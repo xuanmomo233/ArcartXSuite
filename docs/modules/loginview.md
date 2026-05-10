@@ -1,0 +1,188 @@
+# LoginView 登录界面
+
+## 功能定位
+
+ArcartX UI 驱动的**登录/注册界面**，替代传统聊天框输入密码方式。支持两种运行模式：
+
+- **`authme`**（默认）— 桥接已有的 AuthMe 数据库，登录/注册/改密全部走 AuthMe API
+- **`standalone`** — 独立账户系统，使用 AXS 自带的数据库和 BCrypt hash
+
+玩家进服后自动弹出 ArcartX UI 登录面板，未登录前**锁定移动、聊天、命令、物品操作**。
+
+## 依赖
+
+- 必需：ArcartX
+- 可选：AuthMe（`authme` 模式需要）
+
+## 启用步骤
+
+```yaml
+modules:
+  loginview:
+    enabled: true
+    password: "AXS-LoginView@2026#Ready"
+```
+
+## 关键配置（`ArcartXLoginView.yml`）
+
+### 认证模式
+
+```yaml
+auth:
+  mode: "authme"    # authme | standalone
+```
+
+| 模式 | 说明 |
+| --- | --- |
+| `authme` | 桥接 AuthMe API，登录/注册/改密全部走 AuthMe |
+| `standalone` | 独立账户系统，使用 AXS 自带的 SQLite/MySQL 存储 |
+
+### UI 配置
+
+```yaml
+ui:
+  ui-id: "AXS:LoginView"
+  packet-id: "AXS_loginview"
+  register-ui-on-enable: true
+  overwrite-ui-files: false
+  open-delay-ticks: 20        # 进服后延迟多少 tick 弹出
+  close-on-login: true         # 登录成功后自动关闭 UI
+```
+
+### 安全配置
+
+```yaml
+security:
+  min-password-length: 6
+  max-password-length: 64
+  max-attempts: 5              # 最大尝试次数
+  kick-on-max-attempts: true   # 达到最大次数后踢出
+  lock-movement: true          # 未登录时锁定移动
+  lock-chat: true              # 未登录时锁定聊天
+  lock-commands: true          # 未登录时锁定命令
+  allow-commands-prefix: "login,register,l,reg,AXS"  # 例外命令前缀
+  rehash-migrated-password-on-login: true  # AuthMe 迁移后首次登录时用 AXS hash 重新加密
+```
+
+### 存储配置
+
+```yaml
+storage:
+  mode: "sqlite"               # sqlite | mysql
+  sqlite:
+    file: "loginview.db"
+  mysql:
+    host: "127.0.0.1"
+    port: 3306
+    database: "minecraft"
+    username: "root"
+    password: ""
+  table-prefix: "AXS_loginview_"
+```
+
+### 消息自定义
+
+```yaml
+messages:
+  title-login: "登录服务器"
+  title-register: "注册账号"
+  login-success: "&a登录成功。"
+  register-success: "&a注册完成，已自动登录。"
+  change-success: "&a密码已修改。"
+  password-mismatch: "&c两次输入的密码不一致。"
+  password-too-short: "&c密码太短。"
+  password-too-long: "&c密码太长。"
+  wrong-password: "&c密码错误。"
+  already-registered: "&c你已经注册过账号。"
+  not-registered: "&e你还没有注册，请先设置密码。"
+  locked: "&e请先完成登录。"
+  kicked: "&c密码错误次数过多。"
+```
+
+## 命令
+
+```
+/AXS loginview status                    # 查看模块状态
+/AXS loginview reload                    # 重载配置
+/AXS loginview open <player>             # 手动为玩家打开登录 UI
+/AXS loginview migrate-authme [dry-run]  # 迁移 AuthMe 数据库
+/AXS loginview migration-commands        # 查看 AuthMe 迁移说明
+```
+
+## AuthMe 迁移
+
+如果你从 AuthMe 迁移到 LoginView 的 `standalone` 模式：
+
+### 1. 配置迁移源
+
+```yaml
+authme-migration:
+  source:
+    jdbc-url: "jdbc:sqlite:plugins/AuthMe/AuthMe.db"
+    username: ""
+    password: ""
+    table: "authme"
+  columns:
+    name: "username"
+    real-name: "realname"
+    password: "password"
+    salt: "salt"
+  imported-hash-algorithm: "AUTHME_BCRYPT"
+  batch-size: 200
+```
+
+### 2. 先干跑确认
+
+```
+/AXS loginview migrate-authme dry-run
+```
+
+### 3. 正式迁移
+
+```
+/AXS loginview migrate-authme
+```
+
+迁移后：
+- AuthMe 的密码 hash 原样复制，**不会破解明文**
+- 玩家首次用旧密码登录后，如果 `rehash-migrated-password-on-login: true`，会自动用 AXS 的 BCrypt 重新加密
+
+## UI / Packet 契约
+
+- UI ID：`AXS:LoginView`
+- Packet ID：`AXS_loginview`
+
+### 服务端 → 客户端
+
+| handler | payload |
+| --- | --- |
+| `init` | `{type, title, mode, registered, playerName, serverName, online, maxPlayers, address, time, message}` |
+| `result` | `{success, message}` |
+| `close` | `{message}` |
+
+### 客户端 → 服务端
+
+| action | data |
+| --- | --- |
+| `login` | `[password]` |
+| `register` | `[password, confirmPassword]` |
+| `change_password` | `[oldPassword, newPassword, confirmPassword]` |
+| `refresh` | `[]` |
+
+## 安全特性
+
+- 未登录时**锁定**：移动、聊天、命令、物品栏点击、物品丢弃、方块交互
+- 允许的命令前缀通过 `allow-commands-prefix` 白名单配置
+- 密码错误计数，达到 `max-attempts` 后自动踢出
+- `ClientPacketGuard` 同样保护 LoginView 回包，防止暴力破解
+
+## EventPacket 联动
+
+LoginView 在以下时机自动向 EventPacket 发射信号：
+
+| 信号名 | 触发时机 | 携带变量 |
+| --- | --- | --- |
+| `login_success` | 玩家登录成功 | `auth_mode` |
+| `first_register` | 玩家首次注册完成 | `auth_mode` |
+
+可在 `ArcartXEventPacket.yml` 中配置对应规则实现欢迎动画、新手任务引导等联动效果。
