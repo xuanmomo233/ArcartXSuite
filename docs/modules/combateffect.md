@@ -7,6 +7,22 @@
 - **击杀特效** — 监听玩家攻击 / 击杀活体实体，把上下文发包给 ArcartX UI 播放击杀特效或弹出击杀提示。不限 PVP，可监听任意活体
 - **伤害飘字** — 把伤害 / 治疗事件桥接到 ArcartX 伤害显示，按来源拆分：原始伤害、玩家伤害、暴击、治疗等
 
+### 核心特性
+
+**击杀特效：**
+- **双触发器**：`kill`（击杀时触发）和 `attack`（攻击时触发），可同时启用
+- **多接收者**：支持 `killer`（攻击者）、`victim`（受害者）等接收者角色
+- **丰富变量**：pack 支持 `{killer_name}`、`{victim_name}`、`{victim_display_name}`、`{victim_entity_type_name}`、`{victim_mythic_mob_id}`、`{victim_is_player}`、坐标、世界、UUID、主手物品等
+- **黑名单过滤**：支持按 MythicMob ID 或 Bukkit EntityType 过滤，避免对特定实体触发特效
+- **灵活发包格式**：pack 支持字符串、列表、字典三种模式，适配不同 UI 需求
+
+**伤害飘字：**
+- **智能来源检测**：自动选择最优伤害来源 — MythicLib → CraneAttribute → AttributePlus → Bukkit 原版
+- **来源回退**：指定来源不可用时自动回退到下一个可用来源
+- **分类显示**：原始伤害、玩家伤害、MythicLib 属性伤害、CraneAttribute 属性伤害分别使用不同配置 ID
+- **治疗飘字**：原版治疗和 MythicMobs 技能治疗均可显示，支持精确模式（实际生效量）
+- **最小阈值**：每种伤害/治疗类型可配置最小显示值，避免微量数字刷屏
+
 ## 依赖
 
 - 必需：ArcartX

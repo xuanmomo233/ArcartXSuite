@@ -4,6 +4,16 @@
 
 通过 PlaceholderAPI 输出渐变 / 扫光效果文本。`entries.<id>.text` 自身可以再嵌套其他 PAPI。
 
+### 核心特性
+
+- **逐字渐变**：文本按字符分配颜色梯度，支持多色渐变（如红→黄→蓝）
+- **扫光效果**：在渐变基础上叠加动态扫光高亮，可配置扫光颜色、宽度和强度
+- **动画帧切换**：每隔 N tick 切换到下一帧，形成动态流光效果
+- **PAPI 嵌套**：`entries.<id>.text` 会先按目标玩家解析 PlaceholderAPI（如 `%player_name%`），再叠加 RGB 渐变
+- **多条目管理**：支持定义多个渐变条目，每个条目独立配置颜色、扫光和速度
+- **Shimmer 函数**：提供 `ArcartRGB.rgb(...)` Shimmer 工具函数，可在 UI YAML 中直接调用
+- **广泛适用**：输出可用于聊天前缀、Tab 列表、称号显示、计分板或任何支持 PAPI 的场景
+
 ## 依赖
 
 - 必需：ArcartX、**PlaceholderAPI**

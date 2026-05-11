@@ -1,12 +1,16 @@
 # QuestGPS 任务导航
 
-::: warning WIP
-本模块仍在开发中，接口契约可能调整。
-:::
-
 ## 功能定位
 
 将 Chemdah 任务追踪展示为 ArcartX HUD 路径点导航。
+
+### 核心特性
+
+- **HUD 导航箭头**：在 ArcartX HUD 上显示指向任务目标的导航箭头和距离信息
+- **Chemdah 联动**：自动读取 Chemdah 任务追踪数据，无需手动配置坐标
+- **目标追踪**：玩家可选择追踪/取消追踪特定任务目标
+- **HUD 开关**：玩家可随时开关导航 HUD 显示
+- **EventPacket 联动**：可通过 EventPacket 的 `questgps.offer` / `questgps.accept` 动作自动推送任务导航
 
 ## 依赖
 

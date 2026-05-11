@@ -9,6 +9,16 @@
 
 **几乎零依赖，适合作为第一个验证模块。**
 
+### 核心特性
+
+- **轮播公告**：多条公告按配置顺序自动轮播，可配置每条停留时间和轮播冷却
+- **PlaceholderAPI 解析**：公告文本支持 `%player_name%`、`%server_online%` 等 PAPI 变量，按接收玩家解析
+- **点击命令**：每条公告可绑定控制台命令，玩家点击 HUD 后自动执行（支持 `<player>` 变量）
+- **打字机字幕**：逐字/逐帧播放文本动画，可控制每帧速度、停留时间、文本内容
+- **字幕组管理**：字幕定义放在独立目录 `subtitle/groups/*.yml`，支持热重载
+- **EventPacket 联动**：其他模块（如 LoginView、OnlineRewards）可通过 EventPacket 的 `subtitle.play` 动作触发字幕播放
+- **HUD 自动注册**：启动时自动将公告 HUD 和字幕 HUD 注册到 ArcartX，无需手动配置 UI 文件
+
 ## 依赖
 
 - 必需：ArcartX

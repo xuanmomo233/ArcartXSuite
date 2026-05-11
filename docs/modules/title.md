@@ -4,6 +4,22 @@
 
 分组称号系统：有效期/永久、属性加成、聊天/TAB 前缀、ArcartX UI 菜单、PAPI 全量输出。
 
+### 核心特性
+
+- **分组管理**：称号按组归类（如冒险类、探索类、活动类），每组有独立显示名和排序
+- **品质系统**：普通、传说、神话等多品质等级，每个品质有独立排序
+- **双类型称号**：`text`（文字称号）和 `icon`（图标称号），图标称号支持 ArcartX 自定义文字图标
+- **有效期 / 永久**：通过 `/AXS title give` 命令指定时长（如 `7d`、`30m`、`permanent`），后台自动过期清理
+- **聊天 / Tab 前后缀**：每个称号可独立配置 `chat-prefix`、`chat-suffix`、`tab-prefix`、`tab-suffix`，通过 PAPI 接入任意聊天/Tab 系统
+- **属性加成**：
+  - **展示属性**：仅在装备该称号时生效
+  - **收藏属性**：只要拥有且未过期即累计（收集图鉴式）
+  - **原生属性行**：直接传给 AttributePlus / CraneAttribute，支持百分比和中文属性名
+- **三大属性插件**：同时支持 AttributePlus、MythicLib/MMOItems、CraneAttribute，各有独立开关和前缀
+- **UI 菜单**：ArcartX UI 驱动的称号管理界面，玩家可浏览、装备、卸下、隐藏称号
+- **PAPI 全量输出**：拥有数量、装备信息、剩余时间、属性加成等全部通过 PlaceholderAPI 输出
+- **数据持久化**：SQLite 或 MySQL，带连接池
+
 ## 依赖
 
 - 必需：ArcartX

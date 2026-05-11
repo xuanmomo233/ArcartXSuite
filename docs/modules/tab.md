@@ -4,6 +4,19 @@
 
 通过 ArcartX TAB UI 渲染自定义在线列表，支持排序、分组、PAPI 变量。
 
+### 核心特性
+
+- **三种排序模式**：
+  - `name` — 按玩家名字母排序
+  - `prem` — 按权限组排序，优先级列表自定义（如 admin > vip3 > vip2 > default）
+  - `papi` — 按 PlaceholderAPI 变量排序（如 `%player_level%`），支持数字/文本排序
+- **灵活 pack 格式**：字符串、列表、字典三种模式，按每个玩家渲染 PAPI 后发给 UI
+- **周期同步**：服务端按配置间隔（默认 20 tick）自动 diff 推送，客户端无需主动刷新
+- **客户端刷新入口**：保留客户端 `Packet.send("TAB", "update")` 兼容入口，带限流保护
+- **跨服玩家列表**：Redis Pub/Sub 或代理通道同步远程服务端玩家列表，超时自动移除过期快照
+- **条目过滤**：支持 `max-entries` 限制条目数、`omit-blank-values` 跳过空值
+- **称号前后缀集成**：pack 中直接引用 `%AXStitle_tab_<组ID>_prefix%` 等 Title 模块占位符
+
 ## 依赖
 
 - 必需：ArcartX、**PlaceholderAPI**

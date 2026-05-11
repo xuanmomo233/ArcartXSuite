@@ -10,6 +10,32 @@
 - `command-signal`（由 `/AXS eventpacket fire` 手动触发，或由其他模块自动发射信号）
 - `client-packet`（客户端回包触发预设指令）
 
+### 核心特性
+
+**触发器类型：**
+- **`join`**：玩家加入服务器时触发
+- **`first-join`**：玩家首次进服时触发（仅一次）
+- **`quit`**：玩家退出服务器时触发
+- **`placeholder-increase`**：指定 PAPI 值增长时触发
+- **`placeholder-decrease`**：指定 PAPI 值减少时触发
+- **`placeholder-threshold`**：指定 PAPI 值达到阈值时触发
+- **`mob-kill-count`**：击杀指定 MythicMob 累计 N 次后触发
+- **`command-signal`**：由 `/AXS eventpacket fire` 手动触发，或由其他模块（LoginView、OnlineRewards 等）自动发射信号
+- **`client-packet`**：客户端通过 ArcartX Packet.send 回包触发
+
+**动作链：**
+- **console-command**：以控制台执行命令，支持 `{player}` 等变量
+- **player-command**：以玩家身份执行命令
+- **message**：发送消息给玩家
+- **subtitle.play**：触发 Announcer 字幕播放
+- **title**：发送 Minecraft 原生 Title/Subtitle
+- **sound**：播放音效
+
+**其他特性：**
+- **延迟执行**：动作链支持配置延迟（ticks）
+- **条件判断**：支持权限条件和 PAPI 条件
+- **跨模块信号**：LoginView 登录成功、OnlineRewards 签到、EntityTracker Boss 结算等均会自动发射信号，可在 EventPacket 中监听
+
 ## 依赖
 
 - 必需：ArcartX
