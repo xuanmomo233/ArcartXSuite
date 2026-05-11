@@ -108,7 +108,7 @@ features:
 
 <div class="comparison-section">
   <h2>为什么选择 ArcartXSuite</h2>
-  <p class="comparison-subtitle">一个插件覆盖 15 个功能领域，统一 ArcartX UI 体验，模块间深度联动</p>
+  <p class="comparison-subtitle">一个插件覆盖 15 个功能领域，统一 ArcartX UI 体验，模块间深度联动，消除其他插件与ArcartX冲突的烦恼</p>
   <div class="comparison-table-wrapper">
     <table class="comparison-table">
       <thead>
@@ -121,16 +121,16 @@ features:
       </thead>
       <tbody>
         <tr>
-          <td>ArcartX 生态扩展</td>
+          <td>挖掘AX潜力</td>
           <td class="col-module">ArcartXSuite</td>
           <td class="col-alt">ArcartX 同类扩展</td>
-          <td class="col-advantage">ArcartX 功能原生支持、模块化联动、替代一切不兼容 AX 的插件与模组</td>
+          <td class="col-advantage">混合端高兼容、原生模块联动、跨服功能完善、跟随ArcartX版本更新</td>
         </tr>
         <tr>
           <td>聊天系统</td>
           <td class="col-module">Chat</td>
           <td class="col-alt">TrChat / VentureChat / HuskChat</td>
-          <td class="col-advantage">ArcartX UI 聊天卡片、物品展示、敏感词云词库、Redis + 代理双通道跨服</td>
+          <td class="col-advantage">ArcartX聊天卡片与高级物品展示、聊天分离UI功能、敏感词云词库、Redis + 代理双通道跨服</td>
         </tr>
         <tr>
           <td>称号系统</td>
@@ -171,8 +171,8 @@ features:
         <tr>
           <td>仓库银行</td>
           <td class="col-module">Warehouse</td>
-          <td class="col-alt">BossShopPro / ChestShop</td>
-          <td class="col-advantage">NBT 分类、共享仓库、多货币银行、阶梯利率定期存款、二级密码</td>
+          <td class="col-alt">某知名系列仓库or灵魂空间</td>
+          <td class="col-advantage">自带Arcart UI、NBT 分类、共享仓库、多货币银行、阶梯利率定期存款、二级密码</td>
         </tr>
         <tr>
           <td>渐变文本</td>
@@ -208,10 +208,10 @@ features:
           <td>任务视图</td>
           <td class="col-module">Conversation / QuestGPS</td>
           <td class="col-alt">其他任务视图</td>
-          <td class="col-advantage">可视化奖励预览、独立任务分类、AX 导航升级</td>
+          <td class="col-advantage">更全面的数据转接、可视化奖励预览、独立任务分类、AX 导航升级</td>
         </tr>
       </tbody>
     </table>
   </div>
-  <p class="comparison-footer"><strong>一个 JAR，17 个模块</strong> — 统一 UI 体验，模块间零配置联动，告别插件兼容性地狱</p>
+  <p class="comparison-footer"><strong>一个插件，17 个模块</strong> — 统一 UI 体验，模块间零配置联动，告别插件兼容性地狱</p>
 </div>
