@@ -46,7 +46,7 @@ modules:
 源码：`xuanmo.arcartxsuite.security.ModulePasswordAuthenticator`
 
 1. AXS 启动 / `reload` 时逐模块读取 `enabled` 与 `password`
-2. 内部用 SHA-256 对比产出 `ValidationResult`（`OK / DISABLED / LOCKED`）
+2. 内部用 PBKDF2 对比产出 `ValidationResult`（`OK / DISABLED / LOCKED`）
 3. 非 `OK` 则跳过模块启用
 
 ## 常见错误

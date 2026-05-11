@@ -13,23 +13,19 @@
 
 ```yaml
 modules:
-  onlinereward:
+  onlinerewards:
     enabled: true
     password: "AXS-OnlineRewards@2026#Ready"
 ```
-
-::: warning 管理命令是 onlinereward（单数）
-源码 `MODULE_IDS` 写的是 `onlinereward`；玩家命令则是 `/onlinerewards`（复数）。
-:::
 
 ## 命令
 
 管理：
 ```
-/AXS onlinereward status
-/AXS onlinereward reload
-/AXS onlinereward add|remove|set <time> <player>
-/AXS onlinereward card <add|remove|set> <amount> <player>
+/AXS onlinerewards status
+/AXS onlinerewards reload
+/AXS onlinerewards add|remove|set <time> <player>
+/AXS onlinerewards card <add|remove|set> <amount> <player>
 ```
 
 玩家：

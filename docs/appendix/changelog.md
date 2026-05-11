@@ -7,6 +7,7 @@
 ## 4.0.0（当前）
 
 - **架构** — 模块整合为 17 个主模块，EntityTracker（实体追踪）、CombatEffect（战斗特效）、Announcer（播报系统）、EventPacket（事件引擎）功能扩展
+- **破坏** — 管理命令和 `config.yml` 中的旧模块名已全部移除，不再向下兼容：`bossbar` → `entitytracker`、`killeffect` → `combateffect`、`subtitle` → `announcer`、`attacktarget` → `entitytracker`、`digisdisplay` → `combateffect`、`packetcommand` → `eventpacket`、`onlinereward` → `onlinerewards`
 - **新增** — LoginView 登录界面模块（独立/AuthMe 兼容双模式）
 - **文档** — 迁移至 VitePress，全新可视化文档站
 
@@ -17,7 +18,7 @@
 - **Mail** — `attachment-tax-rates.<currency>` 替代旧 `vault-tax-rate`
 - **EventPacket** — 引入 `rules.<id>` 模型（trigger + actions 链）
 - **Title** — 新增 `craneattribute.enabled` 桥
-- **OnlineRewards** — 管理命令固定为 `onlinereward`（单数）
+- **OnlineRewards** — ~~管理命令固定为 `onlinereward`（单数）~~ → 4.0.0 起统一为 `onlinerewards`（复数）
 - **EntityTracker** — rewards actions 支持四类；`inventory-full` 策略
 
 ---
