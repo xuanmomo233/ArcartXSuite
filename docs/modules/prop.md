@@ -20,8 +20,10 @@ modules:
 
 ## 命令
 
-```
-/AXS prop status
-/AXS prop reload
-/AXS prop set <propId>     # 把手持物品标记为指定 prop
-```
+> 权限：`arcartxsuite.admin`
+
+| 命令 | 说明 |
+| --- | --- |
+| `/AXS prop status` | 查看 Prop 模块状态和已加载道具列表 |
+| `/AXS prop reload` | 重载 Prop 配置 |
+| `/AXS prop set <道具ID>` | 把指定道具 ID 写入执行者的当前 Prop 状态，用于调试 |

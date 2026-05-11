@@ -59,7 +59,9 @@ digis-display:
 
 ## 命令
 
-```
-/AXS combateffect status
-/AXS combateffect reload
-```
+> 权限：`arcartxsuite.admin`
+
+| 命令 | 说明 |
+| --- | --- |
+| `/AXS combateffect status` | 查看战斗特效模块是否启用和配置加载状态 |
+| `/AXS combateffect reload` | 重载战斗特效配置 |

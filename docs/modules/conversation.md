@@ -30,10 +30,12 @@ settings:
 
 ## 命令
 
-```
-/AXS conversation status
-/AXS conversation reload
-```
+> 权限：`arcartxsuite.admin`
+
+| 命令 | 说明 |
+| --- | --- |
+| `/AXS conversation status` | 查看对话桥模块状态 |
+| `/AXS conversation reload` | 重载对话配置和 UI |
 
 ## UI / Packet
 

@@ -82,27 +82,51 @@ attack-target:
 
 ## 命令
 
-```
-/AXS entitytracker status
-/AXS entitytracker reload
-/AXS entitytracker sessions [mobId]
-/AXS entitytracker rank <entityUuid> [page]
-/AXS entitytracker settlements [page]
-/AXS entitytracker settlement <settlementId> [page]
-/AXS entitytracker reissue <settlementId> <rank> [player]
-```
+> 权限：`arcartxsuite.admin`（管理命令）
+
+| 命令 | 说明 |
+| --- | --- |
+| `/AXS entitytracker status` | 查看模块状态、活跃会话数和奖励配置信息 |
+| `/AXS entitytracker reload` | 重载 EntityTracker 配置、UI 和追踪服务 |
+| `/AXS entitytracker sessions [mobId]` | 列出当前正在追踪的 Boss 会话。可选传入 `mobId` 过滤指定 Boss |
+| `/AXS entitytracker rank <entityUuid> [page]` | 查看指定 Boss 实体的实时伤害排行榜（UUID 可从 sessions 命令获取） |
+| `/AXS entitytracker settlements [page]` | 分页查看历史结算记录，包含 Boss 名称、击杀时间和参与人数 |
+| `/AXS entitytracker settlement <结算ID> [page]` | 查看指定结算的详细排名：每位参与者的伤害值和奖励 |
+| `/AXS entitytracker reissue <结算ID> <名次> [玩家]` | 按结算名次补发奖励，不指定玩家则发给原排名玩家 |
 
 ## PAPI
 
 前缀：`%AXSentitytracker_*%`
 
-```
-%AXSentitytracker_current_display_name%
-%AXSentitytracker_current_health_percent%
-%AXSentitytracker_current_viewer_rank_text%
-%AXSentitytracker_slot_2_top_1_name%
-%AXSentitytracker_last_rank%
-```
+### 全局信息
+
+| 占位符 | 说明 |
+| --- | --- |
+| `%AXSentitytracker_sort_mode%` | 当前 Boss 排序模式 |
+| `%AXSentitytracker_max_visible_bars%` | 配置中允许同时显示的最大 Boss 血条数 |
+| `%AXSentitytracker_configured_boss_count%` | 配置文件中定义的 Boss 总数 |
+| `%AXSentitytracker_damage_ranking_boss_count%` | 开启伤害排行的 Boss 数量 |
+| `%AXSentitytracker_active_session_count%` | 当前活跃的 Boss 战斗会话数 |
+| `%AXSentitytracker_active_viewer_count%` | 当前正在观察 Boss 的玩家总数 |
+| `%AXSentitytracker_boss_count%` | 该玩家视野中的 Boss 数量 |
+| `%AXSentitytracker_total_boss_count%` | 全服正在追踪的 Boss 总数 |
+
+### 当前 Boss / 槽位
+
+| 占位符 | 说明 |
+| --- | --- |
+| `%AXSentitytracker_current_<字段>%` | 视野中第 1 个 Boss 的信息（等同 `slot_1_<字段>`） |
+| `%AXSentitytracker_slot_<N>_<字段>%` | 视野中第 N 个 Boss 的信息 |
+
+常用 `<字段>`：`display_name`（名称）、`health_percent`（血量百分比）、`mob_id`（MythicMobs ID）、`viewer_rank`（玩家伤害排名）、`viewer_damage`（玩家累计伤害）、`top_<排名>_name`（排行第 N 名玩家名）、`top_<排名>_damage`（排行第 N 名伤害值）
+
+### 最近结算
+
+| 占位符 | 说明 |
+| --- | --- |
+| `%AXSentitytracker_last_<字段>%` | 玩家参与的最近一次 Boss 结算信息 |
+
+常用 `<字段>`：`rank`（排名）、`damage`（伤害值）、`boss_name`（Boss 名称）、`total_participants`（参与人数）
 
 ## EventPacket 联动
 

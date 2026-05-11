@@ -24,18 +24,20 @@ modules:
 
 ## 命令
 
-管理：
-```
-/AXS map status
-/AXS map reload
-/AXS map open <player> [world]
-/AXS map list
-/AXS map anchors [world]
-```
+### 管理命令（权限：`arcartxsuite.admin`）
 
-玩家：
-```
-/map open [world]
-/map hud [on|off|toggle]
-/map cleartrack
-```
+| 命令 | 说明 |
+| --- | --- |
+| `/AXS map status` | 查看地图模块、世界、锚点和路径点状态 |
+| `/AXS map reload` | 重载地图配置和 UI |
+| `/AXS map open <玩家> [世界名]` | 为在线玩家打开地图界面，可选指定世界 |
+| `/AXS map list` | 列出所有已配置的地图世界 |
+| `/AXS map anchors [世界名]` | 列出全部或指定世界的锚点 |
+
+### 玩家命令（权限：`arcartxsuite.map.use`，别名 `/axmap`）
+
+| 命令 | 说明 |
+| --- | --- |
+| `/map` 或 `/map open [世界名]` | 打开地图界面，不指定世界时显示当前所在世界 |
+| `/map hud [on\|off\|toggle]` | 控制小地图 HUD 显示。默认 `toggle` 切换 |
+| `/map cleartrack` | 清除地图上正在追踪的目标点 |

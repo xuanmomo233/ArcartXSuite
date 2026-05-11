@@ -101,13 +101,15 @@ messages:
 
 ## 命令
 
-```
-/AXS loginview status                    # 查看模块状态
-/AXS loginview reload                    # 重载配置
-/AXS loginview open <player>             # 手动为玩家打开登录 UI
-/AXS loginview migrate-authme [dry-run]  # 迁移 AuthMe 数据库
-/AXS loginview migration-commands        # 查看 AuthMe 迁移说明
-```
+> 权限：`arcartxsuite.admin`
+
+| 命令 | 说明 |
+| --- | --- |
+| `/AXS loginview status` | 查看登录模块、模式、UI 和账户库状态 |
+| `/AXS loginview reload` | 重载登录视图配置、UI 和账户服务 |
+| `/AXS loginview open <玩家>` | 为在线玩家打开登录视图界面，一般用于调试 |
+| `/AXS loginview migrate-authme [dry-run]` | 从 AuthMe 迁移密码哈希。加 `dry-run` 只预览不执行 |
+| `/AXS loginview migration-commands` | 显示停用 AuthMe 后的安全操作步骤 |
 
 ## AuthMe 迁移
 

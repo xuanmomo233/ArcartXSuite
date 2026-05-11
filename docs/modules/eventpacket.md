@@ -312,8 +312,10 @@ rules:
 
 ## 命令
 
-```
-/AXS eventpacket status
-/AXS eventpacket reload
-/AXS eventpacket fire <signal> <player> [key=value...]
-```
+> 权限：`arcartxsuite.admin`
+
+| 命令 | 说明 |
+| --- | --- |
+| `/AXS eventpacket status` | 查看事件引擎规则数量和模块状态 |
+| `/AXS eventpacket reload` | 重载触发器配置 |
+| `/AXS eventpacket fire <信号名> <玩家> [key=value...]` | 手动向指定玩家触发信号，可附带参数。用于调试规则配置 |

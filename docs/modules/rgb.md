@@ -32,16 +32,19 @@ entries:
 
 ## PAPI
 
-前缀：`%arcartrgb_*%`
+前缀：`%arcartrgb_*%`（**必须安装 PlaceholderAPI**）
 
-```
-%arcartrgb_welcome%       # 渲染 entries.welcome.text
-%arcartrgb_<entryId>%     # 任意条目
-```
+| 占位符 | 说明 |
+| --- | --- |
+| `%arcartrgb_<条目ID>%` | 渲染配置中定义的渐变文本条目。条目 ID 对应 `entries.<id>` |
+
+示例：`%arcartrgb_welcome%` → 渲染 `entries.welcome.text` 的渐变文本
 
 ## 命令
 
-```
-/AXS rgb status
-/AXS rgb reload
-```
+> 权限：`arcartxsuite.admin`
+
+| 命令 | 说明 |
+| --- | --- |
+| `/AXS rgb status` | 查看 RGB 模块状态 |
+| `/AXS rgb reload` | 重载动态渐变配置 |

@@ -30,7 +30,9 @@ settings:
 
 ## 命令
 
-```
-/AXS pickup status
-/AXS pickup reload
-```
+> 权限：`arcartxsuite.admin`
+
+| 命令 | 说明 |
+| --- | --- |
+| `/AXS pickup status` | 查看拾取提示模块状态 |
+| `/AXS pickup reload` | 重载拾取提示配置和 HUD |
