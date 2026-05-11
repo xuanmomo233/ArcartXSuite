@@ -12,7 +12,7 @@ AXS 共有 **7 个模块** 对外输出 PAPI 占位符：
 
 | 模块 | 前缀 | 必装 PAPI? | 说明 |
 | --- | --- | --- | --- |
-| [EntityTracker](/modules/entitytracker) | `%arcartxbossbar_*%` | 可选 | Boss 追踪、伤害排行、结算数据 |
+| [EntityTracker](/modules/entitytracker) | `%AXSentitytracker_*%` | 可选 | Boss 追踪、伤害排行、结算数据 |
 | [Title](/modules/title) | `%AXStitle_*%` | 可选 | 称号前缀/后缀、装备状态、属性加成 |
 | [RGB](/modules/rgb) | `%arcartrgb_*%` | **必装** | 动态渐变彩色文本渲染 |
 | [OnlineRewards](/modules/onlinerewards) | `%AXSonlinerewards_*%` | 可选 | 在线时长、签到状态、排行榜 |
@@ -24,19 +24,19 @@ AXS 共有 **7 个模块** 对外输出 PAPI 占位符：
 
 ## EntityTracker 占位符
 
-前缀：`%arcartxbossbar_<字段>%`
+前缀：`%AXSentitytracker_<字段>%`
 
 ### 全局信息（不需要玩家上下文）
 
 | 占位符 | 返回值 | 说明 |
 | --- | --- | --- |
-| `%arcartxbossbar_sort_mode%` | 文本 | 当前 Boss 排序模式（如 `SPAWN_ORDER`） |
-| `%arcartxbossbar_max_visible_bars%` | 数字 | 配置中允许同时显示的最大 Boss 血条数 |
-| `%arcartxbossbar_configured_boss_count%` | 数字 | 配置文件中定义的 Boss 总数 |
-| `%arcartxbossbar_damage_ranking_boss_count%` | 数字 | 开启了伤害排行功能的 Boss 数量 |
-| `%arcartxbossbar_max_damage_ranking_entries%` | 数字 | 伤害排行榜最大展示条目数 |
-| `%arcartxbossbar_active_session_count%` | 数字 | 当前活跃的 Boss 战斗会话数 |
-| `%arcartxbossbar_active_viewer_count%` | 数字 | 当前正在观察 Boss 的玩家总数 |
+| `%AXSentitytracker_sort_mode%` | 文本 | 当前 Boss 排序模式（如 `SPAWN_ORDER`） |
+| `%AXSentitytracker_max_visible_bars%` | 数字 | 配置中允许同时显示的最大 Boss 血条数 |
+| `%AXSentitytracker_configured_boss_count%` | 数字 | 配置文件中定义的 Boss 总数 |
+| `%AXSentitytracker_damage_ranking_boss_count%` | 数字 | 开启了伤害排行功能的 Boss 数量 |
+| `%AXSentitytracker_max_damage_ranking_entries%` | 数字 | 伤害排行榜最大展示条目数 |
+| `%AXSentitytracker_active_session_count%` | 数字 | 当前活跃的 Boss 战斗会话数 |
+| `%AXSentitytracker_active_viewer_count%` | 数字 | 当前正在观察 Boss 的玩家总数 |
 
 ### 玩家视野中的 Boss（需要玩家上下文）
 
@@ -44,39 +44,39 @@ AXS 共有 **7 个模块** 对外输出 PAPI 占位符：
 
 | 占位符 | 说明 |
 | --- | --- |
-| `%arcartxbossbar_current_<字段>%` | 等同于 `slot_1_<字段>`，获取视野中第一个 Boss 的信息 |
+| `%AXSentitytracker_current_<字段>%` | 等同于 `slot_1_<字段>`，获取视野中第一个 Boss 的信息 |
 
 **按槽位获取**（视野中第 N 个 Boss）：
 
 | 占位符 | 说明 |
 | --- | --- |
-| `%arcartxbossbar_slot_<N>_<字段>%` | 获取第 N 个 Boss 的信息。N 从 1 开始，最大值由 `max_visible_bars` 决定 |
+| `%AXSentitytracker_slot_<N>_<字段>%` | 获取第 N 个 Boss 的信息。N 从 1 开始，最大值由 `max_visible_bars` 决定 |
 
 常用的 `<字段>` 值包括：`display_name`（Boss 名称）、`health_percent`（血量百分比）、`mob_id`（MythicMobs ID）、`viewer_rank`（玩家伤害排名）、`viewer_damage`（玩家累计伤害）、`top_<排名>_name`（排行第 N 名的玩家名）、`top_<排名>_damage`（排行第 N 名的伤害值）等。
 
 **使用示例**：
 ```
-%arcartxbossbar_current_display_name%        → 返回视野中第一个 Boss 的名称
-%arcartxbossbar_current_health_percent%      → 返回血量百分比，如 "75.5"
-%arcartxbossbar_slot_2_display_name%         → 返回第 2 个 Boss 的名称
-%arcartxbossbar_slot_1_top_1_name%           → 返回第 1 个 Boss 伤害排行第 1 名的玩家名
-%arcartxbossbar_boss_count%                  → 返回该玩家视野中的 Boss 数量
-%arcartxbossbar_total_boss_count%            → 返回全服正在追踪的 Boss 总数
+%AXSentitytracker_current_display_name%        → 返回视野中第一个 Boss 的名称
+%AXSentitytracker_current_health_percent%      → 返回血量百分比，如 "75.5"
+%AXSentitytracker_slot_2_display_name%         → 返回第 2 个 Boss 的名称
+%AXSentitytracker_slot_1_top_1_name%           → 返回第 1 个 Boss 伤害排行第 1 名的玩家名
+%AXSentitytracker_boss_count%                  → 返回该玩家视野中的 Boss 数量
+%AXSentitytracker_total_boss_count%            → 返回全服正在追踪的 Boss 总数
 ```
 
 ### 最近结算数据
 
 | 占位符 | 说明 |
 | --- | --- |
-| `%arcartxbossbar_last_<字段>%` | 获取该玩家参与的最近一次 Boss 击杀结算的信息 |
+| `%AXSentitytracker_last_<字段>%` | 获取该玩家参与的最近一次 Boss 击杀结算的信息 |
 
 常用的 `<字段>` 值：`rank`（玩家排名）、`damage`（伤害值）、`boss_name`（Boss 名称）、`total_participants`（总参与人数）等。
 
 **使用示例**：
 ```
-%arcartxbossbar_last_rank%                   → 返回最近结算中的排名，如 "1"
-%arcartxbossbar_last_damage%                 → 返回造成的伤害值
-%arcartxbossbar_last_boss_name%              → 返回被击杀的 Boss 名称
+%AXSentitytracker_last_rank%                   → 返回最近结算中的排名，如 "1"
+%AXSentitytracker_last_damage%                 → 返回造成的伤害值
+%AXSentitytracker_last_boss_name%              → 返回被击杀的 Boss 名称
 ```
 
 ---
