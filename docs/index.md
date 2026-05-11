@@ -107,16 +107,16 @@ features:
 </div>
 
 <div class="comparison-section">
-  <h2>为什么选择 ArcartXSuite</h2>
-  <p class="comparison-subtitle">一个插件覆盖 15 个功能领域，统一 ArcartX UI 体验，模块间深度联动，消除其他插件与ArcartX冲突的烦恼</p>
+  <h2>为什么选择 ArcartXSuite ？</h2>
+  <p class="comparison-subtitle">一个插件覆盖 15 个功能领域，统一 ArcartX UI 体验，模块间深度联动，消除适配 ArcartX 的烦恼</p>
   <div class="comparison-table-wrapper">
     <table class="comparison-table">
       <thead>
         <tr>
           <th>功能领域</th>
-          <th>AXS 模块</th>
-          <th>常见替代插件</th>
-          <th>AXS 核心优势</th>
+          <th>ArcartXSuite</th>
+          <th>同类插件模组</th>
+          <th>核心优势</th>
         </tr>
       </thead>
       <tbody>
@@ -124,7 +124,7 @@ features:
           <td>挖掘AX潜力</td>
           <td class="col-module">ArcartXSuite</td>
           <td class="col-alt">ArcartX 同类扩展</td>
-          <td class="col-advantage">混合端高兼容、原生模块联动、跨服功能完善、跟随ArcartX版本更新</td>
+          <td class="col-advantage">混合端高兼容、原生模块联动、跨服功能完善、跟随ArcartX版本更新、更优秀的UI技术</td>
         </tr>
         <tr>
           <td>聊天系统</td>
@@ -172,7 +172,7 @@ features:
           <td>仓库银行</td>
           <td class="col-module">Warehouse</td>
           <td class="col-alt">某知名系列仓库or灵魂空间</td>
-          <td class="col-advantage">自带Arcart UI、NBT 分类、共享仓库、多货币银行、阶梯利率定期存款、二级密码</td>
+          <td class="col-advantage"><strong>自带Arcart UI</strong>、NBT 分类、共享仓库、多货币银行、阶梯利率定期存款、二级密码</td>
         </tr>
         <tr>
           <td>渐变文本</td>
