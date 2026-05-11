@@ -1,23 +1,27 @@
 # 命令速查
 
-源码：`xuanmo.arcartxsuite.command.ArcartXSuiteCommand`（管理）+ 各模块 `*PlayerCommand`（玩家）。
+本页列出 ArcartXSuite 全部可用命令及其用法，分为**管理命令**（服务器管理员/OP 使用）和**玩家命令**（普通玩家使用）两部分。
+
+> **约定**：`<参数>` 表示必填，`[参数]` 表示选填，`A|B` 表示二选一。
+
+---
 
 ## 管理命令
 
-主入口：`/AXS`（别名 `/arcartxsuite`），需要权限 `arcartxsuite.admin`（默认 op）。
+主入口：`/AXS`（别名 `/arcartxsuite`），需要权限 `arcartxsuite.admin`（默认 OP）。
 
-### 全局
+### 全局管理
 
-| 命令 | 说明 |
-| --- | --- |
-| `/AXS` | 等同 `/AXS status` |
-| `/AXS status` | 全模块状态总览 |
-| `/AXS help [module]` | 中文帮助 |
-| `/AXS reload all` | 按顺序 reload 全部启用模块 |
-| `/AXS reload <module>` | reload 单个模块 |
-| `/AXS <module> status` | 单模块状态详情 |
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/AXS` | 查看全部模块运行状态，等同 `/AXS status` | `/AXS` |
+| `/AXS status` | 以列表形式展示所有模块的启用/禁用状态和运行信息 | `/AXS status` |
+| `/AXS help [模块名]` | 查看帮助。不指定模块时列出所有模块概览；指定模块时显示该模块的详细命令用法 | `/AXS help title` |
+| `/AXS reload all` | 按依赖顺序重载全部已启用模块的配置、UI 和服务，适用于修改配置后刷新 | `/AXS reload all` |
+| `/AXS reload <模块名>` | 仅重载指定模块的配置。常用于只改了某个模块的 YAML 后快速生效 | `/AXS reload mail` |
+| `/AXS <模块名> status` | 查看单个模块的状态详情，包括加载的配置数量、数据库连接状态等 | `/AXS entitytracker status` |
 
-合法的 `<module>` 共 17 个：
+合法的 `<模块名>` 共 17 个：
 
 ```
 announcer, entitytracker, combateffect, eventpacket,
@@ -26,61 +30,193 @@ pickup, prop, rgb, tab, title,
 map, questgps, warehouse
 ```
 
-### 模块特有动作
+---
 
-#### EntityTracker
+### 模块管理命令
 
-| 命令 | 说明 |
-| --- | --- |
-| `/AXS entitytracker sessions [mobId]` | 列出活跃 Boss 会话 |
-| `/AXS entitytracker rank <entityUuid> [page]` | 查看实时伤害排行 |
-| `/AXS entitytracker settlements [page]` | 列出结算记录 |
-| `/AXS entitytracker settlement <id> [page]` | 查看结算详情 |
-| `/AXS entitytracker reissue <id> <rank> [player]` | 补发奖励 |
+以下命令均以 `/AXS <模块名>` 为前缀，仅管理员可用。每个模块都自带 `status` 和 `reload` 子命令，下面只列出各模块的**特有动作**。
 
-#### EventPacket
+#### EntityTracker（Boss 追踪 / 伤害排行）
 
-| 命令 | 说明 |
-| --- | --- |
-| `/AXS eventpacket fire <signal> <player> [key=value...]` | 手动触发规则 |
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/AXS entitytracker sessions [mobId]` | 列出当前正在追踪的全部 Boss 会话。可选传入 `mobId` 来过滤只看某种 Boss | `/AXS entitytracker sessions`<br>`/AXS entitytracker sessions SkeletonKing` |
+| `/AXS entitytracker rank <实体UUID> [页码]` | 查看指定 Boss 实体的实时伤害排行榜，按伤害量降序。UUID 可从 `sessions` 命令输出中复制 | `/AXS entitytracker rank 550e8400-e29b-41d4-a716 1` |
+| `/AXS entitytracker settlements [页码]` | 分页查看历史结算记录列表，每条记录包含 Boss 名称、击杀时间和参与人数 | `/AXS entitytracker settlements 2` |
+| `/AXS entitytracker settlement <结算ID> [页码]` | 查看某次结算的详细排名信息，包括每位参与者的伤害值和获得的奖励 | `/AXS entitytracker settlement abc123` |
+| `/AXS entitytracker reissue <结算ID> <名次> [玩家]` | 补发奖励。如果结算时某位玩家不在线导致奖励未送达，可用此命令补发。不指定玩家则发给原排名玩家 | `/AXS entitytracker reissue abc123 1`<br>`/AXS entitytracker reissue abc123 1 Steve` |
 
-#### Announcer
+#### EventPacket（事件引擎 / 触发器）
 
-| 命令 | 说明 |
-| --- | --- |
-| `/AXS announcer subtitle list` | 列出字幕组 |
-| `/AXS announcer subtitle play <player> <group>` | 播放字幕 |
-| `/AXS announcer subtitle stop <player>` | 停止字幕 |
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/AXS eventpacket fire <信号名> <玩家> [key=value...]` | 手动向指定玩家触发一个信号，可附带额外参数。常用于调试自定义触发器规则是否正确配置 | `/AXS eventpacket fire quest_complete Steve quest-id=main_1`<br>`/AXS eventpacket fire level_up Alex value=10` |
 
-#### Title
+#### Announcer（公告 / 字幕播报）
 
-| 命令 | 说明 |
-| --- | --- |
-| `/AXS title give <player> <titleId> <duration>` | 发放称号 |
-| `/AXS title revoke <player> <titleId>` | 收回称号 |
-| `/AXS title open <player>` | 打开称号菜单 |
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/AXS announcer subtitle list` | 列出所有已加载的字幕组 ID，用于确认字幕配置是否正确加载 | `/AXS announcer subtitle list` |
+| `/AXS announcer subtitle play <玩家> <字幕组ID>` | 向指定在线玩家播放打字机字幕动画。字幕组 ID 需在配置中预先定义 | `/AXS announcer subtitle play Steve welcome_intro` |
+| `/AXS announcer subtitle stop <玩家>` | 立即停止指定玩家当前正在播放的字幕动画 | `/AXS announcer subtitle stop Steve` |
 
-#### LoginView
+#### Title（称号系统）
 
-| 命令 | 说明 |
-| --- | --- |
-| `/AXS loginview open <player>` | 打开登录界面 |
-| `/AXS loginview migrate-authme [dry-run]` | 迁移 AuthMe 数据 |
-| `/AXS loginview migration-commands` | 查看迁移说明 |
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/AXS title give <玩家> <称号ID> <时长>` | 向玩家发放一个称号。时长支持 `permanent`（永久）、`7d`（7天）、`12h`（12小时）、`30m`（30分钟）等格式 | `/AXS title give Steve 勇者之证 permanent`<br>`/AXS title give Alex 活动限定 7d` |
+| `/AXS title revoke <玩家> <称号ID>` | 收回玩家的指定称号，该称号将从玩家的拥有列表中移除 | `/AXS title revoke Steve 勇者之证` |
+| `/AXS title open <玩家>` | 为指定在线玩家打开称号管理界面（AXUI），可用于管理员代替玩家操作 | `/AXS title open Steve` |
 
-#### Mail / Warehouse / Chat / Map
+#### LoginView（登录视图）
 
-详见各模块文档页。
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/AXS loginview open <玩家>` | 为指定在线玩家打开登录视图界面，一般用于调试 | `/AXS loginview open Steve` |
+| `/AXS loginview migrate-authme [dry-run]` | 从 AuthMe 数据库迁移密码哈希到 AXS 独立账户库。加 `dry-run` 参数只预览不执行，用于事先确认迁移数量 | `/AXS loginview migrate-authme dry-run`<br>`/AXS loginview migrate-authme` |
+| `/AXS loginview migration-commands` | 显示停用 AuthMe 后的安全操作步骤说明 | `/AXS loginview migration-commands` |
+
+#### Mail（邮箱系统）
+
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/AXS mail open <玩家>` | 为指定在线玩家打开邮箱收件箱界面 | `/AXS mail open Steve` |
+| `/AXS mail preset send <预设ID> <目标>` | 按预设向目标派发邮件。目标可以是玩家名、`all-online`（全部在线）或 `all-registered`（全部注册玩家） | `/AXS mail preset send welcome Steve`<br>`/AXS mail preset send update_notice all-online` |
+| `/AXS mail cdk create <预设ID> <兑换码\|auto> <最大领取数> <有效期>` | 基于邮件预设创建 CDK 兑换码。`auto` 自动生成随机码，有效期如 `1d`、`7d`、`permanent` | `/AXS mail cdk create gift_pack auto 100 7d`<br>`/AXS mail cdk create vip_reward ABCD1234 1 permanent` |
+| `/AXS mail cdk info <兑换码>` | 查看 CDK 的绑定预设、已领取次数、过期时间和启用状态 | `/AXS mail cdk info ABCD1234` |
+| `/AXS mail cdk list [页码]` | 分页查看当前所有已创建的 CDK 列表 | `/AXS mail cdk list`<br>`/AXS mail cdk list 2` |
+| `/AXS mail cdk delete <兑换码>` | 禁用并删除指定 CDK，已领取的不受影响 | `/AXS mail cdk delete ABCD1234` |
+
+#### Chat（聊天系统）
+
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/AXS chat mute <玩家> <时长> [原因]` | 禁言指定玩家。时长格式如 `30m`、`12h`、`7d`、`permanent`（永久） | `/AXS chat mute Steve 7d 发送广告`<br>`/AXS chat mute Griefer permanent` |
+| `/AXS chat unmute <玩家>` | 解除指定玩家的禁言状态 | `/AXS chat unmute Steve` |
+| `/AXS chat spy <玩家> <on\|off>` | 开启或关闭对指定玩家的私聊监听，管理员可查看该玩家的私聊内容 | `/AXS chat spy Steve on` |
+
+#### OnlineRewards（在线奖励）
+
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/AXS onlinerewards add\|remove\|set <时长> <玩家>` | 修改玩家的在线时长。`add` 增加、`remove` 减少、`set` 设置为指定值。时长如 `30m`、`2h`、`1d` | `/AXS onlinerewards add 2h Steve`<br>`/AXS onlinerewards set 0m Steve` |
+| `/AXS onlinerewards card add\|remove\|set <数量> <玩家>` | 修改玩家的补签卡数量 | `/AXS onlinerewards card add 3 Steve` |
+
+#### Warehouse（仓库系统）
+
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/AXS warehouse open <玩家>` | 为指定在线玩家打开仓库 AXUI 界面 | `/AXS warehouse open Steve` |
+| `/AXS warehouse info <玩家>` | 查看玩家的仓库概览信息，包括个人仓库使用量、共享仓库数等 | `/AXS warehouse info Steve` |
+| `/AXS warehouse password <玩家> clear` | 清除玩家的二级密码。适用于玩家忘记密码的情况 | `/AXS warehouse password Steve clear` |
+| `/AXS warehouse bank <玩家> <货币ID> <set\|add\|take> <金额>` | 管理玩家银行余额。`set` 设定、`add` 增加、`take` 扣除 | `/AXS warehouse bank Steve gold add 1000`<br>`/AXS warehouse bank Steve diamond set 50` |
+
+#### Prop（道具脚本）
+
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/AXS prop set <道具ID>` | 把指定道具 ID 写入执行者的当前 Prop 状态，用于调试 | `/AXS prop set magic_sword` |
+
+#### QuestGPS（任务导航）
+
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/AXS questgps open <玩家>` | 为指定在线玩家打开任务导航界面 | `/AXS questgps open Steve` |
+
+#### Map（地图系统）
+
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/AXS map open <玩家> [世界名]` | 为指定在线玩家打开地图界面，可选指定世界 | `/AXS map open Steve`<br>`/AXS map open Steve world_nether` |
+| `/AXS map list` | 列出所有已在配置中定义的地图世界 | `/AXS map list` |
+| `/AXS map anchors [世界名]` | 列出全部锚点，或只列出指定世界的锚点。锚点是地图上的标记点 | `/AXS map anchors`<br>`/AXS map anchors world` |
+
+---
 
 ## 玩家命令
 
-| 命令 | 别名 | 权限 | 说明 |
+以下命令面向普通玩家，无需管理员权限（但需要对应的 `arcartxsuite.<模块>.use` 权限节点，默认全部玩家可用）。
+
+### Title — 称号（`/title`）
+
+权限：`arcartxsuite.title.use`
+
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/title` 或 `/title open` | 打开称号管理菜单，可在界面中查看、装备、卸下和隐藏称号 | `/title` |
+| `/title equip <称号ID>` | 装备指定称号，称号效果（前缀/后缀/属性）将立即生效 | `/title equip 勇者之证` |
+| `/title unequip <组ID\|all>` | 卸下某个称号组中已装备的称号。使用 `all` 卸下全部已装备的称号 | `/title unequip 战斗`<br>`/title unequip all` |
+| `/title hide <称号ID>` | 隐藏指定称号，隐藏后该称号在菜单中不显示但仍然拥有 | `/title hide 新手之证` |
+| `/title unhide <称号ID>` | 取消隐藏，让该称号重新在菜单中显示 | `/title unhide 新手之证` |
+
+### Warehouse — 仓库（`/warehouse`，别名 `/wh`）
+
+权限：`arcartxsuite.warehouse.use`
+
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/warehouse` 或 `/wh` | 打开个人仓库界面。所有仓库操作（存/取/共享/银行）均在 AXUI 界面中完成 | `/wh` |
+
+### Mail — 邮箱（`/mail`，别名 `/axmail`）
+
+权限：`arcartxsuite.mail.use`
+
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/mail` 或 `/mail open` | 打开邮箱收件箱，查看收到的邮件 | `/mail` |
+| `/mail compose` | 打开写信界面，可给其他玩家写信并附带物品附件 | `/mail compose` |
+| `/mail claimall` | 一键领取所有未领取邮件中的附件和奖励 | `/mail claimall` |
+| `/mail deleteall` | 删除所有已读邮件，清理收件箱 | `/mail deleteall` |
+| `/mail cdk <兑换码>` | 使用兑换码领取对应的邮件奖励。兑换码由管理员创建 | `/mail cdk ABCD1234` |
+
+### Chat — 聊天（`/chat`）
+
+权限：`arcartxsuite.chat.use`
+
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/chat` | 查看当前聊天状态，包括所在频道、私聊开关、忽略列表等 | `/chat` |
+| `/chat channel <频道ID>` | 切换到指定聊天频道，之后发送的消息会进入该频道 | `/chat channel Global`<br>`/chat channel Staff` |
+| `/chat toggle private [on\|off]` | 开启或关闭私聊接收。关闭后其他玩家无法向你发送私聊消息 | `/chat toggle private off` |
+| `/chat toggle mentions [on\|off]` | 开启或关闭 @提及通知。关闭后不会收到被 @ 的提醒 | `/chat toggle mentions off` |
+| `/chat ignore <玩家>` | 屏蔽指定玩家，不再看到对方的聊天消息和私聊 | `/chat ignore Spammer` |
+| `/chat unignore <玩家>` | 取消屏蔽，恢复接收对方的消息 | `/chat unignore Spammer` |
+| `/chat socialspy [on\|off]` | 开启或关闭社交监听（需要权限），可查看其他玩家之间的私聊 | `/chat socialspy on` |
+
+### 私聊与回复
+
+| 命令 | 权限 | 说明 | 使用示例 |
 | --- | --- | --- | --- |
-| `/title open/equip/unequip/hide/unhide` | — | `arcartxsuite.title.use` | 称号菜单 |
-| `/warehouse` | `wh` | `arcartxsuite.warehouse.use` | 打开仓库 |
-| `/mail open/compose/claimall/cdk` | `axmail` | `arcartxsuite.mail.use` | 邮箱 |
-| `/chat channel/toggle/ignore` | — | `arcartxsuite.chat.use` | 频道控制 |
-| `/msg <player> <message>` | — | `arcartxsuite.chat.msg` | 私聊 |
-| `/onlinerewards open/signin/top` | `signin` | `arcartxsuite.onlinerewards.use` | 在线奖励 |
-| `/questgps open/cleartrack/hud` | — | `arcartxsuite.questgps.use` | 任务 GPS |
-| `/map open/hud/cleartrack` | `axmap` | `arcartxsuite.map.use` | 地图 |
+| `/msg <玩家> <消息>` | `arcartxsuite.chat.msg` | 向指定在线玩家发送一条私聊消息 | `/msg Steve 你好，需要帮忙吗？` |
+| `/reply <消息>` | `arcartxsuite.chat.msg` | 快速回复最近一次私聊你的玩家，无需再输入对方名字 | `/reply 好的，马上来` |
+
+### OnlineRewards — 在线奖励（`/onlinerewards`，别名 `/signin`）
+
+权限：`arcartxsuite.onlinerewards.use`
+
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/onlinerewards` 或 `/onlinerewards open` | 打开在线奖励菜单界面，可查看奖励进度和领取奖励 | `/onlinerewards` |
+| `/onlinerewards status` | 在聊天中查看自己的在线时长统计（今日/本周/本月/总计）和签到状态 | `/onlinerewards status` |
+| `/onlinerewards signin` 或 `/signin` | 进行今日签到。使用别名 `/signin` 可直接签到不打开菜单 | `/signin` |
+| `/onlinerewards top <范围> [页码]` | 查看在线时长排行榜。范围可选：`daily`（日）、`weekly`（周）、`monthly`（月）、`total`（总计） | `/onlinerewards top daily`<br>`/onlinerewards top total 2` |
+
+### QuestGPS — 任务导航（`/questgps`）
+
+权限：`arcartxsuite.questgps.use`
+
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/questgps` 或 `/questgps open` | 打开任务导航菜单，可查看可用任务和追踪目标位置 | `/questgps` |
+| `/questgps cleartrack` | 清除当前追踪的任务目标，HUD 导航箭头将消失 | `/questgps cleartrack` |
+| `/questgps hud [on\|off\|toggle]` | 控制 HUD 导航显示。`on` 开启、`off` 关闭、`toggle` 切换状态（默认） | `/questgps hud off`<br>`/questgps hud` |
+
+### Map — 地图（`/map`，别名 `/axmap`）
+
+权限：`arcartxsuite.map.use`
+
+| 命令 | 说明 | 使用示例 |
+| --- | --- | --- |
+| `/map` 或 `/map open [世界名]` | 打开地图界面。不指定世界时显示当前所在世界的地图 | `/map`<br>`/map open world_nether` |
+| `/map hud [on\|off\|toggle]` | 控制小地图 HUD 的显示开关 | `/map hud off`<br>`/map hud` |
+| `/map cleartrack` | 清除地图上正在追踪的目标点 | `/map cleartrack` |
