@@ -8,7 +8,7 @@
 
 - **架构** — 引入 **宿主 + 模块 Jar** 架构（`axs-api` + `axs-core` + `modules/*`），详见 [模块化架构](/architecture/modular)
 - **架构** — `ModuleRegistry` 预扫描外部模块 Jar，自动跳过内置加载，避免双重初始化
-- **架构** — 17 个模块 Jar 子项目（4 个独立实现 + 13 个委托实现），子功能合并入父模块：AttackTarget→EntityTracker、DigisDisplay→CombatEffect、Subtitle→Announcer、PacketCommand→EventPacket
+- **架构** — 17 个模块 Jar 子项目（4 个独立实现 + 13 个委托实现），目标 HUD、伤害飘字、字幕和客户端回包能力分别收归父模块
 - **架构** — 动态命令注册：模块实现 `ModuleCommandHandler` 即可自动注册 `/axs <moduleId>` 子命令
 - **改进** — EntityTracker 启动流程统一：`reloadEntityTrackerState(boolean logSummary)` 与其他模块一致
 - **移除** — 不再自动执行 `ax reload true`，ArcartX 已支持 UI 自动导入
@@ -21,7 +21,7 @@
 ## 4.0.0
 
 - **架构** — 模块整合为 17 个主模块，EntityTracker（实体追踪）、CombatEffect（战斗特效）、Announcer（播报系统）、EventPacket（事件引擎）功能扩展
-- **破坏** — 管理命令和 `config.yml` 中的旧模块名已全部移除，不再向下兼容：`bossbar` → `entitytracker`、`killeffect` → `combateffect`、`subtitle` → `announcer`、`attacktarget` → `entitytracker`、`digisdisplay` → `combateffect`、`packetcommand` → `eventpacket`、`onlinereward` → `onlinerewards`
+- **破坏** — 管理命令和 `config.yml` 只保留 17 个主模块入口：`entitytracker`、`combateffect`、`announcer`、`eventpacket`、`onlinerewards` 等，不再兼容旧的分散入口
 - **新增** — LoginView 登录界面模块（独立/AuthMe 兼容双模式）
 - **文档** — 迁移至 VitePress，全新可视化文档站
 

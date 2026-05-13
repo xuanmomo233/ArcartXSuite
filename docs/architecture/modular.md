@@ -10,11 +10,11 @@ ArcartXSuite/
 ├── axs-core/             # 宿主核心（ShadowJar 输出）
 ├── modules/
 │   ├── announcer/        # Announcer 播报 + Subtitle 字幕
-│   ├── entitytracker/    # EntityTracker 实体追踪 + AttackTarget 攻击目标
+│   ├── entitytracker/    # EntityTracker 实体追踪 + 目标 HUD
 │   ├── chat/             # Chat 频道聊天
 │   ├── conversation/     # Conversation 对话桥
 │   ├── eventpacket/      # EventPacket 事件引擎
-│   ├── combateffect/     # CombatEffect 战斗特效 + DigisDisplay 伤害飘字
+│   ├── combateffect/     # CombatEffect 战斗特效 + 伤害飘字
 │   ├── loginview/        # LoginView 登录界面
 │   ├── mail/             # Mail 邮箱
 │   ├── map/              # Map 世界地图
@@ -192,9 +192,9 @@ external-softdepends: []
 | rgb | RGB | ✅ 独立 | — | 自建 ArcartRgbService |
 | pickup | Pickup | ✅ 独立 | HUD | 自建 PickupService |
 | tab | Tab | ✅ 独立 | — | 自建 TabSyncService |
-| combateffect | CombatEffect + DigisDisplay | ✅ 独立 | — | 自建 CombatEffectService，DigisDisplay 随 CombatEffect 加载 |
+| combateffect | CombatEffect + 伤害飘字 | ✅ 独立 | — | 自建 CombatEffectService，伤害飘字随 CombatEffect 加载 |
 | announcer | Announcer + Subtitle | 🔗 委托 | HUD | reloadAnnouncerState，Subtitle 随 Announcer 加载 |
-| entitytracker | EntityTracker + AttackTarget | 🔗 委托 | HUD | reloadEntityTrackerState，AttackTarget 随 EntityTracker 加载 |
+| entitytracker | EntityTracker + 目标 HUD | 🔗 委托 | HUD | reloadEntityTrackerState，目标 HUD 随 EntityTracker 加载 |
 | chat | Chat | 🔗 委托 | — | reloadChatState |
 | conversation | Conversation | 🔗 委托 | UI+Selector | reloadConversationState |
 | eventpacket | EventPacket | 🔗 委托 | — | reloadEventPacketState |

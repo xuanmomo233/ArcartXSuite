@@ -147,7 +147,7 @@ features:
         <tr>
           <td>Boss 追踪</td>
           <td class="col-module">EntityTracker</td>
-          <td class="col-alt">原版 BossBar / CMI BossBar</td>
+          <td class="col-alt">原版 Boss 血条 / CMI 血条</td>
           <td class="col-advantage">实时伤害排行、多 Boss 并行、死亡自动结算发奖、补发机制</td>
         </tr>
         <tr>

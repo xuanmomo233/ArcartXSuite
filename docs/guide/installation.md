@@ -57,9 +57,9 @@ plugins/
   ArcartXSuite/
     config.yml
     modules/                ← 按需放入模块 Jar
-      AXS-RGB-1.0.0.jar
-      AXS-Tab-1.0.0.jar
-      AXS-Pickup-1.0.0.jar
+      ArcartXSuite-RGB-3.3.8.jar
+      ArcartXSuite-Tab-3.3.8.jar
+      ArcartXSuite-Pickup-3.3.8.jar
       ...
 ```
 
