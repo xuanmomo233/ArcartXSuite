@@ -49,10 +49,6 @@ license:
   install_id: "auto"
 ```
 
-::: warning 不再使用旧字段
-`license.key` 已废弃，不会被当作单个授权码读取。请始终使用 `license.keys` 列表。
-:::
-
 ## 授权码类型
 
 | 类型 | 示例前缀 | 解锁范围 |
