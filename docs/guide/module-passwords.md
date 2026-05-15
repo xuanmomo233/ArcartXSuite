@@ -58,25 +58,120 @@ license:
 
 同一个 QQ 可以拥有多个授权码。同一个授权码只能有一个 active 服务器绑定；如果第二台服务器也需要同一模块，请为该服务器单独发一个授权码。
 
-## 首次绑定流程
+## 授权激活完整流程
 
-1. 在后台为 QQ 发放单模块码或 suite 码。
-2. 把 QQ 和授权码写入 `plugins/ArcartXSuite/license.yml`。
-3. 保持 `install_id: "auto"`，首次启动时插件会生成 UUID 并写回配置。
-4. 重启服务器，或在控制台执行：
+授权激活分为“后台发码”和“服务器激活”两部分。后台负责把授权码归属到 QQ；服务器负责把授权码绑定到当前服务器身份。
+
+### 后台发码
+
+管理员在 Worker 项目目录执行：
+
+```powershell
+cd D:\Desktop\arcartxsuite-license
+```
+
+给 QQ 发放全模块授权：
+
+```powershell
+npm.cmd run license-admin -- create qq=1451759359 type=suite
+```
+
+给 QQ 发放单模块授权：
+
+```powershell
+npm.cmd run license-admin -- create qq=1451759359 module=warehouse
+```
+
+命令成功后会输出：
+
+```txt
+code=AXS-SUITE-xxxxxxxxxxxxxxxxxxxx
+id=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+```
+
+`code=` 是给服务器填写的授权码明文，只显示一次；`id=` 是数据库里的授权码 ID，后台停用、补次数、删除绑定时使用。
+
+如果这个 QQ 需要使用云端网页换绑，还需要生成授权账号设置密码链接：
+
+```powershell
+npm.cmd run license-admin -- setup-token qq=1451759359
+```
+
+把输出里的 `account_setup=...` 发给用户，让用户设置 QQ 授权账号密码。服务器激活本身不需要账号登录；账号登录只用于云端网页换绑和后续自助管理。
+
+### 服务器填写 license.yml
+
+打开服务器配置：
+
+```txt
+plugins/ArcartXSuite/license.yml
+```
+
+填写 QQ 和授权码：
+
+```yaml
+license:
+  qq: "1451759359"
+  keys:
+    - "AXS-SUITE-xxxxxxxxxxxxxxxxxxxx"
+  install_id: "auto"
+```
+
+多个单模块授权码可以写多行。`install_id: "auto"` 建议保留，插件首次启动时会生成 UUID 并写回配置。
+
+### 执行激活
+
+重启服务器，或在控制台执行：
 
 ```txt
 /axs license activate
 /axs license status
 ```
 
-绑定成功后，Worker 会返回签名票据，插件会写入：
+激活时插件会：
+
+1. 读取 `license.qq`、`license.keys`、`install_id`。
+2. 读取或生成 `security/local-salt.dat`。
+3. 计算当前机器指纹 `fingerprintHash`。
+4. 请求 Worker 的 `/v1/activate`。
+5. Worker 校验 QQ、授权码、模块类型、过期时间和当前绑定。
+6. 首次激活时，Worker 创建 `license_bindings` 绑定记录。
+7. Worker 返回 Ed25519 签名 ticket 和付费资源解密 key。
+8. 插件验签 ticket，并写入本地缓存。
+
+绑定成功后，插件会写入：
 
 ```txt
 plugins/ArcartXSuite/security/license.cache
 plugins/ArcartXSuite/security/secure-clock.dat
 plugins/ArcartXSuite/security/local-salt.dat
 ```
+
+`/axs license status` 中看到 `VALID`，并且模块列表包含需要的付费模块，就表示授权已经生效。
+
+### 刷新与重新激活
+
+日常刷新授权使用：
+
+```txt
+/axs license refresh
+```
+
+`refresh` 只验证当前绑定，不会消耗换绑次数。
+
+如果授权码还没有绑定当前服务器，或你刚清空过本地缓存，可以执行：
+
+```txt
+/axs license activate
+```
+
+如果授权码已经绑定其他服务器，普通 `activate` 会返回 `BOUND_TO_OTHER_INSTALL`。确认迁移时再使用：
+
+```txt
+/axs license rebind
+```
+
+或走云端网页换绑流程。
 
 ::: danger 不要随意删除 security 目录
 `local-salt.dat` 是服务器机器指纹的一部分。授权中心绑定的不只是 `install_id`，还包括 `local-salt.dat` 参与计算后的机器指纹。
