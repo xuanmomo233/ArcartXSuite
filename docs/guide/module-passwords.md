@@ -262,3 +262,51 @@ https://arcartxsuite-license.arcartxsuite-license.workers.dev/rebind
 | `REBIND_COOLDOWN_ACTIVE` | 换绑冷却中 | 等待冷却结束或后台重置冷却 |
 | `CLOUD_REBIND_MONTHLY_LIMIT_EXHAUSTED` | 云端网页换绑本月免费次数已用完 | 等到下个月，或联系管理员处理绑定 |
 | `NETWORK_ERROR` | 授权入口不可达 | 检查服务器网络、Cloudflare 可达性或临时代理配置 |
+
+## VPS 网络与代理排查
+
+如果日志里出现：
+
+```txt
+proxy=system:none 网络错误: UnknownHostException: arcartxsuite-license.arcartxsuite-license.workers.dev
+```
+
+含义是：插件尝试读取系统代理，但当前 VPS 没有可用系统代理，且 VPS 的 DNS 解析不到 `workers.dev`。这不是授权码问题。
+
+先在 VPS 上测试：
+
+```bash
+nslookup arcartxsuite-license.arcartxsuite-license.workers.dev
+curl -I https://arcartxsuite-license.arcartxsuite-license.workers.dev/v1/time
+```
+
+Windows VPS 可用：
+
+```powershell
+nslookup arcartxsuite-license.arcartxsuite-license.workers.dev
+curl.exe -I https://arcartxsuite-license.arcartxsuite-license.workers.dev/v1/time
+```
+
+如果 DNS 失败，先修 VPS 的 DNS，例如改为 `1.1.1.1`、`8.8.8.8` 或服务商推荐 DNS。
+
+如果 VPS 必须走代理，`127.0.0.1` 只代表 VPS 自己。代理必须运行在 VPS 本机，或者填写 VPS 能访问到的代理服务器地址：
+
+```yaml
+license:
+  network:
+    proxy:
+      enabled: true
+      use_system: false
+      type: HTTP
+      host: 代理服务器IP或域名
+      port: 7897
+```
+
+如果使用 Linux systemd 启动服务端，也可以给服务进程设置环境变量，但必须在启动 Minecraft 的同一个进程环境里生效：
+
+```ini
+Environment="HTTPS_PROXY=http://代理服务器IP:7897"
+Environment="HTTP_PROXY=http://代理服务器IP:7897"
+```
+
+`/axs license status` 里看到 `proxy=HTTP /代理IP:端口` 才表示插件真正走到了代理；`proxy=system:none` 表示没有解析到可用代理。
