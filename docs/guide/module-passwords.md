@@ -104,7 +104,7 @@ plugins/ArcartXSuite/license.yml
 plugins/ArcartXSuite/security/
 ```
 
-迁移服务器时，如果你希望授权仍然视为同一台服务器，请同时迁移 `license.yml` 和 `security/local-salt.dat`。如果你是故意换到新服务器，应保留新的 `local-salt.dat`，然后执行 `/axs license rebind`。
+迁移服务器时，如果你希望授权仍然视为同一台服务器，请同时迁移 `license.yml` 和 `security/local-salt.dat`。如果你是故意换到新服务器，应保留新的 `local-salt.dat`，然后执行 `/axs license rebind`，或使用云端网页换绑。
 
 ## 换绑方式
 
@@ -127,13 +127,15 @@ fallback 地址：
 https://arcartxsuite-license.arcartxsuite-license.workers.dev/rebind
 ```
 
-云端换绑前，先在目标服务器执行：
+云端换绑前，先在新目标服务器执行：
 
 ```txt
-/axs license fingerprint
+/axs license cloud-code
 ```
 
-复制输出里的 `install_id`、`fingerprintHash` 和 `localSaltHash` 到网页。网页换绑成功后，回到目标服务器执行：
+复制输出里的 `challengeCode` 到网页。网页换绑需要先用 QQ 授权账号登录，选择该 QQ 名下的授权码，再输入挑战码。旧服务器不需要在线，也不需要旧服务器确认；挑战码由新服务器生成，10 分钟内有效且只能使用一次。
+
+网页换绑成功后，回到目标服务器执行：
 
 ```txt
 /axs license activate
@@ -149,6 +151,7 @@ https://arcartxsuite-license.arcartxsuite-license.workers.dev/rebind
 | `/axs license refresh` | 刷新当前服务器绑定，不消耗换绑次数 |
 | `/axs license activate` | 首次绑定或重新激活当前服务器 |
 | `/axs license rebind` | 显式换绑到当前服务器，会消耗该授权码的自助换绑次数/冷却 |
+| `/axs license cloud-code` | 生成云端网页换绑挑战码，用于证明你控制新目标服务器 |
 | `/axs license fingerprint` | 输出当前服务器机器指纹和 localSaltHash，用于后台核对 |
 
 ## 校验流程

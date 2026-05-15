@@ -24,6 +24,7 @@
 | `/AXS license refresh` | 刷新当前服务器绑定的授权票据。不会消耗换绑次数，适合改完 `license.yml` 后手动同步 | `/AXS license refresh` |
 | `/AXS license activate` | 主动激活当前服务器，把 `qq + keys + install_id + 机器指纹` 绑定到授权中心 | `/AXS license activate` |
 | `/AXS license rebind` | 显式把授权码换绑到当前服务器，会消耗该授权码的自助换绑次数/冷却 | `/AXS license rebind` |
+| `/AXS license cloud-code` | 生成云端网页换绑挑战码，用于证明你控制新目标服务器 | `/AXS license cloud-code` |
 | `/AXS license fingerprint` | 输出当前服务器机器指纹、localSaltHash 和参与指纹计算的组件，用于授权诊断 | `/AXS license fingerprint` |
 
 合法的 `<模块名>` 共 17 个：
@@ -47,6 +48,7 @@ map, questgps, warehouse
 | `/AXS license refresh` | 授权码已绑定本服务器，需要重新向 Worker 验证并刷新缓存 | 本次请求的入口、是否成功、失败原因 |
 | `/AXS license activate` | 首次绑定、缓存过旧、或出现 `BINDING_NOT_FOUND` 时手动激活 | 成功后会写入新的 `security/license.cache` |
 | `/AXS license rebind` | 授权码已经绑定到另一台服务器或旧机器指纹，且你确认要迁移到当前服务器 | 成功后旧绑定失效；失败时会显示换绑次数或冷却原因 |
+| `/AXS license cloud-code` | 需要使用云端网页换绑，且旧服务器不可用或不想消耗服务器内换绑次数 | 输出 10 分钟有效的一次性 `challengeCode` |
 | `/AXS license fingerprint` | 对比后台记录、排查机器指纹不匹配、确认本地 salt 是否变化 | `hash`、`localSaltHash` 和各指纹组件 |
 
 常见授权错误：
