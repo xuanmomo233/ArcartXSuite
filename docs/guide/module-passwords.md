@@ -106,6 +106,41 @@ plugins/ArcartXSuite/security/
 
 迁移服务器时，如果你希望授权仍然视为同一台服务器，请同时迁移 `license.yml` 和 `security/local-salt.dat`。如果你是故意换到新服务器，应保留新的 `local-salt.dat`，然后执行 `/axs license rebind`。
 
+## 换绑方式
+
+AXS 支持两种换绑方式，次数相互独立：
+
+| 方式 | 适用场景 | 次数规则 |
+| --- | --- | --- |
+| 服务器内换绑 `/axs license rebind` | 已经能进入新服务器控制台 | 消耗授权码的服务器内自助换绑次数 |
+| 云端网页换绑 | 旧服务器不可用、无法进入控制台或需要先解绑旧机器 | 每个授权码每月免费 4 次，不消耗服务器内换绑次数 |
+
+云端换绑地址：
+
+```txt
+https://license.arcartxsuite.com/rebind
+```
+
+fallback 地址：
+
+```txt
+https://arcartxsuite-license.arcartxsuite-license.workers.dev/rebind
+```
+
+云端换绑前，先在目标服务器执行：
+
+```txt
+/axs license fingerprint
+```
+
+复制输出里的 `install_id`、`fingerprintHash` 和 `localSaltHash` 到网页。网页换绑成功后，回到目标服务器执行：
+
+```txt
+/axs license activate
+```
+
+或重启服务器。
+
 ## 授权命令
 
 | 命令 | 用途 |
@@ -150,4 +185,5 @@ plugins/ArcartXSuite/security/
 | `BOUND_TO_OTHER_INSTALL` | 授权码已绑定其他服务器或旧机器指纹。常见原因是删除/重建了 `security/local-salt.dat`，或把同一个授权码拿到另一台服务器使用 | 如果是迁移服务器，执行 `/axs license rebind`；如果是误删 salt，恢复旧 `local-salt.dat` 备份；管理员也可以删除旧 binding 后重新 `/axs license activate` |
 | `REBIND_QUOTA_EXHAUSTED` | 自助换绑次数不足 | 后台补换绑次数或管理员删除绑定 |
 | `REBIND_COOLDOWN_ACTIVE` | 换绑冷却中 | 等待冷却结束或后台重置冷却 |
+| `CLOUD_REBIND_MONTHLY_LIMIT_EXHAUSTED` | 云端网页换绑本月免费次数已用完 | 等到下个月，或联系管理员处理绑定 |
 | `NETWORK_ERROR` | 授权入口不可达 | 检查服务器网络、Cloudflare 可达性或临时代理配置 |
