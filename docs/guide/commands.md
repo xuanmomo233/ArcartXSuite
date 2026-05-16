@@ -121,7 +121,12 @@ map, questgps, warehouse
 | 命令 | 说明 | 使用示例 |
 | --- | --- | --- |
 | `/axs mail open <玩家>` | 为指定在线玩家打开邮箱收件箱界面 | `/axs mail open Steve` |
+| `/axs mail admin` | 打开邮箱管理 UI，支持可视化新建/编辑/删除/发布邮件预设 | `/axs mail admin` |
+| `/axs mail preset list` | 列出所有已加载的邮件预设，显示 ID、显示名、启用状态和附件数量 | `/axs mail preset list` |
 | `/axs mail preset send <预设ID> <目标>` | 按预设向目标派发邮件。目标可以是玩家名、`all-online`（全部在线）或 `all-registered`（全部注册玩家） | `/axs mail preset send welcome Steve`<br>`/axs mail preset send update_notice all-online` |
+| `/axs mail preset info <预设ID>` | 查看预设详细信息，包括标题、正文、附件、命令和启用状态 | `/axs mail preset info starter` |
+| `/axs mail preset delete <预设ID>` | 删除预设（从内存和 YAML 文件） | `/axs mail preset delete old_event` |
+| `/axs mail preset reload` | 重新从 YAML 加载所有预设 | `/axs mail preset reload` |
 | `/axs mail cdk create <预设ID> <兑换码\|auto> <最大领取数> <有效期>` | 基于邮件预设创建 CDK 兑换码。`auto` 自动生成随机码，有效期如 `1d`、`7d`、`permanent` | `/axs mail cdk create gift_pack auto 100 7d`<br>`/axs mail cdk create vip_reward ABCD1234 1 permanent` |
 | `/axs mail cdk info <兑换码>` | 查看 CDK 的绑定预设、已领取次数、过期时间和启用状态 | `/axs mail cdk info ABCD1234` |
 | `/axs mail cdk list [页码]` | 分页查看当前所有已创建的 CDK 列表 | `/axs mail cdk list`<br>`/axs mail cdk list 2` |
