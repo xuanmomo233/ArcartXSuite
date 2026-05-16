@@ -35,9 +35,9 @@ modules:
 
 | 命令 | 说明 |
 | --- | --- |
-| `/AXS questgps status` | 查看任务导航模块状态 |
-| `/AXS questgps reload` | 重载任务导航配置和 UI |
-| `/AXS questgps open <玩家>` | 为在线玩家打开任务导航界面 |
+| `/axs questgps status` | 查看任务导航模块状态 |
+| `/axs questgps reload` | 重载任务导航配置和 UI |
+| `/axs questgps open <玩家>` | 为在线玩家打开任务导航界面 |
 
 ### 玩家命令（权限：`arcartxsuite.questgps.use`）
 

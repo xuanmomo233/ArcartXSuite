@@ -57,5 +57,5 @@ tabs:
 
 | 命令 | 说明 |
 | --- | --- |
-| `/AXS tab status` | 查看 Tab 模块状态 |
-| `/AXS tab reload` | 重载 Tab 配置并刷新在线玩家显示 |
+| `/axs tab status` | 查看 Tab 模块状态 |
+| `/axs tab reload` | 重载 Tab 配置并刷新在线玩家显示 |

@@ -62,11 +62,11 @@ channels:
 
 | 命令 | 说明 |
 | --- | --- |
-| `/AXS chat status` | 查看聊天模块状态、存储、Redis 和 Proxy 连接信息 |
-| `/AXS chat reload` | 重载聊天频道、过滤和跨服配置 |
-| `/AXS chat mute <玩家> <时长> [原因]` | 禁言玩家。时长如 `30m`、`12h`、`7d`、`permanent`（永久） |
-| `/AXS chat unmute <玩家>` | 解除玩家禁言 |
-| `/AXS chat spy <玩家> <on\|off>` | 开启/关闭对指定玩家的私聊监听 |
+| `/axs chat status` | 查看聊天模块状态、存储、Redis 和 Proxy 连接信息 |
+| `/axs chat reload` | 重载聊天频道、过滤和跨服配置 |
+| `/axs chat mute <玩家> <时长> [原因]` | 禁言玩家。时长如 `30m`、`12h`、`7d`、`permanent`（永久） |
+| `/axs chat unmute <玩家>` | 解除玩家禁言 |
+| `/axs chat spy <玩家> <on\|off>` | 开启/关闭对指定玩家的私聊监听 |
 
 ### 玩家命令（权限：`arcartxsuite.chat.use`）
 

@@ -60,12 +60,12 @@ modules:
 
 | 命令 | 说明 |
 | --- | --- |
-| `/AXS warehouse status` | 查看仓库模块、数据库和配置状态 |
-| `/AXS warehouse reload` | 重载仓库配置 |
-| `/AXS warehouse open <玩家>` | 为在线玩家打开仓库界面 |
-| `/AXS warehouse info <玩家>` | 查看玩家仓库概览（使用量、共享仓库数等） |
-| `/AXS warehouse password <玩家> clear` | 清除玩家的二级密码（玩家忘记密码时使用） |
-| `/AXS warehouse bank <玩家> <货币ID> <set\|add\|take> <金额>` | 管理玩家银行余额。`set` 设定、`add` 增加、`take` 扣除 |
+| `/axs warehouse status` | 查看仓库模块、数据库和配置状态 |
+| `/axs warehouse reload` | 重载仓库配置 |
+| `/axs warehouse open <玩家>` | 为在线玩家打开仓库界面 |
+| `/axs warehouse info <玩家>` | 查看玩家仓库概览（使用量、共享仓库数等） |
+| `/axs warehouse password <玩家> clear` | 清除玩家的二级密码（玩家忘记密码时使用） |
+| `/axs warehouse bank <玩家> <货币ID> <set\|add\|take> <金额>` | 管理玩家银行余额。`set` 设定、`add` 增加、`take` 扣除 |
 
 ### 玩家命令（权限：`arcartxsuite.warehouse.use`，别名 `/wh`）
 

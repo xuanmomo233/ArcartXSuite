@@ -16,7 +16,7 @@
 
 **预设邮件：**
 - **预设定义**：在 `mail/presets/*.yml` 中定义邮件模板，包含标题、正文、附件、命令
-- **批量派发**：`/AXS mail preset send` 支持指定玩家、全部在线、全部已注册三种目标
+- **批量派发**：`/axs mail preset send` 支持指定玩家、全部在线、全部已注册三种目标
 - **模块联动**：OnlineRewards 签到奖励、EntityTracker Boss 结算等均可通过预设邮件发奖
 
 **CDK 系统：**
@@ -58,14 +58,14 @@ modules:
 
 | 命令 | 说明 |
 | --- | --- |
-| `/AXS mail status` | 查看邮箱模块、存储、预设和 CDK 状态 |
-| `/AXS mail reload` | 重载邮箱配置、预设和 UI |
-| `/AXS mail open <玩家>` | 为在线玩家打开邮箱收件箱 |
-| `/AXS mail preset send <预设ID> <目标>` | 按预设派发邮件。目标可填玩家名、`all-online` 或 `all-registered` |
-| `/AXS mail cdk create <预设ID> <兑换码\|auto> <最大领取数> <有效期>` | 创建 CDK 兑换码。`auto` 自动生成，有效期如 `1d`、`7d`、`permanent` |
-| `/AXS mail cdk info <兑换码>` | 查看 CDK 绑定预设、已领取次数、过期时间 |
-| `/AXS mail cdk list [页码]` | 分页查看所有已创建的 CDK |
-| `/AXS mail cdk delete <兑换码>` | 禁用并删除指定 CDK |
+| `/axs mail status` | 查看邮箱模块、存储、预设和 CDK 状态 |
+| `/axs mail reload` | 重载邮箱配置、预设和 UI |
+| `/axs mail open <玩家>` | 为在线玩家打开邮箱收件箱 |
+| `/axs mail preset send <预设ID> <目标>` | 按预设派发邮件。目标可填玩家名、`all-online` 或 `all-registered` |
+| `/axs mail cdk create <预设ID> <兑换码\|auto> <最大领取数> <有效期>` | 创建 CDK 兑换码。`auto` 自动生成，有效期如 `1d`、`7d`、`permanent` |
+| `/axs mail cdk info <兑换码>` | 查看 CDK 绑定预设、已领取次数、过期时间 |
+| `/axs mail cdk list [页码]` | 分页查看所有已创建的 CDK |
+| `/axs mail cdk delete <兑换码>` | 禁用并删除指定 CDK |
 
 ### 玩家命令（权限：`arcartxsuite.mail.use`，别名 `/axmail`）
 

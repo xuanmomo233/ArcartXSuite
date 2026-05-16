@@ -107,13 +107,13 @@ attack-target:
 
 | 命令 | 说明 |
 | --- | --- |
-| `/AXS entitytracker status` | 查看模块状态、活跃会话数和奖励配置信息 |
-| `/AXS entitytracker reload` | 重载 EntityTracker 配置、UI 和追踪服务 |
-| `/AXS entitytracker sessions [mobId]` | 列出当前正在追踪的 Boss 会话。可选传入 `mobId` 过滤指定 Boss |
-| `/AXS entitytracker rank <entityUuid> [page]` | 查看指定 Boss 实体的实时伤害排行榜（UUID 可从 sessions 命令获取） |
-| `/AXS entitytracker settlements [page]` | 分页查看历史结算记录，包含 Boss 名称、击杀时间和参与人数 |
-| `/AXS entitytracker settlement <结算ID> [page]` | 查看指定结算的详细排名：每位参与者的伤害值和奖励 |
-| `/AXS entitytracker reissue <结算ID> <名次> [玩家]` | 按结算名次补发奖励，不指定玩家则发给原排名玩家 |
+| `/axs entitytracker status` | 查看模块状态、活跃会话数和奖励配置信息 |
+| `/axs entitytracker reload` | 重载 EntityTracker 配置、UI 和追踪服务 |
+| `/axs entitytracker sessions [mobId]` | 列出当前正在追踪的 Boss 会话。可选传入 `mobId` 过滤指定 Boss |
+| `/axs entitytracker rank <entityUuid> [page]` | 查看指定 Boss 实体的实时伤害排行榜（UUID 可从 sessions 命令获取） |
+| `/axs entitytracker settlements [page]` | 分页查看历史结算记录，包含 Boss 名称、击杀时间和参与人数 |
+| `/axs entitytracker settlement <结算ID> [page]` | 查看指定结算的详细排名：每位参与者的伤害值和奖励 |
+| `/axs entitytracker reissue <结算ID> <名次> [玩家]` | 按结算名次补发奖励，不指定玩家则发给原排名玩家 |
 
 ## PAPI
 

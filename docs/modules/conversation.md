@@ -81,7 +81,7 @@ example_conversation:
 修改后执行：
 
 ```txt
-/AXS conversation reload
+/axs conversation reload
 ```
 
 如果 Chemdah 本身不会热重载对话配置，还需要按你的 Chemdah 管理方式重载 Chemdah 或重启服务器。
@@ -100,8 +100,8 @@ example_conversation:
 
 | 命令 | 说明 |
 | --- | --- |
-| `/AXS conversation status` | 查看对话桥模块状态 |
-| `/AXS conversation reload` | 重载对话配置和 UI |
+| `/axs conversation status` | 查看对话桥模块状态 |
+| `/axs conversation reload` | 重载对话配置和 UI |
 
 ## UI / Packet
 

@@ -59,5 +59,5 @@ entries:
 
 | 命令 | 说明 |
 | --- | --- |
-| `/AXS rgb status` | 查看 RGB 模块状态 |
-| `/AXS rgb reload` | 重载动态渐变配置 |
+| `/axs rgb status` | 查看 RGB 模块状态 |
+| `/axs rgb reload` | 重载动态渐变配置 |

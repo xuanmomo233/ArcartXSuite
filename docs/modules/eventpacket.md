@@ -7,7 +7,7 @@
 - `join` / `first-join` / `quit`
 - `placeholder-increase` / `placeholder-decrease` / `placeholder-threshold`
 - `mob-kill-count`
-- `command-signal`（由 `/AXS eventpacket fire` 手动触发，或由其他模块自动发射信号）
+- `command-signal`（由 `/axs eventpacket fire` 手动触发，或由其他模块自动发射信号）
 - `client-packet`（客户端回包触发预设指令）
 
 ### 核心特性
@@ -20,7 +20,7 @@
 - **`placeholder-decrease`**：指定 PAPI 值减少时触发
 - **`placeholder-threshold`**：指定 PAPI 值达到阈值时触发
 - **`mob-kill-count`**：击杀指定 MythicMob 累计 N 次后触发
-- **`command-signal`**：由 `/AXS eventpacket fire` 手动触发，或由其他模块（LoginView、OnlineRewards 等）自动发射信号
+- **`command-signal`**：由 `/axs eventpacket fire` 手动触发，或由其他模块（LoginView、OnlineRewards 等）自动发射信号
 - **`client-packet`**：客户端通过 ArcartX Packet.send 回包触发
 
 **动作链：**
@@ -345,6 +345,6 @@ rules:
 
 | 命令 | 说明 |
 | --- | --- |
-| `/AXS eventpacket status` | 查看事件引擎规则数量和模块状态 |
-| `/AXS eventpacket reload` | 重载触发器配置 |
-| `/AXS eventpacket fire <信号名> <玩家> [key=value...]` | 手动向指定玩家触发信号，可附带参数。用于调试规则配置 |
+| `/axs eventpacket status` | 查看事件引擎规则数量和模块状态 |
+| `/axs eventpacket reload` | 重载触发器配置 |
+| `/axs eventpacket fire <信号名> <玩家> [key=value...]` | 手动向指定玩家触发信号，可附带参数。用于调试规则配置 |

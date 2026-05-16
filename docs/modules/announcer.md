@@ -84,11 +84,11 @@ groups:
 
 | 命令 | 说明 |
 | --- | --- |
-| `/AXS announcer status` | 查看播报模块状态和公告/字幕组数量 |
-| `/AXS announcer reload` | 重载播报配置和 HUD |
-| `/AXS announcer subtitle list` | 列出所有已加载的字幕组 ID |
-| `/AXS announcer subtitle play <玩家> <字幕组ID>` | 向在线玩家播放打字机字幕动画 |
-| `/AXS announcer subtitle stop <玩家>` | 停止玩家当前正在播放的字幕 |
+| `/axs announcer status` | 查看播报模块状态和公告/字幕组数量 |
+| `/axs announcer reload` | 重载播报配置和 HUD |
+| `/axs announcer subtitle list` | 列出所有已加载的字幕组 ID |
+| `/axs announcer subtitle play <玩家> <字幕组ID>` | 向在线玩家播放打字机字幕动画 |
+| `/axs announcer subtitle stop <玩家>` | 停止玩家当前正在播放的字幕 |
 
 ## UI / Packet
 

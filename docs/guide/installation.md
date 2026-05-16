@@ -1,4 +1,4 @@
-# 安装
+﻿# 安装
 
 ## 环境要求
 
@@ -53,7 +53,7 @@ plugins/
 ### 4. 验证
 
 ```
-/AXS status
+/axs status
 ```
 
 所有行都是 `disabled / locked` 是正常的，因为还没填写授权码，也还没开启模块。
@@ -89,8 +89,8 @@ plugins/
 
 ### 重载
 
-- `/AXS reload all` 自动判断每个模块的加载来源，走对应的重载路径
-- `/AXS reload <模块名>` 同理
+- `/axs reload all` 自动判断每个模块的加载来源，走对应的重载路径
+- `/axs reload <模块名>` 同理
 
 ::: tip 无需手动 ax reload
 ArcartX 现已支持 UI 自动导入，AXS 不再需要在启动或重载时执行 `ax reload` 命令。

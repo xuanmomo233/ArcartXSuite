@@ -28,8 +28,8 @@ plugins/ArcartXSuite/license.yml
 3. 执行：
 
 ```txt
-/AXS license activate
-/AXS license status
+/axs license activate
+/axs license status
 ```
 
 4. `license status` 显示 `VALID`，并且模块列表包含目标付费模块后，再启用对应模块。
@@ -58,8 +58,8 @@ entries:
 ### 3. reload 并验证
 
 ```
-/AXS announcer reload
-/AXS announcer status
+/axs announcer reload
+/axs announcer status
 ```
 
 ### 4. 进游戏看 HUD
@@ -77,6 +77,6 @@ entries:
 确认 1-2 个模块跑通后，逐个打开其他模块：
 
 ```
-/AXS reload all
-/AXS status
+/axs reload all
+/axs status
 ```

@@ -1,4 +1,4 @@
-# 模块化架构
+﻿# 模块化架构
 
 ArcartXSuite 1.0.2-beta 使用 **宿主 + 模块 Jar** 架构。宿主（`axs-core`）提供核心基础设施，各功能模块可以打包为独立 Jar 放入 `modules/` 目录按需加载。
 
@@ -61,14 +61,14 @@ onEnable()
 
 ## 重载流程
 
-### `/AXS reload all`
+### `/axs reload all`
 
 对每个模块判断加载来源：
 
 - **外部 Jar 已加载** → `moduleRegistry.reloadModule(id)` → 触发模块 `onReload()`
 - **内置加载** → `plugin.reloadXxxState(true)`
 
-### `/AXS reload <模块名>`
+### `/axs reload <模块名>`
 
 单模块重载遵循同样逻辑，通过 `isExternalModule()` 判断走外部还是内置路径。
 

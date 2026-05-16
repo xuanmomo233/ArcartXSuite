@@ -83,5 +83,5 @@ digis-display:
 
 | 命令 | 说明 |
 | --- | --- |
-| `/AXS combateffect status` | 查看战斗特效模块是否启用和配置加载状态 |
-| `/AXS combateffect reload` | 重载战斗特效配置 |
+| `/axs combateffect status` | 查看战斗特效模块是否启用和配置加载状态 |
+| `/axs combateffect reload` | 重载战斗特效配置 |
