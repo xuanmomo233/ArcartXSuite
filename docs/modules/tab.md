@@ -6,7 +6,7 @@ Tab 属于福利模块，消费额度满 ¥200 或单独购买 ¥40 即可获得
 
 ## 功能定位
 
-通过 ArcartX TAB UI 渲染自定义在线列表，支持排序、分组、PAPI 变量。
+通过 ArcartX TAB UI 渲染自定义在线列表，支持排序、分组、PAPI 变量、跨服。
 
 ### 核心特性
 
@@ -32,7 +32,7 @@ Tab 属于福利模块，消费额度满 ¥200 或单独购买 ¥40 即可获得
 
 ## 启用步骤
 
-Tab 是付费模块，启用前需要先完成 `license.yml` 授权激活。
+Tab 是福利模块，启用前需要先完成 `license.yml` 授权激活。
 
 ```yaml
 modules:
@@ -51,9 +51,17 @@ settings:
 
 tabs:
   online-tab:
-    ui-id: "ArcartXTab"
+    ui-id: "tab"
     packet-handler: "tab"
 ```
+
+## UI / Packet
+
+| 功能 | UI ID | 说明 |
+| --- | --- | --- |
+| 在线列表 | `tab` | 服务端按 `refresh-interval-ticks` 周期 diff 推送；客户端 `Packet.send("TAB", "update")` 触发一次强制重发（受 `client-refresh-guard` 限流） |
+
+> UI 注册 ID 由 `ArcartXTab.yml` 中 `tabs.<id>.ui-id` 决定，默认 `tab`。如自定义其他 UI，可改这里并对齐 ArcartX UI 端的注册名。
 
 ## 命令
 
