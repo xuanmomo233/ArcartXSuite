@@ -80,10 +80,10 @@ gate:
 
 ```yaml
 # data/questgps/quests/mainline.yml
-"main/example_quest":
-  enabled: true
+"main/example_quest":                    # example_quest 为 Chemdah 的任务id
+  enabled: true                          # 是否启用本任务
   category: mainline                     # mainline / side / encounter
-  display-name-override: "初入岛屿"      # 覆盖 Chemdah 任务名，留空则用 Chemdah 原名
+  display-name-override: "初入岛屿"       # 覆盖 Chemdah 任务名，留空则用 Chemdah 原名
   description:                           # 任务描述，完全由 QuestGPS 控制
     - "&7跟随引导完成第一条主线。"
     - "&8这里的描述不读取 Chemdah 配置。"
