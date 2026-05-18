@@ -1,4 +1,4 @@
-﻿import { defineConfig } from 'vitepress'
+import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   lang: 'zh-CN',
@@ -69,7 +69,6 @@ export default defineConfig({
           collapsed: false,
           items: [
             { text: 'Announcer 播报系统', link: '/modules/announcer' },
-            { text: 'EntityTracker 实体追踪', link: '/modules/entitytracker' },
             { text: 'Chat 聊天', link: '/modules/chat' },
             { text: 'EventPacket 事件引擎', link: '/modules/eventpacket' },
             { text: 'CombatEffect 战斗特效', link: '/modules/combateffect' },
@@ -97,6 +96,7 @@ export default defineConfig({
           collapsed: false,
           items: [
             { text: 'Tab 在线列表', link: '/modules/tab' },
+            { text: 'EntityTracker 实体追踪', link: '/modules/entitytracker' },
           ],
         },
       ],
