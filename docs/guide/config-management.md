@@ -154,3 +154,72 @@ operations:
     from: "old-key"
     to: "new-key"
 ```
+
+## 何时需要更新诊断声明
+
+智能诊断引擎对大多数 yml 改动可自动识别，但**部分情况必须显式更新声明**，否则会丢值或漏告警。
+
+### 自动覆盖（无需更新声明）
+
+| 改动 | 自动行为 |
+|------|---------|
+| 新增 jar 默认字段 | 报告 `JAR_NEW`，用户配置自动合并 |
+| 删除 jar 默认字段 | 报告 `USER_DEPRECATED` |
+| 修改 jar 默认值 | 标记用户旧值为 `USER_MODIFIED` |
+| 修改注释/排版 | 不影响 |
+
+### 必须更新声明
+
+| 改动 | 必须做的事 |
+|------|-----------|
+| **重命名字段**（`a.b` → `c.d`） | 写 `migrations/<from>-<to>.yml` 添加 `rename` 操作 + 递增 `currentConfigVersion()` |
+| **移动字段**（嵌套层级变化） | 写 migration + 升版本号 |
+| **新增字段类型/范围/枚举约束** | 在模块的 `mainConfigValidations()` 或 `additionalConfigSpecs()` 加 `ValidationRule` |
+| **新增动态节**（用户可自由扩展的子节） | 在 `defaultSyncPolicy()` 用 `SyncPolicy.builder().dynamicSection("path").build()` 声明 |
+
+### 字段约束速查
+
+模块入口（继承 `AbstractAXSModule`）需要覆写：
+
+```java
+@Override
+protected List<ValidationRule> mainConfigValidations() {
+    return List.of(
+        ValidationRule.of("storage.mode", ValueType.STRING)
+            .withEnum(Set.of("sqlite", "mysql")),
+        ValidationRule.of("storage.pool-size", ValueType.INT)
+            .withRange(1, 100),
+        ValidationRule.required("storage.url", ValueType.STRING)
+    );
+}
+
+@Override
+protected SyncPolicy defaultSyncPolicy() {
+    return SyncPolicy.builder()
+        .dynamicSection("warehouses")  // 用户自由添加子节
+        .build();
+}
+
+@Override
+protected int currentConfigVersion() {
+    return 2; // 字段重命名时递增
+}
+```
+
+### 强制流程
+
+每次改动 yml 默认配置时按此清单执行：
+
+1. ✅ 修改 jar 默认 yml
+2. ✅ 如重命名/移动字段 → 写 migration + 升版本号
+3. ✅ 如有新增值约束 → 加 `ValidationRule`
+4. ✅ 如有新增动态节 → 更新 `SyncPolicy`
+5. ✅ 在 `docs/appendix/changelog.md` 记录改动
+6. ✅ 跑 `.\gradlew.bat build` 验证
+
+### 反模式（禁止）
+
+- ❌ 重命名字段但不写 migration → 用户值丢失
+- ❌ 修改字段含义但保持名字不变 → 用户值会被错误保留
+- ❌ 删除已发布的 migration 文件 → 老版本升级路径断裂
+
