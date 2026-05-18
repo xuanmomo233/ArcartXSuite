@@ -40,6 +40,76 @@ map, questgps, warehouse
 
 ---
 
+### 热加载/卸载命令说明
+
+热加载和热卸载是 1.1.0-beta 版本新增的运行时模块管理能力，允许在不重启服务端的情况下动态加载或卸载模块。
+
+#### `/axs load <模块名>`
+
+**用途**：热加载新模块或重新启用已卸载的模块。
+
+**执行流程**：
+1. 检查模块未加载（已加载则拒绝，提示使用 reload）
+2. 扫描 `modules/` 目录寻找 id 匹配的 jar 文件
+3. 执行 license 校验（`LicenseService.isModuleAllowed(id)`）
+4. 创建独立 `ModuleClassLoader` 并实例化模块主类
+5. 调用 `instance.onEnable(context)` 完成初始化
+
+**使用场景**：
+- 首次部署新的模块 Jar
+- 重新启用之前通过 `unload` 卸载的模块
+- 更新模块 Jar 后重新加载（需要先 unload 再 load）
+
+**示例**：
+```bash
+/axs load mail          # 加载邮箱模块
+/axs load questgps      # 加载任务导航模块
+```
+
+#### `/axs unload <模块名>`
+
+**用途**：热卸载已加载的模块，释放资源。
+
+**安全检查**：
+- **反向依赖检查**：遍历所有已启用模块的 `depends` 配置
+- 若存在依赖该模块的其他模块，则拒绝卸载并提示依赖列表
+- 确保不会破坏模块间的依赖关系
+
+**执行流程**：
+1. 移除 `/axs <模块名>` 子命令处理器
+2. 调用 `instance.onDisable()` 执行模块清理
+3. 移除该模块注册的客户端包处理器
+4. 从模块注册表中移除记录
+5. 关闭 `URLClassLoader` 释放 jar 文件句柄
+
+**使用场景**：
+- 临时禁用某个模块进行调试
+- 更新模块 Jar 前先卸载旧版本
+- 释放服务器资源
+
+**示例**：
+```bash
+/axs unload mail        # 卸载邮箱模块
+/axs unload warehouse    # 卸载仓库模块
+```
+
+#### 已知约束
+
+- **UI 残留**：ArcartX UI 不支持显式注销，卸载后旧 UI 仍由 ArcartX 持有，但包处理器已断开
+- **Capability 清理**：模块需在 `onDisable` 中自行清理注册的 capabilities
+- **依赖顺序**：卸载时需按依赖关系手动处理，系统不会自动卸载依赖模块
+
+#### 与 reload 的区别
+
+| 操作 | load/unload | reload |
+|------|-------------|--------|
+| **ClassLoader** | 创建/关闭新的 | 复用现有的 |
+| **资源释放** | 完全释放 jar 句柄 | 仅重置状态 |
+| **依赖检查** | unload 时检查反向依赖 | 不检查 |
+| **适用场景** | 动态插拔、版本更新 | 配置刷新、状态重置 |
+
+---
+
 ### 授权命令说明
 
 授权命令用于排查和管理 `plugins/ArcartXSuite/license.yml` 中的 QQ + 授权码配置。当前付费模块为 `warehouse`、`map`、`mail`、`title`、`questgps`、`conversation`，福利模块 `tab` 也需要授权码（与付费模块共用同一套 license 流程），免费模块只受 `config.yml` 的 `modules.<module>.enabled` 控制。

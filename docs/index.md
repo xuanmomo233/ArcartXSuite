@@ -23,11 +23,11 @@ features:
     link: /modules/announcer
   - icon: 🐉
     title: EntityTracker 实体追踪
-    details: Boss 血条、伤害排行、自动结算 + 攻击目标 HUD 实时显示
+    details: Boss血条HUD、实时伤害排行、自动结算奖励 + 攻击目标信息显示，支持多Boss并行追踪
     link: /modules/entitytracker
   - icon: 💬
     title: Chat 频道聊天
-    details: 多频道、私聊、@提及、SocialSpy、禁言、跨服 Redis 转发
+    details: 多频道系统、私聊回复、@提及通知、物品展示、敏感词过滤、Redis跨服转发
     link: /modules/chat
   - icon: 🗣️
     title: Conversation 对话桥
@@ -35,11 +35,11 @@ features:
     link: /modules/conversation
   - icon: ⚡
     title: EventPacket 事件引擎
-    details: 16 种触发器 × 6 种动作自由组合，事件驱动玩法编排
+    details: 16种触发器×6种动作自由组合，支持跨模块联动和复杂事件链编排
     link: /modules/eventpacket
   - icon: 🎯
     title: CombatEffect 战斗特效
-    details: 击杀特效 + 伤害飘字，战斗视觉反馈一站式解决
+    details: 击杀特效、伤害飘字、治疗显示，智能识别MythicLib/AttributePlus/CraneAttribute伤害来源
     link: /modules/combateffect
   - icon: 🔐
     title: LoginView 登录界面
@@ -47,11 +47,11 @@ features:
     link: /modules/loginview
   - icon: 📬
     title: Mail 邮箱
-    details: 玩家写信、预设派发、CDK 兑换、物品附件、跨服广播
+    details: 玩家写信、预设派发、CDK兑换、物品附件、多货币支持、跨服广播、敏感词过滤
     link: /modules/mail
   - icon: 🎁
     title: OnlineRewards 在线奖励
-    details: 在线时长奖励、每日签到、补签卡、四维排行榜
+    details: 在线时长阶段奖励、每日签到、连续签到、补签卡、四维排行榜、跨服同步
     link: /modules/onlinerewards
   - icon: ✨
     title: Pickup 拾取提示
@@ -71,7 +71,7 @@ features:
     link: /modules/tab
   - icon: 🏅
     title: Title 称号
-    details: 分组称号、有效期/永久、属性加成、聊天/TAB 前缀
+    details: 分组称号系统、品质等级、有效期管理、三插件属性同步、套装加成、头顶显示
     link: /modules/title
   - icon: 🗺️
     title: Map 世界地图
@@ -83,7 +83,7 @@ features:
     link: /modules/questgps
   - icon: 🏦
     title: Warehouse 仓库银行
-    details: 个人仓库物品存取 + 多货币银行定期存款
+    details: 个人仓库NBT分类、共享仓库管理、多货币银行、定期存款、二级密码、物品展示
     link: /modules/warehouse
 ---
 
@@ -93,11 +93,11 @@ features:
     <div class="stat-label">主模块</div>
   </div>
   <div class="stat-item">
-    <div class="stat-number">7</div>
+    <div class="stat-number">9</div>
     <div class="stat-label">PAPI 输出</div>
   </div>
   <div class="stat-item">
-    <div class="stat-number">6</div>
+    <div class="stat-number">7</div>
     <div class="stat-label">数据库模块</div>
   </div>
   <div class="stat-item">
@@ -108,7 +108,7 @@ features:
 
 <div class="comparison-section">
   <h2>为什么选择 ArcartXSuite ？</h2>
-  <p class="comparison-subtitle">一个插件覆盖 15 个功能领域，统一 ArcartX UI 体验，模块间深度联动，消除适配 ArcartX 的烦恼</p>
+  <p class="comparison-subtitle">一个插件覆盖 17 个功能领域，统一 ArcartX UI 体验，模块间深度联动，消除适配 ArcartX 的烦恼</p>
   <div class="comparison-table-wrapper">
     <table class="comparison-table">
       <thead>
