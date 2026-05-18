@@ -19,6 +19,8 @@
 | `/axs help [模块名]` | 查看帮助。不指定模块时列出所有模块概览；指定模块时显示该模块的详细命令用法 | `/axs help title` |
 | `/axs reload all` | 按依赖顺序重载全部已启用模块的配置、UI 和服务，适用于修改配置后刷新 | `/axs reload all` |
 | `/axs reload <模块名>` | 仅重载指定模块的配置。常用于只改了某个模块的 YAML 后快速生效 | `/axs reload mail` |
+| `/axs load <模块名>` | 热加载新模块。从 `modules/` 扫描指定 id 的 jar，执行 license 校验 → 实例化 → onEnable。**不重启服务端**即可上线新模块或重新启用已 unload 的模块 | `/axs load mail` |
+| `/axs unload <模块名>` | 热卸载模块。执行 `onDisable` → 移除命令/包/能力注册 → 关闭 ClassLoader 释放 jar 文件句柄。若有其他模块依赖它，则会被拒绝并提示 dependents | `/axs unload mail` |
 | `/axs <模块名> status` | 查看单个模块的状态详情，包括加载的配置数量、数据库连接状态等 | `/axs entitytracker status` |
 | `/axs license status` | 查看授权状态、QQ、已解锁模块、授权入口、代理状态、缓存状态和每个授权码的诊断结果 | `/axs license status` |
 | `/axs license refresh` | 刷新当前服务器绑定的授权票据。不会消耗换绑次数，适合改完 `license.yml` 后手动同步 | `/axs license refresh` |

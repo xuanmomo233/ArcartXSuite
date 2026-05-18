@@ -72,6 +72,41 @@ onEnable()
 
 单模块重载遵循同样逻辑，通过 `isExternalModule()` 判断走外部还是内置路径。
 
+## 热加载 / 热卸载
+
+不同于 `reload`（onDisable + onEnable 在同一个 ClassLoader 内复位），`/axs load|unload` 提供真正的运行时插拔：
+
+### `/axs load <模块名>`
+
+1. 检查模块未加载（已加载则拒绝，提示走 reload）。
+2. 扫描 `modules/` 目录寻找 id 匹配的 jar。
+3. license 校验（`LicenseService.isModuleAllowed(id)`）。
+4. 进入与启动期相同的 `loadAndEnable(DiscoveredModule)` 流程：
+   - 检查外部插件依赖 / AXS 模块依赖（depends）
+   - 创建独立 `ModuleClassLoader`（URLClassLoader 子类）
+   - 实例化 `AXSModule` 主类
+   - 构建 `DefaultModuleContext`
+   - 注册模块的 `ModuleConfigSpec`（用于配置诊断）
+   - 调用 `instance.onEnable(context)`
+5. 失败时调用 `cleanupFailedModule(id)` 回滚（onDisable + 关闭 ClassLoader + 从 modules 表移除）。
+
+### `/axs unload <模块名>`
+
+1. **反向依赖检查**：遍历所有已启用模块的 `descriptor.depends()`，若存在依赖该模块的 dependent，则拒绝卸载并提示 dependents 列表。
+2. 执行 `disableModule(loaded)`：
+   - `commandHandlers.remove(id)` — 取消 `/axs <id>` 子命令
+   - `instance.onDisable()` — 模块自清理（停止 Service、注销事件、关闭数据库）
+   - 标记 `loaded.setEnabled(false)`
+3. `removePacketHandlers(id)` — 移除该模块注册的 `ClientPacketHandler`。
+4. `modules.remove(id)` — 从注册表移除。
+5. `closeClassLoader(loaded)` — 调用 `URLClassLoader.close()` 释放 jar 文件句柄。
+
+### 已知约束
+
+- **UI 残留**：ArcartX 的 UI 不支持显式 unregister，卸载后旧 UI 仍由 ArcartX 持有，但 packetHandler 已断开。重新 `load` 会重新 export + register 覆盖旧 UI。
+- **Capability 清理**：当前 capability 表不跟踪 owner，模块需在 `onDisable` 中自行清理 capabilities（否则旧引用会持有死对象）。`ModuleRegistry.removeCapabilities(id)` 保留作为接口契约位。
+- **依赖图变化**：`unload` 不会自动 disable dependents，要求管理员按依赖顺序手动 unload。
+
 ### UI 注册与更新
 
 每个有 UI 的模块在 reload 时严格执行四步：
