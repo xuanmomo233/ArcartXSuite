@@ -12,7 +12,7 @@
 - **SocialSpy 社交监听**：拥有权限的玩家可查看全服私聊内容
 - **忽略系统**：玩家可屏蔽不想看到的玩家消息
 - **禁言管理**：支持定时禁言（如 `30m`、`7d`）和永久禁言，带原因记录
-- **物品展示**：聊天中输入 `[item]`（可配置）自动替换为手持物品名称和数量，其他玩家可通过聊天卡片预览物品详情
+- **物品展示**：聊天中输入 `[item]`（可配置）自动替换为手持物品名称和数量。当配置了 `item-preview-card-id` 时，通过 ArcartX 聊天卡片展示物品详情（可触发 Tooltip），此时原始聊天消息行会被抑制以避免重复；未配置卡片时，物品文本带有原版 `SHOW_ITEM` 悬浮提示
 - **自定义组件**：通过正则匹配替换聊天内容中的特殊标记（如 `:star:` → `★`）
 - **敏感词过滤**：本地词库 + 远程云词库，支持正则匹配，可选取消发言或替换敏感内容
 - **聊天卡片**：提及、私聊、系统提示、物品展示均可绑定 ArcartX 聊天卡片 ID
@@ -101,7 +101,7 @@ cards:
   mention-card-id: ""
   private-card-id: ""
   system-card-id: ""
-  item-preview-card-id: ""
+  item-preview-card-id: "axs_item_preview"
 
 function:
   mention:
@@ -349,6 +349,68 @@ transport:
 | `private-card-id` | 收到/发送私聊时 | `senderName`、`senderDisplayName`、`targetName`、`direction`（`sender`/`recipient`）、`message` |
 | `item-preview-card-id` | 聊天中展示物品时 | `itemJson`、`itemName`、`itemAmount`、`itemMaterial`、`senderName`、`senderDisplayName`、`channel` |
 | `system-card-id` | 系统通知（禁言提示等） | `type` + 各场景额外字段 |
+
+### 内置物品预览卡片
+
+模块默认 `item-preview-card-id` 为 `axs_item_preview`。首次启动时会自动将内置模板导出到 `plugins/ArcartX/chat_card/axs_item_preview.yml`（文件已存在则不覆盖）。
+
+该模板的效果：
+
+- 卡片内包含一个 **Slot**（`slotType: ~Icon`），通过 `setItemIcon(itemJson)` 渲染物品图标，悬浮时可触发 ArcartX Tooltip 显示完整物品信息
+- 显示发送者名称和物品名称
+- **当卡片成功发送时，原始聊天消息行会被完全抑制**，避免物品信息重复出现
+
+你可以直接编辑 `plugins/ArcartX/chat_card/axs_item_preview.yml` 自定义卡片外观，或将 `item-preview-card-id` 设为其他卡片 ID 使用自定义模板。设为空字符串可禁用卡片，回退到原版 `SHOW_ITEM` 悬浮预览。
+
+默认模板结构：
+
+```yaml
+root_control:
+  type: card
+  attribute:
+    width: 500
+    height: 100
+  children:
+    background:
+      type: Slot
+      attribute:
+        width: 500
+        height: 100
+        normal: ~25,25,35,200
+        slotType: ~Icon
+        alpha: 0.999
+      action:
+        create: |-
+          self.setItemIcon(self.parent.data['itemJson'])
+    item_slot:
+      type: Slot
+      attribute:
+        width: 80
+        height: 80
+        x: 10
+        y: 10
+        slotType: ~Icon
+        itemScale: 0.8
+      action:
+        create: |-
+          self.setItemIcon(self.parent.data['itemJson'])
+    sender_label:
+      type: Text
+      attribute:
+        fontSize: 49
+        x: 100
+        y: 15
+        texts: "self.parent.data['senderDisplayName'] + ' §7展示了一件物品'"
+        through: true
+    item_label:
+      type: Text
+      attribute:
+        fontSize: 49
+        x: 100
+        y: 60
+        texts: "'§b' + self.parent.data['itemName']"
+        through: true
+```
 
 ## PAPI
 
