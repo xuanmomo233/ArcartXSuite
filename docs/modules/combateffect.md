@@ -88,33 +88,75 @@ modules:
 ```yaml
 kill-effect:
   settings:
-    debug: false                         # 开启后输出详细发包日志
+    # 是否开启调试日志（输出详细发包信息）
+    debug: false
     blacklist:
-      mythic-mob-ids: []                 # MythicMob ID 黑名单，大小写不敏感
-      entity-types: []                   # Bukkit EntityType 黑名单，如 ARMOR_STAND
+      # MythicMob ID 黑名单，大小写不敏感。命中后不发送 CombatEffect 包。
+      mythic-mob-ids: []
+      # Bukkit EntityType 黑名单，例如 ZOMBIE、PLAYER、ARMOR_STAND。
+      entity-types: []
+    # 实体战斗监听设置
     entity-combat:
-      enabled: true                      # 总开关
-      include-players: true              # 是否处理玩家目标（PVP）
-      include-non-player-living: true    # 是否处理非玩家活体
+      # 是否启用 CombatEffect 的实体攻击 / 击杀监听（总开关）
+      enabled: true
+      # 是否处理玩家目标（PVP）
+      include-players: true
+      # 是否处理非玩家活体实体，例如原版怪物和 MythicMob
+      include-non-player-living: true
 
-  packets-directory: "packets"           # 包定义目录，相对模块数据目录
+  # 包定义目录，路径相对模块数据目录
+  # 目录下每个 *.yml 文件可包含多个包定义，根键即为包 ID
+  packets-directory: "packets"
 ```
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `debug` | boolean | 输出详细发包日志，排查问题时开启 |
+| `blacklist.mythic-mob-ids` | list | MythicMob ID 黑名单，匹配的实体不触发任何包 |
+| `blacklist.entity-types` | list | Bukkit EntityType 黑名单（如 `ARMOR_STAND`、`VILLAGER`） |
+| `entity-combat.enabled` | boolean | 实体战斗监听总开关，关闭后不监听任何攻击/击杀事件 |
+| `entity-combat.include-players` | boolean | 是否处理玩家目标（PVP 场景） |
+| `entity-combat.include-non-player-living` | boolean | 是否处理非玩家活体（原版怪物、MythicMob） |
+| `packets-directory` | string | 包定义文件所在目录，相对模块数据目录 |
 
 ### 连击追踪配置
 
 ```yaml
 combo-tracker:
-  enabled: false                  # 是否启用连击追踪
-  source: "auto"                  # combo 来源: auto / chronos / bukkit
-  timeout: 2000                   # 超时重置时间（毫秒）
-  chronos-groups:                 # Chronos 状态组过滤
+  # 是否启用连击追踪
+  enabled: false
+  # combo 来源模式:
+  #   auto    — Chronos 可用时优先 Chronos 状态事件，否则回退 Bukkit 攻击事件
+  #   chronos — 仅使用 Chronos PlayerEnterStateEvent
+  #   bukkit  — 仅使用 Bukkit EntityDamageByEntityEvent
+  source: "auto"
+  # combo 超时重置时间（毫秒），超过该时间无攻击则重置计数
+  timeout: 2000
+  # Chronos 状态组过滤（仅这些组的状态进入才计为 combo 一击）
+  chronos-groups:
     - "攻击"
     - "连击"
-  sync-variable: true             # 是否实时同步到客户端服务器变量
-  variable-name: "combo_count"    # 服务器变量名
-  per-target: false               # 目标锁定模式
+  # 实时同步 combo 计数到 ArcartX 客户端服务器变量
+  # 客户端 UI 可通过 {server.combo_count} 直接引用当前连击数
+  sync-variable: true
+  # 服务器变量名称（客户端通过 {server.<此名称>} 引用）
+  variable-name: "combo_count"
+  # 目标锁定模式: true 时切换攻击目标会重置 combo
+  # 适用于 Boss 战等场景，确保 combo 仅计入对同一目标的连续攻击
+  per-target: false
   debug: false
 ```
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `enabled` | boolean | `false` | 是否启用连击追踪 |
+| `source` | string | `auto` | combo 来源模式 |
+| `timeout` | int | `2000` | 超时重置时间（毫秒） |
+| `chronos-groups` | list | `["攻击", "连击"]` | Chronos 状态组过滤，仅这些组计为一击 |
+| `sync-variable` | boolean | `true` | 是否实时同步到客户端服务器变量 |
+| `variable-name` | string | `combo_count` | 服务器变量名称 |
+| `per-target` | boolean | `false` | 目标锁定模式 |
+| `debug` | boolean | `false` | 调试日志 |
 
 **来源模式说明：**
 
@@ -132,19 +174,43 @@ combo-tracker:
 
 ```yaml
 death-buffer:
-  enabled: false                     # 是否启用死亡缓冲
-  duration: 3000                     # 缓冲持续时间（毫秒）
+  # 是否启用死亡缓冲
+  enabled: false
+  # 缓冲持续时间（毫秒），玩家在此期间不会真正死亡
+  duration: 3000
   visuals:
-    shader: ""                       # ArcartX Shader 名称（灰度/模糊）
-    third-person-camera: true        # 是否切换第三人称视角
-    camera-preset: ""                # ArcartX 预设相机 ID
+    # ArcartX Shader 名称，用于死亡画面效果（灰度/模糊等）
+    # 需要在客户端资源 shaders/ 目录下存在对应配置
+    shader: ""
+    # 是否切换到第三人称视角
+    third-person-camera: true
+    # ArcartX 预设相机 ID（如需电影级俭拍镜头）
+    camera-preset: ""
+    # Chronos 集成（需安装 Chronos 插件）
     chronos:
-      enabled: false                 # 是否强制进入 Chronos 状态
-      state-id: "死亡"               # Chronos 状态 ID
-  block-auto-respawn: true           # 阻止自动复活
-  world-blacklist: []                # 不启用的世界列表
+      # 是否强制玩家进入 Chronos 状态（如冰冻/倒地动画）
+      enabled: false
+      # 强制进入的 Chronos 状态 ID，需在控制器中注册该状态
+      state-id: "死亡"
+  # 缓冲期间阻止其他插件触发的自动复活
+  block-auto-respawn: true
+  # 不启用死亡缓冲的世界列表
+  world-blacklist: []
   debug: false
 ```
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `enabled` | boolean | `false` | 是否启用死亡缓冲 |
+| `duration` | int | `3000` | 缓冲持续时间（毫秒） |
+| `visuals.shader` | string | `""` | ArcartX Shader 名称，空 = 不应用 |
+| `visuals.third-person-camera` | boolean | `true` | 是否切换第三人称 |
+| `visuals.camera-preset` | string | `""` | ArcartX 预设相机 ID，空 = 不使用 |
+| `visuals.chronos.enabled` | boolean | `false` | 是否强制进入 Chronos 状态 |
+| `visuals.chronos.state-id` | string | `"死亡"` | Chronos 状态 ID |
+| `block-auto-respawn` | boolean | `true` | 阻止自动复活 |
+| `world-blacklist` | list | `[]` | 不启用缓冲的世界名称列表 |
+| `debug` | boolean | `false` | 调试日志 |
 
 **工作流程：**
 1. 玩家受到致命伤害 → 取消死亡事件
@@ -228,49 +294,77 @@ state-trigger:
 
 ```yaml
 digis-display:
+  # 伤害显示配置
   damage-display:
+    # 伤害来源检测配置
     source:
-      mode: "auto"                   # auto / craneattribute / attributeplus / bukkit
-      fallback: true                 # 指定来源不可用时自动回退
-      debug: false
+      # 伤害来源模式:
+      #   auto            — 按优先级自动选择: MythicLib → CraneAttribute → AttributePlus → Bukkit
+      #   craneattribute  — 仅优先使用 CraneAttribute 属性结算后的伤害
+      #   attributeplus   — 仅优先使用 AttributePlus 伤害事件
+      #   bukkit          — 仅使用 Bukkit 原版伤害事件
+      mode: "auto"
+      fallback: true                 # 指定来源不可用时是否自动回退到下一个可用来源
+      debug: false                   # 是否输出伤害来源选择与回退日志
 
-    original:                        # 原始伤害
-      enabled: true
-      config-id: "damage"            # ArcartX digis 配置 ID
-      min-amount: 1.0
-      ap-compatible: true
+    # 原始伤害（非玩家对玩家）
+    original:
+      enabled: true                  # 是否启用原始伤害飘字
+      config-id: "damage"            # ArcartX 客户端 digis 配置 ID，决定飘字颜色/字体/动画等样式
+      min-amount: 1.0                # 最小显示阈值，低于此值的伤害不显示飘字（避免微量数字刷屏）
+      ap-compatible: true            # 当伤害来源为 AttributePlus 时，是否允许显示
 
-    player:                          # 玩家对玩家伤害
-      enabled: true
-      config-id: "player-damage"
-      min-amount: 1.0
+    # 玩家对玩家伤害（PVP）
+    player:
+      enabled: true                  # 是否启用 PVP 伤害飘字
+      config-id: "player-damage"     # ArcartX 客户端 digis 配置 ID（可与原始伤害使用不同样式）
+      min-amount: 1.0                # 最小显示阈值
 
-    mythiclib:                       # MythicLib 属性伤害
-      enabled: false
-      config-id: "damage"
-      player-config-id: "player-damage"
-      min-amount: 1.0
-      player-min-amount: 1.0
+    # MythicLib / MMOItems 属性伤害（需安装 MythicLib 插件）
+    mythiclib:
+      enabled: false                 # 是否启用 MythicLib 属性伤害飘字
+      config-id: "damage"            # 普通目标伤害的 ArcartX digis 配置 ID
+      player-config-id: "player-damage" # 目标为玩家时使用的 digis 配置 ID（PVP 伤害样式）
+      min-amount: 1.0                # 最小显示阈值
+      player-min-amount: 1.0         # PVP 伤害最小显示阈值
 
-    craneattribute:                  # CraneAttribute 属性伤害
-      enabled: false
-      config-id: "damage"
-      player-config-id: "player-damage"
-      min-amount: 1.0
-      player-min-amount: 1.0
+    # CraneAttribute 属性伤害（需安装 CraneAttribute 插件）
+    craneattribute:
+      enabled: false                 # 是否启用 CraneAttribute 属性伤害飘字
+      config-id: "damage"            # 普通目标伤害的 ArcartX digis 配置 ID
+      player-config-id: "player-damage" # 目标为玩家时使用的 digis 配置 ID
+      min-amount: 1.0                # 最小显示阈值
+      player-min-amount: 1.0         # PVP 伤害最小显示阈值
 
+  # 治疗显示配置
   heal-display:
-    original:                        # 原版治疗
-      enabled: true
-      config-id: "heal"
-      min-amount: 1.0
+    # 原版治疗事件（药水、生命恢复等）
+    original:
+      enabled: true                  # 是否启用原版治疗飘字
+      config-id: "heal"             # ArcartX 客户端 digis 配置 ID（治疗样式）
+      min-amount: 1.0                # 最小显示阈值
 
-    mythic:                          # MythicMobs 技能治疗
-      enabled: true
-      config-id: "heal"
-      min-amount: 1.0
-      exact-mode: true               # true = 实际生效量
+    # MythicMobs 技能治疗（需安装 MythicMobs / MythicBukkit 插件）
+    mythic:
+      enabled: true                  # 是否启用 MythicMobs 技能治疗飘字
+      config-id: "heal"             # ArcartX 客户端 digis 配置 ID（治疗样式）
+      min-amount: 1.0                # 最小显示阈值
+      exact-mode: true               # true: 显示实际生效的治疗量；false: 显示技能理论治疗量
 ```
+
+**字段速查表：**
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `mode` | string | 伤害来源选择模式，决定读取哪个插件的伤害数据 |
+| `fallback` | boolean | 指定来源不可用时是否自动回退到下一个来源 |
+| `enabled` | boolean | 是否启用该类别的飘字 |
+| `config-id` | string | ArcartX 客户端 `digis` 配置中的样式 ID，控制飘字外观 |
+| `player-config-id` | string | PVP 场景单独使用的 digis 样式 ID |
+| `min-amount` | double | 最小显示阈值，低于此值不显示飘字 |
+| `player-min-amount` | double | PVP 场景的最小显示阈值 |
+| `ap-compatible` | boolean | 是否允许 AttributePlus 结算的伤害触发此飘字 |
+| `exact-mode` | boolean | MythicMobs 治疗：true 显示实际生效量，false 显示技能原始值 |
 
 | 来源模式 | 优先级链 |
 | --- | --- |
