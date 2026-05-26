@@ -17,6 +17,14 @@
 - **资源保护** — 付费模块资源通过 ticket 中的 `resourceKeys` 解包后在内存中解密。
 - **文档** — 安装、授权、命令速查和安全架构文档已同步到 `1.1.0-beta`。
 
+### 1.1.0-beta (Build 2026-05-26) — Announcer 跨服广播 + 公告目录重命名
+
+- **Announcer** — 公告条目目录从 `entries/` 重命名为 `announcer/`，旧目录自动迁移。配置 `entries-directory` 默认值同步更新。
+- **Announcer** — 新增跨服广播功能（BungeeCord Forward）：配置 `transport.proxy` 段启用后，`broadcast` / `broadcastnow` 命令发出的手动公告会转发到其他子服，同时接收来自其他子服的公告。自动轮播条目不跨服。
+- **Announcer** — 新增 `AnnouncerProxyTransport`、`AnnouncerEnvelope`、`AnnouncerEnvelopeCodec`、`AnnouncerProxyConfiguration` 类；`AnnouncerService` 构造函数新增 `transport`/`nodeId` 参数。
+- **Announcer** — `/axs announcer status` 新增跨服传输状态显示。
+- **Announcer** — 版本号从 `1.0.2-beta` 升至 `1.1.0-beta`。
+
 ### 1.1.0-beta (Build 2026-05-26) — Pickup 交互重构 + Conversation UI 优化
 
 - **Pickup** — 扫描模式交互重构为双 UI 架构：
