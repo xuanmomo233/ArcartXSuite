@@ -42,8 +42,13 @@
 - **Regions** — 配置文件 `ArcartXRegions.yml`，支持 SQLite/MySQL 存储
 - **Regions** — 新增权限：`axs.regions.select`、`axs.regions.admin`、`axs.regions.bypass`、`axs.regions.bypass.limit`
 
+- **API** — 新增 `ChatMutable` capability 接口，Chat 模块实现并注册，提供 `mutePlayer`/`unmutePlayer`/`isMuted` 方法
+- **Essentials** — `mute`/`tempmute`/`unmute` 命令委托给 Chat 模块执行，不再维护独立的 mutes 表，确保禁言真正拦截聊天
+- **Essentials** — `EssentialsQueryable.isMuted()` 改为委托 `ChatMutable.isMuted()` 查询
+
 - **文档** — 新增 `docs/modules/essentials.md` 和 `docs/modules/regions.md`
 - **文档** — 命令速查、模块总览、sidebar 导航全面更新
+- **文档** — 主页模块展示和对比表格更新至 19 模块，更新旧模块功能描述
 - **构建** — 模块总数从 17 → 19，全量 107 任务 BUILD SUCCESSFUL
 
 ### 1.1.0-beta (Build 2026-05-26) — LoginView 正版/LittleSkin 免登录

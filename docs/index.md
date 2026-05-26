@@ -35,11 +35,11 @@ features:
     link: /modules/conversation
   - icon: ⚡
     title: EventPacket 事件引擎
-    details: 16种触发器×6种动作自由组合，支持跨模块联动和复杂事件链编排
+    details: 9种触发器×11种动作自由组合，内置实体清理(ClearLag)和定时命令，支持跨模块联动
     link: /modules/eventpacket
   - icon: 🎯
     title: CombatEffect 战斗特效
-    details: 击杀特效、伤害飘字、治疗显示，智能识别MythicLib/AttributePlus/CraneAttribute伤害来源
+    details: 击杀特效、连击追踪、死亡缓冲、伤害飘字，支持按键/状态/控制器触发，四插件属性来源自动检测
     link: /modules/combateffect
   - icon: 🔐
     title: LoginView 登录界面
@@ -55,7 +55,7 @@ features:
     link: /modules/onlinerewards
   - icon: ✨
     title: Pickup 拾取提示
-    details: 物品拾取时 HUD 弹出提示动画
+    details: 物品拾取 HUD 弹出提示 + 扫描器模式，双模式可切换
     link: /modules/pickup
   - icon: 🗡️
     title: Prop 快捷道具
@@ -79,12 +79,20 @@ features:
     link: /modules/map
   - icon: 🧭
     title: QuestGPS 任务导航
-    details: Chemdah 任务追踪、路径点 HUD 导航
+    details: Chemdah 任务追踪、路径寻路 + 3D模型标记、任务指引HUD、任务菜单
     link: /modules/questgps
   - icon: 🏦
     title: Warehouse 仓库银行
     details: 个人仓库NBT分类、共享仓库管理、多货币银行、定期存款、二级密码、物品展示
     link: /modules/warehouse
+  - icon: 🛠️
+    title: Essentials 基础工具
+    details: 传送/家/Warp、飞行/无敌/治疗、封禁/禁言/警告、一键砷树、背包整理、自动补种
+    link: /modules/essentials
+  - icon: 🛡️
+    title: Regions 区域保护
+    details: 区域创建/标志管理/优先级继承、世界规则、成员权限、类 WorldGuard 体验
+    link: /modules/regions
 ---
 
 <div class="stats-bar">
@@ -97,7 +105,7 @@ features:
     <div class="stat-label">PAPI 输出</div>
   </div>
   <div class="stat-item">
-    <div class="stat-number">7</div>
+    <div class="stat-number">9</div>
     <div class="stat-label">数据库模块</div>
   </div>
   <div class="stat-item">
@@ -190,7 +198,7 @@ features:
           <td>事件引擎</td>
           <td class="col-module">EventPacket</td>
           <td class="col-alt">无直接竞品</td>
-          <td class="col-advantage">9 种触发器 × 6 种动作、跨模块信号、客户端回包触发</td>
+          <td class="col-advantage">9 种触发器 × 11 种动作、内置实体清理 + 定时命令、跨模块信号、客户端回包触发</td>
         </tr>
         <tr>
           <td>拾取提示</td>
@@ -207,8 +215,26 @@ features:
         <tr>
           <td>任务视图</td>
           <td class="col-module">Conversation / QuestGPS</td>
-          <td class="col-alt">其他任务视图</td>
-          <td class="col-advantage">更全面的数据转接、可视化奖励预览、独立任务分类、AX 导航升级</td>
+          <td class="col-alt">BetonQuest UI / 其他任务视图</td>
+          <td class="col-advantage">Chemdah 深度集成、A*寻路 + 3D模型标记、可视化奖励预览、独立任务分类、AX 导航升级</td>
+        </tr>
+        <tr>
+          <td>服务器基础</td>
+          <td class="col-module">Essentials</td>
+          <td class="col-alt">EssentialsX / CMI</td>
+          <td class="col-advantage">轻量纯净、内置一键砷树、背包整理/自动工具/自动补种、禁言委托 Chat 模块联动</td>
+        </tr>
+        <tr>
+          <td>区域保护</td>
+          <td class="col-module">Regions</td>
+          <td class="col-alt">WorldGuard / GriefPrevention / Residence</td>
+          <td class="col-advantage">轻量内置、标志三态(allow/deny/none)、优先级继承、世界规则、无额外依赖</td>
+        </tr>
+        <tr>
+          <td>服务器播报</td>
+          <td class="col-module">Announcer</td>
+          <td class="col-alt">BossBarAnnounce / ActionAnnouncer</td>
+          <td class="col-advantage">ArcartX HUD 渲染、常驻/轮播/字幕三模式、可点击执行命令</td>
         </tr>
       </tbody>
     </table>

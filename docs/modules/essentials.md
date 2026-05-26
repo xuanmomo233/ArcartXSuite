@@ -12,7 +12,7 @@ Essentials 模块集合了服务器最常用的玩家工具、传送系统、安
 | 容器 | 末影箱 / 工作台 / 铁砧 / 垃圾桶 |
 | 传送系统 | Home / Warp / Spawn / TPA / Back / TP / Top / TpPos |
 | 世界管理 | 时间 / 天气 |
-| 安全管控 | 封禁 / 禁言 / 踢出 / 警告 / Sudo / 背包查看 |
+| 安全管控 | 封禁 / 禁言（委托 Chat 模块） / 踢出 / 警告 / Sudo / 背包查看 |
 | 交互 | 坐下 / 躺下 |
 | 一键砍树 | 连锁砍伐原木 + 树叶，可配置斧头/潜行/连锁数 |
 | 背包操作 | 自动补种作物 / 背包整理 / 自动工具切换 |
@@ -78,9 +78,9 @@ Essentials 模块集合了服务器最常用的玩家工具、传送系统、安
 | `/axs ess ban <玩家> [原因]` | 永久封禁 | `axs.essentials.ban` |
 | `/axs ess tempban <玩家> <时长> [原因]` | 临时封禁 | `axs.essentials.ban` |
 | `/axs ess unban <玩家>` | 解封 | `axs.essentials.unban` |
-| `/axs ess mute <玩家> [原因]` | 永久禁言 | `axs.essentials.mute` |
-| `/axs ess tempmute <玩家> <时长> [原因]` | 临时禁言 | `axs.essentials.mute` |
-| `/axs ess unmute <玩家>` | 解除禁言 | `axs.essentials.unmute` |
+| `/axs ess mute <玩家> [原因]` | 永久禁言（委托 Chat 模块） | `axs.essentials.mute` |
+| `/axs ess tempmute <玩家> <时长> [原因]` | 临时禁言（委托 Chat 模块） | `axs.essentials.mute` |
+| `/axs ess unmute <玩家>` | 解除禁言（委托 Chat 模块） | `axs.essentials.unmute` |
 | `/axs ess kick <玩家> [原因]` | 踢出服务器 | `axs.essentials.kick` |
 | `/axs ess warn <玩家> <原因>` | 警告玩家 | `axs.essentials.warn` |
 | `/axs ess sudo <玩家> <命令>` | 强制玩家执行命令 | `axs.essentials.sudo` |
@@ -163,7 +163,7 @@ inv-actions:
 
 ## 存储
 
-支持 SQLite（默认）和 MySQL，存储传送点、Home、封禁/禁言记录等数据。
+支持 SQLite（默认）和 MySQL，存储传送点、Home、封禁/警告记录等数据。禁言数据由 Chat 模块统一管理。
 
 ```yaml
 storage:
@@ -185,7 +185,7 @@ storage:
 | 联动模块 | 说明 |
 | --- | --- |
 | Tab | AFK/Vanish 状态变化时刷新 Tab 列表 |
-| Chat | 禁言状态同步给 Chat 模块；昵称联动 |
+| Chat | 禁言命令委托 Chat 模块执行（通过 `ChatMutable` capability）；昵称联动 |
 | EventPacket | 通过 `EssentialsQueryable` capability 供其他模块查询玩家状态 |
 
 ---
