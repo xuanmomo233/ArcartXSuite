@@ -240,8 +240,10 @@ subtitle:
 | `/axs announcer help` | 查看 Announcer 模块所有可用命令 |
 | `/axs announcer status` | 查看模块状态：活跃公告数、已初始化玩家数、字幕组数、播放中玩家数、待播队列和跨服传输状态 |
 | `/axs reload announcer` | 重载配置和 HUD（公告 + 字幕一起重载），HUD 不中断 |
-| `/axs announcer broadcast <文本>` | 将一条自定义文本加入广播队列，当前公告展示结束后立即播报，不受冷却限制。**启用跨服时同步转发到其他子服** |
-| `/axs announcer broadcastnow <文本>` | 立即广播，强制打断当前正在展示的公告。**启用跨服时同步转发到其他子服**（远端也立即广播） |
+| `/axs announcer broadcast <文本>` | **本服**将一条自定义文本加入广播队列，当前公告展示结束后立即播报 |
+| `/axs announcer broadcastnow <文本>` | **本服**立即广播，强制打断当前正在展示的公告 |
+| `/axs announcer gbroadcast <文本>` | **跨服**加入广播队列，同时通过代理转发到其他子服（需启用 `transport.proxy`） |
+| `/axs announcer gbroadcastnow <文本>` | **跨服**立即广播，强制打断当前展示并转发到其他子服（远端也立即广播） |
 | `/axs announcer subtitle list` | 列出所有已加载的字幕组 ID |
 | `/axs announcer subtitle play <玩家> <字幕组ID>` | 向在线玩家播放指定字幕组。如果该玩家有字幕正在播放，会先终止旧的 |
 | `/axs announcer subtitle stop <玩家>` | 立即停止玩家当前正在播放的字幕并关闭字幕 HUD |
@@ -264,11 +266,17 @@ subtitle:
 # 查看状态
 /axs announcer status
 
-# 维护通知（加入队列，当前公告结束后播报；跨服时同步到其他子服）
+# 本服维护通知（加入队列，仅本服播报）
 /axs announcer broadcast &c服务器将于10分钟后维护，请及时保存进度！
 
-# 紧急通知（立即打断当前公告；跨服时其他子服也立即广播）
+# 本服紧急通知（立即打断当前公告，仅本服）
 /axs announcer broadcastnow &c&l紧急通知：服务器即将重启
+
+# 跨服广播（加入队列，同时转发到所有子服）
+/axs announcer gbroadcast &c全服维护通知，请及时保存进度！
+
+# 跨服立即广播（所有子服立即打断当前展示）
+/axs announcer gbroadcastnow &c&l紧急通知：全服即将重启
 
 # 播放字幕
 /axs announcer subtitle play Steve welcome
@@ -358,15 +366,26 @@ join_welcome_subtitle:
 
 1. 管理员执行 `/axs announcer broadcast 维护通知`
 2. 文本加入本地内部队列
-3. **若跨服已启用** → 封装为 `AnnouncerEnvelope`（`immediate=false`）→ 通过 BungeeCord Forward 发送到其他子服
-4. 下一次定时任务检查时优先消费队列 → 推送 `display` 包（`id` = `"manual"`）
+3. 下一次定时任务检查时优先消费队列 → 推送 `display` 包（`id` = `"manual"`）
+
+### 跨服广播流程
+
+1. 管理员执行 `/axs announcer gbroadcast 维护通知`
+2. 文本加入本地内部队列
+3. 封装为 `AnnouncerEnvelope`（`immediate=false`）→ 通过 BungeeCord Forward 发送到其他子服
+4. 本服下一次定时任务检查时优先消费队列 → 推送 `display` 包（`id` = `"manual"`）
 5. 其他子服收到信封 → 去重校验 → 加入当地广播队列 → 按同样流程展示
 
 ### 立即广播流程
 
 1. 管理员执行 `/axs announcer broadcastnow 紧急通知`
-2. 立即打断当前展示，向所有在线玩家推送 `display` 包
-3. **若跨服已启用** → 封装为 `AnnouncerEnvelope`（`immediate=true`）→ 通过 BungeeCord Forward 发送到其他子服
+2. 立即打断当前展示，向所有在线玩家推送 `display` 包（仅本服）
+
+### 跨服立即广播流程
+
+1. 管理员执行 `/axs announcer gbroadcastnow 紧急通知`
+2. 本服立即打断当前展示，向所有在线玩家推送 `display` 包
+3. 封装为 `AnnouncerEnvelope`（`immediate=true`）→ 通过 BungeeCord Forward 发送到其他子服
 4. 其他子服收到信封 → 去重校验 → **立即**在当地广播（也打断当前展示）
 
 ### 跨服消息收发流程
@@ -374,7 +393,7 @@ join_welcome_subtitle:
 ```
 子服 A                          BungeeCord 代理                      子服 B
   │                                  │                                 │
-  │  broadcast "维护通知"            │                                 │
+  │  gbroadcast "维护通知"           │                                 │
   │─────────────────────────────────>│                                 │
   │  Forward / AXS_ANNOUNCER         │    Plugin Message               │
   │  AnnouncerEnvelope(YAML)         │────────────────────────────────>│
