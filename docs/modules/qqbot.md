@@ -52,6 +52,10 @@ QQBot 为付费模块，需要有效授权码激活。
 | `/axs qqbot reload` | `arcartxsuite.qqbot.admin` | 重载配置 |
 | `/axs qqbot send <消息>` | `arcartxsuite.qqbot.admin` | 向所有已配置群发送消息 |
 | `/axs qqbot lookup <玩家名\|QQ号>` | `arcartxsuite.qqbot.admin` | 查询绑定关系（双向） |
+| `/axs qqbot snowluma install` | `arcartxsuite.qqbot.admin` | 从 GitHub 下载安装最新版 SnowLuma |
+| `/axs qqbot snowluma start` | `arcartxsuite.qqbot.admin` | 启动 SnowLuma 子进程 |
+| `/axs qqbot snowluma stop` | `arcartxsuite.qqbot.admin` | 停止 SnowLuma 子进程 |
+| `/axs qqbot snowluma status` | `arcartxsuite.qqbot.admin` | 查看 SnowLuma 安装/运行状态 |
 
 ### 群内指令（默认前缀 `#`）
 
@@ -102,6 +106,9 @@ onebot:
   access-token: ""               # 鉴权 token（可留空）
   reconnect-interval-seconds: 10
   heartbeat-interval-seconds: 30
+  snowluma:
+    dir: "snowluma"              # 安装目录（相对服务端根目录）
+    auto-start: false            # 模块启动时自动拉起 SnowLuma
 
 # 监听的 QQ 群（支持多群）
 groups:

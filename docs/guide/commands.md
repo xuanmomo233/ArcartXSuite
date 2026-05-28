@@ -266,6 +266,10 @@ map, questgps, warehouse, essentials, regions, market, qqbot
 | `/axs qqbot reload` | 重载 ArcartXQQBot.yml 配置 | `/axs qqbot reload` |
 | `/axs qqbot send <消息>` | 向所有已配置的 QQ 群发送消息 | `/axs qqbot send 服务器即将重启` |
 | `/axs qqbot lookup <玩家名\|QQ号>` | 双向查询绑定关系 | `/axs qqbot lookup Steve`<br>`/axs qqbot lookup 12345678` |
+| `/axs qqbot snowluma install` | 从 GitHub 自动下载安装最新版 SnowLuma | `/axs qqbot snowluma install` |
+| `/axs qqbot snowluma start` | 启动 SnowLuma 子进程 | `/axs qqbot snowluma start` |
+| `/axs qqbot snowluma stop` | 停止 SnowLuma 子进程 | `/axs qqbot snowluma stop` |
+| `/axs qqbot snowluma status` | 查看 SnowLuma 安装/运行/PID 状态 | `/axs qqbot snowluma status` |
 
 ---
 
