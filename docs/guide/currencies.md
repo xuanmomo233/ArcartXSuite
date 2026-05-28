@@ -60,7 +60,7 @@ currencies:
 
 **前置条件：**
 1. 安装 [Vault](https://www.spigotmc.org/resources/vault.34315/)
-2. 安装任一经济插件（如 CMI、EssentialsX、GemsEconomy）
+2. 安装任一经济插件（如 CMI、EssentialsX、Economy）
 3. 确认 `/money` 或类似命令可正常使用
 
 **工作原理：**
@@ -141,14 +141,14 @@ ArcartXSuite 中的货币 ID（即 `currencies:` 下的键名）会直接作为 
 
 ```yaml
 currencies:
-  gems:
+  money:
     enabled: true
     provider: "command"
     display-name: "宝石"
     precision: 0
-    balance-placeholder: "%gemseconomy_balance_gems%"
-    withdraw-command: "gems take %player% %amount%"
-    deposit-command: "gems give %player% %amount%"
+    balance-placeholder: "%economy_balance_money%"
+    withdraw-command: "esc take %player% %amount%"
+    deposit-command: "esc give %player% %amount%"
 ```
 
 **前置条件：**
@@ -161,8 +161,8 @@ currencies:
 | 字段 | 说明 | 示例 |
 |------|------|------|
 | `balance-placeholder` | PAPI 占位符，返回**纯数字**余额 | `%gemseconomy_balance_gems%` |
-| `withdraw-command` | 扣款时执行的控制台命令 | `gems take %player% %amount%` |
-| `deposit-command` | 入账时执行的控制台命令 | `gems give %player% %amount%` |
+| `withdraw-command` | 扣款时执行的控制台命令 | `money take %player% %amount%` |
+| `deposit-command` | 入账时执行的控制台命令 | `money give %player% %amount%` |
 
 ::: danger 三项缺一不可
 `balance-placeholder`、`withdraw-command`、`deposit-command` 三项必须全部填写，否则该货币桥接将标记为不可用。
@@ -188,14 +188,14 @@ currencies:
 
 ```yaml
 currencies:
-  gems:
+  money:
     enabled: true
     provider: "command"
     display-name: "宝石"
     precision: 0
     balance-placeholder: "%gemseconomy_balance_gems%"
-    withdraw-command: "eco take %player% %amount% gems"
-    deposit-command: "eco give %player% %amount% gems"
+    withdraw-command: "eco take %player% %amount% money"
+    deposit-command: "eco give %player% %amount% money"
 ```
 
 ##### CoinsEngine
@@ -255,14 +255,14 @@ currencies:
     precision: 0
 
   # 3. 宝石 — 使用命令桥接（GemsEconomy）
-  gems:
+  money:
     enabled: true
     provider: "command"
     display-name: "宝石"
     precision: 0
     balance-placeholder: "%gemseconomy_balance_gems%"
-    withdraw-command: "eco take %player% %amount% gems"
-    deposit-command: "eco give %player% %amount% gems"
+    withdraw-command: "eco take %player% %amount% money"
+    deposit-command: "eco give %player% %amount% money"
 
   # 4. Rondo 多货币示例
   # rondo_gold:
