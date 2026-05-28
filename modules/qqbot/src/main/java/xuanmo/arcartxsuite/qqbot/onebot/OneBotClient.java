@@ -236,7 +236,7 @@ public final class OneBotClient {
             logger.warning("[QQBot]  当前目标: " + wsUri);
             logger.warning("[QQBot] ");
             logger.warning("[QQBot]  解决方法:");
-            logger.warning("[QQBot]    1. 安装 Lagrange / NapCat / LLOneBot");
+            logger.warning("[QQBot]    1. 安装 SnowLuma (推荐) https://github.com/SnowLuma/SnowLuma");
             logger.warning("[QQBot]    2. 启动并登录 QQ 机器人账号");
             logger.warning("[QQBot]    3. 确认 WebSocket 监听地址与配置一致");
             logger.warning("[QQBot] ");

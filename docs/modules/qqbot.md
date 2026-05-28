@@ -21,7 +21,7 @@ QQBot 为付费模块，需要有效授权码激活。
 | 依赖 | 是否必须 | 用途 |
 |------|----------|------|
 | ArcartX | ✅ 必须 | 模块加载（无 UI 资源） |
-| OneBot 11 实现端 | ✅ 必须 | Lagrange / NapCat / LLOneBot / go-cqhttp 等 |
+| OneBot 11 实现端 | ✅ 必须 | SnowLuma（推荐）/ NapCat / LLBot 等 |
 | SQLite (内置) | 默认 | 绑定数据持久化 |
 | MySQL | 可选 | 跨服共享绑定数据时使用 |
 | PlaceholderAPI | 可选 | 群指令查询玩家数据 |
@@ -29,9 +29,9 @@ QQBot 为付费模块，需要有效授权码激活。
 
 ::: warning OneBot 实现端
 本模块**不提供云端服务**，需要你自行部署 OneBot 11 实现端。推荐方案：
-- **[Lagrange](https://github.com/LagrangeDev/Lagrange.Core)** — 跨平台、纯净、活跃维护
-- **[NapCat](https://github.com/NapNeko/NapCatQQ)** — 基于 QQNT，功能最完整
-- **[LLOneBot](https://github.com/LLOneBot/LLOneBot)** — QQNT 插件形态
+- **[SnowLuma](https://github.com/SnowLuma/SnowLuma)** ⭐ 推荐 — TypeScript 全链路，WebUI 管理面板，多账号并行，NapCat 团队推荐的下一代框架
+- **[NapCat](https://github.com/NapNeko/NapCatQQ)** — 基于 NTQQ，9k+ Stars，社区最大
+- **[LLBot](https://github.com/LLOneBot/LuckyLilliaBot)** — 支持 OneBot 11 / Satori / Milky 多协议
 :::
 
 ## 命令
@@ -254,6 +254,60 @@ QQBotModule (AbstractAXSModule)
 ├── QQBotPlaceholderExpansion (PAPI)
 └── 注册 QQBotBroadcastable capability
 ```
+
+## SnowLuma 快速接入
+
+推荐使用 [SnowLuma](https://github.com/SnowLuma/SnowLuma) 作为 OneBot 11 实现端，以下是最小化接入步骤：
+
+### 1. 安装 SnowLuma
+
+```bash
+# 从 Release 下载预构建包解压
+# https://github.com/SnowLuma/SnowLuma/releases
+
+# Windows
+./launcher.bat
+
+# Linux
+./launcher.sh
+```
+
+首次启动后 WebUI 默认监听 `5099` 端口，控制台会打印初始密码：
+```
+initial credentials: user=admin password=<随机密码>
+```
+
+### 2. 登录 QQ 账号
+
+浏览器打开 `http://127.0.0.1:5099`，用初始密码登录 WebUI，然后扫码或密码登录你的 QQ 机器人账号。
+
+### 3. 配置 WebSocket 适配器
+
+在 SnowLuma WebUI 中启用 **WebSocket Server** 适配器：
+- 监听地址：`0.0.0.0:8080`（如果与 MC 同机器，用 `127.0.0.1:8080`）
+- Access Token：建议设置一个（与 AXS 配置一致）
+
+### 4. 配置 AXS QQBot
+
+编辑 `plugins/ArcartXSuite/data/qqbot/ArcartXQQBot.yml`：
+
+```yaml
+onebot:
+  ws-url: "ws://127.0.0.1:8080"
+  access-token: "你在 SnowLuma 设置的 token"
+```
+
+### 5. 验证连接
+
+重载模块或重启服务器，控制台应出现：
+```
+[QQBot] WebSocket 已连接: ws://127.0.0.1:8080
+[QQBot] 登录账号: 你的昵称 (QQ号)
+```
+
+::: tip 多账号
+SnowLuma 支持同一进程托管多个 QQ 账号，每个账号独立 WebSocket 端口。如果你有多个群需要不同机器人，可以在 SnowLuma 中配置多账号，AXS 侧只需连接主账号即可。
+:::
 
 ## 安全建议
 
