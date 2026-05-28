@@ -47,7 +47,7 @@ currencies:
 
 ### vault — Vault 经济
 
-最常用的经济类型。需要服务端安装 **Vault** 插件以及至少一个注册了 Vault Economy 服务的经济插件（如 CMI、EssentialsX、GemsEconomy 等）。
+最常用的经济类型。需要服务端安装 **Vault** 插件以及至少一个注册了 Vault Economy 服务的经济插件（如 CMI、EssentialsX、Economy 等）。
 
 ```yaml
 currencies:
@@ -160,7 +160,7 @@ currencies:
 
 | 字段 | 说明 | 示例 |
 |------|------|------|
-| `balance-placeholder` | PAPI 占位符，返回**纯数字**余额 | `%gemseconomy_balance_gems%` |
+| `balance-placeholder` | PAPI 占位符，返回**纯数字**余额 | `%Economy_balance_money%` |
 | `withdraw-command` | 扣款时执行的控制台命令 | `money take %player% %amount%` |
 | `deposit-command` | 入账时执行的控制台命令 | `money give %player% %amount%` |
 
@@ -184,7 +184,7 @@ currencies:
 
 #### 常见经济插件的命令桥接示例
 
-##### GemsEconomy
+##### Economy
 
 ```yaml
 currencies:
@@ -193,7 +193,7 @@ currencies:
     provider: "command"
     display-name: "宝石"
     precision: 0
-    balance-placeholder: "%gemseconomy_balance_gems%"
+    balance-placeholder: "%Economy_balance_money%"
     withdraw-command: "eco take %player% %amount% money"
     deposit-command: "eco give %player% %amount% money"
 ```
@@ -254,13 +254,13 @@ currencies:
     display-name: "点券"
     precision: 0
 
-  # 3. 宝石 — 使用命令桥接（GemsEconomy）
+  # 3. 宝石 — 使用命令桥接（Economy）
   money:
     enabled: true
     provider: "command"
     display-name: "宝石"
     precision: 0
-    balance-placeholder: "%gemseconomy_balance_gems%"
+    balance-placeholder: "%Economy_balance_money%"
     withdraw-command: "eco take %player% %amount% money"
     deposit-command: "eco give %player% %amount% money"
 
@@ -329,7 +329,7 @@ ArcartXSuite v1.1.0-beta
 
 **原因：** Vault 已安装但没有经济插件注册 Economy 服务。
 
-**解决：** 安装一个 Vault 经济插件（如 CMI、EssentialsX、GemsEconomy）。
+**解决：** 安装一个 Vault 经济插件（如 CMI、EssentialsX、Economy）。
 
 ### PlayerPoints 余额始终为 0
 
