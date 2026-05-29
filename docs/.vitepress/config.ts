@@ -117,6 +117,7 @@ export default defineConfig({
             { text: '桥接 API', link: '/api/bridge-api' },
             { text: '事件', link: '/api/events' },
             { text: 'Capability 跨模块通信', link: '/api/capability' },
+            { text: '消息外部化 (i18n)', link: '/api/i18n' },
           ],
         },
       ],

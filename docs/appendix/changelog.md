@@ -18,6 +18,35 @@
 - **资源保护** — 付费模块资源通过 ticket 中的 `resourceKeys` 解包后在内存中解密。
 - **文档** — 安装、授权、命令速查和安全架构文档已同步到 `1.1.0-beta`。
 
+### 1.1.0-beta (Build 2026-05-29b) — 商业化增强
+
+- **跨源一键同步迁移** — 新增 `/axs migrate <模块ID|all> <sqlite-to-mysql|mysql-to-sqlite> [overwrite]` 命令，支持由控制台发起跨数据库的一键无损热迁移，全自动生成目标 DDL 并通过分批事务零开销透传数据
+- **迁移能力全整合** — 包含 `chat`, `essentials`, `eventpacket`, `loginview`, `mail`, `map`, `market`, `onlinerewards`, `qqbot`, `regions`, `title`, `warehouse` 在内的全部 12 个持久化大户模块 100% 完美注册 `DatabaseMigratable` 迁移能力并重写了 allTables() 的保障契约
+- **诊断命令** — `/axs diagnostic`：一键生成诊断包文件（Server/JVM/模块/授权/依赖信息），输出到 `diagnostics/` 目录，大幅降低客服排查成本
+- **版本检查** — 启动时异步检查最新版本，有更新时控制台提示 + OP 加入游戏时通知
+- **Purge 审计日志** — 每次 `/axs purge` 执行后自动在 `purge-logs/` 记录操作范围和受影响行数，不可抵赖
+- **性能优化** — `discoverableModuleIds()` 增加 30 秒缓存，Tab 补全不再重复扫描 JAR
+- **消息外部化框架** — 新增 `api.message.MessageProvider`，模块可通过 `messages.yml` 实现文本自定义和 i18n
+- **模块卸载修复** — `removeCapabilities()` 不再是空实现，卸载模块时正确清除 `purgeables` 列表避免操作已关闭连接池
+- **代码清理** — 删除 3 个 .hprof（~2.2GB）、2 个 .bak、重复 import；`.gitignore` 已补充规则
+- **自动化测试** — 新增 `TypeCoercerTest`（20）、`LicenseDecisionTest`（13）、`MessageProviderTest`（10）共 43 个单元测试，连同既有 8 个测试合计 51 个，全部通过；`axs-api` 模块补充 JUnit 5 测试基础设施
+
+### 1.1.0-beta (Build 2026-05-29c) — i18n 消息外部化框架
+
+- **AbstractAXSModule** — 新增 `messagesFileName()` 声明式钩子和 `messages()` 访问器；基类在 `onEnable` 自动从 jar 导出 `messages.yml`（走加密资源管线，付费模块同样受保护）并加载
+- **消息文件** — 模块在 `src/main/resources/messages.yml` 声明默认文本，支持 `&` 颜色码和 `{0}` 占位符；用户编辑 `data/<moduleId>/messages.yml` 后 `/axs reload` 即可生效
+- **已迁移模块** — `pickup`、`onlinerewards`、`loginview`、`combateffect`（非基类手动集成）、`announcer`、`eventpacket`、`title`（付费模块 `.axl` 授权资源）、`prop`、`questgps`、`map`、`chat`（多模式集成的代表性大模块）、`market`（高复杂度拍卖系统）、`qqbot`（机器人及SnowLuma进程集成）、`conversation`（NPC动画与交互框架）、`warehouse`、`tab`、`regions`、`essentials`（包含巨量基础命令的大模块），至此除免于迁移的纯 PAPI 计算服务 `rgb` 外，所有 20 个核心模块已全量 100% 迁移完毕，多语言底层完全归档。
+- **文档** — 新增 `docs/api/i18n.md` 迁移指南，含接入步骤、API 速查、迁移现状表
+- **迁移策略** — 采用渐进式：基础设施就绪后各模块逐步接入，避免一次性改动 1060 处 `sendMessage` 引入风险
+
+### 1.1.0-beta (Build 2026-05-29) — 玩家数据统一清除
+
+- **PlayerDataPurgeable** — 新增 `PlayerDataPurgeable` capability 接口，各模块注册后可由宿主统一调度玩家数据删除
+- **AbstractModuleRepository** — 新增 `deletePlayerData(UUID)` 和 `deleteAllPlayerData()` 模板方法，根据 `playerDataTables()` 和 `playerUuidColumn()` 自动生成 DELETE SQL
+- **已注册模块**：qqbot、warehouse、eventpacket、map、essentials、title、chat、mail、onlinerewards（共 9 个）
+- **命令** — `/axs purge <玩家名|all> [模块ID|all]`：支持单玩家/全玩家 × 单模块/全模块 的矩阵清除；仅控制台可执行，带 10 秒二次确认机制防止误操作；Tab 补全提示在线玩家和已注册模块 ID
+- **ModuleRegistry** — 新增 `purgePlayerData(UUID)`、`purgePlayerData(UUID, moduleId)`、`purgeAllPlayerData()`、`purgeAllPlayerData(moduleId)`、`purgeableModuleIds()` 方法
+
 ### 1.1.0-beta (Build 2026-05-28b) — QQBot QQ群服互联模块
 
 - **QQBot** — 新增 `qqbot` 付费模块，通过 **OneBot 11 正向 WebSocket** 连接 QQ 机器人（Lagrange/NapCat/LLOneBot/go-cqhttp 等），不依赖云端中转：

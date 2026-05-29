@@ -189,6 +189,26 @@ public interface SignalDispatchable {
 
 **使用场景：** OnlineRewards 等模块在特定条件下触发 EventPacket 规则引擎。
 
+### PlayerDataPurgeable
+
+由各持久化存储模块注册（多实例 Capability），供 `/axs purge` 命令统一调度玩家数据删除。
+
+```java
+public interface PlayerDataPurgeable {
+    @NotNull String moduleId();
+    int purgePlayerData(@NotNull UUID playerUuid);
+    default int purgeAllPlayerData() { return -1; }
+}
+```
+
+**已注册模块：** qqbot、warehouse、eventpacket、map、essentials、title、chat、mail、onlinerewards
+
+**特殊说明：**
+- 这是唯一一个支持多实例注册的 Capability（每个模块各注册一个实例）
+- `purgePlayerData` 删除指定玩家数据，`purgeAllPlayerData` 清空模块全部玩家数据表
+- 底层由 `AbstractModuleRepository.deletePlayerData(UUID)` / `deleteAllPlayerData()` 实现
+- 未注册此 Capability 的模块（如 market、loginview、regions）在 purge 时会被跳过
+
 ## 自定义 Capability
 
 第三方模块可以定义自己的 Capability 接口并注册：
@@ -232,3 +252,18 @@ if (ability != null && ability.isSupported("feature_x")) {
 - **注册时机**：在 `startService()` 中注册，确保服务已完全初始化
 - **接口粒度**：Capability 接口应聚焦单一职责，避免暴露过多内部细节
 - **文档化**：如果你的 Capability 供第三方使用，务必提供清晰的 Javadoc
+
+## 消息外部化
+
+`api.message.MessageProvider` 提供模块消息的外部化加载，支持 `&` 颜色码和 `{0}` 占位符：
+
+```java
+// 在模块 startService() 中初始化
+MessageProvider msg = new MessageProvider(context.dataFolder(), "messages.yml", getClass().getClassLoader(), context.logger());
+msg.load();
+
+// 使用
+player.sendMessage(msg.get("purge.confirm", "10"));
+```
+
+模块首次加载时自动从 JAR 导出默认 `messages.yml`；用户可自定义文本而无需修改代码。

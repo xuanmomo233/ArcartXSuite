@@ -21,6 +21,8 @@
 | `/axs reload <模块名>` | 仅重载指定模块的配置。常用于只改了某个模块的 YAML 后快速生效 | `/axs reload mail` |
 | `/axs load <模块名>` | 热加载新模块。从 `modules/` 扫描指定 id 的 jar，执行 license 校验 → 实例化 → onEnable。**不重启服务端**即可上线新模块或重新启用已 unload 的模块 | `/axs load mail` |
 | `/axs unload <模块名>` | 热卸载模块。执行 `onDisable` → 移除命令/包/能力注册 → 关闭 ClassLoader 释放 jar 文件句柄。若有其他模块依赖它，则会被拒绝并提示 dependents | `/axs unload mail` |
+| `/axs purge <玩家名\|all> [模块ID\|all]` | **仅控制台**。删除指定玩家（或全部玩家）在指定模块（或全部模块）中的持久化数据。需 10 秒内重复输入确认。省略模块ID等同 `all`。每次执行自动生成审计日志到 `purge-logs/` | `/axs purge Steve`<br>`/axs purge Steve chat`<br>`/axs purge all title`<br>`/axs purge all` |
+| `/axs diagnostic` | 生成诊断包文件（含 Server/JVM/模块/授权/依赖信息），输出到 `diagnostics/` 目录供客服排查 | `/axs diagnostic` |
 | `/axs <模块名> status` | 查看单个模块的状态详情，包括加载的配置数量、数据库连接状态等 | `/axs entitytracker status` |
 | `/axs license status` | 查看授权状态、QQ、已解锁模块、授权入口、代理状态、缓存状态和每个授权码的诊断结果 | `/axs license status` |
 | `/axs license refresh` | 刷新当前服务器绑定的授权票据。不会消耗换绑次数，适合改完 `license.yml` 后手动同步 | `/axs license refresh` |
