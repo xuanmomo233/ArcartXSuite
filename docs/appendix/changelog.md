@@ -18,6 +18,18 @@
 - **资源保护** — 付费模块资源通过 ticket 中的 `resourceKeys` 解包后在内存中解密。
 - **文档** — 安装、授权、命令速查和安全架构文档已同步到 `1.1.0-beta`。
 
+### 1.1.0-beta (Build 2026-05-30) — 统一账号识别服务
+
+- **核心（修复）** — 修复 LoginView 在 authlib-injector + LittleSkin 环境下，微软正版账号若未关联 LittleSkin（UUID 为 v3 离线 UUID）被误判为「离线」、无法免密直接进服的问题。根因是旧逻辑对非 v4 的 UUID 直接判离线、从不查询 Mojang。
+- **核心** — 新增宿主级统一账号识别服务：`axs-api` 新增 `api.account.AccountType` 枚举与 `api.account.AccountTypeService` 接口；`ModuleContext` 新增 `accountTypeService()` 访问方法（`@Stable`，永不为 null）。
+- **核心** — 宿主 `AccountTypeServiceImpl` 统一实现微软正版 / LittleSkin / 离线判定，含 Mojang API 查询、authlib-injector 检测与缓存，并在 `AsyncPlayerPreLogin` 异步阶段预热缓存；区分「确认不存在」(HTTP 204/404) 与「网络失败」，后者不写缓存以便重试。
+- **判定规则** — 玩家名在 Mojang 正版库存在 → 微软正版（无论 UUID v3/v4）；玩家名不在 Mojang 且 UUID 为 v4（已认证）→ LittleSkin；其余 → 离线。
+- **LoginView** — 删除自带账号判定（`classifyAccountType`、Mojang 查询、本地缓存与 `AsyncPlayerPreLogin` 监听），改用宿主统一服务；删除冗余的 `LoginAccountType` 枚举；PAPI 占位符 `%AXSloginview_account_type%`/`is_microsoft`/`is_premium` 等行为不变。
+- **QQBot** — 白名单登录门控 `QQBotLoginGateListener` 删除自带 Mojang 查询与缓存，改用统一服务；`microsoft-pass` / `littleskin-require-bind` / `deny-offline` 策略语义保持不变。
+- **EventPacket** — 规则上下文新增内置变量 `{account_type}` / `{account_type_display}` / `{account_premium}`，底层委托统一服务（主线程非阻塞，走预热缓存）。
+- **配置** — 宿主 `config.yml` 新增 `account-type` 节（`enable-mojang-lookup` / `mojang-timeout-ms` / `debug`，均带默认值，属 `JAR_NEW` 自动同步，无破坏性、无需迁移）。
+- **构建** — 全量 123 任务 BUILD SUCCESSFUL，51 项单元测试通过。
+
 ### 1.1.0-beta (Build 2026-05-29b) — 商业化增强
 
 - **跨源一键同步迁移** — 新增 `/axs migrate <模块ID|all> <sqlite-to-mysql|mysql-to-sqlite> [overwrite]` 命令，支持由控制台发起跨数据库的一键无损热迁移，全自动生成目标 DDL 并通过分批事务零开销透传数据

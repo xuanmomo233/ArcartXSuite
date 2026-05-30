@@ -47,6 +47,39 @@ if (bridge != null && bridge.isAvailable()) {
 
 详见 [桥接 API 参考](./bridge-api)。
 
+## 账号识别服务
+
+宿主统一提供微软正版 / LittleSkin / 离线账号判定，供 LoginView、QQBot、EventPacket 等模块共享，取代各模块自行实现且不一致的判定逻辑。
+
+| 方法 | 返回类型 | 稳定性 | 说明 |
+|------|----------|--------|------|
+| `accountTypeService()` | `AccountTypeService` | `@Stable` | 宿主统一账号识别服务，**永不为 null** |
+
+```java
+AccountTypeService accounts = context.accountTypeService();
+
+// 主线程安全（走缓存，非阻塞）
+AccountType type = accounts.resolve(player);
+if (type.premium()) {
+    // 微软正版或 LittleSkin，可免密直接进服
+}
+
+// 异步线程（如 AsyncPlayerPreLoginEvent）允许阻塞查询 Mojang 并写缓存
+AccountType resolved = accounts.resolveBlocking(uuid, name);
+```
+
+`AccountType` 取值：
+
+| 取值 | id | premium | 判定条件 |
+|------|-----|---------|----------|
+| `MICROSOFT` | `microsoft` | 是 | 玩家名在 Mojang 正版库存在（无论 UUID 为 v3 离线或 v4 在线） |
+| `LITTLESKIN` | `littleskin` | 是 | 玩家名不在 Mojang，且 UUID 为 v4（已通过 yggdrasil 认证） |
+| `OFFLINE` | `offline` | 否 | v3 离线 UUID 且不在 Mojang |
+
+::: tip
+判定开关位于宿主 `config.yml` 的 `account-type` 节（`enable-mojang-lookup` / `mojang-timeout-ms` / `debug`）。服务在 `AsyncPlayerPreLogin` 阶段异步预热缓存，因此 `resolve()` 在玩家进服后通常命中缓存，可在主线程安全调用。
+:::
+
 ## 模块间通信
 
 ### 查找模块

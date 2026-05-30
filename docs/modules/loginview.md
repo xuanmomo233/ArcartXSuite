@@ -73,13 +73,13 @@ auth:
 
 #### 工作原理
 
-| 玩家类型 | UUID 版本 | 进服体验 |
+| 玩家类型 | 判定依据 | 进服体验 |
 |---|---|---|
-| LittleSkin 外置登录 | version 4（由 Yggdrasil 服务器分配） | 显示「进入服务器」按钮，一键进服 |
-| Mojang 正版 | version 4（由 Mojang 服务器分配） | 显示「进入服务器」按钮，一键进服 |
-| 离线/盗版 | version 3（基于玩家名称计算） | 正常显示注册/登录界面 |
+| 微软正版 | 玩家名在 Mojang 正版库存在（UUID v3 或 v4 均可） | 显示「进入服务器」按钮，一键进服 |
+| LittleSkin 外置登录 | 玩家名不在 Mojang，UUID 为 v4（Yggdrasil 分配） | 显示「进入服务器」按钮，一键进服 |
+| 离线/盗版 | UUID 为 v3 且玩家名不在 Mojang | 正常显示注册/登录界面 |
 
-> LoginView 先通过 UUID version 判断是否为认证账号：version 4 = 认证服务器分配，version 3 = 离线模式名称 UUID。若为 version 4，会继续对比 Mojang 官方 UUID，以区分 `microsoft` 与 `littleskin`。
+> 账号判定由 ArcartXSuite 本体[统一账号识别服务](../api/module-context#账号识别服务)提供。服务在玩家预登录阶段异步查询 Mojang 正版库：**只要玩家名在 Mojang 存在即视为微软正版**（无论 UUID 是 v3 离线 UUID 还是 v4 在线 UUID），从而正确识别「微软正版但未关联 LittleSkin」（其 UUID 通常为 v3）的玩家；玩家名不在 Mojang 且 UUID 为 v4 的视为 LittleSkin；其余视为离线。
 
 ### PlaceholderAPI
 
@@ -201,7 +201,7 @@ java -javaagent:plugins/ArcartXSuite/authlib-injector.jar=https://littleskin.cn/
 
 **Q: 启用后离线玩家还能注册/登录吗？**
 
-可以。免登录仅对 UUID version 4 的玩家生效，离线玩家（version 3）不受影响，仍走正常注册/登录流程。
+可以。免登录仅对识别为正版的玩家（微软正版 / LittleSkin）生效，离线玩家不受影响，仍走正常注册/登录流程。
 
 **Q: 玩家改名后会怎样？**
 

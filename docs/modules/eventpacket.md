@@ -702,6 +702,21 @@ controls:
   pack: "{player_name};cdk_sparkle;{preset_name}"
 ```
 
+### `qq-broadcast` — QQ 群广播
+
+向 QQ 群发送消息（需要 QQBot 模块已启用并配置）。
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `message` | string | 要发送的消息内容（支持变量替换） |
+| `group-id` | long/string | 可选，指定群号；留空则发送到所有配置的群 |
+
+```yaml
+- type: qq-broadcast
+  message: "玩家 {player_name} 完成了成就！"
+  # group-id: 123456789  # 可选：指定群号
+```
+
 ---
 
 ## 上下文变量一览
@@ -722,6 +737,16 @@ controls:
 | `{player_ping}` | 延迟 |
 
 `{subject_*}` 与 `{player_*}` 等价。
+
+### 账号信息
+
+由宿主统一账号识别服务提供，可用于所有触发器（join、papi、command-signal 等）。
+
+| 变量 | 说明 |
+| --- | --- |
+| `{account_type}` | 账号类型 id：`microsoft` / `littleskin` / `offline` |
+| `{account_type_display}` | 账号类型中文名：微软正版 / LittleSkin / 离线 |
+| `{account_premium}` | 是否正版账号（可免密进服）：`true` / `false` |
 
 ### 接收者信息（仅 `ui-packet` 动作的 `pack` 中有效）
 
