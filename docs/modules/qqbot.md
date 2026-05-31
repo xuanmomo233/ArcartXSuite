@@ -17,6 +17,7 @@ QQBot 为付费模块，需要有效授权码激活。
 | **群指令** | 内置（在线列表/服务器状态/积分榜）+ PlaceholderAPI 查询 + 服务器命令执行 + 自定义扩展 |
 | **自动化** | 服务器监控告警、定时消息、击杀播报、入群欢迎、关键词自动回复（FAQ） |
 | **群管理** | `#公告` 同步游戏内、`#踢`/`#封禁` 远程管理、QQ 禁言同步封禁绑定玩家 |
+| **黑名单** | 配置化禁止指定 QQ 号使用机器人（指令/消息同步/欢迎/签到等全部拦截） |
 | **跨模块** | `QQBotBroadcastable` 推送消息、`QQBotNotifiable` 反向监听群事件、`MailDispatchable` 发放兑换奖励 |
 
 ## 依赖
@@ -59,6 +60,9 @@ QQBot 为付费模块，需要有效授权码激活。
 | `/axs qqbot snowluma start` | `arcartxsuite.qqbot.admin` | 启动 SnowLuma 子进程 |
 | `/axs qqbot snowluma stop` | `arcartxsuite.qqbot.admin` | 停止 SnowLuma 子进程 |
 | `/axs qqbot snowluma status` | `arcartxsuite.qqbot.admin` | 查看 SnowLuma 安装/运行状态 |
+| `/axs qqbot blacklist add <QQ号>` | `arcartxsuite.qqbot.admin` | 将指定 QQ 加入黑名单 |
+| `/axs qqbot blacklist remove <QQ号>` | `arcartxsuite.qqbot.admin` | 将指定 QQ 移出黑名单 |
+| `/axs qqbot blacklist list` | `arcartxsuite.qqbot.admin` | 查看当前数据库黑名单列表 |
 
 ### 群内指令（默认前缀 `#`）
 
@@ -67,8 +71,11 @@ QQBot 为付费模块，需要有效授权码激活。
 | `#绑定 <玩家名>` | 群员 | 申请绑定，机器人返回 6 位验证码 |
 | `#解绑` | 群员 | 解除自己 QQ 的绑定 |
 | `#查绑 [玩家名]` | 群员 | 查询自己/指定玩家的绑定 |
-| `#加白 <玩家名>` | 群管/群主 | 添加白名单 |
-| `#删白 <玩家名>` | 群管/群主 | 移除白名单 |
+| `#加白 <玩家名>` | 群管/群主 | 添加白名单（兼容旧指令） |
+| `#删白 <玩家名>` | 群管/群主 | 移除白名单（兼容旧指令） |
+| `#白名单添加 <玩家名>` | 群管/群主 | 添加白名单 |
+| `#白名单移除 <玩家名>` | 群管/群主 | 移除白名单 |
+| `#白名单列表` | 群管/群主 | 查看服务器当前白名单 |
 | `#查在线` | 群员 | 内置：返回在线玩家列表 |
 | `#查服务器` | 群员 | 内置：返回 TPS / 内存 / 实体 / 区块 |
 | `#查玩家 [玩家名]` | 群员 | PAPI 示例：等级 / 金币 / 生命 / 饥饿 |
@@ -81,6 +88,9 @@ QQBot 为付费模块，需要有效授权码激活。
 | `#公告 <内容>` | 群管/群主 | 发布公告，同步到游戏内聊天栏 + 标题 |
 | `#踢 <玩家名> [原因]` | 群管/群主 | 远程踢出玩家 |
 | `#封禁 <玩家名> [原因]` | 群管/群主 | 远程封禁玩家 |
+| `#黑名单添加 <QQ号>` | 群管/群主 | 将指定 QQ 加入黑名单（禁止其使用机器人） |
+| `#黑名单移除 <QQ号>` | 群管/群主 | 将指定 QQ 移出黑名单 |
+| `#黑名单列表` | 群管/群主 | 查看当前数据库黑名单列表 |
 
 ## 权限
 
@@ -148,6 +158,9 @@ whitelist:
   auto-remove-on-unbind: true
   add-command: "whitelist add {name}"
   remove-command: "whitelist remove {name}"
+  add-prefix: "#白名单添加"
+  remove-prefix: "#白名单移除"
+  list-prefix: "#白名单列表"
 
 # 自定义群指令
 command-prefix: "#"
@@ -270,6 +283,15 @@ moderation:
     use-duration: true           # 按 QQ 禁言时长设置封禁时长
     reason: "QQ群禁言同步"
 
+# 黑名单（列入的 QQ 号禁止使用机器人的所有功能，支持群指令动态管理）
+blacklist:
+  enabled: false
+  qq-list:
+    - 987654321
+  add-prefix: "#黑名单添加"
+  remove-prefix: "#黑名单移除"
+  list-prefix: "#黑名单列表"
+
 # 存储
 storage:
   mode: "sqlite"                  # sqlite / mysql
@@ -302,6 +324,7 @@ QQBot 数据库表（SQLite 默认在 `plugins/ArcartXSuite/data/qqbot/qqbot.db`
 | `axs_qqbot_points` | `qq_id`、`balance`、`total_earned`、`total_spent`、`updated_at` | 积分账户（`qq_id` 主键） |
 | `axs_qqbot_signin` | `qq_id`、`sign_date`、`streak`、`signed_at` | 每日签到记录（`PRIMARY KEY(qq_id, sign_date)` 防重复） |
 | `axs_qqbot_redeem_log` | `id`、`qq_id`、`prize_id`、`cost`、`redeem_date`、`created_at` | 兑换流水（每日限购统计） |
+| `axs_qqbot_blacklist` | `qq_id`、`added_by`、`added_at` | 动态黑名单（`qq_id` 主键，群指令添加/移除） |
 
 ## 配置诊断
 
