@@ -68,5 +68,6 @@ tasks.register("buildDev") {
     group = "build"
     description = "Build all JARs WITHOUT obfuscation (dev only)"
     dependsOn(":axs-core:shadowJar")
-    dependsOn(subprojects.filter { it.path.startsWith(":modules:") || it.path.startsWith(":proxy:") }.map { "${it.path}:jar" })
+    dependsOn(subprojects.filter { it.path.startsWith(":modules:") }.map { "${it.path}:jar" })
+    dependsOn(subprojects.filter { it.path.startsWith(":proxy:") }.map { "${it.path}:shadowJar" })
 }

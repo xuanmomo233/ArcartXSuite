@@ -21,18 +21,6 @@ tasks.jar {
     duplicatesStrategy = org.gradle.api.file.DuplicatesStrategy.INCLUDE
 }
 
-val publishProxyJar by tasks.registering {
-    dependsOn(tasks.jar)
-    val src = tasks.jar.get().archiveFile.get().asFile
-    val dst = rootProject.layout.buildDirectory.dir("ArcartXSuite/proxy").get().file(src.name).asFile
-    inputs.file(src)
-    outputs.file(dst)
-    doLast {
-        dst.parentFile.mkdirs()
-        src.copyTo(dst, overwrite = true)
-    }
-}
-
 tasks.build {
-    dependsOn(publishProxyJar)
+    dependsOn(tasks.jar)
 }
