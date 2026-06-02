@@ -1,0 +1,727 @@
+# AXS 资源说明
+# 用途: Essentials 玩家功能菜单，支持首页/家/传送点/TPA/设置五个子页面。
+# 前置依赖: ArcartX；Essentials 模块启用后自动注册。
+# 打开方式: /axs essentials menu
+# 数据交互: packetHandler 接收 init 推送；客户端通过 Packet.send('AXS_ESS_MENU', ...) 发送操作指令。
+
+ui:
+  background: true
+  escClose: true
+  closeDied: true
+  show: true
+  through: false
+  screenScale: true
+  packetHandler:
+    init: |-
+      var.page = packet['page']
+      var.packetId = packet['packetId']
+      var.playerName = packet['playerName']
+      var.isFlying = packet['isFlying']
+      var.isGod = packet['isGod']
+      var.isAfk = packet['isAfk']
+      var.flySpeed = packet['flySpeed']
+      var.walkSpeed = packet['walkSpeed']
+      var.location = packet['location']
+      var.homes = packet['homes']
+      var.homeCount = packet['homeCount']
+      var.warps = packet['warps']
+      var.warpCount = packet['warpCount']
+      var.onlinePlayers = packet['onlinePlayers']
+      var.replantEnabled = packet['replantEnabled']
+      var.autotoolEnabled = packet['autotoolEnabled']
+
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      root:
+        type: Texture
+        attribute:
+          point: ~middle_center
+          width: 900
+          height: 600
+          normal: ~25,25,30,240
+          shape: ~round_rect
+          radius: 14
+        effect:
+          stroke:
+            width: 2
+            color: ~80,180,255,180
+        children:
+          # ═══ 标题栏 ═══
+          header:
+            type: Texture
+            attribute:
+              x: 0
+              y: 0
+              width: 900
+              height: 60
+              normal: ~35,35,45,255
+              shape: ~round_rect
+              radius: 14
+            children:
+              title_text:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 14
+                  fontSize: 64
+                  texts: '&b&l⚙ 玩家工具'
+              title_player:
+                type: Text
+                attribute:
+                  x: 700
+                  y: 14
+                  fontSize: 64
+                  texts: "~&7{var.playerName}"
+
+          # ═══ 左侧导航栏 ═══
+          nav_bar:
+            type: Texture
+            attribute:
+              x: 0
+              y: 60
+              width: 160
+              height: 540
+              normal: ~30,30,38,255
+            children:
+              nav_home:
+                type: Texture
+                attribute:
+                  x: 10
+                  y: 16
+                  width: 140
+                  height: 40
+                  normal: "var.page == 'home' ? '60,140,220,200' : '45,45,55,180'"
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send(var.packetId, 'navigate', 'home')
+                children:
+                  nav_home_text:
+                    type: Text
+                    attribute:
+                      x: 70
+                      y: 8
+                      through: true
+                      center: true
+                      fontSize: 49
+                      texts: '&f首页'
+
+              nav_homes:
+                type: Texture
+                attribute:
+                  x: 10
+                  y: 66
+                  width: 140
+                  height: 40
+                  normal: "var.page == 'homes' ? '60,140,220,200' : '45,45,55,180'"
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send(var.packetId, 'navigate', 'homes')
+                children:
+                  nav_homes_text:
+                    type: Text
+                    attribute:
+                      x: 70
+                      y: 8
+                      through: true
+                      center: true
+                      fontSize: 49
+                      texts: '&f家'
+
+              nav_warps:
+                type: Texture
+                attribute:
+                  x: 10
+                  y: 116
+                  width: 140
+                  height: 40
+                  normal: "var.page == 'warps' ? '60,140,220,200' : '45,45,55,180'"
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send(var.packetId, 'navigate', 'warps')
+                children:
+                  nav_warps_text:
+                    type: Text
+                    attribute:
+                      x: 70
+                      y: 8
+                      through: true
+                      center: true
+                      fontSize: 49
+                      texts: '&f传送点'
+
+              nav_tpa:
+                type: Texture
+                attribute:
+                  x: 10
+                  y: 166
+                  width: 140
+                  height: 40
+                  normal: "var.page == 'tpa' ? '60,140,220,200' : '45,45,55,180'"
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send(var.packetId, 'navigate', 'tpa')
+                children:
+                  nav_tpa_text:
+                    type: Text
+                    attribute:
+                      x: 70
+                      y: 8
+                      through: true
+                      center: true
+                      fontSize: 49
+                      texts: '&f传送'
+
+              nav_settings:
+                type: Texture
+                attribute:
+                  x: 10
+                  y: 216
+                  width: 140
+                  height: 40
+                  normal: "var.page == 'settings' ? '60,140,220,200' : '45,45,55,180'"
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send(var.packetId, 'navigate', 'settings')
+                children:
+                  nav_settings_text:
+                    type: Text
+                    attribute:
+                      x: 70
+                      y: 8
+                      through: true
+                      center: true
+                      fontSize: 49
+                      texts: '&f设置'
+
+          # ═══ 右侧内容区 ═══
+          content_area:
+            type: Texture
+            attribute:
+              x: 160
+              y: 60
+              width: 740
+              height: 540
+              normal: ~20,20,25,100
+
+            children:
+              # ─── 首页视图 ───
+              page_home:
+                type: Canvas
+                attribute:
+                  x: 20
+                  y: 20
+                  width: 700
+                  height: 500
+                  visible: |-
+                    var.page == 'home'
+                children:
+                  home_title:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      fontSize: 64
+                      texts: '&6&l玩家状态'
+                  status_fly:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 50
+                      fontSize: 49
+                      texts: "~&7飞行: {var.isFlying == 'true' ? '&a开启' : '&c关闭'}"
+                  status_god:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 86
+                      fontSize: 49
+                      texts: "~&7无敌: {var.isGod == 'true' ? '&a开启' : '&c关闭'}"
+                  status_afk:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 122
+                      fontSize: 49
+                      texts: "~&7AFK: {var.isAfk == 'true' ? '&e是' : '&a否'}"
+                  status_speed:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 158
+                      fontSize: 49
+                      texts: "~&7飞行速度: &f{var.flySpeed}  &7行走速度: &f{var.walkSpeed}"
+                  status_location:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 194
+                      fontSize: 49
+                      texts: "~&7位置: &f{var.location}"
+                  status_homes:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 246
+                      fontSize: 49
+                      texts: "~&7家数量: &b{var.homeCount}  &7传送点: &b{var.warpCount}"
+
+              # ─── 家列表视图 ───
+              page_homes:
+                type: Canvas
+                attribute:
+                  x: 20
+                  y: 20
+                  width: 700
+                  height: 500
+                  visible: |-
+                    var.page == 'homes'
+                children:
+                  homes_title:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      fontSize: 64
+                      texts: '&6&l我的家'
+                  btn_set_home:
+                    type: Texture
+                    attribute:
+                      x: 560
+                      y: 0
+                      width: 120
+                      height: 38
+                      normal: ~50,180,80,200
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      click: |-
+                        Packet.send(var.packetId, 'set_home', 'home')
+                    children:
+                      btn_set_home_text:
+                        type: Text
+                        attribute:
+                          x: 60
+                          y: 6
+                          through: true
+                          center: true
+                          fontSize: 49
+                          texts: '&f设置家'
+                  homes_scroll:
+                    type: Scroll
+                    attribute:
+                      x: 0
+                      y: 50
+                      width: 700
+                      height: 440
+                    action:
+                      wheel: |-
+                        self.moveY(self.wheelValue * 40)
+                    children:
+                      homes_list:
+                        val: home_data
+                        type: VStack
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 700
+                          spaceBetween: 6
+                        children:
+                          home_item:
+                            type: Texture
+                            attribute:
+                              entry: var.homes[self.key]
+                              visible: self.entry != null
+                              width: 680
+                              height: 50
+                              normal: ~40,40,50,180
+                              shape: ~round_rect
+                              radius: 6
+                            children:
+                              home_item_name:
+                                type: Text
+                                attribute:
+                                  x: 16
+                                  y: 12
+                                  through: true
+                                  fontSize: 49
+                                  texts: "~&b{self.parent.entry['name']}"
+                              home_item_coords:
+                                type: Text
+                                attribute:
+                                  x: 200
+                                  y: 14
+                                  through: true
+                                  fontSize: 24
+                                  texts: "~&7{self.parent.entry['world']} {self.parent.entry['coords']}"
+                              btn_tp_home:
+                                type: Texture
+                                attribute:
+                                  x: 520
+                                  y: 8
+                                  width: 70
+                                  height: 34
+                                  normal: ~60,140,220,200
+                                  shape: ~round_rect
+                                  radius: 6
+                                action:
+                                  click: |-
+                                    Packet.send(var.packetId, 'teleport_home', self.parent.entry['name'])
+                                children:
+                                  btn_tp_home_text:
+                                    type: Text
+                                    attribute:
+                                      x: 35
+                                      y: 5
+                                      through: true
+                                      center: true
+                                      fontSize: 22
+                                      texts: '&f传送'
+                              btn_del_home:
+                                type: Texture
+                                attribute:
+                                  x: 600
+                                  y: 8
+                                  width: 70
+                                  height: 34
+                                  normal: ~200,60,60,200
+                                  shape: ~round_rect
+                                  radius: 6
+                                action:
+                                  click: |-
+                                    Packet.send(var.packetId, 'delete_home', self.parent.entry['name'])
+                                children:
+                                  btn_del_home_text:
+                                    type: Text
+                                    attribute:
+                                      x: 35
+                                      y: 5
+                                      through: true
+                                      center: true
+                                      fontSize: 22
+                                      texts: '&f删除'
+
+              # ─── 传送点视图 ───
+              page_warps:
+                type: Canvas
+                attribute:
+                  x: 20
+                  y: 20
+                  width: 700
+                  height: 500
+                  visible: |-
+                    var.page == 'warps'
+                children:
+                  warps_title:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      fontSize: 64
+                      texts: '&6&l传送点列表'
+                  warps_scroll:
+                    type: Scroll
+                    attribute:
+                      x: 0
+                      y: 50
+                      width: 700
+                      height: 440
+                    action:
+                      wheel: |-
+                        self.moveY(self.wheelValue * 40)
+                    children:
+                      warps_list:
+                        val: warp_data
+                        type: VStack
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 700
+                          spaceBetween: 6
+                        children:
+                          warp_item:
+                            type: Texture
+                            attribute:
+                              entry: var.warps[self.key]
+                              visible: self.entry != null
+                              width: 680
+                              height: 50
+                              normal: ~40,40,50,180
+                              shape: ~round_rect
+                              radius: 6
+                            children:
+                              warp_item_name:
+                                type: Text
+                                attribute:
+                                  x: 16
+                                  y: 12
+                                  through: true
+                                  fontSize: 49
+                                  texts: "~&e{self.parent.entry}"
+                              btn_tp_warp:
+                                type: Texture
+                                attribute:
+                                  x: 580
+                                  y: 8
+                                  width: 80
+                                  height: 34
+                                  normal: ~60,140,220,200
+                                  shape: ~round_rect
+                                  radius: 6
+                                action:
+                                  click: |-
+                                    Packet.send(var.packetId, 'teleport_warp', self.parent.entry)
+                                children:
+                                  btn_tp_warp_text:
+                                    type: Text
+                                    attribute:
+                                      x: 40
+                                      y: 5
+                                      through: true
+                                      center: true
+                                      fontSize: 22
+                                      texts: '&f传送'
+
+              # ─── TPA 视图 ───
+              page_tpa:
+                type: Canvas
+                attribute:
+                  x: 20
+                  y: 20
+                  width: 700
+                  height: 500
+                  visible: |-
+                    var.page == 'tpa'
+                children:
+                  tpa_title:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      fontSize: 64
+                      texts: '&6&l传送请求'
+                  tpa_hint:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 46
+                      fontSize: 36
+                      texts: '&7点击玩家名发送传送请求'
+                  btn_accept_tpa:
+                    type: Texture
+                    attribute:
+                      x: 500
+                      y: 0
+                      width: 90
+                      height: 38
+                      normal: ~50,180,80,200
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      click: |-
+                        Packet.send(var.packetId, 'accept_tpa')
+                    children:
+                      btn_accept_text:
+                        type: Text
+                        attribute:
+                          x: 45
+                          y: 6
+                          through: true
+                          center: true
+                          fontSize: 49
+                          texts: '&f接受'
+                  btn_deny_tpa:
+                    type: Texture
+                    attribute:
+                      x: 600
+                      y: 0
+                      width: 90
+                      height: 38
+                      normal: ~200,60,60,200
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      click: |-
+                        Packet.send(var.packetId, 'deny_tpa')
+                    children:
+                      btn_deny_text:
+                        type: Text
+                        attribute:
+                          x: 45
+                          y: 6
+                          through: true
+                          center: true
+                          fontSize: 49
+                          texts: '&f拒绝'
+                  tpa_scroll:
+                    type: Scroll
+                    attribute:
+                      x: 0
+                      y: 80
+                      width: 700
+                      height: 400
+                    action:
+                      wheel: |-
+                        self.moveY(self.wheelValue * 40)
+                    children:
+                      tpa_list:
+                        val: tpa_data
+                        type: VStack
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 700
+                          spaceBetween: 6
+                        children:
+                          tpa_player_item:
+                            type: Texture
+                            attribute:
+                              entry: var.onlinePlayers[self.key]
+                              visible: self.entry != null
+                              width: 680
+                              height: 44
+                              normal: ~40,40,50,180
+                              shape: ~round_rect
+                              radius: 6
+                            action:
+                              click: |-
+                                Packet.send(var.packetId, 'send_tpa', self.entry)
+                            children:
+                              tpa_player_name:
+                                type: Text
+                                attribute:
+                                  x: 16
+                                  y: 10
+                                  through: true
+                                  fontSize: 49
+                                  texts: "~&f{self.parent.entry}"
+
+              # ─── 设置视图 ───
+              page_settings:
+                type: Canvas
+                attribute:
+                  x: 20
+                  y: 20
+                  width: 700
+                  height: 500
+                  visible: |-
+                    var.page == 'settings'
+                children:
+                  settings_title:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      fontSize: 64
+                      texts: '&6&l个人设置'
+                  # 飞行开关
+                  btn_toggle_fly:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 56
+                      width: 320
+                      height: 50
+                      normal: "var.isFlying == 'true' ? '40,120,60,200' : '60,60,70,200'"
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      click: |-
+                        Packet.send(var.packetId, 'toggle_fly')
+                    children:
+                      fly_text:
+                        type: Text
+                        attribute:
+                          x: 160
+                          y: 12
+                          through: true
+                          center: true
+                          fontSize: 49
+                          texts: "~飞行: {var.isFlying == 'true' ? '&a开启' : '&c关闭'}"
+                  # 自动补种
+                  btn_toggle_replant:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 118
+                      width: 320
+                      height: 50
+                      normal: "var.replantEnabled == 'true' ? '40,120,60,200' : '60,60,70,200'"
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      click: |-
+                        Packet.send(var.packetId, 'toggle_replant')
+                    children:
+                      replant_text:
+                        type: Text
+                        attribute:
+                          x: 160
+                          y: 12
+                          through: true
+                          center: true
+                          fontSize: 49
+                          texts: "~自动补种: {var.replantEnabled == 'true' ? '&a开启' : '&c关闭'}"
+                  # 自动工具
+                  btn_toggle_autotool:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 180
+                      width: 320
+                      height: 50
+                      normal: "var.autotoolEnabled == 'true' ? '40,120,60,200' : '60,60,70,200'"
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      click: |-
+                        Packet.send(var.packetId, 'toggle_autotool')
+                    children:
+                      autotool_text:
+                        type: Text
+                        attribute:
+                          x: 160
+                          y: 12
+                          through: true
+                          center: true
+                          fontSize: 49
+                          texts: "~自动工具: {var.autotoolEnabled == 'true' ? '&a开启' : '&c关闭'}"
+                  # 背包整理
+                  btn_sort:
+                    type: Texture
+                    attribute:
+                      x: 0
+                      y: 246
+                      width: 320
+                      height: 50
+                      normal: ~60,100,180,200
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      click: |-
+                        Packet.send(var.packetId, 'sort')
+                    children:
+                      sort_text:
+                        type: Text
+                        attribute:
+                          x: 160
+                          y: 12
+                          through: true
+                          center: true
+                          fontSize: 49
+                          texts: '&f背包整理'

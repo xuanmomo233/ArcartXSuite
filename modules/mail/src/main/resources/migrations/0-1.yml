@@ -1,0 +1,27 @@
+# Mail 配置迁移示例
+# 从版本 0 升级到版本 1 的迁移规则
+from-version: 0
+to-version: 1
+description: "示例迁移：货币字段重命名"
+
+operations:
+  # 示例：将货币配置字段重命名
+  - type: rename
+    from: "currencies.vault-money"
+    to: "currencies.vault"
+
+  # 示例：删除已废弃的字段
+  - type: remove
+    path: "legacy.use-legacy-ui"
+
+  # 示例：设置缺失的默认附件上限
+  - type: set-if-missing
+    path: "player-send.max-attachments"
+    value: 6
+
+  # 示例：状态值映射转换
+  - type: value-map
+    path: "retention.policy"
+    mapping:
+      "delete": "auto-cleanup"
+      "keep": "persistent"

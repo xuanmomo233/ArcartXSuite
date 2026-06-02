@@ -1,0 +1,13 @@
+id: onlinerewards
+name: OnlineRewards
+version: 1.0.2-beta
+main: xuanmo.arcartxsuite.onlinerewards.OnlineRewardsModule
+api-version: 1.0
+
+depends: []
+softdepends: []
+external-depends:
+
+external-softdepends:
+  - PlaceholderAPI
+

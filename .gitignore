@@ -1,20 +1,48 @@
-/.gradle
-/.windsurf
-/axs-core
-/build
-/build.gradle.kts
-/buildSrc
-/dist-scripts
-/gradle
-/gradle.properties
-/gradlew
-/gradlew.bat
-/libs
-/MODULAR-README.md
-/modules
-/native
-/proguard
-/proxy
-/README.md
-/settings.gradle.kts
-/src
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# VS Code
+.vscode/
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ArcartXSuite specific
+buildSrc/build/
+axs-core/build/
+modules/*/build/
+
+# Cache / Temp
+*.tmp
+*.swp
+*~
+
+# Windows
+dist-scripts/temp/
+
+# Keep Gradle wrapper scripts
+!gradlew.bat

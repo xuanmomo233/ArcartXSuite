@@ -1,0 +1,124 @@
+# Boss 追踪配置: ExampleBoss
+# 文件名（去掉 .yml）即为 MythicMob ID（大小写不敏感），例如 SkeletalKnight.yml。
+# 详细变量说明见主配置 ArcartXEntityTracker.yml 注释。
+#
+# display_name 支持占位符 {mob_id} 和 {display_name}，分别代表 MythicMob 的 ID 和显示名称。
+# title-format 和 subtitle-format 支持颜色代码，以及：
+# {display_name} {mob_id} {mob_id_lower} {entity_uuid}
+# {health} {max_health} {health_percent} {progress}
+# {distance} {distance_text} {spawn_order} {priority}
+# {world} {x} {y} {z} {alive_seconds} {alive_time}
+# {has_target} {target_name} {target_display_name} {target_uuid} {target_type}
+# {ranking_enabled} {damage_participant_count} {damage_tracked_player_count} {total_damage}
+# {viewer_rank} {viewer_rank_text} {viewer_damage} {viewer_damage_percent} {viewer_taken_damage}
+# {top_1_name} {top_1_damage} {top_1_damage_percent} {top_1_taken_damage}
+# 其中 {top_N_*} 支持从 1 到 damage-ranking.max-entries 的任意名次占位符。
+# spawn-chat-card / death-chat-card / despawn-chat-card 填 ArcartX chat card 模板 ID。
+# 触发时会传入与 title-format / subtitle-format 相同的 Boss 内置变量和伤害排行变量。
+
+enabled: true
+priority: 100
+viewer-range: 48.0
+title-format: "&c{display_name}"
+subtitle-format: "&7MythicMob: &f{mob_id}"
+damage-ranking:
+  enabled: true
+  max-entries: 10
+  # 可写固定值或百分比。
+  min-damage: "1%"
+  rewards:
+    # 只在 Boss 死亡结算时发奖；重载 / 消失 / 停机不会触发。
+    enabled: false
+    # inventory-full 背包满时处理: drop 掉落剩余物品；fail 发奖前直接失败；silent-drop 静默掉落剩余物品。
+    inventory-full: "drop"
+    ranks:
+      1:
+        actions:
+          - type: neigeitems
+            item-id: "legendary_sword"
+            amount: 1
+          - type: mythicitems
+            item-id: "BossGem"
+            amount: 1
+          - type: command
+            command: "points give {player} 100"
+          - type: message
+            # target 消息目标: player 发给获奖玩家；broadcast 全服广播；console 输出到控制台。
+            target: "player"
+            text: "&6你在 {boss_display_name} 伤害排名第 {rank} 名，获得奖励。"
+      2:
+        actions:
+          - type: command
+            command: "points give {player} 50"
+          - type: message
+            target: "player"
+            text: "&e你在 {boss_display_name} 伤害排名第 {rank} 名。"
+    # 奖励动作支持变量:
+    # {player} {player_name} {player_uuid} {player_display_name}
+    # {boss_id} {boss_display_name} {entity_uuid}
+    # {rank} {rank_text} {damage} {damage_percent} {taken_damage}
+    # {total_damage} {participant_count} {tracked_player_count}
+    # 以及 {top_1_name} 这类排行字段；内置变量替换后会再走一次 PlaceholderAPI。
+  # 排行榜定时奖励（周 / 月），独立于 rewards（死亡即时结算）。
+  # 格式与 rewards 一致（ranks → 数字 → actions 列表），由调度器在周期结束后统一发放。
+  ranking-rewards:
+    weekly:
+      enabled: false
+      # inventory-full 背包满时处理: drop 掉落剩余物品；fail 发奖前直接失败；silent-drop 静默掉落剩余物品。
+      inventory-full: "drop"
+      ranks:
+        1:
+          actions:
+            - type: command
+              command: "points give {player} 100"
+            - type: message
+              target: "broadcast"
+              text: "&6&l恭喜 {player} 获得本周 {boss_display_name} 伤害冠军！"
+            - type: message
+              target: "player"
+              text: "&6你在本周 {boss_display_name} 伤害排行榜获得第 {rank} 名，获得冠军奖励。"
+        2:
+          actions:
+            - type: command
+              command: "points give {player} 50"
+            - type: message
+              target: "player"
+              text: "&e你在本周 {boss_display_name} 伤害排行榜获得第 {rank} 名。"
+        3:
+          actions:
+            - type: command
+              command: "points give {player} 25"
+            - type: message
+              target: "player"
+              text: "&b你在本周 {boss_display_name} 伤害排行榜获得第 {rank} 名。"
+    monthly:
+      enabled: false
+      inventory-full: "drop"
+      ranks:
+        1:
+          actions:
+            - type: command
+              command: "points give {player} 500"
+            - type: message
+              target: "broadcast"
+              text: "&6&l&n恭喜 {player} 获得本月 {boss_display_name} 伤害冠军！"
+            - type: message
+              target: "player"
+              text: "&6你在本月 {boss_display_name} 伤害排行榜获得第 {rank} 名，获得冠军奖励。"
+        2:
+          actions:
+            - type: command
+              command: "points give {player} 250"
+            - type: message
+              target: "player"
+              text: "&e你在本月 {boss_display_name} 伤害排行榜获得第 {rank} 名。"
+        3:
+          actions:
+            - type: command
+              command: "points give {player} 100"
+            - type: message
+              target: "player"
+              text: "&b你在本月 {boss_display_name} 伤害排行榜获得第 {rank} 名。"
+spawn-chat-card: ""
+death-chat-card: ""
+despawn-chat-card: ""

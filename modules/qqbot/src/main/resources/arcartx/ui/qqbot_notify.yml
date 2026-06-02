@@ -1,0 +1,118 @@
+# AXS QQBot 消息通知 HUD
+# 当QQ群有@玩家或重要消息时，在屏幕右上角弹出通知
+
+ui:
+  isHud: true
+  defaultOpen: true
+  through: true
+  escClose: false
+  closeDied: false
+  show: true
+  level: 50
+  screenScale: true
+  packetHandler:
+    notify: |-
+      var.notifications.add({'nick': packet['nick'], 'msg': packet['msg'], 'time': packet['time'], 'alpha': 1.0, 'born': Time.now()})
+      var.showCount = var.notifications.size()
+    clear: |-
+      var.notifications = []
+      var.showCount = 0
+  action:
+    load: |-
+      var.notifications = []
+      var.showCount = 0
+      var.maxDisplay = 4
+      var.displayDuration = 8000
+    tick: |-
+      if(var.notifications.size() > 0){
+        var.now = Time.now()
+        var.toRemove = []
+        for(i in range(0, var.notifications.size())){
+          var.item = var.notifications[i]
+          var.elapsed = var.now - var.item['born']
+          if(var.elapsed > var.displayDuration){
+            var.toRemove.add(i)
+          } else if(var.elapsed > var.displayDuration - 1000){
+            var.item['alpha'] = (var.displayDuration - var.elapsed) / 1000.0
+          }
+        }
+        for(i in var.toRemove.reverse()){
+          var.notifications.remove(i)
+        }
+        var.showCount = var.notifications.size()
+      }
+
+controls:
+  自适应:
+    type: Adaptive
+    attribute:
+      point: ~top_right
+      width: 1920
+      height: 1080
+    children:
+      通知容器:
+        type: Canvas
+        attribute:
+          point: ~top_right
+          x: -20
+          y: 60
+          width: 340
+          height: 400
+          visible: var.showCount > 0
+        children:
+          通知列表:
+            val: notifyList
+            type: VStack
+            attribute:
+              width: 340
+              spaceBetween: 6
+            children:
+              通知条目:
+                type: Texture
+                attribute:
+                  entry: var.notifications[self.key]
+                  visible: self.entry != null
+                  width: 340
+                  height: 58
+                  normal: ~20,26,36,200
+                  shape: ~round_rect
+                  radius: 10
+                  alpha: "self.entry != null ? self.entry['alpha'] : 0"
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,100
+                children:
+                  QQ图标:
+                    type: Text
+                    attribute:
+                      x: 12
+                      y: 6
+                      through: true
+                      texts: '&b✉'
+                      fontSize: 32
+                  发送者:
+                    type: Text
+                    attribute:
+                      x: 38
+                      y: 4
+                      through: true
+                      texts: "'&f' + self.parent.entry['nick']"
+                      fontSize: 24
+                  时间:
+                    type: Text
+                    attribute:
+                      x: 38
+                      y: 24
+                      through: true
+                      texts: "'&7' + self.parent.entry['time']"
+                      fontSize: 20
+                  消息内容:
+                    type: Text
+                    attribute:
+                      x: 12
+                      y: 34
+                      through: true
+                      width: 316
+                      texts: "'&f' + self.parent.entry['msg']"
+                      fontSize: 24

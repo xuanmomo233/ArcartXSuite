@@ -1,0 +1,59 @@
+# ============================================================
+#  Conversation 模块消息文件
+# ------------------------------------------------------------
+#  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
+#  修改后执行 /axs reload conversation 即可生效。
+# ============================================================
+
+prefix: "&3◆ &6ArcartXSuite &7| &r"
+
+# ── 通用 ──────────────────────────────────────────────
+common:
+  service-down: "&cConversation 服务未启动。"
+  reload-hint: "&e请使用 /{0} reload conversation"
+  unknown: "&e未知命令，使用 /{0} conversation help"
+  no-permission: "&c你没有权限执行这个命令。"
+
+# ── help ──────────────────────────────────────────────
+help:
+  title: "&6Conversation 管理命令"
+  status: "&7{0} status&f - 查看模块状态"
+  setmodel: "&7{0} adyeshach setModel <名称> <modelID> <scale>&f - 设置模型"
+  setanimation: "&7{0} adyeshach setAnimation <名称> <state> <animName>&f - 设置默认动画状态"
+  playanimation: "&7{0} adyeshach playAnimation <名称> <动画名> <速度> [过渡ms] [持续ms]&f - 一次性播放动画"
+
+# ── status ────────────────────────────────────────────
+status:
+  title: "&6Conversation 状态"
+  interaction: "&7交互增强: {0}"
+  npc-bridge: "&7NPC 桥接: {0}"
+  key-event: "&7按键事件: {0}"
+  selector-ui: "&7Selector UI: {0}"
+  active-count: "&7对话中: &f{0}"
+  disabled-reason: "&e降级原因: &c{0}"
+
+# ── adyeshach ─────────────────────────────────────────
+adyeshach:
+  help:
+    title: "&6Adyeshach NPC 操作"
+    setmodel: "&e  setModel <名称> <modelID> <scale>"
+    setanimation: "&e  setAnimation <名称> <state> <animName>"
+    playanimation: "&e  playAnimation <名称> <动画名> <速度> [过渡ms] [持续ms]"
+  setmodel:
+    usage: "&e用法: /axs conversation adyeshach setModel <NPC名称> <modelID> <scale>"
+    invalid-scale: "&c无效的缩放比例: {0}"
+    bridge-unavailable: "&cAdyeshach NPC 桥接不可用。"
+    not-found: "&c未找到名称为 \"{0}\" 的 Adyeshach NPC。"
+    success: "&a已为 NPC \"{0}\" 设置模型 {1} (scale={2})。"
+    failed: "&c设置模型失败，请检查控制台日志。"
+  setanimation:
+    usage: "&e用法: /axs conversation adyeshach setAnimation <NPC名称> <state> <animName>"
+    success: "&a已为 NPC \"{0}\" 设置默认动画状态 {1} -> {2}。"
+    failed: "&c设置动画失败，请检查控制台日志。"
+  playanimation:
+    usage: "&e用法: /axs conversation adyeshach playAnimation <NPC名称> <动画名> <速度> [过渡ms] [持续ms]"
+    invalid-speed: "&c速度必须为正数：{0}"
+    invalid-transition: "&c无效的过渡时间: {0}"
+    invalid-keep: "&c无效的持续时间: {0}"
+    success: "&a已为 NPC \"{0}\" 播放动画 {1} (speed={2}, transition={3}ms, keep={4}ms)。"
+    failed: "&c播放动画失败，请检查控制台日志。"

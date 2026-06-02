@@ -1,0 +1,377 @@
+﻿# AXS 资源说明
+# 用途: Mail 模块默认写信菜单，用于编辑标题、正文、附件和发送动作。
+# 前置依赖: ArcartX；Mail 模块启用后会自动注册或导出。
+# 启用开关: config.yml -> modules.mail.enabled + modules.mail.password
+# 关联文件: ArcartXMail.yml、ui/mail_inbox.yml
+# 重载命令: /axs mail reload
+# 最小使用路径: ui + controls
+# 结构提示: 顶层 ui 节点定义窗口行为；packetHandler 负责接收写信上下文；controls 定义输入框、附件槽和确认按钮。
+
+ui:
+  match:
+    - AXS Mail Compose
+  background: false
+  through: true
+  escClose: true
+  show: true
+  screenScale: true
+  action:
+    load: |-
+      var.sessionId = ''
+      var.baseFee = '0'
+      var.vaultTaxRate = '0'
+      var.allowVault = true
+      var.quoteSuccess = true
+      var.quoteMessage = ''
+      var.itemFee = '0'
+      var.totalFee = '0'
+      var.maxAttachments = 6
+      var.attachmentCount = 0
+      var.subjectMax = 48
+      var.bodyMax = 400
+      var.composeRecipient = ''
+      var.composeSubject = ''
+      var.composeBody = ''
+      var.composeVault = '0'
+  # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
+  packetHandler:
+    init: |-
+      var.sessionId = packet['session_id']
+      var.baseFee = packet['base_fee']
+      var.vaultTaxRate = packet['vault_tax_rate']
+      var.allowVault = packet['allow_vault']
+      var.quoteSuccess = packet['quote_success']
+      var.quoteMessage = packet['quote_message']
+      var.itemFee = packet['item_fee']
+      var.totalFee = packet['total_fee']
+      var.maxAttachments = packet['max_attachments']
+      var.attachmentCount = packet['attachment_count']
+      var.subjectMax = packet['subject_max']
+      var.bodyMax = packet['body_max']
+      var.composeRecipient = ''
+      var.composeSubject = ''
+      var.composeBody = ''
+      var.composeVault = '0'
+    update: |-
+      var.baseFee = packet['base_fee']
+      var.vaultTaxRate = packet['vault_tax_rate']
+      var.allowVault = packet['allow_vault']
+      var.quoteSuccess = packet['quote_success']
+      var.quoteMessage = packet['quote_message']
+      var.itemFee = packet['item_fee']
+      var.totalFee = packet['total_fee']
+      var.maxAttachments = packet['max_attachments']
+      var.attachmentCount = packet['attachment_count']
+
+# controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
+
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      root:
+        type: Texture
+        attribute:
+          point: ~middle_center
+          width: 1360
+          height: 820
+          normal: ~95,95,95,240
+          shape: ~round_rect
+          radius: 24
+        effect:
+          stroke:
+            width: 3
+            color: ~255,255,255,255
+          shadow:
+            xOffset: 2
+            yOffset: 2
+            blur: 5
+            color: ~255,255,255,75
+          ripple:
+            duration: 1200
+            color: ~255,255,255,110
+            width: 0.05
+        children:
+          title:
+            type: Text
+            attribute:
+              x: 38
+              y: 28
+              fontSize: 49
+              texts: "~&f&l写信中"
+          tips:
+            type: Text
+            attribute:
+              x: 38
+              y: 78
+              fontSize: 49
+              lineSpace: 14
+              texts: 
+                - "'&7前 ' + var.maxAttachments.round() + ' 个槽位放真实物品附件。'"
+                - "'&7基础邮费: &0' + var.baseFee + '   &7货币税率: &0' + var.vaultTaxRate"
+          attachment_panel:
+            type: Texture
+            attribute:
+              x: 38
+              y: 160
+              width: 390
+              height: 168
+              normal: ~120,120,120,255
+              shape: ~round_rect
+              radius: 18
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            children:
+              title:
+                type: Text
+                attribute:
+                  x: 18
+                  y: 14
+                  fontSize: 49
+                  texts: "'&0物品附件 &7' + var.attachmentCount.round() + '/' + var.maxAttachments.round()"
+              hint_text:
+                type: Text
+                attribute:
+                  x: 18
+                  y: 50
+                  fontSize: 36
+                  texts: 
+                    - "~&7将寄出物品拖入下方槽位"
+                    - "~&7未寄出物品关闭界面，物品会自动退回"
+              slot_grid:
+                type: HGrid
+                attribute:
+                  x: 18
+                  y: 95
+                  spaceBetweenX: 6
+                  spaceBetweenY: 6
+                  column: 6
+                action:
+                  create: |-
+                    for(i in range(1,5)){
+                      slot = self['slot0'].copy('slot' + i)
+                      slot.id = i
+                    }
+                children:
+                  slot0:
+                    type: Slot
+                    attribute:
+                      width: 54
+                      height: 54
+                      normal: "~Frosted:0;95,95,95,255"
+                      hover: "~Frosted:0;255,255,255,255"
+                      shape: ~round_rect
+                      radius: 6
+                      itemScale: 0.72
+                      slotType: ~Container
+                      id: 0
+                      visible: "self.id < var.maxAttachments"
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+          Backpack:
+            type: Texture
+            attribute:
+              x: 38
+              y: 360
+              width: 390
+              height: 390
+              normal: ~120,120,120,255
+              shape: ~round_rect
+              radius: 18
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            children:
+              bp_grid:
+                type: HGrid
+                attribute:
+                  x: 18
+                  y: 18
+                  spaceBetweenX: 6
+                  spaceBetweenY: 6
+                  column: 6
+                action:
+                  create: |-
+                    for(i in range(1,35)){
+                      slot = self['slot0'].copy('slot' + i)
+                      slot.id = i + 27
+                    }
+                children:
+                  slot0:
+                    type: Slot
+                    attribute:
+                      width: 54
+                      height: 54
+                      normal: "~Frosted:0;95,95,95,255"
+                      hover: "~Frosted:0;255,255,255,255"
+                      shape: ~round_rect
+                      radius: 6
+                      itemScale: 0.72
+                      slotType: ~Backpack
+                      id: 27
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+          recipient_label:
+            type: Text
+            attribute:
+              x: 440
+              y: 112
+              fontSize: 49
+              texts: "~&7收件人"
+          recipient_box:
+            type: TextBox
+            attribute:
+              x: 440
+              y: 154
+              width: 300
+              height: 38
+              length: 32
+              emptyText: ~输入玩家名
+              fontSize: 49
+              background: ~120,120,120,255
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            action:
+              textChange: |-
+                var.composeRecipient = self.getContent()
+          subject_label:
+            type: Text
+            attribute:
+              x: 770
+              y: 112
+              fontSize: 49
+              texts: "~&7标题"
+          subject_box:
+            type: TextBox
+            attribute:
+              x: 770
+              y: 154
+              width: 552
+              height: 38
+              length: 48
+              emptyText: ~输入邮件标题
+              fontSize: 49
+              background: ~120,120,120,255
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            action:
+              textChange: |-
+                var.composeSubject = self.getContent()
+          body_label:
+            type: Text
+            attribute:
+              x: 440
+              y: 214
+              fontSize: 49
+              texts: "~&7正文"
+          body_box:
+            type: TextBox
+            attribute:
+              x: 440
+              y: 256
+              width: 882
+              height: 316
+              length: 400
+              allowNewLine: true
+              emptyText: ~支持多行正文
+              fontSize: 49
+              background: ~120,120,120,255
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            action:
+              textChange: |-
+                var.composeBody = self.getContent()
+          summary:
+            type: Text
+            attribute:
+              x: 440
+              y: 590
+              fontSize: 49
+              texts: "'&7标题文字上限: &0' + var.subjectMax.round() + '   &7正文文字上限: &0' + var.bodyMax.round()"
+          vault_box:
+            type: TextBox
+            attribute:
+              x: 440
+              y: 632
+              width: 400
+              height: 30
+              length: 24
+              emptyText: ~点击填写本邮件所寄送的金币数量
+              fontSize: 49
+              background: ~120,120,120,255
+              visible: var.allowVault
+            action:
+              textChange: |-
+                var.composeVault = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+          quote_summary:
+            type: Text
+            attribute:
+              x: 440
+              y: 676
+              fontSize: 49
+              width: 880
+              texts: "'&7邮件总费用: &0' + var.totalFee + '金币' + '   &7物品手续费: &0' + var.itemFee + '金币' + (var.quoteMessage == '' ? '' : '   &7提示: &0' + var.quoteMessage)"
+          bottom_buttons:
+            type: HStack
+            attribute:
+              x: 440
+              y: 708
+              spaceBetween: 20
+            children:
+              send_button:
+                type: Texture
+                attribute:
+                  width: 180
+                  height: 48
+                  normal: ~150,150,150,255
+                  shape: ~round_rect
+                  radius: 16
+                  texts: "~&0发送邮件"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_MAIL', 'compose-send', var.sessionId, var.composeRecipient, var.composeSubject, var.composeBody, var.composeVault)
+              inbox_button:
+                type: Texture
+                attribute:
+                  width: 180
+                  height: 48
+                  normal: ~150,150,150,255
+                  shape: ~round_rect
+                  radius: 16
+                  texts: "~&0返回邮箱"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Chat.say('/mail')

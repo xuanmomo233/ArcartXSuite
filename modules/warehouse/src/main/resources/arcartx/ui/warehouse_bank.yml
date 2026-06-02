@@ -1,0 +1,476 @@
+﻿# AXS Warehouse Bank
+# 纯色块风格独立银行和定期界面。
+
+ui:
+  isHud: false
+  defaultOpen: false
+  hide:
+    - HUD
+    - online
+    - 聊天栏
+    - 纯色块HUD
+    - 纯色块HUD二改
+  through: false
+  background: false
+  escClose: true
+  closeDied: true
+  show: true
+  jei: false
+  level: 8
+  itemSize: 16
+  screenScale: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.warehouseName = packet['warehouseName']
+      var.balances = packet['balances']
+      var.balanceTexts = packet['balanceTexts']
+      var.products = packet['products']
+      var.productTexts = packet['productTexts']
+      var.fixedDeposits = packet['fixedDeposits']
+      var.fixedDepositTexts = packet['fixedDepositTexts']
+      var.unlocked = packet['unlocked']
+      var.hasPassword = packet['hasPassword']
+    update: |-
+      var.packetId = packet['packetId']
+      var.warehouseName = packet['warehouseName']
+      var.balances = packet['balances']
+      var.balanceTexts = packet['balanceTexts']
+      var.products = packet['products']
+      var.productTexts = packet['productTexts']
+      var.fixedDeposits = packet['fixedDeposits']
+      var.fixedDepositTexts = packet['fixedDepositTexts']
+      var.unlocked = packet['unlocked']
+      var.hasPassword = packet['hasPassword']
+  action:
+    load: |-
+      var.packetId = 'AXS_WAREHOUSE'
+      var.warehouseName = 'AXS 仓库'
+      var.balances = {}
+      var.balanceTexts = {}
+      var.products = {}
+      var.productTexts = {}
+      var.fixedDeposits = {}
+      var.fixedDepositTexts = {}
+      var.unlocked = false
+      var.hasPassword = false
+      var.passwordText = ''
+      var.selectedCurrency = 'money'
+      var.selectedProduct = ''
+      var.bankAmount = ''
+    open: |-
+      Packet.send(var.packetId, 'refresh')
+
+controls:
+  根:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      主面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 1660
+          height: 1030
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: "~95,95,95,220"
+              shape: ~round_rect
+              radius: 28
+            effect:
+              stroke:
+                width: 3
+                color: ~255,255,255,255
+              shadow:
+                xOffset: 2
+                yOffset: 2
+                blur: 5
+                color: ~255,255,255,75
+              ripple:
+                duration: 1200
+                color: ~255,255,255,110
+                width: 0.05
+          标题:
+            type: Text
+            attribute:
+              x: 42
+              y: 30
+              texts: "~&f银行和定期"
+              fontSize: 64
+          状态:
+            type: Text
+            attribute:
+              x: 42
+              y: 90
+              width: 720
+              texts: "var.unlocked ? '&a二级密码已解锁' : '&c提现和领取需要先解锁二级密码'"
+              fontSize: 38
+          密码输入:
+            type: TextBox
+            attribute:
+              x: 800
+              y: 42
+              width: 220
+              height: 50
+              length: 32
+              emptyText: ~二级密码
+              fontSize: 36
+              background: ~90,90,90,220
+              shape: ~round_rect
+              radius: 12
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            action:
+              textChange: |-
+                var.passwordText = self.getContent()
+          解锁:
+            type: Texture
+            attribute:
+              x: 1040
+              y: 42
+              width: 90
+              height: 50
+              normal: ~255,255,255,150
+              hover: ~Frosted:0;255,255,255,240
+              shape: ~round_rect
+              radius: 14
+              texts: "var.hasPassword ? '&0解锁' : '&0设置'"
+              center: true
+              fontSize: 34
+            action:
+              clickLeft: |-
+                if(var.hasPassword){
+                  Packet.send(var.packetId, 'password_unlock', var.passwordText)
+                }else{
+                  Packet.send(var.packetId, 'password_set', var.passwordText)
+                }
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+          返回仓库:
+            type: Texture
+            attribute:
+              x: 1350
+              y: 42
+              width: 92
+              height: 48
+              normal: ~255,255,255,150
+              hover: ~Frosted:0;255,255,255,240
+              shape: ~round_rect
+              radius: 14
+              texts: "~&0仓库"
+              center: true
+              fontSize: 34
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'storage')
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+          管理:
+            type: Texture
+            attribute:
+              x: 1500
+              y: 42
+              width: 92
+              height: 48
+              normal: ~255,255,255,150
+              hover: ~Frosted:0;255,255,255,240
+              shape: ~round_rect
+              radius: 14
+              texts: "~&0管理"
+              center: true
+              fontSize: 34
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'manage')
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+
+          银行卡片:
+            type: Texture
+            attribute:
+              x: 42
+              y: 210
+              width: 500
+              height: 770
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 24
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            children:
+              银行标题:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 22
+                  texts: "~&f账户余额"
+                  fontSize: 44
+              金额:
+                type: TextBox
+                attribute:
+                  x: 24
+                  y: 82
+                  width: 220
+                  height: 50
+                  length: 18
+                  emptyText: ~金额
+                  fontSize: 36
+                  background: ~90,90,90,220
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  textChange: |-
+                    var.bankAmount = self.getContent()
+              存入:
+                type: Texture
+                attribute:
+                  x: 260
+                  y: 82
+                  width: 90
+                  height: 50
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0存入"
+                  center: true
+                  fontSize: 34
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'bank_deposit', var.selectedCurrency, var.bankAmount)
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              提现:
+                type: Texture
+                attribute:
+                  x: 366
+                  y: 82
+                  width: 90
+                  height: 50
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0提现"
+                  center: true
+                  fontSize: 34
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'bank_withdraw', var.selectedCurrency, var.bankAmount)
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              余额滚动:
+                type: Scroll
+                attribute:
+                  x: 24
+                  y: 160
+                  width: 450
+                  height: 570
+                  moveY: 0
+                children:
+                  余额列表:
+                    val: 余额列表
+                    type: VStack
+                    attribute:
+                      width: 450
+                      spaceBetween: 10
+                    children:
+                      项:
+                        type: Texture
+                        attribute:
+                          entry: var.balances[self.key]
+                          visible: self.entry != null
+                          width: 450
+                          height: 56
+                          normal: "self.key == var.selectedCurrency ? '110,170,230,255' : '190,190,195,255'"
+                          hover: ~Frosted:0;255,255,255,240
+                          shape: ~round_rect
+                          radius: 14
+                          texts: "var.balanceTexts[self.key]"
+                          center: true
+                          fontSize: 34
+                        action:
+                          clickLeft: |-
+                            var.selectedCurrency = self.key
+              余额观察:
+                type: Observer
+                attribute:
+                  target: val.余额列表['项']
+                  subscribe: var.balances
+                  maxSize: 16
+
+          产品卡片:
+            type: Texture
+            attribute:
+              x: 580
+              y: 210
+              width: 500
+              height: 770
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 24
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            children:
+              产品标题:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 22
+                  texts: "~&f定期产品"
+                  fontSize: 44
+              购买:
+                type: Texture
+                attribute:
+                  x: 300
+                  y: 22
+                  width: 160
+                  height: 50
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0购买"
+                  center: true
+                  fontSize: 34
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'fixed_create', var.selectedProduct, var.bankAmount)
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              产品滚动:
+                type: Scroll
+                attribute:
+                  x: 24
+                  y: 96
+                  width: 470
+                  height: 630
+                  moveY: 0
+                children:
+                  产品列表:
+                    val: 产品列表
+                    type: VStack
+                    attribute:
+                      width: 450
+                      spaceBetween: 10
+                    children:
+                      项:
+                        type: Texture
+                        attribute:
+                          entry: var.products[self.key]
+                          visible: self.entry != null
+                          width: 450
+                          height: 78
+                          normal: "self.key == var.selectedProduct ? '110,170,230,255' : '190,190,195,255'"
+                          hover: ~Frosted:0;255,255,255,240
+                          shape: ~round_rect
+                          radius: 14
+                          texts: "var.productTexts[self.key]"
+                          fontSize: 30
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~0,0,0,255
+                        action:
+                          clickLeft: |-
+                            var.selectedProduct = self.key
+              产品观察:
+                type: Observer
+                attribute:
+                  target: val.产品列表['项']
+                  subscribe: var.products
+                  maxSize: 32
+
+          定期卡片:
+            type: Texture
+            attribute:
+              x: 1118
+              y: 210
+              width: 500
+              height: 770
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 24
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            children:
+              定期标题:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 22
+                  texts: "~&f我的定期"
+                  fontSize: 44
+              定期滚动:
+                type: Scroll
+                attribute:
+                  x: 24
+                  y: 96
+                  width: 470
+                  height: 630
+                  moveY: 0
+                children:
+                  定期列表:
+                    val: 定期列表
+                    type: VStack
+                    attribute:
+                      width: 450
+                      spaceBetween: 10
+                    children:
+                      项:
+                        type: Texture
+                        attribute:
+                          entry: var.fixedDeposits[self.key]
+                          visible: self.entry != null
+                          width: 450
+                          height: 70
+                          normal: ~190,190,195,255
+                          hover: ~Frosted:0;255,255,255,240
+                          shape: ~round_rect
+                          radius: 14
+                          texts: "var.fixedDepositTexts[self.key]"
+                          fontSize: 30
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~0,0,0,255
+                        action:
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'fixed_claim', self.key)
+              定期观察:
+                type: Observer
+                attribute:
+                  target: val.定期列表['项']
+                  subscribe: var.fixedDeposits
+                  maxSize: 64
+

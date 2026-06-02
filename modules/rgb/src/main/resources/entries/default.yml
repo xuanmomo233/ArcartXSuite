@@ -1,0 +1,32 @@
+# ArcartRGB 渐变色条目定义
+# 目录下每个 *.yml 文件可以包含多个条目，根键即为条目 ID（entryId）。
+# 同一个文件中可以放置任意数量的 RGB 定义，不需要每条单独一个文件。
+# 例如你可以把同一个业务相关的渐变色定义放在一个文件里统一管理。
+#
+# PAPI 占位符: %arcartrgb_<entryId>%
+# text 字段支持 PlaceholderAPI 变量，如 %player_name%。
+
+welcome:
+  enabled: true
+  text: "欢迎来到 ArcartX，%player_name%"
+  gradient-colors:
+    - "#FF7A18"
+    - "#FFD64D"
+    - "#7FE7FF"
+  shine: true
+  switch-interval-ticks: 2
+  shine-width: 2
+  shine-color: "#FFFFFF"
+  shine-strength: 0.55
+
+momo:
+  enabled: true
+  text: "多请墨大师喝奶茶，谢谢"
+  gradient-colors:
+    - "#6A5CFF"
+    - "#FF6B9D"
+  shine: false
+  switch-interval-ticks: 3
+  shine-width: 2
+  shine-color: "#FFFFFF"
+  shine-strength: 0.55

@@ -1,0 +1,835 @@
+# AXS 资源说明
+# 用途: Mail 模块管理 UI，支持预设新增/编辑/删除/派发。
+# 前置依赖: ArcartX；Mail 模块启用后自动注册。
+# 打开方式: /axs mail admin
+# 重载命令: /axs mail reload
+# 数据交互: packetHandler 接收 preset-list / preset-detail / result 三种服务端推送；
+#             客户端通过 Packet.send('AXS_MAIL', ...) 发送操作指令。
+
+ui:
+  match:
+    - AXS Mail Admin
+  background: false
+  escClose: true
+  closeDied: true
+  show: true
+  through: true
+  screenScale: true
+  action:
+    load: |-
+      var.view = 'list'
+      var.resultMsg = ''
+      var.editItemCount = 0
+  packetHandler:
+    preset-list: |-
+      var.presets = packet['presets']
+      var.total = packet['total']
+    preset-detail: |-
+      var.editId = packet['id']
+      var.editEnabled = packet['enabled']
+      var.editDisplayName = packet['displayName']
+      var.editSubject = packet['subject']
+      var.editBody = packet['body']
+      var.editExpiresDays = packet['expiresAfterDays']
+      var.editCurrencies = packet['currencyAttachments']
+      var.editItemCount = packet['itemAttachmentCount'].round()
+      var.editCommands = packet['claimCommands']
+      var.editConditions = packet['claimConditions']
+      var.editFound = packet['found']
+      var.view = 'edit'
+      var.resultMsg = ''
+    attachment-count: |-
+      var.editItemCount = packet['itemAttachmentCount'].round()
+    result: |-
+      var.resultMsg = packet['message']
+      if(packet['success']){
+        var.view = 'list'
+      }
+
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      root:
+        type: Texture
+        attribute:
+          point: ~middle_center
+          width: 1500
+          height: 920
+          normal: ~30,30,35,235
+          shape: ~round_rect
+          radius: 16
+        effect:
+          stroke:
+            width: 2
+            color: ~80,180,255,180
+        children:
+          # 标题栏
+          header:
+            type: Texture
+            attribute:
+              x: 0
+              y: 0
+              width: 1500
+              height: 72
+              normal: ~40,40,50,255
+              shape: ~round_rect
+              radius: 16
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,180
+            children:
+              title_text:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 24
+                  fontSize: 49
+                  texts: "~&b&lAXS Mail Admin &8- &7预设管理"
+              header_buttons:
+                type: HStack
+                attribute:
+                  x: 1220
+                  y: 12
+                  spaceBetween: 14
+                children:
+                  btn_refresh:
+                    type: Texture
+                    attribute:
+                      width: 120
+                      height: 48
+                      normal: ~60,130,200,200
+                      shape: ~round_rect
+                      radius: 8
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~80,180,255,180
+                    action:
+                      click: |-
+                        var.view = 'list'
+                        Packet.send('AXS_MAIL', 'admin-preset-list')
+                    children:
+                      btn_refresh_text:
+                        type: Text
+                        attribute:
+                          x: 60
+                          y: 12
+                          center: true
+                          point: ~middle_center
+                          fontSize: 49
+                          texts: "~&f刷新"
+                  btn_new:
+                    type: Texture
+                    attribute:
+                      width: 120
+                      height: 48
+                      normal: ~50,180,80,200
+                      shape: ~round_rect
+                      radius: 8
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~80,180,255,180
+                    action:
+                      click: |-
+                        var.editId = ''
+                        var.editEnabled = true
+                        var.editDisplayName = ''
+                        var.editSubject = ''
+                        var.editBody = ''
+                        var.editExpiresDays = 15
+                        var.editCurrencies = ''
+                        var.editItemCount = 0
+                        var.editCommands = ''
+                        var.editConditions = ''
+                        var.editFound = false
+                        var.view = 'edit'
+                        var.resultMsg = ''
+                        Packet.send('AXS_MAIL', 'admin-preset-new')
+                    children:
+                      btn_new_text:
+                        type: Text
+                        attribute:
+                          x: 60
+                          y: 12
+                          center: true
+                          point: ~middle_center
+                          fontSize: 49
+                          texts: "~&f新建"
+
+          # 结果提示
+          result_bar:
+            type: Text
+            attribute:
+              x: 28
+              y: 884
+              fontSize: 28
+              texts: "~&e{var.resultMsg}"
+
+          # 列表表头（固定，不随滚动）
+          list_header:
+            type: Texture
+            attribute:
+              x: 20
+              y: 84
+              width: 1460
+              height: 44
+              normal: ~50,50,60,255
+              shape: ~round_rect
+              radius: 6
+              visible: "var.view == 'list' || var.view == null"
+            children:
+              col_id:
+                type: Text
+                attribute:
+                  x: 16
+                  y: 12
+                  fontSize: 36
+                  texts: "~&bID"
+              col_name:
+                type: Text
+                attribute:
+                  x: 300
+                  y: 12
+                  fontSize: 36
+                  texts: "~&b显示名"
+              col_subject:
+                type: Text
+                attribute:
+                  x: 600
+                  y: 12
+                  fontSize: 36
+                  texts: "~&b标题"
+              col_enabled:
+                type: Text
+                attribute:
+                  x: 920
+                  y: 12
+                  fontSize: 36
+                  texts: "~&b启用"
+              col_actions:
+                type: Text
+                attribute:
+                  x: 1080
+                  y: 12
+                  fontSize: 36
+                  texts: "~&b操作"
+
+          # 预设列表区域（可滚动）
+          list_area:
+            type: Scroll
+            attribute:
+              x: 20
+              y: 132
+              width: 1460
+              height: 720
+              visible: "var.view == 'list' || var.view == null"
+            children:
+              preset_stack:
+                val: preset_data
+                type: VStack
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 1460
+                  spaceBetween: 4
+                children:
+                  preset_row:
+                    type: Texture
+                    attribute:
+                      entry: var.presets[self.key]
+                      width: 1460
+                      height: 52
+                      normal: ~45,45,55,220
+                      shape: ~round_rect
+                      radius: 6
+                      visible: self.entry != null
+                    action:
+                      enter: |-
+                        self.normal = '60,60,75,200'
+                      leave: |-
+                        self.normal = '45,45,55,220'
+                    children:
+                      row_id:
+                        type: Text
+                        attribute:
+                          x: 16
+                          y: 16
+                          width: 270
+                          fontSize: 36
+                          texts: "~&f{self.parent.entry['id']}"
+                      row_name:
+                        type: Text
+                        attribute:
+                          x: 300
+                          y: 16
+                          width: 290
+                          fontSize: 36
+                          texts: "~&7{self.parent.entry['displayName']}"
+                      row_subject:
+                        type: Text
+                        attribute:
+                          x: 600
+                          y: 16
+                          width: 310
+                          fontSize: 36
+                          texts: "~&7{self.parent.entry['subject']}"
+                      row_enabled:
+                        type: Text
+                        attribute:
+                          x: 920
+                          y: 16
+                          fontSize: 36
+                          texts: "~{self.parent.entry['enabled'] ? '&a✔' : '&c✖'}"
+                      btn_edit:
+                        type: Texture
+                        attribute:
+                          x: 1080
+                          y: 6
+                          width: 80
+                          height: 40
+                          normal: ~60,130,200,200
+                          shape: ~round_rect
+                          radius: 6
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~255,255,255,80
+                        action:
+                          click: |-
+                            Packet.send('AXS_MAIL', 'admin-preset-get', self.parent.entry['id'])
+                        children:
+                          btn_edit_text:
+                            type: Text
+                            attribute:
+                              x: 40
+                              y: 10
+                              through: true
+                              center: true
+                              fontSize: 36
+                              texts: "~&f编辑"
+                      btn_send:
+                        type: Texture
+                        attribute:
+                          x: 1170
+                          y: 6
+                          width: 80
+                          height: 40
+                          normal: ~50,160,80,200
+                          shape: ~round_rect
+                          radius: 6
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~255,255,255,80
+                        action:
+                          click: |-
+                            Packet.send('AXS_MAIL', 'admin-preset-send', self.parent.entry['id'], 'all-online')
+                        children:
+                          btn_send_text:
+                            type: Text
+                            attribute:
+                              x: 40
+                              y: 10
+                              through: true
+                              center: true
+                              fontSize: 36
+                              texts: "~&f派发"
+                      btn_delete:
+                        type: Texture
+                        attribute:
+                          x: 1340
+                          y: 6
+                          width: 80
+                          height: 40
+                          normal: ~200,60,60,200
+                          shape: ~round_rect
+                          radius: 6
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~255,255,255,80
+                        action:
+                          click: |-
+                            Packet.send('AXS_MAIL', 'admin-preset-delete', self.parent.entry['id'])
+                        children:
+                          btn_delete_text:
+                            type: Text
+                            attribute:
+                              x: 40
+                              y: 10
+                              through: true
+                              center: true
+                              fontSize: 36
+                              texts: "~&f删除"
+          # Observer: 监听 var.presets 变化，驱动 VStack 更新
+          preset_observer:
+            type: Observer
+            attribute:
+              target: val.preset_data['preset_row']
+              subscribe: var.presets
+              maxSize: 2048
+
+          # 空列表提示
+          empty_hint:
+            type: Text
+            attribute:
+              x: 600
+              y: 300
+              center: true
+              fontSize: 64
+              visible: "var.presets == null || var.total == 0"
+              texts: "~&8暂无预设，点击右上角 &a新建 &8开始创建"
+
+          # 编辑表单区域
+          edit_area:
+            type: Texture
+            attribute:
+              x: 20
+              y: 84
+              width: 1460
+              height: 788
+              visible: "var.view == 'edit'"
+              normal: ~40,40,50,200
+              shape: ~round_rect
+              radius: 12
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,180
+            children:
+              # 顶部: 返回 + 标题
+              btn_back:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 100
+                  height: 40
+                  normal: ~80,80,95,200
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,60
+                action:
+                  click: |-
+                    var.view = 'list'
+                    Packet.send('AXS_MAIL', 'admin-preset-cancel')
+                    Packet.send('AXS_MAIL', 'admin-preset-list')
+                children:
+                  btn_back_text:
+                    type: Text
+                    attribute:
+                      x: 50
+                      y: 10
+                      through: true
+                      center: true
+                      fontSize: 36
+                      texts: "~&f返回"
+
+              edit_title:
+                type: Text
+                attribute:
+                  x: 120
+                  y: 10
+                  fontSize: 36
+                  texts: "~{var.editFound ? '&b编辑预设: &f' : '&a新建预设'}{var.editId}"
+
+              # 第一行: ID / 显示名 / 启用 (label 在 input 上方)
+              label_id:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 52
+                  fontSize: 36
+                  texts: "~&7预设 ID"
+              input_id:
+                type: ChatTextBox
+                attribute:
+                  x: 0
+                  y: 84
+                  width: 350
+                  height: 36
+                  fontSize: 28
+                  background: ~60,60,70,255
+                  shape: ~round_rect
+                  radius: 6
+                  val: var.editId
+                  lock: |-
+                    var.editFound == true
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,100
+
+              label_displayName:
+                type: Text
+                attribute:
+                  x: 380
+                  y: 52
+                  fontSize: 36
+                  texts: "~&7显示名"
+              input_displayName:
+                type: ChatTextBox
+                attribute:
+                  x: 380
+                  y: 84
+                  width: 350
+                  height: 36
+                  fontSize: 28
+                  background: ~60,60,70,255
+                  shape: ~round_rect
+                  radius: 6
+                  val: var.editDisplayName
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,100
+
+              label_enabled:
+                type: Text
+                attribute:
+                  x: 760
+                  y: 52
+                  fontSize: 36
+                  texts: "~&7启用"
+              btn_toggle:
+                type: Texture
+                attribute:
+                  x: 760
+                  y: 84
+                  width: 70
+                  height: 36
+                  normal: |-
+                    ~{var.editEnabled ? '50,180,80,200' : '200,60,60,200'}
+                  shape: ~round_rect
+                  radius: 6
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,80
+                action:
+                  click: |-
+                    var.editEnabled = !var.editEnabled
+                children:
+                  toggle_text:
+                    type: Text
+                    attribute:
+                      x: 35
+                      y: 8
+                      through: true
+                      center: true
+                      fontSize: 36
+                      texts: "~{var.editEnabled ? '&f开' : '&f关'}"
+
+              # 第二行: 标题 (宽输入，模仿 compose 的 subject)
+              label_subject:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 134
+                  fontSize: 36
+                  texts: "~&7标题"
+              input_subject:
+                type: ChatTextBox
+                attribute:
+                  x: 0
+                  y: 166
+                  width: 800
+                  height: 36
+                  fontSize: 28
+                  background: ~60,60,70,255
+                  shape: ~round_rect
+                  radius: 6
+                  val: var.editSubject
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,100
+
+              # 第三行: 正文 (大面积输入区，模仿 compose 的 body)
+              label_body:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 216
+                  fontSize: 36
+                  texts: "~&7正文"
+              input_body:
+                type: ChatTextBox
+                attribute:
+                  x: 0
+                  y: 248
+                  width: 800
+                  height: 140
+                  fontSize: 28
+                  background: ~60,60,70,255
+                  shape: ~round_rect
+                  radius: 6
+                  val: var.editBody
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,100
+
+              # 第四行: 过期 / 货币附件
+              label_expires:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 402
+                  fontSize: 36
+                  texts: "~&7过期(天)"
+              input_expires:
+                type: ChatTextBox
+                attribute:
+                  x: 0
+                  y: 434
+                  width: 160
+                  height: 36
+                  fontSize: 28
+                  background: ~60,60,70,255
+                  shape: ~round_rect
+                  radius: 6
+                  val: var.editExpiresDays
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,100
+
+              label_currencies:
+                type: Text
+                attribute:
+                  x: 200
+                  y: 402
+                  fontSize: 36
+                  texts: "~&7货币附件"
+              input_currencies:
+                type: ChatTextBox
+                attribute:
+                  x: 200
+                  y: 434
+                  width: 600
+                  height: 36
+                  fontSize: 28
+                  background: ~60,60,70,255
+                  shape: ~round_rect
+                  radius: 6
+                  val: var.editCurrencies
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,100
+
+              # 第五行: 领取命令
+              label_commands:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 484
+                  fontSize: 36
+                  texts: "~&7领取命令"
+              input_commands:
+                type: ChatTextBox
+                attribute:
+                  x: 0
+                  y: 516
+                  width: 800
+                  height: 36
+                  fontSize: 28
+                  background: ~60,60,70,255
+                  shape: ~round_rect
+                  radius: 6
+                  val: var.editCommands
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,100
+
+              # 底部信息 + 操作按钮
+              edit_summary:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 564
+                  fontSize: 22
+                  texts: "~&8物品附件: &f{var.editItemCount} &8个   &8货币格式: currency:amount:desc   &8命令用 | 分隔"
+
+              btn_save:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 584
+                  width: 160
+                  height: 40
+                  normal: ~50,180,80,230
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,80
+                action:
+                  click: |-
+                    var.resultMsg = '&e保存中...'
+                    Packet.send('AXS_MAIL', 'admin-preset-save', var.editId, var.editEnabled, var.editDisplayName, var.editSubject, var.editBody, var.editExpiresDays, var.editCurrencies, var.editCommands)
+                children:
+                  btn_save_text:
+                    type: Text
+                    attribute:
+                      x: 80
+                      y: 10
+                      through: true
+                      center: true
+                      fontSize: 36
+                      texts: "~&f&l保存"
+
+              btn_cancel:
+                type: Texture
+                attribute:
+                  x: 180
+                  y: 584
+                  width: 120
+                  height: 40
+                  normal: ~120,120,130,200
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,255,255,60
+                action:
+                  click: |-
+                    var.view = 'list'
+                    Packet.send('AXS_MAIL', 'admin-preset-cancel')
+                    Packet.send('AXS_MAIL', 'admin-preset-list')
+                children:
+                  btn_cancel_text:
+                    type: Text
+                    attribute:
+                      x: 60
+                      y: 10
+                      through: true
+                      center: true
+                      fontSize: 36
+                      texts: "~&f取消"
+
+              # ─── 右侧: 物品附件面板 ───
+              attachment_panel:
+                type: Texture
+                attribute:
+                  x: 860
+                  y: 52
+                  width: 580
+                  height: 170
+                  normal: ~50,50,60,230
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~80,180,255,120
+                children:
+                  att_title:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 10
+                      fontSize: 36
+                      texts: "'&f物品附件 &7' + var.editItemCount + '/6'"
+                  att_hint:
+                    type: Text
+                    attribute:
+                      x: 14
+                      y: 42
+                      fontSize: 28
+                      texts:
+                        - "~&7将物品拖入下方槽位"
+                        - "~&7模板物品保存后不消耗"
+                  slot_grid:
+                    type: HGrid
+                    attribute:
+                      x: 14
+                      y: 80
+                      spaceBetweenX: 6
+                      spaceBetweenY: 6
+                      column: 6
+                    action:
+                      create: |-
+                        for(i in range(1,5)){
+                          slot = self['slot0'].copy('slot' + i)
+                          slot.id = i
+                        }
+                    children:
+                      slot0:
+                        type: Slot
+                        attribute:
+                          width: 54
+                          height: 54
+                          normal: "~Frosted:0;95,95,95,255"
+                          hover: "~Frosted:0;255,255,255,255"
+                          shape: ~round_rect
+                          radius: 6
+                          itemScale: 0.72
+                          slotType: ~Container
+                          id: 0
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~0,0,0,255
+
+              # ─── 右侧: 背包面板 ───
+              admin_backpack:
+                type: Texture
+                attribute:
+                  x: 860
+                  y: 230
+                  width: 580
+                  height: 396
+                  normal: ~50,50,60,230
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~80,180,255,120
+                children:
+                  bp_grid:
+                    type: HGrid
+                    attribute:
+                      x: 14
+                      y: 14
+                      spaceBetweenX: 6
+                      spaceBetweenY: 6
+                      column: 6
+                    action:
+                      create: |-
+                        for(i in range(1,35)){
+                          slot = self['bp_slot0'].copy('bp_slot' + i)
+                          slot.id = i + 27
+                        }
+                    children:
+                      bp_slot0:
+                        type: Slot
+                        attribute:
+                          width: 54
+                          height: 54
+                          normal: "~Frosted:0;95,95,95,255"
+                          hover: "~Frosted:0;255,255,255,255"
+                          shape: ~round_rect
+                          radius: 6
+                          itemScale: 0.72
+                          slotType: ~Backpack
+                          id: 27
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~0,0,0,255

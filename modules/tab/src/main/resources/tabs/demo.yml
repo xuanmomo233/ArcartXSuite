@@ -1,0 +1,25 @@
+# Tab 定义: demo
+# 完整版示例 definition：消费 map 形态 pack，对应内置 ui-id: tab-rich
+# （文件位于 plugins/ArcartXSuite/ui/tab-rich.yml，模块启用时自动复制）。
+# 该 UI 渲染玩家头像（PlayerSkin 纹理）+ 视觉风格 PAPI（PVP / vanish / ping）。
+# 启用前请确认：
+#   - settings.papi.enabled: true
+#   - settings.style.pvp-highlight / vanish-grey / ping-icon 按需打开
+# 默认 enabled: false，避免与 online-tab 同时推送时玩家看到双 HUD。
+
+enabled: false
+# 支持新格式 ui-targets（可同时发给多个 UI）或旧格式 ui-id + packet-handler（仅发一个 UI）。
+ui-targets:
+  - ui-id: "tab-rich"
+    packet-handler: "tab"
+client-refresh-packet-id: "TAB"
+client-refresh-action: "update"
+max-entries: -1
+sort-keys:
+  - { mode: prem, prem-group: [admin, vip3, vip2, vip1, default] }
+  - { mode: name }
+pack:
+  uuid: "{player_uuid}"
+  name: "%AXStab_pvp_color%%AXStab_vanish_color%%player_name%"
+  ping: "%AXStab_ping_icon%"
+  health: "%player_health%"

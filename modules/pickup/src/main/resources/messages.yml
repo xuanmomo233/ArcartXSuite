@@ -1,0 +1,35 @@
+# ============================================================
+#  Pickup 模块消息文件
+# ------------------------------------------------------------
+#  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
+#  修改后执行 /axs reload pickup 即可生效。
+# ============================================================
+
+# 通用前缀
+prefix: "&3\u25c6 &6ArcartXSuite &7| &r"
+
+# 命令权限/执行限制
+player-only: "&c\u8be5\u547d\u4ee4\u53ea\u80fd\u7531\u73a9\u5bb6\u6267\u884c\u3002"
+no-permission: "&c\u4f60\u6ca1\u6709\u6743\u9650\u6267\u884c\u8fd9\u4e2a\u547d\u4ee4\u3002"
+module-disabled: "&c\u62fe\u53d6\u6a21\u5757\u5f53\u524d\u672a\u542f\u7528\u3002"
+
+# 开关切换
+toggle:
+  enabled: "&a\u62fe\u53d6\u529f\u80fd\u5df2\u5f00\u542f\u3002"
+  disabled: "&e\u62fe\u53d6\u529f\u80fd\u5df2\u5173\u95ed\u3002"
+
+# 状态查询
+status:
+  title: "&6\u62fe\u53d6\u6a21\u5757\u72b6\u6001"
+  mode: "&7\u5f53\u524d\u6a21\u5f0f: &f{0}"
+  state: "&7\u529f\u80fd\u72b6\u6001: {0}"
+
+# 模式名称
+mode:
+  scanner: "\u626b\u63cf\u6a21\u5f0f"
+  notification: "\u901a\u77e5\u6a21\u5f0f"
+
+# 状态标签
+state:
+  'on': "&a\u5df2\u5f00\u542f"
+  'off': "&c\u5df2\u5173\u95ed"

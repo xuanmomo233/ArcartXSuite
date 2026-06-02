@@ -1,0 +1,70 @@
+# 示例系统商店配置
+# 每个文件定义一个商店，文件名即商店 ID。
+
+display-name: "&6综合商店"
+icon: "DIAMOND"
+permission: ""
+# 分类标签（用于 UI 筛选）
+tags: ["综合", "基础"]
+
+items:
+  diamond_sword:
+    # 物品来源: minecraft / mythic / neige / overture / mmoitems
+    source: "minecraft"
+    # 物品 ID（对应物品源）
+    item-id: "DIAMOND_SWORD"
+    display-name: "&b钻石剑"
+    # 购买价格
+    buy-price: 500
+    # 出售价格（玩家卖给商店，0 表示不可出售）
+    sell-price: 100
+    # 货币类型
+    currency: "money"
+    # 库存模式: unlimited / global / per-player
+    stock-mode: "unlimited"
+    stock-amount: 0
+    # 限购: 0 = 无限制
+    limit-per-player: 0
+    # 限购重置: daily / weekly / monthly / never
+    limit-reset: "never"
+    # 折扣（权限 → 折扣比例）
+    discount:
+      "axsmarket.vip": 0.9
+      "axsmarket.mvp": 0.8
+    # 上架条件（为空则始终上架）
+    conditions:
+      permission: ""
+      min-level: 0
+
+  healing_potion:
+    source: "minecraft"
+    item-id: "POTION"
+    item-nbt: "{Potion:'minecraft:strong_healing'}"
+    display-name: "&d强效治疗药水"
+    buy-price: 50
+    sell-price: 10
+    currency: "money"
+    stock-mode: "per-player"
+    stock-amount: 64
+    limit-per-player: 128
+    limit-reset: "daily"
+    discount: {}
+    conditions:
+      permission: ""
+      min-level: 0
+
+  mythic_weapon_example:
+    source: "mythic"
+    item-id: "ExampleMythicSword"
+    display-name: "&6传说之剑"
+    buy-price: 10000
+    sell-price: 0
+    currency: "points"
+    stock-mode: "global"
+    stock-amount: 5
+    limit-per-player: 1
+    limit-reset: "weekly"
+    discount: {}
+    conditions:
+      permission: "axsmarket.shop.legendary"
+      min-level: 30

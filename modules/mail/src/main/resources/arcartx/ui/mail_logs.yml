@@ -1,0 +1,223 @@
+﻿# AXS 资源说明
+# 用途: Mail 模块默认日志菜单，用于查询发信记录、领取状态与后台审计数据。
+# 前置依赖: ArcartX；Mail 模块启用后会自动注册或导出。
+# 启用开关: config.yml -> modules.mail.enabled + modules.mail.password
+# 关联文件: ArcartXMail.yml、ui/mail_admin.yml
+# 重载命令: /axs mail reload
+# 最小使用路径: ui + controls
+# 结构提示: 顶层 ui 节点定义窗口行为；packetHandler 负责接收日志分页数据；controls 定义列表、筛选和返回按钮。
+
+ui:
+  background: true
+  escClose: true
+  closeDied: true
+  show: true
+  through: false
+  screenScale: true
+  action:
+    load: |-
+      var.logs = {}
+      var.page = 1
+      var.maxPage = 1
+      var.totalCount = 0
+  # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
+  packetHandler:
+    init: |-
+      var.logs = packet['logs']
+      var.page = packet['page']
+      var.maxPage = packet['max_page']
+      var.totalCount = packet['total_count']
+    update: |-
+      var.logs = packet['logs']
+      var.page = packet['page']
+      var.maxPage = packet['max_page']
+      var.totalCount = packet['total_count']
+
+# controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
+
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      root:
+        type: Texture
+        attribute:
+          point: ~middle_center
+          width: 1420
+          height: 860
+          normal: ~95,95,95,220
+          shape: ~round_rect
+          radius: 24
+        effect:
+          stroke:
+            width: 3
+            color: ~255,255,255,255
+          shadow:
+            xOffset: 2
+            yOffset: 2
+            blur: 5
+            color: ~255,255,255,75
+          ripple:
+            duration: 1200
+            color: ~0,0,0,255
+            width: 0.05
+        children:
+          title:
+            type: Text
+            attribute:
+              x: 42
+              y: 30
+              fontSize: 64
+              texts: "~&f&l邮件日志"
+          summary:
+            type: Text
+            attribute:
+              x: 42
+              y: 84
+              fontSize: 49
+              texts: "'&f总日志: ' + var.totalCount.round() + '   &f页码: ' + var.page.round() + '/' + var.maxPage.round()"
+          header_buttons:
+            type: HStack
+            attribute:
+              x: 1005
+              y: 30
+              spaceBetween: 15
+            children:
+              back_button:
+                type: Texture
+                attribute:
+                  width: 110
+                  height: 42
+                  normal: ~150,150,150,255
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0邮箱"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_MAIL', 'open')
+              prev_button:
+                type: Texture
+                attribute:
+                  width: 110
+                  height: 42
+                  normal: ~150,150,150,255
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0<"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_MAIL', 'logs-prev')
+              next_button:
+                type: Texture
+                attribute:
+                  width: 110
+                  height: 42
+                  normal: ~150,150,150,255
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0>"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_MAIL', 'logs-next')
+          panel:
+            type: Texture
+            attribute:
+              x: 42
+              y: 130
+              width: 1336
+              height: 680
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 20
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+          scroll:
+            type: Scroll
+            attribute:
+              x: 60
+              y: 146
+              width: 1320
+              height: 648
+              moveY: 0
+            action:
+              wheel: |-
+                if(self.wheelValue > 0){
+                  self.moveY = Math.max(0, self.moveY - 0.1)
+                }elif(self.wheelValue < 0){
+                  self.moveY = Math.min(1, self.moveY + 0.1)
+                }
+            children:
+              log_stack:
+                val: logs_list
+                type: VStack
+                attribute:
+                  width: 1300
+                  spaceBetween: 10
+                children:
+                  item:
+                    type: Texture
+                    attribute:
+                      entry: var.logs[self.key]
+                      width: 1300
+                      height: 98
+                      normal: ~120,120,120,255
+                      shape: ~round_rect
+                      radius: 16
+                      visible: self.entry != null
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                    children:
+                      type:
+                        type: Text
+                        attribute:
+                          x: 18
+                          y: 14
+                          fontSize: 49
+                          texts: "'&0&l[' + self.parent.entry['type_text'] + ']'"
+                      time:
+                        type: Text
+                        attribute:
+                          x: 18
+                          y: 46
+                          fontSize: 49
+                          texts: "'&7' + self.parent.entry['created_at']"
+                      content:
+                        type: Text
+                        attribute:
+                          x: 240
+                          y: 18
+                          width: 1020
+                          fontSize: 49
+                          texts: "'&0' + self.parent.entry['content']"
+          logs_observer:
+            type: Observer
+            attribute:
+              target: val.logs_list['item']
+              subscribe: var.logs
+              maxSize: 2048

@@ -1,0 +1,189 @@
+config-version: 1
+# AXS EntityTracker
+# 作用: 跟踪指定 MythicMob，向 HUD/聊天卡片同步血量、距离、目标、存活时间、实时伤害排行和死亡结算结果；同时显示玩家最近攻击目标 HUD。
+# 新增: Boss掉落记录、掉落分配系统、跨服Boss排行功能
+# 依赖: ArcartX、MythicMobs/MythicBukkit；PlaceholderAPI 可选，仅用于对外输出 PAPI 和解析显示文本。
+# 重载: /axs entitytracker reload
+# PAPI 输出: %AXSentitytracker_*%
+# 关联资源: ui/boss_tracker.yml、ui/attack_target_hud.yml
+# 福利模块: 消费额度满¥150获得授权
+
+boss:
+  settings:
+    refresh-interval-ticks: 5
+    default-viewer-range: 48.0
+    max-visible-bars: 5
+    # sort-mode 排序模式:
+    # spawn-order 生成顺序；distance 距离优先；health-percent 血量百分比优先；priority 配置优先级；hybrid 混合排序。
+    sort-mode: "spawn-order"
+    # 目标 HUD 的 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
+    # ui-id: "AXS:boss_tracker"
+    # 多 UI 示例（同一个 payload 同时发给多个 UI）：
+    # ui-id:
+    #   - "AXS:boss_tracker"
+    #   - "AXS:boss_tracker_alt"
+    ui-id: "AXS:boss_tracker"
+    register-ui-on-enable: true
+    overwrite-ui-file: false
+
+  # Boss 定义目录，路径相对模块数据目录。
+  # 目录下每个 *.yml 文件为一个 Boss 追踪配置，文件名（去掉 .yml）即为 MythicMob ID。
+  bosses-directory: "bosses"
+
+attack-target:
+  settings:
+    debug: false
+    refresh-interval-ticks: 5
+    target-timeout-ms: 3000
+    max-view-distance: 48.0
+    # 目标 HUD 的 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
+    # ui-id: "AXS:attack_target_hud"
+    # 多 UI 示例：
+    # ui-id:
+    #   - "AXS:attack_target_hud"
+    #   - "AXS:attack_target_hud_alt"
+    ui-id: "AXS:attack_target_hud"
+    register-ui-on-enable: true
+    overwrite-ui-file: false
+    blacklist:
+      # MythicMob ID 黑名单，大小写不敏感。命中后不显示 EntityTracker target HUD。
+      mythic-mob-ids: []
+      # Bukkit EntityType 黑名单，例如 ZOMBIE、PLAYER、ARMOR_STAND。
+      entity-types: []
+    entitytracker-link:
+      # true 时，ArcartXEntityTracker.yml 中 enabled=true 的 Boss 默认不触发 target HUD。
+      ignore-configured-bosses: true
+    title-format: "&c{display_name}"
+    subtitle-format: "&7{entity_type_name} &8| &c{health}/{max_health} &8| &f{distance_text}"
+
+# 新功能配置 (1.1.0-beta)
+new-features:
+  # Boss掉落记录系统
+  drop-recording:
+    enabled: true
+    # 数据保留天数，超过此天数的记录将被自动清理
+    retention-days: 30
+    # 是否启用掉落统计
+    enable-statistics: true
+    # 统计更新间隔(秒)
+    statistics-update-interval: 300
+
+  # 掉落分配系统
+  drop-allocation:
+    enabled: true
+    # 默认分配模式: dkp/roll/priority/manual
+    default-mode: "roll"
+    # 分配超时时间(秒)
+    allocation-timeout: 60
+    
+    # DKP积分系统
+    dkp:
+      enabled: true
+      # Boss击杀基础积分
+      base-earn-points: 10
+      # 伤害排名积分奖励
+      rank-bonus-points:
+        1: 20  # 第一名额外奖励
+        2: 15  # 第二名额外奖励
+        3: 10  # 第三名额外奖励
+        4: 5   # 第四名额外奖励
+        5: 3   # 第五名额外奖励
+    
+    # ROLL随机系统
+    roll:
+      enabled: true
+      # ROLL超时时间(秒)
+      timeout-seconds: 30
+      # ROLL范围: 1-100
+      roll-range: "1-100"
+      # 是否允许放弃(pass)
+      allow-pass: true
+    
+    # 优先级分配系统
+    priority:
+      enabled: true
+      # 职业优先级配置
+      class-priority:
+        tank: 1    # 坦克职业优先级最高
+        healer: 2  # 治疗职业次之
+        dps: 3     # DPS职业最后
+      # 装备品质优先级
+      quality-priority:
+        legendary: 1  # 传说装备优先级最高
+        epic: 2       # 史诗装备次之
+        rare: 3       # 稀有装备
+        common: 4     # 普通装备
+
+  # 跨服Boss排行系统
+  cross-server-ranking:
+    enabled: true
+    # 服务器标识名称
+    server-name: "Server1"
+    # 排行榜更新间隔(秒)
+    update-interval: 60
+    # Redis配置
+    redis:
+      host: "localhost"
+      port: 6379
+      password: ""
+      database: 0
+      # 连接超时(毫秒)
+      timeout: 5000
+    # 排行榜类型
+    ranking-types:
+      - "best_damage" # 最高单次伤害排行
+      - "boss_damage" # 特定Boss最高伤害排行
+      - "kills"       # 击杀排行
+      - "participate" # 参与排行
+      - "server"      # 服务器排行
+    # 排行榜显示数量
+    max-entries: 50
+
+  # 排行榜定时奖励全局设置
+  # 每个 Boss 的具体奖励（ranks + actions）在各自的 Boss yml 文件中配置。
+  ranking-rewards:
+    # 周奖励调度 (每周一 00:00)
+    schedule:
+      weekly:
+        enabled: true
+        day-of-week: "MONDAY"    # MONDAY, TUESDAY, etc.
+        hour: 0
+        minute: 0
+      # 月奖励调度 (每月1号 00:00)
+      monthly:
+        enabled: true
+        day-of-month: 1
+        hour: 0
+        minute: 0
+    # 时区，默认中国北京时间
+    timezone: "Asia/Shanghai"
+    # 奖励发放设置
+    reward-settings:
+      # 是否自动发放奖励
+      auto-distribute: true
+      # 发放失败重试次数
+      max-retry-count: 3
+      # 重试间隔(分钟)
+      retry-interval-minutes: 30
+      # 是否广播奖励发放结果
+      broadcast-rewards: true
+      # 是否记录详细日志
+      detailed-logging: true
+
+# 数据库配置
+database:
+  # 数据库类型: sqlite/mysql
+  type: "sqlite"
+  # SQLite配置
+  sqlite:
+    file: "entitytracker.db"
+  # MySQL配置
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "arcartxsuite"
+    username: "root"
+    password: ""
+    # 连接池配置
+    pool-size: 5
+    connection-timeout: 30000

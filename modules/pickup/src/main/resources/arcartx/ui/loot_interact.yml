@@ -1,0 +1,24 @@
+# 掉落物交互面板（透明 Menu，捕获鼠标光标并处理按键/滚轮交互）
+# 打开后通过发包给服务端，由服务端发包更新 loot_panel HUD。
+ui:
+  isHud: false
+  background: false
+  escClose: true
+  through: true
+action:
+  close: |-
+    Packet.send('pickup', 'close_menu')
+  wheel: |-
+    if(self.wheelValue > 0){
+      Packet.send('pickup', 'scroll_up')
+    }
+    if(self.wheelValue < 0){
+      Packet.send('pickup', 'scroll_down')
+    }
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080

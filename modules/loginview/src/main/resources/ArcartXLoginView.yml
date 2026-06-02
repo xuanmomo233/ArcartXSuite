@@ -1,0 +1,105 @@
+config-version: 1
+# ArcartXSuite LoginView
+# 密码同步不保存明文：AuthMe 迁移只复制数据库 hash，独立模式登录成功后可重写为 AXS 自己的 PBKDF2 hash。
+
+# PlaceholderAPI:
+# - %AXSloginview_account_type% -> microsoft / littleskin / offline
+# - %AXSloginview_account_type_display% -> 微软正版 / LittleSkin / 离线
+# - %AXSloginview_is_microsoft% / %AXSloginview_is_littleskin% / %AXSloginview_is_offline%
+
+debug: false
+
+auth:
+  # authme: 使用 AuthMe API 做注册、登录、改密，LoginView 只提供 AXUI 登录界面。
+  # standalone: 使用 AXS 独立账户库，可通过 /axs loginview migrate-authme 导入 AuthMe hash。
+  mode: standalone
+  # 正版/LittleSkin 白名单免登录。
+  # 启用后，通过 authlib-injector（LittleSkin）或 Mojang 正版认证的玩家
+  # 无需输入密码，直接显示「进入服务器」按钮。
+  # 检测原理: 认证账号使用 version=4 UUID；离线账号使用 version=3 UUID。
+  # 若为 version=4，LoginView 会再比对 Mojang 官方 UUID，用于区分微软正版与 LittleSkin。
+  premium-bypass:
+    enabled: false
+    # 进入服务器成功后的提示信息
+    message: '&a身份已验证，欢迎回来。'
+
+# QQ 绑定集成（需 qqbot 模块同时加载）
+qq-binding:
+  enabled: true
+  # 未绑定 QQ 的正版/LittleSkin 玩家在登录面板看到的提示
+  bind-prompt: '&e你尚未绑定 QQ
+&7请在 QQ 群发送: #绑定 {name}
+&7获取验证码后在下方输入'
+
+ui:
+  ui-id: AXS:LoginView
+  packet-id: AXS_loginview
+  # 默认使用第一套紧凑登录 UI；可改为 login_view_menu.yml 使用纯色块主菜单风格 UI。
+  ui-file: login_view.yml
+  register-ui-on-enable: true
+  overwrite-ui-files: false
+  open-delay-ticks: 20
+  close-on-login: true
+
+security:
+  min-password-length: 6
+  max-password-length: 64
+  max-attempts: 5
+  kick-on-max-attempts: true
+  lock-movement: true
+  lock-chat: true
+  lock-commands: true
+  allow-commands-prefix: login,register,l,reg,AXS
+  # 从 AuthMe 导入的 hash 验证成功后，改写成 AXS_PBKDF2_SHA256，后续即可完全脱离 AuthMe。
+  rehash-migrated-password-on-login: true
+
+storage:
+  mode: sqlite
+  sqlite:
+    file: loginview.db
+  mysql:
+    host: 127.0.0.1
+    port: 3306
+    database: minecraft
+    username: root
+    password: ''
+  table-prefix: AXS_loginview_
+
+authme-migration:
+  source:
+    # SQLite 示例: jdbc:sqlite:plugins/AuthMe/AuthMe.db
+    # MySQL 示例: jdbc:mysql://127.0.0.1:3306/authme?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    jdbc-url: jdbc:sqlite:plugins/AuthMe/AuthMe.db
+    username: ''
+    password: ''
+    table: authme
+  columns:
+    name: username
+    real-name: realname
+    password: password
+    salt: salt
+    last-ip: ip
+    last-login: lastlogin
+    registration-date: regdate
+    registration-ip: regip
+    email: email
+  # 支持 AUTHME_BCRYPT、AUTHME_BCRYPT2Y、AUTHME_SHA256。
+  # 不支持的算法不会破解，请先在 AuthMe 侧转换或让玩家重置密码。
+  imported-hash-algorithm: AUTHME_BCRYPT
+  batch-size: 200
+
+messages:
+  title-login: 登录服务器
+  title-register: 注册账号
+  login-success: '&a登录成功。'
+  register-success: '&a注册完成，已自动登录。'
+  change-success: '&a密码已修改。'
+  password-mismatch: '&c两次输入的密码不一致。'
+  password-too-short: '&c密码太短。'
+  password-too-long: '&c密码太长。'
+  wrong-password: '&c密码错误。'
+  already-registered: '&c你已经注册过账号。'
+  not-registered: '&e你还没有注册，请先设置密码。'
+  authme-unavailable: '&c当前配置为 AuthMe 兼容模式，但 AuthMe 不可用。'
+  locked: '&e请先完成登录。'
+  kicked: '&c密码错误次数过多。'

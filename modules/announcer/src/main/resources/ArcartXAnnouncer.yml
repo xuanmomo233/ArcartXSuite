@@ -1,0 +1,109 @@
+config-version: 1
+# AXS Announcer & Subtitle
+# 作用: 轮播公告到 ArcartX HUD + 服务端打字机字幕播放。
+# 依赖: ArcartX；PlaceholderAPI 可选，仅用于解析公告文本 / 字幕文本。
+# 重载: /axs announcer reload
+# PAPI 输出: 无独立 PlaceholderAPI 输出。
+# 可解析的 PAPI: entries.<id>.text / subtitle.groups-directory 下字幕文本 会按接收玩家解析。
+# 内置变量: click-command 中的 <player> 会替换为点击玩家名。
+# 关联资源: ui/announcer_hud.yml、ui/subtitle_hud.yml、subtitle/groups/*.yml
+
+settings:
+  # 是否输出调试日志。
+  # true 时会打印 settings / entries 发包内容和点击回包信息。
+  debug: false
+
+  # 目标 HUD 的 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
+  # ui-id: "AXS:announcer_hud"
+  # 多 UI 示例（同一个 payload 同时发给多个 UI）：
+  # ui-id:
+  #   - "AXS:announcer_hud"
+  #   - "AXS:announcer_hud_alt"
+  ui-id: "AXS:announcer_hud"
+
+  # 插件启动/重载时是否自动注册 HUD
+  register-ui-on-enable: true
+
+  # 是否强制覆盖 plugins/ArcartXSuite/ui/announcer_hud.yml
+  overwrite-ui-file: false
+
+  # 是否自动播放公告
+  # false 时 HUD 仍会同步配置，但不主动滚动显示
+  auto-play: true
+
+  # 后台检查在线玩家/待同步玩家的周期，单位 tick
+  # 20 tick = 1 秒
+  check-interval-ticks: 20
+
+  # 一整轮公告播完后的冷却时间，单位毫秒
+  # 例如 30000 = 30 秒
+  cooldown-ms: 30000
+
+  # 同一轮中，上一条公告播完后切到下一条公告的等待时间，单位毫秒
+  between-entry-interval-ms: 30000
+
+  # 用于估算滚动文字宽度的字体大小（自适应坐标单位）。
+  # 值越大，HUD 背景显示时间越长；值越小，背景消失越快。
+  # 对应 announcer_hud.yml 中 announcement_text 的 fontSize。
+  text-width-font-size: 60
+
+  # 是否将公告自动转发到 QQ 群（需要 QQBot 模块启用）
+  forward-to-qq: false
+
+# 公告条目目录，路径相对模块数据目录。
+# 目录下每个 *.yml 文件可包含多个条目，根键即为条目 ID。
+entries-directory: "announcer"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 跨服广播（BungeeCord / Velocity 代理转发）
+# 启用后，broadcast / broadcastnow 命令发出的公告会通过代理转发到其他子服。
+# 同时，本服也会接收来自其他子服的公告并展示给在线玩家。
+# 注意：仅「手动广播」会跨服转发，entries 目录中的自动轮播条目不会跨服。
+# ─────────────────────────────────────────────────────────────────────────────
+transport:
+  proxy:
+    # 是否启用 BungeeCord 代理转发
+    enabled: false
+
+    # BungeeCord Forward 子频道名称，所有子服必须一致
+    messenger-channel: "AXS_ANNOUNCER"
+
+    # 转发目标：ALL = 所有子服，或指定服务器名
+    forward-target: "ALL"
+
+    # 当前节点 ID（用于去重），留空则自动取 server.properties 中 server-name
+    node-id: ""
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AXS Subtitle（字幕）
+# 作用: 按字幕组顺序播放服务端控制的打字机字幕，并向 ArcartX HUD 推送当前文本、速度、停留和关闭状态。
+# 依赖: ArcartX；PlaceholderAPI 可选。
+# 重载: /axs announcer reload（随 Announcer 一起重载）
+# 可解析的 PAPI: subtitle.groups-directory 下 *.yml 中的字幕文本会按目标玩家解析，例如 %player_name%。
+# 关联资源: subtitle/groups/*.yml、ui/subtitle_hud.yml
+# ─────────────────────────────────────────────────────────────────────────────
+subtitle:
+  settings:
+    # 是否输出调试日志。
+    # true 时会打印每帧字幕 play 包和关闭 close 包内容。
+    debug: false
+
+    # 目标 HUD 的 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
+    # ui-id: "AXS:subtitle_hud"
+    # 多 UI 示例：
+    # ui-id:
+    #   - "AXS:subtitle_hud"
+    #   - "AXS:subtitle_hud_alt"
+    ui-id: "AXS:subtitle_hud"
+
+    # 插件启动/重载时是否自动向 ArcartX 注册 HUD
+    register-ui-on-enable: true
+
+    # 是否强制覆盖 plugins/ArcartXSuite/ui/subtitle_hud.yml
+    overwrite-ui-file: false
+
+    # 字幕组目录，路径相对插件数据目录
+    groups-directory: "subtitle/groups"
+
+    # 是否显示字幕底部黑色背景板
+    show-background: true

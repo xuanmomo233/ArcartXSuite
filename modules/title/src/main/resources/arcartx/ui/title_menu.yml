@@ -1,0 +1,718 @@
+﻿ui:
+  background: false
+  escClose: true
+  closeDied: true
+  show: true
+  through: false
+  screenScale: true
+  packetHandler:
+    init: |-
+      var.titles = packet['titles']
+      var.groups = packet['groups']
+      var.qualities = packet['qualities']
+      var.selectedId = packet['selected_id']
+      var.filterMode = 'all'
+      var.filterGroup = 'all'
+      var.filterQuality = 'all'
+      var.groupScrollRatio = 0
+      var.qualityScrollRatio = 0
+      var.detailScrollRatio = 0
+      var.equippedSummary = packet['equipped_summary']
+      var.ownedCount = packet['owned_count']
+      var.hiddenCount = packet['hidden_count']
+      var.selectedName = packet['selected_display_name']
+      var.selectedKind = packet['selected_kind']
+      if(var.selectedKind == 'text'){
+        var.selectedKind = '文本称号'
+      }elif(var.selectedKind == 'icon'){
+        var.selectedKind = '贴图称号'
+      }
+      var.selectedChatPrefix = packet['selected_chat_prefix']
+      var.selectedChatSuffix = packet['selected_chat_suffix']
+      var.selectedTabPrefix = packet['selected_tab_prefix']
+      var.selectedTabSuffix = packet['selected_tab_suffix']
+      var.selectedGroupId = packet['selected_group_id']
+      var.selectedGroupEquippedName = packet['selected_group_equipped_name']
+      var.selectedDescription = packet['selected_description']
+      var.selectedSource = packet['selected_source']
+      var.selectedGroupName = packet['selected_group_name']
+      var.selectedQualityName = packet['selected_quality_name']
+      var.selectedOwned = packet['selected_owned']
+      var.selectedHidden = packet['selected_hidden']
+      var.selectedRemainingText = packet['selected_remaining_text']
+      var.selectedDisplayAttributesText = packet['selected_display_attributes_text']
+      var.selectedCollectionAttributesText = packet['selected_collection_attributes_text']
+      var.displayAttributesText = packet['display_attributes_text']
+      var.collectionAttributesText = packet['collection_attributes_text']
+      var.totalAttributesText = packet['total_attributes_text']
+      var.setBonusAttributesText = packet['set_bonus_attributes_text']
+      var.sets = packet['sets']
+      var.displayTitleName = packet['display_title_name']
+      var.displayTitleChatPrefix = packet['display_title_chat_prefix']
+      var.displayTitleChatSuffix = packet['display_title_chat_suffix']
+      var.displayTitleTabPrefix = packet['display_title_tab_prefix']
+      var.displayTitleTabSuffix = packet['display_title_tab_suffix']
+      var.setScrollRatio = 0
+    update: |-
+      var.titles = packet['titles']
+      var.groups = packet['groups']
+      var.qualities = packet['qualities']
+      var.selectedId = packet['selected_id']
+      var.equippedSummary = packet['equipped_summary']
+      var.ownedCount = packet['owned_count']
+      var.hiddenCount = packet['hidden_count']
+      var.selectedName = packet['selected_display_name']
+      var.selectedKind = packet['selected_kind']
+      if(var.selectedKind == 'text'){
+        var.selectedKind = '文本称号'
+      }elif(var.selectedKind == 'icon'){
+        var.selectedKind = '贴图称号'
+      }
+      var.selectedChatPrefix = packet['selected_chat_prefix']
+      var.selectedChatSuffix = packet['selected_chat_suffix']
+      var.selectedTabPrefix = packet['selected_tab_prefix']
+      var.selectedTabSuffix = packet['selected_tab_suffix']
+      var.selectedGroupId = packet['selected_group_id']
+      var.selectedGroupEquippedName = packet['selected_group_equipped_name']
+      var.selectedDescription = packet['selected_description']
+      var.selectedSource = packet['selected_source']
+      var.selectedGroupName = packet['selected_group_name']
+      var.selectedQualityName = packet['selected_quality_name']
+      var.selectedOwned = packet['selected_owned']
+      var.selectedHidden = packet['selected_hidden']
+      var.selectedRemainingText = packet['selected_remaining_text']
+      var.selectedDisplayAttributesText = packet['selected_display_attributes_text']
+      var.selectedCollectionAttributesText = packet['selected_collection_attributes_text']
+      var.displayAttributesText = packet['display_attributes_text']
+      var.collectionAttributesText = packet['collection_attributes_text']
+      var.totalAttributesText = packet['total_attributes_text']
+      var.setBonusAttributesText = packet['set_bonus_attributes_text']
+      var.sets = packet['sets']
+      var.displayTitleName = packet['display_title_name']
+      var.displayTitleChatPrefix = packet['display_title_chat_prefix']
+      var.displayTitleChatSuffix = packet['display_title_chat_suffix']
+      var.displayTitleTabPrefix = packet['display_title_tab_prefix']
+      var.displayTitleTabSuffix = packet['display_title_tab_suffix']
+
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      root:
+        type: Texture
+        attribute:
+          point: ~middle_center
+          width: 1520
+          height: 900
+          normal: ~95,95,95,220
+          shape: ~round_rect
+          radius: 28
+        effect:
+          stroke:
+            width: 3
+            color: ~255,255,255,255
+          shadow:
+            xOffset: 2
+            yOffset: 2
+            blur: 5
+            color: ~255,255,255,75
+          ripple:
+            duration: 1200
+            color: ~255,255,255,110
+            width: 0.05
+        children:
+          title:
+            type: Text
+            attribute:
+              x: 48
+              y: 34
+              fontSize: 81
+              texts: "~&f&l称号总览"
+          summary:
+            type: Text
+            attribute:
+              x: 48
+              y: 86
+              fontSize: 49
+              texts: "'&0已拥有: &0' + var.ownedCount.round() + '   &0已隐藏: &0' + var.hiddenCount.round() + '   &0已装备: &0' + var.equippedSummary"
+          display_title_preview:
+            type: Text
+            attribute:
+              x: 48
+              y: 108
+              fontSize: 49
+              texts: "'&0总展示称号: &0' + (var.displayTitleName == '' ? '无' : var.displayTitleName)"
+          mode_all:
+            type: Texture
+            attribute:
+              x: 48
+              y: 132
+              width: 116
+              height: 42
+              normal: ~120,190,255,230
+              shape: ~round_rect
+              radius: 14
+              texts: "'&0全部'"
+              center: true
+              fontSize: 49
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            action:
+              clickLeft: |-
+                var.filterMode = 'all'
+          mode_owned:
+            type: Texture
+            attribute:
+              x: 176
+              y: 132
+              width: 116
+              height: 42
+              normal: ~100,200,130,230
+              shape: ~round_rect
+              radius: 14
+              texts: "'&0已拥有'"
+              center: true
+              fontSize: 49
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            action:
+              clickLeft: |-
+                var.filterMode = 'owned'
+          mode_hidden:
+            type: Texture
+            attribute:
+              x: 304
+              y: 132
+              width: 116
+              height: 42
+              normal: ~200,150,80,230
+              shape: ~round_rect
+              radius: 14
+              texts: "'&0已隐藏'"
+              center: true
+              fontSize: 49
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            action:
+              clickLeft: |-
+                var.filterMode = 'hidden'
+          group_label:
+            type: Text
+            attribute:
+              x: 48
+              y: 194
+              fontSize: 49
+              texts: "'&0分组筛选: &0' + var.filterGroup"
+          group_scroll:
+            type: Scroll
+            attribute:
+              x: 48
+              y: 226
+              width: 660
+              height: 42
+              moveX: var.groupScrollRatio
+            action:
+              wheel: |-
+                if(self.wheelValue > 0){
+                  var.groupScrollRatio = Math.max(0, var.groupScrollRatio - 0.1)
+                }elif(self.wheelValue < 0){
+                  var.groupScrollRatio = Math.min(1, var.groupScrollRatio + 0.1)
+                }
+            children:
+              group_stack:
+                val: group_list
+                type: HStack
+                attribute:
+                  height: 42
+                  spaceBetween: 12
+                children:
+                  item:
+                    type: Texture
+                    attribute:
+                      entry: var.groups[self.key]
+                      width: 124
+                      height: 42
+                      normal: ~145,145,145,255
+                      shape: ~round_rect
+                      radius: 14
+                      texts: "self.entry['name']"
+                      center: true
+                      fontSize: 49
+                      visible: self.entry != null
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                    action:
+                      clickLeft: |-
+                        var.filterGroup = self.key
+          group_observer:
+            type: Observer
+            attribute:
+              target: val.group_list['item']
+              subscribe: var.groups
+              maxSize: 64
+          quality_label:
+            type: Text
+            attribute:
+              x: 48
+              y: 286
+              fontSize: 49
+              texts: "'&0品质筛选: &0' + var.filterQuality"
+          quality_scroll:
+            type: Scroll
+            attribute:
+              x: 48
+              y: 318
+              width: 660
+              height: 42
+              moveX: var.qualityScrollRatio
+            action:
+              wheel: |-
+                if(self.wheelValue > 0){
+                  var.qualityScrollRatio = Math.max(0, var.qualityScrollRatio - 0.1)
+                }elif(self.wheelValue < 0){
+                  var.qualityScrollRatio = Math.min(1, var.qualityScrollRatio + 0.1)
+                }
+            children:
+              quality_stack:
+                val: quality_list
+                type: HStack
+                attribute:
+                  height: 42
+                  spaceBetween: 12
+                children:
+                  item:
+                    type: Texture
+                    attribute:
+                      entry: var.qualities[self.key]
+                      width: 124
+                      height: 42
+                      normal: ~145,145,145,255
+                      shape: ~round_rect
+                      radius: 14
+                      texts: "self.entry['name']"
+                      center: true
+                      fontSize: 49
+                      visible: self.entry != null
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                    action:
+                      clickLeft: |-
+                        var.filterQuality = self.key
+          quality_observer:
+            type: Observer
+            attribute:
+              target: val.quality_list['item']
+              subscribe: var.qualities
+              maxSize: 64
+          left_panel:
+            type: Texture
+            attribute:
+              x: 48
+              y: 386
+              width: 640
+              height: 456
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 20
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+          title_scroll:
+            type: Scroll
+            attribute:
+              x: 60
+              y: 398
+              width: 636
+              height: 432
+              moveY: 0
+            action:
+              wheel: |-
+                if(self.wheelValue > 0){
+                  self.moveY = Math.max(0, self.moveY - 0.1)
+                }elif(self.wheelValue < 0){
+                  self.moveY = Math.min(1, self.moveY + 0.1)
+                }
+            children:
+              title_stack:
+                val: title_list
+                type: VStack
+                attribute:
+                  width: 616
+                  spaceBetween: 10
+                children:
+                  item:
+                    type: Texture
+                    attribute:
+                      entry: var.titles[self.key]
+                      width: 616
+                      height: 82
+                      normal: ~145,145,145,255
+                      shape: ~round_rect
+                      radius: 18
+                      visible: "(var.filterMode == 'all' || (var.filterMode == 'owned' && self.entry['owned']) || (var.filterMode == 'hidden' && self.entry['hidden'])) && (var.filterGroup == 'all' || var.filterGroup == self.entry['group_id']) && (var.filterQuality == 'all' || var.filterQuality == self.entry['quality_id']) && self.entry != null"
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                    action:
+                      clickLeft: |-
+                        Packet.send('AXS_TITLE_MENU', 'select', self.key)
+                    children:
+                      name:
+                        type: Text
+                        attribute:
+                          x: 18
+                          y: 12
+                          fontSize: 49
+                          texts: "self.parent.entry['display_name']"
+                      state:
+                        type: Text
+                        attribute:
+                          x: 18
+                          y: 42
+                          fontSize: 49
+                          texts: "'&0' + self.parent.entry['quality_name'] + ' / ' + self.parent.entry['group_name'] + ' / ' + self.parent.entry['remaining_text']"
+          title_observer:
+            type: Observer
+            attribute:
+              target: val.title_list['item']
+              subscribe: var.titles
+              maxSize: 1024
+          right_panel:
+            type: Texture
+            attribute:
+              x: 728
+              y: 132
+              width: 744
+              height: 730
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 24
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+          detail_scroll:
+            type: Scroll
+            attribute:
+              x: 780
+              y: 164
+              width: 680
+              height: 560
+              moveY: var.detailScrollRatio
+            action:
+              wheel: |-
+                if(self.wheelValue > 0){
+                  var.detailScrollRatio = Math.max(0, var.detailScrollRatio - 0.1)
+                }elif(self.wheelValue < 0){
+                  var.detailScrollRatio = Math.min(1, var.detailScrollRatio + 0.1)
+                }
+            children:
+              detail_stack:
+                type: VStack
+                attribute:
+                  width: 660
+                  spaceBetween: 18
+                children:
+                  selected_name:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      texts: "var.selectedName == '' ? '&0未选择称号' : var.selectedName"
+                  selected_meta:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      lineSpace: 15
+                      texts:
+                        - "'&0类型: &0' + var.selectedKind + '    &0分组: &0' + var.selectedGroupName + '    &0品质: &0' + var.selectedQualityName"
+                        - "'&0本组已装备: &0' + var.selectedGroupEquippedName"
+                  selected_prefix:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      lineSpace: 15
+                      texts:
+                        - "'&0聊天前缀: &0' + (var.selectedChatPrefix == '' ? '无' : var.selectedChatPrefix)"
+                        - "'&0聊天后缀: &0' + (var.selectedChatSuffix == '' ? '无' : var.selectedChatSuffix)"
+                        - "'&0Tab 前缀: &0' + (var.selectedTabPrefix == '' ? '无' : var.selectedTabPrefix)"
+                        - "'&0Tab 后缀: &0' + (var.selectedTabSuffix == '' ? '无' : var.selectedTabSuffix)"
+                  selected_desc:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      lineSpace: 15
+                      texts:
+                        - "'&0介绍: &0' + (var.selectedDescription == '' ? '暂无介绍' : var.selectedDescription)"
+                        - "'&0获取渠道: &0' + (var.selectedSource == '' ? '未填写' : var.selectedSource)"
+                        - "'&0拥有状态: &0' + (var.selectedOwned ? '已拥有' : '未拥有')"
+                        - "'&0剩余时间: &0' + var.selectedRemainingText"
+                  selected_display_label:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      texts: "'&0佩戴属性'"
+                  selected_display_value:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      lineSpace: 4
+                      texts: "var.selectedDisplayAttributesText"
+                  selected_collection_label:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      texts: "'&0收集属性'"
+                  selected_collection_value:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      lineSpace: 4
+                      texts: "var.selectedCollectionAttributesText"
+                  total_display_label:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      texts: "'&0当前装备属性'"
+                  total_display_value:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      lineSpace: 4
+                      texts: "var.displayAttributesText"
+                  total_collection_label:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      texts: "'&0当前收集属性'"
+                  total_collection_value:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      lineSpace: 4
+                      texts: "var.collectionAttributesText"
+                  total_label:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      texts: "'&0总属性'"
+                  total_value:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      lineSpace: 4
+                      texts: "var.totalAttributesText"
+                  set_divider:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      texts: "'&0&l─── 套装效果 ───'"
+                      visible: var.sets != null && var.sets.size() > 0
+                  set_bonus_label:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      texts: "'&0套装加成属性'"
+                      visible: var.sets != null && var.sets.size() > 0
+                  set_bonus_value:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      lineSpace: 4
+                      texts: "var.setBonusAttributesText"
+                      visible: var.sets != null && var.sets.size() > 0
+                  set_list_label:
+                    type: Text
+                    attribute:
+                      width: 660
+                      fontSize: 49
+                      texts: "'&0套装详情'"
+                      visible: var.sets != null && var.sets.size() > 0
+                  set_stack:
+                    val: set_list
+                    type: VStack
+                    attribute:
+                      width: 660
+                      spaceBetween: 12
+                      visible: var.sets != null && var.sets.size() > 0
+                    children:
+                      item:
+                        type: Texture
+                        attribute:
+                          entry: var.sets[self.key]
+                          width: 660
+                          normal: ~255,255,255,80
+                          shape: ~round_rect
+                          radius: 14
+                          visible: self.entry != null
+                        children:
+                          set_info:
+                            type: Text
+                            attribute:
+                              x: 12
+                              y: 6
+                              width: 636
+                              fontSize: 49
+                              lineSpace: 12
+                              texts:
+                                - "(self.parent.entry['active'] ? '&a✔ ' : '&c✘ ') + '&0' + self.parent.entry['display_name'] + '  &0(' + self.parent.entry['progress'] + ')'"
+                                - "'&0所需: ' + self.parent.entry['required_titles_text']"
+                                - "'&0加成: &0' + self.parent.entry['bonus_text']"
+                  set_observer:
+                    type: Observer
+                    attribute:
+                      target: val.set_list['item']
+                      subscribe: var.sets
+                      maxSize: 64
+          equip_btn:
+            type: Texture
+            attribute:
+              x: 760
+              y: 748
+              width: 160
+              height: 42
+              normal: ~150,150,150,255
+              shape: ~round_rect
+              radius: 14
+              texts: "~&0装备本组"
+              center: true
+              fontSize: 49
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            action:
+              clickLeft: |-
+                Packet.send('AXS_TITLE_MENU', 'equip', var.selectedId)
+          unequip_btn:
+            type: Texture
+            attribute:
+              x: 930
+              y: 748
+              width: 160
+              height: 42
+              normal: ~150,150,150,255
+              shape: ~round_rect
+              radius: 14
+              texts: "~&0卸下本组"
+              center: true
+              fontSize: 49
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            action:
+              clickLeft: |-
+                Packet.send('AXS_TITLE_MENU', 'unequip_group', var.selectedGroupId)
+          unequip_all_btn:
+            type: Texture
+            attribute:
+              x: 1100
+              y: 748
+              width: 160
+              height: 42
+              normal: ~150,150,150,255
+              shape: ~round_rect
+              radius: 14
+              texts: "~&0全部卸下"
+              center: true
+              fontSize: 49
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            action:
+              clickLeft: |-
+                Packet.send('AXS_TITLE_MENU', 'unequip_all')
+          hide_btn:
+            type: Texture
+            attribute:
+              x: 760
+              y: 804
+              width: 160
+              height: 42
+              normal: ~150,150,150,255
+              shape: ~round_rect
+              radius: 14
+              texts: "~&0隐藏"
+              center: true
+              fontSize: 49
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            action:
+              clickLeft: |-
+                Packet.send('AXS_TITLE_MENU', 'hide', var.selectedId)
+          unhide_btn:
+            type: Texture
+            attribute:
+              x: 930
+              y: 804
+              width: 160
+              height: 42
+              normal: ~150,150,150,255
+              shape: ~round_rect
+              radius: 14
+              texts: "~&0取消隐藏"
+              center: true
+              fontSize: 49
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            action:
+              clickLeft: |-
+                Packet.send('AXS_TITLE_MENU', 'unhide', var.selectedId)
+          refresh_btn:
+            type: Texture
+            attribute:
+              x: 1100
+              y: 804
+              width: 160
+              height: 42
+              normal: ~150,150,150,255
+              shape: ~round_rect
+              radius: 14
+              texts: "~&0刷新"
+              center: true
+              fontSize: 49
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            action:
+              clickLeft: |-
+                Packet.send('AXS_TITLE_MENU', 'refresh')

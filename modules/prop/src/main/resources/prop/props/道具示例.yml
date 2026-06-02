@@ -1,0 +1,76 @@
+﻿# AXS 资源说明
+# 用途: Prop 模块默认道具示例，演示冷却、使用限制与效果列表写法。
+# 前置依赖: ArcartX；Prop 模块启用后生效。
+# 启用开关: config.yml -> modules.prop.enabled + modules.prop.password
+# 关联文件: ArcartXProp.yml、prop/key.yml、prop/language.yml
+# 重载命令: /axs prop reload
+# 最小使用路径: coolDownGroup + effects
+
+# 冷却组；同一组内的多个道具会共享冷却时间。
+coolDownGroup: "默认冷却组"
+
+# 冷却时间，单位秒。
+coolDownTime: 10
+
+# 持续时间，单位秒；部分效果会在该时间结束后自动移除。
+Duration: 10
+
+# 使用后是否消耗物品。
+remove: true
+
+# 是否允许手持右键使用。
+hand: true
+
+# 是否允许通过客户端按键触发。
+key: true
+
+# 使用权限；留空表示不额外校验权限。
+permission: ""
+
+# 使用条件列表；全部满足时才允许使用（AND 逻辑）。
+# 格式: <PlaceholderAPI变量> <运算符> <期望值>
+# 支持运算符: ==  !=  >=  <=  >  <  contains  regex
+# 需要安装 PlaceholderAPI 以解析变量；留空或不填则不检查条件。
+#
+# ── 数值比较 ──
+# conditions:
+#   - "%player_level% >= 10"              # 玩家等级 ≥ 10
+#   - "%vault_eco_balance% >= 100"        # Vault 余额 ≥ 100
+#   - "%player_health% > 5"              # 当前生命值 > 5
+#   - "%player_food_level% > 0"          # 饱食度 > 0
+#   - "%player_max_health% <= 40"        # 最大生命值 ≤ 40
+#   - "%player_exp% != 0"               # 经验值不为 0
+#
+# ── 字符串精确匹配（支持中文） ──
+# conditions:
+#   - "%player_world% == world"          # 当前世界为 world
+#   - "%player_biome% == 森林"            # 生物群系名称为中文时
+#   - "%luckperms_primary_group% == 战士"  # 主权限组为"战士"
+#   - "%craneattribute_job% != 无职业"     # 职业不为"无职业"
+#
+# ── 包含判断（contains，不区分大小写） ──
+# conditions:
+#   - "%player_world% contains world"    # 世界名包含 "world"
+#   - "%luckperms_groups% contains VIP"  # 权限组列表包含 VIP
+#   - "%player_biome% contains 沙漠"      # 生物群系名包含"沙漠"
+#
+# ── 正则匹配（regex，不区分大小写） ──
+# conditions:
+#   - "%player_name% regex ^[A-Z].*"     # 玩家名以大写字母开头
+#   - "%luckperms_primary_group% regex (战士|法师|弓手)"  # 职业为三者之一
+conditions: []
+
+# 效果列表示例:
+# cmd|say hello {player}        -> 执行后台命令
+# msg|hello {player}            -> 给玩家发送消息
+# food|10                       -> 恢复饱食度
+# health|10                     -> 恢复生命值
+# exp|10                        -> 增加经验
+# healthPercent|10              -> 按百分比恢复生命值
+# potion|SPEED:1                -> 附加药水效果
+# ap|物理伤害:10                 -> 附加 AttributePlus 词条
+# ml|ATTACK_DAMAGE:5            -> 附加 MythicLib 临时属性
+# mythiclib|critical_damage:8   -> 同上，支持完整前缀写法
+# 最小示例保留一个可运行效果，实际可继续追加多行。
+effects:
+  - "potion|SPEED:2"

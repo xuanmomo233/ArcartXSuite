@@ -1,0 +1,173 @@
+config-version: 1
+# AXS CombatEffect
+# 作用: 监听玩家攻击/击杀活体实体并向 ArcartX UI 发包；同时将伤害/治疗事件桥接到 ArcartX 数字飘字显示。
+# 依赖: ArcartX；MythicLib/MMOItems、CraneAttribute、AttributePlus、MythicMobs 按功能选用。
+# 重载: /axs combateffect reload
+# PAPI 输出: 无独立 PlaceholderAPI 输出。
+
+kill-effect:
+  settings:
+    # 是否开启调试日志（输出详细发包信息）
+    debug: false
+    blacklist:
+      # MythicMob ID 黑名单，大小写不敏感。命中后不发送 CombatEffect 包。
+      mythic-mob-ids: []
+      # Bukkit EntityType 黑名单，例如 ZOMBIE、PLAYER、ARMOR_STAND。
+      entity-types: []
+    # 实体战斗监听设置
+    entity-combat:
+      # 是否启用 CombatEffect 的实体攻击 / 击杀监听（总开关）。
+      enabled: true
+      # 是否处理玩家目标；保持旧版 PVP 行为。
+      include-players: true
+      # 是否处理非玩家活体实体，例如原版怪物和 MythicMob。
+      include-non-player-living: true
+
+  # 包定义目录，路径相对模块数据目录.
+  # 目录下每个 *.yml 文件可包含多个包定义，根键即为包 ID.
+  packets-directory: "packets"
+
+# 连击追踪系统
+combo-tracker:
+  # 是否启用连击追踪
+  enabled: false
+  # combo 来源模式:
+  # auto: Chronos 可用时优先 Chronos 状态事件，否则回退 Bukkit 攻击事件
+  # chronos: 仅使用 Chronos PlayerEnterStateEvent
+  # bukkit: 仅使用 Bukkit EntityDamageByEntityEvent
+  source: "auto"
+  # combo 超时重置时间（毫秒），超过该时间无攻击则重置计数
+  timeout: 2000
+  # Chronos 状态组过滤（仅这些组的状态进入才计为 combo 一击）
+  chronos-groups:
+    - "攻击"
+    - "连击"
+  # 实时同步 combo 计数到 ArcartX 客户端服务器变量
+  # 客户端 UI 可通过 {server.combo_count} 直接引用当前连击数
+  sync-variable: true
+  variable-name: "combo_count"
+  # 目标锁定模式: true 时切换攻击目标会重置 combo
+  # 适用于 Boss 战等场景，确保 combo 仅计入对同一目标的连续攻击
+  per-target: false
+  debug: false
+
+# 死亡缓冲系统
+death-buffer:
+  # 是否启用死亡缓冲
+  enabled: false
+  # 缓冲持续时间（毫秒），玩家在此期间不会真正死亡
+  duration: 3000
+  visuals:
+    # ArcartX Shader 名称，用于死亡画面效果（灰度/模糊等）
+    # 需要在客户端资源 shaders/ 目录下存在对应配置
+    shader: ""
+    # 是否切换到第三人称视角
+    third-person-camera: true
+    # ArcartX 预设相机 ID（如需电影级俯拍镜头）
+    camera-preset: ""
+    # Chronos 集成（需安装 Chronos 插件）
+    chronos:
+      enabled: false
+      # 强制玩家进入的 Chronos 状态 ID，需在控制器中注册该状态
+      state-id: "死亡"
+  # 缓冲期间阻止其他插件触发的自动复活
+  block-auto-respawn: true
+  # 不启用死亡缓冲的世界列表
+  world-blacklist: []
+  debug: false
+
+keybind-trigger:
+  # 是否启用 ArcartX 按键触发（需要 ArcartX 插件）
+  # 启用后，包定义可使用 trigger: keybind，在玩家按下/释放指定按键时触发特效
+  enabled: false
+
+state-trigger:
+  # 是否启用 Chronos 状态/控制器触发（需要 Chronos 插件）
+  # 启用后，包定义可使用 trigger: state 或 trigger: controller
+  # state: 玩家进入/离开 Chronos 状态时触发特效
+  # controller: 玩家切换 Chronos 控制器时触发特效
+  enabled: false
+
+# 伤害飘字显示
+digis-display:
+  # 伤害显示配置
+  damage-display:
+    # 伤害来源检测配置
+    source:
+      # auto: MythicLib/MMOItems -> CraneAttribute -> AttributePlus -> Bukkit
+      # craneattribute: 仅优先使用 CraneAttribute 属性结算后的伤害
+      # attributeplus: 仅优先使用 AttributePlus 伤害事件
+      # bukkit: 仅使用 Bukkit 原版伤害事件
+      mode: "auto"
+      # true: 指定来源不可用时自动回退到下一个可用来源。
+      fallback: true
+      # true: 输出伤害来源选择与回退日志。
+      debug: false
+
+    # 原始伤害（非玩家对玩家）
+    original:
+      # 是否启用原始伤害飘字
+      enabled: true
+      # ArcartX 客户端 digis 配置 ID，决定飘字颜色/字体/动画等样式
+      config-id: "damage"
+      # 最小显示阈值，低于此值的伤害不显示飘字（避免微量数字刷屏）
+      min-amount: 1.0
+      # 当伤害来源为 AttributePlus 时，是否允许显示
+      ap-compatible: true
+
+    # 玩家对玩家伤害（PVP）
+    player:
+      # 是否启用 PVP 伤害飘字
+      enabled: true
+      # ArcartX 客户端 digis 配置 ID（可与原始伤害使用不同样式）
+      config-id: "player-damage"
+      # 最小显示阈值
+      min-amount: 1.0
+
+    # MythicLib / MMOItems 属性伤害（需安装 MythicLib 插件）
+    mythiclib:
+      # 是否启用 MythicLib 属性伤害飘字
+      enabled: false
+      # 普通目标伤害的 ArcartX digis 配置 ID
+      config-id: "damage"
+      # 目标为玩家时使用的 digis 配置 ID（PVP 伤害样式）
+      player-config-id: "player-damage"
+      # 最小显示阈值
+      min-amount: 1.0
+      # PVP 伤害最小显示阈值
+      player-min-amount: 1.0
+
+    # CraneAttribute 属性伤害（需安装 CraneAttribute 插件）
+    craneattribute:
+      # 是否启用 CraneAttribute 属性伤害飘字
+      enabled: false
+      # 普通目标伤害的 ArcartX digis 配置 ID
+      config-id: "damage"
+      # 目标为玩家时使用的 digis 配置 ID
+      player-config-id: "player-damage"
+      # 最小显示阈值
+      min-amount: 1.0
+      # PVP 伤害最小显示阈值
+      player-min-amount: 1.0
+
+  # 治疗显示配置
+  heal-display:
+    # 原版治疗事件（药水、生命恢复等）
+    original:
+      # 是否启用原版治疗飘字
+      enabled: true
+      # ArcartX 客户端 digis 配置 ID（治疗样式）
+      config-id: "heal"
+      # 最小显示阈值
+      min-amount: 1.0
+
+    # MythicMobs 技能治疗（需安装 MythicMobs / MythicBukkit 插件）
+    mythic:
+      # 是否启用 MythicMobs 技能治疗飘字
+      enabled: true
+      # ArcartX 客户端 digis 配置 ID（治疗样式）
+      config-id: "heal"
+      # 最小显示阈值
+      min-amount: 1.0
+      # true: 显示实际生效的治疗量；false: 显示技能理论治疗量
+      exact-mode: true

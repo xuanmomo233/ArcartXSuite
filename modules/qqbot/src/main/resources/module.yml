@@ -1,0 +1,13 @@
+id: qqbot
+name: QQBot
+version: 1.0.0-beta
+main: xuanmo.arcartxsuite.qqbot.QQBotModule
+api-version: 1.0
+
+depends: []
+softdepends:
+  - chat
+external-depends:
+
+external-softdepends:
+  - PlaceholderAPI

@@ -1,0 +1,84 @@
+config-version: 1
+# ArcartXSuite Regions - 区域保护模块
+# 重载: /axs regions reload
+
+debug: false
+
+# 选区工具
+selection:
+  # 选区工具物品 (MATERIAL 名)
+  wand-item: WOODEN_AXE
+  # 最大选区体积 (方块数)
+  max-volume: 500000
+  # 每个玩家最大区域数 (0=无限)
+  max-regions-per-player: 20
+
+# 区域默认设置
+defaults:
+  # 新建区域默认优先级
+  priority: 0
+  # 全局区域名 (无任何区域覆盖时的保底规则)
+  global-region-id: "__global__"
+
+# 进入/离开提示
+notifications:
+  # 进出区域是否显示 ActionBar 提示
+  show-actionbar: true
+  # 进出消息显示方式: actionbar / chat / title
+  display-mode: actionbar
+
+# ─── 世界规则 (按世界级别的限制，不依赖区域选区) ───
+world-rules:
+  # 禁止飞行的世界列表
+  no-fly-worlds:
+    - "world_pvp"
+  # 进入禁飞世界时的处理: cancel(取消飞行)
+  no-fly-action: cancel
+  # 禁飞提示消息
+  no-fly-message: "&c此世界禁止飞行。"
+  # 禁止活塞推动的世界列表
+  no-piston-worlds: []
+  # 禁止交互的物品/方块类型 (按世界配置)
+  # 格式: 世界名: [MATERIAL列表]
+  disabled-interactions:
+    # world_spawn:
+    #   - ENDER_CHEST
+    #   - ANVIL
+
+# 存储
+storage:
+  # sqlite / mysql
+  dialect: sqlite
+  sqlite-file: "regions.db"
+  # MySQL 配置
+  host: "127.0.0.1"
+  port: 3306
+  database: "arcartxsuite"
+  username: "root"
+  password: ""
+  table-prefix: "axs_rg_"
+  pool-size: 3
+
+# 消息
+messages:
+  prefix: "&8[&6Regions&8] &r"
+  wand-pos1: "&a已设置选区点 1: &f{x}, {y}, {z}"
+  wand-pos2: "&a已设置选区点 2: &f{x}, {y}, {z}"
+  region-created: "&a区域 &f{name} &a已创建。"
+  region-deleted: "&c区域 &f{name} &c已删除。"
+  region-not-found: "&c未找到区域: &f{name}"
+  region-exists: "&c区域 &f{name} &c已存在。"
+  no-selection: "&c请先用选区工具选定两个点。"
+  selection-too-large: "&c选区体积超过限制 ({max} 方块)。"
+  max-regions-reached: "&c你已达到最大区域数量限制 ({max})。"
+  flag-set: "&a区域 &f{region} &a标志 &f{flag} &a已设置为 &f{value}&a。"
+  flag-removed: "&a区域 &f{region} &a标志 &f{flag} &a已移除。"
+  flag-unknown: "&c未知标志: &f{flag}"
+  member-added: "&a已将 &f{player} &a添加为区域 &f{region} &a的{role}。"
+  member-removed: "&a已将 &f{player} &a从区域 &f{region} &a移除。"
+  no-permission-region: "&c你没有在此区域执行该操作的权限。"
+  no-build: "&c你不能在此区域放置或破坏方块。"
+  no-interact: "&c你不能在此区域进行交互。"
+  no-pvp: "&c此区域禁止 PVP。"
+  region-enter: "&a[进入] &f{region}"
+  region-leave: "&a[离开] &f{region}"

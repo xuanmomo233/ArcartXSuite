@@ -1,0 +1,29 @@
+# 探索类称号
+# 每个根键为称号 ID；group 必须已在主配置 groups: 中定义。
+
+starwalker:
+  enabled: true
+  group: "exploration"
+  quality: "legendary"
+  kind: "icon"
+  display-name: "&6星轨行者"
+  chat-prefix: "§k!%000001<icon>"
+  chat-suffix: ""
+  tab-prefix: "§k!%000001<icon>"
+  tab-suffix: ""
+  description: "适用于 ArcartX 文本图标称号的示例条目。"
+  source: "限时探索活动"
+  display-attributes:
+    luck: 3
+  display-attribute-lines:
+    - "幸运值:3"
+  collection-attributes:
+    prestige: 1
+  sort-order: 20
+  # 头顶显示：texture 模式使用 ArcartX 客户端文字贴图渲染。
+  # overhead-texture 使用 ArcartX 自定义文字贴图格式：§k!%<id><type>
+  overhead-mode: texture
+  overhead-texture: "§k!%000001<icon>"
+  overhead-width: 80
+  overhead-height: 20
+  overhead-offset-y: 2.3

@@ -1,0 +1,28 @@
+# 冒险类称号
+# 每个根键为称号 ID；group 必须已在主配置 groups: 中定义。
+
+adventurer:
+  enabled: true
+  group: "adventure"
+  quality: "common"
+  kind: "text"
+  display-name: "&0冒险者"
+  chat-prefix: "&7[冒险者]&r "
+  chat-suffix: ""
+  tab-prefix: "&7[冒险者]&r "
+  tab-suffix: ""
+  description: "完成新手冒险线后获得。"
+  source: "新手任务"
+  display-attributes:
+    attack: 1
+  display-attribute-lines:
+    - "&4暴击率: 5(%)"
+  collection-attributes:
+    knowledge: 1
+  collection-attribute-lines:
+    - "&a生命力: 100"
+  sort-order: 10
+  # 头顶显示：text 模式使用 Scoreboard Team 前后缀（纯服务端）。
+  overhead-mode: text
+  overhead-prefix: "&7[冒险者] "
+  overhead-suffix: ""

@@ -1,0 +1,28 @@
+# OnlineRewards 在线阶段奖励
+# 从 ArcartXOnlineRewards.yml 的 rewards: 段独立为外部文件。
+#
+# 会按配置顺序推进；minutes 为达到该阶段所需的今日累计在线分钟。
+# commands 支持 {player} 变量。
+# mail-presets 填写 Mail 模块 mail/presets/*.yml 中的 preset.id，达成阶段后会发送给玩家。
+
+rewards:
+  - minutes: 1
+    name: "第一阶段"
+    rewardText: "这里是第一阶段的奖励描述"
+    mail-presets: []
+    commands:
+      - "say 你好 {player} 这是第一阶段"
+
+  - minutes: 5
+    name: "第二阶段"
+    rewardText: "这里是第二阶段的奖励描述"
+    mail-presets: []
+    commands:
+      - "say 你好 {player} 这是第二阶段"
+
+  - minutes: 10
+    name: "第三阶段"
+    rewardText: "这里是第三阶段的奖励描述"
+    mail-presets: []
+    commands:
+      - "say 你好 {player} 这是第三阶段"

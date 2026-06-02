@@ -1,0 +1,152 @@
+config-version: 1
+# AXS Chat
+# 作用: 频道聊天、私聊、回复、监听、忽略、禁言、跨服转发、聊天卡片、物品展示和过滤。
+# 依赖: ArcartX；PlaceholderAPI、Redis、数据库按功能选用。
+# 重载: /axs chat reload
+# PAPI 输出:
+#   %AXSchat_current_channel% 当前频道 ID。
+#   %AXSchat_current_channel_display% 当前频道显示名。
+#   %AXSchat_reply_target% 当前 /reply 目标玩家名。
+#   %AXSchat_spy_enabled% 当前玩家是否开启社交监听。
+#   %AXSchat_ignore_count% 当前玩家忽略列表数量。
+#   %AXSchat_muted% 当前玩家是否处于禁言中。
+# 可解析的 PAPI: 频道格式、卡片文本和展示文本会按聊天上下文解析 PlaceholderAPI。
+# 关联资源: chat/channels/*.yml
+
+settings:
+  # 是否输出 Chat 模块调试日志。
+  debug: false
+
+  # 当前服务端节点标识；跨服转发或 Redis 去重时会用到。
+  server-id: "default"
+
+  # 默认频道 ID；若配置不存在，模块会自动回退到首个有效频道。
+  default-channel: "normal"
+
+  # 单条消息最大长度。
+  max-length: 256
+
+  # 玩家连续发言冷却，单位毫秒。
+  cooldown-millis: 750
+
+  # 重复消息判定窗口，单位毫秒。
+  duplicate-window-millis: 4000
+
+compatibility:
+  other-chat-plugins:
+    # 强制接管聊天事件。开启后 AXS 会尽早捕获玩家原始消息，并在事件链末尾再次取消原版/其他插件广播。
+    # 仅在服务器安装其他聊天插件并出现消息被改写、重复或复用旧消息时开启。
+    force-takeover: false
+
+storage:
+  # 存储模式: sqlite 本地文件；mysql 远程 MySQL。
+  mode: "sqlite"
+
+  sqlite:
+    # SQLite 文件会创建在插件数据目录下。
+    file: "chat.db"
+
+  mysql:
+    host: "127.0.0.1"
+    port: 3306
+    database: "arcartxsuite"
+    username: "root"
+    password: ""
+
+  # 连接池大小；在线较多或启用跨服历史时可适当提高。
+  pool-size: 4
+
+transport:
+  redis:
+    # 开启后使用 Redis 同步聊天消息，适合多服互通。
+    enabled: false
+    host: "127.0.0.1"
+    port: 6379
+    password: ""
+    database: 0
+    channel: "AXS:chat"
+    node-id: ""
+    connect-timeout-ms: 5000
+
+  proxy:
+    # 开启后通过 ArcartX / 代理侧信道转发消息。
+    enabled: false
+    messenger-channel: "AXS_CHAT"
+    forward-target: "ALL"
+    node-id: ""
+
+cards:
+  # 提及、私聊、系统提示、物品展示对应的 ArcartX 聊天卡片 ID；留空则不发送卡片。
+  mention-card-id: "axs_chat_mention"
+  private-card-id: "axs_chat_private"
+  system-card-id: "axs_chat_system"
+  item-preview-card-id: "axs_item_preview"
+
+  # 全角字符（中文等）占位宽度
+  char-width-full: 31
+  # 半角字符（英文/数字等）占位宽度，这里我已经调到默认配置最佳值
+  char-width-half: 18
+  # 每行文字高度
+  line-height: 36
+  # 文字区最大宽度（超过此值自动换行）
+  max-line-width: 750
+  # 文字区 X 偏移（图标区宽度）
+  text-offset-x: 170
+  # 右侧内边距
+  pad-right: 40
+  # 卡片单行基础高度
+  base-height: 100
+  # 卡片最小宽度
+  min-width: 500
+
+function:
+  mention:
+    # 是否开启 @提及 识别。
+    enabled: true
+    # 是否允许所有玩家被提及；关闭后只允许可见/可接收对象。
+    allow-all: true
+
+  item:
+    # 是否开启 [item] 物品展示。
+    enabled: true
+    token: "[item]"
+    format: "&b[&f{item_name}&b x{item_amount}]"
+    failed-format: "&c[物品不可用]"
+
+  # 自定义组件匹配表；为空时不额外替换。
+  # 示例:
+  # custom-components:
+  #   star:
+  #     enabled: true
+  #     pattern: ":star:"
+  #     replacement: "★"
+  custom-components: {}
+
+filter:
+  # 是否启用本地敏感词与正则过滤。
+  enabled: false
+
+  # 命中后是否直接取消发言；false 表示替换后继续发送。
+  cancel-on-match: false
+
+  # 替换字符或文本。
+  replacement: "*"
+  blocked-words: []
+  blocked-patterns: []
+
+  cloud:
+    # 远程词库开关；开启后会定期拉取 url 内容并并入过滤规则。
+    enabled: false
+    url: ""
+    refresh-minutes: 60
+
+# 频道定义目录，相对于插件数据目录。
+channels-directory: "chat/channels"
+
+migration:
+  trchat:
+    # 旧版 TrChat 配置源目录；仅迁移时使用。
+    source-directory: "TrChat"
+
+    # 迁移报告输出路径，相对于插件数据目录。
+    report-file: "chat/migration-report.yml"

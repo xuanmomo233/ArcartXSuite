@@ -1,0 +1,12 @@
+id: loginview
+name: LoginView
+version: 1.0.2-beta
+main: xuanmo.arcartxsuite.loginview.LoginViewModule
+api-version: 1.0
+
+depends: []
+softdepends: []
+external-depends:
+
+external-softdepends:
+

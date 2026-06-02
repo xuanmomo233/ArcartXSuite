@@ -1,0 +1,22 @@
+﻿# AXS 资源说明
+# 用途: Chat 模块的私聊频道示例；/msg 与 /reply 等会复用该格式。
+# 前置依赖: ArcartX；Chat 模块启用后生效。
+# 启用开关: config.yml -> modules.chat.enabled + modules.chat.password
+# 关联文件: ArcartXChat.yml
+# 重载命令: /axs chat reload
+# 最小使用路径: mode: private + chat 命令权限
+
+enabled: true
+display-name: "私聊"
+mode: "private"
+send-permission: "arcartxsuite.chat.msg"
+receive-permission: "arcartxsuite.chat.msg"
+
+# 私聊通常需要跨服同步，确保目标玩家可跨节点收到消息。
+cross-server: true
+range: 0
+format: "&d[私聊] &f{player_name}&7: &r{message}"
+console-format: "[私聊] {player_name} -> {target_name}: {message}"
+sender-format: "&d[私聊 -> {target_name}] &f{player_name}&7: &r{message}"
+recipient-format: "&d[私聊 <- {player_name}] &f{player_name}&7: &r{message}"
+spy-format: "&5[监听 {player_name} -> {target_name}] &r{message}"

@@ -1,0 +1,19 @@
+config-version: 1
+# AXS RGB
+# 作用: 将 entries.<id>.text 渲染为逐字渐变或扫光文本，并通过 PlaceholderAPI 输出给聊天、TAB、称号或 UI 文本使用。
+# 依赖: ArcartX、PlaceholderAPI。
+# 重载: /axs rgb reload
+# PAPI 输出:
+#   %arcartrgb_welcome% 渲染默认 welcome 文本。
+#   %arcartrgb_momo% 渲染默认 momo 文本。
+#   %arcartrgb_<entryId>% 渲染任意 entries.<entryId> 文本。
+# 可使用的 PAPI: entries.<id>.text 会先按目标玩家解析 PlaceholderAPI，再叠加 RGB 渐变/扫光。
+
+settings:
+  # 是否输出调试日志。
+  debug: false
+
+# 渐变色条目目录，路径相对模块数据目录。
+# 目录下每个 *.yml 文件可包含多个条目，根键即为条目 ID。
+# 同一个文件中可放多个 RGB 定义，不需要每条单独一个文件。
+entries-directory: "entries"

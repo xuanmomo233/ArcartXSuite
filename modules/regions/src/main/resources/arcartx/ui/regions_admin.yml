@@ -1,0 +1,544 @@
+# AXS 资源说明
+# 用途: Regions 管理员区域管理面板，支持区域列表/区域编辑/成员管理。
+# 前置依赖: ArcartX；Regions 模块启用后自动注册。
+# 打开方式: /axs regions admin
+# 数据交互: packetHandler 接收 init 推送；客户端通过 Packet.send('AXS_REGIONS_ADMIN', ...) 发送管理指令。
+
+ui:
+  background: true
+  escClose: true
+  closeDied: true
+  show: true
+  through: false
+  screenScale: true
+  packetHandler:
+    init: |-
+      var.page = packet['page']
+      var.packetId = packet['packetId']
+      var.regions = packet['regions']
+      var.regionCount = packet['regionCount']
+      var.selId = packet['selId']
+      var.selWorld = packet['selWorld']
+      var.selPriority = packet['selPriority']
+      var.selParent = packet['selParent']
+      var.selMin = packet['selMin']
+      var.selMax = packet['selMax']
+      var.selVolume = packet['selVolume']
+      var.selFlags = packet['selFlags']
+      var.selMembers = packet['selMembers']
+
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      root:
+        type: Texture
+        attribute:
+          point: ~middle_center
+          width: 1040
+          height: 680
+          normal: ~25,25,30,240
+          shape: ~round_rect
+          radius: 14
+        effect:
+          stroke:
+            width: 2
+            color: ~220,160,60,180
+          shadow:
+            xOffset: 0
+            yOffset: 4
+            blur: 12
+            color: ~0,0,0,100
+        children:
+          # ═══ 标题栏 ═══
+          header:
+            type: Texture
+            attribute:
+              x: 0
+              y: 0
+              width: 1040
+              height: 58
+              normal: ~40,35,25,255
+              shape: ~round_rect
+              radius: 14
+            children:
+              title_text:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 8
+                  fontSize: 38
+                  texts: '&6&l🛡 区域管理'
+              region_count:
+                type: Text
+                attribute:
+                  x: 860
+                  y: 14
+                  fontSize: 28
+                  texts: "~&7区域数: &f{var.regionCount}"
+
+          # ═══ 左侧导航 ═══
+          nav_bar:
+            type: Texture
+            attribute:
+              x: 0
+              y: 58
+              width: 160
+              height: 622
+              normal: ~30,30,38,255
+            children:
+              nav_regions:
+                type: Texture
+                attribute:
+                  x: 10
+                  y: 16
+                  width: 140
+                  height: 40
+                  normal: "var.page == 'regions' ? '180,130,40,200' : '45,45,55,180'"
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send(var.packetId, 'navigate', 'regions')
+                children:
+                  nav_regions_text:
+                    type: Text
+                    attribute:
+                      x: 70
+                      y: 8
+                      through: true
+                      center: true
+                      fontSize: 28
+                      texts: '&f区域列表'
+
+              nav_edit:
+                type: Texture
+                attribute:
+                  x: 10
+                  y: 66
+                  width: 140
+                  height: 40
+                  normal: "var.page == 'edit' ? '180,130,40,200' : '45,45,55,180'"
+                  shape: ~round_rect
+                  radius: 8
+                children:
+                  nav_edit_text:
+                    type: Text
+                    attribute:
+                      x: 70
+                      y: 8
+                      through: true
+                      center: true
+                      fontSize: 28
+                      texts: '&f编辑'
+
+          # ═══ 内容区 ═══
+          content_area:
+            type: Texture
+            attribute:
+              x: 160
+              y: 58
+              width: 880
+              height: 622
+              normal: ~20,20,25,100
+            children:
+              # ─── 区域列表 ───
+              page_regions:
+                type: Canvas
+                attribute:
+                  x: 20
+                  y: 16
+                  width: 840
+                  height: 590
+                  visible: |-
+                    var.page == 'regions'
+                children:
+                  regions_title:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      fontSize: 36
+                      texts: '&6&l所有区域'
+                  regions_scroll:
+                    type: Scroll
+                    attribute:
+                      x: 0
+                      y: 50
+                      width: 840
+                      height: 530
+                    action:
+                      wheel: |-
+                        self.moveY(self.wheelValue * 40)
+                    children:
+                      regions_list:
+                        val: region_data
+                        type: VStack
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 840
+                          spaceBetween: 6
+                        children:
+                          region_row:
+                            type: Texture
+                            attribute:
+                              entry: var.regions[self.key]
+                              visible: self.entry != null
+                              width: 820
+                              height: 50
+                              normal: ~40,40,50,180
+                              shape: ~round_rect
+                              radius: 6
+                            children:
+                              region_id:
+                                type: Text
+                                attribute:
+                                  x: 16
+                                  y: 12
+                                  through: true
+                                  fontSize: 28
+                                  texts: "~&f{self.parent.entry['id']}"
+                              region_world:
+                                type: Text
+                                attribute:
+                                  x: 260
+                                  y: 14
+                                  through: true
+                                  fontSize: 24
+                                  texts: "~&7{self.parent.entry['world']}"
+                              region_priority:
+                                type: Text
+                                attribute:
+                                  x: 440
+                                  y: 14
+                                  through: true
+                                  fontSize: 24
+                                  texts: "~&7P:{self.parent.entry['priority']}"
+                              region_volume:
+                                type: Text
+                                attribute:
+                                  x: 530
+                                  y: 14
+                                  through: true
+                                  fontSize: 24
+                                  texts: "~&7{self.parent.entry['volume']}格"
+                              btn_edit:
+                                type: Texture
+                                attribute:
+                                  x: 650
+                                  y: 8
+                                  width: 70
+                                  height: 34
+                                  normal: ~60,140,220,200
+                                  shape: ~round_rect
+                                  radius: 6
+                                action:
+                                  click: |-
+                                    Packet.send(var.packetId, 'select_region', self.parent.entry['id'])
+                                children:
+                                  btn_edit_t:
+                                    type: Text
+                                    attribute:
+                                      x: 35
+                                      y: 5
+                                      through: true
+                                      center: true
+                                      fontSize: 22
+                                      texts: '&f编辑'
+                              btn_delete:
+                                type: Texture
+                                attribute:
+                                  x: 730
+                                  y: 8
+                                  width: 70
+                                  height: 34
+                                  normal: ~200,60,60,200
+                                  shape: ~round_rect
+                                  radius: 6
+                                action:
+                                  click: |-
+                                    Packet.send(var.packetId, 'delete_region', self.parent.entry['id'])
+                                children:
+                                  btn_delete_t:
+                                    type: Text
+                                    attribute:
+                                      x: 35
+                                      y: 5
+                                      through: true
+                                      center: true
+                                      fontSize: 22
+                                      texts: '&f删除'
+
+              # ─── 区域编辑视图 ───
+              page_edit:
+                type: Canvas
+                attribute:
+                  x: 20
+                  y: 16
+                  width: 840
+                  height: 590
+                  visible: |-
+                    var.page == 'edit'
+                children:
+                  edit_title:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      fontSize: 36
+                      texts: "~&6&l编辑: &f{var.selId}"
+                  edit_info:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 46
+                      fontSize: 26
+                      texts: "~&7世界: &f{var.selWorld}  &7优先级: &f{var.selPriority}  &7父: &f{var.selParent != '' ? var.selParent : '无'}"
+                  edit_bounds:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 78
+                      fontSize: 26
+                      texts: "~&7范围: &f{var.selMin} ~ {var.selMax}  &7体积: &f{var.selVolume}"
+
+                  # 成员列表
+                  members_label:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 118
+                      fontSize: 28
+                      texts: '&b成员:'
+                  members_scroll:
+                    type: Scroll
+                    attribute:
+                      x: 0
+                      y: 150
+                      width: 400
+                      height: 140
+                    action:
+                      wheel: |-
+                        self.moveY(self.wheelValue * 34)
+                    children:
+                      members_list:
+                        val: member_data
+                        type: VStack
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 400
+                          spaceBetween: 4
+                        children:
+                          member_row:
+                            type: Texture
+                            attribute:
+                              entry: var.selMembers[self.key]
+                              visible: self.entry != null
+                              width: 380
+                              height: 34
+                              normal: ~38,38,48,160
+                              shape: ~round_rect
+                              radius: 4
+                            children:
+                              m_name:
+                                type: Text
+                                attribute:
+                                  x: 12
+                                  y: 5
+                                  through: true
+                                  fontSize: 22
+                                  texts: "~&f{self.parent.entry['name']}"
+                              m_role:
+                                type: Text
+                                attribute:
+                                  x: 180
+                                  y: 6
+                                  through: true
+                                  fontSize: 20
+                                  texts: "~{self.parent.entry['role'] == 'owner' ? '&6所有者' : '&b成员'}"
+                              btn_remove_member:
+                                type: Texture
+                                attribute:
+                                  x: 310
+                                  y: 3
+                                  width: 60
+                                  height: 28
+                                  normal: ~180,50,50,180
+                                  shape: ~round_rect
+                                  radius: 4
+                                action:
+                                  click: |-
+                                    Packet.send(var.packetId, 'remove_member', var.selId, self.parent.entry['uuid'])
+                                children:
+                                  btn_rm_t:
+                                    type: Text
+                                    attribute:
+                                      x: 30
+                                      y: 3
+                                      through: true
+                                      center: true
+                                      fontSize: 20
+                                      texts: '&f移除'
+
+                  # 标志列表
+                  flags_label:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 300
+                      fontSize: 28
+                      texts: '&e标志设置:'
+                  flags_scroll:
+                    type: Scroll
+                    attribute:
+                      x: 0
+                      y: 332
+                      width: 840
+                      height: 250
+                    action:
+                      wheel: |-
+                        self.moveY(self.wheelValue * 38)
+                    children:
+                      flags_list:
+                        val: flag_data
+                        type: VStack
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 840
+                          spaceBetween: 4
+                        children:
+                          flag_row:
+                            type: Texture
+                            attribute:
+                              entry: var.selFlags[self.key]
+                              visible: self.entry != null
+                              width: 820
+                              height: 38
+                              normal: ~38,38,48,160
+                              shape: ~round_rect
+                              radius: 4
+                            children:
+                              f_name:
+                                type: Text
+                                attribute:
+                                  x: 12
+                                  y: 7
+                                  through: true
+                                  fontSize: 24
+                                  texts: "~&b{self.parent.entry['key']}"
+                              f_desc:
+                                type: Text
+                                attribute:
+                                  x: 200
+                                  y: 8
+                                  through: true
+                                  fontSize: 22
+                                  texts: "~&7{self.parent.entry['desc']}"
+                              f_state:
+                                type: Text
+                                attribute:
+                                  x: 520
+                                  y: 8
+                                  through: true
+                                  fontSize: 22
+                                  texts: "~{self.parent.entry['state'] == 'allow' ? '&a允许' : self.parent.entry['state'] == 'deny' ? '&c拒绝' : '&8未设置'}"
+                              btn_allow:
+                                type: Texture
+                                attribute:
+                                  x: 620
+                                  y: 4
+                                  width: 56
+                                  height: 30
+                                  normal: ~40,140,60,180
+                                  shape: ~round_rect
+                                  radius: 4
+                                action:
+                                  click: |-
+                                    Packet.send(var.packetId, 'set_flag', var.selId, self.parent.entry['key'], 'allow')
+                                children:
+                                  btn_allow_t:
+                                    type: Text
+                                    attribute:
+                                      x: 28
+                                      y: 4
+                                      through: true
+                                      center: true
+                                      fontSize: 20
+                                      texts: '&f允许'
+                              btn_deny:
+                                type: Texture
+                                attribute:
+                                  x: 684
+                                  y: 4
+                                  width: 56
+                                  height: 30
+                                  normal: ~180,50,50,180
+                                  shape: ~round_rect
+                                  radius: 4
+                                action:
+                                  click: |-
+                                    Packet.send(var.packetId, 'set_flag', var.selId, self.parent.entry['key'], 'deny')
+                                children:
+                                  btn_deny_t:
+                                    type: Text
+                                    attribute:
+                                      x: 28
+                                      y: 4
+                                      through: true
+                                      center: true
+                                      fontSize: 20
+                                      texts: '&f拒绝'
+                              btn_clear_flag:
+                                type: Texture
+                                attribute:
+                                  x: 748
+                                  y: 4
+                                  width: 56
+                                  height: 30
+                                  normal: ~60,60,70,180
+                                  shape: ~round_rect
+                                  radius: 4
+                                action:
+                                  click: |-
+                                    Packet.send(var.packetId, 'remove_flag', var.selId, self.parent.entry['key'])
+                                children:
+                                  btn_clear_t:
+                                    type: Text
+                                    attribute:
+                                      x: 28
+                                      y: 4
+                                      through: true
+                                      center: true
+                                      fontSize: 20
+                                      texts: '&7清除'
+
+                  btn_back:
+                    type: Texture
+                    attribute:
+                      x: 720
+                      y: 0
+                      width: 100
+                      height: 36
+                      normal: ~60,60,70,200
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      click: |-
+                        Packet.send(var.packetId, 'navigate', 'regions')
+                    children:
+                      btn_back_text:
+                        type: Text
+                        attribute:
+                          x: 50
+                          y: 5
+                          through: true
+                          center: true
+                          fontSize: 26
+                          texts: '&f← 返回'

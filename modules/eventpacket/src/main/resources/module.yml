@@ -1,0 +1,13 @@
+id: eventpacket
+name: EventPacket
+version: 1.0.2-beta
+main: xuanmo.arcartxsuite.eventpacket.EventPacketModule
+api-version: 1.0
+
+depends: []
+softdepends: []
+external-depends:
+
+external-softdepends:
+  - PlaceholderAPI
+

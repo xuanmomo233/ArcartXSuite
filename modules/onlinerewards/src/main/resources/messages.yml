@@ -1,0 +1,54 @@
+# ============================================================
+#  OnlineRewards 模块消息文件
+# ------------------------------------------------------------
+#  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
+#  修改后执行 /axs reload onlinerewards 即可生效。
+#  注意：签到/奖励结果等业务文本仍由 config.yml 与服务层控制。
+# ============================================================
+
+prefix: "&3◆ &6ArcartXSuite &7| &r"
+
+# ── 通用 ──────────────────────────────────────────────
+common:
+  player-only: "&c该命令只能由玩家执行。"
+  no-permission: "&c你没有权限执行这个命令。"
+  module-disabled: "&cOnlineRewards 模块当前未启用。"
+  service-down: "&c服务未启动。"
+  player-offline: "&c玩家不在线: {0}"
+
+# ── 玩家命令 ──────────────────────────────────────────
+player:
+  usage: "&e用法: /{0} open|status|signin|top <daily|weekly|monthly|total> [page]"
+  status:
+    online: "&7今日在线: &f{0}&7 | 本周在线: &f{1}"
+    monthly: "&7本月在线: &f{0}&7 | 总在线: &f{1}"
+    stage: "&7每日阶段: &f{0}"
+    signin: "&7签到状态: &f{0}&7 | 连续: &f{1}&7 | 累计: &f{2}"
+    signed-yes: "今日已签到"
+    signed-no: "今日未签到"
+  top:
+    usage: "&e用法: /{0} top <daily|weekly|monthly|total> [page]"
+    invalid-scope: "&c无效排行榜类型: {0}"
+    header: "&7排行榜: &f{0}&7 | 页数: &f{1}"
+    empty: "&e当前排行榜暂无数据。"
+    entry: "&f#{0}&7 {1}&7 | 时长: &f{2}&7 | 分钟: &f{3}"
+
+# ── 管理命令 ──────────────────────────────────────────
+admin:
+  reload-hint: "&e请使用 /{0} reload onlinerewards"
+  unknown: "&e未知命令，使用 /{0} onlinerewards help"
+  help:
+    title: "&6OnlineRewards 管理命令"
+    status: "&7{0} status&f - 查看模块状态"
+    time: "&7{0} add|remove|set <时长> <玩家>&f - 修改在线时长"
+    card: "&7{0} card add|remove|set <数量> <玩家>&f - 修改补签卡"
+  status:
+    title: "&6OnlineRewards 状态"
+    cached: "&7缓存玩家: &f{0}"
+    redis: "&7Redis: &f{0}"
+  time:
+    usage: "&e用法: /axs onlinerewards {0} <时长> <玩家>"
+    invalid: "&c无效时长: {0} (支持 30m/2h/1d)"
+  card:
+    usage: "&e用法: /axs onlinerewards card add|remove|set <数量> <玩家>"
+    invalid-amount: "&c无效数量: {0}"

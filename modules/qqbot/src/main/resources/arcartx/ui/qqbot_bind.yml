@@ -1,0 +1,347 @@
+# AXS QQBot 绑定中心
+# 玩家可在此查看绑定状态、生成验证码、解绑等
+
+ui:
+  isHud: false
+  defaultOpen: false
+  through: false
+  background: true
+  escClose: true
+  closeDied: true
+  show: true
+  jei: false
+  level: 15
+  screenScale: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.bound = packet['bound']
+      var.qqId = packet['qqId']
+      var.playerName = packet['playerName']
+      var.bindTime = packet['bindTime']
+      var.code = ''
+      var.codeExpire = 0
+      var.result = ''
+      var.resultType = ''
+      var.tab = 'status'
+      var.messages = packet['messages']
+      var.msgCount = packet['msgCount']
+    update: |-
+      var.bound = packet['bound']
+      var.qqId = packet['qqId']
+      var.bindTime = packet['bindTime']
+      var.result = packet['message']
+      var.resultType = packet['type']
+    code: |-
+      var.code = packet['code']
+      var.codeExpire = packet['expire']
+    messages: |-
+      var.messages = packet['messages']
+      var.msgCount = packet['msgCount']
+    result: |-
+      var.result = packet['message']
+      var.resultType = packet['type']
+  action:
+    load: |-
+      var.packetId = 'AXS_qqbot'
+      var.bound = false
+      var.qqId = ''
+      var.playerName = ''
+      var.bindTime = ''
+      var.code = ''
+      var.codeExpire = 0
+      var.result = ''
+      var.resultType = ''
+      var.tab = 'status'
+      var.messages = []
+      var.msgCount = 0
+      var.replyText = ''
+
+controls:
+  自适应:
+    type: Adaptive
+    attribute:
+      point: ~middle_center
+      width: 1920
+      height: 1080
+    children:
+      面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 720
+          height: 460
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~26,32,42,235
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,180
+          # ── 顶部标题栏 ──
+          标题栏强调:
+            type: Texture
+            attribute:
+              x: 28
+              y: 18
+              width: 5
+              height: 48
+              normal: ~80,180,255,255
+              shape: ~round_rect
+              radius: 3
+          标题:
+            type: Text
+            attribute:
+              x: 44
+              y: 20
+              texts: '&f&lQQ 绑定中心'
+              fontSize: 49
+          关闭按钮:
+            type: Texture
+            attribute:
+              x: 660
+              y: 18
+              width: 40
+              height: 40
+              normal: ~180,50,50,200
+              hover: ~220,70,70,255
+              shape: ~round_rect
+              radius: 10
+              texts: '&f✕'
+              center: true
+              fontSize: 36
+            action:
+              clickLeft: |-
+                self.close()
+          # ── Tab 切换按钮 ──
+          tab_状态:
+            type: Texture
+            attribute:
+              x: 28
+              y: 76
+              width: 130
+              height: 38
+              normal: "var.tab == 'status' ? '80,180,255,220' : '50,55,65,200'"
+              hover: ~100,200,255,255
+              shape: ~round_rect
+              radius: 10
+              texts: '&f绑定状态'
+              center: true
+              fontSize: 34
+            action:
+              clickLeft: |-
+                var.tab = 'status'
+          tab_消息:
+            type: Texture
+            attribute:
+              x: 168
+              y: 76
+              width: 130
+              height: 38
+              normal: "var.tab == 'messages' ? '80,180,255,220' : '50,55,65,200'"
+              hover: ~100,200,255,255
+              shape: ~round_rect
+              radius: 10
+              texts: "'&f群消息 (' + var.msgCount + ')'"
+              center: true
+              fontSize: 34
+            action:
+              clickLeft: |-
+                var.tab = 'messages'
+                Packet.send(var.packetId, 'fetch_messages')
+          # ── 绑定状态页 ──
+          状态容器:
+            type: Canvas
+            attribute:
+              x: 28
+              y: 126
+              width: 664
+              height: 310
+              visible: var.tab == 'status'
+            children:
+              绑定状态图标:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 8
+                  width: 48
+                  height: 48
+                  normal: "var.bound ? '80,200,120,255' : '200,80,80,255'"
+                  shape: ~round_rect
+                  radius: 24
+                  texts: "var.bound ? '&f✔' : '&f✘'"
+                  center: true
+                  fontSize: 36
+              绑定状态文字:
+                type: Text
+                attribute:
+                  x: 60
+                  y: 10
+                  texts: "var.bound ? '&a已绑定 QQ: &f' + var.qqId : '&c未绑定 QQ 账号'"
+                  fontSize: 38
+              绑定时间:
+                type: Text
+                attribute:
+                  x: 60
+                  y: 42
+                  texts: "var.bound ? '&7绑定时间: ' + var.bindTime : '&7请在QQ群获取验证码后绑定'"
+                  fontSize: 28
+              # 生成验证码按钮
+              获取验证码按钮:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 80
+                  width: 200
+                  height: 44
+                  normal: ~60,140,200,220
+                  hover: ~80,160,220,255
+                  shape: ~round_rect
+                  radius: 12
+                  texts: '&f获取验证码'
+                  center: true
+                  fontSize: 36
+                  visible: "!var.bound"
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'request_code')
+              # 验证码显示
+              验证码显示:
+                type: Text
+                attribute:
+                  x: 220
+                  y: 92
+                  texts: "var.code != '' ? '&e验证码: &f&l' + var.code + ' &7(' + var.codeExpire + 's)' : ''"
+                  fontSize: 36
+                  visible: "!var.bound && var.code != ''"
+              # 解绑按钮
+              解绑按钮:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 80
+                  width: 160
+                  height: 44
+                  normal: ~180,80,60,220
+                  hover: ~210,100,80,255
+                  shape: ~round_rect
+                  radius: 12
+                  texts: '&f解除绑定'
+                  center: true
+                  fontSize: 36
+                  visible: var.bound
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'unbind')
+              # 结果消息
+              结果消息:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 144
+                  texts: "var.resultType == 'success' ? '&a' + var.result : (var.resultType == 'error' ? '&c' + var.result : '&7' + var.result)"
+                  fontSize: 32
+                  visible: var.result != ''
+          # ── 群消息页 ──
+          消息容器:
+            type: Canvas
+            attribute:
+              x: 28
+              y: 126
+              width: 664
+              height: 310
+              visible: var.tab == 'messages'
+            children:
+              消息滚动区:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 664
+                  height: 260
+                children:
+                  纵向滑块:
+                    type: Texture
+                    attribute:
+                      point: ~top_right
+                      width: 8
+                      height: 60
+                      normal: ~120,120,130,180
+                      shape: ~round_rect
+                      radius: 4
+                      maxDragY: 260 - 60
+                  消息滚动栏:
+                    type: Scroll
+                    attribute:
+                      width: 648
+                      height: 260
+                      moveY: self.parent['纵向滑块'].getDragYRatio()
+                    children:
+                      消息列表:
+                        val: msgList
+                        type: VStack
+                        attribute:
+                          width: 640
+                          spaceBetween: 4
+                        children:
+                          消息条目:
+                            type: Texture
+                            attribute:
+                              entry: var.messages[self.key]
+                              visible: self.entry != null
+                              width: 636
+                              height: 40
+                              normal: ~40,44,54,180
+                              shape: ~round_rect
+                              radius: 6
+                            children:
+                              消息内容:
+                                type: Text
+                                attribute:
+                                  x: 10
+                                  y: 6
+                                  through: true
+                                  texts: "'&b' + self.parent.entry['nick'] + ' &7' + self.parent.entry['time'] + '\n&f' + self.parent.entry['msg']"
+                                  fontSize: 26
+              # 回复区
+              回复输入框:
+                type: TextBox
+                attribute:
+                  x: 0
+                  y: 268
+                  width: 540
+                  height: 36
+                  length: 200
+                  emptyText: ~输入消息发送到QQ群...
+                  fontSize: 28
+                  background: ~35,38,48,240
+                action:
+                  textChange: |-
+                    var.replyText = self.getContent()
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,120
+              发送按钮:
+                type: Texture
+                attribute:
+                  x: 550
+                  y: 268
+                  width: 114
+                  height: 36
+                  normal: ~60,140,200,220
+                  hover: ~80,160,220,255
+                  shape: ~round_rect
+                  radius: 10
+                  texts: '&f发送'
+                  center: true
+                  fontSize: 30
+                action:
+                  clickLeft: |-
+                    if(var.replyText != ''){
+                      Packet.send(var.packetId, 'send_message', var.replyText)
+                      var.replyText = ''
+                    }

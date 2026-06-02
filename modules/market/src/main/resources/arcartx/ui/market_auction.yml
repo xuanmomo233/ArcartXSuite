@@ -1,0 +1,616 @@
+# AXS Market — 拍卖行主界面
+# 打开方式: /market 或 /market auction
+# 数据交互: packetHandler init/update；客户端 Packet.send(var.packetId, action, ...)
+
+ui:
+  isHud: false
+  defaultOpen: false
+  hide:
+    - HUD
+  through: false
+  background: false
+  escClose: true
+  closeDied: true
+  show: true
+  jei: false
+  level: 8
+  itemSize: 16
+  screenScale: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.page = packet['page']
+      var.totalPages = packet['totalPages']
+      var.pageText = packet['pageText']
+      var.currentCategory = packet['currentCategory']
+      var.categories = packet['categories']
+      var.categoryTexts = packet['categoryTexts']
+      var.listings = packet['listings']
+      var.listingTexts = packet['listingTexts']
+      var.readListingSlots(packet)
+    update: |-
+      var.packetId = packet['packetId']
+      var.page = packet['page']
+      var.totalPages = packet['totalPages']
+      var.pageText = packet['pageText']
+      var.currentCategory = packet['currentCategory']
+      var.categories = packet['categories']
+      var.categoryTexts = packet['categoryTexts']
+      var.listings = packet['listings']
+      var.listingTexts = packet['listingTexts']
+      var.readListingSlots(packet)
+  action:
+    load: |-
+      var.packetId = 'AXS_MARKET'
+      var.page = 0
+      var.totalPages = 1
+      var.pageText = '1/1'
+      var.currentCategory = 'all'
+      var.categories = {}
+      var.categoryTexts = {}
+      var.listings = {}
+      var.listingTexts = {}
+      var.search = ''
+      var.categoryScrollRatio = 0
+      var.listingScrollRatio = 0
+      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      var.readListingSlots = -> {
+        source = args[0]
+        for(i in range(0,19)){
+          idx = i.round()
+          si = idx + ''
+          entry = var.listings[si]
+          if(entry == null){
+            next
+          }
+          itemJson = source['itemJson' + si]
+          if(itemJson == null || itemJson == ''){
+            itemJson = var.emptyItemJson
+          }
+          control = val.物品列表['物品行']
+          if(control != null){
+            copies = control.copies
+            if(copies != null){
+              target = copies[si]
+              if(target != null){
+                slot = target['物品图标']
+                if(slot != null){
+                  slot.setItemIcon(itemJson)
+                }
+              }
+            }
+          }
+        }
+      }
+    open: |-
+      Packet.send(var.packetId, 'auction_list', '0', '', '')
+
+controls:
+  根:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      主面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 1500
+          height: 900
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~35,35,45,235
+              shape: ~round_rect
+              radius: 24
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,180
+              shadow:
+                xOffset: 2
+                yOffset: 2
+                blur: 6
+                color: ~0,0,0,120
+
+          标题:
+            type: Text
+            attribute:
+              x: 42
+              y: 24
+              texts: '&6&l全球拍卖行'
+              fontSize: 56
+          副标题:
+            type: Text
+            attribute:
+              x: 42
+              y: 78
+              texts: "~&7第 {var.page + 1}/{var.totalPages} 页"
+              fontSize: 32
+
+          # ── 顶部按钮栏 ──────────────────────────────
+          全部按钮:
+            type: Texture
+            attribute:
+              x: 340
+              y: 28
+              width: 110
+              height: 48
+              normal: "var.currentCategory == 'all' ? '80,160,255,220' : '65,65,75,220'"
+              hover: ~Frosted:0;255,255,255,180
+              shape: ~round_rect
+              radius: 14
+            action:
+              clickLeft: |-
+                var.currentCategory = 'all'
+                Packet.send(var.packetId, 'auction_list', '0', 'all', var.search)
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,120
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 55
+                  y: 12
+                  through: true
+                  center: true
+                  fontSize: 36
+                  texts: '&f全部'
+
+          我的上架按钮:
+            type: Texture
+            attribute:
+              x: 460
+              y: 28
+              width: 130
+              height: 48
+              normal: ~65,65,75,220
+              hover: ~Frosted:0;255,255,255,180
+              shape: ~round_rect
+              radius: 14
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'auction_list', '0', 'my', '')
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,120
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 65
+                  y: 12
+                  through: true
+                  center: true
+                  fontSize: 36
+                  texts: '&f我的上架'
+
+          刷新按钮:
+            type: Texture
+            attribute:
+              x: 600
+              y: 28
+              width: 90
+              height: 48
+              normal: ~65,65,75,220
+              hover: ~Frosted:0;255,255,255,180
+              shape: ~round_rect
+              radius: 14
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'auction_list', var.page + '', var.currentCategory, var.search)
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,120
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 45
+                  y: 12
+                  through: true
+                  center: true
+                  fontSize: 36
+                  texts: '&f刷新'
+
+          # ── 搜索框 ──────────────────────────────────
+          搜索区:
+            type: Texture
+            attribute:
+              x: 1100
+              y: 28
+              width: 360
+              height: 48
+              normal: ~50,50,60,220
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,120
+            children:
+              搜索框:
+                type: TextBox
+                attribute:
+                  x: 12
+                  y: 8
+                  width: 240
+                  height: 32
+                  length: 32
+                  emptyText: ~搜索物品...
+                  fontSize: 28
+                  background: ~60,60,70,200
+                  shape: ~round_rect
+                  radius: 10
+                action:
+                  textChange: |-
+                    var.search = self.getContent()
+                  enter: |-
+                    Packet.send(var.packetId, 'auction_list', '0', var.currentCategory, var.search)
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,80
+              搜索按钮:
+                type: Texture
+                attribute:
+                  x: 266
+                  y: 6
+                  width: 80
+                  height: 36
+                  normal: ~80,160,255,200
+                  hover: ~Frosted:0;255,255,255,220
+                  shape: ~round_rect
+                  radius: 10
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'auction_list', '0', var.currentCategory, var.search)
+                children:
+                  文字:
+                    type: Text
+                    attribute:
+                      x: 40
+                      y: 6
+                      through: true
+                      center: true
+                      fontSize: 28
+                      texts: '&f搜索'
+
+          # ── 左侧分类栏 ──────────────────────────────
+          分类卡片:
+            type: Texture
+            attribute:
+              x: 32
+              y: 110
+              width: 230
+              height: 750
+              normal: ~50,50,60,180
+              shape: ~round_rect
+              radius: 20
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,100
+            children:
+              分类标题:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 16
+                  texts: '&e分类筛选'
+                  fontSize: 36
+              分类滚动:
+                type: Scroll
+                val: 分类滚动
+                attribute:
+                  x: 14
+                  y: 60
+                  width: 202
+                  height: 670
+                  moveY: var.categoryScrollRatio
+                action:
+                  wheel: |-
+                    var.categoryScrollRatio = Math.max(0, Math.min(1, var.categoryScrollRatio + self.wheelValue * 0.08))
+                    self.moveY = var.categoryScrollRatio
+                children:
+                  分类列表:
+                    val: 分类列表
+                    type: VStack
+                    attribute:
+                      width: 190
+                      spaceBetween: 8
+                    children:
+                      分类项:
+                        type: Texture
+                        attribute:
+                          entry: var.categories[self.key]
+                          visible: self.entry != null
+                          width: 190
+                          height: 44
+                          normal: "self.key == var.currentCategory ? '80,160,255,220' : '70,70,80,200'"
+                          hover: ~Frosted:0;255,255,255,200
+                          shape: ~round_rect
+                          radius: 12
+                          texts: "var.categoryTexts[self.key]"
+                          center: true
+                          fontSize: 32
+                        action:
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'auction_list', '0', self.key, var.search)
+                        effect:
+                          stroke:
+                            width: 1
+                            color: ~80,180,255,80
+              分类观察:
+                type: Observer
+                attribute:
+                  target: val.分类列表['分类项']
+                  subscribe: var.categories
+                  maxSize: 32
+
+          # ── 物品列表区 ──────────────────────────────
+          物品卡片:
+            type: Texture
+            attribute:
+              x: 280
+              y: 110
+              width: 1188
+              height: 700
+              normal: ~50,50,60,180
+              shape: ~round_rect
+              radius: 20
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,100
+            children:
+              物品滚动:
+                type: Scroll
+                val: 物品滚动
+                attribute:
+                  x: 10
+                  y: 10
+                  width: 1168
+                  height: 680
+                  moveY: var.listingScrollRatio
+                action:
+                  wheel: |-
+                    var.listingScrollRatio = Math.max(0, Math.min(1, var.listingScrollRatio + self.wheelValue * 0.05))
+                    self.moveY = var.listingScrollRatio
+                children:
+                  物品列表:
+                    val: 物品列表
+                    type: VStack
+                    attribute:
+                      width: 1148
+                      spaceBetween: 6
+                    children:
+                      物品行:
+                        type: Texture
+                        attribute:
+                          entry: var.listings[self.key]
+                          visible: self.entry != null
+                          width: 1148
+                          height: 72
+                          normal: ~60,60,70,200
+                          hover: ~Frosted:0;80,140,220,200
+                          shape: ~round_rect
+                          radius: 14
+                        action:
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'auction_buy', self.entry['id'] + '')
+                        effect:
+                          stroke:
+                            width: 1
+                            color: ~80,180,255,60
+                        children:
+                          物品图标:
+                            type: Slot
+                            attribute:
+                              slotType: ~Icon
+                              itemScale: 0.72
+                              x: 8
+                              y: 4
+                              width: 64
+                              height: 64
+                              normal: ~45,45,55,200
+                              shape: ~round_rect
+                              radius: 10
+                              through: true
+                          名称:
+                            type: Text
+                            attribute:
+                              x: 84
+                              y: 8
+                              width: 280
+                              texts: "self.parent.entry != null ? '&f' + self.parent.entry['name'] : ''"
+                              fontSize: 36
+                              through: true
+                          卖家:
+                            type: Text
+                            attribute:
+                              x: 84
+                              y: 40
+                              width: 200
+                              texts: "self.parent.entry != null ? '&7卖家: &b' + self.parent.entry['seller'] : ''"
+                              fontSize: 22
+                              through: true
+                          价格:
+                            type: Text
+                            attribute:
+                              x: 400
+                              y: 14
+                              width: 260
+                              texts: "self.parent.entry != null ? '&e一口价: &f' + self.parent.entry['price'] : ''"
+                              fontSize: 32
+                              through: true
+                          竞价:
+                            type: Text
+                            attribute:
+                              x: 400
+                              y: 44
+                              width: 260
+                              texts: "self.parent.entry != null ? '&7当前出价: &f' + self.parent.entry['bid'] : ''"
+                              fontSize: 22
+                              through: true
+                          剩余时间:
+                            type: Text
+                            attribute:
+                              x: 700
+                              y: 14
+                              width: 200
+                              texts: "self.parent.entry != null ? '&a' + self.parent.entry['timeLeft'] : ''"
+                              fontSize: 28
+                              through: true
+                          货币:
+                            type: Text
+                            attribute:
+                              x: 700
+                              y: 44
+                              width: 200
+                              texts: "self.parent.entry != null ? '&7' + self.parent.entry['currencyName'] : ''"
+                              fontSize: 22
+                              through: true
+                          购买按钮:
+                            type: Texture
+                            attribute:
+                              x: 950
+                              y: 10
+                              width: 100
+                              height: 52
+                              normal: ~60,180,100,200
+                              hover: ~Frosted:0;80,220,120,230
+                              shape: ~round_rect
+                              radius: 10
+                            action:
+                              clickLeft: |-
+                                Packet.send(var.packetId, 'auction_buy', self.parent.parent.entry['id'] + '')
+                            effect:
+                              stroke:
+                                width: 1
+                                color: ~80,255,140,120
+                            children:
+                              文字:
+                                type: Text
+                                attribute:
+                                  x: 50
+                                  y: 14
+                                  through: true
+                                  center: true
+                                  fontSize: 28
+                                  texts: '&f购买'
+                          取消按钮:
+                            type: Texture
+                            attribute:
+                              x: 1060
+                              y: 10
+                              width: 76
+                              height: 52
+                              visible: "self.parent.entry != null && self.parent.entry['canCancel']"
+                              normal: ~180,80,80,200
+                              hover: ~Frosted:0;220,100,100,230
+                              shape: ~round_rect
+                              radius: 10
+                            action:
+                              clickLeft: |-
+                                Packet.send(var.packetId, 'auction_cancel', self.parent.parent.entry['id'] + '')
+                            effect:
+                              stroke:
+                                width: 1
+                                color: ~255,120,120,120
+                            children:
+                              文字:
+                                type: Text
+                                attribute:
+                                  x: 38
+                                  y: 14
+                                  through: true
+                                  center: true
+                                  fontSize: 28
+                                  texts: '&f取消'
+              物品观察:
+                type: Observer
+                attribute:
+                  target: val.物品列表['物品行']
+                  subscribe: var.listings
+                  maxSize: 20
+
+          # ── 底部分页栏 ──────────────────────────────
+          上一页:
+            type: Texture
+            attribute:
+              x: 280
+              y: 822
+              width: 120
+              height: 48
+              normal: ~65,65,75,220
+              hover: ~Frosted:0;255,255,255,180
+              shape: ~round_rect
+              radius: 14
+            action:
+              clickLeft: |-
+                if(var.page > 0){
+                  Packet.send(var.packetId, 'auction_list', (var.page - 1) + '', var.currentCategory, var.search)
+                }
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,120
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 60
+                  y: 12
+                  through: true
+                  center: true
+                  fontSize: 36
+                  texts: '&f< 上一页'
+
+          页码:
+            type: Text
+            attribute:
+              x: 750
+              y: 834
+              center: true
+              texts: "~&7第 &f{var.page + 1} &7/ &f{var.totalPages} &7页"
+              fontSize: 32
+
+          下一页:
+            type: Texture
+            attribute:
+              x: 1348
+              y: 822
+              width: 120
+              height: 48
+              normal: ~65,65,75,220
+              hover: ~Frosted:0;255,255,255,180
+              shape: ~round_rect
+              radius: 14
+            action:
+              clickLeft: |-
+                if(var.page < var.totalPages - 1){
+                  Packet.send(var.packetId, 'auction_list', (var.page + 1) + '', var.currentCategory, var.search)
+                }
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,120
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 60
+                  y: 12
+                  through: true
+                  center: true
+                  fontSize: 36
+                  texts: '&f下一页 >'

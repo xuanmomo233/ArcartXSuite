@@ -1,0 +1,48 @@
+# ============================================================
+#  CombatEffect 模块消息文件
+# ------------------------------------------------------------
+#  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
+#  修改后执行 /axs reload combateffect 即可生效。
+# ============================================================
+
+prefix: "&3◆ &6CombatEffect &7| &r"
+
+# ── 通用 ──────────────────────────────────────────────
+common:
+  reload-hint: "&e请使用 /{0} reload combateffect"
+  unknown: "&e未知子命令。使用 {0} help 查看帮助。"
+  enabled: "&a已启用"
+  disabled: "&c未启用"
+
+# ── help ──────────────────────────────────────────────
+help:
+  title: "&6CombatEffect v{0}"
+  status: "&7{0} status&f — 查看模块状态"
+  reload: "&7{0} reload&f — 重载配置"
+  send: "&7{0} send <包ID> <玩家> [k=v ...]&f — 按包定义发送"
+  direct: "&7{0} direct <uiId> <handler> <玩家> [k=v ...]&f — 直接发包"
+
+# ── status ────────────────────────────────────────────
+status:
+  title: "&6CombatEffect v{0}&a 运行中"
+  packets: "&7包定义: &f{0}"
+  packets-none: "未加载"
+  display: "&7战斗显示: {0}"
+  death-buffer: "&7死亡缓冲: {0}"
+  combo: "&7连击追踪: {0}"
+  keybind: "&7按键触发: {0}"
+  state: "&7状态触发: {0}"
+
+# ── send ──────────────────────────────────────────────
+send:
+  usage: "&e用法: {0} send <包ID> <玩家> [k=v ...]"
+  player-offline: "&c玩家 '{0}' 不在线。"
+  success: "&a已发送包 '{0}' 给 {1}"
+  fail: "&c发送失败（包不存在或 ArcartX 不可用）"
+
+# ── direct ────────────────────────────────────────────
+direct:
+  usage: "&e用法: {0} direct <uiId> <handler> <玩家> [k=v ...]"
+  player-offline: "&c玩家 '{0}' 不在线。"
+  success: "&a已发送 {0}.{1} 给 {2}"
+  fail: "&c发送失败（ArcartX 不可用）"

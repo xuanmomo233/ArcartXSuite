@@ -1,0 +1,22 @@
+﻿# AXS 资源说明
+# 用途: Prop 模块按键映射配置；定义客户端按键分类与 Slot 绑定。
+# 前置依赖: ArcartX；Prop 模块启用后生效。
+# 启用开关: config.yml -> modules.prop.enabled + modules.prop.password
+# 关联文件: ArcartXProp.yml、prop/props/*.yml
+# 重载命令: /axs prop reload
+# 最小使用路径: category + keys.<显示名>.defaultKey + slot
+
+# 客户端按键分类名。
+category: "ArcartX 快捷道具按键"
+
+keys:
+  # 顶层键是显示给玩家的按键名称。
+  快捷道具1:
+    defaultKey: "Z"
+    slot: Slot1
+  快捷道具2:
+    defaultKey: "X"
+    slot: Slot2
+  快捷道具3:
+    defaultKey: "C"
+    slot: Slot3

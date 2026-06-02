@@ -1,0 +1,74 @@
+﻿ui:
+  isHud: true
+  defaultOpen: false
+  through: false
+  background: false
+  closeDied: false
+  show: true
+  level: 1
+  packetHandler:
+    play: |-
+      var.subtitleVisible = true
+      var.subtitleText = packet['text']
+      var.subtitleLength = packet['length']
+      var.subtitleTime = packet['time']
+      var.subtitleShowBackground = packet['showBackground']
+      var.subtitleAnimation = Lerp(0, var.subtitleLength, var.subtitleTime)
+    close: |-
+      var.subtitleVisible = false
+      var.subtitleText = ''
+      var.subtitleLength = 0
+      var.subtitleTime = 0
+      var.subtitleShowBackground = false
+      var.subtitleAnimation = Lerp(0, 0, 1)
+  action:
+    load: |-
+      var.subtitleVisible = false
+      var.subtitleText = ''
+      var.subtitleLength = 0
+      var.subtitleTime = 0
+      var.subtitleShowBackground = false
+      var.subtitleAnimation = Lerp(0, 0, 1)
+
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      subtitle_panel:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          x: 0
+          y: 380
+          width: 1280
+          height: 72
+          visible: var.subtitleVisible
+        children:
+          subtitle_background:
+            type: Texture
+            attribute:
+              point: ~middle_center
+              width: 1220
+              height: 54
+              normal: ~Frosted:30;95,95,95,220
+              shape: ~round_rect
+              radius: 16
+              visible: var.subtitleShowBackground
+            effect:
+              stroke:
+                width: 3
+                color: ~0,0,0,255
+          subtitle_text:
+            type: Text
+            attribute:
+              point: ~middle_center
+              x: 0
+              y: 0
+              limit: var.subtitleAnimation
+              texts: "var.subtitleText"
+              fontSize: 50
+              visible: var.subtitleVisible

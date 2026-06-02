@@ -1,0 +1,334 @@
+# AXS Market — 交易历史界面
+# 打开方式: /market history
+# 数据交互: packetHandler init/update；客户端 Packet.send(var.packetId, action, ...)
+
+ui:
+  isHud: false
+  defaultOpen: false
+  hide:
+    - HUD
+  through: false
+  background: false
+  escClose: true
+  closeDied: true
+  show: true
+  jei: false
+  level: 8
+  itemSize: 16
+  screenScale: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.page = packet['page']
+      var.totalPages = packet['totalPages']
+      var.records = packet['records']
+      var.readHistorySlots(packet)
+    update: |-
+      var.packetId = packet['packetId']
+      var.page = packet['page']
+      var.totalPages = packet['totalPages']
+      var.records = packet['records']
+      var.readHistorySlots(packet)
+  action:
+    load: |-
+      var.packetId = 'AXS_MARKET'
+      var.page = 0
+      var.totalPages = 1
+      var.records = {}
+      var.scrollRatio = 0
+      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      var.readHistorySlots = -> {
+        source = args[0]
+        for(i in range(0,19)){
+          idx = i.round()
+          si = idx + ''
+          entry = var.records[si]
+          if(entry == null){
+            next
+          }
+          itemJson = source['historyItemJson' + si]
+          if(itemJson == null || itemJson == ''){
+            itemJson = var.emptyItemJson
+          }
+          control = val.记录列表['记录行']
+          if(control != null){
+            copies = control.copies
+            if(copies != null){
+              target = copies[si]
+              if(target != null){
+                slot = target['物品图标']
+                if(slot != null){
+                  slot.setItemIcon(itemJson)
+                }
+              }
+            }
+          }
+        }
+      }
+    open: |-
+      Packet.send(var.packetId, 'history_list', '0')
+
+controls:
+  根:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      主面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 1300
+          height: 860
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~35,35,45,235
+              shape: ~round_rect
+              radius: 24
+            effect:
+              stroke:
+                width: 2
+                color: ~180,160,255,180
+              shadow:
+                xOffset: 2
+                yOffset: 2
+                blur: 6
+                color: ~0,0,0,120
+
+          标题:
+            type: Text
+            attribute:
+              x: 42
+              y: 24
+              texts: '&d&l交易历史'
+              fontSize: 56
+          副标题:
+            type: Text
+            attribute:
+              x: 42
+              y: 78
+              texts: "~&7第 {var.page + 1}/{var.totalPages} 页"
+              fontSize: 32
+
+          关闭按钮:
+            type: Texture
+            attribute:
+              x: 1210
+              y: 24
+              width: 56
+              height: 56
+              normal: ~180,60,60,200
+              hover: ~Frosted:0;220,80,80,230
+              shape: ~round_rect
+              radius: 14
+            action:
+              clickLeft: |-
+                Screen.close()
+            effect:
+              stroke:
+                width: 2
+                color: ~255,120,120,120
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 14
+                  through: true
+                  center: true
+                  fontSize: 36
+                  texts: '&fX'
+
+          # ── 记录列表区 ──────────────────────────────
+          列表卡片:
+            type: Texture
+            attribute:
+              x: 32
+              y: 110
+              width: 1236
+              height: 670
+              normal: ~50,50,60,180
+              shape: ~round_rect
+              radius: 20
+            effect:
+              stroke:
+                width: 2
+                color: ~180,160,255,100
+            children:
+              列表滚动:
+                type: Scroll
+                val: 列表滚动
+                attribute:
+                  x: 10
+                  y: 10
+                  width: 1216
+                  height: 650
+                  moveY: var.scrollRatio
+                action:
+                  wheel: |-
+                    var.scrollRatio = Math.max(0, Math.min(1, var.scrollRatio + self.wheelValue * 0.05))
+                    self.moveY = var.scrollRatio
+                children:
+                  记录列表:
+                    val: 记录列表
+                    type: VStack
+                    attribute:
+                      width: 1196
+                      spaceBetween: 6
+                    children:
+                      记录行:
+                        type: Texture
+                        attribute:
+                          entry: var.records[self.key]
+                          visible: self.entry != null
+                          width: 1196
+                          height: 68
+                          normal: ~60,60,70,200
+                          shape: ~round_rect
+                          radius: 14
+                        effect:
+                          stroke:
+                            width: 1
+                            color: ~180,160,255,60
+                        children:
+                          物品图标:
+                            type: Slot
+                            attribute:
+                              slotType: ~Icon
+                              itemScale: 0.64
+                              x: 8
+                              y: 4
+                              width: 60
+                              height: 60
+                              normal: ~45,45,55,200
+                              shape: ~round_rect
+                              radius: 10
+                              through: true
+                          类型:
+                            type: Text
+                            attribute:
+                              x: 80
+                              y: 8
+                              width: 120
+                              texts: "self.parent.entry != null ? self.parent.entry['typeColor'] + self.parent.entry['typeText'] : ''"
+                              fontSize: 36
+                              through: true
+                          物品名:
+                            type: Text
+                            attribute:
+                              x: 200
+                              y: 8
+                              width: 280
+                              texts: "self.parent.entry != null ? '&f' + self.parent.entry['itemName'] : ''"
+                              fontSize: 36
+                              through: true
+                          对方:
+                            type: Text
+                            attribute:
+                              x: 200
+                              y: 40
+                              width: 200
+                              texts: "self.parent.entry != null ? '&7' + self.parent.entry['counterpart'] : ''"
+                              fontSize: 22
+                              through: true
+                          金额:
+                            type: Text
+                            attribute:
+                              x: 540
+                              y: 14
+                              width: 260
+                              texts: "self.parent.entry != null ? '&e' + self.parent.entry['amount'] : ''"
+                              fontSize: 32
+                              through: true
+                          时间:
+                            type: Text
+                            attribute:
+                              x: 860
+                              y: 14
+                              width: 300
+                              texts: "self.parent.entry != null ? '&7' + self.parent.entry['time'] : ''"
+                              fontSize: 28
+                              through: true
+              记录观察:
+                type: Observer
+                attribute:
+                  target: val.记录列表['记录行']
+                  subscribe: var.records
+                  maxSize: 20
+
+          # ── 底部分页栏 ──────────────────────────────
+          上一页:
+            type: Texture
+            attribute:
+              x: 32
+              y: 794
+              width: 120
+              height: 48
+              normal: ~65,65,75,220
+              hover: ~Frosted:0;255,255,255,180
+              shape: ~round_rect
+              radius: 14
+            action:
+              clickLeft: |-
+                if(var.page > 0){
+                  Packet.send(var.packetId, 'history_list', (var.page - 1) + '')
+                }
+            effect:
+              stroke:
+                width: 2
+                color: ~180,160,255,120
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 60
+                  y: 12
+                  through: true
+                  center: true
+                  fontSize: 36
+                  texts: '&f< 上一页'
+
+          页码:
+            type: Text
+            attribute:
+              x: 650
+              y: 806
+              center: true
+              texts: "~&7第 &f{var.page + 1} &7/ &f{var.totalPages} &7页"
+              fontSize: 32
+
+          下一页:
+            type: Texture
+            attribute:
+              x: 1148
+              y: 794
+              width: 120
+              height: 48
+              normal: ~65,65,75,220
+              hover: ~Frosted:0;255,255,255,180
+              shape: ~round_rect
+              radius: 14
+            action:
+              clickLeft: |-
+                if(var.page < var.totalPages - 1){
+                  Packet.send(var.packetId, 'history_list', (var.page + 1) + '')
+                }
+            effect:
+              stroke:
+                width: 2
+                color: ~180,160,255,120
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 60
+                  y: 12
+                  through: true
+                  center: true
+                  fontSize: 36
+                  texts: '&f下一页 >'

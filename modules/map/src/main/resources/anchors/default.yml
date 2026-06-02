@@ -1,0 +1,57 @@
+# ArcartXMap 锚点定义
+# 目录下每个 *.yml 文件可包含多个锚点，根键即为锚点 ID。
+# 同一个文件中可放多个锚点，不需要每个锚点单独一个文件。
+
+spawn:
+  enabled: true
+  display-name: "新手村"
+  world: "world"
+  x: 0
+  y: 80
+  z: 0
+  description: "所有玩家默认可见的主城锚点。"
+  permission: ""
+  sort-order: 0
+  unlock-currencies: []
+  teleport-currencies:
+    - currency: "money"
+      amount: 10
+  unlock-items: []
+
+mine:
+  enabled: true
+  display-name: "矿洞入口"
+  world: "world"
+  x: 128
+  y: 64
+  z: -42
+  description: "示例锁定锚点，演示货币 + 物品解锁。"
+  permission: ""
+  sort-order: 10
+  unlock-currencies:
+    - currency: "money"
+      amount: 200
+    - currency: "points"
+      amount: 5
+  teleport-currencies:
+    - currency: "money"
+      amount: 30
+  unlock-items:
+    - amount: 2
+      matcher:
+        material-ids:
+          - "ender_pearl"
+
+nether_hub:
+  enabled: true
+  display-name: "下界中枢"
+  world: "world_nether"
+  x: 12
+  y: 64
+  z: 12
+  description: "下界示例锚点。"
+  permission: ""
+  sort-order: 0
+  unlock-currencies: []
+  teleport-currencies: []
+  unlock-items: []

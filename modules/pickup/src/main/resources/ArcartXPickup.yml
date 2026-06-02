@@ -1,0 +1,88 @@
+config-version: 1
+# AXS Pickup
+# 作用: 拾取提示 HUD（通知模式）或掉落物交互拾取面板（扫描模式）。
+# 依赖: ArcartX。
+# 重载: /axs pickup reload
+# PAPI 输出: 无独立 PlaceholderAPI 输出。
+# 可解析的 PAPI: 无；提示内容来自拾取事件和 ItemStack 序列化。
+# 关联资源: ui/pickup_hud.yml, arcartx/ui/loot_panel.yml
+
+settings:
+  # 是否输出调试日志
+  debug: false
+
+  # 工作模式:
+  #   notification - 通知模式（拾取时弹出 HUD 提示，不拦截拾取）
+  #   scanner      - 扫描模式（禁用自动拾取，面板展示附近掉落物，按键交互拾取）
+  mode: notification
+
+# ========== 通知模式配置（mode: notification）==========
+notification:
+  # 目标 HUD 的 UI ID
+  ui-id: "AXS:pickup_hud"
+  # 插件启动/重载时是否自动注册 HUD
+  register-ui-on-enable: true
+  # 是否强制覆盖 ui/pickup_hud.yml（该文件按配置动态生成）
+  overwrite-ui-file: false
+  # 同时最多显示多少条最近拾取提示
+  max-visible: 4
+  # 每条提示在 HUD 上存活多久（毫秒）
+  entry-ttl-ms: 3000
+
+# ========== 扫描模式配置（mode: scanner）==========
+scanner:
+  # 目标 HUD 的 UI ID
+  ui-id: "AXS:loot_panel"
+  # 插件启动/重载时是否自动注册 HUD
+  register-ui-on-enable: true
+  # 是否强制覆盖 ui 文件
+  overwrite-ui-file: false
+  # 扫描附近掉落物的半径（格）
+  scan-radius: 5.0
+  # 扫描间隔（ticks，5 = 250ms）
+  scan-interval-ticks: 5
+  # 面板最多显示的物品数
+  max-display: 8
+  # 是否禁用自动拾取（玩家靠近掉落物时不会自动吸入背包）
+  disable-auto-pickup: true
+  # 拾取后是否尝试存入仓库（需要 warehouse 模块启用并配置自动入库）
+  warehouse-auto-deposit: false
+  # 物品落地后多久开始显示在面板（ticks，防止刚扔出的物品立即被扫描）
+  pickup-delay-ticks: 40
+  # 同类物品是否合并显示（SuperStack）
+  merge-same-items: true
+  # 交互 Menu 的 UI ID（按 F 打开的透明菜单，用于捕获滚轮/按键输入）
+  interact-ui-id: "AXS:loot_interact"
+  # 拾取按键绑定（注册为 ArcartX 自定义按键，玩家可在按键设置中修改）
+  keybind:
+    name: AXS_PICKUP_PICK
+    default-key: F
+
+# ========== 过滤系统（仅 scanner 模式生效）==========
+filter:
+  # 过滤模式:
+  #   blacklist - 黑名单内的物品不显示
+  #   whitelist - 只显示白名单内的物品
+  mode: blacklist
+  # 材质黑名单（mode=blacklist 时，这些材质的掉落物不在面板中显示）
+  blacklist:
+    - DIRT
+    - COBBLESTONE
+    - GRAVEL
+    - SAND
+    - NETHERRACK
+    - COBBLED_DEEPSLATE
+  # 材质白名单（mode=whitelist 时，只有这些材质的掉落物才显示）
+  whitelist: []
+  # 物品名称黑名单正则（匹配的不显示，支持颜色代码去色后匹配）
+  name-blacklist-regex: []
+  # Lore 黑名单正则（物品 Lore 中任意一行去色后匹配到则不显示）
+  lore-blacklist-regex: []
+  # Lore 白名单正则（设置后，物品 Lore 中必须至少有一行匹配才显示；留空则不启用）
+  lore-whitelist-regex: []
+  # NBT 键黑名单（物品 NBT 中包含指定键则不显示，支持嵌套路径如 "custom.trash"）
+  nbt-blacklist-keys: []
+  # NBT 键白名单（设置后，物品 NBT 中必须包含至少一个指定键才显示；留空则不启用）
+  nbt-whitelist-keys: []
+  # 最小堆叠数量（低于此数量的掉落物不显示）
+  min-amount: 1

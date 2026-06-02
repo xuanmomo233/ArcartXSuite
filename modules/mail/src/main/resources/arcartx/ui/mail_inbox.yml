@@ -1,0 +1,571 @@
+﻿# AXS 资源说明
+# 用途: Mail 模块默认收件箱菜单，用于浏览、领取和删除邮件。
+# 前置依赖: ArcartX；Mail 模块启用后会自动注册或导出。
+# 启用开关: config.yml -> modules.mail.enabled + modules.mail.password
+# 关联文件: ArcartXMail.yml、ui/mail_compose.yml、ui/mail_logs.yml
+# 重载命令: /axs mail reload
+# 最小使用路径: ui + controls
+# 结构提示: 顶层 ui 节点定义窗口行为；packetHandler 负责接收邮件列表；controls 定义邮件卡片、分页和操作按钮。
+
+ui:
+  background: true
+  escClose: true
+  closeDied: true
+  show: true
+  through: false
+  screenScale: true
+  action:
+    load: |-
+      var.messages = {}
+      var.filterMode = 'all'
+      var.totalCount = 0
+      var.unreadCount = 0
+      var.claimableCount = 0
+      var.selectedId = ''
+      var.selectedSubject = ''
+      var.selectedSenderName = ''
+      var.selectedSourceText = ''
+      var.selectedStatusText = ''
+      var.selectedCreatedAt = ''
+      var.selectedExpiresAt = ''
+      var.selectedBody = ['&8暂无正文']
+      var.selectedAttachmentSummary = '无附件'
+      var.selectedClaimable = false
+      var.cdkCode = ''
+  # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
+  packetHandler:
+    init: |-
+      var.messages = packet['messages']
+      var.filterMode = 'all'
+      var.totalCount = packet['total_count']
+      var.unreadCount = packet['unread_count']
+      var.claimableCount = packet['claimable_count']
+      var.selectedId = packet['selected_id']
+      var.selectedSubject = packet['selected_subject']
+      var.selectedSenderName = packet['selected_sender_name']
+      var.selectedSourceText = packet['selected_source_text']
+      var.selectedStatusText = packet['selected_status_text']
+      var.selectedCreatedAt = packet['selected_created_at']
+      var.selectedExpiresAt = packet['selected_expires_at']
+      var.selectedBody = packet['selected_body']
+      var.selectedAttachmentSummary = packet['selected_attachment_summary']
+      var.selectedClaimable = packet['selected_claimable']
+    update: |-
+      var.messages = packet['messages']
+      var.totalCount = packet['total_count']
+      var.unreadCount = packet['unread_count']
+      var.claimableCount = packet['claimable_count']
+      var.selectedId = packet['selected_id']
+      var.selectedSubject = packet['selected_subject']
+      var.selectedSenderName = packet['selected_sender_name']
+      var.selectedSourceText = packet['selected_source_text']
+      var.selectedStatusText = packet['selected_status_text']
+      var.selectedCreatedAt = packet['selected_created_at']
+      var.selectedExpiresAt = packet['selected_expires_at']
+      var.selectedBody = packet['selected_body']
+      var.selectedAttachmentSummary = packet['selected_attachment_summary']
+      var.selectedClaimable = packet['selected_claimable']
+
+# controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
+
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      root:
+        type: Texture
+        attribute:
+          point: ~middle_center
+          width: 1540
+          height: 920
+          normal: ~95,95,95,220
+          shape: ~round_rect
+          radius: 26
+        effect:
+          stroke:
+            width: 3
+            color: ~255,255,255,255
+          shadow:
+            xOffset: 2
+            yOffset: 2
+            blur: 5
+            color: ~255,255,255,75
+          ripple:
+            duration: 1200
+            color: ~255,255,255,110
+            width: 0.05
+        children:
+          title:
+            type: Text
+            attribute:
+              x: 42
+              y: 30
+              fontSize: 42
+              texts: "~&f&lAXS 邮箱"
+          summary:
+            type: Text
+            attribute:
+              x: 42
+              y: 82
+              fontSize: 49
+              texts: "'&f总数: ' + var.totalCount.round(0) + '   &f未读: ' + var.unreadCount.round(0) + '   &f可领取: ' + var.claimableCount.round(0)"
+          filter_bar:
+            type: HStack
+            attribute:
+              x: 42
+              y: 124
+              spaceBetween: 10
+            children:
+              filter_all:
+                type: Texture
+                attribute:
+                  width: 104
+                  height: 40
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 12
+                  texts: "~&0全部"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    var.filterMode = 'all'
+              filter_unread:
+                type: Texture
+                attribute:
+                  width: 104
+                  height: 40
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 12
+                  texts: "~&0未读"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    var.filterMode = 'unread'
+              filter_claimable:
+                type: Texture
+                attribute:
+                  width: 104
+                  height: 40
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 12
+                  texts: "~&0可领"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    var.filterMode = 'claimable'
+              filter_system:
+                type: Texture
+                attribute:
+                  width: 104
+                  height: 40
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 12
+                  texts: "~&0系统"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    var.filterMode = 'system'
+              filter_player:
+                type: Texture
+                attribute:
+                  width: 104
+                  height: 40
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 12
+                  texts: "~&0玩家"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    var.filterMode = 'player'
+              filter_preset:
+                type: Texture
+                attribute:
+                  width: 104
+                  height: 40
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 12
+                  texts: "~&0预设"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    var.filterMode = 'preset'
+              filter_cdk:
+                type: Texture
+                attribute:
+                  width: 104
+                  height: 40
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 12
+                  texts: "~&0CDK"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    var.filterMode = 'cdk'
+          left_panel:
+            type: Texture
+            attribute:
+              x: 42
+              y: 184
+              width: 660
+              height: 690
+              normal: ~90,90,90,255
+              shape: ~round_rect
+              radius: 20
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,120
+          left_scroll:
+            type: Scroll
+            attribute:
+              x: 56
+              y: 198
+              width: 642
+              height: 662
+              moveY: 0
+            action:
+              wheel: |-
+                if(self.wheelValue > 0){
+                  self.moveY = Math.max(0, self.moveY - 0.1)
+                }elif(self.wheelValue < 0){
+                  self.moveY = Math.min(1, self.moveY + 0.1)
+                }
+            children:
+              mail_stack:
+                val: mail_list
+                type: VStack
+                attribute:
+                  width: 632
+                  spaceBetween: 10
+                children:
+                  item:
+                    type: Texture
+                    attribute:
+                      entry: var.messages[self.key]
+                      width: 632
+                      height: 96
+                      normal: ~120,120,120,255
+                      shape: ~round_rect
+                      radius: 16
+                      visible: "self.entry != null && var.filterMode == 'all' || (var.filterMode == 'unread' && self.entry['unread']) || (var.filterMode == 'claimable' && self.entry['claimable']) || (var.filterMode == 'system' && self.entry['source_type'] == 'system') || (var.filterMode == 'player' && self.entry['source_type'] == 'player') || (var.filterMode == 'preset' && self.entry['source_type'] == 'preset') || (var.filterMode == 'cdk' && self.entry['source_type'] == 'cdk')"
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                    action:
+                      clickLeft: |-
+                        Packet.send('AXS_MAIL', 'select', self.key)
+                    children:
+                      subject:
+                        type: Text
+                        attribute:
+                          x: 18
+                          y: 12
+                          fontSize: 49
+                          texts: "self.parent.entry['unread'] ? '&0&l' + self.parent.entry['subject'] : '&0' + self.parent.entry['subject']"
+                      meta:
+                        type: Text
+                        attribute:
+                          x: 18
+                          y: 42
+                          fontSize: 36
+                          texts: "'&7' + self.parent.entry['sender_name'] + ' / ' + self.parent.entry['source_text'] + ' / ' + self.parent.entry['status_text']"
+                      preview:
+                        type: Text
+                        attribute:
+                          x: 18
+                          y: 66
+                          fontSize: 36
+                          texts: "'&8' + self.parent.entry['preview']"
+          mail_observer:
+            type: Observer
+            attribute:
+              target: val.mail_list['item']
+              subscribe: var.messages
+              maxSize: 2048
+          right_panel:
+            type: Texture
+            attribute:
+              x: 736
+              y: 184
+              width: 762
+              height: 690
+              normal: ~90,90,90,255
+              shape: ~round_rect
+              radius: 20
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+          selected_subject:
+            type: Text
+            attribute:
+              x: 766
+              y: 214
+              fontSize: 49
+              texts: "var.selectedSubject == '' ? '&7未选择邮件' : '&0' + var.selectedSubject"
+          selected_meta:
+            type: Text
+            attribute:
+              x: 766
+              y: 260
+              fontSize: 49
+              texts: "'&7发件人: &0' + var.selectedSenderName + '    &7来源: &0' + var.selectedSourceText + '    &7状态: &0' + var.selectedStatusText"
+          selected_time:
+            type: Text
+            attribute:
+              x: 766
+              y: 294
+              fontSize: 36
+              texts: 
+                - "'&7创建: &0' + var.selectedCreatedAt"
+                - "'&7到期: &0' + var.selectedExpiresAt"
+          selected_attachment:
+            type: Text
+            attribute:
+              x: 766
+              y: 346
+              fontSize: 36
+              texts: "'&7附件: &0' + var.selectedAttachmentSummary"
+          selected_body:
+            type: Text
+            attribute:
+              x: 766
+              y: 392
+              fontSize: 49
+              width: 700
+              texts: "var.selectedBody"
+          button_row_top:
+            type: HStack
+            attribute:
+              x: 766
+              y: 690
+              spaceBetween: 14
+            children:
+              button_logs:
+                type: Texture
+                attribute:
+                  width: 124
+                  height: 40
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0日志"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_MAIL', 'logs')
+          button_row_actions:
+            type: HStack
+            attribute:
+              x: 766
+              y: 748
+              spaceBetween: 14
+            children:
+              button_compose:
+                type: Texture
+                attribute:
+                  width: 124
+                  height: 44
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0写信"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_MAIL', 'compose')
+              button_claim:
+                type: Texture
+                attribute:
+                  width: 124
+                  height: 44
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0领取"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    if(var.selectedId != ''){
+                      Packet.send('AXS_MAIL', 'claim', var.selectedId)
+                    }
+              button_delete:
+                type: Texture
+                attribute:
+                  width: 124
+                  height: 44
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0删除"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    if(var.selectedId != ''){
+                      Packet.send('AXS_MAIL', 'delete', var.selectedId)
+                    }
+              button_claim_all:
+                type: Texture
+                attribute:
+                  width: 124
+                  height: 44
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0全部领取"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_MAIL', 'claimall')
+              button_delete_all:
+                type: Texture
+                attribute:
+                  width: 124
+                  height: 44
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0全部删除"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_MAIL', 'deleteall')
+          cdk_row:
+            type: HStack
+            attribute:
+              x: 780
+              y: 806
+              spaceBetween: 14
+            children:
+              cdk_box:
+                type: TextBox
+                attribute:
+                  width: 385
+                  height: 44
+                  length: 18
+                  emptyText: ~输入 CDK 后点兑换
+                  fontSize: 42
+                  background: ~95,95,95,255
+                  shape: ~round_rect
+                  radius: 14
+                action:
+                  textChange: |-
+                    var.cdkCode = self.getContent()
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              cdk_button:
+                type: Texture
+                attribute:
+                  width: 124
+                  height: 44
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0兑换"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    if(var.cdkCode != ''){
+                      Packet.send('AXS_MAIL', 'cdk', var.cdkCode)
+                    }
+              refresh_button:
+                type: Texture
+                attribute:
+                  width: 124
+                  height: 44
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0刷新"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_MAIL', 'refresh')

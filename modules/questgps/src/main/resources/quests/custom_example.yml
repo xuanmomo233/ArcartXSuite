@@ -1,0 +1,28 @@
+# QuestGPS 自定义分类任务示例
+# 使用前需在 ArcartXQuestGPS.yml 的 categories 段定义分类 ID。
+# 同一分类的任务可以分散在 quests/ 目录下的多个 yml 文件中。
+
+# 示例: 日常任务（需要先在 categories 中定义 daily 分类）
+# "daily/gather_herbs":
+#   enabled: true
+#   category: daily
+#   display-name-override: "采集药草"
+#   description:
+#     - "&7在野外采集 10 株药草。"
+#   sort-order: 10
+#   allow-abandon: true
+#   required-mainline: []
+#   navigation:
+#     enabled: true
+#     point:
+#       world: "world"
+#       x: 100
+#       y: 70
+#       z: -50
+#       title: "药草产地"
+#       style-id: "default"
+#       map-label: "日常目标"
+#   tasks:
+#     "collect_herbs":
+#       display-text: "采集药草 0/10"
+#       sort-order: 10

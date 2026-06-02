@@ -1,0 +1,186 @@
+config-version: 1
+# ============================================================
+#  ArcartXSuite - Essentials 模块配置
+#  免费模块：玩家管理 / 传送系统 / 世界管理 / 安全管理
+# ============================================================
+
+debug: false
+
+# ─── 玩家管理 ───
+player:
+  # 默认飞行速度倍率 (1-10)
+  default-fly-speed: 1
+  # 默认行走速度倍率 (1-10)
+  default-walk-speed: 1
+  # AFK 自动检测（秒），0 = 禁用
+  afk-timeout: 300
+  # AFK 后自动踢出（秒），0 = 不踢出
+  afk-kick-timeout: 0
+  # vanish 隐身时退出消息是否隐藏
+  vanish-hide-quit-message: true
+  # vanish 隐身时进入消息是否隐藏
+  vanish-hide-join-message: true
+
+# ─── 传送系统 ───
+teleport:
+  # TPA 请求超时（秒）
+  tpa-timeout: 60
+  # 传送前等待（秒），0 = 立即传送
+  teleport-delay: 3
+  # 传送等待期间移动是否取消传送
+  cancel-on-move: true
+  # 最大 Home 数量（默认值，可通过权限覆盖）
+  max-homes: 3
+  # /back 记录最大深度
+  back-stack-size: 5
+  # 传送安全检查（避免传送到方块内）
+  safe-teleport: true
+
+# ─── 世界管理 ───
+world:
+  # 允许 /time 和 /weather 的世界列表，空列表 = 所有世界
+  allowed-worlds: []
+
+# ─── 安全管理 ───
+moderation:
+  # 封禁消息
+  ban-message: '&c你已被服务器封禁。\n&7原因: {reason}\n&7到期: {expiry}'
+  # 踢出消息
+  kick-message: '&c你已被踢出服务器。\n&7原因: {reason}'
+  # 禁言消息（发给被禁言的玩家）
+  mute-message: '&c你已被禁言，无法发送消息。\n&7到期: {expiry}'
+  # 最大警告次数，达到后自动封禁（0 = 不自动封禁）
+  max-warnings-before-ban: 5
+  # 警告过期时间（天），0 = 永不过期
+  warning-expire-days: 30
+
+# ─── Sit/Lay ───
+interaction:
+  # 右键点击楼梯自动坐下
+  sit-on-stairs: true
+  # 右键点击台阶自动坐下
+  sit-on-slabs: false
+  # /lay 使用的实体类型
+  lay-entity-type: ARMOR_STAND
+
+# ─── 存储 ───
+storage:
+  # sqlite 或 mysql
+  dialect: sqlite
+  # SQLite 文件名
+  sqlite-file: essentials.db
+  # MySQL 配置（dialect 为 mysql 时使用）
+  mysql:
+    host: localhost
+    port: 3306
+    database: arcartxsuite
+    username: root
+    password: ''
+    table-prefix: axs_ess_
+
+# ─── 消息 ───
+messages:
+  fly-enabled: '&a飞行模式已开启。'
+  fly-disabled: '&c飞行模式已关闭。'
+  god-enabled: '&a无敌模式已开启。'
+  god-disabled: '&c无敌模式已关闭。'
+  heal: '&a你的生命值已恢复。'
+  feed: '&a你的饥饿值已恢复。'
+  speed-set: '&a速度已设置为 {speed}。'
+  afk-enter: '&7{player} 已进入挂机状态。'
+  afk-leave: '&7{player} 已退出挂机状态。'
+  vanish-enabled: '&a你已隐身。'
+  vanish-disabled: '&c你已取消隐身。'
+  home-set: '&a家 &f{name} &a已设置。'
+  home-deleted: '&c家 &f{name} &c已删除。'
+  home-not-found: '&c家 &f{name} &c不存在。'
+  home-limit: '&c你的家数量已达上限 ({max})。'
+  home-teleported: '&a已传送到家 &f{name}&a。'
+  warp-set: '&a传送点 &f{name} &a已设置。'
+  warp-deleted: '&c传送点 &f{name} &c已删除。'
+  warp-not-found: '&c传送点 &f{name} &c不存在。'
+  warp-teleported: '&a已传送到 &f{name}&a。'
+  spawn-set: '&a出生点已设置。'
+  spawn-teleported: '&a已传送到出生点。'
+  tpa-sent: '&a传送请求已发送给 &f{player}&a。'
+  tpa-received: '&f{player} &a请求传送到你的位置。\n&7输入 &f/tpaccept &7接受，&f/tpdeny &7拒绝。'
+  tpa-here-received: '&f{player} &a请求你传送到 TA 的位置。\n&7输入 &f/tpaccept &7接受，&f/tpdeny &7拒绝。'
+  tpa-accepted: '&a传送请求已接受。'
+  tpa-denied: '&c传送请求已拒绝。'
+  tpa-expired: '&c传送请求已过期。'
+  tpa-no-pending: '&c没有待处理的传送请求。'
+  teleport-cancelled: '&c传送已取消（你移动了）。'
+  teleport-warmup: '&7传送中... &f{seconds} &7秒后到达，请勿移动。'
+  back-teleported: '&a已传送回上次位置。'
+  back-none: '&c没有可返回的位置。'
+  repair-success: '&a物品已修复。'
+  repair-nothing: '&c手中没有可修复的物品。'
+  hat-success: '&a物品已戴在头上。'
+  hat-nothing: '&c手中没有物品。'
+  nick-set: '&a昵称已设置为 &f{nick}&a。'
+  nick-reset: '&a昵称已重置。'
+  sit-down: '&7你坐下了。'
+  lay-down: '&7你躺下了。'
+  time-set: '&a世界 &f{world} &a的时间已设置为 &f{time}&a。'
+  weather-set: '&a世界 &f{world} &a的天气已设置为 &f{weather}&a。'
+  player-not-found: '&c玩家 &f{player} &c不在线。'
+  no-permission: '&c你没有权限执行此操作。'
+  ban-broadcast: '&c{player} 已被 {operator} 封禁。原因: {reason}'
+  mute-broadcast: '&c{player} 已被 {operator} 禁言。原因: {reason}'
+  kick-broadcast: '&c{player} 已被 {operator} 踢出。原因: {reason}'
+  warn-broadcast: '&e{player} 收到来自 {operator} 的警告。原因: {reason}'
+  unban-success: '&a已解封 &f{player}&a。'
+  unmute-success: '&a已解除 &f{player} &a的禁言。'
+  sort-done: '&a背包已整理。'
+  tree-felled: '&a一键砍树! 共砍落 {count} 个原木方块。'
+  replant-enabled: '&a自动补种已开启。'
+  replant-disabled: '&c自动补种已关闭。'
+  autotool-enabled: '&a自动切换工具已开启。'
+  autotool-disabled: '&c自动切换工具已关闭。'
+
+
+# ─── 一键砍树 (TreeCapitator) ───
+tree-capitator:
+  enabled: true
+  # 需要的权限节点 (留空 = 无需权限)
+  permission: "axs.essentials.treecap"
+  # 最大连锁方块数
+  max-blocks: 128
+  # 需要手持斧头
+  require-axe: true
+  # 需要潜行触发
+  require-sneak: false
+  # 是否消耗工具耐久
+  consume-durability: true
+  # 支持的原木类型 (留空 = 所有原木)
+  log-types: []
+  # 是否同时破坏树叶
+  break-leaves: true
+  # 树叶搜索范围 (在原木周围多少格内)
+  leaf-radius: 4
+
+# ─── 背包操作 (InvActions: 补种/整理/工具切换) ───
+inv-actions:
+  # 自动补种作物
+  auto-replant:
+    enabled: true
+    permission: "axs.essentials.replant"
+    # 支持的作物类型
+    crops:
+      - WHEAT
+      - CARROTS
+      - POTATOES
+      - BEETROOTS
+      - NETHER_WART
+  # 背包整理
+  inventory-sort:
+    enabled: true
+    permission: "axs.essentials.sort"
+    # 排序方式: type(按类型) / name(按名称) / amount(按数量)
+    sort-mode: type
+  # 自动工具切换
+  auto-tool:
+    enabled: true
+    permission: "axs.essentials.autotool"
+    # 破坏方块时自动切换到最佳工具
+    switch-on-break: true

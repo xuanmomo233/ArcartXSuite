@@ -1,0 +1,148 @@
+# Tab 定义: online-tab
+# 文件名（去掉 .yml）即为定义 ID。
+# 详细文档见 docs/modules/tab.md
+
+enabled: true
+# 单 UI 发包（简写格式）：
+ui-id: "tab"
+packet-handler: "tab"
+# 多 UI 发包（新格式）：同一个 payload 可同时发给多个 UI，每个 UI 可自定义 handler：
+# ui-targets:
+#   - ui-id: "tab"
+#     packet-handler: "tab"
+#   - ui-id: "tab-hud"
+#     packet-handler: "overlay"
+# 注意：ui-targets 优先级高于 ui-id + packet-handler；两者不要同时写。
+# Tab 仍以服务端周期 diff 同步为主；下面的客户端回包刷新保留为兼容入口，默认启用。
+# 客户端 Packet.send("TAB", "update") 会请求一次 viewer 级强制重发，但仍受限流保护。
+# 如果你不需要这个兼容入口，可把 client-refresh-packet-id 留空关闭。
+client-refresh-packet-id: "TAB"
+client-refresh-action: "update"
+client-refresh-guard:
+  enabled: true
+  window-ms: 1500
+  max-hits: 1
+  mode: "silent"
+  notify-message: "&cTAB 刷新过快，请稍后再试。"
+  notify-cooldown-ms: 3000
+# Tab 默认只遍历当前在线玩家，然后按照 sort-mode 排序后发一个列表给 UI。
+# 当前支持的排序模式只有：
+# sort-mode: "name"                   按玩家名排序
+# sort-mode: "prem"                   按权限组排序，顺序由 sort-prem-group 决定
+# sort-mode: "papi"                   按 PlaceholderAPI 变量排序，排序值由 sort-papi-key 决定
+#
+# 其他可选字段：
+# max-entries: -1                     -1 表示不限制条目数
+# sort-descending: false              是否倒序
+# sort-papi-key: "%player_money%"     当 sort-mode=papi 时，使用这个 Placeholder 作为排序依据
+# sort-papi-numeric: false            当 sort-mode=papi 时，是否把 Placeholder 值按数字排序
+# sort-prem-group: []                 当 sort-mode=prem 时，权限组优先级列表，未列出的组视为 default
+# omit-blank-values: false            pack 渲染结果为空字符串时是否跳过该条
+max-entries: -1
+sort-mode: "name"
+sort-descending: false
+sort-papi-key: "%player_money%"
+sort-papi-numeric: false
+sort-prem-group:
+  - "admin"
+  - "vip3"
+  - "vip2"
+  - "vip1"
+  - "default"
+omit-blank-values: false
+
+# 多键复合排序（推荐）。如果填写了 sort-keys，则上面的 sort-mode/sort-papi-*/sort-prem-group/sort-descending 失效。
+# 每个 key 字段：
+#   mode: name / prem / papi
+#   key (papi 模式): PlaceholderAPI 表达式
+#   numeric: papi 模式是否数字排序
+#   prem-group (prem 模式): 优先级列表，未列出的玩家归 default
+#   order: asc / desc（默认 asc，可用 descending: true 等价）
+# 示例：先按权限组排，再按等级倒序，再按玩家名升序
+# sort-keys:
+#   - { mode: prem, prem-group: [admin, vip3, vip2, vip1, default] }
+#   - { mode: papi, key: "%player_level%", numeric: true, order: desc }
+#   - { mode: name }
+
+# 过滤器：include 是 OR（任一命中保留），exclude 是 OR（任一命中剔除）。
+# hide-vanished 自动隐藏隐身玩家（兼容 Essentials/SuperVanish/PremiumVanish 与 Bukkit "vanished" metadata）。
+# 规则字段：papi+equals 或 permission，invert: true 反转匹配。
+# filters:
+#   hide-vanished: false
+#   include:
+#     - { papi: "%player_world%", equals: "world" }
+#   exclude:
+#     - { permission: "axs.tab.hide" }
+#     - { papi: "%player_gamemode%", equals: "SPECTATOR" }
+
+# 置顶 / 置底：命中 top 的玩家排在所有 middle 之前；命中 bottom 的排在最后。
+# 三个分桶各自再用 sort-keys / sort-mode 内部排序。
+# pinned:
+#   top:
+#     - { permission: "axs.tab.pin-top" }
+#     - { papi: "%player_uuid%", equals: "{player_uuid}" }   # 自己
+#   bottom:
+#     - { permission: "axs.tab.pin-bottom" }
+
+# 视图（view）：玩家通过 /axstab view <name> 切换。只有 definition.view 与玩家当前 view 相同时，
+# 此 tab 才会推送数据；切换瞬间旧 view 的 tab 会被一次性清空。默认 "default"。
+# view: "default"
+
+# 分组（grouping）：按 PAPI 表达式把已排序玩家分桶，可选 header-pack 写在每组前。
+# 仅 list / string 形态的 pack 支持分组；map 形态会自动退化为不分组并打印警告。
+# grouping:
+#   enabled: false
+#   group-by-papi: "%vault_primary_group%"
+#   group-order: ["admin", "vip3", "vip2", "vip1", "default"]
+#   include-unordered: true                   # 未在 group-order 中列出的组是否仍输出
+#   header-pack: "&6=== {group} ==="          # {group} 会被替换为组键；同样支持 PAPI
+
+# 分页（pagination）：每页 page-size 行，由客户端发包翻页。
+# 客户端：Packet.send("TAB_PAGE", "next") / Packet.send("TAB_PAGE", "prev") / Packet.send("TAB_PAGE", "set", "2")
+# 服务端命令：/axstab page <definitionId> <next|prev|N>
+# pagination:
+#   enabled: false
+#   page-size: 80
+#   packet-id: "TAB_PAGE"
+#   next-action: "next"
+#   prev-action: "prev"
+#   set-action: "set"
+
+# 跨服聚合（aggregate）：仅当 cross-server: true 时生效。
+# 启用后 Tab 不展开玩家列表，每个服务器（含本服与每个远程节点）只占一行，常用于
+# 大区 BungeeCord / Velocity 网络的"服务器总览"视图。
+# line-pack 中可使用 {server-id} / {server-display} / {server-online} 三个占位符，
+# 以及完整 PAPI（按本服第一个在线玩家上下文渲染）。
+# aggregate:
+#   enabled: false
+#   line-pack: "&b{server-display} &7- &f{server-online} 人在线"
+# pack 会针对排序后的每个在线玩家渲染一次。
+# - pack 是字符串时：按玩家渲染后组成一个根列表发给 UI
+# - pack 是列表时：按玩家渲染后把每个玩家的列表扁平合并成一个根列表
+# - pack 是字典时：按玩家渲染后把每个玩家的字典合并成一个根字典，相同 key 以后者覆盖前者
+#
+# pack 为字符串时，最终类似：
+# - "%AXStitle_tab_adventure_prefix%Alice%AXStitle_tab_adventure_suffix%20"
+# - "%AXStitle_tab_adventure_prefix%Bob%AXStitle_tab_adventure_suffix%18"
+#
+# pack 也可以写成列表，例如：
+# pack:
+#   - "%AXStitle_tab_adventure_prefix%%player_name%%AXStitle_tab_adventure_suffix%"
+#   - "%player_health%"
+#
+# pack 也可以写成字典，例如：
+# pack:
+#   "%player_uuid%":
+#     name: "%AXStitle_tab_adventure_prefix%%player_name%%AXStitle_tab_adventure_suffix%"
+#     health: "%player_health%"
+# 如果 pack / sort-papi-key 依赖 PlaceholderAPI 动态变量，仍由服务端周期扫描兜底。
+# 聊天栏前后缀可按分组接入，例如 %AXStitle_chat_adventure_prefix% 与 %AXStitle_chat_adventure_suffix%
+#
+# 玩家头像（PlayerSkin 纹理表达式）：
+# 服务端 pack 把玩家 UUID 输出给 UI，UI 端 Texture 控件用 normal: "PlayerSkin:{var.uuid}" 渲染。
+# 服务端不抓 Mojang，纯靠客户端 ArcartX 渲染。示例：
+# pack:
+#   name: "%AXStitle_tab_adventure_prefix%%player_name%"
+#   uuid: "{player_uuid}"
+#   health: "%player_health%"
+pack: "%AXStitle_tab_adventure_prefix%%player_name%%AXStitle_tab_adventure_suffix%%player_health%"

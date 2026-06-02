@@ -1,0 +1,66 @@
+# 默认回收表
+# 定义哪些物品可以回收及其价格。
+
+display-name: "&a默认回收表"
+
+# 回收规则列表
+entries:
+  cobblestone:
+    source: "minecraft"
+    item-id: "COBBLESTONE"
+    price: 1
+    currency: "money"
+
+  iron_ingot:
+    source: "minecraft"
+    item-id: "IRON_INGOT"
+    price: 10
+    currency: "money"
+
+  gold_ingot:
+    source: "minecraft"
+    item-id: "GOLD_INGOT"
+    price: 25
+    currency: "money"
+
+  diamond:
+    source: "minecraft"
+    item-id: "DIAMOND"
+    price: 100
+    currency: "money"
+
+  emerald:
+    source: "minecraft"
+    item-id: "EMERALD"
+    price: 80
+    currency: "money"
+
+  rotten_flesh:
+    source: "minecraft"
+    item-id: "ROTTEN_FLESH"
+    price: 2
+    currency: "money"
+
+  bone:
+    source: "minecraft"
+    item-id: "BONE"
+    price: 3
+    currency: "money"
+
+  string:
+    source: "minecraft"
+    item-id: "STRING"
+    price: 2
+    currency: "money"
+
+  gunpowder:
+    source: "minecraft"
+    item-id: "GUNPOWDER"
+    price: 5
+    currency: "money"
+
+  ender_pearl:
+    source: "minecraft"
+    item-id: "ENDER_PEARL"
+    price: 30
+    currency: "money"

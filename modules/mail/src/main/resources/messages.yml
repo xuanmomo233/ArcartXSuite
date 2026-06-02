@@ -1,0 +1,88 @@
+# ============================================================
+#  Mail 模块消息文件
+# ------------------------------------------------------------
+#  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
+#  修改后执行 /axs reload mail 即可生效。
+# ============================================================
+
+prefix: "&3◆ &6ArcartXSuite &7| &r"
+
+# ── 通用 ──────────────────────────────────────────────
+common:
+  service-down: "&c服务未启动。"
+  reload-hint: "&e请使用 /{0} reload mail"
+  unknown: "&e未知命令，使用 /{0} mail help"
+  only-player: "&c该命令只能由玩家执行。"
+  no-permission: "&c你没有权限执行这个命令。"
+
+# ── help ──────────────────────────────────────────────
+help:
+  title: "&6Mail 管理命令"
+  status: "&7{0} status&f - 查看模块状态"
+  open: "&7{0} open <玩家>&f - 为玩家打开邮箱"
+  preset:
+    list: "&7{0} preset list&f - 列出所有预设"
+    send: "&7{0} preset send <预设ID> <目标>&f - 派发预设邮件"
+    info: "&7{0} preset info <预设ID>&f - 查看预设详情"
+    delete: "&7{0} preset delete <预设ID>&f - 删除预设"
+    reload: "&7{0} preset reload&f - 重新加载预设"
+  admin: "&7{0} admin&f - 打开管理 UI（预设编辑器）"
+  cdk:
+    create: "&7{0} cdk create <预设ID> <code|auto> <最大领取数> <有效期>&f - 创建 CDK"
+    info: "&7{0} cdk info <兑换码>&f - 查看 CDK"
+    list: "&7{0} cdk list [页码]&f - 列出 CDK"
+    delete: "&7{0} cdk delete <兑换码>&f - 删除 CDK"
+
+# ── status ────────────────────────────────────────────
+status:
+  title: "&6Mail 状态"
+  preset: "&7预设数: &f{0}"
+  redis: "&7Redis: &f{0}"
+  compose: "&7写信会话: &f{0}"
+
+# ── admin ─────────────────────────────────────────────
+admin:
+  open:
+    usage: "&e用法: /axs mail open <玩家>"
+  preset:
+    usage: "&e用法: /axs mail preset <list|send|info|delete|reload> ..."
+    send-usage: "&e用法: /axs mail preset send <预设ID> <目标>"
+    info-usage: "&e用法: /axs mail preset info <预设ID>"
+    delete-usage: "&e用法: /axs mail preset delete <预设ID>"
+    sub-list: "&eyml preset 子命令: list|send|info|delete|reload"
+    empty: "&7无已加载的预设。"
+    list-title: "&6预设列表 ({0}):"
+    item-format: "{0} &f{1} &7| &e{2} &7| 附件: {3} | 命令: {4}"
+    not-found: "&c预设不存在: {0}"
+    info-title: "&6预设: {0}"
+    info-enabled: "&7启用: &f{0}"
+    info-display: "&7显示名: &f{0}"
+    info-subject: "&7标题: &f{0}"
+    info-body: "&7正文: &f{0}"
+    info-expires: "&7过期: &f{0}"
+    info-attachments: "&7附件: &f{0}"
+    info-commands: "&7领取命令: &f{0}"
+    info-conditions: "&7领取条件: &f{0}"
+    info-cdks: "&7CDK: &f{0}"
+  cdk:
+    usage: "&e用法: /axs mail cdk <create|info|list|delete> ..."
+    sub-list: "&ecdk 子命令: create|info|list|delete"
+    create-usage: "&e用法: /axs mail cdk create <预设ID> <code|auto> <最大领取数> <有效期>"
+    invalid-claims: "&c无效领取数: {0}"
+    info-usage: "&e用法: /axs mail cdk info <兑换码>"
+    not-found: "&cCDK 不存在: {0}"
+    info-title: "&6CDK: {0}"
+    info-preset: "&7预设: &f{0}"
+    info-claims: "&7领取: &f{0}/{1}"
+    info-expires: "&7过期: &f{0}"
+    info-enabled: "&7启用: &f{0}"
+    list-empty: "&7第 {0} 页无 CDK。"
+    list-title: "&6CDK 列表 (第 {0} 页):"
+    list-item: "&f{0} &7| &e{1} &7| &b{2}/{3} &7| {4}"
+    delete-usage: "&e用法: /axs mail cdk delete <兑换码>"
+
+# ── player ────────────────────────────────────────────
+player:
+  module-down: "&c邮箱模块当前未启用。"
+  cdk-usage: "&e用法: /{0} cdk <code>"
+  usage: "&e用法: /{0} open|compose|claimall|deleteall|cdk <code>"

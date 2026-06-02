@@ -1,0 +1,32 @@
+﻿# AXS 资源说明
+# 用途: Chat 模块的全服频道示例；适合公共聊天或跨服广播。
+# 前置依赖: ArcartX；Chat 模块启用后生效。
+# 启用开关: config.yml -> modules.chat.enabled + modules.chat.password
+# 关联文件: ArcartXChat.yml
+# 重载命令: /axs chat reload
+# 最小使用路径: channels-directory -> chat/channels/Global.yml
+
+enabled: true
+
+# UI / 消息中显示的频道名。
+display-name: "全服"
+
+# 可选: normal / global / private / staff
+mode: "global"
+
+# 留空表示不额外要求发送/接收权限。
+send-permission: ""
+receive-permission: ""
+
+# 全服频道通常建议开启跨服同步。
+cross-server: true
+
+# range 仅普通附近频道会使用；0 表示不限制。
+range: 0
+
+# 下面五个格式分别对应常规消息、控制台、私聊双方和社交监听。
+format: "&6[{channel}] &f{player_name}&7: &r{message}"
+console-format: "[{channel}] {player_name}: {message}"
+sender-format: "&d[私聊 -> {target_name}] &f{player_name}&7: &r{message}"
+recipient-format: "&d[私聊 <- {player_name}] &f{player_name}&7: &r{message}"
+spy-format: "&5[监听 {player_name} -> {target_name}] &r{message}"

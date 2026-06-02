@@ -1,0 +1,159 @@
+config-version: 1
+# AXS Title
+# 作用: 管理称号定义、分组、品质、图标、属性、拥有/隐藏/装备/过期状态和称号菜单。
+# 依赖: ArcartX；PlaceholderAPI、AttributePlus、MythicLib、MMOItems、CraneAttribute 按功能选用。
+# 重载: /axs title reload
+# PAPI 输出:
+#   %AXStitle_owned_count% 当前玩家拥有称号数量。
+#   %AXStitle_hidden_count% 当前玩家隐藏称号数量。
+#   %AXStitle_chat_<groupId>_prefix% 指定分组已装备称号的聊天前缀。
+#   %AXStitle_chat_<groupId>_suffix% 指定分组已装备称号的聊天后缀。
+#   %AXStitle_tab_<groupId>_prefix% 指定分组已装备称号的 TAB 前缀。
+#   %AXStitle_tab_<groupId>_suffix% 指定分组已装备称号的 TAB 后缀。
+#   %AXStitle_equipped_<groupId>_id% 指定分组已装备称号 ID。
+#   %AXStitle_equipped_<groupId>_name% 指定分组已装备称号名称。
+#   %AXStitle_equipped_<groupId>_group% 指定分组已装备称号的分组名。
+#   %AXStitle_equipped_<groupId>_quality% 指定分组已装备称号的品质名。
+#   %AXStitle_owned_<titleId>% 判断是否拥有指定称号。
+#   %AXStitle_hidden_<titleId>% 判断指定称号是否隐藏。
+#   %AXStitle_remaining_<titleId>% 返回指定称号剩余毫秒或“永久”。
+#   %AXStitle_display% 总展示称号名称（按 display-title.groups 顺序拼接，分隔符见 separator）。
+#   %AXStitle_display_name% 同 %AXStitle_display%。
+#   %AXStitle_display_chat_prefix% 总展示称号的聊天前缀拼接。
+#   %AXStitle_display_chat_suffix% 总展示称号的聊天后缀拼接。
+#   %AXStitle_display_tab_prefix% 总展示称号的 TAB 前缀拼接。
+#   %AXStitle_display_tab_suffix% 总展示称号的 TAB 后缀拼接。
+#   %AXStitle_display_attr_<key>% 输出当前展示属性值。
+#   %AXStitle_collection_attr_<key>% 输出当前收藏属性值。
+#   %AXStitle_total_attr_<key>% 输出展示属性和收藏属性合计值。
+# 可消费的 PAPI: 本模块配置不主动解析外部 PAPI；输出常被 Chat、Tab 或计分板引用。
+# 关联资源: ui/title_menu.yml
+
+settings:
+  # 是否输出称号模块调试日志。
+  debug: false
+
+  # 后台过期清理周期，单位 ticks。
+  # 20 ticks = 1 秒，1200 ticks = 60 秒。
+  expiration-cleanup-interval-ticks: 1200
+
+storage:
+  # 存储模式:
+  #   sqlite = 本地文件存储
+  #   mysql  = 远程 MySQL 存储
+  mode: "sqlite"
+
+  # JDBC 连接池大小。
+  # 小服通常 2~4 即可，大服再按需提高。
+  pool-size: 4
+
+  sqlite:
+    # SQLite 文件名。
+    # 最终会生成在插件数据目录下。
+    file: "titles.db"
+
+  mysql:
+    # 当 mode: "mysql" 时使用以下配置。
+    host: "127.0.0.1"
+    port: 3306
+    database: "arcartxsuite"
+    username: "root"
+    password: ""
+
+ui:
+  # 菜单 UI ID。
+  # 默认内置菜单为 AXS:title_menu。
+  # 如果你自己做了同协议 UI，也可以改成自己的 UI ID。
+  ui-id: "AXS:title_menu"
+
+  # 插件启动时是否自动注册/重载这个 UI。
+  # 如果你想完全自己管理 UI 文件注册，可设为 false。
+  register-ui-on-enable: true
+
+  # 属性列表每行的统一颜色前缀。
+  # 后端会把这个前缀加到 selected_display_attributes_text / display_attributes_text 等
+  # List<String> 字段的每一项之前，UI 直接通过 texts: "var.xxx 渲染即可。"
+  # 支持 &0~&f 颜色码、&l 加粗等。留空 "" 表示不加任何前缀。
+  attribute-line-color: "&0"
+
+  # 当某个属性列表为空时，后端会发送的占位字符串（已带 attribute-line-color 前缀）。
+  empty-attribute-placeholder: "-"
+
+attributeplus:
+  # 是否尝试把称号属性同步到 AttributePlus Pro。
+  # 未安装 AP、未启用或挂钩失败时，称号模块仍会正常运行。
+  enabled: true
+
+  # AP 属性来源前缀。
+  # 最终会生成:
+  #   <前缀>_DISPLAY
+  #   <前缀>_COLLECTION
+  source-prefix: "AXS_TITLE"
+
+mythiclib:
+  # 是否尝试把称号属性同步到 MythicLib / MMOItems 玩家 stat。
+  # 默认关闭，避免旧配置里的自定义属性键在安装 MythicLib 后被误当成 stat id。
+  enabled: false
+
+  # MythicLib modifier 前缀。
+  # 最终会生成:
+  #   <前缀>_DISPLAY_<STAT>
+  #   <前缀>_COLLECTION_<STAT>
+  source-prefix: "AXS_TITLE"
+
+craneattribute:
+  # 是否尝试把称号属性同步到 CraneAttribute。
+  # 默认关闭；未安装、未启用或挂钩失败时，称号模块仍会正常运行。
+  enabled: false
+
+  # CraneAttribute 属性来源前缀。
+  source-prefix: "AXS_TITLE"
+
+display-title:
+  # 总展示称号关联的分组列表。
+  # 按列表顺序依次拼接各组已装备称号。
+  # 留空 [] 表示按分组定义顺序展示所有组。
+  # 只想展示单个组的称号时，只填一个组 ID。
+  groups: []
+
+  # 多组拼接时使用的分隔符。
+  separator: " "
+
+  # 没有装备任何称号时返回的文本。留空则返回空字符串。
+  empty-text: ""
+
+groups:
+  # 分组字典。
+  # key 为分组 ID，只建议使用小写英文、数字、下划线。
+  # name 为显示名称，sort-order 越小越靠前。
+  adventure:
+    name: "&f冒险类&7"
+    sort-order: 10
+
+  exploration:
+    name: "&f探索类&7"
+    sort-order: 20
+
+  activity:
+    name: "&f活动类&7"
+    sort-order: 30
+
+qualities:
+  # 品质字典。
+  # key 为品质 ID，name 为显示名称，sort-order 越小越靠前。
+  common:
+    name: "&f普通"
+    sort-order: 10
+
+  legendary:
+    name: "&6传说"
+    sort-order: 20
+
+  mythic:
+    name: "&c神话"
+    sort-order: 30
+
+# 称号定义目录，路径相对模块数据目录。
+# 建议按称号组分文件，例如 titles/adventure.yml、titles/exploration.yml、titles/activity.yml。
+# 目录下每个 *.yml 文件可包含多个称号定义，根键即为称号 ID。
+titles-directory: "titles"

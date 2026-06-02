@@ -1,0 +1,34 @@
+# ============================================================
+#  EventPacket 模块消息文件
+# ------------------------------------------------------------
+#  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
+#  修改后执行 /axs reload eventpacket 即可生效。
+# ============================================================
+
+prefix: "&3◆ &6ArcartXSuite &7| &r"
+
+# ── 通用 ──────────────────────────────────────────────
+common:
+  service-down: "&c服务未启动。"
+  player-offline: "&c玩家不在线: {0}"
+  reload-hint: "&e请使用 /{0} reload eventpacket"
+  unknown: "&e未知命令，使用 /{0} eventpacket help"
+  running: "&6EventPacket 运行中"
+
+# ── help ──────────────────────────────────────────────
+help:
+  title: "&6EventPacket 管理命令"
+  status: "&7{0} status&f - 查看模块状态"
+  fire: "&7{0} fire <信号名> <玩家> [key=value...]&f - 手动触发信号"
+  clearlag: "&7{0} clearlag&f - 手动执行实体清理"
+
+# ── fire ──────────────────────────────────────────────
+fire:
+  usage: "&e用法: /axs eventpacket fire <信号名> <玩家> [key=value...]"
+  success: "&a已向 {0} 触发信号 {1}"
+  success-vars: "&a已向 {0} 触发信号 {1} (附带 {2} 个参数)"
+
+# ── clearlag ──────────────────────────────────────────
+clearlag:
+  service-down: "&c实体清理服务未启动。"
+  success: "&a已手动清除 {0} 个实体。"

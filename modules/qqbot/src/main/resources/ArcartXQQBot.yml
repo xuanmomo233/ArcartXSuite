@@ -1,0 +1,426 @@
+config-version: 1
+# AXS QQBot QQ群服互联
+# 作用: 通过 OneBot 11 协议连接 QQ 机器人，实现 QQ 群与服务器消息双向同步、
+#       群指令查询玩家数据、QQ-游戏账号绑定、白名单管理。
+# 重载: /axs qqbot reload
+# 玩家入口: /qqbot bind <验证码> 绑定账号。
+# PAPI: %AXSqqbot_bound_qq%、%AXSqqbot_bound_name% 等。
+
+settings:
+  debug: false
+  # 服务器标识（多服时区分来源）
+  server-id: "survival"
+
+# ─── OneBot 11 WebSocket 连接 ──────────────────────────
+onebot:
+  # OneBot 正向 WebSocket 地址（如 Lagrange/NapCat/LLOneBot）
+  ws-url: "ws://127.0.0.1:3001"
+  # 鉴权 token（可留空）
+  access-token: ""
+  # 断线重连间隔（秒）
+  reconnect-interval-seconds: 10
+  # 心跳间隔（秒）
+  heartbeat-interval-seconds: 30
+  # SnowLuma 进程管理（推荐的 OneBot 实现端）
+  snowluma:
+    # SnowLuma 安装目录（相对于服务端根目录）
+    dir: "snowluma"
+    # 模块启动时自动启动 SnowLuma（前提：已通过 install 安装）
+    auto-start: false
+
+# ─── 监听的 QQ 群 ──────────────────────────────────────
+groups:
+  - group-id: 123456789
+    # 消息同步模式: both / game-to-qq / qq-to-game / none
+    sync-mode: "both"
+    # 游戏消息转发到 QQ 群的格式
+    game-to-qq: "[MC] {player}: {message}"
+    # QQ 群消息转发到游戏内的格式
+    qq-to-game: "&7[QQ] &f{nick}: &7{message}"
+    # 是否允许群成员执行指令
+    commands-enabled: true
+    # 玩家进服通知
+    join-message: "[MC] {player} 加入了服务器"
+    # 玩家退服通知
+    quit-message: "[MC] {player} 离开了服务器"
+
+# ─── QQ-游戏账号绑定 ───────────────────────────────────
+binding:
+  enabled: true
+  # 绑定方式: code（验证码）
+  method: "code"
+  # 验证码过期时间（秒）
+  code-expire-seconds: 300
+  # 每个 QQ 最多绑定的游戏账号数
+  max-bindings-per-qq: 1
+  # 群内绑定指令前缀（如 "#绑定 玩家名"）
+  bind-prefix: "#绑定"
+  # 群内解绑指令前缀
+  unbind-prefix: "#解绑"
+  # 群内查绑指令前缀
+  query-prefix: "#查绑"
+
+# ─── 白名单管理 ────────────────────────────────────────
+whitelist:
+  enabled: true
+  # 绑定后自动加白名单
+  auto-add-on-bind: true
+  # 解绑后自动移除白名单
+  auto-remove-on-unbind: true
+  # 白名单命令模板
+  add-command: "whitelist add {name}"
+  remove-command: "whitelist remove {name}"
+  # 群内白名单管理指令（仅群管/群主可用）
+  add-prefix: "#白名单添加"
+  remove-prefix: "#白名单移除"
+  list-prefix: "#白名单列表"
+
+# ─── 白名单登录门控 ─────────────────────────────────────
+# 结合 authlib-injector (LittleSkin) 和 QQ 绑定实现分级准入。
+#
+# 【Mixed Auth Mode 必要配置】若服务器同时支持 LittleSkin + 微软正版 + 离线：
+#   1. 启动脚本 authlib-injector API 地址必须加上 ?mixed 后缀
+#      例: -javaagent:plugins/authlib-injector.jar=https://littleskin.cn/api/yggdrasil?mixed
+#   2. server.properties 必须设置 online-mode=true
+#      否则 LittleSkin 账号会被分配 v3 UUID，无法与离线玩家区分
+#   3. 注意：启用 online-mode=true 后，离线玩家无法直接连接服务器
+#
+# 判定原理: 查 Mojang API 比较 UUID。
+#   - UUID 与 Mojang 官方一致 → 微软正版
+#   - UUID 与 Mojang 官方不同 → LittleSkin
+#   - 不在 Mojang 且 v4 → LittleSkin
+#   - 不在 Mojang 且 v3 → 离线
+#
+# 【v2.0 架构变更】QQ 绑定验证已从 PreLogin 拦截迁移到 LoginView 登录面板中完成。
+#   - 本配置启用后不再踢人，仅做日志记录和审计。
+#   - 微软正版 / LittleSkin 玩家进服后都会看到 LoginView 面板。
+#   - 已绑定 QQ 的玩家：面板显示「进入服务器」按钮，直接放行。
+#   - 未绑定 QQ 的玩家：面板显示绑定验证码输入框，需输入验证码完成绑定。
+#   - 离线玩家：若认证层（authlib-injector）已正确拦截，则不会到达此阶段。
+whitelist-login:
+  enabled: false
+  # 保留配置项，向后兼容。实际绑定验证已在登录面板中完成。
+  microsoft-pass: true
+  littleskin-require-bind: true
+  deny-offline: true
+  # 以下消息不再用于踢出，仅供日志参考。
+  kick-not-bound: "&c你还未在QQ群完成绑定认证\n&7请在QQ群发送: #绑定 {name}\n&7完成验证后方可进入游戏"
+  kick-offline: "&c本服务器仅允许正版/LittleSkin 账号登录"
+  kick-denied: "&c你没有权限进入本服务器"
+
+# ─── 管理员远程控制 ─────────────────────────────────────
+# 配置的QQ号可在群内直接执行服务器控制台命令。
+# 安全警告: 请仅添加完全信任的QQ号，该功能等同于控制台权限。
+admin:
+  enabled: false
+  # 管理员QQ号列表
+  qq-list:
+    - 123456789
+  # 管理员指令前缀（如 "#cmd say hello" 会在控制台执行 "say hello"）
+  command-prefix: "#cmd"
+
+# ─── 自定义群指令 ──────────────────────────────────────
+# 指令前缀（群消息以此开头才会被识别为指令）
+command-prefix: "#"
+# 帮助指令前缀
+help-prefix: "#帮助"
+custom-commands:
+  查在线:
+    # 权限: 0=普通群员, 1=群管理/群主
+    permission: 0
+    # 类型: builtin / server-command / papi-query
+    type: "builtin"
+    builtin-id: "online-list"
+  查服务器:
+    permission: 0
+    type: "builtin"
+    builtin-id: "server-status"
+  查玩家:
+    permission: 0
+    type: "papi-query"
+    # 需要绑定才能查自己，或指定玩家名
+    usage: "#查玩家 [玩家名]"
+    placeholders:
+      - "%player_level%"
+      - "%vault_eco_balance%"
+      - "%player_health%"
+      - "%player_food_level%"
+    format: "玩家: {name}\n等级: {0}\n金币: {1}\n生命: {2}\n饥饿: {3}"
+  执行命令:
+    permission: 1
+    type: "server-command"
+    # {args} 会被替换为群消息中指令后面的所有参数
+    command: "{args}"
+  积分榜:
+    permission: 0
+    type: "builtin"
+    builtin-id: "points-leaderboard"
+
+# ─── 签到打卡 + 积分系统 ───────────────────────────────
+# 群成员每日签到获得积分，连续签到有额外加成。
+# 积分可在兑换商店通过邮件领取游戏奖励。
+signin:
+  enabled: true
+  # 每日签到基础积分
+  base-points: 10
+  # 每多连续签到 1 天额外增加的积分
+  streak-bonus: 2
+  # 连续签到加成上限（防止无限叠加）
+  max-streak-bonus: 50
+  # 签到指令
+  sign-prefix: "#签到"
+  # 签到别名（任意一个都可触发签到）
+  aliases:
+    - "#打卡"
+  # 兑换商店指令
+  shop-prefix: "#商店"
+  # 兑换指令前缀（如 "#兑换 diamond"）
+  redeem-prefix: "#兑换"
+  # 积分查询指令
+  points-query-prefix: "#积分"
+  # 积分转账指令
+  transfer-prefix: "#转账"
+  # 发红包指令
+  red-packet-prefix: "#红包"
+  # 抢红包指令
+  grab-red-packet-prefix: "#抢红包"
+  # 活跃度排行指令
+  activity-prefix: "#活跃排行"
+
+# ─── 积分兑换奖品 ──────────────────────────────────────
+# 兑换后通过邮件系统（Mail 模块）将奖品发放给绑定玩家。
+# mail-preset-id 须对应 Mail 模块中配置的邮件预设。
+prizes:
+  - id: "diamond"
+    name: "钻石礼包"
+    cost: 100
+    mail-preset-id: "qqbot_diamond"
+    description: "10 颗钻石"
+    # 每日兑换上限（0=不限）
+    limit-per-day: 1
+    # 是否需要先绑定游戏账号
+    require-bind: true
+    # 折扣比例（0.8=8折），不折扣时填 1.0 或省略
+    discount-rate: 1.0
+    # 折扣截止 unix 时间戳（毫秒），0=无折扣
+    discount-until: 0
+  - id: "vip1"
+    name: "VIP体验卡"
+    cost: 500
+    mail-preset-id: "qqbot_vip"
+    description: "3 天 VIP 体验"
+    limit-per-day: 0
+    require-bind: true
+    discount-rate: 1.0
+    discount-until: 0
+
+# ─── 服务器监控告警 ─────────────────────────────────────
+# 检测到 TPS 过低或内存占用过高时自动推送告警到群。
+monitor:
+  enabled: false
+  # TPS 低于此值触发告警
+  tps-threshold: 15.0
+  # 内存占用百分比超过此值触发告警
+  memory-threshold-percent: 90
+  # 检测间隔（秒）
+  check-interval-seconds: 60
+  # 同类告警冷却（秒），避免刷屏
+  cooldown-seconds: 300
+  # 接收告警的群号列表（留空=推送到所有已配置群）
+  alarm-groups: []
+  # TPS 告警格式
+  tps-alarm-format: "⚠ 服务器告警\nTPS 过低: {tps}（阈值 {threshold}）"
+  # 内存告警格式
+  memory-alarm-format: "⚠ 服务器告警\n内存占用过高: {used}MB/{max}MB ({percent}%)"
+
+# ─── 定时消息 ──────────────────────────────────────────
+# mode: interval（固定间隔）/ daily（每日定时 HH:mm）
+# 占位符: {online} 在线人数, {max} 最大人数, {tps} 当前TPS
+scheduled-messages:
+  - id: "online_report"
+    mode: "interval"
+    interval-seconds: 21600
+    message: "📊 当前在线人数: {online}/{max}"
+    # 目标群（留空=所有已配置群）
+    target-groups: []
+  - id: "daily_signin_reminder"
+    mode: "daily"
+    daily-time: "12:00"
+    message: "🎁 别忘了发送 #签到 领取今日积分哦~"
+    target-groups: []
+
+# ─── 击杀播报 ──────────────────────────────────────────
+# 游戏内击杀事件推送到 QQ 群。
+broadcast:
+  kill:
+    enabled: false
+    format: "🗡 {killer} 击杀了 {victim}"
+    # 仅播报 Boss 击杀（victim 名称匹配 boss-keywords）
+    boss-only: true
+    # 仅播报玩家击杀玩家（PvP），优先级高于 boss-only
+    player-kill-only: false
+    # Boss 名称关键词（包含即视为 Boss）
+    boss-keywords:
+      - "Boss"
+      - "首领"
+      - "魔王"
+  death:
+    enabled: false
+    format: "☠ {player} 死亡了"
+
+# ─── 入群欢迎 ──────────────────────────────────────────
+# 新成员加群时自动 @ 并发送欢迎消息。
+welcome:
+  enabled: false
+  message: "欢迎新成员加入！\n发送 #绑定 <游戏名> 关联你的游戏账号\n发送 #帮助 查看可用指令"
+
+# ─── 关键词自动回复（FAQ） ─────────────────────────────
+auto-reply:
+  enabled: false
+  # 同一群两次自动回复的最小间隔（秒），防刷屏
+  cooldown-seconds: 30
+  rules:
+    - keywords: ["怎么进服", "服务器地址", "ip"]
+      response: "服务器地址: play.example.com\n首次进入请先在群内 #绑定 <游戏名>"
+      # true=消息须完全等于关键词，false=包含即触发
+      exact-match: false
+    - keywords: ["怎么绑定", "如何绑定"]
+      response: "在群里发送: #绑定 <你的游戏名>\n然后按提示在游戏内输入验证码即可"
+      exact-match: false
+
+# ─── 群公告广播 ────────────────────────────────────────
+# 管理员在群内发布公告，同步到游戏内（聊天栏 + 标题）。
+announce:
+  enabled: false
+  prefix: "#公告"
+  # 游戏内聊天栏格式
+  game-format: "&e&l[群公告] &f{content}"
+  # 发布成功后给群的回执
+  qq-receipt: "✓ 公告已发布到游戏内"
+  # 是否同时弹出标题
+  title-enabled: true
+  title-text: "&e群公告"
+  subtitle-format: "&f{content}"
+
+# ─── 群管理 moderation ─────────────────────────────────
+# 管理员在群内踢出/封禁玩家，并支持 QQ 禁言同步封禁。
+moderation:
+  enabled: false
+  kick-prefix: "#踢"
+  ban-prefix: "#封禁"
+  kick-command: "kick {name} {reason}"
+  ban-command: "ban {name} {reason}"
+  # QQ 群禁言 → 游戏内封禁绑定玩家
+  sync-ban:
+    enabled: false
+    # {duration} 为禁言时长（分钟，如 "10m"），{name} 玩家名，{reason} 原因
+    command: "tempban {name} {duration} {reason}"
+    # 是否按 QQ 禁言时长设置游戏封禁时长
+    use-duration: true
+    reason: "QQ群禁言同步"
+  # 关键词自动撤回 + 禁言（广告拦截）
+  auto-moderation:
+    enabled: false
+    keywords:
+      - "http://"
+      - "https://"
+      - "www."
+      - "点击"
+      - "加群"
+    # 禁言时长（秒）
+    ban-duration-seconds: 600
+    # 同一群两次自动 moderation 最小间隔（秒）
+    cooldown-seconds: 300
+
+# ─── 群内 @ → 游戏内提示 ───────────────────────────────
+# 当群消息中 @ 了某 QQ 号，若该 QQ 绑定的玩家在线，游戏内收到 Title 提示。
+at-to-game:
+  enabled: true
+
+# ─── 黑名单 ────────────────────────────────────────────
+# 列入黑名单的 QQ 号将被禁止使用机器人的所有功能：
+# 指令处理、消息同步、入群欢迎、签到积分、自动回复等。
+# 支持通过群指令动态添加/移除（仅管理员可用）。
+blacklist:
+  enabled: false
+  qq-list:
+    - 987654321
+  add-prefix: "#黑名单添加"
+  remove-prefix: "#黑名单移除"
+  list-prefix: "#黑名单列表"
+
+# ─── 存储（QQ-游戏绑定数据） ──────────────────────────
+storage:
+  mode: "sqlite"
+  sqlite-file: "qqbot.db"
+  mysql:
+    host: "127.0.0.1"
+    port: 3306
+    database: "arcartxsuite"
+    username: "root"
+    password: ""
+    table-prefix: "axs_qqbot_"
+  pool-size: 4
+
+# ─── UI 界面配置 ───────────────────────────────────────
+ui:
+  # 绑定中心 UI
+  bind:
+    ui-id: "AXS:QQBot_Bind"
+    ui-file: "qqbot_bind.yml"
+  # 消息通知 HUD
+  notify:
+    ui-id: "AXS:QQBot_Notify"
+    ui-file: "qqbot_notify.yml"
+    # 是否启用消息通知 HUD（屏幕右上角弹出新消息）
+    enabled: true
+  # 管理后台 UI
+  admin:
+    ui-id: "AXS:QQBot_Admin"
+    ui-file: "qqbot_admin.yml"
+
+# ─── 消息文本 ─────────────────────────────────────────
+messages:
+  prefix: "&8[&bQQBot&8] &7"
+  bind-code-sent: "验证码已生成: {code}\n请在 {expire} 秒内到游戏中输入:\n/qqbot bind {code}"
+  bind-success: "绑定成功！\nQQ: {qq} ↔ 游戏: {name}"
+  bind-success-game: "&a绑定成功！QQ: &e{qq} &a↔ 游戏: &e{name}"
+  already-bound: "该QQ已绑定玩家 {name}，如需换绑请先解绑"
+  unbind-success: "已解除绑定: {name}"
+  unbind-success-game: "&c已解除与 QQ &e{qq} &c的绑定"
+  not-bound: "该账号尚未绑定"
+  code-expired: "验证码已过期，请重新获取"
+  code-invalid: "&c验证码无效或已过期"
+  whitelist-added: "已为 {name} 添加白名单"
+  whitelist-removed: "已移除 {name} 的白名单"
+  bot-connected: "&aQQ 机器人已连接"
+  bot-disconnected: "&cQQ 机器人连接断开"
+  no-permission: "你没有权限执行此指令"
+  player-not-found: "找不到玩家: {name}"
+  command-executed: "命令已执行: {command}"
+  admin-command-executed: "[管理] 命令已执行: {command}"
+  admin-command-failed: "[管理] 命令执行失败: {command}"
+  # ─── 签到积分 ───
+  signin-success: "签到成功！获得 {points} 积分\n连续签到 {streak} 天，当前积分 {balance}"
+  signin-already: "你今天已经签到过了\n连续签到 {streak} 天，当前积分 {balance}"
+  points-query: "你的积分: {balance}\n累计获得 {earned}，已消费 {spent}"
+  shop-header: "═══ 积分兑换商店 ═══\n（发送 #兑换 <编号> 兑换奖品）"
+  shop-item: "[{id}] {name} - {cost}积分\n  {desc}"
+  shop-footer: "═══════════════\n你的积分: {balance}"
+  redeem-success: "兑换成功！\n奖品 [{name}] 将通过邮件发放给 {player}\n已扣除 {cost} 积分，剩余 {balance}"
+  redeem-no-points: "积分不足！兑换 [{name}] 需要 {cost} 积分，你只有 {balance}"
+  redeem-not-found: "找不到该奖品编号: {id}"
+  redeem-not-bound: "兑换该奖品需要先绑定游戏账号\n请发送: #绑定 <游戏名>"
+  redeem-limit: "[{name}] 今日兑换次数已达上限"
+  redeem-mail-failed: "奖品发放失败（邮件系统不可用），积分已退还"
+  blacklist-blocked: "你的账号已被禁止使用本机器人的功能"
+  blacklist-added: "已将 QQ {qq} 加入黑名单"
+  blacklist-removed: "已将 QQ {qq} 移出黑名单"
+  blacklist-already: "QQ {qq} 已在黑名单中"
+  blacklist-not-found: "QQ {qq} 不在黑名单中"
+  blacklist-list-header: "═══ 黑名单列表 ═══"
+  blacklist-list-item: "- {qq}"
+  blacklist-list-empty: "黑名单为空"
+  blacklist-no-permission: "你没有权限管理黑名单"
+  help-header: "═══ 可用指令 ═══"
+  help-footer: "═══════════════"

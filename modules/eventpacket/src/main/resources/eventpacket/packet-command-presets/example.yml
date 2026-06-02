@@ -1,0 +1,21 @@
+﻿# AXS 资源说明
+# 用途: EventPacket 客户端回包预设示例；客户端 UI 通过 presetId 触发服务端命令。
+# 前置依赖: ArcartX；EventPacket 模块启用后生效。
+# 启用开关: config.yml -> modules.eventpacket.enabled + modules.eventpacket.password
+# 关联文件: ArcartXEventPacket.yml 的 packet-command 段
+# 重载命令: /axs eventpacket reload
+# 最小使用路径: 预设键名 + type + commands
+
+# 顶层键就是 presetId。
+example_op:
+  # 可选: op / console / player
+  type: op
+  commands:
+    - say 你好，我是 <player>
+    - say 这里是 OP 身份执行
+
+example_console:
+  type: console
+  commands:
+    - say 控制台正在响应 <player>
+

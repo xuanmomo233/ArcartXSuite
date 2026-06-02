@@ -1,0 +1,13 @@
+# Announcer 公告条目
+# 目录下每个 *.yml 文件可包含多个条目，根键即为条目 ID。
+# enabled=false 的条目不会下发到客户端。
+
+welcome:
+  enabled: true
+  text: "欢迎来到服务器，祝你游玩愉快。"
+  click-command: ""
+
+player:
+  enabled: true
+  text: "你好，%player_name%。"
+  click-command: "say <player> 点击了公告"

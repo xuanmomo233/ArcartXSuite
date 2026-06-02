@@ -1,0 +1,121 @@
+# CombatEffect 包定义
+# 目录下每个 *.yml 文件可包含多个包定义，根键即为包 ID。
+#
+# ─── 通用字段说明 ───
+# enabled:        是否启用此包定义（false 时完全跳过）
+# trigger:        触发器类型
+#   kill          — 玩家击杀活体实体时触发
+#   attack        — 玩家攻击活体实体时触发
+#   death         — 玩家即将死亡进入缓冲期时触发
+#   combo         — 连击计数达到条件时触发
+#   manual        — 仅通过命令或 API 手动触发
+#   keybind       — ArcartX 按键按下/释放时触发（需启用 keybind-trigger）
+#   state         — Chronos 状态进入/离开时触发（需启用 state-trigger）
+#   controller    — Chronos 控制器切换时触发（需启用 state-trigger）
+# ui-id:          目标 ArcartX UI 的 ID（即 UI 文件名去掉 .yml）
+# packet-handler: 目标 UI 中的 packetHandler 名称
+# recipients:     接收者列表
+#   killer / attacker — 攻击者（按键/状态触发时为触发的玩家）
+#   target            — 受害者（仅玩家可接收）
+# cooldown:       冷却时间（毫秒），同一玩家在冷却内不会重复收到此包，0 = 无冷却
+# conditions:     触发条件（不同 trigger 有不同可用字段）
+# pack:           发包内容，支持字符串 / 列表 / 字典三种模式，支持变量替换
+#
+# ─── 内置变量（按触发器分组）───
+# kill/attack:    {killer_name} {victim_name} {victim_display_name} {victim_entity_type_name}
+#                 {victim_mythic_mob_id} {victim_is_player} {receiver_role} {killer_main_hand}
+#                 {timestamp_local} {victim_x} {victim_y} {victim_z} {victim_world} {victim_uuid}
+# death:          {attacker} {target} {damage} {death_message}
+# combo:          {combo_count} {player} {attacker}
+# keybind:        {player} {key_name}
+# state:          {player} {state_id} {controller_id}
+# controller:     {player} {controller_id}
+
+# ─── 击杀特效 ───
+# 玩家击杀活体实体时，向攻击者发送击杀特效包
+kill-effect:
+  enabled: true                    # 是否启用
+  trigger: kill                    # 触发器: 击杀时触发
+  ui-id: "combat_kill_effect"      # 目标 UI ID
+  packet-handler: "kill"           # UI 中的处理器名称
+  recipients:                      # 接收者列表
+    - killer                       # 攻击者（击杀者）
+  pack: ""                         # 发包内容（空字符串 = 不附加额外数据）
+
+# ─── 命中特效 ───
+# 玩家攻击活体实体时触发，高频事件建议配合 cooldown 使用
+attack-effect:
+  enabled: false                   # 默认关闭，按需开启
+  trigger: attack                  # 触发器: 攻击时触发
+  ui-id: "combat_kill_effect"      # 目标 UI ID
+  packet-handler: "attack"         # UI 中的处理器名称
+  recipients:                      # 接收者列表
+    - attacker                     # 攻击者
+  cooldown: 500                    # 冷却时间（毫秒），同一玩家在冷却内不会重复收到此包。0 = 无冷却
+  pack: ""                         # 发包内容
+
+# ─── 连击包定义 ───
+# trigger: combo — 当玩家连击计数满足 conditions 条件时触发。
+# conditions 字段说明:
+#   combo-min:    最低连击数（含），到达时触发一次
+#   combo-max:    最高连击数（含），超出后不再触发。2147483647 表示无上限
+#   combo-repeat: true 时在 min~max 范围内每一击都触发；false 时仅达到 min 时触发一次
+# 内置变量: {combo_count} 当前连击数, {player} 触发玩家名, {attacker} 攻击者名
+
+# 连击达到 5 时触发一次普通连击提示
+combo-5:
+  enabled: true                    # 是否启用
+  trigger: combo                   # 触发器: 连击条件触发
+  ui-id: "combo_effect"            # 目标 UI ID（连击特效面板）
+  packet-handler: "combo"          # UI 中的处理器名称（更新连击数字）
+  recipients:                      # 接收者列表
+    - attacker                     # 攻击者
+  conditions:                      # 连击触发条件
+    combo-min: 5                   # 最低连击数（含）: 达到 5 连击时触发
+    combo-max: 2147483647          # 最高连击数（含）: 无上限
+    combo-repeat: false            # 不重复触发，仅达到 5 时触发一次
+  pack:                            # 发包内容（字典模式）
+    combo_count: "{combo_count}"   # 传递当前连击数到客户端
+
+# 连击达到 10 时触发里程碑特效动画
+combo-10:
+  enabled: true                    # 是否启用
+  trigger: combo                   # 触发器: 连击条件触发
+  ui-id: "combo_effect"            # 目标 UI ID（连击特效面板）
+  packet-handler: "combo_milestone" # UI 中的处理器名称（更新数字 + 播放里程碑动画）
+  recipients:                      # 接收者列表
+    - attacker                     # 攻击者
+  conditions:                      # 连击触发条件
+    combo-min: 10                  # 最低连击数（含）: 达到 10 连击时触发
+    combo-max: 2147483647          # 最高连击数（含）: 无上限
+    combo-repeat: false            # 不重复触发，仅达到 10 时触发一次
+  pack:                            # 发包内容
+    combo_count: "{combo_count}"   # 传递当前连击数到客户端
+
+# ─── 死亡缓冲包定义 ───
+# trigger: death — 在玩家即将死亡进入缓冲期时触发。
+# 内置变量: {attacker} 击杀者名, {target} 死亡玩家名, {damage} 致命伤害数值, {death_message} 死亡消息
+
+# 死亡缓冲 — 发给被击杀的玩家（显示全屏死亡界面）
+death-buffer-victim:
+  enabled: true                    # 是否启用
+  trigger: death                   # 触发器: 死亡缓冲触发
+  ui-id: "death_buffer"            # 目标 UI ID（全屏死亡缓冲界面）
+  packet-handler: "death"          # UI 中的处理器名称
+  recipients:                      # 接收者列表
+    - target                       # 受害者（即将死亡的玩家）
+  pack:                            # 发包内容
+    killer: "{attacker}"           # 击杀者名称（环境死亡时为空）
+    victim: "{target}"             # 死亡玩家名称
+
+# 死亡缓冲 — 发给击杀者（复用击杀特效 UI 显示击杀提示）
+death-buffer-killer:
+  enabled: true                    # 是否启用
+  trigger: death                   # 触发器: 死亡缓冲触发
+  ui-id: "combat_kill_effect"      # 目标 UI ID（复用击杀特效 HUD）
+  packet-handler: "kill"           # UI 中的处理器名称（显示击杀计数）
+  recipients:                      # 接收者列表
+    - attacker                     # 攻击者（击杀者，可能不存在）
+  pack:                            # 发包内容
+    killer: "{attacker}"           # 击杀者名称
+    victim: "{target}"             # 死亡玩家名称

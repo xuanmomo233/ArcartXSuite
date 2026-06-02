@@ -1,0 +1,54 @@
+﻿# AXS 资源说明
+# 用途: Mail 模块预设邮件示例；管理员可直接批量派发。
+# 前置依赖: ArcartX；Mail 模块启用后生效。
+# 启用开关: config.yml -> modules.mail.enabled + modules.mail.password
+# 关联文件: ArcartXMail.yml
+# 重载命令: /axs mail reload
+# 最小使用路径: preset.id + /axs mail preset send <presetId> <player|all-online|all-registered>
+
+preset:
+  # 预设唯一 ID；建议与文件名一致。
+  id: starter
+  enabled: true
+  display-name: 新手欢迎信
+  subject: 欢迎来到服务器
+  body: |-
+    这是一封 AXS Mail 模块的示例邮件。
+    你可以通过 /axs mail preset send starter <player> 进行派发。
+
+  # 邮件默认过期天数。
+  expires-after-days: 15
+
+  # 旧版兼容字段；等价于附带一份 money 货币附件。
+  vault-attachment: 0.0
+
+  # 也可以用 currency-attachments 显式定义多种货币附件。
+  # currency-attachments:
+  #   - currency: money
+  #     amount: 88
+  #     description: 新手金币礼包
+
+  item-attachments:
+    - material: APPLE
+      amount: 8
+      name: "§a欢迎苹果"
+      lore:
+        - "§7来自 AXS Mail 示例预设"
+
+
+  # 玩家领取邮件时额外执行的命令。
+  claim-commands:
+    - "tell <player> 你领取了示例邮件奖励。"
+
+  # 领取条件格式: placeholder::operator::expected
+  # 例如: %player_level%::gte::10
+  claim-conditions: []
+
+  # 可选: 随预设同步到数据库的 CDK。
+  # 执行 /axs mail reload 后会创建或更新固定 code；已有领取次数不会清零。
+  # expires-at 使用 UTC ISO 时间；expires-after/ttl 按 CDK 首次创建时间计算。
+  cdks:
+    - code: STARTER2026
+      enabled: true
+      max-claims: 100
+      expires-after: 30d

@@ -1,0 +1,92 @@
+config-version: 1
+# AXS Conversation
+# 作用: 桥接 Chemdah/Adyeshach 对话，把 NPC 正文、玩家回复和附近可对话 NPC 列表推送到 ArcartX UI。
+# 依赖: ArcartX、Chemdah、Adyeshach。
+# 重载: /axs conversation reload
+# PAPI 输出: 无独立 PlaceholderAPI 输出。
+# 可解析的 PAPI: 本模块不主动解析 %...%；对话文本通常由 Chemdah 或任务系统生成。
+# 发包字段: dialog sync 使用 speakerName、messageLines、replyRows；selector sync 使用 npcRows、distanceText、selected 状态。
+# 关联资源: ui/conversation_menu.yml、ui/conversation_selector_hud.yml
+
+debug:
+  # 是否输出对话桥接调试日志。
+  enabled: false
+
+theme:
+  # 注册到 ConversationService 的主题名。
+  name: ArcartXConversation
+
+client:
+  # 客户端 packet-id；HUD 菜单与交互都会通过这个标识通信。
+  # 注意: 两个 HUD 的点击/滚轮回包会直接读取这里下发的 packetId。
+  packet-id: AXS_CONVERSATION
+
+  # 主对话 Menu 与 NPC 选择 HUD 的 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
+  # dialog-ui-id: "AXS:conversation_menu"
+  # 多 UI 示例（同一个 payload 同时发给多个 UI）：
+  # dialog-ui-id:
+  #   - "AXS:conversation_menu"
+  #   - "AXS:conversation_menu_alt"
+  dialog-ui-id: AXS:conversation_menu
+  # selector-ui-id 同样支持列表格式：
+  # selector-ui-id:
+  #   - "AXS:conversation_selector_hud"
+  #   - "AXS:conversation_selector_alt"
+  selector-ui-id: AXS:conversation_selector_hud
+
+  # 是否在模块启用 / 重载时自动向 ArcartX 注册 UI 文件。
+  register-ui-on-enable: true
+  overwrite-ui-files: false
+
+interaction:
+  # 是否启用附近 NPC 扫描与快捷键交互。
+  enabled: true
+
+  # 扫描附近可交互 NPC 的范围与周期。
+  scan-range: 6.0
+  scan-period-ticks: 10
+
+  # NPC 选择器与回包防抖参数，单位毫秒。
+  selector-sticky-ms: 1500
+  open-cooldown-ms: 350
+  reply-debounce-ms: 250
+  suppress-reopen-ms: 500
+
+# 按键已由宿主 config.yml keybinds 节统一注册（AXS_INTERACT / AXS_NAVIGATE_PREV / AXS_NAVIGATE_NEXT）。
+# 本模块不再自行注册按键。
+
+# NPC 外观配置：模块启动/重载时，自动为指定名称的 Adyeshach NPC 设置 ArcartX 模型与动画。
+# 依赖 ArcartX 和 Adyeshach 同时可用。
+#
+# 必填字段:
+#   npc     - NPC 显示名 (displayName / customName) 或 Adyeshach ID，忽略大小写。
+#   model   - ArcartX 模型 ID。
+#
+# 可选字段:
+#   scale            - 模型缩放比例，默认 1.0。
+#
+# 动画模式二选一:
+#   模式 A — 持久默认状态（不填 animation-speed）:
+#     state     - 动画状态名称（如 "idle"）。
+#     animation - 动画名称。
+#     → 调用 setDefaultState(state, animation)
+#
+#   模式 B — 一次性播放（填 animation-speed > 0）:
+#     animation        - 动画名称。
+#     animation-speed  - 播放速度，大于 0 时启用此模式（如 1.0 为正常速度，1.5 为 1.5 倍速）。
+#     transition-time  - 过渡时间（毫秒），默认 5。
+#     keep-time        - 持续时间（毫秒），-1 表示播放完整动画，默认 -1。
+#     → 调用 playAnimation(animation, speed, transitionTime, keepTime)
+npc-appearances:
+#  - npc: "村长老王"           # 模式 A：持久默认动画
+#    model: npc_village_elder
+#    scale: 1.0
+#    state: idle
+#    animation: idle_loop
+#  - npc: "铁匠张三"           # 模式 B：一次性播放（带速度）
+#    model: npc_blacksmith
+#    scale: 1.0
+#    animation: hammer_swing
+#    animation-speed: 1.5
+#    transition-time: 100
+#    keep-time: -1

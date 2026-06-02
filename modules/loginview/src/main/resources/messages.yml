@@ -1,0 +1,67 @@
+# ============================================================
+#  LoginView 模块消息文件
+# ------------------------------------------------------------
+#  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
+#  修改后执行 /axs reload loginview 即可生效。
+# ============================================================
+
+prefix: "&3◆ &6ArcartXSuite &7| &r"
+
+# ── 通用 ──────────────────────────────────────────────
+common:
+  service-down: "&cLoginView 服务未启动。"
+  unknown-command: "&e未知 LoginView 命令: {0}"
+
+# ── help ──────────────────────────────────────────────
+help:
+  title: "&6LoginView 模块命令"
+  status: "&7{0} status&f - 查看登录模块状态。"
+  reload: "&7{0} reload&f - 重载配置、UI 和账户服务。"
+  open: "&7{0} open <玩家>&f - 强制为在线玩家打开登录界面。"
+  migrate: "&7{0} migrate-authme [dry-run]&f - 从 AuthMe 迁移账户 hash。"
+  migration-commands: "&7{0} migration-commands&f - 查看迁移后的安全操作提示。"
+  setup-authlib: "&7{0} setup-authlib&f - 自动下载 authlib-injector 并生成启动脚本。"
+
+# ── status ────────────────────────────────────────────
+status:
+  title: "&6LoginView 状态"
+  service: "&7服务: &f{0}"
+  service-running: "运行中"
+  service-stopped: "未启动"
+  auth-mode: "&7认证模式: &f{0}"
+  storage: "&7存储: &f{0}"
+  ui: "&7UI: &f{0}"
+  ui-file: "&7UI 文件: &f{0}"
+  lock: "&7锁定: &f移动={0}, 聊天={1}, 命令={2}"
+  accounts: "&7账户数: &f{0}"
+  authme: "&7AuthMe 可用: &f{0}"
+
+# ── reload ────────────────────────────────────────────
+reload:
+  success: "&aLoginView 已重载。"
+  failed: "&cLoginView 重载失败: {0}"
+
+# ── open ──────────────────────────────────────────────
+open:
+  usage: "&e用法: /axs loginview open <玩家>"
+  player-offline: "&c玩家不在线: {0}"
+  success: "&a已为 {0} 打开 LoginView。"
+
+# ── migrate-authme ────────────────────────────────────
+migrate:
+  preview: "&aAuthMe 迁移预览完成: 扫描 {0}，可导入 {1}，跳过 {2}"
+  done: "&aAuthMe 迁移完成: 扫描 {0}，可导入 {1}，跳过 {2}"
+  failed: "&cAuthMe 迁移失败: {0}"
+
+# ── setup-authlib ─────────────────────────────────────
+setup:
+  start: "&6正在配置 authlib-injector..."
+  already: "&aauthlib-injector 已在运行中，无需额外配置。"
+
+# ── migration-commands ────────────────────────────────
+migration:
+  title: "&6LoginView 迁移提示"
+  step1: "&71. 先执行 /axs loginview migrate-authme dry-run 预览数量。"
+  step2: "&72. 确认无误后执行 /axs loginview migrate-authme。"
+  step3: "&73. 玩家首次用旧密码登录成功后，可自动重写为 AXS hash。"
+  step4: "&74. 完成验证后再停用 AuthMe，避免玩家无法登录。"

@@ -1,0 +1,691 @@
+﻿# AXS 资源说明
+# 用途: Map 模块默认全屏地图 GUI。
+# 前置依赖: ArcartX；Map 模块启用后会自动注册或导出。
+# 启用开关: config.yml -> modules.map.enabled + modules.map.password
+# 关联文件: ArcartXMap.yml、ui/map_hud.yml
+# 重载命令: /axs map reload
+
+ui:
+  isHud: false
+  background: true
+  closeDied: true
+  escClose: true
+  through: false
+  screenScale: true
+  show: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.selectedWorldId = packet['selectedWorldId']
+      var.selectedWorldName = packet['selectedWorldName']
+      var.worldRows = packet['worldRows']
+      var.anchorRows = packet['anchorRows']
+      var.waypointRows = packet['waypointRows']
+      var.externalTargetRows = packet['externalTargetRows']
+      var.waypointLimit = packet['waypointLimit']
+      var.waypointCount = packet['waypointCount']
+      var.canCreateWaypoint = packet['canCreateWaypoint']
+      var.clearTrackVisible = packet['clearTrackVisible']
+      var.trackingText = packet['trackingText']
+      var.detailSelectedType = packet['detailSelectedType']
+      var.detailSelectedId = packet['detailSelectedId']
+      var.detailTitle = packet['detailTitle']
+      var.detailDescription = packet['detailDescription']
+      var.detailUnlocked = packet['detailUnlocked']
+      var.detailUnlockCostText = packet['detailUnlockCostText']
+      var.detailTeleportCostText = packet['detailTeleportCostText']
+      var.detailExternalTarget = packet['detailExternalTarget']
+      var.detailCanUnlock = packet['detailCanUnlock']
+      var.detailCanTeleport = packet['detailCanTeleport']
+      var.detailCanTrackAnchor = packet['detailCanTrackAnchor']
+      var.detailCanTrackWaypoint = packet['detailCanTrackWaypoint']
+      var.detailCanTrackExternal = packet['detailCanTrackExternal']
+      var.detailCanDeleteWaypoint = packet['detailCanDeleteWaypoint']
+      var.detailCanCreateWaypoint = packet['detailCanCreateWaypoint']
+      var.detailClearTrackVisible = packet['detailClearTrackVisible']
+      var.detailTrackingText = packet['detailTrackingText']
+    update: |-
+      var.packetId = packet['packetId']
+      var.selectedWorldId = packet['selectedWorldId']
+      var.selectedWorldName = packet['selectedWorldName']
+      var.worldRows = packet['worldRows']
+      var.anchorRows = packet['anchorRows']
+      var.waypointRows = packet['waypointRows']
+      var.externalTargetRows = packet['externalTargetRows']
+      var.waypointLimit = packet['waypointLimit']
+      var.waypointCount = packet['waypointCount']
+      var.canCreateWaypoint = packet['canCreateWaypoint']
+      var.clearTrackVisible = packet['clearTrackVisible']
+      var.trackingText = packet['trackingText']
+      var.detailSelectedType = packet['detailSelectedType']
+      var.detailSelectedId = packet['detailSelectedId']
+      var.detailTitle = packet['detailTitle']
+      var.detailDescription = packet['detailDescription']
+      var.detailUnlocked = packet['detailUnlocked']
+      var.detailUnlockCostText = packet['detailUnlockCostText']
+      var.detailTeleportCostText = packet['detailTeleportCostText']
+      var.detailExternalTarget = packet['detailExternalTarget']
+      var.detailCanUnlock = packet['detailCanUnlock']
+      var.detailCanTeleport = packet['detailCanTeleport']
+      var.detailCanTrackAnchor = packet['detailCanTrackAnchor']
+      var.detailCanTrackWaypoint = packet['detailCanTrackWaypoint']
+      var.detailCanTrackExternal = packet['detailCanTrackExternal']
+      var.detailCanDeleteWaypoint = packet['detailCanDeleteWaypoint']
+      var.detailCanCreateWaypoint = packet['detailCanCreateWaypoint']
+      var.detailClearTrackVisible = packet['detailClearTrackVisible']
+      var.detailTrackingText = packet['detailTrackingText']
+  action:
+    load: |-
+      var.packetId = 'AXS_MAP'
+      var.selectedWorldId = ''
+      var.selectedWorldName = '未选择'
+      var.worldRows = {}
+      var.anchorRows = {}
+      var.waypointRows = {}
+      var.externalTargetRows = {}
+      var.waypointLimit = 0
+      var.waypointCount = 0
+      var.canCreateWaypoint = false
+      var.clearTrackVisible = false
+      var.trackingText = '当前未导航'
+      var.detailSelectedType = 'none'
+      var.detailSelectedId = ''
+      var.detailTitle = '未选中目标'
+      var.detailDescription = '请选择一个锚点或路径点。'
+      var.detailUnlocked = true
+      var.detailUnlockCostText = ''
+      var.detailTeleportCostText = ''
+      var.detailExternalTarget = false
+      var.detailCanUnlock = false
+      var.detailCanTeleport = false
+      var.detailCanTrackAnchor = false
+      var.detailCanTrackWaypoint = false
+      var.detailCanTrackExternal = false
+      var.detailCanDeleteWaypoint = false
+      var.detailCanCreateWaypoint = false
+      var.detailClearTrackVisible = false
+      var.detailTrackingText = '当前未导航'
+
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      panel:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 1520
+          height: 900
+        children:
+          bg:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~85,85,90,220
+              shape: ~round_rect
+              radius: 28
+          border:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~255,255,255,18
+              shape: ~round_rect
+              radius: 28
+          title:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 36
+              y: 24
+              texts: "'&0地图总览 &8/ &7' + var.selectedWorldName"
+              fontSize: 30
+              shadow: false
+          tracking:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 36
+              y: 62
+              texts: "'&7' + var.trackingText"
+              fontSize: 16
+              shadow: false
+          worlds_box:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 110
+              width: 360
+              height: 150
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 18
+          worlds_title:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 42
+              y: 128
+              texts: "'&0世界列表'"
+              fontSize: 20
+              shadow: false
+          world_scroll:
+            type: Scroll
+            attribute:
+              point: ~top_left
+              x: 42
+              y: 162
+              width: 324
+              height: 82
+              moveX: 0
+            action:
+              wheel: |-
+                if(self.wheelValue > 0){
+                  self.moveX = Math.max(0, self.moveX - 0.1)
+                }elif(self.wheelValue < 0){
+                  self.moveX = Math.min(1, self.moveX + 0.1)
+                }
+            children:
+              world_list:
+                val: world_entry
+                type: HStack
+                attribute:
+                  height: 68
+                  spaceBetween: 12
+                children:
+                  item:
+                    type: Texture
+                    attribute:
+                      entry: var.worldRows[self.key]
+                      visible: self.entry != null
+                      width: 148
+                      height: 68
+                      normal: "self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                      shape: ~round_rect
+                      radius: 16
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'open_world', self.entry['id'])
+                    children:
+                      text:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          texts: "self.entry['displayName']"
+                          fontSize: 18
+                          shadow: false
+                          through: true
+          world_observer:
+            type: Observer
+            attribute:
+              target: val.world_list['item']
+              subscribe: var.worldRows
+              maxSize: 16
+          map_box:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 280
+              width: 900
+              height: 596
+              normal: ~85,85,90,220
+              shape: ~round_rect
+              radius: 22
+          map_title:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 44
+              y: 300
+              texts: "'&0全屏地图区'"
+              fontSize: 22
+              shadow: false
+          map_hint:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 44
+              y: 334
+              texts: "'&7由 packet snapshot 驱动世界切换、选中态与按钮状态。'"
+              fontSize: 15
+              shadow: false
+          anchor_box:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 948
+              y: 110
+              width: 548
+              height: 250
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 18
+          anchor_title:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 972
+              y: 126
+              texts: "'&0锚点列表'"
+              fontSize: 20
+              shadow: false
+          anchor_scroll:
+            type: Scroll
+            attribute:
+              point: ~top_left
+              x: 972
+              y: 156
+              width: 500
+              height: 186
+              moveY: 0
+            action:
+              wheel: |-
+                if(self.wheelValue > 0){
+                  self.moveY = Math.max(0, self.moveY - 0.1)
+                }elif(self.wheelValue < 0){
+                  self.moveY = Math.min(1, self.moveY + 0.1)
+                }
+            children:
+              anchor_stack:
+                val: anchor_row
+                type: VStack
+                attribute:
+                  width: 500
+                  spaceBetween: 10
+                children:
+                  item:
+                    type: Texture
+                    attribute:
+                      entry: var.anchorRows[self.key]
+                      visible: self.entry != null
+                      width: 500
+                      height: 70
+                      normal: "self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                      shape: ~round_rect
+                      radius: 14
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'select_anchor', self.entry['id'])
+                    children:
+                      title:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 18
+                          y: 12
+                          texts: "self.entry['displayName']"
+                          fontSize: 18
+                          shadow: false
+                          through: true
+                      state:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 18
+                          y: 40
+                          texts: "self.entry['unlocked'] ? '&a已解锁' : '&c未解锁'"
+                          fontSize: 14
+                          shadow: false
+                          through: true
+          anchor_observer:
+            type: Observer
+            attribute:
+              target: val.anchor_stack['item']
+              subscribe: var.anchorRows
+              maxSize: 128
+          waypoint_box:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 948
+              y: 374
+              width: 548
+              height: 142
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 18
+          waypoint_title:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 972
+              y: 390
+              texts: "'&0路径点 &8(' + var.waypointCount + '/' + var.waypointLimit + '&8)'"
+              fontSize: 20
+              shadow: false
+          waypoint_scroll:
+            type: Scroll
+            attribute:
+              point: ~top_left
+              x: 972
+              y: 420
+              width: 500
+              height: 80
+              moveY: 0
+            action:
+              wheel: |-
+                if(self.wheelValue > 0){
+                  self.moveY = Math.max(0, self.moveY - 0.1)
+                }elif(self.wheelValue < 0){
+                  self.moveY = Math.min(1, self.moveY + 0.1)
+                }
+            children:
+              waypoint_stack:
+                val: waypoint_row
+                type: VStack
+                attribute:
+                  width: 500
+                  spaceBetween: 8
+                children:
+                  item:
+                    type: Texture
+                    attribute:
+                      entry: var.waypointRows[self.key]
+                      visible: self.entry != null
+                      width: 500
+                      height: 48
+                      normal: "self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                      shape: ~round_rect
+                      radius: 14
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'select_waypoint', self.entry['id'])
+                    children:
+                      text:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 18
+                          texts: "self.entry['name']"
+                          fontSize: 16
+                          shadow: false
+                          through: true
+          waypoint_observer:
+            type: Observer
+            attribute:
+              target: val.waypoint_stack['item']
+              subscribe: var.waypointRows
+              maxSize: 128
+          external_box:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 948
+              y: 530
+              width: 548
+              height: 130
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 18
+          external_title:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 972
+              y: 546
+              texts: "'&0任务目标'"
+              fontSize: 20
+              shadow: false
+          external_scroll:
+            type: Scroll
+            attribute:
+              point: ~top_left
+              x: 972
+              y: 576
+              width: 500
+              height: 68
+              moveY: 0
+            action:
+              wheel: |-
+                if(self.wheelValue > 0){
+                  self.moveY = Math.max(0, self.moveY - 0.1)
+                }elif(self.wheelValue < 0){
+                  self.moveY = Math.min(1, self.moveY + 0.1)
+                }
+            children:
+              external_stack:
+                val: external_row
+                type: VStack
+                attribute:
+                  width: 500
+                  spaceBetween: 8
+                children:
+                  item:
+                    type: Texture
+                    attribute:
+                      entry: var.externalTargetRows[self.key]
+                      visible: self.entry != null
+                      width: 500
+                      height: 48
+                      normal: "self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                      shape: ~round_rect
+                      radius: 14
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'select_external', self.entry['id'])
+                    children:
+                      text:
+                        type: Text
+                        attribute:
+                          point: ~middle_left
+                          x: 18
+                          texts: "self.entry['name']"
+                          fontSize: 16
+                          shadow: false
+                          through: true
+          external_observer:
+            type: Observer
+            attribute:
+              target: val.external_stack['item']
+              subscribe: var.externalTargetRows
+              maxSize: 128
+          detail_box:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 948
+              y: 674
+              width: 548
+              height: 202
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 18
+          detail_title:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 972
+              y: 692
+              texts: "var.detailTitle"
+              fontSize: 22
+              shadow: false
+          detail_desc:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 972
+              y: 724
+              texts: "var.detailDescription"
+              fontSize: 14
+              shadow: false
+          detail_unlock_cost:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 972
+              y: 750
+              texts: "'&7解锁: &0' + var.detailUnlockCostText"
+              fontSize: 13
+              shadow: false
+              visible: "var.detailSelectedType == 'anchor'"
+          detail_teleport_cost:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 972
+              y: 768
+              texts: "'&7传送: &0' + var.detailTeleportCostText"
+              fontSize: 13
+              shadow: false
+              visible: "var.detailSelectedType == 'anchor'"
+          btn_unlock:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 972
+              y: 800
+              width: 104
+              height: 34
+              normal: "var.detailCanUnlock ? '225,225,230,255' : '110,110,115,255'"
+              shape: ~round_rect
+              radius: 12
+            action:
+              clickLeft: |-
+                if (var.detailCanUnlock) {
+                  Packet.send(var.packetId, 'unlock_anchor', var.detailSelectedId)
+                }
+            children:
+              text:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "'&0解锁'"
+                  fontSize: 16
+                  shadow: false
+                  through: true
+          btn_teleport:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 1088
+              y: 800
+              width: 104
+              height: 34
+              normal: "var.detailCanTeleport ? '225,225,230,255' : '110,110,115,255'"
+              shape: ~round_rect
+              radius: 12
+            action:
+              clickLeft: |-
+                if (var.detailCanTeleport) {
+                  Packet.send(var.packetId, 'teleport_anchor', var.detailSelectedId)
+                }
+            children:
+              text:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "'&0传送'"
+                  fontSize: 16
+                  shadow: false
+                  through: true
+          btn_track:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 1204
+              y: 800
+              width: 104
+              height: 34
+              normal: "(var.detailCanTrackAnchor || var.detailCanTrackWaypoint || var.detailCanTrackExternal) ? '225,225,230,255' : '110,110,115,255'"
+              shape: ~round_rect
+              radius: 12
+            action:
+              clickLeft: |-
+                if (var.detailSelectedType == 'anchor' && var.detailCanTrackAnchor) {
+                  Packet.send(var.packetId, 'track_anchor', var.detailSelectedId)
+                }
+                if (var.detailSelectedType == 'waypoint' && var.detailCanTrackWaypoint) {
+                  Packet.send(var.packetId, 'track_waypoint', var.detailSelectedId)
+                }
+                if (var.detailSelectedType == 'external' && var.detailCanTrackExternal) {
+                  Packet.send(var.packetId, 'track_external', var.detailSelectedId)
+                }
+            children:
+              text:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "'&0导航'"
+                  fontSize: 16
+                  shadow: false
+                  through: true
+          btn_delete:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 1320
+              y: 800
+              width: 72
+              height: 34
+              normal: "var.detailCanDeleteWaypoint ? '225,225,230,255' : '110,110,115,255'"
+              shape: ~round_rect
+              radius: 12
+            action:
+              clickLeft: |-
+                if (var.detailCanDeleteWaypoint) {
+                  Packet.send(var.packetId, 'delete_waypoint', var.detailSelectedId)
+                }
+            children:
+              text:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "'&0删除'"
+                  fontSize: 16
+                  shadow: false
+                  through: true
+          btn_create:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 1404
+              y: 800
+              width: 72
+              height: 34
+              normal: "var.canCreateWaypoint ? '225,225,230,255' : '110,110,115,255'"
+              shape: ~round_rect
+              radius: 12
+            action:
+              clickLeft: |-
+                if (var.canCreateWaypoint) {
+                  Packet.send(var.packetId, 'create_waypoint')
+                }
+            children:
+              text:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "'&0新建'"
+                  fontSize: 16
+                  shadow: false
+                  through: true
+          btn_clear:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 1404
+              y: 24
+              width: 72
+              height: 34
+              normal: "var.clearTrackVisible ? '225,225,230,255' : '110,110,115,255'"
+              shape: ~round_rect
+              radius: 12
+            action:
+              clickLeft: |-
+                if (var.clearTrackVisible) {
+                  Packet.send(var.packetId, 'clear_track')
+                }
+            children:
+              text:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "'&0清除'"
+                  fontSize: 16
+                  shadow: false
+                  through: true

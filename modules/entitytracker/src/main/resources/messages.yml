@@ -1,0 +1,100 @@
+# ============================================================
+#  EntityTracker 模块消息文件
+# ------------------------------------------------------------
+#  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
+#  修改后执行 /axs reload entitytracker 即可生效。
+# ============================================================
+
+prefix: "&3◆ &6ArcartXSuite &7| &r"
+
+# ── 通用 ──────────────────────────────────────────────
+common:
+  service-down: "&cBossTracker 服务未启动。"
+  reload-hint: "&e请使用 /{0} reload entitytracker"
+  unknown: "&e未知命令，使用 /{0} entitytracker help 查看帮助"
+  only-player: "&c此命令只能由玩家执行。"
+  no-permission: "&c你没有权限执行这个命令。"
+
+# ── help ──────────────────────────────────────────────
+help:
+  title: "&6EntityTracker 管理命令"
+  status: "&7{0} status&f - 查看模块状态"
+  sessions: "&7{0} sessions [mobId]&f - 列出活跃 Boss 会话"
+  rank: "&7{0} rank <实体UUID> [页码]&f - 查看 Boss 实时伤害排行"
+  settlements: "&7{0} settlements [页码]&f - 查看历史结算记录"
+  settlement: "&7{0} settlement <结算ID> [页码]&f - 查看结算详情"
+  reissue: "&7{0} reissue <结算ID> <名次> [玩家]&f - 补发奖励"
+
+# ── status ────────────────────────────────────────────
+status:
+  title: "&6EntityTracker 状态"
+  active-sessions: "&7活跃会话: &f{0}"
+  active-viewers: "&7查看者: &f{0}"
+  history-settlements: "&7历史结算: &f{0}"
+
+# ── admin ─────────────────────────────────────────────
+admin:
+  sessions:
+    empty: "&7当前没有活跃的 Boss 会话。"
+    title: "&6活跃 Boss 会话 ({0}):"
+    item-format: "&e{0} &7| HP={1}/{2} | 参与={3} | UUID={4}"
+  rank:
+    usage: "&e用法: /axs entitytracker rank <实体UUID> [页码]"
+    invalid-uuid: "&c无效的 UUID: {0}"
+    not-found: "&c未找到该实体的会话。"
+    title: "&6{0} 实时伤害排行:"
+    item-format: "{0} &b{1} &7伤害={2}"
+  settlements:
+    empty: "&7暂无历史结算记录。"
+    title: "&6历史结算记录 ({0}):"
+    item-format: "&f{0} &e{1} &7| {2} | 参与={3}"
+  settlement:
+    usage: "&e用法: /axs entitytracker settlement <结算ID> [页码]"
+    not-found: "&c未找到结算记录: {0}"
+    title: "&6{0} 结算详情 [{1}]"
+    info: "&7时间: {0} | 参与={1} | 总伤害={2}"
+    item-format: "{0} &b{1} &7伤害={2} 奖励={3}"
+  reissue:
+    usage: "&e用法: /axs entitytracker reissue <结算ID> <名次> [玩家]"
+    invalid-rank: "&c无效的名次: {0}"
+    result: "&a{0}"
+  common:
+    page-footer: "&7第 {0}/{1} 页"
+
+# ── rewards ───────────────────────────────────────────
+rewards:
+  no-permission: "&c你没有权限使用此命令"
+  only-player: "&c只有玩家可以使用此命令"
+  help:
+    title: "&6=== 排行榜奖励命令帮助 ==="
+    manage: "&a/rewards manage &7- 打开奖励管理界面"
+    history: "&a/rewards history &7- 打开发放历史界面"
+    distribute: "&a/rewards distribute <weekly|monthly> &7- 手动发放奖励"
+    status: "&a/rewards status &7- 查看调度器状态"
+    reload: "&a/rewards reload &7- 重新加载调度器配置"
+  manage:
+    opening: "&a正在打开奖励管理界面..."
+    failed: "&c打开界面失败: {0}"
+  history:
+    opening: "&a正在打开发放历史界面..."
+    failed: "&c打开界面失败: {0}"
+  distribute:
+    usage: "&c用法: /rewards distribute <weekly|monthly>"
+    invalid-type: "&c奖励类型必须是 weekly 或 monthly"
+    triggering: "&e正在发放{0}奖励..."
+    weekly: "周"
+    monthly: "月"
+    success: "&a奖励发放完成！共发放 {0} 个奖励"
+    failed: "&c奖励发放失败: {0}"
+  status:
+    title: "&6=== 排行榜奖励调度器状态 ==="
+    next-execution: "&e下次执行时间:"
+    task-status: "&e任务状态:"
+    weekly-task: "&a周奖励任务: {0}"
+    monthly-task: "&a月奖励任务: {0}"
+    running: "&a运行中"
+    stopped: "&c已停止"
+  reload:
+    reloading: "&e正在重新加载调度器配置..."
+    success: "&a调度器配置已重新加载"
+    failed: "&c重新加载失败: {0}"

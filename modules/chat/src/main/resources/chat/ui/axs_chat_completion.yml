@@ -1,0 +1,301 @@
+# ArcartXSuite Chat — @提及补全 HUD
+# 以 HUD 形式挂载在聊天栏，服务端推送在线玩家列表，客户端轮询聊天输入并显示 @ 候选。
+ui:
+  isHud: true
+  match:
+    - '聊天栏'
+  defaultOpen: true
+  through: true
+  level: 200
+  packetHandler:
+    updatePlayers: |-
+      var.players = packet
+  action:
+    load: |-
+      var.players = []
+      var.matches = []
+      var.showDropdown = false
+    tick: |-
+      var.__msg = Chat.getMessage()
+      var.matches = []
+      var.showDropdown = false
+      if(var.__msg != null && var.__msg.length() > 0){
+        var.__atIdx = var.__msg.lastIndexOf('@')
+        if(var.__atIdx >= 0){
+          var.__partial = var.__msg.substring(var.__atIdx + 1)
+          if(!var.__partial.contains(' ')){
+            var.__lp = var.__partial.toLowerCase()
+            if(var.players != null){
+              for(__n in var.players){
+                if(var.matches.size() >= 8){
+                  break
+                }
+                if(__n.toLowerCase().startsWith(var.__lp)){
+                  var.matches.add(__n)
+                }
+              }
+            }
+            if(var.matches.size() > 0){
+              var.showDropdown = true
+            }
+          }
+        }
+      }
+controls:
+  自适应布局:
+    type: Adaptive
+    attribute:
+      width: 2560
+      point: ~stretch_all
+      height: 1440
+    children:
+      dropdown:
+        type: VStack
+        attribute:
+          visible: true
+          point: ~bottom_left
+          x: 1100
+          y: -105
+          width: 500
+          spaceBetween: 2
+        children:
+          ci_0:
+            type: Texture
+            attribute:
+              visible: "var.matches.size() > 0"
+              width: 500
+              height: 50
+              normal: ~Frosted:30;0,0,0,200
+              shape: ~round_rect
+              radius: 10
+            action:
+              enter: |-
+                self.normal = 'Frosted:30;80,80,100,220'
+              leave: |-
+                self.normal = 'Frosted:30;0,0,0,200'
+              click: |-
+                var.__cm = Chat.getMessage()
+                var.__ai = var.__cm.lastIndexOf('@')
+                if(var.__ai >= 0){
+                  Chat.setMessage(var.__cm.substring(0, var.__ai) + '@' + var.matches.get(0) + ' ')
+                }
+                var.showDropdown = false
+            children:
+              label_0:
+                type: Text
+                attribute:
+                  through: true
+                  x: 16
+                  y: 7
+                  fontSize: 64
+                  texts: "var.matches.size() > 0 ? '&e@ &f' + var.matches.get(0) : ''"
+          ci_1:
+            type: Texture
+            attribute:
+              visible: "var.matches.size() > 1"
+              width: 500
+              height: 50
+              normal: ~Frosted:30;0,0,0,200
+              shape: ~round_rect
+              radius: 10
+            action:
+              enter: |-
+                self.normal = 'Frosted:30;80,80,100,220'
+              leave: |-
+                self.normal = 'Frosted:30;0,0,0,200'
+              click: |-
+                var.__cm = Chat.getMessage()
+                var.__ai = var.__cm.lastIndexOf('@')
+                if(var.__ai >= 0){
+                  Chat.setMessage(var.__cm.substring(0, var.__ai) + '@' + var.matches.get(1) + ' ')
+                }
+                var.showDropdown = false
+            children:
+              label_1:
+                type: Text
+                attribute:
+                  through: true
+                  x: 16
+                  y: 7
+                  fontSize: 64
+                  texts: "var.matches.size() > 1 ? '&e@ &f' + var.matches.get(1) : ''"
+          ci_2:
+            type: Texture
+            attribute:
+              visible: "var.matches.size() > 2"
+              width: 500
+              height: 50
+              normal: ~Frosted:30;0,0,0,200
+              shape: ~round_rect
+              radius: 10
+            action:
+              enter: |-
+                self.normal = 'Frosted:30;80,80,100,220'
+              leave: |-
+                self.normal = 'Frosted:30;0,0,0,200'
+              click: |-
+                var.__cm = Chat.getMessage()
+                var.__ai = var.__cm.lastIndexOf('@')
+                if(var.__ai >= 0){
+                  Chat.setMessage(var.__cm.substring(0, var.__ai) + '@' + var.matches.get(2) + ' ')
+                }
+                var.showDropdown = false
+            children:
+              label_2:
+                type: Text
+                attribute:
+                  through: true
+                  x: 16
+                  y: 7
+                  fontSize: 64
+                  texts: "var.matches.size() > 2 ? '&e@ &f' + var.matches.get(2) : ''"
+          ci_3:
+            type: Texture
+            attribute:
+              visible: "var.matches.size() > 3"
+              width: 500
+              height: 50
+              normal: ~Frosted:30;0,0,0,200
+              shape: ~round_rect
+              radius: 10
+            action:
+              enter: |-
+                self.normal = 'Frosted:30;80,80,100,220'
+              leave: |-
+                self.normal = 'Frosted:30;0,0,0,200'
+              click: |-
+                var.__cm = Chat.getMessage()
+                var.__ai = var.__cm.lastIndexOf('@')
+                if(var.__ai >= 0){
+                  Chat.setMessage(var.__cm.substring(0, var.__ai) + '@' + var.matches.get(3) + ' ')
+                }
+                var.showDropdown = false
+            children:
+              label_3:
+                type: Text
+                attribute:
+                  through: true
+                  x: 16
+                  y: 7
+                  fontSize: 64
+                  texts: "var.matches.size() > 3 ? '&e@ &f' + var.matches.get(3) : ''"
+          ci_4:
+            type: Texture
+            attribute:
+              visible: "var.matches.size() > 4"
+              width: 500
+              height: 50
+              normal: ~Frosted:30;0,0,0,200
+              shape: ~round_rect
+              radius: 10
+            action:
+              enter: |-
+                self.normal = 'Frosted:30;80,80,100,220'
+              leave: |-
+                self.normal = 'Frosted:30;0,0,0,200'
+              click: |-
+                var.__cm = Chat.getMessage()
+                var.__ai = var.__cm.lastIndexOf('@')
+                if(var.__ai >= 0){
+                  Chat.setMessage(var.__cm.substring(0, var.__ai) + '@' + var.matches.get(4) + ' ')
+                }
+                var.showDropdown = false
+            children:
+              label_4:
+                type: Text
+                attribute:
+                  through: true
+                  x: 16
+                  y: 7
+                  fontSize: 64
+                  texts: "var.matches.size() > 4 ? '&e@ &f' + var.matches.get(4) : ''"
+          ci_5:
+            type: Texture
+            attribute:
+              visible: "var.matches.size() > 5"
+              width: 500
+              height: 50
+              normal: ~Frosted:30;0,0,0,200
+              shape: ~round_rect
+              radius: 10
+            action:
+              enter: |-
+                self.normal = 'Frosted:30;80,80,100,220'
+              leave: |-
+                self.normal = 'Frosted:30;0,0,0,200'
+              click: |-
+                var.__cm = Chat.getMessage()
+                var.__ai = var.__cm.lastIndexOf('@')
+                if(var.__ai >= 0){
+                  Chat.setMessage(var.__cm.substring(0, var.__ai) + '@' + var.matches.get(5) + ' ')
+                }
+                var.showDropdown = false
+            children:
+              label_5:
+                type: Text
+                attribute:
+                  through: true
+                  x: 16
+                  y: 7
+                  fontSize: 64
+                  texts: "var.matches.size() > 5 ? '&e@ &f' + var.matches.get(5) : ''"
+          ci_6:
+            type: Texture
+            attribute:
+              visible: "var.matches.size() > 6"
+              width: 500
+              height: 50
+              normal: ~Frosted:30;0,0,0,200
+              shape: ~round_rect
+              radius: 10
+            action:
+              enter: |-
+                self.normal = 'Frosted:30;80,80,100,220'
+              leave: |-
+                self.normal = 'Frosted:30;0,0,0,200'
+              click: |-
+                var.__cm = Chat.getMessage()
+                var.__ai = var.__cm.lastIndexOf('@')
+                if(var.__ai >= 0){
+                  Chat.setMessage(var.__cm.substring(0, var.__ai) + '@' + var.matches.get(6) + ' ')
+                }
+                var.showDropdown = false
+            children:
+              label_6:
+                type: Text
+                attribute:
+                  through: true
+                  x: 16
+                  y: 7
+                  fontSize: 64
+                  texts: "var.matches.size() > 6 ? '&e@ &f' + var.matches.get(6) : ''"
+          ci_7:
+            type: Texture
+            attribute:
+              visible: "var.matches.size() > 7"
+              width: 500
+              height: 50
+              normal: ~Frosted:30;0,0,0,200
+              shape: ~round_rect
+              radius: 10
+            action:
+              enter: |-
+                self.normal = 'Frosted:30;80,80,100,220'
+              leave: |-
+                self.normal = 'Frosted:30;0,0,0,200'
+              click: |-
+                var.__cm = Chat.getMessage()
+                var.__ai = var.__cm.lastIndexOf('@')
+                if(var.__ai >= 0){
+                  Chat.setMessage(var.__cm.substring(0, var.__ai) + '@' + var.matches.get(7) + ' ')
+                }
+                var.showDropdown = false
+            children:
+              label_7:
+                type: Text
+                attribute:
+                  through: true
+                  x: 16
+                  y: 7
+                  fontSize: 64
+                  texts: "var.matches.size() > 7 ? '&e@ &f' + var.matches.get(7) : ''"

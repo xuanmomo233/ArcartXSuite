@@ -1,0 +1,282 @@
+﻿# AXS 资源说明
+# 用途: QuestGPS 任务指引清单 HUD — 左侧竖排信息流/RPG 风格。
+# 前置依赖: ArcartX；QuestGPS 模块启用后会自动注册或导出。
+# 关联文件: ArcartXQuestGPS.yml、ui/questgps_menu.yml
+
+ui:
+  isHud: true
+  defaultOpen: false
+  background: false
+  closeDied: true
+  through: true
+  screenScale: true
+  show: true
+  level: 3
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.active = packet['active']
+      var.questName = packet['questName']
+      var.completedCount = packet['completedCount']
+      var.totalCount = packet['totalCount']
+      var.progressText = packet['progressText']
+      var.tasks = packet['tasks']
+      var.taskCount = packet['taskCount']
+      var.navWorld = packet['navWorld']
+      var.navX = packet['navX']
+      var.navY = packet['navY']
+      var.navZ = packet['navZ']
+      var.hasNav = packet['hasNav']
+    update: |-
+      var.packetId = packet['packetId']
+      var.active = packet['active']
+      var.questName = packet['questName']
+      var.completedCount = packet['completedCount']
+      var.totalCount = packet['totalCount']
+      var.progressText = packet['progressText']
+      var.tasks = packet['tasks']
+      var.taskCount = packet['taskCount']
+      var.navWorld = packet['navWorld']
+      var.navX = packet['navX']
+      var.navY = packet['navY']
+      var.navZ = packet['navZ']
+      var.hasNav = packet['hasNav']
+  action:
+    load: |-
+      var.packetId = 'AXS_QUESTGPS'
+      var.active = false
+      var.questName = ''
+      var.completedCount = 0
+      var.totalCount = 0
+      var.progressText = '0/0'
+      var.tasks = {}
+      var.taskCount = 0
+      var.navWorld = ''
+      var.navX = 0
+      var.navY = 0
+      var.navZ = 0
+      var.hasNav = false
+
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      root:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: 16
+          y: 220
+          width: 420
+          height: 340
+          visible: var.active
+        effect:
+          offsetAnimate:
+            duration: 300
+            interpolator: decelerate
+            x: -440
+            y: 0
+        children:
+          # 背景面板
+          bg:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~12,12,18,210
+              shape: ~round_rect
+              radius: 16
+          # 左侧金色强调竖条
+          accent_bar:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 0
+              y: 0
+              width: 5
+              height: 340
+              normal: ~248,202,83,255
+              shape: ~round_rect
+              radius: 4
+          # 标题区域
+          quest_icon:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 20
+              y: 14
+              texts: "~&6⬡"
+              fontSize: 20
+              shadow: false
+          quest_name:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 44
+              y: 14
+              width: 260
+              texts: "'&e&l' + var.questName"
+              fontSize: 18
+              shadow: false
+          # 进度条背景
+          progress_bg:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 310
+              y: 16
+              width: 96
+              height: 18
+              normal: ~40,40,50,200
+              shape: ~round_rect
+              radius: 8
+          # 进度条填充
+          progress_fill:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 310
+              y: 16
+              width: "var.totalCount > 0 ? Math.max(12, 96 * var.completedCount / var.totalCount) : 12"
+              height: 18
+              normal: ~120,220,80,230
+              shape: ~round_rect
+              radius: 8
+          # 进度文字
+          progress_text:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 310
+              y: 17
+              width: 96
+              texts: "'&f' + var.progressText"
+              fontSize: 12
+              shadow: false
+              center: true
+          # 分隔线
+          divider1:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 16
+              y: 42
+              width: 388
+              height: 1
+              normal: ~255,255,255,40
+          # 任务目标列表（最多 3 条）
+          task_list:
+            type: List
+            attribute:
+              point: ~top_left
+              x: 16
+              y: 50
+              width: 388
+              height: 210
+              entryWidth: 388
+              entryHeight: 66
+              source: var.tasks
+              count: var.taskCount
+            entryControls:
+              row:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  width: 388
+                  height: 66
+                children:
+                  status_icon:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 8
+                      y: 10
+                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&a✓' : '&f◈') : ''"
+                      fontSize: 16
+                      shadow: false
+                  task_text:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 10
+                      width: 280
+                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&7&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : ''"
+                      fontSize: 14
+                      shadow: false
+                  task_status:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -8
+                      y: 10
+                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&a已完成' : '&e进行中') : ''"
+                      fontSize: 12
+                      shadow: false
+                  row_divider:
+                    type: Texture
+                    attribute:
+                      point: ~bottom_left
+                      x: 8
+                      y: -2
+                      width: 372
+                      height: 1
+                      normal: ~255,255,255,20
+          # 导航坐标区域
+          divider2:
+            type: Texture
+            attribute:
+              point: ~bottom_left
+              x: 16
+              y: -56
+              width: 388
+              height: 1
+              normal: ~255,255,255,40
+              visible: var.hasNav
+          nav_icon:
+            type: Text
+            attribute:
+              point: ~bottom_left
+              x: 20
+              y: -42
+              texts: "~&b🌐"
+              fontSize: 14
+              shadow: false
+              visible: var.hasNav
+          nav_coords:
+            type: Text
+            attribute:
+              point: ~bottom_left
+              x: 42
+              y: -42
+              width: 360
+              texts: "'&3' + var.navWorld + '  &bX:&f' + var.navX + '  &bY:&f' + var.navY + '  &bZ:&f' + var.navZ"
+              fontSize: 13
+              shadow: false
+              visible: var.hasNav
+          # 关闭按钮
+          close_btn:
+            type: Texture
+            attribute:
+              point: ~top_right
+              x: -8
+              y: 8
+              width: 22
+              height: 22
+              normal: ~255,255,255,40
+              shape: ~round_rect
+              radius: 6
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'clear_track')
+            children:
+              close_text:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&7✕"
+                  fontSize: 12
+                  shadow: false

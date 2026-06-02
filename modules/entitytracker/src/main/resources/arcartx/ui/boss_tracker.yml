@@ -1,0 +1,1000 @@
+﻿# ArcartXEntityTracker Boss Tracker HUD
+# AXS 资源说明
+# 用途: EntityTracker 模块默认 HUD 模板，负责展示 Boss 血条、目标信息与伤害排行。
+# 前置依赖: ArcartX、MythicMobs / MythicBukkit；EntityTracker 模块启用后会自动导出到 plugins/ArcartXSuite/ui。
+# 启用开关: config.yml -> modules.entitytracker.enabled + modules.entitytracker.password
+# 关联文件: ArcartXEntityTracker.yml
+# 重载命令: /axs entitytracker reload
+# 最小使用路径: ui + controls
+# 结构提示: packetHandler 负责接收 Boss 快照；controls 定义每个槽位的血条与排行展示。
+
+ui:
+  isHud: true
+  through: false
+  background: false
+  closeDied: true
+  show: true
+  level: 2
+  screenScale: true
+  defaultOpen: false
+  hide:
+    - boss_event_progress
+  # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
+  packetHandler:
+    init: |-
+      var.isVisible = true
+      // init 会在 HUD 首次打开时执行一次。
+      // 服务端会把当前玩家附近所有可见 Boss 的快照整体下发，
+      // 所以下面这段脚本的职责只有一件事：把 packet 内容复制到本地变量。
+      // 后续所有控件都只读取 var.*，不直接读取 packet，便于后续二改时统一维护。
+      // bossCount: 当前实际渲染在 HUD 上的血条数量。
+      // totalBossCount: 当前玩家附近满足显示条件的 Boss 总数，可能大于 bossCount。
+      // maxVisibleBars: 当前这份 HUD 总共预留了多少个槽位。
+      var.bossCount = packet['bossCount']
+      var.totalBossCount = packet['totalBossCount']
+      var.maxVisibleBars = packet['maxVisibleBars']
+      // 第1条 Boss 血条槽位。
+      // Visible 控制整张卡片是否显示；其余字段则提供给标题、血条和数值介绍使用。
+      var.slot1Visible = packet['slot1_visible']
+      var.slot1Title = packet['slot1_title']
+      var.slot1Subtitle = packet['slot1_subtitle']
+      var.slot1Health = packet['slot1_health']
+      var.slot1MaxHealth = packet['slot1_maxHealth']
+      var.slot1HealthText = packet['slot1_healthText']
+      var.slot1MaxHealthText = packet['slot1_maxHealthText']
+      var.slot1DistanceText = packet['slot1_distanceText']
+      var.slot1Progress = packet['slot1_progress']
+      var.slot1MobId = packet['slot1_mobId']
+      var.slot1DisplayName = packet['slot1_displayName']
+      var.slot1EntityUuid = packet['slot1_entityUuid']
+      var.slot1HasTarget = packet['slot1_hasTarget']
+      var.slot1TargetDisplayName = packet['slot1_targetDisplayName']
+      var.slot1TargetUuid = packet['slot1_targetUuid']
+      var.slot1TargetType = packet['slot1_targetType']
+      var.slot1SpawnOrder = packet['slot1_spawnOrder']
+      var.slot1ViewerRankText = packet['slot1_viewerRankText']
+      var.slot1ViewerDamageText = packet['slot1_viewerDamageText']
+      var.slot1Used = var.isVisible && var.slot1Visible
+      // 第2条 Boss 血条槽位。
+      // Visible 控制整张卡片是否显示；其余字段则提供给标题、血条和数值介绍使用。
+      var.slot2Visible = packet['slot2_visible']
+      var.slot2Title = packet['slot2_title']
+      var.slot2Subtitle = packet['slot2_subtitle']
+      var.slot2Health = packet['slot2_health']
+      var.slot2MaxHealth = packet['slot2_maxHealth']
+      var.slot2HealthText = packet['slot2_healthText']
+      var.slot2MaxHealthText = packet['slot2_maxHealthText']
+      var.slot2DistanceText = packet['slot2_distanceText']
+      var.slot2Progress = packet['slot2_progress']
+      var.slot2MobId = packet['slot2_mobId']
+      var.slot2DisplayName = packet['slot2_displayName']
+      var.slot2EntityUuid = packet['slot2_entityUuid']
+      var.slot2HasTarget = packet['slot2_hasTarget']
+      var.slot2TargetDisplayName = packet['slot2_targetDisplayName']
+      var.slot2TargetUuid = packet['slot2_targetUuid']
+      var.slot2TargetType = packet['slot2_targetType']
+      var.slot2SpawnOrder = packet['slot2_spawnOrder']
+      var.slot2ViewerRankText = packet['slot2_viewerRankText']
+      var.slot2ViewerDamageText = packet['slot2_viewerDamageText']
+      var.slot2Used = var.isVisible && var.slot2Visible
+      // 第3条 Boss 血条槽位。
+      // Visible 控制整张卡片是否显示；其余字段则提供给标题、血条和数值介绍使用。
+      var.slot3Visible = packet['slot3_visible']
+      var.slot3Title = packet['slot3_title']
+      var.slot3Subtitle = packet['slot3_subtitle']
+      var.slot3Health = packet['slot3_health']
+      var.slot3MaxHealth = packet['slot3_maxHealth']
+      var.slot3HealthText = packet['slot3_healthText']
+      var.slot3MaxHealthText = packet['slot3_maxHealthText']
+      var.slot3DistanceText = packet['slot3_distanceText']
+      var.slot3Progress = packet['slot3_progress']
+      var.slot3MobId = packet['slot3_mobId']
+      var.slot3DisplayName = packet['slot3_displayName']
+      var.slot3EntityUuid = packet['slot3_entityUuid']
+      var.slot3HasTarget = packet['slot3_hasTarget']
+      var.slot3TargetDisplayName = packet['slot3_targetDisplayName']
+      var.slot3TargetUuid = packet['slot3_targetUuid']
+      var.slot3TargetType = packet['slot3_targetType']
+      var.slot3SpawnOrder = packet['slot3_spawnOrder']
+      var.slot3ViewerRankText = packet['slot3_viewerRankText']
+      var.slot3ViewerDamageText = packet['slot3_viewerDamageText']
+      var.slot3Used = var.isVisible && var.slot3Visible
+      // 第4条 Boss 血条槽位。
+      // Visible 控制整张卡片是否显示；其余字段则提供给标题、血条和数值介绍使用。
+      var.slot4Visible = packet['slot4_visible']
+      var.slot4Title = packet['slot4_title']
+      var.slot4Subtitle = packet['slot4_subtitle']
+      var.slot4Health = packet['slot4_health']
+      var.slot4MaxHealth = packet['slot4_maxHealth']
+      var.slot4HealthText = packet['slot4_healthText']
+      var.slot4MaxHealthText = packet['slot4_maxHealthText']
+      var.slot4DistanceText = packet['slot4_distanceText']
+      var.slot4Progress = packet['slot4_progress']
+      var.slot4MobId = packet['slot4_mobId']
+      var.slot4DisplayName = packet['slot4_displayName']
+      var.slot4EntityUuid = packet['slot4_entityUuid']
+      var.slot4HasTarget = packet['slot4_hasTarget']
+      var.slot4TargetDisplayName = packet['slot4_targetDisplayName']
+      var.slot4TargetUuid = packet['slot4_targetUuid']
+      var.slot4TargetType = packet['slot4_targetType']
+      var.slot4SpawnOrder = packet['slot4_spawnOrder']
+      var.slot4ViewerRankText = packet['slot4_viewerRankText']
+      var.slot4ViewerDamageText = packet['slot4_viewerDamageText']
+      var.slot4Used = var.isVisible && var.slot4Visible
+      // 第5条 Boss 血条槽位。
+      // Visible 控制整张卡片是否显示；其余字段则提供给标题、血条和数值介绍使用。
+      var.slot5Visible = packet['slot5_visible']
+      var.slot5Title = packet['slot5_title']
+      var.slot5Subtitle = packet['slot5_subtitle']
+      var.slot5Health = packet['slot5_health']
+      var.slot5MaxHealth = packet['slot5_maxHealth']
+      var.slot5HealthText = packet['slot5_healthText']
+      var.slot5MaxHealthText = packet['slot5_maxHealthText']
+      var.slot5DistanceText = packet['slot5_distanceText']
+      var.slot5Progress = packet['slot5_progress']
+      var.slot5MobId = packet['slot5_mobId']
+      var.slot5DisplayName = packet['slot5_displayName']
+      var.slot5EntityUuid = packet['slot5_entityUuid']
+      var.slot5HasTarget = packet['slot5_hasTarget']
+      var.slot5TargetDisplayName = packet['slot5_targetDisplayName']
+      var.slot5TargetUuid = packet['slot5_targetUuid']
+      var.slot5TargetType = packet['slot5_targetType']
+      var.slot5SpawnOrder = packet['slot5_spawnOrder']
+      var.slot5ViewerRankText = packet['slot5_viewerRankText']
+      var.slot5ViewerDamageText = packet['slot5_viewerDamageText']
+      var.slot5Used = var.isVisible && var.slot5Visible
+    update: |-
+      var.isVisible = true
+      // update 会在插件刷新周期内持续触发。
+      // 这里与 init 的写法基本一致，目的是用最新 packet 覆盖本地缓存变量，
+      // 让进度条、标题和数值说明始终使用最新的 Boss 数据。
+      // bossCount: 当前实际渲染在 HUD 上的血条数量。
+      // totalBossCount: 当前玩家附近满足显示条件的 Boss 总数，可能大于 bossCount。
+      // maxVisibleBars: 当前这份 HUD 总共预留了多少个槽位。
+      var.bossCount = packet['bossCount']
+      var.totalBossCount = packet['totalBossCount']
+      var.maxVisibleBars = packet['maxVisibleBars']
+      // 第1条 Boss 血条槽位。
+      // Visible 控制整张卡片是否显示；其余字段则提供给标题、血条和数值介绍使用。
+      var.slot1Visible = packet['slot1_visible']
+      var.slot1Title = packet['slot1_title']
+      var.slot1Subtitle = packet['slot1_subtitle']
+      var.slot1Health = packet['slot1_health']
+      var.slot1MaxHealth = packet['slot1_maxHealth']
+      var.slot1HealthText = packet['slot1_healthText']
+      var.slot1MaxHealthText = packet['slot1_maxHealthText']
+      var.slot1DistanceText = packet['slot1_distanceText']
+      var.slot1Progress = packet['slot1_progress']
+      var.slot1MobId = packet['slot1_mobId']
+      var.slot1DisplayName = packet['slot1_displayName']
+      var.slot1EntityUuid = packet['slot1_entityUuid']
+      var.slot1HasTarget = packet['slot1_hasTarget']
+      var.slot1TargetDisplayName = packet['slot1_targetDisplayName']
+      var.slot1TargetUuid = packet['slot1_targetUuid']
+      var.slot1TargetType = packet['slot1_targetType']
+      var.slot1SpawnOrder = packet['slot1_spawnOrder']
+      var.slot1ViewerRankText = packet['slot1_viewerRankText']
+      var.slot1ViewerDamageText = packet['slot1_viewerDamageText']
+      var.slot1Used = var.isVisible && var.slot1Visible
+      // 第2条 Boss 血条槽位。
+      // Visible 控制整张卡片是否显示；其余字段则提供给标题、血条和数值介绍使用。
+      var.slot2Visible = packet['slot2_visible']
+      var.slot2Title = packet['slot2_title']
+      var.slot2Subtitle = packet['slot2_subtitle']
+      var.slot2Health = packet['slot2_health']
+      var.slot2MaxHealth = packet['slot2_maxHealth']
+      var.slot2HealthText = packet['slot2_healthText']
+      var.slot2MaxHealthText = packet['slot2_maxHealthText']
+      var.slot2DistanceText = packet['slot2_distanceText']
+      var.slot2Progress = packet['slot2_progress']
+      var.slot2MobId = packet['slot2_mobId']
+      var.slot2DisplayName = packet['slot2_displayName']
+      var.slot2EntityUuid = packet['slot2_entityUuid']
+      var.slot2HasTarget = packet['slot2_hasTarget']
+      var.slot2TargetDisplayName = packet['slot2_targetDisplayName']
+      var.slot2TargetUuid = packet['slot2_targetUuid']
+      var.slot2TargetType = packet['slot2_targetType']
+      var.slot2SpawnOrder = packet['slot2_spawnOrder']
+      var.slot2ViewerRankText = packet['slot2_viewerRankText']
+      var.slot2ViewerDamageText = packet['slot2_viewerDamageText']
+      var.slot2Used = var.isVisible && var.slot2Visible
+      // 第3条 Boss 血条槽位。
+      // Visible 控制整张卡片是否显示；其余字段则提供给标题、血条和数值介绍使用。
+      var.slot3Visible = packet['slot3_visible']
+      var.slot3Title = packet['slot3_title']
+      var.slot3Subtitle = packet['slot3_subtitle']
+      var.slot3Health = packet['slot3_health']
+      var.slot3MaxHealth = packet['slot3_maxHealth']
+      var.slot3HealthText = packet['slot3_healthText']
+      var.slot3MaxHealthText = packet['slot3_maxHealthText']
+      var.slot3DistanceText = packet['slot3_distanceText']
+      var.slot3Progress = packet['slot3_progress']
+      var.slot3MobId = packet['slot3_mobId']
+      var.slot3DisplayName = packet['slot3_displayName']
+      var.slot3EntityUuid = packet['slot3_entityUuid']
+      var.slot3HasTarget = packet['slot3_hasTarget']
+      var.slot3TargetDisplayName = packet['slot3_targetDisplayName']
+      var.slot3TargetUuid = packet['slot3_targetUuid']
+      var.slot3TargetType = packet['slot3_targetType']
+      var.slot3SpawnOrder = packet['slot3_spawnOrder']
+      var.slot3ViewerRankText = packet['slot3_viewerRankText']
+      var.slot3ViewerDamageText = packet['slot3_viewerDamageText']
+      var.slot3Used = var.isVisible && var.slot3Visible
+      // 第4条 Boss 血条槽位。
+      // Visible 控制整张卡片是否显示；其余字段则提供给标题、血条和数值介绍使用。
+      var.slot4Visible = packet['slot4_visible']
+      var.slot4Title = packet['slot4_title']
+      var.slot4Subtitle = packet['slot4_subtitle']
+      var.slot4Health = packet['slot4_health']
+      var.slot4MaxHealth = packet['slot4_maxHealth']
+      var.slot4HealthText = packet['slot4_healthText']
+      var.slot4MaxHealthText = packet['slot4_maxHealthText']
+      var.slot4DistanceText = packet['slot4_distanceText']
+      var.slot4Progress = packet['slot4_progress']
+      var.slot4MobId = packet['slot4_mobId']
+      var.slot4DisplayName = packet['slot4_displayName']
+      var.slot4EntityUuid = packet['slot4_entityUuid']
+      var.slot4HasTarget = packet['slot4_hasTarget']
+      var.slot4TargetDisplayName = packet['slot4_targetDisplayName']
+      var.slot4TargetUuid = packet['slot4_targetUuid']
+      var.slot4TargetType = packet['slot4_targetType']
+      var.slot4SpawnOrder = packet['slot4_spawnOrder']
+      var.slot4ViewerRankText = packet['slot4_viewerRankText']
+      var.slot4ViewerDamageText = packet['slot4_viewerDamageText']
+      var.slot4Used = var.isVisible && var.slot4Visible
+      // 第5条 Boss 血条槽位。
+      // Visible 控制整张卡片是否显示；其余字段则提供给标题、血条和数值介绍使用。
+      var.slot5Visible = packet['slot5_visible']
+      var.slot5Title = packet['slot5_title']
+      var.slot5Subtitle = packet['slot5_subtitle']
+      var.slot5Health = packet['slot5_health']
+      var.slot5MaxHealth = packet['slot5_maxHealth']
+      var.slot5HealthText = packet['slot5_healthText']
+      var.slot5MaxHealthText = packet['slot5_maxHealthText']
+      var.slot5DistanceText = packet['slot5_distanceText']
+      var.slot5Progress = packet['slot5_progress']
+      var.slot5MobId = packet['slot5_mobId']
+      var.slot5DisplayName = packet['slot5_displayName']
+      var.slot5EntityUuid = packet['slot5_entityUuid']
+      var.slot5HasTarget = packet['slot5_hasTarget']
+      var.slot5TargetDisplayName = packet['slot5_targetDisplayName']
+      var.slot5TargetUuid = packet['slot5_targetUuid']
+      var.slot5TargetType = packet['slot5_targetType']
+      var.slot5SpawnOrder = packet['slot5_spawnOrder']
+      var.slot5ViewerRankText = packet['slot5_viewerRankText']
+      var.slot5ViewerDamageText = packet['slot5_viewerDamageText']
+      var.slot5Used = var.isVisible && var.slot5Visible
+    close: |-
+      // close 会在 Boss HUD 被服务端主动关闭时执行。
+      // 这里只需要把显示数量清零，并隐藏所有槽位。
+      // 其余标题和数值不必逐一清空，因为下一次 init 会完整覆盖这些变量。
+      var.isVisible = false
+      var.bossCount = 0
+      var.totalBossCount = 0
+      var.slot1Visible = false
+      var.slot1HasTarget = false
+      var.slot1TargetDisplayName = ''
+      var.slot1TargetUuid = ''
+      var.slot1TargetType = ''
+      var.slot1Used = false
+      var.slot2Visible = false
+      var.slot2HasTarget = false
+      var.slot2TargetDisplayName = ''
+      var.slot2TargetUuid = ''
+      var.slot2TargetType = ''
+      var.slot2Used = false
+      var.slot3Visible = false
+      var.slot3HasTarget = false
+      var.slot3TargetDisplayName = ''
+      var.slot3TargetUuid = ''
+      var.slot3TargetType = ''
+      var.slot3Used = false
+      var.slot4Visible = false
+      var.slot4HasTarget = false
+      var.slot4TargetDisplayName = ''
+      var.slot4TargetUuid = ''
+      var.slot4TargetType = ''
+      var.slot4Used = false
+      var.slot5Visible = false
+      var.slot5HasTarget = false
+      var.slot5TargetDisplayName = ''
+      var.slot5TargetUuid = ''
+      var.slot5TargetType = ''
+      var.slot5Used = false
+  action:
+    load: |-
+      var.isVisible = false
+      var.bossCount = 0
+      var.totalBossCount = 0
+      var.maxVisibleBars = 5
+      var.slot1Visible = false
+      var.slot1Used = false
+      var.slot1Progress = 0
+      var.slot2Visible = false
+      var.slot2Used = false
+      var.slot2Progress = 0
+      var.slot3Visible = false
+      var.slot3Used = false
+      var.slot3Progress = 0
+      var.slot4Visible = false
+      var.slot4Used = false
+      var.slot4Progress = 0
+      var.slot5Visible = false
+      var.slot5Used = false
+      var.slot5Progress = 0
+# controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
+controls:
+  自适应全局布局:
+    type: adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    action:
+      create: |-
+        // create 会在 HUD 控件第一次创建时执行。
+        // 这里先准备好所有本地变量默认值，避免 HUD 刚打开但服务端数据包还没到时出现脏数据。
+        // 你后续如果想额外增加阶段名、护盾值、状态图标等，也建议先在这里补默认值。
+        var.isVisible = false
+        var.bossCount = 0
+        var.totalBossCount = 0
+        var.maxVisibleBars = 5
+        // 第1条 Boss 血条槽位默认值。
+        // 这些变量对应下面同序号控件的显示内容。
+        var.slot1Visible = false
+        var.slot1Title = ''
+        var.slot1Subtitle = ''
+        var.slot1Health = 0
+        var.slot1MaxHealth = 0
+        var.slot1HealthText = '0'
+        var.slot1MaxHealthText = '0'
+        var.slot1DistanceText = '-'
+        var.slot1Progress = 0
+        var.slot1MobId = ''
+        var.slot1DisplayName = ''
+        var.slot1EntityUuid = ''
+        var.slot1HasTarget = false
+        var.slot1TargetDisplayName = ''
+        var.slot1TargetUuid = ''
+        var.slot1TargetType = ''
+        var.slot1SpawnOrder = 0
+        var.slot1ViewerRankText = '-'
+        var.slot1ViewerDamageText = '0'
+        var.slot1Used = false
+        // 第2条 Boss 血条槽位默认值。
+        // 这些变量对应下面同序号控件的显示内容。
+        var.slot2Visible = false
+        var.slot2Title = ''
+        var.slot2Subtitle = ''
+        var.slot2Health = 0
+        var.slot2MaxHealth = 0
+        var.slot2HealthText = '0'
+        var.slot2MaxHealthText = '0'
+        var.slot2DistanceText = '-'
+        var.slot2Progress = 0
+        var.slot2MobId = ''
+        var.slot2DisplayName = ''
+        var.slot2EntityUuid = ''
+        var.slot2HasTarget = false
+        var.slot2TargetDisplayName = ''
+        var.slot2TargetUuid = ''
+        var.slot2TargetType = ''
+        var.slot2SpawnOrder = 0
+        var.slot2ViewerRankText = '-'
+        var.slot2ViewerDamageText = '0'
+        var.slot2Used = false
+        // 第3条 Boss 血条槽位默认值。
+        // 这些变量对应下面同序号控件的显示内容。
+        var.slot3Visible = false
+        var.slot3Title = ''
+        var.slot3Subtitle = ''
+        var.slot3Health = 0
+        var.slot3MaxHealth = 0
+        var.slot3HealthText = '0'
+        var.slot3MaxHealthText = '0'
+        var.slot3DistanceText = '-'
+        var.slot3Progress = 0
+        var.slot3MobId = ''
+        var.slot3DisplayName = ''
+        var.slot3EntityUuid = ''
+        var.slot3HasTarget = false
+        var.slot3TargetDisplayName = ''
+        var.slot3TargetUuid = ''
+        var.slot3TargetType = ''
+        var.slot3SpawnOrder = 0
+        var.slot3ViewerRankText = '-'
+        var.slot3ViewerDamageText = '0'
+        var.slot3Used = false
+        // 第4条 Boss 血条槽位默认值。
+        // 这些变量对应下面同序号控件的显示内容。
+        var.slot4Visible = false
+        var.slot4Title = ''
+        var.slot4Subtitle = ''
+        var.slot4Health = 0
+        var.slot4MaxHealth = 0
+        var.slot4HealthText = '0'
+        var.slot4MaxHealthText = '0'
+        var.slot4DistanceText = '-'
+        var.slot4Progress = 0
+        var.slot4MobId = ''
+        var.slot4DisplayName = ''
+        var.slot4EntityUuid = ''
+        var.slot4HasTarget = false
+        var.slot4TargetDisplayName = ''
+        var.slot4TargetUuid = ''
+        var.slot4TargetType = ''
+        var.slot4SpawnOrder = 0
+        var.slot4ViewerRankText = '-'
+        var.slot4ViewerDamageText = '0'
+        var.slot4Used = false
+        // 第5条 Boss 血条槽位默认值。
+        // 这些变量对应下面同序号控件的显示内容。
+        var.slot5Visible = false
+        var.slot5Title = ''
+        var.slot5Subtitle = ''
+        var.slot5Health = 0
+        var.slot5MaxHealth = 0
+        var.slot5HealthText = '0'
+        var.slot5MaxHealthText = '0'
+        var.slot5DistanceText = '-'
+        var.slot5Progress = 0
+        var.slot5MobId = ''
+        var.slot5DisplayName = ''
+        var.slot5EntityUuid = ''
+        var.slot5HasTarget = false
+        var.slot5TargetDisplayName = ''
+        var.slot5TargetUuid = ''
+        var.slot5TargetType = ''
+        var.slot5SpawnOrder = 0
+        var.slot5ViewerRankText = '-'
+        var.slot5ViewerDamageText = '0'
+        var.slot5Used = false
+    children:
+      首领追踪标题文字:
+        type: text
+        attribute:
+          point: ~top_center
+          x: 0
+          y: 32
+          texts: "'&f首领追踪 &8' + var.bossCount.round() + '/' + var.totalBossCount.round()"
+          fontSize: 36
+          visible: var.isVisible
+      血条排列布局:
+        type: Vstack
+        attribute:
+          point: ~top_center
+          x: -240
+          y: 58
+          spaceBetween: 8
+          visible: var.isVisible
+        children:
+          Boss血条卡片1:
+            type: canvas
+            attribute:
+              width: 480
+              height: 58
+              visible: var.slot1Used
+            children:
+              Boss标题文字1:
+                type: text
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 0
+                  texts: "var.slot1Title"
+                  fontSize: 36
+              数值说明文字1:
+                type: text
+                attribute:
+                  point: ~top_right
+                  x: 0
+                  y: 4
+                  texts: "'&8' + var.slot1DistanceText + '  R' + var.slot1ViewerRankText + '  ' + var.slot1ViewerDamageText"
+                  fontSize: 24
+              血条底框1:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480
+                  height: 22
+                  normal: ~30,30,30,220
+                  shape: ~round_rect
+                  radius: 11
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              血条层1a:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot1Progress
+                  height: 22
+                  normal: ~140,60,60,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot1Progress > 0
+              血条层1b:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot1Progress
+                  height: 22
+                  normal: ~180,50,50,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot1Progress > 0.2
+              血条层1c:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot1Progress
+                  height: 22
+                  normal: ~200,40,40,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot1Progress > 0.4
+              血条层1d:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot1Progress
+                  height: 22
+                  normal: ~220,35,35,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot1Progress > 0.6
+              血条层1e:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot1Progress
+                  height: 22
+                  normal: ~240,30,30,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot1Progress > 0.8
+              血条文字1:
+                type: text
+                attribute:
+                  point: ~top_center
+                  x: 0
+                  y: 27
+                  texts: "'&f' + var.slot1HealthText + '/' + var.slot1MaxHealthText"
+                  fontSize: 36
+          Boss血条卡片2:
+            type: canvas
+            attribute:
+              width: 480
+              height: 58
+              visible: var.slot2Used
+            children:
+              Boss标题文字2:
+                type: text
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 0
+                  texts: "var.slot2Title"
+                  fontSize: 36
+              数值说明文字2:
+                type: text
+                attribute:
+                  point: ~top_right
+                  x: 0
+                  y: 4
+                  texts: "'&8' + var.slot2DistanceText + '  R' + var.slot2ViewerRankText + '  ' + var.slot2ViewerDamageText"
+                  fontSize: 24
+              血条底框2:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480
+                  height: 22
+                  normal: ~30,30,30,220
+                  shape: ~round_rect
+                  radius: 11
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              血条层2a:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot2Progress
+                  height: 22
+                  normal: ~140,60,60,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot2Progress > 0
+              血条层2b:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot2Progress
+                  height: 22
+                  normal: ~180,50,50,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot2Progress > 0.2
+              血条层2c:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot2Progress
+                  height: 22
+                  normal: ~200,40,40,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot2Progress > 0.4
+              血条层2d:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot2Progress
+                  height: 22
+                  normal: ~220,35,35,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot2Progress > 0.6
+              血条层2e:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot2Progress
+                  height: 22
+                  normal: ~240,30,30,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot2Progress > 0.8
+              血条文字2:
+                type: text
+                attribute:
+                  point: ~top_center
+                  x: 0
+                  y: 27
+                  texts: "'&f' + var.slot2HealthText + '/' + var.slot2MaxHealthText"
+                  fontSize: 36
+          Boss血条卡片3:
+            type: canvas
+            attribute:
+              width: 480
+              height: 58
+              visible: var.slot3Used
+            children:
+              Boss标题文字3:
+                type: text
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 0
+                  texts: "var.slot3Title"
+                  fontSize: 36
+              数值说明文字3:
+                type: text
+                attribute:
+                  point: ~top_right
+                  x: 0
+                  y: 4
+                  texts: "'&8' + var.slot3DistanceText + '  R' + var.slot3ViewerRankText + '  ' + var.slot3ViewerDamageText"
+                  fontSize: 24
+              血条底框3:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480
+                  height: 22
+                  normal: ~30,30,30,220
+                  shape: ~round_rect
+                  radius: 11
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              血条层3a:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot3Progress
+                  height: 22
+                  normal: ~140,60,60,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot3Progress > 0
+              血条层3b:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot3Progress
+                  height: 22
+                  normal: ~180,50,50,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot3Progress > 0.2
+              血条层3c:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot3Progress
+                  height: 22
+                  normal: ~200,40,40,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot3Progress > 0.4
+              血条层3d:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot3Progress
+                  height: 22
+                  normal: ~220,35,35,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot3Progress > 0.6
+              血条层3e:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot3Progress
+                  height: 22
+                  normal: ~240,30,30,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot3Progress > 0.8
+              血条文字3:
+                type: text
+                attribute:
+                  point: ~top_center
+                  x: 0
+                  y: 27
+                  texts: "'&f' + var.slot3HealthText + '/' + var.slot3MaxHealthText"
+                  fontSize: 36
+          Boss血条卡片4:
+            type: canvas
+            attribute:
+              width: 480
+              height: 58
+              visible: var.slot4Used
+            children:
+              Boss标题文字4:
+                type: text
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 0
+                  texts: "var.slot4Title"
+                  fontSize: 36
+              数值说明文字4:
+                type: text
+                attribute:
+                  point: ~top_right
+                  x: 0
+                  y: 4
+                  texts: "'&8' + var.slot4DistanceText + '  R' + var.slot4ViewerRankText + '  ' + var.slot4ViewerDamageText"
+                  fontSize: 24
+              血条底框4:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480
+                  height: 22
+                  normal: ~30,30,30,220
+                  shape: ~round_rect
+                  radius: 11
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              血条层4a:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot4Progress
+                  height: 22
+                  normal: ~140,60,60,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot4Progress > 0
+              血条层4b:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot4Progress
+                  height: 22
+                  normal: ~180,50,50,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot4Progress > 0.2
+              血条层4c:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot4Progress
+                  height: 22
+                  normal: ~200,40,40,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot4Progress > 0.4
+              血条层4d:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot4Progress
+                  height: 22
+                  normal: ~220,35,35,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot4Progress > 0.6
+              血条层4e:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot4Progress
+                  height: 22
+                  normal: ~240,30,30,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot4Progress > 0.8
+              血条文字4:
+                type: text
+                attribute:
+                  point: ~top_center
+                  x: 0
+                  y: 27
+                  texts: "'&f' + var.slot4HealthText + '/' + var.slot4MaxHealthText"
+                  fontSize: 36
+          Boss血条卡片5:
+            type: canvas
+            attribute:
+              width: 480
+              height: 58
+              visible: var.slot5Used
+            children:
+              Boss标题文字5:
+                type: text
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 0
+                  texts: "var.slot5Title"
+                  fontSize: 36
+              数值说明文字5:
+                type: text
+                attribute:
+                  point: ~top_right
+                  x: 0
+                  y: 4
+                  texts: "'&8' + var.slot5DistanceText + '  R' + var.slot5ViewerRankText + '  ' + var.slot5ViewerDamageText"
+                  fontSize: 24
+              血条底框5:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480
+                  height: 22
+                  normal: ~30,30,30,220
+                  shape: ~round_rect
+                  radius: 11
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              血条层5a:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot5Progress
+                  height: 22
+                  normal: ~140,60,60,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot5Progress > 0
+              血条层5b:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot5Progress
+                  height: 22
+                  normal: ~180,50,50,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot5Progress > 0.2
+              血条层5c:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot5Progress
+                  height: 22
+                  normal: ~200,40,40,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot5Progress > 0.4
+              血条层5d:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot5Progress
+                  height: 22
+                  normal: ~220,35,35,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot5Progress > 0.6
+              血条层5e:
+                type: texture
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: 26
+                  width: 480 * var.slot5Progress
+                  height: 22
+                  normal: ~240,30,30,255
+                  shape: ~round_rect
+                  radius: 11
+                  visible: var.slot5Progress > 0.8
+              血条文字5:
+                type: text
+                attribute:
+                  point: ~top_center
+                  x: 0
+                  y: 27
+                  texts: "'&f' + var.slot5HealthText + '/' + var.slot5MaxHealthText"
+                  fontSize: 36

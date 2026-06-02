@@ -1,0 +1,16 @@
+﻿# AXS 资源说明
+# 用途: Prop 模块语言配置；定义冷却、权限、按键和手持限制提示。
+# 前置依赖: ArcartX；Prop 模块启用后生效。
+# 启用开关: config.yml -> modules.prop.enabled + modules.prop.password
+# 关联文件: ArcartXProp.yml、prop/props/*.yml
+# 重载命令: /axs prop reload
+# 最小使用路径: COOL_DOWN / NO_PERMISSION / NO_KEY / NO_HAND
+
+# {NAME} 为道具名，{TIME} 为剩余冷却秒数。
+COOL_DOWN: "&7[&dArcartXProp&7]&c{NAME}&f还在冷却,你还需要等待&a{TIME}秒&f才能使用道具"
+NO_PERMISSION: "&7[&dArcartXProp&7]&f你没有权限使用 &c{NAME}"
+NO_KEY: "&7[&dArcartXProp&7]&c{NAME} &f无法按键使用"
+NO_HAND: "&7[&dArcartXProp&7]&c{NAME} &f该道具无法手持使用"
+
+# {NAME} 为道具名，{CONDITION} 为未满足的条件原文。
+CONDITION_NOT_MET: "&7[&dArcartXProp&7]&c{NAME} &f使用条件不满足: &e{CONDITION}"

@@ -1,0 +1,485 @@
+﻿# AXS 资源说明
+# 用途: LoginView 模块纯色块主菜单风格登录、注册与密码修改界面。
+# 前置依赖: ArcartX；LoginView 模块启用后会自动注册或导出。
+# 启用开关: config.yml -> modules.loginview.enabled + modules.loginview.password
+# 关联文件: ArcartXLoginView.yml、ui/login_view.yml
+# 重载命令: /axs loginview reload
+# 最小使用路径: ui + controls
+# 结构提示: 顶层 ui 节点定义菜单行为；packetHandler 处理登录/注册/改密数据包；controls 分左侧功能栏与右侧场景装饰。
+# 服务端 sync 字段:
+#   packetId, type, title, mode, registered, playerName, serverName,
+#   online, maxPlayers, address, time, message
+# 客户端回包:
+#   login, register, change_password
+
+ui:
+  isHud: false
+  defaultOpen: false
+  hide:
+    - HUD
+    - online
+    - 聊天栏
+    - 纯色块HUD
+    - 纯色块HUD二改
+  through: false
+  background: true
+  escClose: false
+  closeDied: true
+  show: true
+  jei: false
+  level: 20
+  screenScale: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.type = packet['type']
+      var.title = packet['title']
+      var.mode = packet['mode']
+      var.registered = packet['registered']
+      var.playerName = packet['playerName']
+      var.serverName = packet['serverName']
+      var.online = packet['online']
+      var.maxPlayers = packet['maxPlayers']
+      var.address = packet['address']
+      var.time = packet['time']
+      var.premiumBypass = packet['premiumBypass']
+      var.result = packet['message']
+      var.password = ''
+      var.confirmPassword = ''
+      var.oldPassword = ''
+      var.newPassword = ''
+      var.changeConfirmPassword = ''
+    result: |-
+      var.result = packet['message']
+      var.lastSuccess = packet['success']
+      if (var.lastSuccess && var.type == 'change') {
+        var.type = 'login'
+        var.title = '登录服务器'
+        var.oldPassword = ''
+        var.newPassword = ''
+        var.changeConfirmPassword = ''
+      }
+    close: |-
+      var.result = packet['message']
+  action:
+    load: |-
+      var.packetId = 'AXS_loginview'
+      var.type = 'login'
+      var.title = '登录服务器'
+      var.mode = 'standalone'
+      var.registered = true
+      var.premiumBypass = false
+      var.playerName = ''
+      var.serverName = ''
+      var.online = 0
+      var.maxPlayers = 0
+      var.address = ''
+      var.time = ''
+      var.result = ''
+      var.password = ''
+      var.confirmPassword = ''
+      var.oldPassword = ''
+      var.newPassword = ''
+      var.changeConfirmPassword = ''
+
+controls:
+  自适应:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      # ── 全屏底色 ──
+      底色:
+        type: Texture
+        attribute:
+          point: ~stretch_all
+          normal: ~18,14,48,255
+      # ── 左侧功能栏 ──
+      左侧栏:
+        type: Canvas
+        attribute:
+          point: ~vertical_stretch_left
+          x: 0
+          y: 0
+          width: 430
+        children:
+          栏底色:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~9,8,28,236
+          分割线:
+            type: Texture
+            attribute:
+              point: ~vertical_stretch_left
+              x: 428
+              y: 0
+              width: 3
+              height: 1080
+              normal: ~105,82,190,170
+          # ── 品牌标志 ──
+          标志主标题:
+            type: Text
+            attribute:
+              x: 76
+              y: 70
+              texts: "~&e&lArcartX"
+              fontSize: 74
+          标志副标题:
+            type: Text
+            attribute:
+              x: 84
+              y: 128
+              texts: "~&6&lSUITE LOGIN"
+              fontSize: 32
+          # ── 用户信息 ──
+          服务器名:
+            type: Text
+            attribute:
+              x: 90
+              y: 230
+              texts: "&7欢迎来到 ArcartX 服务器"
+              fontSize: 49
+          玩家名:
+            type: Text
+            attribute:
+              x: 90
+              y: 280
+              texts: "'&b' + var.playerName + '  祝您游戏愉快'"
+              fontSize: 49
+          # ── 导航标记 ──
+          菜单线:
+            type: Texture
+            attribute:
+              x: 66
+              y: 335
+              width: 3
+              height: 340
+              normal: ~92,78,185,185
+          当前标记:
+            type: Texture
+            attribute:
+              x: 96
+              y: 350
+              width: 6
+              height: 52
+              normal: ~255,255,255,215
+          状态标题:
+            type: Text
+            attribute:
+              x: 96 + 6 + 20
+              y: 352
+              texts: "'&f' + var.title"
+              fontSize: 32
+          状态信息:
+            type: Text
+            attribute:
+              x: 96 + 6 + 20
+              y: 386
+              texts: "'&7在线 ' + var.online.round() + '/' + var.maxPlayers.round() + '  地址 ' + var.address"
+              fontSize: 20
+          # ── 登录表单 ──
+          登录密码:
+            type: TextBox
+            attribute:
+              x: 96
+              y: 440
+              width: 260
+              height: 36
+              length: 64
+              emptyText: ~输入密码
+              fontSize: 32
+              passwordChar: ~※
+              background: ~18,16,46,235
+              visible: var.type == 'login'
+            action:
+              textChange: |-
+                var.password = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~132,120,220,220
+          登录按钮:
+            type: Texture
+            attribute:
+              x: 96
+              y: 494
+              width: 260
+              height: 42
+              normal: ~96,84,205,220
+              hover: ~126,112,235,255
+              shape: ~round_rect
+              radius: 8
+              texts: "~&f加入服务器"
+              center: true
+              fontSize: 28
+              visible: var.type == 'login'
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'login', var.password)
+          切换修改密码:
+            type: Texture
+            attribute:
+              x: 96
+              y: 556
+              width: 260
+              height: 42
+              normal: ~96,84,205,220
+              hover: ~126,112,235,255
+              shape: ~round_rect
+              radius: 8
+              texts: "~&f修改密码"
+              center: true
+              fontSize: 28
+              visible: var.type == 'login'
+            action:
+              clickLeft: |-
+                var.type = 'change'
+                var.title = '修改密码'
+                var.result = ''
+                var.password = ''
+                var.oldPassword = ''
+                var.newPassword = ''
+                var.changeConfirmPassword = ''
+          退出游戏:
+            type: Texture
+            attribute:
+              x: 96
+              y: 618
+              width: 260
+              height: 42
+              normal: ~96,84,205,220
+              hover: ~126,112,235,255
+              shape: ~round_rect
+              radius: 8
+              texts: "~&f退出游戏"
+              center: true
+              fontSize: 28
+              visible: var.type != 'bypass'
+            action:
+              clickLeft: |-
+                Game.quit()
+          # ── 正版/LittleSkin 免登录视图 ──
+          免登录提示:
+            type: Text
+            attribute:
+              x: 96
+              y: 440
+              texts: "~&a✔ &f身份已验证"
+              fontSize: 28
+              visible: var.type == 'bypass'
+          进入服务器:
+            type: Texture
+            attribute:
+              x: 96
+              y: 490
+              width: 260
+              height: 42
+              normal: ~74,165,118,225
+              hover: ~96,195,140,255
+              shape: ~round_rect
+              radius: 8
+              texts: "~&f进入服务器"
+              center: true
+              fontSize: 28
+              visible: var.type == 'bypass'
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'bypass_enter')
+          免登退出游戏:
+            type: Texture
+            attribute:
+              x: 96
+              y: 550
+              width: 260
+              height: 42
+              normal: ~96,84,205,220
+              hover: ~126,112,235,255
+              shape: ~round_rect
+              radius: 8
+              texts: "~&f退出游戏"
+              center: true
+              fontSize: 28
+              visible: var.type == 'bypass'
+            action:
+              clickLeft: |-
+                Game.quit()
+          # ── 注册表单 ──
+          注册密码:
+            type: TextBox
+            attribute:
+              x: 96
+              y: 440
+              width: 260
+              height: 36
+              length: 64
+              emptyText: ~设置密码
+              fontSize: 30
+              passwordChar: ~※
+              background: ~18,16,46,235
+              visible: var.type == 'register'
+            action:
+              textChange: |-
+                var.password = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~132,120,220,220
+          注册确认:
+            type: TextBox
+            attribute:
+              x: 96
+              y: 488
+              width: 260
+              height: 36
+              length: 64
+              emptyText: ~确认密码
+              fontSize: 30
+              passwordChar: ~※
+              background: ~18,16,46,235
+              visible: var.type == 'register'
+            action:
+              textChange: |-
+                var.confirmPassword = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~132,120,220,220
+          注册按钮:
+            type: Texture
+            attribute:
+              x: 96
+              y: 542
+              width: 260
+              height: 42
+              normal: ~74,165,118,225
+              hover: ~96,195,140,255
+              shape: ~round_rect
+              radius: 8
+              texts: "~&f注册并登录"
+              center: true
+              fontSize: 28
+              visible: var.type == 'register'
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'register', var.password, var.confirmPassword)
+          # ── 修改密码表单 ──
+          修改旧密码:
+            type: TextBox
+            attribute:
+              x: 96
+              y: 430
+              width: 260
+              height: 34
+              length: 64
+              emptyText: ~旧密码
+              fontSize: 28
+              passwordChar: ~※
+              background: ~18,16,46,235
+              visible: var.type == 'change'
+            action:
+              textChange: |-
+                var.oldPassword = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~132,120,220,220
+          修改新密码:
+            type: TextBox
+            attribute:
+              x: 96
+              y: 474
+              width: 260
+              height: 34
+              length: 64
+              emptyText: ~新密码
+              fontSize: 28
+              passwordChar: ~※
+              background: ~18,16,46,235
+              visible: var.type == 'change'
+            action:
+              textChange: |-
+                var.newPassword = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~132,120,220,220
+          修改确认:
+            type: TextBox
+            attribute:
+              x: 96
+              y: 518
+              width: 260
+              height: 34
+              length: 64
+              emptyText: ~确认新密码
+              fontSize: 28
+              passwordChar: ~※
+              background: ~18,16,46,235
+              visible: var.type == 'change'
+            action:
+              textChange: |-
+                var.changeConfirmPassword = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~132,120,220,220
+          修改按钮:
+            type: Texture
+            attribute:
+              x: 96
+              y: 570
+              width: 122
+              height: 38
+              normal: ~190,154,68,225
+              hover: ~224,184,82,255
+              shape: ~round_rect
+              radius: 8
+              texts: "~&f修改"
+              center: true
+              fontSize: 24
+              visible: var.type == 'change'
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'change_password', var.oldPassword, var.newPassword, var.changeConfirmPassword)
+          返回登录:
+            type: Texture
+            attribute:
+              x: 234
+              y: 570
+              width: 122
+              height: 38
+              normal: ~74,92,150,225
+              hover: ~96,118,180,255
+              shape: ~round_rect
+              radius: 8
+              texts: "~&f返回"
+              center: true
+              fontSize: 24
+              visible: var.type == 'change'
+            action:
+              clickLeft: |-
+                var.type = 'login'
+                var.title = '登录服务器'
+                var.result = ''
+                var.oldPassword = ''
+                var.newPassword = ''
+                var.changeConfirmPassword = ''
+          # ── 底部状态 ──
+          结果:
+            type: Text
+            attribute:
+              x: 50
+              y: 1004
+              width: 340
+              texts: "var.result"
+              fontSize: 36
+          页脚:
+            type: Text
+            attribute:
+              x: 50
+              y: 1038
+              texts: "'&8时间 ' + var.time"
+              fontSize: 36

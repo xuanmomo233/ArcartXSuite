@@ -1,0 +1,81 @@
+# QuestGPS 主线任务定义
+# 目录下每个 *.yml 文件可包含多个任务，根键即为任务 ID。
+# 同一个文件中可放多个任务定义，不需要每个任务单独一个文件。
+
+"main/example_quest":
+  enabled: true
+  category: mainline
+  display-name-override: "初入岛屿"
+  description:
+    - "&7跟随引导完成第一条主线。"
+    - "&8这里的描述完全由 QuestGPS 配置控制，不读取 AXChemdahUi。"
+  sort-order: 10
+  allow-abandon: false
+  required-mainline: []
+  hooks:
+    triggered:
+      - "questgps_main_triggered"
+    accepted:
+      - "questgps_main_accepted"
+    completed:
+      - "questgps_main_completed"
+    track-changed:
+      - "questgps_track_changed"
+  rewards:
+    - type: neigeitems
+      neige-item-id: "starter_sword"
+      amount: 1
+      display-name: "&6新手长剑"
+      text: "&7NeigeItems 奖励预览；缺失时按 fallback-material 展示。"
+      fallback-material: "IRON_SWORD"
+    - type: mythicmobs
+      mythic-item-id: "starter_relic"
+      amount: 1
+      display-name: "&d遗物"
+      text: "&7MythicMobs / MythicItems 物品库奖励预览。"
+      fallback-material: "AMETHYST_SHARD"
+    - type: mmoitems
+      type-id: "SWORD"
+      id: "STARTER_BLADE"
+      level: 1
+      amount: 1
+      display-name: "&bMMOItems 武器"
+      text: "&7MMOItems type + id 物品预览。"
+      fallback-material: "DIAMOND_SWORD"
+    - type: title
+      title-id: "newcomer"
+      duration: "permanent"
+      display-name: "&e称号: 初来乍到"
+    - type: material
+      material: "GOLD_INGOT"
+      amount: 16
+      display-name: "&e金币"
+      lore:
+        - "&7普通 Bukkit Material 展示。"
+    - type: text
+      display-name: "&a经验"
+      text: "&7Chemdah 原生奖励仍由 Chemdah 执行；这里只做预览。"
+  navigation:
+    enabled: true
+    point:
+      world: "world"
+      x: 0
+      y: 80
+      z: 0
+      title: "初入岛屿"
+      style-id: "default"
+      map-label: "主线目标"
+  tasks:
+    "talk_to_elder":
+      display-text: "与长老对话"
+      description:
+        - "&7前往村口与长老完成对话。"
+      sort-order: 10
+      navigation:
+        world: "world"
+        x: 12
+        y: 80
+        z: -8
+        title: "与长老对话"
+        style-id: "default"
+        map-label: "任务目标"

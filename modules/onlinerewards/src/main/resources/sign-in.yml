@@ -1,0 +1,84 @@
+# OnlineRewards 签到配置
+# 从 ArcartXOnlineRewards.yml 的 sign-in: 段独立为外部文件；根键即原 sign-in. 下各字段。
+
+# 玩家客户端初始化后，如果当天未签到，是否发送提醒消息
+reminder-on-join: true
+
+messages:
+  sign-in-success: "§a今日签到成功，连续 {streak} 天，累计 {total} 天。"
+  sign-in-repeat: "§e今天已经签到过了。"
+  sign-in-reminder: "§e你今天还没有签到，输入 /signin 即可领取奖励。"
+
+# 每次成功签到都会执行的命令
+# 可用变量: {player} {streak} {total} {date} {day}
+base-commands:
+  - "say [签到] {player} 完成了今日签到"
+
+base-rewardText: "命令 1"
+base-mail-presets: []
+
+makeup:
+  enabled: true
+  card-name: "补签卡"
+  success: "§a已消耗 1 张{card}补签 {date}，当前剩余 {cards} 张。"
+  no-card: "§c你的{card}不足，无法补签。"
+  invalid-date: "§c只能补签本月今天之前未签到的日期。"
+  already-signed: "§e该日期已经签到过了。"
+
+# 连续签到奖励，仅在连续天数"恰好等于" days 时触发
+streak-rewards:
+  - days: 3
+    rewardText: "这里是连续签到 3 天的奖励描述"
+    mail-presets: []
+    commands:
+      - "say [签到] {player} 达成连续签到 {streak} 天"
+  - days: 7
+    rewardText: "这里是连续签到 7 天的奖励描述"
+    mail-presets: []
+    commands:
+      - "say [签到] {player} 达成连续签到 {streak} 天"
+
+# 累计签到奖励，仅在累计天数"恰好等于" days 时触发
+total-rewards:
+  - days: 10
+    rewardText: "这里是累计签到 10 天的奖励描述"
+    mail-presets: []
+    commands:
+      - "say [签到] {player} 达成累计签到 {total} 天"
+  - days: 30
+    rewardText: "这里是累计签到 30 天的奖励描述"
+    mail-presets: []
+    commands:
+      - "say [签到] {player} 达成累计签到 {total} 天"
+
+# 每月指定日期签到奖励，仅在当月的指定 day 当天签到时触发
+day-of-month-rewards:
+  - day: 1
+    rewardText: "这里是每月 1 号的奖励描述"
+    mail-presets: []
+    commands:
+      - "say [签到] {player} 完成每月 1 号签到"
+  - day: 15
+    rewardText: "这里是每月 15 号的奖励描述"
+    mail-presets: []
+    commands:
+      - "say [签到] {player} 完成每月 15 号签到"
+
+# 节日签到奖励，在指定月日签到或补签该日期时触发
+holiday-rewards:
+  - month: 1
+    day: 1
+    name: "元旦签到"
+    rewardText: "这里是元旦签到的奖励描述"
+    mail-presets: []
+    commands:
+      - "say [签到] {player} 完成元旦签到"
+
+# 拥有对应权限时，成功签到或补签会额外发放一组奖励；匹配多个权限时取 priority 最高的一组。
+permission-bonus-groups:
+  - permission: "ArcartXSuite.onlinerewards.signin.bonus"
+    priority: 10
+    rewardText: "权限额外奖励"
+    mail-presets: []
+    commands:
+      - "say [签到] {player} 领取了权限额外签到奖励"

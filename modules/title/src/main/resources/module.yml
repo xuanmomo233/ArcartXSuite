@@ -1,0 +1,13 @@
+id: title
+name: Title
+version: 1.0.2-beta
+main: xuanmo.arcartxsuite.title.TitleModule
+api-version: 1.0
+
+depends: []
+softdepends: []
+external-depends:
+
+external-softdepends:
+  - PlaceholderAPI
+

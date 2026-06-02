@@ -1,0 +1,698 @@
+﻿# AXS 资源说明
+# 用途: QuestGPS 模块默认菜单，用于查看任务分类、奖励预览和导航状态。
+# 前置依赖: ArcartX；QuestGPS 模块启用后会自动注册或导出。
+# 启用开关: config.yml -> modules.questgps.enabled + modules.questgps.password
+# 关联文件: ArcartXQuestGPS.yml
+# 重载命令: /axs questgps reload
+# 最小使用路径: ui + controls
+# 结构提示: 顶层 ui 节点定义窗口行为；packetHandler 负责接收任务快照；controls 定义分类列表、任务详情和导航按钮。
+
+ui:
+  isHud: false
+  defaultOpen: false
+  through: false
+  background: true
+  closeDied: true
+  escClose: true
+  show: true
+  screenScale: true
+  # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.categoryId = packet['categoryId']
+      var.pageId = packet['pageId']
+      var.categoryName = packet['categoryName']
+      var.pageName = packet['pageName']
+      var.availableCount = packet['availableCount']
+      var.activeCount = packet['activeCount']
+      var.completedCount = packet['completedCount']
+      var.questCount = packet['questCount']
+      var.questRows = packet['questRows']
+      var.selectedQuestId = packet['selectedQuestId']
+      var.selectedQuestName = packet['selectedQuestName']
+      var.selectedQuestState = packet['selectedQuestState']
+      var.selectedQuestPath = packet['selectedQuestPath']
+      var.selectedQuestDescriptionText = packet['selectedQuestDescriptionText']
+      var.trackSummary = packet['trackSummary']
+      var.canAccept = packet['canAccept']
+      var.canAbandon = packet['canAbandon']
+      var.canTrackQuest = packet['canTrackQuest']
+      var.canTrackTask = packet['canTrackTask']
+      var.canClearTrack = packet['canClearTrack']
+      var.questTracked = packet['questTracked']
+      var.navigationReady = packet['navigationReady']
+      var.taskRows = packet['taskRows']
+      var.taskCount = packet['taskCount']
+      var.rewardRows = packet['rewardRows']
+      var.rewardCount = packet['rewardCount']
+    update: |-
+      var.packetId = packet['packetId']
+      var.categoryId = packet['categoryId']
+      var.pageId = packet['pageId']
+      var.categoryName = packet['categoryName']
+      var.pageName = packet['pageName']
+      var.availableCount = packet['availableCount']
+      var.activeCount = packet['activeCount']
+      var.completedCount = packet['completedCount']
+      var.questCount = packet['questCount']
+      var.questRows = packet['questRows']
+      var.selectedQuestId = packet['selectedQuestId']
+      var.selectedQuestName = packet['selectedQuestName']
+      var.selectedQuestState = packet['selectedQuestState']
+      var.selectedQuestPath = packet['selectedQuestPath']
+      var.selectedQuestDescriptionText = packet['selectedQuestDescriptionText']
+      var.trackSummary = packet['trackSummary']
+      var.canAccept = packet['canAccept']
+      var.canAbandon = packet['canAbandon']
+      var.canTrackQuest = packet['canTrackQuest']
+      var.canTrackTask = packet['canTrackTask']
+      var.canClearTrack = packet['canClearTrack']
+      var.questTracked = packet['questTracked']
+      var.navigationReady = packet['navigationReady']
+      var.taskRows = packet['taskRows']
+      var.taskCount = packet['taskCount']
+      var.rewardRows = packet['rewardRows']
+      var.rewardCount = packet['rewardCount']
+    close: |-
+      var.questRows = {}
+      var.taskRows = {}
+      var.rewardRows = {}
+      var.selectedQuestId = ''
+  action:
+    load: |-
+      var.packetId = 'AXS_QUESTGPS'
+      var.categoryId = 'mainline'
+      var.pageId = 'available'
+      var.categoryName = '主线'
+      var.pageName = '可接取'
+      var.availableCount = 0
+      var.activeCount = 0
+      var.completedCount = 0
+      var.questCount = 0
+      var.questRows = {}
+      var.selectedQuestId = ''
+      var.selectedQuestName = '暂无任务'
+      var.selectedQuestState = ''
+      var.selectedQuestPath = ''
+      var.selectedQuestDescriptionText = '当前分类下没有可展示的任务。'
+      var.trackSummary = '当前未设置导航'
+      var.canAccept = false
+      var.canAbandon = false
+      var.canTrackQuest = false
+      var.canTrackTask = false
+      var.canClearTrack = false
+      var.questTracked = false
+      var.navigationReady = false
+      var.taskRows = {}
+      var.taskCount = 0
+      var.rewardRows = {}
+      var.rewardCount = 0
+
+# controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
+
+controls:
+  quest_observer:
+    type: Observer
+    attribute:
+      target: val.quest_rows['quest_item']
+      subscribe: var.questRows
+      maxSize: 256
+  task_observer:
+    type: Observer
+    attribute:
+      target: val.task_rows['task_item']
+      subscribe: var.taskRows
+      maxSize: 256
+  reward_observer:
+    type: Observer
+    attribute:
+      target: val.reward_rows['reward_item']
+      subscribe: var.rewardRows
+      maxSize: 128
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      panel:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 1440
+          height: 860
+        children:
+          shell:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~95,95,95,220
+              shape: ~round_rect
+              radius: 26
+            effect:
+              stroke:
+                width: 3
+                color: ~255,255,255,255
+              shadow:
+                xOffset: 2
+                yOffset: 2
+                blur: 5
+                color: ~255,255,255,75
+              ripple:
+                duration: 1200
+                color: ~255,255,255,110
+                width: 0.05
+          title:
+            type: Text
+            attribute:
+              x: 34
+              y: 28
+              texts: "'&f&l任务总览  &r&7' + var.categoryName + ' · ' + var.pageName"
+              fontSize: 64
+          subtitle:
+            type: Text
+            attribute:
+              x: 34
+              y: 72
+              texts: "'&f接取、放弃、追踪任务与目标'"
+              fontSize: 49
+          left_panel:
+            type: Texture
+            attribute:
+              x: 24
+              y: 120
+              width: 460
+              height: 710
+              normal: ~90,90,90,255
+              shape: ~round_rect
+              radius: 20
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,120
+          empty:
+            type: Text
+            attribute:
+              x: 160
+              y: 500
+              visible: var.questCount <= 0
+              texts: "~&7当前页没有可展示任务"
+              fontSize: 42
+          category_tabs:
+            type: HStack
+            attribute:
+              x: 42
+              y: 138
+              width: 424
+              height: 42
+              spaceBetween: 10
+            children:
+              mainline:
+                type: Texture
+                attribute:
+                  width: 134
+                  height: 42
+                  normal: "var.categoryId == 'mainline' ? '110,170,230,255' : '105,105,105,255'"
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0主线"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'switch_category', 'mainline')
+              side:
+                type: Texture
+                attribute:
+                  width: 134
+                  height: 42
+                  normal: "var.categoryId == 'side' ? '110,170,230,255' : '105,105,105,255'"
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0支线"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'switch_category', 'side')
+              encounter:
+                type: Texture
+                attribute:
+                  width: 134
+                  height: 42
+                  normal: "var.categoryId == 'encounter' ? '110,170,230,255' : '105,105,105,255'"
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0奇遇"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'switch_category', 'encounter')
+          page_tabs:
+            type: HStack
+            attribute:
+              x: 42
+              y: 192
+              width: 424
+              height: 40
+              spaceBetween: 8
+            children:
+              available:
+                type: Texture
+                attribute:
+                  width: 136
+                  height: 40
+                  normal: "var.pageId == 'available' ? '110,170,230,255' : '105,105,105,255'"
+                  shape: ~round_rect
+                  radius: 12
+                  texts: "'&0可接取(' + var.availableCount.round() + ')'"
+                  center: true
+                  fontSize: 36
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'switch_page', 'available')
+              active:
+                type: Texture
+                attribute:
+                  width: 136
+                  height: 40
+                  normal: "var.pageId == 'active' ? '110,170,230,255' : '105,105,105,255'"
+                  shape: ~round_rect
+                  radius: 12
+                  texts: "'&0进行中(' + var.activeCount.round() + ')'"
+                  center: true
+                  fontSize: 36
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'switch_page', 'active')
+              completed:
+                type: Texture
+                attribute:
+                  width: 136
+                  height: 40
+                  normal: "var.pageId == 'completed' ? '110,170,230,255' : '105,105,105,255'"
+                  shape: ~round_rect
+                  radius: 12
+                  texts: "'&0已完成(' + var.completedCount.round() + ')'"
+                  center: true
+                  fontSize: 36
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'switch_page', 'completed')
+          quest_scroll:
+            type: Scroll
+            attribute:
+              x: 42
+              y: 248
+              width: 424
+              height: 564
+              moveY: 0
+            action:
+              wheel: |-
+                if(self.wheelValue > 0){
+                  self.moveY = Math.max(0, self.moveY - 0.1)
+                }elif(self.wheelValue < 0){
+                  self.moveY = Math.min(1, self.moveY + 0.1)
+                }
+            children:
+              quest_list:
+                val: quest_rows
+                type: VStack
+                attribute:
+                  width: 424
+                  spaceBetween: 10
+                children:
+                  quest_item:
+                    type: Texture
+                    attribute:
+                      entry: var.questRows[self.key]
+                      visible: self.entry != null
+                      width: 424
+                      height: 96
+                      normal: "self.entry != null && self.entry['selected'] ? '110,170,230,255' : '105,105,105,255'"
+                      shape: ~round_rect
+                      radius: 16
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'select_quest', self.entry['id'])
+                    children:
+                      quest_name:
+                        type: Text
+                        attribute:
+                          x: 18
+                          y: 12
+                          width: 280
+                          texts: "self.parent.entry != null ? '&0' + self.parent.entry['name'] : ''"
+                          fontSize: 49
+                          through: true
+                      quest_state:
+                        type: Text
+                        attribute:
+                          x: 310
+                          y: 14
+                          texts: "self.parent.entry != null ? '&7' + self.parent.entry['state'] : ''"
+                          fontSize: 36
+                          through: true
+                      quest_summary:
+                        type: Text
+                        attribute:
+                          x: 18
+                          y: 46
+                          width: 340
+                          texts: "self.parent.entry != null ? '&7' + self.parent.entry['summary'] : ''"
+                          fontSize: 36
+                          through: true
+                      quest_track:
+                        type: Text
+                        attribute:
+                          x: 310
+                          y: 68
+                          texts: "self.parent.entry != null ? (self.parent.entry['trackable'] ? '&a可导航' : '&8无导航') : ''"
+                          fontSize: 30
+                          through: true
+          detail_panel:
+            type: Texture
+            attribute:
+              x: 508
+              y: 120
+              width: 908
+              height: 710
+              normal: ~90,90,90,255
+              shape: ~round_rect
+              radius: 20
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,120
+          quest_detail_title:
+            type: Text
+            attribute:
+              x: 534
+              y: 142
+              texts: "var.selectedQuestName == '' ? '&7未选择任务' : '&0' + var.selectedQuestName"
+              fontSize: 56
+          quest_detail_state:
+            type: Text
+            attribute:
+              x: 1260
+              y: 148
+              texts: "'&7' + var.selectedQuestState"
+              fontSize: 36
+          quest_detail_path:
+            type: Text
+            attribute:
+              x: 534
+              y: 186
+              width: 520
+              texts: "'&8' + var.selectedQuestPath"
+              fontSize: 36
+          quest_detail_desc:
+            type: Text
+            attribute:
+              x: 534
+              y: 224
+              width: 520
+              texts: "var.selectedQuestDescriptionText"
+              fontSize: 42
+          tracking_summary:
+            type: Text
+            attribute:
+              x: 1100
+              y: 142
+              width: 300
+              texts: "'&7' + var.trackSummary"
+              fontSize: 36
+          task_title:
+            type: Text
+            attribute:
+              x: 534
+              y: 340
+              texts: "~&0任务目标"
+              fontSize: 49
+          task_scroll:
+            type: Scroll
+            attribute:
+              x: 534
+              y: 380
+              width: 410
+              height: 334
+              moveY: 0
+            action:
+              wheel: |-
+                if(self.wheelValue > 0){
+                  self.moveY = Math.max(0, self.moveY - 0.1)
+                }elif(self.wheelValue < 0){
+                  self.moveY = Math.min(1, self.moveY + 0.1)
+                }
+            children:
+              task_list:
+                val: task_rows
+                type: VStack
+                attribute:
+                  width: 410
+                  spaceBetween: 8
+                children:
+                  task_item:
+                    type: Texture
+                    attribute:
+                      entry: var.taskRows[self.key]
+                      visible: self.entry != null
+                      width: 410
+                      height: 74
+                      normal: "self.entry != null && self.entry['tracked'] ? '110,170,230,255' : '105,105,105,255'"
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                    children:
+                      task_text:
+                        type: Text
+                        attribute:
+                          x: 16
+                          y: 12
+                          width: 280
+                          texts: "self.parent.entry != null ? '&0' + self.parent.entry['text'] : ''"
+                          fontSize: 36
+                          through: true
+                      task_status:
+                        type: Text
+                        attribute:
+                          x: 16
+                          y: 44
+                          texts: "self.parent.entry != null ? '&7' + self.parent.entry['status'] : ''"
+                          fontSize: 30
+                          through: true
+                      task_button:
+                        type: Texture
+                        attribute:
+                          x: 310
+                          y: 18
+                          width: 84
+                          height: 36
+                          visible: "self.parent.entry != null && self.parent.entry['trackable']"
+                          normal: ~255,255,255,150
+                          shape: ~round_rect
+                          radius: 10
+                          texts: "self.parent.entry != null && self.parent.entry['tracked'] ? '&0取消' : '&0追踪'"
+                          center: true
+                          fontSize: 30
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~0,0,0,255
+                        action:
+                          clickLeft: |-
+                            if(self.parent.entry['tracked']){
+                              Packet.send(var.packetId, 'clear_track')
+                            }else{
+                              Packet.send(var.packetId, 'track_task', var.selectedQuestId, self.parent.entry['id'])
+                            }
+          reward_title:
+            type: Text
+            attribute:
+              x: 974
+              y: 340
+              texts: "~&0任务奖励"
+              fontSize: 49
+          reward_scroll:
+            type: Scroll
+            attribute:
+              x: 974
+              y: 380
+              width: 420
+              height: 334
+              moveY: 0
+            action:
+              wheel: |-
+                if(self.wheelValue > 0){
+                  self.moveY = Math.max(0, self.moveY - 0.1)
+                }elif(self.wheelValue < 0){
+                  self.moveY = Math.min(1, self.moveY + 0.1)
+                }
+            children:
+              reward_list:
+                val: reward_rows
+                type: VStack
+                attribute:
+                  width: 420
+                  spaceBetween: 8
+                children:
+                  reward_item:
+                    type: Texture
+                    attribute:
+                      entry: var.rewardRows[self.key]
+                      visible: self.entry != null
+                      width: 420
+                      height: 74
+                      normal: ~120,120,120,255
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                    children:
+                      reward_name:
+                        type: Text
+                        attribute:
+                          x: 16
+                          y: 12
+                          width: 290
+                          texts: "self.parent.entry != null ? '&0' + self.parent.entry['title'] : ''"
+                          fontSize: 36
+                          through: true
+                      reward_amount:
+                        type: Text
+                        attribute:
+                          x: 330
+                          y: 14
+                          texts: "self.parent.entry != null ? '&7x' + self.parent.entry['amount'] : ''"
+                          fontSize: 30
+                          through: true
+                      reward_desc:
+                        type: Text
+                        attribute:
+                          x: 16
+                          y: 44
+                          width: 370
+                          texts: "self.parent.entry != null ? '&7' + self.parent.entry['description'] : ''"
+                          fontSize: 30
+                          through: true
+          actions:
+            type: HStack
+            attribute:
+              x: 560
+              y: 748
+              width: 800
+              height: 44
+              spaceBetween: 12
+            children:
+              accept:
+                type: Texture
+                attribute:
+                  width: 160
+                  height: 44
+                  visible: var.canAccept
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0接取任务"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'accept_quest', var.selectedQuestId)
+              abandon:
+                type: Texture
+                attribute:
+                  width: 160
+                  height: 44
+                  visible: var.canAbandon
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0放弃任务"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'abandon_quest', var.selectedQuestId)
+              track:
+                type: Texture
+                attribute:
+                  width: 190
+                  height: 44
+                  visible: var.canTrackQuest && !var.questTracked
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0追踪任务"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'track_quest', var.selectedQuestId)
+              cancel_nav:
+                type: Texture
+                attribute:
+                  width: 160
+                  height: 44
+                  visible: var.questTracked
+                  normal: ~255,255,255,150
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0取消导航"
+                  center: true
+                  fontSize: 49
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'clear_track')

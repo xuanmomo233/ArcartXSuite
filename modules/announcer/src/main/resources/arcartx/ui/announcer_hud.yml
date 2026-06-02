@@ -1,0 +1,89 @@
+﻿# AXS announcer_hud; version=2
+# AXS 资源说明
+# 用途: Announcer 模块默认 HUD，负责轮播公告显示与点击事件回传。
+# 前置依赖: ArcartX；Announcer 模块启用后会自动注册或导出。
+# 启用开关: config.yml -> modules.announcer.enabled + modules.announcer.password
+# 关联文件: ArcartXAnnouncer.yml
+# 重载命令: /axs announcer reload
+# 最小使用路径: ui + controls
+
+ui:
+  isHud: true
+  defaultOpen: true
+  through: true
+  background: false
+  closeDied: false
+  show: true
+  level: 8
+  hide:
+    - boss_event_progress
+  packetHandler:
+    display: |-
+      var.displayVisible = packet['isShow']
+      var.currentEntryId = packet['id']
+      var.currentText = packet['text']
+      var.currentClickable = packet['clickable']
+      var.lastRevision = packet['revision']
+      var.textWidth = packet['textWidth']
+      var.textX = Display.width()
+      if(!var.displayVisible){
+        var.currentText = ''
+      }
+  action:
+    load: |-
+      var.displayVisible = false
+      var.currentEntryId = ''
+      var.currentText = ''
+      var.currentClickable = false
+      var.lastRevision = ''
+      var.textX = Display.width()
+      var.textWidth = 0
+      var.scrollSpeed = 1.5
+    tick: |-
+      if(var.displayVisible && var.currentText != ''){
+        var.textX = var.textX - var.scrollSpeed
+        if(var.textX < 0 - var.textWidth){
+          var.displayVisible = false
+          var.currentText = ''
+        }
+      }
+
+controls:
+  root:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      announcer_background:
+        type: Texture
+        attribute:
+          point: ~horizontal_stretch_top
+          x: 0
+          y: 84
+          height: 72
+          normal: ~Frosted:30;95,95,95,220
+          visible: var.displayVisible && var.currentText != ''
+      announcer_click:
+        type: Canvas
+        attribute:
+          point: ~top_center
+          x: 0
+          y: 84
+          width: Display.width()
+          height: 72
+          through: false
+          visible: var.displayVisible && var.currentClickable && var.currentText != ''
+        action:
+          clickLeft: |-
+            Packet.send("AXS_announcer_click", var.currentEntryId)
+      announcement_text:
+        type: Text
+        attribute:
+          point: ~top_left
+          x: var.textX
+          y: 95
+          texts: "'&f' + var.currentText"
+          fontSize: 100
+          visible: var.displayVisible && var.currentText != ''

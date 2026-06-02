@@ -1,0 +1,357 @@
+﻿config-version: 1
+
+# AXS 资源说明
+# 用途: AXS 主配置，负责模块启用开关；付费模块授权请编辑 license.yml。
+# 前置依赖: ArcartX。
+# 启用开关: modules.<module>.enabled。
+# 关联文件: config.yml、license.yml、ArcartX*.yml。
+# 重载命令: /axs reload all 或 /axs <module> reload。
+# 最小使用路径: 免费模块 modules.<module>.enabled: true；付费模块还需 license.yml 授权通过。
+
+# ========== 全局货币定义 ==========
+# 所有模块共享同一组货币。provider 支持: vault / playerpoints / rondo / command / placeholder-command / custom。
+# 模块配置中的 currencies 节将合并到此全局池中（不覆盖已有同名货币）。
+currencies:
+  money:
+    enabled: true
+    provider: "vault"
+    display-name: "金币"
+    precision: 2
+  points:
+    enabled: true
+    provider: "playerpoints"
+    display-name: "点券"
+    precision: 0
+
+# ========== 全局按键绑定 ==========
+# 由宿主统一注册到 ArcartX 客户端，各模块共享。
+# name: ArcartX 注册名（玩家可在按键设置中看到）
+# default-key: 默认键位（GLFW 键名，如 F、G、H、NUMPAD_8 等）
+# category: 按键分类名（显示在按键设置界面）
+keybinds:
+  interact:
+    name: AXS_INTERACT
+    default-key: F
+    category: ArcartXSuite
+  navigate-prev:
+    name: AXS_NAVIGATE_PREV
+    default-key: NUMPAD_8
+    category: ArcartXSuite
+  navigate-next:
+    name: AXS_NAVIGATE_NEXT
+    default-key: NUMPAD_2
+    category: ArcartXSuite
+
+tacz-compat:
+  enabled: true
+  debug: false
+
+# ========== 账号识别（统一服务）==========
+# 微软正版 / LittleSkin / 离线账号判定，由本体统一提供，供 loginview、qqbot、eventpacket 共享。
+# 该服务在玩家预登录（AsyncPlayerPreLogin）阶段于异步线程预热缓存，避免主线程阻塞网络请求。
+# 【重要前提】若同时使用 LittleSkin + 微软正版 + 离线（Mixed Auth Mode）：
+#   1. 启动脚本 authlib-injector API 地址必须加上 ?mixed 后缀
+#      例: -javaagent:plugins/authlib-injector.jar=https://littleskin.cn/api/yggdrasil?mixed
+#   2. server.properties 必须设置 online-mode=true
+#      否则 LittleSkin 账号会被分配 v3 UUID，无法与离线玩家区分
+#   3. 离线玩家需在 qqbot/loginview 白名单登录配置中设置 deny-offline: false
+#      注意：启用 online-mode=true 后，离线玩家无法直接连接服务器
+#
+# 判定规则：
+#   - 查 Mojang API，玩家名在正版数据库存在：
+#     - 当前 UUID 与 Mojang 官方 UUID 一致          -> 微软正版
+#     - 当前 UUID 与 Mojang 官方 UUID 不同          -> LittleSkin（名字恰好与正版相同）
+#   - 玩家名不在 Mojang：
+#     - UUID 为 v4                                  -> LittleSkin
+#     - UUID 为 v3                                  -> 离线
+account-type:
+  # 是否查询 Mojang API 识别微软正版账号。
+  # 关闭后仅按 UUID 版本判定（v4=LittleSkin，v3=离线），将无法识别微软正版账号。
+  enable-mojang-lookup: true
+  # Mojang API 请求超时（毫秒）。
+  mojang-timeout-ms: 5000
+  # 是否输出账号判定调试日志。
+  debug: false
+
+# ========== 多方认证（authlib-injector 管理）==========
+# 仅在单端服务器有效。群组服请使用 ArcartXSuite-Proxy 插件。
+auth:
+  # 启动时自动检测 authlib-injector 版本并提示更新
+  auto-check-version: true
+  # Yggdrasil 认证源（用于启动脚本生成）
+  yggdrasil-source: "https://littleskin.cn/api/yggdrasil?mixed"
+  # 拒绝离线玩家（authlib-injector Mixed Mode 下在线模式已处理，此为 fallback）
+  deny-offline: true
+  kick-offline-message: "&c本服务器仅支持正版/LittleSkin 账号登录"
+
+client-packet-guard:
+  enabled: true
+  cleanup-interval-ticks: 200
+  defaults:
+    window-ms: 1000
+    max-hits: 20
+    mode: "silent"
+    notify-message: "&c操作过快，请稍后再试。"
+    notify-cooldown-ms: 3000
+    punish-command: ""
+  modules:
+    title:
+      window-ms: 1000
+      max-hits: 4
+      mode: "silent"
+      actions:
+        equip:
+          window-ms: 1500
+          max-hits: 1
+          mode: "notify"
+        unequip:
+          window-ms: 1500
+          max-hits: 1
+          mode: "notify"
+        unequip_group:
+          window-ms: 1500
+          max-hits: 1
+          mode: "notify"
+        unequip_all:
+          window-ms: 1500
+          max-hits: 1
+          mode: "notify"
+        hide:
+          window-ms: 1500
+          max-hits: 1
+          mode: "notify"
+        unhide:
+          window-ms: 1500
+          max-hits: 1
+          mode: "notify"
+    mail:
+      window-ms: 1000
+      max-hits: 4
+      mode: "silent"
+      actions:
+        compose-send:
+          window-ms: 5000
+          max-hits: 1
+          mode: "notify"
+        claimall:
+          window-ms: 5000
+          max-hits: 1
+          mode: "notify"
+        deleteall:
+          window-ms: 5000
+          max-hits: 1
+          mode: "notify"
+        cdk:
+          window-ms: 3000
+          max-hits: 1
+          mode: "notify"
+    questgps:
+      window-ms: 500
+      max-hits: 4
+      mode: "silent"
+      actions:
+        accept_quest:
+          window-ms: 2000
+          max-hits: 1
+          mode: "notify"
+        abandon_quest:
+          window-ms: 2000
+          max-hits: 1
+          mode: "notify"
+    map:
+      window-ms: 500
+      max-hits: 4
+      mode: "silent"
+      actions:
+        unlock_anchor:
+          window-ms: 3000
+          max-hits: 1
+          mode: "notify"
+        teleport_anchor:
+          window-ms: 3000
+          max-hits: 1
+          mode: "notify"
+        create_waypoint:
+          window-ms: 2000
+          max-hits: 1
+          mode: "notify"
+        delete_waypoint:
+          window-ms: 2000
+          max-hits: 1
+          mode: "notify"
+    announcer:
+      actions:
+        click:
+          window-ms: 3000
+          max-hits: 2
+          mode: "notify"
+    eventpacket:
+      actions:
+        client-packet:
+          window-ms: 3000
+          max-hits: 2
+          mode: "notify"
+    loginview:
+      actions:
+        login:
+          window-ms: 3000
+          max-hits: 3
+          mode: "notify"
+        register:
+          window-ms: 5000
+          max-hits: 2
+          mode: "notify"
+        change_password:
+          window-ms: 5000
+          max-hits: 2
+          mode: "notify"
+    tab:
+      actions:
+        refresh:
+          window-ms: 1500
+          max-hits: 1
+          mode: "silent"
+    essentials:
+      window-ms: 1000
+      max-hits: 6
+      mode: "silent"
+      actions:
+        menu:
+          window-ms: 1000
+          max-hits: 4
+          mode: "silent"
+        admin:
+          window-ms: 1000
+          max-hits: 4
+          mode: "silent"
+    regions:
+      window-ms: 1000
+      max-hits: 6
+      mode: "silent"
+      actions:
+        menu:
+          window-ms: 1000
+          max-hits: 4
+          mode: "silent"
+        admin:
+          window-ms: 1000
+          max-hits: 4
+          mode: "silent"
+    market:
+      window-ms: 500
+      max-hits: 6
+      mode: "silent"
+      actions:
+        sell:
+          window-ms: 3000
+          max-hits: 1
+          mode: "notify"
+        buy:
+          window-ms: 2000
+          max-hits: 2
+          mode: "notify"
+        bid:
+          window-ms: 2000
+          max-hits: 2
+          mode: "notify"
+        cancel:
+          window-ms: 3000
+          max-hits: 1
+          mode: "notify"
+        recycle:
+          window-ms: 1000
+          max-hits: 3
+          mode: "notify"
+
+modules:
+  entitytracker:
+    enabled: false
+    # EntityTracker 实体追踪（含 Boss 追踪 + 攻击目标 HUD）。
+
+  combateffect:
+    enabled: false
+    # CombatEffect 战斗特效（含击杀特效 + 伤害飘字）。
+
+  eventpacket:
+    enabled: false
+    # EventPacket 事件引擎（含客户端回包预设功能）。
+
+  tab:
+    enabled: false
+    # Tab 在线列表。
+
+  title:
+    enabled: false
+    # 付费模块，需 license.yml 授权通过。
+    # 具体称号定义请编辑 ArcartXTitle.yml，修改后可执行 /axs title reload。
+
+  conversation:
+    enabled: false
+    # 付费模块，需 license.yml 授权通过。
+    # 具体对话桥接配置请编辑 ArcartXConversation.yml，修改后可执行 /axs conversation reload。
+
+  announcer:
+    enabled: false
+    # Announcer 播报系统（含 HUD 公告 + 打字机字幕）。
+
+  pickup:
+    enabled: false
+    # Pickup 拾取提示。
+
+  prop:
+    enabled: false
+    # Prop 快捷道具。
+
+  rgb:
+    enabled: false
+    # RGB 渐变文本。
+    # 具体动态渐变配置请编辑 ArcartXRGB.yml，修改后可执行 /axs rgb reload。
+
+  onlinerewards:
+    enabled: false
+    # OnlineRewards 在线奖励。
+
+  loginview:
+    enabled: false
+    # LoginView 登录界面。
+
+  warehouse:
+    enabled: false
+    # 付费模块，需 license.yml 授权通过。
+
+  mail:
+    enabled: false
+    # 付费模块，需 license.yml 授权通过。
+
+  chat:
+    enabled: false
+    # Chat 聊天。
+
+  questgps:
+    enabled: false
+    # 付费模块，需 license.yml 授权通过。
+
+  map:
+    enabled: false
+    # 付费模块，需 license.yml 授权通过。
+
+  essentials:
+    enabled: false
+    # Essentials 基础工具（玩家管理、传送系统、安全管控、实用工具）。
+
+  regions:
+    enabled: false
+    # Regions 区域保护（40+ 保护标志、世界规则、成员权限、子区域继承）。
+
+  market:
+    enabled: false
+    # 付费模块，需 license.yml 授权通过。
+    # Market 全球市场（系统商店 + 玩家拍卖行 + 回收商店，多货币、跨服同步）。
+
+  qqbot:
+    enabled: false
+    # 付费模块，需 license.yml 授权通过。
+    # QQBot QQ群服互联（OneBot 11 协议，消息同步、绑定、白名单、群指令查询）。
+
+
+

@@ -1,0 +1,456 @@
+﻿# AXS 资源说明
+# 用途: EntityTracker 排行榜奖励发放历史查看界面，展示发放记录、筛选和重试。
+# 前置依赖: ArcartX；EntityTracker 模块排行榜奖励功能启用后自动注册。
+# 打开方式: /axs entitytracker rewards history 或从管理界面跳转
+# 数据交互: packetHandler 接收 history-list / statistics / result 推送；
+#             客户端通过 Packet.send('AXS_ENTITY_TRACKER_REWARD', ...) 发送操作指令。
+
+ui:
+  background: true
+  escClose: true
+  closeDied: true
+  show: true
+  through: false
+  screenScale: true
+  packetHandler:
+    history-list: |-
+      var.records = packet['records']
+      var.currentPage = packet['page']
+      var.totalPages = packet['totalPages']
+      var.totalCount = packet['totalCount']
+      var.resultMsg = ''
+    statistics: |-
+      var.totalCount = packet['totalCount']
+      var.successCount = packet['successCount']
+      var.failedCount = packet['failedCount']
+      var.pendingCount = packet['pendingCount']
+    result: |-
+      var.resultMsg = packet['message']
+
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      root:
+        type: Texture
+        attribute:
+          point: ~middle_center
+          width: 1200
+          height: 720
+          normal: ~30,30,35,235
+          shape: ~round_rect
+          radius: 16
+        effect:
+          stroke:
+            width: 2
+            color: ~130,100,200,180
+          shadow:
+            xOffset: 0
+            yOffset: 4
+            blur: 12
+            color: ~0,0,0,120
+        children:
+          # 标题栏
+          header:
+            type: Texture
+            attribute:
+              x: 0
+              y: 0
+              width: 1200
+              height: 72
+              normal: ~40,40,50,255
+              shape: ~round_rect
+              radius: 16
+            children:
+              title_text:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 14
+                  fontSize: 42
+                  texts: "~&d&l奖励发放历史"
+              btn_filter_all:
+                type: Texture
+                attribute:
+                  x: 500
+                  y: 12
+                  width: 80
+                  height: 48
+                  normal: ~80,80,100,200
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', '', '', 1)
+                children:
+                  btn_all_text:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      fontSize: 26
+                      texts: "~&f全部"
+              btn_filter_success:
+                type: Texture
+                attribute:
+                  x: 592
+                  y: 12
+                  width: 80
+                  height: 48
+                  normal: ~50,180,80,180
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'success', '', 1)
+                children:
+                  btn_success_text:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      fontSize: 26
+                      texts: "~&a成功"
+              btn_filter_failed:
+                type: Texture
+                attribute:
+                  x: 684
+                  y: 12
+                  width: 80
+                  height: 48
+                  normal: ~200,60,60,180
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'failed', '', 1)
+                children:
+                  btn_failed_text:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      fontSize: 26
+                      texts: "~&c失败"
+              btn_filter_pending:
+                type: Texture
+                attribute:
+                  x: 776
+                  y: 12
+                  width: 80
+                  height: 48
+                  normal: ~200,160,50,180
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'pending', '', 1)
+                children:
+                  btn_pending_text:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      fontSize: 26
+                      texts: "~&e待发"
+              btn_refresh:
+                type: Texture
+                attribute:
+                  x: 920
+                  y: 12
+                  width: 100
+                  height: 48
+                  normal: ~60,130,200,200
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', '', '', var.currentPage)
+                children:
+                  btn_refresh_text:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      fontSize: 26
+                      texts: "~&f刷新"
+              btn_back:
+                type: Texture
+                attribute:
+                  x: 1034
+                  y: 12
+                  width: 140
+                  height: 48
+                  normal: ~80,80,100,200
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'open-manage')
+                children:
+                  btn_back_text:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      fontSize: 26
+                      texts: "~&f← 返回管理"
+
+          # 统计摘要
+          stats_bar:
+            type: Texture
+            attribute:
+              x: 20
+              y: 80
+              width: 1160
+              height: 44
+              normal: ~50,50,60,150
+              shape: ~round_rect
+              radius: 6
+            children:
+              stat_total:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 8
+                  fontSize: 26
+                  texts: "~&6总计: &e{var.totalCount}"
+              stat_success:
+                type: Text
+                attribute:
+                  x: 240
+                  y: 8
+                  fontSize: 26
+                  texts: "~&a成功: &f{var.successCount}"
+              stat_failed:
+                type: Text
+                attribute:
+                  x: 480
+                  y: 8
+                  fontSize: 26
+                  texts: "~&c失败: &f{var.failedCount}"
+              stat_pending:
+                type: Text
+                attribute:
+                  x: 720
+                  y: 8
+                  fontSize: 26
+                  texts: "~&e待发: &f{var.pendingCount}"
+
+          # 结果提示
+          result_bar:
+            type: Text
+            attribute:
+              x: 28
+              y: 690
+              fontSize: 24
+              texts: "~&e{var.resultMsg}"
+
+          # 记录列表
+          list_area:
+            type: Scroll
+            attribute:
+              x: 20
+              y: 132
+              width: 1160
+              height: 510
+            children:
+              list_header:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 1160
+                  height: 40
+                  normal: ~50,50,60,200
+                  shape: ~round_rect
+                  radius: 6
+                children:
+                  col_period:
+                    type: Text
+                    attribute:
+                      x: 16
+                      y: 6
+                      fontSize: 26
+                      texts: "~&b周期"
+                  col_player:
+                    type: Text
+                    attribute:
+                      x: 160
+                      y: 6
+                      fontSize: 26
+                      texts: "~&b玩家"
+                  col_rank:
+                    type: Text
+                    attribute:
+                      x: 340
+                      y: 6
+                      fontSize: 26
+                      texts: "~&b排名"
+                  col_type:
+                    type: Text
+                    attribute:
+                      x: 440
+                      y: 6
+                      fontSize: 26
+                      texts: "~&b类型"
+                  col_reward:
+                    type: Text
+                    attribute:
+                      x: 600
+                      y: 6
+                      fontSize: 26
+                      texts: "~&b奖励"
+                  col_status:
+                    type: Text
+                    attribute:
+                      x: 860
+                      y: 6
+                      fontSize: 26
+                      texts: "~&b状态"
+                  col_action:
+                    type: Text
+                    attribute:
+                      x: 1020
+                      y: 6
+                      fontSize: 26
+                      texts: "~&b操作"
+              list_body:
+                type: VGrid
+                attribute:
+                  x: 0
+                  y: 46
+                  width: 1160
+                  eachHeight: 48
+                  dataList: var.records
+                children:
+                  row_bg:
+                    type: Texture
+                    attribute:
+                      width: 1160
+                      height: 44
+                      normal: ~45,45,55,160
+                      shape: ~round_rect
+                      radius: 4
+                    children:
+                      cell_period:
+                        type: Text
+                        attribute:
+                          x: 16
+                          y: 8
+                          fontSize: 24
+                          texts: "~&f{each.periodDisplay}"
+                      cell_player:
+                        type: Text
+                        attribute:
+                          x: 160
+                          y: 8
+                          fontSize: 24
+                          texts: "~&f{each.playerName}"
+                      cell_rank:
+                        type: Text
+                        attribute:
+                          x: 340
+                          y: 8
+                          fontSize: 24
+                          texts: "~&f#{each.rank}"
+                      cell_type:
+                        type: Text
+                        attribute:
+                          x: 440
+                          y: 8
+                          fontSize: 24
+                          texts: "~&7{each.rankingTypeDisplay}"
+                      cell_reward:
+                        type: Text
+                        attribute:
+                          x: 600
+                          y: 8
+                          fontSize: 22
+                          texts: "~&a{each.rewardSummary}"
+                      cell_status:
+                        type: Text
+                        attribute:
+                          x: 860
+                          y: 8
+                          fontSize: 24
+                          texts: "~{each.statusIcon}"
+                      cell_retry:
+                        type: Texture
+                        attribute:
+                          x: 1020
+                          y: 4
+                          width: 80
+                          height: 36
+                          normal: ~200,120,50,180
+                          shape: ~round_rect
+                          radius: 6
+                          visible: |-
+                            each.status == 'failed'
+                        action:
+                          click: |-
+                            Packet.send('AXS_ENTITY_TRACKER_REWARD', 'retry', each.id)
+                        children:
+                          cell_retry_text:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              fontSize: 22
+                              texts: "~&f重试"
+
+          # 分页控件
+          pagination:
+            type: Texture
+            attribute:
+              x: 400
+              y: 652
+              width: 400
+              height: 44
+              normal: ~50,50,60,150
+              shape: ~round_rect
+              radius: 8
+            children:
+              btn_prev:
+                type: Texture
+                attribute:
+                  x: 10
+                  y: 4
+                  width: 100
+                  height: 36
+                  normal: ~60,130,200,180
+                  shape: ~round_rect
+                  radius: 6
+                action:
+                  click: |-
+                    if (var.currentPage > 1) { Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', '', '', var.currentPage - 1) }
+                children:
+                  btn_prev_text:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      fontSize: 24
+                      texts: "~&f上一页"
+              page_info:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  fontSize: 26
+                  texts: "~&f{var.currentPage} / {var.totalPages}"
+              btn_next:
+                type: Texture
+                attribute:
+                  x: 290
+                  y: 4
+                  width: 100
+                  height: 36
+                  normal: ~60,130,200,180
+                  shape: ~round_rect
+                  radius: 6
+                action:
+                  click: |-
+                    if (var.currentPage < var.totalPages) { Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', '', '', var.currentPage + 1) }
+                children:
+                  btn_next_text:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      fontSize: 24
+                      texts: "~&f下一页"

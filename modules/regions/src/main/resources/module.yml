@@ -1,0 +1,13 @@
+id: regions
+name: Regions
+version: 1.0.0-beta
+main: xuanmo.arcartxsuite.regions.RegionsModule
+description: "区域保护与管理模块 - WorldGuard 替代方案"
+authors:
+  - ArcartXSuite
+dependencies: []
+soft-dependencies:
+  - essentials
+commands:
+  - region
+  - rg

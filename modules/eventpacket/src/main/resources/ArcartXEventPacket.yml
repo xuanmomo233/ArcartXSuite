@@ -1,0 +1,80 @@
+config-version: 1
+# AXS EventPacket
+# 作用: 通用触发器和动作链，可由加入/退出、首次加入、PAPI 数值变化、击杀计数或命令信号触发 UI 包、字幕、聊天卡片、任务导航、称号和命令。
+# 依赖: ArcartX；PlaceholderAPI 仅在 placeholder-* / papi-* 触发器中需要。
+# 重载: /axs eventpacket reload
+# PAPI 输出: 无独立 PlaceholderAPI 输出。
+# 可消费的 PAPI: rules.<id>.placeholder 可填写完整 PAPI，例如 %player_level%，用于 placeholder-increase、placeholder-decrease、placeholder-threshold。
+# 规则条件: rules.<id>.conditions 与 prop 模块相同，格式为 "%placeholder% operator value"，支持 == != >= <= > < contains regex。
+# 动作变量: 动作参数可使用 {player}、{uuid}、{world}、{trigger}、{placeholder}、{old_value}、{new_value}、{delta}、{signal} 等上下文字段。
+
+settings:
+  refresh-interval-ticks: 20
+  debug: false
+
+storage:
+  mode: sqlite                     # sqlite 或 mysql
+  sqlite:
+    file: "eventpacket.db"
+  mysql:
+    host: "127.0.0.1"
+    port: 3306
+    database: "arcartxsuite"
+    username: "root"
+    password: ""
+  pool-size: 2
+
+packet-command:
+  # 客户端 Packet.send 回包预设入口，随 EventPacket 一起加载。
+  enabled: true
+  packet-id: "ArcartXEventPacket"
+  presets-directory: "eventpacket/packet-command-presets"
+
+# 规则定义目录，路径相对模块数据目录。
+# 目录下每个 *.yml 文件可包含多个规则定义，根键即为规则 ID。
+rules-directory: "rules"
+
+# ─── 实体清理 (ClearLag) ───
+entity-cleanup:
+  enabled: false
+  # 清理间隔（秒）
+  interval-seconds: 300
+  # 清理前警告倒计时（秒），0 = 不警告
+  warning-seconds: 30
+  warning-message: '&c[清理] 将在 {seconds} 秒后清理掉落物！'
+  cleanup-message: '&a[清理] 已清除 {count} 个实体。'
+  # 清理类型
+  clear-dropped-items: true
+  clear-monsters: false
+  clear-animals: false
+  # 跳过有自定义名称的实体
+  skip-named: true
+  # 额外要清理的实体类型（EntityType 枚举名）
+  clear-entity-types: []
+  # 不清理的实体类型白名单
+  entity-whitelist:
+    - VILLAGER
+    - ARMOR_STAND
+  # 限定生效世界，空 = 所有世界
+  worlds: []
+
+# ─── 定时命令 ───
+scheduled-commands:
+  # 可定义多个定时任务，键名即任务 ID
+  example-save:
+    enabled: false
+    interval-seconds: 600
+    delay-seconds: 600
+    as-console: true
+    commands:
+      - 'save-all'
+    broadcast-message: ''
+  example-tip:
+    enabled: false
+    interval-seconds: 1800
+    delay-seconds: 60
+    as-console: true
+    commands:
+      - 'say 欢迎加入服务器！输入 /help 查看帮助。'
+    broadcast-message: ''
+

@@ -1,0 +1,12 @@
+id: warehouse
+name: Warehouse
+version: 1.0.2-beta
+main: xuanmo.arcartxsuite.warehouse.WarehouseModule
+api-version: 1.0
+
+depends: []
+softdepends: []
+external-depends:
+
+external-softdepends:
+

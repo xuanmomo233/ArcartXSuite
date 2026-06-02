@@ -1,0 +1,359 @@
+# AXS Market — 回收商店界面
+# 打开方式: /market recycle
+# 数据交互: packetHandler init/update；客户端 Packet.send(var.packetId, action, ...)
+
+ui:
+  isHud: false
+  defaultOpen: false
+  hide:
+    - HUD
+  through: false
+  background: false
+  escClose: true
+  closeDied: true
+  show: true
+  jei: false
+  level: 8
+  itemSize: 16
+  screenScale: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.totalValue = packet['totalValue']
+      var.currency = packet['currency']
+      var.multiplier = packet['multiplier']
+      var.recyclables = packet['recyclables']
+      var.readRecycleSlots(packet)
+    update: |-
+      var.packetId = packet['packetId']
+      var.totalValue = packet['totalValue']
+      var.currency = packet['currency']
+      var.multiplier = packet['multiplier']
+      var.recyclables = packet['recyclables']
+      var.readRecycleSlots(packet)
+  action:
+    load: |-
+      var.packetId = 'AXS_MARKET'
+      var.totalValue = '0'
+      var.currency = 'money'
+      var.multiplier = '1.0'
+      var.recyclables = {}
+      var.scrollRatio = 0
+      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      var.readRecycleSlots = -> {
+        source = args[0]
+        for(i in range(0,35)){
+          idx = i.round()
+          si = idx + ''
+          entry = var.recyclables[si]
+          if(entry == null){
+            next
+          }
+          itemJson = source['recycleItemJson' + si]
+          if(itemJson == null || itemJson == ''){
+            itemJson = var.emptyItemJson
+          }
+          control = val.回收列表['回收项']
+          if(control != null){
+            copies = control.copies
+            if(copies != null){
+              target = copies[si]
+              if(target != null){
+                slot = target['物品图标']
+                if(slot != null){
+                  slot.setItemIcon(itemJson)
+                }
+              }
+            }
+          }
+        }
+      }
+    open: |-
+      Packet.send(var.packetId, 'recycle_preview')
+
+controls:
+  根:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      主面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 1100
+          height: 780
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~35,35,45,235
+              shape: ~round_rect
+              radius: 24
+            effect:
+              stroke:
+                width: 2
+                color: ~80,255,140,180
+              shadow:
+                xOffset: 2
+                yOffset: 2
+                blur: 6
+                color: ~0,0,0,120
+
+          标题:
+            type: Text
+            attribute:
+              x: 42
+              y: 24
+              texts: '&a&l回收商店'
+              fontSize: 56
+          副标题:
+            type: Text
+            attribute:
+              x: 42
+              y: 78
+              texts: "~&7回收倍率: &e{var.multiplier}x"
+              fontSize: 32
+
+          关闭按钮:
+            type: Texture
+            attribute:
+              x: 1010
+              y: 24
+              width: 56
+              height: 56
+              normal: ~180,60,60,200
+              hover: ~Frosted:0;220,80,80,230
+              shape: ~round_rect
+              radius: 14
+            action:
+              clickLeft: |-
+                Screen.close()
+            effect:
+              stroke:
+                width: 2
+                color: ~255,120,120,120
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 14
+                  through: true
+                  center: true
+                  fontSize: 36
+                  texts: '&fX'
+
+          # ── 物品列表 ──────────────────────────────────
+          列表卡片:
+            type: Texture
+            attribute:
+              x: 32
+              y: 120
+              width: 1036
+              height: 530
+              normal: ~50,50,60,180
+              shape: ~round_rect
+              radius: 20
+            effect:
+              stroke:
+                width: 2
+                color: ~80,255,140,100
+            children:
+              列表标题:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 12
+                  texts: '&7可回收物品'
+                  fontSize: 32
+              列表滚动:
+                type: Scroll
+                val: 列表滚动
+                attribute:
+                  x: 10
+                  y: 48
+                  width: 1016
+                  height: 470
+                  moveY: var.scrollRatio
+                action:
+                  wheel: |-
+                    var.scrollRatio = Math.max(0, Math.min(1, var.scrollRatio + self.wheelValue * 0.06))
+                    self.moveY = var.scrollRatio
+                children:
+                  回收列表:
+                    val: 回收列表
+                    type: VStack
+                    attribute:
+                      width: 996
+                      spaceBetween: 6
+                    children:
+                      回收项:
+                        type: Texture
+                        attribute:
+                          entry: var.recyclables[self.key]
+                          visible: self.entry != null
+                          width: 996
+                          height: 64
+                          normal: ~60,60,70,200
+                          hover: ~Frosted:0;60,160,90,200
+                          shape: ~round_rect
+                          radius: 14
+                        effect:
+                          stroke:
+                            width: 1
+                            color: ~80,255,140,60
+                        children:
+                          物品图标:
+                            type: Slot
+                            attribute:
+                              slotType: ~Icon
+                              itemScale: 0.64
+                              x: 8
+                              y: 4
+                              width: 56
+                              height: 56
+                              normal: ~45,45,55,200
+                              shape: ~round_rect
+                              radius: 10
+                              through: true
+                          名称:
+                            type: Text
+                            attribute:
+                              x: 76
+                              y: 10
+                              width: 260
+                              texts: "self.parent.entry != null ? '&f' + self.parent.entry['name'] : ''"
+                              fontSize: 34
+                              through: true
+                          数量:
+                            type: Text
+                            attribute:
+                              x: 76
+                              y: 38
+                              width: 120
+                              texts: "self.parent.entry != null ? '&7x' + self.parent.entry['amount'] : ''"
+                              fontSize: 22
+                              through: true
+                          单价:
+                            type: Text
+                            attribute:
+                              x: 380
+                              y: 14
+                              width: 200
+                              texts: "self.parent.entry != null ? '&e单价: &f' + self.parent.entry['unitPrice'] : ''"
+                              fontSize: 28
+                              through: true
+                          总价:
+                            type: Text
+                            attribute:
+                              x: 620
+                              y: 14
+                              width: 200
+                              texts: "self.parent.entry != null ? '&a总计: &f' + self.parent.entry['totalPrice'] : ''"
+                              fontSize: 28
+                              through: true
+                          回收按钮:
+                            type: Texture
+                            attribute:
+                              x: 870
+                              y: 6
+                              width: 110
+                              height: 52
+                              normal: ~60,180,100,200
+                              hover: ~Frosted:0;80,220,120,230
+                              shape: ~round_rect
+                              radius: 10
+                            action:
+                              clickLeft: |-
+                                Packet.send(var.packetId, 'recycle_single', self.parent.parent.entry['slot'] + '')
+                            effect:
+                              stroke:
+                                width: 1
+                                color: ~80,255,140,120
+                            children:
+                              文字:
+                                type: Text
+                                attribute:
+                                  x: 55
+                                  y: 14
+                                  through: true
+                                  center: true
+                                  fontSize: 28
+                                  texts: '&f回收'
+              回收观察:
+                type: Observer
+                attribute:
+                  target: val.回收列表['回收项']
+                  subscribe: var.recyclables
+                  maxSize: 36
+
+          # ── 底部操作栏 ──────────────────────────────
+          总价值:
+            type: Text
+            attribute:
+              x: 42
+              y: 670
+              texts: "~&7可回收总价值: &e{var.totalValue} &7{var.currency}"
+              fontSize: 40
+
+          一键回收:
+            type: Texture
+            attribute:
+              x: 760
+              y: 660
+              width: 220
+              height: 56
+              normal: ~60,200,100,220
+              hover: ~Frosted:0;80,240,120,240
+              shape: ~round_rect
+              radius: 16
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'recycle_all')
+            effect:
+              stroke:
+                width: 2
+                color: ~80,255,140,160
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 110
+                  y: 14
+                  through: true
+                  center: true
+                  fontSize: 36
+                  texts: '&f&l一键回收全部'
+
+          刷新按钮:
+            type: Texture
+            attribute:
+              x: 1000
+              y: 660
+              width: 68
+              height: 56
+              normal: ~65,65,75,220
+              hover: ~Frosted:0;255,255,255,180
+              shape: ~round_rect
+              radius: 16
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'recycle_preview')
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,120
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 34
+                  y: 14
+                  through: true
+                  center: true
+                  fontSize: 36
+                  texts: '&f↻'

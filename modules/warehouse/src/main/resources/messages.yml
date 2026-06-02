@@ -1,0 +1,53 @@
+# ============================================================
+#  Warehouse 模块消息文件
+# ------------------------------------------------------------
+#  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
+#  修改后执行 /axs reload warehouse 即可生效。
+# ============================================================
+
+prefix: "&3◆ &6ArcartXSuite &7| &r"
+
+# ── 通用 ──────────────────────────────────────────────
+common:
+  service-down: "&c服务未启动。"
+  reload-hint: "&e请使用 /{0} reload warehouse"
+  unknown: "&e未知命令，使用 /{0} warehouse help"
+  only-player: "&c该命令只能由玩家执行。"
+  no-permission: "&c你没有权限执行这个命令。"
+
+# ── help ──────────────────────────────────────────────
+help:
+  title: "&6Warehouse 管理命令"
+  status: "&7{0} status&f - 查看模块状态"
+  open: "&7{0} open <玩家>&f - 为玩家打开仓库"
+  info: "&7{0} info <玩家>&f - 查看玩家仓库概览"
+  password: "&7{0} password <玩家> clear&f - 清除二级密码"
+  bank: "&7{0} bank <玩家> <货币ID> <set|add|take> <金额>&f - 管理银行"
+
+# ── status ────────────────────────────────────────────
+status:
+  title: "&6Warehouse 状态"
+  cached: "&7缓存玩家: &f{0}"
+  dirty: "&7脏数据: &f{0}"
+  currency: "&7货币: &f{0}"
+
+# ── admin ─────────────────────────────────────────────
+admin:
+  open:
+    usage: "&e用法: /axs warehouse open <玩家>"
+    offline: "&c玩家不在线: {0}"
+  info:
+    usage: "&e用法: /axs warehouse info <玩家>"
+  password:
+    usage: "&e用法: /axs warehouse password <玩家> clear"
+  bank:
+    usage: "&e用法: /axs warehouse bank <玩家> <货币ID> <set|add|take> <金额>"
+
+# ── player ────────────────────────────────────────────
+player:
+  only-player: "&c该命令只能由玩家执行。"
+  no-permission: "&c你没有权限执行这个命令。"
+  module-down: "&cWarehouse 模块当前未启用。"
+  preview:
+    usage: "&e用法: /{0} preview <玩家UUID>"
+    invalid-uuid: "&c无效的玩家 UUID。"

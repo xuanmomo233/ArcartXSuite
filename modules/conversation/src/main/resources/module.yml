@@ -1,0 +1,13 @@
+id: conversation
+name: Conversation
+version: 1.0.2-beta
+main: xuanmo.arcartxsuite.conversation.ConversationModule
+api-version: 1.0
+
+depends: []
+softdepends: []
+external-depends:
+  - Chemdah
+external-softdepends:
+  - Adyeshach
+

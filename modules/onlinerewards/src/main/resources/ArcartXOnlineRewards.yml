@@ -1,0 +1,115 @@
+config-version: 1
+# AXS OnlineRewards
+# 作用: 统计今日/本周/本月/总在线时长，发放在线阶段奖励；提供签到、连续/累计/每月/节日奖励、补签卡、排行榜和日历 UI。
+# 依赖: ArcartX；PlaceholderAPI、Mail 可选。
+# 重载: /axs onlinereward reload
+# PAPI 输出:
+#   %AXSonlinerewards_daily_minutes% 今日在线原始分钟数。
+#   %AXSonlinerewards_weekly_minutes% 本周在线原始分钟数。
+#   %AXSonlinerewards_monthly_minutes% 本月在线原始分钟数。
+#   %AXSonlinerewards_total_minutes% 总在线原始分钟数。
+#   %AXSonlinerewards_daily_time% 今日在线格式化时长。
+#   %AXSonlinerewards_weekly_time% 本周在线格式化时长。
+#   %AXSonlinerewards_monthly_time% 本月在线格式化时长。
+#   %AXSonlinerewards_total_time% 总在线格式化时长。
+#   %AXSonlinerewards_signin_signed_today% 今日是否已签到。
+#   %AXSonlinerewards_signin_streak% 当前连续签到天数。
+#   %AXSonlinerewards_signin_total% 累计签到天数。
+#   %AXSonlinerewards_top_daily_<rank>_name% 日榜 Top1-10 玩家名。
+#   %AXSonlinerewards_top_daily_<rank>_minutes% 日榜 Top1-10 分钟数。
+#   %AXSonlinerewards_top_daily_<rank>_time% 日榜 Top1-10 格式化时长。
+#   %AXSonlinerewards_top_weekly_<rank>_name% 周榜 Top1-10 玩家名。
+#   %AXSonlinerewards_top_weekly_<rank>_minutes% 周榜 Top1-10 分钟数。
+#   %AXSonlinerewards_top_weekly_<rank>_time% 周榜 Top1-10 格式化时长。
+#   %AXSonlinerewards_top_monthly_<rank>_name% 月榜 Top1-10 玩家名。
+#   %AXSonlinerewards_top_monthly_<rank>_minutes% 月榜 Top1-10 分钟数。
+#   %AXSonlinerewards_top_monthly_<rank>_time% 月榜 Top1-10 格式化时长。
+#   %AXSonlinerewards_top_total_<rank>_name% 总榜 Top1-10 玩家名。
+#   %AXSonlinerewards_top_total_<rank>_minutes% 总榜 Top1-10 分钟数。
+#   %AXSonlinerewards_top_total_<rank>_time% 总榜 Top1-10 格式化时长。
+# 可消费的 PAPI: 无直接 PAPI 条件；倍率和额外签到奖励通过权限节点匹配。
+# 关联资源: ui/online_rewards_menu.yml；可联动 Mail 的 mail/presets/*.yml。
+
+settings:
+  # 是否输出详细调试日志
+  debug: false
+
+  # 玩家客户端初始化完成后，延迟多少 tick 再推送在线奖励进度变量
+  client-sync-delay-ticks: 50
+
+messages:
+  # 今日在线阶段全部完成后的客户端标题文案
+  done: "§c所有阶段已领取"
+
+variables:
+  # 推送给 ArcartX 客户端的进度变量名，值为 0.0 ~ 1.0
+  progress: "arcartx_online_time"
+
+  # 推送给 ArcartX 客户端的标题变量名，值为当前阶段名称或完成文案
+  title: "arcartx_online_time_title"
+
+ui:
+  # OnlineRewards 菜单 UI ID；/onlinerewards open 或 /onlinerewards 会打开该界面。
+  # 支持字符串（单 UI）或列表（多 UI 同时发包）：
+  # menu-ui-id: "AXS:online_rewards_menu"
+  # 多 UI 示例（同一个 payload 同时发给多个 UI）：
+  # menu-ui-id:
+  #   - "AXS:online_rewards_menu"
+  #   - "AXS:online_rewards_menu_alt"
+  menu-ui-id: AXS:online_rewards_menu
+
+  # 客户端按钮回包 ID；需与 online_rewards_menu.yml 中 Packet.send 的第一个参数一致。
+  packet-id: AXS_ONLINE_REWARDS
+
+  # 模块启用时是否自动注册默认 UI。
+  register-ui-on-enable: true
+
+  # 是否用内置 online_rewards_menu.yml 覆盖已导出的 plugins/ArcartXSuite/ui/online_rewards_menu.yml。
+  overwrite-ui-files: false
+
+time-bonus:
+  # 玩家拥有对应权限时，在线计时按 multiplier 倍数累计；匹配多个权限时取 priority 最高的一组。
+  permission-groups:
+    - permission: "ArcartXSuite.onlinerewards.time.1_5"
+      multiplier: 1.5
+      priority: 10
+    - permission: "ArcartXSuite.onlinerewards.time.2"
+      multiplier: 2.0
+      priority: 20
+
+storage:
+  # 存储模式: sqlite 本地文件；mysql 远程 MySQL。
+  mode: "sqlite"
+
+  sqlite:
+    # SQLite 文件会创建在插件数据目录下
+    file: "online-rewards.db"
+
+  mysql:
+    host: "127.0.0.1"
+    port: 3306
+    database: "arcartxsuite"
+    username: "root"
+    password: ""
+
+  # 连接池大小，在线人数较多时可适当提高
+  pool-size: 2
+
+# 跨服同步: 使用 Redis Pub/Sub 在签到、补签、管理员操作后通知其他服务端刷新数据。
+# 前提: storage.mode 必须设为 mysql (共享数据库)，否则跨服通知无意义。
+redis:
+  enabled: false
+  host: "127.0.0.1"
+  port: 6379
+  password: ""
+  database: 0
+  channel: "AXS:onlinerewards"
+  # 当前节点标识，每台服务端必须不同；留空则不会过滤自身消息。
+  node-id: ""
+  connect-timeout-ms: 5000
+
+# 签到配置文件路径，相对模块数据目录。
+sign-in-file: "sign-in.yml"
+
+# 在线阶段奖励文件路径，相对模块数据目录。
+rewards-file: "rewards.yml"

@@ -1,0 +1,42 @@
+# ArcartXSuite License v1.3
+license:
+  qq: ""
+  keys: []
+  install_id: "auto"
+
+  endpoints:
+    - name: "official-domain"
+      base_url: "https://axs.021209.xyz"
+      priority: 10
+      timeout_ms: 4500
+
+  network:
+    connect_timeout_ms: 3000
+    read_timeout_ms: 5000
+    max_retries: 2
+    preflight_time_check: true
+    retry_backoff_ms: 800
+    jitter_ms: 300
+    circuit_breaker_minutes: 10
+    proxy:
+      enabled: false
+      # enabled=false 时是否读取系统代理。Windows 上会读取“设置/Internet 选项”里的用户代理。
+      # 如果你的服务端需要完全直连 Cloudflare，可改为 false。
+      use_system: true
+      type: "HTTP"
+      host: "127.0.0.1"
+      port: 7897
+
+  offline:
+    soft_grace_days: 7
+    emergency_grace_days: 3
+    refresh_before_hours: 24
+
+time:
+  ntp_enabled: true
+  ntp_timeout_ms: 1500
+  ntp_hosts:
+    - "ntp.tencent.com"
+    - "ntp1.tencent.com"
+    - "ntp.aliyun.com"
+    - "ntp1.aliyun.com"

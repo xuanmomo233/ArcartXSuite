@@ -1,0 +1,62 @@
+# ============================================================
+#  Announcer 模块消息文件
+# ------------------------------------------------------------
+#  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
+#  修改后执行 /axs reload announcer 即可生效。
+# ============================================================
+
+prefix: "&3◆ &6ArcartXSuite &7| &r"
+
+# ── 通用 ──────────────────────────────────────────────
+common:
+  reload-hint: "&e请使用 /{0} reload announcer"
+  unknown: "&e未知命令，使用 /{0} announcer help"
+  player-offline: "&c玩家不在线: {0}"
+  enabled: "&a已启用"
+  disabled: "&e未启用"
+
+# ── help ──────────────────────────────────────────────
+help:
+  title: "&6Announcer 管理命令"
+  status: "&7{0} status&f - 查看模块状态"
+  reload: "&7{0} reload&f - 重载模块"
+  broadcast: "&7{0} broadcast <文本>&f - 本服加入广播队列（当前广播结束后播报）"
+  broadcastnow: "&7{0} broadcastnow <文本>&f - 本服立即广播（打断当前展示）"
+  gbroadcast: "&7{0} gbroadcast <文本>&f - 跨服加入广播队列（转发到其他子服）"
+  gbroadcastnow: "&7{0} gbroadcastnow <文本>&f - 跨服立即广播（转发到其他子服）"
+  subtitle-list: "&7{0} subtitle list&f - 列出字幕组"
+  subtitle-play: "&7{0} subtitle play <玩家> <字幕组ID>&f - 播放字幕"
+  subtitle-stop: "&7{0} subtitle stop <玩家>&f - 停止字幕"
+
+# ── status ────────────────────────────────────────────
+status:
+  title: "&6Announcer 状态"
+  active: "&7活跃公告: &f{0}"
+  initialized: "&7已初始化玩家: &f{0}"
+  groups: "&7字幕组: &f{0}"
+  playing: "&7字幕播放中: &f{0}"
+  pending: "&7待播队列: &f{0}"
+  proxy: "&7跨服传输: &f{0}"
+
+# ── broadcast ─────────────────────────────────────────
+broadcast:
+  service-down: "&c广播服务未启动。"
+  proxy-disabled: "&c跨服传输未启用，请先在配置中开启 transport.proxy.enabled。"
+  usage: "&e用法: /{0} announcer {1} <文本>"
+  now: "&a已{0}立即广播: &f{1}"
+  queued: "&a已{0}加入广播队列 (待播: {1}): &f{2}"
+  scope-local: "本服"
+  scope-global: "跨服"
+
+# ── subtitle ──────────────────────────────────────────
+subtitle:
+  service-down: "&c字幕服务未启动（Subtitle UI 注册失败）。"
+  list-empty: "&e无已加载的字幕组。"
+  list-title: "&6字幕组 ({0}):"
+  list-entry: "&f  {0}"
+  play-usage: "&e用法: /{0} announcer subtitle play <玩家> <字幕组ID>"
+  play-success: "&a已向 {0} 播放字幕组: {1}"
+  play-not-found: "&c字幕组不存在: {0}"
+  stop-usage: "&e用法: /{0} announcer subtitle stop <玩家>"
+  stop-success: "&a已停止 {0} 的字幕播放。"
+  unknown: "&e未知字幕命令: {0}。可用: list, play, stop"

@@ -1,0 +1,51 @@
+# ArcartXSuite Mail — 新邮件通知卡片模板
+# 当玩家收到新邮件时，在聊天栏中显示此卡片
+root_control:
+  type: card
+  attribute:
+    width: "self.data['cardWidth'] + 0"
+    height: "self.data['cardHeight'] + 0"
+  children:
+    background:
+      type: Texture
+      attribute:
+        width: "self.parent.data['cardWidth'] + 0"
+        height: "self.parent.data['cardHeight'] + 0"
+        normal: ~30,30,45,200
+      action:
+        click: |-
+          Chat.say('/axsmail')
+    icon:
+      type: Text
+      attribute:
+        fontSize: 300
+        x: 5
+        y: "self.parent.data['cardHeight']/2 - 75"
+        texts: "'§f✉'"
+        through: true
+    title_label:
+      type: Text
+      attribute:
+        fontSize: 64
+        x: 160
+        y: 15
+        texts: "'§e§l新邮件 §7来自 §f' + self.parent.data['senderName']"
+        through: true
+    subject_label:
+      type: Text
+      attribute:
+        fontSize: 64
+        x: 160
+        y: 60
+        through: true
+        texts:
+          - "'§7主题: §f' + self.parent.data['msg0']"
+          - "self.parent.data['msg1'] != null ? '§f' + self.parent.data['msg1'] : null"
+          - "self.parent.data['msg2'] != null ? '§f' + self.parent.data['msg2'] : null"
+          - "self.parent.data['msg3'] != null ? '§f' + self.parent.data['msg3'] : null"
+          - "self.parent.data['msg4'] != null ? '§f' + self.parent.data['msg4'] : null"
+          - "self.parent.data['msg5'] != null ? '§f' + self.parent.data['msg5'] : null"
+          - "self.parent.data['msg6'] != null ? '§f' + self.parent.data['msg6'] : null"
+          - "self.parent.data['msg7'] != null ? '§f' + self.parent.data['msg7'] : null"
+          - "self.parent.data['msg8'] != null ? '§f' + self.parent.data['msg8'] : null"
+          - "self.parent.data['msg9'] != null ? '§f' + self.parent.data['msg9'] : null"

@@ -1,0 +1,521 @@
+﻿# AXS LoginView
+# 登录、注册与密码修改界面。
+
+ui:
+  isHud: false
+  defaultOpen: false
+  hide:
+    - HUD
+    - online
+    - 聊天栏
+    - 纯色块HUD
+    - 纯色块HUD二改
+  through: false
+  background: true
+  escClose: false
+  closeDied: true
+  show: true
+  jei: false
+  level: 20
+  screenScale: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.type = packet['type']
+      var.title = packet['title']
+      var.mode = packet['mode']
+      var.registered = packet['registered']
+      var.playerName = packet['playerName']
+      var.serverName = packet['serverName']
+      var.online = packet['online']
+      var.maxPlayers = packet['maxPlayers']
+      var.address = packet['address']
+      var.time = packet['time']
+      var.premiumBypass = packet['premiumBypass']
+      var.qqBound = packet['qqBound']
+      var.bindPrompt = packet['bindPrompt']
+      var.result = packet['message']
+      var.password = ''
+      var.confirmPassword = ''
+      var.oldPassword = ''
+      var.newPassword = ''
+      var.changeConfirmPassword = ''
+    result: |-
+      var.result = packet['message']
+      var.resultAlpha = TwoLerp(1, 1, 0, 2000, 1000)
+      var.lastSuccess = packet['success']
+      if (var.lastSuccess && var.type == 'change') {
+        var.type = 'login'
+        var.title = '登录服务器'
+        var.oldPassword = ''
+        var.newPassword = ''
+        var.changeConfirmPassword = ''
+      }
+    close: |-
+      var.result = packet['message']
+  action:
+    load: |-
+      var.packetId = 'AXS_loginview'
+      var.type = 'login'
+      var.title = '登录服务器'
+      var.mode = 'standalone'
+      var.registered = true
+      var.premiumBypass = false
+      var.qqBound = false
+      var.bindPrompt = ''
+      var.playerName = ''
+      var.serverName = ''
+      var.online = 0
+      var.maxPlayers = 0
+      var.address = ''
+      var.time = ''
+      var.result = ''
+      var.password = ''
+      var.confirmPassword = ''
+      var.oldPassword = ''
+      var.newPassword = ''
+      var.changeConfirmPassword = ''
+      var.bindCode = ''
+
+controls:
+  自适应:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 680
+          height: 360
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~26,32,42,232
+              #shape: ~round_rect
+              #radius: 18
+            effect:
+              stroke:
+                width: 2
+                color: ~210,225,245,230
+              ripple:
+                duration: 1200
+                color: ~140,190,240,90
+                width: 0.05
+          顶部强调:
+            type: Texture
+            attribute:
+              x: 28
+              y: 20
+              width: 5
+              height: 54
+              normal: ~84,190,130,255
+              shape: ~round_rect
+              radius: 3
+          标题:
+            type: Text
+            attribute:
+              x: 42
+              y: 24
+              texts: "'&f&l' + var.title"
+              fontSize: 56
+          副标题:
+            type: Text
+            attribute:
+              x: 42
+              y: 66
+              texts: "'&b' + var.playerName"
+              fontSize: 38
+          服务器信息:
+            type: Text
+            attribute:
+              x: 42
+              y: 98
+              texts: "'&7' + var.serverName + '  在线 ' + var.online.round() + '/' + var.maxPlayers.round() + '  IP地址 ' + var.address"
+              fontSize: 34
+          服务器时间:
+            type: Text
+            attribute:
+              x: 42
+              y: 124
+              texts: "'&8时间 ' + var.time"
+              fontSize: 28
+          登录提示:
+            type: Text
+            attribute:
+              x: 42
+              y: 160
+              texts: "~&f输入密码登录"
+              fontSize: 36
+              visible: var.type == 'login'
+          登录密码:
+            type: TextBox
+            attribute:
+              x: 42
+              y: 190
+              width: 420
+              height: 42
+              length: 64
+              emptyText: ~密码
+              fontSize: 49
+              passwordChar: ~※
+              background: ~18,23,31,235
+              visible: var.type == 'login'
+            action:
+              textChange: |-
+                var.password = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+          登录按钮:
+            type: Texture
+            attribute:
+              x: 478
+              y: 190
+              width: 180
+              height: 42
+              normal: ~80,180,122,238
+              hover: ~108,210,156,255
+              shape: ~round_rect
+              radius: 12
+              texts: "~&f登录"
+              center: true
+              fontSize: 38
+              visible: var.type == 'login'
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'login', var.password)
+          切换修改密码:
+            type: Texture
+            attribute:
+              x: 42
+              y: 246
+              width: 616
+              height: 38
+              normal: ~191,160,72,220
+              hover: ~224,188,88,255
+              shape: ~round_rect
+              radius: 10
+              texts: "~&f修改密码"
+              center: true
+              fontSize: 34
+              visible: var.type == 'login'
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+            action:
+              clickLeft: |-
+                var.type = 'change'
+                var.title = '修改密码'
+                var.result = ''
+                var.password = ''
+                var.oldPassword = ''
+                var.newPassword = ''
+                var.changeConfirmPassword = ''
+          退出服务器:
+            type: Texture
+            attribute:
+              x: 42
+              y: 300
+              width: 616
+              height: 38
+              normal: ~160,50,50,220
+              hover: ~200,60,60,255
+              shape: ~round_rect
+              radius: 10
+              texts: "~&f退出服务器"
+              center: true
+              fontSize: 34
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+            action:
+              clickLeft: |-
+                Game.quit()
+          # ── 正版/LittleSkin 免登录视图（已绑定QQ）──
+          免登录提示:
+            type: Text
+            attribute:
+              x: 42
+              y: 160
+              texts: "~&a✔ &f身份已通过正版验证，无需输入密码"
+              fontSize: 36
+              visible: var.type == 'bypass'
+          进入服务器:
+            type: Texture
+            attribute:
+              x: 42
+              y: 210
+              width: 616
+              height: 46
+              normal: ~80,180,122,238
+              hover: ~108,210,156,255
+              shape: ~round_rect
+              radius: 12
+              texts: "~&f进入服务器"
+              center: true
+              fontSize: 38
+              visible: var.type == 'bypass'
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'bypass_enter')
+          # ── 正版/LittleSkin 登录视图（未绑定QQ，需输入绑定码）──
+          绑定提示:
+            type: Text
+            attribute:
+              x: 42
+              y: 152
+              width: 600
+              texts: "var.bindPrompt"
+              fontSize: 30
+              visible: var.type == 'bypass_unbound'
+          绑定码输入框:
+            type: TextBox
+            attribute:
+              x: 42
+              y: 218
+              width: 420
+              height: 42
+              length: 6
+              emptyText: ~绑定验证码
+              fontSize: 49
+              background: ~18,23,31,235
+              visible: var.type == 'bypass_unbound'
+            action:
+              textChange: |-
+                var.bindCode = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+          确认绑定:
+            type: Texture
+            attribute:
+              x: 478
+              y: 218
+              width: 180
+              height: 42
+              normal: ~80,180,122,238
+              hover: ~108,210,156,255
+              shape: ~round_rect
+              radius: 12
+              texts: "~&f确认绑定"
+              center: true
+              fontSize: 38
+              visible: var.type == 'bypass_unbound'
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'bind_code', var.bindCode)
+          # ── 注册视图 ──
+          注册提示:
+            type: Text
+            attribute:
+              x: 42
+              y: 160
+              texts: "~&f设置密码注册账号"
+              fontSize: 36
+              visible: var.type == 'register'
+          注册密码:
+            type: TextBox
+            attribute:
+              x: 42
+              y: 190
+              width: 300
+              height: 42
+              length: 64
+              emptyText: ~设置密码
+              fontSize: 42
+              passwordChar: ~※
+              background: ~18,23,31,235
+              visible: var.type == 'register'
+            action:
+              textChange: |-
+                var.password = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+          注册确认:
+            type: TextBox
+            attribute:
+              x: 358
+              y: 190
+              width: 300
+              height: 42
+              length: 64
+              emptyText: ~确认密码
+              fontSize: 42
+              passwordChar: ~※
+              background: ~18,23,31,235
+              visible: var.type == 'register'
+            action:
+              textChange: |-
+                var.confirmPassword = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+          注册按钮:
+            type: Texture
+            attribute:
+              x: 42
+              y: 246
+              width: 616
+              height: 42
+              normal: ~80,180,122,238
+              hover: ~108,210,156,255
+              shape: ~round_rect
+              radius: 12
+              texts: "~&f注册并登录"
+              center: true
+              fontSize: 38
+              visible: var.type == 'register'
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'register', var.password, var.confirmPassword)
+          修改提示:
+            type: Text
+            attribute:
+              x: 42
+              y: 160
+              texts: "~&f输入旧密码并设置新密码"
+              fontSize: 36
+              visible: var.type == 'change'
+          修改旧密码:
+            type: TextBox
+            attribute:
+              x: 42
+              y: 190
+              width: 196
+              height: 40
+              length: 64
+              emptyText: ~旧密码
+              fontSize: 34
+              passwordChar: ~※
+              background: ~18,23,31,235
+              visible: var.type == 'change'
+            action:
+              textChange: |-
+                var.oldPassword = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+          修改新密码:
+            type: TextBox
+            attribute:
+              x: 252
+              y: 190
+              width: 196
+              height: 40
+              length: 64
+              emptyText: ~新密码
+              fontSize: 34
+              passwordChar: ~※
+              background: ~18,23,31,235
+              visible: var.type == 'change'
+            action:
+              textChange: |-
+                var.newPassword = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+          修改确认:
+            type: TextBox
+            attribute:
+              x: 462
+              y: 190
+              width: 196
+              height: 40
+              length: 64
+              emptyText: ~确认
+              fontSize: 34
+              passwordChar: ~※
+              background: ~18,23,31,235
+              visible: var.type == 'change'
+            action:
+              textChange: |-
+                var.changeConfirmPassword = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+          修改按钮:
+            type: Texture
+            attribute:
+              x: 42
+              y: 246
+              width: 300
+              height: 42
+              normal: ~191,160,72,225
+              hover: ~224,188,88,255
+              shape: ~round_rect
+              radius: 12
+              texts: "~&f修改密码"
+              center: true
+              fontSize: 36
+              visible: var.type == 'change'
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'change_password', var.oldPassword, var.newPassword, var.changeConfirmPassword)
+          返回登录:
+            type: Texture
+            attribute:
+              x: 358
+              y: 246
+              width: 300
+              height: 42
+              normal: ~86,112,148,225
+              hover: ~145,170,205,255
+              shape: ~round_rect
+              radius: 12
+              texts: "~&f返回登录"
+              center: true
+              fontSize: 36
+              visible: var.type == 'change'
+            effect:
+              stroke:
+                width: 2
+                color: ~165,190,220,255
+            action:
+              clickLeft: |-
+                var.type = 'login'
+                var.title = '登录服务器'
+                var.result = ''
+                var.oldPassword = ''
+                var.newPassword = ''
+                var.changeConfirmPassword = ''
+          结果:
+            type: Text
+            attribute:
+              point: ~middle_center
+              width: 616
+              texts: "var.result"
+              fontSize: 81
+              alpha: var.resultAlpha
+              visible: var.resultAlpha > 0

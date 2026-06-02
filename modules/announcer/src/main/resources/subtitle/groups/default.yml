@@ -1,0 +1,45 @@
+﻿# AXS 资源说明
+# 用途: Subtitle 模块默认字幕组示例，演示按顺序播放多条字幕帧。
+# 前置依赖: ArcartX；Subtitle 模块启用后生效。
+# 启用开关: config.yml -> modules.subtitle.enabled + modules.subtitle.password
+# 关联文件: ArcartXSubtitle.yml、ui/subtitle_hud.yml
+# 重载命令: /axs subtitle reload
+# 最小使用路径: 顶层数字节点 + text + time + keep
+
+# 使用方式:
+# /axs announcer subtitle play <玩家> default
+#
+# 规则说明:
+# 1. 顶层节点必须是数字，系统会按数字从小到大顺序播放。
+# 2. text 为字幕文本；若服务器安装了 PlaceholderAPI，会在发送前先解析。
+# 3. length 为打字机动画总字数；填 0 或负数时会按可见文本长度自动计算。
+# 4. time 为打字机动画时长，单位毫秒。
+# 5. keep 为当前条动画结束后继续停留的秒数。
+# 6. ui-id（可选）指定本组使用哪个 UI 播放，不填则使用全局默认。
+#    支持字符串或列表：
+#    ui-id: "AXS:custom_subtitle_hud"
+#    或
+#    ui-id:
+#      - "AXS:subtitle_hud_1"
+#      - "AXS:subtitle_hud_2"
+
+1:
+  # 支持颜色代码和 PlaceholderAPI 变量。
+  text: "&f欢迎，%player_name%。"
+
+  # 0 = 自动按当前可见文本长度计算。
+  length: 0
+
+  # 打字机动画 1.4 秒。
+  time: 1400
+
+  # 动画结束后停留 1 秒再切下一条。
+  keep: 1
+
+2:
+  text: "&e这是 AXS Subtitle 默认字幕组。"
+  length: 0
+  time: 1800
+
+  # 最后一条会在 time + keep 后自动关闭 HUD。
+  keep: 1.5

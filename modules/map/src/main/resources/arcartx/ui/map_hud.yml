@@ -1,0 +1,123 @@
+﻿# AXS 资源说明
+# 用途: Map 模块默认小地图 HUD。
+# 前置依赖: ArcartX；Map 模块启用后会自动注册或导出。
+# 启用开关: config.yml -> modules.map.enabled + modules.map.password
+# 关联文件: ArcartXMap.yml、ui/map_menu.yml
+# 重载命令: /axs map reload
+
+ui:
+  isHud: true
+  background: false
+  closeDied: true
+  through: false
+  screenScale: true
+  show: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.visible = packet['visible']
+      var.worldId = packet['worldId']
+      var.texture = packet['texture']
+      var.imageWidth = packet['imageWidth']
+      var.imageHeight = packet['imageHeight']
+      var.hudZoom = packet['hudZoom']
+      var.hudSize = packet['hudSize']
+      var.clippedPlayerX = packet['clippedPlayerX']
+      var.clippedPlayerZ = packet['clippedPlayerZ']
+      var.playerYaw = packet['playerYaw']
+      var.trackingText = packet['trackingText']
+    update: |-
+      var.packetId = packet['packetId']
+      var.visible = packet['visible']
+      var.worldId = packet['worldId']
+      var.texture = packet['texture']
+      var.imageWidth = packet['imageWidth']
+      var.imageHeight = packet['imageHeight']
+      var.hudZoom = packet['hudZoom']
+      var.hudSize = packet['hudSize']
+      var.clippedPlayerX = packet['clippedPlayerX']
+      var.clippedPlayerZ = packet['clippedPlayerZ']
+      var.playerYaw = packet['playerYaw']
+      var.trackingText = packet['trackingText']
+  action:
+    load: |-
+      var.packetId = 'AXS_MAP'
+      var.visible = false
+      var.worldId = ''
+      var.texture = ''
+      var.imageWidth = 0
+      var.imageHeight = 0
+      var.hudZoom = 0.18
+      var.hudSize = 180
+      var.clippedPlayerX = 0
+      var.clippedPlayerZ = 0
+      var.playerYaw = 0
+      var.trackingText = '当前未导航'
+
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      root:
+        type: Canvas
+        attribute:
+          point: ~top_right
+          x: -28
+          y: 24
+          width: 250
+          height: 250
+        children:
+          shell:
+            type: Texture
+            attribute:
+              point: ~top_right
+              width: 250
+              height: 250
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 26
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_menu')
+          title:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 18
+              y: 16
+              texts: "'&0小地图 &8/ &7' + var.worldId"
+              fontSize: 18
+              shadow: false
+          map_mask:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 18
+              y: 48
+              width: 214
+              height: 160
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 18
+          coords:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 20
+              y: 218
+              texts: "'&7PX: &0' + var.clippedPlayerX + '  &7PZ: &0' + var.clippedPlayerZ"
+              fontSize: 13
+              shadow: false
+          tracking:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 20
+              y: 236
+              texts: "'&7' + var.trackingText"
+              fontSize: 12
+              shadow: false

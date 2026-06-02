@@ -1,0 +1,51 @@
+# ArcartXSuite Chat — 私聊通知卡片模板
+# 收到或发送私聊消息时显示此卡片
+root_control:
+  type: card
+  attribute:
+    width: "self.data['cardWidth'] + 0"
+    height: "self.data['cardHeight'] + 0"
+  children:
+    background:
+      type: Texture
+      attribute:
+        width: "self.parent.data['cardWidth'] + 0"
+        height: "self.parent.data['cardHeight'] + 0"
+        normal: ~25,25,35,200
+      action:
+        click: |-
+          Chat.setMessage('/msg ' + self.parent.data['senderName'] + ' ')
+    icon_label:
+      type: Text
+      attribute:
+        fontSize: 260
+        x: 15
+        y: "self.parent.data['cardHeight']/2 - 10"
+        texts: "'§d✎'"
+        through: true
+    title_label:
+      type: Text
+      attribute:
+        fontSize: 64
+        x: 160
+        y: 15
+        texts: "self.parent.data['direction'] == 'sender' ? '§d私聊 → §f' + self.parent.data['targetName'] : '§d私聊 ← §f' + self.parent.data['senderDisplayName']"
+        through: true
+    message_label:
+      type: Text
+      attribute:
+        fontSize: 64
+        x: 160
+        y: 60
+        through: true
+        texts:
+          - "'§7' + self.parent.data['msg0']"
+          - "self.parent.data['msg1'] != null ? '§7' + self.parent.data['msg1'] : null"
+          - "self.parent.data['msg2'] != null ? '§7' + self.parent.data['msg2'] : null"
+          - "self.parent.data['msg3'] != null ? '§7' + self.parent.data['msg3'] : null"
+          - "self.parent.data['msg4'] != null ? '§7' + self.parent.data['msg4'] : null"
+          - "self.parent.data['msg5'] != null ? '§7' + self.parent.data['msg5'] : null"
+          - "self.parent.data['msg6'] != null ? '§7' + self.parent.data['msg6'] : null"
+          - "self.parent.data['msg7'] != null ? '§7' + self.parent.data['msg7'] : null"
+          - "self.parent.data['msg8'] != null ? '§7' + self.parent.data['msg8'] : null"
+          - "self.parent.data['msg9'] != null ? '§7' + self.parent.data['msg9'] : null"

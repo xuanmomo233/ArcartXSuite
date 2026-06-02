@@ -1,0 +1,101 @@
+config-version: 1
+# AXS Tab
+# 作用: 周期生成在线玩家列表并推送给 ArcartX Tab UI，支持按玩家名、权限组或 PAPI 数值排序。
+# 依赖: ArcartX、PlaceholderAPI。
+# 重载: /axs tab reload
+# PAPI 输出: 无独立 PlaceholderAPI 输出。
+# 可消费的 PAPI: tabs.<id>.pack 会按每个目标玩家解析完整 PAPI，例如 %player_name%、%player_health%、%AXStitle_tab_<groupId>_prefix%。
+# 排序 PAPI: sort-mode=papi 时 sort-papi-key 填完整 PAPI，例如 %player_level%；sort-papi-numeric 控制数字/文本排序。
+
+settings:
+  refresh-interval-ticks: 20
+  # 跨服快照广播节流：相邻两次广播最小间隔（ticks，50ms/tick）。0 表示禁用节流。
+  # 当玩家进退服触发的额外 refresh 在短时间内连发时，可避免风暴。建议 = refresh-interval-ticks。
+  batch:
+    window-ticks: 0
+  # 退服宽限：玩家退服后保留其在跨服快照中的虚拟条目，避免跨服跳传时的"消失闪烁"。
+  # 0 表示禁用；典型值 1500 ~ 3000（毫秒）。
+  leave-grace-ms: 0
+  debug: false
+
+  # 插件启动/重载时是否自动注册随模块内置的 TAB UI。
+  register-ui-on-enable: true
+
+  # 是否强制覆盖 plugins/ArcartXSuite/ui/tab.yml。
+  overwrite-ui-file: false
+
+  # 当前服务端节点标识；跨服同步时用于区分不同服务端。
+  server-id: "default"
+
+  # 跨服玩家列表全局默认开关；每个 tab definition 可用 cross-server: true/false 覆盖。
+  cross-server: false
+
+  # 远程服务端快照过期时间（毫秒），超过此时间未收到新快照的远程节点条目将被移除。
+  stale-snapshot-ms: 30000
+
+  # PAPI 输出：注册 PlaceholderExpansion，对外暴露 Tab 统计 / 玩家状态占位符。
+  # 见 docs/modules/tab.md "PAPI 输出" 章节。
+  papi:
+    enabled: false
+    expansion-id: "AXStab"
+
+  # 视觉风格（由 PAPI 占位符执行，不修改 pack 渲染逻辑）：
+  # - pvp-highlight: %AXStab_pvp% / %AXStab_pvp_color%；window-ms 内仍视为 PVP 状态
+  # - vanish-grey:   %AXStab_vanished% / %AXStab_vanish_color%
+  # - ping-icon:     %AXStab_ping% / %AXStab_ping_icon%；tiers 按 max-ms 升序匹配
+  style:
+    pvp-highlight:
+      enabled: false
+      window-ms: 5000
+      color: "&c"
+    vanish-grey:
+      enabled: false
+      color: "&7"
+    ping-icon:
+      enabled: false
+      tiers:
+        - { max-ms: 80,   icon: "&a▮▮▮▮" }
+        - { max-ms: 160,  icon: "&e▮▮▮▯" }
+        - { max-ms: 300,  icon: "&6▮▮▯▯" }
+        - { max-ms: 9999, icon: "&c▮▯▯▯" }
+
+  # 隐私脱敏：仅影响 %AXStab_uuid% / %AXStab_ip% 占位符，便于在 pack 中用它们替代
+  # %player_uuid% / %player_ip% 集中开关脱敏。
+  privacy:
+    hide-uuid: false
+    hide-ip: false
+
+  # 调试工具：
+  # - dry-run：渲染流程跑全（filters / sortKeys / pinned / grouping / pagination / PAPI 解析），
+  #   但**不真正发包给客户端**，仅在 settings.debug=true 时记录每次跳过日志。用于线上排查或配置预演。
+  # 命令补充：/axstab snapshot save|load|unload|list|delete <name>
+  #   存档落盘到 plugins/ArcartXSuite/data/tab/snapshots/<name>.json，load 后注入为
+  #   snapshot:<name>:<原 nodeId> 虚拟节点，让本服 viewer 立即看到历史/复现快照。
+  debug-tools:
+    dry-run: false
+
+#跨服传输功能
+transport:
+  redis:
+    # 开启后使用 Redis Pub/Sub 同步跨服玩家列表。
+    enabled: false
+    host: "127.0.0.1"
+    port: 6379
+    password: ""
+    database: 0
+    channel: "AXS:tab"
+    # 留空则使用 settings.server-id 的值。
+    node-id: ""
+    connect-timeout-ms: 5000
+
+  proxy:
+    # 开启后通过 BungeeCord/Velocity 插件消息通道同步跨服玩家列表。
+    enabled: false
+    messenger-channel: "AXS_TAB"
+    forward-target: "ALL"
+    # 留空则使用 settings.server-id 的值。
+    node-id: ""
+
+# Tab 定义目录，路径相对模块数据目录。
+# 目录下每个 *.yml 文件为一个 Tab 定义，文件名（去掉 .yml）即为定义 ID。
+tabs-directory: "tabs"

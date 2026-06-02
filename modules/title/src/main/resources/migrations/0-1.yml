@@ -1,0 +1,20 @@
+# Title 配置迁移示例
+# 从版本 0 升级到版本 1 的迁移规则
+from-version: 0
+to-version: 1
+description: "示例迁移：属性字段重命名"
+
+operations:
+  # 示例：将属性前缀字段重命名
+  - type: rename
+    from: "attributeplus.prefix"
+    to: "attributeplus.ap-priority-prefix"
+
+  # 示例：删除已废弃的字段
+  - type: remove
+    path: "legacy.use-old-menu"
+
+  # 示例：设置缺失的默认UI ID
+  - type: set-if-missing
+    path: "ui.ui-id"
+    value: "AXS:title_menu"

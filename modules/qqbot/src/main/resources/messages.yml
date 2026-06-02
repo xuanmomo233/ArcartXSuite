@@ -1,0 +1,83 @@
+# ============================================================
+#  QQBot 模块消息文件
+# ------------------------------------------------------------
+#  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
+#  修改后执行 /axs reload qqbot 即可生效。
+# ============================================================
+
+prefix: "&3◆ &6ArcartXSuite &7| &r"
+
+# ── 通用 ──────────────────────────────────────────────
+common:
+  service-down: "&cQQBot 模块未启动。"
+  reload-hint: "&e请使用 /{0} reload qqbot"
+  unknown: "&e未知命令，使用 /{0} qqbot help"
+  only-player: "&c该命令仅限玩家使用。"
+  no-permission: "&c你没有权限执行这个命令。"
+
+# ── help ──────────────────────────────────────────────
+help:
+  title: "&bQQBot 管理命令:"
+  status: "&e  /axs qqbot status&7 - 查看运行状态"
+  reload: "&e  /axs qqbot reload&7 - 重载配置"
+  send: "&e  /axs qqbot send <all|群号> <消息>&7 - 向指定群或所有群发消息"
+  lookup: "&e  /axs qqbot lookup <玩家|QQ>&7 - 查询绑定"
+  snowluma: "&e  /axs qqbot snowluma ...&7 - SnowLuma 进程管理"
+
+# ── status ────────────────────────────────────────────
+status:
+  title: "&bQQBot 状态:"
+  connection: "&7  连接状态: {0}"
+  connected: "&a已连接"
+  disconnected: "&c未连接"
+  groups: "&7  监听群数: &f{0}"
+  storage: "&7  存储模式: &f{0}"
+  binding: "&7  绑定功能: {0}"
+  whitelist: "&7  白名单: {0}"
+  enabled: "&a启用"
+  disabled: "&c禁用"
+
+# ── admin ─────────────────────────────────────────────
+admin:
+  send:
+    usage: "&c用法: /axs qqbot send <all|群号> <消息>"
+    success-all: "&a消息已发送到所有群。"
+    success-group: "&a消息已发送到群 &e{0}&a。"
+    invalid-group: "&c无效的群号: &7{0}"
+  lookup:
+    usage: "&c用法: /axs qqbot lookup <玩家名|QQ号>"
+    by-qq-success: "&aQQ &e{0}&a 绑定玩家: &b{1}"
+    by-qq-none: "&cQQ &7{0}&c 未绑定。"
+    by-player-success: "&a玩家 &b{0}&a 绑定QQ: &e{1}"
+    by-player-none: "&c玩家 &7{0}&c 未绑定。"
+  snowluma:
+    title: "&bSnowLuma 进程管理:"
+    start: "&e  /axs qqbot snowluma start&7 - 启动 SnowLuma"
+    stop: "&e  /axs qqbot snowluma stop&7 - 停止 SnowLuma"
+    status: "&e  /axs qqbot snowluma status&7 - 查看状态"
+    install: "&e  /axs qqbot snowluma install&7 - 下载安装最新版"
+    install-start: "&e正在后台下载 SnowLuma，请稍候..."
+    unknown: "&c未知子命令: {0}"
+
+# ── player ────────────────────────────────────────────
+player:
+  help:
+    title: "&bQQBot 命令帮助:"
+    bind: "&e  /{0} bind <验证码>&7 - 绑定QQ"
+    unbind: "&e  /{0} unbind&7 - 解绑QQ"
+    info: "&e  /{0} info&7 - 查看绑定信息"
+    ui: "&e  /{0} ui&7 - 打开绑定中心面板"
+    admin: "&e  /{0} admin&7 - 打开管理后台"
+  bind:
+    usage: "&c用法: /{0} bind <验证码>"
+  info:
+    bind: "&a已绑定 QQ: &e{0}"
+    none: "&7你尚未绑定QQ"
+  ui:
+    not-ready: "&cUI 服务未就绪。"
+  at:
+    usage: "&c用法: /{0} at <QQ号> <消息>"
+    invalid-qq: "&c无效的QQ号: &7{0}"
+    sent: "&a消息已通过QQ群发送给 &e{0}&a。"
+  admin:
+    no-permission: "&c你没有管理员权限。"

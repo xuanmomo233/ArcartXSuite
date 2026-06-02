@@ -1,0 +1,169 @@
+config-version: 1
+# AXS Mail
+# 作用: 收件箱、写信、附件、领取命令、预设邮件、CDK、跨服刷新、邮件日志和 Mail UI；可被 OnlineRewards 等模块调用预设邮件发奖。
+# 依赖: ArcartX；Vault、PlayerPoints、PlaceholderAPI、Redis 按功能选用。
+# 重载: /axs mail reload
+# PAPI 输出:
+#   %AXSmail_unread_count% 当前玩家未读邮件数。
+#   %AXSmail_claimable_count% 当前玩家可领取邮件数。
+#   %AXSmail_total_count% 当前玩家收件箱总邮件数。
+# 可消费的 PAPI: currencies.<id>.balance-placeholder 用于读取余额；mail/presets/*.yml 的 claim-conditions 会解析 PAPI 后判断领取条件。
+# 内置变量: claim-commands、withdraw-command、deposit-command 等命令支持玩家相关 token，例如 <player>。
+# 关联资源: mail/presets/*.yml、ui/mail_*.yml
+
+settings:
+  # 是否输出 Mail 模块调试日志。
+  debug: false
+
+storage:
+  # 存储模式: sqlite 本地文件；mysql 远程 MySQL。
+  mode: sqlite
+
+  sqlite:
+    # SQLite 文件会创建在插件数据目录下。
+    file: mail.db
+
+  mysql:
+    host: 127.0.0.1
+    port: 3306
+    database: arcartxsuite
+    username: root
+    password: ""
+
+  # 数据库连接池大小。
+  pool-size: 4
+
+redis:
+  # 多服邮件广播开关；只在跨服同步时需要。
+  enabled: false
+  host: 127.0.0.1
+  port: 6379
+  password: ""
+  database: 0
+  channel: AXS:mail
+  node-id: ""
+  connect-timeout-ms: 5000
+
+ui:
+  # 下面四个 UI ID 对应收件箱、写信、日志和管理页。
+  inbox-ui-id: AXS:mail_inbox
+  compose-ui-id: AXS:mail_compose
+  logs-ui-id: AXS:mail_logs
+  admin-ui-id: AXS:mail_admin
+  register-ui-on-enable: true
+  overwrite-ui-files: false
+
+  # 玩家打开写信背包时显示的标题。
+  compose-inventory-title: AXS Mail Compose
+
+  # 新邮件到达时在聊天栏显示的 ArcartX 卡片 ID；留空则不发送通知卡片。
+  notify-card-id: "axs_mail_notify"
+
+  # 全角字符占位宽度
+  notify-char-width-full: 31
+  # 半角字符占位宽度
+  notify-char-width-half: 18
+  # 每行文字高度
+  notify-line-height: 36
+  # 文字区最大宽度（超过此值换行）
+  notify-max-line-width: 750
+  # 文字区 X 偏移
+  notify-text-offset-x: 170
+  # 右侧内边距
+  notify-pad-right: 100
+  # 卡片单行基础高度
+  notify-base-height: 100
+  # 卡片最小宽度
+  notify-min-width: 550
+
+currencies:
+  # provider 货币来源:
+  # vault 使用 Vault 经济；playerpoints 使用 PlayerPoints；placeholder-command 用 PAPI 读余额并用命令扣/加款；command 只通过命令扣/加款；custom 预留给自定义扩展。
+  money:
+    enabled: true
+    provider: vault
+    display-name: 金币
+    scale: 2
+    balance-placeholder: ""
+    withdraw-command: ""
+    deposit-command: ""
+  points:
+    enabled: true
+    provider: playerpoints
+    display-name: 点券
+    scale: 0
+    balance-placeholder: ""
+    withdraw-command: ""
+    deposit-command: ""
+
+player-send:
+  # 玩家写信功能总开关。
+  enabled: true
+
+  # 是否要求 ArcartXSuite.mail.send 权限。
+  require-permission: true
+
+  # 发信冷却，单位秒。
+  cooldown-seconds: 120
+
+  # 固定手续费。
+  base-fee: 0.0
+
+  # 额外物品附件手续费。
+  # 玩家写信时会邮寄附件槽中的真实 ItemStack 数据；原版、NeigeItems、MythicMobs/MythicItems、MMOItems 等物品库产物不需要单独配置。
+  item-fee: 0.0
+
+  # base-fee / item-fee 使用的货币 ID；需在 currencies 中存在。
+  fee-currency: money
+
+  # 旧版兼容键；等价于 attachment-tax-rates.money。
+  vault-tax-rate: 0.05
+
+  # 各货币附件税率；发送附件时会按货币 ID 读取对应倍率。
+  attachment-tax-rates:
+    money: 0.05
+    points: 0.0
+
+  # 是否允许给自己发信。
+  allow-self-send: false
+
+  # 是否允许离线目标收信。
+  allow-offline-send: true
+
+  # 是否允许附带 Vault 金币。
+  allow-vault-attachment: true
+
+  # 玩家写信界面可放入的物品附件槽数量；实际不会超过写信容器大小。
+  max-attachments: 6
+  subject-max-length: 48
+  body-max-length: 400
+
+moderation:
+  # 命中时禁止发送；支持敏感词、正则、物品材质和 Lore 正则。
+  blocked-words: []
+  blocked-patterns: []
+  blocked-materials:
+    - BEDROCK
+    - COMMAND_BLOCK
+    - BARRIER
+  blocked-lore-patterns: []
+
+retention:
+  # 自动清理周期，单位 tick。
+  cleanup-interval-ticks: 1200
+
+  # 默认邮件保留天数。
+  default-expire-after-days: 15
+
+  # 已领取 / 已删除邮件保留天数。
+  claimed-retention-days: 7
+  deleted-retention-days: 7
+
+  # 是否允许在仍有未领取附件时删除邮件。
+  allow-delete-with-unclaimed-attachments: false
+
+presets:
+  # 预设目录，相对于插件数据目录。
+  # 预设邮件可在 preset.cdks 中声明固定 CDK；执行 /axs mail reload 后同步到数据库。
+  # CDK 可通过 /axs mail cdk list [page] 查看当前 code、预设、领取次数和过期时间。
+  directory: mail/presets

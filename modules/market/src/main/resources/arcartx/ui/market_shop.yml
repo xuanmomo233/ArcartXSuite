@@ -1,0 +1,361 @@
+# AXS Market — 系统商店界面
+# 打开方式: /market shop [商店ID]
+# 数据交互: packetHandler init/update；客户端 Packet.send(var.packetId, action, ...)
+
+ui:
+  isHud: false
+  defaultOpen: false
+  hide:
+    - HUD
+  through: false
+  background: false
+  escClose: true
+  closeDied: true
+  show: true
+  jei: false
+  level: 8
+  itemSize: 16
+  screenScale: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.shopId = packet['shopId']
+      var.shopName = packet['shopName']
+      var.shops = packet['shops']
+      var.shopTexts = packet['shopTexts']
+      var.items = packet['items']
+      var.readShopSlots(packet)
+    update: |-
+      var.packetId = packet['packetId']
+      var.shopId = packet['shopId']
+      var.shopName = packet['shopName']
+      var.shops = packet['shops']
+      var.shopTexts = packet['shopTexts']
+      var.items = packet['items']
+      var.readShopSlots(packet)
+  action:
+    load: |-
+      var.packetId = 'AXS_MARKET'
+      var.shopId = ''
+      var.shopName = '系统商店'
+      var.shops = {}
+      var.shopTexts = {}
+      var.items = {}
+      var.shopScrollRatio = 0
+      var.itemScrollRatio = 0
+      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      var.readShopSlots = -> {
+        source = args[0]
+        for(i in range(0,39)){
+          idx = i.round()
+          si = idx + ''
+          entry = var.items[si]
+          if(entry == null){
+            next
+          }
+          itemJson = source['shopItemJson' + si]
+          if(itemJson == null || itemJson == ''){
+            itemJson = var.emptyItemJson
+          }
+          control = val.商品列表['商品项']
+          if(control != null){
+            copies = control.copies
+            if(copies != null){
+              target = copies[si]
+              if(target != null){
+                slot = target['商品图标']
+                if(slot != null){
+                  slot.setItemIcon(itemJson)
+                }
+              }
+            }
+          }
+        }
+      }
+    open: |-
+      Packet.send(var.packetId, 'shop_list', '')
+
+controls:
+  根:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      主面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 1400
+          height: 860
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~35,35,45,235
+              shape: ~round_rect
+              radius: 24
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,180
+              shadow:
+                xOffset: 2
+                yOffset: 2
+                blur: 6
+                color: ~0,0,0,120
+
+          标题:
+            type: Text
+            attribute:
+              x: 42
+              y: 24
+              texts: "~&e&l{var.shopName}"
+              fontSize: 56
+          副标题:
+            type: Text
+            attribute:
+              x: 42
+              y: 78
+              texts: '&7系统商店'
+              fontSize: 32
+
+          关闭按钮:
+            type: Texture
+            attribute:
+              x: 1310
+              y: 24
+              width: 56
+              height: 56
+              normal: ~180,60,60,200
+              hover: ~Frosted:0;220,80,80,230
+              shape: ~round_rect
+              radius: 14
+            action:
+              clickLeft: |-
+                Screen.close()
+            effect:
+              stroke:
+                width: 2
+                color: ~255,120,120,120
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 14
+                  through: true
+                  center: true
+                  fontSize: 36
+                  texts: '&fX'
+
+          # ── 左侧商店列表 ──────────────────────────────
+          商店卡片:
+            type: Texture
+            attribute:
+              x: 32
+              y: 110
+              width: 240
+              height: 720
+              normal: ~50,50,60,180
+              shape: ~round_rect
+              radius: 20
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,100
+            children:
+              商店标题:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 16
+                  texts: '&e商店列表'
+                  fontSize: 36
+              商店滚动:
+                type: Scroll
+                val: 商店滚动
+                attribute:
+                  x: 14
+                  y: 60
+                  width: 212
+                  height: 640
+                  moveY: var.shopScrollRatio
+                action:
+                  wheel: |-
+                    var.shopScrollRatio = Math.max(0, Math.min(1, var.shopScrollRatio + self.wheelValue * 0.08))
+                    self.moveY = var.shopScrollRatio
+                children:
+                  商店列表:
+                    val: 商店列表
+                    type: VStack
+                    attribute:
+                      width: 200
+                      spaceBetween: 8
+                    children:
+                      商店项:
+                        type: Texture
+                        attribute:
+                          entry: var.shops[self.key]
+                          visible: self.entry != null
+                          width: 200
+                          height: 48
+                          normal: "self.key == var.shopId ? '80,160,255,220' : '70,70,80,200'"
+                          hover: ~Frosted:0;255,255,255,200
+                          shape: ~round_rect
+                          radius: 12
+                          texts: "var.shopTexts[self.key]"
+                          center: true
+                          fontSize: 32
+                        action:
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'shop_list', self.key)
+                        effect:
+                          stroke:
+                            width: 1
+                            color: ~80,180,255,80
+              商店观察:
+                type: Observer
+                attribute:
+                  target: val.商店列表['商店项']
+                  subscribe: var.shops
+                  maxSize: 32
+
+          # ── 右侧商品区 ──────────────────────────────
+          商品卡片:
+            type: Texture
+            attribute:
+              x: 290
+              y: 110
+              width: 1078
+              height: 720
+              normal: ~50,50,60,180
+              shape: ~round_rect
+              radius: 20
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,100
+            children:
+              商品滚动:
+                type: Scroll
+                val: 商品滚动
+                attribute:
+                  x: 10
+                  y: 10
+                  width: 1058
+                  height: 700
+                  moveY: var.itemScrollRatio
+                action:
+                  wheel: |-
+                    var.itemScrollRatio = Math.max(0, Math.min(1, var.itemScrollRatio + self.wheelValue * 0.05))
+                    self.moveY = var.itemScrollRatio
+                children:
+                  商品列表:
+                    val: 商品列表
+                    type: VStack
+                    attribute:
+                      width: 1038
+                      spaceBetween: 6
+                    children:
+                      商品项:
+                        type: Texture
+                        attribute:
+                          entry: var.items[self.key]
+                          visible: self.entry != null
+                          width: 1038
+                          height: 68
+                          normal: ~60,60,70,200
+                          hover: ~Frosted:0;80,140,220,200
+                          shape: ~round_rect
+                          radius: 14
+                        effect:
+                          stroke:
+                            width: 1
+                            color: ~80,180,255,60
+                        children:
+                          商品图标:
+                            type: Slot
+                            attribute:
+                              slotType: ~Icon
+                              itemScale: 0.68
+                              x: 8
+                              y: 4
+                              width: 60
+                              height: 60
+                              normal: ~45,45,55,200
+                              shape: ~round_rect
+                              radius: 10
+                              through: true
+                          名称:
+                            type: Text
+                            attribute:
+                              x: 80
+                              y: 10
+                              width: 280
+                              texts: "self.parent.entry != null ? '&f' + self.parent.entry['name'] : ''"
+                              fontSize: 36
+                              through: true
+                          价格:
+                            type: Text
+                            attribute:
+                              x: 80
+                              y: 40
+                              width: 200
+                              texts: "self.parent.entry != null ? '&e价格: &f' + self.parent.entry['price'] : ''"
+                              fontSize: 22
+                              through: true
+                          库存:
+                            type: Text
+                            attribute:
+                              x: 400
+                              y: 14
+                              width: 200
+                              texts: "self.parent.entry != null ? '&7库存: &f' + self.parent.entry['stock'] : ''"
+                              fontSize: 28
+                              through: true
+                          限购:
+                            type: Text
+                            attribute:
+                              x: 400
+                              y: 44
+                              width: 200
+                              texts: "self.parent.entry != null && self.parent.entry['limitText'] != '' ? '&c' + self.parent.entry['limitText'] : ''"
+                              fontSize: 22
+                              through: true
+                          购买按钮:
+                            type: Texture
+                            attribute:
+                              x: 850
+                              y: 8
+                              width: 100
+                              height: 52
+                              normal: ~60,180,100,200
+                              hover: ~Frosted:0;80,220,120,230
+                              shape: ~round_rect
+                              radius: 10
+                            action:
+                              clickLeft: |-
+                                Packet.send(var.packetId, 'shop_buy', var.shopId, self.parent.parent.entry['key'], '1')
+                            effect:
+                              stroke:
+                                width: 1
+                                color: ~80,255,140,120
+                            children:
+                              文字:
+                                type: Text
+                                attribute:
+                                  x: 50
+                                  y: 14
+                                  through: true
+                                  center: true
+                                  fontSize: 28
+                                  texts: '&f购买'
+              商品观察:
+                type: Observer
+                attribute:
+                  target: val.商品列表['商品项']
+                  subscribe: var.items
+                  maxSize: 40

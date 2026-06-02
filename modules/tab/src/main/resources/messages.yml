@@ -1,0 +1,71 @@
+# ============================================================
+#  Tab 列表同步模块消息文件
+# ------------------------------------------------------------
+#  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
+#  修改后执行 /axs reload tab 即可生效。
+# ============================================================
+
+prefix: "&3◆ &6ArcartXSuite &7| &r"
+
+# ── 通用 ──────────────────────────────────────────────
+common:
+  service-down: "&cTab 服务未启动。"
+  only-player: "&c仅玩家可使用此命令（debug 除外）。"
+  no-permission: "&c缺少权限: {0}"
+
+# ── 玩家操作 ──────────────────────────────────────────
+player:
+  refresh:
+    requested: "&a已请求刷新。"
+  view:
+    current: "&e当前视图: &f{0}"
+    usage: "&7用法: /axstab view <name>"
+    success: "&a已切换到视图: &f{0}"
+    no-change: "&e已在此视图，无需切换。"
+  page:
+    usage: "&7用法: /axstab page <definitionId> <next|prev|N>"
+    invalid-page: "&c页码无效: {0}"
+    success: "&a页码已设为: &f{0}"
+    failed: "&e翻页未生效（definition 不存在或未开启分页）。"
+  usage:
+    title: "&e用法:"
+    view: "&7/{0} view <name>"
+    page: "&7/{0} page <definitionId> <next|prev|N>"
+    refresh: "&7/{0} refresh"
+
+# ── 调试与快照运维 ────────────────────────────────────
+admin:
+  debug:
+    usage: "&7用法: /axstab debug <player> [definitionId]"
+    offline: "&c玩家不在线: {0}"
+    empty: "&e无可用 definition。"
+    header: "&6=== {0} @ {1} ==="
+  snapshot:
+    not-initialized: "&cSnapshot store 未初始化。"
+    usage: "&7用法: /axstab snapshot <save|load|unload|list|delete> [name]"
+    unknown: "&c未知操作: {0}"
+    list:
+      saved: "&6已保存快照 ({0}):"
+      none: "&7  (无)"
+      item: "&7  - &f{0}"
+      installed: "&6已注入虚拟节点 ({0}):"
+      failed: "&c列出快照失败: {0}"
+    save:
+      usage: "&7用法: /axstab snapshot save <name>"
+      invalid-name: "&c名称非法（仅允许字母/数字/_/-，最长 64）: {0}"
+      success: "&a快照已保存: &f{0}"
+      failed: "&c保存失败: {0}"
+    load:
+      usage: "&7用法: /axstab snapshot load <name>"
+      invalid-name: "&c名称非法: {0}"
+      failed: "&c加载失败: {0}"
+      success: "&a快照已注入: &f{0} &7| localDefs={1} remoteNodes={2} | savedAt={3}"
+    unload:
+      usage: "&7用法: /axstab snapshot unload <name|all>"
+      success: "&a已卸载虚拟节点: &f{0}"
+    delete:
+      usage: "&7用法: /axstab snapshot delete <name>"
+      invalid-name: "&c名称非法: {0}"
+      success: "&a已删除: &f{0}"
+      not-found: "&e未找到: &f{0}"
+      failed: "&c删除失败: {0}"

@@ -1,0 +1,13 @@
+id: chat
+name: Chat
+version: 1.0.2-beta
+main: xuanmo.arcartxsuite.chat.ChatModule
+api-version: 1.0
+
+depends: []
+softdepends: []
+external-depends:
+
+external-softdepends:
+  - PlaceholderAPI
+

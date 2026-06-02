@@ -1,0 +1,14 @@
+# QuestGPS 奇遇任务定义
+
+"encounter/example_rare":
+  enabled: false
+  category: encounter
+  display-name-override: "示例奇遇"
+  description:
+    - "&7可由 EventPacket 的 mob-kill-count 或 placeholder-threshold 触发。"
+  sort-order: 200
+  allow-abandon: true
+  rewards:
+    - type: text
+      display-name: "&d奇遇奖励"
+      text: "&7按服务器实际奖励填写。"

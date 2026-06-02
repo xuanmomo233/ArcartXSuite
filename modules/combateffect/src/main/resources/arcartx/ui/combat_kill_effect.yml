@@ -1,0 +1,117 @@
+#
+# ArcartXSuite CombatEffect - 击杀命中特效 HUD
+# 本 UI 作为 HUD 常驻显示，通过 packetHandler 接收服务端包触发动画。
+# packetHandler:
+#   attack  — 命中特效，显示 1 秒
+#   kill    — 击杀特效 + 击杀计数，5 秒无新击杀自动清零
+#
+ui:
+  isHud: true
+  defaultOpen: true
+  hide:
+    - crosshair
+  action:
+    #我在这里写了一个自定义准星的动画，就是教你如何自定义准星，你甚至可以联动ac，根据玩家状态来调整准星样式
+    tick: |-
+      var.t = Time.currentTime() / 1000.0
+      var.r = Cast.toInt(128 + 127 * Math.sin(var.t * 3)).round()
+      var.g = Cast.toInt(128 + 127 * Math.sin(var.t * 3 + 2.094)).round()
+      var.b = Cast.toInt(128 + 127 * Math.sin(var.t * 3 + 4.189)).round()
+      var.crosshairColor = var.r + ',' + var.g + ',' + var.b + ',200'
+
+  packetHandler:
+    attack: |-
+      val.attack_fx.visible = true
+      async {
+        Thread.sleep(1000)
+        val.attack_fx.visible = false
+      }
+    kill: |-
+      var.击杀数++
+      var.上次击杀时间 = Time.currentTime()
+      val.kill_fx.visible = true
+      async {
+        Thread.sleep(1500)
+        val.kill_fx.visible = false
+      }
+      async {
+        while (true) {
+          Thread.sleep(1000)
+          if (Time.currentTime() - var.上次击杀时间 > 5000) {
+            var.击杀数 = 0
+            break
+          }
+        }
+      }
+
+controls:
+  自适应全局控件:
+    type: Adaptive
+    attribute:
+      width: 1920
+      height: 1080
+      point: ~stretch_all
+    children:
+      自定义准心:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 16
+          height: 16
+        children:
+          准心横线:
+            type: Texture
+            val: crosshair_h
+            attribute:
+              point: ~middle_center
+              width: 16
+              height: 3
+              normal: var.crosshairColor
+          准心竖线:
+            type: Texture
+            val: crosshair_v
+            attribute:
+              point: ~middle_center
+              width: 3
+              height: 16
+              normal: var.crosshairColor
+
+      击杀特效展示区:
+        type: Canvas
+        attribute:
+          width: 200
+          y: 80
+          point: ~horizontal_stretch_middle
+          height: 200
+        children:
+
+          命中特效贴图:
+            type: Texture
+            val: attack_fx
+            attribute:
+              normal: ~combat_effect/hit.png
+              middleScale: 1
+              width: 128
+              height: 128
+              point: ~top_center
+              visible: false
+
+          击杀特效贴图:
+            type: Texture
+            val: kill_fx
+            attribute:
+              normal: ~combat_effect/kill.png
+              middleScale: 1
+              width: 128
+              height: 128
+              point: ~top_center
+              visible: false
+
+          击杀计数文本:
+            type: Text
+            attribute:
+              texts: "~§c ✦ {var.击杀数} 击杀"
+              fontSize: 49
+              y: 134
+              point: ~top_center
+              visible: "var.击杀数 > 0"

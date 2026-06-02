@@ -1,0 +1,334 @@
+﻿# AXS 资源说明
+# 用途: EntityTracker 排行榜奖励配置编辑界面，支持新建/编辑奖励配置。
+# 前置依赖: ArcartX；EntityTracker 模块排行榜奖励功能启用后自动注册。
+# 打开方式: 从 ranking_rewards 管理界面点击编辑/新建触发
+# 数据交互: packetHandler 接收 config-detail / boss-list / result 推送；
+#             客户端通过 Packet.send('AXS_ENTITY_TRACKER_REWARD', ...) 发送保存指令。
+
+ui:
+  background: true
+  escClose: true
+  closeDied: true
+  show: true
+  through: false
+  screenScale: true
+  packetHandler:
+    config-detail: |-
+      var.mode = packet['mode']
+      var.configId = packet['id']
+      var.rewardType = packet['rewardType']
+      var.rankingType = packet['rankingType']
+      var.bossId = packet['bossId']
+      var.rankStart = packet['rankStart']
+      var.rankEnd = packet['rankEnd']
+      var.rewardName = packet['rewardName']
+      var.rewardDescription = packet['rewardDescription']
+      var.rewardMoney = packet['rewardMoney']
+      var.rewardDkp = packet['rewardDkp']
+      var.rewardItemsPreview = packet['rewardItemsPreview']
+      var.rewardCommandsPreview = packet['rewardCommandsPreview']
+      var.enabled = packet['enabled']
+      var.resultMsg = ''
+    boss-list: |-
+      var.bossList = packet['bosses']
+    result: |-
+      var.resultMsg = packet['message']
+      var.saved = packet['success']
+
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      root:
+        type: Texture
+        attribute:
+          point: ~middle_center
+          width: 1000
+          height: 720
+          normal: ~30,30,35,235
+          shape: ~round_rect
+          radius: 16
+        effect:
+          stroke:
+            width: 2
+            color: ~80,200,160,180
+          shadow:
+            xOffset: 0
+            yOffset: 4
+            blur: 12
+            color: ~0,0,0,120
+        children:
+          # 标题栏
+          header:
+            type: Texture
+            attribute:
+              x: 0
+              y: 0
+              width: 1000
+              height: 72
+              normal: ~40,40,50,255
+              shape: ~round_rect
+              radius: 16
+            children:
+              title_text:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 14
+                  fontSize: 42
+                  texts: "~&6&l{var.mode == 'edit' ? '编辑' : '新建'}奖励配置"
+              btn_save:
+                type: Texture
+                attribute:
+                  x: 748
+                  y: 12
+                  width: 110
+                  height: 48
+                  normal: ~50,180,80,200
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'save-config', var.configId, var.rewardType, var.rankingType, var.bossId, var.rankStart, var.rankEnd, var.rewardName, var.rewardDescription, var.rewardMoney, var.rewardDkp)
+                children:
+                  btn_save_text:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      fontSize: 28
+                      texts: "~&f保存"
+              btn_cancel:
+                type: Texture
+                attribute:
+                  x: 872
+                  y: 12
+                  width: 110
+                  height: 48
+                  normal: ~200,60,60,200
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Screen.close()
+                children:
+                  btn_cancel_text:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      fontSize: 28
+                      texts: "~&f取消"
+
+          # 结果提示
+          result_bar:
+            type: Text
+            attribute:
+              x: 28
+              y: 684
+              fontSize: 26
+              texts: "~&e{var.resultMsg}"
+
+          # 表单区域
+          form_area:
+            type: Texture
+            attribute:
+              x: 20
+              y: 84
+              width: 960
+              height: 588
+              normal: ~40,40,50,100
+              shape: ~round_rect
+              radius: 10
+            children:
+              # 奖励名称
+              label_name:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 10
+                  fontSize: 28
+                  texts: "~&b奖励名称:"
+              val_name:
+                type: Text
+                attribute:
+                  x: 200
+                  y: 10
+                  fontSize: 28
+                  texts: "~&f{var.rewardName}"
+
+              # 奖励类型
+              label_reward_type:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 56
+                  fontSize: 28
+                  texts: "~&b奖励周期:"
+              val_reward_type:
+                type: Text
+                attribute:
+                  x: 200
+                  y: 56
+                  fontSize: 28
+                  texts: "~&f{var.rewardType == 'weekly' ? '周奖励' : '月奖励'}"
+
+              # 排行类型
+              label_ranking_type:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 102
+                  fontSize: 28
+                  texts: "~&b排行类型:"
+              val_ranking_type:
+                type: Text
+                attribute:
+                  x: 200
+                  y: 102
+                  fontSize: 28
+                  texts: "~&f{var.rankingType == 'best_damage' ? '最高伤害' : var.rankingType == 'boss_damage' ? 'Boss伤害' : var.rankingType == 'kills' ? '击杀排行' : '参与排行'}"
+
+              # Boss ID
+              label_boss:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 148
+                  fontSize: 28
+                  texts: "~&b关联Boss:"
+                  visible: |-
+                    var.rankingType == 'boss_damage'
+              val_boss:
+                type: Text
+                attribute:
+                  x: 200
+                  y: 148
+                  fontSize: 28
+                  texts: "~&f{var.bossId != '' ? var.bossId : '(全部)'}"
+                  visible: |-
+                    var.rankingType == 'boss_damage'
+
+              # 名次范围
+              label_rank_range:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 194
+                  fontSize: 28
+                  texts: "~&b名次范围:"
+              val_rank_range:
+                type: Text
+                attribute:
+                  x: 200
+                  y: 194
+                  fontSize: 28
+                  texts: "~&f第 {var.rankStart} ~ {var.rankEnd} 名"
+
+              # 奖励描述
+              label_desc:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 240
+                  fontSize: 28
+                  texts: "~&b奖励描述:"
+              val_desc:
+                type: Text
+                attribute:
+                  x: 200
+                  y: 240
+                  fontSize: 26
+                  texts: "~&7{var.rewardDescription}"
+
+              # 分隔线
+              separator:
+                type: Texture
+                attribute:
+                  x: 20
+                  y: 286
+                  width: 920
+                  height: 2
+                  normal: ~80,80,100,120
+
+              # 金钱奖励
+              label_money:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 300
+                  fontSize: 28
+                  texts: "~&e金钱奖励:"
+              val_money:
+                type: Text
+                attribute:
+                  x: 200
+                  y: 300
+                  fontSize: 28
+                  texts: "~&f{var.rewardMoney} 金币"
+
+              # DKP奖励
+              label_dkp:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 346
+                  fontSize: 28
+                  texts: "~&eDKP积分:"
+              val_dkp:
+                type: Text
+                attribute:
+                  x: 200
+                  y: 346
+                  fontSize: 28
+                  texts: "~&f{var.rewardDkp} DKP"
+
+              # 物品奖励预览
+              label_items:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 392
+                  fontSize: 28
+                  texts: "~&e物品奖励:"
+              val_items:
+                type: Text
+                attribute:
+                  x: 200
+                  y: 392
+                  fontSize: 26
+                  texts: "~&7{var.rewardItemsPreview}"
+
+              # 命令奖励预览
+              label_commands:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 438
+                  fontSize: 28
+                  texts: "~&e命令奖励:"
+              val_commands:
+                type: Text
+                attribute:
+                  x: 200
+                  y: 438
+                  fontSize: 26
+                  texts: "~&7{var.rewardCommandsPreview}"
+
+              # 启用状态
+              label_enabled:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 500
+                  fontSize: 28
+                  texts: "~&b启用状态:"
+              val_enabled:
+                type: Text
+                attribute:
+                  x: 200
+                  y: 500
+                  fontSize: 28
+                  texts: "~{var.enabled ? '&a已启用' : '&c已禁用'}"

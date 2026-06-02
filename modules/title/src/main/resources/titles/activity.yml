@@ -1,0 +1,22 @@
+# 活动类称号
+# 每个根键为称号 ID；group 必须已在主配置 groups: 中定义。
+
+myth_hunter:
+  enabled: true
+  group: "activity"
+  quality: "mythic"
+  kind: "text"
+  display-name: "&c神话猎手"
+  chat-prefix: "&c[神话猎手]&r "
+  chat-suffix: ""
+  tab-prefix: "&c[神话猎手]&r "
+  tab-suffix: ""
+  description: "用于演示高品质称号和收集属性。"
+  source: "周年活动"
+  display-attributes:
+    critical_damage: 5
+  display-attribute-lines:
+    - "暴击伤害:5(%)"
+  collection-attributes:
+    collection_score: 10
+  sort-order: 30

@@ -1,0 +1,12 @@
+id: market
+name: Market
+version: 1.0.0
+main: xuanmo.arcartxsuite.market.MarketModule
+api-version: 1.0
+
+depends: []
+softdepends: []
+external-depends:
+
+external-softdepends:
+

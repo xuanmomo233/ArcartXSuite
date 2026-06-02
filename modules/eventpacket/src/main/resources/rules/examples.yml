@@ -1,0 +1,172 @@
+# EventPacket 规则文件: examples
+# 目录下每个 *.yml 文件可包含多个规则定义，根键即为规则 ID。
+# 同名规则以最后加载的文件为准；目录文件按文件名排序加载。
+# trigger 可选值:
+# - join 玩家加入服务器。
+# - first-join 玩家首次加入服务器。
+# - quit 玩家退出服务器。
+# - placeholder-increase / papi-increase 指定 PAPI 数值增加时触发。
+# - placeholder-decrease / papi-decrease 指定 PAPI 数值减少时触发。
+# - placeholder-threshold 指定 PAPI 数值达到阈值时触发。
+# - mob-kill-count 玩家击杀指定怪物累计到条件时触发。
+# - command-signal 管理命令手动发送信号时触发。
+#
+# 默认每个玩家只触发一次；repeatable: true 可重复触发，cooldown 支持 10s / 5m / 2h / 1d。
+# conditions 与 prop 模块相同，格式为 "%placeholder% operator value"，支持 == != >= <= > < contains regex。
+# 动作按顺序执行，单个动作失败不会中断后续动作。
+# 动作变量: {player}、{uuid}、{world}、{trigger}、{placeholder}、{old_value}、{new_value}、{delta}、{signal} 等。
+
+first_join_offer_mainline:
+  enabled: false
+  trigger: first-join
+  repeatable: false
+  actions:
+    - type: subtitle.play
+      group-id: "quest_intro"
+    - type: chat.card
+      card-id: "quest_offer"
+      data:
+        quest: "main/example_quest"
+        title: "初入岛屿"
+    - type: questgps.offer
+      quest-id: "main/example_quest"
+      open-menu: true
+
+kill_zombie_trigger_encounter:
+  enabled: false
+  trigger: mob-kill-count
+  count: 10
+  repeatable: false
+  worlds:
+    - "world"
+  entity-types:
+    - "ZOMBIE"
+  mythic-mob-ids: []
+  actions:
+    - type: questgps.offer
+      quest-id: "encounter/example_rare"
+      open-menu: true
+    - type: subtitle.play
+      group-id: "encounter_trigger"
+
+power_threshold_offer_side:
+  enabled: false
+  trigger: placeholder-threshold
+  placeholder: "%player_level%"
+  threshold: 10
+  require-non-empty: true
+  repeatable: false
+  actions:
+    - type: questgps.offer
+      quest-id: "side/example_side"
+      open-menu: false
+    - type: chat.card
+      card-id: "quest_unlock"
+      data:
+        quest: "side/example_side"
+        level: "{new_number}"
+
+command_signal_accept_mainline:
+  enabled: false
+  trigger: command-signal
+  signal: "accept_mainline"
+  repeatable: true
+  cooldown: "5s"
+  actions:
+    - type: questgps.accept
+      quest-id: "{quest-id}"
+    - type: command.dispatch
+      executor: console
+      command: "say {player_name} accepted {quest-id}"
+
+quest_completed_title_reward:
+  enabled: false
+  trigger: command-signal
+  signal: "questgps_main_completed"
+  repeatable: false
+  actions:
+    - type: title.give
+      title-id: "newcomer"
+      duration: "permanent"
+    - type: ui-packet
+      ui-id: "示例UI"
+      packet-handler: "questCompleted"
+      recipients:
+        - self
+      pack:
+        player: "{player_name}"
+        quest: "{quest-id}"
+        time: "{timestamp_local}"
+
+# ── 模块联动示例 ──────────────────────────────────────────────
+
+boss_settlement_celebration:
+  enabled: false
+  trigger: command-signal
+  signal: "boss_settlement"
+  repeatable: true
+  cooldown: "3s"
+  actions:
+    - type: subtitle.play
+      group-id: "boss_victory"
+    - type: mail.send
+      preset-id: "boss_reward_{boss_id}"
+    - type: title.give
+      title-id: "boss_slayer"
+      duration: "7d"
+
+signin_streak_milestone:
+  enabled: false
+  trigger: command-signal
+  signal: "signin_success"
+  repeatable: true
+  cooldown: "1d"
+  actions:
+    - type: subtitle.play
+      group-id: "signin_celebrate"
+    - type: mail.send
+      preset-id: "signin_bonus"
+
+welcome_after_register:
+  enabled: false
+  trigger: command-signal
+  signal: "first_register"
+  conditions:
+    - "%AXSloginview_account_type% == microsoft"
+  repeatable: false
+  actions:
+    - type: subtitle.play
+      group-id: "welcome_cinematic"
+    - type: questgps.offer
+      quest-id: "main/tutorial"
+      open-menu: true
+    - type: mail.send
+      preset-id: "welcome_gift"
+
+welcome_littleskin_after_register:
+  enabled: false
+  trigger: command-signal
+  signal: "first_register"
+  conditions:
+    - "%AXSloginview_account_type% == littleskin"
+  repeatable: false
+  actions:
+    - type: subtitle.play
+      group-id: "welcome_cinematic"
+    - type: chat.card
+      card-id: "quest_offer"
+      data:
+        title: "LittleSkin 登录奖励"
+        source: "{account_type_display}"
+
+cdk_redeemed_effect:
+  enabled: false
+  trigger: command-signal
+  signal: "cdk_redeemed"
+  repeatable: true
+  cooldown: "5s"
+  actions:
+    - type: combateffect.play
+      pack: "{player_name};CDK;{preset_name}"
+    - type: subtitle.play
+      group-id: "cdk_success"

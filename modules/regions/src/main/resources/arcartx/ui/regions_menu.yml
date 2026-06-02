@@ -1,0 +1,533 @@
+# AXS 资源说明
+# 用途: Regions 玩家区域查看菜单，支持当前区域/我的区域/区域详情。
+# 前置依赖: ArcartX；Regions 模块启用后自动注册。
+# 打开方式: /axs regions menu
+# 数据交互: packetHandler 接收 init 推送；客户端通过 Packet.send('AXS_REGIONS_MENU', ...) 发送操作指令。
+
+ui:
+  background: true
+  escClose: true
+  closeDied: true
+  show: true
+  through: false
+  screenScale: true
+  packetHandler:
+    init: |-
+      var.page = packet['page']
+      var.packetId = packet['packetId']
+      var.currentRegion = packet['currentRegion']
+      var.currentWorld = packet['currentWorld']
+      var.currentPriority = packet['currentPriority']
+      var.currentOwners = packet['currentOwners']
+      var.currentMembers = packet['currentMembers']
+      var.currentFlags = packet['currentFlags']
+      var.myRegions = packet['myRegions']
+      var.myRegionCount = packet['myRegionCount']
+      var.regionId = packet['regionId']
+      var.regionWorld = packet['regionWorld']
+      var.regionPriority = packet['regionPriority']
+      var.regionMin = packet['regionMin']
+      var.regionMax = packet['regionMax']
+      var.regionVolume = packet['regionVolume']
+      var.regionParent = packet['regionParent']
+      var.flags = packet['flags']
+      var.owners = packet['owners']
+      var.members = packet['members']
+
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      root:
+        type: Texture
+        attribute:
+          point: ~middle_center
+          width: 860
+          height: 580
+          normal: ~25,25,30,240
+          shape: ~round_rect
+          radius: 14
+        effect:
+          stroke:
+            width: 2
+            color: ~80,200,140,180
+          shadow:
+            xOffset: 0
+            yOffset: 4
+            blur: 12
+            color: ~0,0,0,100
+        children:
+          # ═══ 标题栏 ═══
+          header:
+            type: Texture
+            attribute:
+              x: 0
+              y: 0
+              width: 860
+              height: 56
+              normal: ~30,40,35,255
+              shape: ~round_rect
+              radius: 14
+            children:
+              title_text:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 8
+                  fontSize: 38
+                  texts: '&a&l🌍 区域信息'
+
+          # ═══ 左侧导航 ═══
+          nav_bar:
+            type: Texture
+            attribute:
+              x: 0
+              y: 56
+              width: 150
+              height: 524
+              normal: ~30,30,38,255
+            children:
+              nav_current:
+                type: Texture
+                attribute:
+                  x: 10
+                  y: 16
+                  width: 130
+                  height: 40
+                  normal: "var.page == 'current' ? '40,160,100,200' : '45,45,55,180'"
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send(var.packetId, 'navigate', 'current')
+                children:
+                  nav_current_text:
+                    type: Text
+                    attribute:
+                      x: 65
+                      y: 8
+                      through: true
+                      center: true
+                      fontSize: 28
+                      texts: '&f当前'
+
+              nav_my:
+                type: Texture
+                attribute:
+                  x: 10
+                  y: 66
+                  width: 130
+                  height: 40
+                  normal: "var.page == 'my' || var.page == 'detail' ? '40,160,100,200' : '45,45,55,180'"
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send(var.packetId, 'navigate', 'my')
+                children:
+                  nav_my_text:
+                    type: Text
+                    attribute:
+                      x: 65
+                      y: 8
+                      through: true
+                      center: true
+                      fontSize: 28
+                      texts: '&f我的'
+
+          # ═══ 内容区 ═══
+          content_area:
+            type: Texture
+            attribute:
+              x: 150
+              y: 56
+              width: 710
+              height: 524
+              normal: ~20,20,25,100
+            children:
+              # ─── 当前区域 ───
+              page_current:
+                type: Canvas
+                attribute:
+                  x: 20
+                  y: 16
+                  width: 670
+                  height: 490
+                  visible: |-
+                    var.page == 'current'
+                children:
+                  cur_title:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      fontSize: 36
+                      texts: '&a&l当前所在区域'
+                  cur_name:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 50
+                      fontSize: 28
+                      texts: "~&7区域: {var.currentRegion != '' ? '&f' + var.currentRegion : '&8无 (荒野)'}"
+                  cur_world:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 86
+                      fontSize: 28
+                      texts: "~&7世界: &f{var.currentWorld}"
+                  cur_priority:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 122
+                      fontSize: 28
+                      texts: "~&7优先级: &f{var.currentPriority}"
+                  cur_members:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 158
+                      fontSize: 28
+                      texts: "~&7所有者: &b{var.currentOwners}  &7成员: &b{var.currentMembers}"
+                  cur_flags_label:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 210
+                      fontSize: 30
+                      texts: '&e标志:'
+                  cur_flags_scroll:
+                    type: Scroll
+                    attribute:
+                      x: 0
+                      y: 246
+                      width: 670
+                      height: 240
+                    action:
+                      wheel: |-
+                        self.moveY(self.wheelValue * 36)
+                    children:
+                      cur_flags_list:
+                        val: cur_flag_data
+                        type: VStack
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 670
+                          spaceBetween: 4
+                        children:
+                          flag_row:
+                            type: Texture
+                            attribute:
+                              entry: var.currentFlags[self.key]
+                              visible: self.entry != null
+                              width: 650
+                              height: 36
+                              normal: ~38,38,48,160
+                              shape: ~round_rect
+                              radius: 4
+                            children:
+                              flag_name:
+                                type: Text
+                                attribute:
+                                  x: 12
+                                  y: 6
+                                  through: true
+                                  fontSize: 24
+                                  texts: "~&b{self.parent.entry['name']}"
+                              flag_desc:
+                                type: Text
+                                attribute:
+                                  x: 200
+                                  y: 7
+                                  through: true
+                                  fontSize: 22
+                                  texts: "~&7{self.parent.entry['desc']}"
+                              flag_state:
+                                type: Text
+                                attribute:
+                                  x: 560
+                                  y: 7
+                                  through: true
+                                  fontSize: 22
+                                  texts: "~{self.parent.entry['state'] == 'allow' ? '&a允许' : '&c拒绝'}"
+
+              # ─── 我的区域列表 ───
+              page_my:
+                type: Canvas
+                attribute:
+                  x: 20
+                  y: 16
+                  width: 670
+                  height: 490
+                  visible: |-
+                    var.page == 'my'
+                children:
+                  my_title:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      fontSize: 36
+                      texts: "~&a&l我的区域 &7({var.myRegionCount})"
+                  my_scroll:
+                    type: Scroll
+                    attribute:
+                      x: 0
+                      y: 50
+                      width: 670
+                      height: 430
+                    action:
+                      wheel: |-
+                        self.moveY(self.wheelValue * 40)
+                    children:
+                      my_list:
+                        val: my_region_data
+                        type: VStack
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 670
+                          spaceBetween: 6
+                        children:
+                          region_row:
+                            type: Texture
+                            attribute:
+                              entry: var.myRegions[self.key]
+                              visible: self.entry != null
+                              width: 650
+                              height: 50
+                              normal: ~40,40,50,180
+                              shape: ~round_rect
+                              radius: 6
+                            action:
+                              click: |-
+                                Packet.send(var.packetId, 'select_region', self.entry['id'])
+                            children:
+                              region_id:
+                                type: Text
+                                attribute:
+                                  x: 16
+                                  y: 12
+                                  through: true
+                                  fontSize: 28
+                                  texts: "~&f{self.parent.entry['id']}"
+                              region_world:
+                                type: Text
+                                attribute:
+                                  x: 300
+                                  y: 14
+                                  through: true
+                                  fontSize: 24
+                                  texts: "~&7{self.parent.entry['world']}"
+                              region_role:
+                                type: Text
+                                attribute:
+                                  x: 520
+                                  y: 14
+                                  through: true
+                                  fontSize: 24
+                                  texts: "~{self.parent.entry['isOwner'] == 'true' ? '&6所有者' : '&b成员'}"
+
+              # ─── 区域详情 ───
+              page_detail:
+                type: Canvas
+                attribute:
+                  x: 20
+                  y: 16
+                  width: 670
+                  height: 490
+                  visible: |-
+                    var.page == 'detail'
+                children:
+                  detail_title:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 0
+                      fontSize: 36
+                      texts: "~&a&l区域: &f{var.regionId}"
+                  detail_world:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 48
+                      fontSize: 28
+                      texts: "~&7世界: &f{var.regionWorld}  &7优先级: &f{var.regionPriority}"
+                  detail_bounds:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 82
+                      fontSize: 28
+                      texts: "~&7范围: &f{var.regionMin} ~ {var.regionMax}"
+                  detail_volume:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 116
+                      fontSize: 28
+                      texts: "~&7体积: &f{var.regionVolume} 方块  &7父区域: &f{var.regionParent != '' ? var.regionParent : '无'}"
+                  detail_owners_label:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 162
+                      fontSize: 28
+                      texts: '&6所有者:'
+                  detail_owners_scroll:
+                    type: Scroll
+                    attribute:
+                      x: 0
+                      y: 194
+                      width: 300
+                      height: 100
+                    action:
+                      wheel: |-
+                        self.moveY(self.wheelValue * 28)
+                    children:
+                      owners_list:
+                        val: owner_data
+                        type: VStack
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 300
+                          spaceBetween: 4
+                        children:
+                          owner_item:
+                            type: Text
+                            attribute:
+                              entry: var.owners[self.key]
+                              visible: self.entry != null
+                              x: 8
+                              y: 2
+                              fontSize: 24
+                              texts: "~&f{self.entry}"
+                  detail_members_label:
+                    type: Text
+                    attribute:
+                      x: 340
+                      y: 162
+                      fontSize: 28
+                      texts: '&b成员:'
+                  detail_members_scroll:
+                    type: Scroll
+                    attribute:
+                      x: 340
+                      y: 194
+                      width: 300
+                      height: 100
+                    action:
+                      wheel: |-
+                        self.moveY(self.wheelValue * 28)
+                    children:
+                      members_list:
+                        val: member_data
+                        type: VStack
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 300
+                          spaceBetween: 4
+                        children:
+                          member_item:
+                            type: Text
+                            attribute:
+                              entry: var.members[self.key]
+                              visible: self.entry != null
+                              x: 8
+                              y: 2
+                              fontSize: 24
+                              texts: "~&f{self.entry}"
+                  detail_flags_label:
+                    type: Text
+                    attribute:
+                      x: 0
+                      y: 310
+                      fontSize: 28
+                      texts: '&e标志:'
+                  detail_flags_scroll:
+                    type: Scroll
+                    attribute:
+                      x: 0
+                      y: 342
+                      width: 670
+                      height: 140
+                    action:
+                      wheel: |-
+                        self.moveY(self.wheelValue * 34)
+                    children:
+                      detail_flags_list:
+                        val: detail_flag_data
+                        type: VStack
+                        attribute:
+                          x: 0
+                          y: 0
+                          width: 670
+                          spaceBetween: 4
+                        children:
+                          d_flag_row:
+                            type: Texture
+                            attribute:
+                              entry: var.flags[self.key]
+                              visible: self.entry != null
+                              width: 650
+                              height: 32
+                              normal: ~38,38,48,160
+                              shape: ~round_rect
+                              radius: 4
+                            children:
+                              d_flag_name:
+                                type: Text
+                                attribute:
+                                  x: 12
+                                  y: 5
+                                  through: true
+                                  fontSize: 22
+                                  texts: "~&b{self.parent.entry['name']}"
+                              d_flag_desc:
+                                type: Text
+                                attribute:
+                                  x: 200
+                                  y: 6
+                                  through: true
+                                  fontSize: 20
+                                  texts: "~&7{self.parent.entry['desc']}"
+                              d_flag_state:
+                                type: Text
+                                attribute:
+                                  x: 560
+                                  y: 6
+                                  through: true
+                                  fontSize: 20
+                                  texts: "~{self.parent.entry['state'] == 'allow' ? '&a允许' : '&c拒绝'}"
+                  btn_back:
+                    type: Texture
+                    attribute:
+                      x: 560
+                      y: 0
+                      width: 100
+                      height: 36
+                      normal: ~60,60,70,200
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      click: |-
+                        Packet.send(var.packetId, 'navigate', 'my')
+                    children:
+                      btn_back_text:
+                        type: Text
+                        attribute:
+                          x: 50
+                          y: 5
+                          through: true
+                          center: true
+                          fontSize: 26
+                          texts: '&f← 返回'

@@ -1,0 +1,133 @@
+#
+# ArcartXSuite CombatEffect - 死亡缓冲界面
+# 当玩家即将死亡时，服务端发送 death 包触发本界面。
+# 界面在缓冲期间全屏覆盖，显示击杀者信息和倒计时。
+# 缓冲结束后由服务端关闭本 UI 或玩家真正死亡时自动关闭（closeDied: true）。
+#
+# packetHandler:
+#   death — 接收死亡缓冲包，展示击杀者名称
+#
+ui:
+  isHud: false
+  closeDied: true
+  escClose: false
+  background: false
+  through: false
+  level: 100
+  packetHandler:
+    death: |-
+      var.killer_name = packet['killer']
+      var.victim_name = packet['victim']
+      var.buffer_start = Time.currentTime()
+      var.buffer_active = true
+      val.death_overlay.visible = true
+      val.death_info.visible = true
+  action:
+    tick: |-
+      if (var.buffer_active) {
+        var.elapsed = Time.currentTime() - var.buffer_start
+        var.remaining = Math.max(0, 3000 - var.elapsed)
+        var.countdown = Cast.toInt(var.remaining / 1000) + 1
+        var.fade_alpha = Math.min(200, Cast.toInt(var.elapsed * 200 / 1500))
+        if (var.remaining <= 0) {
+          var.buffer_active = false
+        }
+      }
+
+controls:
+  自适应全局控件:
+    type: Adaptive
+    attribute:
+      width: 1920
+      height: 1080
+      point: ~stretch_all
+    children:
+
+      全屏遮罩:
+        type: Texture
+        val: death_overlay
+        attribute:
+          normal: ~0,0,0,180
+          width: 1920
+          height: 1080
+          point: ~stretch_all
+          visible: false
+
+      死亡信息区:
+        type: Canvas
+        val: death_info
+        attribute:
+          width: 600
+          height: 300
+          point: ~middle_center
+          visible: false
+        children:
+
+          死亡标题:
+            type: Text
+            attribute:
+              texts: "'&c&l你死了'"
+              shadow: false
+              fontSize: 72
+              center: true
+              x: 300
+              y: 20
+              point: ~top_left
+
+          击杀者信息:
+            type: Text
+            attribute:
+              texts: ~&7被 &f&l{var.killer_name} &7击杀
+              shadow: false
+              fontSize: 36
+              center: true
+              x: 300
+              y: 110
+              point: ~top_left
+              visible: "var.killer_name != null && var.killer_name != ''"
+
+          环境死亡信息:
+            type: Text
+            attribute:
+              texts: "'&7你倒下了...'"
+              shadow: false
+              fontSize: 36
+              center: true
+              x: 300
+              y: 110
+              point: ~top_left
+              visible: "var.killer_name == null || var.killer_name == ''"
+
+          倒计时文本:
+            type: Text
+            attribute:
+              texts: ~&f{var.countdown}
+              shadow: false
+              fontSize: 96
+              center: true
+              x: 300
+              y: 170
+              point: ~top_left
+              visible: "var.buffer_active"
+
+          分隔线:
+            type: Texture
+            attribute:
+              normal: ~255,255,255,60
+              width: 400
+              height: 2
+              x: 100
+              y: 150
+              point: ~top_left
+
+          提示文本:
+            type: Text
+            attribute:
+              texts: "'&8即将复活...'"
+              shadow: false
+              fontSize: 22
+              center: true
+              x: 300
+              y: 275
+              point: ~top_left
+              visible: "var.buffer_active"

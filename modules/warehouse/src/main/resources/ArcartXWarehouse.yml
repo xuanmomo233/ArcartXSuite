@@ -1,0 +1,233 @@
+config-version: 1
+# AXS Warehouse AXUI
+# 作用: AXUI 驱动个人仓库、共享仓库、NBT 分类、银行、多利率定期存款和二级密码。
+# 重载: /axs warehouse reload
+# 玩家入口: /warehouse 或 /wh 打开 UI，业务操作全部在 AXUI 内完成。
+# PAPI: %AXSwarehouse_total_items%、%AXSwarehouse_bank_balance_money% 等。
+
+settings:
+  debug: false
+  flush-interval-ticks: 100
+
+ui:
+  id: "AXS:warehouse_storage"
+  file: "arcartx/ui/warehouse_menu.yml"
+  manage-id: "AXS:warehouse_manage"
+  manage-file: "arcartx/ui/warehouse_manage.yml"
+  bank-id: "AXS:warehouse_bank"
+  bank-file: "arcartx/ui/warehouse_bank.yml"
+  packet-id: "AXS_WAREHOUSE"
+  register-ui-on-enable: true
+  overwrite-ui-files: false
+  page-size: 54
+
+storage:
+  mode: "sqlite"
+  sqlite:
+    file: "warehouse.db"
+  mysql:
+    host: "127.0.0.1"
+    port: 3306
+    database: "arcartxsuite"
+    username: "root"
+    password: ""
+  pool-size: 4
+
+security:
+  min-length: 4
+  max-length: 32
+  unlock-session-ms: 600000
+  allow-admin-password-reveal: false
+  admin-reveal-secret: ""
+
+pickup:
+  auto-store-on-pickup: true
+  auto-store-mythic-loot: false
+  notify-on-auto-store: true
+
+search:
+  page-size: 18
+  default-sort: "time"
+
+warehouses:
+  personal:
+    display-name: "&6个人仓库"
+    default-owned: true
+    default-level: 1
+    levels:
+      "1":
+        capacity: 1000
+        upgrade:
+          currency: "points"
+          amount: 500
+      "2":
+        capacity: 2500
+        upgrade:
+          currency: "points"
+          amount: 1200
+      "3":
+        capacity: 6000
+
+categories:
+  equipment:
+    display-name: "装备"
+    priority: 10
+    nbt:
+      path: "pdc:arcartx:item_category"
+      values: ["equipment", "weapon", "armor"]
+  material:
+    display-name: "材料"
+    priority: 20
+    nbt:
+      path: "pdc:arcartx:item_category"
+      values: ["material"]
+  consumable:
+    display-name: "消耗品"
+    priority: 30
+    nbt:
+      path: "pdc:arcartx:item_category"
+      values: ["consumable", "food", "potion"]
+  other:
+    display-name: "其它"
+    priority: 9999
+    default: true
+
+bank:
+  currencies:
+    money:
+      enabled: true
+      provider: "vault"
+      display-name: "金币"
+      scale: 2
+    points:
+      enabled: true
+      provider: "playerpoints"
+      display-name: "点券"
+      scale: 0
+    custom_token:
+      enabled: false
+      provider: "placeholder-command"
+      display-name: "自定义货币"
+      scale: 0
+      balance-placeholder: "%some_currency_balance%"
+      withdraw-command: "somecurrency take %player% %amount%"
+      deposit-command: "somecurrency give %player% %amount%"
+  deposit-products:
+    money_stable_1d:
+      enabled: true
+      display-name: "稳健 1 日"
+      description: "低门槛短期定存。"
+      currency: "money"
+      duration-seconds: 86400
+      min-amount: 100
+      max-amount: 0
+      permission: ""
+      interest-tiers:
+        tier_1:
+          min: 100
+          max: 9999
+          rate: 0.01
+        tier_2:
+          min: 10000
+          max: 99999
+          rate: 0.015
+        tier_3:
+          min: 100000
+          max: 0
+          rate: 0.02
+    money_vip_7d:
+      enabled: true
+      display-name: "贵宾 7 日"
+      description: "权限专属较高收益定存。"
+      currency: "money"
+      duration-seconds: 604800
+      min-amount: 1000
+      max-amount: 0
+      permission: "ArcartXSuite.warehouse.bank.vip"
+      interest-tiers:
+        tier_1:
+          min: 1000
+          max: 49999
+          rate: 0.04
+        tier_2:
+          min: 50000
+          max: 0
+          rate: 0.06
+    points_3d:
+      enabled: true
+      display-name: "点券 3 日"
+      description: "点券定期产品。"
+      currency: "points"
+      duration-seconds: 259200
+      min-amount: 50
+      max-amount: 0
+      permission: ""
+      interest-tiers:
+        tier_1:
+          min: 50
+          max: 999
+          rate: 0.02
+        tier_2:
+          min: 1000
+          max: 0
+          rate: 0.03
+
+shared:
+  enabled: true
+  create-cost:
+    currency: "points"
+    amount: 1000
+  default-level: 1
+  levels:
+    "1":
+      capacity: 2000
+      upgrade:
+        currency: "points"
+        amount: 800
+    "2":
+      capacity: 5000
+      upgrade:
+        currency: "points"
+        amount: 1800
+    "3":
+      capacity: 10000
+  role-names:
+    owner: "所有者"
+    member: "成员"
+    viewer: "观众"
+  permission-tiers:
+    default:
+      permission: ""
+      priority: 0
+      max-owned: 1
+      max-members: 6
+    vip:
+      permission: "ArcartXSuite.warehouse.shared.vip"
+      priority: 10
+      max-owned: 3
+      max-members: 12
+
+sort-profiles:
+  time:
+    fields:
+      - "updated:desc"
+      - "name:asc"
+  name:
+    fields:
+      - "name:asc"
+  amount:
+    fields:
+      - "amount:desc"
+      - "updated:desc"
+
+blacklist:
+  material-ids: []
+  mythic-item-ids: []
+  neige-item-ids: []
+  kinds: []
+  name-contains:
+    - "绑定不可存"
+  lore-contains:
+    - "不可存入仓库"
+  name-regex: []
+  lore-regex: []

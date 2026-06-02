@@ -1,0 +1,121 @@
+# ============================================================
+#  Essentials 基础功能模块消息文件
+# ------------------------------------------------------------
+#  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
+#  修改后执行 /axs reload essentials 即可生效。
+# ============================================================
+
+prefix: "&3◆ &6ArcartXSuite &7| &r"
+
+# ── 通用 ──────────────────────────────────────────────
+common:
+  service-down: "&c服务未启动。"
+  reload-hint: "&e请使用 /{0} reload essentials"
+  unknown: "&e未知命令: {0}"
+  only-player: "&c此命令只能由玩家执行。"
+  no-permission: "&c缺少权限：{0}"
+
+# ── help ──────────────────────────────────────────────
+help:
+  title: "&6Essentials 命令列表"
+  player-manager: "&7── 玩家管理 ──"
+  toggle-status: "  &f/{0} {1} fly/god/heal/feed/vanish/afk&7 - 切换状态"
+  gamemode: "  &f/{0} {1} gamemode <模式> [玩家]&7 - 游戏模式"
+  speed: "  &f/{0} {1} speed <fly|walk> <速度>&7 - 设置速度"
+  items: "  &f/{0} {1} repair/hat/nick/seen&7 - 物品/信息"
+  containers: "  &f/{0} {1} enderchest/workbench/anvil/trash&7 - 打开容器"
+  teleport-header: "&7── 传送 ──"
+  home: "  &f/{0} {1} home/sethome/delhome [名称]&7 - 家"
+  warp: "  &f/{0} {1} warp/setwarp/delwarp <名称>&7 - 传送点"
+  teleport: "  &f/{0} {1} spawn/setspawn/tpa/tpahere/tp/top/tppos/back&7 - 传送"
+  world-header: "&7── 世界 ──"
+  time: "  &f/{0} {1} time <day|night|noon|midnight>&7 - 时间"
+  weather: "  &f/{0} {1} weather <clear|rain|thunder>&7 - 天气"
+  security-header: "&7── 管理 ──"
+  ban: "  &f/{0} {1} ban/tempban/unban/mute/tempmute/unmute&7 - 封禁/禁言"
+  admin: "  &f/{0} {1} kick/warn/sudo/inv&7 - 踢出/警告/强制/背包"
+  interact-header: "&7── 交互 ──"
+  sit-lay: "  &f/{0} {1} sit/lay&7 - 坐/躺"
+
+# ── status ────────────────────────────────────────────
+status:
+  title: "&6Essentials 模块状态"
+  service: "&7服务: &f{0}"
+  running: "运行中"
+  stopped: "未启动"
+  storage: "&7存储: &f{0}"
+  afk-timeout: "&7AFK 超时: &f{0}s"
+  teleport-delay: "&7传送延迟: &f{0}s"
+  max-homes: "&7最大 Home: &f{0}"
+
+# ── reload ────────────────────────────────────────────
+reload:
+  success: "&aEssentials 模块已重载。"
+  failed: "&c重载失败: {0}"
+
+# ── admin ─────────────────────────────────────────────
+admin:
+  gamemode:
+    usage: "&c用法: /axs essentials gamemode <模式> [玩家]"
+    invalid: "&c无效的游戏模式: {0}"
+    success: "&a已将 {0} 的游戏模式设置为 {1}"
+  speed:
+    usage: "&c用法: /axs essentials speed <fly|walk> <速度 1-10>"
+    invalid: "&c无效的速度值: {0}"
+  nick:
+    usage: "&c用法: /axs essentials nick <昵称|off>"
+  seen:
+    usage: "&c用法: /axs essentials seen <玩家>"
+    online: "&a{0} 当前在线。"
+    ip: "&7IP: &f{0}"
+    offline: "&e{0} 不在线。"
+  require-arg: "&c请指定{0}。"
+  ui:
+    offline: "&cUI 功能不可用（ArcartX 未加载）"
+    no-permission: "&c权限不足。"
+  tpa:
+    usage: "&c用法: /axs essentials tpa <玩家>"
+  tpahere:
+    usage: "&c用法: /axs essentials tpahere <玩家>"
+  tp:
+    usage: "&c用法: /axs essentials tp <玩家> [目标玩家]"
+    success-other: "&a已将 {0} 传送到 {1}"
+    success-self: "&a已传送到 {0}"
+  tppos:
+    usage: "&c用法: /axs essentials tppos <x> <y> <z>"
+    invalid: "&c无效的坐标。"
+    success: "&a已传送到坐标 {0}, {1}, {2}"
+  time:
+    usage: "&c用法: /axs essentials time <day|night|noon|midnight|set <值>>"
+    invalid-val: "&c无效的时间值。"
+    invalid-key: "&c无效的时间: {0}"
+    require-val: "&c请指定时间值。"
+  weather:
+    usage: "&c用法: /axs essentials weather <clear|rain|thunder>"
+    invalid: "&c无效的天气: {0}"
+  ban:
+    usage: "&c用法: /axs essentials {0} <玩家> [原因] 或 tempban <玩家> <时间> [原因]"
+    require-duration: "&c请指定封禁时长（如 1d, 2h, 30m）。"
+    failed: "&c封禁失败: {0}"
+  unban:
+    usage: "&c用法: /axs essentials unban <玩家>"
+    tip: "&e注: 离线玩家解封需要通过 UUID，当前仅支持在线玩家或缓存中的玩家。"
+    failed: "&c解封失败。"
+  mute:
+    usage: "&c用法: /axs essentials {0} <玩家> [原因] 或 tempmute <玩家> <时间> [原因]"
+    offline-warn: "&c禁言功能需要 Chat 模块启用。"
+    require-duration: "&c请指定禁言时长。"
+  unmute:
+    usage: "&c用法: /axs essentials unmute <玩家>"
+    offline-warn: "&c禁言功能需要 Chat 模块启用。"
+  kick:
+    usage: "&c用法: /axs essentials kick <玩家> [原因]"
+  warn:
+    usage: "&c用法: /axs essentials warn <玩家> [原因]"
+    ban-tip: "&c{0} 因警告达到 {1} 次已被自动封禁。"
+    failed: "&c警告失败。"
+  sudo:
+    usage: "&c用法: /axs essentials sudo <玩家> <命令>"
+    success: "&a已强制 {0} 执行: /{1}"
+  inv:
+    usage: "&c用法: /axs essentials inv <玩家>"

@@ -1,0 +1,396 @@
+﻿# AXS 资源说明
+# 用途: EntityTracker 排行榜奖励管理主界面，展示奖励配置列表、手动发放和调度状态。
+# 前置依赖: ArcartX；EntityTracker 模块排行榜奖励功能启用后自动注册。
+# 打开方式: /axs entitytracker rewards manage
+# 重载命令: /axs entitytracker reload
+# 数据交互: packetHandler 接收 config-list / scheduler-status / result 三种服务端推送；
+#             客户端通过 Packet.send('AXS_ENTITY_TRACKER_REWARD', ...) 发送操作指令。
+
+ui:
+  background: true
+  escClose: true
+  closeDied: true
+  show: true
+  through: false
+  screenScale: true
+  packetHandler:
+    config-list: |-
+      var.rewardType = packet['rewardType']
+      var.configs = packet['configs']
+      var.total = packet['total']
+      var.view = 'list'
+      var.resultMsg = ''
+    scheduler-status: |-
+      var.weeklyEnabled = packet['weeklyEnabled']
+      var.monthlyEnabled = packet['monthlyEnabled']
+      var.nextWeekly = packet['nextWeekly']
+      var.nextMonthly = packet['nextMonthly']
+      var.weeklyRunning = packet['weeklyRunning']
+      var.monthlyRunning = packet['monthlyRunning']
+      var.view = 'status'
+    result: |-
+      var.resultMsg = packet['message']
+
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      root:
+        type: Texture
+        attribute:
+          point: ~middle_center
+          width: 1200
+          height: 720
+          normal: ~30,30,35,235
+          shape: ~round_rect
+          radius: 16
+        effect:
+          stroke:
+            width: 2
+            color: ~80,200,160,180
+          shadow:
+            xOffset: 0
+            yOffset: 4
+            blur: 12
+            color: ~0,0,0,120
+        children:
+          # 标题栏
+          header:
+            type: Texture
+            attribute:
+              x: 0
+              y: 0
+              width: 1200
+              height: 72
+              normal: ~40,40,50,255
+              shape: ~round_rect
+              radius: 16
+            children:
+              title_text:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 14
+                  fontSize: 42
+                  texts: "~&6&l排行榜奖励管理"
+              btn_weekly:
+                type: Texture
+                attribute:
+                  x: 520
+                  y: 12
+                  width: 120
+                  height: 48
+                  normal: ~50,180,80,200
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', 'weekly')
+                children:
+                  btn_weekly_text:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      fontSize: 28
+                      texts: "~&f周奖励"
+              btn_monthly:
+                type: Texture
+                attribute:
+                  x: 654
+                  y: 12
+                  width: 120
+                  height: 48
+                  normal: ~200,160,50,200
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', 'monthly')
+                children:
+                  btn_monthly_text:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      fontSize: 28
+                      texts: "~&f月奖励"
+              btn_status:
+                type: Texture
+                attribute:
+                  x: 788
+                  y: 12
+                  width: 140
+                  height: 48
+                  normal: ~60,130,200,200
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'scheduler-status')
+                children:
+                  btn_status_text:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      fontSize: 28
+                      texts: "~&f调度状态"
+              btn_history:
+                type: Texture
+                attribute:
+                  x: 942
+                  y: 12
+                  width: 120
+                  height: 48
+                  normal: ~130,100,200,200
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'open-history')
+                children:
+                  btn_history_text:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      fontSize: 28
+                      texts: "~&f发放历史"
+              btn_distribute:
+                type: Texture
+                attribute:
+                  x: 1076
+                  y: 12
+                  width: 110
+                  height: 48
+                  normal: ~200,80,50,200
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'manual-distribute', var.rewardType)
+                children:
+                  btn_distribute_text:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      fontSize: 28
+                      texts: "~&f手动发放"
+
+          # 结果提示
+          result_bar:
+            type: Text
+            attribute:
+              x: 28
+              y: 684
+              fontSize: 26
+              texts: "~&e{var.resultMsg}"
+
+          # 配置列表区域
+          list_area:
+            type: Scroll
+            attribute:
+              x: 20
+              y: 84
+              width: 1160
+              height: 588
+              visible: |-
+                var.view == 'list' || var.view == null
+            children:
+              list_header:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 1160
+                  height: 44
+                  normal: ~50,50,60,200
+                  shape: ~round_rect
+                  radius: 6
+                children:
+                  col_type:
+                    type: Text
+                    attribute:
+                      x: 16
+                      y: 8
+                      fontSize: 28
+                      texts: "~&b排行类型"
+                  col_range:
+                    type: Text
+                    attribute:
+                      x: 240
+                      y: 8
+                      fontSize: 28
+                      texts: "~&b名次范围"
+                  col_name:
+                    type: Text
+                    attribute:
+                      x: 420
+                      y: 8
+                      fontSize: 28
+                      texts: "~&b奖励名称"
+                  col_reward:
+                    type: Text
+                    attribute:
+                      x: 680
+                      y: 8
+                      fontSize: 28
+                      texts: "~&b奖励内容"
+                  col_status:
+                    type: Text
+                    attribute:
+                      x: 960
+                      y: 8
+                      fontSize: 28
+                      texts: "~&b状态"
+                  col_action:
+                    type: Text
+                    attribute:
+                      x: 1080
+                      y: 8
+                      fontSize: 28
+                      texts: "~&b操作"
+              list_body:
+                type: VGrid
+                attribute:
+                  x: 0
+                  y: 50
+                  width: 1160
+                  eachHeight: 52
+                  dataList: var.configs
+                children:
+                  row_bg:
+                    type: Texture
+                    attribute:
+                      width: 1160
+                      height: 48
+                      normal: ~45,45,55,180
+                      shape: ~round_rect
+                      radius: 6
+                    children:
+                      cell_type:
+                        type: Text
+                        attribute:
+                          x: 16
+                          y: 10
+                          fontSize: 26
+                          texts: "~&f{each.rankingTypeDisplay}"
+                      cell_range:
+                        type: Text
+                        attribute:
+                          x: 240
+                          y: 10
+                          fontSize: 26
+                          texts: "~&7第{each.rankStart}-{each.rankEnd}名"
+                      cell_name:
+                        type: Text
+                        attribute:
+                          x: 420
+                          y: 10
+                          fontSize: 26
+                          texts: "~&e{each.rewardName}"
+                      cell_reward:
+                        type: Text
+                        attribute:
+                          x: 680
+                          y: 10
+                          fontSize: 24
+                          texts: "~&a{each.rewardPreview}"
+                      cell_status:
+                        type: Text
+                        attribute:
+                          x: 960
+                          y: 10
+                          fontSize: 26
+                          texts: "~{each.statusIcon}"
+                      cell_toggle:
+                        type: Texture
+                        attribute:
+                          x: 1060
+                          y: 6
+                          width: 80
+                          height: 36
+                          normal: ~60,130,200,180
+                          shape: ~round_rect
+                          radius: 6
+                        action:
+                          click: |-
+                            Packet.send('AXS_ENTITY_TRACKER_REWARD', 'toggle', each.id)
+                        children:
+                          cell_toggle_text:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              fontSize: 24
+                              texts: "~&f切换"
+
+          # 调度状态区域
+          status_area:
+            type: Texture
+            attribute:
+              x: 20
+              y: 84
+              width: 1160
+              height: 588
+              visible: |-
+                var.view == 'status'
+              normal: ~40,40,50,180
+              shape: ~round_rect
+              radius: 12
+            children:
+              status_title:
+                type: Text
+                attribute:
+                  x: 40
+                  y: 20
+                  fontSize: 36
+                  texts: "~&6&l调度器状态"
+              weekly_status:
+                type: Text
+                attribute:
+                  x: 40
+                  y: 80
+                  fontSize: 30
+                  texts: "~&a周奖励任务: {var.weeklyRunning ? '&a运行中' : '&c已停止'}"
+              weekly_next:
+                type: Text
+                attribute:
+                  x: 40
+                  y: 130
+                  fontSize: 28
+                  texts: "~&7下次周奖励: &f{var.nextWeekly}"
+              monthly_status:
+                type: Text
+                attribute:
+                  x: 40
+                  y: 200
+                  fontSize: 30
+                  texts: "~&e月奖励任务: {var.monthlyRunning ? '&a运行中' : '&c已停止'}"
+              monthly_next:
+                type: Text
+                attribute:
+                  x: 40
+                  y: 250
+                  fontSize: 28
+                  texts: "~&7下次月奖励: &f{var.nextMonthly}"
+              btn_back_to_list:
+                type: Texture
+                attribute:
+                  x: 40
+                  y: 340
+                  width: 140
+                  height: 48
+                  normal: ~60,130,200,200
+                  shape: ~round_rect
+                  radius: 8
+                action:
+                  click: |-
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', var.rewardType)
+                children:
+                  btn_back_text:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      fontSize: 28
+                      texts: "~&f← 返回列表"

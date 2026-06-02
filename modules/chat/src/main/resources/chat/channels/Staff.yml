@@ -1,0 +1,20 @@
+﻿# AXS 资源说明
+# 用途: Chat 模块的管理频道示例；适合值班、监控或内部沟通。
+# 前置依赖: ArcartX；Chat 模块启用后生效。
+# 启用开关: config.yml -> modules.chat.enabled + modules.chat.password
+# 关联文件: ArcartXChat.yml
+# 重载命令: /axs chat reload
+# 最小使用路径: mode: staff + 对应权限节点
+
+enabled: true
+display-name: "管理"
+mode: "staff"
+send-permission: "ArcartXSuite.chat.mute"
+receive-permission: "ArcartXSuite.chat.mute"
+cross-server: true
+range: 0
+format: "&c[{channel}] &f{player_name}&7: &r{message}"
+console-format: "[{channel}] {player_name}: {message}"
+sender-format: "&d[私聊 -> {target_name}] &f{player_name}&7: &r{message}"
+recipient-format: "&d[私聊 <- {player_name}] &f{player_name}&7: &r{message}"
+spy-format: "&5[监听 {player_name} -> {target_name}] &r{message}"

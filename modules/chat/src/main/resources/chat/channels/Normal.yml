@@ -1,0 +1,22 @@
+﻿# AXS 资源说明
+# 用途: Chat 模块的默认普通频道示例；适合作为 settings.default-channel 对应频道。
+# 前置依赖: ArcartX；Chat 模块启用后生效。
+# 启用开关: config.yml -> modules.chat.enabled + modules.chat.password
+# 关联文件: ArcartXChat.yml
+# 重载命令: /axs chat reload
+# 最小使用路径: settings.default-channel: normal
+
+enabled: true
+display-name: "普通"
+mode: "normal"
+send-permission: ""
+receive-permission: ""
+
+# normal 模式通常只在当前服广播；如需多服同步可改为 true。
+cross-server: false
+range: 0
+format: "&7[{channel}] &f{player_name}&7: &r{message}"
+console-format: "[{channel}] {player_name}: {message}"
+sender-format: "&d[私聊 -> {target_name}] &f{player_name}&7: &r{message}"
+recipient-format: "&d[私聊 <- {player_name}] &f{player_name}&7: &r{message}"
+spy-format: "&5[监听 {player_name} -> {target_name}] &r{message}"

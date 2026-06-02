@@ -1,0 +1,53 @@
+# ============================================================
+#  Title 模块消息文件
+# ------------------------------------------------------------
+#  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
+#  修改后执行 /axs reload title 即可生效。
+#  注：发放/收回称号的结果文本来自业务层，不在此文件。
+# ============================================================
+
+prefix: "&3◆ &6ArcartXSuite &7| &r"
+
+# ── 通用 ──────────────────────────────────────────────
+common:
+  service-down: "&c服务未启动。"
+  player-offline: "&c玩家不在线: {0}"
+  reload-hint: "&e请使用 /{0} reload title"
+  unknown: "&e未知命令，使用 /{0} title help"
+
+# ── help（管理命令）───────────────────────────────────
+help:
+  title: "&6Title 管理命令"
+  status: "&7{0} status&f - 查看模块状态"
+  give: "&7{0} give <玩家> <称号ID> <时长>&f - 发放称号"
+  revoke: "&7{0} revoke <玩家> <称号ID>&f - 收回称号"
+  open: "&7{0} open <玩家>&f - 为玩家打开称号菜单"
+
+# ── status ────────────────────────────────────────────
+status:
+  title: "&6Title 状态"
+  cached: "&7缓存玩家数: &f{0}"
+  ap: "&7AP: {0}/{1}"
+  mythiclib: "&7MythicLib: {0}/{1}"
+  crane: "&7CraneAttribute: {0}/{1}"
+
+# ── give / revoke / open ──────────────────────────────
+give:
+  usage: "&e用法: /axs title give <玩家> <称号ID> <时长>"
+  invalid-duration: "&c无效时长: {0} (支持 permanent/7d/12h/30m)"
+revoke:
+  usage: "&e用法: /axs title revoke <玩家> <称号ID>"
+open:
+  usage: "&e用法: /axs title open <玩家>"
+  success: "&a已为 {0} 打开称号菜单。"
+
+# ── 玩家命令 ──────────────────────────────────────────
+player:
+  only-player: "&c该命令只能由玩家执行。"
+  no-permission: "&c你没有权限执行这个命令。"
+  module-disabled: "&c称号模块当前未启用。"
+  equip-usage: "&e用法: /{0} equip <titleId>"
+  unequip-usage: "&e用法: /{0} unequip <groupId|all>"
+  hide-usage: "&e用法: /{0} hide <titleId>"
+  unhide-usage: "&e用法: /{0} unhide <titleId>"
+  usage: "&e用法: /{0} open|equip <titleId>|unequip <groupId|all>|hide <titleId>|unhide <titleId>"

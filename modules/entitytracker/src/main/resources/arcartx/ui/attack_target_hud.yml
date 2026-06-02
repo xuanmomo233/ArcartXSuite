@@ -1,0 +1,200 @@
+﻿ui:
+  isHud: true
+  defaultOpen: false
+  through: false
+  background: false
+  closeDied: true
+  show: true
+  level: 2
+  hide:
+    - boss_event_progress
+  packetHandler:
+    init: |-
+      var.isVisible = true
+      var.title = packet['title']
+      var.subtitle = packet['subtitle']
+      var.health = packet['health']
+      var.maxHealth = packet['maxHealth']
+      var.healthText = packet['healthText']
+      var.maxHealthText = packet['maxHealthText']
+      var.healthPercent = packet['healthPercent']
+      var.healthPercentText = packet['healthPercentText']
+      var.progress = packet['progress']
+      var.distance = packet['distance']
+      var.distanceText = packet['distanceText']
+      var.displayName = packet['displayName']
+      var.entityUuid = packet['entityUuid']
+      var.world = packet['world']
+      var.x = packet['x']
+      var.y = packet['y']
+      var.z = packet['z']
+      var.entityType = packet['entityType']
+      var.entityTypeName = packet['entityTypeName']
+      var.mythicMobId = packet['mythicMobId']
+      var.isPlayerTarget = packet['isPlayerTarget']
+      var.lastHitAgoMs = packet['lastHitAgoMs']
+      var.timeoutMs = packet['timeoutMs']
+    update: |-
+      var.isVisible = true
+      var.title = packet['title']
+      var.subtitle = packet['subtitle']
+      var.health = packet['health']
+      var.maxHealth = packet['maxHealth']
+      var.healthText = packet['healthText']
+      var.maxHealthText = packet['maxHealthText']
+      var.healthPercent = packet['healthPercent']
+      var.healthPercentText = packet['healthPercentText']
+      var.progress = packet['progress']
+      var.distance = packet['distance']
+      var.distanceText = packet['distanceText']
+      var.displayName = packet['displayName']
+      var.entityUuid = packet['entityUuid']
+      var.world = packet['world']
+      var.x = packet['x']
+      var.y = packet['y']
+      var.z = packet['z']
+      var.entityType = packet['entityType']
+      var.entityTypeName = packet['entityTypeName']
+      var.mythicMobId = packet['mythicMobId']
+      var.isPlayerTarget = packet['isPlayerTarget']
+      var.lastHitAgoMs = packet['lastHitAgoMs']
+      var.timeoutMs = packet['timeoutMs']
+    close: |-
+      var.isVisible = false
+      var.title = ''
+      var.subtitle = ''
+      var.health = 0
+      var.maxHealth = 0
+      var.healthText = '0'
+      var.maxHealthText = '0'
+      var.healthPercent = 0
+      var.healthPercentText = '0'
+      var.progress = 0
+      var.distance = 0
+      var.distanceText = '-'
+      var.displayName = ''
+      var.entityUuid = ''
+      var.world = ''
+      var.x = 0
+      var.y = 0
+      var.z = 0
+      var.entityType = ''
+      var.entityTypeName = ''
+      var.mythicMobId = ''
+      var.isPlayerTarget = false
+      var.lastHitAgoMs = 0
+      var.timeoutMs = 0
+  action:
+    load: |-
+      var.isVisible = false
+      var.title = ''
+      var.subtitle = ''
+      var.health = 0
+      var.maxHealth = 0
+      var.healthText = '0'
+      var.maxHealthText = '0'
+      var.healthPercent = 0
+      var.healthPercentText = '0'
+      var.progress = 0
+      var.distance = 0
+      var.distanceText = '-'
+      var.displayName = ''
+      var.entityUuid = ''
+      var.world = ''
+      var.x = 0
+      var.y = 0
+      var.z = 0
+      var.entityType = ''
+      var.entityTypeName = ''
+      var.mythicMobId = ''
+      var.isPlayerTarget = false
+      var.lastHitAgoMs = 0
+      var.timeoutMs = 0
+
+controls:
+  adaptive:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      target_panel:
+        type: Canvas
+        attribute:
+          point: ~top_center
+          x: 0
+          y: 56
+          width: 620
+          height: 108
+          visible: var.isVisible
+        children:
+          background:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;95,95,95,220
+              shape: ~round_rect
+              radius: 20
+            effect:
+              stroke:
+                width: 3
+                color: ~0,0,0,255
+          title:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 14
+              texts: "var.title"
+              fontSize: 49
+          distance:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -24
+              y: 18
+              texts: "'&f' + var.distanceText"
+              fontSize: 36
+          bar_background:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 56
+              width: 572
+              height: 20
+              normal: ~40,40,40,210
+              shape: ~round_rect
+              radius: 10
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,180
+          bar_fill:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 56
+              width: 572 * var.progress
+              height: 20
+              normal: ~220,72,72,255
+              shape: ~round_rect
+              radius: 10
+          hp_text:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 80
+              texts: "'&f' + var.healthText + '&8/&f' + var.maxHealthText + ' &7(' + var.healthPercentText + '%)'"
+              fontSize: 36
+          age_text:
+            type: Text
+            attribute:
+              point: ~top_right
+              x: -24
+              y: 80
+              texts: "'&8' + var.lastHitAgoMs + '/' + var.timeoutMs + 'ms'"
+              fontSize: 36
