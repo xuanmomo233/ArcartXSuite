@@ -142,11 +142,3 @@ filter:
 
 # 频道定义目录，相对于插件数据目录。
 channels-directory: "chat/channels"
-
-migration:
-  trchat:
-    # 旧版 TrChat 配置源目录；仅迁移时使用。
-    source-directory: "TrChat"
-
-    # 迁移报告输出路径，相对于插件数据目录。
-    report-file: "chat/migration-report.yml"

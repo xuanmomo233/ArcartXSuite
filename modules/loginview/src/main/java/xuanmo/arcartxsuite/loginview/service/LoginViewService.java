@@ -71,6 +71,7 @@ public final class LoginViewService implements Listener {
     private final Set<UUID> authenticatedPlayers = new HashSet<>();
     private final Map<UUID, Integer> failedAttempts = new HashMap<>();
     private final Set<String> allowedCommandPrefixes = new HashSet<>();
+    private final Set<UUID> loginViewInvulnerablePlayers = new HashSet<>();
     private boolean started;
 
     public LoginViewService(
@@ -127,9 +128,13 @@ public final class LoginViewService implements Listener {
         HandlerList.unregisterAll(this);
         for (Player player : Bukkit.getOnlinePlayers()) {
             packetBridge.closeUiUnsafe(player, uiId);
+            if (loginViewInvulnerablePlayers.remove(player.getUniqueId())) {
+                player.setInvulnerable(false);
+            }
         }
         authenticatedPlayers.clear();
         failedAttempts.clear();
+        loginViewInvulnerablePlayers.clear();
         repository.close();
         started = false;
     }
@@ -178,11 +183,23 @@ public final class LoginViewService implements Listener {
 
         packetBridge.openUiUnsafe(player, uiId);
 
+        if (!isAuthenticated(player)) {
+            player.setInvulnerable(true);
+            loginViewInvulnerablePlayers.add(player.getUniqueId());
+        }
+
         if (premium) {
             // 微软正版 / LittleSkin：显示 bypass 类视图
-            String prompt = qqBound ? null : configuration.qqBinding().bindPrompt();
+            boolean requireBind = switch (type) {
+                case MICROSOFT -> configuration.qqBinding().microsoftRequireBind();
+                case LITTLESKIN -> configuration.qqBinding().littleskinRequireBind();
+                default -> false;
+            };
+            // 若该账号类型不要求绑定，逻辑视为已绑定，前端直接显示「进入服务器」
+            boolean effectiveQqBound = qqBound || !requireBind;
+            String prompt = effectiveQqBound ? null : configuration.qqBinding().bindPrompt();
             packetBridge.sendPacket(player, uiId, "init",
-                buildInitPayload(player, true, false, true, qqBound, prompt));
+                buildInitPayload(player, true, false, true, effectiveQqBound, prompt));
         } else {
             // 离线玩家（若认证层未拦住则 fallback 到密码登录）
             packetBridge.sendPacket(player, uiId, "init",
@@ -308,8 +325,13 @@ public final class LoginViewService implements Listener {
             sendResult(player, color("&c你不是正版/LittleSkin 认证玩家，无法免密登录。"), false);
             return;
         }
-        // QQ 绑定检查：未绑定则拒绝进入
-        if (!isQqBound(player)) {
+        // QQ 绑定检查：按账号类型分别判断是否要求绑定
+        boolean requireBind = switch (accountType) {
+            case MICROSOFT -> configuration.qqBinding().microsoftRequireBind();
+            case LITTLESKIN -> configuration.qqBinding().littleskinRequireBind();
+            default -> false;
+        };
+        if (requireBind && !isQqBound(player)) {
             sendResult(player, color("&c请先完成 QQ 绑定才能进入服务器。"), false);
             return;
         }
@@ -400,6 +422,9 @@ public final class LoginViewService implements Listener {
 
     private void completeLogin(Player player, String message) {
         failedAttempts.remove(player.getUniqueId());
+        if (loginViewInvulnerablePlayers.remove(player.getUniqueId())) {
+            player.setInvulnerable(false);
+        }
         sendResult(player, message, true);
         if (configuration.ui().closeOnLogin()) {
             packetBridge.sendPacket(player, uiId, "close", Map.of("message", message));
@@ -514,6 +539,9 @@ public final class LoginViewService implements Listener {
         UUID uuid = event.getPlayer().getUniqueId();
         authenticatedPlayers.remove(uuid);
         failedAttempts.remove(uuid);
+        if (loginViewInvulnerablePlayers.remove(uuid)) {
+            event.getPlayer().setInvulnerable(false);
+        }
     }
 
     @EventHandler(ignoreCancelled = true)

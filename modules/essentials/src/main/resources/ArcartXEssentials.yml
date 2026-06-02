@@ -60,8 +60,6 @@ interaction:
   sit-on-stairs: true
   # 右键点击台阶自动坐下
   sit-on-slabs: false
-  # /lay 使用的实体类型
-  lay-entity-type: ARMOR_STAND
 
 # ─── 存储 ───
 storage:

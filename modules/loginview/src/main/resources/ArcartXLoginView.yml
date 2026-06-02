@@ -26,6 +26,10 @@ auth:
 # QQ 绑定集成（需 qqbot 模块同时加载）
 qq-binding:
   enabled: true
+  # 微软正版账号是否需要绑定 QQ 才能进入游戏
+  microsoft-require-bind: false
+  # LittleSkin 账号是否需要绑定 QQ 才能进入游戏
+  littleskin-require-bind: true
   # 未绑定 QQ 的正版/LittleSkin 玩家在登录面板看到的提示
   bind-prompt: '&e你尚未绑定 QQ
 &7请在 QQ 群发送: #绑定 {name}

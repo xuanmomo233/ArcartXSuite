@@ -73,11 +73,15 @@ public record LoginViewModuleConfiguration(
 
     public record QqBindingConfiguration(
         boolean enabled,
+        boolean microsoftRequireBind,
+        boolean littleskinRequireBind,
         String bindPrompt
     ) {
         private static QqBindingConfiguration load(ConfigurationSection section) {
             return new QqBindingConfiguration(
                 bool(section, "enabled", true),
+                bool(section, "microsoft-require-bind", false),
+                bool(section, "littleskin-require-bind", true),
                 string(section, "bind-prompt", "&e你尚未绑定 QQ\n&7请在 QQ 群发送: #绑定 {name}\n&7获取验证码后在下方输入")
             );
         }
