@@ -65,6 +65,7 @@ public final class SnowLumaProcessManager {
 
     /**
      * 启动 SnowLuma 子进程。
+     * 启动前会自动清理占用 5099/3001 的残留进程。
      */
     public String start() {
         if (status.get() == Status.RUNNING && process != null && process.isAlive()) {
@@ -77,20 +78,32 @@ public final class SnowLumaProcessManager {
             return "SnowLuma 未安装，请先执行 /axs qqbot snowluma install";
         }
 
+        // ── 端口预检：清理残留实例 ──
+        String cleanupMsg = killResidue();
+        if (cleanupMsg != null) {
+            logger.info("[QQBot/SnowLuma] " + cleanupMsg);
+        }
+
         status.set(Status.STARTING);
         try {
             ProcessBuilder pb = buildProcess();
             pb.directory(installDir.toFile());
             pb.redirectErrorStream(true);
             process = pb.start();
+            final long thisPid = process.pid();
 
             // 转发子进程输出到日志（仅 debug 模式，ERROR/WARN 始终显示）
+            // 同时监听致命错误（如端口冲突），检测到后自动标记 STOPPED
+            AtomicReference<String> fatalError = new AtomicReference<>();
             outputThread = new Thread(() -> {
                 try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
                         String lower = line.toLowerCase();
-                        if (lower.contains("error") || lower.contains("warn") || lower.contains("fail")) {
+                        if (lower.contains("eaddrinuse") || lower.contains("address already in use")) {
+                            fatalError.set("端口冲突: " + line);
+                            logger.severe("[SnowLuma] " + line);
+                        } else if (lower.contains("error") || lower.contains("warn") || lower.contains("fail")) {
                             logger.warning("[SnowLuma] " + line);
                         } else if (debugMode.getAsBoolean()) {
                             logger.info("[SnowLuma] " + line);
@@ -101,9 +114,23 @@ public final class SnowLumaProcessManager {
             outputThread.setDaemon(true);
             outputThread.start();
 
+            // 给 SnowLuma 3 秒初始化窗口，检查是否已因端口冲突崩溃
+            try { Thread.sleep(3000); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            if (fatalError.get() != null) {
+                forceKill(thisPid);
+                status.set(Status.STOPPED);
+                process = null;
+                return "启动失败: " + fatalError.get() + "\n请检查是否有其他 SnowLuma / Node 进程占用 5099 或 3001 端口。";
+            }
+            if (!process.isAlive()) {
+                status.set(Status.STOPPED);
+                process = null;
+                return "启动失败: SnowLuma 进程启动后立即退出，请查看日志排查原因。";
+            }
+
             status.set(Status.RUNNING);
-            logger.info("[QQBot/SnowLuma] 进程已启动 (PID: " + process.pid() + ")");
-            return "SnowLuma 已启动 (PID: " + process.pid() + ")，WebUI: http://127.0.0.1:5099";
+            logger.info("[QQBot/SnowLuma] 进程已启动 (PID: " + thisPid + ")");
+            return "SnowLuma 已启动 (PID: " + thisPid + ")，WebUI: http://127.0.0.1:5099";
         } catch (Exception e) {
             status.set(Status.STOPPED);
             logger.log(Level.SEVERE, "[QQBot/SnowLuma] 启动失败", e);
@@ -112,42 +139,25 @@ public final class SnowLumaProcessManager {
     }
 
     /**
-     * 停止 SnowLuma 子进程。
+     * 停止 SnowLuma 子进程，并清理残留端口占用。
      */
     public String stop() {
         if (process == null || !process.isAlive()) {
+            // 当前没托管进程，但仍可能残留旧实例
+            String cleanup = killResidue();
             status.set(Status.STOPPED);
-            return "SnowLuma 未在运行";
+            return cleanup != null ? "SnowLuma 已强制停止残留进程: " + cleanup : "SnowLuma 未在运行";
         }
         long pid = process.pid();
-        // Windows 下 destroy() 无法杀子进程树，用 taskkill /F /T 强制终止整棵进程树
-        String os = System.getProperty("os.name", "").toLowerCase();
-        if (os.contains("win")) {
-            try {
-                new ProcessBuilder("taskkill", "/F", "/T", "/PID", String.valueOf(pid))
-                    .redirectErrorStream(true).start().waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
-            } catch (Exception e) {
-                logger.warning("[QQBot/SnowLuma] taskkill 失败，尝试 destroyForcibly: " + e.getMessage());
-                process.destroyForcibly();
-            }
-        } else {
-            process.destroy();
-            try {
-                boolean exited = process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
-                if (!exited) {
-                    process.destroyForcibly();
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                process.destroyForcibly();
-            }
-        }
-        // 等待端口释放
-        try { Thread.sleep(1500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+        forceKill(pid);
+        // 再清一次端口，确保无残留 node 实例
+        String cleanup = killResidue();
         status.set(Status.STOPPED);
         process = null;
         logger.info("[QQBot/SnowLuma] 进程已停止 (PID: " + pid + ")");
-        return "SnowLuma 已停止 (PID: " + pid + ")";
+        String msg = "SnowLuma 已停止 (PID: " + pid + ")";
+        if (cleanup != null) msg += "，同时清理了残留: " + cleanup;
+        return msg;
     }
 
     /**
@@ -156,6 +166,194 @@ public final class SnowLumaProcessManager {
     public void shutdown() {
         if (process != null && process.isAlive()) {
             stop();
+        } else {
+            // 即使当前没托管进程，也尝试清理残留
+            String cleanup = killResidue();
+            if (cleanup != null) {
+                logger.info("[QQBot/SnowLuma] 模块卸载时清理残留: " + cleanup);
+            }
+        }
+    }
+
+    // ─── 残留进程清理 ───
+
+    private String killResidue() {
+        StringBuilder killed = new StringBuilder();
+        // 检查 5099 (WebUI) 和 3001 (WS)
+        for (int port : new int[]{5099, 3001}) {
+            long pid = findPidOnPort(port);
+            if (pid > 0) {
+                // 如果是当前托管的进程，跳过
+                if (process != null && process.isAlive() && process.pid() == pid) {
+                    continue;
+                }
+                if (isSnowLumaOrNodeProcess(pid)) {
+                    logger.warning("[QQBot/SnowLuma] 端口 " + port + " 被 PID " + pid + " 占用，强制终止残留进程");
+                    forceKill(pid);
+                    if (killed.length() > 0) killed.append("; ");
+                    killed.append("PID ").append(pid).append(" (端口 ").append(port).append(")");
+                } else {
+                    logger.warning("[QQBot/SnowLuma] 端口 " + port + " 被 PID " + pid + " 占用，但该进程不是 SnowLuma/Node，请手动处理");
+                }
+            }
+        }
+        if (killed.length() > 0) {
+            // 等端口释放
+            try { Thread.sleep(1000); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            return killed.toString();
+        }
+        return null;
+    }
+
+    private void forceKill(long pid) {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        if (os.contains("win")) {
+            try {
+                ProcessBuilder pb = new ProcessBuilder("taskkill", "/F", "/T", "/PID", String.valueOf(pid));
+                pb.redirectErrorStream(true);
+                Process killProc = pb.start();
+                killProc.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (Exception e) {
+                logger.warning("[QQBot/SnowLuma] taskkill /F /T /PID " + pid + " 失败: " + e.getMessage());
+                if (process != null && process.pid() == pid) {
+                    process.destroyForcibly();
+                }
+            }
+        } else {
+            // Unix: 先尝试 SIGTERM，再 SIGKILL
+            try {
+                ProcessBuilder pb = new ProcessBuilder("kill", "-TERM", String.valueOf(pid));
+                pb.redirectErrorStream(true).start().waitFor(3, java.util.concurrent.TimeUnit.SECONDS);
+                // 检查是否还活着
+                if (isProcessAlive(pid)) {
+                    new ProcessBuilder("kill", "-KILL", String.valueOf(pid))
+                        .redirectErrorStream(true).start().waitFor(3, java.util.concurrent.TimeUnit.SECONDS);
+                }
+            } catch (Exception e) {
+                logger.warning("[QQBot/SnowLuma] kill 失败: " + e.getMessage());
+                if (process != null && process.pid() == pid) {
+                    process.destroyForcibly();
+                }
+            }
+        }
+    }
+
+    private long findPidOnPort(int port) {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        try {
+            if (os.contains("win")) {
+                // 先过滤 LISTENING 状态，再找目标端口
+                // 顺序不能反：findstr LISTENING 先执行，避免匹配到远程端为 PORT 的 ESTABLISHED 连接
+                ProcessBuilder pb = new ProcessBuilder(
+                    "cmd", "/c",
+                    "netstat -ano | findstr LISTENING | findstr \":" + port + "\""
+                );
+                pb.redirectErrorStream(true);
+                Process proc = pb.start();
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        // 格式: TCP  0.0.0.0:5099  0.0.0.0:0  LISTENING  3832
+                        String[] parts = line.trim().split("\\s+");
+                        if (parts.length >= 5) {
+                            String state = parts[parts.length - 2].toUpperCase();
+                            if (state.contains("LISTENING")) {
+                                return Long.parseLong(parts[parts.length - 1]);
+                            }
+                        }
+                    }
+                }
+                proc.waitFor(3, java.util.concurrent.TimeUnit.SECONDS);
+            } else {
+                // lsof -ti:<port>
+                ProcessBuilder pb = new ProcessBuilder("lsof", "-ti:" + port);
+                pb.redirectErrorStream(true);
+                Process proc = pb.start();
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
+                    String line = reader.readLine();
+                    if (line != null && !line.isBlank()) {
+                        return Long.parseLong(line.trim());
+                    }
+                }
+                proc.waitFor(3, java.util.concurrent.TimeUnit.SECONDS);
+            }
+        } catch (Exception e) {
+            if (debugMode.getAsBoolean()) {
+                logger.info("[QQBot/SnowLuma] 端口 " + port + " PID 查询失败: " + e.getMessage());
+            }
+        }
+        return -1;
+    }
+
+    private boolean isSnowLumaOrNodeProcess(long pid) {
+        // 无法 100% 确认，但 SnowLuma 是 Node 进程，多渠道验证
+        String os = System.getProperty("os.name", "").toLowerCase();
+        try {
+            if (os.contains("win")) {
+                // 通道 1：wmic 查 CommandLine（最准确）
+                ProcessBuilder pb = new ProcessBuilder("wmic", "process", "where", "ProcessId=" + pid, "get", "CommandLine", "/format:list");
+                pb.redirectErrorStream(true);
+                Process proc = pb.start();
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        String lower = line.toLowerCase();
+                        if (lower.contains("snowluma") || lower.contains("node") || lower.contains("index.js")) {
+                            return true;
+                        }
+                    }
+                }
+                proc.waitFor(3, java.util.concurrent.TimeUnit.SECONDS);
+
+                // 通道 2：tasklist 查进程名（备选，更快更可靠）
+                ProcessBuilder pb2 = new ProcessBuilder("tasklist", "/FI", "PID eq " + pid, "/FO", "CSV", "/NH");
+                pb2.redirectErrorStream(true);
+                Process proc2 = pb2.start();
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(proc2.getInputStream()))) {
+                    String line = reader.readLine();
+                    if (line != null) {
+                        String lower = line.toLowerCase();
+                        if (lower.contains("node.exe") || lower.contains("node") || lower.contains("snowluma")) {
+                            return true;
+                        }
+                    }
+                }
+                proc2.waitFor(3, java.util.concurrent.TimeUnit.SECONDS);
+            } else {
+                // Linux: 读取 /proc/<pid>/cmdline
+                Path cmdline = Paths.get("/proc", String.valueOf(pid), "cmdline");
+                if (Files.exists(cmdline)) {
+                    String content = Files.readString(cmdline).toLowerCase();
+                    return content.contains("snowluma") || content.contains("node") || content.contains("index.js");
+                }
+            }
+        } catch (Exception e) {
+            if (debugMode.getAsBoolean()) {
+                logger.info("[QQBot/SnowLuma] PID " + pid + " 进程识别失败: " + e.getMessage());
+            }
+        }
+        return false; // 保守策略：不认识就不杀
+    }
+
+    private boolean isProcessAlive(long pid) {
+        try {
+            if (System.getProperty("os.name", "").toLowerCase().contains("win")) {
+                ProcessBuilder pb = new ProcessBuilder("tasklist", "/FI", "PID eq " + pid);
+                pb.redirectErrorStream(true);
+                Process proc = pb.start();
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (line.contains(String.valueOf(pid))) return true;
+                    }
+                }
+                proc.waitFor(2, java.util.concurrent.TimeUnit.SECONDS);
+                return false;
+            } else {
+                return Files.exists(Paths.get("/proc", String.valueOf(pid)));
+            }
+        } catch (Exception e) {
+            return false;
         }
     }
 

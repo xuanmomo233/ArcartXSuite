@@ -173,8 +173,14 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         // 7. 等待 SnowLuma WS 端口就绪后再连接
         if (snowLumaManager.getStatus() == xuanmo.arcartxsuite.qqbot.process.SnowLumaProcessManager.Status.RUNNING) {
             waitForPort(configuration.onebot().wsUrl(), 8000);
+            oneBotClient.start();
+        } else if (configuration.onebot().snowLumaAutoStart()) {
+            context.logger().warning("[QQBot] SnowLuma 启动失败或已停止，OneBot 连接被跳过。" +
+                "请检查 SnowLuma 进程状态，或手动启动后执行 /axs qqbot reload");
+        } else {
+            // 用户手动管理 SnowLuma，直接尝试连接
+            oneBotClient.start();
         }
-        oneBotClient.start();
 
         // 8. 注册管理命令
         adminCommand = new QQBotAdminCommand(() -> service, () -> repository, snowLumaManager, messages());

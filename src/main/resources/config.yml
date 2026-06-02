@@ -49,9 +49,10 @@ tacz-compat:
 # ========== 账号识别（统一服务）==========
 # 微软正版 / LittleSkin / 离线账号判定，由本体统一提供，供 loginview、qqbot、eventpacket 共享。
 # 该服务在玩家预登录（AsyncPlayerPreLogin）阶段于异步线程预热缓存，避免主线程阻塞网络请求。
-# 【重要前提】若同时使用 LittleSkin + 微软正版 + 离线（Mixed Auth Mode）：
-#   1. 启动脚本 authlib-injector API 地址必须加上 ?mixed 后缀
-#      例: -javaagent:plugins/authlib-injector.jar=https://littleskin.cn/api/yggdrasil?mixed
+# 【重要前提】若同时使用 LittleSkin + 微软正版（混合登录 Mixed Auth Mode）：
+#   1. 必须用 AXS 生成的 start-mixed-auth 脚本启动服务器（执行 /axs auth setup 生成）。
+#      该脚本会先独立启动 AXS 本地混合代理，再启动服务器，authlib-injector 指向本地代理。
+#      （authlib-injector 原生不支持单端正版+外置混合，?mixed 也不是其有效参数）
 #   2. server.properties 必须设置 online-mode=true
 #      否则 LittleSkin 账号会被分配 v3 UUID，无法与离线玩家区分
 #   3. 离线玩家需在 qqbot/loginview 白名单登录配置中设置 deny-offline: false
@@ -78,11 +79,19 @@ account-type:
 auth:
   # 启动时自动检测 authlib-injector 版本并提示更新
   auto-check-version: true
-  # Yggdrasil 认证源（用于启动脚本生成）
+  # Yggdrasil 认证源（用于 /axs auth setup 生成启动脚本）
+  # 【混合登录】若 URL 包含 ?mixed，AXS 会：
+  #   1. 生成的 start-mixed-auth 脚本会【先独立启动】本地 Yggdrasil 混合代理（见下方 mixed-proxy-port），
+  #      再启动服务器，authlib-injector 指向该本地代理。
+  #      这样才能解决 authlib-injector premain 时序问题（代理必须先于服务器存在）。
+  #   2. 代理行为：hasJoined 先查 LittleSkin，未命中再 fallback 到 Mojang 官方，
+  #      让 LittleSkin 玩家与微软正版玩家都能进服。
+  # 注意：?mixed 并非 authlib-injector/LittleSkin 的有效参数，仅是 AXS 的“启用混合代理”开关。
+  # 若只需外置登录，改为纯 LittleSkin："https://littleskin.cn/api/yggdrasil"
   yggdrasil-source: "https://littleskin.cn/api/yggdrasil?mixed"
-  # 拒绝离线玩家（authlib-injector Mixed Mode 下在线模式已处理，此为 fallback）
-  deny-offline: true
-  kick-offline-message: "&c本服务器仅支持正版/LittleSkin 账号登录"
+  # 本地混合代理监听端口（固定）。start-mixed-auth 脚本与服务器都使用此端口，
+  # authlib-injector 在服务器启动时会连接 http://127.0.0.1:<此端口>。必须是未被占用的端口（1-65535）。
+  mixed-proxy-port: 25599
 
 client-packet-guard:
   enabled: true

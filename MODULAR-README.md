@@ -303,6 +303,15 @@ public final class MyModule implements AXSModule, ModuleCommandHandler {
 
 ## 近期变更记录
 
+### v3 — 混合登录代理重构（独立进程架构）
+
+- **MixedYggdrasilProxy 独立进程化**：新增 `main()` 入口，支持固定端口启动与端口占用复用检测（`SO_REUSEADDR`），解决 authlib-injector `premain` 时序问题
+- **启动脚本重写**：`start-mixed-auth.bat/.sh` 改为「后台启动代理进程 → 轮询端口就绪 → 启动服务器 JVM」流程，代理生命周期由脚本管理
+- **宿主去耦合**：`ArcartXSuitePlugin.onEnable` 不再启动/停止代理，改为异步探测代理端口可达性并提示状态
+- **命令状态同步**：`/axs auth status` 显示代理端口与连通状态（就绪/未运行）
+- **配置清理**：`config.yml` 新增 `auth.mixed-proxy-port`（默认 25599），重写 `?mixed` 误导注释；删除无效死配置 `deny-offline` / `kick-offline-message`
+- **ProGuard 保护**：`-keep` 保留 `MixedYggdrasilProxy` 类名与 `main()`，防止混淆导致独立进程入口丢失
+
 ### v2 — 统一启动流程 & 移除 ax reload
 
 - **EntityTracker 流程统一**：`reloadEntityTrackerState` 签名简化为 `(boolean logSummary)`，与其他模块一致

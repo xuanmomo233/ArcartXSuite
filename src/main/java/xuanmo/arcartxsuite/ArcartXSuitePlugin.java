@@ -200,12 +200,27 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(versionCheckService, this);
 
         // 11. authlib-injector 多方认证管理
-        authlibInjectorManager = new xuanmo.arcartxsuite.auth.AuthlibInjectorManager(getLogger(), getDataFolder());
+        int mixedProxyPort = getConfig().getInt("auth.mixed-proxy-port", 25599);
+        authlibInjectorManager = new xuanmo.arcartxsuite.auth.AuthlibInjectorManager(getLogger(), getDataFolder(), mixedProxyPort);
         authCommand = new xuanmo.arcartxsuite.auth.AuthCommand(authlibInjectorManager, getLogger());
-        // 异步检测版本（避免阻塞启动）
+
+        // 异步检测版本 + 混合代理就绪状态（避免阻塞启动）
+        // 注意：本地混合代理是【独立进程】，由 start-mixed-auth 脚本在服务器启动前拉起，
+        // 本插件不再负责启动/停止，这里只做就绪探测与提示。
+        String yggdrasilSource = getConfig().getString("auth.yggdrasil-source", "https://littleskin.cn/api/yggdrasil?mixed");
+        boolean expectMixed = yggdrasilSource.contains("?mixed");
         getServer().getScheduler().runTaskAsynchronously(this, () -> {
             authlibInjectorManager.checkVersionAndNotify();
             authlibInjectorManager.checkServerProperties();
+            if (expectMixed) {
+                if (authlibInjectorManager.isMixedProxyReachable()) {
+                    consoleInfo(ChatColor.AQUA + "本地混合代理就绪 | " + authlibInjectorManager.getMixedProxyUrl());
+                } else {
+                    consoleInfo(ChatColor.YELLOW + "未检测到本地混合代理（端口 "
+                        + authlibInjectorManager.getMixedProxyPort()
+                        + "）。如需 LittleSkin+正版 混合登录，请用 start-mixed-auth 脚本启动服务器（执行 /axs auth setup 生成）。");
+                }
+            }
         });
 
         consoleInfo(ChatColor.GREEN + "加载完成");
@@ -353,6 +368,7 @@ public class ArcartXSuitePlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        // 注意：本地混合代理是独立进程，由 start-mixed-auth 脚本管理，此处无需停止。
         if (heartbeatService != null) {
             heartbeatService.stop();
             heartbeatService = null;

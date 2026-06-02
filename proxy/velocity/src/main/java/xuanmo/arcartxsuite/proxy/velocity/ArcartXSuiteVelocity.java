@@ -107,13 +107,16 @@ public class ArcartXSuiteVelocity {
         }
 
         if (loaded) {
-            logger.info("[Auth] 已检测到 authlib-injector，LittleSkin 多方认证已启用。");
+            logger.info("[Auth] 已检测到 authlib-injector。");
+            logger.info("[Auth] 注意: 若需正版+外置混合登录，authlib-injector 必须指向支持多源的认证端");
+            logger.info("[Auth]   （MultiLogin 或本地混合代理）；单独指向 littleskin.cn 仅支持外置登录。");
+            logger.info("[Auth]   ?mixed 并非 authlib-injector/LittleSkin 的有效参数，请勿使用。");
         } else {
             logger.warning("[Auth] 未检测到 authlib-injector！");
-            logger.warning("[Auth] 若需支持 LittleSkin 多方认证，请在 Velocity 启动参数中添加:");
-            logger.warning("[Auth]   -javaagent:authlib-injector.jar=https://littleskin.cn/api/yggdrasil?mixed");
-            logger.warning("[Auth]   --add-opens java.base/java.lang=ALL-UNNAMED");
-            logger.warning("[Auth]   --add-opens java.base/java.net=ALL-UNNAMED");
+            logger.warning("[Auth] 群组服混合登录（正版 + LittleSkin）推荐方案:");
+            logger.warning("[Auth]   方案A（推荐）: 安装 MultiLogin 插件，配置 OFFICIAL + BLESSING_SKIN 多源");
+            logger.warning("[Auth]   方案B（仅外置）: 启动参数加 -javaagent:authlib-injector.jar=littleskin.cn");
+            logger.warning("[Auth]     并添加 --add-opens java.base/java.lang=ALL-UNNAMED 等参数");
         }
     }
 }

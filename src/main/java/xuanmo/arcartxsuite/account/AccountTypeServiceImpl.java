@@ -36,7 +36,8 @@ import xuanmo.arcartxsuite.api.account.AccountTypeService;
 public final class AccountTypeServiceImpl implements AccountTypeService, Listener {
 
     private static final String AUTHLIB_AGENT_CLASS = "moe.yushi.authlibinjector.AuthlibInjector";
-    private static final String MOJANG_PROFILE_API = "https://api.mojang.com/users/profiles/minecraft/";
+    private static final String MOJANG_PROFILE_API = "https://api.minecraftservices.com/minecraft/profile/lookup/name/";
+    private static final String MOJANG_LEGACY_API = "https://api.mojang.com/users/profiles/minecraft/";
 
     private final Logger logger;
     private final boolean enableMojangLookup;
@@ -202,8 +203,23 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
      * @throws IOException 网络异常或非预期 HTTP 状态（如 429 限流），调用方据此跳过缓存
      */
     private String queryOfficialUuid(String name) throws IOException {
+        // 优先尝试新版微软 API，失败后回退旧版 Mojang API
+        try {
+            String result = queryOfficialUuidFrom(name, MOJANG_PROFILE_API);
+            if (!result.isBlank()) {
+                return result;
+            }
+        } catch (IOException e) {
+            if (debug) {
+                logger.fine("[AccountType] 新版 API 查询失败 (" + name + "): " + e.getMessage() + "，尝试旧版 API");
+            }
+        }
+        return queryOfficialUuidFrom(name, MOJANG_LEGACY_API);
+    }
+
+    private String queryOfficialUuidFrom(String name, String baseUrl) throws IOException {
         String encoded = URLEncoder.encode(name, StandardCharsets.UTF_8);
-        URL url = new URL(MOJANG_PROFILE_API + encoded);
+        URL url = new URL(baseUrl + encoded);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod("GET");
         conn.setConnectTimeout(mojangTimeoutMs);

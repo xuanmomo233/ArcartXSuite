@@ -29,6 +29,13 @@ public class AuthCommand {
                 boolean loaded = manager.isAgentLoaded();
                 sender.sendMessage(ChatColor.GOLD + "===== authlib-injector 状态 =====");
                 sender.sendMessage(ChatColor.GRAY + "已加载: " + (loaded ? ChatColor.GREEN + "是" : ChatColor.RED + "否"));
+                boolean proxyUp = manager.isMixedProxyReachable();
+                sender.sendMessage(ChatColor.GRAY + "本地混合代理(端口 " + manager.getMixedProxyPort() + "): "
+                    + (proxyUp ? ChatColor.GREEN + "就绪 " + manager.getMixedProxyUrl()
+                               : ChatColor.RED + "未运行"));
+                if (!proxyUp) {
+                    sender.sendMessage(ChatColor.YELLOW + "  提示: 混合登录需用 start-mixed-auth 脚本启动服务器（代理为独立进程）。");
+                }
                 if (loaded) {
                     manager.checkVersionAndNotify();
                 } else {

@@ -8,6 +8,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
 import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -33,14 +35,25 @@ public final class AuthlibInjectorManager {
         + "--add-opens java.base/java.net=ALL-UNNAMED "
         + "--add-opens java.base/sun.net.util=ALL-UNNAMED";
 
+    /** 混合代理独立进程入口类（必须与 proguard -keep 保持一致）。 */
+    private static final String PROXY_MAIN_CLASS = "xuanmo.arcartxsuite.auth.MixedYggdrasilProxy";
+
+    private static final int DEFAULT_PROXY_PORT = 25599;
+
     private final Logger logger;
     private final File dataFolder;
     private final File serverRoot;
+    private final int mixedProxyPort;
 
     public AuthlibInjectorManager(Logger logger, File dataFolder) {
+        this(logger, dataFolder, DEFAULT_PROXY_PORT);
+    }
+
+    public AuthlibInjectorManager(Logger logger, File dataFolder, int mixedProxyPort) {
         this.logger = logger;
         this.dataFolder = dataFolder;
         this.serverRoot = resolveServerRoot(dataFolder);
+        this.mixedProxyPort = (mixedProxyPort > 0 && mixedProxyPort <= 65535) ? mixedProxyPort : DEFAULT_PROXY_PORT;
     }
 
     // ═════════════════════════════════════════════════════════════════
@@ -124,16 +137,17 @@ public final class AuthlibInjectorManager {
     //  启动脚本
     // ═════════════════════════════════════════════════════════════════
 
-    public boolean generateStartScripts(String yggdrasilUrl, String serverJarName) {
+    public boolean generateStartScripts(String yggdrasilUrl, String serverJarName, boolean useLocalMixed) {
         File authlibJar = new File(dataFolder, JAR_NAME);
         if (!authlibJar.exists()) {
             logger.warning("[AuthlibInjector] 未找到 authlib-injector.jar，请先执行下载。");
             return false;
         }
         String agentPath = getRelativePath(authlibJar);
+        String axsJarPath = resolveAxsJarPath();
         try {
-            generateBatScript(agentPath, yggdrasilUrl, serverJarName);
-            generateShScript(agentPath, yggdrasilUrl, serverJarName);
+            generateBatScript(agentPath, yggdrasilUrl, serverJarName, useLocalMixed, axsJarPath);
+            generateShScript(agentPath, yggdrasilUrl, serverJarName, useLocalMixed, axsJarPath);
             logger.info("[AuthlibInjector] 启动脚本已生成: start-mixed-auth.bat / start-mixed-auth.sh");
             return true;
         } catch (IOException e) {
@@ -142,30 +156,71 @@ public final class AuthlibInjectorManager {
         }
     }
 
+    /** 本地混合代理监听端口（固定，由 config 注入）。 */
+    public int getMixedProxyPort() {
+        return mixedProxyPort;
+    }
+
+    /** 本地混合代理 URL（authlib-injector 指向此地址）。 */
+    public String getMixedProxyUrl() {
+        return "http://127.0.0.1:" + mixedProxyPort;
+    }
+
+    /**
+     * 检测本地混合代理是否已就绪（由 start-mixed-auth 脚本独立进程启动）。
+     * <p>
+     * 注意：代理是独立进程，不由本插件启动/停止，这里只做连通性探测。
+     */
+    public boolean isMixedProxyReachable() {
+        try (Socket s = new Socket()) {
+            s.connect(new InetSocketAddress("127.0.0.1", mixedProxyPort), 1000);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     /**
      * 一键配置：下载 + 生成脚本。
+     * <p>
+     * 若 yggdrasilUrl 包含 "?mixed"，自动替换为本地混合代理地址，
+     * 绕过 authlib-injector / LittleSkin ?mixed 的兼容性问题。
      */
     public String setupAll(String yggdrasilUrl) {
+        // ?mixed 是 AXS 用来识别「启用本地混合代理」的开关（并非 authlib-injector 的有效参数）
+        boolean useLocalMixed = yggdrasilUrl != null && yggdrasilUrl.contains("?mixed");
+        String effectiveUrl;
+        if (useLocalMixed) {
+            // authlib-injector 指向本地代理（固定端口），代理由脚本在服务器启动前独立拉起
+            effectiveUrl = getMixedProxyUrl();
+            logger.info("[AuthlibInjector] 混合登录：脚本将先独立启动本地代理（端口 "
+                + mixedProxyPort + "），authlib-injector 指向 " + effectiveUrl);
+        } else {
+            effectiveUrl = yggdrasilUrl;
+        }
+
         File jar = downloadOrUpdate();
         if (jar == null) {
             return ChatColor.RED + "authlib-injector 下载失败，请检查网络连接。";
         }
         String serverJar = detectServerJar();
-        if (!generateStartScripts(yggdrasilUrl, serverJar)) {
+        if (!generateStartScripts(effectiveUrl, serverJar, useLocalMixed)) {
             return ChatColor.RED + "启动脚本生成失败。authlib-injector.jar 已下载到: " + jar.getAbsolutePath();
         }
-        patchExistingStartScript(getRelativePath(jar), yggdrasilUrl);
 
         StringBuilder sb = new StringBuilder();
         sb.append(ChatColor.GREEN).append("authlib-injector 配置完成！\n");
         sb.append(ChatColor.GRAY).append("  ").append(ChatColor.WHITE).append("jar: ").append(jar.getAbsolutePath()).append("\n");
         sb.append(ChatColor.GRAY).append("  ").append(ChatColor.WHITE).append("启动脚本: start-mixed-auth.bat / .sh\n");
+        if (useLocalMixed) {
+            sb.append(ChatColor.AQUA).append("  [混合登录] 脚本会先启动本地代理（端口 ").append(mixedProxyPort)
+              .append("）再启动服务器，支持 LittleSkin + 微软正版\n");
+            sb.append(ChatColor.YELLOW).append("  [重要] 本模式必须使用 start-mixed-auth 脚本启动，\n");
+            sb.append(ChatColor.YELLOW).append("         不能只在原脚本加 -javaagent（代理需先于服务器启动）。\n");
+        }
         sb.append(ChatColor.YELLOW).append("\n  请执行以下操作:\n");
         sb.append(ChatColor.WHITE).append("  1. 关闭服务器 (stop)\n");
-        sb.append(ChatColor.WHITE).append("  2. 使用 start-mixed-auth.bat 启动\n");
-        sb.append(ChatColor.WHITE).append("     或在原启动脚本 java 命令中添加:\n");
-        sb.append(ChatColor.AQUA).append("     -javaagent:").append(getRelativePath(jar)).append("=").append(yggdrasilUrl).append("\n");
-        sb.append(ChatColor.WHITE).append("     ").append(JAVA17_OPENS).append("\n");
+        sb.append(ChatColor.WHITE).append("  2. 使用 start-mixed-auth.bat (Windows) 或 start-mixed-auth.sh (Linux) 启动\n");
         sb.append(ChatColor.YELLOW).append("\n  请确保 server.properties 中 online-mode=true");
         return sb.toString();
     }
@@ -277,63 +332,81 @@ public final class AuthlibInjectorManager {
         }
     }
 
-    private void generateBatScript(String agentPath, String yggdrasilUrl, String serverJar) throws IOException {
+    private void generateBatScript(String agentPath, String yggdrasilUrl, String serverJar,
+                                   boolean useLocalMixed, String axsJarPath) throws IOException {
         File script = new File(serverRoot, "start-mixed-auth.bat");
-        String content = "@echo off\r\n"
-            + "title Minecraft Server (Mixed Auth Mode)\r\n"
-            + "echo [ArcartXSuite] Starting with authlib-injector...\r\n"
-            + "java " + JAVA17_OPENS + " -javaagent:" + agentPath + "=" + yggdrasilUrl
-            + " -Xmx4G -Xms1G -jar " + serverJar + " nogui\r\n"
-            + "pause\r\n";
-        Files.writeString(script.toPath(), content, StandardCharsets.UTF_8);
+        StringBuilder c = new StringBuilder();
+        c.append("@echo off\r\n");
+        c.append("cd /d \"%~dp0\"\r\n");
+        c.append("title Minecraft Server (Mixed Auth Mode)\r\n");
+        if (useLocalMixed) {
+            c.append("set \"PROXY_PORT=").append(mixedProxyPort).append("\"\r\n");
+            c.append("echo [ArcartXSuite] Starting AXS mixed-auth proxy on port %PROXY_PORT% ...\r\n");
+            c.append("start \"AXS Mixed-Auth Proxy\" /min java -cp \"").append(axsJarPath)
+             .append("\" ").append(PROXY_MAIN_CLASS).append(" %PROXY_PORT%\r\n");
+            c.append("echo [ArcartXSuite] Waiting for proxy to be ready ...\r\n");
+            c.append("set /a _tries=0\r\n");
+            c.append(":axs_waitproxy\r\n");
+            c.append("powershell -NoProfile -Command \"$c=New-Object Net.Sockets.TcpClient;try{$c.Connect('127.0.0.1',%PROXY_PORT%);$c.Close();exit 0}catch{exit 1}\" >nul 2>&1\r\n");
+            c.append("if not errorlevel 1 goto axs_proxyready\r\n");
+            c.append("set /a _tries+=1\r\n");
+            c.append("if %_tries% geq 30 (echo [ArcartXSuite][WARN] proxy not ready, continuing anyway & goto axs_proxyready)\r\n");
+            c.append("ping -n 2 127.0.0.1 >nul\r\n");
+            c.append("goto axs_waitproxy\r\n");
+            c.append(":axs_proxyready\r\n");
+            c.append("echo [ArcartXSuite] Proxy ready. Launching server ...\r\n");
+        } else {
+            c.append("echo [ArcartXSuite] Starting with authlib-injector ...\r\n");
+        }
+        c.append("java ").append(JAVA17_OPENS).append(" -javaagent:").append(agentPath).append("=").append(yggdrasilUrl)
+         .append(" -Xmx4G -Xms1G -jar ").append(serverJar).append(" nogui\r\n");
+        c.append("pause\r\n");
+        Files.writeString(script.toPath(), c.toString(), StandardCharsets.UTF_8);
     }
 
-    private void generateShScript(String agentPath, String yggdrasilUrl, String serverJar) throws IOException {
+    private void generateShScript(String agentPath, String yggdrasilUrl, String serverJar,
+                                  boolean useLocalMixed, String axsJarPath) throws IOException {
         File script = new File(serverRoot, "start-mixed-auth.sh");
-        String content = "#!/bin/bash\n"
-            + "echo \"[ArcartXSuite] Starting with authlib-injector...\"\n"
-            + "java " + JAVA17_OPENS + " -javaagent:" + agentPath + "=" + yggdrasilUrl
-            + " -Xmx4G -Xms1G -jar " + serverJar + " nogui\n";
-        Files.writeString(script.toPath(), content, StandardCharsets.UTF_8);
+        StringBuilder c = new StringBuilder();
+        c.append("#!/bin/bash\n");
+        c.append("cd \"$(dirname \"$0\")\"\n");
+        if (useLocalMixed) {
+            c.append("PROXY_PORT=").append(mixedProxyPort).append("\n");
+            c.append("echo \"[ArcartXSuite] Starting AXS mixed-auth proxy on port $PROXY_PORT ...\"\n");
+            c.append("java -cp \"").append(axsJarPath).append("\" ").append(PROXY_MAIN_CLASS).append(" $PROXY_PORT &\n");
+            c.append("AXS_PROXY_PID=$!\n");
+            c.append("echo \"[ArcartXSuite] Waiting for proxy to be ready ...\"\n");
+            c.append("_tries=0\n");
+            c.append("until bash -c \"echo > /dev/tcp/127.0.0.1/$PROXY_PORT\" 2>/dev/null; do\n");
+            c.append("  _tries=$((_tries+1))\n");
+            c.append("  if [ $_tries -ge 30 ]; then echo \"[ArcartXSuite][WARN] proxy not ready, continuing\"; break; fi\n");
+            c.append("  sleep 1\n");
+            c.append("done\n");
+            c.append("echo \"[ArcartXSuite] Proxy ready. Launching server ...\"\n");
+            c.append("java ").append(JAVA17_OPENS).append(" -javaagent:").append(agentPath).append("=").append(yggdrasilUrl)
+             .append(" -Xmx4G -Xms1G -jar ").append(serverJar).append(" nogui\n");
+            c.append("kill $AXS_PROXY_PID 2>/dev/null\n");
+        } else {
+            c.append("echo \"[ArcartXSuite] Starting with authlib-injector ...\"\n");
+            c.append("java ").append(JAVA17_OPENS).append(" -javaagent:").append(agentPath).append("=").append(yggdrasilUrl)
+             .append(" -Xmx4G -Xms1G -jar ").append(serverJar).append(" nogui\n");
+        }
+        Files.writeString(script.toPath(), c.toString(), StandardCharsets.UTF_8);
         script.setExecutable(true);
     }
 
-    private String patchExistingStartScript(String agentPath, String yggdrasilUrl) {
-        if (serverRoot == null || !serverRoot.isDirectory()) return null;
-        String agentArg = "-javaagent:" + agentPath + "=" + yggdrasilUrl;
-        String agentWithOpens = JAVA17_OPENS + " " + agentArg;
-        File[] scripts = serverRoot.listFiles((d, n) -> {
-            String l = n.toLowerCase();
-            return (l.endsWith(".bat") || l.endsWith(".sh")) && !l.contains("mixed-auth");
-        });
-        if (scripts == null || scripts.length == 0) return null;
-        StringBuilder patched = new StringBuilder();
-        for (File s : scripts) {
-            try {
-                String content = Files.readString(s.toPath(), StandardCharsets.UTF_8);
-                if (content.contains("authlib-injector")) continue;
-                if (!content.contains("java ") && !content.contains("java.exe ")) continue;
-                String p = content
-                    .replace("java -jar", "java " + agentWithOpens + " -jar")
-                    .replace("java.exe -jar", "java.exe " + agentWithOpens + " -jar");
-                if (p.equals(content)) {
-                    p = content
-                        .replace("java -X", "java " + agentWithOpens + " -X")
-                        .replace("java.exe -X", "java.exe " + agentWithOpens + " -X");
-                }
-                if (!p.equals(content)) {
-                    File bak = new File(s.getAbsolutePath() + ".bak");
-                    if (!bak.exists()) Files.writeString(bak.toPath(), content, StandardCharsets.UTF_8);
-                    Files.writeString(s.toPath(), p, StandardCharsets.UTF_8);
-                    if (patched.length() > 0) patched.append(", ");
-                    patched.append(s.getName());
-                    logger.info("[AuthlibInjector] 已修改启动脚本: " + s.getName() + " (备份: .bak)");
-                }
-            } catch (IOException e) {
-                logger.warning("[AuthlibInjector] 修改 " + s.getName() + " 失败: " + e.getMessage());
+    /**
+     * 解析 AXS 自身 jar 的相对路径（用于独立进程代理的 classpath）。
+     */
+    private String resolveAxsJarPath() {
+        try {
+            File jar = new File(getClass().getProtectionDomain().getCodeSource().getLocation().toURI());
+            if (jar.isFile()) {
+                return getRelativePath(jar);
             }
+        } catch (Exception ignored) {
         }
-        return patched.length() == 0 ? null : "已自动修改: " + patched + " (原文件已备份为 .bak)";
+        return "plugins/ArcartXSuite.jar";
     }
 
     private String detectServerJar() {
