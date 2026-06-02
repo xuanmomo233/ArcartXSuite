@@ -41,8 +41,10 @@ ui:
       var.online = packet['online']
       var.maxPlayers = packet['maxPlayers']
       var.address = packet['address']
-      var.time = packet['time']
+      //var.time = packet['time']
       var.premiumBypass = packet['premiumBypass']
+      var.qqBound = packet['qqBound']
+      var.bindPrompt = packet['bindPrompt']
       var.result = packet['message']
       var.password = ''
       var.confirmPassword = ''
@@ -69,6 +71,8 @@ ui:
       var.mode = 'standalone'
       var.registered = true
       var.premiumBypass = false
+      var.qqBound = false
+      var.bindPrompt = ''
       var.playerName = ''
       var.serverName = ''
       var.online = 0
@@ -172,14 +176,14 @@ controls:
               x: 96 + 6 + 20
               y: 352
               texts: "'&f' + var.title"
-              fontSize: 32
+              fontSize: 49
           状态信息:
             type: Text
             attribute:
               x: 96 + 6 + 20
               y: 386
               texts: "'&7在线 ' + var.online.round() + '/' + var.maxPlayers.round() + '  地址 ' + var.address"
-              fontSize: 20
+              fontSize: 36
           # ── 登录表单 ──
           登录密码:
             type: TextBox
@@ -214,7 +218,7 @@ controls:
               radius: 8
               texts: "~&f加入服务器"
               center: true
-              fontSize: 28
+              fontSize: 36
               visible: var.type == 'login'
             action:
               clickLeft: |-
@@ -232,7 +236,7 @@ controls:
               radius: 8
               texts: "~&f修改密码"
               center: true
-              fontSize: 28
+              fontSize: 36
               visible: var.type == 'login'
             action:
               clickLeft: |-
@@ -256,7 +260,7 @@ controls:
               radius: 8
               texts: "~&f退出游戏"
               center: true
-              fontSize: 28
+              fontSize: 36
               visible: var.type != 'bypass'
             action:
               clickLeft: |-
@@ -268,7 +272,7 @@ controls:
               x: 96
               y: 440
               texts: "~&a✔ &f身份已验证"
-              fontSize: 28
+              fontSize: 36
               visible: var.type == 'bypass'
           进入服务器:
             type: Texture
@@ -283,7 +287,7 @@ controls:
               radius: 8
               texts: "~&f进入服务器"
               center: true
-              fontSize: 28
+              fontSize: 36
               visible: var.type == 'bypass'
             action:
               clickLeft: |-
@@ -301,8 +305,73 @@ controls:
               radius: 8
               texts: "~&f退出游戏"
               center: true
-              fontSize: 28
+              fontSize: 36
               visible: var.type == 'bypass'
+            action:
+              clickLeft: |-
+                Game.quit()
+          # ── 正版/LittleSkin 未绑定QQ视图 ──
+          绑定提示:
+            type: Text
+            attribute:
+              x: 96
+              y: 410
+              width: 280
+              texts: "var.bindPrompt"
+              fontSize: 36
+              visible: var.type == 'bypass_unbound'
+          绑定码输入框:
+            type: TextBox
+            attribute:
+              x: 96
+              y: 490
+              width: 260
+              height: 36
+              length: 6
+              emptyText: ~绑定验证码
+              fontSize: 36
+              background: ~18,16,46,235
+              visible: var.type == 'bypass_unbound'
+            action:
+              textChange: |-
+                var.bindCode = self.getContent()
+            effect:
+              stroke:
+                width: 2
+                color: ~132,120,220,220
+          确认绑定:
+            type: Texture
+            attribute:
+              x: 96
+              y: 542
+              width: 260
+              height: 42
+              normal: ~74,165,118,225
+              hover: ~96,195,140,255
+              shape: ~round_rect
+              radius: 8
+              texts: "~&f确认绑定"
+              center: true
+              fontSize: 36
+              visible: var.type == 'bypass_unbound'
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'bind_code', var.bindCode)
+          未绑定退出游戏:
+            type: Texture
+            attribute:
+              x: 96
+              y: 600
+              width: 260
+              height: 42
+              normal: ~96,84,205,220
+              hover: ~126,112,235,255
+              shape: ~round_rect
+              radius: 8
+              texts: "~&f退出游戏"
+              center: true
+              fontSize: 36
+              visible: var.type == 'bypass_unbound'
             action:
               clickLeft: |-
                 Game.quit()
@@ -360,7 +429,7 @@ controls:
               radius: 8
               texts: "~&f注册并登录"
               center: true
-              fontSize: 28
+              fontSize: 36
               visible: var.type == 'register'
             action:
               clickLeft: |-
@@ -375,7 +444,7 @@ controls:
               height: 34
               length: 64
               emptyText: ~旧密码
-              fontSize: 28
+              fontSize: 36
               passwordChar: ~※
               background: ~18,16,46,235
               visible: var.type == 'change'
@@ -395,7 +464,7 @@ controls:
               height: 34
               length: 64
               emptyText: ~新密码
-              fontSize: 28
+              fontSize: 36
               passwordChar: ~※
               background: ~18,16,46,235
               visible: var.type == 'change'
@@ -415,7 +484,7 @@ controls:
               height: 34
               length: 64
               emptyText: ~确认新密码
-              fontSize: 28
+              fontSize: 36
               passwordChar: ~※
               background: ~18,16,46,235
               visible: var.type == 'change'
@@ -481,5 +550,5 @@ controls:
             attribute:
               x: 50
               y: 1038
-              texts: "'&8时间 ' + var.time"
+              texts: "'&f时间: ' + Placeholder.parse('%server_time_yyyy年MM月dd日hh:mm:ss%')"
               fontSize: 36

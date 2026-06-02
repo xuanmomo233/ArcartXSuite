@@ -35,11 +35,13 @@ ui:
       var.qqBound = packet['qqBound']
       var.bindPrompt = packet['bindPrompt']
       var.result = packet['message']
+      var.resultAlpha = 0
       var.password = ''
       var.confirmPassword = ''
       var.oldPassword = ''
       var.newPassword = ''
       var.changeConfirmPassword = ''
+      var.bindCode = ''
     result: |-
       var.result = packet['message']
       var.resultAlpha = TwoLerp(1, 1, 0, 2000, 1000)
