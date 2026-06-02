@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="MessageProvider 消息提供者" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-06-01T08:37:25" hostname="LAPTOP-A7222I9H" time="0.542">
+  <properties/>
+  <testcase name="缺失键返回键名本身" classname="xuanmo.arcartxsuite.api.message.MessageProviderTest" time="0.407"/>
+  <testcase name="null 参数不抛异常" classname="xuanmo.arcartxsuite.api.message.MessageProviderTest" time="0.017"/>
+  <testcase name="多占位符按顺序替换" classname="xuanmo.arcartxsuite.api.message.MessageProviderTest" time="0.011"/>
+  <testcase name="&amp; 颜色码被翻译" classname="xuanmo.arcartxsuite.api.message.MessageProviderTest" time="0.011"/>
+  <testcase name="嵌套键使用点号路径" classname="xuanmo.arcartxsuite.api.message.MessageProviderTest" time="0.014"/>
+  <testcase name="reload 后更新内容" classname="xuanmo.arcartxsuite.api.message.MessageProviderTest" time="0.015"/>
+  <testcase name="加载简单消息" classname="xuanmo.arcartxsuite.api.message.MessageProviderTest" time="0.012"/>
+  <testcase name="has 正确判断键是否存在" classname="xuanmo.arcartxsuite.api.message.MessageProviderTest" time="0.015"/>
+  <testcase name="文件不存在时 size 为 0" classname="xuanmo.arcartxsuite.api.message.MessageProviderTest" time="0.005"/>
+  <testcase name="占位符 {0} 被替换" classname="xuanmo.arcartxsuite.api.message.MessageProviderTest" time="0.01"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
