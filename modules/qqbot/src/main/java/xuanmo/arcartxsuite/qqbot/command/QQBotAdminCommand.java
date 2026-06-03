@@ -15,7 +15,7 @@ import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.QQBotBinding;
 
 public final class QQBotAdminCommand {
 
-    private static final List<String> SNOWLUMA_ACTIONS = List.of("start", "stop", "status", "install");
+    private static final List<String> SNOWLUMA_ACTIONS = List.of("start", "stop", "status", "install", "logs", "check-update");
 
     private final Supplier<QQBotService> serviceProvider;
     private final Supplier<QQBotRepository> repositoryProvider;
@@ -142,6 +142,8 @@ public final class QQBotAdminCommand {
             sender.sendMessage(fullMsg("admin.snowluma.stop"));
             sender.sendMessage(fullMsg("admin.snowluma.status"));
             sender.sendMessage(fullMsg("admin.snowluma.install"));
+            sender.sendMessage(fullMsg("admin.snowluma.logs"));
+            sender.sendMessage(fullMsg("admin.snowluma.check-update"));
             return;
         }
         String sub = args[2].toLowerCase();
@@ -152,6 +154,18 @@ public final class QQBotAdminCommand {
             case "install" -> {
                 sender.sendMessage(fullMsg("admin.snowluma.install-start"));
                 snowLuma.installAsync().thenAccept(result -> {
+                    sender.sendMessage((messages != null ? messages.get("prefix") : "") + result);
+                });
+            }
+            case "logs" -> {
+                String logOutput = snowLuma.logs();
+                for (String line : logOutput.split("\n")) {
+                    sender.sendMessage(line);
+                }
+            }
+            case "check-update" -> {
+                sender.sendMessage("&e正在检查 SnowLuma 版本...");
+                snowLuma.checkUpdateAsync().thenAccept(result -> {
                     sender.sendMessage((messages != null ? messages.get("prefix") : "") + result);
                 });
             }

@@ -144,14 +144,14 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             () -> service.onBotDisconnected()
         );
 
-        // 5. 注入 client + capability suppliers 并启动 Bukkit 监听
+        // 5. 注入 client + capability suppliers
         service.setClient(oneBotClient);
         service.setEssentialsProvider(() -> context.getCapability(
             xuanmo.arcartxsuite.api.capability.EssentialsQueryable.class));
         service.setMailProvider(() -> context.getCapability(
             xuanmo.arcartxsuite.api.capability.MailDispatchable.class));
 
-        // 5b. 签到积分服务
+        // 6. 签到积分服务
         signInService = new xuanmo.arcartxsuite.qqbot.service.QQBotSignInService(
             configuration, repository,
             () -> context.getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class),
@@ -160,21 +160,20 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         service.setSignInService(signInService);
         service.start();
 
-        // 6. SnowLuma 进程管理（必须在 WS 连接前启动）
+        // 7. SnowLuma 进程管理（必须在 WS 连接前启动）
         snowLumaManager = new SnowLumaProcessManager(
             java.nio.file.Path.of("").toAbsolutePath(),
-            configuration.onebot().snowLumaDir(),
-            configuration.onebot().snowLumaAutoStart(),
+            configuration.onebot().snowluma(),
             context.logger(),
             () -> configuration.debug()
         );
         snowLumaManager.init();
 
-        // 7. 等待 SnowLuma WS 端口就绪后再连接
+        // 8. 等待 SnowLuma WS 端口就绪后连接 OneBot
         if (snowLumaManager.getStatus() == xuanmo.arcartxsuite.qqbot.process.SnowLumaProcessManager.Status.RUNNING) {
             waitForPort(configuration.onebot().wsUrl(), 8000);
             oneBotClient.start();
-        } else if (configuration.onebot().snowLumaAutoStart()) {
+        } else if (configuration.onebot().snowluma().autoStart()) {
             context.logger().warning("[QQBot] SnowLuma 启动失败或已停止，OneBot 连接被跳过。" +
                 "请检查 SnowLuma 进程状态，或手动启动后执行 /axs qqbot reload");
         } else {
@@ -182,10 +181,10 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             oneBotClient.start();
         }
 
-        // 8. 注册管理命令
+        // 9. 注册管理命令
         adminCommand = new QQBotAdminCommand(() -> service, () -> repository, snowLumaManager, messages());
 
-        // 9. 注册 PlayerDataPurgeable capability
+        // 10. 注册 capability（PlayerDataPurgeable + DatabaseMigratable）
         JdbcQQBotRepository jdbcRepo = repository;
         context.registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
@@ -212,7 +211,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
                 }
             });
 
-        // 10a. 注册 QqBindCapable capability（供 loginview 等模块查询绑定状态）
+        // 11. 注册 QqBindCapable capability（供 loginview 等模块查询绑定状态）
         QQBotBindService bindSvc = bindService;
         context.registerCapability(xuanmo.arcartxsuite.api.capability.QqBindCapable.class,
             new xuanmo.arcartxsuite.api.capability.QqBindCapable() {
@@ -239,7 +238,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
                 }
             });
 
-        // 10b. 注册 QQBotBroadcastable capability
+        // 12. 注册 QQBotBroadcastable capability
         QQBotService svc = service;
         context.registerCapability(QQBotBroadcastable.class, new QQBotBroadcastable() {
             @Override
@@ -253,7 +252,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             }
         });
 
-        // 9b. 注册 QQBotNotifiable capability（反向通知）
+        // 13. 注册 QQBotNotifiable capability（反向通知）
         context.registerCapability(xuanmo.arcartxsuite.api.capability.QQBotNotifiable.class,
             new xuanmo.arcartxsuite.api.capability.QQBotNotifiable() {
                 @Override
@@ -266,7 +265,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
                 }
             });
 
-        // 10. 白名单登录门控
+        // 14. 白名单登录门控
         if (configuration.whitelistLogin().enabled()) {
             loginGateListener = new QQBotLoginGateListener(
                 context.plugin(), configuration, repository, context.accountTypeService(), context.logger()
@@ -277,7 +276,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
                 + " | 拒绝离线=" + configuration.whitelistLogin().denyOffline());
         }
 
-        // 11. UI 服务
+        // 15. UI 服务
         PacketBridgeAPI packetBridge = context.packetBridge();
         uiService = new QQBotUiService(
             context.plugin(), configuration, repository, bindService, packetBridge, context.logger()
@@ -324,7 +323,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             + " | UI=" + (bindUi != null ? "启用" : "禁用")
         );
 
-        // 12. 订阅 EventBus 事件（解耦播报）
+        // 16. 订阅 EventBus 事件（解耦播报）
         xuanmo.arcartxsuite.api.capability.EventBusCapability eventBus = context.getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class);
         if (eventBus != null) {
@@ -340,19 +339,19 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             });
         }
 
-        // 13. 服务器监控告警
+        // 17. 服务器监控告警
         monitorService = new xuanmo.arcartxsuite.qqbot.service.QQBotMonitorService(
             context.plugin(), configuration, svc::sendToGroup, context.logger()
         );
         monitorService.start();
 
-        // 14. 定时消息
+        // 18. 定时消息
         scheduledMessageService = new xuanmo.arcartxsuite.qqbot.service.QQBotScheduledMessageService(
             context.plugin(), configuration, svc::sendToGroup, context.logger()
         );
         scheduledMessageService.start();
 
-        // 15. 周结算排行榜
+        // 19. 周结算排行榜
         if (configuration.signin().enabled()) {
             weeklyRankService = new QQBotWeeklyRankService(
                 context.plugin(), configuration, repository, bindService, svc::sendToAllGroups, context.logger()
@@ -360,7 +359,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             weeklyRankService.start();
         }
 
-        // 16. 红包过期退款定时器（每小时检查一次）
+        // 20. 红包过期退款定时器（每小时检查一次）
         if (configuration.signin().enabled()) {
             Bukkit.getScheduler().runTaskTimerAsynchronously(context.plugin(),
                 () -> signInService.refundExpiredRedPackets(), 72000L, 72000L);
@@ -476,7 +475,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         try {
             java.net.URI uri = java.net.URI.create(wsUrl);
             String host = uri.getHost() != null ? uri.getHost() : "127.0.0.1";
-            int port = uri.getPort() > 0 ? uri.getPort() : 8080;
+            int port = uri.getPort() > 0 ? uri.getPort() : 80;
             long deadline = System.currentTimeMillis() + timeoutMs;
             context.logger().info("[QQBot] 等待 WS 端口 " + host + ":" + port + " 就绪...");
             while (System.currentTimeMillis() < deadline) {

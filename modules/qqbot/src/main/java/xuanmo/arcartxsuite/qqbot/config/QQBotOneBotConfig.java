@@ -5,6 +5,5 @@ public record QQBotOneBotConfig(
     String accessToken,
     int reconnectIntervalSeconds,
     int heartbeatIntervalSeconds,
-    String snowLumaDir,
-    boolean snowLumaAutoStart
+    QQBotSnowLumaConfig snowluma
 ) {}

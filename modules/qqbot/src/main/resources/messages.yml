@@ -51,12 +51,14 @@ admin:
     by-player-success: "&a玩家 &b{0}&a 绑定QQ: &e{1}"
     by-player-none: "&c玩家 &7{0}&c 未绑定。"
   snowluma:
-    title: "&bSnowLuma 进程管理:"
+    title: "&bSnowLuma 管理:"
     start: "&e  /axs qqbot snowluma start&7 - 启动 SnowLuma"
     stop: "&e  /axs qqbot snowluma stop&7 - 停止 SnowLuma"
     status: "&e  /axs qqbot snowluma status&7 - 查看状态"
-    install: "&e  /axs qqbot snowluma install&7 - 下载安装最新版"
-    install-start: "&e正在后台下载 SnowLuma，请稍候..."
+    install: "&e  /axs qqbot snowluma install&7 - 下载安装/部署"
+    logs: "&e  /axs qqbot snowluma logs&7 - 查看最近日志（Docker 模式）"
+    check-update: "&e  /axs qqbot snowluma check-update&7 - 检查是否有新版本"
+    install-start: "&e正在后台执行，请稍候..."
     unknown: "&c未知子命令: {0}"
 
 # ── player ────────────────────────────────────────────

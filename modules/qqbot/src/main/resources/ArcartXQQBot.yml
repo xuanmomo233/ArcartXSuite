@@ -21,12 +21,26 @@ onebot:
   reconnect-interval-seconds: 10
   # 心跳间隔（秒）
   heartbeat-interval-seconds: 30
-  # SnowLuma 进程管理（推荐的 OneBot 实现端）
+  # SnowLuma 进程/容器管理（推荐的 OneBot 实现端）
   snowluma:
-    # SnowLuma 安装目录（相对于服务端根目录）
+    # 运行模式: native（本地子进程）/ docker（Docker 容器，推荐 Linux VPS）
+    mode: "native"
+    # SnowLuma 安装目录（相对于服务端根目录，仅 native 模式）
     dir: "snowluma"
     # 模块启动时自动启动 SnowLuma（前提：已通过 install 安装）
     auto-start: false
+    # Docker 模式专用配置
+    docker:
+      # 容器名称
+      container-name: "snowluma"
+      # Docker 镜像
+      image: "motricseven7/snowluma:latest"
+      # 宿主机端口映射
+      webui-port: 5099
+      ws-port: 3001
+      http-port: 3000
+      # 是否自动拉取并运行容器（模块启动时若容器不存在则自动 install）
+      auto-install: false
 
 # ─── 监听的 QQ 群 ──────────────────────────────────────
 groups:

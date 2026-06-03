@@ -52,13 +52,46 @@ public record QQBotConfiguration(
         boolean debug = yaml.getBoolean("settings.debug", false);
         String serverId = yaml.getString("settings.server-id", "survival");
 
+        // ── SnowLuma 配置 ──
+        var snowlumaSection = yaml.getConfigurationSection("onebot.snowluma");
+        String snowlumaMode = "native";
+        String snowlumaDir = "snowluma";
+        boolean snowlumaAutoStart = false;
+        String dockerContainerName = "snowluma";
+        String dockerImage = "motricseven7/snowluma:latest";
+        int dockerWebUiPort = 5099;
+        int dockerWsPort = 3001;
+        int dockerHttpPort = 3000;
+        boolean dockerAutoInstall = false;
+
+        if (snowlumaSection != null) {
+            snowlumaMode = snowlumaSection.getString("mode", "native");
+            snowlumaDir = snowlumaSection.getString("dir", "snowluma");
+            snowlumaAutoStart = snowlumaSection.getBoolean("auto-start", false);
+            var dockerSection = snowlumaSection.getConfigurationSection("docker");
+            if (dockerSection != null) {
+                dockerContainerName = dockerSection.getString("container-name", "snowluma");
+                dockerImage = dockerSection.getString("image", "motricseven7/snowluma:latest");
+                dockerWebUiPort = dockerSection.getInt("webui-port", 5099);
+                dockerWsPort = dockerSection.getInt("ws-port", 3001);
+                dockerHttpPort = dockerSection.getInt("http-port", 3000);
+                dockerAutoInstall = dockerSection.getBoolean("auto-install", false);
+            }
+        }
+
+        QQBotSnowLumaConfig snowlumaConfig = new QQBotSnowLumaConfig(
+            snowlumaMode, snowlumaDir, snowlumaAutoStart,
+            dockerContainerName, dockerImage,
+            dockerWebUiPort, dockerWsPort, dockerHttpPort,
+            dockerAutoInstall
+        );
+
         QQBotOneBotConfig onebot = new QQBotOneBotConfig(
             yaml.getString("onebot.ws-url", "ws://127.0.0.1:8080"),
             yaml.getString("onebot.access-token", ""),
             yaml.getInt("onebot.reconnect-interval-seconds", 10),
             yaml.getInt("onebot.heartbeat-interval-seconds", 30),
-            yaml.getString("onebot.snowluma.dir", "snowluma"),
-            yaml.getBoolean("onebot.snowluma.auto-start", false)
+            snowlumaConfig
         );
 
         List<QQBotGroupConfig> groups = new ArrayList<>();
