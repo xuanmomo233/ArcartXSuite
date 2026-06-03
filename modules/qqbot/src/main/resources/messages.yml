@@ -60,6 +60,7 @@ admin:
     check-update: "&e  /axs qqbot snowluma check-update&7 - 检查是否有新版本"
     install-start: "&e正在后台执行，请稍候..."
     unknown: "&c未知子命令: {0}"
+    node-missing: "&c启动失败: 未检测到 Node.js 环境。SnowLuma 需要 Node.js 18+ 才能运行。\n&7• Windows: &fhttps://nodejs.org 下载安装\n&7• Linux: &fapt-get install -y nodejs / yum install -y nodejs\n&7• macOS: &fbrew install node\n&7安装完成后请执行 &f/axs qqbot reload&7 重载模块。"
 
 # ── player ────────────────────────────────────────────
 player:

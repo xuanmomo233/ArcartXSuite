@@ -26,6 +26,8 @@ public final class SnowLumaProcessManager {
     private final AtomicReference<Status> status = new AtomicReference<>(Status.STOPPED);
     private volatile Process process;
     private Thread outputThread;
+    private volatile Boolean nodeAvailable;
+    private volatile String nodeVersion;
 
     public SnowLumaProcessManager(Path serverRoot, QQBotSnowLumaConfig config, Logger logger, BooleanSupplier debugMode) {
         this.config = config;
@@ -40,9 +42,42 @@ public final class SnowLumaProcessManager {
             if (isInstalled()) { start(); }
             else { logger.info("[QQBot/SnowLuma] Docker: 未检测到容器 '" + config.dockerContainerName() + "'，请执行 install"); }
         } else {
+            if (!checkNodeEnvironment()) {
+                logger.warning("[QQBot/SnowLuma] 未检测到 Node.js 环境，SnowLuma 无法自动启动。"
+                    + "请先安装 Node.js 18+（Linux 示例: apt-get install -y nodejs），然后执行 /axs qqbot reload");
+                return;
+            }
             if (isInstalled()) { start(); }
             else { logger.info("[QQBot/SnowLuma] 未检测到安装目录，请执行 install"); }
         }
+    }
+
+    private boolean checkNodeEnvironment() {
+        return checkNodeEnvironment(false);
+    }
+
+    private boolean checkNodeEnvironment(boolean force) {
+        if (config.isDocker()) return true;
+        if (!force && nodeAvailable != null) return nodeAvailable;
+        nodeAvailable = null;
+        try {
+            ProcessBuilder pb = new ProcessBuilder("node", "--version");
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            boolean ok = p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+            if (ok && p.exitValue() == 0) {
+                String v = readAll(p.getInputStream()).trim();
+                if (!v.isEmpty() && v.startsWith("v")) {
+                    nodeVersion = v;
+                    nodeAvailable = true;
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            if (debugMode.getAsBoolean()) logger.info("[QQBot/SnowLuma] Node.js 检测异常: " + e.getMessage());
+        }
+        nodeAvailable = false;
+        return false;
     }
 
     public Status getStatus() {
@@ -177,6 +212,14 @@ public final class SnowLumaProcessManager {
             return "SnowLuma 已在运行中 (PID: "+process.pid()+")";
         if (status.get()==Status.INSTALLING) return "正在安装中，请稍后再试";
         if (!isInstalled()) return "SnowLuma 未安装，请先 install";
+        if (!checkNodeEnvironment(true)) {
+            return "启动失败: 未检测到 Node.js 环境。SnowLuma 需要 Node.js 18+ 才能运行。\n"
+                + "请根据操作系统选择安装方式:\n"
+                + "• Windows: 访问 https://nodejs.org 下载安装包\n"
+                + "• Linux: 运行 'apt-get install -y nodejs' 或 'yum install -y nodejs'\n"
+                + "• macOS: 运行 'brew install node'\n"
+                + "安装完成后请执行 /axs qqbot reload 重载模块。";
+        }
         String cleanup = killResidue(); if (cleanup!=null) logger.info("[QQBot/SnowLuma] "+cleanup);
         status.set(Status.STARTING);
         try {
@@ -316,9 +359,11 @@ public final class SnowLumaProcessManager {
 
     private String statusReportNative() {
         Status s = getStatus(); String localVer = getLocalVersion();
+        checkNodeEnvironment(true);
         StringBuilder sb = new StringBuilder("§6[SnowLuma 状态]\n");
         sb.append("§7  安装目录: §f").append(installDir).append("\n");
         sb.append("§7  本地版本: §f").append(localVer != null ? localVer : "未知").append("\n");
+        sb.append("§7  Node.js: §f").append(nodeVersion != null ? nodeVersion : "未检测到").append("\n");
         sb.append("§7  已安装: §f").append(isInstalled()?"是":"否").append("\n");
         sb.append("§7  状态: §f").append(s.name()).append("\n");
         if (s==Status.RUNNING && process!=null) sb.append("§7  PID: §f").append(process.pid()).append("\n");

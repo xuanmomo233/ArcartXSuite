@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.loginview.config;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
@@ -47,6 +48,21 @@ public record LoginViewModuleConfiguration(
         return value == null || value.trim().isEmpty() ? fallback : value.trim();
     }
 
+    private static List<String> strings(ConfigurationSection section, String path, List<String> fallback) {
+        if (section == null) {
+            return fallback;
+        }
+        if (section.isList(path)) {
+            List<String> list = section.getStringList(path);
+            return list == null || list.isEmpty() ? fallback : list;
+        }
+        String value = section.getString(path);
+        if (value != null && !value.trim().isEmpty()) {
+            return List.of(value.trim());
+        }
+        return fallback;
+    }
+
     private static boolean bool(ConfigurationSection section, String path, boolean fallback) {
         return section == null ? fallback : section.getBoolean(path, fallback);
     }
@@ -75,14 +91,18 @@ public record LoginViewModuleConfiguration(
         boolean enabled,
         boolean microsoftRequireBind,
         boolean littleskinRequireBind,
-        String bindPrompt
+        List<String> bindPrompt
     ) {
         private static QqBindingConfiguration load(ConfigurationSection section) {
             return new QqBindingConfiguration(
                 bool(section, "enabled", true),
                 bool(section, "microsoft-require-bind", false),
                 bool(section, "littleskin-require-bind", true),
-                string(section, "bind-prompt", "&e你尚未绑定 QQ\n&7请在 QQ 群发送: #绑定 {name}\n&7获取验证码后在下方输入")
+                strings(section, "bind-prompt", List.of(
+                    "&e你尚未绑定 QQ",
+                    "&7请在 QQ 群发送: #绑定 {name}",
+                    "&7获取验证码后在下方输入"
+                ))
             );
         }
     }

@@ -31,9 +31,10 @@ qq-binding:
   # LittleSkin 账号是否需要绑定 QQ 才能进入游戏
   littleskin-require-bind: true
   # 未绑定 QQ 的正版/LittleSkin 玩家在登录面板看到的提示
-  bind-prompt: '&e你尚未绑定 QQ
-&7请在 QQ 群发送: #绑定 {name}
-&7获取验证码后在下方输入'
+  bind-prompt: 
+    - '&e你尚未绑定 QQ'
+    - '&7请在 QQ 群发送: #绑定 {name}'
+    - '&7获取验证码后在下方输入'
 
 ui:
   ui-id: AXS:LoginView

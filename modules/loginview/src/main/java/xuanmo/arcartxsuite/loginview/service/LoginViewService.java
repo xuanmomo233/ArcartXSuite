@@ -197,7 +197,7 @@ public final class LoginViewService implements Listener {
             };
             // 若该账号类型不要求绑定，逻辑视为已绑定，前端直接显示「进入服务器」
             boolean effectiveQqBound = qqBound || !requireBind;
-            String prompt = effectiveQqBound ? null : configuration.qqBinding().bindPrompt();
+            String prompt = effectiveQqBound ? null : String.join("\n", configuration.qqBinding().bindPrompt());
             packetBridge.sendPacket(player, uiId, "init",
                 buildInitPayload(player, true, false, true, effectiveQqBound, prompt));
         } else {

@@ -261,7 +261,7 @@ controls:
               texts: "~&f退出游戏"
               center: true
               fontSize: 36
-              visible: var.type != 'bypass'
+              visible: var.type == 'login' || var.type == 'register' || var.type == 'change'
             action:
               clickLeft: |-
                 Game.quit()
