@@ -223,19 +223,29 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
      * @throws IOException 网络异常或非预期 HTTP 状态（如 429 限流），调用方据此跳过缓存
      */
     private String queryOfficialUuid(String name) throws IOException {
-        // 优先尝试新版微软 API（带重试），失败后回退旧版 Mojang API
+        // 优先尝试旧版 Mojang API（authlib-injector 通常已代理，连通性更好），
+        // 失败后回退新版微软 API（带重试）。
+        try {
+            if (debug) {
+                logger.fine("[AccountType] 尝试旧版 API: " + name);
+            }
+            return queryOfficialUuidFrom(name, MOJANG_LEGACY_API);
+        } catch (IOException e) {
+            if (debug) {
+                logger.fine("[AccountType] 旧版 API 查询失败 (" + name + "): " + e.getMessage() + "，尝试新版 API");
+            }
+        }
         IOException lastException = null;
         for (int attempt = 0; attempt < 3; attempt++) {
             if (attempt > 0) {
                 try {
                     Thread.sleep(500);
-                } catch (InterruptedException e) {
+                } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                     break;
                 }
             }
             try {
-                // 新版 API 返回 UUID（200）或空串（204/404 已确认不存在），均直接返回
                 return queryOfficialUuidFrom(name, MOJANG_PROFILE_API);
             } catch (IOException e) {
                 lastException = e;
@@ -244,10 +254,7 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
                 }
             }
         }
-        if (debug) {
-            logger.fine("[AccountType] 新版 API 重试耗尽，尝试旧版 API");
-        }
-        return queryOfficialUuidFrom(name, MOJANG_LEGACY_API);
+        throw lastException != null ? lastException : new IOException("Mojang API 查询全部失败");
     }
 
     /**
