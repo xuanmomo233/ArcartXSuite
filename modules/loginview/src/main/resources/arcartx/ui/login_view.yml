@@ -145,7 +145,7 @@ controls:
             attribute:
               x: 42
               y: 124
-              texts: "'&8时间 ' + var.time"
+              texts: "'&f时间: ' + Placeholder.parse('%server_time_yyyy年MM月dd日hh:mm:ss%')"
               fontSize: 28
           登录提示:
             type: Text

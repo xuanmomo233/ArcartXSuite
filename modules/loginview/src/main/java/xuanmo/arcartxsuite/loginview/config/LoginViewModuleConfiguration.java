@@ -9,7 +9,7 @@ import org.bukkit.configuration.file.FileConfiguration;
 public record LoginViewModuleConfiguration(
     boolean debug,
     AuthMode authMode,
-    PremiumBypassConfiguration premiumBypass,
+    BypassWelcomeConfiguration bypassWelcome,
     QqBindingConfiguration qqBinding,
     UiConfiguration ui,
     SecurityConfiguration security,
@@ -24,13 +24,13 @@ public record LoginViewModuleConfiguration(
         ConfigurationSection storageSection = configuration.getConfigurationSection("storage");
         ConfigurationSection migrationSection = configuration.getConfigurationSection("authme-migration");
         ConfigurationSection messagesSection = configuration.getConfigurationSection("messages");
-        ConfigurationSection premiumSection = configuration.getConfigurationSection("auth.premium-bypass");
+        ConfigurationSection bypassWelcomeSection = configuration.getConfigurationSection("auth.bypass-welcome");
         ConfigurationSection qqBindingSection = configuration.getConfigurationSection("qq-binding");
 
         return new LoginViewModuleConfiguration(
             configuration.getBoolean("debug", false),
             AuthMode.parse(configuration.getString("auth.mode", "standalone"), logger),
-            PremiumBypassConfiguration.load(premiumSection),
+            BypassWelcomeConfiguration.load(bypassWelcomeSection),
             QqBindingConfiguration.load(qqBindingSection),
             UiConfiguration.load(uiSection),
             SecurityConfiguration.load(securitySection),
@@ -75,13 +75,11 @@ public record LoginViewModuleConfiguration(
         return Math.max(min, section == null ? fallback : section.getLong(path, fallback));
     }
 
-    public record PremiumBypassConfiguration(
-        boolean enabled,
+    public record BypassWelcomeConfiguration(
         String message
     ) {
-        private static PremiumBypassConfiguration load(ConfigurationSection section) {
-            return new PremiumBypassConfiguration(
-                bool(section, "enabled", false),
+        private static BypassWelcomeConfiguration load(ConfigurationSection section) {
+            return new BypassWelcomeConfiguration(
                 string(section, "message", "&a\u8eab\u4efd\u5df2\u9a8c\u8bc1\uff0c\u6b22\u8fce\u56de\u6765\u3002")
             );
         }

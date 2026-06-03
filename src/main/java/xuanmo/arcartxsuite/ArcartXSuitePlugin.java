@@ -38,6 +38,7 @@ import xuanmo.arcartxsuite.license.LicenseService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import xuanmo.arcartxsuite.chat.ChatSignBypassService;
 import xuanmo.arcartxsuite.keybind.KeybindService;
 import xuanmo.arcartxsuite.module.ModuleRegistry;
 import xuanmo.arcartxsuite.module.PluginConsoleLogger;
@@ -78,6 +79,7 @@ public class ArcartXSuitePlugin extends JavaPlugin {
     private VersionCheckService versionCheckService;
     private xuanmo.arcartxsuite.auth.AuthlibInjectorManager authlibInjectorManager;
     private xuanmo.arcartxsuite.auth.AuthCommand authCommand;
+    private ChatSignBypassService chatSignBypassService;
     /** 宿主自身的 spec（config.yml） */
     private final List<ModuleConfigSpec> hostConfigSpecs = new ArrayList<>();
     /** 外部模块提交的 spec： ownerId -> (spec, classLoader) */
@@ -149,7 +151,12 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         registerClientCustomPacketListener();
         registerClientInitializedListener();
 
-        // 7. ModuleRegistry：扫描并加载所有外部模块
+        // 7. 聊天签名绕过（Paper 1.21+ 混合登录兼容）
+        boolean chatSignBypassEnabled = getConfig().getBoolean("chat-sign-bypass.enabled", true);
+        chatSignBypassService = new ChatSignBypassService(this, chatSignBypassEnabled);
+        chatSignBypassService.initialize();
+
+        // 8. ModuleRegistry：扫描并加载所有外部模块
         moduleRegistry = new ModuleRegistry(
             this,
             new File(getDataFolder(), "modules"),
@@ -369,6 +376,10 @@ public class ArcartXSuitePlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         // 注意：本地混合代理是独立进程，由 start-mixed-auth 脚本管理，此处无需停止。
+        if (chatSignBypassService != null) {
+            chatSignBypassService.shutdown();
+            chatSignBypassService = null;
+        }
         if (heartbeatService != null) {
             heartbeatService.stop();
             heartbeatService = null;

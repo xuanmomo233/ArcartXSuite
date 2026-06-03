@@ -110,12 +110,8 @@ public final class LoginViewService implements Listener {
             return;
         }
         boolean authlibAgentLoaded = accountTypeService.isAuthlibInjectorLoaded();
-        if (configuration.premiumBypass().enabled()) {
-            if (!authlibAgentLoaded) {
-                plugin.getLogger().warning("LoginView premium-bypass 已启用，但未检测到 authlib-injector，正版/LittleSkin 免登录当前不可用。");
-            } else {
-                plugin.getLogger().info("LoginView premium-bypass: authlib-injector 已检测到，正版/LittleSkin 免登录已启用。");
-            }
+        if (authlibAgentLoaded) {
+            plugin.getLogger().info("LoginView: authlib-injector 已检测到，正版/LittleSkin 免登录由 AccountTypeService 管理。");
         }
         Bukkit.getPluginManager().registerEvents(this, plugin);
         started = true;
@@ -190,21 +186,21 @@ public final class LoginViewService implements Listener {
 
         if (premium) {
             // 微软正版 / LittleSkin：显示 bypass 类视图
-            boolean requireBind = switch (type) {
+            boolean requireBind = configuration.qqBinding().enabled() && switch (type) {
                 case MICROSOFT -> configuration.qqBinding().microsoftRequireBind();
                 case LITTLESKIN -> configuration.qqBinding().littleskinRequireBind();
                 default -> false;
             };
             // 若该账号类型不要求绑定，逻辑视为已绑定，前端直接显示「进入服务器」
             boolean effectiveQqBound = qqBound || !requireBind;
-            String prompt = effectiveQqBound ? null : String.join("\n", configuration.qqBinding().bindPrompt());
+            List<String> promptLines = effectiveQqBound ? null : configuration.qqBinding().bindPrompt();
             packetBridge.sendPacket(player, uiId, "init",
-                buildInitPayload(player, true, false, true, effectiveQqBound, prompt));
+                buildInitPayload(player, true, false, true, effectiveQqBound, promptLines));
         } else {
             // 离线玩家（若认证层未拦住则 fallback 到密码登录）
             packetBridge.sendPacket(player, uiId, "init",
                 buildInitPayload(player, registered, authenticated && force, false, false,
-                    color("&e请先完成登录验证")));
+                    List.of(color("&e请先完成登录验证"))));
         }
     }
 
@@ -336,7 +332,7 @@ public final class LoginViewService implements Listener {
             return;
         }
         authenticatedPlayers.add(player.getUniqueId());
-        completeLogin(player, color(configuration.premiumBypass().message()));
+        completeLogin(player, color(configuration.bypassWelcome().message()));
         dispatchLoginSignal(player, "premium_bypass");
     }
 
@@ -483,7 +479,7 @@ public final class LoginViewService implements Listener {
         });
     }
 
-    private Map<String, Object> buildInitPayload(Player player, boolean registered, boolean changeMode, boolean premiumBypass, boolean qqBound, String bindPrompt) {
+    private Map<String, Object> buildInitPayload(Player player, boolean registered, boolean changeMode, boolean premiumBypass, boolean qqBound, List<String> bindPrompt) {
         Server server = plugin.getServer();
         Map<String, Object> payload = new HashMap<>();
         payload.put("packetId", configuration.ui().packetId());
@@ -508,7 +504,7 @@ public final class LoginViewService implements Listener {
         payload.put("registered", registered);
         payload.put("premiumBypass", premiumBypass);
         payload.put("qqBound", qqBound);
-        payload.put("bindPrompt", bindPrompt == null ? "" : bindPrompt);
+        payload.put("bindPrompt", bindPrompt == null ? List.of() : bindPrompt);
         payload.put("playerName", player.getName());
         payload.put("serverName", server.getName());
         payload.put("online", server.getOnlinePlayers().size());

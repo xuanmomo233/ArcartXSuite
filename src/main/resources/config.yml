@@ -46,6 +46,16 @@ tacz-compat:
   enabled: true
   debug: false
 
+# ========== 聊天签名绕过（Paper 1.21+ 混合登录兼容）==========
+# Paper 1.21+ 引入了安全聊天验证（secure-chat validation），
+# LittleSkin / 离线玩家的聊天消息没有 Mojang 签名，会被 Paper 拒绝并提示
+# "Chat message validation failure"。
+# 启用后，AXS 会在玩家加入时自动移除 Paper 对该玩家的签名验证路径，
+# 让混合登录玩家与离线玩家正常发送聊天消息。
+# 若服务器仅使用微软正版账号（无 LittleSkin / 离线），可关闭此选项。
+chat-sign-bypass:
+  enabled: true
+
 # ========== 账号识别（统一服务）==========
 # 微软正版 / LittleSkin / 离线账号判定，由本体统一提供，供 loginview、qqbot、eventpacket 共享。
 # 该服务在玩家预登录（AsyncPlayerPreLogin）阶段于异步线程预热缓存，避免主线程阻塞网络请求。
