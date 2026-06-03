@@ -7,6 +7,8 @@ import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -37,6 +39,7 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
 
     private static final String AUTHLIB_AGENT_CLASS = "moe.yushi.authlibinjector.AuthlibInjector";
     private static final String MOJANG_PROFILE_API = "https://api.minecraftservices.com/minecraft/profile/lookup/name/";
+    private static final String MOJANG_PROFILE_BY_UUID_API = "https://api.minecraftservices.com/minecraft/profile/lookup/";
     private static final String MOJANG_LEGACY_API = "https://api.mojang.com/users/profiles/minecraft/";
 
     private final Logger logger;
@@ -44,18 +47,22 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
     private final int mojangTimeoutMs;
     private final boolean debug;
     private final boolean authlibInjectorLoaded;
+    private final Proxy proxy;
 
     /** UUID -> 已确定（含网络查询）的账号类型缓存 */
     private final ConcurrentMap<UUID, AccountType> accountTypeCache = new ConcurrentHashMap<>();
     /** 玩家名(小写) -> Mojang 官方 UUID（空串表示已确认不存在；网络失败不缓存） */
     private final ConcurrentMap<String, String> officialUuidCache = new ConcurrentHashMap<>();
 
-    public AccountTypeServiceImpl(Logger logger, boolean enableMojangLookup, int mojangTimeoutMs, boolean debug) {
+    public AccountTypeServiceImpl(Logger logger, boolean enableMojangLookup, int mojangTimeoutMs, boolean debug, String proxyHost, int proxyPort) {
         this.logger = logger;
         this.enableMojangLookup = enableMojangLookup;
         this.mojangTimeoutMs = Math.max(1000, mojangTimeoutMs);
         this.debug = debug;
         this.authlibInjectorLoaded = detectAuthlibInjector();
+        this.proxy = (proxyHost != null && !proxyHost.isBlank() && proxyPort > 0)
+            ? new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort))
+            : Proxy.NO_PROXY;
     }
 
     @Override
@@ -148,6 +155,19 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
                 // 玩家名在 Mojang 存在但 UUID 不同 = LittleSkin（名字恰好与正版相同）
                 return AccountType.LITTLESKIN;
             }
+
+            // 名字查询返回空串（可能为超时或 404）→ UUID 反查兜底
+            Boolean uuidExists = queryOfficialByUuid(uuid);
+            if (uuidExists != null) {
+                if (uuidExists) {
+                    return AccountType.MICROSOFT;
+                }
+                // UUID 反查确认不是正版
+                if (uuid.version() == 4) {
+                    return AccountType.LITTLESKIN;
+                }
+                return AccountType.OFFLINE;
+            }
         }
 
         // 玩家名不在 Mojang（或未启用 Mojang 查询）
@@ -203,24 +223,80 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
      * @throws IOException 网络异常或非预期 HTTP 状态（如 429 限流），调用方据此跳过缓存
      */
     private String queryOfficialUuid(String name) throws IOException {
-        // 优先尝试新版微软 API，失败后回退旧版 Mojang API
+        // 优先尝试新版微软 API（带重试），失败后回退旧版 Mojang API
+        IOException lastException = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            if (attempt > 0) {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+            try {
+                // 新版 API 返回 UUID（200）或空串（204/404 已确认不存在），均直接返回
+                return queryOfficialUuidFrom(name, MOJANG_PROFILE_API);
+            } catch (IOException e) {
+                lastException = e;
+                if (debug) {
+                    logger.fine("[AccountType] 新版 API 查询失败 (" + name + ") 第" + (attempt + 1) + "次: " + e.getMessage());
+                }
+            }
+        }
+        if (debug) {
+            logger.fine("[AccountType] 新版 API 重试耗尽，尝试旧版 API");
+        }
+        return queryOfficialUuidFrom(name, MOJANG_LEGACY_API);
+    }
+
+    /**
+     * 通过 UUID 反查 Mojang API，确认该 UUID 是否属于微软正版。
+     *
+     * @return true=微软正版（200）, false=非正版（404/204）, null=查询失败（网络异常）
+     */
+    private Boolean queryOfficialByUuid(UUID uuid) {
+        if (uuid == null) {
+            return null;
+        }
+        String urlStr = MOJANG_PROFILE_BY_UUID_API + uuid.toString().replace("-", "");
         try {
-            String result = queryOfficialUuidFrom(name, MOJANG_PROFILE_API);
-            if (!result.isBlank()) {
-                return result;
+            URL url = new URL(urlStr);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection(proxy);
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(mojangTimeoutMs);
+            conn.setReadTimeout(mojangTimeoutMs);
+            conn.setRequestProperty("User-Agent", "ArcartXSuite-AccountType");
+            try {
+                int code = conn.getResponseCode();
+                if (code == 200) {
+                    if (debug) {
+                        logger.fine("[AccountType] UUID 反查确认正版: " + uuid);
+                    }
+                    return true;
+                }
+                if (code == 204 || code == 404) {
+                    if (debug) {
+                        logger.fine("[AccountType] UUID 反查确认非正版: " + uuid);
+                    }
+                    return false;
+                }
+                throw new IOException("非预期 HTTP 状态: " + code);
+            } finally {
+                conn.disconnect();
             }
         } catch (IOException e) {
             if (debug) {
-                logger.fine("[AccountType] 新版 API 查询失败 (" + name + "): " + e.getMessage() + "，尝试旧版 API");
+                logger.warning("[AccountType] UUID 反查失败 (" + uuid + "): " + e.getMessage());
             }
+            return null;
         }
-        return queryOfficialUuidFrom(name, MOJANG_LEGACY_API);
     }
 
     private String queryOfficialUuidFrom(String name, String baseUrl) throws IOException {
         String encoded = URLEncoder.encode(name, StandardCharsets.UTF_8);
         URL url = new URL(baseUrl + encoded);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection(proxy);
         conn.setRequestMethod("GET");
         conn.setConnectTimeout(mojangTimeoutMs);
         conn.setReadTimeout(mojangTimeoutMs);

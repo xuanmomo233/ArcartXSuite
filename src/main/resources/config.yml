@@ -70,7 +70,11 @@ account-type:
   # 关闭后仅按 UUID 版本判定（v4=LittleSkin，v3=离线），将无法识别微软正版账号。
   enable-mojang-lookup: true
   # Mojang API 请求超时（毫秒）。
-  mojang-timeout-ms: 5000
+  mojang-timeout-ms: 10000
+  # Mojang API 代理配置（中国大陆网络环境建议配置）。
+  # 例如：mojang-proxy-host: "127.0.0.1"  mojang-proxy-port: 10809
+  mojang-proxy-host: ""
+  mojang-proxy-port: 0
   # 是否输出账号判定调试日志。
   debug: false
 

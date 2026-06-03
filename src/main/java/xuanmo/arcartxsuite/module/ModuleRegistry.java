@@ -747,9 +747,11 @@ public final class ModuleRegistry {
         YamlConfiguration rootConfig = loadRootConfig();
         org.bukkit.configuration.ConfigurationSection section = rootConfig.getConfigurationSection("account-type");
         boolean enableLookup = section == null || section.getBoolean("enable-mojang-lookup", true);
-        int timeoutMs = section == null ? 5000 : section.getInt("mojang-timeout-ms", 5000);
+        int timeoutMs = section == null ? 10000 : section.getInt("mojang-timeout-ms", 10000);
         boolean debug = section != null && section.getBoolean("debug", false);
-        accountTypeService = new AccountTypeServiceImpl(plugin.getLogger(), enableLookup, timeoutMs, debug);
+        String proxyHost = section == null ? null : section.getString("mojang-proxy-host", null);
+        int proxyPort = section == null ? 0 : section.getInt("mojang-proxy-port", 0);
+        accountTypeService = new AccountTypeServiceImpl(plugin.getLogger(), enableLookup, timeoutMs, debug, proxyHost, proxyPort);
         Bukkit.getPluginManager().registerEvents(accountTypeService, plugin);
         LOGGER.fine("统一账号识别服务已就绪 | Mojang查询=" + enableLookup
             + " | 超时=" + timeoutMs + "ms | authlib-injector=" + accountTypeService.isAuthlibInjectorLoaded());

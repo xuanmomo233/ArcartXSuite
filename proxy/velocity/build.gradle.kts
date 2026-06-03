@@ -37,6 +37,7 @@ tasks.shadowJar {
 }
 
 val publishProxyJar by tasks.registering {
+    dependsOn(tasks.jar)
     dependsOn(tasks.shadowJar)
     val src = tasks.shadowJar.get().archiveFile.get().asFile
     val dst = rootProject.layout.buildDirectory.dir("ArcartXSuite/proxy").get().file(src.name).asFile
