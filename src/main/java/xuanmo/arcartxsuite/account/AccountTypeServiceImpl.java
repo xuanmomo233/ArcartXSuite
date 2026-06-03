@@ -48,13 +48,15 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
     private final boolean debug;
     private final boolean authlibInjectorLoaded;
     private final Proxy proxy;
+    /** 本地混合代理端口（<= 0 表示未启用混合登录，跳过代理权威查询）。 */
+    private final int mixedProxyPort;
 
     /** UUID -> 已确定（含网络查询）的账号类型缓存 */
     private final ConcurrentMap<UUID, AccountType> accountTypeCache = new ConcurrentHashMap<>();
     /** 玩家名(小写) -> Mojang 官方 UUID（空串表示已确认不存在；网络失败不缓存） */
     private final ConcurrentMap<String, String> officialUuidCache = new ConcurrentHashMap<>();
 
-    public AccountTypeServiceImpl(Logger logger, boolean enableMojangLookup, int mojangTimeoutMs, boolean debug, String proxyHost, int proxyPort) {
+    public AccountTypeServiceImpl(Logger logger, boolean enableMojangLookup, int mojangTimeoutMs, boolean debug, String proxyHost, int proxyPort, int mixedProxyPort) {
         this.logger = logger;
         this.enableMojangLookup = enableMojangLookup;
         this.mojangTimeoutMs = Math.max(1000, mojangTimeoutMs);
@@ -63,6 +65,7 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
         this.proxy = (proxyHost != null && !proxyHost.isBlank() && proxyPort > 0)
             ? new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort))
             : Proxy.NO_PROXY;
+        this.mixedProxyPort = mixedProxyPort;
     }
 
     @Override
@@ -140,8 +143,18 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
             return AccountType.OFFLINE;
         }
 
+        // 优先：查本地混合代理的权威认证来源。
+        // 玩家进服时 hasJoined 走本地代理，LittleSkin/Mojang 哪个命中就是哪种账号，
+        // 这是 100% 准确的真实认证结果，且为本机查询（毫秒级），无需依赖外部 Mojang API。
+        if (allowNetwork && mixedProxyPort > 0) {
+            AccountType proxyResult = queryProxyAccountSource(uuid);
+            if (proxyResult != null) {
+                return proxyResult;
+            }
+        }
+
         // 微软正版与 LittleSkin 都可能为 v4 UUID，不能仅凭版本号区分。
-        // 必须通过 Mojang API 比较当前 UUID 与官方 UUID。
+        // 非混合模式（或代理无记录）时回退：通过 Mojang API 比较当前 UUID 与官方 UUID。
         // 关键事实：
         //   - 微软正版玩家的 UUID = Mojang 官方 UUID（无论是否通过 authlib-injector 登录）
         //   - LittleSkin 玩家的 UUID 由 yggdrasil 认证服务器分配，通常与官方 UUID 不同
@@ -177,6 +190,64 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
         }
         // v3 且不在 Mojang：离线
         return AccountType.OFFLINE;
+    }
+
+    /**
+     * 查询本地混合代理记录的权威认证来源。
+     * <p>玩家进服时 hasJoined 走本地代理，代理已记录该 UUID 是 LittleSkin 还是 Mojang 命中。
+     * 本机查询（localhost），毫秒级，且 100% 准确。
+     *
+     * @return {@link AccountType#MICROSOFT} / {@link AccountType#LITTLESKIN}；
+     *         代理无记录（404）、未启动（连接拒绝）或异常时返回 {@code null}
+     */
+    private AccountType queryProxyAccountSource(UUID uuid) {
+        String urlStr = "http://127.0.0.1:" + mixedProxyPort + "/axs-internal/account-source?uuid="
+            + uuid.toString().replace("-", "");
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL(urlStr);
+            conn = (HttpURLConnection) url.openConnection(Proxy.NO_PROXY);
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(2000);
+            conn.setReadTimeout(2000);
+            conn.setRequestProperty("User-Agent", "ArcartXSuite-AccountType");
+            int code = conn.getResponseCode();
+            if (code != 200) {
+                return null;
+            }
+            try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
+                String source = extractJsonString(response.toString(), "source");
+                if ("microsoft".equalsIgnoreCase(source)) {
+                    if (debug) {
+                        logger.fine("[AccountType] 代理权威结果: " + uuid + " -> microsoft");
+                    }
+                    return AccountType.MICROSOFT;
+                }
+                if ("littleskin".equalsIgnoreCase(source)) {
+                    if (debug) {
+                        logger.fine("[AccountType] 代理权威结果: " + uuid + " -> littleskin");
+                    }
+                    return AccountType.LITTLESKIN;
+                }
+                return null;
+            }
+        } catch (IOException e) {
+            // 代理未启动（连接拒绝）属正常情况：非混合模式或代理尚未就绪，回退 Mojang API
+            if (debug) {
+                logger.fine("[AccountType] 代理查询跳过 (" + uuid + "): " + e.getMessage());
+            }
+            return null;
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
+        }
     }
 
     private static boolean uuidEqualsIgnoreDashes(UUID uuid, String other) {

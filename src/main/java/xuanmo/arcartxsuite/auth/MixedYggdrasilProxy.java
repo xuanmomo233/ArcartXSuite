@@ -14,6 +14,9 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Formatter;
@@ -42,6 +45,19 @@ public class MixedYggdrasilProxy {
     private static final String MOJANG_SESSION = "https://sessionserver.mojang.com";
     /** Yggdrasil 规范的 sessionserver 路径前缀；Mojang 官方端点无此前缀。 */
     private static final String SESSION_PREFIX = "/sessionserver";
+    /** 内部账号来源查询 endpoint（供主进程 AccountTypeService 查询权威认证结果）。 */
+    private static final String INTERNAL_SOURCE_PATH = "/axs-internal/account-source";
+    /** 认证来源标记：微软正版（Mojang 命中）。 */
+    private static final String SOURCE_MICROSOFT = "microsoft";
+    /** 认证来源标记：LittleSkin。 */
+    private static final String SOURCE_LITTLESKIN = "littleskin";
+
+    /**
+     * 玩家认证来源权威记录：无横线小写 UUID -> source。
+     * <p>在 hasJoined / profile 命中时写入，是玩家实际认证链路的真实结果，
+     * 比主进程事后猜测 Mojang API 更准确。
+     */
+    private final ConcurrentMap<String, String> accountSource = new ConcurrentHashMap<>();
 
     private final Logger logger;
     private final boolean debug;
@@ -78,7 +94,7 @@ public class MixedYggdrasilProxy {
             port = server.getAddress().getPort();
             logger.info("[MixedProxy] 本地 Yggdrasil 混合代理已启动: http://127.0.0.1:" + port);
             if (debug) {
-                logger.info("[MixedProxy] hasJoined 顺序: LittleSkin -> Mojang");
+                logger.info("[MixedProxy] hasJoined 顺序: Mojang -> LittleSkin");
             }
             return port;
         } catch (IOException e) {
@@ -125,7 +141,13 @@ public class MixedYggdrasilProxy {
                 logger.info("[MixedProxy] 收到 " + exchange.getRequestMethod() + " " + fullPath);
             }
 
-            // sessionserver 的 hasJoined / profile 查询需要 LittleSkin -> Mojang fallback
+            // 内部账号来源查询（仅供本机主进程调用）
+            if (path.startsWith(INTERNAL_SOURCE_PATH)) {
+                handleInternalSourceQuery(exchange, query);
+                return;
+            }
+
+            // sessionserver 的 hasJoined / profile 查询需要 Mojang -> LittleSkin fallback
             // （仅 GET，符合 Yggdrasil 规范）
             if ("GET".equalsIgnoreCase(exchange.getRequestMethod())
                 && (path.startsWith("/sessionserver/session/minecraft/hasJoined")
@@ -140,29 +162,21 @@ public class MixedYggdrasilProxy {
     }
 
     /**
-     * 处理 sessionserver 的 hasJoined / profile 查询，先 LittleSkin 后 Mojang fallback。
+     * 处理 sessionserver 的 hasJoined / profile 查询，先 Mojang 后 LittleSkin fallback。
      * <p>
      * Yggdrasil 规范路径为 {root}/sessionserver/session/minecraft/...，
      * 而 Mojang 官方端点无 /sessionserver 前缀（即 /session/minecraft/...），
-     * 因此 fallback 到 Mojang 时必须移除该前缀，否则会请求到不存在的路径。
+     * 因此查询 Mojang 时必须移除该前缀，否则会请求到不存在的路径。
      */
     private void handleSessionWithFallback(HttpExchange exchange, String fullPath) throws IOException {
-        // 1. 先尝试 LittleSkin（保留完整 Yggdrasil 路径）
-        String response = tryFetch(LITTLESKIN_BASE + fullPath);
-        if (response != null) {
-            if (debug) {
-                logger.info("[MixedProxy] LittleSkin 命中 -> 200");
-            }
-            sendJson(exchange, 200, response);
-            return;
-        }
-
-        // 2. fallback 到 Mojang 官方（移除 /sessionserver 前缀）
+        // 1. 先尝试 Mojang 官方（移除 /sessionserver 前缀；hasJoined 基于 serverId 加密握手
+        //    哈希验证，Mojang 仅对真正用微软账号登录的玩家返回 200，命中即微软正版）
         String mojangPath = fullPath.startsWith(SESSION_PREFIX)
             ? fullPath.substring(SESSION_PREFIX.length())
             : fullPath;
-        response = tryFetch(MOJANG_SESSION + mojangPath);
+        String response = tryFetch(MOJANG_SESSION + mojangPath);
         if (response != null) {
+            recordSource(response, SOURCE_MICROSOFT);
             if (debug) {
                 logger.info("[MixedProxy] Mojang 命中 -> 200");
             }
@@ -170,12 +184,96 @@ public class MixedYggdrasilProxy {
             return;
         }
 
+        // 2. fallback 到 LittleSkin（保留完整 Yggdrasil 路径）
+        response = tryFetch(LITTLESKIN_BASE + fullPath);
+        if (response != null) {
+            recordSource(response, SOURCE_LITTLESKIN);
+            if (debug) {
+                logger.info("[MixedProxy] LittleSkin 命中 -> 200");
+            }
+            sendJson(exchange, 200, response);
+            return;
+        }
+
         // 3. 都未命中 → 204 No Content（Minecraft 规范：验证失败）
         if (debug) {
-            logger.info("[MixedProxy] LittleSkin + Mojang 均未命中 -> 204 | " + fullPath);
+            logger.info("[MixedProxy] Mojang + LittleSkin 均未命中 -> 204 | " + fullPath);
         }
         exchange.sendResponseHeaders(204, -1);
         exchange.close();
+    }
+
+    /**
+     * 从 hasJoined / profile 响应 JSON 中提取玩家 UUID（id 字段）并记录认证来源。
+     */
+    private void recordSource(String responseJson, String source) {
+        String id = extractJsonString(responseJson, "id");
+        if (id == null || id.isBlank()) {
+            return;
+        }
+        String key = id.replace("-", "").toLowerCase(Locale.ROOT);
+        accountSource.put(key, source);
+        if (debug) {
+            logger.info("[MixedProxy] 记录认证来源: " + key + " -> " + source);
+        }
+    }
+
+    /**
+     * 处理内部账号来源查询：{@code GET /axs-internal/account-source?uuid=<uuid>}。
+     * <p>命中返回 {@code {"source":"microsoft|littleskin"}}；未命中返回 404。
+     */
+    private void handleInternalSourceQuery(HttpExchange exchange, String query) throws IOException {
+        String uuid = parseQueryParam(query, "uuid");
+        if (uuid != null) {
+            uuid = uuid.replace("-", "").toLowerCase(Locale.ROOT);
+        }
+        String source = uuid == null ? null : accountSource.get(uuid);
+        if (source == null) {
+            exchange.sendResponseHeaders(404, -1);
+            exchange.close();
+            return;
+        }
+        sendJson(exchange, 200, "{\"source\":\"" + source + "\"}");
+    }
+
+    /**
+     * 从 query 字符串（如 {@code uuid=xxx&foo=bar}）中提取指定参数值。
+     */
+    private static String parseQueryParam(String query, String key) {
+        if (query == null || query.isEmpty()) {
+            return null;
+        }
+        for (String pair : query.split("&")) {
+            int eq = pair.indexOf('=');
+            if (eq > 0 && pair.substring(0, eq).equals(key)) {
+                return pair.substring(eq + 1);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 极简 JSON 字符串字段提取（与 AccountTypeServiceImpl 保持一致）。
+     */
+    private static String extractJsonString(String json, String key) {
+        String pattern = "\"" + key + "\"";
+        int keyIndex = json.indexOf(pattern);
+        if (keyIndex < 0) {
+            return null;
+        }
+        int colonIndex = json.indexOf(':', keyIndex + pattern.length());
+        if (colonIndex < 0) {
+            return null;
+        }
+        int startQuote = json.indexOf('"', colonIndex + 1);
+        if (startQuote < 0) {
+            return null;
+        }
+        int endQuote = json.indexOf('"', startQuote + 1);
+        if (endQuote < 0) {
+            return null;
+        }
+        return json.substring(startQuote + 1, endQuote).trim();
     }
 
     // ═════════════════════════════════════════════════════════════════

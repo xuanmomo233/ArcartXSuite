@@ -751,10 +751,17 @@ public final class ModuleRegistry {
         boolean debug = section != null && section.getBoolean("debug", false);
         String proxyHost = section == null ? null : section.getString("mojang-proxy-host", null);
         int proxyPort = section == null ? 0 : section.getInt("mojang-proxy-port", 0);
-        accountTypeService = new AccountTypeServiceImpl(plugin.getLogger(), enableLookup, timeoutMs, debug, proxyHost, proxyPort);
+        // 仅混合登录模式（yggdrasil-source 含 ?mixed）时启用本地代理权威查询，
+        // 非混合服务器传 0 跳过，避免每次都尝试连接不存在的本地代理。
+        String yggdrasilSource = rootConfig.getString("auth.yggdrasil-source", "");
+        int mixedProxyPort = (yggdrasilSource != null && yggdrasilSource.contains("?mixed"))
+            ? rootConfig.getInt("auth.mixed-proxy-port", 25599)
+            : 0;
+        accountTypeService = new AccountTypeServiceImpl(plugin.getLogger(), enableLookup, timeoutMs, debug, proxyHost, proxyPort, mixedProxyPort);
         Bukkit.getPluginManager().registerEvents(accountTypeService, plugin);
         LOGGER.fine("统一账号识别服务已就绪 | Mojang查询=" + enableLookup
-            + " | 超时=" + timeoutMs + "ms | authlib-injector=" + accountTypeService.isAuthlibInjectorLoaded());
+            + " | 超时=" + timeoutMs + "ms | 混合代理端口=" + mixedProxyPort
+            + " | authlib-injector=" + accountTypeService.isAuthlibInjectorLoaded());
     }
 
     /** 获取宿主统一账号识别服务（永不为 null） */
