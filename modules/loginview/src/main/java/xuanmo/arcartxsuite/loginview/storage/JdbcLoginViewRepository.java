@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.logging.Logger;
 import org.bukkit.entity.Player;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
@@ -20,6 +21,7 @@ public final class JdbcLoginViewRepository extends AbstractModuleRepository impl
 
     private final StorageConfiguration configuration;
     private final String accountsTable;
+    private final String sessionsTable;
     private final boolean sqlite;
 
     public JdbcLoginViewRepository(File dataFolder, StorageConfiguration configuration, Logger logger) {
@@ -27,6 +29,7 @@ public final class JdbcLoginViewRepository extends AbstractModuleRepository impl
         this.configuration = configuration;
         this.sqlite = configuration.dialect() == StorageDialect.SQLITE;
         this.accountsTable = configuration.tablePrefix() + "accounts";
+        this.sessionsTable = configuration.tablePrefix() + "sessions";
     }
 
     @Override
@@ -47,8 +50,18 @@ public final class JdbcLoginViewRepository extends AbstractModuleRepository impl
                     + "updated_at BIGINT NOT NULL DEFAULT 0"
                     + ")"
             );
+            statement.executeUpdate(
+                "CREATE TABLE IF NOT EXISTS " + sessionsTable + " ("
+                    + "uuid VARCHAR(36) PRIMARY KEY,"
+                    + "player_name VARCHAR(64) NOT NULL,"
+                    + "ip VARCHAR(64) NOT NULL DEFAULT '',"
+                    + "created_at BIGINT NOT NULL DEFAULT 0,"
+                    + "expires_at BIGINT NOT NULL DEFAULT 0"
+                    + ")"
+            );
         }
-        logger.fine("LoginView 账户存储已初始化: " + configuration.dialect().configKey() + " | table=" + accountsTable);
+        logger.fine("LoginView 账户与 session 存储已初始化: " + configuration.dialect().configKey()
+            + " | accounts=" + accountsTable + " | sessions=" + sessionsTable);
     }
 
     @Override
@@ -59,7 +72,7 @@ public final class JdbcLoginViewRepository extends AbstractModuleRepository impl
 
     @Override
     protected List<String> allTables() {
-        return List.of(accountsTable);
+        return List.of(accountsTable, sessionsTable);
     }
 
     @Override
@@ -218,5 +231,71 @@ public final class JdbcLoginViewRepository extends AbstractModuleRepository impl
 
     private static String value(String value) {
         return value == null ? "" : value;
+    }
+
+    // ── Session methods ─────────────────────────────────────
+
+    @Override
+    public void createOrUpdateSession(UUID uuid, String playerName, String ip, long expiresAt) throws SQLException {
+        long now = Instant.now().toEpochMilli();
+        String sql = sqlite
+            ? "INSERT INTO " + sessionsTable
+                + " (uuid, player_name, ip, created_at, expires_at) VALUES (?, ?, ?, ?, ?)"
+                + " ON CONFLICT(uuid) DO UPDATE SET player_name = excluded.player_name, ip = excluded.ip,"
+                + " created_at = excluded.created_at, expires_at = excluded.expires_at"
+            : "INSERT INTO " + sessionsTable
+                + " (uuid, player_name, ip, created_at, expires_at) VALUES (?, ?, ?, ?, ?)"
+                + " ON DUPLICATE KEY UPDATE player_name = VALUES(player_name), ip = VALUES(ip),"
+                + " created_at = VALUES(created_at), expires_at = VALUES(expires_at)";
+        try (Connection connection = getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, uuid.toString());
+            statement.setString(2, playerName);
+            statement.setString(3, ip);
+            statement.setLong(4, now);
+            statement.setLong(5, expiresAt);
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public Optional<LoginViewSession> findSession(UUID uuid) throws SQLException {
+        String sql = "SELECT uuid, player_name, ip, created_at, expires_at FROM " + sessionsTable + " WHERE uuid = ?";
+        try (Connection connection = getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, uuid.toString());
+            try (ResultSet rs = statement.executeQuery()) {
+                if (!rs.next()) {
+                    return Optional.empty();
+                }
+                return Optional.of(new LoginViewSession(
+                    UUID.fromString(rs.getString("uuid")),
+                    rs.getString("player_name"),
+                    rs.getString("ip"),
+                    rs.getLong("created_at"),
+                    rs.getLong("expires_at")
+                ));
+            }
+        }
+    }
+
+    @Override
+    public void deleteSession(UUID uuid) throws SQLException {
+        String sql = "DELETE FROM " + sessionsTable + " WHERE uuid = ?";
+        try (Connection connection = getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, uuid.toString());
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public void deleteExpiredSessions() throws SQLException {
+        long now = Instant.now().toEpochMilli();
+        String sql = "DELETE FROM " + sessionsTable + " WHERE expires_at <= ?";
+        try (Connection connection = getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, now);
+            int deleted = statement.executeUpdate();
+            if (deleted > 0) {
+                logger.fine("LoginView 已清理 " + deleted + " 条过期 session");
+            }
+        }
     }
 }

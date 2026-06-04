@@ -168,7 +168,9 @@ public record LoginViewModuleConfiguration(
         boolean lockChat,
         boolean lockCommands,
         String allowCommandsPrefix,
-        boolean rehashMigratedPasswordOnLogin
+        boolean rehashMigratedPasswordOnLogin,
+        int sessionTtlMinutes,
+        boolean sessionStrictIp
     ) {
         private static SecurityConfiguration load(ConfigurationSection section) {
             return new SecurityConfiguration(
@@ -180,7 +182,9 @@ public record LoginViewModuleConfiguration(
                 bool(section, "lock-chat", true),
                 bool(section, "lock-commands", true),
                 string(section, "allow-commands-prefix", "login,register,l,reg,AXS"),
-                bool(section, "rehash-migrated-password-on-login", true)
+                bool(section, "rehash-migrated-password-on-login", true),
+                integer(section, "session-ttl-minutes", 30, 0),
+                bool(section, "session-strict-ip", false)
             );
         }
     }

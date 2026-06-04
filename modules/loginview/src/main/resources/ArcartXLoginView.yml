@@ -52,6 +52,11 @@ security:
   allow-commands-prefix: login,register,l,reg,AXS
   # 从 AuthMe 导入的 hash 验证成功后，改写成 AXS_PBKDF2_SHA256，后续即可完全脱离 AuthMe。
   rehash-migrated-password-on-login: true
+  # 认证 session 有效期（分钟），在有效期内玩家掉线重连或服务器重启后无需重新登录。
+  # 设为 0 则禁用 session 持久化（每次进服都必须重新登录）。
+  session-ttl-minutes: 30
+  # 是否要求 session 绑定 IP（更严格但可能影响 NAT 切换/移动网络用户）。
+  session-strict-ip: false
 
 storage:
   mode: sqlite

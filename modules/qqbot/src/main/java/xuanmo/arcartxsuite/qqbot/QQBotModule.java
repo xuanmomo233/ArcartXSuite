@@ -265,16 +265,11 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
                 }
             });
 
-        // 14. 白名单登录门控
-        if (configuration.whitelistLogin().enabled()) {
-            loginGateListener = new QQBotLoginGateListener(
-                context.plugin(), configuration, repository, context.accountTypeService(), context.logger()
-            );
-            loginGateListener.register();
-            context.logger().info("[QQBot] 白名单登录门控已启用 | 微软放行=" + configuration.whitelistLogin().microsoftPass()
-                + " | LittleSkin需绑定=" + configuration.whitelistLogin().littleskinRequireBind()
-                + " | 拒绝离线=" + configuration.whitelistLogin().denyOffline());
-        }
+        // 14. 审计日志：玩家账号类型与绑定状态（仅 debug 输出，不拦截登录）
+        loginGateListener = new QQBotLoginGateListener(
+            context.plugin(), configuration, repository, context.accountTypeService(), context.logger()
+        );
+        loginGateListener.register();
 
         // 15. UI 服务
         PacketBridgeAPI packetBridge = context.packetBridge();

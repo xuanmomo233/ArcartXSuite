@@ -12,7 +12,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.account.AccountType;
 import xuanmo.arcartxsuite.api.account.AccountTypeService;
 import xuanmo.arcartxsuite.qqbot.config.QQBotConfiguration;
-import xuanmo.arcartxsuite.qqbot.config.QQBotWhitelistLoginConfig;
 import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository;
 
 /**
@@ -59,7 +58,7 @@ public final class QQBotLoginGateListener implements Listener {
         AccountType type = accountTypeService.resolveBlocking(uuid, name);
         boolean bound = repository.findByPlayerName(name) != null;
 
-        if (config.debug() || config.whitelistLogin().enabled()) {
+        if (config.debug()) {
             logger.info("[QQBot/Gate] " + name + " UUID=" + uuid
                 + " v" + (uuid == null ? "?" : uuid.version())
                 + " type=" + type.id()

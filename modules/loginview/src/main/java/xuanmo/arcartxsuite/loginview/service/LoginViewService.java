@@ -118,6 +118,15 @@ public final class LoginViewService implements Listener {
         for (Player player : Bukkit.getOnlinePlayers()) {
             scheduleOpen(player);
         }
+        // 每小时清理一次过期 session
+        long cleanupInterval = 20L * 60 * 60;
+        Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
+            try {
+                repository.deleteExpiredSessions();
+            } catch (SQLException e) {
+                plugin.getLogger().warning("LoginView session 清理失败: " + e.getMessage());
+            }
+        }, cleanupInterval, cleanupInterval);
     }
 
     public void shutdown() {
@@ -128,7 +137,6 @@ public final class LoginViewService implements Listener {
                 player.setInvulnerable(false);
             }
         }
-        authenticatedPlayers.clear();
         failedAttempts.clear();
         loginViewInvulnerablePlayers.clear();
         repository.close();
@@ -322,7 +330,7 @@ public final class LoginViewService implements Listener {
             return;
         }
         // QQ 绑定检查：按账号类型分别判断是否要求绑定
-        boolean requireBind = switch (accountType) {
+        boolean requireBind = configuration.qqBinding().enabled() && switch (accountType) {
             case MICROSOFT -> configuration.qqBinding().microsoftRequireBind();
             case LITTLESKIN -> configuration.qqBinding().littleskinRequireBind();
             default -> false;
@@ -411,9 +419,36 @@ public final class LoginViewService implements Listener {
     }
 
     private boolean isAuthenticated(Player player) {
-        return configuration.authMode() == AuthMode.AUTHME
-            ? authMeBridge.available() && authMeBridge.isAuthenticated(player)
-            : authenticatedPlayers.contains(player.getUniqueId());
+        if (configuration.authMode() == AuthMode.AUTHME) {
+            return authMeBridge.available() && authMeBridge.isAuthenticated(player);
+        }
+        UUID uuid = player.getUniqueId();
+        if (authenticatedPlayers.contains(uuid)) {
+            return true;
+        }
+        // 内存未命中，查数据库 session（支持重启/重连后恢复认证状态）
+        try {
+            var sessionOpt = repository.findSession(uuid);
+            if (sessionOpt.isPresent()) {
+                var session = sessionOpt.get();
+                long now = System.currentTimeMillis();
+                if (session.expiresAt() > now) {
+                    if (configuration.security().sessionStrictIp()) {
+                        String currentIp = playerAddress(player);
+                        if (!currentIp.equals(session.ip())) {
+                            return false;
+                        }
+                    }
+                    authenticatedPlayers.add(uuid);
+                    return true;
+                }
+                // session 已过期，静默清理
+                repository.deleteSession(uuid);
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().warning("LoginView session 查询失败: " + e.getMessage());
+        }
+        return false;
     }
 
     private void completeLogin(Player player, String message) {
@@ -425,6 +460,16 @@ public final class LoginViewService implements Listener {
         if (configuration.ui().closeOnLogin()) {
             packetBridge.sendPacket(player, uiId, "close", Map.of("message", message));
             Bukkit.getScheduler().runTaskLater(plugin, () -> packetBridge.closeUiUnsafe(player, uiId), 2L);
+        }
+        // 持久化 session，支持重启/重连后免重新登录
+        int ttl = configuration.security().sessionTtlMinutes();
+        if (ttl > 0) {
+            long expiresAt = System.currentTimeMillis() + ttl * 60L * 1000L;
+            try {
+                repository.createOrUpdateSession(player.getUniqueId(), player.getName(), playerAddress(player), expiresAt);
+            } catch (SQLException e) {
+                plugin.getLogger().warning("LoginView session 写入失败: " + e.getMessage());
+            }
         }
     }
 
@@ -533,11 +578,11 @@ public final class LoginViewService implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
-        authenticatedPlayers.remove(uuid);
         failedAttempts.remove(uuid);
         if (loginViewInvulnerablePlayers.remove(uuid)) {
             event.getPlayer().setInvulnerable(false);
         }
+        // session 保留在数据库中，支持短暂掉线重连免登录
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -619,5 +664,12 @@ public final class LoginViewService implements Listener {
         variables.put("account_type", accountType.id());
         variables.put("account_type_display", accountType.displayName());
         signalDispatcher.dispatchSignal(signal, player, variables);
+    }
+
+    private static String playerAddress(Player player) {
+        if (player == null || player.getAddress() == null || player.getAddress().getAddress() == null) {
+            return "";
+        }
+        return player.getAddress().getAddress().getHostAddress();
     }
 }

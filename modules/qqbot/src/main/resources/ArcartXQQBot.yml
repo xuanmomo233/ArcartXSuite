@@ -105,22 +105,7 @@ whitelist:
 #   - 不在 Mojang 且 v4 → LittleSkin
 #   - 不在 Mojang 且 v3 → 离线
 #
-# 【v2.0 架构变更】QQ 绑定验证已从 PreLogin 拦截迁移到 LoginView 登录面板中完成。
-#   - 本配置启用后不再踢人，仅做日志记录和审计。
-#   - 微软正版 / LittleSkin 玩家进服后都会看到 LoginView 面板。
-#   - 已绑定 QQ 的玩家：面板显示「进入服务器」按钮，直接放行。
-#   - 未绑定 QQ 的玩家：面板显示绑定验证码输入框，需输入验证码完成绑定。
-#   - 离线玩家：若认证层（authlib-injector）已正确拦截，则不会到达此阶段。
-whitelist-login:
-  enabled: false
-  # 保留配置项，向后兼容。实际绑定验证已在登录面板中完成。
-  microsoft-pass: true
-  littleskin-require-bind: true
-  deny-offline: true
-  # 以下消息不再用于踢出，仅供日志参考。
-  kick-not-bound: "&c你还未在QQ群完成绑定认证\n&7请在QQ群发送: #绑定 {name}\n&7完成验证后方可进入游戏"
-  kick-offline: "&c本服务器仅允许正版/LittleSkin 账号登录"
-  kick-denied: "&c你没有权限进入本服务器"
+# 登录与 QQ 绑定验证由 LoginView 模块统一管控，QQBot 只提供绑定数据查询。
 
 # ─── 管理员远程控制 ─────────────────────────────────────
 # 配置的QQ号可在群内直接执行服务器控制台命令。

@@ -15,7 +15,6 @@ public record QQBotConfiguration(
     List<QQBotGroupConfig> groups,
     QQBotBindingConfig binding,
     QQBotWhitelistConfig whitelist,
-    QQBotWhitelistLoginConfig whitelistLogin,
     boolean adminEnabled,
     List<Long> adminQQs,
     String adminCommandPrefix,
@@ -134,16 +133,6 @@ public record QQBotConfiguration(
             yaml.getString("whitelist.add-prefix", "#白名单添加"),
             yaml.getString("whitelist.remove-prefix", "#白名单移除"),
             yaml.getString("whitelist.list-prefix", "#白名单列表")
-        );
-
-        QQBotWhitelistLoginConfig whitelistLogin = new QQBotWhitelistLoginConfig(
-            yaml.getBoolean("whitelist-login.enabled", false),
-            yaml.getBoolean("whitelist-login.microsoft-pass", true),
-            yaml.getBoolean("whitelist-login.littleskin-require-bind", true),
-            yaml.getBoolean("whitelist-login.deny-offline", true),
-            yaml.getString("whitelist-login.kick-not-bound", "&c\u4f60\u8fd8\u672a\u5728QQ\u7fa4\u5b8c\u6210\u7ed1\u5b9a\u8ba4\u8bc1\n&7\u8bf7\u5728QQ\u7fa4\u53d1\u9001: #\u7ed1\u5b9a {name}\n&7\u5b8c\u6210\u9a8c\u8bc1\u540e\u65b9\u53ef\u8fdb\u5165\u6e38\u620f"),
-            yaml.getString("whitelist-login.kick-offline", "&c\u672c\u670d\u52a1\u5668\u4ec5\u5141\u8bb8\u6b63\u7248/LittleSkin \u8d26\u53f7\u767b\u5f55"),
-            yaml.getString("whitelist-login.kick-denied", "&c\u4f60\u6ca1\u6709\u6743\u9650\u8fdb\u5165\u672c\u670d\u52a1\u5668")
         );
 
         boolean adminEnabled = yaml.getBoolean("admin.enabled", false);
@@ -371,7 +360,7 @@ public record QQBotConfiguration(
         );
 
         return new QQBotConfiguration(
-            debug, serverId, onebot, groups, binding, whitelist, whitelistLogin,
+            debug, serverId, onebot, groups, binding, whitelist,
             adminEnabled, adminQQs, adminCommandPrefix,
             commandPrefix, helpPrefix, customCommands, storage, messages,
             signin, prizes, monitor, scheduledMessages, broadcast,
