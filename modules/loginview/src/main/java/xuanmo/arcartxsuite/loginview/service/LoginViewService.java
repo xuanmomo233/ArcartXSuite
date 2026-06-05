@@ -152,10 +152,10 @@ public final class LoginViewService implements Listener {
             return true;
         }
         switch (action) {
-            case "login" -> handleLogin(player, value(data, 1));
-            case "register" -> handleRegister(player, value(data, 1), value(data, 2));
+            case "login" -> handleLogin(player, value(data, 1), Boolean.parseBoolean(value(data, 2)));
+            case "register" -> handleRegister(player, value(data, 1), value(data, 2), Boolean.parseBoolean(value(data, 3)));
             case "change_password" -> handleChangePassword(player, value(data, 1), value(data, 2), value(data, 3));
-            case "bypass_enter" -> handleBypassEnter(player);
+            case "bypass_enter" -> handleBypassEnter(player, Boolean.parseBoolean(value(data, 1)));
             case "bind_code" -> handleBindCode(player, value(data, 1));
             case "refresh" -> openFor(player, true);
             default -> sendResult(player, color("&c未知 LoginView 操作。"), false);
@@ -237,7 +237,11 @@ public final class LoginViewService implements Listener {
         return accountTypeService.resolve(player);
     }
 
-    private void handleLogin(Player player, String password) {
+    private void handleLogin(Player player, String password, boolean agreed) {
+        if (!agreed) {
+            sendResult(player, color("&c请先阅读并同意服务器游玩须知。"), false);
+            return;
+        }
         if (!validatePasswordShape(player, password, false)) {
             return;
         }
@@ -282,7 +286,11 @@ public final class LoginViewService implements Listener {
         }
     }
 
-    private void handleRegister(Player player, String password, String confirmPassword) {
+    private void handleRegister(Player player, String password, String confirmPassword, boolean agreed) {
+        if (!agreed) {
+            sendResult(player, color("&c请先阅读并同意服务器游玩须知。"), false);
+            return;
+        }
         if (!validatePasswordShape(player, password, true)) {
             return;
         }
@@ -323,7 +331,11 @@ public final class LoginViewService implements Listener {
         }
     }
 
-    private void handleBypassEnter(Player player) {
+    private void handleBypassEnter(Player player, boolean agreed) {
+        if (!agreed) {
+            sendResult(player, color("&c请先阅读并同意服务器游玩须知。"), false);
+            return;
+        }
         AccountType accountType = accountType(player);
         if (!accountType.premium()) {
             sendResult(player, color("&c你不是正版/LittleSkin 认证玩家，无法免密登录。"), false);

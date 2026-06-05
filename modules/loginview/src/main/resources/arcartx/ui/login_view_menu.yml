@@ -51,6 +51,8 @@ ui:
       var.oldPassword = ''
       var.newPassword = ''
       var.changeConfirmPassword = ''
+      var.agreed = false
+      var.showRules = false
     result: |-
       var.result = packet['message']
       var.lastSuccess = packet['success']
@@ -85,6 +87,8 @@ ui:
       var.oldPassword = ''
       var.newPassword = ''
       var.changeConfirmPassword = ''
+      var.agreed = false
+      var.showRules = false
 
 controls:
   自适应:
@@ -129,14 +133,14 @@ controls:
             attribute:
               x: 76
               y: 70
-              texts: "~&e&lArcartX"
+              texts: "~&eArcartX"
               fontSize: 74
           标志副标题:
             type: Text
             attribute:
               x: 84
               y: 128
-              texts: "~&6&lSUITE LOGIN"
+              texts: "~&6SUITE LOGIN"
               fontSize: 32
           # ── 用户信息 ──
           服务器名:
@@ -144,7 +148,7 @@ controls:
             attribute:
               x: 90
               y: 230
-              texts: "&7欢迎来到 ArcartX 服务器"
+              texts: "~&7欢迎来到 ArcartX 服务器"
               fontSize: 49
           玩家名:
             type: Text
@@ -160,7 +164,7 @@ controls:
               x: 66
               y: 335
               width: 3
-              height: 340
+              height: "(var.type == 'bypass_unbound' || var.type == 'bypass') ? 310 : 370"
               normal: ~92,78,185,185
           当前标记:
             type: Texture
@@ -189,7 +193,7 @@ controls:
             type: TextBox
             attribute:
               x: 96
-              y: 440
+              y: 432
               width: 260
               height: 36
               length: 64
@@ -205,15 +209,39 @@ controls:
               stroke:
                 width: 2
                 color: ~132,120,220,220
+          进服须知:
+            type: Text
+            attribute:
+              x: 96
+              y: 476
+              texts: "var.agreed ? '&a✔ &f我已阅读并同意服务器游玩须知' : '      &f我已阅读并同意服务器游玩须知'"
+              fontSize: 36
+              visible: "var.type == 'login' || var.type == 'bypass'"
+            action:
+              click: var.showRules = true
+            children:
+              方框:
+                type: Texture
+                attribute:
+                  normal: ~26,32,42,232
+                  width: 15
+                  x: 5
+                  y: 2
+                  height: 15
+                  visible: "!var.agreed"
+                effect:
+                  stroke:
+                    width: 2.0
+                    color: ~255,255,255,255
           登录按钮:
             type: Texture
             attribute:
               x: 96
-              y: 494
+              y: 524
               width: 260
               height: 42
-              normal: ~96,84,205,220
-              hover: ~126,112,235,255
+              normal: ~74,165,118,225
+              hover: ~96,195,140,255
               shape: ~round_rect
               radius: 8
               texts: "~&f加入服务器"
@@ -222,12 +250,12 @@ controls:
               visible: var.type == 'login'
             action:
               clickLeft: |-
-                Packet.send(var.packetId, 'login', var.password)
+                Packet.send(var.packetId, 'login', var.password, var.agreed)
           切换修改密码:
             type: Texture
             attribute:
               x: 96
-              y: 556
+              y: 586
               width: 260
               height: 42
               normal: ~96,84,205,220
@@ -251,7 +279,7 @@ controls:
             type: Texture
             attribute:
               x: 96
-              y: 618
+              y: 648
               width: 260
               height: 42
               normal: ~96,84,205,220
@@ -261,7 +289,7 @@ controls:
               texts: "~&f退出游戏"
               center: true
               fontSize: 36
-              visible: var.type == 'login' || var.type == 'register' || var.type == 'change'
+              visible: var.type == 'login' || var.type == 'register'
             action:
               clickLeft: |-
                 Game.quit()
@@ -270,7 +298,7 @@ controls:
             type: Text
             attribute:
               x: 96
-              y: 440
+              y: 432
               texts: "~&a✔ &f身份已验证"
               fontSize: 36
               visible: var.type == 'bypass'
@@ -278,7 +306,7 @@ controls:
             type: Texture
             attribute:
               x: 96
-              y: 490
+              y: 524
               width: 260
               height: 42
               normal: ~74,165,118,225
@@ -291,12 +319,12 @@ controls:
               visible: var.type == 'bypass'
             action:
               clickLeft: |-
-                Packet.send(var.packetId, 'bypass_enter')
+                Packet.send(var.packetId, 'bypass_enter', var.agreed)
           免登退出游戏:
             type: Texture
             attribute:
               x: 96
-              y: 550
+              y: 586
               width: 260
               height: 42
               normal: ~96,84,205,220
@@ -315,16 +343,40 @@ controls:
             type: Text
             attribute:
               x: 96
-              y: 410
+              y: 380
               width: 280
               texts: "var.bindPrompt"
               fontSize: 36
               visible: var.type == 'bypass_unbound'
+          绑定须知:
+            type: Text
+            attribute:
+              x: 96
+              y: 432
+              texts: "var.agreed ? '&a✔ &f我已阅读并同意服务器游玩须知' : '      &f我已阅读并同意服务器游玩须知'"
+              fontSize: 36
+              visible: var.type == 'bypass_unbound'
+            action:
+              click: var.showRules = true
+            children:
+              方框:
+                type: Texture
+                attribute:
+                  normal: ~26,32,42,232
+                  width: 15
+                  x: 5
+                  y: 2
+                  height: 15
+                  visible: "!var.agreed"
+                effect:
+                  stroke:
+                    width: 2.0
+                    color: ~255,255,255,255
           绑定码输入框:
             type: TextBox
             attribute:
               x: 96
-              y: 490
+              y: 476
               width: 260
               height: 36
               length: 6
@@ -343,7 +395,7 @@ controls:
             type: Texture
             attribute:
               x: 96
-              y: 542
+              y: 524
               width: 260
               height: 42
               normal: ~74,165,118,225
@@ -361,7 +413,7 @@ controls:
             type: Texture
             attribute:
               x: 96
-              y: 600
+              y: 586
               width: 260
               height: 42
               normal: ~96,84,205,220
@@ -380,7 +432,7 @@ controls:
             type: TextBox
             attribute:
               x: 96
-              y: 440
+              y: 432
               width: 260
               height: 36
               length: 64
@@ -400,7 +452,7 @@ controls:
             type: TextBox
             attribute:
               x: 96
-              y: 488
+              y: 476
               width: 260
               height: 36
               length: 64
@@ -420,7 +472,7 @@ controls:
             type: Texture
             attribute:
               x: 96
-              y: 542
+              y: 586
               width: 260
               height: 42
               normal: ~74,165,118,225
@@ -433,13 +485,37 @@ controls:
               visible: var.type == 'register'
             action:
               clickLeft: |-
-                Packet.send(var.packetId, 'register', var.password, var.confirmPassword)
+                Packet.send(var.packetId, 'register', var.password, var.confirmPassword, var.agreed)
+          注册须知:
+            type: Text
+            attribute:
+              x: 96
+              y: 524
+              texts: "var.agreed ? '&a✔ &f我已阅读并同意服务器游玩须知' : '      &f我已阅读并同意服务器游玩须知'"
+              fontSize: 36
+              visible: var.type == 'register'
+            action:
+              click: var.showRules = true
+            children:
+              方框:
+                type: Texture
+                attribute:
+                  normal: ~26,32,42,232
+                  width: 15
+                  x: 5
+                  y: 2
+                  height: 15
+                  visible: "!var.agreed"
+                effect:
+                  stroke:
+                    width: 2.0
+                    color: ~255,255,255,255
           # ── 修改密码表单 ──
           修改旧密码:
             type: TextBox
             attribute:
               x: 96
-              y: 430
+              y: 432
               width: 260
               height: 34
               length: 64
@@ -459,7 +535,7 @@ controls:
             type: TextBox
             attribute:
               x: 96
-              y: 474
+              y: 476
               width: 260
               height: 34
               length: 64
@@ -479,7 +555,7 @@ controls:
             type: TextBox
             attribute:
               x: 96
-              y: 518
+              y: 520
               width: 260
               height: 34
               length: 64
@@ -499,16 +575,16 @@ controls:
             type: Texture
             attribute:
               x: 96
-              y: 570
-              width: 122
-              height: 38
-              normal: ~190,154,68,225
-              hover: ~224,184,82,255
+              y: 572
+              width: 260
+              height: 42
+              normal: ~74,165,118,225
+              hover: ~96,195,140,255
               shape: ~round_rect
               radius: 8
               texts: "~&f修改"
               center: true
-              fontSize: 24
+              fontSize: 36
               visible: var.type == 'change'
             action:
               clickLeft: |-
@@ -516,17 +592,17 @@ controls:
           返回登录:
             type: Texture
             attribute:
-              x: 234
-              y: 570
-              width: 122
-              height: 38
-              normal: ~74,92,150,225
-              hover: ~96,118,180,255
+              x: 96
+              y: 630
+              width: 260
+              height: 42
+              normal: ~96,84,205,220
+              hover: ~126,112,235,255
               shape: ~round_rect
               radius: 8
               texts: "~&f返回"
               center: true
-              fontSize: 24
+              fontSize: 36
               visible: var.type == 'change'
             action:
               clickLeft: |-
@@ -552,3 +628,139 @@ controls:
               y: 1038
               texts: "'&f时间: ' + Placeholder.parse('%server_time_yyyy年MM月dd日hh:mm:ss%')"
               fontSize: 36
+      服规覆盖层:
+        type: Canvas
+        attribute:
+          point: ~stretch_all
+          visible: var.showRules
+        children:
+          遮罩:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~0,0,0,200
+          服规面板:
+            type: Canvas
+            attribute:
+              point: ~middle_center
+              width: 600
+              height: 300
+            children:
+              服规背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~26,32,42,255
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~210,225,245,230
+              服规标题:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 12
+                  texts: ~&f服务器游玩须知
+                  fontSize: 36
+              服规滚动区:
+                type: Canvas
+                attribute:
+                  x: 20
+                  y: 52
+                  width: 560
+                  height: 180
+                children:
+                  纵向滑块:
+                    type: Texture
+                    attribute:
+                      point: ~top_right
+                      width: 15
+                      height: 40
+                      normal: ~120,130,140,255
+                      maxDragY: 140
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~255,255,255,120
+                  服规滚动栏:
+                    type: Scroll
+                    attribute:
+                      width: 545
+                      height: 180
+                      moveY: self.parent['纵向滑块'].getDragYRatio()
+                    action:
+                      wheel: |-
+                        if(self.moveY >= 0){
+                          if(self.wheelValue > 0){
+                            self.parent['纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                          }
+                        }
+                        if(self.moveY <= 1){
+                          if(self.wheelValue < 0){
+                            self.parent['纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                          }
+                        }
+                    children:
+                      服规内容区:
+                        type: Canvas
+                        attribute:
+                          width: 545
+                          height: 280
+                        children:
+                          服规内容:
+                            type: Text
+                            attribute:
+                              x: 0
+                              y: 0
+                              width: 545
+                              texts:
+                                - ~&f1. 禁止使用作弊软件、外挂或任何破坏游戏公平性的工具。
+                                - ~&f2. 禁止恶意破坏他人建筑、偷窃或骚扰其他玩家。
+                                - ~&f3. 禁止在公共频道发布广告、色情、暴力或政治敏感内容。
+                                - ~&f4. 请尊重其他玩家和管理员，禁止辱骂、人身攻击或恶意挑衅。
+                                - ~&f5. 禁止使用红石/高频装置等造成服务器卡顿的行为。
+                                - ~&f6. 禁止利用游戏漏洞或 BUG 获取不正当利益。
+                                - ~&f7. 账号安全由玩家本人负责，请勿共享账号密码。
+                              fontSize: 36
+              同意按钮:
+                type: Texture
+                attribute:
+                  x: 170
+                  y: 250
+                  width: 120
+                  height: 38
+                  normal: ~80,180,122,238
+                  hover: ~108,210,156,255
+                  shape: ~round_rect
+                  radius: 10
+                  texts: ~&f同意
+                  center: true
+                  fontSize: 36
+                action:
+                  clickLeft: |-
+                    var.agreed = true
+                    var.showRules = false
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~165,190,220,255
+              关闭按钮:
+                type: Texture
+                attribute:
+                  x: 310
+                  y: 250
+                  width: 120
+                  height: 38
+                  normal: ~160,50,50,220
+                  hover: ~200,60,60,255
+                  shape: ~round_rect
+                  radius: 10
+                  texts: ~&f关闭
+                  center: true
+                  fontSize: 36
+                action:
+                  clickLeft: var.showRules = false
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~165,190,220,255
