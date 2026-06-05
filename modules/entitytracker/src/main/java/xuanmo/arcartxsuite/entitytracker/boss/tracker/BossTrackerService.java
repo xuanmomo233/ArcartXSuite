@@ -38,6 +38,7 @@ import xuanmo.arcartxsuite.entitytracker.boss.config.BossDefinition;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossSortMode;
 import xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration;
 import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
+import xuanmo.arcartxsuite.api.event.TaczGunDamageEvent;
 
 public final class BossTrackerService implements Listener {
 
@@ -57,6 +58,7 @@ public final class BossTrackerService implements Listener {
     private final java.util.function.BiConsumer<String, Player> signalDispatcher;
     private final xuanmo.arcartxsuite.entitytracker.boss.platform.ServerPlatform serverPlatform;
     private final BossDamageSettlementService settlementService;
+    private final xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge;
     private final Map<UUID, BossSession> sessions = new LinkedHashMap<>();
     private final Map<UUID, ViewerState> viewerStates = new ConcurrentHashMap<>();
 
@@ -66,8 +68,7 @@ public final class BossTrackerService implements Listener {
     private BukkitTask hybridPersistentRescanTask;
     private int hybridWarmupRescanAttempts;
     private long nextSpawnOrder = 0L;
-    private Listener attributePlusListener;
-    private boolean attributePlusHooked;
+    private xuanmo.arcartxsuite.api.attribute.AttributeDamageListener attributeDamageListener;
 
     public BossTrackerService(
         JavaPlugin plugin,
@@ -76,7 +77,8 @@ public final class BossTrackerService implements Listener {
         List<String> runtimeUiIds,
         xuanmo.arcartxsuite.entitytracker.boss.platform.ServerPlatform serverPlatform,
         java.util.function.BiConsumer<String, Player> signalDispatcher,
-        xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry
+        xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry,
+        xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
@@ -84,6 +86,7 @@ public final class BossTrackerService implements Listener {
         this.runtimeUiIds = runtimeUiIds;
         this.serverPlatform = serverPlatform;
         this.signalDispatcher = signalDispatcher;
+        this.attributeBridge = attributeBridge;
         this.settlementService = new BossDamageSettlementService(plugin, () -> null, signalDispatcher, itemSourceRegistry);
     }
 
@@ -95,7 +98,8 @@ public final class BossTrackerService implements Listener {
         xuanmo.arcartxsuite.entitytracker.boss.platform.ServerPlatform serverPlatform,
         java.util.function.BiConsumer<String, Player> signalDispatcher,
         java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider,
-        xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry
+        xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry,
+        xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
@@ -103,6 +107,7 @@ public final class BossTrackerService implements Listener {
         this.runtimeUiIds = runtimeUiIds;
         this.serverPlatform = serverPlatform;
         this.signalDispatcher = signalDispatcher;
+        this.attributeBridge = attributeBridge;
         this.settlementService = new BossDamageSettlementService(plugin, mailDispatchableProvider, signalDispatcher, itemSourceRegistry);
     }
 
@@ -115,7 +120,20 @@ public final class BossTrackerService implements Listener {
             configuration.refreshIntervalTicks(),
             configuration.refreshIntervalTicks()
         );
-        registerAttributePlusListenerIfAvailable();
+        if (attributeBridge != null && attributeBridge.hasDamageSource()) {
+            attributeDamageListener = event -> {
+                if (!(event.target() instanceof LivingEntity target)) return;
+                BossSession session = sessions.get(target.getUniqueId());
+                if (session == null) return;
+                Player attacker = event.attacker();
+                if (attacker == null) return;
+                double effectiveDamage = resolveEffectiveDamage(target, event.damage());
+                if (effectiveDamage <= 0.0D) return;
+                session.recordDamage(attacker, effectiveDamage);
+                requestRefresh();
+            };
+            attributeBridge.registerDamageListener(attributeDamageListener);
+        }
         scheduleHybridRescansIfNeeded();
         requestRefresh();
     }
@@ -137,11 +155,10 @@ public final class BossTrackerService implements Listener {
             hybridPersistentRescanTask.cancel();
             hybridPersistentRescanTask = null;
         }
-        if (attributePlusListener != null) {
-            HandlerList.unregisterAll(attributePlusListener);
-            attributePlusListener = null;
+        if (attributeBridge != null && attributeDamageListener != null) {
+            attributeBridge.unregisterDamageListener(attributeDamageListener);
+            attributeDamageListener = null;
         }
-        attributePlusHooked = false;
         settlementService.shutdown();
         for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
             arcartXBridge.closeUiAll(onlinePlayer, runtimeUiIds);
@@ -160,7 +177,7 @@ public final class BossTrackerService implements Listener {
     }
 
     public boolean attributePlusHooked() {
-        return attributePlusHooked;
+        return attributeBridge != null && attributeBridge.hasDamageSource();
     }
 
     public BossDamagePlayerSettlementView getLastSettlement(UUID playerUuid) {
@@ -778,164 +795,6 @@ public final class BossTrackerService implements Listener {
         return activeMob.getMobType();
     }
 
-    @SuppressWarnings("unchecked")
-    private void registerAttributePlusListenerIfAvailable() {
-        attributePlusHooked = false;
-        Plugin attributePlus = Bukkit.getPluginManager().getPlugin("AttributePlus");
-        if (attributePlus == null || !attributePlus.isEnabled()) {
-            return;
-        }
-
-        if (registerAttributePlusDamageEvent(attributePlus)) {
-            return;
-        }
-        registerAttributePlusAttackEvent(attributePlus);
-    }
-
-    @SuppressWarnings("unchecked")
-    private boolean registerAttributePlusDamageEvent(Plugin attributePlus) {
-        try {
-            ClassLoader classLoader = attributePlus.getClass().getClassLoader();
-            Class<?> rawEventClass = Class.forName(
-                "org.serverct.ersha.api.event.AttrEntityDamageEvent",
-                true,
-                classLoader
-            );
-            if (!Event.class.isAssignableFrom(rawEventClass)) {
-                return false;
-            }
-
-            Class<? extends Event> eventClass = (Class<? extends Event>) rawEventClass;
-            Method getAttackerMethod = rawEventClass.getMethod("getAttacker");
-            Method getAttackDamageMethod = rawEventClass.getMethod("getAttackDamage");
-            Method getTargetMethod = rawEventClass.getMethod("getTarget");
-            attributePlusListener = new Listener() {
-            };
-            Bukkit.getPluginManager().registerEvent(
-                eventClass,
-                attributePlusListener,
-                EventPriority.MONITOR,
-                (listener, event) -> handleAttributePlusDamageEvent(event, rawEventClass, getAttackerMethod, getAttackDamageMethod, getTargetMethod),
-                plugin,
-                true
-            );
-            attributePlusHooked = true;
-            return true;
-        } catch (ReflectiveOperationException ignored) {
-            return false;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void registerAttributePlusAttackEvent(Plugin attributePlus) {
-        try {
-            ClassLoader classLoader = attributePlus.getClass().getClassLoader();
-            Class<?> rawEventClass = Class.forName(
-                "org.serverct.ersha.api.event.AttrEntityAttackEvent",
-                true,
-                classLoader
-            );
-            if (!Event.class.isAssignableFrom(rawEventClass)) {
-                return;
-            }
-
-            Class<? extends Event> eventClass = (Class<? extends Event>) rawEventClass;
-            Method getAttackerMethod = rawEventClass.getMethod("getAttackerOrKiller");
-            Method getEntityMethod = rawEventClass.getMethod("getEntity");
-            Method getAttributeHandleMethod = rawEventClass.getMethod("getAttributeHandle");
-            attributePlusListener = new Listener() {
-            };
-            Bukkit.getPluginManager().registerEvent(
-                eventClass,
-                attributePlusListener,
-                EventPriority.MONITOR,
-                (listener, event) -> handleAttributePlusAttackEvent(event, rawEventClass, getAttackerMethod, getEntityMethod, getAttributeHandleMethod),
-                plugin,
-                true
-            );
-            attributePlusHooked = true;
-        } catch (ReflectiveOperationException exception) {
-            plugin.getLogger().warning("注册 EntityTracker AttributePlus 伤害监听失败: " + exception.getMessage());
-        }
-    }
-
-    private void handleAttributePlusDamageEvent(
-        Event event,
-        Class<?> eventClass,
-        Method getAttackerMethod,
-        Method getAttackDamageMethod,
-        Method getTargetMethod
-    ) {
-        if (!eventClass.isInstance(event)) {
-            return;
-        }
-
-        try {
-            Object rawAttacker = getAttackerMethod.invoke(event);
-            Object rawDamage = getAttackDamageMethod.invoke(event);
-            Object rawTarget = getTargetMethod.invoke(event);
-            if (!(rawAttacker instanceof Player attacker) || !(rawTarget instanceof LivingEntity target)) {
-                return;
-            }
-
-            BossSession session = sessions.get(target.getUniqueId());
-            if (session == null) {
-                return;
-            }
-
-            double damage = rawDamage instanceof Number number ? number.doubleValue() : 0.0D;
-            double effectiveDamage = resolveEffectiveDamage(target, damage);
-            if (effectiveDamage <= 0.0D) {
-                return;
-            }
-            session.recordDamage(attacker, effectiveDamage);
-            requestRefresh();
-        } catch (ReflectiveOperationException exception) {
-            plugin.getLogger().warning("处理 EntityTracker AttributePlus 伤害事件失败: " + exception.getMessage());
-        }
-    }
-
-    private void handleAttributePlusAttackEvent(
-        Event event,
-        Class<?> eventClass,
-        Method getAttackerMethod,
-        Method getEntityMethod,
-        Method getAttributeHandleMethod
-    ) {
-        if (!eventClass.isInstance(event)) {
-            return;
-        }
-
-        try {
-            Object rawAttacker = getAttackerMethod.invoke(event);
-            Object rawTarget = getEntityMethod.invoke(event);
-            if (!(rawAttacker instanceof Player attacker) || !(rawTarget instanceof LivingEntity target)) {
-                return;
-            }
-
-            BossSession session = sessions.get(target.getUniqueId());
-            if (session == null) {
-                return;
-            }
-
-            Object attributeHandle = getAttributeHandleMethod.invoke(event);
-            if (attributeHandle == null) {
-                return;
-            }
-            Method getDamageMethod = attributeHandle.getClass().getMethod("getDamage", LivingEntity.class);
-            Object rawDamage = getDamageMethod.invoke(attributeHandle, attacker);
-            double damage = rawDamage instanceof Number number ? number.doubleValue() : 0.0D;
-            double effectiveDamage = resolveEffectiveDamage(target, damage);
-            if (effectiveDamage <= 0.0D) {
-                return;
-            }
-            session.recordDamage(attacker, effectiveDamage);
-            requestRefresh();
-        } catch (ReflectiveOperationException exception) {
-            plugin.getLogger().warning("处理 EntityTracker AttributePlus 攻击事件失败: " + exception.getMessage());
-        }
-    }
-
     private void recordVanillaPlayerDamage(EntityDamageByEntityEvent event) {
         if (!(event.getEntity() instanceof LivingEntity target)) {
             return;
@@ -943,10 +802,6 @@ public final class BossTrackerService implements Listener {
 
         BossSession session = sessions.get(target.getUniqueId());
         if (session == null) {
-            return;
-        }
-
-        if (attributePlusHooked) {
             return;
         }
 
@@ -978,6 +833,22 @@ public final class BossTrackerService implements Listener {
             return;
         }
         session.recordTakenDamage(targetPlayer, damage);
+        requestRefresh();
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTaczGunDamage(TaczGunDamageEvent event) {
+        LivingEntity target = event.getTarget();
+        BossSession session = sessions.get(target.getUniqueId());
+        if (session == null) {
+            return;
+        }
+        Player attacker = event.getAttacker();
+        double damage = resolveEffectiveDamage(target, event.getDamage());
+        if (damage <= 0.0D) {
+            return;
+        }
+        session.recordDamage(attacker, damage);
         requestRefresh();
     }
 

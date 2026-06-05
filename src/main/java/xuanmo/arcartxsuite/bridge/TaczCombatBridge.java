@@ -2,27 +2,24 @@ package xuanmo.arcartxsuite.bridge;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.EnumMap;
-import java.util.Map;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
-import org.bukkit.event.HandlerList;
-import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.event.TaczGunDamageEvent;
 
 /**
  * TACZ（创世战术武器）兼容桥接，仅在混合核心（Mohist/Arclight 等）上启用。
  * <p>
- * 当 TACZ Mod 存在时，注册 Forge/NeoForge 事件监听器将 TACZ 武器伤害
- * 转发为 Bukkit EntityDamageByEntityEvent，以便 EntityTracker 等模块能正确追踪。
+ * 当 TACZ Mod 存在时，注册 Forge/NeoForge 事件监听器，将 {@code EntityHurtByGunEvent.Pre}
+ * 转换为 {@link TaczGunDamageEvent} 并通过 Bukkit 事件总线广播。
+ * AXS 模块可通过标准 {@code @EventHandler} 监听 {@link TaczGunDamageEvent} 获取枪械伤害信息，
+ * 而无需关心 Forge 反射细节，也不会与 {@link org.bukkit.event.entity.EntityDamageByEntityEvent} 混淆。
  */
-public final class TaczCombatBridge implements Listener {
+public final class TaczCombatBridge {
 
     private static final String TACZ_EVENT_CLASS = "com.tacz.guns.api.event.common.EntityHurtByGunEvent$Pre";
     private static final String FORGE_CLASS = "net.minecraftforge.common.MinecraftForge";
@@ -38,6 +35,8 @@ public final class TaczCombatBridge implements Listener {
     private Method getHurtEntityMethod;
     private Method getAttackerMethod;
     private Method getBaseAmountMethod;
+    private Method isHeadShotMethod;
+    private Method getGunIdMethod;
     private Method getBukkitEntityMethod;
 
     private TaczCombatBridge(JavaPlugin plugin, boolean debug) {
@@ -64,7 +63,6 @@ public final class TaczCombatBridge implements Listener {
                 plugin.getLogger().warning("[TaczCombat] 无法注册 Forge 事件监听器，TACZ 伤害桥接未启用。");
                 return null;
             }
-            Bukkit.getPluginManager().registerEvents(bridge, plugin);
             bridge.active = true;
             plugin.getLogger().info("[TaczCombat] TACZ 伤害桥接已启用。");
             return bridge;
@@ -76,7 +74,6 @@ public final class TaczCombatBridge implements Listener {
 
     public void shutdown() {
         if (active) {
-            HandlerList.unregisterAll(this);
             active = false;
             plugin.getLogger().info("[TaczCombat] TACZ 伤害桥接已关闭。");
         }
@@ -98,6 +95,8 @@ public final class TaczCombatBridge implements Listener {
             getHurtEntityMethod = findMethodByNames(eventPreClass, "getHurtEntity", "getEntity", "getTarget");
             getAttackerMethod = findMethodByNames(eventPreClass, "getAttacker", "getShooter", "getPlayer");
             getBaseAmountMethod = findMethodByNames(eventPreClass, "getBaseAmount", "getAmount", "getDamage");
+            isHeadShotMethod = findMethodByNames(eventPreClass, "isHeadShot", "isHeadshot");
+            getGunIdMethod = findMethodByNames(eventPreClass, "getGunId", "getGunID");
 
             if (getHurtEntityMethod == null || getAttackerMethod == null || getBaseAmountMethod == null) {
                 plugin.getLogger().warning("[TaczCombat] 无法找到 TACZ 事件所需方法: hurtEntity="
@@ -179,12 +178,43 @@ public final class TaczCombatBridge implements Listener {
                 return;
             }
 
-            // 4. 在主线程转发为 Bukkit EntityDamageByEntityEvent
+            // 4. 提取额外信息
+            boolean headShot = false;
+            if (isHeadShotMethod != null) {
+                try {
+                    Object headShotResult = isHeadShotMethod.invoke(event);
+                    if (headShotResult instanceof Boolean b) {
+                        headShot = b;
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            String gunId = "";
+            if (getGunIdMethod != null) {
+                try {
+                    Object gunIdResult = getGunIdMethod.invoke(event);
+                    if (gunIdResult != null) {
+                        gunId = gunIdResult.toString();
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+
+            // 5. 在主线程广播为 TaczGunDamageEvent
             final double finalDamage = damage;
+            final boolean finalHeadShot = headShot;
+            final String finalGunId = gunId;
+            Runnable fireEvent = () -> {
+                if (!livingTarget.isDead() && livingTarget.isValid()) {
+                    Bukkit.getPluginManager().callEvent(
+                        new TaczGunDamageEvent(player, livingTarget, finalDamage, finalHeadShot, finalGunId)
+                    );
+                }
+            };
             if (Bukkit.isPrimaryThread()) {
-                fireBukkitDamageEvent(player, livingTarget, finalDamage);
+                fireEvent.run();
             } else {
-                Bukkit.getScheduler().runTask(plugin, () -> fireBukkitDamageEvent(player, livingTarget, finalDamage));
+                Bukkit.getScheduler().runTask(plugin, fireEvent);
             }
         } catch (Exception e) {
             if (debug) {
@@ -193,30 +223,12 @@ public final class TaczCombatBridge implements Listener {
         }
     }
 
-    private void fireBukkitDamageEvent(Player attacker, LivingEntity target, double damage) {
-        if (target.isDead() || !target.isValid()) {
-            return;
-        }
-
-        Map<EntityDamageEvent.DamageModifier, Double> modifiers = new EnumMap<>(EntityDamageEvent.DamageModifier.class);
-        modifiers.put(EntityDamageEvent.DamageModifier.BASE, damage);
-
-        @SuppressWarnings("deprecation")
-        EntityDamageByEntityEvent syntheticEvent = new EntityDamageByEntityEvent(
-            attacker,
-            target,
-            EntityDamageEvent.DamageCause.PROJECTILE,
-            modifiers,
-            Map.of(EntityDamageEvent.DamageModifier.BASE, unused -> 0.0D)
-        );
-
-        Bukkit.getPluginManager().callEvent(syntheticEvent);
-
+    private void logTaczGunDamageEvent(Player attacker, LivingEntity target, double damage, boolean headShot) {
         if (debug) {
-            plugin.getLogger().info("[TaczCombat] 转发 TACZ 伤害 -> attacker=" + attacker.getName()
+            plugin.getLogger().info("[TaczCombat] 广播 TACZ 伤害 -> attacker=" + attacker.getName()
                 + ", target=" + target.getType() + "(" + target.getUniqueId() + ")"
                 + ", damage=" + String.format("%.2f", damage)
-                + ", cancelled=" + syntheticEvent.isCancelled());
+                + ", headshot=" + headShot);
         }
     }
 

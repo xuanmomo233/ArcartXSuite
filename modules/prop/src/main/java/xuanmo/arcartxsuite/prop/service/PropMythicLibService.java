@@ -31,19 +31,15 @@ public final class PropMythicLibService {
         activeModifiers.clear();
     }
 
+    public boolean hooked() {
+        return bridge.available();
+    }
+
     public void shutdown() {
         for (UUID playerUuid : List.copyOf(activeModifiers.keySet())) {
             clear(playerUuid);
         }
         warnedUnknownStats.clear();
-    }
-
-    public boolean enabled() {
-        return configuration.enabled();
-    }
-
-    public boolean hooked() {
-        return bridge.available() && configuration.enabled();
     }
 
     public boolean apply(Player player, String propId, List<PropMythicLibEffect> effects, int durationSeconds) {

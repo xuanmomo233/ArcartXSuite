@@ -1,4 +1,4 @@
-config-version: 1
+﻿config-version: 1
 # AXS Prop
 # 作用: 管理快捷道具定义、玩家绑定、按键触发、冷却、消耗、提示文案和临时属性效果。
 # 依赖: ArcartX；AttributePlus、MythicLib、MMOItems 按功能选用。
@@ -12,11 +12,8 @@ settings:
   debug: false
 
 mythiclib:
-  # 是否允许道具里的 ml|... / mythiclib|... 效果附加 MythicLib 临时属性。
-  # 未安装 MythicLib、未启用或挂钩失败时，Prop 模块仍会正常运行。
-  enabled: false
-
   # 临时属性 modifier 前缀。
+  # 是否生效由本体 config.yml 的 attribute-bridges.mythiclib 统一管理。
   # 最终会生成:
   #   <前缀>_<PROP_ID>_<STAT>
   source-prefix: "AXS_PROP"

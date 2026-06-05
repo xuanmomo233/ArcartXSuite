@@ -27,9 +27,10 @@ help:
 status:
   title: "&6Title 状态"
   cached: "&7缓存玩家数: &f{0}"
-  ap: "&7AP: {0}/{1}"
-  mythiclib: "&7MythicLib: {0}/{1}"
-  crane: "&7CraneAttribute: {0}/{1}"
+  ap: "&7AP: &f{0}"
+  mythiclib: "&7MythicLib: &f{0}"
+  crane: "&7CraneAttribute: &f{0}"
+  symphony: "&7Symphony: &f{0}"
 
 # ── give / revoke / open ──────────────────────────────
 give:

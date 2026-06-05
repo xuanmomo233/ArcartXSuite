@@ -1,9 +1,9 @@
 package xuanmo.arcartxsuite.title.config;
 
-public record TitleCraneAttributeConfiguration(
+public record TitleSymphonyConfiguration(
     String sourcePrefix
 ) {
-    public TitleCraneAttributeConfiguration {
+    public TitleSymphonyConfiguration {
         sourcePrefix = sourcePrefix == null || sourcePrefix.isBlank() ? "AXS_TITLE" : sourcePrefix.trim();
     }
 

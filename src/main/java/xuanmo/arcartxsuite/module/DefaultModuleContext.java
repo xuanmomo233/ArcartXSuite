@@ -34,6 +34,7 @@ import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXPropBridge;
 import xuanmo.arcartxsuite.keybind.KeybindService;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.bridge.TaczCombatBridge;
 import xuanmo.arcartxsuite.security.ClientPacketGuard;
 
 /**
@@ -54,6 +55,7 @@ final class DefaultModuleContext implements ModuleContext {
     private final ModuleRegistry registry;
     private final ClassLoader moduleClassLoader;
     private final KeybindService keybindService;
+    private final TaczCombatBridge taczCombatBridge;
 
     // 模块注册的资源（onDisable 时自动清理）
     private final List<Listener> registeredListeners = new ArrayList<>();
@@ -70,7 +72,8 @@ final class DefaultModuleContext implements ModuleContext {
         ClientPacketGuard packetGuard,
         ModuleRegistry registry,
         ClassLoader moduleClassLoader,
-        KeybindService keybindService
+        KeybindService keybindService,
+        TaczCombatBridge taczCombatBridge
     ) {
         this.plugin = plugin;
         this.moduleId = moduleId;
@@ -85,6 +88,7 @@ final class DefaultModuleContext implements ModuleContext {
         this.registry = registry;
         this.moduleClassLoader = moduleClassLoader;
         this.keybindService = keybindService;
+        this.taczCombatBridge = taczCombatBridge;
     }
 
     @Override
@@ -244,6 +248,11 @@ final class DefaultModuleContext implements ModuleContext {
     @Override
     public PacketGuardAPI packetGuard() {
         return packetGuard;
+    }
+
+    @Override
+    public boolean taczActive() {
+        return taczCombatBridge != null && taczCombatBridge.isActive();
     }
 
     @Override

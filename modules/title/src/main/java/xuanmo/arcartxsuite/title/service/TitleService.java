@@ -65,6 +65,7 @@ public class TitleService {
     private final TitleAttributePlusService attributePlusService;
     private final TitleMythicLibService mythicLibService;
     private final TitleCraneAttributeService craneAttributeService;
+    private final TitleSymphonyService symphonyService;
     private final TitleOverheadService overheadService;
     private final ExecutorService databaseExecutor = Executors.newSingleThreadExecutor(new TitleThreadFactory());
     private final ConcurrentMap<UUID, PlayerTitleState> states = new ConcurrentHashMap<>();
@@ -112,6 +113,7 @@ public class TitleService {
         this.attributePlusService = new TitleAttributePlusService(plugin, configuration.attributePlus(), attributeBridge.attributePlus());
         this.mythicLibService = new TitleMythicLibService(plugin, configuration.mythicLib(), attributeBridge.mythicLib());
         this.craneAttributeService = new TitleCraneAttributeService(plugin, configuration.craneAttribute(), attributeBridge.craneAttribute());
+        this.symphonyService = new TitleSymphonyService(plugin, configuration.symphony(), attributeBridge.symphony());
         ArcartXWorldTextureService worldTextureService = new ArcartXWorldTextureService(plugin);
         worldTextureService.initialize();
         this.overheadService = new TitleOverheadService(worldTextureService, logger);
@@ -164,6 +166,7 @@ public class TitleService {
             attributePlusService.clear(player);
             mythicLibService.clear(player);
             craneAttributeService.clear(player);
+            symphonyService.clear(player);
             overheadService.clear(player);
         }
         mythicLibService.shutdown();
@@ -215,6 +218,7 @@ public class TitleService {
         attributePlusService.clear(player);
         mythicLibService.clear(player);
         craneAttributeService.clear(player);
+        symphonyService.clear(player);
         UUID playerUuid = player.getUniqueId();
         states.remove(playerUuid);
         loadingStates.remove(playerUuid);
@@ -414,28 +418,20 @@ public class TitleService {
         return TitleStateResolver.resolve(getCachedState(playerUuid), configuration, clock.instant());
     }
 
-    public boolean attributePlusEnabled() {
-        return attributePlusService.enabled();
-    }
-
     public boolean attributePlusHooked() {
         return attributePlusService.hooked();
-    }
-
-    public boolean mythicLibEnabled() {
-        return mythicLibService.enabled();
     }
 
     public boolean mythicLibHooked() {
         return mythicLibService.hooked();
     }
 
-    public boolean craneAttributeEnabled() {
-        return craneAttributeService.enabled();
-    }
-
     public boolean craneAttributeHooked() {
         return craneAttributeService.hooked();
+    }
+
+    public boolean symphonyHooked() {
+        return symphonyService.hooked();
     }
 
     public PlayerTitleState getCachedState(UUID playerUuid) {
@@ -655,6 +651,7 @@ public class TitleService {
         attributePlusService.sync(player, resolvedState);
         mythicLibService.sync(player, resolvedState);
         craneAttributeService.sync(player, resolvedState);
+        symphonyService.sync(player, resolvedState);
         overheadService.sync(player, resolvedState);
     }
 

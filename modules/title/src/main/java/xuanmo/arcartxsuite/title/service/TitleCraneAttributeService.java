@@ -19,12 +19,8 @@ public final class TitleCraneAttributeService {
         this.bridge = bridge;
     }
 
-    public boolean enabled() {
-        return configuration.enabled();
-    }
-
     public boolean hooked() {
-        return bridge.available() && configuration.enabled();
+        return bridge.available();
     }
 
     public void sync(Player player, ResolvedTitleState resolvedState) {

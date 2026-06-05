@@ -124,12 +124,14 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
 
         // 导出 UI 资源到 ArcartX ui/ 目录
         exportUiResources(context);
+        // 导出 damage_display 资源到 ArcartX damage_display/ 目录
+        exportDamageDisplayResources(context);
 
         packetService = new CombatEffectPacketService(plugin, packetConfiguration, packetBridge, logger);
         packetService.start();
 
         if (clientBridge != null && clientBridge.isAvailable()) {
-            displayService = new CombatDisplayService(plugin, displayConfiguration, clientBridge);
+            displayService = new CombatDisplayService(plugin, displayConfiguration, clientBridge, context.attributeBridge());
             displayService.start();
         }
 
@@ -397,6 +399,12 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
         UI_RESOURCE_MAPPINGS.put("arcartx/ui/death_buffer.yml", "ui/death_buffer.yml");
     }
 
+    private static final Map<String, String> DAMAGE_DISPLAY_MAPPINGS = new LinkedHashMap<>();
+    static {
+        DAMAGE_DISPLAY_MAPPINGS.put("arcartx/damage_display/ArcartXSuite-damage.yml", "ArcartXSuite-damage.yml");
+        DAMAGE_DISPLAY_MAPPINGS.put("arcartx/damage_display/ArcartXSuite-heal.yml", "ArcartXSuite-heal.yml");
+    }
+
     private void exportUiResources(ModuleContext ctx) {
         ClassLoader loader = getClass().getClassLoader();
         for (Map.Entry<String, String> entry : UI_RESOURCE_MAPPINGS.entrySet()) {
@@ -415,6 +423,26 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
             } catch (IOException exception) {
                 ctx.logger().warning("UI 资源导出失败: " + entry.getKey() + " | " + exception.getMessage());
             }
+        }
+    }
+
+    private void exportDamageDisplayResources(ModuleContext ctx) {
+        org.bukkit.plugin.Plugin arcartX = org.bukkit.Bukkit.getPluginManager().getPlugin("ArcartX");
+        if (arcartX == null) {
+            ctx.logger().fine("ArcartX 未安装，跳过 damage_display 资源导出");
+            return;
+        }
+        File damageDisplayDir = new File(arcartX.getDataFolder(), "damage_display");
+        if (!damageDisplayDir.exists()) {
+            damageDisplayDir.mkdirs();
+        }
+        for (Map.Entry<String, String> entry : DAMAGE_DISPLAY_MAPPINGS.entrySet()) {
+            File target = new File(damageDisplayDir, entry.getValue());
+            if (target.exists()) {
+                continue;
+            }
+            ctx.exportResource(entry.getKey(), target, false);
+            ctx.logger().fine("已导出 damage_display 资源: " + entry.getValue());
         }
     }
 

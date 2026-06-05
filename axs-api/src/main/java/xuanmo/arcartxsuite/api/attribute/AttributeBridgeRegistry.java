@@ -24,4 +24,31 @@ public interface AttributeBridgeRegistry {
 
     /** Symphony 桥接 */
     SymphonyBridge symphony();
+
+    // ─── 通用属性伤害事件分发 ──────────────────────────────────
+
+    /**
+     * 是否有可用的属性伤害来源（任一属性插件已加载且桥接成功）。
+     * <p>
+     * 模块可用此判断是否需要注册 {@link AttributeDamageListener}。
+     */
+    boolean hasDamageSource();
+
+    /**
+     * 注册通用属性伤害事件监听器。
+     * <p>
+     * 当任一已对接属性插件触发伤害事件时，本体将其归一化为
+     * {@link AttributeDamageEvent} 后调用此监听器。
+     * 新增属性插件兼容时，模块无需调整。
+     *
+     * @param listener 监听器
+     */
+    void registerDamageListener(AttributeDamageListener listener);
+
+    /**
+     * 注销通用属性伤害事件监听器。
+     *
+     * @param listener 监听器
+     */
+    void unregisterDamageListener(AttributeDamageListener listener);
 }

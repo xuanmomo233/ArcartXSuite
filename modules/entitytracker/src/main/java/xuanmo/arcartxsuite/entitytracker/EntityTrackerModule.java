@@ -171,7 +171,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             bossService = new BossTrackerService(
                 context.plugin(), configuration, packetBridge, bossRuntimeUiIds,
                 platform, null, () -> context.getCapability(MailDispatchable.class),
-                context.itemSourceRegistry()
+                context.itemSourceRegistry(), context.attributeBridge()
             );
             bossService.start();
             adminCommand = new EntityTrackerAdminCommand(() -> bossService, messages());

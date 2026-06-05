@@ -11,7 +11,6 @@ public record PropModuleConfiguration(
         return new PropModuleConfiguration(
             configuration.getBoolean("settings.debug", false),
             new PropMythicLibConfiguration(
-                configuration.getBoolean("mythiclib.enabled", false),
                 configuration.getString("mythiclib.source-prefix", "AXS_PROP")
             )
         );

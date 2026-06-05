@@ -80,33 +80,29 @@ ui:
   empty-attribute-placeholder: "-"
 
 attributeplus:
-  # 是否尝试把称号属性同步到 AttributePlus Pro。
-  # 未安装 AP、未启用或挂钩失败时，称号模块仍会正常运行。
-  enabled: true
-
   # AP 属性来源前缀。
   # 最终会生成:
   #   <前缀>_DISPLAY
   #   <前缀>_COLLECTION
+  # 是否生效由本体 config.yml 的 attribute-bridges.attributeplus 统一管理。
   source-prefix: "AXS_TITLE"
 
 mythiclib:
-  # 是否尝试把称号属性同步到 MythicLib / MMOItems 玩家 stat。
-  # 默认关闭，避免旧配置里的自定义属性键在安装 MythicLib 后被误当成 stat id。
-  enabled: false
-
   # MythicLib modifier 前缀。
   # 最终会生成:
   #   <前缀>_DISPLAY_<STAT>
   #   <前缀>_COLLECTION_<STAT>
+  # 是否生效由本体 config.yml 的 attribute-bridges.mythiclib 统一管理。
   source-prefix: "AXS_TITLE"
 
 craneattribute:
-  # 是否尝试把称号属性同步到 CraneAttribute。
-  # 默认关闭；未安装、未启用或挂钩失败时，称号模块仍会正常运行。
-  enabled: false
-
   # CraneAttribute 属性来源前缀。
+  # 是否生效由本体 config.yml 的 attribute-bridges.craneattribute 统一管理。
+  source-prefix: "AXS_TITLE"
+
+symphony:
+  # Symphony 属性来源前缀。
+  # 是否生效由本体 config.yml 的 attribute-bridges.symphony 统一管理。
   source-prefix: "AXS_TITLE"
 
 display-title:

@@ -1,0 +1,24 @@
+# AXS CombatEffect — 治疗飘字样式 (heal)
+# 说明: 客户端数字飘字显示配置，由 CombatEffect 模块自动导出到 plugins/ArcartX/damage_display/
+# 文档: https://wiki.arcartx.com/docs/core/2_simple/9_damage_display
+
+# 样式ID
+ArcartXSuite-heal:
+  # 每张贴图的宽高（像素）
+  textureWidth: 22
+  textureHeight: 33
+  # 位置随机值（世界坐标单位）
+  randomMin: 0
+  randomMax: 0.75
+  # 贴图列表，对应数字 0-9
+  textures:
+    - "damage/0.png"
+    - "damage/1.png"
+    - "damage/2.png"
+    - "damage/3.png"
+    - "damage/4.png"
+    - "damage/5.png"
+    - "damage/6.png"
+    - "damage/7.png"
+    - "damage/8.png"
+    - "damage/9.png"

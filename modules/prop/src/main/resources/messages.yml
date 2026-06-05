@@ -26,7 +26,7 @@ status:
   props: "&7道具数: &f{0}"
   keys: "&7Key: &f{0}"
   ap: "&7AP: &f{0}"
-  mythiclib: "&7MythicLib: &f{0}/{1}"
+  mythiclib: "&7MythicLib: &f{0}"
 
 # ── set ───────────────────────────────────────────────
 set:

@@ -21,6 +21,7 @@ public record TitleModuleConfiguration(
     TitleAttributePlusConfiguration attributePlus,
     TitleMythicLibConfiguration mythicLib,
     TitleCraneAttributeConfiguration craneAttribute,
+    TitleSymphonyConfiguration symphony,
     TitleDisplayConfiguration displayTitle,
     Map<String, TitleGroupDefinition> groups,
     Map<String, TitleQualityDefinition> qualities,
@@ -64,18 +65,19 @@ public record TitleModuleConfiguration(
         );
         ConfigurationSection attributePlusSection = configuration.getConfigurationSection("attributeplus");
         TitleAttributePlusConfiguration attributePlus = new TitleAttributePlusConfiguration(
-            attributePlusSection == null || attributePlusSection.getBoolean("enabled", true),
             attributePlusSection == null ? "AXS_TITLE" : nullToEmpty(attributePlusSection.getString("source-prefix", "AXS_TITLE"))
         );
         ConfigurationSection mythicLibSection = configuration.getConfigurationSection("mythiclib");
         TitleMythicLibConfiguration mythicLib = new TitleMythicLibConfiguration(
-            mythicLibSection != null && mythicLibSection.getBoolean("enabled", false),
             mythicLibSection == null ? "AXS_TITLE" : nullToEmpty(mythicLibSection.getString("source-prefix", "AXS_TITLE"))
         );
         ConfigurationSection craneAttributeSection = configuration.getConfigurationSection("craneattribute");
         TitleCraneAttributeConfiguration craneAttribute = new TitleCraneAttributeConfiguration(
-            craneAttributeSection != null && craneAttributeSection.getBoolean("enabled", false),
             craneAttributeSection == null ? "AXS_TITLE" : nullToEmpty(craneAttributeSection.getString("source-prefix", "AXS_TITLE"))
+        );
+        ConfigurationSection symphonySection = configuration.getConfigurationSection("symphony");
+        TitleSymphonyConfiguration symphony = new TitleSymphonyConfiguration(
+            symphonySection == null ? "AXS_TITLE" : nullToEmpty(symphonySection.getString("source-prefix", "AXS_TITLE"))
         );
         ConfigurationSection displayTitleSection = configuration.getConfigurationSection("display-title");
         List<String> displayGroups = new ArrayList<>();
@@ -109,6 +111,7 @@ public record TitleModuleConfiguration(
             attributePlus,
             mythicLib,
             craneAttribute,
+            symphony,
             displayTitle,
             immutableCopy(groups),
             immutableCopy(qualities),

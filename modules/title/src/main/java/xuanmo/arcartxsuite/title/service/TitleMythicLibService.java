@@ -36,12 +36,8 @@ public final class TitleMythicLibService {
         syncedStates.clear();
     }
 
-    public boolean enabled() {
-        return configuration.enabled();
-    }
-
     public boolean hooked() {
-        return bridge.available() && configuration.enabled();
+        return bridge.available();
     }
 
     public void sync(Player player, ResolvedTitleState resolvedState) {

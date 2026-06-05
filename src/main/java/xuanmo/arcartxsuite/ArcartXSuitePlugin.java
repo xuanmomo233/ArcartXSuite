@@ -166,7 +166,8 @@ public class ArcartXSuitePlugin extends JavaPlugin {
             propBridge,
             clientPacketGuard,
             licenseService,
-            keybindService
+            keybindService,
+            taczCombatBridge
         );
         ModuleRegistry.LoadSummary summary = moduleRegistry.loadAll();
         consoleInfo(

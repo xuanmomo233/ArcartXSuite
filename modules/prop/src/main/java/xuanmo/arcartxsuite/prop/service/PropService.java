@@ -100,10 +100,6 @@ public final class PropService implements Listener {
         return attributePlusService.hooked();
     }
 
-    public boolean mythicLibEnabled() {
-        return mythicLibService.enabled();
-    }
-
     public boolean mythicLibHooked() {
         return mythicLibService.hooked();
     }
@@ -406,22 +402,19 @@ public final class PropService implements Listener {
         }
 
         if (!attributeLines.isEmpty() && !attributePlusService.apply(player, definition.displayName(), attributeLines, definition.durationSeconds()) && configuration.debug()) {
-            Plugin attributePlus = Bukkit.getPluginManager().getPlugin("AttributePlus");
-            plugin.getLogger().info("ArcartXProp AP 效果已跳过 -> installed=" + (attributePlus != null && attributePlus.isEnabled()));
+            plugin.getLogger().info("ArcartXProp AP 效果已跳过 -> hooked=" + attributePlusService.hooked());
         }
         if (!mythicLibEffects.isEmpty()
             && !mythicLibService.apply(player, definition.id(), mythicLibEffects, definition.durationSeconds())
             && configuration.debug()
         ) {
-            Plugin mythicLib = Bukkit.getPluginManager().getPlugin("MythicLib");
-            plugin.getLogger().info("ArcartXProp MythicLib 效果已跳过 -> installed=" + (mythicLib != null && mythicLib.isEnabled()));
+            plugin.getLogger().info("ArcartXProp MythicLib 效果已跳过 -> hooked=" + mythicLibService.hooked());
         }
         if (!symphonyEffects.isEmpty()
             && !symphonyService.apply(player, definition.id(), symphonyEffects, definition.durationSeconds())
             && configuration.debug()
         ) {
-            Plugin symphony = Bukkit.getPluginManager().getPlugin("Symphony");
-            plugin.getLogger().info("ArcartXProp Symphony 效果已跳过 -> installed=" + (symphony != null && symphony.isEnabled()));
+            plugin.getLogger().info("ArcartXProp Symphony 效果已跳过 -> hooked=" + symphonyService.hooked());
         }
     }
 

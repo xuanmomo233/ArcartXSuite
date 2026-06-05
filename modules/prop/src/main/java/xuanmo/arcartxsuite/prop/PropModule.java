@@ -81,7 +81,7 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
             "Prop 模块已载入，props=" + service.propCount()
                 + " | keys=" + service.registeredKeyCount()
                 + " | category=" + service.keyCategory()
-                + " | mythiclib=" + configuration.mythicLib().enabled() + "/" + service.mythicLibHooked()
+                + " | mythiclib=" + service.mythicLibHooked()
                 + " | debug=" + configuration.debug()
         );
     }

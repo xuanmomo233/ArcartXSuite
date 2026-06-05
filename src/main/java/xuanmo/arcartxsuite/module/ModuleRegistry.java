@@ -42,6 +42,7 @@ import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXPropBridge;
 import xuanmo.arcartxsuite.bridge.DefaultAttributeBridgeRegistry;
 import xuanmo.arcartxsuite.bridge.DefaultItemSourceRegistry;
+import xuanmo.arcartxsuite.bridge.TaczCombatBridge;
 import xuanmo.arcartxsuite.keybind.KeybindService;
 import xuanmo.arcartxsuite.license.LicenseMessages;
 import xuanmo.arcartxsuite.license.LicenseService;
@@ -63,6 +64,7 @@ public final class ModuleRegistry {
     private final ClientPacketGuard packetGuard;
     private final LicenseService licenseService;
     private final KeybindService keybindService;
+    private final TaczCombatBridge taczCombatBridge;
 
     // ─── 全局桥接单例 ──────────────────────────────────────────
     private DefaultItemSourceRegistry itemSourceRegistry;
@@ -95,7 +97,8 @@ public final class ModuleRegistry {
         ArcartXPropBridge propBridge,
         ClientPacketGuard packetGuard,
         LicenseService licenseService,
-        KeybindService keybindService
+        KeybindService keybindService,
+        TaczCombatBridge taczCombatBridge
     ) {
         this.plugin = plugin;
         this.modulesDir = modulesDir;
@@ -106,6 +109,7 @@ public final class ModuleRegistry {
         this.packetGuard = packetGuard;
         this.licenseService = licenseService;
         this.keybindService = keybindService;
+        this.taczCombatBridge = taczCombatBridge;
     }
 
     // ─── 生命周期 ─────────────────────────────────────────────
@@ -527,7 +531,8 @@ public final class ModuleRegistry {
             packetGuard,
             this,
             classLoader,
-            keybindService
+            keybindService,
+            taczCombatBridge
         );
 
         LoadedModule loaded = new LoadedModule(descriptor, instance, classLoader, jarFile);
@@ -675,6 +680,12 @@ public final class ModuleRegistry {
         if (attributeBridgeRegistry == null) {
             attributeBridgeRegistry = new DefaultAttributeBridgeRegistry(plugin);
         }
+        org.bukkit.configuration.ConfigurationSection attrBridges = rootConfig.getConfigurationSection("attribute-bridges");
+        boolean apEnabled = attrBridges == null || attrBridges.getBoolean("attributeplus", true);
+        boolean caEnabled = attrBridges == null || attrBridges.getBoolean("craneattribute", true);
+        boolean mlEnabled = attrBridges == null || attrBridges.getBoolean("mythiclib", true);
+        boolean symEnabled = attrBridges == null || attrBridges.getBoolean("symphony", true);
+        attributeBridgeRegistry.setSourceEnabled(apEnabled, caEnabled, mlEnabled, symEnabled);
         attributeBridgeRegistry.initialize();
 
         // 全局事件总线

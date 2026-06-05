@@ -70,7 +70,7 @@ public final class PropAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("status.props", svc.propCount()));
         sender.sendMessage(fullMsg("status.keys", svc.registeredKeyCount()));
         sender.sendMessage(fullMsg("status.ap", svc.attributePlusHooked()));
-        sender.sendMessage(fullMsg("status.mythiclib", svc.mythicLibEnabled(), svc.mythicLibHooked()));
+        sender.sendMessage(fullMsg("status.mythiclib", svc.mythicLibHooked()));
     }
 
     private void handleSet(CommandSender sender, String[] args) {

@@ -4,7 +4,6 @@ import java.util.Locale;
 import xuanmo.arcartxsuite.api.mythiclib.MythicLibStatKeyNormalizer;
 
 public record PropMythicLibConfiguration(
-    boolean enabled,
     String sourcePrefix
 ) {
     public PropMythicLibConfiguration {

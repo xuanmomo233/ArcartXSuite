@@ -100,6 +100,10 @@ public interface ModuleContext {
     @ApiStability.Stable
     AttributeBridgeRegistry attributeBridge();
 
+    /** TACZ（创世战术武器）兼容桥接是否已激活。模块可通过此查询判断 TACZ 伤害转发是否生效。 */
+    @ApiStability.Stable
+    boolean taczActive();
+
     // ─── 模块间通信 ───────────────────────────────────────────
 
     /**

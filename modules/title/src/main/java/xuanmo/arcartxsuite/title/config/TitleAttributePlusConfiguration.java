@@ -1,7 +1,6 @@
 package xuanmo.arcartxsuite.title.config;
 
 public record TitleAttributePlusConfiguration(
-    boolean enabled,
     String sourcePrefix
 ) {
     public TitleAttributePlusConfiguration {

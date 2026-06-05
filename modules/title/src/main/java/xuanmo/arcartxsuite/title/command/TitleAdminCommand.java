@@ -88,9 +88,10 @@ public final class TitleAdminCommand implements ModuleCommandHandler {
         if (svc == null) { sender.sendMessage(msg("common.service-down")); return; }
         sender.sendMessage(msg("status.title"));
         sender.sendMessage(msg("status.cached", svc.cachedPlayerCount()));
-        sender.sendMessage(msg("status.ap", svc.attributePlusEnabled(), svc.attributePlusHooked()));
-        sender.sendMessage(msg("status.mythiclib", svc.mythicLibEnabled(), svc.mythicLibHooked()));
-        sender.sendMessage(msg("status.crane", svc.craneAttributeEnabled(), svc.craneAttributeHooked()));
+        sender.sendMessage(msg("status.ap", svc.attributePlusHooked()));
+        sender.sendMessage(msg("status.mythiclib", svc.mythicLibHooked()));
+        sender.sendMessage(msg("status.crane", svc.craneAttributeHooked()));
+        sender.sendMessage(msg("status.symphony", svc.symphonyHooked()));
     }
 
     private void handleGive(CommandSender sender, String[] args) {
