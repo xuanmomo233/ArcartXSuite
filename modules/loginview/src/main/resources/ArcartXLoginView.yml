@@ -41,6 +41,10 @@ ui:
   open-delay-ticks: 20
   close-on-login: true
 
+terms-of-service:
+  #是否开启玩家必须查阅服务器服规才能登录
+  enabled: true
+
 security:
   min-password-length: 6
   max-password-length: 64

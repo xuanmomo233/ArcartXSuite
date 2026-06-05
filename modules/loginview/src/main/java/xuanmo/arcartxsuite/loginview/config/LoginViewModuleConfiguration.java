@@ -12,6 +12,7 @@ public record LoginViewModuleConfiguration(
     BypassWelcomeConfiguration bypassWelcome,
     QqBindingConfiguration qqBinding,
     UiConfiguration ui,
+    TermsOfServiceConfiguration termsOfService,
     SecurityConfiguration security,
     StorageConfiguration storage,
     MigrationConfiguration migration,
@@ -26,6 +27,7 @@ public record LoginViewModuleConfiguration(
         ConfigurationSection messagesSection = configuration.getConfigurationSection("messages");
         ConfigurationSection bypassWelcomeSection = configuration.getConfigurationSection("auth.bypass-welcome");
         ConfigurationSection qqBindingSection = configuration.getConfigurationSection("qq-binding");
+        ConfigurationSection termsOfServiceSection = configuration.getConfigurationSection("terms-of-service");
 
         return new LoginViewModuleConfiguration(
             configuration.getBoolean("debug", false),
@@ -33,6 +35,7 @@ public record LoginViewModuleConfiguration(
             BypassWelcomeConfiguration.load(bypassWelcomeSection),
             QqBindingConfiguration.load(qqBindingSection),
             UiConfiguration.load(uiSection),
+            TermsOfServiceConfiguration.load(termsOfServiceSection),
             SecurityConfiguration.load(securitySection),
             StorageConfiguration.load(storageSection),
             MigrationConfiguration.load(migrationSection),
@@ -274,6 +277,16 @@ public record LoginViewModuleConfiguration(
                 sanitizeIdentifier(string(section, "columns.email", "email"), "email"),
                 string(section, "imported-hash-algorithm", "AUTHME_BCRYPT"),
                 integer(section, "batch-size", 200, 1)
+            );
+        }
+    }
+
+    public record TermsOfServiceConfiguration(
+        boolean enabled
+    ) {
+        private static TermsOfServiceConfiguration load(ConfigurationSection section) {
+            return new TermsOfServiceConfiguration(
+                bool(section, "enabled", true)
             );
         }
     }

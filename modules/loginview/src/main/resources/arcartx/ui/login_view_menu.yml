@@ -53,6 +53,7 @@ ui:
       var.changeConfirmPassword = ''
       var.agreed = false
       var.showRules = false
+      var.requireTerms = packet['requireTerms']
     result: |-
       var.result = packet['message']
       var.lastSuccess = packet['success']
@@ -216,7 +217,7 @@ controls:
               y: 476
               texts: "var.agreed ? '&a✔ &f我已阅读并同意服务器游玩须知' : '      &f我已阅读并同意服务器游玩须知'"
               fontSize: 36
-              visible: "var.type == 'login' || var.type == 'bypass'"
+              visible: "(var.type == 'login' || var.type == 'bypass') && var.requireTerms"
             action:
               click: var.showRules = true
             children:
@@ -355,7 +356,7 @@ controls:
               y: 432
               texts: "var.agreed ? '&a✔ &f我已阅读并同意服务器游玩须知' : '      &f我已阅读并同意服务器游玩须知'"
               fontSize: 36
-              visible: var.type == 'bypass_unbound'
+              visible: "var.type == 'bypass_unbound' && var.requireTerms"
             action:
               click: var.showRules = true
             children:
@@ -493,7 +494,7 @@ controls:
               y: 524
               texts: "var.agreed ? '&a✔ &f我已阅读并同意服务器游玩须知' : '      &f我已阅读并同意服务器游玩须知'"
               fontSize: 36
-              visible: var.type == 'register'
+              visible: "var.type == 'register' && var.requireTerms"
             action:
               click: var.showRules = true
             children:

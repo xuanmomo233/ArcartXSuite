@@ -238,7 +238,7 @@ public final class LoginViewService implements Listener {
     }
 
     private void handleLogin(Player player, String password, boolean agreed) {
-        if (!agreed) {
+        if (configuration.termsOfService().enabled() && !agreed) {
             sendResult(player, color("&c请先阅读并同意服务器游玩须知。"), false);
             return;
         }
@@ -287,7 +287,7 @@ public final class LoginViewService implements Listener {
     }
 
     private void handleRegister(Player player, String password, String confirmPassword, boolean agreed) {
-        if (!agreed) {
+        if (configuration.termsOfService().enabled() && !agreed) {
             sendResult(player, color("&c请先阅读并同意服务器游玩须知。"), false);
             return;
         }
@@ -332,7 +332,7 @@ public final class LoginViewService implements Listener {
     }
 
     private void handleBypassEnter(Player player, boolean agreed) {
-        if (!agreed) {
+        if (configuration.termsOfService().enabled() && !agreed) {
             sendResult(player, color("&c请先阅读并同意服务器游玩须知。"), false);
             return;
         }
@@ -569,6 +569,7 @@ public final class LoginViewService implements Listener {
         payload.put("address", player.getAddress() == null ? "" : player.getAddress().getHostString());
         payload.put("time", DATE_FORMATTER.format(Instant.now()));
         payload.put("message", premiumBypass ? "" : (changeMode || registered ? "" : color(configuration.messages().notRegistered())));
+        payload.put("requireTerms", configuration.termsOfService().enabled());
         return payload;
     }
 

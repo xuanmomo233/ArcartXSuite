@@ -43,6 +43,7 @@ ui:
       var.bindCode = ''
       var.agreed = false
       var.showRules = false
+      var.requireTerms = true
   packetHandler:
     result: |-
       var.result = packet['message']
@@ -80,6 +81,7 @@ ui:
       var.bindCode = ''
       var.agreed = false
       var.showRules = false
+      var.requireTerms = true
     close: "var.result = packet['message']"
   defaultOpen: false
 controls:
@@ -259,6 +261,7 @@ controls:
               y: 160
               texts: "var.agreed ? '&a✔ &f我已阅读并同意服务器游玩须知' : '      &f我已阅读并同意服务器游玩须知'"
               fontSize: 36
+              visible: "var.type == 'bypass' && var.requireTerms"
             action:
               click: var.showRules = true
             children:
