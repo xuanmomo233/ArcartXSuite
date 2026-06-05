@@ -68,3 +68,55 @@ items:
     conditions:
       permission: "axsmarket.shop.legendary"
       min-level: 30
+
+  neige_fishing_rod:
+    # NeigeItems 物品库（需在 NeigeItems 中预先配置 ID）
+    source: "neige"
+    item-id: "NeigeFishRod"
+    display-name: "&e神奇钓鱼竿"
+    buy-price: 3000
+    sell-price: 600
+    currency: "money"
+    stock-mode: "global"
+    stock-amount: 8
+    limit-per-player: 2
+    limit-reset: "daily"
+    discount: {}
+    conditions:
+      permission: ""
+      min-level: 10
+
+  overture_treasure_box:
+    # Overture 物品库（slot 参数可为空，代表默认槽位）
+    source: "overture"
+    item-id: "OvertureTreasure"
+    display-name: "&d神秘宝藏"
+    buy-price: 5000
+    sell-price: 0
+    currency: "money"
+    stock-mode: "global"
+    stock-amount: 3
+    limit-per-player: 1
+    limit-reset: "never"
+    discount:
+      "axsmarket.vip": 0.85
+    conditions:
+      permission: "axsmarket.shop.vip"
+      min-level: 0
+
+  mmoitems_steel_helmet:
+    # MMOItems 物品库（使用 MMOItems 内部 Type 与 ID 组合）
+    source: "mmoitems"
+    item-id: "ARMOR;STEEL_HELMET"
+    display-name: "&7钢盔"
+    buy-price: 1200
+    sell-price: 240
+    currency: "points"
+    stock-mode: "per-player"
+    stock-amount: 1
+    limit-per-player: 1
+    limit-reset: "weekly"
+    discount: {}
+    conditions:
+      permission: ""
+      min-level: 20

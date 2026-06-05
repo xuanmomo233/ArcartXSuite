@@ -147,6 +147,10 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         // MailDispatchable supplier（延迟查找）
         java.util.function.Supplier<MailDispatchable> mailSupplier = () -> context.getCapability(MailDispatchable.class);
 
+        // 首次启动时自动导出示例商店和回收表
+        ensureExampleShopExported();
+        ensureDefaultRecycleExported();
+
         service = new MarketService(context.plugin(), configuration, packetBridge,
             currencyManager, itemSourceRegistry, itemSerializer,
             context.itemStackBridge(), mailSupplier, context.logger());
@@ -198,6 +202,32 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         xuanmo.arcartxsuite.api.UiBinding binding = context.prepareUiBinding(name, configuredId, true, uiFile);
         if (binding != null) {
             recordUiBinding(relativeUiPath, binding);
+        }
+    }
+
+    private void ensureExampleShopExported() {
+        File shopDir = new File(context.dataFolder(), configuration.shop().shopsDirectory());
+        if (!shopDir.exists()) {
+            shopDir.mkdirs();
+        }
+        File[] files = shopDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (files == null || files.length == 0) {
+            File target = new File(shopDir, "example_shop.yml");
+            context.exportResource("shops/example_shop.yml", target, false);
+            context.logger().info("[Market] 已导出示例商店到 " + target.getPath());
+        }
+    }
+
+    private void ensureDefaultRecycleExported() {
+        File recycleDir = new File(context.dataFolder(), configuration.recycle().recycleDirectory());
+        if (!recycleDir.exists()) {
+            recycleDir.mkdirs();
+        }
+        File[] files = recycleDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (files == null || files.length == 0) {
+            File target = new File(recycleDir, "default_recycle.yml");
+            context.exportResource("recycle/default_recycle.yml", target, false);
+            context.logger().info("[Market] 已导出默认回收表到 " + target.getPath());
         }
     }
 
