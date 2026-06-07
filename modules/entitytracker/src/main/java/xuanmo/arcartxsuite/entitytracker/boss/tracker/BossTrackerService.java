@@ -682,15 +682,61 @@ public final class BossTrackerService implements Listener {
         packet.put("maxDamageRankingEntries", configuration.getMaxDamageRankingEntries());
         packet.put("sortMode", snapshot.sortMode().configKey());
 
-        int slot = 1;
-        for (; slot <= snapshot.visibleSlots().size(); slot++) {
-            BossViewSlot slotData = snapshot.visibleSlots().get(slot - 1);
-            writeBossSlot(packet, slot, slotData);
+        Map<String, Object> bosses = new LinkedHashMap<>();
+        int slot = 0;
+        for (; slot < snapshot.visibleSlots().size(); slot++) {
+            BossViewSlot slotData = snapshot.visibleSlots().get(slot);
+            bosses.put(Integer.toString(slot), buildBossEntry(slotData));
         }
-        for (; slot <= configuration.maxVisibleBars(); slot++) {
-            writeEmptySlot(packet, slot);
-        }
+        packet.put("bosses", bosses);
         return packet;
+    }
+
+    private Map<String, Object> buildBossEntry(BossViewSlot slotData) {
+        Map<String, Object> entry = new LinkedHashMap<>();
+        BossPlaceholderContext ctx = slotData.context();
+        entry.put("visible", ctx.visible());
+        entry.put("title", slotData.title());
+        entry.put("subtitle", slotData.subtitle());
+        entry.put("health", ctx.health());
+        entry.put("maxHealth", ctx.maxHealth());
+        entry.put("healthText", ctx.healthText());
+        entry.put("maxHealthText", ctx.maxHealthText());
+        entry.put("healthPercent", ctx.healthPercent());
+        entry.put("healthPercentText", ctx.healthPercentText());
+        entry.put("distance", ctx.distance());
+        entry.put("distanceText", ctx.distanceText());
+        entry.put("progress", ctx.progress());
+        entry.put("mobId", ctx.mythicMobId());
+        entry.put("displayName", ctx.displayName());
+        entry.put("entityUuid", ctx.entityUuid());
+        entry.put("hasTarget", ctx.hasTarget());
+        entry.put("targetDisplayName", ctx.targetDisplayName());
+        entry.put("targetUuid", ctx.targetUuid());
+        entry.put("targetType", ctx.targetType());
+        entry.put("spawnOrder", ctx.spawnOrder());
+        entry.put("priority", ctx.priority());
+        entry.put("world", ctx.world());
+        entry.put("x", ctx.x());
+        entry.put("y", ctx.y());
+        entry.put("z", ctx.z());
+        entry.put("aliveSeconds", ctx.aliveSeconds());
+        entry.put("aliveTime", ctx.aliveTime());
+        entry.put("rankingEnabled", ctx.damageRanking().enabled());
+        entry.put("damageParticipantCount", ctx.damageRanking().participantCount());
+        entry.put("damageTrackedPlayerCount", ctx.damageRanking().trackedPlayerCount());
+        entry.put("totalDamage", ctx.damageRanking().totalDamage());
+        entry.put("totalDamageText", ctx.totalDamageText());
+        entry.put("viewerRank", ctx.viewerDamageEntry().rank());
+        entry.put("viewerRankText", ctx.viewerRankText());
+        entry.put("viewerQualified", ctx.viewerDamageEntry().qualified());
+        entry.put("viewerDamage", ctx.viewerDamageEntry().damage());
+        entry.put("viewerDamageText", ctx.viewerDamageText());
+        entry.put("viewerDamagePercent", ctx.viewerDamageEntry().damagePercent());
+        entry.put("viewerDamagePercentText", ctx.viewerDamagePercentText());
+        entry.put("viewerTakenDamage", ctx.viewerDamageEntry().takenDamage());
+        entry.put("viewerTakenDamageText", ctx.viewerTakenDamageText());
+        return entry;
     }
 
     private void closeBossHud(Player player) {
