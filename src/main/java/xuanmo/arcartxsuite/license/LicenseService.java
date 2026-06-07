@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
+import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.license.LicenseGateway.LicenseAuthException;
 import xuanmo.arcartxsuite.license.LicenseGateway.LicenseNetworkException;
@@ -49,7 +50,23 @@ public final class LicenseService {
     public void initialize() {
         reloadConfig();
         loadCacheDecision();
-        refresh(false);
+        scheduleBackgroundRefresh(false);
+    }
+
+    private void scheduleBackgroundRefresh(boolean forceActivate) {
+        if (config == null || !config.hasLicenseIdentity()) {
+            return;
+        }
+        LicenseDecision previous = decision;
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            refresh(forceActivate);
+            LicenseDecision current = decision;
+            if (!previous.allowsPaidModules() && current.allowsPaidModules()) {
+                Bukkit.getScheduler().runTask(plugin, () -> logger.info(
+                    "ArcartXSuite 后台授权校验已完成，付费模块现已可用。若尚未加载，请执行 /axs reload。"
+                ));
+            }
+        });
     }
 
     public void reloadConfig() {

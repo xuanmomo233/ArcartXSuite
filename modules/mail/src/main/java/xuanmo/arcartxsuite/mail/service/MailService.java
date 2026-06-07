@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.file.Files;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -72,9 +73,10 @@ import xuanmo.arcartxsuite.mail.model.MailPresetDefinition;
 import xuanmo.arcartxsuite.mail.model.MailSendQuote;
 import xuanmo.arcartxsuite.mail.model.MailSourceType;
 import xuanmo.arcartxsuite.mail.model.MailStatus;
-import xuanmo.arcartxsuite.mail.redis.MailRedisBridge;
 import xuanmo.arcartxsuite.mail.storage.MailRepository;
 import xuanmo.arcartxsuite.mail.util.MailItemSerializer;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 
 public final class MailService implements Listener {
@@ -123,6 +125,7 @@ public final class MailService implements Listener {
     private final BundledResourceWriter bundledResourceWriter;
     private final BiConsumer<String, Player> signalDispatcher;
     private final CurrencyBridgeAPI currencyBridgeManager;
+    private final CrossServerAPI crossServer;
     private final Map<String, MailPresetDefinition> presets = new ConcurrentHashMap<>();
     private final Map<UUID, Long> selectedMailIds = new ConcurrentHashMap<>();
     private final Map<UUID, MailInboxQuery> inboxQueries = new ConcurrentHashMap<>();
@@ -134,7 +137,7 @@ public final class MailService implements Listener {
     private final Set<UUID> logViewers = ConcurrentHashMap.newKeySet();
 
     private BukkitTask cleanupTask;
-    private MailRedisBridge redisBridge;
+    private CrossServerChannel crossServerChannel;
     private String inboxUiId;
     private String composeUiId;
     private String logsUiId;
@@ -154,10 +157,11 @@ public final class MailService implements Listener {
         UiResourceExporter uiResourceExporter,
         BundledResourceWriter bundledResourceWriter,
         BiConsumer<String, Player> signalDispatcher,
-        CurrencyBridgeAPI currencyBridgeManager
+        CurrencyBridgeAPI currencyBridgeManager,
+        CrossServerAPI crossServer
     ) {
         this(plugin, plugin.getDataFolder(), configuration, repository, bridge, packetGuard,
-            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager);
+            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer);
     }
 
     public MailService(
@@ -170,7 +174,8 @@ public final class MailService implements Listener {
         UiResourceExporter uiResourceExporter,
         BundledResourceWriter bundledResourceWriter,
         BiConsumer<String, Player> signalDispatcher,
-        CurrencyBridgeAPI currencyBridgeManager
+        CurrencyBridgeAPI currencyBridgeManager,
+        CrossServerAPI crossServer
     ) {
         this.plugin = plugin;
         this.baseDataDir = baseDataDir;
@@ -182,6 +187,7 @@ public final class MailService implements Listener {
         this.bundledResourceWriter = bundledResourceWriter;
         this.signalDispatcher = signalDispatcher;
         this.currencyBridgeManager = currencyBridgeManager;
+        this.crossServer = crossServer;
     }
 
     public void start() throws Exception {
@@ -209,14 +215,11 @@ public final class MailService implements Listener {
 
         cleanupTask = Bukkit.getScheduler()
             .runTaskTimer(plugin, this::runCleanup, configuration.retention().cleanupIntervalTicks(), configuration.retention().cleanupIntervalTicks());
-        if (shouldEnableRedis()) {
-            MailRedisBridge candidate = new MailRedisBridge(plugin, configuration.redis(), this::handleRedisMessage);
-            if (candidate.start()) {
-                redisBridge = candidate;
-            } else {
-                candidate.shutdown();
-            }
-        }
+        crossServerChannel = crossServer.openChannel(
+            "mail",
+            configuration.crossServer(),
+            delivery -> handleCrossServerMessage(delivery.payload())
+        );
     }
 
     public void shutdown() {
@@ -224,9 +227,9 @@ public final class MailService implements Listener {
             cleanupTask.cancel();
             cleanupTask = null;
         }
-        if (redisBridge != null) {
-            redisBridge.shutdown();
-            redisBridge = null;
+        if (crossServerChannel != null) {
+            crossServerChannel.close();
+            crossServerChannel = null;
         }
 
         for (ComposeSession session : List.copyOf(composeSessions.values())) {
@@ -383,8 +386,14 @@ public final class MailService implements Listener {
         });
     }
 
+    public boolean crossServerActive() {
+        return crossServerChannel != null && crossServerChannel.isActive();
+    }
+
+    /** @deprecated 使用 {@link #crossServerActive()} */
+    @Deprecated
     public boolean redisActive() {
-        return redisBridge != null && redisBridge.isActive();
+        return crossServerActive();
     }
 
     public int composeSessionCount() {
@@ -1347,11 +1356,7 @@ public final class MailService implements Listener {
         }
     }
 
-    private boolean shouldEnableRedis() {
-        return configuration.redis().enabled();
-    }
-
-    private void handleRedisMessage(String message) {
+    private void handleCrossServerMessage(String message) {
         if (configuration.debug()) {
             plugin.getLogger().info("收到邮件 Redis 消息: " + message);
         }
@@ -1817,28 +1822,10 @@ public final class MailService implements Listener {
             }
 
             Instant now = Instant.now();
-            repository.updateMailState(
-                new MailMessage(
-                    mail.id(),
-                    mail.ownerUuid(),
-                    mail.senderUuid(),
-                    mail.senderName(),
-                    mail.sourceType(),
-                    mail.presetId(),
-                    mail.cdkCode(),
-                    mail.subject(),
-                    mail.body(),
-                    MailStatus.CLAIMED,
-                    mail.attachments(),
-                    mail.claimCommands(),
-                    mail.claimConditions(),
-                    mail.createdAt(),
-                    mail.expiresAt(),
-                    now,
-                    now,
-                    mail.deletedAt()
-                )
-            );
+            MailStatus previousStatus = mail.status();
+            if (!repository.tryClaimMail(player.getUniqueId(), mailId, now)) {
+                return MailOperationResult.failure("该邮件已被领取或当前不可领取。");
+            }
 
             deliverItemRewards(player, itemRewards);
             for (String command : mail.claimCommands()) {
@@ -1846,6 +1833,7 @@ public final class MailService implements Listener {
             }
             MailOperationResult currencyResult = depositClaimCurrencies(player, mail.attachments());
             if (!currencyResult.success()) {
+                rollbackClaimedMail(mail, previousStatus);
                 return currencyResult;
             }
 
@@ -1858,6 +1846,36 @@ public final class MailService implements Listener {
         } catch (Exception exception) {
             plugin.getLogger().warning("领取邮件失败: " + exception.getMessage());
             return MailOperationResult.failure("领取邮件失败。");
+        }
+    }
+
+    private void rollbackClaimedMail(MailMessage mail, MailStatus previousStatus) {
+        try {
+            Instant now = Instant.now();
+            repository.updateMailState(
+                new MailMessage(
+                    mail.id(),
+                    mail.ownerUuid(),
+                    mail.senderUuid(),
+                    mail.senderName(),
+                    mail.sourceType(),
+                    mail.presetId(),
+                    mail.cdkCode(),
+                    mail.subject(),
+                    mail.body(),
+                    previousStatus,
+                    mail.attachments(),
+                    mail.claimCommands(),
+                    mail.claimConditions(),
+                    mail.createdAt(),
+                    mail.expiresAt(),
+                    now,
+                    null,
+                    mail.deletedAt()
+                )
+            );
+        } catch (SQLException exception) {
+            plugin.getLogger().warning("回滚邮件领取状态失败: mailId=" + mail.id() + " | " + exception.getMessage());
         }
     }
 
@@ -2376,8 +2394,8 @@ public final class MailService implements Listener {
     }
 
     private void publishRefresh(UUID playerUuid) {
-        if (playerUuid != null && redisBridge != null && redisBridge.isActive()) {
-            redisBridge.publish("refresh:" + playerUuid);
+        if (playerUuid != null && crossServerChannel != null && crossServerChannel.isActive()) {
+            crossServerChannel.publish("refresh:" + playerUuid);
         }
     }
 

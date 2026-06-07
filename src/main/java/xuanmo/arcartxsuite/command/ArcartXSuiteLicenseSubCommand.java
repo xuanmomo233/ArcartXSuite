@@ -129,21 +129,21 @@ public final class ArcartXSuiteLicenseSubCommand {
                 String challengeCode = response.has("challengeCode") ? response.get("challengeCode").getAsString() : "";
                 long expiresAt = response.has("expiresAt") ? response.get("expiresAt").getAsLong() : 0L;
                 if (challengeCode.isBlank()) {
-                    sender.sendMessage(PREFIX + ChatColor.RED + "授权中心未返回 challengeCode。");
+                    sendOnMain(sender, PREFIX + ChatColor.RED + "授权中心未返回 challengeCode。");
                     return;
                 }
-                sender.sendMessage(PREFIX + ChatColor.GREEN + "挑战码: " + ChatColor.WHITE + challengeCode);
+                sendOnMain(sender, PREFIX + ChatColor.GREEN + "挑战码: " + ChatColor.WHITE + challengeCode);
                 if (expiresAt > 0L) {
-                    sender.sendMessage(PREFIX + ChatColor.GRAY + "有效期至: " + ChatColor.WHITE + formatInstant(expiresAt));
+                    sendOnMain(sender, PREFIX + ChatColor.GRAY + "有效期至: " + ChatColor.WHITE + formatInstant(expiresAt));
                 }
-                sender.sendMessage(PREFIX + ChatColor.GRAY + "请在 10 分钟内于云端网页换绑流程中粘贴此挑战码。");
+                sendOnMain(sender, PREFIX + ChatColor.GRAY + "请在 10 分钟内于云端网页换绑流程中粘贴此挑战码。");
             } catch (LicenseAuthException exception) {
-                sender.sendMessage(PREFIX + ChatColor.RED + "授权被拒绝: "
+                sendOnMain(sender, PREFIX + ChatColor.RED + "授权被拒绝: "
                     + LicenseMessages.authError(exception.errorCode()));
             } catch (LicenseNetworkException exception) {
-                sender.sendMessage(PREFIX + ChatColor.RED + "授权入口不可达: " + exception.getMessage());
+                sendOnMain(sender, PREFIX + ChatColor.RED + "授权入口不可达: " + exception.getMessage());
             } catch (RuntimeException exception) {
-                sender.sendMessage(PREFIX + ChatColor.RED + "生成挑战码失败: " + exception.getMessage());
+                sendOnMain(sender, PREFIX + ChatColor.RED + "生成挑战码失败: " + exception.getMessage());
             }
         });
         return true;
@@ -171,20 +171,28 @@ public final class ArcartXSuiteLicenseSubCommand {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 LicenseDecision decision = task.run();
-                sender.sendMessage(PREFIX + ChatColor.GRAY + "结果: " + ChatColor.WHITE
+                sendOnMain(sender, PREFIX + ChatColor.GRAY + "结果: " + ChatColor.WHITE
                     + LicenseMessages.state(decision.state()));
                 if (!decision.reason().isEmpty()) {
-                    sender.sendMessage(PREFIX + ChatColor.GRAY + "原因: " + ChatColor.WHITE + decision.reason());
+                    sendOnMain(sender, PREFIX + ChatColor.GRAY + "原因: " + ChatColor.WHITE + decision.reason());
                 }
                 if (!decision.modules().isEmpty()) {
-                    sender.sendMessage(PREFIX + ChatColor.GRAY + "已解锁模块: "
+                    sendOnMain(sender, PREFIX + ChatColor.GRAY + "已解锁模块: "
                         + ChatColor.WHITE + String.join(", ", decision.modules()));
                 }
             } catch (RuntimeException exception) {
-                sender.sendMessage(PREFIX + ChatColor.RED + action + "失败: " + exception.getMessage());
+                sendOnMain(sender, PREFIX + ChatColor.RED + action + "失败: " + exception.getMessage());
             }
         });
         return true;
+    }
+
+    private void sendOnMain(CommandSender sender, String message) {
+        if (Bukkit.isPrimaryThread()) {
+            sender.sendMessage(message);
+        } else {
+            Bukkit.getScheduler().runTask(plugin, () -> sender.sendMessage(message));
+        }
     }
 
     private void sendHelp(CommandSender sender) {

@@ -10,6 +10,11 @@ import org.bukkit.configuration.file.YamlConfiguration;
 
 public final class TabSnapshotCodec {
 
+    /** 解码时允许的最大 payload 字符数（UTF-16），防止恶意大包。 */
+    public static final int MAX_DECODE_CONTENT_LENGTH = 512 * 1024;
+    /** 单快照最大玩家条目数。 */
+    public static final int MAX_ENTRIES = 500;
+
     private TabSnapshotCodec() {
     }
 
@@ -17,6 +22,11 @@ public final class TabSnapshotCodec {
     private static final int PROTOCOL_VERSION = 2;
 
     public static String encode(TabServerSnapshot snapshot) {
+        YamlConfiguration yaml = buildYaml(snapshot);
+        return yaml.saveToString();
+    }
+
+    private static YamlConfiguration buildYaml(TabServerSnapshot snapshot) {
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.set("protocol", PROTOCOL_VERSION);
         yaml.set("node-id", snapshot.nodeId());
@@ -27,10 +37,8 @@ public final class TabSnapshotCodec {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("uuid", entry.playerUuid());
             map.put("name", entry.playerName());
-            // v1 兼容字段（首键）
             map.put("sort-value", entry.sortValue());
             map.put("sort-string", entry.sortStringValue());
-            // v2 新字段（多键 + groupKey）
             map.put("sort-values", new ArrayList<>(entry.sortValues()));
             map.put("sort-string-values", new ArrayList<>(entry.sortStringValues()));
             map.put("group-key", entry.groupKey());
@@ -38,10 +46,15 @@ public final class TabSnapshotCodec {
             entriesData.add(map);
         }
         yaml.set("entries", entriesData);
-        return yaml.saveToString();
+        return yaml;
     }
 
     public static TabServerSnapshot decode(String content) throws InvalidConfigurationException {
+        if (content != null && content.length() > MAX_DECODE_CONTENT_LENGTH) {
+            throw new InvalidConfigurationException(
+                "Tab snapshot payload exceeds " + MAX_DECODE_CONTENT_LENGTH + " characters"
+            );
+        }
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.loadFromString(content);
         String nodeId = string(yaml.getString("node-id"));
@@ -50,6 +63,11 @@ public final class TabSnapshotCodec {
         List<TabRemoteEntry> entries = new ArrayList<>();
         List<?> entriesList = yaml.getList("entries");
         if (entriesList != null) {
+            if (entriesList.size() > MAX_ENTRIES) {
+                throw new InvalidConfigurationException(
+                    "Tab snapshot entry count exceeds limit: " + MAX_ENTRIES
+                );
+            }
             for (Object raw : entriesList) {
                 if (raw instanceof Map<?, ?> map) {
                     double sortValue = numberValue(map.get("sort-value"));

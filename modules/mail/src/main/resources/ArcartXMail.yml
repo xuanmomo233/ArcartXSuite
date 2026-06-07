@@ -33,16 +33,9 @@ storage:
   # 数据库连接池大小。
   pool-size: 4
 
-redis:
-  # 多服邮件广播开关；只在跨服同步时需要。
+cross-server:
+  # 多服邮件刷新通知；连接参数见宿主 config.yml cross-server 节
   enabled: false
-  host: 127.0.0.1
-  port: 6379
-  password: ""
-  database: 0
-  channel: AXS:mail
-  node-id: ""
-  connect-timeout-ms: 5000
 
 ui:
   # 下面四个 UI ID 对应收件箱、写信、日志和管理页。

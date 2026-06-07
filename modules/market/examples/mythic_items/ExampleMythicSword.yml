@@ -19,21 +19,15 @@ ExampleMythicSword:
     - '&7▸ 伤害: &c+25'
     - '&7▸ 暴击率: &c+15%'
     - '&7▸ 攻击速度: &c+10%'
-  # 附魔
+  # 附魔（MythicMobs 5.x 使用 Bukkit 枚举名）
   Enchantments:
-    - SHARPNESS:5
+    - DAMAGE_ALL:5
     - FIRE_ASPECT:2
-    - LOOTING:3
-    - UNBREAKING:3
-  # 属性修饰器
-  Attributes:
-    - GENERIC_ATTACK_DAMAGE:25
-    - GENERIC_ATTACK_SPEED:0.1
+    - LOOT_BONUS_MOBS:3
+    - DURABILITY:3
   # 选项
   Options:
     # 不可破坏
     Unbreakable: true
     # 隐藏附魔光效
-    HideEnchantments: false
-    # 隐藏属性修饰器
-    HideAttributes: false
+    HideEnchants: false

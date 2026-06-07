@@ -39,6 +39,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import xuanmo.arcartxsuite.chat.ChatSignBypassService;
+import xuanmo.arcartxsuite.crossserver.CrossServerService;
 import xuanmo.arcartxsuite.keybind.KeybindService;
 import xuanmo.arcartxsuite.module.ModuleRegistry;
 import xuanmo.arcartxsuite.module.PluginConsoleLogger;
@@ -72,6 +73,7 @@ public class ArcartXSuitePlugin extends JavaPlugin {
     private HeartbeatService heartbeatService;
     private ModuleRegistry moduleRegistry;
     private KeybindService keybindService;
+    private CrossServerService crossServerService;
     private Listener clientCustomPacketListener;
     private Listener clientInitializedListener;
     private ConfigDiagnosticEngine configDiagnosticEngine;
@@ -147,6 +149,9 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         keybindService = new KeybindService(this, propBridge);
         keybindService.initialize(getConfig());
 
+        crossServerService = new CrossServerService(this);
+        crossServerService.start();
+
         // 6. 客户端事件转发到 ModuleRegistry
         registerClientCustomPacketListener();
         registerClientInitializedListener();
@@ -167,7 +172,8 @@ public class ArcartXSuitePlugin extends JavaPlugin {
             clientPacketGuard,
             licenseService,
             keybindService,
-            taczCombatBridge
+            taczCombatBridge,
+            crossServerService
         );
         ModuleRegistry.LoadSummary summary = moduleRegistry.loadAll();
         consoleInfo(
@@ -393,6 +399,10 @@ public class ArcartXSuitePlugin extends JavaPlugin {
             moduleRegistry.unloadAll();
             moduleRegistry = null;
         }
+        if (crossServerService != null) {
+            crossServerService.shutdown();
+            crossServerService = null;
+        }
         unregisterClientCustomPacketListener();
         unregisterClientInitializedListener();
         if (taczCombatBridge != null) {
@@ -546,7 +556,12 @@ public class ArcartXSuitePlugin extends JavaPlugin {
             List<String> data = rawData instanceof List<?> rawList
                 ? rawList.stream().map(String::valueOf).toList()
                 : List.of();
-            moduleRegistry.routeClientPacket(player, packetId, data);
+            Runnable route = () -> moduleRegistry.routeClientPacket(player, packetId, data);
+            if (Bukkit.isPrimaryThread()) {
+                route.run();
+            } else {
+                Bukkit.getScheduler().runTask(this, route);
+            }
         } catch (ReflectiveOperationException ignored) {
             // ArcartX API 不兼容时已记录在注册阶段
         }
@@ -605,7 +620,12 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         try {
             Object rawPlayer = getPlayerMethod.invoke(event);
             if (rawPlayer instanceof Player player) {
-                moduleRegistry.routeClientInitialized(player);
+                Runnable route = () -> moduleRegistry.routeClientInitialized(player);
+                if (Bukkit.isPrimaryThread()) {
+                    route.run();
+                } else {
+                    Bukkit.getScheduler().runTask(this, route);
+                }
             }
         } catch (ReflectiveOperationException ignored) {
             // 已在注册阶段告警

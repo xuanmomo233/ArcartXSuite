@@ -1,76 +1,135 @@
+# =============================================================================
 # 示例系统商店配置
-# 每个文件定义一个商店，文件名即商店 ID。
+# =============================================================================
+# 每个 .yml 文件定义一个独立的商店，文件名（不含扩展名）即为商店 ID。
+# 文件放置路径: <模块数据目录>/shops/ 目录下
+# 首次启动时，若 shops 目录为空，会自动导出此示例文件。
+#
+# 商店 ID 用法:
+#   - 命令: /market shop <商店ID> 打开指定商店
+#   - UI 中通过商店列表选择
+#   - PAPI 占位符: %AXSmarket_shop_<id>_stock% 等
+#
+# 物品来源 (source) 支持:
+#   minecraft  - 原版 Minecraft 物品，item-id 为 Bukkit Material 名
+#   mythic     - MythicMobs 自定义物品，item-id 为 MythicMobs 内部名称
+#   neige      - NeigeItems 自定义物品，item-id 为 NeigeItems 物品 ID
+#   overture   - Overture 自定义物品，item-id 为 Overture 物品 ID
+#   mmoitems   - MMOItems 自定义物品，item-id 格式为 "TYPE;ID"
+#
+# 货币类型 (currency):
+#   具体可用值取决于 CurrencyBridgeManager 注册的桥接器。
+#   常见值: "money"(Vault经济)、"points"(PlayerPoints) 等。
+# =============================================================================
 
+# ── 商店基础信息 ──
+# 商店在 UI 中显示的名称（支持 & 颜色码）
 display-name: "&6综合商店"
+# 商店图标材质（Bukkit Material 枚举名，用于菜单列表显示）
 icon: "DIAMOND"
+# 查看此商店所需的权限（空字符串表示无限制）
 permission: ""
-# 分类标签（用于 UI 筛选）
+# 分类标签（用于 UI 筛选功能，可定义多个）
 tags: ["综合", "基础"]
 
+# ── 商品列表 ──
+# 每个键为商品唯一标识（内部使用，不会在 UI 中显示）
 items:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 示例 1: 原版 Minecraft 物品（无限库存）
+  # ═══════════════════════════════════════════════════════════════════════════
   diamond_sword:
-    # 物品来源: minecraft / mythic / neige / overture / mmoitems
+    # 物品来源
     source: "minecraft"
-    # 物品 ID（对应物品源）
+    # 物品 ID: Bukkit Material 枚举名
     item-id: "DIAMOND_SWORD"
+    # 在商店 UI 中显示的名称（覆盖物品本身的名称）
     display-name: "&b钻石剑"
-    # 购买价格
+    # 玩家从商店购买此物品的价格（设为 0 或省略表示不可购买）
     buy-price: 500
-    # 出售价格（玩家卖给商店，0 表示不可出售）
+    # 玩家出售此物品给商店的价格（设为 0 或省略表示不可出售）
     sell-price: 100
-    # 货币类型
+    # 货币类型（覆盖商店默认货币）
     currency: "money"
-    # 库存模式: unlimited / global / per-player
+    # 库存模式:
+    #   unlimited  - 无限库存，可无限购买
+    #   global     - 全服共享库存，所有玩家共用同一库存量
+    #   per-player - 每个玩家独立库存，互不影响
     stock-mode: "unlimited"
+    # 库存数量（unlimited 模式下此值无效）
+    # 当库存为 0 时，商品在 UI 中显示为"已售罄"且不可购买
     stock-amount: 0
-    # 限购: 0 = 无限制
+    # 每个玩家的购买上限（0 = 无限制）
+    # 用于控制玩家在一定周期内最多可购买的数量
     limit-per-player: 0
-    # 限购重置: daily / weekly / monthly / never
+    # 限购重置周期:
+    #   daily   - 每日重置（服务器时间 00:00）
+    #   weekly  - 每周重置（周一 00:00）
+    #   monthly - 每月重置（1日 00:00）
+    #   never   - 从不重置（终身限购）
     limit-reset: "never"
-    # 折扣（权限 → 折扣比例）
+    # 折扣配置（权限节点 → 折扣比例）
+    # 拥有对应权限的玩家购买时享受折扣
+    # 例: 原价 100，折扣 0.9 → 实际支付 90
+    # 若同时拥有多个折扣权限，取最低折扣值
     discount:
-      "axsmarket.vip": 0.9
-      "axsmarket.mvp": 0.8
-    # 上架条件（为空则始终上架）
+      "axsmarket.vip": 0.9    # VIP 享受 9 折
+      "axsmarket.mvp": 0.8    # MVP 享受 8 折
+    # 上架条件（满足所有条件才显示在商店中）
     conditions:
+      # 查看此商品所需的权限（空字符串表示无限制）
       permission: ""
+      # 玩家最低等级要求（0 = 无限制，依赖等级插件支持）
       min-level: 0
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 示例 2: 原版 Minecraft 物品（带 NBT，每人每日限量）
+  # ═══════════════════════════════════════════════════════════════════════════
   healing_potion:
     source: "minecraft"
     item-id: "POTION"
+    # 原版物品 NBT 数据（JSON 格式），用于指定药水类型、附魔等
+    # 此示例生成"强效治疗药水"（Instant Health II）
     item-nbt: "{Potion:'minecraft:strong_healing'}"
     display-name: "&d强效治疗药水"
     buy-price: 50
     sell-price: 10
     currency: "money"
     stock-mode: "per-player"
-    stock-amount: 64
-    limit-per-player: 128
+    stock-amount: 64          # 每个玩家最多库存 64 个
+    limit-per-player: 128     # 每人每日最多购买 128 个
     limit-reset: "daily"
-    discount: {}
+    discount: {}              # 空对象表示无折扣
     conditions:
       permission: ""
       min-level: 0
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 示例 3: MythicMobs 自定义物品（全服限量，周限购）
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 前提: 需在 plugins/MythicMobs/Items/ 目录下配置 ExampleMythicSword.yml
   mythic_weapon_example:
     source: "mythic"
     item-id: "ExampleMythicSword"
     display-name: "&6传说之剑"
     buy-price: 10000
-    sell-price: 0
-    currency: "points"
+    sell-price: 0               # 0 = 不可出售给商店
+    currency: "points"          # 使用 PlayerPoints 点数货币
     stock-mode: "global"
-    stock-amount: 5
-    limit-per-player: 1
+    stock-amount: 5             # 全服共享 5 把
+    limit-per-player: 1         # 每人每周限购 1 把
     limit-reset: "weekly"
     discount: {}
     conditions:
+      # 购买此商品需要拥有特定权限
       permission: "axsmarket.shop.legendary"
-      min-level: 30
+      min-level: 30             # 最低等级 30 级
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 示例 4: NeigeItems 自定义物品（全服限量，日限购）
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 前提: 需在 plugins/NeigeItems/Items/ 目录下配置 NeigeFishRod.yml
   neige_fishing_rod:
-    # NeigeItems 物品库（需在 NeigeItems 中预先配置 ID）
     source: "neige"
     item-id: "NeigeFishRod"
     display-name: "&e神奇钓鱼竿"
@@ -78,16 +137,19 @@ items:
     sell-price: 600
     currency: "money"
     stock-mode: "global"
-    stock-amount: 8
-    limit-per-player: 2
+    stock-amount: 8             # 全服共享 8 根
+    limit-per-player: 2         # 每人每日限购 2 根
     limit-reset: "daily"
     discount: {}
     conditions:
       permission: ""
-      min-level: 10
+      min-level: 10             # 最低等级 10 级
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 示例 5: Overture 自定义物品（全服限量，终身限购，VIP折扣）
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 前提: 需在 plugins/Overture/items/ 目录下配置 OvertureTreasure.yml
   overture_treasure_box:
-    # Overture 物品库（slot 参数可为空，代表默认槽位）
     source: "overture"
     item-id: "OvertureTreasure"
     display-name: "&d神秘宝藏"
@@ -95,17 +157,21 @@ items:
     sell-price: 0
     currency: "money"
     stock-mode: "global"
-    stock-amount: 3
-    limit-per-player: 1
+    stock-amount: 3             # 全服共享 3 个
+    limit-per-player: 1         # 每人终身限购 1 个
     limit-reset: "never"
     discount:
-      "axsmarket.vip": 0.85
+      "axsmarket.vip": 0.85   # VIP 享受 8.5 折
     conditions:
       permission: "axsmarket.shop.vip"
       min-level: 0
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 示例 6: MMOItems 自定义物品（每人限量，周限购）
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 前提: 需在 plugins/MMOItems/item/armor/ 目录下配置 STEEL_HELMET.yml
+  # item-id 格式: "TYPE;ID"，TYPE 为 MMOItems 物品类型（如 ARMOR, SWORD 等）
   mmoitems_steel_helmet:
-    # MMOItems 物品库（使用 MMOItems 内部 Type 与 ID 组合）
     source: "mmoitems"
     item-id: "ARMOR;STEEL_HELMET"
     display-name: "&7钢盔"
@@ -113,10 +179,10 @@ items:
     sell-price: 240
     currency: "points"
     stock-mode: "per-player"
-    stock-amount: 1
-    limit-per-player: 1
+    stock-amount: 1             # 每个玩家库存 1 个
+    limit-per-player: 1         # 每人每周限购 1 个
     limit-reset: "weekly"
     discount: {}
     conditions:
       permission: ""
-      min-level: 20
+      min-level: 20             # 最低等级 20 级

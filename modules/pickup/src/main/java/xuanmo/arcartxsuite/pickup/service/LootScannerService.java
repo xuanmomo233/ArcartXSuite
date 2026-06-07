@@ -27,6 +27,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable;
+import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration;
@@ -48,6 +49,7 @@ public final class LootScannerService implements Listener {
 
     private final JavaPlugin plugin;
     private final PickupModuleConfiguration configuration;
+    private final PacketGuardAPI packetGuard;
     private final ArcartXPacketBridge packetBridge;
     private final ArcartXItemStackBridge itemStackBridge;
     private final Supplier<WarehouseAutoDepositable> warehouseAutoDepositableSupplier;
@@ -75,6 +77,7 @@ public final class LootScannerService implements Listener {
     public LootScannerService(
         JavaPlugin plugin,
         PickupModuleConfiguration configuration,
+        PacketGuardAPI packetGuard,
         ArcartXPacketBridge packetBridge,
         ArcartXItemStackBridge itemStackBridge,
         String uiId,
@@ -83,6 +86,7 @@ public final class LootScannerService implements Listener {
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
+        this.packetGuard = packetGuard;
         this.packetBridge = packetBridge;
         this.itemStackBridge = itemStackBridge;
         this.warehouseAutoDepositableSupplier = warehouseAutoDepositableSupplier == null ? () -> null : warehouseAutoDepositableSupplier;
@@ -232,6 +236,10 @@ public final class LootScannerService implements Listener {
         if (!active || player == null || !player.isOnline()) {
             return false;
         }
+        String guardAction = guardAction(action);
+        if (packetGuard != null && !packetGuard.allow(player, "pickup", guardAction, configuration.debug())) {
+            return true;
+        }
         switch (action) {
             case "pick" -> handlePick(player, -1);
             case "open_menu" -> menuOpenPlayers.add(player.getUniqueId());
@@ -253,6 +261,16 @@ public final class LootScannerService implements Listener {
             }
         }
         return true;
+    }
+
+    private static String guardAction(String action) {
+        if (action == null || action.isBlank()) {
+            return "pick";
+        }
+        if (action.startsWith("pick_")) {
+            return "pick";
+        }
+        return action;
     }
 
     /**

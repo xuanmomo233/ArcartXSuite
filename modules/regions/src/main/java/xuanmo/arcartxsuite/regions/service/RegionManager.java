@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.regions.service;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -27,7 +28,7 @@ public final class RegionManager {
     private final RegionsConfiguration config;
     private final Logger logger;
 
-    private final List<Region> regions = new ArrayList<>();
+    private final List<Region> regions = new CopyOnWriteArrayList<>();
     private final Map<UUID, Selection> selections = new ConcurrentHashMap<>();
     private final Map<UUID, String> lastRegion = new ConcurrentHashMap<>();
 

@@ -43,6 +43,7 @@ import xuanmo.arcartxsuite.bridge.ArcartXPropBridge;
 import xuanmo.arcartxsuite.bridge.DefaultAttributeBridgeRegistry;
 import xuanmo.arcartxsuite.bridge.DefaultItemSourceRegistry;
 import xuanmo.arcartxsuite.bridge.TaczCombatBridge;
+import xuanmo.arcartxsuite.crossserver.CrossServerService;
 import xuanmo.arcartxsuite.keybind.KeybindService;
 import xuanmo.arcartxsuite.license.LicenseMessages;
 import xuanmo.arcartxsuite.license.LicenseService;
@@ -65,6 +66,7 @@ public final class ModuleRegistry {
     private final LicenseService licenseService;
     private final KeybindService keybindService;
     private final TaczCombatBridge taczCombatBridge;
+    private final CrossServerService crossServerService;
 
     // ─── 全局桥接单例 ──────────────────────────────────────────
     private DefaultItemSourceRegistry itemSourceRegistry;
@@ -100,7 +102,8 @@ public final class ModuleRegistry {
         ClientPacketGuard packetGuard,
         LicenseService licenseService,
         KeybindService keybindService,
-        TaczCombatBridge taczCombatBridge
+        TaczCombatBridge taczCombatBridge,
+        CrossServerService crossServerService
     ) {
         this.plugin = plugin;
         this.modulesDir = modulesDir;
@@ -112,6 +115,7 @@ public final class ModuleRegistry {
         this.licenseService = licenseService;
         this.keybindService = keybindService;
         this.taczCombatBridge = taczCombatBridge;
+        this.crossServerService = crossServerService;
     }
 
     // ─── 生命周期 ─────────────────────────────────────────────
@@ -150,17 +154,18 @@ public final class ModuleRegistry {
         if (!modulesDir.isDirectory()) {
             modulesDir.mkdirs();
             LOGGER.fine("已创建模块目录: " + modulesDir.getAbsolutePath());
-            return new LoadSummary(0, 0, 0, 0, 0, List.of(), List.of(), List.of());
         }
 
-        File[] jarFiles = modulesDir.listFiles((dir, name) -> name.endsWith(".jar"));
+        // 0. 初始化全局桥接单例（即使 modules/ 为空或后续热加载也需要）
+        initializeGlobalBridges();
+
+        File[] jarFiles = modulesDir.isDirectory()
+            ? modulesDir.listFiles((dir, name) -> name.endsWith(".jar"))
+            : null;
         if (jarFiles == null || jarFiles.length == 0) {
             LOGGER.fine("模块目录为空，未加载任何模块。");
             return new LoadSummary(0, 0, 0, 0, 0, List.of(), List.of(), List.of());
         }
-
-        // 0. 初始化全局桥接单例
-        initializeGlobalBridges();
 
         // 1. 解析描述符
         Map<String, DiscoveredModule> discovered = new LinkedHashMap<>();
@@ -283,6 +288,13 @@ public final class ModuleRegistry {
             return false;
         }
         try {
+            DefaultModuleContext context = loaded.context();
+            if (context != null) {
+                context.unregisterKeybindHandlers();
+            }
+            removePacketHandlers(moduleId);
+            removeInitializedHandlers(moduleId);
+            removeCapabilities(moduleId);
             loaded.instance().onReload();
             LOGGER.info(loaded.descriptor().name() + " 模块已重载。");
             return true;
@@ -339,6 +351,7 @@ public final class ModuleRegistry {
             LOGGER.warning("模块已加载: " + moduleId + "，如需重启请使用 reload 或 unload + load。");
             return false;
         }
+        initializeGlobalBridges();
         if (!modulesDir.isDirectory()) {
             LOGGER.warning("模块目录不存在: " + modulesDir.getAbsolutePath());
             return false;
@@ -539,10 +552,12 @@ public final class ModuleRegistry {
             this,
             classLoader,
             keybindService,
-            taczCombatBridge
+            taczCombatBridge,
+            crossServerService
         );
 
         LoadedModule loaded = new LoadedModule(descriptor, instance, classLoader, jarFile);
+        loaded.setContext(context);
         modules.put(descriptor.id(), loaded);
 
         // 在 onEnable 之前注册并跑模块的 ConfigSpec 诊断（dry-run，不动玩家 yml）
@@ -616,6 +631,11 @@ public final class ModuleRegistry {
 
     private void clearModuleRegistrations(LoadedModule loaded) {
         String moduleId = loaded.descriptor().id();
+        DefaultModuleContext context = loaded.context();
+        if (context != null) {
+            context.unbindCommands();
+            context.unregisterKeybindHandlers();
+        }
         removeCommandHandlers(loaded);
         removePacketHandlers(moduleId);
         removeInitializedHandlers(moduleId);
@@ -917,10 +937,12 @@ public final class ModuleRegistry {
         capabilities.put(capabilityType, implementation);
         moduleCapabilityTypes.computeIfAbsent(moduleId, ignored -> new CopyOnWriteArrayList<>()).add(capabilityType);
         if (implementation instanceof xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable p) {
-            purgeables.addIfAbsent(p);
+            purgeables.removeIf(existing -> existing.moduleId().equalsIgnoreCase(p.moduleId()));
+            purgeables.add(p);
         }
         if (implementation instanceof xuanmo.arcartxsuite.api.capability.DatabaseMigratable m) {
-            migratables.addIfAbsent(m);
+            migratables.removeIf(existing -> existing.moduleId().equalsIgnoreCase(m.moduleId()));
+            migratables.add(m);
         }
     }
 

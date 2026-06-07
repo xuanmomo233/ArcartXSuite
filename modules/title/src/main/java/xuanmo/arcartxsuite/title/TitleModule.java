@@ -18,6 +18,7 @@ import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
 import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
+import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.title.command.TitleAdminCommand;
@@ -26,6 +27,7 @@ import xuanmo.arcartxsuite.title.config.TitleDefinition;
 import xuanmo.arcartxsuite.title.config.TitleModuleConfiguration;
 import xuanmo.arcartxsuite.title.config.TitleQualityDefinition;
 import xuanmo.arcartxsuite.title.placeholder.TitlePlaceholderExpansion;
+import xuanmo.arcartxsuite.title.service.TitleOperationResult;
 import xuanmo.arcartxsuite.title.service.TitleService;
 import xuanmo.arcartxsuite.title.storage.JdbcTitleRepository;
 
@@ -116,6 +118,18 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
         }
     }
 
+    /**
+     * 初始化称号服务并注册跨模块能力。
+     * <p>
+     * 流程：
+     * <ol>
+     *   <li>构造并启动 {@link TitleService}（含数据库初始化、UI 注册、监听器绑定）</li>
+     *   <li>注册 {@link TitleGrantable} —— 供 EventPacket 等模块授予称号</li>
+     *   <li>注册 {@link TitleConfigQueryable} —— 供外部查询称号配置元数据</li>
+     *   <li>注册 {@link PlayerDataPurgeable} —— 支持 /axs purge 统一清理玩家数据</li>
+     *   <li>注册 {@link DatabaseMigratable} —— 支持 /axs migrate 跨源数据库迁移</li>
+     * </ol>
+     */
     @Override
     protected void startService() throws Exception {
         ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
@@ -137,6 +151,18 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
         );
         service.start();
         adminCommand = new TitleAdminCommand(() -> service, messages());
+
+        // 注册跨模块称号授予能力（EventPacket 等模块通过 capability 调用）
+        context.registerCapability(TitleGrantable.class,
+            (playerId, titleId, duration, source) -> {
+                var specOpt = xuanmo.arcartxsuite.title.TitleDurationParser.parse(duration);
+                if (specOpt.isEmpty()) {
+                    context.logger().warning("TitleGrantable 收到无效的 duration 格式: " + duration);
+                    return false;
+                }
+                TitleOperationResult result = service.giveTitle(playerId, titleId, specOpt.get(), source);
+                return result.success();
+            });
 
         context.registerCapability(TitleConfigQueryable.class, titleId -> {
             if (configuration == null) return null;

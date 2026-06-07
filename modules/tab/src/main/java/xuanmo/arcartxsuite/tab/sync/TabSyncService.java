@@ -12,11 +12,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import me.clip.placeholderapi.PlaceholderAPI;
 import xuanmo.arcartxsuite.tab.config.UiTarget;
 import org.bukkit.Bukkit;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.Player;
+import org.bukkit.scoreboard.Team;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
@@ -33,12 +33,11 @@ import xuanmo.arcartxsuite.tab.config.TabModuleConfiguration;
 import xuanmo.arcartxsuite.tab.config.TabPaginationConfiguration;
 import xuanmo.arcartxsuite.tab.config.TabSortKey;
 import xuanmo.arcartxsuite.tab.config.TabStyleConfiguration;
-import xuanmo.arcartxsuite.tab.transport.CompositeTabTransport;
-import xuanmo.arcartxsuite.tab.transport.ProxyTabTransport;
-import xuanmo.arcartxsuite.tab.transport.RedisTabTransport;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.tab.transport.TabRemoteEntry;
 import xuanmo.arcartxsuite.tab.transport.TabServerSnapshot;
-import xuanmo.arcartxsuite.tab.transport.TabTransport;
+import xuanmo.arcartxsuite.tab.transport.TabSnapshotCodec;
 
 public final class TabSyncService implements Listener, TabRefreshRequester, xuanmo.arcartxsuite.api.capability.TabRefreshable {
 
@@ -48,6 +47,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
     private final TabModuleConfiguration configuration;
     private final ArcartXPacketBridge bridge;
     private final PacketGuardAPI packetGuard;
+    private final CrossServerAPI crossServer;
     private final Map<String, Map<UUID, Object>> lastPayloads = new LinkedHashMap<>();
     private final Map<String, TabDefinition> definitionsById = new LinkedHashMap<>();
     private final TabRefreshQueue refreshQueue = new TabRefreshQueue();
@@ -70,29 +70,48 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
                               Map<String, Double> sortNumericByDefinition,
                               Map<String, String> sortStringByDefinition) {}
 
-    private TabTransport transport;
+    private CrossServerChannel crossServerChannel;
     private BukkitTask refreshTask;
     private BukkitTask flushTask;
 
-    public TabSyncService(JavaPlugin plugin, TabModuleConfiguration configuration, ArcartXPacketBridge bridge, PacketGuardAPI packetGuard) {
+    public TabSyncService(
+        JavaPlugin plugin,
+        TabModuleConfiguration configuration,
+        ArcartXPacketBridge bridge,
+        PacketGuardAPI packetGuard,
+        CrossServerAPI crossServer
+    ) {
         this.plugin = plugin;
         this.configuration = configuration;
         this.bridge = bridge;
         this.packetGuard = packetGuard;
+        this.crossServer = crossServer;
         this.clientRefreshGuard = new TabClientRefreshGuard(plugin.getLogger());
         for (TabDefinition definition : configuration.definitions()) {
             definitionsById.put(definition.id(), definition);
         }
     }
 
+    /**
+     * 统一占位符解析入口：完全由内置解析器处理，不依赖 PlaceholderAPI。
+     * 支持常见的 %player_xxx% / %server_xxx% 占位符。
+     */
+    private String resolvePlaceholders(Player player, String text) {
+        if (text == null) {
+            return "";
+        }
+        return BuiltinPlaceholderResolver.resolve(text, player);
+    }
+
     public void start() {
         shutdown();
-        transport = createTransport();
-        if (transport != null) {
-            boolean transportActive = transport.start();
-            if (transportActive) {
-                plugin.getLogger().fine("ArcartXTab 跨服传输已启用: " + transport.name());
-            }
+        crossServerChannel = crossServer.openChannel(
+            "tab",
+            configuration.crossServer(),
+            delivery -> handleRemoteSnapshotPayload(delivery.payload(), delivery.nodeId())
+        );
+        if (crossServerChannel.isActive()) {
+            plugin.getLogger().fine("ArcartXTab 跨服通道已启用");
         }
         Bukkit.getPluginManager().registerEvents(this, plugin);
         refreshTask = Bukkit.getScheduler().runTaskTimer(
@@ -113,9 +132,9 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
             flushTask.cancel();
             flushTask = null;
         }
-        if (transport != null) {
-            transport.shutdown();
-            transport = null;
+        if (crossServerChannel != null) {
+            crossServerChannel.close();
+            crossServerChannel = null;
         }
         HandlerList.unregisterAll(this);
         refreshQueue.clear();
@@ -251,6 +270,9 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
             if (packetGuard != null && !packetGuard.allow(player, "tab", "page", configuration.debug())) {
                 return true;
             }
+            if (!clientRefreshGuard.allow(player, definition, configuration.debug())) {
+                return true;
+            }
             setViewerPage(player, definition.id(), newPage);
             return true;
         }
@@ -284,6 +306,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
+        leaveGraceCache.remove(event.getPlayer().getUniqueId());
         requestGlobalRefresh("player-join");
     }
 
@@ -300,7 +323,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
 
         // 退服宽限：把玩家最后一次的渲染快照存起来，跨服快照在 grace 期内仍带这一条
         long graceMs = configuration.leaveGraceMs();
-        if (graceMs > 0L && transport != null && transport.isActive()) {
+        if (graceMs > 0L && crossServerChannel != null && crossServerChannel.isActive()) {
             cacheGraceEntry(player);
         }
 
@@ -596,7 +619,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
         // 按玩家解析 group key
         Map<String, List<Player>> grouped = new LinkedHashMap<>();
         for (Player player : sorted) {
-            String key = PlaceholderAPI.setPlaceholders(player, grouping.groupByPapi());
+            String key = resolvePlaceholders(player, grouping.groupByPapi());
             if (key == null || key.isBlank() || key.equals(grouping.groupByPapi())) {
                 key = "default";
             }
@@ -745,29 +768,23 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
         return node;
     }
 
-    private TabTransport createTransport() {
-        boolean anyEnabled = (configuration.redis() != null && configuration.redis().enabled())
-            || (configuration.proxy() != null && configuration.proxy().enabled());
-        if (!anyEnabled) {
-            return null;
+    private void handleRemoteSnapshotPayload(String payload, String nodeId) {
+        if (payload == null || payload.isBlank() || nodeId == null || nodeId.isBlank()) {
+            return;
         }
-        List<TabTransport> transports = new ArrayList<>();
-        if (configuration.redis() != null) {
-            transports.add(new RedisTabTransport(plugin, configuration.redis(), snapshot ->
-                Bukkit.getScheduler().runTask(plugin, () -> handleRemoteSnapshot(snapshot))));
+        try {
+            TabServerSnapshot snapshot = TabSnapshotCodec.decode(payload);
+            handleRemoteSnapshot(snapshot);
+        } catch (Exception exception) {
+            plugin.getLogger().warning("ArcartXTab 解析跨服快照失败: " + exception.getMessage());
         }
-        if (configuration.proxy() != null) {
-            transports.add(new ProxyTabTransport(plugin, configuration.proxy(), snapshot ->
-                Bukkit.getScheduler().runTask(plugin, () -> handleRemoteSnapshot(snapshot))));
-        }
-        return new CompositeTabTransport(transports);
     }
 
     private void handleRemoteSnapshot(TabServerSnapshot snapshot) {
         if (snapshot == null || snapshot.nodeId().isBlank()) {
             return;
         }
-        if (configuration.serverId().equalsIgnoreCase(snapshot.nodeId())) {
+        if (crossServer.nodeId().equalsIgnoreCase(snapshot.nodeId())) {
             return;
         }
         remoteSnapshots
@@ -1084,7 +1101,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
         if (!grouping.enabled() || grouping.groupByPapi().isBlank()) {
             return "";
         }
-        String resolved = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, grouping.groupByPapi());
+        String resolved = resolvePlaceholders(player, grouping.groupByPapi());
         if (resolved == null || resolved.isBlank() || resolved.equals(grouping.groupByPapi())) {
             return "default";
         }
@@ -1112,16 +1129,16 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
     }
 
     private void broadcastLocalSnapshots(List<Player> onlinePlayers) {
-        if (transport == null || !transport.isActive()) {
+        if (crossServerChannel == null || !crossServerChannel.isActive()) {
             return;
         }
         long now = System.currentTimeMillis();
         long batchWindowMs = configuration.batchWindowTicks() * 50L; // 1 tick = 50ms
+        String nodeId = crossServer.nodeId();
         for (TabDefinition definition : configuration.definitions()) {
             if (!definition.enabled() || !isDefinitionCrossServer(definition)) {
                 continue;
             }
-            // 批节流：距离上次广播未到 window-ticks 跳过（0 表示禁用节流）
             Long lastBroadcast = lastBroadcastTimestamps.get(definition.id());
             if (batchWindowMs > 0L && lastBroadcast != null && now - lastBroadcast < batchWindowMs) {
                 continue;
@@ -1130,19 +1147,18 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
             List<TabRemoteEntry> entries = collectLocalEntriesForBroadcast(definition, onlinePlayers);
 
             TabServerSnapshot snapshot = new TabServerSnapshot(
-                configuration.serverId(),
+                nodeId,
                 definition.id(),
                 now,
                 List.copyOf(entries)
             );
-            transport.send(snapshot);
+            crossServerChannel.publish(TabSnapshotCodec.encode(snapshot));
             lastBroadcastTimestamps.put(definition.id(), now);
             if (configuration.debug()) {
                 plugin.getLogger().info(
                     "ArcartXTab 广播跨服快照 def=" + definition.id()
                         + " | entries=" + entries.size()
                         + " | grace=" + leaveGraceCache.size()
-                        + " | transport=" + transport.name()
                 );
             }
         }
@@ -1171,6 +1187,9 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
         }
         if (!leaveGraceCache.isEmpty()) {
             for (Map.Entry<UUID, GraceEntry> entry : leaveGraceCache.entrySet()) {
+                if (onlinePlayers.stream().anyMatch(player -> player.getUniqueId().equals(entry.getKey()))) {
+                    continue;
+                }
                 GraceEntry grace = entry.getValue();
                 Object rendered = grace.renderedPackByDefinition().get(definition.id());
                 if (rendered == null) {
@@ -1352,30 +1371,9 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
         return System.currentTimeMillis() - ts <= style.pvpWindowMs();
     }
 
-    /** 公开版 vanish 判定（复用内部多 placeholder 检测）。 */
-    public boolean isVanishedPublic(Player player) {
-        return player != null && isVanished(player);
-    }
-
     /** 当前 ping（ms），不可解析返回 0。 */
     public int pingOf(Player player) {
         return player == null ? 0 : Math.max(0, player.getPing());
-    }
-
-    /** 按 settings.style.ping-icon.tiers 选择对应 icon；若禁用或无匹配返回最后一档/空。 */
-    public String pingIcon(int ping) {
-        TabStyleConfiguration style = configuration.style();
-        if (!style.pingIconEnabled() || style.pingTiers().isEmpty()) {
-            return "";
-        }
-        String fallback = "";
-        for (TabStyleConfiguration.PingTier tier : style.pingTiers()) {
-            fallback = tier.icon();
-            if (ping <= tier.maxMs()) {
-                return tier.icon();
-            }
-        }
-        return fallback;
     }
 
     /**
@@ -1466,25 +1464,9 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
         return result;
     }
 
-    private static final List<String> VANISH_PLACEHOLDERS = List.of(
-        "%essentials_vanished%",
-        "%supervanish_vanished%",
-        "%vanish_vanished%",
-        "%premiumvanish_vanished%"
-    );
-
     private boolean isVanished(Player player) {
         for (org.bukkit.metadata.MetadataValue value : player.getMetadata("vanished")) {
             if (value.asBoolean()) {
-                return true;
-            }
-        }
-        for (String placeholder : VANISH_PLACEHOLDERS) {
-            String resolved = PlaceholderAPI.setPlaceholders(player, placeholder);
-            if (resolved == null || resolved.isBlank() || resolved.equals(placeholder)) {
-                continue;
-            }
-            if (resolved.equalsIgnoreCase("true") || resolved.equalsIgnoreCase("yes")) {
                 return true;
             }
         }
@@ -1506,7 +1488,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
     private boolean matchesRule(Player player, TabFilterRule rule) {
         boolean matched;
         if (rule.isPapi()) {
-            String resolved = PlaceholderAPI.setPlaceholders(player, rule.papi());
+            String resolved = resolvePlaceholders(player, rule.papi());
             String expected = rule.equalsValue();
             if (expected == null || expected.isBlank()) {
                 // 未指定 equals：判断 PAPI 渲染结果非空且不等于原表达式（即被实际渲染了）
@@ -1598,7 +1580,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
 
         Map<String, String> preservedTokens = new LinkedHashMap<>();
         rendered = preserveArcartXTokens(rendered, preservedTokens);
-        rendered = PlaceholderAPI.setPlaceholders(target, rendered);
+        rendered = resolvePlaceholders(target, rendered);
         rendered = restorePreservedTokens(rendered, preservedTokens);
         return rendered.replace("\\n", "\n");
     }
@@ -1667,33 +1649,78 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
         return defaultIndex >= 0 ? defaultIndex : premGroups.size();
     }
 
-    private static final List<String> GROUP_PLACEHOLDERS = List.of(
-        "%vault_primary_group%", "%vault_group%", "%luckperms_primary_group_name%"
-    );
-
     private String resolvePlayerGroup(Player player) {
-        for (String placeholder : GROUP_PLACEHOLDERS) {
-            String value = PlaceholderAPI.setPlaceholders(player, placeholder);
-            if (value == null || value.isBlank() || value.equals(placeholder)) {
-                continue;
+        String group = resolveVaultPrimaryGroup(player);
+        if (group != null) {
+            return group;
+        }
+        group = resolveLuckPermsPrimaryGroup(player);
+        if (group != null) {
+            return group;
+        }
+        Team team = player.getScoreboard().getEntryTeam(player.getName());
+        if (team != null) {
+            String teamName = team.getName();
+            if (teamName != null && !teamName.isBlank()) {
+                return teamName.toLowerCase(Locale.ROOT);
             }
-            return value.trim();
         }
         return "default";
     }
 
-    private static String resolvePapiStringValue(Player player, String placeholder) {
+    private static String resolveVaultPrimaryGroup(Player player) {
+        try {
+            Class<?> permissionClass = Class.forName("net.milkbowl.vault.permission.Permission");
+            org.bukkit.plugin.RegisteredServiceProvider<?> provider =
+                Bukkit.getServicesManager().getRegistration(permissionClass);
+            if (provider == null) {
+                return null;
+            }
+            Object permission = provider.getProvider();
+            java.lang.reflect.Method getPrimaryGroup = permission.getClass()
+                .getMethod("getPrimaryGroup", org.bukkit.World.class, String.class);
+            String group = (String) getPrimaryGroup.invoke(permission, player.getWorld(), player.getName());
+            if (group != null && !group.isBlank()) {
+                return group.toLowerCase(Locale.ROOT);
+            }
+        } catch (ReflectiveOperationException ignored) {
+        }
+        return null;
+    }
+
+    private static String resolveLuckPermsPrimaryGroup(Player player) {
+        try {
+            Class<?> providerClass = Class.forName("net.luckperms.api.LuckPermsProvider");
+            java.lang.reflect.Method get = providerClass.getMethod("get");
+            Object api = get.invoke(null);
+            java.lang.reflect.Method getUserManager = api.getClass().getMethod("getUserManager");
+            Object userManager = getUserManager.invoke(api);
+            java.lang.reflect.Method getUser = userManager.getClass().getMethod("getUser", UUID.class);
+            Object user = getUser.invoke(userManager, player.getUniqueId());
+            if (user != null) {
+                java.lang.reflect.Method getPrimaryGroup = user.getClass().getMethod("getPrimaryGroup");
+                String group = (String) getPrimaryGroup.invoke(user);
+                if (group != null && !group.isBlank()) {
+                    return group.toLowerCase(Locale.ROOT);
+                }
+            }
+        } catch (ReflectiveOperationException ignored) {
+        }
+        return null;
+    }
+
+    private String resolvePapiStringValue(Player player, String placeholder) {
         if (placeholder == null || placeholder.isBlank()) {
             return player.getName();
         }
-        String value = PlaceholderAPI.setPlaceholders(player, placeholder);
+        String value = resolvePlaceholders(player, placeholder);
         if (value == null || value.isBlank() || value.equals(placeholder)) {
             return "";
         }
         return value.trim();
     }
 
-    private static double resolvePapiNumericValue(Player player, String placeholder) {
+    private double resolvePapiNumericValue(Player player, String placeholder) {
         String value = resolvePapiStringValue(player, placeholder);
         if (value.isBlank()) {
             return 0.0D;

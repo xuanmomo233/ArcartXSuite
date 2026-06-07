@@ -71,6 +71,11 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private final ConcurrentMap<UUID, MapNavigationState> navigationStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, ConcurrentMap<String, MapExternalTarget>> externalTargets = new ConcurrentHashMap<>();
     private final Set<UUID> openedHudPlayers = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> defaultUnlocksEnsured = ConcurrentHashMap.newKeySet();
+    private final ConcurrentMap<UUID, CachedPlayerMapData> playerDataCache = new ConcurrentHashMap<>();
+
+    private record CachedPlayerMapData(Set<String> unlockedAnchors, List<MapWaypoint> waypoints) {
+    }
 
     public MapService(
         JavaPlugin plugin,
@@ -120,6 +125,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         navigationStates.clear();
         externalTargets.clear();
         openedHudPlayers.clear();
+        defaultUnlocksEnsured.clear();
+        playerDataCache.clear();
     }
 
     public boolean handleClientPacket(Player player, String packetId, List<String> data) {
@@ -380,6 +387,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         navigationStates.remove(uuid);
         externalTargets.remove(uuid);
         openedHudPlayers.remove(uuid);
+        playerDataCache.remove(uuid);
     }
 
     private MapOperationResult openMenuInternal(Player player, String worldId, boolean pushInitPacket) {
@@ -428,35 +436,47 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (anchor == null) {
             return MapOperationResult.failure("未找到锚点: " + anchorId);
         }
-        if (!isAnchorUnlocked(player, anchor)) {
-            MapOperationResult accessResult = validateAnchorAccess(player, anchor);
-            if (!accessResult.success()) {
-                return accessResult;
-            }
-            PreparedItemConsumption preparedItems = prepareItemConsumption(player, anchor.unlockItems());
-            if (!preparedItems.success()) {
-                return MapOperationResult.failure(preparedItems.message());
-            }
-            CurrencyChargeReceipt currencyReceipt = chargeCurrencies(player, anchor.unlockCurrencies());
-            if (!currencyReceipt.success()) {
-                return MapOperationResult.failure(currencyReceipt.message());
-            }
-            MapOperationResult itemResult = applyItemConsumption(player, preparedItems);
-            if (!itemResult.success()) {
-                rollbackCurrencies(player, currencyReceipt.successfulCharges());
-                return itemResult;
-            }
-            try {
-                repository.unlockAnchor(player.getUniqueId(), anchor.id(), System.currentTimeMillis());
-                sync(player, false);
-                return MapOperationResult.success("已解锁锚点: " + anchor.displayName());
-            } catch (Exception exception) {
-                rollbackItemConsumption(player, preparedItems);
-                rollbackCurrencies(player, currencyReceipt.successfulCharges());
-                return MapOperationResult.failure("写入锚点解锁数据失败。");
-            }
+        if (isAnchorUnlocked(player, anchor)) {
+            return MapOperationResult.failure("该锚点已解锁。");
         }
-        return MapOperationResult.failure("该锚点已解锁。");
+        MapOperationResult accessResult = validateAnchorAccess(player, anchor);
+        if (!accessResult.success()) {
+            return accessResult;
+        }
+        PreparedItemConsumption preparedItems = prepareItemConsumption(player, anchor.unlockItems());
+        if (!preparedItems.success()) {
+            return MapOperationResult.failure(preparedItems.message());
+        }
+        long unlockTime = System.currentTimeMillis();
+        try {
+            if (!repository.tryUnlockAnchor(player.getUniqueId(), anchor.id(), unlockTime)) {
+                return MapOperationResult.failure("该锚点已解锁。");
+            }
+        } catch (Exception exception) {
+            return MapOperationResult.failure("写入锚点解锁数据失败。");
+        }
+        CurrencyChargeReceipt currencyReceipt = chargeCurrencies(player, anchor.unlockCurrencies());
+        if (!currencyReceipt.success()) {
+            rollbackUnlock(player.getUniqueId(), anchor.id());
+            return MapOperationResult.failure(currencyReceipt.message());
+        }
+        MapOperationResult itemResult = applyItemConsumption(player, preparedItems);
+        if (!itemResult.success()) {
+            rollbackCurrencies(player, currencyReceipt.successfulCharges());
+            rollbackUnlock(player.getUniqueId(), anchor.id());
+            return itemResult;
+        }
+        invalidatePlayerDataCache(player.getUniqueId());
+        sync(player, false);
+        return MapOperationResult.success("已解锁锚点: " + anchor.displayName());
+    }
+
+    private void rollbackUnlock(UUID playerUuid, String anchorId) {
+        try {
+            repository.removeUnlock(playerUuid, anchorId);
+            invalidatePlayerDataCache(playerUuid);
+        } catch (Exception ignored) {
+        }
     }
 
     private MapOperationResult teleportAnchorInternal(Player player, String anchorId) {
@@ -602,7 +622,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (player == null || !player.isOnline()) {
             return MapOperationResult.failure("玩家当前不在线。");
         }
-        MapNavigationState state = navigationStates.remove(player.getUniqueId());
+        MapNavigationState state = navigationStates.get(player.getUniqueId());
         if (state == null || !state.active()) {
             if (sync) {
                 sync(player, false);
@@ -612,6 +632,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (!waypointBridge.removeWaypoint(player, state.waypointId(), false)) {
             return MapOperationResult.failure("清除导航失败。");
         }
+        navigationStates.remove(player.getUniqueId());
         if (sync) {
             sync(player, false);
         }
@@ -650,7 +671,12 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             now
         );
         try {
-            repository.upsertWaypoint(player.getUniqueId(), waypoint);
+            if (!repository.createWaypointIfUnderWorldLimit(
+                player.getUniqueId(), waypoint, worldId, limit
+            )) {
+                return MapOperationResult.failure("当前世界的路径点数量已达到上限: " + limit);
+            }
+            invalidatePlayerDataCache(player.getUniqueId());
             state(player).selectWorld(worldId);
             state(player).selectWaypoint(waypoint.waypointId());
             sync(player, false);
@@ -672,6 +698,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             if (!repository.deleteWaypoint(player.getUniqueId(), waypoint.waypointId())) {
                 return MapOperationResult.failure("删除路径点失败。");
             }
+            invalidatePlayerDataCache(player.getUniqueId());
             if (navigationStates.getOrDefault(player.getUniqueId(), MapNavigationState.none()).matchesWaypoint(waypoint.waypointId())) {
                 clearTrackSilently(player);
             }
@@ -827,7 +854,6 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
 
     private MapSnapshotBuilder.BuildResult buildSnapshot(Player player) {
         MapPlayerViewState state = state(player);
-        ensureDefaultUnlocks(player);
         List<MapSnapshotBuilder.WorldView> worlds = new ArrayList<>();
         for (WorldDefinition world : configuration.worlds().values()) {
             worlds.add(
@@ -1029,19 +1055,16 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (player == null) {
             return Set.of();
         }
-        try {
-            return repository.loadUnlockedAnchors(player.getUniqueId());
-        } catch (Exception exception) {
-            return Set.of();
-        }
+        return loadPlayerData(player.getUniqueId()).unlockedAnchors();
     }
 
     private void ensureDefaultUnlocks(Player player) {
-        if (player == null || !player.isOnline()) {
+        if (player == null || !player.isOnline() || !defaultUnlocksEnsured.add(player.getUniqueId())) {
             return;
         }
         try {
-            Set<String> existing = new LinkedHashSet<>(repository.loadUnlockedAnchors(player.getUniqueId()));
+            Set<String> existing = new LinkedHashSet<>(loadUnlockedAnchors(player));
+            boolean changed = false;
             long now = System.currentTimeMillis();
             for (DefaultUnlockRule rule : configuration.defaultUnlocks()) {
                 if (!player.hasPermission(rule.permission())) {
@@ -1050,8 +1073,12 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                 for (String anchorId : rule.anchorIds()) {
                     if (existing.add(anchorId)) {
                         repository.unlockAnchor(player.getUniqueId(), anchorId, now);
+                        changed = true;
                     }
                 }
+            }
+            if (changed) {
+                invalidatePlayerDataCache(player.getUniqueId());
             }
         } catch (Exception ignored) {
         }
@@ -1074,10 +1101,24 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (player == null) {
             return List.of();
         }
-        try {
-            return repository.loadWaypoints(player.getUniqueId());
-        } catch (Exception exception) {
-            return List.of();
+        return loadPlayerData(player.getUniqueId()).waypoints();
+    }
+
+    private CachedPlayerMapData loadPlayerData(UUID playerUuid) {
+        return playerDataCache.computeIfAbsent(playerUuid, uuid -> {
+            try {
+                Set<String> anchors = repository.loadUnlockedAnchors(uuid);
+                List<MapWaypoint> waypoints = repository.loadWaypoints(uuid);
+                return new CachedPlayerMapData(Set.copyOf(anchors), List.copyOf(waypoints));
+            } catch (Exception exception) {
+                return new CachedPlayerMapData(Set.of(), List.of());
+            }
+        });
+    }
+
+    private void invalidatePlayerDataCache(UUID playerUuid) {
+        if (playerUuid != null) {
+            playerDataCache.remove(playerUuid);
         }
     }
 

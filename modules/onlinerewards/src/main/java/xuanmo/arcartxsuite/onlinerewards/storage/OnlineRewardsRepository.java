@@ -24,6 +24,11 @@ public interface OnlineRewardsRepository {
 
     void saveSignInRecord(UUID playerUuid, String playerName, String date, boolean makeup) throws SQLException;
 
+    /**
+     * 原子插入签到记录，已存在则返回 {@code false}（防并发双签）。
+     */
+    boolean tryInsertSignInRecord(UUID playerUuid, String playerName, String date, boolean makeup) throws SQLException;
+
     List<OnlineRewardsLeaderboardEntry> loadLeaderboard(
         OnlineRewardsLeaderboardScope scope,
         String periodKey,

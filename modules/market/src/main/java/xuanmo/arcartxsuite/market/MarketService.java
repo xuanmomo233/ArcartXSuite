@@ -788,12 +788,8 @@ public class MarketService {
     }
 
     public boolean adminRemoveListing(long listingId) {
-        if (repository == null) return false;
-        var listing = repository.getListing(listingId);
-        if (listing == null) return false;
-        listing.setStatus(xuanmo.arcartxsuite.market.auction.AuctionListing.ListingStatus.CANCELLED);
-        repository.updateListing(listing);
-        return true;
+        if (auctionService == null) return false;
+        return auctionService.adminForceCancelListing(listingId);
     }
 
     private void handleRedisMessage(String message) {

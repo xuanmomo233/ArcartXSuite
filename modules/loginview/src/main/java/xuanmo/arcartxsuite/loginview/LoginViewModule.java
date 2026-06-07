@@ -110,18 +110,20 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            // storage.mode 必须是 sqlite 或 mysql
             ValidationRule.required("storage.mode", ValueType.STRING)
                 .withEnum(Set.of("sqlite", "mysql")),
-            // 登录视图显示持续时间（秒）
-            ValidationRule.of("settings.display-duration-seconds", ValueType.INT)
-                .withRange(1, 300),
-            // 最大登录失败次数
-            ValidationRule.of("settings.max-login-attempts", ValueType.INT)
-                .withRange(1, 10),
-            // 锁定时间（秒）
-            ValidationRule.of("settings.lockout-duration-seconds", ValueType.INT)
-                .withRange(0, 3600)
+            ValidationRule.required("auth.mode", ValueType.STRING)
+                .withEnum(Set.of("standalone", "authme")),
+            ValidationRule.of("ui.open-delay-ticks", ValueType.INT)
+                .withRange(0, 600),
+            ValidationRule.of("security.max-attempts", ValueType.INT)
+                .withRange(1, 20),
+            ValidationRule.of("security.min-password-length", ValueType.INT)
+                .withRange(1, 64),
+            ValidationRule.of("security.max-password-length", ValueType.INT)
+                .withRange(8, 128),
+            ValidationRule.of("security.session-ttl-minutes", ValueType.INT)
+                .withRange(0, 10080)
         );
     }
 

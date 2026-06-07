@@ -95,18 +95,10 @@ storage:
   # 连接池大小，在线人数较多时可适当提高
   pool-size: 2
 
-# 跨服同步: 使用 Redis Pub/Sub 在签到、补签、管理员操作后通知其他服务端刷新数据。
+# 跨服同步：签到/补签/管理员操作后通知其他子服刷新；连接参数见宿主 config.yml cross-server 节
 # 前提: storage.mode 必须设为 mysql (共享数据库)，否则跨服通知无意义。
-redis:
+cross-server:
   enabled: false
-  host: "127.0.0.1"
-  port: 6379
-  password: ""
-  database: 0
-  channel: "AXS:onlinerewards"
-  # 当前节点标识，每台服务端必须不同；留空则不会过滤自身消息。
-  node-id: ""
-  connect-timeout-ms: 5000
 
 # 签到配置文件路径，相对模块数据目录。
 sign-in-file: "sign-in.yml"

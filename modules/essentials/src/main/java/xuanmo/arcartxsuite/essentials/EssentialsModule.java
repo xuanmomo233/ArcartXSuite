@@ -8,7 +8,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -18,10 +20,16 @@ import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
+import xuanmo.arcartxsuite.api.config.ValidationRule;
+import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
@@ -73,6 +81,7 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
     private Supplier<ChatMutable> chatMutableSupplier;
     private EssentialsMenuPacketHandler menuPacketHandler;
     private EssentialsAdminPacketHandler adminPacketHandler;
+    private final Map<UUID, BukkitTask> poseMonitorTasks = new ConcurrentHashMap<>();
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -106,6 +115,15 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
     @Override
     protected String messagesFileName() {
         return "messages.yml";
+    }
+
+    @Override
+    protected @NotNull List<ValidationRule> mainConfigValidations() {
+        return List.of(
+            ValidationRule.required("storage.dialect", ValueType.STRING)
+                .withEnum(Set.of("sqlite", "mysql")),
+            ValidationRule.required("storage.sqlite-file", ValueType.STRING)
+        );
     }
 
     @Override
@@ -241,6 +259,8 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
 
     @Override
     protected void stopService() {
+        poseMonitorTasks.values().forEach(BukkitTask::cancel);
+        poseMonitorTasks.clear();
         menuPacketHandler = null;
         adminPacketHandler = null;
         if (inventoryActionsService != null) { inventoryActionsService.shutdown(); inventoryActionsService = null; }
@@ -267,7 +287,7 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         switch (action) {
             case "help" -> sendHelp(sender, label, args[0]);
             case "status" -> sendStatus(sender);
-            case "reload" -> reload(sender);
+            case "reload" -> requirePermission(sender, "axs.essentials.reload", () -> reload(sender));
             case "menu" -> requirePlayer(sender, p -> {
                 if (menuPacketHandler != null) menuPacketHandler.openMenu(p);
                 else p.sendMessage(fullMsg("admin.ui.offline"));
@@ -281,79 +301,101 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
                 else p.sendMessage(fullMsg("admin.ui.offline"));
             });
             // ─── 玩家管理 ───
-            case "fly" -> requirePlayer(sender, p -> playerService.toggleFly(p, resolveTarget(sender, args, 2, p)));
-            case "god" -> requirePlayer(sender, p -> playerService.toggleGod(resolveTarget(sender, args, 2, p)));
-            case "heal" -> requirePlayer(sender, p -> playerService.heal(resolveTarget(sender, args, 2, p)));
-            case "feed" -> requirePlayer(sender, p -> playerService.feed(resolveTarget(sender, args, 2, p)));
-            case "gamemode" -> handleGameMode(sender, args);
-            case "speed" -> handleSpeed(sender, args);
-            case "vanish" -> requirePlayer(sender, p -> playerService.toggleVanish(p));
-            case "afk" -> requirePlayer(sender, p -> playerService.toggleAfk(p));
-            case "back" -> requirePlayer(sender, p -> teleportService.back(p));
-            case "repair" -> requirePlayer(sender, p -> playerService.repair(p));
-            case "hat" -> requirePlayer(sender, p -> playerService.hat(p));
-            case "enderchest" -> requirePlayer(sender, p -> playerService.openEnderChest(p, resolveTarget(sender, args, 2, p)));
-            case "workbench" -> requirePlayer(sender, p -> playerService.openWorkbench(p));
-            case "anvil" -> requirePlayer(sender, p -> playerService.openAnvil(p));
-            case "trash" -> requirePlayer(sender, p -> playerService.openTrash(p));
-            case "nick" -> handleNick(sender, args);
-            case "seen" -> handleSeen(sender, args);
+            case "fly" -> requirePermission(sender, "axs.essentials.fly", () ->
+                requirePlayer(sender, p -> playerService.toggleFly(p, resolveTarget(sender, args, 2, p))));
+            case "god" -> requirePermission(sender, "axs.essentials.god", () ->
+                requirePlayer(sender, p -> playerService.toggleGod(resolveTarget(sender, args, 2, p))));
+            case "heal" -> requirePermission(sender, "axs.essentials.heal", () ->
+                requirePlayer(sender, p -> playerService.heal(resolveTarget(sender, args, 2, p))));
+            case "feed" -> requirePermission(sender, "axs.essentials.feed", () ->
+                requirePlayer(sender, p -> playerService.feed(resolveTarget(sender, args, 2, p))));
+            case "gamemode" -> requirePermission(sender, "axs.essentials.gamemode", () -> handleGameMode(sender, args));
+            case "speed" -> requirePermission(sender, "axs.essentials.speed", () -> handleSpeed(sender, args));
+            case "vanish" -> requirePermission(sender, "axs.essentials.vanish", () ->
+                requirePlayer(sender, p -> playerService.toggleVanish(p)));
+            case "afk" -> requirePermission(sender, "axs.essentials.afk", () ->
+                requirePlayer(sender, p -> playerService.toggleAfk(p)));
+            case "back" -> requirePermission(sender, "axs.essentials.back", () ->
+                requirePlayer(sender, p -> teleportService.back(p)));
+            case "repair" -> requirePermission(sender, "axs.essentials.repair", () ->
+                requirePlayer(sender, p -> playerService.repair(p)));
+            case "hat" -> requirePermission(sender, "axs.essentials.hat", () ->
+                requirePlayer(sender, p -> playerService.hat(p)));
+            case "enderchest" -> requirePermission(sender, "axs.essentials.enderchest", () ->
+                requirePlayer(sender, p -> playerService.openEnderChest(p, resolveTarget(sender, args, 2, p))));
+            case "workbench" -> requirePermission(sender, "axs.essentials.workbench", () ->
+                requirePlayer(sender, p -> playerService.openWorkbench(p)));
+            case "anvil" -> requirePermission(sender, "axs.essentials.anvil", () ->
+                requirePlayer(sender, p -> playerService.openAnvil(p)));
+            case "trash" -> requirePermission(sender, "axs.essentials.trash", () ->
+                requirePlayer(sender, p -> playerService.openTrash(p)));
+            case "nick" -> requirePermission(sender, "axs.essentials.nick", () -> handleNick(sender, args));
+            case "seen" -> requirePermission(sender, "axs.essentials.seen", () -> handleSeen(sender, args));
             // ─── 传送 ───
-            case "home" -> requirePlayer(sender, p -> teleportService.teleportHome(p, arg(args, 2, "home")));
-            case "sethome" -> requirePlayer(sender, p -> teleportService.setHome(p, arg(args, 2, "home")));
-            case "delhome" -> requirePlayer(sender, p -> teleportService.deleteHome(p, arg(args, 2, "home")));
-            case "warp" -> requirePlayer(sender, p -> teleportService.teleportWarp(p, arg(args, 2, "")));
-            case "setwarp" -> handleRequireArg(sender, args, 2, "传送点名称", name -> {
-                requirePlayer(sender, p -> teleportService.setWarp(p, name));
-            });
-            case "delwarp" -> handleRequireArg(sender, args, 2, "传送点名称", name -> {
-                requirePlayer(sender, p -> teleportService.deleteWarp(p, name));
-            });
-            case "spawn" -> requirePlayer(sender, p -> teleportService.teleportSpawn(p));
-            case "setspawn" -> requirePlayer(sender, p -> teleportService.setSpawn(p));
-            case "tpa" -> handleTpa(sender, args, false);
-            case "tpahere" -> handleTpa(sender, args, true);
-            case "tpaccept" -> requirePlayer(sender, p -> teleportService.acceptTpa(p));
-            case "tpdeny" -> requirePlayer(sender, p -> teleportService.denyTpa(p));
-            case "tp" -> handleTp(sender, args);
-            case "top" -> requirePlayer(sender, p -> teleportService.teleportTop(p));
-            case "tppos" -> handleTpPos(sender, args);
+            case "home" -> requirePermission(sender, "axs.essentials.home", () ->
+                requirePlayer(sender, p -> teleportService.teleportHome(p, arg(args, 2, "home"))));
+            case "sethome" -> requirePermission(sender, "axs.essentials.sethome", () ->
+                requirePlayer(sender, p -> teleportService.setHome(p, arg(args, 2, "home"))));
+            case "delhome" -> requirePermission(sender, "axs.essentials.delhome", () ->
+                requirePlayer(sender, p -> teleportService.deleteHome(p, arg(args, 2, "home"))));
+            case "warp" -> requirePermission(sender, "axs.essentials.warp", () ->
+                requirePlayer(sender, p -> teleportService.teleportWarp(p, arg(args, 2, ""))));
+            case "setwarp" -> requirePermission(sender, "axs.essentials.setwarp", () ->
+                handleRequireArg(sender, args, 2, "传送点名称", name ->
+                    requirePlayer(sender, p -> teleportService.setWarp(p, name))));
+            case "delwarp" -> requirePermission(sender, "axs.essentials.delwarp", () ->
+                handleRequireArg(sender, args, 2, "传送点名称", name ->
+                    requirePlayer(sender, p -> teleportService.deleteWarp(p, name))));
+            case "spawn" -> requirePermission(sender, "axs.essentials.spawn", () ->
+                requirePlayer(sender, p -> teleportService.teleportSpawn(p)));
+            case "setspawn" -> requirePermission(sender, "axs.essentials.setspawn", () ->
+                requirePlayer(sender, p -> teleportService.setSpawn(p)));
+            case "tpa" -> requirePermission(sender, "axs.essentials.tpa", () -> handleTpa(sender, args, false));
+            case "tpahere" -> requirePermission(sender, "axs.essentials.tpa", () -> handleTpa(sender, args, true));
+            case "tpaccept" -> requirePermission(sender, "axs.essentials.tpa", () ->
+                requirePlayer(sender, p -> teleportService.acceptTpa(p)));
+            case "tpdeny" -> requirePermission(sender, "axs.essentials.tpa", () ->
+                requirePlayer(sender, p -> teleportService.denyTpa(p)));
+            case "tp" -> requirePermission(sender, "axs.essentials.teleport", () -> handleTp(sender, args));
+            case "top" -> requirePermission(sender, "axs.essentials.teleport", () ->
+                requirePlayer(sender, p -> teleportService.teleportTop(p)));
+            case "tppos" -> requirePermission(sender, "axs.essentials.teleport", () -> handleTpPos(sender, args));
             // ─── 世界管理 ───
-            case "time" -> handleTime(sender, args);
-            case "weather" -> handleWeather(sender, args);
+            case "time" -> requirePermission(sender, "axs.essentials.time", () -> handleTime(sender, args));
+            case "weather" -> requirePermission(sender, "axs.essentials.weather", () -> handleWeather(sender, args));
             // ─── 安全管理 ───
-            case "ban" -> handleBan(sender, args, false);
-            case "tempban" -> handleBan(sender, args, true);
-            case "unban" -> handleUnban(sender, args);
-            case "mute" -> handleMute(sender, args, false);
-            case "tempmute" -> handleMute(sender, args, true);
-            case "unmute" -> handleUnmute(sender, args);
-            case "kick" -> handleKick(sender, args);
-            case "warn" -> handleWarn(sender, args);
-            case "sudo" -> handleSudo(sender, args);
-            case "inv" -> handleInv(sender, args);
+            case "ban" -> requirePermission(sender, "axs.essentials.ban", () -> handleBan(sender, args, false));
+            case "tempban" -> requirePermission(sender, "axs.essentials.ban", () -> handleBan(sender, args, true));
+            case "unban" -> requirePermission(sender, "axs.essentials.unban", () -> handleUnban(sender, args));
+            case "mute" -> requirePermission(sender, "axs.essentials.mute", () -> handleMute(sender, args, false));
+            case "tempmute" -> requirePermission(sender, "axs.essentials.mute", () -> handleMute(sender, args, true));
+            case "unmute" -> requirePermission(sender, "axs.essentials.unmute", () -> handleUnmute(sender, args));
+            case "kick" -> requirePermission(sender, "axs.essentials.kick", () -> handleKick(sender, args));
+            case "warn" -> requirePermission(sender, "axs.essentials.warn", () -> handleWarn(sender, args));
+            case "sudo" -> requirePermission(sender, "axs.essentials.sudo", () -> handleSudo(sender, args));
+            case "inv" -> requirePermission(sender, "axs.essentials.inv", () -> handleInv(sender, args));
             // ─── 交互 ───
-            case "sit" -> requirePlayer(sender, p -> handleSit(p));
-            case "lay" -> requirePlayer(sender, p -> handleLay(p));
+            case "sit" -> requirePermission(sender, "axs.essentials.sit", () -> requirePlayer(sender, this::handleSit));
+            case "lay" -> requirePermission(sender, "axs.essentials.lay", () -> requirePlayer(sender, this::handleLay));
             // ─── 工具 ───
-            case "sort" -> requirePlayer(sender, p -> {
+            case "sort" -> requirePermission(sender, "axs.essentials.sort", () -> requirePlayer(sender, p -> {
                 if (inventoryActionsService != null) {
                     inventoryActionsService.sortInventory(p);
                     p.sendMessage(prefix() + configuration.messages().sortDone());
                 }
-            });
-            case "replant" -> requirePlayer(sender, p -> {
+            }));
+            case "replant" -> requirePermission(sender, "axs.essentials.replant", () -> requirePlayer(sender, p -> {
                 if (inventoryActionsService != null) {
                     boolean on = inventoryActionsService.toggleReplant(p.getUniqueId());
                     p.sendMessage(prefix() + (on ? configuration.messages().replantDisabled() : configuration.messages().replantEnabled()));
                 }
-            });
-            case "autotool" -> requirePlayer(sender, p -> {
+            }));
+            case "autotool" -> requirePermission(sender, "axs.essentials.autotool", () -> requirePlayer(sender, p -> {
                 if (inventoryActionsService != null) {
                     boolean on = inventoryActionsService.toggleAutoTool(p.getUniqueId());
                     p.sendMessage(prefix() + (on ? configuration.messages().autotoolDisabled() : configuration.messages().autotoolEnabled()));
                 }
-            });
+            }));
             default -> {
                 sender.sendMessage(fullMsg("common.unknown", action));
                 sendHelp(sender, label, args[0]);
@@ -763,7 +805,25 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
 
     // ─── Sit / Lay ───
 
+    @Override
+    protected List<Listener> createListeners() {
+        return List.of(new Listener() {
+            @EventHandler
+            public void onPlayerQuit(PlayerQuitEvent event) {
+                cancelPoseTask(event.getPlayer().getUniqueId());
+            }
+        });
+    }
+
+    private void cancelPoseTask(UUID playerId) {
+        BukkitTask task = poseMonitorTasks.remove(playerId);
+        if (task != null) {
+            task.cancel();
+        }
+    }
+
     private void handleSit(Player player) {
+        cancelPoseTask(player.getUniqueId());
         // 使用 ArmorStand 让玩家坐下
         org.bukkit.entity.ArmorStand seat = player.getWorld().spawn(
             player.getLocation().subtract(0, 0.2, 0), org.bukkit.entity.ArmorStand.class, stand -> {
@@ -776,16 +836,17 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         seat.addPassenger(player);
         player.sendMessage(prefix() + configuration.messages().sitDown());
 
-        // 玩家下坐后移除 ArmorStand
-        Bukkit.getScheduler().runTaskTimer(context.plugin(), task -> {
+        BukkitTask monitorTask = Bukkit.getScheduler().runTaskTimer(context.plugin(), () -> {
             if (!seat.isValid() || seat.getPassengers().isEmpty()) {
                 seat.remove();
-                task.cancel();
+                cancelPoseTask(player.getUniqueId());
             }
         }, 20L, 20L);
+        poseMonitorTasks.put(player.getUniqueId(), monitorTask);
     }
 
     private void handleLay(Player player) {
+        cancelPoseTask(player.getUniqueId());
         // 使用 ArmorStand 模拟躺下姿势
         org.bukkit.entity.ArmorStand bed = player.getWorld().spawn(
             player.getLocation().subtract(0, 0.2, 0), org.bukkit.entity.ArmorStand.class, stand -> {
@@ -798,12 +859,13 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         bed.addPassenger(player);
         player.sendMessage(prefix() + configuration.messages().layDown());
 
-        Bukkit.getScheduler().runTaskTimer(context.plugin(), task -> {
+        BukkitTask monitorTask = Bukkit.getScheduler().runTaskTimer(context.plugin(), () -> {
             if (!bed.isValid() || bed.getPassengers().isEmpty()) {
                 bed.remove();
-                task.cancel();
+                cancelPoseTask(player.getUniqueId());
             }
         }, 20L, 20L);
+        poseMonitorTasks.put(player.getUniqueId(), monitorTask);
     }
 
     // ─── Help / Status / Reload ───
@@ -869,6 +931,14 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         } else {
             sender.sendMessage(fullMsg("common.only-player"));
         }
+    }
+
+    private void requirePermission(CommandSender sender, String permission, Runnable action) {
+        if (sender.hasPermission(permission)) {
+            action.run();
+            return;
+        }
+        sender.sendMessage(prefix() + configuration.messages().noPermission());
     }
 
     private void handleRequireArg(CommandSender sender, String[] args, int index, String name,

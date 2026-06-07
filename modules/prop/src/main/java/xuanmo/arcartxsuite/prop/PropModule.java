@@ -9,6 +9,7 @@ import org.jetbrains.annotations.NotNull;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
+import xuanmo.arcartxsuite.api.ClientInitializedHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.prop.command.PropAdminCommand;
@@ -93,6 +94,15 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
             service = null;
         }
         configuration = null;
+    }
+
+    @Override
+    protected @Nullable ClientInitializedHandler createInitializedHandler() {
+        return player -> {
+            if (service != null) {
+                service.handleClientInitialized(player);
+            }
+        };
     }
 
     public PropService getService() {

@@ -133,6 +133,14 @@ public class RankingRewardService {
 
             int rewardedCount = 0;
             for (PlayerBossBestDamage ranking : rankings) {
+                if (recordDao.hasSuccessfulIssuance(
+                    boss.mythicMobId(), periodType, periodStart, ranking.getPlayerUuid(), ranking.getRank()
+                )) {
+                    logger.fine("Boss " + boss.mythicMobId() + " " + periodType + " 第"
+                        + ranking.getRank() + "名已发放，跳过");
+                    continue;
+                }
+
                 BossDamageRankRewardDefinition rewardDef = rewardSettings.rewardForRank(ranking.getRank());
                 if (rewardDef.actions().isEmpty()) {
                     continue;

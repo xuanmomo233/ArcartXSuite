@@ -25,8 +25,10 @@ import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.announcer.config.AnnouncerEntry;
 import xuanmo.arcartxsuite.announcer.config.AnnouncerModuleConfiguration;
 import xuanmo.arcartxsuite.announcer.transport.AnnouncerEnvelope;
-import xuanmo.arcartxsuite.announcer.transport.AnnouncerProxyTransport;
+import xuanmo.arcartxsuite.announcer.transport.AnnouncerEnvelopeCodec;
 import xuanmo.arcartxsuite.api.capability.QQBotBroadcastable;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.bridge.ArcartXClientBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
@@ -47,8 +49,9 @@ public final class AnnouncerService implements Listener {
     private final ArcartXClientBridge clientBridge;
     private final PacketGuardAPI packetGuard;
     private final java.util.List<String> uiIds;
-    private final AnnouncerProxyTransport transport;
-    private final String nodeId;
+    private final CrossServerAPI crossServer;
+
+    private CrossServerChannel crossServerChannel;
     private final Set<UUID> initializedPlayers = ConcurrentHashMap.newKeySet();
     private final Set<UUID> openedPlayers = ConcurrentHashMap.newKeySet();
     private final AtomicLong revisionSequence = new AtomicLong();
@@ -78,8 +81,7 @@ public final class AnnouncerService implements Listener {
         ArcartXClientBridge clientBridge,
         PacketGuardAPI packetGuard,
         java.util.List<String> uiIds,
-        AnnouncerProxyTransport transport,
-        String nodeId
+        CrossServerAPI crossServer
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
@@ -87,8 +89,7 @@ public final class AnnouncerService implements Listener {
         this.clientBridge = clientBridge;
         this.packetGuard = packetGuard;
         this.uiIds = uiIds;
-        this.transport = transport;
-        this.nodeId = nodeId == null ? "" : nodeId;
+        this.crossServer = crossServer;
         this.currentDisplay = AnnouncerDisplay.hidden(nextRevision());
     }
 
@@ -97,6 +98,11 @@ public final class AnnouncerService implements Listener {
     }
 
     public void start() {
+        crossServerChannel = crossServer.openChannel(
+            "announcer",
+            configuration.crossServer(),
+            delivery -> handleRemotePayload(delivery.payload())
+        );
         Bukkit.getPluginManager().registerEvents(this, plugin);
         broadcastTask = Bukkit.getScheduler().runTaskTimer(
             plugin,
@@ -107,6 +113,10 @@ public final class AnnouncerService implements Listener {
     }
 
     public void shutdown() {
+        if (crossServerChannel != null) {
+            crossServerChannel.close();
+            crossServerChannel = null;
+        }
         if (broadcastTask != null) {
             broadcastTask.cancel();
             broadcastTask = null;
@@ -242,7 +252,7 @@ public final class AnnouncerService implements Listener {
         if (text != null && !text.isBlank()) {
             manualBroadcastQueue.offer(text);
             if (forward) {
-                forwardToProxy(text, false);
+                forwardCrossServer(text, false);
             }
         }
     }
@@ -266,7 +276,7 @@ public final class AnnouncerService implements Listener {
         if (text == null || text.isBlank()) return;
         broadcastManualDisplay(text);
         if (forward) {
-            forwardToProxy(text, true);
+            forwardCrossServer(text, true);
         }
     }
 
@@ -291,13 +301,28 @@ public final class AnnouncerService implements Listener {
 
     // ─── 跨服传输 ──────────────────────────────────────────────
 
+    public boolean crossServerActive() {
+        return crossServerChannel != null && crossServerChannel.isActive();
+    }
+
+    private void handleRemotePayload(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return;
+        }
+        try {
+            handleRemoteEnvelope(AnnouncerEnvelopeCodec.decode(payload));
+        } catch (Exception exception) {
+            plugin.getLogger().warning("Announcer 跨服消息解码失败: " + exception.getMessage());
+        }
+    }
+
     /**
      * 处理从其他子服收到的公告信封。
      * 在主线程中调度本地展示，跳过自身节点和重复消息。
      */
     public void handleRemoteEnvelope(AnnouncerEnvelope envelope) {
         if (envelope == null) return;
-        if (nodeId.equals(envelope.originNode())) return;
+        if (crossServer.nodeId().equals(envelope.originNode())) return;
         if (!recentDedupeKeys.add(envelope.dedupeKey())) return;
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (envelope.immediate()) {
@@ -308,13 +333,13 @@ public final class AnnouncerService implements Listener {
         });
     }
 
-    private void forwardToProxy(String text, boolean immediate) {
-        if (transport == null || !transport.isActive()) return;
+    private void forwardCrossServer(String text, boolean immediate) {
+        if (crossServerChannel == null || !crossServerChannel.isActive()) return;
         AnnouncerEnvelope envelope = new AnnouncerEnvelope(
-            UUID.randomUUID().toString(), nodeId, text, immediate
+            UUID.randomUUID().toString(), crossServer.nodeId(), text, immediate
         );
         recentDedupeKeys.add(envelope.dedupeKey());
-        transport.send(envelope);
+        crossServerChannel.publish(AnnouncerEnvelopeCodec.encode(envelope));
     }
 
     private void broadcastNextDisplay(long now, String reason) {

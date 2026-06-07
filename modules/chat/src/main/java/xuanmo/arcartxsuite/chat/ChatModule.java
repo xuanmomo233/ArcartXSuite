@@ -130,7 +130,8 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
             configuration,
             chatRepo,
             packetBridge, itemStackBridge,
-            completionUiId
+            completionUiId,
+            context.crossServer()
         );
         service.start();
         adminCommand = new ChatAdminCommand(() -> service, messages());

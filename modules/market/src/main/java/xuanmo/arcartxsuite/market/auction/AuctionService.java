@@ -360,6 +360,40 @@ public class AuctionService {
     }
 
     /**
+     * 管理员强制下架：退还竞价押金与上架物品，写入历史。
+     */
+    public boolean adminForceCancelListing(long listingId) {
+        AuctionListing listing = repository.getListing(listingId);
+        if (listing == null) return false;
+        if (listing.getStatus() != AuctionListing.ListingStatus.ACTIVE) return false;
+
+        if (!repository.compareAndSetListingStatus(listingId,
+                AuctionListing.ListingStatus.ACTIVE, AuctionListing.ListingStatus.CANCELLED)) {
+            return false;
+        }
+
+        if (listing.getHighestBidder() != null && listing.getCurrentBid() > 0) {
+            depositSafe(listing.getHighestBidder(), listing.getCurrency(), listing.getCurrentBid(), "auction_admin_cancel_refund");
+        }
+
+        listing.setStatus(AuctionListing.ListingStatus.CANCELLED);
+        repository.updateListing(listing);
+        deliverItemSafe(listing.getSeller(), listing, "auction_admin_cancel_return");
+
+        repository.insertHistory(new AuctionHistory(
+            0, listing.getId(), listing.getSeller(), null,
+            listing.getItemData(), listing.getItemDisplayName(),
+            0, listing.getCurrency(), 0, "ADMIN_CANCELLED", System.currentTimeMillis()
+        ));
+
+        if (redisCache.isAvailable()) {
+            redisCache.invalidateByPrefix("market:listings:");
+            redisCache.publish("LISTING_CANCELLED:" + listingId);
+        }
+        return true;
+    }
+
+    /**
      * 切换收藏。
      */
     public boolean toggleFavorite(UUID player, long listingId) {
@@ -519,10 +553,15 @@ public class AuctionService {
         Player online = Bukkit.getPlayer(target);
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(currency);
         if (online != null && online.isOnline() && bridge != null && bridge.available()) {
-            runOnMain(() -> bridge.deposit(online, BigDecimal.valueOf(amount)));
-        } else {
-            repository.addPendingCurrency(target, currency, amount, reason);
+            CurrencyTransactionResult[] resultHolder = new CurrencyTransactionResult[1];
+            runOnMain(() -> resultHolder[0] = bridge.deposit(online, BigDecimal.valueOf(amount)));
+            if (resultHolder[0] != null && resultHolder[0].success()) {
+                return;
+            }
+            logger.warning("[Market-Auction] 在线入账失败，转入待发放队列: player="
+                + online.getName() + " currency=" + currency + " amount=" + amount);
         }
+        repository.addPendingCurrency(target, currency, amount, reason);
     }
 
     // ─── 工具方法 ───────────────────────────────────────────

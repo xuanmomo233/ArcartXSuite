@@ -1,66 +1,91 @@
-# 默认回收表
-# 定义哪些物品可以回收及其价格。
+# =============================================================================
+# 默认回收表配置
+# =============================================================================
+# 每个 .yml 文件定义一张独立的回收表，文件名（不含扩展名）即为回收表 ID。
+# 文件放置路径: <模块数据目录>/recycle/ 目录下
+# 首次启动时，若 recycle 目录为空，会自动导出此示例文件。
+#
+# 回收表功能:
+#   - 玩家通过 /market recycle 打开回收界面，系统扫描背包匹配回收条目
+#   - 支持单件回收和一键批量回收
+#   - 若开启 allow-auto-recycle，拾取物品时自动检测并回收
+#
+# 条目字段说明:
+#   source    - 物品来源: minecraft / mythic / neige / overture / mmoitems
+#   item-id   - 物品标识（格式与商店配置一致）
+#   price     - 回收单价（每个物品获得的货币数量）
+#   currency  - 货币类型（覆盖默认货币）
+#
+# 注意: 回收价格会受主配置中 price-multiplier 影响。
+#   最终价格 = price * 玩家匹配的 price-multiplier
+#   例如: 圆石 price=1，VIP 倍率 1.2 → VIP 玩家每个圆石获得 1.2
+# =============================================================================
 
+# 回收表在 UI 中显示的名称
 display-name: "&a默认回收表"
 
-# 回收规则列表
+# ── 回收条目列表 ──
+# 每个键为条目唯一标识（内部使用）
 entries:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 原版 Minecraft 物品回收示例
+  # ═══════════════════════════════════════════════════════════════════════════
   cobblestone:
     source: "minecraft"
     item-id: "COBBLESTONE"
-    price: 1
+    price: 1                    # 每个圆石回收价 1
     currency: "money"
 
   iron_ingot:
     source: "minecraft"
     item-id: "IRON_INGOT"
-    price: 10
+    price: 10                   # 每个铁锭回收价 10
     currency: "money"
 
   gold_ingot:
     source: "minecraft"
     item-id: "GOLD_INGOT"
-    price: 25
+    price: 25                   # 每个金锭回收价 25
     currency: "money"
 
   diamond:
     source: "minecraft"
     item-id: "DIAMOND"
-    price: 100
+    price: 100                  # 每个钻石回收价 100
     currency: "money"
 
   emerald:
     source: "minecraft"
     item-id: "EMERALD"
-    price: 80
+    price: 80                   # 每个绿宝石回收价 80
     currency: "money"
 
   rotten_flesh:
     source: "minecraft"
     item-id: "ROTTEN_FLESH"
-    price: 2
+    price: 2                    # 每个腐肉回收价 2
     currency: "money"
 
   bone:
     source: "minecraft"
     item-id: "BONE"
-    price: 3
+    price: 3                    # 每个骨头回收价 3
     currency: "money"
 
   string:
     source: "minecraft"
     item-id: "STRING"
-    price: 2
+    price: 2                    # 每个线回收价 2
     currency: "money"
 
   gunpowder:
     source: "minecraft"
     item-id: "GUNPOWDER"
-    price: 5
+    price: 5                    # 每个火药回收价 5
     currency: "money"
 
   ender_pearl:
     source: "minecraft"
     item-id: "ENDER_PEARL"
-    price: 30
+    price: 30                   # 每个末影珍珠回收价 30
     currency: "money"

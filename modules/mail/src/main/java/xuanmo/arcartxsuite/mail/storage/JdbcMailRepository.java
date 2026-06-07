@@ -182,6 +182,22 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     }
 
     @Override
+    public boolean tryClaimMail(UUID ownerUuid, long mailId, Instant now) throws SQLException {
+        String sql = """
+            UPDATE mail_entries SET status = 'CLAIMED', claimed_at = ?, updated_at = ?
+            WHERE id = ? AND owner_uuid = ? AND status IN ('UNREAD', 'READ')
+            """;
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, now.toEpochMilli());
+            statement.setLong(2, now.toEpochMilli());
+            statement.setLong(3, mailId);
+            statement.setString(4, ownerUuid.toString());
+            return statement.executeUpdate() > 0;
+        }
+    }
+
+    @Override
     public Optional<MailMessage> loadMail(UUID ownerUuid, long mailId) throws SQLException {
         try (Connection connection = connection();
              PreparedStatement statement = connection.prepareStatement(

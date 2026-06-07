@@ -16,6 +16,7 @@ import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
@@ -136,6 +137,12 @@ public interface ModuleContext {
      */
     @ApiStability.Stable
     @NotNull AccountTypeService accountTypeService();
+
+    /**
+     * 宿主统一跨服传输（Redis + Proxy 双后端、统一信封与 HMAC）。
+     */
+    @ApiStability.Stable
+    @NotNull CrossServerAPI crossServer();
 
     // ─── 配置与资源工具 ───────────────────────────────────────
 

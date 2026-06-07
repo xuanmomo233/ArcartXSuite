@@ -68,6 +68,7 @@ public class TitleService {
     private final TitleSymphonyService symphonyService;
     private final TitleOverheadService overheadService;
     private final ExecutorService databaseExecutor = Executors.newSingleThreadExecutor(new TitleThreadFactory());
+    private volatile boolean databaseWritesEnabled = true;
     private final ConcurrentMap<UUID, PlayerTitleState> states = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, CompletableFuture<PlayerTitleState>> loadingStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, String> selectedTitleIds = new ConcurrentHashMap<>();
@@ -119,6 +120,12 @@ public class TitleService {
         this.overheadService = new TitleOverheadService(worldTextureService, logger);
     }
 
+    /**
+     * 启动称号服务。
+     * <p>
+     * 初始化数据库、注册 UI、绑定玩家监听器、预加载在线玩家数据，
+     * 并启动过期称号清理定时任务。
+     */
     public void start() throws SQLException, IOException {
         repository.initialize();
         mythicLibService.start();
@@ -149,7 +156,14 @@ public class TitleService {
         );
     }
 
+    /**
+     * 关闭称号服务。
+     * <p>
+     * 取消定时任务、注销监听器、卸载 UI、清理所有在线玩家的外部属性加成，
+     * 并优雅关闭数据库线程池与连接。
+     */
     public void shutdown() {
+        databaseWritesEnabled = false;
         if (expirationTask != null) {
             expirationTask.cancel();
             expirationTask = null;
@@ -225,6 +239,13 @@ public class TitleService {
         selectedTitleIds.remove(playerUuid);
     }
 
+    /**
+     * 为指定玩家打开称号管理菜单。
+     * <p>
+     * 异步加载玩家数据后，通过 {@link ArcartXPacketBridge} 发送 UI 初始化包。
+     *
+     * @param player 目标玩家
+     */
     public void openMenu(Player player) {
         if (player == null || !player.isOnline()) {
             return;
@@ -240,6 +261,16 @@ public class TitleService {
         );
     }
 
+    /**
+     * 处理来自客户端的称号菜单交互包。
+     * <p>
+     * 支持的动作：open、select、equip、unequip_group、unequip_all、hide、unhide、refresh。
+     *
+     * @param player   发包玩家
+     * @param packetId 包 ID（仅处理 {@value #CLIENT_PACKET_ID}）
+     * @param data     包数据，首元素为动作名
+     * @return true 表示已消费该包
+     */
     public boolean handleClientPacket(Player player, String packetId, List<String> data) {
         if (player == null || !player.isOnline() || packetId == null || !CLIENT_PACKET_ID.equalsIgnoreCase(packetId)) {
             return false;
@@ -275,6 +306,14 @@ public class TitleService {
         return true;
     }
 
+    /**
+     * 为玩家装备指定称号（若已拥有且未过期）。
+     * <p>
+     * 装备后会同步外部属性、刷新菜单，并触发全局 Tab 刷新。
+     *
+     * @param player  目标玩家
+     * @param titleId 称号 ID
+     */
     public void equipTitle(Player player, String titleId) {
         if (player == null || !player.isOnline()) {
             return;
@@ -309,6 +348,14 @@ public class TitleService {
         );
     }
 
+    /**
+     * 卸下玩家指定分组中已装备的称号。
+     * <p>
+     * 卸下后会同步外部属性、刷新菜单，并触发全局 Tab 刷新。
+     *
+     * @param player  目标玩家
+     * @param groupId 分组 ID
+     */
     public void unequipGroup(Player player, String groupId) {
         if (player == null || !player.isOnline()) {
             return;
@@ -330,6 +377,13 @@ public class TitleService {
         );
     }
 
+    /**
+     * 卸下玩家所有分组中已装备的称号。
+     * <p>
+     * 卸下后会同步外部属性、刷新菜单，并触发全局 Tab 刷新。
+     *
+     * @param player 目标玩家
+     */
     public void unequipAll(Player player) {
         if (player == null || !player.isOnline()) {
             return;
@@ -358,6 +412,18 @@ public class TitleService {
         setHidden(player, titleId, false, notify);
     }
 
+    /**
+     * 向玩家授予称号。
+     * <p>
+     * 支持永久、限时（如 7d）或日期区间（如 2025-01-01~2025-12-31）。
+     * 授予后会更新缓存、同步外部属性，并触发全局 Tab 刷新。
+     *
+     * @param playerUuid  玩家 UUID
+     * @param titleId     称号 ID
+     * @param durationSpec 有效期描述（null 视为永久）
+     * @param grantedBy   来源标识（如 "EventPacket"、管理员名）
+     * @return 操作结果，{@link TitleOperationResult#success()} 为 true 表示成功
+     */
     public TitleOperationResult giveTitle(UUID playerUuid, String titleId, TitleDurationSpec durationSpec, String grantedBy) {
         TitleDefinition definition = requireTitle(titleId);
         if (definition == null) {
@@ -394,6 +460,15 @@ public class TitleService {
         return TitleOperationResult.success("已授予称号: " + definition.displayName());
     }
 
+    /**
+     * 收回玩家的指定称号。
+     * <p>
+     * 收回后会更新缓存、同步外部属性，并触发全局 Tab 刷新。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param titleId    称号 ID
+     * @return 操作结果，{@link TitleOperationResult#success()} 为 true 表示成功
+     */
     public TitleOperationResult revokeTitle(UUID playerUuid, String titleId) {
         TitleDefinition definition = requireTitle(titleId);
         if (definition == null) {
@@ -517,7 +592,11 @@ public class TitleService {
         withLoadedState(
             player,
             state -> {
-                if (requireTitle(normalizedTitleId) == null) {
+                TitleDefinition definition = requireTitle(normalizedTitleId);
+                if (definition == null) {
+                    return;
+                }
+                if (!state.hasOwnedTitle(normalizedTitleId)) {
                     return;
                 }
                 selectedTitleIds.put(player.getUniqueId(), normalizedTitleId);
@@ -603,6 +682,9 @@ public class TitleService {
     }
 
     private void queueWrite(String description, RepositoryAction repositoryAction) {
+        if (!databaseWritesEnabled) {
+            return;
+        }
         databaseExecutor.submit(() -> {
             try {
                 repositoryAction.run();

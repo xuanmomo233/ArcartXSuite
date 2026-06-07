@@ -7,11 +7,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
-import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.api.config.UiIdParser;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
 
 public record AnnouncerModuleConfiguration(
     boolean debug,
@@ -25,7 +26,7 @@ public record AnnouncerModuleConfiguration(
     int textWidthFontSize,
     boolean forwardToQQ,
     List<AnnouncerEntry> entries,
-    AnnouncerProxyConfiguration proxy,
+    CrossServerChannelConfig crossServer,
     SubtitleSettings subtitle
 ) {
 
@@ -68,7 +69,9 @@ public record AnnouncerModuleConfiguration(
             logger.warning("entries 目录为空或不存在，未加载任何公告条目。");
         }
 
-        AnnouncerProxyConfiguration proxySettings = loadProxy(configuration);
+        CrossServerChannelConfig crossServer = CrossServerChannelConfigs.fromSection(
+            configuration.getConfigurationSection("cross-server")
+        );
         SubtitleSettings subtitleSettings = loadSubtitle(configuration);
 
         return new AnnouncerModuleConfiguration(
@@ -83,7 +86,7 @@ public record AnnouncerModuleConfiguration(
             textWidthFontSize,
             forwardToQQ,
             List.copyOf(new ArrayList<>(entryMap.values())),
-            proxySettings,
+            crossServer,
             subtitleSettings
         );
     }
@@ -112,20 +115,6 @@ public record AnnouncerModuleConfiguration(
             }
         }
         return List.copyOf(activeEntries);
-    }
-
-    private static AnnouncerProxyConfiguration loadProxy(FileConfiguration configuration) {
-        ConfigurationSection section = configuration.getConfigurationSection("transport.proxy");
-        if (section == null) {
-            return AnnouncerProxyConfiguration.DISABLED;
-        }
-        String serverId = Bukkit.getServer().getName();
-        return new AnnouncerProxyConfiguration(
-            section.getBoolean("enabled", false),
-            readString(section, "messenger-channel", "AXS_ANNOUNCER"),
-            readString(section, "forward-target", "ALL"),
-            readString(section, "node-id", serverId)
-        );
     }
 
     private static SubtitleSettings loadSubtitle(FileConfiguration configuration) {

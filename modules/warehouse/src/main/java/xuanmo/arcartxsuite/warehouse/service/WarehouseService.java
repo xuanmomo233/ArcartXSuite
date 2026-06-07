@@ -76,6 +76,12 @@ import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.SharedWarehouse
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.SlotItemRecord;
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.WarehouseRecord;
 
+/**
+ * Warehouse 核心业务服务，统筹个人仓库、共享仓库、多货币银行、二级密码与自动拾取逻辑。
+ * <p>
+ * 通过 {@link ArcartXPacketBridge} 与客户端 AXUI 通信，所有状态变更后回发更新包刷新界面。
+ * 共享仓库使用 {@link #sharedEditLocks} 实现编辑互斥锁，防止并发冲突。
+ */
 public final class WarehouseService implements Listener {
 
     private static final String PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
@@ -119,9 +125,13 @@ public final class WarehouseService implements Listener {
     private final CurrencyBridgeAPI currencyBridgeManager;
     private final Supplier<PickupNotifiable> pickupNotifiableSupplier;
     private final SecureRandom secureRandom = new SecureRandom();
+    /** 玩家当前 UI 视图状态（ownerType / warehouseId / page / search 等）。 */
     private final ConcurrentMap<UUID, ViewState> viewStates = new ConcurrentHashMap<>();
+    /** 玩家二级密码解锁过期时间戳（毫秒）。 */
     private final ConcurrentMap<UUID, Long> unlockedUntil = new ConcurrentHashMap<>();
+    /** 共享仓库编辑互斥锁：共享仓库 ID → 当前编辑者 UUID。 */
     private final ConcurrentMap<String, UUID> sharedEditLocks = new ConcurrentHashMap<>();
+    /** 玩家上次展示仓库的时间戳（毫秒），用于冷却控制。 */
     private final ConcurrentMap<UUID, Long> showcaseCooldowns = new ConcurrentHashMap<>();
     private String storageRuntimeUiId = "";
     private String manageRuntimeUiId = "";
@@ -156,12 +166,18 @@ public final class WarehouseService implements Listener {
         this.pickupNotifiableSupplier = pickupNotifiableSupplier;
     }
 
+    /**
+     * 启动服务：初始化数据库、绑定三套 AXUI、注册 Bukkit 事件监听。
+     */
     public void start() throws Exception {
         repository.initialize();
         bindUis();
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
+    /**
+     * 关闭服务：注销事件监听、清理 UI 回调与玩家状态、关闭数据库连接。
+     */
     public void shutdown() {
         HandlerList.unregisterAll(this);
         if (packetBridge != null) {
@@ -208,6 +224,14 @@ public final class WarehouseService implements Listener {
         return storageRuntimeUiId;
     }
 
+    /**
+     * 供外部模块（如 Pickup）调用的自动入库接口。
+     * 将物品存入玩家第一个个人仓库，返回存入结果。
+     *
+     * @param player    目标玩家
+     * @param itemStack 待存入物品（会被 clone，不会修改原对象）
+     * @return 存入结果，包含成功状态、已存数量、剩余数量与提示消息
+     */
     public WarehouseAutoDepositable.DepositResult depositToPersonalWarehouse(Player player, ItemStack itemStack) {
         if (player == null || !player.isOnline()) {
             return new WarehouseAutoDepositable.DepositResult(false, 0L, 0, "玩家不在线。");
@@ -232,6 +256,13 @@ public final class WarehouseService implements Listener {
         }
     }
 
+    /**
+     * 为玩家打开仓库主界面（存取界面）。
+     * 会自动初始化玩家权限仓库、确保当前仓库有效，并发送 storage 更新包。
+     *
+     * @param player 目标玩家
+     * @return 操作结果
+     */
     public ActionResult openMenu(Player player) {
         if (player == null || !player.isOnline()) {
             return ActionResult.failure("玩家不在线。");
@@ -251,6 +282,15 @@ public final class WarehouseService implements Listener {
         }
     }
 
+    /**
+     * 以只读预览模式打开目标玩家的仓库。
+     * 预览模式下仅支持翻页、分类、搜索、选择和刷新，禁止存取与切换仓库。
+     *
+     * @param viewer      预览者
+     * @param targetUuid  被预览玩家 UUID
+     * @param warehouseId 指定仓库 ID，空字符串则使用默认仓库
+     * @return 操作结果
+     */
     public ActionResult openPreview(Player viewer, UUID targetUuid, String warehouseId) {
         if (viewer == null || !viewer.isOnline()) {
             return ActionResult.failure("玩家不在线。");
@@ -272,6 +312,14 @@ public final class WarehouseService implements Listener {
         }
     }
 
+    /**
+     * 向全服展示玩家仓库。
+     * 若配置了 {@code card-id} 则发送 ArcartX 聊天卡片，否则发送可点击聊天消息。
+     * 受 {@code cooldown-seconds} 冷却控制。
+     *
+     * @param player 展示者
+     * @return 操作结果
+     */
     public ActionResult showcase(Player player) {
         if (player == null || !player.isOnline()) {
             return ActionResult.failure("玩家不在线。");
@@ -317,6 +365,17 @@ public final class WarehouseService implements Listener {
         return ActionResult.success("已展示仓库。");
     }
 
+    /**
+     * 处理客户端 UI 发来的操作包。
+     * <p>
+     * 支持的操作（action）详见 wiki 文档「客户端包协议」章节。
+     * 所有操作均经过 {@link PacketGuardAPI} 校验，异常时自动刷新 UI。
+     *
+     * @param player   发送包的玩家
+     * @param packetId 包 ID（应为 {@code AXS_WAREHOUSE}）
+     * @param data     包数据列表，第一项通常为 action
+     * @return true 表示已处理（无论成功或失败）
+     */
     public boolean handleClientPacket(Player player, String packetId, List<String> data) {
         if (player == null || !player.isOnline() || packetId == null || !configuration.ui().packetId().equalsIgnoreCase(packetId)) {
             return false;
@@ -1270,8 +1329,12 @@ public final class WarehouseService implements Listener {
             refreshBoth(player);
             return;
         }
-        BigDecimal current = bankBalance(player.getUniqueId(), normalized);
-        repository.setBankBalance(player.getUniqueId(), normalized, current.add(amount), System.currentTimeMillis());
+        try {
+            repository.creditBankBalance(player.getUniqueId(), normalized, amount, System.currentTimeMillis());
+        } catch (Exception exception) {
+            bridge.deposit(player, amount);
+            throw exception;
+        }
         sendMessage(player, true, "已存入银行 " + formatCurrency(normalized, amount) + "。");
         refreshBoth(player);
     }
@@ -1295,13 +1358,19 @@ public final class WarehouseService implements Listener {
             refreshBoth(player);
             return;
         }
+        long now = System.currentTimeMillis();
+        if (!repository.debitBankBalance(player.getUniqueId(), normalized, amount, now)) {
+            sendMessage(player, false, "银行余额不足或金额无效。");
+            refreshBoth(player);
+            return;
+        }
         var result = bridge.deposit(player, amount);
         if (!result.success()) {
+            repository.creditBankBalance(player.getUniqueId(), normalized, amount, now);
             sendMessage(player, false, result.message());
             refreshBoth(player);
             return;
         }
-        repository.setBankBalance(player.getUniqueId(), normalized, current.subtract(amount), System.currentTimeMillis());
         sendMessage(player, true, "已从银行取出 " + formatCurrency(normalized, amount) + "。");
         refreshBoth(player);
     }
@@ -1331,19 +1400,28 @@ public final class WarehouseService implements Listener {
             return;
         }
         long now = System.currentTimeMillis();
-        repository.setBankBalance(player.getUniqueId(), product.currencyId(), current.subtract(amount), now);
-        repository.createFixedDeposit(new FixedDepositRecord(
-            UUID.randomUUID().toString(),
-            player.getUniqueId(),
-            product.id(),
-            product.currencyId(),
-            amount,
-            tier.rate(),
-            now,
-            now + product.durationSeconds() * 1000L,
-            false,
-            0L
-        ));
+        if (!repository.debitBankBalance(player.getUniqueId(), product.currencyId(), amount, now)) {
+            sendMessage(player, false, "银行余额不足。");
+            refreshBoth(player);
+            return;
+        }
+        try {
+            repository.createFixedDeposit(new FixedDepositRecord(
+                UUID.randomUUID().toString(),
+                player.getUniqueId(),
+                product.id(),
+                product.currencyId(),
+                amount,
+                tier.rate(),
+                now,
+                now + product.durationSeconds() * 1000L,
+                false,
+                0L
+            ));
+        } catch (Exception exception) {
+            repository.creditBankBalance(player.getUniqueId(), product.currencyId(), amount, now);
+            throw exception;
+        }
         sendMessage(player, true, "已创建定期存款。");
         refreshBoth(player);
     }
@@ -1357,17 +1435,24 @@ public final class WarehouseService implements Listener {
         Optional<FixedDepositRecord> optional = repository.loadFixedDeposits(player.getUniqueId()).stream()
             .filter(deposit -> deposit.id().equals(depositId))
             .findFirst();
-        if (optional.isEmpty() || optional.get().claimed() || optional.get().maturesAt() > System.currentTimeMillis()) {
+        if (optional.isEmpty()) {
             sendMessage(player, false, "该定期暂不可领取。");
             refreshBoth(player);
             return;
         }
         FixedDepositRecord deposit = optional.get();
-        BigDecimal payout = deposit.principal().add(deposit.principal().multiply(deposit.interestRate())).setScale(8, RoundingMode.DOWN).stripTrailingZeros();
-        BigDecimal current = bankBalance(player.getUniqueId(), deposit.currencyId());
-        repository.setBankBalance(player.getUniqueId(), deposit.currencyId(), current.add(payout), System.currentTimeMillis());
-        repository.markFixedDepositClaimed(deposit.id(), System.currentTimeMillis());
-        sendMessage(player, true, "已领取定期本息 " + formatCurrency(deposit.currencyId(), payout) + "。");
+        if (deposit.claimed() || deposit.maturesAt() > System.currentTimeMillis()) {
+            sendMessage(player, false, "该定期暂不可领取。");
+            refreshBoth(player);
+            return;
+        }
+        Optional<BigDecimal> payout = repository.claimFixedDepositAtomic(depositId, player.getUniqueId(), System.currentTimeMillis());
+        if (payout.isEmpty()) {
+            sendMessage(player, false, "该定期暂不可领取。");
+            refreshBoth(player);
+            return;
+        }
+        sendMessage(player, true, "已领取定期本息 " + formatCurrency(deposit.currencyId(), payout.get()) + "。");
         refreshBoth(player);
     }
 

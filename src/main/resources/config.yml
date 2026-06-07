@@ -23,6 +23,30 @@ currencies:
     display-name: "点券"
     precision: 0
 
+# ========== 跨服传输（全模块共用）==========
+# 各模块在 ArcartX*.yml 的 cross-server.enabled 开启后接入此配置。
+# Redis 与 BungeeCord/Velocity Forward 可同时启用（双发 + 入站去重）。
+cross-server:
+  node-id: "default"
+  dedupe-ttl-ms: 60000
+  max-payload-chars: 524288
+  redis:
+    enabled: false
+    host: "127.0.0.1"
+    port: 6379
+    password: ""
+    database: 0
+    channel: "AXS:CROSS"
+    connect-timeout-ms: 5000
+  proxy:
+    enabled: false
+    messenger-channel: "AXS_CROSS"
+    forward-target: "ALL"
+  signature:
+    enabled: false
+    secret: ""
+    verify: true
+
 # ========== 全局属性插件桥接 ==========
 # 控制 AXS 是否初始化各属性插件桥接。
 # 即使服务器安装了对应插件，若此处设为 false，AXS 也不会连接该插件，
@@ -226,6 +250,31 @@ client-packet-guard:
           window-ms: 3000
           max-hits: 2
           mode: "notify"
+    pickup:
+      window-ms: 500
+      max-hits: 8
+      mode: "silent"
+      actions:
+        pick:
+          window-ms: 1000
+          max-hits: 4
+          mode: "notify"
+        scroll_up:
+          window-ms: 500
+          max-hits: 8
+          mode: "silent"
+        scroll_down:
+          window-ms: 500
+          max-hits: 8
+          mode: "silent"
+        open_menu:
+          window-ms: 1000
+          max-hits: 4
+          mode: "silent"
+        close_menu:
+          window-ms: 1000
+          max-hits: 4
+          mode: "silent"
     loginview:
       actions:
         login:

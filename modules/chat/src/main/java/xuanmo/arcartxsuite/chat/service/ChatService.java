@@ -54,10 +54,9 @@ import xuanmo.arcartxsuite.chat.model.ChatOperationResult;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerProfile;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerState;
 import xuanmo.arcartxsuite.chat.storage.ChatRepository;
-import xuanmo.arcartxsuite.chat.transport.ChatTransport;
-import xuanmo.arcartxsuite.chat.transport.CompositeChatTransport;
-import xuanmo.arcartxsuite.chat.transport.ProxyChatTransport;
-import xuanmo.arcartxsuite.chat.transport.RedisChatTransport;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
+import xuanmo.arcartxsuite.chat.service.ChatEnvelopeCodec;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
 
 public final class ChatService implements Listener {
@@ -84,8 +83,9 @@ public final class ChatService implements Listener {
     private final Set<String> cloudWords = ConcurrentHashMap.newKeySet();
     private final java.util.function.Supplier<TabRefreshable> tabRefreshableProvider;
     private final String completionUiId;
+    private final CrossServerAPI crossServer;
 
-    private ChatTransport transport;
+    private CrossServerChannel crossServerChannel;
     private BukkitTask cleanupTask;
     private BukkitTask cloudRefreshTask;
     private boolean paperChatEventRegistered;
@@ -100,7 +100,8 @@ public final class ChatService implements Listener {
         ChatRepository repository,
         ArcartXPacketBridge packetBridge,
         ArcartXItemStackBridge itemStackBridge,
-        String completionUiId
+        String completionUiId,
+        CrossServerAPI crossServer
     ) {
         this.plugin = Objects.requireNonNull(plugin);
         this.tabRefreshableProvider = tabRefreshableProvider;
@@ -109,6 +110,7 @@ public final class ChatService implements Listener {
         this.packetBridge = Objects.requireNonNull(packetBridge);
         this.itemStackBridge = Objects.requireNonNull(itemStackBridge);
         this.completionUiId = completionUiId;
+        this.crossServer = Objects.requireNonNull(crossServer);
         this.ioExecutor = Executors.newSingleThreadExecutor(runnable -> {
             Thread thread = new Thread(runnable, "AXS-Chat-IO");
             thread.setDaemon(true);
@@ -118,8 +120,11 @@ public final class ChatService implements Listener {
 
     public void start() throws Exception {
         repository.initialize();
-        transport = createTransport();
-        transport.start();
+        crossServerChannel = crossServer.openChannel(
+            "chat",
+            configuration.crossServer(),
+            delivery -> handleRemotePayload(delivery.payload())
+        );
         Bukkit.getPluginManager().registerEvents(this, plugin);
         registerPaperChatEventIfAvailable();
         initMentionCompletionReflection();
@@ -145,17 +150,17 @@ public final class ChatService implements Listener {
         HandlerList.unregisterAll(this);
         paperChatEventRegistered = false;
         paperChatEventObserved = false;
-        if (transport != null) {
-            transport.shutdown();
-            transport = null;
+        if (crossServerChannel != null) {
+            crossServerChannel.close();
+            crossServerChannel = null;
         }
-        repository.close();
         ioExecutor.shutdown();
         try {
             ioExecutor.awaitTermination(2L, TimeUnit.SECONDS);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
         }
+        repository.close();
         states.clear();
         profiles.clear();
         mutes.clear();
@@ -187,11 +192,11 @@ public final class ChatService implements Listener {
     }
 
     public boolean transportActive() {
-        return transport != null && transport.isActive();
+        return crossServerChannel != null && crossServerChannel.isActive();
     }
 
     public String transportName() {
-        return transport == null ? "none" : transport.name();
+        return transportActive() ? "cross-server" : "none";
     }
 
     public List<String> channelIds() {
@@ -568,7 +573,7 @@ public final class ChatService implements Listener {
         rememberEnvelope(envelope.dedupeKey());
         deliverPublicEnvelope(envelope, channel, sender);
         if (channel.crossServer() && transportActive()) {
-            transport.send(envelope);
+            crossServerChannel.publish(ChatEnvelopeCodec.encode(envelope));
         }
         trackMessageFingerprint(sender.getUniqueId(), processedMessage);
         return ChatOperationResult.success("聊天已发送。");
@@ -671,7 +676,7 @@ public final class ChatService implements Listener {
         rememberEnvelope(envelope.dedupeKey());
         deliverPrivateEnvelope(envelope, sender, localTarget);
         if (channel.crossServer() && transportActive()) {
-            transport.send(envelope);
+            crossServerChannel.publish(ChatEnvelopeCodec.encode(envelope));
         }
         replyTargets.put(sender.getUniqueId(), targetProfile.playerUuid());
         if (localTarget != null) {
@@ -847,6 +852,17 @@ public final class ChatService implements Listener {
             sendChatComponents(viewer, envelope.renderedSpyText(), envelope.itemPreview(), true);
         }
         sendConsole(envelope.consoleText(), envelope.itemPreview());
+    }
+
+    private void handleRemotePayload(String payload) {
+        if (payload == null || payload.isBlank()) {
+            return;
+        }
+        try {
+            handleRemoteEnvelope(ChatEnvelopeCodec.decode(payload));
+        } catch (Exception exception) {
+            plugin.getLogger().warning("解析跨服聊天消息失败: " + exception.getMessage());
+        }
     }
 
     private void handleRemoteEnvelope(ChatEnvelope envelope) {
@@ -1308,19 +1324,6 @@ public final class ChatService implements Listener {
     private void sendConsole(String consoleText, ChatItemPreview itemPreview) {
         CommandSender console = Bukkit.getConsoleSender();
         console.sendMessage(ChatColor.stripColor(ChatFormatSupport.plainText(consoleText, itemPreview)));
-    }
-
-    private ChatTransport createTransport() {
-        List<ChatTransport> transports = new ArrayList<>();
-        transports.add(
-            new RedisChatTransport(plugin, configuration.redis(), envelope ->
-                Bukkit.getScheduler().runTask(plugin, () -> handleRemoteEnvelope(envelope)))
-        );
-        transports.add(
-            new ProxyChatTransport(plugin, configuration.proxy(), envelope ->
-                Bukkit.getScheduler().runTask(plugin, () -> handleRemoteEnvelope(envelope)))
-        );
-        return new CompositeChatTransport(transports);
     }
 
     private ChatChannelDefinition channel(String channelId) {

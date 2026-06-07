@@ -12,6 +12,7 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
+import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
@@ -65,7 +66,12 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
 
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
-        return List.of();
+        return List.of(
+            ValidationRule.required("client.packet-id", ValueType.STRING),
+            ValidationRule.of("navigation.enabled", ValueType.BOOLEAN),
+            ValidationRule.of("navigation.path-max-iterations", ValueType.INT).withRange(100, 50000),
+            ValidationRule.of("debug.enabled", ValueType.BOOLEAN)
+        );
     }
 
     @Override

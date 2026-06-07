@@ -10,12 +10,14 @@ import java.util.regex.PatternSyntaxException;
 import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
 import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 
 public record MailModuleConfiguration(
     boolean debug,
     MailStorageConfiguration storage,
-    MailRedisConfiguration redis,
+    CrossServerChannelConfig crossServer,
     MailUiConfiguration ui,
     Map<String, CurrencyDefinition> currencies,
     MailPlayerSendConfiguration playerSend,
@@ -39,16 +41,8 @@ public record MailModuleConfiguration(
             storageSection == null ? 4 : Math.max(1, storageSection.getInt("pool-size", 4))
         );
 
-        ConfigurationSection redisSection = configuration.getConfigurationSection("redis");
-        MailRedisConfiguration redis = new MailRedisConfiguration(
-            redisSection != null && redisSection.getBoolean("enabled", false),
-            redisSection == null ? "127.0.0.1" : string(redisSection.getString("host", "127.0.0.1")),
-            redisSection == null ? 6379 : Math.max(1, redisSection.getInt("port", 6379)),
-            redisSection == null ? "" : string(redisSection.getString("password", "")),
-            redisSection == null ? 0 : Math.max(0, redisSection.getInt("database", 0)),
-            redisSection == null ? "AXS:mail" : string(redisSection.getString("channel", "AXS:mail")),
-            redisSection == null ? "" : string(redisSection.getString("node-id", "")),
-            redisSection == null ? 5000 : Math.max(1000, redisSection.getInt("connect-timeout-ms", 5000))
+        CrossServerChannelConfig crossServer = CrossServerChannelConfigs.fromSection(
+            configuration.getConfigurationSection("cross-server")
         );
 
         ConfigurationSection uiSection = configuration.getConfigurationSection("ui");
@@ -116,7 +110,7 @@ public record MailModuleConfiguration(
         ConfigurationSection presetsSection = configuration.getConfigurationSection("presets");
         String presetsDirectory = presetsSection == null ? "mail/presets" : string(presetsSection.getString("directory", "mail/presets"));
 
-        return new MailModuleConfiguration(debug, storage, redis, ui, currencies, playerSend, moderation, retention, presetsDirectory);
+        return new MailModuleConfiguration(debug, storage, crossServer, ui, currencies, playerSend, moderation, retention, presetsDirectory);
     }
 
     private static String string(String value) {

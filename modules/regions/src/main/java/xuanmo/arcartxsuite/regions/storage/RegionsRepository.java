@@ -86,23 +86,34 @@ public final class RegionsRepository extends AbstractModuleRepository implements
     // ─── 区域 CRUD ───
 
     public void saveRegion(Region region) throws SQLException {
-        String sql = "REPLACE INTO " + prefix + "regions (id, world, min_x, min_y, min_z, max_x, max_y, max_z, priority, parent_id) "
-            + "VALUES (?,?,?,?,?,?,?,?,?,?)";
-        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, region.id());
-            ps.setString(2, region.world());
-            ps.setInt(3, region.minX());
-            ps.setInt(4, region.minY());
-            ps.setInt(5, region.minZ());
-            ps.setInt(6, region.maxX());
-            ps.setInt(7, region.maxY());
-            ps.setInt(8, region.maxZ());
-            ps.setInt(9, region.priority());
-            ps.setString(10, region.parentId());
-            ps.executeUpdate();
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                String sql = "REPLACE INTO " + prefix + "regions (id, world, min_x, min_y, min_z, max_x, max_y, max_z, priority, parent_id) "
+                    + "VALUES (?,?,?,?,?,?,?,?,?,?)";
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, region.id());
+                    ps.setString(2, region.world());
+                    ps.setInt(3, region.minX());
+                    ps.setInt(4, region.minY());
+                    ps.setInt(5, region.minZ());
+                    ps.setInt(6, region.maxX());
+                    ps.setInt(7, region.maxY());
+                    ps.setInt(8, region.maxZ());
+                    ps.setInt(9, region.priority());
+                    ps.setString(10, region.parentId());
+                    ps.executeUpdate();
+                }
+                saveFlags(conn, region);
+                saveMembers(conn, region);
+                conn.commit();
+            } catch (SQLException exception) {
+                conn.rollback();
+                throw exception;
+            } finally {
+                conn.setAutoCommit(true);
+            }
         }
-        saveFlags(region);
-        saveMembers(region);
     }
 
     public void deleteRegion(String id, String world) throws SQLException {
@@ -187,58 +198,54 @@ public final class RegionsRepository extends AbstractModuleRepository implements
         return regions;
     }
 
-    private void saveFlags(Region region) throws SQLException {
-        try (Connection conn = getConnection()) {
-            try (PreparedStatement del = conn.prepareStatement(
-                "DELETE FROM " + prefix + "flags WHERE region_id=? AND world=?")) {
-                del.setString(1, region.id()); del.setString(2, region.world()); del.executeUpdate();
+    private void saveFlags(Connection conn, Region region) throws SQLException {
+        try (PreparedStatement del = conn.prepareStatement(
+            "DELETE FROM " + prefix + "flags WHERE region_id=? AND world=?")) {
+            del.setString(1, region.id()); del.setString(2, region.world()); del.executeUpdate();
+        }
+        if (region.flags().isEmpty()) return;
+        String sql = "INSERT INTO " + prefix + "flags (region_id, world, flag, state, data) VALUES (?,?,?,?,?)";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            for (Map.Entry<RegionFlag, RegionFlag.State> entry : region.flags().entrySet()) {
+                ps.setString(1, region.id());
+                ps.setString(2, region.world());
+                ps.setString(3, entry.getKey().configKey());
+                ps.setString(4, entry.getValue().name().toLowerCase());
+                ps.setString(5, region.getFlagData(entry.getKey()));
+                ps.addBatch();
             }
-            if (region.flags().isEmpty()) return;
-            String sql = "INSERT INTO " + prefix + "flags (region_id, world, flag, state, data) VALUES (?,?,?,?,?)";
-            try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                for (Map.Entry<RegionFlag, RegionFlag.State> entry : region.flags().entrySet()) {
-                    ps.setString(1, region.id());
-                    ps.setString(2, region.world());
-                    ps.setString(3, entry.getKey().configKey());
-                    ps.setString(4, entry.getValue().name().toLowerCase());
-                    ps.setString(5, region.getFlagData(entry.getKey()));
-                    ps.addBatch();
-                }
-                ps.executeBatch();
-            }
+            ps.executeBatch();
         }
     }
 
-    private void saveMembers(Region region) throws SQLException {
-        try (Connection conn = getConnection()) {
-            try (PreparedStatement del = conn.prepareStatement(
-                "DELETE FROM " + prefix + "members WHERE region_id=? AND world=?")) {
-                del.setString(1, region.id()); del.setString(2, region.world()); del.executeUpdate();
+    private void saveMembers(Connection conn, Region region) throws SQLException {
+        try (PreparedStatement del = conn.prepareStatement(
+            "DELETE FROM " + prefix + "members WHERE region_id=? AND world=?")) {
+            del.setString(1, region.id()); del.setString(2, region.world()); del.executeUpdate();
+        }
+        String sql = "INSERT INTO " + prefix + "members (region_id, world, uuid, group_name, role) VALUES (?,?,?,?,?)";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            for (UUID uuid : region.owners()) {
+                ps.setString(1, region.id()); ps.setString(2, region.world());
+                ps.setString(3, uuid.toString()); ps.setString(4, null); ps.setString(5, "owner");
+                ps.addBatch();
             }
-            String sql = "INSERT INTO " + prefix + "members (region_id, world, uuid, group_name, role) VALUES (?,?,?,?,?)";
-            try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                for (UUID uuid : region.owners()) {
-                    ps.setString(1, region.id()); ps.setString(2, region.world());
-                    ps.setString(3, uuid.toString()); ps.setString(4, null); ps.setString(5, "owner");
-                    ps.addBatch();
-                }
-                for (UUID uuid : region.members()) {
-                    ps.setString(1, region.id()); ps.setString(2, region.world());
-                    ps.setString(3, uuid.toString()); ps.setString(4, null); ps.setString(5, "member");
-                    ps.addBatch();
-                }
-                for (String group : region.ownerGroups()) {
-                    ps.setString(1, region.id()); ps.setString(2, region.world());
-                    ps.setString(3, null); ps.setString(4, group); ps.setString(5, "owner");
-                    ps.addBatch();
-                }
-                for (String group : region.memberGroups()) {
-                    ps.setString(1, region.id()); ps.setString(2, region.world());
-                    ps.setString(3, null); ps.setString(4, group); ps.setString(5, "member");
-                    ps.addBatch();
-                }
-                ps.executeBatch();
+            for (UUID uuid : region.members()) {
+                ps.setString(1, region.id()); ps.setString(2, region.world());
+                ps.setString(3, uuid.toString()); ps.setString(4, null); ps.setString(5, "member");
+                ps.addBatch();
             }
+            for (String group : region.ownerGroups()) {
+                ps.setString(1, region.id()); ps.setString(2, region.world());
+                ps.setString(3, null); ps.setString(4, group); ps.setString(5, "owner");
+                ps.addBatch();
+            }
+            for (String group : region.memberGroups()) {
+                ps.setString(1, region.id()); ps.setString(2, region.world());
+                ps.setString(3, null); ps.setString(4, group); ps.setString(5, "member");
+                ps.addBatch();
+            }
+            ps.executeBatch();
         }
     }
 

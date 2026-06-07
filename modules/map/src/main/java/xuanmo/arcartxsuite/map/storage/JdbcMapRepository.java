@@ -60,12 +60,79 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
 
     @Override
     public void unlockAnchor(UUID playerUuid, String anchorId, long unlockTime) throws SQLException {
+        tryUnlockAnchor(playerUuid, anchorId, unlockTime);
+    }
+
+    @Override
+    public boolean tryUnlockAnchor(UUID playerUuid, String anchorId, long unlockTime) throws SQLException {
+        String sql = configuration.dialect() == StorageDialect.SQLITE
+            ? "INSERT OR IGNORE INTO AXS_map_unlocks (uuid, anchor_id, unlock_time) VALUES (?, ?, ?)"
+            : "INSERT IGNORE INTO AXS_map_unlocks (uuid, anchor_id, unlock_time) VALUES (?, ?, ?)";
         try (Connection connection = connection();
-             PreparedStatement statement = connection.prepareStatement(unlockUpsertSql())) {
+             PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, playerUuid.toString());
             statement.setString(2, anchorId);
             statement.setLong(3, unlockTime);
+            return statement.executeUpdate() > 0;
+        }
+    }
+
+    @Override
+    public void removeUnlock(UUID playerUuid, String anchorId) throws SQLException {
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "DELETE FROM AXS_map_unlocks WHERE uuid = ? AND anchor_id = ?"
+             )) {
+            statement.setString(1, playerUuid.toString());
+            statement.setString(2, anchorId);
             statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public boolean createWaypointIfUnderWorldLimit(
+        UUID playerUuid,
+        MapWaypoint waypoint,
+        String worldId,
+        int maxCountInWorld
+    ) throws SQLException {
+        try (Connection connection = connection()) {
+            connection.setAutoCommit(false);
+            try {
+                int count;
+                try (PreparedStatement countStatement = connection.prepareStatement(
+                    "SELECT COUNT(*) FROM AXS_map_waypoints WHERE uuid = ? AND world = ?"
+                )) {
+                    countStatement.setString(1, playerUuid.toString());
+                    countStatement.setString(2, worldId);
+                    try (ResultSet resultSet = countStatement.executeQuery()) {
+                        count = resultSet.next() ? resultSet.getInt(1) : 0;
+                    }
+                }
+                if (count >= maxCountInWorld) {
+                    connection.rollback();
+                    return false;
+                }
+                try (PreparedStatement statement = connection.prepareStatement(waypointUpsertSql())) {
+                    statement.setString(1, playerUuid.toString());
+                    statement.setString(2, waypoint.waypointId());
+                    statement.setString(3, waypoint.name());
+                    statement.setString(4, waypoint.world());
+                    statement.setDouble(5, waypoint.x());
+                    statement.setDouble(6, waypoint.y());
+                    statement.setDouble(7, waypoint.z());
+                    statement.setLong(8, waypoint.createdAt());
+                    statement.setLong(9, waypoint.updatedAt());
+                    statement.executeUpdate();
+                }
+                connection.commit();
+                return true;
+            } catch (SQLException exception) {
+                connection.rollback();
+                throw exception;
+            } finally {
+                connection.setAutoCommit(true);
+            }
         }
     }
 

@@ -24,6 +24,7 @@ import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.account.AccountTypeService;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
@@ -32,6 +33,7 @@ import xuanmo.arcartxsuite.bridge.ArcartXClientBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXPropBridge;
+import xuanmo.arcartxsuite.crossserver.CrossServerService;
 import xuanmo.arcartxsuite.keybind.KeybindService;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.bridge.TaczCombatBridge;
@@ -56,11 +58,13 @@ final class DefaultModuleContext implements ModuleContext {
     private final ClassLoader moduleClassLoader;
     private final KeybindService keybindService;
     private final TaczCombatBridge taczCombatBridge;
+    private final CrossServerService crossServerService;
 
     // 模块注册的资源（onDisable 时自动清理）
     private final List<Listener> registeredListeners = new ArrayList<>();
     private final List<String> registeredCommandNames = new ArrayList<>();
     private final List<Object> registeredPlaceholderExpansions = new ArrayList<>();
+    private final List<xuanmo.arcartxsuite.api.KeybindHandler> registeredKeybindHandlers = new ArrayList<>();
 
     DefaultModuleContext(
         JavaPlugin plugin,
@@ -73,7 +77,8 @@ final class DefaultModuleContext implements ModuleContext {
         ModuleRegistry registry,
         ClassLoader moduleClassLoader,
         KeybindService keybindService,
-        TaczCombatBridge taczCombatBridge
+        TaczCombatBridge taczCombatBridge,
+        CrossServerService crossServerService
     ) {
         this.plugin = plugin;
         this.moduleId = moduleId;
@@ -89,6 +94,7 @@ final class DefaultModuleContext implements ModuleContext {
         this.moduleClassLoader = moduleClassLoader;
         this.keybindService = keybindService;
         this.taczCombatBridge = taczCombatBridge;
+        this.crossServerService = crossServerService;
     }
 
     @Override
@@ -258,6 +264,11 @@ final class DefaultModuleContext implements ModuleContext {
     @Override
     public AccountTypeService accountTypeService() {
         return registry.accountTypeService();
+    }
+
+    @Override
+    public CrossServerAPI crossServer() {
+        return crossServerService;
     }
 
     @Override
@@ -477,7 +488,17 @@ final class DefaultModuleContext implements ModuleContext {
     public void registerKeybindHandler(String keyName, int priority, xuanmo.arcartxsuite.api.KeybindHandler handler) {
         if (keybindService != null && keyName != null && handler != null) {
             keybindService.registerHandler(keyName, priority, handler);
+            registeredKeybindHandlers.add(handler);
         }
+    }
+
+    void unregisterKeybindHandlers() {
+        if (keybindService != null) {
+            for (xuanmo.arcartxsuite.api.KeybindHandler handler : registeredKeybindHandlers) {
+                keybindService.unregisterHandler(handler);
+            }
+        }
+        registeredKeybindHandlers.clear();
     }
 
     @Override

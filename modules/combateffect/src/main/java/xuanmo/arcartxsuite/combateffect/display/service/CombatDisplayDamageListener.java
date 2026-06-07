@@ -12,7 +12,7 @@ final class CombatDisplayDamageListener implements Listener {
         this.service = service;
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onDamage(EntityDamageByEntityEvent event) {
         service.handleDamage(event);
     }

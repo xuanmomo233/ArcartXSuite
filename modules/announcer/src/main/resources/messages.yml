@@ -41,7 +41,7 @@ status:
 # ── broadcast ─────────────────────────────────────────
 broadcast:
   service-down: "&c广播服务未启动。"
-  proxy-disabled: "&c跨服传输未启用，请先在配置中开启 transport.proxy.enabled。"
+  proxy-disabled: "&c跨服传输未启用，请先在模块配置中开启 cross-server.enabled，并在宿主 config.yml 配置 cross-server。"
   usage: "&e用法: /{0} announcer {1} <文本>"
   now: "&a已{0}立即广播: &f{1}"
   queued: "&a已{0}加入广播队列 (待播: {1}): &f{2}"

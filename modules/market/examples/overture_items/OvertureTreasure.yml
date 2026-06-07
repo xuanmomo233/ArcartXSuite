@@ -1,0 +1,47 @@
+# Overture 物品配置示例
+# 官方文档: https://17artist.github.io/Overture/
+# 文件放置路径: plugins/Overture/items/ （递归扫描，子文件夹自动成为分组）
+# 物品 ID 为根键 OvertureTreasure，需与 example_shop.yml 中 item-id 一致
+
+OvertureTreasure:
+  # 引用展示方案（定义在 plugins/Overture/displays/ 下）
+  display: treasure_display
+  # 基础材质
+  icon: CHEST
+  # 名称字段（display 模板中使用 <item_name> 引用）
+  name:
+    item_name: "&d神秘宝藏"
+  # Lore 字段（display 模板中使用 <item_type> / <item_desc...> 引用）
+  lore:
+    item_type: "&5消耗品"
+    item_desc:
+      - "&7一个散发着紫光的神秘宝箱。"
+      - "&7右键打开它，或许能获得意想不到的惊喜。"
+      - ""
+      - "&e✦ &7稀有度: &d史诗"
+      - "&e✦ &7类别: &f消耗品"
+      - "&e✦ &7来源: &fOverture"
+      - ""
+      - "&8&m------------&7 说明 &8&m------------"
+      - "&7▸ 右键使用开启"
+      - "&7▸ 随机获得珍贵物品"
+      - "&7▸ 仅限 VIP 购买"
+  # Meta 附加属性
+  meta:
+    # 发光效果
+    shiny: true
+    # 自定义模型数据（可选，需配合资源包）
+    # model-data: 30001
+  # 自定义数据（可被 Aria 脚本读取）
+  data:
+    # 宝藏类型标识
+    treasure_type: "legendary"
+    # 开启次数限制
+    open_limit: 1
+  # Aria 事件脚本（可选）
+  # event:
+  #   on_interact$:
+  #     - "if (player.hand == 'main') {"
+  #     - "  dropLoot('legendary', player.location)"
+  #     - "  item.consume(1)"
+  #     - "}"

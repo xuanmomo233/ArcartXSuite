@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -62,9 +63,9 @@ public final class EssentialsMenuPacketHandler implements ClientPacketHandler {
     @Override
     public boolean handleClientPacket(@NotNull Player player, @NotNull String packetId, @NotNull List<String> data) {
         if (!PACKET_ID.equalsIgnoreCase(packetId)) return false;
-        if (packetGuard != null && !packetGuard.allow(player, "essentials", "menu", false)) return true;
-
         String action = data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
+        if (packetGuard != null && !packetGuard.allow(player, "essentials", action, false)) return true;
+
         switch (action) {
             case "navigate" -> {
                 String page = hasValue(data, 1) ? data.get(1) : "home";
@@ -105,6 +106,10 @@ public final class EssentialsMenuPacketHandler implements ClientPacketHandler {
             case "accept_tpa" -> teleportService.acceptTpa(player);
             case "deny_tpa" -> teleportService.denyTpa(player);
             case "toggle_fly" -> {
+                if (!player.hasPermission("axs.essentials.fly")) {
+                    player.sendMessage(ChatColor.RED + "你没有飞行权限。");
+                    break;
+                }
                 playerService.toggleFly(player, player);
                 pushInitData(player, "settings");
             }

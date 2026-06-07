@@ -26,17 +26,14 @@ import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
 import xuanmo.arcartxsuite.announcer.config.AnnouncerModuleConfiguration;
-import xuanmo.arcartxsuite.announcer.config.AnnouncerProxyConfiguration;
 import xuanmo.arcartxsuite.announcer.service.AnnouncerService;
 import xuanmo.arcartxsuite.announcer.service.SubtitleService;
-import xuanmo.arcartxsuite.announcer.transport.AnnouncerProxyTransport;
 
 public final class AnnouncerModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private AnnouncerModuleConfiguration configuration;
     private AnnouncerService service;
     private SubtitleService subtitleService;
-    private AnnouncerProxyTransport proxyTransport;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -72,12 +69,14 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            // 公告轮播间隔（秒）
-            ValidationRule.of("settings.interval-seconds", ValueType.INT)
-                .withRange(1, 3600),
-            // 字幕显示时长（秒）
-            ValidationRule.of("subtitle.duration-seconds", ValueType.INT)
-                .withRange(1, 60)
+            ValidationRule.of("settings.check-interval-ticks", ValueType.INT)
+                .withRange(1, 1200),
+            ValidationRule.of("settings.cooldown-ms", ValueType.LONG)
+                .withRange(0, 3600000),
+            ValidationRule.of("settings.between-entry-interval-ms", ValueType.LONG)
+                .withRange(0, 3600000),
+            ValidationRule.of("settings.text-width-font-size", ValueType.INT)
+                .withRange(1, 200)
         );
     }
 
@@ -159,22 +158,12 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         ArcartXClientBridge clientBridge = (ArcartXClientBridge) context.clientBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
 
-        // 跨服传输
-        AnnouncerProxyConfiguration proxyCfg = configuration.proxy();
-        // service 先声明为 null，再创建 transport 传入 consumer
-        final AnnouncerService[] serviceRef = new AnnouncerService[1];
-        proxyTransport = new AnnouncerProxyTransport(
-            context.plugin(), proxyCfg,
-            envelope -> { if (serviceRef[0] != null) serviceRef[0].handleRemoteEnvelope(envelope); }
-        );
-        boolean transportActive = proxyTransport.start();
-
+        // 跨服广播
         service = new AnnouncerService(
             context.plugin(), configuration, packetBridge, clientBridge, packetGuard,
             java.util.List.copyOf(announcerRuntimeUiIds),
-            proxyTransport, proxyCfg.nodeId()
+            context.crossServer()
         );
-        serviceRef[0] = service;
         service.setQQBotProvider(() -> context.getCapability(
             xuanmo.arcartxsuite.api.capability.QQBotBroadcastable.class));
         service.start();
@@ -217,7 +206,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
                 + " | UI: " + announcerRuntimeUiIds
                 + " | Subtitle UI: " + subtitleRuntimeUiIds
                 + " | 字幕组: " + (subtitleService != null ? subtitleService.groupCount() : 0)
-                + " | 跨服: " + (transportActive ? "ON" : "OFF")
+                + " | 跨服: " + (service.crossServerActive() ? "ON" : "OFF")
         );
     }
 
@@ -230,10 +219,6 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         if (service != null) {
             service.shutdown();
             service = null;
-        }
-        if (proxyTransport != null) {
-            proxyTransport.shutdown();
-            proxyTransport = null;
         }
         configuration = null;
     }
@@ -296,7 +281,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
                 sender.sendMessage(msg("status.playing", subtitleService != null ? subtitleService.activePlayerCount() : 0));
                 sender.sendMessage(msg("status.pending", service != null ? service.pendingManualBroadcasts() : 0));
                 sender.sendMessage(msg("status.proxy",
-                    proxyTransport != null && proxyTransport.isActive()
+                    service != null && service.crossServerActive()
                         ? messages().get("common.enabled") : messages().get("common.disabled")));
             }
             case "reload" -> sender.sendMessage(msg("common.reload-hint", label));
@@ -315,7 +300,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
             sender.sendMessage(msg("broadcast.service-down"));
             return;
         }
-        if (forward && (proxyTransport == null || !proxyTransport.isActive())) {
+        if (forward && (service == null || !service.crossServerActive())) {
             sender.sendMessage(msg("broadcast.proxy-disabled"));
             return;
         }

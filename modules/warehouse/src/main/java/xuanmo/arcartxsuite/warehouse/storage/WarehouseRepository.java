@@ -29,6 +29,23 @@ public interface WarehouseRepository {
 
     void setBankBalance(UUID playerUuid, String currencyId, BigDecimal amount, long updatedAt) throws SQLException;
 
+    /** 原子增加银行余额（记录不存在则创建）。 */
+    void creditBankBalance(UUID playerUuid, String currencyId, BigDecimal amount, long updatedAt) throws SQLException;
+
+    /**
+     * 原子扣减银行余额。
+     *
+     * @return {@code true} 表示扣减成功
+     */
+    boolean debitBankBalance(UUID playerUuid, String currencyId, BigDecimal amount, long updatedAt) throws SQLException;
+
+    /**
+     * 原子领取定期存款：标记 claimed 并将本息入账。
+     *
+     * @return 实际入账金额；不可领取时返回 {@link Optional#empty()}
+     */
+    java.util.Optional<BigDecimal> claimFixedDepositAtomic(String depositId, UUID playerUuid, long now) throws SQLException;
+
     void createFixedDeposit(FixedDepositRecord deposit) throws SQLException;
 
     List<FixedDepositRecord> loadFixedDeposits(UUID playerUuid) throws SQLException;

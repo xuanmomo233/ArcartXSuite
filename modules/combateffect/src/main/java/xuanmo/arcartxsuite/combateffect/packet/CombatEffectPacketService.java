@@ -53,6 +53,14 @@ public final class CombatEffectPacketService implements Listener {
 
     public void shutdown() {
         HandlerList.unregisterAll(this);
+        cooldownMap.clear();
+    }
+
+    @EventHandler
+    public void onPlayerQuit(org.bukkit.event.player.PlayerQuitEvent event) {
+        UUID playerId = event.getPlayer().getUniqueId();
+        String suffix = ":" + playerId;
+        cooldownMap.keySet().removeIf(key -> key.endsWith(suffix));
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

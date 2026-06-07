@@ -27,8 +27,7 @@ public class ArcartXSuiteBungee extends Plugin {
 
         // 加载配置
         config = new ProxyConfig(logger, getDataFolder());
-        config.loadDefaults();
-        config.extractDefaultConfig("proxy-config.yml");
+        config.load("proxy-config.yml");
 
         // 初始化认证器
         authenticator = new YggdrasilAuthenticator(logger, config.debug());

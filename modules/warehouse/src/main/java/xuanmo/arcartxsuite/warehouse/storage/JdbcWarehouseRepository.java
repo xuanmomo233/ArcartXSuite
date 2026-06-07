@@ -203,6 +203,193 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
     }
 
     @Override
+    public void creditBankBalance(UUID playerUuid, String currencyId, BigDecimal amount, long updatedAt) throws SQLException {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        String sql = configuration.dialect() == StorageDialect.SQLITE
+            ? """
+                INSERT INTO warehouse_bank_balances (player_uuid, currency_id, balance, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(player_uuid, currency_id) DO UPDATE SET
+                    balance = CAST(balance AS REAL) + CAST(excluded.balance AS REAL),
+                    updated_at = excluded.updated_at
+                """
+            : """
+                INSERT INTO warehouse_bank_balances (player_uuid, currency_id, balance, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    balance = balance + VALUES(balance),
+                    updated_at = VALUES(updated_at)
+                """;
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerUuid.toString());
+            statement.setString(2, currencyId);
+            statement.setString(3, amount.toPlainString());
+            statement.setLong(4, updatedAt);
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public boolean debitBankBalance(UUID playerUuid, String currencyId, BigDecimal amount, long updatedAt) throws SQLException {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            return false;
+        }
+        String sql = "UPDATE warehouse_bank_balances SET balance = balance - ?, updated_at = ?"
+            + " WHERE player_uuid = ? AND currency_id = ? AND CAST(balance AS REAL) >= ?";
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, amount.toPlainString());
+            statement.setLong(2, updatedAt);
+            statement.setString(3, playerUuid.toString());
+            statement.setString(4, currencyId);
+            statement.setString(5, amount.toPlainString());
+            return statement.executeUpdate() > 0;
+        }
+    }
+
+    @Override
+    public Optional<BigDecimal> claimFixedDepositAtomic(String depositId, UUID playerUuid, long now) throws SQLException {
+        try (Connection connection = connection()) {
+            connection.setAutoCommit(false);
+            try {
+                FixedDepositRecord deposit;
+                try (PreparedStatement select = connection.prepareStatement(
+                    "SELECT id, player_uuid, product_id, currency_id, principal, interest_rate, created_at, matures_at, claimed, claimed_at"
+                        + " FROM warehouse_fixed_deposits WHERE id = ? AND player_uuid = ? FOR UPDATE"
+                )) {
+                    select.setString(1, depositId);
+                    select.setString(2, playerUuid.toString());
+                    try (ResultSet rs = select.executeQuery()) {
+                        if (!rs.next() || rs.getBoolean("claimed") || rs.getLong("matures_at") > now) {
+                            connection.rollback();
+                            return Optional.empty();
+                        }
+                        deposit = new FixedDepositRecord(
+                            rs.getString("id"),
+                            playerUuid,
+                            rs.getString("product_id"),
+                            rs.getString("currency_id"),
+                            decimal(rs.getString("principal")),
+                            decimal(rs.getString("interest_rate")),
+                            rs.getLong("created_at"),
+                            rs.getLong("matures_at"),
+                            false,
+                            0L
+                        );
+                    }
+                } catch (SQLException forUpdateUnsupported) {
+                    // SQLite 等不支持 FOR UPDATE：降级为条件 UPDATE
+                    connection.rollback();
+                    return claimFixedDepositAtomicWithoutForUpdate(depositId, playerUuid, now);
+                }
+
+                BigDecimal payout = deposit.principal()
+                    .add(deposit.principal().multiply(deposit.interestRate()))
+                    .setScale(8, java.math.RoundingMode.DOWN)
+                    .stripTrailingZeros();
+
+                try (PreparedStatement mark = connection.prepareStatement(
+                    "UPDATE warehouse_fixed_deposits SET claimed = ?, claimed_at = ? WHERE id = ? AND claimed = ?"
+                )) {
+                    mark.setBoolean(1, true);
+                    mark.setLong(2, now);
+                    mark.setString(3, depositId);
+                    mark.setBoolean(4, false);
+                    if (mark.executeUpdate() == 0) {
+                        connection.rollback();
+                        return Optional.empty();
+                    }
+                }
+
+                creditBankBalanceOnConnection(connection, playerUuid, deposit.currencyId(), payout, now);
+                connection.commit();
+                return Optional.of(payout);
+            } catch (SQLException exception) {
+                connection.rollback();
+                throw exception;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        }
+    }
+
+    private Optional<BigDecimal> claimFixedDepositAtomicWithoutForUpdate(String depositId, UUID playerUuid, long now) throws SQLException {
+        List<FixedDepositRecord> deposits = loadFixedDeposits(playerUuid);
+        Optional<FixedDepositRecord> optional = deposits.stream()
+            .filter(d -> d.id().equals(depositId) && !d.claimed() && d.maturesAt() <= now)
+            .findFirst();
+        if (optional.isEmpty()) {
+            return Optional.empty();
+        }
+        FixedDepositRecord deposit = optional.get();
+        BigDecimal payout = deposit.principal()
+            .add(deposit.principal().multiply(deposit.interestRate()))
+            .setScale(8, java.math.RoundingMode.DOWN)
+            .stripTrailingZeros();
+
+        try (Connection connection = connection()) {
+            connection.setAutoCommit(false);
+            try {
+                try (PreparedStatement mark = connection.prepareStatement(
+                    "UPDATE warehouse_fixed_deposits SET claimed = ?, claimed_at = ? WHERE id = ? AND claimed = ? AND matures_at <= ?"
+                )) {
+                    mark.setBoolean(1, true);
+                    mark.setLong(2, now);
+                    mark.setString(3, depositId);
+                    mark.setBoolean(4, false);
+                    mark.setLong(5, now);
+                    if (mark.executeUpdate() == 0) {
+                        connection.rollback();
+                        return Optional.empty();
+                    }
+                }
+                creditBankBalanceOnConnection(connection, playerUuid, deposit.currencyId(), payout, now);
+                connection.commit();
+                return Optional.of(payout);
+            } catch (SQLException exception) {
+                connection.rollback();
+                throw exception;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        }
+    }
+
+    private void creditBankBalanceOnConnection(
+        Connection connection,
+        UUID playerUuid,
+        String currencyId,
+        BigDecimal amount,
+        long updatedAt
+    ) throws SQLException {
+        String sql = configuration.dialect() == StorageDialect.SQLITE
+            ? """
+                INSERT INTO warehouse_bank_balances (player_uuid, currency_id, balance, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(player_uuid, currency_id) DO UPDATE SET
+                    balance = CAST(balance AS REAL) + CAST(excluded.balance AS REAL),
+                    updated_at = excluded.updated_at
+                """
+            : """
+                INSERT INTO warehouse_bank_balances (player_uuid, currency_id, balance, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    balance = balance + VALUES(balance),
+                    updated_at = VALUES(updated_at)
+                """;
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerUuid.toString());
+            statement.setString(2, currencyId);
+            statement.setString(3, amount.toPlainString());
+            statement.setLong(4, updatedAt);
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
     public void createFixedDeposit(FixedDepositRecord deposit) throws SQLException {
         try (Connection connection = connection();
              PreparedStatement statement = connection.prepareStatement(

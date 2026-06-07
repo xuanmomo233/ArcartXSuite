@@ -74,27 +74,9 @@ settings:
   debug-tools:
     dry-run: false
 
-#跨服传输功能
-transport:
-  redis:
-    # 开启后使用 Redis Pub/Sub 同步跨服玩家列表。
-    enabled: false
-    host: "127.0.0.1"
-    port: 6379
-    password: ""
-    database: 0
-    channel: "AXS:tab"
-    # 留空则使用 settings.server-id 的值。
-    node-id: ""
-    connect-timeout-ms: 5000
-
-  proxy:
-    # 开启后通过 BungeeCord/Velocity 插件消息通道同步跨服玩家列表。
-    enabled: false
-    messenger-channel: "AXS_TAB"
-    forward-target: "ALL"
-    # 留空则使用 settings.server-id 的值。
-    node-id: ""
+#跨服：连接参数见宿主 plugins/ArcartXSuite/config.yml cross-server 节
+cross-server:
+  enabled: false
 
 # Tab 定义目录，路径相对模块数据目录。
 # 目录下每个 *.yml 文件为一个 Tab 定义，文件名（去掉 .yml）即为定义 ID。

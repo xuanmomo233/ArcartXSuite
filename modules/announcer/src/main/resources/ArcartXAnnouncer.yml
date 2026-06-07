@@ -55,24 +55,13 @@ settings:
 entries-directory: "announcer"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 跨服广播（BungeeCord / Velocity 代理转发）
-# 启用后，broadcast / broadcastnow 命令发出的公告会通过代理转发到其他子服。
+# 跨服广播（统一 CrossServer SDK，连接参数见宿主 config.yml cross-server 节）
+# 启用后，broadcast / broadcastnow 命令发出的公告会转发到其他子服。
 # 同时，本服也会接收来自其他子服的公告并展示给在线玩家。
 # 注意：仅「手动广播」会跨服转发，entries 目录中的自动轮播条目不会跨服。
 # ─────────────────────────────────────────────────────────────────────────────
-transport:
-  proxy:
-    # 是否启用 BungeeCord 代理转发
-    enabled: false
-
-    # BungeeCord Forward 子频道名称，所有子服必须一致
-    messenger-channel: "AXS_ANNOUNCER"
-
-    # 转发目标：ALL = 所有子服，或指定服务器名
-    forward-target: "ALL"
-
-    # 当前节点 ID（用于去重），留空则自动取 server.properties 中 server-name
-    node-id: ""
+cross-server:
+  enabled: false
 
 # ─────────────────────────────────────────────────────────────────────────────
 # AXS Subtitle（字幕）

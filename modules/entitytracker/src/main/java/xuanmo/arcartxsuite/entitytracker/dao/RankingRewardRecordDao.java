@@ -23,6 +23,34 @@ public class RankingRewardRecordDao {
     }
 
     /**
+     * 检查是否已成功发放过相同 Boss/周期/玩家/名次的奖励。
+     */
+    public boolean hasSuccessfulIssuance(
+        String bossId,
+        String periodType,
+        LocalDateTime periodStart,
+        String playerUuid,
+        int rank
+    ) throws SQLException {
+        String sql = """
+            SELECT 1 FROM ranking_reward_records
+            WHERE boss_id = ? AND reward_type = ? AND period_start = ? AND player_uuid = ? AND rank = ? AND status = 'success'
+            LIMIT 1
+            """;
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, bossId);
+            stmt.setString(2, periodType);
+            stmt.setTimestamp(3, Timestamp.valueOf(periodStart));
+            stmt.setString(4, playerUuid);
+            stmt.setInt(5, rank);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
+    /**
      * 插入奖励发放记录
      */
     public int insert(RankingRewardRecord record) throws SQLException {

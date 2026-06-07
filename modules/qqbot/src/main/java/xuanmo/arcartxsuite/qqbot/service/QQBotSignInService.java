@@ -271,7 +271,6 @@ public final class QQBotSignInService {
             return "手慢了，红包已经被抢完了";
         }
         if (result > 0) {
-            repository.addPoints(claimerQq, result, "redpacket_claim", "抢到红包 #" + rp.id());
             return "🎉 恭喜你抢到了 " + result + " 积分！（剩余 " + (rp.count() - rp.claimedCount() - 1) + " 份）";
         }
         return "抢红包失败，请重试";

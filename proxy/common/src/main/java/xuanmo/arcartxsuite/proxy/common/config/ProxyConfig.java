@@ -7,9 +7,11 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 
 import org.jetbrains.annotations.NotNull;
+import org.yaml.snakeyaml.Yaml;
 
 import xuanmo.arcartxsuite.proxy.common.model.YggdrasilSource;
 
@@ -34,7 +36,6 @@ public class ProxyConfig {
     }
 
     public void loadDefaults() {
-        // 默认配置：Mojang 官方 + LittleSkin
         sources.clear();
         sources.add(new YggdrasilSource(
             "Mojang",
@@ -50,6 +51,88 @@ public class ProxyConfig {
             false,
             null
         ));
+    }
+
+    /**
+     * 释放默认配置并加载 dataFolder 下的 YAML 文件。
+     */
+    public void load(String configFileName) {
+        extractDefaultConfig(configFileName);
+        File target = new File(dataFolder, configFileName);
+        if (!target.exists()) {
+            logger.warning("配置文件不存在，使用内置默认值: " + configFileName);
+            loadDefaults();
+            return;
+        }
+        try {
+            loadFromYaml(target);
+        } catch (IOException exception) {
+            logger.warning("读取 " + configFileName + " 失败，使用内置默认值: " + exception.getMessage());
+            loadDefaults();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void loadFromYaml(File file) throws IOException {
+        Yaml yaml = new Yaml();
+        Map<String, Object> root;
+        try (InputStream input = Files.newInputStream(file.toPath())) {
+            Object loaded = yaml.load(input);
+            if (!(loaded instanceof Map<?, ?> map)) {
+                loadDefaults();
+                return;
+            }
+            root = (Map<String, Object>) map;
+        }
+
+        debug = readBoolean(root, "debug", debug);
+        denyOffline = readBoolean(root, "deny-offline", denyOffline);
+        kickOfflineMessage = readString(root, "kick-offline-message", kickOfflineMessage);
+        autoAssignUuid = readBoolean(root, "auto-assign-uuid", autoAssignUuid);
+
+        sources.clear();
+        Object sourcesNode = root.get("sources");
+        if (sourcesNode instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> sourceMap) {
+                    sources.add(parseSource((Map<String, Object>) sourceMap));
+                }
+            }
+        }
+        if (sources.isEmpty()) {
+            logger.warning("proxy-config.yml 未配置 sources，回退内置默认值。");
+            loadDefaults();
+        }
+    }
+
+    private static YggdrasilSource parseSource(Map<String, Object> section) {
+        return new YggdrasilSource(
+            readString(section, "name", "source"),
+            readString(section, "api-url", ""),
+            readBoolean(section, "enabled", true),
+            readBoolean(section, "allow-offline-fallback", false),
+            readString(section, "server-id", null)
+        );
+    }
+
+    private static String readString(Map<String, Object> section, String key, String fallback) {
+        Object value = section.get(key);
+        if (value == null) {
+            return fallback;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? fallback : text;
+    }
+
+    private static boolean readBoolean(Map<String, Object> section, String key, boolean fallback) {
+        Object value = section.get(key);
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value instanceof String text) {
+            return Boolean.parseBoolean(text.trim());
+        }
+        return fallback;
     }
 
     public boolean debug() {
@@ -120,7 +203,7 @@ public class ProxyConfig {
         if (target.exists()) {
             return;
         }
-        try (InputStream in = getClass().getClassLoader().getResourceAsStream(resourceName)) {
+        try (InputStream in = ProxyConfig.class.getClassLoader().getResourceAsStream(resourceName)) {
             if (in == null) {
                 logger.warning("默认配置未找到: " + resourceName);
                 return;

@@ -14,6 +14,9 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
+import xuanmo.arcartxsuite.api.config.ValidationRule;
+import xuanmo.arcartxsuite.api.config.ValueType;
+import java.util.Set;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
@@ -60,6 +63,15 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
     @Override
     protected String messagesFileName() {
         return "messages.yml";
+    }
+
+    @Override
+    protected @NotNull List<ValidationRule> mainConfigValidations() {
+        return List.of(
+            ValidationRule.required("storage.dialect", ValueType.STRING)
+                .withEnum(Set.of("sqlite", "mysql")),
+            ValidationRule.of("selection.max-volume", ValueType.INT).withRange(1, 100000000)
+        );
     }
 
     @Override

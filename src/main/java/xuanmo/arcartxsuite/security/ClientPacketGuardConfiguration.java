@@ -160,6 +160,7 @@ public record ClientPacketGuardConfiguration(
         rules.put("mail", new ClientPacketGuardRule(true, 1000L, 4, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, ""));
         rules.put("questgps", new ClientPacketGuardRule(true, 500L, 4, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, ""));
         rules.put("map", new ClientPacketGuardRule(true, 500L, 4, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, ""));
+        rules.put("pickup", new ClientPacketGuardRule(true, 500L, 8, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, ""));
         return rules;
     }
 
@@ -199,6 +200,13 @@ public record ClientPacketGuardConfiguration(
             actionRule("bind_code", 3000L, 3, ClientPacketGuardMode.NOTIFY)
         ));
         rules.put("tab", actionRules(actionRule("refresh", 1500L, 1, ClientPacketGuardMode.SILENT)));
+        rules.put("pickup", actionRules(
+            actionRule("pick", 1000L, 4, ClientPacketGuardMode.NOTIFY),
+            actionRule("scroll_up", 500L, 8, ClientPacketGuardMode.SILENT),
+            actionRule("scroll_down", 500L, 8, ClientPacketGuardMode.SILENT),
+            actionRule("open_menu", 1000L, 4, ClientPacketGuardMode.SILENT),
+            actionRule("close_menu", 1000L, 4, ClientPacketGuardMode.SILENT)
+        ));
         return rules;
     }
 

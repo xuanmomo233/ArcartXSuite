@@ -14,6 +14,8 @@ import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
+import xuanmo.arcartxsuite.api.config.ValidationRule;
+import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
 import xuanmo.arcartxsuite.conversation.command.ConversationAdminCommand;
 import xuanmo.arcartxsuite.conversation.config.ConversationModuleConfiguration;
@@ -49,6 +51,18 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
     @Override
     protected String messagesFileName() {
         return "messages.yml";
+    }
+
+    @Override
+    protected @NotNull List<ValidationRule> mainConfigValidations() {
+        return List.of(
+            ValidationRule.required("client.packet-id", ValueType.STRING),
+            ValidationRule.of("client.register-ui-on-enable", ValueType.BOOLEAN),
+            ValidationRule.of("interaction.enabled", ValueType.BOOLEAN),
+            ValidationRule.of("interaction.scan-range", ValueType.DOUBLE).withRange(1.0, 128.0),
+            ValidationRule.of("interaction.scan-period-ticks", ValueType.INT).withRange(1, 200),
+            ValidationRule.of("interaction.open-cooldown-ms", ValueType.LONG).withRange(0L, 60000L)
+        );
     }
 
     @Override

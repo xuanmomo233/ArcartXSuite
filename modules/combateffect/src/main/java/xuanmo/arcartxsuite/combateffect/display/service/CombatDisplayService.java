@@ -86,10 +86,18 @@ public final class CombatDisplayService {
     }
 
     void handleDamage(EntityDamageByEntityEvent event) {
+        if (activeDamageSource != CombatDisplayDamageSource.NONE
+            && activeDamageSource != CombatDisplayDamageSource.BUKKIT) {
+            return;
+        }
         handleStandardDamage(event.getEntity(), event.getFinalDamage());
     }
 
     void handleTaczDamage(xuanmo.arcartxsuite.api.event.TaczGunDamageEvent event) {
+        if (activeDamageSource != CombatDisplayDamageSource.NONE
+            && activeDamageSource != CombatDisplayDamageSource.BUKKIT) {
+            return;
+        }
         handleStandardDamage(event.getTarget(), event.getDamage());
     }
 

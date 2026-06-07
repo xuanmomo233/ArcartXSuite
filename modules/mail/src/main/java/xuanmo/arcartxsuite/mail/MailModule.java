@@ -148,7 +148,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             context.plugin(), context.dataFolder(), configuration,
             mailRepo,
             packetBridge, packetGuard, uiExporter, presetWriter, null,
-            context.currencyManager()
+            context.currencyManager(), context.crossServer()
         );
         service.start();
         adminCommand = new MailAdminCommand(() -> service, messages());

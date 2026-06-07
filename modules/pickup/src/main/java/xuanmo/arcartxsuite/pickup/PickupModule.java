@@ -171,7 +171,7 @@ public final class PickupModule extends AbstractAXSModule {
         recordUiBinding(LOOT_INTERACT_FILE_PATH, interactBinding);
 
         scannerService = new LootScannerService(
-            context.plugin(), configuration, packetBridge, itemStackBridge,
+            context.plugin(), configuration, context.packetGuard(), packetBridge, itemStackBridge,
             uiBinding.runtimeUiId(), interactBinding.runtimeUiId(),
             () -> context.getCapability(WarehouseAutoDepositable.class)
         );

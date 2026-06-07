@@ -14,6 +14,8 @@ import xuanmo.arcartxsuite.rgb.config.ArcartRgbRenderOptions;
 
 public final class ArcartRgbService {
 
+    private static final int MAX_RENDER_TEXT_LENGTH = 1024;
+
     private final ArcartRgbModuleConfiguration configuration;
     private final Logger logger;
     private final PlaceholderResolver placeholderResolver;
@@ -45,7 +47,7 @@ public final class ArcartRgbService {
         }
 
         ArcartRgbEntry entry = configuration.entry(entryId);
-        if (entry == null) {
+        if (entry == null || !entry.active()) {
             return "";
         }
 
@@ -64,6 +66,9 @@ public final class ArcartRgbService {
 
         try {
             String text = resolvePlaceholders(player, entry.text());
+            if (text.length() > MAX_RENDER_TEXT_LENGTH) {
+                text = text.substring(0, MAX_RENDER_TEXT_LENGTH);
+            }
             if (Boolean.TRUE.equals(recursiveReferenceDetected.get())) {
                 return "";
             }

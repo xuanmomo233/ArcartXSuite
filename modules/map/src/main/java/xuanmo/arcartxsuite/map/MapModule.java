@@ -15,6 +15,7 @@ import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
+import xuanmo.arcartxsuite.api.ClientInitializedHandler;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
@@ -74,9 +75,8 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             // pool-size 范围 1-100
             ValidationRule.required("storage.pool-size", ValueType.INT)
                 .withRange(1, 100),
-            // 默认缩放级别
-            ValidationRule.of("navigation.default-zoom", ValueType.INT)
-                .withRange(0, 20)
+            ValidationRule.required("client.packet-id", ValueType.STRING),
+            ValidationRule.of("navigation.enabled", ValueType.BOOLEAN)
         );
     }
 
@@ -218,6 +218,15 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
     protected @NotNull Map<String, TabExecutor> commandBindings() {
         MapPlayerCommand cmd = new MapPlayerCommand(() -> service, () -> configuration, messages());
         return Map.of("map", (TabExecutor) cmd);
+    }
+
+    @Override
+    protected @Nullable ClientInitializedHandler createInitializedHandler() {
+        return player -> {
+            if (service != null) {
+                service.handleClientInitialized(player);
+            }
+        };
     }
 
     @Override

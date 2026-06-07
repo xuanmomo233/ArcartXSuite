@@ -43,6 +43,13 @@ public interface MailRepository {
 
     void updateMailState(MailMessage message) throws SQLException;
 
+    /**
+     * 原子领取：仅当邮件当前为 UNREAD/READ 时标记为 CLAIMED。
+     *
+     * @return {@code true} 表示本次成功抢占领取权
+     */
+    boolean tryClaimMail(UUID ownerUuid, long mailId, Instant now) throws SQLException;
+
     Optional<MailMessage> loadMail(UUID ownerUuid, long mailId) throws SQLException;
 
     List<MailMessage> loadInbox(UUID ownerUuid) throws SQLException;

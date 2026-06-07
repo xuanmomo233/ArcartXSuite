@@ -12,7 +12,8 @@ import java.util.regex.PatternSyntaxException;
 import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
 
 public record ChatModuleConfiguration(
     boolean debug,
@@ -23,8 +24,7 @@ public record ChatModuleConfiguration(
     long duplicateWindowMillis,
     boolean forceChatTakeover,
     ChatStorageConfiguration storage,
-    ChatRedisConfiguration redis,
-    ChatProxyConfiguration proxy,
+    CrossServerChannelConfig crossServer,
     ChatCardConfiguration cards,
     ChatFunctionConfiguration functions,
     ChatFilterConfiguration filter,
@@ -53,24 +53,8 @@ public record ChatModuleConfiguration(
             storageSection == null ? 4 : Math.max(1, storageSection.getInt("pool-size", 4))
         );
 
-        ConfigurationSection redisSection = configuration.getConfigurationSection("transport.redis");
-        ChatRedisConfiguration redis = new ChatRedisConfiguration(
-            redisSection != null && redisSection.getBoolean("enabled", false),
-            redisSection == null ? "127.0.0.1" : string(redisSection.getString("host", "127.0.0.1")),
-            redisSection == null ? 6379 : Math.max(1, redisSection.getInt("port", 6379)),
-            redisSection == null ? "" : string(redisSection.getString("password", "")),
-            redisSection == null ? 0 : Math.max(0, redisSection.getInt("database", 0)),
-            redisSection == null ? "AXS:chat" : string(redisSection.getString("channel", "AXS:chat")),
-            redisSection == null ? serverId : string(redisSection.getString("node-id", serverId)),
-            redisSection == null ? 5000 : Math.max(1000, redisSection.getInt("connect-timeout-ms", 5000))
-        );
-
-        ConfigurationSection proxySection = configuration.getConfigurationSection("transport.proxy");
-        ChatProxyConfiguration proxy = new ChatProxyConfiguration(
-            proxySection != null && proxySection.getBoolean("enabled", false),
-            proxySection == null ? "AXS_CHAT" : string(proxySection.getString("messenger-channel", "AXS_CHAT")),
-            proxySection == null ? "ALL" : string(proxySection.getString("forward-target", "ALL")),
-            proxySection == null ? serverId : string(proxySection.getString("node-id", serverId))
+        CrossServerChannelConfig crossServer = CrossServerChannelConfigs.fromSection(
+            configuration.getConfigurationSection("cross-server")
         );
 
         ConfigurationSection cardSection = configuration.getConfigurationSection("cards");
@@ -129,8 +113,7 @@ public record ChatModuleConfiguration(
             duplicateWindowMillis,
             forceChatTakeover,
             storage,
-            redis,
-            proxy,
+            crossServer,
             cards,
             functions,
             filter,

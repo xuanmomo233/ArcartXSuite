@@ -178,6 +178,27 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
     }
 
     @Override
+    public boolean tryInsertSignInRecord(UUID playerUuid, String playerName, String date, boolean makeup) throws SQLException {
+        String sql = configuration.dialect() == OnlineRewardsPersistenceDialect.SQLITE
+            ? """
+                INSERT OR IGNORE INTO online_rewards_sign_ins (player_uuid, player_name, sign_in_date, makeup)
+                VALUES (?, ?, ?, ?)
+                """
+            : """
+                INSERT IGNORE INTO online_rewards_sign_ins (player_uuid, player_name, sign_in_date, makeup)
+                VALUES (?, ?, ?, ?)
+                """;
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerUuid.toString());
+            statement.setString(2, playerName == null ? "" : playerName);
+            statement.setString(3, date == null ? "" : date);
+            statement.setInt(4, makeup ? 1 : 0);
+            return statement.executeUpdate() > 0;
+        }
+    }
+
+    @Override
     public List<OnlineRewardsLeaderboardEntry> loadLeaderboard(
         OnlineRewardsLeaderboardScope scope,
         String periodKey,

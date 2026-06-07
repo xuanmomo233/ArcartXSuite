@@ -41,11 +41,12 @@ import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsPermissionBonusRewa
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsModuleConfiguration;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsSignInConfiguration;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsTimeBonusGroup;
-import xuanmo.arcartxsuite.onlinerewards.redis.OnlineRewardsRedisBridge;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsLeaderboardEntry;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsLeaderboardScope;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsPlayerState;
 import xuanmo.arcartxsuite.onlinerewards.storage.OnlineRewardsRepository;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 
 public class OnlineRewardsService implements Listener {
@@ -69,6 +70,7 @@ public class OnlineRewardsService implements Listener {
     private final Function<Boolean, File> menuUiFileExporter;
     private final OnlineRewardsStateEngine stateEngine;
     private final Clock clock;
+    private final CrossServerAPI crossServer;
     private final Map<UUID, OnlineRewardsPlayerState> cachedStates = new ConcurrentHashMap<>();
     private final Map<UUID, OnlineRewardsPlayerState> dirtyStates = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> calendarMonthOffsets = new ConcurrentHashMap<>();
@@ -77,7 +79,7 @@ public class OnlineRewardsService implements Listener {
         new EnumMap<>(OnlineRewardsLeaderboardScope.class);
 
     private BukkitTask minuteTask;
-    private OnlineRewardsRedisBridge redisBridge;
+    private CrossServerChannel crossServerChannel;
     private java.util.List<String> runtimeMenuUiIds = java.util.List.of();
     private java.util.List<String> registeredMenuUiIds = java.util.List.of();
 
@@ -90,11 +92,12 @@ public class OnlineRewardsService implements Listener {
         PacketGuardAPI packetGuard,
         Supplier<MailDispatchable> mailProvider,
         Supplier<SignalDispatchable> signalProvider,
-        Function<Boolean, File> menuUiFileExporter
+        Function<Boolean, File> menuUiFileExporter,
+        CrossServerAPI crossServer
     ) {
         this(plugin, configuration, repository, clientBridge, packetBridge,
             packetGuard, mailProvider, signalProvider, menuUiFileExporter,
-            Clock.systemDefaultZone());
+            Clock.systemDefaultZone(), crossServer);
     }
 
     OnlineRewardsService(
@@ -107,7 +110,8 @@ public class OnlineRewardsService implements Listener {
         Supplier<MailDispatchable> mailProvider,
         Supplier<SignalDispatchable> signalProvider,
         Function<Boolean, File> menuUiFileExporter,
-        Clock clock
+        Clock clock,
+        CrossServerAPI crossServer
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
@@ -119,6 +123,7 @@ public class OnlineRewardsService implements Listener {
         this.signalProvider = signalProvider;
         this.menuUiFileExporter = menuUiFileExporter;
         this.clock = clock;
+        this.crossServer = crossServer;
         this.stateEngine = new OnlineRewardsStateEngine(configuration);
         for (OnlineRewardsLeaderboardScope scope : OnlineRewardsLeaderboardScope.values()) {
             leaderboardCache.put(scope, List.of());
@@ -132,14 +137,13 @@ public class OnlineRewardsService implements Listener {
         refreshLeaderboardSnapshots();
         scheduleSyncForOnlinePlayers();
         minuteTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickOnlinePlayers, 20L, 1200L);
-        if (configuration.redis() != null && configuration.redis().enabled()) {
-            OnlineRewardsRedisBridge candidate = new OnlineRewardsRedisBridge(plugin, configuration.redis(), this::handleRedisMessage);
-            if (candidate.start()) {
-                redisBridge = candidate;
-                plugin.getLogger().fine("OnlineRewards Redis 跨服通知已启用。");
-            } else {
-                candidate.shutdown();
-            }
+        crossServerChannel = crossServer.openChannel(
+            "onlinerewards",
+            configuration.crossServer(),
+            delivery -> handleCrossServerMessage(delivery.payload())
+        );
+        if (crossServerChannel.isActive()) {
+            plugin.getLogger().fine("OnlineRewards 跨服通知已启用。");
         }
     }
 
@@ -148,9 +152,9 @@ public class OnlineRewardsService implements Listener {
             minuteTask.cancel();
             minuteTask = null;
         }
-        if (redisBridge != null) {
-            redisBridge.shutdown();
-            redisBridge = null;
+        if (crossServerChannel != null) {
+            crossServerChannel.close();
+            crossServerChannel = null;
         }
         flushAll();
         cachedStates.clear();
@@ -163,8 +167,14 @@ public class OnlineRewardsService implements Listener {
         repository.close();
     }
 
+    public boolean crossServerActive() {
+        return crossServerChannel != null && crossServerChannel.isActive();
+    }
+
+    /** @deprecated 使用 {@link #crossServerActive()} */
+    @Deprecated
     public boolean redisActive() {
-        return redisBridge != null && redisBridge.isActive();
+        return crossServerActive();
     }
 
     public void handleClientInitialized(Player player) {
@@ -675,12 +685,12 @@ public class OnlineRewardsService implements Listener {
     }
 
     private void publishRefresh(UUID playerUuid) {
-        if (playerUuid != null && redisBridge != null && redisBridge.isActive()) {
-            redisBridge.publish("refresh:" + playerUuid);
+        if (playerUuid != null && crossServerChannel != null && crossServerChannel.isActive()) {
+            crossServerChannel.publish("refresh:" + playerUuid);
         }
     }
 
-    private void handleRedisMessage(String message) {
+    private void handleCrossServerMessage(String message) {
         if (configuration.debug()) {
             plugin.getLogger().info("收到 OnlineRewards Redis 消息: " + message);
         }
@@ -759,11 +769,11 @@ public class OnlineRewardsService implements Listener {
         }
 
         dirtyStates.put(player.getUniqueId(), state.copy());
-        saveImmediately(player.getUniqueId(), state);
-        dirtyStates.remove(player.getUniqueId());
         for (OnlineRewardDefinition reward : triggeredRewards) {
             executeRewardCommands(player, reward, context);
         }
+        saveImmediately(player.getUniqueId(), state);
+        dirtyStates.remove(player.getUniqueId());
         refreshLeaderboardSnapshots();
         pushSnapshot(player, stateEngine.snapshot(state));
         refreshMenu(player);
@@ -846,9 +856,19 @@ public class OnlineRewardsService implements Listener {
     private OnlineRewardsSignInResult applySignInRecord(Player player, OnlineRewardsPlayerState state, LocalDate date, boolean makeup) {
         String dateText = date.format(DATE_FORMATTER);
         try {
-            repository.saveSignInRecord(player.getUniqueId(), player.getName(), dateText, makeup);
+            if (!repository.tryInsertSignInRecord(player.getUniqueId(), player.getName(), dateText, makeup)) {
+                return new OnlineRewardsSignInResult(
+                    false,
+                    true,
+                    state.signInStreak(),
+                    state.signInTotal(),
+                    dateText,
+                    date.getDayOfMonth()
+                );
+            }
         } catch (SQLException exception) {
             plugin.getLogger().log(Level.WARNING, "保存签到记录失败: " + player.getUniqueId() + " " + dateText, exception);
+            return new OnlineRewardsSignInResult(false, false, state.signInStreak(), state.signInTotal(), dateText, date.getDayOfMonth());
         }
         Set<String> dates = loadAllSignInDates(player.getUniqueId());
         if (!dates.contains(dateText)) {

@@ -133,6 +133,7 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
 
         dispatchService = new EventPacketDispatchService(
             context.logger(),
+            context.packetGuard(),
             packetBridge,
             () -> configuration,
             () -> context.getCapability(QuestGpsNavigable.class),

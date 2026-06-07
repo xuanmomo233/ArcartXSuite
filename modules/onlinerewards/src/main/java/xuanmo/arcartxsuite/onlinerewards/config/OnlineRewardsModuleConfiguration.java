@@ -7,6 +7,8 @@ import java.util.Map;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
 
 public record OnlineRewardsModuleConfiguration(
     boolean debug,
@@ -16,7 +18,7 @@ public record OnlineRewardsModuleConfiguration(
     String titleVariableName,
     OnlineRewardsUiConfiguration ui,
     OnlineRewardsStorageConfiguration storage,
-    OnlineRewardsRedisConfiguration redis,
+    CrossServerChannelConfig crossServer,
     OnlineRewardsSignInConfiguration signIn,
     List<OnlineRewardsTimeBonusGroup> timeBonusGroups,
     List<OnlineRewardDefinition> rewards
@@ -71,7 +73,9 @@ public record OnlineRewardsModuleConfiguration(
         }
         OnlineRewardsSignInConfiguration signIn = loadSignIn(signInCfg);
 
-        OnlineRewardsRedisConfiguration redis = loadRedisConfiguration(configuration);
+        CrossServerChannelConfig crossServer = CrossServerChannelConfigs.fromSection(
+            configuration.getConfigurationSection("cross-server")
+        );
 
         return new OnlineRewardsModuleConfiguration(
             configuration.getBoolean("settings.debug", false),
@@ -81,7 +85,7 @@ public record OnlineRewardsModuleConfiguration(
             readString(configuration, "variables.title", "arcartx_online_time_title"),
             ui,
             storage,
-            redis,
+            crossServer,
             signIn,
             loadTimeBonusGroups(configuration.getMapList("time-bonus.permission-groups")),
             List.copyOf(rewards)
@@ -105,21 +109,6 @@ public record OnlineRewardsModuleConfiguration(
             loadPermissionBonusRewards(external.getMapList("permission-bonus-groups"))
         );
     }
-
-    private static OnlineRewardsRedisConfiguration loadRedisConfiguration(FileConfiguration configuration) {
-        ConfigurationSection section = configuration.getConfigurationSection("redis");
-        return new OnlineRewardsRedisConfiguration(
-            section != null && section.getBoolean("enabled", false),
-            section == null ? "127.0.0.1" : nullToDefault(section.getString("host", "127.0.0.1"), "127.0.0.1"),
-            section == null ? 6379 : Math.max(1, section.getInt("port", 6379)),
-            section == null ? "" : nullToDefault(section.getString("password", ""), ""),
-            section == null ? 0 : Math.max(0, section.getInt("database", 0)),
-            section == null ? "AXS:onlinerewards" : nullToDefault(section.getString("channel", "AXS:onlinerewards"), "AXS:onlinerewards"),
-            section == null ? "" : nullToDefault(section.getString("node-id", ""), ""),
-            section == null ? 5000 : Math.max(1000, section.getInt("connect-timeout-ms", 5000))
-        );
-    }
-
 
     private static List<OnlineRewardsTimeBonusGroup> loadTimeBonusGroups(List<Map<?, ?>> values) {
         List<OnlineRewardsTimeBonusGroup> groups = new ArrayList<>();

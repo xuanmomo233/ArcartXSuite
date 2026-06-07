@@ -1,101 +1,190 @@
-config-version: 1
-# AXS Market 全球市场
-# 作用: 系统商店、玩家拍卖行、回收商店三合一市场系统。
-# 重载: /axs market reload
-# 玩家入口: /market 打开主菜单。
-# PAPI: %AXSmarket_auction_count%、%AXSmarket_my_listings% 等。
+# =============================================================================
+# AXS Market 全球市场 主配置文件
+# =============================================================================
+# 功能概述:
+#   Market 模块提供三合一经济交易系统：
+#   1. 拍卖行 - 玩家间一口价/竞价交易，支持分类筛选和搜索
+#   2. 系统商店 - 管理员预设商品，支持多物品来源（原版/第三方插件）
+#   3. 回收商店 - 玩家将物品出售给系统，支持批量回收和自动回收
+#
+# 命令:
+#   玩家: /market              打开市场主界面
+#         /market shop [商店ID] 打开系统商店
+#         /market sell <价格> [起拍价] [时长] [货币]  上架手持物品
+#         /market recycle      打开回收界面
+#   管理: /axs market reload   重载商店/回收配置
+#         /axs market status   查看模块运行状态
+#
+# PAPI 占位符:
+#   %AXSmarket_auction_count%    当前活跃拍卖数量
+#   %AXSmarket_shop_count%         已加载系统商店数量
+#   %AXSmarket_recycle_count%      回收表条目数量
+#   %AXSmarket_my_listings%        我的上架数量
+#   %AXSmarket_redis_status%       Redis 连接状态
+# =============================================================================
 
+config-version: 1
+
+# ------------------------------------------------------------------------------
+# 全局设置
+# ------------------------------------------------------------------------------
 settings:
+  # 调试模式: true 时会在控制台输出详细日志，生产环境建议关闭
   debug: false
-  # 定时任务间隔（tick），用于到期检查、竞价结算
+  # 定时任务间隔（tick，20 tick = 1秒）
+  # 用途: 检查到期上架、结算竞价、刷新限时商品等
+  # 建议: 200 tick (~10秒)，服务器负载高时可适当调大
   scheduler-interval-ticks: 200
 
+# ------------------------------------------------------------------------------
+# UI 界面配置
+# ------------------------------------------------------------------------------
+# 以下配置定义 Market 模块使用的 ArcartX UI 文件。
+# UI 文件在首次启动时自动导出到模块数据目录，可通过 overwrite-ui-files 控制是否覆盖。
+# 如需自定义界面，修改导出后的 UI 文件即可。
+# ------------------------------------------------------------------------------
 ui:
+  # 系统商店 UI ID（与 ArcartX 客户端通信用的标识）
   shop-id: "AXS:market_shop"
+  # 系统商店 UI 文件在 JAR 中的路径
   shop-file: "arcartx/ui/market_shop.yml"
+  # 拍卖行 UI ID
   auction-id: "AXS:market_auction"
   auction-file: "arcartx/ui/market_auction.yml"
+  # 回收商店 UI ID
   recycle-id: "AXS:market_recycle"
   recycle-file: "arcartx/ui/market_recycle.yml"
+  # 交易历史 UI ID
   history-id: "AXS:market_history"
   history-file: "arcartx/ui/market_history.yml"
+  # 客户端数据包 ID，所有 Market UI 通信均通过此 ID
   packet-id: "AXS_MARKET"
+  # 是否在模块启动时自动将 UI 文件注册到 ArcartX 桥接层
   register-ui-on-enable: true
+  # 是否覆盖已导出的 UI 文件（true = 每次启动都覆盖，false = 仅在首次导出）
+  # 注意: 设为 true 会覆盖你在服务器上的自定义修改！
   overwrite-ui-files: false
 
+# ------------------------------------------------------------------------------
+# 数据存储配置
+# ------------------------------------------------------------------------------
 storage:
-  # 存储模式: sqlite（默认，零依赖） 或 mysql（需自行搭建）
+  # 存储模式:
+  #   sqlite - 零依赖，数据保存在本地 SQLite 文件，适合单服或测试环境
+  #   mysql  - 需自行搭建 MySQL/MariaDB，适合多服共享数据或高并发场景
   mode: "sqlite"
+  # SQLite 专属配置
   sqlite:
+    # 数据库文件路径（相对模块数据目录）
     file: "market.db"
+  # MySQL 专属配置
   mysql:
     host: "127.0.0.1"
     port: 3306
     database: "arcartxsuite"
     username: "root"
     password: ""
+    # 表名前缀，避免与其他插件表名冲突
     table-prefix: "axs_market_"
+  # 数据库连接池大小（SQLite 建议保持 1，MySQL 建议 5-20）
   pool-size: 8
 
+# ------------------------------------------------------------------------------
+# Redis 缓存与跨服同步（可选）
+# ------------------------------------------------------------------------------
+# 启用 Redis 后，拍卖行列表会被缓存到内存数据库，
+# 多个服务器通过 Pub/Sub 频道广播上架/成交/取消事件，实现跨服同步。
+# 建议: 单服可不启用；多服架构强烈建议启用。
+# ------------------------------------------------------------------------------
 redis:
   enabled: false
   host: "127.0.0.1"
   port: 6379
   password: ""
   database: 0
+  # Pub/Sub 频道名称，所有 Market 实例需保持一致
   channel: "axs:market:sync"
-  # 拍卖行列表缓存过期时间（秒）
+  # 拍卖行列表缓存过期时间（秒），过期后从数据库重新加载
   cache-ttl-seconds: 60
 
-# ─── 拍卖行 ─────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子系统配置 - 拍卖行
+# ═══════════════════════════════════════════════════════════════════════════════
 auction:
+  # 是否启用拍卖行功能
   enabled: true
-  # 上架时长范围（秒）
-  min-duration-seconds: 3600
-  max-duration-seconds: 604800
-  # 默认上架时长（秒）= 24小时
+  # 上架时长限制（秒）
+  # 玩家上架物品时，时长必须在此范围内
+  min-duration-seconds: 3600        # 最短 1 小时
+  max-duration-seconds: 604800      # 最长 7 天
+  # 默认上架时长（秒）= 24 小时
   default-duration-seconds: 86400
-  # 最大同时上架数量
+  # 每个玩家同时最多可上架的物品数量
   max-listings-per-player: 10
-  # 竞价最低加价比例（0.05 = 5%）
-  min-bid-increment-ratio: 0.05
-  # 竞价最低加价绝对值（与比例取较大值）
-  min-bid-increment-absolute: 10
-  # 上架手续费（固定）
+  # 竞价加价规则:
+  #   新出价必须 >= max(当前最高价 * (1 + min-bid-increment-ratio), 当前最高价 + min-bid-increment-absolute)
+  # 例如: 当前最高价 100，ratio=0.05 absolute=10 → 新出价至少 110（取 max(105, 110)）
+  min-bid-increment-ratio: 0.05     # 比例: 5%
+  min-bid-increment-absolute: 10    # 绝对值: 10
+  # 上架手续费（固定金额，上架时立即扣除，无论是否成交）
+  # 设为 0 表示免费上架
   listing-fee: 0
-  # 上架手续费货币
-  listing-fee-currency: "money"
-  # 成交税率（0.05 = 5%）
+  listing-fee-currency: "money"       # 手续费货币类型
+  # 成交税率（0.05 = 5%，从卖家最终收入中扣除）
+  # 例如: 成交价 1000，税率 0.05 → 卖家实际获得 950
   transaction-tax-rate: 0.05
-  # 税费货币（从卖家收入中扣除）
-  transaction-tax-currency: "money"
-  # VIP 税率减免
+  transaction-tax-currency: "money"   # 税费货币类型
+  # VIP 税率减免（拥有对应权限的玩家享受更低税率）
+  # 最终税率 = base-rate - 匹配的减免值，取最大减免
+  # 例: base 5% - VIP 2% = 3%；base 5% - MVP 1% = 4%
   tax-discount:
-    "axsmarket.vip": 0.02
-    "axsmarket.mvp": 0.01
-  # 到期未售物品退回方式: mail / inventory
+    "axsmarket.vip": 0.02            # VIP 减免 2%
+    "axsmarket.mvp": 0.01            # MVP 减免 1%
+  # 到期未售物品退回方式:
+  #   mail     - 通过邮件系统退回（需 Mail 模块支持）
+  #   inventory- 直接放入玩家背包（背包满时可能丢失！）
   expired-return-method: "mail"
-  # 竞价被超越时通知方式: chat / actionbar / title
+  # 竞价被超越时通知被超越玩家的方式
+  #   chat     - 聊天栏消息
+  #   actionbar- 屏幕底部 Action Bar
+  #   title    - 屏幕中央标题
   outbid-notify: "chat"
-  # 物品黑名单
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 拍卖行物品黑名单
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 满足任意一条规则的物品将不允许上架拍卖行。
+  # 支持原版材质、MythicMobs 物品 ID、NeigeItems 物品 ID、名称/Lore 内容匹配。
+  # --------------------------------------------------------------------------
   blacklist:
+    # 禁止的原版材质 ID 列表（Bukkit Material 枚举名）
     material-ids: []
+    # 禁止的 MythicMobs 物品内部 ID 列表
     mythic-item-ids: []
+    # 禁止的 NeigeItems 物品 ID 列表
     neige-item-ids: []
+    # 物品名称包含以下字符串则被禁止（支持 & 颜色码）
     name-contains:
       - "绑定"
+    # 物品 Lore 包含以下字符串则被禁止（支持 & 颜色码）
     lore-contains:
       - "不可交易"
+    # 物品名称匹配正则表达式则被禁止（高级用法，为空表示不启用）
     name-regex: []
+    # 物品 Lore 匹配正则表达式则被禁止
     lore-regex: []
-  # 分类定义
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 拍卖行分类定义
+  # ═══════════════════════════════════════════════════════════════════════════
+  # 分类用于拍卖行界面的筛选功能。每个分类通过检查物品的 NBT/PDC 数据来判定归属。
+  # 未匹配任何分类的物品自动归入设置了 default: true 的 "other" 分类。
+  # --------------------------------------------------------------------------
   categories:
     weapon:
-      display-name: "&c武器"
-      priority: 10
+      display-name: "&c武器"           # 分类在 UI 中显示的名称
+      priority: 10                      # 排序优先级，数字越小越靠前
       nbt:
-        path: "pdc:arcartx:item_category"
-        values: ["weapon"]
+        path: "pdc:arcartx:item_category"  # 检查的 NBT/PDC 路径
+        values: ["weapon"]               # 值匹配列表，任一匹配即归属此分类
     armor:
       display-name: "&9防具"
       priority: 20
@@ -116,37 +205,70 @@ auction:
         values: ["consumable", "food", "potion"]
     other:
       display-name: "&7其他"
-      priority: 9999
-      default: true
+      priority: 9999                    # 放在最后
+      default: true                     # 未匹配其他分类时归入此类
 
-# ─── 系统商店 ────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子系统配置 - 系统商店
+# ═══════════════════════════════════════════════════════════════════════════════
+# 系统商店通过 YAML 文件定义，每个文件代表一个商店。
+# 文件放置路径: <模块数据目录>/shops/ 下，文件名（不含 .yml）即为商店 ID。
+# 示例文件: example_shop.yml（首次启动时自动导出）
+# ═══════════════════════════════════════════════════════════════════════════════
 shop:
   enabled: true
-  # 商店定义目录（相对模块数据目录）
+  # 商店定义文件所在目录（相对模块数据目录）
+  # 模块启动时会递归扫描此目录下的所有 .yml 文件并加载为商店
   shops-directory: "shops"
-  # 全局刷新间隔（tick），用于限时商品刷新
-  refresh-interval-ticks: 6000
-  # 默认货币
+  # 全局刷新间隔（tick），用于限时商品的定时刷新逻辑
+  # 例如: 设置每日限量的商品，到达此间隔后自动重置库存
+  refresh-interval-ticks: 6000        # 6000 tick = 5 分钟
+  # 默认货币类型，当商店商品未指定 currency 时 fallback 使用
+  # 具体可用货币取决于 CurrencyBridgeManager 的注册情况（如 Vault/PlayerPoints 等）
   default-currency: "money"
 
-# ─── 回收商店 ────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子系统配置 - 回收商店
+# ═══════════════════════════════════════════════════════════════════════════════
+# 回收商店允许玩家将背包中的物品出售给系统换取货币。
+# 回收表通过 YAML 文件定义，每个文件代表一张回收表。
+# 文件放置路径: <模块数据目录>/recycle/ 下
+# ═══════════════════════════════════════════════════════════════════════════════
 recycle:
   enabled: true
-  # 回收表定义目录（相对模块数据目录）
+  # 回收表定义文件所在目录（相对模块数据目录）
   recycle-directory: "recycle"
-  # 默认回收货币
+  # 默认回收货币类型（当回收条目未指定 currency 时 fallback）
   default-currency: "money"
-  # 是否允许自动回收（拾取时）
+  # 是否允许自动回收:
+  #   true  - 玩家拾取物品时，若该物品在回收表中，自动出售并提示
+  #   false - 只能通过 /market recycle 界面手动回收
+  # 注意: 自动回收需要玩家拥有 axsmarket.autorecycle 权限
   allow-auto-recycle: true
-  # 批量回收确认（避免误操作）
+  # 批量回收确认:
+  #   true  - 点击"一键回收"按钮时弹出确认窗口，避免误操作
+  #   false - 直接执行，无确认提示
   batch-confirm: true
-  # 回收价格倍率（权限组）
+  # 回收价格倍率（按玩家权限组加成）
+  # 最终回收价格 = 基础价格 * 匹配的最高倍率
+  # 例: VIP 1.2 倍，MVP 1.5 倍 → MVP 玩家获得 1.5 倍基础价格
   price-multiplier:
-    "axsmarket.recycle.vip": 1.2
-    "axsmarket.recycle.mvp": 1.5
+    "axsmarket.recycle.vip": 1.2       # VIP 回收加成 20%
+    "axsmarket.recycle.mvp": 1.5       # MVP 回收加成 50%
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# 消息文本配置
+# ═══════════════════════════════════════════════════════════════════════════════
+# 所有消息文本均可在此处自定义，支持 & 颜色码和以下占位符:
+#   %amount%    - 金额/数量
+#   %item%      - 物品名称
+#   %player%    - 玩家名
+#   %currency%  - 货币名称
+# ═══════════════════════════════════════════════════════════════════════════════
 messages:
+  # 消息前缀，所有 Market 消息都会自动附加此前缀
   prefix: "&8[&6AXS市场&8] &7"
+  # ── 拍卖行消息 ──
   auction-listed: "&a物品已成功上架！"
   auction-bought: "&a购买成功！"
   auction-bid-placed: "&a出价成功！当前最高出价: &e%amount%"
@@ -154,9 +276,12 @@ messages:
   auction-expired: "&7您上架的 &e%item% &7已到期，已退回。"
   auction-sold: "&a您上架的 &e%item% &a已售出！收入: &e%amount%"
   auction-cancelled: "&7已取消上架。"
+  # ── 系统商店消息 ──
   shop-bought: "&a购买成功！花费: &e%amount%"
   shop-limit-reached: "&c该商品已达购买上限。"
+  # ── 回收商店消息 ──
   recycle-success: "&a回收成功！获得: &e%amount%"
   recycle-nothing: "&7背包中没有可回收的物品。"
+  # ── 通用错误消息 ──
   insufficient-funds: "&c余额不足。"
   item-blacklisted: "&c该物品不允许上架。"

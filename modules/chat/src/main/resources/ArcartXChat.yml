@@ -56,24 +56,8 @@ storage:
   # 连接池大小；在线较多或启用跨服历史时可适当提高。
   pool-size: 4
 
-transport:
-  redis:
-    # 开启后使用 Redis 同步聊天消息，适合多服互通。
-    enabled: false
-    host: "127.0.0.1"
-    port: 6379
-    password: ""
-    database: 0
-    channel: "AXS:chat"
-    node-id: ""
-    connect-timeout-ms: 5000
-
-  proxy:
-    # 开启后通过 ArcartX / 代理侧信道转发消息。
-    enabled: false
-    messenger-channel: "AXS_CHAT"
-    forward-target: "ALL"
-    node-id: ""
+cross-server:
+  enabled: false
 
 cards:
   # 提及、私聊、系统提示、物品展示对应的 ArcartX 聊天卡片 ID；留空则不发送卡片。

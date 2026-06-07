@@ -13,6 +13,7 @@ final class LoadedModule {
     private final AXSModule instance;
     private final ModuleClassLoader classLoader;
     private final File jarFile;
+    private DefaultModuleContext context;
     private boolean enabled;
 
     LoadedModule(ModuleDescriptor descriptor, AXSModule instance, ModuleClassLoader classLoader, File jarFile) {
@@ -21,6 +22,14 @@ final class LoadedModule {
         this.classLoader = classLoader;
         this.jarFile = jarFile;
         this.enabled = false;
+    }
+
+    void setContext(DefaultModuleContext context) {
+        this.context = context;
+    }
+
+    DefaultModuleContext context() {
+        return context;
     }
 
     ModuleDescriptor descriptor() {

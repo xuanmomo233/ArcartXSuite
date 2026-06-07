@@ -147,7 +147,10 @@ public final class PropService implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onPlayerQuit(PlayerQuitEvent event) {
-        mythicLibService.clear(event.getPlayer());
+        Player player = event.getPlayer();
+        mythicLibService.clear(player);
+        symphonyService.clear(player);
+        attributePlusService.clear(player);
     }
 
     @EventHandler(ignoreCancelled = true)

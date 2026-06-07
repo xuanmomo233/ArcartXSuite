@@ -18,6 +18,7 @@ import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
 import xuanmo.arcartxsuite.api.capability.QQBotBroadcastable;
@@ -44,6 +45,7 @@ public final class EventPacketDispatchService {
     private static final MethodHandle PAPI_SET_PLACEHOLDERS = resolvePapiMethodHandle();
 
     private final Logger logger;
+    private final PacketGuardAPI packetGuard;
     private final ArcartXPacketBridge packetBridge;
     private final Supplier<PluginConfiguration> configurationProvider;
     private final Supplier<QuestGpsNavigable> questGpsProvider;
@@ -60,6 +62,7 @@ public final class EventPacketDispatchService {
 
     public EventPacketDispatchService(
         Logger logger,
+        PacketGuardAPI packetGuard,
         ArcartXPacketBridge packetBridge,
         Supplier<PluginConfiguration> configurationProvider,
         Supplier<QuestGpsNavigable> questGpsProvider,
@@ -72,6 +75,7 @@ public final class EventPacketDispatchService {
         Supplier<EventPacketRepository> repositoryProvider
     ) {
         this.logger = logger;
+        this.packetGuard = packetGuard;
         this.packetBridge = packetBridge;
         this.configurationProvider = configurationProvider;
         this.questGpsProvider = questGpsProvider;
@@ -106,6 +110,9 @@ public final class EventPacketDispatchService {
         PluginConfiguration configuration = configurationProvider.get();
         if (configuration == null || packetId == null || presetId == null || subject == null) {
             return false;
+        }
+        if (packetGuard != null && !packetGuard.allow(subject, "eventpacket", "client-packet", configuration.debug())) {
+            return true;
         }
         EventPacketRule rule = configuration.findClientPacketRule(packetId, presetId);
         if (rule == null) {

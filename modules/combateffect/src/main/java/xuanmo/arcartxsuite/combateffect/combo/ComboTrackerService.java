@@ -48,6 +48,8 @@ public final class ComboTrackerService implements Listener {
     private final ConcurrentHashMap<UUID, ComboState> comboStates = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID, BukkitTask> resetTasks = new ConcurrentHashMap<>();
 
+    private Listener quitCleanupListener;
+
     // Chronos 反射
     private boolean chronosHooked;
     private Listener chronosListener;
@@ -89,8 +91,8 @@ public final class ComboTrackerService implements Listener {
                 logger.info("ComboTracker 使用 Bukkit 攻击事件作为 combo 来源");
             }
         } else if (chronosHooked) {
-            // 仍需注册 quit listener
-            Bukkit.getPluginManager().registerEvents(new QuitCleanupListener(), plugin);
+            quitCleanupListener = new QuitCleanupListener();
+            Bukkit.getPluginManager().registerEvents(quitCleanupListener, plugin);
             if (config.debug()) {
                 logger.info("ComboTracker 使用 Chronos 状态事件作为 combo 来源 | groups=" + config.chronosGroups());
             }
@@ -99,6 +101,10 @@ public final class ComboTrackerService implements Listener {
 
     public void shutdown() {
         HandlerList.unregisterAll(this);
+        if (quitCleanupListener != null) {
+            HandlerList.unregisterAll(quitCleanupListener);
+            quitCleanupListener = null;
+        }
         if (chronosListener != null) {
             HandlerList.unregisterAll(chronosListener);
             chronosListener = null;
@@ -292,8 +298,6 @@ public final class ComboTrackerService implements Listener {
                 plugin,
                 true
             );
-            // 也注册 quit cleanup
-            Bukkit.getPluginManager().registerEvents(new QuitCleanupListener(), plugin);
             return true;
         } catch (Exception exception) {
             if (config.debug()) {

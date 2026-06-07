@@ -57,30 +57,35 @@ public final class EssentialsAdminPacketHandler implements ClientPacketHandler {
     @Override
     public boolean handleClientPacket(@NotNull Player player, @NotNull String packetId, @NotNull List<String> data) {
         if (!PACKET_ID.equalsIgnoreCase(packetId)) return false;
-        if (packetGuard != null && !packetGuard.allow(player, "essentials", "admin", false)) return true;
         if (!player.hasPermission("axs.essentials.admin")) return true;
-
         String action = data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
+        if (packetGuard != null && !packetGuard.allow(player, "essentials", action, false)) return true;
+
         switch (action) {
             case "refresh" -> pushAdminData(player, hasValue(data, 1) ? data.get(1) : "players");
             case "navigate" -> pushAdminData(player, hasValue(data, 1) ? data.get(1) : "players");
             case "heal" -> {
+                if (!player.hasPermission("axs.essentials.heal")) break;
                 Player target = resolveTarget(data, 1);
                 if (target != null) { playerService.heal(target); pushAdminData(player, "players"); }
             }
             case "feed" -> {
+                if (!player.hasPermission("axs.essentials.feed")) break;
                 Player target = resolveTarget(data, 1);
                 if (target != null) { playerService.feed(target); pushAdminData(player, "players"); }
             }
             case "fly" -> {
+                if (!player.hasPermission("axs.essentials.fly")) break;
                 Player target = resolveTarget(data, 1);
                 if (target != null) { playerService.toggleFly(player, target); pushAdminData(player, "players"); }
             }
             case "god" -> {
+                if (!player.hasPermission("axs.essentials.god")) break;
                 Player target = resolveTarget(data, 1);
                 if (target != null) { playerService.toggleGod(target); pushAdminData(player, "players"); }
             }
             case "kick" -> {
+                if (!player.hasPermission("axs.essentials.kick")) break;
                 Player target = resolveTarget(data, 1);
                 if (target != null) {
                     String reason = hasValue(data, 2) ? data.get(2) : "被管理员踢出";
@@ -89,6 +94,7 @@ public final class EssentialsAdminPacketHandler implements ClientPacketHandler {
                 }
             }
             case "ban" -> {
+                if (!player.hasPermission("axs.essentials.ban")) break;
                 Player target = resolveTarget(data, 1);
                 if (target != null) {
                     try {
@@ -101,6 +107,7 @@ public final class EssentialsAdminPacketHandler implements ClientPacketHandler {
                 }
             }
             case "unban" -> {
+                if (!player.hasPermission("axs.essentials.unban")) break;
                 if (hasValue(data, 1)) {
                     try {
                         java.util.UUID uuid = java.util.UUID.fromString(data.get(1));

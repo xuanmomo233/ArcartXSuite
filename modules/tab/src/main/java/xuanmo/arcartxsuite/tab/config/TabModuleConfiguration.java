@@ -9,6 +9,8 @@ import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
 import xuanmo.arcartxsuite.api.security.ClientPacketGuardMode;
 
 public record TabModuleConfiguration(
@@ -21,13 +23,9 @@ public record TabModuleConfiguration(
     long staleSnapshotMs,
     int batchWindowTicks,
     long leaveGraceMs,
-    boolean papiEnabled,
-    String papiExpansionId,
     boolean dryRun,
     TabStyleConfiguration style,
-    TabPrivacyConfiguration privacy,
-    TabRedisConfiguration redis,
-    TabProxyConfiguration proxy,
+    CrossServerChannelConfig crossServer,
     List<TabDefinition> definitions
 ) {
 
@@ -54,17 +52,12 @@ public record TabModuleConfiguration(
         long staleSnapshotMs = Math.max(5000L, configuration.getLong("settings.stale-snapshot-ms", 30000L));
         int batchWindowTicks = Math.max(0, configuration.getInt("settings.batch.window-ticks", 0));
         long leaveGraceMs = Math.max(0L, configuration.getLong("settings.leave-grace-ms", 0L));
-        boolean papiEnabled = configuration.getBoolean("settings.papi.enabled", false);
-        String papiExpansionId = nullToEmpty(configuration.getString("settings.papi.expansion-id", "AXStab")).trim();
-        if (papiExpansionId.isBlank()) {
-            papiExpansionId = "AXStab";
-        }
         TabStyleConfiguration style = readStyleConfiguration(configuration.getConfigurationSection("settings.style"));
-        TabPrivacyConfiguration privacy = readPrivacyConfiguration(configuration.getConfigurationSection("settings.privacy"));
         boolean dryRun = configuration.getBoolean("settings.debug-tools.dry-run", false);
 
-        TabRedisConfiguration redis = loadRedisConfiguration(configuration, serverId);
-        TabProxyConfiguration proxy = loadProxyConfiguration(configuration, serverId);
+        CrossServerChannelConfig crossServer = CrossServerChannelConfigs.fromSection(
+            configuration.getConfigurationSection("cross-server")
+        );
 
         Map<String, TabDefinition> definitionMap = new LinkedHashMap<>();
         if (tabsDirectory != null && tabsDirectory.isDirectory()) {
@@ -78,7 +71,7 @@ public record TabModuleConfiguration(
         return new TabModuleConfiguration(
             refreshIntervalTicks, debug, registerUiOnEnable, overwriteUiFile,
             serverId, crossServerDefault, staleSnapshotMs, batchWindowTicks, leaveGraceMs,
-            papiEnabled, papiExpansionId, dryRun, style, privacy, redis, proxy, definitions
+            dryRun, style, crossServer, definitions
         );
     }
 
@@ -216,85 +209,9 @@ public record TabModuleConfiguration(
             return TabStyleConfiguration.defaults();
         }
         ConfigurationSection pvp = section.getConfigurationSection("pvp-highlight");
-        ConfigurationSection vanish = section.getConfigurationSection("vanish-grey");
-        ConfigurationSection ping = section.getConfigurationSection("ping-icon");
-
         boolean pvpEnabled = pvp != null && pvp.getBoolean("enabled", false);
         long pvpWindowMs = pvp == null ? 5_000L : Math.max(0L, pvp.getLong("window-ms", 5_000L));
-        String pvpColor = pvp == null ? "&c" : nullToEmpty(pvp.getString("color", "&c"));
-
-        boolean vanishGreyEnabled = vanish != null && vanish.getBoolean("enabled", false);
-        String vanishColor = vanish == null ? "&7" : nullToEmpty(vanish.getString("color", "&7"));
-
-        boolean pingIconEnabled = ping != null && ping.getBoolean("enabled", false);
-        List<TabStyleConfiguration.PingTier> tiers = new ArrayList<>();
-        if (ping != null) {
-            List<?> rawTiers = ping.getList("tiers");
-            if (rawTiers != null) {
-                for (Object raw : rawTiers) {
-                    if (!(raw instanceof Map<?, ?> mapNode)) {
-                        continue;
-                    }
-                    int maxMs = (int) asLong(mapNode.get("max-ms"), Integer.MAX_VALUE);
-                    String icon = asString(mapNode.get("icon"), "");
-                    tiers.add(new TabStyleConfiguration.PingTier(maxMs, icon));
-                }
-                tiers.sort((a, b) -> Integer.compare(a.maxMs(), b.maxMs()));
-            }
-        }
-        return new TabStyleConfiguration(
-            pvpEnabled, pvpWindowMs, pvpColor,
-            vanishGreyEnabled, vanishColor,
-            pingIconEnabled, List.copyOf(tiers)
-        );
-    }
-
-    private static TabPrivacyConfiguration readPrivacyConfiguration(ConfigurationSection section) {
-        if (section == null) {
-            return TabPrivacyConfiguration.defaults();
-        }
-        return new TabPrivacyConfiguration(
-            section.getBoolean("hide-uuid", false),
-            section.getBoolean("hide-ip", false)
-        );
-    }
-
-    private static long asLong(Object value, long fallback) {
-        if (value instanceof Number num) {
-            return num.longValue();
-        }
-        if (value instanceof String str) {
-            try {
-                return Long.parseLong(str.trim());
-            } catch (NumberFormatException ex) {
-                return fallback;
-            }
-        }
-        return fallback;
-    }
-
-    private static TabRedisConfiguration loadRedisConfiguration(FileConfiguration configuration, String serverId) {
-        ConfigurationSection section = configuration.getConfigurationSection("transport.redis");
-        return new TabRedisConfiguration(
-            section != null && section.getBoolean("enabled", false),
-            section == null ? "127.0.0.1" : nullToEmpty(section.getString("host", "127.0.0.1")),
-            section == null ? 6379 : Math.max(1, section.getInt("port", 6379)),
-            section == null ? "" : nullToEmpty(section.getString("password", "")),
-            section == null ? 0 : Math.max(0, section.getInt("database", 0)),
-            section == null ? "AXS:tab" : nullToEmpty(section.getString("channel", "AXS:tab")),
-            section == null ? serverId : nullToEmpty(section.getString("node-id", serverId)).isBlank() ? serverId : nullToEmpty(section.getString("node-id", serverId)),
-            section == null ? 5000 : Math.max(1000, section.getInt("connect-timeout-ms", 5000))
-        );
-    }
-
-    private static TabProxyConfiguration loadProxyConfiguration(FileConfiguration configuration, String serverId) {
-        ConfigurationSection section = configuration.getConfigurationSection("transport.proxy");
-        return new TabProxyConfiguration(
-            section != null && section.getBoolean("enabled", false),
-            section == null ? "AXS_TAB" : nullToEmpty(section.getString("messenger-channel", "AXS_TAB")),
-            section == null ? "ALL" : nullToEmpty(section.getString("forward-target", "ALL")),
-            section == null ? serverId : nullToEmpty(section.getString("node-id", serverId)).isBlank() ? serverId : nullToEmpty(section.getString("node-id", serverId))
-        );
+        return new TabStyleConfiguration(pvpEnabled, pvpWindowMs);
     }
 
     private static TabClientRefreshGuardConfiguration readClientRefreshGuard(

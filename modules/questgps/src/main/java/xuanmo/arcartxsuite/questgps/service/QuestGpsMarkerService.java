@@ -118,7 +118,7 @@ public final class QuestGpsMarkerService {
         }
 
         // 立即计算一次路径
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        Bukkit.getScheduler().runTask(plugin, () -> {
             if (!player.isOnline()) return;
             computeAndApplyPath(player, state);
         });
@@ -165,7 +165,7 @@ public final class QuestGpsMarkerService {
             // 异步计算路径，主线程应用实体操作
             final Player p = player;
             final PlayerPathState s = state;
-            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            Bukkit.getScheduler().runTask(plugin, () -> {
                 if (p.isOnline() && !s.cancelled) {
                     computeAndApplyPath(p, s);
                 }

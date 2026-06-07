@@ -22,7 +22,6 @@ import xuanmo.arcartxsuite.tab.config.TabDefinition;
 import xuanmo.arcartxsuite.tab.config.TabModuleConfiguration;
 import xuanmo.arcartxsuite.tab.debug.TabSnapshotStore;
 import xuanmo.arcartxsuite.tab.listener.TabPvpListener;
-import xuanmo.arcartxsuite.tab.placeholder.TabPlaceholderExpansion;
 import xuanmo.arcartxsuite.tab.sync.TabSyncService;
 
 /**
@@ -47,7 +46,6 @@ public final class TabModule extends AbstractAXSModule {
             .name("Tab")
             .version("1.0.2-beta")
             .mainClass(getClass().getName())
-            .externalDepends(List.of("PlaceholderAPI"))
             .build();
     }
 
@@ -75,12 +73,9 @@ public final class TabModule extends AbstractAXSModule {
         return List.of(
             // 服务端ID不能为空
             ValidationRule.required("settings.server-id", ValueType.STRING),
-            // Redis端口范围
-            ValidationRule.of("transport.redis.port", ValueType.INT)
-                .withRange(1, 65535),
-            // 快照过期时间必须为正
-            ValidationRule.of("settings.stale-snapshot-ms", ValueType.INT)
-                .withRange(1000, null)
+            ValidationRule.of("settings.stale-snapshot-ms", ValueType.LONG)
+                .withRange(1000, null),
+            ValidationRule.of("cross-server.enabled", ValueType.BOOLEAN)
         );
     }
 
@@ -128,7 +123,7 @@ public final class TabModule extends AbstractAXSModule {
         Map<String, UiBinding> tabUiBindings = registerTabUis();
         ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
-        service = new TabSyncService(context.plugin(), configuration, packetBridge, packetGuard);
+        service = new TabSyncService(context.plugin(), configuration, packetBridge, packetGuard, context.crossServer());
         service.start();
 
         // Snapshot 调试存储：plugins/ArcartXSuite/data/tab/snapshots/
@@ -173,10 +168,7 @@ public final class TabModule extends AbstractAXSModule {
 
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
-        if (configuration == null || !configuration.papiEnabled()) {
-            return null;
-        }
-        return new TabPlaceholderExpansion(context.plugin(), () -> service, () -> configuration);
+        return null;
     }
 
     public TabSyncService getService() {

@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -479,15 +480,16 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
             for (String id : targetIds) {
                 Optional<xuanmo.arcartxsuite.api.capability.DatabaseMigratable> opt = registry.getMigratable(id);
                 if (opt.isEmpty()) {
-                    sender.sendMessage(PREFIX + ChatColor.RED + "模块 [" + id + "] 迁移接口获取失败，跳过。");
+                    sendOnMain(sender, PREFIX + ChatColor.RED + "模块 [" + id + "] 迁移接口获取失败，跳过。");
                     continue;
                 }
                 xuanmo.arcartxsuite.api.capability.DatabaseMigratable migratable = opt.get();
                 xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDesc = migratable.currentDescriptor();
 
                 if (currentDesc.isMysql() == toMysql) {
-                    sender.sendMessage(PREFIX + ChatColor.RED + "模块 [" + id + "] 无法从其自身进行迁移 (源方言 " + (currentDesc.isMysql() ? "MySQL" : "SQLite") + " 与目标方言相同！)");
-                    sender.sendMessage(PREFIX + ChatColor.GRAY + "请检查该模块的 config.yml 中的数据库启用状态是否与搬迁方向相符。");
+                    sendOnMain(sender, PREFIX + ChatColor.RED + "模块 [" + id + "] 无法从其自身进行迁移 (源方言 "
+                        + (currentDesc.isMysql() ? "MySQL" : "SQLite") + " 与目标方言相同！)");
+                    sendOnMain(sender, PREFIX + ChatColor.GRAY + "请检查该模块的 config.yml 中的数据库启用状态是否与搬迁方向相符。");
                     continue;
                 }
 
@@ -503,25 +505,26 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
                     currentDesc.tablePrefix()
                 );
 
-                sender.sendMessage(PREFIX + ChatColor.GRAY + "正在迁移模块 [" + ChatColor.YELLOW + id + ChatColor.GRAY + "] 的所有数据库表 ...");
+                sendOnMain(sender, PREFIX + ChatColor.GRAY + "正在迁移模块 [" + ChatColor.YELLOW + id + ChatColor.GRAY + "] 的所有数据库表 ...");
                 try {
                     xuanmo.arcartxsuite.api.storage.MigrationResult result = migratable.migrateDatabase(targetDesc, overwrite);
                     if (result.isSuccess()) {
-                        sender.sendMessage(PREFIX + ChatColor.GREEN + "模块 [" + id + "] 迁移成功！共迁移 " 
+                        sendOnMain(sender, PREFIX + ChatColor.GREEN + "模块 [" + id + "] 迁移成功！共迁移 "
                             + result.tablesMigrated() + " 张表，共复制 " + result.rowsCopied() + " 行数据。");
-                        result.tableRows().forEach((table, rows) -> 
-                            sender.sendMessage(PREFIX + ChatColor.GRAY + "  - 表 " + ChatColor.AQUA + table + ChatColor.GRAY + ": " + ChatColor.WHITE + rows + " 行"));
+                        result.tableRows().forEach((table, rows) ->
+                            sendOnMain(sender, PREFIX + ChatColor.GRAY + "  - 表 " + ChatColor.AQUA + table
+                                + ChatColor.GRAY + ": " + ChatColor.WHITE + rows + " 行"));
                     } else {
-                        sender.sendMessage(PREFIX + ChatColor.RED + "模块 [" + id + "] 迁移未完全成功：");
+                        sendOnMain(sender, PREFIX + ChatColor.RED + "模块 [" + id + "] 迁移未完全成功：");
                         for (String err : result.errors()) {
-                            sender.sendMessage(PREFIX + ChatColor.RED + "  - " + err);
+                            sendOnMain(sender, PREFIX + ChatColor.RED + "  - " + err);
                         }
                     }
                 } catch (Exception e) {
-                    sender.sendMessage(PREFIX + ChatColor.RED + "模块 [" + id + "] 迁移遭遇严重异常: " + e.getMessage());
+                    sendOnMain(sender, PREFIX + ChatColor.RED + "模块 [" + id + "] 迁移遭遇严重异常: " + e.getMessage());
                 }
             }
-            sender.sendMessage(PREFIX + ChatColor.GOLD + "=== 一键跨源迁移执行完毕 ===");
+            sendOnMain(sender, PREFIX + ChatColor.GOLD + "=== 一键跨源迁移执行完毕 ===");
         });
         return true;
     }
@@ -544,5 +547,13 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
             }
         }
         return result;
+    }
+
+    private void sendOnMain(CommandSender sender, String message) {
+        if (Bukkit.isPrimaryThread()) {
+            sender.sendMessage(message);
+        } else {
+            Bukkit.getScheduler().runTask(plugin, () -> sender.sendMessage(message));
+        }
     }
 }

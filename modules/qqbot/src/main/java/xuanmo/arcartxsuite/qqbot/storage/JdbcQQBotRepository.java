@@ -672,82 +672,104 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
 
     @Override
     public int tryClaimRedPacket(long redPacketId, long claimerQq) {
-        // 检查是否已领取
-        String checkSql = "SELECT 1 FROM " + tableRedPacketClaims + " WHERE red_packet_id = ? AND claimer_qq = ? LIMIT 1";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(checkSql)) {
-            ps.setLong(1, redPacketId);
-            ps.setLong(2, claimerQq);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return -2; // 已领取过
-            }
-        } catch (SQLException e) {
-            logger.warning("QQBot 检查红包领取失败: " + e.getMessage());
-        }
-
-        // 查询红包剩余信息
-        RedPacket rp = null;
-        String selectSql = "SELECT remaining_amount, claimed_count, count, expire_at FROM " + tableRedPackets
-            + " WHERE id = ? AND expire_at > ? AND remaining_amount > 0 AND claimed_count < count";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(selectSql)) {
-            ps.setLong(1, redPacketId);
-            ps.setLong(2, System.currentTimeMillis());
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    rp = new RedPacket(redPacketId, 0, 0, 0,
-                        rs.getInt("remaining_amount"), rs.getInt("count"),
-                        rs.getInt("claimed_count"), rs.getLong("expire_at"), 0);
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                String checkSql = "SELECT 1 FROM " + tableRedPacketClaims
+                    + " WHERE red_packet_id = ? AND claimer_qq = ? LIMIT 1";
+                try (PreparedStatement ps = conn.prepareStatement(checkSql)) {
+                    ps.setLong(1, redPacketId);
+                    ps.setLong(2, claimerQq);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) {
+                            conn.rollback();
+                            return -2;
+                        }
+                    }
                 }
-            }
-        } catch (SQLException e) {
-            logger.warning("QQBot 查询红包状态失败: " + e.getMessage());
-        }
-        if (rp == null) return -3; // 不存在或过期或已领完
 
-        // 计算随机金额（拼手气：最后一人拿剩余）
-        int remaining = rp.remainingAmount();
-        int left = rp.count() - rp.claimedCount();
-        int amount;
-        if (left <= 1) {
-            amount = remaining;
-        } else {
-            // 随机分配，保证每人至少 1 积分
-            int max = remaining - left + 1;
-            amount = 1 + (int) (Math.random() * max);
-        }
+                RedPacket rp;
+                String selectSql = "SELECT remaining_amount, claimed_count, count, expire_at FROM " + tableRedPackets
+                    + " WHERE id = ? AND expire_at > ? AND remaining_amount > 0 AND claimed_count < count";
+                try (PreparedStatement ps = conn.prepareStatement(selectSql)) {
+                    ps.setLong(1, redPacketId);
+                    ps.setLong(2, System.currentTimeMillis());
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (!rs.next()) {
+                            conn.rollback();
+                            return -3;
+                        }
+                        rp = new RedPacket(redPacketId, 0, 0, 0,
+                            rs.getInt("remaining_amount"), rs.getInt("count"),
+                            rs.getInt("claimed_count"), rs.getLong("expire_at"), 0);
+                    }
+                }
 
-        // 乐观锁更新红包
-        String updateSql = "UPDATE " + tableRedPackets
-            + " SET remaining_amount = remaining_amount - ?, claimed_count = claimed_count + 1"
-            + " WHERE id = ? AND remaining_amount >= ? AND claimed_count < count";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(updateSql)) {
-            ps.setInt(1, amount);
-            ps.setLong(2, redPacketId);
-            ps.setInt(3, amount);
-            if (ps.executeUpdate() == 0) {
-                return -1; // 并发冲突，已领完
+                int remaining = rp.remainingAmount();
+                int left = rp.count() - rp.claimedCount();
+                int amount = left <= 1 ? remaining : 1 + (int) (Math.random() * (remaining - left + 1));
+
+                String updateSql = "UPDATE " + tableRedPackets
+                    + " SET remaining_amount = remaining_amount - ?, claimed_count = claimed_count + 1"
+                    + " WHERE id = ? AND remaining_amount >= ? AND claimed_count < count";
+                try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                    ps.setInt(1, amount);
+                    ps.setLong(2, redPacketId);
+                    ps.setInt(3, amount);
+                    if (ps.executeUpdate() == 0) {
+                        conn.rollback();
+                        return -1;
+                    }
+                }
+
+                String insertSql = "INSERT INTO " + tableRedPacketClaims
+                    + " (red_packet_id, claimer_qq, amount, claimed_at) VALUES (?, ?, ?, ?)";
+                try (PreparedStatement ps = conn.prepareStatement(insertSql)) {
+                    ps.setLong(1, redPacketId);
+                    ps.setLong(2, claimerQq);
+                    ps.setInt(3, amount);
+                    ps.setLong(4, System.currentTimeMillis());
+                    ps.executeUpdate();
+                }
+
+                creditPointsOnConnection(conn, claimerQq, amount);
+                conn.commit();
+                return amount;
+            } catch (SQLException exception) {
+                conn.rollback();
+                logger.warning("QQBot 抢红包事务失败: " + exception.getMessage());
+                return -1;
+            } finally {
+                conn.setAutoCommit(true);
             }
-        } catch (SQLException e) {
-            logger.warning("QQBot 更新红包状态失败: " + e.getMessage());
+        } catch (SQLException exception) {
+            logger.warning("QQBot 抢红包失败: " + exception.getMessage());
             return -1;
         }
+    }
 
-        // 记录领取
-        String insertSql = "INSERT INTO " + tableRedPacketClaims
-            + " (red_packet_id, claimer_qq, amount, claimed_at) VALUES (?, ?, ?, ?)";
-        try (Connection conn = getConnection();
-             PreparedStatement ps = conn.prepareStatement(insertSql)) {
-            ps.setLong(1, redPacketId);
-            ps.setLong(2, claimerQq);
-            ps.setInt(3, amount);
-            ps.setLong(4, System.currentTimeMillis());
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            logger.warning("QQBot 记录红包领取失败: " + e.getMessage());
+    private void creditPointsOnConnection(Connection conn, long qqId, int delta) throws SQLException {
+        if (delta <= 0) {
+            return;
         }
-        return amount;
+        long now = System.currentTimeMillis();
+        String upsert = isMysql()
+            ? "INSERT INTO " + tablePoints + " (qq_id, balance, total_earned, total_spent, updated_at) "
+                + "VALUES (?, ?, ?, 0, ?) "
+                + "ON DUPLICATE KEY UPDATE balance = balance + ?, total_earned = total_earned + ?, updated_at = ?"
+            : "INSERT INTO " + tablePoints + " (qq_id, balance, total_earned, total_spent, updated_at) "
+                + "VALUES (?, ?, ?, 0, ?) "
+                + "ON CONFLICT(qq_id) DO UPDATE SET balance = balance + ?, total_earned = total_earned + ?, updated_at = ?";
+        try (PreparedStatement ps = conn.prepareStatement(upsert)) {
+            ps.setLong(1, qqId);
+            ps.setInt(2, delta);
+            ps.setInt(3, delta);
+            ps.setLong(4, now);
+            ps.setInt(5, delta);
+            ps.setInt(6, delta);
+            ps.setLong(7, now);
+            ps.executeUpdate();
+        }
     }
 
     @Override
