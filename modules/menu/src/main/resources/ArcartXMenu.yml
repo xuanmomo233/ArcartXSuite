@@ -1,0 +1,48 @@
+config-version: 1
+# AXS Menu — 通用 ArcartX 菜单系统（类 TrMenu 配置驱动）
+# 作用: 通过 menus/ 目录下的 YAML 定义多页菜单、按钮动作、打开条件与命令绑定。
+# 依赖: ArcartX；PlaceholderAPI 可选（条件表达式）。
+# 重载: /axs menu reload
+# 玩家命令: /menu open <菜单ID> | /menu list
+# 关联资源: ui/menu_panel.yml, ui/menu_esc.yml
+
+debug:
+  enabled: false
+
+client:
+  packet-id: "AXS_MENU"
+  panel-ui-id: "AXS:menu_panel"
+  esc-ui-id: "AXS:menu_esc"
+  register-ui-on-enable: true
+  overwrite-ui-files: false
+  # ESC 暂停界面绑定的默认菜单 ID（layout: esc 的菜单定义）
+  esc-menu-id: "esc_main"
+
+settings:
+  menus-directory: "menus"
+  default-layout: "panel"
+  columns: 2
+  buttons-per-page: 12
+  click-cooldown-ms: 300
+  close-on-action: true
+  # 打开菜单失败时是否向玩家发送提示
+  notify-open-failed: true
+  # 全局物品绑定（跨菜单）
+  item-binds:
+    - menu: example
+      material: NETHER_STAR
+      name-contains: "服务器菜单"
+      action: RIGHT_CLICK
+
+messages:
+  prefix: "&3◆ &6ArcartXSuite &7| &r"
+  no-permission: "&c你没有权限执行此操作。"
+  player-only: "&c该命令只能由玩家执行。"
+  menu-not-found: "&c未找到菜单: &f{menu}"
+  menu-open-failed: "&c无法打开菜单 &f{menu}&c: &7{reason}"
+  menu-open-success: "&a已打开菜单 &f{menu}"
+  button-unavailable: "&c该按钮当前不可用。"
+  button-condition-denied: "&c条件未满足，无法使用该按钮。"
+  page-empty: "&7当前页没有可用按钮。"
+  reload-success: "&aMenu 模块配置已重载。"
+  reload-failed: "&cMenu 模块重载失败: &7{error}"

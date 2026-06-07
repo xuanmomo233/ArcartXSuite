@@ -1,0 +1,135 @@
+# 示例功能菜单 — 居中面板布局
+id: example
+title: "&f&l服务器菜单"
+layout: panel
+columns: 2
+buttons-per-page: 8
+permission: ""
+open-requirements: []
+open-actions:
+  - "message: &a欢迎打开示例菜单！"
+close-actions: []
+commands:
+  - "examplemenu"
+command-regex:
+  - "example(?:menu)?"
+
+item-binds:
+  - material: COMPASS
+    name-contains: "功能菜单"
+    action: RIGHT_CLICK
+
+pages:
+  - id: main
+    title: "&f功能"
+    buttons:
+      warehouse:
+        text: "&f仓库系统"
+        order: 0
+        permission: "arcartxsuite.warehouse.use"
+        icon:
+          material: CHEST
+          name: "&f仓库"
+          custom-model-data: 0
+        actions:
+          - "command: /warehouse open"
+          - "close"
+      mail:
+        text: "&f邮件系统"
+        order: 1
+        icon:
+          material: PAPER
+          name: "&f邮件"
+        actions:
+          - "command: /mail open"
+          - "close"
+      rewards:
+        text: "&f在线奖励"
+        order: 2
+        condition:
+          - "%player_level% >= 5"
+          # Aria 脚本条件（需 Blink 系插件注入 BlinkAriaHost）:
+          # - "aria: return player.getLevel() >= 5"
+        deny-message: "&c需要达到 5 级才能领取在线奖励"
+        actions:
+          - "command: /onlinerewards open"
+          - "close"
+      quest:
+        text: "&f任务导航"
+        order: 3
+        actions:
+          - "command: /questgps open"
+          - "close"
+      map:
+        text: "&f世界地图"
+        order: 4
+        requirements:
+          - "%player_level% >= 1"
+        actions:
+          - "command: /map open"
+          - "close"
+      teleport:
+        text: "&f传送菜单"
+        order: 5
+        actions:
+          - "open: teleport"
+      help:
+        text: "&f帮助"
+        order: 6
+        actions:
+          - "command: /help"
+      next_page:
+        text: "&f更多功能 »"
+        order: 7
+        actions:
+          - "page: page2"
+
+  - id: page2
+    title: "&f更多"
+    buttons:
+      essentials:
+        text: "&f基础工具"
+        order: 0
+        actions:
+          - "command: /axs essentials menu"
+          - "close"
+      spawn:
+        text: "&f返回出生点"
+        order: 1
+        actions:
+          - "command: /axs essentials spawn"
+          - "close"
+      back:
+        text: "&7« 返回"
+        order: 2
+        actions:
+          - "page: main"
+
+# 二级菜单示例
+---
+id: teleport
+title: "&f&l传送"
+layout: panel
+columns: 2
+buttons-per-page: 6
+pages:
+  - id: main
+    title: "&f传送点"
+    buttons:
+      spawn:
+        text: "&f出生点"
+        order: 0
+        actions:
+          - "command: /spawn"
+          - "close"
+      home:
+        text: "&f回家"
+        order: 1
+        actions:
+          - "command: /home"
+          - "close"
+      back:
+        text: "&7« 返回主菜单"
+        order: 2
+        actions:
+          - "open: example"

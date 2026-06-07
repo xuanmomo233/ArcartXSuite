@@ -1,0 +1,22 @@
+prefix: "&3◆ &6ArcartXSuite &7| &r"
+
+common:
+  player-only: "&c该命令只能由玩家执行。"
+  no-permission: "&c你没有权限执行此操作。"
+  module-disabled: "&cMenu 模块当前不可用。"
+
+player:
+  usage: "&7用法: &f/{label} open <菜单ID> &7| &f/{label} list"
+  list-header: "&6已注册菜单 (&f{count}&6):"
+  list-entry: "&7- &f{id} &8(&7{layout}&8) &7{title}"
+
+admin:
+  usage: "&7用法: &f/axs menu <help|status|reload|list|open <菜单ID> [玩家]>"
+  status-title: "&6Menu 模块状态"
+  status-menus: "&7菜单数量: &f{count}"
+  status-panel-ui: "&7面板 UI: &f{ui}"
+  status-esc-ui: "&7ESC UI: &f{ui}"
+  status-bindings: "&7命令绑定: &f{commands} &7| 物品绑定: &f{items}"
+  reload-success: "&aMenu 模块配置已重载。"
+  reload-failed: "&cMenu 模块重载失败: &7{error}"
+  open-other: "&a已为 &f{player} &a打开菜单 &f{menu}"

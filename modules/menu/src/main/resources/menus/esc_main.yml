@@ -1,0 +1,74 @@
+# ESC 暂停界面菜单 — 左侧滑出布局，替换原版暂停界面
+id: esc_main
+title: "&f&l菜单"
+layout: esc
+columns: 2
+buttons-per-page: 14
+permission: ""
+match-esc: true
+open-requirements: []
+pages:
+  - id: main
+    title: "&f菜单"
+    buttons:
+      shop:
+        text: "&f商城"
+        order: 0
+        actions:
+          - "command: /market shop"
+          - "close"
+      warehouse:
+        text: "&f仓库系统"
+        order: 1
+        actions:
+          - "command: /warehouse open"
+          - "close"
+      mail:
+        text: "&f邮件"
+        order: 2
+        actions:
+          - "command: /mail open"
+          - "close"
+      rewards:
+        text: "&f在线奖励"
+        order: 3
+        actions:
+          - "command: /onlinerewards open"
+          - "close"
+      quest:
+        text: "&f任务"
+        order: 4
+        actions:
+          - "command: /questgps open"
+          - "close"
+      map:
+        text: "&f地图"
+        order: 5
+        actions:
+          - "command: /map open"
+          - "close"
+      title:
+        text: "&f称号"
+        order: 6
+        actions:
+          - "command: /title open"
+          - "close"
+      example:
+        text: "&f功能菜单"
+        order: 7
+        actions:
+          - "open: example"
+          - "close"
+      help:
+        text: "&f帮助"
+        order: 8
+        actions:
+          - "command: /help"
+
+footer-buttons:
+  options:
+    text: "&f游戏选项"
+    client-action: "options"
+  quit:
+    text: "&f退出游戏"
+    client-action: "quit"

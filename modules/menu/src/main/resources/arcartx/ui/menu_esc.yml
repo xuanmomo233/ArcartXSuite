@@ -1,0 +1,286 @@
+# AXS Menu ESC UI — 替换暂停界面，参考纯色块 ESC 菜单布局
+ui:
+  isHud: false
+  match:
+    - 暂停界面
+  hide:
+    - HUD
+    - online
+    - 聊天栏
+  itemSize: 16
+  through: true
+  escClose: false
+  background: false
+  closeDied: false
+  show: true
+  jei: false
+  level: 0
+  screenScale: true
+  defaultOpen: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.menuId = packet['menuId']
+      var.title = packet['title']
+      var.pageTitle = packet['pageTitle']
+      var.pageIndex = packet['pageIndex']
+      var.pageCount = packet['pageCount']
+      var.buttonRows = packet['buttonRows']
+      var.buttonCount = packet['buttonCount']
+      var.footerRows = packet['footerRows']
+      var.footerCount = packet['footerCount']
+    update: |-
+      var.packetId = packet['packetId']
+      var.menuId = packet['menuId']
+      var.title = packet['title']
+      var.pageTitle = packet['pageTitle']
+      var.pageIndex = packet['pageIndex']
+      var.pageCount = packet['pageCount']
+      var.buttonRows = packet['buttonRows']
+      var.buttonCount = packet['buttonCount']
+      var.footerRows = packet['footerRows']
+      var.footerCount = packet['footerCount']
+    close: |-
+      var.buttonRows = {}
+      var.footerRows = {}
+  action:
+    open: |-
+      var.animation = TwoLerp(1, 1, 0, 300, 300)
+      Packet.send('AXS_MENU', 'esc_open')
+    tick: |-
+      if(server.player_yaw != var.yaw){
+        var.yaw = server.player_yaw
+        Camera.setState(1.2, -0.5, 2.5, 150, 0.0, 600)
+        Camera.setThirdPerson(true)
+      }
+    close: |-
+      async {
+        Camera.setThirdPerson(false)
+        Camera.clearState()
+      }
+    keyPress: |-
+      if(self.currentKeyPress() == "ESCAPE"){
+        Camera.clearState()
+        var.animation = Lerp(0, 1, 300)
+        async {
+          Thread.sleep(600)
+          Camera.setThirdPerson(false)
+          Screen.close()
+        }
+      }
+    load: |-
+      var.packetId = 'AXS_MENU'
+      var.animation = 1
+      var.yaw = 0
+      var.title = '菜单'
+      var.pageTitle = '菜单'
+      var.pageIndex = 0
+      var.pageCount = 1
+      var.buttonRows = {}
+      var.buttonCount = 0
+      var.footerRows = {}
+      var.footerCount = 0
+
+controls:
+  button_observer:
+    type: Observer
+    attribute:
+      target: val.button_rows['menu_button']
+      subscribe: var.buttonRows
+      maxSize: 128
+  footer_observer:
+    type: Observer
+    attribute:
+      target: val.footer_rows['footer_button']
+      subscribe: var.footerRows
+      maxSize: 8
+  adaptive:
+    type: Adaptive
+    attribute:
+      width: 1920
+      point: ~stretch_all
+      height: 1080
+    children:
+      left_panel:
+        type: Canvas
+        attribute:
+          width: 620
+          x: "-20 - 600 * var.animation"
+          point: ~vertical_stretch_left
+        children:
+          bg:
+            type: Texture
+            attribute:
+              normal: ~Frosted:30;255,255,255,100
+              point: ~stretch_all
+              shape: ~round_rect
+              radius: 20
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0
+              ripple:
+                duration: 1200
+                color: ~255,255,255,100
+                width: 0.05
+          title:
+            type: Text
+            attribute:
+              texts:
+                - "var.title"
+              alpha: 1
+              x: 120
+              y: 40
+              fontSize: 64
+          underline:
+            type: Texture
+            attribute:
+              normal: ~255,255,255
+              alpha: 1
+              width: 618
+              y: 110
+              point: ~top_left
+              height: 5
+              shape: ~round_rect
+              radius: 2
+          scroll_area:
+            type: Scroll
+            attribute:
+              width: 0
+              x: 0
+              y: -15
+              height: 960 - 200
+              point: ~horizontal_stretch_middle
+              moveY: self.parent['drag_bar'].getDragYRatio()
+            action:
+              wheel: |-
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['drag_bar'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['drag_bar'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+            children:
+              button_grid:
+                type: HGrid
+                attribute:
+                  spaceBetweenX: 50
+                  spaceBetweenY: 50
+                  x: 77
+                  column: 2
+                  y: 0
+                  point: ~top_center
+                children:
+                  button_rows:
+                    type: Canvas
+                    val: button_rows
+                    children:
+                      menu_button:
+                        type: Slot
+                        attribute:
+                          entry: var.buttonRows[self.key]
+                          visible: self.entry != null
+                          width: 218
+                          height: 60
+                          normal: "self.entry != null && self.entry['enabled'] ? '~Frosted:0;95,95,95,255' : '~Frosted:0;55,55,55,200'"
+                          hover: "self.entry != null && self.entry['enabled'] ? '~Frosted:0;255,255,255,255' : '~Frosted:0;55,55,55,200'"
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 4
+                            color: "self.entry != null && self.entry['enabled'] ? '~255,255,255' : '~120,120,120'"
+                        action:
+                          click: |-
+                            if(self.entry != null && self.entry['enabled']){
+                              Packet.send(var.packetId, 'click', self.entry['id'])
+                            }
+                        children:
+                          icon:
+                            type: Slot
+                            attribute:
+                              slotType: ~Icon
+                              visible: "self.parent.entry != null && self.parent.entry['hasIcon']"
+                              itemScale: 0.72
+                              x: 8
+                              y: 6
+                              width: 48
+                              height: 48
+                              normal: ~45,45,55,180
+                              shape: ~round_rect
+                              radius: 8
+                              through: true
+                              seticon: "self.parent.entry != null ? self.setItemIcon(self.parent.entry['itemJson']) : null"
+                            action:
+                              create: |-
+                                self.seticon()
+                          label:
+                            type: Text
+                            attribute:
+                              through: true
+                              x: "self.parent.entry != null && self.parent.entry['hasIcon'] ? 138 : 109"
+                              y: 18
+                              texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
+                              center: true
+                              fontSize: 49
+          drag_bar:
+            type: Texture
+            val: drag_bar
+            attribute:
+              point: ~middle_left
+              width: 7
+              height: 50
+              normal: ~0,0,0,100
+              x: 613
+              y: -365
+              maxDragY: 960 - 200 - 50
+          footer_grid:
+            type: HGrid
+            attribute:
+              spaceBetweenX: 50
+              spaceBetweenY: 50
+              column: 2
+              x: 77
+              y: 460
+              point: ~horizontal_stretch_middle
+            children:
+              footer_rows:
+                type: Canvas
+                val: footer_rows
+                children:
+                  footer_button:
+                    type: Slot
+                    attribute:
+                      entry: var.footerRows[self.key]
+                      visible: self.entry != null
+                      width: 218
+                      height: 60
+                      normal: "self.entry != null && self.entry['enabled'] ? '~Frosted:0;95,95,95,255' : '~Frosted:0;55,55,55,200'"
+                      hover: "self.entry != null && self.entry['enabled'] ? '~Frosted:0;255,255,255,255' : '~Frosted:0;55,55,55,200'"
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 4
+                        color: "self.entry != null && self.entry['enabled'] ? '~255,255,255' : '~120,120,120'"
+                    action:
+                      click: |-
+                        if(self.entry != null && self.entry['enabled']){
+                          if(self.entry['clientAction'] == 'options'){
+                            Game.options()
+                          } else if(self.entry['clientAction'] == 'quit'){
+                            Game.quit()
+                          } else {
+                            Packet.send(var.packetId, 'footer', self.entry['id'])
+                          }
+                        }
+                    children:
+                      footer_text:
+                        type: Text
+                        attribute:
+                          through: true
+                          x: 109
+                          y: 18
+                          texts: "self.entry != null ? self.entry['text'] : ''"
+                          center: true
+                          fontSize: 49

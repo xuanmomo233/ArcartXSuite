@@ -1,0 +1,12 @@
+id: menu
+name: Menu
+version: 1.0.0-beta
+main: xuanmo.arcartxsuite.menu.MenuModule
+api-version: 1.0
+
+depends: []
+softdepends: []
+external-depends: []
+
+external-softdepends:
+  - PlaceholderAPI
