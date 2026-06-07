@@ -24,7 +24,13 @@ ui:
       var.shops = packet['shops']
       var.shopTexts = packet['shopTexts']
       var.items = packet['items']
-      var.readShopSlots(packet)
+      var.itemJsons = {}
+      for(key in var.items.keys()){
+        json = packet['shopItemJson' + key]
+        if(json != null && json != ''){
+          var.itemJsons[key] = json
+        }
+      }
     update: |-
       var.packetId = packet['packetId']
       var.shopId = packet['shopId']
@@ -32,7 +38,13 @@ ui:
       var.shops = packet['shops']
       var.shopTexts = packet['shopTexts']
       var.items = packet['items']
-      var.readShopSlots(packet)
+      var.itemJsons = {}
+      for(key in var.items.keys()){
+        json = packet['shopItemJson' + key]
+        if(json != null && json != ''){
+          var.itemJsons[key] = json
+        }
+      }
   action:
     load: |-
       var.packetId = 'AXS_MARKET'
@@ -41,31 +53,10 @@ ui:
       var.shops = {}
       var.shopTexts = {}
       var.items = {}
+      var.itemJsons = {}
       var.shopScrollRatio = 0
       var.itemScrollRatio = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-      var.readShopSlots = -> {
-        source = args[0]
-        for(i in range(0,39)){
-          idx = i.round()
-          si = idx + ''
-          entry = var.items[si]
-          if(entry == null){
-            next
-          }
-          itemJson = source['shopItemJson' + si]
-          if(itemJson == null || itemJson == ''){
-            itemJson = var.emptyItemJson
-          }
-          target = val.商品列表['商品项' + si]
-          if(target != null){
-            slot = target['商品图标']
-            if(slot != null){
-              slot.setItemIcon(itemJson)
-            }
-          }
-        }
-      }
     open: |-
       Packet.send(var.packetId, 'shop_list', '')
 
@@ -254,10 +245,11 @@ controls:
                       width: 1038
                       spaceBetween: 6
                     children:
-                      商品项0:
+                      商品项:
                         type: Texture
                         attribute:
-                          visible: var.items['0'] != null
+                          entry: var.items[self.key]
+                          visible: self.entry != null
                           width: 1038
                           height: 68
                           normal: ~60,60,70,200
@@ -282,13 +274,17 @@ controls:
                               shape: ~round_rect
                               radius: 10
                               through: true
+                              seticon: "self.setItemIcon(var.itemJsons[self.parent.key])"
+                            action:
+                              create: |-
+                                self.seticon()
                           名称:
                             type: Text
                             attribute:
                               x: 80
                               y: 10
                               width: 280
-                              texts: "var.items['0'] != null ? '&f' + var.items['0']['name'] : ''"
+                              texts: "self.parent.entry != null ? '&f' + self.parent.entry['name'] : ''"
                               fontSize: 36
                               through: true
                           价格:
@@ -297,7 +293,7 @@ controls:
                               x: 80
                               y: 40
                               width: 200
-                              texts: "var.items['0'] != null ? '&e价格: &f' + var.items['0']['price'] : ''"
+                              texts: "self.parent.entry != null ? '&e价格: &f' + self.parent.entry['price'] : ''"
                               fontSize: 22
                               through: true
                           库存:
@@ -306,7 +302,7 @@ controls:
                               x: 400
                               y: 14
                               width: 200
-                              texts: "var.items['0'] != null ? '&7库存: &f' + var.items['0']['stock'] : ''"
+                              texts: "self.parent.entry != null ? '&7库存: &f' + self.parent.entry['stock'] : ''"
                               fontSize: 28
                               through: true
                           限购:
@@ -315,7 +311,7 @@ controls:
                               x: 400
                               y: 44
                               width: 200
-                              texts: "var.items['0'] != null && var.items['0']['limitText'] != '' ? '&c' + var.items['0']['limitText'] : ''"
+                              texts: "self.parent.entry != null && self.parent.entry['limitText'] != '' ? '&c' + self.parent.entry['limitText'] : ''"
                               fontSize: 22
                               through: true
                           购买按钮:
@@ -331,7 +327,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'shop_buy', var.shopId, var.items['0']['key'], '1')
+                                Packet.send(var.packetId, 'shop_buy', var.shopId, self.parent.parent.entry['key'], '1')
                             effect:
                               stroke:
                                 width: 1
@@ -346,831 +342,20 @@ controls:
                                   center: true
                                   fontSize: 28
                                   texts: '&f购买'
-                      商品项1:
-                        type: Texture
-                        attribute:
-                          visible: var.items['1'] != null
-                          width: 1038
-                          height: 68
-                          normal: ~60,60,70,200
-                          hover: ~Frosted:0;80,140,220,200
-                          shape: ~round_rect
-                          radius: 14
-                        effect:
-                          stroke:
-                            width: 1
-                            color: ~80,180,255,60
-                        children:
-                          商品图标:
-                            type: Slot
-                            attribute:
-                              slotType: ~Icon
-                              itemScale: 0.68
-                              x: 8
-                              y: 4
-                              width: 60
-                              height: 60
-                              normal: ~45,45,55,200
-                              shape: ~round_rect
-                              radius: 10
-                              through: true
-                          名称:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 10
-                              width: 280
-                              texts: "var.items['1'] != null ? '&f' + var.items['1']['name'] : ''"
-                              fontSize: 36
-                              through: true
-                          价格:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 40
-                              width: 200
-                              texts: "var.items['1'] != null ? '&e价格: &f' + var.items['1']['price'] : ''"
-                              fontSize: 22
-                              through: true
-                          库存:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 14
-                              width: 200
-                              texts: "var.items['1'] != null ? '&7库存: &f' + var.items['1']['stock'] : ''"
-                              fontSize: 28
-                              through: true
-                          限购:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 44
-                              width: 200
-                              texts: "var.items['1'] != null && var.items['1']['limitText'] != '' ? '&c' + var.items['1']['limitText'] : ''"
-                              fontSize: 22
-                              through: true
-                          购买按钮:
-                            type: Texture
-                            attribute:
-                              x: 850
-                              y: 8
-                              width: 100
-                              height: 52
-                              normal: ~60,180,100,200
-                              hover: ~Frosted:0;80,220,120,230
-                              shape: ~round_rect
-                              radius: 10
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'shop_buy', var.shopId, var.items['1']['key'], '1')
-                            effect:
-                              stroke:
-                                width: 1
-                                color: ~80,255,140,120
-                            children:
-                              文字:
-                                type: Text
-                                attribute:
-                                  x: 50
-                                  y: 14
-                                  through: true
-                                  center: true
-                                  fontSize: 28
-                                  texts: '&f购买'
-                      商品项2:
-                        type: Texture
-                        attribute:
-                          visible: var.items['2'] != null
-                          width: 1038
-                          height: 68
-                          normal: ~60,60,70,200
-                          hover: ~Frosted:0;80,140,220,200
-                          shape: ~round_rect
-                          radius: 14
-                        effect:
-                          stroke:
-                            width: 1
-                            color: ~80,180,255,60
-                        children:
-                          商品图标:
-                            type: Slot
-                            attribute:
-                              slotType: ~Icon
-                              itemScale: 0.68
-                              x: 8
-                              y: 4
-                              width: 60
-                              height: 60
-                              normal: ~45,45,55,200
-                              shape: ~round_rect
-                              radius: 10
-                              through: true
-                          名称:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 10
-                              width: 280
-                              texts: "var.items['2'] != null ? '&f' + var.items['2']['name'] : ''"
-                              fontSize: 36
-                              through: true
-                          价格:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 40
-                              width: 200
-                              texts: "var.items['2'] != null ? '&e价格: &f' + var.items['2']['price'] : ''"
-                              fontSize: 22
-                              through: true
-                          库存:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 14
-                              width: 200
-                              texts: "var.items['2'] != null ? '&7库存: &f' + var.items['2']['stock'] : ''"
-                              fontSize: 28
-                              through: true
-                          限购:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 44
-                              width: 200
-                              texts: "var.items['2'] != null && var.items['2']['limitText'] != '' ? '&c' + var.items['2']['limitText'] : ''"
-                              fontSize: 22
-                              through: true
-                          购买按钮:
-                            type: Texture
-                            attribute:
-                              x: 850
-                              y: 8
-                              width: 100
-                              height: 52
-                              normal: ~60,180,100,200
-                              hover: ~Frosted:0;80,220,120,230
-                              shape: ~round_rect
-                              radius: 10
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'shop_buy', var.shopId, var.items['2']['key'], '1')
-                            effect:
-                              stroke:
-                                width: 1
-                                color: ~80,255,140,120
-                            children:
-                              文字:
-                                type: Text
-                                attribute:
-                                  x: 50
-                                  y: 14
-                                  through: true
-                                  center: true
-                                  fontSize: 28
-                                  texts: '&f购买'
-                      商品项3:
-                        type: Texture
-                        attribute:
-                          visible: var.items['3'] != null
-                          width: 1038
-                          height: 68
-                          normal: ~60,60,70,200
-                          hover: ~Frosted:0;80,140,220,200
-                          shape: ~round_rect
-                          radius: 14
-                        effect:
-                          stroke:
-                            width: 1
-                            color: ~80,180,255,60
-                        children:
-                          商品图标:
-                            type: Slot
-                            attribute:
-                              slotType: ~Icon
-                              itemScale: 0.68
-                              x: 8
-                              y: 4
-                              width: 60
-                              height: 60
-                              normal: ~45,45,55,200
-                              shape: ~round_rect
-                              radius: 10
-                              through: true
-                          名称:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 10
-                              width: 280
-                              texts: "var.items['3'] != null ? '&f' + var.items['3']['name'] : ''"
-                              fontSize: 36
-                              through: true
-                          价格:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 40
-                              width: 200
-                              texts: "var.items['3'] != null ? '&e价格: &f' + var.items['3']['price'] : ''"
-                              fontSize: 22
-                              through: true
-                          库存:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 14
-                              width: 200
-                              texts: "var.items['3'] != null ? '&7库存: &f' + var.items['3']['stock'] : ''"
-                              fontSize: 28
-                              through: true
-                          限购:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 44
-                              width: 200
-                              texts: "var.items['3'] != null && var.items['3']['limitText'] != '' ? '&c' + var.items['3']['limitText'] : ''"
-                              fontSize: 22
-                              through: true
-                          购买按钮:
-                            type: Texture
-                            attribute:
-                              x: 850
-                              y: 8
-                              width: 100
-                              height: 52
-                              normal: ~60,180,100,200
-                              hover: ~Frosted:0;80,220,120,230
-                              shape: ~round_rect
-                              radius: 10
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'shop_buy', var.shopId, var.items['3']['key'], '1')
-                            effect:
-                              stroke:
-                                width: 1
-                                color: ~80,255,140,120
-                            children:
-                              文字:
-                                type: Text
-                                attribute:
-                                  x: 50
-                                  y: 14
-                                  through: true
-                                  center: true
-                                  fontSize: 28
-                                  texts: '&f购买'
-                      商品项4:
-                        type: Texture
-                        attribute:
-                          visible: var.items['4'] != null
-                          width: 1038
-                          height: 68
-                          normal: ~60,60,70,200
-                          hover: ~Frosted:0;80,140,220,200
-                          shape: ~round_rect
-                          radius: 14
-                        effect:
-                          stroke:
-                            width: 1
-                            color: ~80,180,255,60
-                        children:
-                          商品图标:
-                            type: Slot
-                            attribute:
-                              slotType: ~Icon
-                              itemScale: 0.68
-                              x: 8
-                              y: 4
-                              width: 60
-                              height: 60
-                              normal: ~45,45,55,200
-                              shape: ~round_rect
-                              radius: 10
-                              through: true
-                          名称:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 10
-                              width: 280
-                              texts: "var.items['4'] != null ? '&f' + var.items['4']['name'] : ''"
-                              fontSize: 36
-                              through: true
-                          价格:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 40
-                              width: 200
-                              texts: "var.items['4'] != null ? '&e价格: &f' + var.items['4']['price'] : ''"
-                              fontSize: 22
-                              through: true
-                          库存:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 14
-                              width: 200
-                              texts: "var.items['4'] != null ? '&7库存: &f' + var.items['4']['stock'] : ''"
-                              fontSize: 28
-                              through: true
-                          限购:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 44
-                              width: 200
-                              texts: "var.items['4'] != null && var.items['4']['limitText'] != '' ? '&c' + var.items['4']['limitText'] : ''"
-                              fontSize: 22
-                              through: true
-                          购买按钮:
-                            type: Texture
-                            attribute:
-                              x: 850
-                              y: 8
-                              width: 100
-                              height: 52
-                              normal: ~60,180,100,200
-                              hover: ~Frosted:0;80,220,120,230
-                              shape: ~round_rect
-                              radius: 10
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'shop_buy', var.shopId, var.items['4']['key'], '1')
-                            effect:
-                              stroke:
-                                width: 1
-                                color: ~80,255,140,120
-                            children:
-                              文字:
-                                type: Text
-                                attribute:
-                                  x: 50
-                                  y: 14
-                                  through: true
-                                  center: true
-                                  fontSize: 28
-                                  texts: '&f购买'
-                      商品项5:
-                        type: Texture
-                        attribute:
-                          visible: var.items['5'] != null
-                          width: 1038
-                          height: 68
-                          normal: ~60,60,70,200
-                          hover: ~Frosted:0;80,140,220,200
-                          shape: ~round_rect
-                          radius: 14
-                        effect:
-                          stroke:
-                            width: 1
-                            color: ~80,180,255,60
-                        children:
-                          商品图标:
-                            type: Slot
-                            attribute:
-                              slotType: ~Icon
-                              itemScale: 0.68
-                              x: 8
-                              y: 4
-                              width: 60
-                              height: 60
-                              normal: ~45,45,55,200
-                              shape: ~round_rect
-                              radius: 10
-                              through: true
-                          名称:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 10
-                              width: 280
-                              texts: "var.items['5'] != null ? '&f' + var.items['5']['name'] : ''"
-                              fontSize: 36
-                              through: true
-                          价格:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 40
-                              width: 200
-                              texts: "var.items['5'] != null ? '&e价格: &f' + var.items['5']['price'] : ''"
-                              fontSize: 22
-                              through: true
-                          库存:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 14
-                              width: 200
-                              texts: "var.items['5'] != null ? '&7库存: &f' + var.items['5']['stock'] : ''"
-                              fontSize: 28
-                              through: true
-                          限购:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 44
-                              width: 200
-                              texts: "var.items['5'] != null && var.items['5']['limitText'] != '' ? '&c' + var.items['5']['limitText'] : ''"
-                              fontSize: 22
-                              through: true
-                          购买按钮:
-                            type: Texture
-                            attribute:
-                              x: 850
-                              y: 8
-                              width: 100
-                              height: 52
-                              normal: ~60,180,100,200
-                              hover: ~Frosted:0;80,220,120,230
-                              shape: ~round_rect
-                              radius: 10
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'shop_buy', var.shopId, var.items['5']['key'], '1')
-                            effect:
-                              stroke:
-                                width: 1
-                                color: ~80,255,140,120
-                            children:
-                              文字:
-                                type: Text
-                                attribute:
-                                  x: 50
-                                  y: 14
-                                  through: true
-                                  center: true
-                                  fontSize: 28
-                                  texts: '&f购买'
-                      商品项6:
-                        type: Texture
-                        attribute:
-                          visible: var.items['6'] != null
-                          width: 1038
-                          height: 68
-                          normal: ~60,60,70,200
-                          hover: ~Frosted:0;80,140,220,200
-                          shape: ~round_rect
-                          radius: 14
-                        effect:
-                          stroke:
-                            width: 1
-                            color: ~80,180,255,60
-                        children:
-                          商品图标:
-                            type: Slot
-                            attribute:
-                              slotType: ~Icon
-                              itemScale: 0.68
-                              x: 8
-                              y: 4
-                              width: 60
-                              height: 60
-                              normal: ~45,45,55,200
-                              shape: ~round_rect
-                              radius: 10
-                              through: true
-                          名称:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 10
-                              width: 280
-                              texts: "var.items['6'] != null ? '&f' + var.items['6']['name'] : ''"
-                              fontSize: 36
-                              through: true
-                          价格:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 40
-                              width: 200
-                              texts: "var.items['6'] != null ? '&e价格: &f' + var.items['6']['price'] : ''"
-                              fontSize: 22
-                              through: true
-                          库存:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 14
-                              width: 200
-                              texts: "var.items['6'] != null ? '&7库存: &f' + var.items['6']['stock'] : ''"
-                              fontSize: 28
-                              through: true
-                          限购:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 44
-                              width: 200
-                              texts: "var.items['6'] != null && var.items['6']['limitText'] != '' ? '&c' + var.items['6']['limitText'] : ''"
-                              fontSize: 22
-                              through: true
-                          购买按钮:
-                            type: Texture
-                            attribute:
-                              x: 850
-                              y: 8
-                              width: 100
-                              height: 52
-                              normal: ~60,180,100,200
-                              hover: ~Frosted:0;80,220,120,230
-                              shape: ~round_rect
-                              radius: 10
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'shop_buy', var.shopId, var.items['6']['key'], '1')
-                            effect:
-                              stroke:
-                                width: 1
-                                color: ~80,255,140,120
-                            children:
-                              文字:
-                                type: Text
-                                attribute:
-                                  x: 50
-                                  y: 14
-                                  through: true
-                                  center: true
-                                  fontSize: 28
-                                  texts: '&f购买'
-                      商品项7:
-                        type: Texture
-                        attribute:
-                          visible: var.items['7'] != null
-                          width: 1038
-                          height: 68
-                          normal: ~60,60,70,200
-                          hover: ~Frosted:0;80,140,220,200
-                          shape: ~round_rect
-                          radius: 14
-                        effect:
-                          stroke:
-                            width: 1
-                            color: ~80,180,255,60
-                        children:
-                          商品图标:
-                            type: Slot
-                            attribute:
-                              slotType: ~Icon
-                              itemScale: 0.68
-                              x: 8
-                              y: 4
-                              width: 60
-                              height: 60
-                              normal: ~45,45,55,200
-                              shape: ~round_rect
-                              radius: 10
-                              through: true
-                          名称:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 10
-                              width: 280
-                              texts: "var.items['7'] != null ? '&f' + var.items['7']['name'] : ''"
-                              fontSize: 36
-                              through: true
-                          价格:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 40
-                              width: 200
-                              texts: "var.items['7'] != null ? '&e价格: &f' + var.items['7']['price'] : ''"
-                              fontSize: 22
-                              through: true
-                          库存:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 14
-                              width: 200
-                              texts: "var.items['7'] != null ? '&7库存: &f' + var.items['7']['stock'] : ''"
-                              fontSize: 28
-                              through: true
-                          限购:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 44
-                              width: 200
-                              texts: "var.items['7'] != null && var.items['7']['limitText'] != '' ? '&c' + var.items['7']['limitText'] : ''"
-                              fontSize: 22
-                              through: true
-                          购买按钮:
-                            type: Texture
-                            attribute:
-                              x: 850
-                              y: 8
-                              width: 100
-                              height: 52
-                              normal: ~60,180,100,200
-                              hover: ~Frosted:0;80,220,120,230
-                              shape: ~round_rect
-                              radius: 10
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'shop_buy', var.shopId, var.items['7']['key'], '1')
-                            effect:
-                              stroke:
-                                width: 1
-                                color: ~80,255,140,120
-                            children:
-                              文字:
-                                type: Text
-                                attribute:
-                                  x: 50
-                                  y: 14
-                                  through: true
-                                  center: true
-                                  fontSize: 28
-                                  texts: '&f购买'
-                      商品项8:
-                        type: Texture
-                        attribute:
-                          visible: var.items['8'] != null
-                          width: 1038
-                          height: 68
-                          normal: ~60,60,70,200
-                          hover: ~Frosted:0;80,140,220,200
-                          shape: ~round_rect
-                          radius: 14
-                        effect:
-                          stroke:
-                            width: 1
-                            color: ~80,180,255,60
-                        children:
-                          商品图标:
-                            type: Slot
-                            attribute:
-                              slotType: ~Icon
-                              itemScale: 0.68
-                              x: 8
-                              y: 4
-                              width: 60
-                              height: 60
-                              normal: ~45,45,55,200
-                              shape: ~round_rect
-                              radius: 10
-                              through: true
-                          名称:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 10
-                              width: 280
-                              texts: "var.items['8'] != null ? '&f' + var.items['8']['name'] : ''"
-                              fontSize: 36
-                              through: true
-                          价格:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 40
-                              width: 200
-                              texts: "var.items['8'] != null ? '&e价格: &f' + var.items['8']['price'] : ''"
-                              fontSize: 22
-                              through: true
-                          库存:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 14
-                              width: 200
-                              texts: "var.items['8'] != null ? '&7库存: &f' + var.items['8']['stock'] : ''"
-                              fontSize: 28
-                              through: true
-                          限购:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 44
-                              width: 200
-                              texts: "var.items['8'] != null && var.items['8']['limitText'] != '' ? '&c' + var.items['8']['limitText'] : ''"
-                              fontSize: 22
-                              through: true
-                          购买按钮:
-                            type: Texture
-                            attribute:
-                              x: 850
-                              y: 8
-                              width: 100
-                              height: 52
-                              normal: ~60,180,100,200
-                              hover: ~Frosted:0;80,220,120,230
-                              shape: ~round_rect
-                              radius: 10
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'shop_buy', var.shopId, var.items['8']['key'], '1')
-                            effect:
-                              stroke:
-                                width: 1
-                                color: ~80,255,140,120
-                            children:
-                              文字:
-                                type: Text
-                                attribute:
-                                  x: 50
-                                  y: 14
-                                  through: true
-                                  center: true
-                                  fontSize: 28
-                                  texts: '&f购买'
-                      商品项9:
-                        type: Texture
-                        attribute:
-                          visible: var.items['9'] != null
-                          width: 1038
-                          height: 68
-                          normal: ~60,60,70,200
-                          hover: ~Frosted:0;80,140,220,200
-                          shape: ~round_rect
-                          radius: 14
-                        effect:
-                          stroke:
-                            width: 1
-                            color: ~80,180,255,60
-                        children:
-                          商品图标:
-                            type: Slot
-                            attribute:
-                              slotType: ~Icon
-                              itemScale: 0.68
-                              x: 8
-                              y: 4
-                              width: 60
-                              height: 60
-                              normal: ~45,45,55,200
-                              shape: ~round_rect
-                              radius: 10
-                              through: true
-                          名称:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 10
-                              width: 280
-                              texts: "var.items['9'] != null ? '&f' + var.items['9']['name'] : ''"
-                              fontSize: 36
-                              through: true
-                          价格:
-                            type: Text
-                            attribute:
-                              x: 80
-                              y: 40
-                              width: 200
-                              texts: "var.items['9'] != null ? '&e价格: &f' + var.items['9']['price'] : ''"
-                              fontSize: 22
-                              through: true
-                          库存:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 14
-                              width: 200
-                              texts: "var.items['9'] != null ? '&7库存: &f' + var.items['9']['stock'] : ''"
-                              fontSize: 28
-                              through: true
-                          限购:
-                            type: Text
-                            attribute:
-                              x: 400
-                              y: 44
-                              width: 200
-                              texts: "var.items['9'] != null && var.items['9']['limitText'] != '' ? '&c' + var.items['9']['limitText'] : ''"
-                              fontSize: 22
-                              through: true
-                          购买按钮:
-                            type: Texture
-                            attribute:
-                              x: 850
-                              y: 8
-                              width: 100
-                              height: 52
-                              normal: ~60,180,100,200
-                              hover: ~Frosted:0;80,220,120,230
-                              shape: ~round_rect
-                              radius: 10
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'shop_buy', var.shopId, var.items['9']['key'], '1')
-                            effect:
-                              stroke:
-                                width: 1
-                                color: ~80,255,140,120
-                            children:
-                              文字:
-                                type: Text
-                                attribute:
-                                  x: 50
-                                  y: 14
-                                  through: true
-                                  center: true
-                                  fontSize: 28
-                                  texts: '&f购买'
+              空商品提示:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  x: 539
+                  y: 360
+                  center: true
+                  fontSize: 36
+                  visible: "var.items == null || var.items.keys().length == 0"
+                  texts: '&8暂无商品'
+                  through: true
+              商品观察:
+                type: Observer
+                attribute:
+                  target: val.商品列表['商品项']
+                  subscribe: var.items
+                  maxSize: 999
