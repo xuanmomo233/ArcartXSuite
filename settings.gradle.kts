@@ -25,6 +25,7 @@ include("modules:market")
 include("modules:essentials")
 include("modules:regions")
 include("modules:qqbot")
+include("modules:menu")
 
 // ─── 代理端插件 ───
 include("proxy:common")
