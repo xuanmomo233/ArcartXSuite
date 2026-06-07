@@ -883,7 +883,6 @@ public final class WarehouseService implements Listener {
                 : emptySlotPacket(displaySlot);
             row.put("displaySlot", displaySlot);
             slots.put(Integer.toString(displaySlot), row);
-            putFlatSlotFields(packet, displaySlot, row);
         }
         int selectedDisplaySlot = selectedDisplaySlot(state, visibleSlots);
         SlotItemRecord selected = validSlot(state.selectedSlot())
