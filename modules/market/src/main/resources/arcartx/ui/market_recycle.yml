@@ -23,14 +23,26 @@ ui:
       var.currency = packet['currency']
       var.multiplier = packet['multiplier']
       var.recyclables = packet['recyclables']
-      var.readRecycleSlots(packet)
+      var.itemJsons = {}
+      for(key in var.recyclables.keys()){
+        json = packet['recycleItemJson' + key]
+        if(json != null && json != ''){
+          var.itemJsons[key] = json
+        }
+      }
     update: |-
       var.packetId = packet['packetId']
       var.totalValue = packet['totalValue']
       var.currency = packet['currency']
       var.multiplier = packet['multiplier']
       var.recyclables = packet['recyclables']
-      var.readRecycleSlots(packet)
+      var.itemJsons = {}
+      for(key in var.recyclables.keys()){
+        json = packet['recycleItemJson' + key]
+        if(json != null && json != ''){
+          var.itemJsons[key] = json
+        }
+      }
   action:
     load: |-
       var.packetId = 'AXS_MARKET'
@@ -38,36 +50,9 @@ ui:
       var.currency = 'money'
       var.multiplier = '1.0'
       var.recyclables = {}
+      var.itemJsons = {}
       var.scrollRatio = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-      var.readRecycleSlots = -> {
-        source = args[0]
-        for(i in range(0,35)){
-          idx = i.round()
-          si = idx + ''
-          entry = var.recyclables[si]
-          if(entry == null){
-            next
-          }
-          itemJson = source['recycleItemJson' + si]
-          if(itemJson == null || itemJson == ''){
-            itemJson = var.emptyItemJson
-          }
-          control = val.回收列表['回收项']
-          if(control != null){
-            copies = control.copies
-            if(copies != null){
-              target = copies[si]
-              if(target != null){
-                slot = target['物品图标']
-                if(slot != null){
-                  slot.setItemIcon(itemJson)
-                }
-              }
-            }
-          }
-        }
-      }
     open: |-
       Packet.send(var.packetId, 'recycle_preview')
 
@@ -220,6 +205,10 @@ controls:
                               shape: ~round_rect
                               radius: 10
                               through: true
+                              seticon: "self.setItemIcon(var.itemJsons[self.parent.key])"
+                            action:
+                              create: |-
+                                self.seticon()
                           名称:
                             type: Text
                             attribute:
