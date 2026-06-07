@@ -41,8 +41,13 @@ import xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXPropBridge;
 import xuanmo.arcartxsuite.bridge.DefaultAttributeBridgeRegistry;
+import xuanmo.arcartxsuite.bridge.DefaultAriaBridge;
 import xuanmo.arcartxsuite.bridge.DefaultItemSourceRegistry;
 import xuanmo.arcartxsuite.bridge.TaczCombatBridge;
+import xuanmo.arcartxsuite.condition.DefaultScriptConditionEvaluator;
+import xuanmo.arcartxsuite.condition.ScriptConditionServices;
+import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
+import xuanmo.arcartxsuite.api.script.AriaBridge;
 import xuanmo.arcartxsuite.crossserver.CrossServerService;
 import xuanmo.arcartxsuite.keybind.KeybindService;
 import xuanmo.arcartxsuite.license.LicenseMessages;
@@ -73,6 +78,8 @@ public final class ModuleRegistry {
     private ItemMatcherSupport itemMatcherSupport;
     private CurrencyBridgeManager currencyBridgeManager;
     private DefaultAttributeBridgeRegistry attributeBridgeRegistry;
+    private DefaultAriaBridge ariaBridge;
+    private ScriptConditionEvaluator scriptConditionEvaluator;
     private AccountTypeServiceImpl accountTypeService;
 
     /** 按 id 排列的已加载模块，保持加载顺序 */
@@ -271,6 +278,9 @@ public final class ModuleRegistry {
             attributeBridgeRegistry.shutdown();
             attributeBridgeRegistry = null;
         }
+        ScriptConditionServices.reset();
+        ariaBridge = null;
+        scriptConditionEvaluator = null;
         if (accountTypeService != null) {
             org.bukkit.event.HandlerList.unregisterAll(accountTypeService);
             accountTypeService.clearCache();
@@ -748,6 +758,13 @@ public final class ModuleRegistry {
         attributeBridgeRegistry.setSourceEnabled(apEnabled, caEnabled, mlEnabled, symEnabled);
         attributeBridgeRegistry.initialize();
 
+        if (ariaBridge == null) {
+            ariaBridge = new DefaultAriaBridge(plugin);
+        }
+        ariaBridge.initialize();
+        scriptConditionEvaluator = new DefaultScriptConditionEvaluator(ariaBridge);
+        ScriptConditionServices.install(scriptConditionEvaluator);
+
         // 全局事件总线
         if (!capabilities.containsKey(xuanmo.arcartxsuite.api.capability.EventBusCapability.class)) {
             capabilities.put(xuanmo.arcartxsuite.api.capability.EventBusCapability.class,
@@ -805,6 +822,24 @@ public final class ModuleRegistry {
     /** 获取全局属性桥接注册表 */
     public DefaultAttributeBridgeRegistry attributeBridge() {
         return attributeBridgeRegistry;
+    }
+
+    /** 获取 Aria 脚本桥接 */
+    public AriaBridge ariaBridge() {
+        if (ariaBridge == null) {
+            ariaBridge = new DefaultAriaBridge(plugin);
+            ariaBridge.initialize();
+        }
+        return ariaBridge;
+    }
+
+    /** 获取统一条件评估器 */
+    public ScriptConditionEvaluator scriptConditionEvaluator() {
+        if (scriptConditionEvaluator == null) {
+            scriptConditionEvaluator = new DefaultScriptConditionEvaluator(ariaBridge());
+            ScriptConditionServices.install(scriptConditionEvaluator);
+        }
+        return scriptConditionEvaluator;
     }
 
     /**

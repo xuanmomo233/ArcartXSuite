@@ -26,6 +26,7 @@ import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.account.AccountTypeService;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry;
+import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
@@ -36,6 +37,7 @@ import xuanmo.arcartxsuite.bridge.ArcartXPropBridge;
 import xuanmo.arcartxsuite.crossserver.CrossServerService;
 import xuanmo.arcartxsuite.keybind.KeybindService;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.script.AriaBridge;
 import xuanmo.arcartxsuite.bridge.TaczCombatBridge;
 import xuanmo.arcartxsuite.security.ClientPacketGuard;
 
@@ -238,6 +240,16 @@ final class DefaultModuleContext implements ModuleContext {
     @Override
     public AttributeBridgeRegistry attributeBridge() {
         return registry.attributeBridge();
+    }
+
+    @Override
+    public AriaBridge ariaBridge() {
+        return registry.ariaBridge();
+    }
+
+    @Override
+    public ScriptConditionEvaluator scriptConditionEvaluator() {
+        return registry.scriptConditionEvaluator();
     }
 
     @Override

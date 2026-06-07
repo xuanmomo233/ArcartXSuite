@@ -94,6 +94,11 @@ commands:
     description: QQ机器人绑定命令
     usage: /<command> bind <验证码>|unbind|info
     permission: arcartxsuite.qqbot.use
+  menu:
+    description: 玩家菜单命令
+    usage: /<command> open <菜单ID>|list
+    aliases: [axmenu]
+    permission: arcartxsuite.menu.use
 permissions:
   arcartxsuite.admin:
     default: op
@@ -238,6 +243,13 @@ permissions:
   axs.regions.bypass:
     default: op
   axs.regions.bypass.limit:
+    default: op
+  # ─── Menu ───
+  arcartxsuite.menu.use:
+    default: true
+  axs.menu.reload:
+    default: op
+  axs.menu.open.other:
     default: op
   # ─── QQBot ───
   arcartxsuite.qqbot.use:

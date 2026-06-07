@@ -321,6 +321,23 @@ client-packet-guard:
           window-ms: 1000
           max-hits: 4
           mode: "silent"
+    menu:
+      window-ms: 500
+      max-hits: 8
+      mode: "silent"
+      actions:
+        click:
+          window-ms: 300
+          max-hits: 6
+          mode: "notify"
+        footer:
+          window-ms: 500
+          max-hits: 4
+          mode: "notify"
+        esc_open:
+          window-ms: 1000
+          max-hits: 2
+          mode: "silent"
     market:
       window-ms: 500
       max-hits: 6
@@ -436,6 +453,10 @@ modules:
     enabled: false
     # 付费模块，需 license.yml 授权通过。
     # QQBot QQ群服互联（OneBot 11 协议，消息同步、绑定、白名单、群指令查询）。
+
+  menu:
+    enabled: false
+    # Menu 通用 ArcartX 菜单系统（配置驱动，支持 ESC 暂停界面替换）。
 
 
 
