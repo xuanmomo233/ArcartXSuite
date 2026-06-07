@@ -35,6 +35,7 @@ Thumbs.db
 buildSrc/build/
 axs-core/build/
 modules/*/build/
+axs-api/build/
 
 # Cache / Temp
 *.tmp
@@ -46,3 +47,5 @@ dist-scripts/temp/
 
 # Keep Gradle wrapper scripts
 !gradlew.bat
+
+
