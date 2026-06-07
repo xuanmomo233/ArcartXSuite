@@ -80,9 +80,11 @@ public final class ModuleRegistry {
     /** 客户端包处理器注册表（按优先级排序） */
     private final CopyOnWriteArrayList<PrioritizedPacketHandler> packetHandlers = new CopyOnWriteArrayList<>();
     /** 客户端初始化处理器注册表 */
-    private final CopyOnWriteArrayList<ClientInitializedHandler> initializedHandlers = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<PrioritizedInitializedHandler> initializedHandlers = new CopyOnWriteArrayList<>();
     /** Capability 全局注册表（类型 -> 实现） */
     private final java.util.concurrent.ConcurrentHashMap<Class<?>, Object> capabilities = new java.util.concurrent.ConcurrentHashMap<>();
+    /** 模块注册的 Capability 类型（用于按模块卸载） */
+    private final java.util.concurrent.ConcurrentHashMap<String, CopyOnWriteArrayList<Class<?>>> moduleCapabilityTypes = new java.util.concurrent.ConcurrentHashMap<>();
     /** 多实例 capability：玩家数据清除注册表 */
     private final CopyOnWriteArrayList<xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable> purgeables = new CopyOnWriteArrayList<>();
     /** 多实例 capability：数据库一键迁移注册表 */
@@ -259,6 +261,11 @@ public final class ModuleRegistry {
             }
         }
         modules.clear();
+        clearAllRegistrations();
+        if (attributeBridgeRegistry != null) {
+            attributeBridgeRegistry.shutdown();
+            attributeBridgeRegistry = null;
+        }
         if (accountTypeService != null) {
             org.bukkit.event.HandlerList.unregisterAll(accountTypeService);
             accountTypeService.clearCache();
@@ -312,9 +319,9 @@ public final class ModuleRegistry {
 
         if (loaded.isEnabled()) {
             disableModule(loaded);
+        } else {
+            clearModuleRegistrations(loaded);
         }
-        removePacketHandlers(moduleId);
-        removeCapabilities(moduleId);
         modules.remove(moduleId);
         closeClassLoader(loaded);
         LOGGER.info(loaded.descriptor().name() + " 模块已卸载，ClassLoader 已释放。");
@@ -565,19 +572,21 @@ public final class ModuleRegistry {
             LOGGER.fine(descriptor.name() + " v" + descriptor.version() + " 模块已启用。");
             return true;
         } else {
-            LOGGER.warning(descriptor.name() + " 模块 onEnable 返回 false，已标记为未启用。");
+            LOGGER.warning(descriptor.name() + " 模块 onEnable 返回 false，已清理并卸载。");
+            cleanupFailedModule(descriptor.id());
             return false;
         }
     }
 
     private void disableModule(LoadedModule loaded) {
         try {
-            commandHandlers.remove(loaded.descriptor().id());
             loaded.instance().onDisable();
-            loaded.setEnabled(false);
-            LOGGER.info(loaded.descriptor().name() + " 模块已禁用。");
         } catch (Exception exception) {
             LOGGER.log(Level.SEVERE, loaded.descriptor().name() + " 模块 onDisable 异常", exception);
+        } finally {
+            clearModuleRegistrations(loaded);
+            loaded.setEnabled(false);
+            LOGGER.info(loaded.descriptor().name() + " 模块已禁用。");
         }
     }
 
@@ -594,6 +603,7 @@ public final class ModuleRegistry {
         if (loaded == null) {
             return;
         }
+        clearModuleRegistrations(loaded);
         try {
             loaded.instance().onDisable();
         } catch (Exception exception) {
@@ -602,6 +612,36 @@ public final class ModuleRegistry {
             LOGGER.warning("清理失败模块 " + loaded.descriptor().name() + " 时依赖不可用: " + error.getMessage());
         }
         closeClassLoader(loaded);
+    }
+
+    private void clearModuleRegistrations(LoadedModule loaded) {
+        String moduleId = loaded.descriptor().id();
+        removeCommandHandlers(loaded);
+        removePacketHandlers(moduleId);
+        removeInitializedHandlers(moduleId);
+        removeCapabilities(moduleId);
+        if (plugin instanceof xuanmo.arcartxsuite.ArcartXSuitePlugin axsPlugin) {
+            axsPlugin.unregisterModuleConfigSpecs(moduleId);
+        }
+    }
+
+    private void removeCommandHandlers(LoadedModule loaded) {
+        AXSModule instance = loaded.instance();
+        if (instance instanceof ModuleCommandHandler handler) {
+            commandHandlers.entrySet().removeIf(entry -> entry.getValue() == handler);
+        } else {
+            commandHandlers.remove(loaded.descriptor().id());
+        }
+    }
+
+    private void clearAllRegistrations() {
+        packetHandlers.clear();
+        initializedHandlers.clear();
+        commandHandlers.clear();
+        moduleCapabilityTypes.clear();
+        capabilities.clear();
+        purgeables.clear();
+        migratables.clear();
     }
 
     private List<String> topologicalSort(Map<String, DiscoveredModule> modules) {
@@ -818,7 +858,14 @@ public final class ModuleRegistry {
      * 注册客户端初始化处理器（由 DefaultModuleContext 调用）。
      */
     void registerClientInitializedHandler(String moduleId, ClientInitializedHandler handler) {
-        initializedHandlers.add(handler);
+        initializedHandlers.add(new PrioritizedInitializedHandler(moduleId, handler));
+    }
+
+    /**
+     * 移除指定模块注册的所有客户端初始化处理器。
+     */
+    void removeInitializedHandlers(String moduleId) {
+        initializedHandlers.removeIf(ih -> ih.moduleId().equals(moduleId));
     }
 
     /**
@@ -851,11 +898,11 @@ public final class ModuleRegistry {
      * 通知所有已注册的客户端初始化处理器。
      */
     public void routeClientInitialized(Player player) {
-        for (ClientInitializedHandler handler : initializedHandlers) {
+        for (PrioritizedInitializedHandler ih : initializedHandlers) {
             try {
-                handler.onClientInitialized(player);
+                ih.handler().onClientInitialized(player);
             } catch (Exception exception) {
-                LOGGER.warning("客户端初始化处理器异常: " + exception.getMessage());
+                LOGGER.warning("模块 " + ih.moduleId() + " 客户端初始化处理器异常: " + exception.getMessage());
             }
         }
     }
@@ -868,6 +915,7 @@ public final class ModuleRegistry {
     @SuppressWarnings("unchecked")
     <T> void registerCapability(String moduleId, Class<T> capabilityType, T implementation) {
         capabilities.put(capabilityType, implementation);
+        moduleCapabilityTypes.computeIfAbsent(moduleId, ignored -> new CopyOnWriteArrayList<>()).add(capabilityType);
         if (implementation instanceof xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable p) {
             purgeables.addIfAbsent(p);
         }
@@ -1007,18 +1055,21 @@ public final class ModuleRegistry {
     void removeCapabilities(String moduleId) {
         purgeables.removeIf(p -> p.moduleId().equalsIgnoreCase(moduleId));
         migratables.removeIf(m -> m.moduleId().equalsIgnoreCase(moduleId));
-        capabilities.values().removeIf(impl ->
-            (impl instanceof xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable p
-                && p.moduleId().equalsIgnoreCase(moduleId))
-            || (impl instanceof xuanmo.arcartxsuite.api.capability.DatabaseMigratable m
-                && m.moduleId().equalsIgnoreCase(moduleId))
-        );
+        CopyOnWriteArrayList<Class<?>> types = moduleCapabilityTypes.remove(moduleId);
+        if (types != null) {
+            for (Class<?> capabilityType : types) {
+                capabilities.remove(capabilityType);
+            }
+        }
     }
 
     /**
      * 带优先级的客户端包处理器包装。
      */
     record PrioritizedPacketHandler(String moduleId, ClientPacketHandler handler, int priority) {
+    }
+
+    record PrioritizedInitializedHandler(String moduleId, ClientInitializedHandler handler) {
     }
 
     private record DiscoveredModule(ModuleDescriptor descriptor, File jarFile) {

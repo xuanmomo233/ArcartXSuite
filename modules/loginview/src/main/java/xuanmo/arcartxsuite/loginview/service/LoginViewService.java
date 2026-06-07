@@ -259,7 +259,10 @@ public final class LoginViewService implements Listener {
                     recordFailure(player);
                     return;
                 }
-                authMeBridge.forceLogin(player);
+                if (!authMeBridge.forceLogin(player)) {
+                    sendResult(player, color("&cAuthMe 登录状态同步失败，请重试。"), false);
+                    return;
+                }
                 completeLogin(player, color(configuration.messages().loginSuccess()));
                 dispatchLoginSignal(player, "login_success");
                 return;
@@ -312,7 +315,10 @@ public final class LoginViewService implements Listener {
                     sendResult(player, color("&cAuthMe 注册失败。"), false);
                     return;
                 }
-                authMeBridge.forceLogin(player);
+                if (!authMeBridge.forceLogin(player)) {
+                    sendResult(player, color("&cAuthMe 登录状态同步失败，请重试。"), false);
+                    return;
+                }
                 completeLogin(player, color(configuration.messages().registerSuccess()));
                 dispatchLoginSignal(player, "first_register");
                 return;
@@ -336,7 +342,11 @@ public final class LoginViewService implements Listener {
             sendResult(player, color("&c请先阅读并同意服务器游玩须知。"), false);
             return;
         }
-        AccountType accountType = accountType(player);
+        AccountType accountType = accountTypeService.cached(player.getUniqueId());
+        if (accountType == AccountType.OFFLINE) {
+            sendResult(player, color("&c账号类型尚未就绪，请稍候再试。"), false);
+            return;
+        }
         if (!accountType.premium()) {
             sendResult(player, color("&c你不是正版/LittleSkin 认证玩家，无法免密登录。"), false);
             return;

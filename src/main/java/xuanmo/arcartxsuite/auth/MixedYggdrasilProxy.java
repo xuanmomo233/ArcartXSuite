@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URL;
@@ -17,7 +18,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Formatter;
 import java.util.logging.LogRecord;
@@ -51,6 +54,7 @@ public class MixedYggdrasilProxy {
     private static final String SOURCE_MICROSOFT = "microsoft";
     /** 认证来源标记：LittleSkin。 */
     private static final String SOURCE_LITTLESKIN = "littleskin";
+    private static final String LOOPBACK_HOST = "127.0.0.1";
 
     /**
      * 玩家认证来源权威记录：无横线小写 UUID -> source。
@@ -63,6 +67,7 @@ public class MixedYggdrasilProxy {
     private final boolean debug;
 
     private HttpServer server;
+    private ExecutorService executor;
     private volatile int port = -1;
 
     public MixedYggdrasilProxy(Logger logger, boolean debug) {
@@ -87,12 +92,14 @@ public class MixedYggdrasilProxy {
      */
     public int startOnPort(int bindPort) {
         try {
-            server = HttpServer.create(new InetSocketAddress(bindPort < 0 ? 0 : bindPort), 0);
+            int portToBind = bindPort < 0 ? 0 : bindPort;
+            server = HttpServer.create(new InetSocketAddress(LOOPBACK_HOST, portToBind), 0);
             server.createContext("/", new YggdrasilHandler());
-            server.setExecutor(Executors.newFixedThreadPool(4));
+            executor = Executors.newFixedThreadPool(4);
+            server.setExecutor(executor);
             server.start();
             port = server.getAddress().getPort();
-            logger.info("[MixedProxy] 本地 Yggdrasil 混合代理已启动: http://127.0.0.1:" + port);
+            logger.info("[MixedProxy] 本地 Yggdrasil 混合代理已启动: http://" + LOOPBACK_HOST + ":" + port);
             if (debug) {
                 logger.info("[MixedProxy] hasJoined 顺序: Mojang -> LittleSkin");
             }
@@ -106,10 +113,22 @@ public class MixedYggdrasilProxy {
     public void stop() {
         if (server != null) {
             server.stop(0);
-            logger.info("[MixedProxy] 已关闭");
             server = null;
             port = -1;
         }
+        if (executor != null) {
+            executor.shutdown();
+            try {
+                if (!executor.awaitTermination(3, TimeUnit.SECONDS)) {
+                    executor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                executor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+            executor = null;
+        }
+        logger.info("[MixedProxy] 已关闭");
     }
 
     public boolean isRunning() {
@@ -122,7 +141,7 @@ public class MixedYggdrasilProxy {
 
     public String getLocalUrl() {
         if (port <= 0) return null;
-        return "http://127.0.0.1:" + port;
+        return "http://" + LOOPBACK_HOST + ":" + port;
     }
 
     // ═════════════════════════════════════════════════════════════════
@@ -223,6 +242,11 @@ public class MixedYggdrasilProxy {
      * <p>命中返回 {@code {"source":"microsoft|littleskin"}}；未命中返回 404。
      */
     private void handleInternalSourceQuery(HttpExchange exchange, String query) throws IOException {
+        if (!isLoopbackClient(exchange)) {
+            exchange.sendResponseHeaders(403, -1);
+            exchange.close();
+            return;
+        }
         String uuid = parseQueryParam(query, "uuid");
         if (uuid != null) {
             uuid = uuid.replace("-", "").toLowerCase(Locale.ROOT);
@@ -234,6 +258,15 @@ public class MixedYggdrasilProxy {
             return;
         }
         sendJson(exchange, 200, "{\"source\":\"" + source + "\"}");
+    }
+
+    private static boolean isLoopbackClient(HttpExchange exchange) {
+        InetSocketAddress remote = exchange.getRemoteAddress();
+        if (remote == null) {
+            return false;
+        }
+        InetAddress address = remote.getAddress();
+        return address != null && address.isLoopbackAddress();
     }
 
     /**
@@ -328,28 +361,42 @@ public class MixedYggdrasilProxy {
     }
 
     /**
-     * 直接把当前请求透传到目标 URL（用于非 hasJoined 请求）。
+     * 直接把当前请求透传到目标 URL（用于非 hasJoined 请求，含 POST body）。
      */
     private void proxyDirectly(HttpExchange exchange, String targetUrl) throws IOException {
         HttpURLConnection conn = null;
         try {
+            byte[] requestBody = readAllBytes(exchange.getRequestBody());
+            String method = exchange.getRequestMethod();
+
             conn = (HttpURLConnection) new URL(targetUrl).openConnection();
-            conn.setRequestMethod(exchange.getRequestMethod());
+            conn.setRequestMethod(method);
             conn.setConnectTimeout(5000);
             conn.setReadTimeout(5000);
             conn.setRequestProperty("User-Agent", "ArcartXSuite-MixedProxy/1.0");
             conn.setInstanceFollowRedirects(true);
 
+            String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
+            if (contentType != null && !contentType.isBlank()) {
+                conn.setRequestProperty("Content-Type", contentType);
+            }
+
+            if (requestBody.length > 0 || "POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method)) {
+                conn.setDoOutput(true);
+                try (OutputStream upstream = conn.getOutputStream()) {
+                    upstream.write(requestBody);
+                }
+            }
+
             int code = conn.getResponseCode();
 
             // 透传 Content-Type；但【不透传】ALI（X-Authlib-Injector-API-Location），
             // 否则 authlib-injector 会绕过本代理直连 LittleSkin，导致 Mojang fallback 失效。
-            String contentType = conn.getContentType();
-            if (contentType != null) {
-                exchange.getResponseHeaders().set("Content-Type", contentType);
+            String responseContentType = conn.getContentType();
+            if (responseContentType != null) {
+                exchange.getResponseHeaders().set("Content-Type", responseContentType);
             }
 
-            // 透传 body
             InputStream in = (code >= 200 && code < 300) ? conn.getInputStream() : conn.getErrorStream();
             if (in != null) {
                 byte[] body = readAllBytes(in);
@@ -385,6 +432,9 @@ public class MixedYggdrasilProxy {
     }
 
     private static byte[] readAllBytes(InputStream in) throws IOException {
+        if (in == null) {
+            return new byte[0];
+        }
         try (in) {
             return in.readAllBytes();
         }
@@ -430,7 +480,7 @@ public class MixedYggdrasilProxy {
         MixedYggdrasilProxy proxy = new MixedYggdrasilProxy(log, dbg);
         int actual = proxy.startOnPort(bindPort);
         if (actual <= 0) {
-            if (isPortReachable(bindPort)) {
+            if (isExistingProxy(bindPort)) {
                 log.info("端口 " + bindPort + " 已有代理实例在运行，复用现有实例，本进程退出。");
                 System.exit(0);
             }
@@ -448,14 +498,39 @@ public class MixedYggdrasilProxy {
     }
 
     /**
-     * 检测本地端口是否可连接（用于判断是否已有代理实例）。
+     * 检测本地端口是否已有本代理在运行（TCP 可连且 HTTP 根路径返回 Yggdrasil 元数据特征）。
      */
-    private static boolean isPortReachable(int port) {
-        try (Socket s = new Socket()) {
-            s.connect(new InetSocketAddress("127.0.0.1", port), 1000);
-            return true;
+    private static boolean isExistingProxy(int port) {
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(LOOPBACK_HOST, port), 1000);
         } catch (IOException e) {
             return false;
+        }
+        HttpURLConnection conn = null;
+        try {
+            conn = (HttpURLConnection) new URL("http://" + LOOPBACK_HOST + ":" + port + "/").openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(1000);
+            conn.setReadTimeout(1000);
+            if (conn.getResponseCode() != 200) {
+                return false;
+            }
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                StringBuilder body = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    body.append(line);
+                }
+                String json = body.toString();
+                return json.contains("\"meta\"") && json.contains("\"skinDomains\"");
+            }
+        } catch (IOException e) {
+            return false;
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
         }
     }
 }

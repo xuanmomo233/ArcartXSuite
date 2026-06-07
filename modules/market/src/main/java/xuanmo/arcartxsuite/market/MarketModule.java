@@ -163,6 +163,10 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start(context.dataFolder());
 
+        // 注册待发放队列消费者（玩家上线补发离线期间累积的物品/货币）
+        context.registerListener(new PendingDeliveryService(
+            context.plugin(), service.getRepository(), currencyManager, itemSerializer, context.logger()));
+
         // 注册 UI 到 ArcartX 桥接层（必须在 exportAndBindUi 之后）
         bindMarketUi("Market Shop", configuration.ui().shopId(), SHOP_UI_FILE_PATH);
         bindMarketUi("Market Auction", configuration.ui().auctionId(), AUCTION_UI_FILE_PATH);
@@ -253,8 +257,21 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
     @Override
     protected @Nullable ClientPacketHandler createPacketHandler() {
-        return (player, packetId, data) ->
-            service != null && service.handleClientPacket(player, packetId, data);
+        return (player, packetId, data) -> {
+            MarketService current = service;
+            if (current == null || !current.ownsPacket(packetId)) {
+                return false;
+            }
+            // 市场交易涉及背包与经济操作，统一切到主线程串行执行，
+            // 消除并发竞态（重复购买/限购绕过）与异步线程操作 Bukkit API 的风险。
+            if (org.bukkit.Bukkit.isPrimaryThread()) {
+                current.handleClientPacket(player, packetId, data);
+            } else {
+                org.bukkit.Bukkit.getScheduler().runTask(context.plugin(),
+                    () -> current.handleClientPacket(player, packetId, data));
+            }
+            return true;
+        };
     }
 
     // ClientPacketHandler.data 是 List<String>，MarketService 内部解析为 Map

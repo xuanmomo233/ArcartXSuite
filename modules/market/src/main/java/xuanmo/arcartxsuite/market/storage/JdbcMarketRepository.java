@@ -33,6 +33,9 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     private String tFavorites;
     private String tShopLimits;
     private String tRecycleStats;
+    private String tPending;
+    private String tGlobalStock;
+    private String tPlayerStock;
 
     public JdbcMarketRepository(StorageConfiguration config, Logger logger, File dataFolder) {
         super("AXS-Market", dataFolder, config.toDescriptor(), logger);
@@ -50,6 +53,9 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         tFavorites = prefix + "favorites";
         tShopLimits = prefix + "shop_limits";
         tRecycleStats = prefix + "recycle_stats";
+        tPending = prefix + "pending_deliveries";
+        tGlobalStock = prefix + "shop_global_stock";
+        tPlayerStock = prefix + "shop_player_stock";
         createTables(conn);
         logger.info("[Market] " + (sqlite ? "SQLite" : "MySQL") + " 存储已初始化，表前缀: " + prefix);
     }
@@ -69,7 +75,10 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             prefix + "history",
             prefix + "favorites",
             prefix + "shop_limits",
-            prefix + "recycle_stats"
+            prefix + "recycle_stats",
+            prefix + "pending_deliveries",
+            prefix + "shop_global_stock",
+            prefix + "shop_player_stock"
         );
     }
 
@@ -150,6 +159,30 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             + "total_amount REAL NOT NULL DEFAULT 0,"
             + "total_items INTEGER NOT NULL DEFAULT 0,"
             + "PRIMARY KEY (player, currency))");
+
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPending + " ("
+            + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            + "player TEXT NOT NULL,"
+            + "type TEXT NOT NULL,"
+            + "item_data TEXT,"
+            + "currency TEXT,"
+            + "amount REAL NOT NULL DEFAULT 0,"
+            + "reason TEXT,"
+            + "created_at INTEGER NOT NULL)");
+        stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_pending_player ON " + tPending + "(player)");
+
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tGlobalStock + " ("
+            + "shop_id TEXT NOT NULL,"
+            + "item_id TEXT NOT NULL,"
+            + "remaining INTEGER NOT NULL,"
+            + "PRIMARY KEY (shop_id, item_id))");
+
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPlayerStock + " ("
+            + "player TEXT NOT NULL,"
+            + "shop_id TEXT NOT NULL,"
+            + "item_id TEXT NOT NULL,"
+            + "remaining INTEGER NOT NULL,"
+            + "PRIMARY KEY (player, shop_id, item_id))");
     }
 
     private void createTablesMysql(Statement stmt) throws SQLException {
@@ -226,6 +259,33 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             + "total_items INT NOT NULL DEFAULT 0,"
             + "PRIMARY KEY (player, currency)"
             + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPending + " ("
+            + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+            + "player CHAR(36) NOT NULL,"
+            + "type VARCHAR(16) NOT NULL,"
+            + "item_data MEDIUMTEXT,"
+            + "currency VARCHAR(32),"
+            + "amount DOUBLE NOT NULL DEFAULT 0,"
+            + "reason VARCHAR(128),"
+            + "created_at BIGINT NOT NULL,"
+            + "INDEX idx_pending_player (player)"
+            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tGlobalStock + " ("
+            + "shop_id VARCHAR(64) NOT NULL,"
+            + "item_id VARCHAR(64) NOT NULL,"
+            + "remaining INT NOT NULL,"
+            + "PRIMARY KEY (shop_id, item_id)"
+            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPlayerStock + " ("
+            + "player CHAR(36) NOT NULL,"
+            + "shop_id VARCHAR(64) NOT NULL,"
+            + "item_id VARCHAR(64) NOT NULL,"
+            + "remaining INT NOT NULL,"
+            + "PRIMARY KEY (player, shop_id, item_id)"
+            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     }
 
     @Override
@@ -236,7 +296,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     // ─── 拍卖行 CRUD ────────────────────────────────────────
 
     @Override
-    public void insertListing(AuctionListing listing) {
+    public boolean insertListing(AuctionListing listing) {
         String sql = "INSERT INTO " + tListings
             + " (seller, seller_name, item_data, item_display_name, category, buy_now_price, starting_bid, current_bid, highest_bidder, currency, type, status, created_at, expires_at)"
             + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
@@ -260,8 +320,10 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) listing.setId(rs.getLong(1));
             }
+            return listing.getId() > 0;
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "[Market] 插入拍卖物品失败", e);
+            return false;
         }
     }
 
@@ -278,6 +340,23 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             ps.executeUpdate();
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "[Market] 更新拍卖物品失败", e);
+        }
+    }
+
+    @Override
+    public boolean compareAndSetListingStatus(long listingId,
+                                              AuctionListing.ListingStatus expect,
+                                              AuctionListing.ListingStatus update) {
+        String sql = "UPDATE " + tListings + " SET status=? WHERE id=? AND status=?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, update.name());
+            ps.setLong(2, listingId);
+            ps.setString(3, expect.name());
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "[Market] 拍卖状态 CAS 失败", e);
+            return false;
         }
     }
 
@@ -636,6 +715,221 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             logger.log(Level.SEVERE, "[Market] 查询回收统计失败", e);
         }
         return 0.0;
+    }
+
+    // ─── 系统商店全局库存 ─────────────────────────────────────
+
+    @Override
+    public int getGlobalShopStock(String shopId, String itemId, int defaultMax) {
+        String sql = "SELECT remaining FROM " + tGlobalStock + " WHERE shop_id=? AND item_id=?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, shopId);
+            ps.setString(2, itemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "[Market] 查询全局库存失败", e);
+        }
+        return defaultMax;
+    }
+
+    @Override
+    public boolean tryConsumeGlobalShopStock(String shopId, String itemId, int amount, int defaultMax) {
+        if (amount <= 0) {
+            return false;
+        }
+        String updateSql = "UPDATE " + tGlobalStock
+            + " SET remaining = remaining - ? WHERE shop_id=? AND item_id=? AND remaining >= ?";
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                    ps.setInt(1, amount);
+                    ps.setString(2, shopId);
+                    ps.setString(3, itemId);
+                    ps.setInt(4, amount);
+                    if (ps.executeUpdate() > 0) {
+                        conn.commit();
+                        return true;
+                    }
+                }
+                String insertSql = sqlite
+                    ? "INSERT OR IGNORE INTO " + tGlobalStock + " (shop_id, item_id, remaining) VALUES (?,?,?)"
+                    : "INSERT IGNORE INTO " + tGlobalStock + " (shop_id, item_id, remaining) VALUES (?,?,?)";
+                try (PreparedStatement insert = conn.prepareStatement(insertSql)) {
+                    insert.setString(1, shopId);
+                    insert.setString(2, itemId);
+                    insert.setInt(3, defaultMax);
+                    insert.executeUpdate();
+                }
+                try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                    ps.setInt(1, amount);
+                    ps.setString(2, shopId);
+                    ps.setString(3, itemId);
+                    ps.setInt(4, amount);
+                    boolean ok = ps.executeUpdate() > 0;
+                    conn.commit();
+                    return ok;
+                }
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "[Market] 扣减全局库存失败", e);
+            return false;
+        }
+    }
+
+    @Override
+    public void restoreGlobalShopStock(String shopId, String itemId, int amount) {
+        if (amount <= 0) {
+            return;
+        }
+        exec("UPDATE " + tGlobalStock + " SET remaining = remaining + ? WHERE shop_id=? AND item_id=?",
+            amount, shopId, itemId);
+    }
+
+    // ─── 系统商店玩家独立库存 ─────────────────────────────────
+
+    @Override
+    public int getPlayerShopStock(UUID player, String shopId, String itemId, int defaultMax) {
+        String sql = "SELECT remaining FROM " + tPlayerStock + " WHERE player=? AND shop_id=? AND item_id=?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, player.toString());
+            ps.setString(2, shopId);
+            ps.setString(3, itemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "[Market] 查询玩家库存失败", e);
+        }
+        return defaultMax;
+    }
+
+    @Override
+    public boolean tryConsumePlayerShopStock(UUID player, String shopId, String itemId, int amount, int defaultMax) {
+        if (amount <= 0) {
+            return false;
+        }
+        String playerId = player.toString();
+        String updateSql = "UPDATE " + tPlayerStock
+            + " SET remaining = remaining - ? WHERE player=? AND shop_id=? AND item_id=? AND remaining >= ?";
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                    ps.setInt(1, amount);
+                    ps.setString(2, playerId);
+                    ps.setString(3, shopId);
+                    ps.setString(4, itemId);
+                    ps.setInt(5, amount);
+                    if (ps.executeUpdate() > 0) {
+                        conn.commit();
+                        return true;
+                    }
+                }
+                String insertSql = sqlite
+                    ? "INSERT OR IGNORE INTO " + tPlayerStock + " (player, shop_id, item_id, remaining) VALUES (?,?,?,?)"
+                    : "INSERT IGNORE INTO " + tPlayerStock + " (player, shop_id, item_id, remaining) VALUES (?,?,?,?)";
+                try (PreparedStatement insert = conn.prepareStatement(insertSql)) {
+                    insert.setString(1, playerId);
+                    insert.setString(2, shopId);
+                    insert.setString(3, itemId);
+                    insert.setInt(4, defaultMax);
+                    insert.executeUpdate();
+                }
+                try (PreparedStatement ps = conn.prepareStatement(updateSql)) {
+                    ps.setInt(1, amount);
+                    ps.setString(2, playerId);
+                    ps.setString(3, shopId);
+                    ps.setString(4, itemId);
+                    ps.setInt(5, amount);
+                    boolean ok = ps.executeUpdate() > 0;
+                    conn.commit();
+                    return ok;
+                }
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "[Market] 扣减玩家库存失败", e);
+            return false;
+        }
+    }
+
+    @Override
+    public void restorePlayerShopStock(UUID player, String shopId, String itemId, int amount) {
+        if (amount <= 0) {
+            return;
+        }
+        exec("UPDATE " + tPlayerStock + " SET remaining = remaining + ? WHERE player=? AND shop_id=? AND item_id=?",
+            amount, player.toString(), shopId, itemId);
+    }
+
+    // ─── 待发放队列 ─────────────────────────────────────────
+
+    @Override
+    public void addPendingItem(UUID player, String itemData, String reason) {
+        exec("INSERT INTO " + tPending
+                + " (player, type, item_data, currency, amount, reason, created_at) VALUES (?,?,?,?,?,?,?)",
+            player.toString(), PendingDelivery.TYPE_ITEM, itemData, "", 0.0D,
+            reason == null ? "" : reason, System.currentTimeMillis());
+    }
+
+    @Override
+    public void addPendingCurrency(UUID player, String currency, double amount, String reason) {
+        exec("INSERT INTO " + tPending
+                + " (player, type, item_data, currency, amount, reason, created_at) VALUES (?,?,?,?,?,?,?)",
+            player.toString(), PendingDelivery.TYPE_CURRENCY, "", currency == null ? "" : currency, amount,
+            reason == null ? "" : reason, System.currentTimeMillis());
+    }
+
+    @Override
+    public List<PendingDelivery> getPendingDeliveries(UUID player) {
+        List<PendingDelivery> results = new ArrayList<>();
+        String sql = "SELECT * FROM " + tPending + " WHERE player=? ORDER BY id ASC";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, player.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) results.add(mapPending(rs));
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "[Market] 查询待发放记录失败", e);
+        }
+        return results;
+    }
+
+    @Override
+    public void deletePendingDelivery(long id) {
+        exec("DELETE FROM " + tPending + " WHERE id=?", id);
+    }
+
+    private PendingDelivery mapPending(ResultSet rs) throws SQLException {
+        return new PendingDelivery(
+            rs.getLong("id"),
+            UUID.fromString(rs.getString("player")),
+            rs.getString("type"),
+            rs.getString("item_data"),
+            rs.getString("currency"),
+            rs.getDouble("amount"),
+            rs.getString("reason"),
+            rs.getLong("created_at")
+        );
     }
 
     // ─── 工具方法 ───────────────────────────────────────────

@@ -191,7 +191,7 @@ public class MarketService {
         if (result.success()) {
             player.sendMessage(ChatColor.translateAlternateColorCodes('&',
                 config.messages().shopBought().replace("%amount%",
-                    currencyManager.format("money", BigDecimal.valueOf(result.totalPrice())))));
+                    currencyManager.format(result.currency(), BigDecimal.valueOf(result.totalPrice())))));
         } else {
             player.sendMessage(ChatColor.RED + result.error());
         }
@@ -241,6 +241,11 @@ public class MarketService {
     }
 
     // ─── 客户端包处理 ────────────────────────────────────────
+
+    /** 判断该包是否归本模块处理（供模块层在切主线程前快速判定）。 */
+    public boolean ownsPacket(String packetId) {
+        return config.ui().packetId().equals(packetId);
+    }
 
     public boolean handleClientPacket(Player player, String packetId, List<String> data) {
         if (!config.ui().packetId().equals(packetId)) return false;
@@ -509,7 +514,7 @@ public class MarketService {
                     row.put("key", itemEntry.getKey());
                     row.put("name", shopItem.displayName());
                     row.put("price", formatPrice(shopItem.buyPrice()));
-                    row.put("stock", shopItem.stockAmount() > 0 ? String.valueOf(shopItem.stockAmount()) : "无限");
+                    row.put("stock", formatShopStock(player, activeShopId, itemEntry.getKey(), shopItem));
                     row.put("limitText", shopItem.limitPerPlayer() > 0 ? "限购 " + shopItem.limitPerPlayer() + " 个" : "");
                     items.put(key, row);
 
@@ -628,6 +633,24 @@ public class MarketService {
 
     // ─── 辅助方法 ─────────────────────────────────────────────
 
+    private String formatShopStock(Player player, String shopId, String itemKey, ShopService.ShopItem shopItem) {
+        if ("unlimited".equalsIgnoreCase(shopItem.stockMode())) {
+            return "无限";
+        }
+        if (repository == null || shopItem.stockAmount() <= 0) {
+            return "无限";
+        }
+        if ("global".equalsIgnoreCase(shopItem.stockMode())) {
+            return String.valueOf(repository.getGlobalShopStock(shopId, itemKey, shopItem.stockAmount()));
+        }
+        if ("per-player".equalsIgnoreCase(shopItem.stockMode())) {
+            return String.valueOf(repository.getPlayerShopStock(
+                player.getUniqueId(), shopId, itemKey, shopItem.stockAmount()
+            ));
+        }
+        return String.valueOf(shopItem.stockAmount());
+    }
+
     private String itemToJson(ItemStack item) {
         if (item == null || item.getType().isAir()) return "";
         if (itemStackBridge != null) {
@@ -660,14 +683,32 @@ public class MarketService {
                 case "mythic" -> itemSourceRegistry.generateMythicItem(shopItem.itemId(), 1);
                 case "neige" -> itemSourceRegistry.generateNeigeItem(shopItem.itemId(), 1);
                 case "overture" -> itemSourceRegistry.generateOvertureItem(shopItem.itemId(), null, 1);
+                case "mmoitems" -> {
+                    String[] parts = shopItem.itemId().split(";", 2);
+                    yield parts.length == 2
+                        ? itemSourceRegistry.generateMmoItem(parts[0], parts[1], 1)
+                        : null;
+                }
                 default -> {
                     org.bukkit.Material mat = org.bukkit.Material.matchMaterial(shopItem.itemId());
-                    yield mat != null ? new ItemStack(mat, 1) : null;
+                    ItemStack base = mat != null ? new ItemStack(mat, 1) : null;
+                    yield applyItemNbt(base, shopItem.itemNbt());
                 }
             };
             return item != null ? itemToJson(item) : "";
         } catch (Exception e) {
             return "";
+        }
+    }
+
+    private static @Nullable ItemStack applyItemNbt(@Nullable ItemStack item, @Nullable String nbt) {
+        if (item == null || nbt == null || nbt.isBlank()) {
+            return item;
+        }
+        try {
+            return org.bukkit.Bukkit.getUnsafe().modifyItemStack(item.clone(), nbt);
+        } catch (Exception e) {
+            return item;
         }
     }
 

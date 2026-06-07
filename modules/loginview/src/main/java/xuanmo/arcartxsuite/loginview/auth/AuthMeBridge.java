@@ -57,7 +57,7 @@ public final class AuthMeBridge {
     }
 
     public boolean forceLogin(Player player) {
-        return invokeBoolean(forceLoginMethod, true, player);
+        return invokeBoolean(forceLoginMethod, false, player);
     }
 
     public boolean changePassword(String playerName, String password) {

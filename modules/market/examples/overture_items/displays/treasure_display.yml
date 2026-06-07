@@ -1,0 +1,12 @@
+# Overture 展示方案配置
+# 放置路径: plugins/Overture/displays/treasure_display.yml
+# 被 OvertureTreasure.yml 中的 display: treasure_display 引用
+
+treasure_display:
+  # 物品名称模板，<item_name> 会替换为物品定义中的 name.item_name
+  name: "<item_name>"
+  # 物品 Lore 模板
+  lore:
+    - "<item_type>"
+    - ""
+    - "<item_desc...>"

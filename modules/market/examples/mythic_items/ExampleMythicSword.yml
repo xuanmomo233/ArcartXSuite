@@ -1,0 +1,39 @@
+# MythicMobs 物品配置示例
+# 文件需复制到 plugins/MythicMobs/Items/ 目录下
+# 物品 internal_name 为 ExampleMythicSword，需与 example_shop.yml 中 item-id 一致
+
+ExampleMythicSword:
+  # 基础材质
+  Id: DIAMOND_SWORD
+  # 显示名称
+  Display: '&6传说之剑'
+  # Lore
+  Lore:
+    - '&7一把散发着神秘光芒的古老长剑。'
+    - ''
+    - '&e✦ &7稀有度: &6传说'
+    - '&e✦ &7类别: &f武器'
+    - '&e✦ &7等级要求: &f30'
+    - ''
+    - '&8&m------------&7 属性 &8&m------------'
+    - '&7▸ 伤害: &c+25'
+    - '&7▸ 暴击率: &c+15%'
+    - '&7▸ 攻击速度: &c+10%'
+  # 附魔
+  Enchantments:
+    - SHARPNESS:5
+    - FIRE_ASPECT:2
+    - LOOTING:3
+    - UNBREAKING:3
+  # 属性修饰器
+  Attributes:
+    - GENERIC_ATTACK_DAMAGE:25
+    - GENERIC_ATTACK_SPEED:0.1
+  # 选项
+  Options:
+    # 不可破坏
+    Unbreakable: true
+    # 隐藏附魔光效
+    HideEnchantments: false
+    # 隐藏属性修饰器
+    HideAttributes: false

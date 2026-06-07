@@ -1,25 +1,14 @@
-# Warehouse 配置迁移示例
-# 从版本 0 升级到版本 1 的迁移规则
+# Warehouse 配置迁移示例（版本 0 → 1）
+# 注意：仅包含与当前 schema 一致的示例操作；错误 rename 已移除，避免触发后破坏用户配置。
 from-version: 0
 to-version: 1
-description: "示例迁移：重命名旧字段并添加默认值"
+description: "示例迁移：补充缺失默认值"
 
 operations:
-  # 示例：将旧字段名重命名为新字段名
-  - type: rename
-    from: "pickup.auto-store-on-pickup"
-    to: "pickup.auto-store"
-
-  # 示例：删除已废弃的字段
-  - type: remove
-    path: "legacy.backup-mode"
-
-  # 示例：添加缺失的默认字段
   - type: set-if-missing
     path: "pickup.notify-on-auto-store"
     value: true
 
-  # 示例：数值映射转换
   - type: value-map
     path: "storage.mode"
     mapping:

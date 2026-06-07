@@ -401,93 +401,160 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
 
     private final class RondoCurrencyBridge extends AbstractCurrencyBridge {
 
+        // Rondo 原生 API（多货币场景使用）
         private Object rondoApiInstance;
-        private Method getBalanceMethod;
-        private Method withdrawMethod;
-        private Method depositMethod;
-        private String unavailableReason = "";
+        private Method rondoGetBalanceMethod;
+        private Method rondoWithdrawMethod;
+        private Method rondoDepositMethod;
+        private String rondoUnavailableReason = "";
+
+        // Vault 回退（Rondo 是 Vault 提供者时，单货币走 Vault 更可靠）
+        private Object vaultEconomy;
+        private Method vaultBalanceMethod;
+        private Method vaultWithdrawMethod;
+        private Method vaultDepositMethod;
+        private String vaultUnavailableReason = "";
 
         private RondoCurrencyBridge(CurrencyDefinition definition) {
             super(definition);
+            initializeVault();
             initializeRondo();
         }
 
         @Override
         public boolean available() {
-            return rondoApiInstance != null && getBalanceMethod != null && withdrawMethod != null && depositMethod != null;
+            return vaultAvailable() || rondoAvailable();
+        }
+
+        private boolean vaultAvailable() {
+            return vaultEconomy != null && vaultBalanceMethod != null && vaultWithdrawMethod != null && vaultDepositMethod != null;
+        }
+
+        private boolean rondoAvailable() {
+            return rondoApiInstance != null && rondoGetBalanceMethod != null && rondoWithdrawMethod != null && rondoDepositMethod != null;
         }
 
         @Override
         public String unavailableReason() {
-            return unavailableReason;
+            if (available()) {
+                return "";
+            }
+            // 两者均不可用：优先返回 Vault 原因，其次 Rondo 原因
+            if (!vaultUnavailableReason.isBlank()) {
+                return vaultUnavailableReason;
+            }
+            return rondoUnavailableReason.isBlank() ? "Rondo/Vault 货币后端不可用" : rondoUnavailableReason;
         }
 
         @Override
         public BigDecimal balance(Player player) {
-            if (!available() || player == null) {
-                return BigDecimal.ZERO;
+            if (player == null) return BigDecimal.ZERO;
+            // 优先 Vault（Rondo 作为 Vault 提供者时无需货币 ID 映射）
+            if (vaultEconomy != null && vaultBalanceMethod != null) {
+                try {
+                    Object value = invokeVaultEconomyMethod(vaultBalanceMethod, player, BigDecimal.ZERO);
+                    return convertToBigDecimal(value);
+                } catch (ReflectiveOperationException ignored) {
+                }
             }
-            try {
-                Object result = getBalanceMethod.invoke(rondoApiInstance, player.getUniqueId(), definition().id());
-                return result instanceof BigDecimal bd ? bd : convertToBigDecimal(result);
-            } catch (ReflectiveOperationException exception) {
-                return BigDecimal.ZERO;
+            // 回退 Rondo 原生
+            if (rondoApiInstance != null && rondoGetBalanceMethod != null) {
+                try {
+                    Object result = rondoGetBalanceMethod.invoke(rondoApiInstance, player.getUniqueId(), definition().id());
+                    return result instanceof BigDecimal bd ? bd : convertToBigDecimal(result);
+                } catch (ReflectiveOperationException ignored) {
+                }
             }
+            return BigDecimal.ZERO;
         }
 
         @Override
         public CurrencyTransactionResult withdraw(Player player, BigDecimal amount) {
-            if (!available()) {
-                return CurrencyTransactionResult.failure(unavailableReason());
-            }
-            if (player == null || amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-                return CurrencyTransactionResult.failure("金额必须大于 0。");
-            }
-            try {
-                Object result = withdrawMethod.invoke(rondoApiInstance, player.getUniqueId(), definition().id(), normalize(amount), "ArcartXSuite");
-                boolean success = result instanceof Boolean booleanValue ? booleanValue : true;
-                return success ? CurrencyTransactionResult.ok() : CurrencyTransactionResult.failure("Rondo 扣款失败。");
-            } catch (ReflectiveOperationException exception) {
-                return CurrencyTransactionResult.failure("Rondo 扣款调用异常。");
-            }
+            return invokeTransaction(vaultWithdrawMethod, rondoWithdrawMethod, player, amount, "扣款失败。");
         }
 
         @Override
         public CurrencyTransactionResult deposit(Player player, BigDecimal amount) {
-            if (!available()) {
-                return CurrencyTransactionResult.failure(unavailableReason());
-            }
+            return invokeTransaction(vaultDepositMethod, rondoDepositMethod, player, amount, "入账失败。");
+        }
+
+        private CurrencyTransactionResult invokeTransaction(
+            Method vaultMethod, Method rondoMethod, Player player, BigDecimal amount, String defaultMessage
+        ) {
             if (player == null || amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
                 return CurrencyTransactionResult.failure("金额必须大于 0。");
             }
+            // 优先 Vault
+            if (vaultEconomy != null && vaultMethod != null) {
+                try {
+                    Object response = invokeVaultEconomyMethod(vaultMethod, player, amount);
+                    return transactionSucceeded(response)
+                        ? CurrencyTransactionResult.ok()
+                        : CurrencyTransactionResult.failure(resolveTransactionMessage(response, defaultMessage));
+                } catch (ReflectiveOperationException ignored) {
+                }
+            }
+            // 回退 Rondo 原生
+            if (rondoApiInstance != null && rondoMethod != null) {
+                try {
+                    Object result = rondoMethod.invoke(rondoApiInstance, player.getUniqueId(), definition().id(), normalize(amount), "ArcartXSuite");
+                    boolean success = result instanceof Boolean booleanValue ? booleanValue : true;
+                    return success ? CurrencyTransactionResult.ok() : CurrencyTransactionResult.failure("Rondo " + defaultMessage);
+                } catch (ReflectiveOperationException ignored) {
+                }
+            }
+            return CurrencyTransactionResult.failure(defaultMessage);
+        }
+
+        private void initializeVault() {
             try {
-                Object result = depositMethod.invoke(rondoApiInstance, player.getUniqueId(), definition().id(), normalize(amount), "ArcartXSuite");
-                boolean success = result instanceof Boolean booleanValue ? booleanValue : true;
-                return success ? CurrencyTransactionResult.ok() : CurrencyTransactionResult.failure("Rondo 入账失败。");
-            } catch (ReflectiveOperationException exception) {
-                return CurrencyTransactionResult.failure("Rondo 入账调用异常。");
+                Class<?> economyClass = Class.forName("net.milkbowl.vault.economy.Economy");
+                RegisteredServiceProvider<?> registration = Bukkit.getServicesManager().getRegistration(economyClass);
+                if (registration == null || registration.getProvider() == null) {
+                    vaultUnavailableReason = "Vault Economy 服务未注册";
+                    return;
+                }
+                vaultEconomy = registration.getProvider();
+                vaultBalanceMethod = findEconomyMethod(vaultEconomy.getClass(), "getBalance");
+                vaultWithdrawMethod = findEconomyMethod(vaultEconomy.getClass(), "withdrawPlayer");
+                vaultDepositMethod = findEconomyMethod(vaultEconomy.getClass(), "depositPlayer");
+            } catch (ClassNotFoundException exception) {
+                vaultUnavailableReason = "Vault 未安装";
             }
         }
 
         private void initializeRondo() {
             Plugin rondo = Bukkit.getPluginManager().getPlugin("Rondo");
             if (rondo == null) {
-                unavailableReason = "Rondo 未安装";
+                rondoUnavailableReason = "Rondo 未安装";
                 return;
             }
             try {
                 ClassLoader classLoader = rondo.getClass().getClassLoader();
                 Class<?> rondoApiClass = Class.forName("priv.seventeen.artist.rondo.api.RondoAPI", true, classLoader);
                 rondoApiInstance = rondoApiClass.getField("INSTANCE").get(null);
-                getBalanceMethod = rondoApiClass.getMethod("getBalance", java.util.UUID.class, String.class);
-                withdrawMethod = rondoApiClass.getMethod("withdraw", java.util.UUID.class, String.class, BigDecimal.class, String.class);
-                depositMethod = rondoApiClass.getMethod("deposit", java.util.UUID.class, String.class, BigDecimal.class, String.class);
-                if (!available()) {
-                    unavailableReason = "未找到兼容的 Rondo API 方法";
-                }
+                rondoGetBalanceMethod = rondoApiClass.getMethod("getBalance", java.util.UUID.class, String.class);
+                rondoWithdrawMethod = rondoApiClass.getMethod("withdraw", java.util.UUID.class, String.class, BigDecimal.class, String.class);
+                rondoDepositMethod = rondoApiClass.getMethod("deposit", java.util.UUID.class, String.class, BigDecimal.class, String.class);
             } catch (ReflectiveOperationException exception) {
-                unavailableReason = "Rondo API 初始化失败: " + exception.getMessage();
+                rondoUnavailableReason = "Rondo API 初始化失败: " + exception.getMessage();
             }
+        }
+
+        private Object invokeVaultEconomyMethod(Method method, Player player, BigDecimal amount) throws ReflectiveOperationException {
+            Class<?>[] parameterTypes = method.getParameterTypes();
+            if (parameterTypes.length == 1) {
+                return method.invoke(vaultEconomy, resolveFirstArgument(method, player));
+            }
+            if (parameterTypes.length == 2) {
+                return method.invoke(vaultEconomy, resolveFirstArgument(method, player), castNumeric(parameterTypes[1], amount));
+            }
+            return method.invoke(
+                vaultEconomy,
+                resolveFirstArgument(method, player),
+                player.getWorld().getName(),
+                castNumeric(parameterTypes[2], amount)
+            );
         }
     }
 

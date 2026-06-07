@@ -1,6 +1,5 @@
 package xuanmo.arcartxsuite.license;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.lang.management.ManagementFactory;
@@ -27,7 +26,6 @@ public final class HeartbeatService {
 
     private final JavaPlugin plugin;
     private final Logger logger;
-    private final Gson gson = new Gson();
     private final LicenseService licenseService;
     private final ModuleRegistry moduleRegistry;
     private ScheduledExecutorService scheduler;
@@ -61,21 +59,29 @@ public final class HeartbeatService {
     }
 
     private void sendHeartbeat() {
+        // Bukkit API 必须在主线程采集；HTTP 请求在心跳线程发送
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            HeartbeatSnapshot snapshot;
+            try {
+                snapshot = captureSnapshot();
+            } catch (Exception exception) {
+                logger.log(Level.FINE, "心跳快照采集异常", exception);
+                return;
+            }
+            if (snapshot == null || scheduler == null || scheduler.isShutdown()) {
+                return;
+            }
+            scheduler.execute(() -> sendHeartbeatWithSnapshot(snapshot));
+        });
+    }
+
+    private void sendHeartbeatWithSnapshot(HeartbeatSnapshot snapshot) {
         try {
-            LicenseConfig config = licenseService.currentConfig();
-            if (config == null || !config.hasLicenseIdentity()) {
-                return;
-            }
-            HostFingerprint.Snapshot fingerprint = licenseService.fingerprint();
-            if (fingerprint == null) {
-                return;
-            }
             FailoverLicenseGateway gateway = licenseService.currentGateway();
             if (gateway == null) {
                 return;
             }
-
-            JsonObject request = buildHeartbeatPayload(config, fingerprint);
+            JsonObject request = buildHeartbeatPayload(snapshot);
             JsonObject response = gateway.heartbeat(request);
             if (response != null && response.has("anomalyCount")) {
                 int anomalyCount = response.get("anomalyCount").getAsInt();
@@ -92,25 +98,48 @@ public final class HeartbeatService {
         }
     }
 
-    private JsonObject buildHeartbeatPayload(LicenseConfig config, HostFingerprint.Snapshot fingerprint) {
+    private @org.jetbrains.annotations.Nullable HeartbeatSnapshot captureSnapshot() {
+        LicenseConfig config = licenseService.currentConfig();
+        if (config == null || !config.hasLicenseIdentity()) {
+            return null;
+        }
+        HostFingerprint.Snapshot fingerprint = licenseService.fingerprint();
+        if (fingerprint == null) {
+            return null;
+        }
+        Double tps = null;
+        double[] recentTps = getRecentTps();
+        if (recentTps != null && recentTps.length > 0) {
+            tps = Math.round(recentTps[0] * 10.0) / 10.0;
+        }
+        return new HeartbeatSnapshot(
+            config,
+            fingerprint,
+            plugin.getDescription().getVersion(),
+            Bukkit.getVersion(),
+            Bukkit.getOnlinePlayers().size(),
+            Bukkit.getMaxPlayers(),
+            tps
+        );
+    }
+
+    private JsonObject buildHeartbeatPayload(HeartbeatSnapshot snapshot) {
         JsonObject request = new JsonObject();
-        request.addProperty("qq", config.qq());
-        request.addProperty("installId", config.installId());
-        request.addProperty("fingerprintHash", fingerprint.hash());
-        request.addProperty("pluginVersion", plugin.getDescription().getVersion());
-        request.addProperty("serverVersion", Bukkit.getVersion());
-        request.addProperty("onlinePlayers", Bukkit.getOnlinePlayers().size());
-        request.addProperty("maxPlayers", Bukkit.getMaxPlayers());
+        request.addProperty("qq", snapshot.config().qq());
+        request.addProperty("installId", snapshot.config().installId());
+        request.addProperty("fingerprintHash", snapshot.fingerprint().hash());
+        request.addProperty("pluginVersion", snapshot.pluginVersion());
+        request.addProperty("serverVersion", snapshot.serverVersion());
+        request.addProperty("onlinePlayers", snapshot.onlinePlayers());
+        request.addProperty("maxPlayers", snapshot.maxPlayers());
         request.addProperty("uptimeMs", System.currentTimeMillis() - serverStartTime());
         request.addProperty("javaVersion", System.getProperty("java.version", "unknown"));
         request.addProperty("osName", System.getProperty("os.name", "unknown"));
 
-        double[] tps = getRecentTps();
-        if (tps != null && tps.length > 0) {
-            request.addProperty("tps", Math.round(tps[0] * 10.0) / 10.0);
+        if (snapshot.tps() != null) {
+            request.addProperty("tps", snapshot.tps());
         }
 
-        // 模块列表
         JsonArray modules = new JsonArray();
         if (moduleRegistry != null) {
             LicenseDecision decision = licenseService.decision();
@@ -129,12 +158,21 @@ public final class HeartbeatService {
         }
         request.add("modules", modules);
 
-        // 客户端检测到的异常
         JsonArray anomalies = new JsonArray();
         request.add("anomalies", anomalies);
 
         return request;
     }
+
+    private record HeartbeatSnapshot(
+        LicenseConfig config,
+        HostFingerprint.Snapshot fingerprint,
+        String pluginVersion,
+        String serverVersion,
+        int onlinePlayers,
+        int maxPlayers,
+        Double tps
+    ) {}
 
     private long serverStartTime() {
         try {

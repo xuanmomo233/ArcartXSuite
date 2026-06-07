@@ -194,7 +194,9 @@ public record ClientPacketGuardConfiguration(
         rules.put("loginview", actionRules(
             actionRule("login", 3000L, 3, ClientPacketGuardMode.NOTIFY),
             actionRule("register", 5000L, 2, ClientPacketGuardMode.NOTIFY),
-            actionRule("change_password", 5000L, 2, ClientPacketGuardMode.NOTIFY)
+            actionRule("change_password", 5000L, 2, ClientPacketGuardMode.NOTIFY),
+            actionRule("bypass_enter", 5000L, 2, ClientPacketGuardMode.NOTIFY),
+            actionRule("bind_code", 3000L, 3, ClientPacketGuardMode.NOTIFY)
         ));
         rules.put("tab", actionRules(actionRule("refresh", 1500L, 1, ClientPacketGuardMode.SILENT)));
         return rules;

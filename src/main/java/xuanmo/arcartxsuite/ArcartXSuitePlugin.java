@@ -385,6 +385,10 @@ public class ArcartXSuitePlugin extends JavaPlugin {
             heartbeatService.stop();
             heartbeatService = null;
         }
+        if (keybindService != null) {
+            keybindService.shutdown();
+            keybindService = null;
+        }
         if (moduleRegistry != null) {
             moduleRegistry.unloadAll();
             moduleRegistry = null;

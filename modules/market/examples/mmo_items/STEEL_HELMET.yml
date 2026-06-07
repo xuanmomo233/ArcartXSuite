@@ -1,0 +1,39 @@
+# MMOItems 物品配置示例
+# 文件需复制到 plugins/MMOItems/item/ 目录下（按类型分文件夹）
+# 因 example_shop.yml 中 source 为 mmoitems，item-id 为 ARMOR;STEEL_HELMET
+# 故 Type = ARMOR, ID = STEEL_HELMET
+# 通常放置路径: plugins/MMOItems/item/armor/STEEL_HELMET.yml
+
+STEEL_HELMET:
+  # 基础属性
+  base:
+    # 基础材质
+    material: IRON_HELMET
+  # 显示名称
+  name: '&7钢盔'
+  # Lore
+  lore:
+    - '&7由坚固的钢材锻造而成的头盔。'
+    - ''
+    - '&e✦ &7稀有度: &f普通'
+    - '&e✦ &7类别: &f护甲'
+    - '&e✦ &7等级要求: &f20'
+    - ''
+    - '&8&m------------&7 属性 &8&m------------'
+    - '&7▸ 护甲值: &a+3'
+    - '&7▸ 韧性: &a+1'
+    - '&7▸ 耐久: &a150'
+  # 附魔
+  enchants:
+    PROTECTION_ENVIRONMENTAL: 2
+    DURABILITY: 2
+  # 类型特定选项
+  item-type: ARMOR
+  # 品阶/稀有度（可选，需与 tiers.yml 中定义的一致）
+  # tier: COMMON
+  # 最大耐久
+  max-durability: 150
+  # 是否绑定
+  bound: false
+  # 自定义模型数据（可选，需配合资源包）
+  # custom-model-data: 20001

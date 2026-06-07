@@ -43,6 +43,9 @@ public class ShopService {
     private final Map<String, ShopDefinition> shops = new LinkedHashMap<>();
     private BukkitTask refreshTask;
 
+    /** 单次购买数量上限（36 格 × 64），防止客户端传入超大值导致整数溢出 / 刷物品。 */
+    private static final int MAX_PURCHASE_AMOUNT = 36 * 64;
+
     public ShopService(JavaPlugin plugin, ShopConfiguration config, MessagesConfiguration messages,
                        MarketRepository repository, CurrencyBridgeAPI currencyManager,
                        ItemSourceRegistry itemSourceRegistry, File dataFolder, Logger logger) {
@@ -155,55 +158,80 @@ public class ShopService {
         ShopItem shopItem = shop.items().get(itemId);
         if (shopItem == null) return BuyResult.fail("商品不存在");
 
-        // 限购检查
+        // 数量校验：防止客户端传入 <=0 或超大值（整数溢出绕过限购 / 刷物品）
+        if (amount < 1 || amount > MAX_PURCHASE_AMOUNT) {
+            return BuyResult.fail("购买数量非法");
+        }
+
+        // 限购检查（用 long 运算，避免 int 溢出绕过）
         if (shopItem.limitPerPlayer() > 0) {
             ShopLimitRecord limit = repository.getShopLimit(player.getUniqueId(), shopId, itemId);
-            int purchased = limit == null ? 0 : limit.purchasedCount();
-            if (purchased + amount > shopItem.limitPerPlayer()) {
+            long purchased = limit == null ? 0L : limit.purchasedCount();
+            if (purchased + (long) amount > shopItem.limitPerPlayer()) {
                 return BuyResult.fail(messages.shopLimitReached());
             }
         }
 
-        // 计算价格（含折扣）
-        double unitPrice = shopItem.buyPrice();
+        // 库存检查（stock-mode: global / per-player）
+        if (!tryConsumeStock(player, shopId, itemId, shopItem, amount)) {
+            return BuyResult.fail("商品库存不足");
+        }
+
+        // 计算价格（含折扣），全程 BigDecimal 避免浮点累计误差
+        BigDecimal unitPrice = BigDecimal.valueOf(shopItem.buyPrice());
         for (var entry : shopItem.discount().entrySet()) {
             if (player.hasPermission(entry.getKey())) {
-                unitPrice *= entry.getValue();
+                unitPrice = unitPrice.multiply(BigDecimal.valueOf(entry.getValue()));
                 break;
             }
         }
-        double totalPrice = unitPrice * amount;
+        BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(amount));
 
         // 扣款
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(shopItem.currency());
         if (bridge == null || !bridge.available()) {
             return BuyResult.fail("货币系统不可用");
         }
-        CurrencyTransactionResult result = bridge.withdraw(player, BigDecimal.valueOf(totalPrice));
+        CurrencyTransactionResult result = bridge.withdraw(player, totalPrice);
         if (!result.success()) {
+            restoreStock(player, shopId, itemId, shopItem, amount);
             return BuyResult.fail(messages.insufficientFunds());
         }
 
-        // 生成物品并给予
+        // 生成物品
         ItemStack item = createItem(shopItem, amount);
         if (item == null) {
-            // 退款
-            bridge.deposit(player, BigDecimal.valueOf(totalPrice));
+            bridge.deposit(player, totalPrice);
+            restoreStock(player, shopId, itemId, shopItem, amount);
             return BuyResult.fail("物品生成失败");
         }
-        player.getInventory().addItem(item);
 
-        // 更新限购记录
+        // 给予物品；背包装不下的部分按比例退款，杜绝"扣了钱却吞物品"
+        Map<Integer, ItemStack> overflow = player.getInventory().addItem(item);
+        int leftover = overflow.values().stream().mapToInt(ItemStack::getAmount).sum();
+        int delivered = amount - leftover;
+        if (leftover > 0) {
+            bridge.deposit(player, unitPrice.multiply(BigDecimal.valueOf(leftover)));
+            restoreStock(player, shopId, itemId, shopItem, leftover);
+            player.sendMessage(ChatColor.translateAlternateColorCodes('&',
+                "&e背包空间不足，仅购买 " + delivered + " 个，多余款项已退还"));
+        }
+        if (delivered <= 0) {
+            restoreStock(player, shopId, itemId, shopItem, amount);
+            return BuyResult.fail("背包空间不足");
+        }
+
+        // 更新限购记录（按实际成交数量计）
         if (shopItem.limitPerPlayer() > 0) {
             ShopLimitRecord existing = repository.getShopLimit(player.getUniqueId(), shopId, itemId);
-            int newCount = (existing == null ? 0 : existing.purchasedCount()) + amount;
+            int newCount = (existing == null ? 0 : existing.purchasedCount()) + delivered;
             long resetTime = calculateResetTime(shopItem.limitReset());
             repository.upsertShopLimit(new ShopLimitRecord(
                 player.getUniqueId(), shopId, itemId, newCount, System.currentTimeMillis(), resetTime
             ));
         }
 
-        return BuyResult.success(totalPrice);
+        return BuyResult.success(unitPrice.multiply(BigDecimal.valueOf(delivered)).doubleValue(), shopItem.currency());
     }
 
     /**
@@ -223,16 +251,34 @@ public class ShopService {
                 case "mythic" -> itemSourceRegistry.generateMythicItem(shopItem.itemId(), amount);
                 case "neige" -> itemSourceRegistry.generateNeigeItem(shopItem.itemId(), amount);
                 case "overture" -> itemSourceRegistry.generateOvertureItem(shopItem.itemId(), null, amount);
+                case "mmoitems" -> {
+                    String[] parts = shopItem.itemId().split(";", 2);
+                    yield parts.length == 2
+                        ? itemSourceRegistry.generateMmoItem(parts[0], parts[1], amount)
+                        : null;
+                }
                 default -> {
                     // minecraft 原版物品
                     org.bukkit.Material mat = org.bukkit.Material.matchMaterial(shopItem.itemId());
-                    yield mat != null ? new ItemStack(mat, amount) : null;
+                    ItemStack base = mat != null ? new ItemStack(mat, amount) : null;
+                    yield applyItemNbt(base, shopItem.itemNbt());
                 }
             };
             return item;
         } catch (Exception e) {
             logger.log(Level.WARNING, "[Market-Shop] 创建物品失败: " + shopItem.source() + ":" + shopItem.itemId(), e);
             return null;
+        }
+    }
+
+    private static @Nullable ItemStack applyItemNbt(@Nullable ItemStack item, @Nullable String nbt) {
+        if (item == null || nbt == null || nbt.isBlank()) {
+            return item;
+        }
+        try {
+            return org.bukkit.Bukkit.getUnsafe().modifyItemStack(item.clone(), nbt);
+        } catch (Exception e) {
+            return item;
         }
     }
 
@@ -250,6 +296,35 @@ public class ShopService {
         repository.resetExpiredShopLimits("auto");
     }
 
+    private static boolean hasLimitedStock(ShopService.ShopItem shopItem) {
+        return shopItem.stockAmount() > 0
+            && ("global".equalsIgnoreCase(shopItem.stockMode())
+            || "per-player".equalsIgnoreCase(shopItem.stockMode()));
+    }
+
+    private boolean tryConsumeStock(Player player, String shopId, String itemId, ShopItem shopItem, int amount) {
+        if (!hasLimitedStock(shopItem)) {
+            return true;
+        }
+        if ("global".equalsIgnoreCase(shopItem.stockMode())) {
+            return repository.tryConsumeGlobalShopStock(shopId, itemId, amount, shopItem.stockAmount());
+        }
+        return repository.tryConsumePlayerShopStock(
+            player.getUniqueId(), shopId, itemId, amount, shopItem.stockAmount()
+        );
+    }
+
+    private void restoreStock(Player player, String shopId, String itemId, ShopItem shopItem, int amount) {
+        if (!hasLimitedStock(shopItem) || amount <= 0) {
+            return;
+        }
+        if ("global".equalsIgnoreCase(shopItem.stockMode())) {
+            repository.restoreGlobalShopStock(shopId, itemId, amount);
+        } else {
+            repository.restorePlayerShopStock(player.getUniqueId(), shopId, itemId, amount);
+        }
+    }
+
     // ─── 数据模型 ───────────────────────────────────────────
 
     public record ShopDefinition(
@@ -264,8 +339,13 @@ public class ShopService {
         int limitPerPlayer, String limitReset, Map<String, Double> discount
     ) {}
 
-    public record BuyResult(boolean success, @Nullable String error, double totalPrice) {
-        public static BuyResult success(double price) { return new BuyResult(true, null, price); }
-        public static BuyResult fail(String error) { return new BuyResult(false, error, 0); }
+    public record BuyResult(boolean success, @Nullable String error, double totalPrice, String currency) {
+        public static BuyResult success(double price, String currency) {
+            return new BuyResult(true, null, price, currency);
+        }
+
+        public static BuyResult fail(String error) {
+            return new BuyResult(false, error, 0, "");
+        }
     }
 }

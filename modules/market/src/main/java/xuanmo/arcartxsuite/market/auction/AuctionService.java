@@ -70,6 +70,12 @@ public class AuctionService {
      */
     public ListingResult createListing(Player seller, ItemStack item, double buyNowPrice,
                                        double startingBid, String currency, long durationSeconds) {
+        if (item == null || item.getType().isAir()) {
+            return ListingResult.fail("没有可上架的物品");
+        }
+        // 防止与主手物品引用别名：使用副本作为上架物品
+        item = item.clone();
+
         // 检查上架数量限制
         int currentCount = repository.countListingsBySeller(seller.getUniqueId());
         if (currentCount >= config.maxListingsPerPlayer()) {
@@ -81,19 +87,39 @@ public class AuctionService {
             return ListingResult.fail(messages.itemBlacklisted());
         }
 
+        // 校验主手确实持有要上架的物品（防止客户端伪造物品 / 数量不符导致复制）
+        ItemStack inHand = seller.getInventory().getItemInMainHand();
+        if (inHand == null || inHand.getType().isAir()
+                || !inHand.isSimilar(item) || inHand.getAmount() < item.getAmount()) {
+            return ListingResult.fail("请手持要上架的物品");
+        }
+
         // 限制时长
         long duration = Math.max(config.minDurationSeconds(), Math.min(config.maxDurationSeconds(), durationSeconds));
 
+        // 先扣除背包物品（占有），避免"先入库后扣除"在异常时造成物品复制
+        if (inHand.getAmount() == item.getAmount()) {
+            seller.getInventory().setItemInMainHand(null);
+        } else {
+            inHand.setAmount(inHand.getAmount() - item.getAmount());
+            seller.getInventory().setItemInMainHand(inHand);
+        }
+
         // 扣上架费
+        BigDecimal feeCharged = null;
+        CurrencyBridgeAPI.CurrencyBridge feeBridge = null;
         if (config.listingFee() > 0) {
-            CurrencyBridgeAPI.CurrencyBridge feeBridge = currencyManager.bridge(config.listingFeeCurrency());
+            feeBridge = currencyManager.bridge(config.listingFeeCurrency());
             if (feeBridge == null || !feeBridge.available()) {
+                giveBack(seller, item);
                 return ListingResult.fail("上架费货币不可用");
             }
             CurrencyTransactionResult feeResult = feeBridge.withdraw(seller, BigDecimal.valueOf(config.listingFee()));
             if (!feeResult.success()) {
+                giveBack(seller, item);
                 return ListingResult.fail(messages.insufficientFunds());
             }
+            feeCharged = BigDecimal.valueOf(config.listingFee());
         }
 
         // 序列化物品
@@ -115,10 +141,14 @@ public class AuctionService {
             now, now + duration * 1000L
         );
 
-        repository.insertListing(listing);
-
-        // 从背包移除
-        seller.getInventory().setItemInMainHand(null);
+        // 入库失败则退费 + 归还物品，保证不丢
+        if (!repository.insertListing(listing)) {
+            if (feeCharged != null && feeBridge != null) {
+                feeBridge.deposit(seller, feeCharged);
+            }
+            giveBack(seller, item);
+            return ListingResult.fail("上架失败，请稍后重试");
+        }
 
         // 使 Redis 缓存失效
         if (redisCache.isAvailable()) {
@@ -127,6 +157,14 @@ public class AuctionService {
         }
 
         return ListingResult.success(listing);
+    }
+
+    /** 把物品归还给玩家，背包装不下的部分掉落在脚下（玩家在场，安全）。 */
+    private void giveBack(Player player, ItemStack item) {
+        var overflow = player.getInventory().addItem(item.clone());
+        for (ItemStack left : overflow.values()) {
+            player.getWorld().dropItemNaturally(player.getLocation(), left);
+        }
     }
 
     /**
@@ -147,14 +185,29 @@ public class AuctionService {
         double price = listing.getBuyNowPrice();
         String currency = listing.getCurrency();
 
-        // 扣买家钱
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(currency);
         if (bridge == null || !bridge.available()) {
             return PurchaseResult.fail("货币系统不可用");
         }
+
+        // 先抢占（状态 CAS），保证同一物品不会被并发购买 / 到期任务重复结算
+        if (!repository.compareAndSetListingStatus(listingId,
+                AuctionListing.ListingStatus.ACTIVE, AuctionListing.ListingStatus.SOLD)) {
+            return PurchaseResult.fail("该物品已不可购买");
+        }
+
+        // 扣买家钱（失败则回滚抢占）
         CurrencyTransactionResult withdrawResult = bridge.withdraw(buyer, BigDecimal.valueOf(price));
         if (!withdrawResult.success()) {
+            repository.compareAndSetListingStatus(listingId,
+                AuctionListing.ListingStatus.SOLD, AuctionListing.ListingStatus.ACTIVE);
             return PurchaseResult.fail(messages.insufficientFunds());
+        }
+
+        // BOTH 类型若已有竞价者，一口价成交需退还其押金（安全发放，离线不丢）
+        if (listing.getHighestBidder() != null && listing.getCurrentBid() > 0
+                && !listing.getHighestBidder().equals(buyer.getUniqueId())) {
+            depositSafe(listing.getHighestBidder(), currency, listing.getCurrentBid(), "auction_outbid_refund");
         }
 
         // 计算税费
@@ -162,20 +215,16 @@ public class AuctionService {
         double tax = price * taxRate;
         double sellerIncome = price - tax;
 
-        // 给卖家打钱
-        Player sellerOnline = Bukkit.getPlayer(listing.getSeller());
-        bridge.deposit(sellerOnline != null ? sellerOnline : createOfflineDeposit(listing.getSeller(), currency, sellerIncome),
-            BigDecimal.valueOf(sellerIncome));
+        // 给卖家打钱（在线即时 / 离线入待发放队列，绝不丢钱）
+        depositSafe(listing.getSeller(), currency, sellerIncome, "auction_sold_income");
 
-        // 更新状态
+        // 持久化其余字段（状态已是 SOLD）
         listing.setStatus(AuctionListing.ListingStatus.SOLD);
         repository.updateListing(listing);
 
-        // 给买家物品
+        // 给买家物品（在线即时 / 离线或背包满入队，绝不丢物品）
+        deliverItemSafe(buyer.getUniqueId(), listing, "auction_buynow_item");
         ItemStack item = itemSerializer.deserialize(listing.getItemData());
-        if (item != null) {
-            buyer.getInventory().addItem(item);
-        }
 
         // 记录历史
         repository.insertHistory(new AuctionHistory(
@@ -184,7 +233,8 @@ public class AuctionService {
             price, currency, tax, "BUY_NOW", System.currentTimeMillis()
         ));
 
-        // 通知卖家
+        // 通知卖家（仅在线时；主线程安全）
+        Player sellerOnline = Bukkit.getPlayer(listing.getSeller());
         if (sellerOnline != null) {
             sellerOnline.sendMessage(ChatColor.translateAlternateColorCodes('&',
                 messages.auctionSold().replace("%item%", listing.getItemDisplayName())
@@ -237,20 +287,18 @@ public class AuctionService {
             return BidResult.fail(messages.insufficientFunds());
         }
 
-        // 退还上一位最高出价者
+        // 退还上一位最高出价者押金（安全发放：在线即时入账并通知，离线入待发放队列，绝不丢钱）
+        // 注：竞价依赖客户端包已切主线程串行执行，单服内无并发覆盖问题。
         UUID previousBidder = listing.getHighestBidder();
         double previousBid = listing.getCurrentBid();
-        if (previousBidder != null && previousBid > 0) {
+        if (previousBidder != null && previousBid > 0 && !previousBidder.equals(bidder.getUniqueId())) {
+            depositSafe(previousBidder, listing.getCurrency(), previousBid, "auction_outbid_refund");
             Player prevPlayer = Bukkit.getPlayer(previousBidder);
             if (prevPlayer != null) {
-                bridge.deposit(prevPlayer, BigDecimal.valueOf(previousBid));
                 prevPlayer.sendMessage(ChatColor.translateAlternateColorCodes('&',
                     messages.auctionOutbid()
                         .replace("%item%", listing.getItemDisplayName())
                         .replace("%amount%", currencyManager.format(listing.getCurrency(), BigDecimal.valueOf(amount)))));
-            } else {
-                // 离线退款：直接通过 bridge 存入
-                depositOffline(previousBidder, listing.getCurrency(), previousBid);
             }
         }
 
@@ -280,19 +328,22 @@ public class AuctionService {
         if (!listing.getSeller().equals(seller.getUniqueId())) return false;
         if (listing.getStatus() != AuctionListing.ListingStatus.ACTIVE) return false;
 
-        // 如果有竞价者，退还
+        // 抢占，避免与到期任务并发重复处理（退款 + 退物只发生一次）
+        if (!repository.compareAndSetListingStatus(listingId,
+                AuctionListing.ListingStatus.ACTIVE, AuctionListing.ListingStatus.CANCELLED)) {
+            return false;
+        }
+
+        // 如果有竞价者，退还押金（安全发放，离线不丢）
         if (listing.getHighestBidder() != null && listing.getCurrentBid() > 0) {
-            depositOffline(listing.getHighestBidder(), listing.getCurrency(), listing.getCurrentBid());
+            depositSafe(listing.getHighestBidder(), listing.getCurrency(), listing.getCurrentBid(), "auction_cancel_refund");
         }
 
         listing.setStatus(AuctionListing.ListingStatus.CANCELLED);
         repository.updateListing(listing);
 
-        // 返还物品
-        ItemStack item = itemSerializer.deserialize(listing.getItemData());
-        if (item != null) {
-            seller.getInventory().addItem(item);
-        }
+        // 返还物品（安全发放：背包满或离线均入待发放队列）
+        deliverItemSafe(seller.getUniqueId(), listing, "auction_cancel_return");
 
         repository.insertHistory(new AuctionHistory(
             0, listing.getId(), listing.getSeller(), null,
@@ -350,10 +401,11 @@ public class AuctionService {
      */
     public int triggerExpiredProcessing() {
         List<AuctionListing> expired = repository.getExpiredListings();
+        int count = expired.size();
         for (AuctionListing listing : expired) {
-            processExpiredListing(listing);
+            Bukkit.getScheduler().runTask(plugin, () -> processExpiredListing(listing));
         }
-        return expired.size();
+        return count;
     }
 
     // ─── 定期处理 ───────────────────────────────────────────
@@ -362,7 +414,7 @@ public class AuctionService {
         try {
             List<AuctionListing> expired = repository.getExpiredListings();
             for (AuctionListing listing : expired) {
-                processExpiredListing(listing);
+                Bukkit.getScheduler().runTask(plugin, () -> processExpiredListing(listing));
             }
         } catch (Exception e) {
             logger.log(Level.SEVERE, "[Market-Auction] 到期处理异常", e);
@@ -370,21 +422,29 @@ public class AuctionService {
     }
 
     private void processExpiredListing(AuctionListing listing) {
-        if (listing.getHighestBidder() != null && listing.getCurrentBid() > 0) {
+        boolean hasBidder = listing.getHighestBidder() != null && listing.getCurrentBid() > 0;
+        AuctionListing.ListingStatus target = hasBidder
+            ? AuctionListing.ListingStatus.SOLD
+            : AuctionListing.ListingStatus.EXPIRED;
+
+        // 抢占：仅当仍为 ACTIVE 时本次才负责结算，杜绝与购买/手动触发/上一轮任务重复结算（重复发钱发物品）
+        if (!repository.compareAndSetListingStatus(listing.getId(),
+                AuctionListing.ListingStatus.ACTIVE, target)) {
+            return;
+        }
+        listing.setStatus(target);
+
+        if (hasBidder) {
             // 竞价成交
             double taxRate = getEffectiveTaxRate(listing.getSeller());
             double tax = listing.getCurrentBid() * taxRate;
             double sellerIncome = listing.getCurrentBid() - tax;
 
-            // 给卖家打钱
-            depositOffline(listing.getSeller(), listing.getCurrency(), sellerIncome);
+            // 卖家收款 + 买家得物品（安全发放，离线不丢）
+            depositSafe(listing.getSeller(), listing.getCurrency(), sellerIncome, "auction_bidwin_income");
+            deliverItemSafe(listing.getHighestBidder(), listing, "auction_bidwin_item");
 
-            // 给买家物品
-            deliverItem(listing.getHighestBidder(), listing);
-
-            listing.setStatus(AuctionListing.ListingStatus.SOLD);
             repository.updateListing(listing);
-
             repository.insertHistory(new AuctionHistory(
                 0, listing.getId(), listing.getSeller(), listing.getHighestBidder(),
                 listing.getItemData(), listing.getItemDisplayName(),
@@ -392,9 +452,8 @@ public class AuctionService {
                 "BID_WIN", System.currentTimeMillis()
             ));
         } else {
-            // 无人竞价，退还物品
-            deliverItem(listing.getSeller(), listing);
-            listing.setStatus(AuctionListing.ListingStatus.EXPIRED);
+            // 无人竞价，退还物品给卖家（安全发放）
+            deliverItemSafe(listing.getSeller(), listing, "auction_expired_return");
             repository.updateListing(listing);
 
             repository.insertHistory(new AuctionHistory(
@@ -403,7 +462,7 @@ public class AuctionService {
                 0, listing.getCurrency(), 0, "EXPIRED", System.currentTimeMillis()
             ));
 
-            // 通知卖家
+            // 通知卖家（在线时）
             Player seller = Bukkit.getPlayer(listing.getSeller());
             if (seller != null) {
                 seller.sendMessage(ChatColor.translateAlternateColorCodes('&',
@@ -416,23 +475,54 @@ public class AuctionService {
         }
     }
 
-    private void deliverItem(UUID target, AuctionListing listing) {
-        Player online = Bukkit.getPlayer(target);
-        ItemStack item = itemSerializer.deserialize(listing.getItemData());
-        if (item == null) return;
-
-        if (online != null) {
-            online.getInventory().addItem(item);
-        } else if ("mail".equals(config.expiredReturnMethod()) && mailSupplier != null) {
-            MailDispatchable mail = mailSupplier.get();
-            if (mail != null) {
-                // 通过预设模板发送退回邮件（预设需在 Mail 模块配置中定义）
-                String playerName = listing.getSellerName();
-                mail.dispatchPreset("market_return", playerName, "Market");
-            }
-            // TODO: 物品附件退还需要扩展 MailDispatchable 接口或通过背包补发队列实现
+    /** 在主线程执行任务（已在主线程则直接执行）。 */
+    private void runOnMain(Runnable task) {
+        if (Bukkit.isPrimaryThread()) {
+            task.run();
+        } else {
+            Bukkit.getScheduler().runTask(plugin, task);
         }
-        // 如果 mail 不可用或玩家离线，物品将在玩家上线时通过补发队列发放
+    }
+
+    /**
+     * 安全发放物品：收件人在线则在主线程放入背包（装不下的部分入待发放队列），
+     * 离线则整笔入待发放队列，玩家上线时补发。彻底避免物品丢失。
+     */
+    private void deliverItemSafe(UUID target, AuctionListing listing, String reason) {
+        final ItemStack item = itemSerializer.deserialize(listing.getItemData());
+        if (item == null) {
+            logger.warning("[Market-Auction] 物品反序列化失败，已转入待发放队列 listing=" + listing.getId());
+            repository.addPendingItem(target, listing.getItemData(), reason);
+            return;
+        }
+        Player online = Bukkit.getPlayer(target);
+        if (online != null && online.isOnline()) {
+            runOnMain(() -> {
+                java.util.Map<Integer, ItemStack> overflow = online.getInventory().addItem(item);
+                for (ItemStack left : overflow.values()) {
+                    repository.addPendingItem(target, itemSerializer.serialize(left), reason);
+                }
+            });
+        } else {
+            repository.addPendingItem(target, listing.getItemData(), reason);
+        }
+    }
+
+    /**
+     * 安全发放货币：收件人在线且货币可用则在主线程入账，
+     * 否则入待发放队列，玩家上线时补发。彻底避免货款丢失。
+     */
+    private void depositSafe(UUID target, String currency, double amount, String reason) {
+        if (amount <= 0) {
+            return;
+        }
+        Player online = Bukkit.getPlayer(target);
+        CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(currency);
+        if (online != null && online.isOnline() && bridge != null && bridge.available()) {
+            runOnMain(() -> bridge.deposit(online, BigDecimal.valueOf(amount)));
+        } else {
+            repository.addPendingCurrency(target, currency, amount, reason);
+        }
     }
 
     // ─── 工具方法 ───────────────────────────────────────────
@@ -486,23 +576,8 @@ public class AuctionService {
         return item.getType().name();
     }
 
-    private void depositOffline(UUID player, String currency, double amount) {
-        // 离线存款：通过命令或 Vault offline
-        CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(currency);
-        if (bridge == null) return;
-        Player online = Bukkit.getPlayer(player);
-        if (online != null) {
-            bridge.deposit(online, BigDecimal.valueOf(amount));
-        }
-        // 离线情况下依赖 Vault OfflinePlayer 支持
-    }
-
-    @SuppressWarnings("all")
-    private Player createOfflineDeposit(UUID seller, String currency, double amount) {
-        // 离线玩家存款委托给主线程
-        Bukkit.getScheduler().runTask(plugin, () -> depositOffline(seller, currency, amount));
-        return null;
-    }
+    // 离线 / 背包溢出的发放统一由 deliverItemSafe / depositSafe + 待发放队列处理，
+    // 不再使用旧的 depositOffline / createOfflineDeposit（离线时会丢钱）。
 
     // ─── 结果类 ─────────────────────────────────────────────
 

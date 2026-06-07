@@ -160,35 +160,44 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
         //   - LittleSkin 玩家的 UUID 由 yggdrasil 认证服务器分配，通常与官方 UUID 不同
         if (enableMojangLookup && allowNetwork) {
             String officialUuid = lookupOfficialUuid(name, true);
-            if (!officialUuid.isBlank()) {
-                if (uuidEqualsIgnoreDashes(uuid, officialUuid)) {
-                    // UUID 与 Mojang 官方完全一致 = 微软正版
+            if (officialUuid != null) {
+                if (!officialUuid.isBlank()) {
+                    // 玩家名在 Mojang 存在 → 微软正版（与 API 文档一致，不因 UUID 版本差异误判）
                     return AccountType.MICROSOFT;
                 }
-                // 玩家名在 Mojang 存在但 UUID 不同 = LittleSkin（名字恰好与正版相同）
-                return AccountType.LITTLESKIN;
+                // 名字已确认不在 Mojang（404/204）
+                Boolean uuidExists = queryOfficialByUuid(uuid);
+                if (uuidExists != null) {
+                    if (uuidExists) {
+                        return AccountType.MICROSOFT;
+                    }
+                    if (uuid.version() == 4) {
+                        return AccountType.LITTLESKIN;
+                    }
+                    return AccountType.OFFLINE;
+                }
+                // UUID 反查也失败：保守判定，禁止 premium bypass
+                return AccountType.OFFLINE;
             }
-
-            // 名字查询返回空串（可能为超时或 404）→ UUID 反查兜底
+            // 名字查询网络失败：尝试 UUID 反查
             Boolean uuidExists = queryOfficialByUuid(uuid);
             if (uuidExists != null) {
                 if (uuidExists) {
                     return AccountType.MICROSOFT;
                 }
-                // UUID 反查确认不是正版
                 if (uuid.version() == 4) {
                     return AccountType.LITTLESKIN;
                 }
                 return AccountType.OFFLINE;
             }
+            // 全部查询失败：保守 OFFLINE，避免网络抖动导致 v4 误判为 LittleSkin 从而免密 bypass
+            return AccountType.OFFLINE;
         }
 
-        // 玩家名不在 Mojang（或未启用 Mojang 查询）
-        if (uuid.version() == 4) {
-            // v4 且不在 Mojang：LittleSkin（authlib 环境）或某些特殊情况
+        // 未启用 Mojang 查询：仅本地启发式，v4 不自动视为 LittleSkin（避免误 bypass）
+        if (uuid != null && uuid.version() == 4 && isAuthlibInjectorLoaded()) {
             return AccountType.LITTLESKIN;
         }
-        // v3 且不在 Mojang：离线
         return AccountType.OFFLINE;
     }
 
@@ -259,10 +268,10 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
     /**
      * 查询玩家名对应的 Mojang 官方 UUID。
      * <p>
-     * 返回空串表示「已确认该名字不是正版」；网络失败时返回空串但<strong>不写缓存</strong>，
-     * 以便下次重试，避免临时网络故障污染判定结果。
+     * 返回官方 UUID（存在）；空串表示已确认该名字不是正版；
+     * {@code null} 表示网络失败/未知（不写缓存，便于重试）。
      */
-    private String lookupOfficialUuid(String name, boolean allowNetwork) {
+    private @Nullable String lookupOfficialUuid(String name, boolean allowNetwork) {
         String normalized = name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
         if (normalized.isBlank()) {
             return "";
@@ -272,7 +281,7 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
             return cached;
         }
         if (!allowNetwork) {
-            return "";
+            return null;
         }
         try {
             String resolved = queryOfficialUuid(name);
@@ -283,7 +292,7 @@ public final class AccountTypeServiceImpl implements AccountTypeService, Listene
                 logger.warning("[AccountType] Mojang API 查询失败 (" + name + "): " + exception.getMessage()
                     + " —— 本次不缓存，下次重试");
             }
-            return "";
+            return null;
         }
     }
 
