@@ -56,6 +56,10 @@ attack-target:
     title-format: "&c{display_name}"
     subtitle-format: "&7{entity_type_name} &8| &c{health}/{max_health} &8| &f{distance_text}"
 
+# 跨服通道开关；Redis/Proxy 连接与鉴权见宿主 plugins/ArcartXSuite/config.yml 的 cross-server 节。
+cross-server:
+  enabled: false
+
 # 新功能配置 (1.1.0-beta)
 new-features:
   # Boss掉落记录系统
@@ -114,29 +118,14 @@ new-features:
         rare: 3       # 稀有装备
         common: 4     # 普通装备
 
-  # 跨服Boss排行系统
+  # 跨服 Boss 排行：Boss 死亡结算后同步各服最高伤害至共享 SQLite，经统一 CrossServer SDK 广播。
   cross-server-ranking:
-    enabled: true
-    # 服务器标识名称
-    server-name: "Server1"
-    # 排行榜更新间隔(秒)
+    enabled: false
+    # 排行榜更新间隔(秒)，预留
     update-interval: 60
-    # Redis配置
-    redis:
-      host: "localhost"
-      port: 6379
-      password: ""
-      database: 0
-      # 连接超时(毫秒)
-      timeout: 5000
-    # 排行榜类型
+    # 排行榜类型（预留）
     ranking-types:
-      - "best_damage" # 最高单次伤害排行
-      - "boss_damage" # 特定Boss最高伤害排行
-      - "kills"       # 击杀排行
-      - "participate" # 参与排行
-      - "server"      # 服务器排行
-    # 排行榜显示数量
+      - "best_damage"
     max-entries: 50
 
   # 排行榜定时奖励全局设置

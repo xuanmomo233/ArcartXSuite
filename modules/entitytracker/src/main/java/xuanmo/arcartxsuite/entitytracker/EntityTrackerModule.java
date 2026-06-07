@@ -19,6 +19,9 @@ import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
+import xuanmo.arcartxsuite.entitytracker.crossserver.EntityTrackerCrossServerService;
 import xuanmo.arcartxsuite.entitytracker.command.EntityTrackerAdminCommand;
 import xuanmo.arcartxsuite.entitytracker.command.RankingRewardCommand;
 import xuanmo.arcartxsuite.entitytracker.service.RankingRewardService;
@@ -55,6 +58,10 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     private EntityTargetHudService targetService;
     private RankingRewardService rewardService;
     private RankingRewardScheduler rewardScheduler;
+    private CrossServerChannelConfig crossServerChannelConfig = CrossServerChannelConfig.disabled();
+    private boolean crossServerRankingEnabled;
+    private EntityTrackerCrossServerService crossServerService;
+    private javax.sql.DataSource moduleDataSource;
     private List<String> bossRuntimeUiIds = List.of();
     private List<String> targetRuntimeUiIds = List.of();
 
@@ -128,6 +135,9 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         ensureBossDefaults(bossesDirRelative);
         configuration = PluginConfiguration.from(bossSection, bossesDirectory);
         targetConfiguration = EntityTargetHudConfiguration.load(yaml.getConfigurationSection("attack-target"));
+        crossServerChannelConfig = CrossServerChannelConfigs.fromSection(yaml.getConfigurationSection("cross-server"));
+        ConfigurationSection crossServerRankingSection = yaml.getConfigurationSection("new-features.cross-server-ranking");
+        crossServerRankingEnabled = crossServerRankingSection != null && crossServerRankingSection.getBoolean("enabled", false);
     }
 
     private void ensureBossDefaults(String bossesRelative) {
@@ -144,6 +154,14 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     @Override
     protected void startService() throws Exception {
         ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
+
+        moduleDataSource = initializeSharedDatabaseIfNeeded();
+        if (crossServerRankingEnabled && moduleDataSource != null) {
+            crossServerService = new EntityTrackerCrossServerService(
+                context.plugin(), context.crossServer(), crossServerChannelConfig, moduleDataSource
+            );
+            crossServerService.start();
+        }
 
         // Boss tracker depends on MythicMobs/MythicBukkit. If it is absent, keep the module alive
         // and only run the generic attack-target HUD below.
@@ -171,7 +189,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             bossService = new BossTrackerService(
                 context.plugin(), configuration, packetBridge, bossRuntimeUiIds,
                 platform, null, () -> context.getCapability(MailDispatchable.class),
-                context.itemSourceRegistry(), context.attributeBridge()
+                context.itemSourceRegistry(), context.attributeBridge(), crossServerService
             );
             bossService.start();
             adminCommand = new EntityTrackerAdminCommand(() -> bossService, messages());
@@ -211,6 +229,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                 + " | boss-ui=" + bossRuntimeUiIds
                 + " | target-ui=" + targetRuntimeUiIds
                 + " | reward-system=" + (rewardService != null ? "enabled" : "disabled")
+                + " | cross-server-ranking=" + (crossServerService != null && crossServerService.isActive() ? "ON" : "OFF")
         );
     }
 
@@ -233,6 +252,11 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         rewardService = null;
         rewardCommand = null;
         
+        if (crossServerService != null) {
+            crossServerService.shutdown();
+            crossServerService = null;
+        }
+        moduleDataSource = null;
         configuration = null;
         targetConfiguration = null;
     }
@@ -261,7 +285,6 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
      */
     private void initializeRewardSystem() {
         try {
-            // 从主配置读取排行榜奖励全局设置
             File configFile = new File(context.dataFolder(), "config.yml");
             if (!configFile.exists()) {
                 context.logger().info("排行榜奖励系统：主配置文件不存在，跳过初始化");
@@ -275,9 +298,10 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                 return;
             }
 
-            // 初始化数据库（database 在主配置根节点）
-            javax.sql.DataSource dataSource = initializeDatabase(mainConfig);
-            if (dataSource == null) {
+            if (moduleDataSource == null) {
+                moduleDataSource = initializeDatabase(mainConfig);
+            }
+            if (moduleDataSource == null) {
                 context.logger().severe("排行榜奖励系统数据库初始化失败");
                 return;
             }
@@ -293,7 +317,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
 
             // 创建服务实例
             rewardService = new RankingRewardService(
-                dataSource, actionExecutor, context.plugin(), () -> configuration
+                moduleDataSource, actionExecutor, context.plugin(), () -> configuration
             );
             rewardScheduler = new RankingRewardScheduler(rewardService, context.plugin());
             rewardCommand = new RankingRewardCommand(rewardService, rewardScheduler, context.plugin(), messages());
@@ -306,6 +330,22 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         } catch (Exception e) {
             context.logger().severe("排行榜奖励系统初始化失败: " + e.getMessage());
             // 不抛出异常，允许模块继续运行其他功能
+        }
+    }
+
+    private javax.sql.DataSource initializeSharedDatabaseIfNeeded() {
+        if (!crossServerRankingEnabled) {
+            return null;
+        }
+        try {
+            File configFile = new File(context.dataFolder(), "config.yml");
+            FileConfiguration mainConfig = configFile.exists()
+                ? YamlConfiguration.loadConfiguration(configFile)
+                : new YamlConfiguration();
+            return initializeDatabase(mainConfig);
+        } catch (Exception exception) {
+            context.logger().severe("跨服 Boss 排行数据库初始化失败: " + exception.getMessage());
+            return null;
         }
     }
 

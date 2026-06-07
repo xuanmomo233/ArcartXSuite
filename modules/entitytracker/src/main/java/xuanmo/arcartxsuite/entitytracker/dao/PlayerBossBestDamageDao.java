@@ -23,6 +23,25 @@ public class PlayerBossBestDamageDao {
     }
 
     /**
+     * 插入或更新；若已有记录且伤害不低于新值则跳过并返回 false。
+     */
+    public boolean insertOrUpdateIfBetter(PlayerBossBestDamage record) throws SQLException {
+        if (record == null || record.getPlayerUuid() == null || record.getBossId() == null) {
+            return false;
+        }
+        Optional<PlayerBossBestDamage> existing = findByPlayerAndBoss(record.getPlayerUuid(), record.getBossId());
+        if (existing.isPresent()) {
+            int current = existing.get().getBestDamage() == null ? 0 : existing.get().getBestDamage();
+            int incoming = record.getBestDamage() == null ? 0 : record.getBestDamage();
+            if (incoming <= current) {
+                return false;
+            }
+        }
+        insertOrUpdate(record);
+        return true;
+    }
+
+    /**
      * 插入或更新玩家Boss最高伤害记录
      */
     public void insertOrUpdate(PlayerBossBestDamage record) throws SQLException {
