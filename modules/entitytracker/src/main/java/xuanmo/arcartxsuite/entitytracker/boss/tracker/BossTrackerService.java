@@ -38,6 +38,7 @@ import xuanmo.arcartxsuite.entitytracker.boss.config.BossDefinition;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossSortMode;
 import xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration;
 import xuanmo.arcartxsuite.entitytracker.crossserver.EntityTrackerCrossServerService;
+import xuanmo.arcartxsuite.entitytracker.service.BossKillRecordingService;
 import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
 import xuanmo.arcartxsuite.api.event.TaczGunDamageEvent;
 
@@ -60,6 +61,7 @@ public final class BossTrackerService implements Listener {
     private final xuanmo.arcartxsuite.entitytracker.boss.platform.ServerPlatform serverPlatform;
     private final BossDamageSettlementService settlementService;
     private final EntityTrackerCrossServerService crossServerService;
+    private final BossKillRecordingService killRecordingService;
     private final xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge;
     private final Map<UUID, BossSession> sessions = new LinkedHashMap<>();
     private final Map<UUID, ViewerState> viewerStates = new ConcurrentHashMap<>();
@@ -98,7 +100,23 @@ public final class BossTrackerService implements Listener {
         EntityTrackerCrossServerService crossServerService
     ) {
         this(plugin, configuration, arcartXBridge, runtimeUiIds, serverPlatform, signalDispatcher,
-            () -> null, itemSourceRegistry, attributeBridge, crossServerService);
+            itemSourceRegistry, attributeBridge, crossServerService, null);
+    }
+
+    public BossTrackerService(
+        JavaPlugin plugin,
+        PluginConfiguration configuration,
+        ArcartXPacketBridge arcartXBridge,
+        List<String> runtimeUiIds,
+        xuanmo.arcartxsuite.entitytracker.boss.platform.ServerPlatform serverPlatform,
+        java.util.function.BiConsumer<String, Player> signalDispatcher,
+        xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry,
+        xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge,
+        EntityTrackerCrossServerService crossServerService,
+        BossKillRecordingService killRecordingService
+    ) {
+        this(plugin, configuration, arcartXBridge, runtimeUiIds, serverPlatform, signalDispatcher,
+            () -> null, itemSourceRegistry, attributeBridge, crossServerService, killRecordingService);
     }
 
     public BossTrackerService(
@@ -111,7 +129,8 @@ public final class BossTrackerService implements Listener {
         java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider,
         xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry,
         xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge,
-        EntityTrackerCrossServerService crossServerService
+        EntityTrackerCrossServerService crossServerService,
+        BossKillRecordingService killRecordingService
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
@@ -121,6 +140,7 @@ public final class BossTrackerService implements Listener {
         this.signalDispatcher = signalDispatcher;
         this.attributeBridge = attributeBridge;
         this.crossServerService = crossServerService;
+        this.killRecordingService = killRecordingService;
         this.settlementService = new BossDamageSettlementService(
             plugin, mailDispatchableProvider, signalDispatcher, itemSourceRegistry
         );
@@ -138,7 +158,7 @@ public final class BossTrackerService implements Listener {
         xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge
     ) {
         this(plugin, configuration, arcartXBridge, runtimeUiIds, serverPlatform, signalDispatcher,
-            mailDispatchableProvider, itemSourceRegistry, attributeBridge, null);
+            mailDispatchableProvider, itemSourceRegistry, attributeBridge, null, null);
     }
 
     public void start() {
@@ -354,6 +374,9 @@ public final class BossTrackerService implements Listener {
         BossDamageSettlementRecord record = settlementService.settle(session, entity);
         if (crossServerService != null && record != null) {
             crossServerService.publishSettlement(record, entity.getLocation());
+        }
+        if (killRecordingService != null && record != null) {
+            killRecordingService.recordBossDeath(session, entity, record, entity.getLocation());
         }
         sendLifecycleCards(session, entity, session.getDefinition().deathChatCard(), "death");
         dispatchBossSettlementSignals(session, record);

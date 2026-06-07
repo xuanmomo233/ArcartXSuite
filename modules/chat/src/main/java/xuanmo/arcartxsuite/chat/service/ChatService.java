@@ -191,12 +191,8 @@ public final class ChatService implements Listener {
         return mutes.size();
     }
 
-    public boolean transportActive() {
+    public boolean crossServerActive() {
         return crossServerChannel != null && crossServerChannel.isActive();
-    }
-
-    public String transportName() {
-        return transportActive() ? "cross-server" : "none";
     }
 
     public List<String> channelIds() {
@@ -572,7 +568,7 @@ public final class ChatService implements Listener {
         );
         rememberEnvelope(envelope.dedupeKey());
         deliverPublicEnvelope(envelope, channel, sender);
-        if (channel.crossServer() && transportActive()) {
+        if (channel.crossServer() && crossServerActive()) {
             crossServerChannel.publish(ChatEnvelopeCodec.encode(envelope));
         }
         trackMessageFingerprint(sender.getUniqueId(), processedMessage);
@@ -610,7 +606,7 @@ public final class ChatService implements Listener {
             if (targetState.ignores(sender.getUniqueId())) {
                 return ChatOperationResult.failure("对方已忽略你。");
             }
-        } else if (!transportActive()) {
+        } else if (!crossServerActive()) {
             return ChatOperationResult.failure("对方当前不在线。");
         }
 
@@ -675,7 +671,7 @@ public final class ChatService implements Listener {
         );
         rememberEnvelope(envelope.dedupeKey());
         deliverPrivateEnvelope(envelope, sender, localTarget);
-        if (channel.crossServer() && transportActive()) {
+        if (channel.crossServer() && crossServerActive()) {
             crossServerChannel.publish(ChatEnvelopeCodec.encode(envelope));
         }
         replyTargets.put(sender.getUniqueId(), targetProfile.playerUuid());

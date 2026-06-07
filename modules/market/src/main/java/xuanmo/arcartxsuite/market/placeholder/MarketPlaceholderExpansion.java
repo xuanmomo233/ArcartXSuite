@@ -35,7 +35,8 @@ public class MarketPlaceholderExpansion extends PlaceholderExpansion {
             case "auction_count" -> String.valueOf(service.getAuctionCount());
             case "shop_count" -> String.valueOf(service.getShopCount());
             case "recycle_count" -> String.valueOf(service.getRecycleEntryCount());
-            case "redis_status" -> service.isRedisConnected() ? "已连接" : "未连接";
+            case "redis_status", "list_cache_status" -> service.isListCacheConnected() ? "已连接" : "未连接";
+            case "cross_server_status" -> service.crossServerActive() ? "已启用" : "未启用";
             case "my_listings" -> player != null ? String.valueOf(getMyListingsCount(service, player)) : "0";
             default -> null;
         };

@@ -9,6 +9,10 @@ settings:
   debug: false
   flush-interval-ticks: 100
 
+# 跨服共享仓库编辑锁；MySQL 共享库 + 多子服时建议开启。连接参数见宿主 config.yml cross-server 节。
+cross-server:
+  enabled: false
+
 ui:
   id: "AXS:warehouse_storage"
   file: "arcartx/ui/warehouse_menu.yml"

@@ -80,7 +80,8 @@ public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
         if (svc == null) { sender.sendMessage(msg("common.service-down")); return; }
         sender.sendMessage(msg("admin.status.title"));
         sender.sendMessage(msg("admin.status.cached", svc.cachedPlayerCount()));
-        sender.sendMessage(msg("admin.status.redis", svc.redisActive()));
+        sender.sendMessage(msg("admin.status.cross-server",
+            svc.crossServerActive() ? ChatColor.GREEN + "已启用" : ChatColor.YELLOW + "未启用"));
     }
 
     private void handleTimeAdjust(CommandSender sender, String operation, String[] args) {

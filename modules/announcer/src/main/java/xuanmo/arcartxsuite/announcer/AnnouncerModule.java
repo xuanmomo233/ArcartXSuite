@@ -280,7 +280,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
                 sender.sendMessage(msg("status.groups", subtitleService != null ? subtitleService.groupCount() : 0));
                 sender.sendMessage(msg("status.playing", subtitleService != null ? subtitleService.activePlayerCount() : 0));
                 sender.sendMessage(msg("status.pending", service != null ? service.pendingManualBroadcasts() : 0));
-                sender.sendMessage(msg("status.proxy",
+                sender.sendMessage(msg("status.cross-server",
                     service != null && service.crossServerActive()
                         ? messages().get("common.enabled") : messages().get("common.disabled")));
             }
@@ -301,7 +301,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
             return;
         }
         if (forward && (service == null || !service.crossServerActive())) {
-            sender.sendMessage(msg("broadcast.proxy-disabled"));
+            sender.sendMessage(msg("broadcast.cross-server-disabled"));
             return;
         }
         if (args.length < 3) {

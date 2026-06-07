@@ -197,7 +197,8 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         }
 
         context.logger().fine("Market 模块已载入 | 存储=" + configuration.storage().mode().toUpperCase()
-            + " | Redis=" + (configuration.redis().enabled() ? "启用" : "禁用"));
+            + " | 列表缓存=" + (configuration.redis().enabled() ? "启用" : "禁用")
+            + " | 跨服=" + (service != null && service.crossServerActive() ? "ON" : "OFF"));
     }
 
     private void bindMarketUi(String name, String configuredId, String relativeUiPath) {

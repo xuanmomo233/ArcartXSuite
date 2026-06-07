@@ -36,12 +36,12 @@ status:
   groups: "&7字幕组: &f{0}"
   playing: "&7字幕播放中: &f{0}"
   pending: "&7待播队列: &f{0}"
-  proxy: "&7跨服传输: &f{0}"
+  cross-server: "&7跨服通道: &f{0}"
 
 # ── broadcast ─────────────────────────────────────────
 broadcast:
   service-down: "&c广播服务未启动。"
-  proxy-disabled: "&c跨服传输未启用，请先在模块配置中开启 cross-server.enabled，并在宿主 config.yml 配置 cross-server。"
+  cross-server-disabled: "&c跨服通道未启用，请先在模块配置中开启 cross-server.enabled，并在宿主 config.yml 配置 cross-server。"
   usage: "&e用法: /{0} announcer {1} <文本>"
   now: "&a已{0}立即广播: &f{1}"
   queued: "&a已{0}加入广播队列 (待播: {1}): &f{2}"

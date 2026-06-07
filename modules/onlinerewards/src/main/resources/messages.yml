@@ -45,7 +45,7 @@ admin:
   status:
     title: "&6OnlineRewards 状态"
     cached: "&7缓存玩家: &f{0}"
-    redis: "&7Redis: &f{0}"
+    cross-server: "&7跨服通道: &f{0}"
   time:
     usage: "&e用法: /axs onlinerewards {0} <时长> <玩家>"
     invalid: "&c无效时长: {0} (支持 30m/2h/1d)"

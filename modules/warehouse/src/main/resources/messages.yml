@@ -30,6 +30,8 @@ status:
   cached: "&7缓存玩家: &f{0}"
   dirty: "&7脏数据: &f{0}"
   currency: "&7货币: &f{0}"
+  cross-server: "&7跨服编辑锁: &f{0}"
+  shared-locks: "&7活跃共享锁: &f{0}"
 
 # ── admin ─────────────────────────────────────────────
 admin:

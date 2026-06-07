@@ -12,10 +12,13 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 import xuanmo.arcartxsuite.entitytracker.boss.tracker.BossDamageSettlementEntry;
 import xuanmo.arcartxsuite.entitytracker.boss.tracker.BossDamageSettlementRecord;
 import xuanmo.arcartxsuite.entitytracker.dao.PlayerBossBestDamageDao;
+import xuanmo.arcartxsuite.entitytracker.entity.BossKillRecord;
 import xuanmo.arcartxsuite.entitytracker.entity.PlayerBossBestDamage;
+import xuanmo.arcartxsuite.entitytracker.service.BossKillRecordingService;
+import xuanmo.arcartxsuite.entitytracker.service.CrossServerRankingCacheService;
 
 /**
- * Boss 最高伤害跨服同步：Boss 结算后写入本地库并广播，其他子服入站合并。
+ * Boss 跨服同步：最高伤害、击杀记录广播与入站合并。
  */
 public final class EntityTrackerCrossServerService {
 
@@ -25,6 +28,8 @@ public final class EntityTrackerCrossServerService {
     private final PlayerBossBestDamageDao damageDao;
 
     private CrossServerChannel channel;
+    private BossKillRecordingService killRecordingService;
+    private CrossServerRankingCacheService rankingCacheService;
 
     public EntityTrackerCrossServerService(
         JavaPlugin plugin,
@@ -36,6 +41,14 @@ public final class EntityTrackerCrossServerService {
         this.crossServer = crossServer;
         this.channelConfig = channelConfig == null ? CrossServerChannelConfig.disabled() : channelConfig;
         this.damageDao = new PlayerBossBestDamageDao(dataSource, plugin);
+    }
+
+    public void attachKillRecording(BossKillRecordingService killRecordingService) {
+        this.killRecordingService = killRecordingService;
+    }
+
+    public void attachRankingCache(CrossServerRankingCacheService rankingCacheService) {
+        this.rankingCacheService = rankingCacheService;
     }
 
     public void start() {
@@ -98,20 +111,51 @@ public final class EntityTrackerCrossServerService {
         }
     }
 
+    public void publishKillRecord(BossKillRecord record) {
+        if (channel == null || !channel.isActive() || record == null) {
+            return;
+        }
+        channel.publish(EntityTrackerCrossServerPayloadCodec.encodeKillRecord(record));
+    }
+
     private void handlePayload(String payload) {
         if (payload == null || payload.isBlank()) {
             return;
         }
         try {
-            PlayerBossBestDamage remote = EntityTrackerCrossServerPayloadCodec.decode(payload);
-            if (remote.getPlayerUuid() == null || remote.getPlayerUuid().isBlank()
-                || remote.getBossId() == null || remote.getBossId().isBlank()) {
-                return;
+            EntityTrackerCrossServerPayloadCodec.DecodedPayload decoded =
+                EntityTrackerCrossServerPayloadCodec.decode(payload);
+            if (EntityTrackerCrossServerPayloadCodec.TYPE_BEST_DAMAGE.equals(decoded.type())) {
+                mergeBestDamage(decoded.bestDamage());
+            } else if (EntityTrackerCrossServerPayloadCodec.TYPE_KILL_RECORD.equals(decoded.type())) {
+                mergeKillRecord(decoded.killRecord());
             }
-            damageDao.insertOrUpdateIfBetter(remote);
         } catch (IllegalArgumentException ignored) {
         } catch (SQLException exception) {
-            plugin.getLogger().warning("[EntityTracker] 合并跨服 Boss 伤害失败: " + exception.getMessage());
+            plugin.getLogger().warning("[EntityTracker] 合并跨服 Boss 数据失败: " + exception.getMessage());
+        }
+    }
+
+    private void mergeBestDamage(PlayerBossBestDamage remote) throws SQLException {
+        if (remote == null || remote.getPlayerUuid() == null || remote.getPlayerUuid().isBlank()
+            || remote.getBossId() == null || remote.getBossId().isBlank()) {
+            return;
+        }
+        if (damageDao.insertOrUpdateIfBetter(remote)) {
+            requestRankingRefresh();
+        }
+    }
+
+    private void mergeKillRecord(BossKillRecord remote) throws SQLException {
+        if (remote == null || killRecordingService == null) {
+            return;
+        }
+        killRecordingService.applyRemoteKillRecord(remote);
+    }
+
+    private void requestRankingRefresh() {
+        if (rankingCacheService != null) {
+            rankingCacheService.requestRefresh();
         }
     }
 }

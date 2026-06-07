@@ -55,7 +55,14 @@ public class MarketAdminCommand {
                 sender.sendMessage(fullMsg("status.active-listings", service.getAuctionCount()));
                 sender.sendMessage(fullMsg("status.shops", service.getShopCount()));
                 sender.sendMessage(fullMsg("status.recycle-entries", service.getRecycleEntryCount()));
-                sender.sendMessage(fullMsg("status.redis", service.isRedisConnected() ? fullMsg("status.redis-connected") : fullMsg("status.redis-disconnected")));
+                sender.sendMessage(fullMsg("status.list-cache",
+                    service.isListCacheConnected()
+                        ? fullMsg("status.list-cache-connected")
+                        : fullMsg("status.list-cache-disconnected")));
+                sender.sendMessage(fullMsg("status.cross-server",
+                    service.crossServerActive()
+                        ? fullMsg("status.cross-server-active")
+                        : fullMsg("status.cross-server-inactive")));
             }
             case "reload" -> {
                 service.reload();

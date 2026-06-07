@@ -21,8 +21,12 @@ import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
-import xuanmo.arcartxsuite.entitytracker.crossserver.EntityTrackerCrossServerService;
 import xuanmo.arcartxsuite.entitytracker.command.EntityTrackerAdminCommand;
+import xuanmo.arcartxsuite.entitytracker.service.BossKillRecordingService;
+import xuanmo.arcartxsuite.entitytracker.service.CrossServerRankingCacheService;
+import xuanmo.arcartxsuite.entitytracker.service.DropAllocationService;
+import xuanmo.arcartxsuite.entitytracker.config.EntityTrackerNewFeaturesSettings;
+import xuanmo.arcartxsuite.entitytracker.crossserver.EntityTrackerCrossServerService;
 import xuanmo.arcartxsuite.entitytracker.command.RankingRewardCommand;
 import xuanmo.arcartxsuite.entitytracker.service.RankingRewardService;
 import xuanmo.arcartxsuite.entitytracker.scheduler.RankingRewardScheduler;
@@ -59,8 +63,12 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     private RankingRewardService rewardService;
     private RankingRewardScheduler rewardScheduler;
     private CrossServerChannelConfig crossServerChannelConfig = CrossServerChannelConfig.disabled();
-    private boolean crossServerRankingEnabled;
+    private EntityTrackerNewFeaturesSettings newFeaturesSettings = EntityTrackerNewFeaturesSettings.defaults();
+    private FileConfiguration moduleYaml;
     private EntityTrackerCrossServerService crossServerService;
+    private BossKillRecordingService killRecordingService;
+    private DropAllocationService dropAllocationService;
+    private CrossServerRankingCacheService rankingCacheService;
     private javax.sql.DataSource moduleDataSource;
     private List<String> bossRuntimeUiIds = List.of();
     private List<String> targetRuntimeUiIds = List.of();
@@ -128,6 +136,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             throw new IllegalStateException("ArcartXEntityTracker.yml 配置文件缺失");
         }
         FileConfiguration yaml = YamlConfiguration.loadConfiguration(configFile);
+        moduleYaml = yaml;
         ConfigurationSection bossSection = yaml.getConfigurationSection("boss");
         String bossesDirRelative = bossSection != null
             ? bossSection.getString("bosses-directory", "bosses") : "bosses";
@@ -136,8 +145,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         configuration = PluginConfiguration.from(bossSection, bossesDirectory);
         targetConfiguration = EntityTargetHudConfiguration.load(yaml.getConfigurationSection("attack-target"));
         crossServerChannelConfig = CrossServerChannelConfigs.fromSection(yaml.getConfigurationSection("cross-server"));
-        ConfigurationSection crossServerRankingSection = yaml.getConfigurationSection("new-features.cross-server-ranking");
-        crossServerRankingEnabled = crossServerRankingSection != null && crossServerRankingSection.getBoolean("enabled", false);
+        newFeaturesSettings = EntityTrackerNewFeaturesSettings.load(yaml.getConfigurationSection("new-features"));
     }
 
     private void ensureBossDefaults(String bossesRelative) {
@@ -155,13 +163,8 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     protected void startService() throws Exception {
         ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
 
-        moduleDataSource = initializeSharedDatabaseIfNeeded();
-        if (crossServerRankingEnabled && moduleDataSource != null) {
-            crossServerService = new EntityTrackerCrossServerService(
-                context.plugin(), context.crossServer(), crossServerChannelConfig, moduleDataSource
-            );
-            crossServerService.start();
-        }
+        moduleDataSource = initializeModuleDatabaseIfNeeded();
+        initializePersistenceServices();
 
         // Boss tracker depends on MythicMobs/MythicBukkit. If it is absent, keep the module alive
         // and only run the generic attack-target HUD below.
@@ -189,7 +192,8 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             bossService = new BossTrackerService(
                 context.plugin(), configuration, packetBridge, bossRuntimeUiIds,
                 platform, null, () -> context.getCapability(MailDispatchable.class),
-                context.itemSourceRegistry(), context.attributeBridge(), crossServerService
+                context.itemSourceRegistry(), context.attributeBridge(),
+                crossServerService, killRecordingService
             );
             bossService.start();
             adminCommand = new EntityTrackerAdminCommand(() -> bossService, messages());
@@ -229,8 +233,56 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                 + " | boss-ui=" + bossRuntimeUiIds
                 + " | target-ui=" + targetRuntimeUiIds
                 + " | reward-system=" + (rewardService != null ? "enabled" : "disabled")
+                + " | drop-recording=" + (newFeaturesSettings.dropRecording().enabled() ? "ON" : "OFF")
+                + " | drop-allocation=" + (newFeaturesSettings.dropAllocation().enabled() ? "ON" : "OFF")
                 + " | cross-server-ranking=" + (crossServerService != null && crossServerService.isActive() ? "ON" : "OFF")
         );
+    }
+
+    private void initializePersistenceServices() {
+        if (moduleDataSource == null) {
+            return;
+        }
+        if (newFeaturesSettings.dropAllocation().enabled()) {
+            dropAllocationService = new DropAllocationService(
+                context.plugin(), newFeaturesSettings.dropAllocation(), moduleDataSource
+            );
+        }
+        boolean crossServerRanking = newFeaturesSettings.crossServerRanking().enabled()
+            && crossServerChannelConfig.enabled();
+        if (crossServerRanking) {
+            crossServerService = new EntityTrackerCrossServerService(
+                context.plugin(), context.crossServer(), crossServerChannelConfig, moduleDataSource
+            );
+            rankingCacheService = new CrossServerRankingCacheService(
+                context.plugin(),
+                newFeaturesSettings.crossServerRanking(),
+                moduleDataSource,
+                () -> configuration,
+                () -> context.crossServer().nodeId()
+            );
+            crossServerService.start();
+            rankingCacheService.start();
+        }
+        if (newFeaturesSettings.dropRecording().enabled()
+            || newFeaturesSettings.dropAllocation().enabled()
+            || crossServerRanking) {
+            killRecordingService = new BossKillRecordingService(
+                context.plugin(),
+                newFeaturesSettings,
+                moduleDataSource,
+                dropAllocationService,
+                crossServerService,
+                rankingCacheService,
+                () -> context.crossServer().nodeId()
+            );
+            killRecordingService.start();
+            if (crossServerService != null) {
+                crossServerService.attachKillRecording(killRecordingService);
+                crossServerService.attachRankingCache(rankingCacheService);
+            }
+            killRecordingService.purgeOldRecords();
+        }
     }
 
     @Override
@@ -251,12 +303,22 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         }
         rewardService = null;
         rewardCommand = null;
-        
+
+        if (killRecordingService != null) {
+            killRecordingService.shutdown();
+            killRecordingService = null;
+        }
+        if (rankingCacheService != null) {
+            rankingCacheService.shutdown();
+            rankingCacheService = null;
+        }
+        dropAllocationService = null;
         if (crossServerService != null) {
             crossServerService.shutdown();
             crossServerService = null;
         }
         moduleDataSource = null;
+        moduleYaml = null;
         configuration = null;
         targetConfiguration = null;
     }
@@ -285,21 +347,19 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
      */
     private void initializeRewardSystem() {
         try {
-            File configFile = new File(context.dataFolder(), "config.yml");
-            if (!configFile.exists()) {
-                context.logger().info("排行榜奖励系统：主配置文件不存在，跳过初始化");
+            if (moduleYaml == null) {
+                context.logger().info("排行榜奖励系统：模块配置尚未加载，跳过初始化");
                 return;
             }
 
-            FileConfiguration mainConfig = YamlConfiguration.loadConfiguration(configFile);
-            ConfigurationSection rewardSection = mainConfig.getConfigurationSection("new-features.ranking-rewards");
+            ConfigurationSection rewardSection = moduleYaml.getConfigurationSection("new-features.ranking-rewards");
             if (rewardSection == null) {
                 context.logger().info("排行榜奖励系统未配置，跳过初始化");
                 return;
             }
 
             if (moduleDataSource == null) {
-                moduleDataSource = initializeDatabase(mainConfig);
+                moduleDataSource = initializeDatabase(moduleYaml);
             }
             if (moduleDataSource == null) {
                 context.logger().severe("排行榜奖励系统数据库初始化失败");
@@ -323,7 +383,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             rewardCommand = new RankingRewardCommand(rewardService, rewardScheduler, context.plugin(), messages());
 
             // 初始化调度器（传入主配置）
-            rewardScheduler.initialize(mainConfig);
+            rewardScheduler.initialize(moduleYaml);
 
             context.logger().info("排行榜奖励系统初始化完成");
 
@@ -333,20 +393,26 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         }
     }
 
-    private javax.sql.DataSource initializeSharedDatabaseIfNeeded() {
-        if (!crossServerRankingEnabled) {
+    private javax.sql.DataSource initializeModuleDatabaseIfNeeded() {
+        if (!newFeaturesSettings.needsDatabase() && !hasRankingRewardsSection()) {
             return null;
         }
         try {
-            File configFile = new File(context.dataFolder(), "config.yml");
-            FileConfiguration mainConfig = configFile.exists()
-                ? YamlConfiguration.loadConfiguration(configFile)
-                : new YamlConfiguration();
-            return initializeDatabase(mainConfig);
+            FileConfiguration config = moduleYaml != null ? moduleYaml : new YamlConfiguration();
+            return initializeDatabase(config);
         } catch (Exception exception) {
-            context.logger().severe("跨服 Boss 排行数据库初始化失败: " + exception.getMessage());
+            context.logger().severe("EntityTracker 数据库初始化失败: " + exception.getMessage());
             return null;
         }
+    }
+
+    private boolean hasRankingRewardsSection() {
+        return moduleYaml != null
+            && moduleYaml.getConfigurationSection("new-features.ranking-rewards") != null;
+    }
+
+    private javax.sql.DataSource initializeSharedDatabaseIfNeeded() {
+        return initializeModuleDatabaseIfNeeded();
     }
 
     /**

@@ -8,7 +8,10 @@ import java.util.Map;
 import java.util.Set;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
@@ -58,6 +61,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
     private static final String BANK_UI_FILE_PATH = "ui/warehouse_bank.yml";
 
     private WarehouseModuleConfiguration configuration;
+    private CrossServerChannelConfig crossServerChannelConfig = CrossServerChannelConfig.disabled();
     private WarehouseService service;
 
     @Override
@@ -143,8 +147,9 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
         if (configFile == null) {
             throw new IllegalStateException("ArcartXWarehouse.yml 配置文件缺失");
         }
-        configuration = WarehouseModuleConfiguration.load(
-            YamlConfiguration.loadConfiguration(configFile), context.logger());
+        FileConfiguration yaml = YamlConfiguration.loadConfiguration(configFile);
+        configuration = WarehouseModuleConfiguration.load(yaml, context.logger());
+        crossServerChannelConfig = CrossServerChannelConfigs.fromSection(yaml.getConfigurationSection("cross-server"));
     }
 
     /**
@@ -179,7 +184,8 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
             context.plugin(), packetBridge, itemStackBridge, packetGuard, uiExporter, configuration,
             warehouseRepo,
             context.itemSourceRegistry(), context.itemMatcher(), context.currencyManager(),
-            () -> context.getCapability(PickupNotifiable.class)
+            () -> context.getCapability(PickupNotifiable.class),
+            context.crossServer(), crossServerChannelConfig
         );
         service.start();
         adminCommand = new WarehouseAdminCommand(() -> service, messages());
@@ -215,6 +221,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
         context.logger().fine(
             "Warehouse 模块已载入，UI=" + configuration.ui().uiId()
                 + " | 存储=" + configuration.storage().dialect().configKey()
+                + " | 跨服编辑锁=" + (service.crossServerActive() ? "ON" : "OFF")
         );
     }
 

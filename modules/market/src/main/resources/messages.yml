@@ -28,9 +28,12 @@ status:
   active-listings: "&7活跃拍卖: &f{0}"
   shops: "&7系统商店: &f{0}"
   recycle-entries: "&7回收条目: &f{0}"
-  redis: "&7Redis: &f{0}"
-  redis-connected: "&a已连接"
-  redis-disconnected: "&c未连接"
+  list-cache: "&7列表缓存(Redis): &f{0}"
+  list-cache-connected: "&a已连接"
+  list-cache-disconnected: "&c未连接"
+  cross-server: "&7跨服通道: &f{0}"
+  cross-server-active: "&a已启用"
+  cross-server-inactive: "&e未启用"
 
 admin:
   reloaded: "&a市场模块已重载"

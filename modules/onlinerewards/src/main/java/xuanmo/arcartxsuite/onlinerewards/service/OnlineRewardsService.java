@@ -171,12 +171,6 @@ public class OnlineRewardsService implements Listener {
         return crossServerChannel != null && crossServerChannel.isActive();
     }
 
-    /** @deprecated 使用 {@link #crossServerActive()} */
-    @Deprecated
-    public boolean redisActive() {
-        return crossServerActive();
-    }
-
     public void handleClientInitialized(Player player) {
         if (player == null || !player.isOnline()) {
             return;
@@ -692,7 +686,7 @@ public class OnlineRewardsService implements Listener {
 
     private void handleCrossServerMessage(String message) {
         if (configuration.debug()) {
-            plugin.getLogger().info("收到 OnlineRewards Redis 消息: " + message);
+            plugin.getLogger().info("收到 OnlineRewards 跨服消息: " + message);
         }
         if (message == null || message.isBlank() || !message.startsWith("refresh:")) {
             return;

@@ -82,7 +82,8 @@ public final class ChatAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("status.channels", svc.channelCount()));
         sender.sendMessage(fullMsg("status.cache-state", svc.cachedStateCount()));
         sender.sendMessage(fullMsg("status.cache-mute", svc.cachedMuteCount()));
-        sender.sendMessage(fullMsg("status.transport", svc.transportName(), svc.transportActive()));
+        sender.sendMessage(fullMsg("status.cross-server",
+            svc.crossServerActive() ? ChatColor.GREEN + "已启用" : ChatColor.YELLOW + "未启用"));
     }
 
     private void handleMute(CommandSender sender, String[] args) {

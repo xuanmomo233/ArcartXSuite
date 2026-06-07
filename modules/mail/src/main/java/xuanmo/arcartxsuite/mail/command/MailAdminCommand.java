@@ -115,7 +115,8 @@ public final class MailAdminCommand implements ModuleCommandHandler {
         if (svc == null) { sender.sendMessage(fullMsg("common.service-down")); return; }
         sender.sendMessage(fullMsg("status.title"));
         sender.sendMessage(fullMsg("status.preset", svc.presetCount()));
-        sender.sendMessage(fullMsg("status.redis", svc.redisActive()));
+        sender.sendMessage(fullMsg("status.cross-server",
+            svc.crossServerActive() ? ChatColor.GREEN + "已启用" : ChatColor.YELLOW + "未启用"));
         sender.sendMessage(fullMsg("status.compose", svc.composeSessionCount()));
     }
 

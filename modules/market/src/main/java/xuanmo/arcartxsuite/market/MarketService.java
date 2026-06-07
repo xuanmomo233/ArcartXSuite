@@ -795,7 +795,11 @@ public class MarketService {
         return recycleService != null ? recycleService.getEntries().size() : 0;
     }
 
-    public boolean isRedisConnected() {
+    public boolean crossServerActive() {
+        return crossServerChannel != null && crossServerChannel.isActive();
+    }
+
+    public boolean isListCacheConnected() {
         return redisCache != null && redisCache.isAvailable();
     }
 

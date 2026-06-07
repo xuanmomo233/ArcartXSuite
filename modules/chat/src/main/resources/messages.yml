@@ -30,7 +30,7 @@ status:
   channels: "&7频道数: &f{0}"
   cache-state: "&7缓存状态: &f{0}"
   cache-mute: "&7缓存禁言: &f{0}"
-  transport: "&7传输层: &f{0} ({1})"
+  cross-server: "&7跨服通道: &f{0}"
 
 # ── mute / unmute / spy ───────────────────────────────
 mute:

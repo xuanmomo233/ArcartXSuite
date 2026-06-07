@@ -193,7 +193,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             "Mail 模块已载入，预设=" + service.presetCount()
                 + " | 存储=" + configuration.storage().dialect().configKey()
                 + " | InboxUI=" + service.inboxUiId()
-                + " | Redis=" + service.redisActive()
+                + " | 跨服=" + (service.crossServerActive() ? "ON" : "OFF")
         );
     }
 

@@ -61,6 +61,11 @@ import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.util.ItemSerializer;
 import xuanmo.arcartxsuite.api.capability.PickupNotifiable;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
+import xuanmo.arcartxsuite.warehouse.crossserver.SharedEditLock;
+import xuanmo.arcartxsuite.warehouse.crossserver.WarehouseCrossServerLockService;
+import xuanmo.arcartxsuite.warehouse.crossserver.WarehouseCrossServerPayloadCodec;
 import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration;
 import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.CategoryDefinition;
 import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.DepositProductDefinition;
@@ -80,7 +85,7 @@ import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.WarehouseRecord
  * Warehouse 核心业务服务，统筹个人仓库、共享仓库、多货币银行、二级密码与自动拾取逻辑。
  * <p>
  * 通过 {@link ArcartXPacketBridge} 与客户端 AXUI 通信，所有状态变更后回发更新包刷新界面。
- * 共享仓库使用 {@link #sharedEditLocks} 实现编辑互斥锁，防止并发冲突。
+ * 共享仓库使用 {@link #sharedEditLocks} 实现编辑互斥锁；启用 cross-server 时经 SDK 同步至其他子服。
  */
 public final class WarehouseService implements Listener {
 
@@ -129,8 +134,11 @@ public final class WarehouseService implements Listener {
     private final ConcurrentMap<UUID, ViewState> viewStates = new ConcurrentHashMap<>();
     /** 玩家二级密码解锁过期时间戳（毫秒）。 */
     private final ConcurrentMap<UUID, Long> unlockedUntil = new ConcurrentHashMap<>();
-    /** 共享仓库编辑互斥锁：共享仓库 ID → 当前编辑者 UUID。 */
-    private final ConcurrentMap<String, UUID> sharedEditLocks = new ConcurrentHashMap<>();
+    /** 共享仓库编辑互斥锁：共享仓库 ID → 当前编辑者（含子服 nodeId）。 */
+    private final ConcurrentMap<String, SharedEditLock> sharedEditLocks = new ConcurrentHashMap<>();
+    private final CrossServerAPI crossServerApi;
+    private final CrossServerChannelConfig crossServerChannelConfig;
+    private WarehouseCrossServerLockService crossServerLockService;
     /** 玩家上次展示仓库的时间戳（毫秒），用于冷却控制。 */
     private final ConcurrentMap<UUID, Long> showcaseCooldowns = new ConcurrentHashMap<>();
     private String storageRuntimeUiId = "";
@@ -151,7 +159,9 @@ public final class WarehouseService implements Listener {
         ItemSourceRegistry itemSourceRegistry,
         ItemMatcherAPI itemMatcherSupport,
         CurrencyBridgeAPI currencyBridgeManager,
-        Supplier<PickupNotifiable> pickupNotifiableSupplier
+        Supplier<PickupNotifiable> pickupNotifiableSupplier,
+        CrossServerAPI crossServerApi,
+        CrossServerChannelConfig crossServerChannelConfig
     ) {
         this.plugin = plugin;
         this.packetBridge = packetBridge;
@@ -164,6 +174,27 @@ public final class WarehouseService implements Listener {
         this.itemMatcherSupport = itemMatcherSupport;
         this.currencyBridgeManager = currencyBridgeManager;
         this.pickupNotifiableSupplier = pickupNotifiableSupplier;
+        this.crossServerApi = crossServerApi;
+        this.crossServerChannelConfig = crossServerChannelConfig == null
+            ? CrossServerChannelConfig.disabled() : crossServerChannelConfig;
+    }
+
+    public WarehouseService(
+        JavaPlugin plugin,
+        ArcartXPacketBridge packetBridge,
+        xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge itemStackBridge,
+        PacketGuardAPI packetGuard,
+        UiResourceExporter uiResourceExporter,
+        WarehouseModuleConfiguration configuration,
+        WarehouseRepository repository,
+        ItemSourceRegistry itemSourceRegistry,
+        ItemMatcherAPI itemMatcherSupport,
+        CurrencyBridgeAPI currencyBridgeManager,
+        Supplier<PickupNotifiable> pickupNotifiableSupplier
+    ) {
+        this(plugin, packetBridge, itemStackBridge, packetGuard, uiResourceExporter, configuration,
+            repository, itemSourceRegistry, itemMatcherSupport, currencyBridgeManager,
+            pickupNotifiableSupplier, null, CrossServerChannelConfig.disabled());
     }
 
     /**
@@ -172,6 +203,18 @@ public final class WarehouseService implements Listener {
     public void start() throws Exception {
         repository.initialize();
         bindUis();
+        if (configuration.shared().enabled()
+            && crossServerChannelConfig.enabled()
+            && crossServerApi != null) {
+            crossServerLockService = new WarehouseCrossServerLockService(
+                plugin,
+                crossServerApi,
+                crossServerChannelConfig,
+                this::applyRemoteSharedLock,
+                (unlock, ignored) -> applyRemoteSharedUnlock(unlock)
+            );
+            crossServerLockService.start();
+        }
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -179,6 +222,10 @@ public final class WarehouseService implements Listener {
      * 关闭服务：注销事件监听、清理 UI 回调与玩家状态、关闭数据库连接。
      */
     public void shutdown() {
+        if (crossServerLockService != null) {
+            crossServerLockService.shutdown();
+            crossServerLockService = null;
+        }
         HandlerList.unregisterAll(this);
         if (packetBridge != null) {
             packetBridge.unregisterUiCloseCallback(storageRuntimeUiId);
@@ -214,6 +261,14 @@ public final class WarehouseService implements Listener {
 
     public boolean neigeBridgeAvailable() {
         return itemSourceRegistry.neigeBridgeAvailable();
+    }
+
+    public boolean crossServerActive() {
+        return crossServerLockService != null && crossServerLockService.isActive();
+    }
+
+    public int activeSharedEditLockCount() {
+        return sharedEditLocks.size();
     }
 
     public Set<String> currencyIds() {
@@ -1610,7 +1665,10 @@ public final class WarehouseService implements Listener {
             return;
         }
         repository.deleteSharedWarehouse(sharedId);
-        sharedEditLocks.remove(sharedId);
+        SharedEditLock lock = sharedEditLocks.remove(sharedId);
+        if (lock != null && crossServerLockService != null && crossServerLockService.isActive()) {
+            crossServerLockService.publishUnlock(sharedId, lock.playerUuid());
+        }
         ViewState state = state(player);
         if (OWNER_SHARED.equals(state.ownerType()) && sharedId.equals(state.ownerId())) {
             state.setOwnerType(OWNER_PERSONAL);
@@ -1741,7 +1799,10 @@ public final class WarehouseService implements Listener {
             return;
         }
         repository.transferSharedWarehouse(sharedId, player.getUniqueId(), target.getUniqueId(), System.currentTimeMillis());
-        sharedEditLocks.remove(sharedId);
+        SharedEditLock lock = sharedEditLocks.remove(sharedId);
+        if (lock != null && crossServerLockService != null && crossServerLockService.isActive()) {
+            crossServerLockService.publishUnlock(sharedId, lock.playerUuid());
+        }
         releaseSharedLocks(target.getUniqueId());
         ViewState state = state(player);
         if (OWNER_SHARED.equals(state.ownerType()) && sharedId.equals(state.ownerId())) {
@@ -1891,8 +1952,11 @@ public final class WarehouseService implements Listener {
         if (shared.isEmpty() || !canEditShared(shared.get().viewerRole())) {
             return false;
         }
-        UUID owner = sharedEditLocks.get(state.ownerId());
-        return owner != null && owner.equals(player.getUniqueId());
+        SharedEditLock lock = sharedEditLocks.get(state.ownerId());
+        if (lock == null) {
+            return false;
+        }
+        return lock.heldBy(player.getUniqueId());
     }
 
     private boolean sharedCanEdit(Player player, ViewState state) throws Exception {
@@ -1916,10 +1980,27 @@ public final class WarehouseService implements Listener {
         if (shared.isEmpty() || !canEditShared(shared.get().viewerRole())) {
             return false;
         }
-        UUID existing = sharedEditLocks.putIfAbsent(state.ownerId(), player.getUniqueId());
-        if (existing != null && !existing.equals(player.getUniqueId())) {
-            sendMessage(player, false, "该共享仓库正在被其他成员编辑，当前以只读方式打开。");
+        String sharedId = state.ownerId();
+        SharedEditLock existing = sharedEditLocks.get(sharedId);
+        if (existing != null) {
+            if (existing.heldBy(player.getUniqueId())) {
+                return true;
+            }
+            sendMessage(player, false, buildLockBusyMessage(existing));
             return false;
+        }
+        SharedEditLock newLock = new SharedEditLock(
+            player.getUniqueId(),
+            player.getName(),
+            localNodeId()
+        );
+        SharedEditLock raced = sharedEditLocks.putIfAbsent(sharedId, newLock);
+        if (raced != null && !raced.heldBy(player.getUniqueId())) {
+            sendMessage(player, false, buildLockBusyMessage(raced));
+            return false;
+        }
+        if (crossServerLockService != null && crossServerLockService.isActive()) {
+            crossServerLockService.publishLock(sharedId, newLock);
         }
         return true;
     }
@@ -1932,24 +2013,100 @@ public final class WarehouseService implements Listener {
     private void releaseCurrentSharedLock(Player player) {
         ViewState state = viewStates.get(player.getUniqueId());
         if (state != null && OWNER_SHARED.equals(state.ownerType())) {
-            sharedEditLocks.computeIfPresent(state.ownerId(), (id, owner) -> owner.equals(player.getUniqueId()) ? null : owner);
+            releaseSharedLock(state.ownerId(), player.getUniqueId());
         }
     }
 
     private void releaseSharedLocks(UUID playerUuid) {
-        sharedEditLocks.entrySet().removeIf(entry -> entry.getValue().equals(playerUuid));
+        List<String> sharedIds = new ArrayList<>();
+        sharedEditLocks.forEach((sharedId, lock) -> {
+            if (lock.heldBy(playerUuid) && localNodeId().equals(lock.nodeId())) {
+                sharedIds.add(sharedId);
+            }
+        });
+        for (String sharedId : sharedIds) {
+            releaseSharedLock(sharedId, playerUuid);
+        }
+    }
+
+    private void releaseSharedLock(String sharedId, UUID playerUuid) {
+        SharedEditLock removed = sharedEditLocks.computeIfPresent(sharedId, (id, lock) ->
+            lock.heldBy(playerUuid) && localNodeId().equals(lock.nodeId()) ? null : lock
+        );
+        if (removed != null && crossServerLockService != null && crossServerLockService.isActive()) {
+            crossServerLockService.publishUnlock(sharedId, playerUuid);
+        }
+    }
+
+    private void applyRemoteSharedLock(String sharedId, SharedEditLock lock) {
+        if (sharedId == null || sharedId.isBlank() || lock == null) {
+            return;
+        }
+        SharedEditLock previous = sharedEditLocks.put(sharedId, lock);
+        if (previous != null
+            && previous.playerUuid().equals(lock.playerUuid())
+            && previous.nodeId().equals(lock.nodeId())) {
+            return;
+        }
+        for (Map.Entry<UUID, ViewState> entry : viewStates.entrySet()) {
+            ViewState viewState = entry.getValue();
+            if (!OWNER_SHARED.equals(viewState.ownerType())
+                || !sharedId.equals(viewState.ownerId())
+                || !viewState.sharedEditMode()
+                || lock.heldBy(entry.getKey())) {
+                continue;
+            }
+            viewState.setSharedEditMode(false);
+            Player online = Bukkit.getPlayer(entry.getKey());
+            if (online == null || !online.isOnline()) {
+                continue;
+            }
+            sendMessage(online, false, buildLockBusyMessage(lock));
+            try {
+                refreshBoth(online);
+            } catch (Exception exception) {
+                plugin.getLogger().warning("[Warehouse] 刷新共享仓库 UI 失败: " + exception.getMessage());
+            }
+        }
+    }
+
+    private void applyRemoteSharedUnlock(WarehouseCrossServerPayloadCodec.UnlockPayload unlock) {
+        if (unlock == null || unlock.sharedId() == null || unlock.sharedId().isBlank()) {
+            return;
+        }
+        sharedEditLocks.computeIfPresent(unlock.sharedId(), (sharedId, lock) ->
+            lock.playerUuid().equals(unlock.playerUuid()) && lock.nodeId().equals(unlock.nodeId())
+                ? null : lock
+        );
+    }
+
+    private String buildLockBusyMessage(SharedEditLock lock) {
+        if (lock == null) {
+            return "该共享仓库正在被其他成员编辑，当前以只读方式打开。";
+        }
+        if (localNodeId().equals(lock.nodeId())) {
+            return "该共享仓库正在被 " + lock.playerName() + " 编辑，当前以只读方式打开。";
+        }
+        return "该共享仓库正在被 " + lock.playerName() + "（" + lock.nodeId() + "）编辑，当前以只读方式打开。";
+    }
+
+    private String localNodeId() {
+        return crossServerLockService != null ? crossServerLockService.nodeId() : "local";
     }
 
     private String lockOwnerName(ViewState state) {
         if (!OWNER_SHARED.equals(state.ownerType())) {
             return "";
         }
-        UUID owner = sharedEditLocks.get(state.ownerId());
-        if (owner == null) {
+        SharedEditLock lock = sharedEditLocks.get(state.ownerId());
+        if (lock == null) {
             return "";
         }
-        Player player = Bukkit.getPlayer(owner);
-        return player == null ? owner.toString() : player.getName();
+        if (localNodeId().equals(lock.nodeId())) {
+            Player player = Bukkit.getPlayer(lock.playerUuid());
+            return player == null ? lock.playerName() : player.getName();
+        }
+        return lock.playerName() + "@" + lock.nodeId();
     }
 
     private void clearFilteredSelection(ViewState state) throws Exception {

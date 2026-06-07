@@ -390,12 +390,6 @@ public final class MailService implements Listener {
         return crossServerChannel != null && crossServerChannel.isActive();
     }
 
-    /** @deprecated 使用 {@link #crossServerActive()} */
-    @Deprecated
-    public boolean redisActive() {
-        return crossServerActive();
-    }
-
     public int composeSessionCount() {
         return composeSessions.size();
     }
@@ -1358,7 +1352,7 @@ public final class MailService implements Listener {
 
     private void handleCrossServerMessage(String message) {
         if (configuration.debug()) {
-            plugin.getLogger().info("收到邮件 Redis 消息: " + message);
+            plugin.getLogger().info("收到邮件跨服消息: " + message);
         }
         if (message == null || message.isBlank() || !message.startsWith("refresh:")) {
             return;

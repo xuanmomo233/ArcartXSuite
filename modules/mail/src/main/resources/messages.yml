@@ -37,7 +37,7 @@ help:
 status:
   title: "&6Mail 状态"
   preset: "&7预设数: &f{0}"
-  redis: "&7Redis: &f{0}"
+  cross-server: "&7跨服通道: &f{0}"
   compose: "&7写信会话: &f{0}"
 
 # ── admin ─────────────────────────────────────────────

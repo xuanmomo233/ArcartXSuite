@@ -191,7 +191,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         context.logger().fine(
             "Chat 模块已载入，频道=" + service.channelCount()
                 + " | 存储=" + configuration.storage().dialect().configKey()
-                + " | Transport=" + service.transportName()
+                + " | 跨服=" + (service.crossServerActive() ? "ON" : "OFF")
         );
     }
 

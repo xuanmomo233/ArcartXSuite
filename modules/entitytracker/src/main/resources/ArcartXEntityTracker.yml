@@ -126,6 +126,10 @@ new-features:
     # 排行榜类型（预留）
     ranking-types:
       - "best_damage"
+      - "boss_damage"
+      - "kills"
+      - "participate"
+      - "server"
     max-entries: 50
 
   # 排行榜定时奖励全局设置

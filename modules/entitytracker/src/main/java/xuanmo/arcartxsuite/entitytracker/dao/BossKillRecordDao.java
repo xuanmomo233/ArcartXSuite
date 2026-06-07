@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.entitytracker.dao;
 
+import xuanmo.arcartxsuite.entitytracker.entity.BossKillRecord;
 import xuanmo.arcartxsuite.entitytracker.entity.PlayerBossBestDamage;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -22,6 +23,90 @@ public class BossKillRecordDao {
     public BossKillRecordDao(DataSource dataSource, JavaPlugin plugin) {
         this.dataSource = dataSource;
         this.logger = plugin.getLogger();
+    }
+
+    /**
+     * 写入击杀记录并返回自增 ID。
+     */
+    public long insert(BossKillRecord record) throws SQLException {
+        String sql = """
+            INSERT INTO boss_kill_records
+            (boss_id, boss_display_name, kill_time, server_name, participants, drops,
+             total_damage, duration_seconds, world_name, location_x, location_y, location_z)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """;
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+
+            stmt.setString(1, record.getBossId());
+            stmt.setString(2, record.getBossDisplayName());
+            stmt.setTimestamp(3, Timestamp.valueOf(record.getKillTime() == null
+                ? LocalDateTime.now() : record.getKillTime()));
+            stmt.setString(4, record.getServerName());
+            stmt.setString(5, record.getParticipantsJson());
+            stmt.setString(6, record.getDropsJson());
+            stmt.setInt(7, record.getTotalDamage());
+            stmt.setInt(8, record.getDurationSeconds());
+            stmt.setString(9, record.getWorldName());
+            setNullableDouble(stmt, 10, record.getLocationX());
+            setNullableDouble(stmt, 11, record.getLocationY());
+            setNullableDouble(stmt, 12, record.getLocationZ());
+            stmt.executeUpdate();
+
+            try (ResultSet keys = stmt.getGeneratedKeys()) {
+                if (keys.next()) {
+                    long id = keys.getLong(1);
+                    record.setId(id);
+                    return id;
+                }
+            }
+        }
+        return -1L;
+    }
+
+    /**
+     * 跨服入站去重：同一子服、Boss、击杀时间戳已存在则跳过。
+     */
+    public boolean existsByServerBossAndKillTime(String serverName, String bossId, LocalDateTime killTime)
+        throws SQLException {
+        if (serverName == null || bossId == null || killTime == null) {
+            return false;
+        }
+        String sql = """
+            SELECT 1 FROM boss_kill_records
+            WHERE server_name = ? AND boss_id = ? AND kill_time = ?
+            LIMIT 1
+            """;
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, serverName);
+            stmt.setString(2, bossId);
+            stmt.setTimestamp(3, Timestamp.valueOf(killTime));
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
+    public int deleteOlderThanDays(int days) throws SQLException {
+        String sql = """
+            DELETE FROM boss_kill_records
+            WHERE kill_time < datetime('now', '-' || ? || ' days')
+            """;
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, days);
+            return stmt.executeUpdate();
+        }
+    }
+
+    private static void setNullableDouble(PreparedStatement stmt, int index, Double value) throws SQLException {
+        if (value == null) {
+            stmt.setNull(index, Types.DOUBLE);
+        } else {
+            stmt.setDouble(index, value);
+        }
     }
 
     /**
