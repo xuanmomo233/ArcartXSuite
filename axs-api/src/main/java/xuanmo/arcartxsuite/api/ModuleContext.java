@@ -16,11 +16,13 @@ import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry;
+import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.script.AriaBridge;
 
 /**
  * 宿主提供给模块的上下文接口。
@@ -100,6 +102,14 @@ public interface ModuleContext {
     /** 获取全局属性桥接注册表（统一 AttributePlus/CraneAttribute/MythicLib/Symphony 桥接） */
     @ApiStability.Stable
     AttributeBridgeRegistry attributeBridge();
+
+    /** 获取 Blink/Aria 脚本桥接（需服务器安装 Blink 系插件并启用 Aria；不可用时 available() 为 false） */
+    @ApiStability.Stable
+    @NotNull AriaBridge ariaBridge();
+
+    /** 获取统一条件评估器（PlaceholderAPI + Aria 脚本） */
+    @ApiStability.Stable
+    @NotNull ScriptConditionEvaluator scriptConditionEvaluator();
 
     /** TACZ（创世战术武器）兼容桥接是否已激活。模块可通过此查询判断 TACZ 伤害转发是否生效。 */
     @ApiStability.Stable

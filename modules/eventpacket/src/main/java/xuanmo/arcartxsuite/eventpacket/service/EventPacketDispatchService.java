@@ -1,8 +1,5 @@
 package xuanmo.arcartxsuite.eventpacket.service;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -27,7 +24,8 @@ import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
 import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketAction;
-import xuanmo.arcartxsuite.eventpacket.config.EventPacketCondition;
+import xuanmo.arcartxsuite.api.condition.ScriptCondition;
+import xuanmo.arcartxsuite.condition.ScriptConditionServices;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketContext;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketRecipient;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketRule;
@@ -41,8 +39,6 @@ import xuanmo.arcartxsuite.eventpacket.storage.EventPacketRepository;
  * 跨模块调用全部通过 capability supplier 完成；缺失能力时对应动作直接跳过。
  */
 public final class EventPacketDispatchService {
-
-    private static final MethodHandle PAPI_SET_PLACEHOLDERS = resolvePapiMethodHandle();
 
     private final Logger logger;
     private final PacketGuardAPI packetGuard;
@@ -149,7 +145,7 @@ public final class EventPacketDispatchService {
                 return;
             }
         }
-        EventPacketCondition failedCondition = evaluateConditions(subject, rule.conditions());
+        ScriptCondition failedCondition = ScriptConditionServices.evaluator().firstFailed(subject, rule.conditions());
         if (failedCondition != null) {
             if (configuration.debug()) {
                 logger.info(
@@ -580,46 +576,5 @@ public final class EventPacketDispatchService {
     public void shutdown() {
         firedRulesCache.clear();
         cooldowns.clear();
-    }
-
-    private EventPacketCondition evaluateConditions(Player subject, List<EventPacketCondition> conditions) {
-        if (conditions == null || conditions.isEmpty()) {
-            return null;
-        }
-        if (subject == null) {
-            return conditions.get(0);
-        }
-        for (EventPacketCondition condition : conditions) {
-            String actualValue = resolvePlaceholder(subject, condition.placeholder());
-            if (!condition.operator().evaluate(actualValue, condition.value())) {
-                return condition;
-            }
-        }
-        return null;
-    }
-
-    private static MethodHandle resolvePapiMethodHandle() {
-        try {
-            Class<?> papiClass = Class.forName("me.clip.placeholderapi.PlaceholderAPI");
-            return MethodHandles.publicLookup().findStatic(
-                papiClass,
-                "setPlaceholders",
-                MethodType.methodType(String.class, Player.class, String.class)
-            );
-        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException ignored) {
-            return null;
-        }
-    }
-
-    private static String resolvePlaceholder(Player player, String placeholder) {
-        if (player == null || placeholder == null || placeholder.isBlank() || PAPI_SET_PLACEHOLDERS == null) {
-            return placeholder == null ? "" : placeholder;
-        }
-        try {
-            String result = (String) PAPI_SET_PLACEHOLDERS.invokeExact(player, placeholder);
-            return result == null ? "" : result;
-        } catch (Throwable throwable) {
-            return placeholder;
-        }
     }
 }

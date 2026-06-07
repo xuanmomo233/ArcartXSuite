@@ -52,14 +52,14 @@ import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI.CurrencyBridge;
 import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
-import xuanmo.arcartxsuite.mail.config.MailConditionOperator;
+import xuanmo.arcartxsuite.api.condition.ScriptCondition;
+import xuanmo.arcartxsuite.condition.ScriptConditionServices;
 import xuanmo.arcartxsuite.mail.config.MailModuleConfiguration;
 import xuanmo.arcartxsuite.mail.config.MailPlayerSendConfiguration;
 import xuanmo.arcartxsuite.mail.config.MailUiConfiguration;
 import xuanmo.arcartxsuite.mail.model.MailAttachment;
 import xuanmo.arcartxsuite.mail.model.MailAttachmentType;
 import xuanmo.arcartxsuite.mail.model.MailCdkDefinition;
-import xuanmo.arcartxsuite.mail.model.MailCondition;
 import xuanmo.arcartxsuite.mail.model.MailInboxFilter;
 import xuanmo.arcartxsuite.mail.model.MailInboxQuery;
 import xuanmo.arcartxsuite.mail.model.MailLogEntry;
@@ -1071,8 +1071,8 @@ public final class MailService implements Listener {
             payload.put("claimCommands", def.claimCommands() != null ? def.claimCommands() : List.of());
             List<String> condStrings = new ArrayList<>();
             if (def.claimConditions() != null) {
-                for (MailCondition cond : def.claimConditions()) {
-                    condStrings.add(cond.placeholder() + "::" + cond.operator().configKey() + "::" + cond.expectedValue());
+                for (ScriptCondition cond : def.claimConditions()) {
+                    condStrings.add(cond.serialize().replace('\t', ':'));
                 }
             }
             payload.put("claimConditions", condStrings);
@@ -1137,7 +1137,7 @@ public final class MailService implements Listener {
             }
 
             MailPresetDefinition existing = getPreset(id);
-            List<MailCondition> claimConditions = existing != null ? existing.claimConditions() : List.of();
+            List<ScriptCondition> claimConditions = existing != null ? existing.claimConditions() : List.of();
             List<MailPresetCdkDefinition> cdks = existing != null ? existing.cdks() : List.of();
 
             MailPresetDefinition newPreset = new MailPresetDefinition(
@@ -1219,29 +1219,6 @@ public final class MailService implements Listener {
             return "";
         }
         return rawCode.trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9_-]", "");
-    }
-
-    static boolean evaluateConditionValue(String actualValue, MailCondition condition) {
-        if (condition == null) {
-            return true;
-        }
-        String actual = safe(actualValue);
-        String expected = safe(condition.expectedValue());
-        MailConditionOperator operator = condition.operator() == null ? MailConditionOperator.EQ : condition.operator();
-        return switch (operator) {
-            case EQ -> actual.equalsIgnoreCase(expected);
-            case NE -> !actual.equalsIgnoreCase(expected);
-            case CONTAINS -> actual.toLowerCase(Locale.ROOT).contains(expected.toLowerCase(Locale.ROOT));
-            case REGEX -> Pattern.compile(expected, Pattern.CASE_INSENSITIVE).matcher(actual).find();
-            case GTE -> {
-                int compareResult = compareNumeric(actual, expected);
-                yield compareResult != Integer.MIN_VALUE && compareResult >= 0;
-            }
-            case LTE -> {
-                int compareResult = compareNumeric(actual, expected);
-                yield compareResult != Integer.MIN_VALUE && compareResult <= 0;
-            }
-        };
     }
 
     static String normalizeRecipientInput(String rawRecipient) {
@@ -2292,24 +2269,11 @@ public final class MailService implements Listener {
         return List.copyOf(attachments);
     }
 
-    private boolean checkClaimConditions(Player player, List<MailCondition> conditions) {
+    private boolean checkClaimConditions(Player player, List<ScriptCondition> conditions) {
         if (conditions == null || conditions.isEmpty()) {
             return true;
         }
-        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") == null) {
-            return false;
-        }
-        for (MailCondition condition : conditions) {
-            String actualValue = PlaceholderAPI.setPlaceholders(player, safe(condition.placeholder()));
-            try {
-                if (!evaluateConditionValue(actualValue, condition)) {
-                    return false;
-                }
-            } catch (Exception exception) {
-                return false;
-            }
-        }
-        return true;
+        return ScriptConditionServices.evaluator().passes(player, conditions);
     }
 
     private List<ItemStack> deserializeItemRewards(List<MailAttachment> attachments) throws IOException {
@@ -2498,7 +2462,7 @@ public final class MailService implements Listener {
         return values == null ? List.of() : List.copyOf(values);
     }
 
-    private static List<MailCondition> copyConditions(List<MailCondition> conditions) {
+    private static List<ScriptCondition> copyConditions(List<ScriptCondition> conditions) {
         return conditions == null ? List.of() : List.copyOf(conditions);
     }
 

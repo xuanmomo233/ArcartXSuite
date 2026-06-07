@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.prop.config;
 
 import java.util.List;
+import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 
 public record PropDefinition(
     String id,
@@ -13,7 +14,7 @@ public record PropDefinition(
     boolean key,
     String permission,
     List<String> effects,
-    List<PropCondition> conditions
+    List<ScriptCondition> conditions
 ) {
 
     public PropDefinition {

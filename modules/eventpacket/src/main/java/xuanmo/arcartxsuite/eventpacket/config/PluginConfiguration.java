@@ -14,6 +14,8 @@ import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import xuanmo.arcartxsuite.api.condition.ScriptCondition;
+import xuanmo.arcartxsuite.api.condition.ScriptConditionsLoader;
 
 public record PluginConfiguration(
     boolean debug,
@@ -116,7 +118,7 @@ public record PluginConfiguration(
             return null;
         }
         List<EventPacketAction> actions = loadActions(section, logger, id);
-        List<EventPacketCondition> conditions = loadConditions(section, logger, id);
+        List<ScriptCondition> conditions = loadConditions(section, logger, id);
         if (actions.isEmpty()) {
             logger.warning("EventPacket 规则没有动作，已跳过: " + id);
             return null;
@@ -186,22 +188,19 @@ public record PluginConfiguration(
         return List.copyOf(actions);
     }
 
-    private static List<EventPacketCondition> loadConditions(ConfigurationSection section, Logger logger, String ruleId) {
-        List<?> rawConditions = section.getList("conditions");
-        if (rawConditions == null || rawConditions.isEmpty()) {
-            return List.of();
-        }
-        List<EventPacketCondition> conditions = new ArrayList<>();
-        for (Object rawCondition : rawConditions) {
-            String line = nullToEmpty(rawCondition == null ? "" : String.valueOf(rawCondition)).trim();
-            if (line.isBlank()) {
-                continue;
-            }
-            EventPacketCondition condition = EventPacketCondition.parse(line);
-            if (condition != null) {
-                conditions.add(condition);
-            } else {
-                logger.warning("EventPacket 规则条件格式无效，已跳过: " + ruleId + " -> " + line);
+    private static List<ScriptCondition> loadConditions(ConfigurationSection section, Logger logger, String ruleId) {
+        List<ScriptCondition> conditions = new ArrayList<>(
+            ScriptConditionsLoader.load(section, "conditions", "aria-conditions", "ariaConditions")
+        );
+        if (conditions.isEmpty()) {
+            List<?> rawConditions = section.getList("conditions");
+            if (rawConditions != null) {
+                for (Object rawCondition : rawConditions) {
+                    String line = nullToEmpty(rawCondition == null ? "" : String.valueOf(rawCondition)).trim();
+                    if (!line.isBlank()) {
+                        logger.warning("EventPacket 规则条件格式无效，已跳过: " + ruleId + " -> " + line);
+                    }
+                }
             }
         }
         return List.copyOf(conditions);

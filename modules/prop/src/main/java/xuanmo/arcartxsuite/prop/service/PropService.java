@@ -1,6 +1,5 @@
 package xuanmo.arcartxsuite.prop.service;
 
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -11,7 +10,6 @@ import java.util.Set;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -28,7 +26,8 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.bridge.ArcartXPropBridge;
-import xuanmo.arcartxsuite.prop.config.PropCondition;
+import xuanmo.arcartxsuite.api.condition.ScriptCondition;
+import xuanmo.arcartxsuite.condition.ScriptConditionServices;
 import xuanmo.arcartxsuite.prop.config.PropDefinition;
 import xuanmo.arcartxsuite.prop.config.PropKeyBindingDefinition;
 import xuanmo.arcartxsuite.prop.config.PropKeyMappingConfiguration;
@@ -47,7 +46,6 @@ public final class PropService implements Listener {
     private final PropMythicLibService mythicLibService;
     private final PropSymphonyService symphonyService;
     private final Set<String> registeredBindingIds = new LinkedHashSet<>();
-    private Method papiSetPlaceholdersMethod;
 
     public PropService(
         JavaPlugin plugin,
@@ -71,7 +69,6 @@ public final class PropService implements Listener {
 
     public void start() {
         mythicLibService.start();
-        initializePlaceholderApi();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         registerBindings();
         syncOnlinePlayers();
@@ -285,7 +282,7 @@ public final class PropService implements Listener {
             return;
         }
         if (!definition.conditions().isEmpty()) {
-            PropCondition failedCondition = evaluateConditions(player, definition.conditions());
+            ScriptCondition failedCondition = ScriptConditionServices.evaluator().firstFailed(player, definition.conditions());
             if (failedCondition != null) {
                 player.sendMessage(renderCondition(languageConfiguration.conditionNotMet(), itemName, failedCondition.raw()));
                 if (useMode == PropUseMode.KEY) {
@@ -567,41 +564,6 @@ public final class PropService implements Listener {
             return Double.parseDouble(rawValue.trim());
         } catch (NumberFormatException exception) {
             return defaultValue;
-        }
-    }
-
-    private void initializePlaceholderApi() {
-        papiSetPlaceholdersMethod = null;
-        if (!Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) {
-            return;
-        }
-        try {
-            Class<?> placeholderApiClass = Class.forName("me.clip.placeholderapi.PlaceholderAPI");
-            papiSetPlaceholdersMethod = placeholderApiClass.getMethod("setPlaceholders", OfflinePlayer.class, String.class);
-        } catch (ReflectiveOperationException exception) {
-            plugin.getLogger().warning("ArcartXProp PlaceholderAPI 初始化失败: " + exception.getMessage());
-        }
-    }
-
-    private PropCondition evaluateConditions(Player player, List<PropCondition> conditions) {
-        for (PropCondition condition : conditions) {
-            String actualValue = resolvePlaceholder(player, condition.placeholder());
-            if (!condition.operator().evaluate(actualValue, condition.value())) {
-                return condition;
-            }
-        }
-        return null;
-    }
-
-    private String resolvePlaceholder(Player player, String placeholder) {
-        if (papiSetPlaceholdersMethod == null || placeholder == null || placeholder.isBlank()) {
-            return placeholder == null ? "" : placeholder;
-        }
-        try {
-            Object result = papiSetPlaceholdersMethod.invoke(null, player, placeholder);
-            return result == null ? "" : String.valueOf(result);
-        } catch (ReflectiveOperationException exception) {
-            return placeholder;
         }
     }
 

@@ -20,8 +20,8 @@ import xuanmo.arcartxsuite.mail.config.MailPersistenceDialect;
 import xuanmo.arcartxsuite.mail.config.MailStorageConfiguration;
 import xuanmo.arcartxsuite.mail.model.MailAttachment;
 import xuanmo.arcartxsuite.mail.model.MailAttachmentType;
+import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.mail.model.MailCdkDefinition;
-import xuanmo.arcartxsuite.mail.model.MailCondition;
 import xuanmo.arcartxsuite.mail.model.MailInboxFilter;
 import xuanmo.arcartxsuite.mail.model.MailInboxQuery;
 import xuanmo.arcartxsuite.mail.model.MailLogEntry;
@@ -1094,12 +1094,12 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
         return List.of(rawValue.split("\n"));
     }
 
-    private static String serializeConditions(List<MailCondition> conditions) {
+    private static String serializeConditions(List<ScriptCondition> conditions) {
         if (conditions == null || conditions.isEmpty()) {
             return "";
         }
         List<String> values = new ArrayList<>();
-        for (MailCondition condition : conditions) {
+        for (ScriptCondition condition : conditions) {
             if (condition != null) {
                 values.add(condition.serialize());
             }
@@ -1107,13 +1107,13 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
         return String.join("\n", values);
     }
 
-    private static List<MailCondition> deserializeConditions(String rawValue) {
+    private static List<ScriptCondition> deserializeConditions(String rawValue) {
         if (rawValue == null || rawValue.isBlank()) {
             return List.of();
         }
-        List<MailCondition> conditions = new ArrayList<>();
+        List<ScriptCondition> conditions = new ArrayList<>();
         for (String line : rawValue.split("\n")) {
-            MailCondition condition = MailCondition.deserialize(line);
+            ScriptCondition condition = ScriptCondition.deserialize(line);
             if (condition != null) {
                 conditions.add(condition);
             }

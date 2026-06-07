@@ -1,9 +1,9 @@
-package xuanmo.arcartxsuite.eventpacket.config;
+package xuanmo.arcartxsuite.api.condition;
 
 import java.util.Locale;
 import java.util.regex.Pattern;
 
-public enum EventPacketConditionOperator {
+public enum ScriptConditionOperator {
     EQ("=="),
     NE("!="),
     GTE(">="),
@@ -15,8 +15,16 @@ public enum EventPacketConditionOperator {
 
     private final String symbol;
 
-    EventPacketConditionOperator(String symbol) {
+    ScriptConditionOperator(String symbol) {
         this.symbol = symbol;
+    }
+
+    public String symbol() {
+        return symbol;
+    }
+
+    public String configKey() {
+        return name();
     }
 
     public boolean evaluate(String actual, String expected) {
@@ -44,13 +52,13 @@ public enum EventPacketConditionOperator {
         };
     }
 
-    public static EventPacketConditionOperator parse(String raw) {
+    public static ScriptConditionOperator parse(String raw) {
         if (raw == null || raw.isBlank()) {
             return EQ;
         }
         String trimmed = raw.trim();
-        for (EventPacketConditionOperator operator : values()) {
-            if (operator.symbol.equalsIgnoreCase(trimmed)) {
+        for (ScriptConditionOperator operator : values()) {
+            if (operator.symbol.equalsIgnoreCase(trimmed) || operator.name().equalsIgnoreCase(trimmed)) {
                 return operator;
             }
         }

@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.eventpacket.config;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
+import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 
 public record EventPacketRule(
     String id,
@@ -18,7 +19,7 @@ public record EventPacketRule(
     Set<String> mythicMobIds,
     boolean repeatable,
     long cooldownMillis,
-    List<EventPacketCondition> conditions,
+    List<ScriptCondition> conditions,
     List<EventPacketAction> actions,
     String clientPacketId
 ) {
@@ -27,7 +28,7 @@ public record EventPacketRule(
         String signal, String placeholder, BigDecimal threshold,
         boolean requireNonEmpty, int requiredCount,
         Set<String> worlds, Set<String> entityTypes, Set<String> mythicMobIds,
-        boolean repeatable, long cooldownMillis, List<EventPacketCondition> conditions, List<EventPacketAction> actions
+        boolean repeatable, long cooldownMillis, List<ScriptCondition> conditions, List<EventPacketAction> actions
     ) {
         this(id, enabled, trigger, signal, placeholder, threshold,
             requireNonEmpty, requiredCount, worlds, entityTypes, mythicMobIds,

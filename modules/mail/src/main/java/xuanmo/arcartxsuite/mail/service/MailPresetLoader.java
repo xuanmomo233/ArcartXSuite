@@ -16,10 +16,10 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import xuanmo.arcartxsuite.mail.config.MailConditionOperator;
+import xuanmo.arcartxsuite.api.condition.ScriptCondition;
+import xuanmo.arcartxsuite.api.condition.ScriptConditionsLoader;
 import xuanmo.arcartxsuite.mail.model.MailAttachment;
 import xuanmo.arcartxsuite.mail.model.MailAttachmentType;
-import xuanmo.arcartxsuite.mail.model.MailCondition;
 import xuanmo.arcartxsuite.mail.model.MailPresetDefinition;
 import xuanmo.arcartxsuite.mail.model.MailPresetCdkDefinition;
 import xuanmo.arcartxsuite.mail.util.MailItemSerializer;
@@ -50,10 +50,15 @@ public final class MailPresetLoader {
             Duration expiresAfter = Duration.ofDays(Math.max(1, presetSection.getLong("expires-after-days", 15L)));
             List<MailAttachment> attachments = loadAttachments(presetSection, logger, maxAttachments, id);
             List<String> claimCommands = presetSection.getStringList("claim-commands");
-            List<MailCondition> claimConditions = presetSection.getStringList("claim-conditions").stream()
-                .map(MailPresetLoader::parseCondition)
-                .filter(java.util.Objects::nonNull)
-                .toList();
+            List<ScriptCondition> claimConditions = new ArrayList<>(
+                ScriptConditionsLoader.load(presetSection, "claim-conditions", "aria-conditions", "ariaConditions")
+            );
+            if (claimConditions.isEmpty()) {
+                claimConditions = presetSection.getStringList("claim-conditions").stream()
+                    .map(MailPresetLoader::parseCondition)
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+            }
             List<MailPresetCdkDefinition> cdks = loadCdks(presetSection, logger, id);
             result.put(id, new MailPresetDefinition(id, enabled, displayName, subject, body, expiresAfter, attachments, claimCommands, claimConditions, cdks));
         }
@@ -221,8 +226,8 @@ public final class MailPresetLoader {
         // claim conditions
         if (preset.claimConditions() != null && !preset.claimConditions().isEmpty()) {
             List<String> condList = new ArrayList<>();
-            for (MailCondition cond : preset.claimConditions()) {
-                condList.add(cond.placeholder() + "::" + cond.operator().configKey() + "::" + cond.expectedValue());
+            for (ScriptCondition cond : preset.claimConditions()) {
+                condList.add(cond.serialize().replace('\t', ':'));
             }
             section.set("claim-conditions", condList);
         }
@@ -263,15 +268,16 @@ public final class MailPresetLoader {
         return seconds + "s";
     }
 
-    private static MailCondition parseCondition(String rawValue) {
+    private static ScriptCondition parseCondition(String rawValue) {
         if (rawValue == null || rawValue.isBlank()) {
             return null;
         }
-        String[] parts = rawValue.split("::", 3);
-        if (parts.length < 3) {
-            return null;
+        ScriptCondition inline = ScriptCondition.parseInline(rawValue);
+        if (inline != null) {
+            return inline;
         }
-        return new MailCondition(parts[0], MailConditionOperator.parse(parts[1]), parts[2]);
+        String normalized = rawValue.replace("::", "\t");
+        return ScriptCondition.deserialize(normalized);
     }
 
     private static String resolveDescription(ItemStack itemStack) {

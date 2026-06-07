@@ -13,6 +13,8 @@ import java.util.logging.Logger;
 import java.util.stream.Stream;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import xuanmo.arcartxsuite.api.condition.ScriptCondition;
+import xuanmo.arcartxsuite.api.condition.ScriptConditionsLoader;
 
 public final class PropDefinitionLoader {
 
@@ -52,7 +54,7 @@ public final class PropDefinitionLoader {
         boolean key = configuration.getBoolean("key", true);
         String permission = readString(configuration, "permission", "");
         List<String> effects = readEffects(configuration);
-        List<PropCondition> conditions = readConditions(configuration, normalizedId, logger);
+        List<ScriptCondition> conditions = readConditions(configuration, normalizedId, logger);
 
         if (displayName.isBlank()) {
             displayName = normalizedId;
@@ -105,22 +107,19 @@ public final class PropDefinitionLoader {
         return List.copyOf(effects);
     }
 
-    private static List<PropCondition> readConditions(FileConfiguration configuration, String propId, Logger logger) {
-        List<?> rawList = configuration.getList("conditions");
-        if (rawList == null || rawList.isEmpty()) {
-            return List.of();
-        }
-        List<PropCondition> conditions = new ArrayList<>();
-        for (Object raw : rawList) {
-            String line = safe(raw == null ? "" : String.valueOf(raw));
-            if (line.isBlank()) {
-                continue;
-            }
-            PropCondition condition = PropCondition.parse(line);
-            if (condition != null) {
-                conditions.add(condition);
-            } else if (logger != null) {
-                logger.warning("Prop " + propId + " 条件格式无效，已跳过: " + line);
+    private static List<ScriptCondition> readConditions(FileConfiguration configuration, String propId, Logger logger) {
+        List<ScriptCondition> conditions = new ArrayList<>(
+            ScriptConditionsLoader.load(configuration, "conditions", "aria-conditions", "ariaConditions")
+        );
+        if (conditions.isEmpty() && logger != null) {
+            List<?> rawList = configuration.getList("conditions");
+            if (rawList != null && !rawList.isEmpty()) {
+                for (Object raw : rawList) {
+                    String line = safe(raw == null ? "" : String.valueOf(raw));
+                    if (!line.isBlank()) {
+                        logger.warning("Prop " + propId + " 条件格式无效，已跳过: " + line);
+                    }
+                }
             }
         }
         return List.copyOf(conditions);

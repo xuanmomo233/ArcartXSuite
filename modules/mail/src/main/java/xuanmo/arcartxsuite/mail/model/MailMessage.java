@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.mail.model;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 
 public record MailMessage(
     long id,
@@ -17,7 +18,7 @@ public record MailMessage(
     MailStatus status,
     List<MailAttachment> attachments,
     List<String> claimCommands,
-    List<MailCondition> claimConditions,
+    List<ScriptCondition> claimConditions,
     Instant createdAt,
     Instant expiresAt,
     Instant updatedAt,
