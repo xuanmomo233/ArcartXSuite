@@ -1,4 +1,4 @@
-﻿ui:
+ui:
   isHud: true
   hide:
   - player_list
@@ -6,12 +6,11 @@
   defaultOpen: true
   action:
     load: |-
-      var.TAB刷新轮次 = 0
       var.TAB显示 = false
     keyPress: |-
       if(self.currentKeyPress() == "TAB"){
         Packet.send("TAB","update")
-        var.单列数量 = Math.ceil(server.server_online / val.TAB遍历.row)
+        var.单列数量 = Math.ceil(server.server_online / val.player_grid.row)
         var.第一列人数 = Math.min(server.server_online, 15)
         var.TAB显示 = true
       }
@@ -21,21 +20,8 @@
       }
   packetHandler:
     tab: |-
-      i = 0
-      var.TAB刷新轮次 = var.TAB刷新轮次 + 1
-      while(val.TAB遍历2.childrenCount() > 1){
-        val.TAB遍历2.get(1).remove()
-      }
-      //此处的写法有点赘余，但这是为了防止报错写的伪判断,以及绕过ax的控件的复制删除BUG
-      while(i <= packet.size()){
-        if(val.player.width == 250){
-          TAB = val.player.copy('player_' + var.TAB刷新轮次 + '_' + i)
-          TAB['player_text'].texts = packet.get(i)
-          TAB.visible = true
-          i++
-        }
-      }
-      var.单列数量 = Math.ceil(server.server_online / val.TAB遍历.row)
+      var.entries = packet['entries']
+      var.单列数量 = Math.ceil(server.server_online / val.player_grid.row)
       var.第一列人数 = Math.min(server.server_online, 15)
 controls:
   adaptive:
@@ -103,57 +89,36 @@ controls:
                       fontSize: 33
                       texts: "~&f&l服务器TPS：{server.server_tps_1}"
                       lineSpace: 8
-          TAB遍历:
+          player_grid:
             type: VGrid
-            val: TAB遍历
             attribute:
               spaceBetweenY: 2
               spaceBetweenX: 2
               row: 15
               y: 44
               x: 26
-            action:
-              create: |-
-                for(i in range(1, 119)){
-                  TAB = self['TAB'].copy('TAB' + i)
-                  TAB.ID = i
-                }
             children:
-              TAB:
+              player_row:
                 type: texture
-                val: TAB
                 attribute:
+                  entry: var.entries[self.key]
                   point: ~top_center
-                  #在这里调整width适应文本长度###################################
                   width: 250
                   height: 25
                   shape: ~round_rect
                   radius: 10
-                  ID: 0
                   normal: ~95,95,95,255
-                  visible: var.TAB显示 && self.ID < server.server_online
-          TAB遍历2:
-            type: VGrid
-            val: TAB遍历2
-            attribute:
-              spaceBetweenY: 2
-              spaceBetweenX: 2
-              row: 15
-              y: 44
-              x: 26
-            children:
-              player:
-                type: Canvas
-                val: player
-                attribute:
-                  width: 250
-                  height: 25
-                  x: 4
-                  y: 4
-                  visible: false
+                  visible: self.entry != null
                 children:
                   player_text:
                     type: text
                     attribute:
                       fontSize: 33
-                      texts: "~null"
+                      texts: "self.parent.entry"
+                      lineSpace: 8
+          tab_observer:
+            type: Observer
+            attribute:
+              target: val.player_grid['player_row']
+              subscribe: var.entries
+              maxSize: 120

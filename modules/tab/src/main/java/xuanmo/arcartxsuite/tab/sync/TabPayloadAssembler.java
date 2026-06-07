@@ -14,29 +14,43 @@ final class TabPayloadAssembler {
     }
 
     static Object create(Object packTemplate, int expectedPlayerCount) {
-        if (packTemplate instanceof Map<?, ?>) {
-            return new LinkedHashMap<String, Object>();
-        }
-        return new ArrayList<>(Math.max(0, expectedPlayerCount));
+        Map<String, Object> wrapper = new LinkedHashMap<>();
+        wrapper.put("entries", new LinkedHashMap<String, Object>());
+        return wrapper;
     }
 
     @SuppressWarnings("unchecked")
     static void append(Object payload, Object packTemplate, Object rendered, boolean omitBlankValues) {
+        Map<String, Object> wrapper = (Map<String, Object>) payload;
+        Map<String, Object> entries = (Map<String, Object>) wrapper.get("entries");
+
         if (packTemplate instanceof Map<?, ?>) {
-            mergeMapPayload((Map<String, Object>) payload, rendered, omitBlankValues);
+            if (rendered instanceof Map<?, ?> renderedMap) {
+                entries.put(Integer.toString(entries.size()), renderedMap);
+            } else {
+                if (!omitBlankValues || !isBlankValue(rendered)) {
+                    entries.put(Integer.toString(entries.size()), rendered);
+                }
+            }
             return;
         }
 
-        List<Object> listPayload = (List<Object>) payload;
         if (packTemplate instanceof List<?>) {
-            mergeListPayload(listPayload, rendered, omitBlankValues);
-            return;
+            if (rendered instanceof List<?> renderedList) {
+                for (Object entry : renderedList) {
+                    if (omitBlankValues && isBlankValue(entry)) {
+                        continue;
+                    }
+                    entries.put(Integer.toString(entries.size()), entry);
+                }
+                return;
+            }
         }
 
         if (omitBlankValues && isBlankValue(rendered)) {
             return;
         }
-        listPayload.add(rendered);
+        entries.put(Integer.toString(entries.size()), rendered);
     }
 
     static Object snapshot(Object payload) {
@@ -100,39 +114,6 @@ final class TabPayloadAssembler {
         }
 
         return Objects.equals(left, right);
-    }
-
-    private static void mergeListPayload(List<Object> payload, Object rendered, boolean omitBlankValues) {
-        if (!(rendered instanceof List<?> renderedList)) {
-            if (!omitBlankValues || !isBlankValue(rendered)) {
-                payload.add(rendered);
-            }
-            return;
-        }
-
-        for (Object entry : renderedList) {
-            if (omitBlankValues && isBlankValue(entry)) {
-                continue;
-            }
-            payload.add(entry);
-        }
-    }
-
-    private static void mergeMapPayload(Map<String, Object> payload, Object rendered, boolean omitBlankValues) {
-        if (!(rendered instanceof Map<?, ?> renderedMap)) {
-            if (!omitBlankValues || !isBlankValue(rendered)) {
-                payload.put("value", rendered);
-            }
-            return;
-        }
-
-        for (Map.Entry<?, ?> entry : renderedMap.entrySet()) {
-            Object value = entry.getValue();
-            if (omitBlankValues && isBlankValue(value)) {
-                continue;
-            }
-            payload.put(String.valueOf(entry.getKey()), value);
-        }
     }
 
     private static boolean isBlankValue(Object value) {
