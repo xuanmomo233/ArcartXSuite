@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
 
 public record MarketModuleConfiguration(
     boolean debug,
@@ -15,6 +17,7 @@ public record MarketModuleConfiguration(
     UiConfiguration ui,
     StorageConfiguration storage,
     RedisConfiguration redis,
+    CrossServerChannelConfig crossServer,
     AuctionConfiguration auction,
     ShopConfiguration shop,
     RecycleConfiguration recycle,
@@ -28,12 +31,15 @@ public record MarketModuleConfiguration(
         UiConfiguration ui = loadUi(config);
         StorageConfiguration storage = loadStorage(config);
         RedisConfiguration redis = loadRedis(config);
+        CrossServerChannelConfig crossServer = CrossServerChannelConfigs.fromSection(
+            config.getConfigurationSection("cross-server")
+        );
         AuctionConfiguration auction = loadAuction(config, logger);
         ShopConfiguration shop = loadShop(config);
         RecycleConfiguration recycle = loadRecycle(config);
         MessagesConfiguration messages = loadMessages(config);
 
-        return new MarketModuleConfiguration(debug, schedulerInterval, ui, storage, redis, auction, shop, recycle, messages);
+        return new MarketModuleConfiguration(debug, schedulerInterval, ui, storage, redis, crossServer, auction, shop, recycle, messages);
     }
 
     private static UiConfiguration loadUi(FileConfiguration config) {
@@ -77,7 +83,6 @@ public record MarketModuleConfiguration(
             Math.max(1, sec.getInt("port", 6379)),
             readStr(sec, "password", ""),
             sec.getInt("database", 0),
-            readStr(sec, "channel", "axs:market:sync"),
             Math.max(10, sec.getInt("cache-ttl-seconds", 60))
         );
     }
@@ -239,10 +244,10 @@ public record MarketModuleConfiguration(
 
     public record RedisConfiguration(
         boolean enabled, String host, int port, String password,
-        int database, String channel, int cacheTtlSeconds
+        int database, int cacheTtlSeconds
     ) {
         public static RedisConfiguration disabled() {
-            return new RedisConfiguration(false, "127.0.0.1", 6379, "", 0, "axs:market:sync", 60);
+            return new RedisConfiguration(false, "127.0.0.1", 6379, "", 0, 60);
         }
     }
 

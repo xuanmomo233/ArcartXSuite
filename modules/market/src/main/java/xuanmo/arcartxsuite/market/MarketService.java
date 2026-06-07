@@ -21,6 +21,8 @@ import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
+import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.market.auction.AuctionItemSerializer;
 import xuanmo.arcartxsuite.market.auction.AuctionListing;
 import xuanmo.arcartxsuite.market.auction.AuctionService;
@@ -47,6 +49,7 @@ public class MarketService {
     private final @Nullable ItemBridgeAPI itemStackBridge;
     private final @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier;
     private final Logger logger;
+    private final CrossServerAPI crossServer;
 
     private static final int AUCTION_PAGE_SIZE = 20;
     private static final int HISTORY_PAGE_SIZE = 20;
@@ -59,6 +62,7 @@ public class MarketService {
 
     private MarketRepository repository;
     private RedisMarketCache redisCache;
+    private CrossServerChannel crossServerChannel;
     private AuctionService auctionService;
     private ShopService shopService;
     private RecycleService recycleService;
@@ -68,7 +72,8 @@ public class MarketService {
                          ItemSourceRegistry itemSourceRegistry, AuctionItemSerializer itemSerializer,
                          @Nullable ItemBridgeAPI itemStackBridge,
                          @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier,
-                         Logger logger) {
+                         Logger logger,
+                         CrossServerAPI crossServer) {
         this.plugin = plugin;
         this.config = config;
         this.packetBridge = packetBridge;
@@ -78,6 +83,7 @@ public class MarketService {
         this.itemStackBridge = itemStackBridge;
         this.mailSupplier = mailSupplier;
         this.logger = logger;
+        this.crossServer = crossServer;
     }
 
     public void setSignalProvider(java.util.function.Supplier<SignalDispatchable> provider) {
@@ -100,12 +106,23 @@ public class MarketService {
 
         // 初始化 Redis
         redisCache = new RedisMarketCache(config.redis(), logger);
-        redisCache.initialize(this::handleRedisMessage);
+        redisCache.initialize();
+
+        crossServerChannel = crossServer.openChannel(
+            "market",
+            config.crossServer(),
+            delivery -> handleCrossServerMessage(delivery.payload())
+        );
+        java.util.function.Consumer<String> crossServerPublisher = message -> {
+            if (crossServerChannel != null && crossServerChannel.isActive()) {
+                crossServerChannel.publish(message);
+            }
+        };
 
         // 启动子服务
         if (config.auction().enabled()) {
             auctionService = new AuctionService(plugin, config.auction(), config.messages(),
-                repository, redisCache, currencyManager, mailSupplier, itemSerializer, logger);
+                repository, redisCache, crossServerPublisher, currencyManager, mailSupplier, itemSerializer, logger);
             auctionService.start(config.schedulerIntervalTicks());
         }
 
@@ -129,6 +146,7 @@ public class MarketService {
         if (shopService != null) { shopService.shutdown(); shopService = null; }
         if (recycleService != null) { recycleService.shutdown(); recycleService = null; }
         if (redisCache != null) { redisCache.shutdown(); redisCache = null; }
+        if (crossServerChannel != null) { crossServerChannel.close(); crossServerChannel = null; }
         if (repository != null) { repository.shutdown(); repository = null; }
     }
 
@@ -792,9 +810,14 @@ public class MarketService {
         return auctionService.adminForceCancelListing(listingId);
     }
 
-    private void handleRedisMessage(String message) {
-        // 处理跨服消息（如缓存失效、通知等）
-        logger.fine("[Market] Redis 消息: " + message);
+    private void handleCrossServerMessage(String message) {
+        logger.fine("[Market] 跨服消息: " + message);
+        if (message == null || message.isBlank() || redisCache == null || !redisCache.isAvailable()) {
+            return;
+        }
+        if (message.startsWith("LISTING_") || message.startsWith("BID_")) {
+            redisCache.invalidateByPrefix("market:listings:");
+        }
     }
 
     // ─── 跨模块联动 ─────────────────────────────────────────

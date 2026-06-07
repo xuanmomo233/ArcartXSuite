@@ -12,6 +12,7 @@ import java.util.regex.PatternSyntaxException;
 import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
 

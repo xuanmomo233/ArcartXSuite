@@ -1604,11 +1604,8 @@ public final class ChatService implements Listener {
     }
 
     private String nodeId() {
-        if (configuration.redis().enabled()) {
-            return configuration.redis().nodeId();
-        }
-        if (configuration.proxy().enabled()) {
-            return configuration.proxy().nodeId();
+        if (crossServerChannel != null && crossServerChannel.isActive()) {
+            return crossServer.nodeId();
         }
         return configuration.serverId();
     }

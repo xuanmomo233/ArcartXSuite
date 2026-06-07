@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.market.auction;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
@@ -31,6 +32,7 @@ public class AuctionService {
     private final MessagesConfiguration messages;
     private final MarketRepository repository;
     private final RedisMarketCache redisCache;
+    private final @Nullable Consumer<String> crossServerPublisher;
     private final CurrencyBridgeAPI currencyManager;
     private final @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier;
     private final AuctionItemSerializer itemSerializer;
@@ -39,6 +41,7 @@ public class AuctionService {
 
     public AuctionService(JavaPlugin plugin, AuctionConfiguration config, MessagesConfiguration messages,
                           MarketRepository repository, RedisMarketCache redisCache,
+                          @Nullable Consumer<String> crossServerPublisher,
                           CurrencyBridgeAPI currencyManager,
                           @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier,
                           AuctionItemSerializer itemSerializer, Logger logger) {
@@ -47,6 +50,7 @@ public class AuctionService {
         this.messages = messages;
         this.repository = repository;
         this.redisCache = redisCache;
+        this.crossServerPublisher = crossServerPublisher;
         this.currencyManager = currencyManager;
         this.mailSupplier = mailSupplier;
         this.itemSerializer = itemSerializer;
@@ -153,7 +157,7 @@ public class AuctionService {
         // 使 Redis 缓存失效
         if (redisCache.isAvailable()) {
             redisCache.invalidateByPrefix("market:listings:");
-            redisCache.publish("LISTING_CREATED:" + listing.getId());
+            publishCrossServer("LISTING_CREATED:" + listing.getId());
         }
 
         return ListingResult.success(listing);
@@ -244,7 +248,7 @@ public class AuctionService {
         // Redis 广播
         if (redisCache.isAvailable()) {
             redisCache.invalidateByPrefix("market:listings:");
-            redisCache.publish("LISTING_SOLD:" + listing.getId());
+            publishCrossServer("LISTING_SOLD:" + listing.getId());
         }
 
         return PurchaseResult.success(item, price, tax);
@@ -313,7 +317,7 @@ public class AuctionService {
         // Redis
         if (redisCache.isAvailable()) {
             redisCache.invalidateByPrefix("market:listings:");
-            redisCache.publish("BID_PLACED:" + listingId + ":" + amount);
+            publishCrossServer("BID_PLACED:" + listingId + ":" + amount);
         }
 
         return BidResult.success(amount);
@@ -353,7 +357,7 @@ public class AuctionService {
 
         if (redisCache.isAvailable()) {
             redisCache.invalidateByPrefix("market:listings:");
-            redisCache.publish("LISTING_CANCELLED:" + listingId);
+            publishCrossServer("LISTING_CANCELLED:" + listingId);
         }
 
         return true;
@@ -388,7 +392,7 @@ public class AuctionService {
 
         if (redisCache.isAvailable()) {
             redisCache.invalidateByPrefix("market:listings:");
-            redisCache.publish("LISTING_CANCELLED:" + listingId);
+            publishCrossServer("LISTING_CANCELLED:" + listingId);
         }
         return true;
     }
@@ -617,6 +621,12 @@ public class AuctionService {
 
     // 离线 / 背包溢出的发放统一由 deliverItemSafe / depositSafe + 待发放队列处理，
     // 不再使用旧的 depositOffline / createOfflineDeposit（离线时会丢钱）。
+
+    private void publishCrossServer(String message) {
+        if (crossServerPublisher != null && message != null && !message.isBlank()) {
+            crossServerPublisher.accept(message);
+        }
+    }
 
     // ─── 结果类 ─────────────────────────────────────────────
 

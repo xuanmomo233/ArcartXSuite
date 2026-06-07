@@ -136,7 +136,8 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
                 } catch (Exception ex) {
                     throw new RuntimeException(ex);
                 }
-            }
+            },
+            context.crossServer()
         );
         service.start();
         adminCommand = new OnlineRewardsAdminCommand(() -> service, messages());

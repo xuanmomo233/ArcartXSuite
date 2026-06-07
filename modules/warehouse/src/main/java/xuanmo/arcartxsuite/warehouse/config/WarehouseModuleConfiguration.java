@@ -15,6 +15,13 @@ import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 import xuanmo.arcartxsuite.api.item.ItemMatcher;
 import xuanmo.arcartxsuite.api.item.ItemMatcherLoader;
 
+/**
+ * Warehouse 模块配置聚合，对应 {@code ArcartXWarehouse.yml}。
+ * <p>
+ * 所有字段均为不可变，通过 {@link #load(FileConfiguration, Logger)} 从 Bukkit YAML 解析。
+ * 动态节（warehouses / categories / currencies / deposit-products / shared / sort-profiles）
+ * 在 {@link xuanmo.arcartxsuite.warehouse.WarehouseModule#defaultSyncPolicy()} 中声明，不会被 ConfigDiagnosticEngine 覆盖。
+ */
 public record WarehouseModuleConfiguration(
     boolean debug,
     long flushIntervalTicks,
@@ -33,6 +40,14 @@ public record WarehouseModuleConfiguration(
     ShowcaseConfiguration showcase
 ) {
 
+    /**
+     * 从 Bukkit {@link FileConfiguration} 解析完整配置。
+     * 缺失值均使用安全默认值，非法值会被截断到合法范围。
+     *
+     * @param configuration Bukkit 配置对象
+     * @param logger        用于输出解析警告
+     * @return 不可变的配置实例
+     */
     public static WarehouseModuleConfiguration load(FileConfiguration configuration, Logger logger) {
         boolean debug = configuration.getBoolean("settings.debug", false);
         long flushIntervalTicks = Math.max(20L, configuration.getLong("settings.flush-interval-ticks", 100L));
@@ -120,6 +135,7 @@ public record WarehouseModuleConfiguration(
         );
     }
 
+    /** 仓库展示配置：冷却、最大展示物品数、聊天卡片 ID。 */
     public record ShowcaseConfiguration(boolean enabled, int cooldownSeconds, int maxItems, String cardId, String permission) {
         public boolean useCard() {
             return cardId != null && !cardId.isBlank();
@@ -498,6 +514,7 @@ public record WarehouseModuleConfiguration(
         }
     }
 
+    /** 三套 AXUI 的 ID、文件路径与包标识配置。 */
     public record UiConfiguration(
         String uiId,
         String uiFile,
@@ -512,6 +529,7 @@ public record WarehouseModuleConfiguration(
     ) {
     }
 
+    /** 存储后端配置：SQLite 文件或 MySQL 连接参数。 */
     public record StorageConfiguration(
         StorageDialect dialect,
         String sqliteFileName,
@@ -531,6 +549,7 @@ public record WarehouseModuleConfiguration(
         }
     }
 
+    /** 二级密码安全策略：长度限制、会话有效期、管理员解密开关。 */
     public record SecurityConfiguration(
         int minLength,
         int maxLength,
@@ -540,12 +559,15 @@ public record WarehouseModuleConfiguration(
     ) {
     }
 
+    /** 自动拾取配置：存入开关、Mythic 掉落开关、通知开关。 */
     public record PickupConfiguration(boolean autoStoreOnPickup, boolean autoStoreMythicLoot, boolean notifyOnAutoStore) {
     }
 
+    /** 搜索与排序默认配置。 */
     public record SearchConfiguration(int pageSize, String defaultSortId) {
     }
 
+    /** 个人仓库定义：显示名、默认拥有、权限、多等级容量。 */
     public record WarehouseDefinition(
         String id,
         String displayName,
@@ -559,12 +581,15 @@ public record WarehouseModuleConfiguration(
         }
     }
 
+    /** 仓库单级定义：等级、容量、升级消耗。 */
     public record WarehouseLevelDefinition(int level, long capacity, UpgradeCost upgradeCost) {
     }
 
+    /** 升级/创建费用：货币 ID 与金额。 */
     public record UpgradeCost(String currencyId, BigDecimal amount) {
     }
 
+    /** 物品分类定义：按 NBT 路径与匹配值归类，fallback 为兜底分类。 */
     public record CategoryDefinition(
         String id,
         String displayName,
@@ -575,6 +600,7 @@ public record WarehouseModuleConfiguration(
     ) {
     }
 
+    /** 定期存款产品定义：期限、金额区间、权限与阶梯利率。 */
     public record DepositProductDefinition(
         String id,
         String displayName,
@@ -599,9 +625,11 @@ public record WarehouseModuleConfiguration(
         }
     }
 
+    /** 利率阶梯：金额区间与对应利率。 */
     public record InterestTier(BigDecimal minAmount, BigDecimal maxAmount, BigDecimal rate) {
     }
 
+    /** 共享仓库全局配置：创建费用、等级、角色名、权限分层。 */
     public record SharedConfiguration(
         boolean enabled,
         UpgradeCost createCost,
@@ -612,9 +640,11 @@ public record WarehouseModuleConfiguration(
     ) {
     }
 
+    /** 共享仓库角色显示名称映射。 */
     public record SharedRoleNames(String owner, String member, String viewer) {
     }
 
+    /** 共享仓库权限分层：拥有权限节点可享受更高的 max-owned / max-members。 */
     public record SharedPermissionTier(
         String id,
         String permission,
@@ -624,9 +654,11 @@ public record WarehouseModuleConfiguration(
     ) {
     }
 
+    /** 排序方案：按字段列表依次排序。 */
     public record SortProfile(String id, List<SortField> fields) {
     }
 
+    /** 排序字段：键与是否降序。 */
     public record SortField(String key, boolean descending) {
     }
 }

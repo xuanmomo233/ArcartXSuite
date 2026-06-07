@@ -453,6 +453,14 @@ public final class WarehouseService implements Listener {
         return true;
     }
 
+    /**
+     * 异步生成玩家仓库概览信息，用于管理员查询。
+     *
+     * @param playerUuid   玩家 UUID
+     * @param playerName   玩家名称（用于显示）
+     * @param callback     成功回调，接收格式化后的信息行列表
+     * @param errorCallback 失败回调，接收错误信息
+     */
     public void describePlayer(UUID playerUuid, String playerName, Consumer<List<String>> callback, Consumer<String> errorCallback) {
         try {
             long total = totalItems(playerUuid);
@@ -471,6 +479,12 @@ public final class WarehouseService implements Listener {
         }
     }
 
+    /**
+     * 管理员清除玩家二级密码。
+     *
+     * @param playerUuid 目标玩家 UUID
+     * @param callback   操作结果回调
+     */
     public void adminClearSecondaryPassword(UUID playerUuid, Consumer<ActionResult> callback) {
         try {
             repository.clearSecurity(playerUuid);
@@ -481,6 +495,15 @@ public final class WarehouseService implements Listener {
         }
     }
 
+    /**
+     * 管理员调整玩家银行余额。支持 set / add / take 三种模式。
+     *
+     * @param playerUuid 目标玩家 UUID
+     * @param currencyId 货币 ID
+     * @param mode       操作模式：set / add / take
+     * @param amountText 金额文本
+     * @param callback   操作结果回调
+     */
     public void adminAdjustWallet(UUID playerUuid, String currencyId, String mode, String amountText, Consumer<ActionResult> callback) {
         try {
             String normalizedCurrency = normalizeId(currencyId);
@@ -643,6 +666,9 @@ public final class WarehouseService implements Listener {
         }
     }
 
+    /**
+     * 导出并注册三套 AXUI 文件（storage / manage / bank），同时为每套 UI 注册关闭回调。
+     */
     private void bindUis() throws Exception {
         storageRuntimeUiId = bindUi(
             configuration.ui().uiId(),
@@ -669,6 +695,15 @@ public final class WarehouseService implements Listener {
         }
     }
 
+    /**
+     * 导出单个 UI 资源文件并注册到 PacketBridge。
+     *
+     * @param configuredId   配置中的 UI ID
+     * @param resourcePath   jar 内资源路径
+     * @param destinationPath 导出到磁盘的相对路径
+     * @param uiKind         UI 类型标识（storage / manage / bank）
+     * @return 运行时 UI ID
+     */
     private String bindUi(String configuredId, String resourcePath, String destinationPath, String uiKind) throws Exception {
         ArcartXPacketBridge bridge = packetBridge;
         File uiFile = uiResourceExporter.export(resourcePath, destinationPath, configuration.ui().overwriteUiFiles());
@@ -692,6 +727,9 @@ public final class WarehouseService implements Listener {
         return registration.runtimeUiId();
     }
 
+    /**
+     * 打开仓库存取界面并发送初始化/更新数据包。
+     */
     private void openStorage(Player player, String handler) throws Exception {
         ensureEntitlements(player);
         ensureCurrentWarehouse(player, state(player));
@@ -702,6 +740,9 @@ public final class WarehouseService implements Listener {
         sendStorage(player, handler);
     }
 
+    /**
+     * 打开共享管理界面并发送初始化/更新数据包。
+     */
     private void openManage(Player player, String handler) throws Exception {
         ensureEntitlements(player);
         ensureCurrentWarehouse(player, state(player));
@@ -709,6 +750,9 @@ public final class WarehouseService implements Listener {
         sendManage(player, handler);
     }
 
+    /**
+     * 打开银行界面并发送初始化/更新数据包。
+     */
     private void openBank(Player player, String handler) throws Exception {
         ensureEntitlements(player);
         ensureCurrentWarehouse(player, state(player));
@@ -716,6 +760,9 @@ public final class WarehouseService implements Listener {
         sendBank(player, handler);
     }
 
+    /**
+     * 同时刷新 storage、manage、bank 三个界面的数据包。
+     */
     private void refreshBoth(Player player) throws Exception {
         ensureEntitlements(player);
         ensureCurrentWarehouse(player, state(player));
@@ -763,6 +810,9 @@ public final class WarehouseService implements Listener {
         }
     }
 
+    /**
+     * 构建仓库存取界面的数据包，包含分页槽位、选中物品、背包信息、容量与权限状态。
+     */
     private Map<String, Object> buildStoragePacket(Player player, ViewState state) throws Exception {
         List<SlotItemRecord> visibleSlots = visibleSlots(state);
         Map<String, Object> slots = new LinkedHashMap<>();
@@ -841,6 +891,9 @@ public final class WarehouseService implements Listener {
         return index >= 0 && index < visibleSlots.size() ? visibleSlots.get(index).slot() : -1;
     }
 
+    /**
+     * 构建共享管理界面的数据包，包含成员列表、搜索结果、自动拾取设置等。
+     */
     private Map<String, Object> buildManagePacket(Player player, ViewState state) throws Exception {
         Map<String, Object> packet = basePacket(player, state);
         Map<String, Object> sharedMembers = sharedMemberPacket(player, state);
@@ -864,6 +917,9 @@ public final class WarehouseService implements Listener {
         return packet;
     }
 
+    /**
+     * 构建银行界面的数据包，包含活期余额、定期产品和当前定期列表。
+     */
     private Map<String, Object> buildBankPacket(Player player, ViewState state) throws Exception {
         Map<String, Object> packet = basePacket(player, state);
         Map<String, Object> balances = bankBalancePacket(player);
@@ -1039,6 +1095,10 @@ public final class WarehouseService implements Listener {
         refreshBoth(player);
     }
 
+    /**
+     * 将玩家背包指定槽位的物品存入当前仓库。
+     * 会检查只读权限、黑名单和容量上限，成功时扣除背包物品并刷新 UI。
+     */
     private void depositSlot(Player player, String rawSlotValue) throws Exception {
         ViewState state = state(player);
         debug("DEPOSIT start player=" + player.getName() + " rawArg=" + safe(rawSlotValue)
@@ -1092,6 +1152,10 @@ public final class WarehouseService implements Listener {
         refreshBoth(player);
     }
 
+    /**
+     * 一键存入背包全部物品（主库存 9~44 槽）。
+     * 逐件检查黑名单和容量，跳过不可存物品，统计存入结果。
+     */
     private void depositAllBackpack(Player player) throws Exception {
         ViewState state = state(player);
         debug("DEPOSIT-ALL start player=" + player.getName()
@@ -1150,6 +1214,18 @@ public final class WarehouseService implements Listener {
         refreshBoth(player);
     }
 
+    /**
+     * 核心存入逻辑：将物品堆栈存入指定仓库。
+     * 优先尝试与已有同 hash 槽位合并（聚合上限 {@link #MAX_AGGREGATED_AMOUNT}），
+     * 无法合并则占用新空槽。若仓库已满则返回失败。
+     *
+     * @param player      操作玩家（用于日志与 debug）
+     * @param ownerType   {@code personal} 或 {@code shared}
+     * @param ownerId     所有者标识（UUID 字符串或共享仓库 ID）
+     * @param warehouseId 仓库 ID
+     * @param stack       待存入物品（amount 可能部分存入）
+     * @return 存入结果
+     */
     private DepositResult depositStack(Player player, String ownerType, String ownerId, String warehouseId, ItemStack stack) throws Exception {
         if (stack == null || stack.getType().isAir() || stack.getAmount() <= 0 || itemMatcherSupport.matches(configuration.blacklist(), stack)) {
             debug("DEPOSIT-STACK reject player=" + player.getName() + " reason=invalid-stack stack=" + describeStack(stack));
@@ -1247,6 +1323,10 @@ public final class WarehouseService implements Listener {
         );
     }
 
+    /**
+     * 从当前仓库取出物品到玩家背包。
+     * 需要二级密码已解锁，且当前仓库可写。按堆叠上限分批给予，背包满时停止。
+     */
     private void withdraw(Player player, int slot, long requestedAmount, boolean all) throws Exception {
         if (!isSecondaryUnlocked(player.getUniqueId())) {
             sendMessage(player, false, "取出物品前请先解锁二级密码。");
@@ -1310,6 +1390,10 @@ public final class WarehouseService implements Listener {
         refreshBoth(player);
     }
 
+    /**
+     * 玩家将背包货币存入银行活期账户。
+     * 先通过货币桥接扣款，再写入数据库；失败时自动回滚。
+     */
     private void bankDeposit(Player player, String currencyId, BigDecimal amount) throws Exception {
         String normalized = normalizeId(currencyId);
         var bridge = currencyBridgeManager.bridge(normalized);
@@ -1339,6 +1423,10 @@ public final class WarehouseService implements Listener {
         refreshBoth(player);
     }
 
+    /**
+     * 玩家从银行活期账户提现到背包。
+     * 先原子扣减数据库余额，再通过货币桥接放款；失败时自动回滚。
+     */
     private void bankWithdraw(Player player, String currencyId, BigDecimal amount) throws Exception {
         if (!isSecondaryUnlocked(player.getUniqueId())) {
             sendMessage(player, false, "提现前请先解锁二级密码。");
@@ -1375,6 +1463,10 @@ public final class WarehouseService implements Listener {
         refreshBoth(player);
     }
 
+    /**
+     * 购买定期存款产品。
+     * 校验金额区间、匹配利率阶梯、原子扣减活期余额后创建定期记录。
+     */
     private void createFixedDeposit(Player player, String productId, BigDecimal amount) throws Exception {
         DepositProductDefinition product = configuration.depositProduct(productId);
         if (product == null || !canUseProduct(player, product)) {
@@ -1426,6 +1518,10 @@ public final class WarehouseService implements Listener {
         refreshBoth(player);
     }
 
+    /**
+     * 领取到期定期存款本息。
+     * 通过 {@link WarehouseRepository#claimFixedDepositAtomic} 原子标记 claimed 并计算本息入账，防止并发重复领取。
+     */
     private void claimFixedDeposit(Player player, String depositId) throws Exception {
         if (!isSecondaryUnlocked(player.getUniqueId())) {
             sendMessage(player, false, "领取定期前请先解锁二级密码。");
@@ -1456,6 +1552,9 @@ public final class WarehouseService implements Listener {
         refreshBoth(player);
     }
 
+    /**
+     * 创建共享仓库。校验权限层级的 max-owned 限制，扣除创建费用后写入数据库。
+     */
     private void createSharedWarehouse(Player player, String rawName) throws Exception {
         if (!configuration.shared().enabled()) {
             sendMessage(player, false, "共享仓库未启用。");
@@ -1493,6 +1592,9 @@ public final class WarehouseService implements Listener {
         refreshBoth(player);
     }
 
+    /**
+     * 删除共享仓库（需二级密码确认）。仅所有者可操作，删除后清理互斥锁并重置当前视图。
+     */
     private void deleteSharedWarehouse(Player player, String sharedId, String password) throws Exception {
         if (!validatePassword(player.getUniqueId(), password)) {
             sendMessage(player, false, "请输入正确二级密码确认删除共享仓库。");
@@ -1540,6 +1642,10 @@ public final class WarehouseService implements Listener {
         refreshBoth(player);
     }
 
+    /**
+     * 邀请玩家加入共享仓库，或修改现有成员角色。
+     * 仅所有者可操作，校验成员数量上限，目标角色不可为 owner。
+     */
     private void inviteSharedMember(Player player, String sharedId, String memberName, String role) throws Exception {
         if (!isSecondaryUnlocked(player.getUniqueId())) {
             sendMessage(player, false, "增加成员前请先解锁二级密码。");
@@ -1602,6 +1708,10 @@ public final class WarehouseService implements Listener {
         refreshBoth(player);
     }
 
+    /**
+     * 将共享仓库所有权转让给现有 member 角色成员。
+     * 转让后原所有者变为 viewer，目标成员提升为 owner。
+     */
     private void transferSharedWarehouse(Player player, String sharedId, String memberName) throws Exception {
         if (!isSecondaryUnlocked(player.getUniqueId())) {
             sendMessage(player, false, "转让共享仓库前请先解锁二级密码。");
@@ -1641,6 +1751,10 @@ public final class WarehouseService implements Listener {
         refreshBoth(player);
     }
 
+    /**
+     * 设置二级密码。使用 PBKDF2WithHmacSHA256 120,000 次迭代 hash，随机 salt。
+     * 设置成功后自动解锁当前会话。
+     */
     private void setPassword(Player player, String password) throws Exception {
         String normalized = safe(password);
         if (normalized.length() < configuration.security().minLength() || normalized.length() > configuration.security().maxLength()) {
@@ -1928,6 +2042,10 @@ public final class WarehouseService implements Listener {
             : "扩充到 Lv." + next.level() + " / " + next.capacity() + " 格，消耗 " + formatCurrencyWithName(cost.currencyId(), cost.amount()));
     }
 
+    /**
+     * 扩充当前仓库到下一等级。
+     * 个人仓库和共享仓库均支持，扣除升级费用后更新数据库。
+     */
     private void upgradeCurrentWarehouse(Player player) throws Exception {
         ViewState state = state(player);
         if (!isSecondaryUnlocked(player.getUniqueId())) {
