@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
@@ -870,6 +871,8 @@ public final class WarehouseService implements Listener {
      */
     private Map<String, Object> buildStoragePacket(Player player, ViewState state) throws Exception {
         List<SlotItemRecord> visibleSlots = visibleSlots(state);
+        String slotOrder = visibleSlots.stream().map(i -> String.valueOf(i.slot())).collect(Collectors.joining(","));
+        debug("buildStoragePacket visibleSlots order: " + slotOrder);
         Map<String, Object> slots = new LinkedHashMap<>();
         Map<String, Object> packet = basePacket(player, state);
         int pageSize = SLOT_COUNT;
@@ -878,18 +881,32 @@ public final class WarehouseService implements Listener {
         int start = (state.page() - 1) * pageSize;
         for (int displaySlot = 0; displaySlot < SLOT_COUNT; displaySlot++) {
             int index = start + displaySlot;
-            Map<String, Object> row = index >= 0 && index < visibleSlots.size()
-                ? slotPacket(visibleSlots.get(index), true)
+            SlotItemRecord item = index >= 0 && index < visibleSlots.size()
+                ? visibleSlots.get(index)
+                : null;
+            Map<String, Object> row = item != null
+                ? slotPacket(item, true)
                 : emptySlotPacket(displaySlot);
             row.put("displaySlot", displaySlot);
-            slots.put(Integer.toString(displaySlot), row);
+            String key = String.valueOf(displaySlot);
+            row.put("key", key);
+            slots.put(key, row);
+            if (item != null) {
+                String itemJson = displayItemJson(item);
+                if (!itemJson.isBlank()) {
+                    packet.put("slotItemJson" + key, itemJson);
+                }
+            }
         }
+        String slotKeys = String.join(",", slots.keySet());
+        debug("buildStoragePacket slots keys order: " + slotKeys);
         int selectedDisplaySlot = selectedDisplaySlot(state, visibleSlots);
         SlotItemRecord selected = validSlot(state.selectedSlot())
             ? repository.loadSlot(state.ownerType(), state.ownerId(), state.warehouseId(), state.selectedSlot()).orElse(null)
             : null;
         packet.put("ui", "storage");
         packet.put("slots", slots);
+        packet.put("slotCount", SLOT_COUNT);
         packet.put("selectedSlot", selectedDisplaySlot);
         packet.put("selectedActualSlot", state.selectedSlot());
         packet.put("selectedItem", selected == null ? emptySelectionPacket() : slotPacket(selected, true));
@@ -2436,7 +2453,6 @@ public final class WarehouseService implements Listener {
         row.put("amount", item.amount());
         row.put("category", item.categoryId());
         row.put("material", item.materialId());
-        row.put("itemJson", displayItemJson(item));
         row.put("updated", TIME_FORMATTER.format(Instant.ofEpochMilli(item.updatedAt())));
         row.put("lore", storedLoreLines(item));
         return row;
@@ -2462,7 +2478,6 @@ public final class WarehouseService implements Listener {
         row.put("amount", 0L);
         row.put("category", "");
         row.put("material", "");
-        row.put("itemJson", "");
         row.put("updated", "");
         row.put("lore", List.of());
         return row;

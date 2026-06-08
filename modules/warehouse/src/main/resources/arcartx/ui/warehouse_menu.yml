@@ -54,6 +54,24 @@ ui:
       var.canUpgrade = packet['canUpgrade']
       var.nextUpgradeText = packet['nextUpgradeText']
       var.renderBackpackAmounts()
+      var.itemJsons = {}
+      if(var.slots != null){
+        for(key in var.slots.keys()){
+          json = packet['slotItemJson' + key]
+          if(json != null && json != ''){
+            var.itemJsons[key] = json
+          } else {
+            var.itemJsons[key] = var.air
+          }
+        }
+      }
+      for(i in range(0, 54)){
+        key = i.round
+        icon = val.仓库网格['物品图标' + key]
+        if(icon != null){
+          icon.seticon()
+        }
+      }
     update: |-
       var.packetId = packet['packetId']
       var.ownerType = packet['ownerType']
@@ -88,6 +106,24 @@ ui:
       var.canUpgrade = packet['canUpgrade']
       var.nextUpgradeText = packet['nextUpgradeText']
       var.renderBackpackAmounts()
+      var.itemJsons = {}
+      if(var.slots != null){
+        for(key in var.slots.keys()){
+          json = packet['slotItemJson' + key]
+          if(json != null && json != ''){
+            var.itemJsons[key] = json
+          } else {
+            var.itemJsons[key] = var.air
+          }
+        }
+      }
+      for(i in range(0, 54)){
+        key = i.round
+        icon = val.仓库网格['物品图标' + key]
+        if(icon != null){
+          icon.seticon()
+        }
+      }
   action:
     load: |-
       var.packetId = 'AXPM_WAREHOUSE'
@@ -104,10 +140,8 @@ ui:
       var.sharedWarehouses = {}
       var.sharedWarehouseStorageTexts = {}
       var.slots = {}
-      for(i in range(0,53)){
-        idx = i.round()
-        var.slots[idx + ''] = {'displaySlot': idx, 'slot': idx, 'empty': true, 'matched': true, 'amount': 0, 'itemJson': ''}
-      }
+      var.itemJsons = {}
+      var.air = '{"id": "minecraft:air","Count":1b}'
       var.selectedSlot = -1
       var.selectedItem = null
       var.backpack = {}
@@ -570,11 +604,19 @@ controls:
                   column: 9
                   spaceBetweenX: 14
                   spaceBetweenY: 14
+                action:
+                  create: |-
+                    for(i in range(0, 54)){
+                      slot = self['物品图标'].copy('物品图标' + i.round)
+                      slot.entryKey = i.round
+
+                    }
                 children:
                   物品图标:
                     type: Slot
                     attribute:
-                      entry: var.slots[self.key]
+                      entryKey: 0
+                      entry: var.slots[self.entryKey]
                       visible: self.entry != null
                       slotType: ~Icon
                       itemScale: 0.76
@@ -584,12 +626,10 @@ controls:
                       hover: ~Frosted:0;255,255,255,255
                       shape: ~round_rect
                       radius: 16
-                      seticon: "self.setItemIcon(self.entry['empty'] || self.entry['itemJson'] == '' ? var.emptyItemJson : self.entry['itemJson'])"
+                      seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
                     action:
-                      create: |-
-                        self.seticon()
                       clickLeft: |-
-                        Packet.send(var.packetId, 'select', self.key)
+                        Packet.send(var.packetId, 'select', self.entryKey)
                     effect:
                       stroke:
                         width: 2
@@ -601,15 +641,9 @@ controls:
                           x: 8
                           y: 48
                           width: 56
-                          texts: "self.parent.entry != null && !self.parent.entry['empty'] ? '&f' + self.parent.entry['amount'] : ''"
+                          texts: "self.parent.entry != null && !self.parent.entry['empty'] ? '&f' + self.parent.entry['amount'].round() : ''"
                           fontSize: 36
                           through: true
-              仓库观察:
-                type: Observer
-                attribute:
-                  target: val.仓库网格['物品图标']
-                  subscribe: var.slots
-                  maxSize: 54
               上一页:
                 type: Texture
                 attribute:

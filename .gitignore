@@ -49,3 +49,4 @@ dist-scripts/temp/
 !gradlew.bat
 
 
+.devin/rules/

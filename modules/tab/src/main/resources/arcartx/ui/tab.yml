@@ -91,6 +91,7 @@ controls:
                       lineSpace: 8
           player_grid:
             type: VGrid
+            val: player_grid
             attribute:
               spaceBetweenY: 2
               spaceBetweenX: 2
