@@ -51,4 +51,28 @@ public interface AttributeBridgeRegistry {
      * @param listener 监听器
      */
     void unregisterDamageListener(AttributeDamageListener listener);
+
+    // ─── 通用属性治疗事件分发 ──────────────────────────────────
+
+    /**
+     * 是否有可用的属性治疗来源（任一属性插件已加载且提供治疗事件桥接）。
+     */
+    boolean hasHealSource();
+
+    /**
+     * 注册通用属性治疗事件监听器。
+     * <p>
+     * 当已对接属性插件触发治疗事件时，本体将其归一化为
+     * {@link AttributeHealEvent} 后调用此监听器。
+     *
+     * @param listener 监听器
+     */
+    void registerHealListener(AttributeHealListener listener);
+
+    /**
+     * 注销通用属性治疗事件监听器。
+     *
+     * @param listener 监听器
+     */
+    void unregisterHealListener(AttributeHealListener listener);
 }

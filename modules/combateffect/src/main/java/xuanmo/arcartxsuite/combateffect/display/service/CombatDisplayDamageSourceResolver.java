@@ -13,20 +13,24 @@ public final class CombatDisplayDamageSourceResolver {
         boolean mythicLibAvailable,
         boolean craneAttributeAvailable,
         boolean attributePlusAvailable,
+        boolean symphonyAvailable,
         boolean bukkitAvailable
     ) {
         CombatDisplayDamageSourceMode effectiveMode = mode == null ? CombatDisplayDamageSourceMode.AUTO : mode;
         return switch (effectiveMode) {
-            case AUTO -> firstAvailable(mythicLibAvailable, craneAttributeAvailable, attributePlusAvailable, bukkitAvailable);
+            case AUTO -> firstAvailable(mythicLibAvailable, craneAttributeAvailable, attributePlusAvailable, symphonyAvailable, bukkitAvailable);
             case MYTHICLIB -> mythicLibAvailable
                 ? CombatDisplayDamageSource.MYTHICLIB
-                : (fallback ? firstAvailable(false, craneAttributeAvailable, attributePlusAvailable, bukkitAvailable) : CombatDisplayDamageSource.NONE);
+                : (fallback ? firstAvailable(false, craneAttributeAvailable, attributePlusAvailable, symphonyAvailable, bukkitAvailable) : CombatDisplayDamageSource.NONE);
             case CRANEATTRIBUTE -> craneAttributeAvailable
                 ? CombatDisplayDamageSource.CRANEATTRIBUTE
-                : (fallback ? firstAvailable(false, false, attributePlusAvailable, bukkitAvailable) : CombatDisplayDamageSource.NONE);
+                : (fallback ? firstAvailable(false, false, attributePlusAvailable, symphonyAvailable, bukkitAvailable) : CombatDisplayDamageSource.NONE);
             case ATTRIBUTEPLUS -> attributePlusAvailable
                 ? CombatDisplayDamageSource.ATTRIBUTEPLUS
-                : (fallback ? firstAvailable(false, false, false, bukkitAvailable) : CombatDisplayDamageSource.NONE);
+                : (fallback ? firstAvailable(false, false, false, symphonyAvailable, bukkitAvailable) : CombatDisplayDamageSource.NONE);
+            case SYMPHONY -> symphonyAvailable
+                ? CombatDisplayDamageSource.SYMPHONY
+                : (fallback ? firstAvailable(false, false, false, false, bukkitAvailable) : CombatDisplayDamageSource.NONE);
             case BUKKIT -> bukkitAvailable ? CombatDisplayDamageSource.BUKKIT : CombatDisplayDamageSource.NONE;
         };
     }
@@ -35,6 +39,7 @@ public final class CombatDisplayDamageSourceResolver {
         boolean mythicLibAvailable,
         boolean craneAttributeAvailable,
         boolean attributePlusAvailable,
+        boolean symphonyAvailable,
         boolean bukkitAvailable
     ) {
         if (mythicLibAvailable) {
@@ -45,6 +50,9 @@ public final class CombatDisplayDamageSourceResolver {
         }
         if (attributePlusAvailable) {
             return CombatDisplayDamageSource.ATTRIBUTEPLUS;
+        }
+        if (symphonyAvailable) {
+            return CombatDisplayDamageSource.SYMPHONY;
         }
         if (bukkitAvailable) {
             return CombatDisplayDamageSource.BUKKIT;

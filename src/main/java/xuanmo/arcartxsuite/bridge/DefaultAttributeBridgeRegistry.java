@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.bridge;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageListener;
+import xuanmo.arcartxsuite.api.attribute.AttributeHealListener;
 import xuanmo.arcartxsuite.api.attribute.AttributePlusBridge;
 import xuanmo.arcartxsuite.api.attribute.CraneAttributeBridge;
 import xuanmo.arcartxsuite.api.attribute.MythicLibBridge;
@@ -65,7 +66,24 @@ public final class DefaultAttributeBridgeRegistry implements AttributeBridgeRegi
     public boolean hasDamageSource() {
         return attributePlusBridge.available()
             || craneAttributeBridge.available()
-            || mythicLibBridge.available();
+            || mythicLibBridge.available()
+            || symphonyBridge.available();
+    }
+
+    @Override
+    public boolean hasHealSource() {
+        return craneAttributeBridge.available()
+            || symphonyBridge.available();
+    }
+
+    @Override
+    public void registerHealListener(AttributeHealListener listener) {
+        damageDispatcher.registerHealListener(listener);
+    }
+
+    @Override
+    public void unregisterHealListener(AttributeHealListener listener) {
+        damageDispatcher.unregisterHealListener(listener);
     }
 
     @Override

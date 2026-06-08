@@ -5,6 +5,7 @@ public enum CombatDisplayDamageSource {
     MYTHICLIB,
     CRANEATTRIBUTE,
     ATTRIBUTEPLUS,
+    SYMPHONY,
     BUKKIT
 }
 

@@ -7,6 +7,7 @@ public enum CombatDisplayDamageSourceMode {
     MYTHICLIB,
     CRANEATTRIBUTE,
     ATTRIBUTEPLUS,
+    SYMPHONY,
     BUKKIT;
 
     public static CombatDisplayDamageSourceMode from(String rawValue) {

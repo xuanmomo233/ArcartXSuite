@@ -2,17 +2,23 @@ package xuanmo.arcartxsuite.combateffect.display.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityRegainHealthEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageEvent;
+import xuanmo.arcartxsuite.api.attribute.AttributeHealEvent;
 import xuanmo.arcartxsuite.bridge.ArcartXClientBridge;
 import xuanmo.arcartxsuite.combateffect.display.config.CombatDisplayConfiguration;
 
@@ -25,8 +31,44 @@ public final class CombatDisplayService {
     private final List<Listener> registeredListeners = new ArrayList<>();
 
     private xuanmo.arcartxsuite.api.attribute.AttributeDamageListener attributeDamageListener;
+    private xuanmo.arcartxsuite.api.attribute.AttributeHealListener attributeHealListener;
     private boolean mythicHealHooked;
     private CombatDisplayDamageSource activeDamageSource = CombatDisplayDamageSource.NONE;
+    private final Map<MergeKey, MergeEntry> damageMergeBuffer = new ConcurrentHashMap<>();
+    private final Map<HealMergeKey, HealMergeEntry> healMergeBuffer = new ConcurrentHashMap<>();
+
+    private record MergeKey(UUID attackerId, UUID targetId, String configId) {}
+    private record HealMergeKey(UUID targetId, String configId) {}
+
+    private static final class HealMergeEntry {
+        final LivingEntity target;
+        final String configId;
+        double amount;
+        final BukkitTask task;
+
+        HealMergeEntry(LivingEntity target, String configId, double amount, BukkitTask task) {
+            this.target = target;
+            this.configId = configId;
+            this.amount = amount;
+            this.task = task;
+        }
+    }
+
+    private static final class MergeEntry {
+        final Player attacker;
+        final Entity target;
+        final String configId;
+        double amount;
+        final BukkitTask task;
+
+        MergeEntry(Player attacker, Entity target, String configId, double amount, BukkitTask task) {
+            this.attacker = attacker;
+            this.target = target;
+            this.configId = configId;
+            this.amount = amount;
+            this.task = task;
+        }
+    }
 
     public CombatDisplayService(
         JavaPlugin plugin,
@@ -52,11 +94,17 @@ public final class CombatDisplayService {
                 && activeDamageSource != CombatDisplayDamageSource.BUKKIT) {
                 attributeDamageListener = event -> {
                     if (!matchesActiveSource(event.source())) return;
-                    handleAttributeDamage(event.target(), event.damage(), event.source());
+                    handleAttributeDamage(event.attacker(), event.target(), event.damage(), event.source());
                 };
                 attributeBridge.registerDamageListener(attributeDamageListener);
                 debugDamageSource("已注册统一属性伤害监听，active=" + activeDamageSource);
             }
+        }
+
+        if (attributeBridge != null && attributeBridge.hasHealSource()) {
+            attributeHealListener = event -> handleAttributeHeal(event);
+            attributeBridge.registerHealListener(attributeHealListener);
+            plugin.getLogger().fine("CombatDisplay 已注册统一属性治疗监听");
         }
     }
 
@@ -68,6 +116,18 @@ public final class CombatDisplayService {
         if (attributeBridge != null && attributeDamageListener != null) {
             attributeBridge.unregisterDamageListener(attributeDamageListener);
             attributeDamageListener = null;
+        }
+        for (MergeEntry entry : damageMergeBuffer.values()) {
+            if (entry.task != null) entry.task.cancel();
+        }
+        damageMergeBuffer.clear();
+        for (HealMergeEntry entry : healMergeBuffer.values()) {
+            if (entry.task != null) entry.task.cancel();
+        }
+        healMergeBuffer.clear();
+        if (attributeBridge != null && attributeHealListener != null) {
+            attributeBridge.unregisterHealListener(attributeHealListener);
+            attributeHealListener = null;
         }
         mythicHealHooked = false;
         activeDamageSource = CombatDisplayDamageSource.NONE;
@@ -90,7 +150,16 @@ public final class CombatDisplayService {
             && activeDamageSource != CombatDisplayDamageSource.BUKKIT) {
             return;
         }
-        handleStandardDamage(event.getEntity(), event.getFinalDamage());
+        handleStandardDamage(resolveBukkitAttacker(event), event.getEntity(), event.getFinalDamage());
+    }
+
+    private Player resolveBukkitAttacker(EntityDamageByEntityEvent event) {
+        Entity damager = event.getDamager();
+        if (damager instanceof Player p) return p;
+        if (damager instanceof org.bukkit.entity.Projectile proj) {
+            if (proj.getShooter() instanceof Player p) return p;
+        }
+        return null;
     }
 
     void handleTaczDamage(xuanmo.arcartxsuite.api.event.TaczGunDamageEvent event) {
@@ -98,48 +167,77 @@ public final class CombatDisplayService {
             && activeDamageSource != CombatDisplayDamageSource.BUKKIT) {
             return;
         }
-        handleStandardDamage(event.getTarget(), event.getDamage());
+        handleStandardDamage(event.getAttacker(), event.getTarget(), event.getDamage());
     }
 
-    void handleMythicLibDamage(Entity target, double damage) {
+    void handleMythicLibDamage(Player attacker, Entity target, double damage) {
+        if (attacker == null) {
+            return;
+        }
         if (activeDamageSource != CombatDisplayDamageSource.MYTHICLIB || !configuration.mythicLibDamageEnabled()) {
             return;
         }
         if (target instanceof Player) {
             if (damage >= configuration.mythicLibPlayerDamageMinAmount()) {
-                sendToViewers(target, configuration.mythicLibPlayerDamageConfigId(), damage);
+                trySendDamageDisplay(attacker, target, configuration.mythicLibPlayerDamageConfigId(), damage);
             }
             return;
         }
         if (damage < configuration.mythicLibDamageMinAmount()) {
             return;
         }
-        sendToViewers(target, configuration.mythicLibDamageConfigId(), damage);
+        trySendDamageDisplay(attacker, target, configuration.mythicLibDamageConfigId(), damage);
     }
 
-    private void handleCraneAttributeDamage(Entity target, double damage) {
+    private void handleCraneAttributeDamage(Player attacker, Entity target, double damage) {
+        if (attacker == null) {
+            return;
+        }
         if (activeDamageSource != CombatDisplayDamageSource.CRANEATTRIBUTE || !configuration.craneAttributeDamageEnabled()) {
             return;
         }
         if (target instanceof Player) {
             if (damage >= configuration.craneAttributePlayerDamageMinAmount()) {
-                sendToViewers(target, configuration.craneAttributePlayerDamageConfigId(), damage);
+                trySendDamageDisplay(attacker, target, configuration.craneAttributePlayerDamageConfigId(), damage);
             }
             return;
         }
         if (damage < configuration.craneAttributeDamageMinAmount()) {
             return;
         }
-        sendToViewers(target, configuration.craneAttributeDamageConfigId(), damage);
+        trySendDamageDisplay(attacker, target, configuration.craneAttributeDamageConfigId(), damage);
     }
 
-    private void handleAttributeDamage(Entity target, double damage, AttributeDamageEvent.Source source) {
+    private void handleAttributeDamage(Player attacker, Entity target, double damage, AttributeDamageEvent.Source source) {
+        if (attacker == null) {
+            return;
+        }
         switch (source) {
-            case ATTRIBUTE_PLUS -> handleStandardDamage(target, damage);
-            case CRANE_ATTRIBUTE -> handleCraneAttributeDamage(target, damage);
-            case MYTHIC_LIB -> handleMythicLibDamage(target, damage);
+            case ATTRIBUTE_PLUS -> handleStandardDamage(attacker, target, damage);
+            case CRANE_ATTRIBUTE -> handleCraneAttributeDamage(attacker, target, damage);
+            case MYTHIC_LIB -> handleMythicLibDamage(attacker, target, damage);
+            case SYMPHONY -> handleSymphonyDamage(attacker, target, damage);
             default -> {}
         }
+    }
+
+    private void handleSymphonyDamage(Player attacker, Entity target, double damage) {
+        if (attacker == null) {
+            return;
+        }
+        if (activeDamageSource != CombatDisplayDamageSource.SYMPHONY || !configuration.symphonyDamageEnabled()) {
+            return;
+        }
+        if (target instanceof Player) {
+            if (damage >= configuration.symphonyPlayerDamageMinAmount()) {
+                trySendDamageDisplay(attacker, target, configuration.symphonyPlayerDamageConfigId(), damage);
+            }
+            return;
+        }
+        if (damage < configuration.symphonyDamageMinAmount()) {
+            return;
+        }
+        trySendDamageDisplay(attacker, target, configuration.symphonyDamageConfigId(), damage);
     }
 
     private CombatDisplayDamageSource resolveActiveSource() {
@@ -149,6 +247,8 @@ public final class CombatDisplayService {
             && configuration.craneAttributeDamageEnabled();
         boolean mlAvailable = attributeBridge.mythicLib().available()
             && configuration.mythicLibDamageEnabled();
+        boolean symAvailable = attributeBridge.symphony().available()
+            && configuration.symphonyDamageEnabled();
         boolean bukkitAvailable = configuration.damageEnabled() || configuration.playerDamageEnabled();
         return CombatDisplayDamageSourceResolver.resolve(
             configuration.damageSourceMode(),
@@ -156,6 +256,7 @@ public final class CombatDisplayService {
             mlAvailable,
             caAvailable,
             apAvailable,
+            symAvailable,
             bukkitAvailable
         );
     }
@@ -165,14 +266,18 @@ public final class CombatDisplayService {
             case MYTHICLIB -> source == AttributeDamageEvent.Source.MYTHIC_LIB;
             case CRANEATTRIBUTE -> source == AttributeDamageEvent.Source.CRANE_ATTRIBUTE;
             case ATTRIBUTEPLUS -> source == AttributeDamageEvent.Source.ATTRIBUTE_PLUS;
+            case SYMPHONY -> source == AttributeDamageEvent.Source.SYMPHONY;
             default -> false;
         };
     }
 
-    private void handleStandardDamage(Entity target, double damage) {
+    private void handleStandardDamage(Player attacker, Entity target, double damage) {
+        if (attacker == null) {
+            return;
+        }
         if (target instanceof Player) {
             if (configuration.playerDamageEnabled() && damage >= configuration.playerDamageMinAmount()) {
-                sendToViewers(target, configuration.playerDamageConfigId(), damage);
+                trySendDamageDisplay(attacker, target, configuration.playerDamageConfigId(), damage);
             }
             return;
         }
@@ -183,7 +288,7 @@ public final class CombatDisplayService {
         if (damage < configuration.damageMinAmount()) {
             return;
         }
-        sendToViewers(target, configuration.damageConfigId(), damage);
+        trySendDamageDisplay(attacker, target, configuration.damageConfigId(), damage);
     }
 
     void handleHeal(EntityRegainHealthEvent event) {
@@ -196,7 +301,7 @@ public final class CombatDisplayService {
         if (event.getAmount() < configuration.healMinAmount()) {
             return;
         }
-        sendToViewers(player, configuration.healConfigId(), event.getAmount());
+        trySendHealDisplay(player, configuration.healConfigId(), event.getAmount());
     }
 
     public void handleMythicHeal(Player player, double healAmount) {
@@ -213,7 +318,20 @@ public final class CombatDisplayService {
         if (displayAmount <= configuration.mythicHealMinAmount()) {
             return;
         }
-        sendToViewers(player, configuration.mythicHealConfigId(), displayAmount);
+        trySendHealDisplay(player, configuration.mythicHealConfigId(), displayAmount);
+    }
+
+    private void handleAttributeHeal(AttributeHealEvent event) {
+        if (!configuration.healEnabled()) {
+            return;
+        }
+        if (!(event.target() instanceof Player player)) {
+            return;
+        }
+        if (event.amount() < configuration.healMinAmount()) {
+            return;
+        }
+        trySendHealDisplay(player, configuration.healConfigId(), event.amount());
     }
 
     private void registerListener(Listener listener) {
@@ -248,6 +366,86 @@ public final class CombatDisplayService {
                     + " | active="
                     + activeDamageSource
             );
+        }
+    }
+
+    private void trySendDamageDisplay(Player attacker, Entity target, String configId, double amount) {
+        if (target == null || configId == null || configId.isBlank() || !clientBridge.isAvailable()) {
+            return;
+        }
+        if (!configuration.damageMergeEnabled()) {
+            sendDamageToViewer(attacker, target, configId, amount);
+            return;
+        }
+        MergeKey key = new MergeKey(
+            attacker != null ? attacker.getUniqueId() : null,
+            target.getUniqueId(),
+            configId
+        );
+        MergeEntry existing = damageMergeBuffer.get(key);
+        if (existing != null) {
+            existing.amount += amount;
+            return;
+        }
+        if (damageMergeBuffer.size() >= configuration.damageMergeMaxEntries()) {
+            sendDamageToViewer(attacker, target, configId, amount);
+            return;
+        }
+        BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> flushMergedDamage(key), configuration.damageMergeWindowTicks());
+        damageMergeBuffer.put(key, new MergeEntry(attacker, target, configId, amount, task));
+    }
+
+    private void flushMergedDamage(MergeKey key) {
+        MergeEntry entry = damageMergeBuffer.remove(key);
+        if (entry == null) return;
+        if (!entry.target.isValid() || entry.target.isDead()) return;
+        if (entry.amount < configuration.damageMergeMinAmount()) return;
+        sendDamageToViewer(entry.attacker, entry.target, entry.configId, entry.amount);
+    }
+
+    private void trySendHealDisplay(LivingEntity target, String configId, double amount) {
+        if (target == null || configId == null || configId.isBlank() || !clientBridge.isAvailable()) {
+            return;
+        }
+        if (!configuration.healMergeEnabled()) {
+            sendToViewers(target, configId, amount);
+            return;
+        }
+        HealMergeKey key = new HealMergeKey(target.getUniqueId(), configId);
+        HealMergeEntry existing = healMergeBuffer.get(key);
+        if (existing != null) {
+            existing.amount += amount;
+            return;
+        }
+        if (healMergeBuffer.size() >= configuration.healMergeMaxEntries()) {
+            sendToViewers(target, configId, amount);
+            return;
+        }
+        BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> flushMergedHeal(key), configuration.healMergeWindowTicks());
+        healMergeBuffer.put(key, new HealMergeEntry(target, configId, amount, task));
+    }
+
+    private void flushMergedHeal(HealMergeKey key) {
+        HealMergeEntry entry = healMergeBuffer.remove(key);
+        if (entry == null) return;
+        if (!entry.target.isValid() || entry.target.isDead()) return;
+        if (entry.amount < configuration.healMergeMinAmount()) return;
+        sendToViewers(entry.target, entry.configId, entry.amount);
+    }
+
+    private void sendDamageToViewer(Player attacker, Entity target, String configId, double amount) {
+        if (target == null || configId == null || configId.isBlank() || !clientBridge.isAvailable()) {
+            return;
+        }
+        if (attacker != null && attacker.isOnline()) {
+            clientBridge.sendDamageDisplay(attacker, configId, amount, target);
+        }
+        if (configuration.showOthersDamage()) {
+            clientBridge.forEachSeenPlayer(target, viewer -> {
+                if (attacker == null || !viewer.equals(attacker)) {
+                    clientBridge.sendDamageDisplay(viewer, configId, amount, target);
+                }
+            });
         }
     }
 

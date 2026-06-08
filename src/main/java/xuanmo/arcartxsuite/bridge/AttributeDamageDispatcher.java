@@ -12,11 +12,15 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityRegainHealthEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageEvent;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageListener;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageEvent.Source;
+import xuanmo.arcartxsuite.api.attribute.AttributeHealEvent;
+import xuanmo.arcartxsuite.api.attribute.AttributeHealListener;
+import xuanmo.arcartxsuite.api.attribute.AttributeHealEvent.SourceType;
 
 /**
  * 统一属性伤害事件分发器。
@@ -29,6 +33,7 @@ final class AttributeDamageDispatcher {
 
     private final JavaPlugin plugin;
     private final List<AttributeDamageListener> listeners = new CopyOnWriteArrayList<>();
+    private final List<AttributeHealListener> healListeners = new CopyOnWriteArrayList<>();
     private final List<Listener> registeredListeners = new CopyOnWriteArrayList<>();
 
     AttributeDamageDispatcher(JavaPlugin plugin) {
@@ -51,12 +56,31 @@ final class AttributeDamageDispatcher {
         return !listeners.isEmpty();
     }
 
+    void registerHealListener(AttributeHealListener listener) {
+        if (listener != null) {
+            healListeners.add(listener);
+        }
+    }
+
+    void unregisterHealListener(AttributeHealListener listener) {
+        if (listener != null) {
+            healListeners.remove(listener);
+        }
+    }
+
     /** 初始化所有可用属性插件的伤害事件监听 */
     void initialize(boolean attributePlusEnabled, boolean craneAttributeEnabled, boolean mythicLibEnabled, boolean symphonyEnabled) {
         shutdown();
         if (attributePlusEnabled) registerAttributePlus();
-        if (craneAttributeEnabled) registerCraneAttribute();
+        if (craneAttributeEnabled) {
+            registerCraneAttribute();
+            registerCraneAttributeHeal();
+        }
         if (mythicLibEnabled) registerMythicLib();
+        if (symphonyEnabled) {
+            registerSymphony();
+            registerSymphonyHeal();
+        }
         registerBukkitFallback();
     }
 
@@ -66,6 +90,7 @@ final class AttributeDamageDispatcher {
             HandlerList.unregisterAll(listener);
         }
         registeredListeners.clear();
+        healListeners.clear();
     }
 
     // ─── AttributePlus ─────────────────────────────────────────
@@ -222,6 +247,67 @@ final class AttributeDamageDispatcher {
         }
     }
 
+    // ─── CraneAttribute Heal ───────────────────────────────────
+
+    @SuppressWarnings("unchecked")
+    private void registerCraneAttributeHeal() {
+        Plugin crane = Bukkit.getPluginManager().getPlugin("CraneAttribute");
+        if (crane == null || !crane.isEnabled()) return;
+        try {
+            ClassLoader cl = crane.getClass().getClassLoader();
+            Class<?> rawClass = Class.forName(
+                "cn.org.bukkit.craneattribute.api.event.trigger.RegainHealthTriggerEvent$After",
+                true, cl
+            );
+            if (!Event.class.isAssignableFrom(rawClass)) return;
+            Class<? extends Event> eventClass = (Class<? extends Event>) rawClass;
+            Method getHandler = rawClass.getMethod("getHandler");
+            Listener listener = new Listener() {};
+            Bukkit.getPluginManager().registerEvent(
+                eventClass, listener, EventPriority.MONITOR,
+                (l, e) -> dispatchCraneAttributeHeal(e, rawClass, getHandler),
+                plugin, true
+            );
+            registeredListeners.add(listener);
+        } catch (ReflectiveOperationException ignored) {
+        }
+    }
+
+    private void dispatchCraneAttributeHeal(Event event, Class<?> eventClass, Method getHandler) {
+        if (!eventClass.isInstance(event)) return;
+        try {
+            Object handler = getHandler.invoke(event);
+            if (handler == null) return;
+            Method getEntity = handler.getClass().getMethod("getEntity");
+            Object rawTarget = getEntity.invoke(handler);
+            if (!(rawTarget instanceof LivingEntity target)) return;
+
+            double heal = 0.0D;
+            try {
+                Method getHeal = handler.getClass().getMethod("getHeal", LivingEntity.class);
+                Object rawHeal = getHeal.invoke(handler, target);
+                if (rawHeal instanceof Number n) heal = n.doubleValue();
+            } catch (NoSuchMethodException ignored) {
+                Method getEvent = handler.getClass().getMethod("getEvent");
+                Object rawEvent = getEvent.invoke(handler);
+                if (rawEvent instanceof EntityRegainHealthEvent he) {
+                    heal = he.getAmount();
+                }
+            }
+            if (heal <= 0.0D) return;
+
+            Player source = null;
+            try {
+                Object rawSource = handler.getClass().getMethod("getSource").invoke(handler);
+                if (rawSource instanceof Player p) source = p;
+            } catch (ReflectiveOperationException ignored) {
+            }
+            dispatchHeal(new AttributeHealEvent(source, target, heal, SourceType.CRANE_ATTRIBUTE));
+        } catch (ReflectiveOperationException e) {
+            plugin.getLogger().warning("[AttributeDamageDispatcher] CraneAttribute heal dispatch failed: " + e.getMessage());
+        }
+    }
+
     // ─── MythicLib ─────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")
@@ -291,6 +377,100 @@ final class AttributeDamageDispatcher {
         return null;
     }
 
+    // ─── Symphony ──────────────────────────────────────────────
+
+    @SuppressWarnings("unchecked")
+    private void registerSymphony() {
+        Plugin symphony = Bukkit.getPluginManager().getPlugin("Symphony");
+        if (symphony == null || !symphony.isEnabled()) return;
+        try {
+            ClassLoader cl = symphony.getClass().getClassLoader();
+            Class<?> rawClass = Class.forName(
+                "priv.seventeen.artist.symphony.api.event.SymphonyDamageEvent", true, cl
+            );
+            if (!Event.class.isAssignableFrom(rawClass)) return;
+            Class<? extends Event> eventClass = (Class<? extends Event>) rawClass;
+            Method getAttacker = rawClass.getMethod("getAttacker");
+            Method getVictim = rawClass.getMethod("getVictim");
+            Method getFinalDamage = rawClass.getMethod("getFinalDamage");
+            Listener listener = new Listener() {};
+            Bukkit.getPluginManager().registerEvent(
+                eventClass, listener, EventPriority.MONITOR,
+                (l, e) -> dispatchSymphony(e, rawClass, getAttacker, getVictim, getFinalDamage),
+                plugin, true
+            );
+            registeredListeners.add(listener);
+        } catch (ReflectiveOperationException ignored) {
+        }
+    }
+
+    private void dispatchSymphony(
+        Event event, Class<?> eventClass,
+        Method getAttacker, Method getVictim, Method getFinalDamage
+    ) {
+        if (!eventClass.isInstance(event)) return;
+        try {
+            Object rawAttacker = getAttacker.invoke(event);
+            Object rawVictim = getVictim.invoke(event);
+            if (!(rawVictim instanceof Entity target)) return;
+            Player attacker = null;
+            if (rawAttacker instanceof Player p) attacker = p;
+            Object rawDamage = getFinalDamage.invoke(event);
+            double damage = rawDamage instanceof Number n ? n.doubleValue() : 0.0D;
+            if (damage <= 0.0D) return;
+            dispatch(new AttributeDamageEvent(attacker, target, damage, Source.SYMPHONY));
+        } catch (ReflectiveOperationException e) {
+            plugin.getLogger().warning("[AttributeDamageDispatcher] Symphony damage dispatch failed: " + e.getMessage());
+        }
+    }
+
+    // ─── Symphony Heal ─────────────────────────────────────────
+
+    @SuppressWarnings("unchecked")
+    private void registerSymphonyHeal() {
+        Plugin symphony = Bukkit.getPluginManager().getPlugin("Symphony");
+        if (symphony == null || !symphony.isEnabled()) return;
+        try {
+            ClassLoader cl = symphony.getClass().getClassLoader();
+            Class<?> rawClass = Class.forName(
+                "priv.seventeen.artist.symphony.api.event.SymphonyHealEvent", true, cl
+            );
+            if (!Event.class.isAssignableFrom(rawClass)) return;
+            Class<? extends Event> eventClass = (Class<? extends Event>) rawClass;
+            Method getSource = rawClass.getMethod("getSource");
+            Method getTarget = rawClass.getMethod("getTarget");
+            Method getAmount = rawClass.getMethod("getAmount");
+            Listener listener = new Listener() {};
+            Bukkit.getPluginManager().registerEvent(
+                eventClass, listener, EventPriority.MONITOR,
+                (l, e) -> dispatchSymphonyHeal(e, rawClass, getSource, getTarget, getAmount),
+                plugin, true
+            );
+            registeredListeners.add(listener);
+        } catch (ReflectiveOperationException ignored) {
+        }
+    }
+
+    private void dispatchSymphonyHeal(
+        Event event, Class<?> eventClass,
+        Method getSource, Method getTarget, Method getAmount
+    ) {
+        if (!eventClass.isInstance(event)) return;
+        try {
+            Object rawSource = getSource.invoke(event);
+            Object rawTarget = getTarget.invoke(event);
+            if (!(rawTarget instanceof LivingEntity target)) return;
+            Player source = null;
+            if (rawSource instanceof Player p) source = p;
+            Object rawAmount = getAmount.invoke(event);
+            double amount = rawAmount instanceof Number n ? n.doubleValue() : 0.0D;
+            if (amount <= 0.0D) return;
+            dispatchHeal(new AttributeHealEvent(source, target, amount, SourceType.SYMPHONY));
+        } catch (ReflectiveOperationException e) {
+            plugin.getLogger().warning("[AttributeDamageDispatcher] Symphony heal dispatch failed: " + e.getMessage());
+        }
+    }
+
     // ─── Bukkit Fallback ───────────────────────────────────────
 
     private void registerBukkitFallback() {
@@ -306,6 +486,16 @@ final class AttributeDamageDispatcher {
                 listener.onAttributeDamage(event);
             } catch (Exception e) {
                 plugin.getLogger().warning("[AttributeDamageDispatcher] Listener " + listener.getClass().getName() + " threw: " + e.getMessage());
+            }
+        }
+    }
+
+    private void dispatchHeal(AttributeHealEvent event) {
+        for (AttributeHealListener listener : healListeners) {
+            try {
+                listener.onAttributeHeal(event);
+            } catch (Exception e) {
+                plugin.getLogger().warning("[AttributeDamageDispatcher] Heal listener " + listener.getClass().getName() + " threw: " + e.getMessage());
             }
         }
     }
