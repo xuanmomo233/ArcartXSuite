@@ -86,7 +86,11 @@ public final class DefaultAriaBridge implements AriaBridge {
     private @Nullable ClassLoader resolveClassLoader() {
         Plugin host = Bukkit.getPluginManager().getPlugin(HOST_PLUGIN_NAME);
         if (host != null && host.isEnabled()) {
-            return host.getClass().getClassLoader();
+            try {
+                Class.forName(MANAGER_CLASS, false, host.getClass().getClassLoader());
+                return host.getClass().getClassLoader();
+            } catch (ClassNotFoundException ignored) {
+            }
         }
         for (String pluginName : DISCOVERY_PLUGINS) {
             Plugin candidate = Bukkit.getPluginManager().getPlugin(pluginName);
