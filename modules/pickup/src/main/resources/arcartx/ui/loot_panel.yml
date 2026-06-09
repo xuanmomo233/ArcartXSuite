@@ -5,16 +5,116 @@ ui:
   show: true
   packetHandler:
     update: |-
-      var.items = packet['items']
       var.count = packet['count']
       var.selectedIndex = packet['selectedIndex']
+      var.item0Visible = packet['item0Visible']
+      var.item0Name = packet['item0Name']
+      var.item0Amount = packet['item0Amount']
+      var.item0Material = packet['item0Material']
+      var.item0ItemJson = packet['item0ItemJson']
+      var.item1Visible = packet['item1Visible']
+      var.item1Name = packet['item1Name']
+      var.item1Amount = packet['item1Amount']
+      var.item1Material = packet['item1Material']
+      var.item1ItemJson = packet['item1ItemJson']
+      var.item2Visible = packet['item2Visible']
+      var.item2Name = packet['item2Name']
+      var.item2Amount = packet['item2Amount']
+      var.item2Material = packet['item2Material']
+      var.item2ItemJson = packet['item2ItemJson']
+      var.item3Visible = packet['item3Visible']
+      var.item3Name = packet['item3Name']
+      var.item3Amount = packet['item3Amount']
+      var.item3Material = packet['item3Material']
+      var.item3ItemJson = packet['item3ItemJson']
+      var.item4Visible = packet['item4Visible']
+      var.item4Name = packet['item4Name']
+      var.item4Amount = packet['item4Amount']
+      var.item4Material = packet['item4Material']
+      var.item4ItemJson = packet['item4ItemJson']
+      var.item5Visible = packet['item5Visible']
+      var.item5Name = packet['item5Name']
+      var.item5Amount = packet['item5Amount']
+      var.item5Material = packet['item5Material']
+      var.item5ItemJson = packet['item5ItemJson']
+      var.item6Visible = packet['item6Visible']
+      var.item6Name = packet['item6Name']
+      var.item6Amount = packet['item6Amount']
+      var.item6Material = packet['item6Material']
+      var.item6ItemJson = packet['item6ItemJson']
+      var.item7Visible = packet['item7Visible']
+      var.item7Name = packet['item7Name']
+      var.item7Amount = packet['item7Amount']
+      var.item7Material = packet['item7Material']
+      var.item7ItemJson = packet['item7ItemJson']
+      var.dirty = true
     select: |-
       var.selectedIndex = packet['selectedIndex']
   action:
     load: |-
-      var.items = {}
       var.count = 0
       var.selectedIndex = 0
+      var.dirty = false
+      var.item0Visible = false
+      var.item1Visible = false
+      var.item2Visible = false
+      var.item3Visible = false
+      var.item4Visible = false
+      var.item5Visible = false
+      var.item6Visible = false
+      var.item7Visible = false
+      var.item0Name = ''
+      var.item1Name = ''
+      var.item2Name = ''
+      var.item3Name = ''
+      var.item4Name = ''
+      var.item5Name = ''
+      var.item6Name = ''
+      var.item7Name = ''
+      var.item0Amount = 0
+      var.item1Amount = 0
+      var.item2Amount = 0
+      var.item3Amount = 0
+      var.item4Amount = 0
+      var.item5Amount = 0
+      var.item6Amount = 0
+      var.item7Amount = 0
+      var.item0ItemJson = ''
+      var.item1ItemJson = ''
+      var.item2ItemJson = ''
+      var.item3ItemJson = ''
+      var.item4ItemJson = ''
+      var.item5ItemJson = ''
+      var.item6ItemJson = ''
+      var.item7ItemJson = ''
+    tick: |-
+      if(var.dirty){
+        if(var.item0ItemJson != ''){
+          val.loot_slot_0.setItemIcon(var.item0ItemJson)
+        }
+        if(var.item1ItemJson != ''){
+          val.loot_slot_1.setItemIcon(var.item1ItemJson)
+        }
+        if(var.item2ItemJson != ''){
+          val.loot_slot_2.setItemIcon(var.item2ItemJson)
+        }
+        if(var.item3ItemJson != ''){
+          val.loot_slot_3.setItemIcon(var.item3ItemJson)
+        }
+        if(var.item4ItemJson != ''){
+          val.loot_slot_4.setItemIcon(var.item4ItemJson)
+        }
+        if(var.item5ItemJson != ''){
+          val.loot_slot_5.setItemIcon(var.item5ItemJson)
+        }
+        if(var.item6ItemJson != ''){
+          val.loot_slot_6.setItemIcon(var.item6ItemJson)
+        }
+        if(var.item7ItemJson != ''){
+          val.loot_slot_7.setItemIcon(var.item7ItemJson)
+        }
+        var.dirty = false
+      }
     keyPress: |-
       if(Keyboard.isKeyDown(Keyboard.getKeyBindingKeyName("AXS_INTERACT")) && var.count > 0){
         Screen.open('AXS:loot_interact')
@@ -69,6 +169,7 @@ controls:
               x: 14
               y: 10
               fontSize: 22
+              #这里是提示文本，随便怎么写
               texts: "~"
               through: true
           loot_list:
@@ -81,26 +182,26 @@ controls:
               spaceBetween: 4
               through: true
             children:
-              entry:
+              entry_0:
                 type: Canvas
                 attribute:
-                  entry: var.items[self.key]
-                  visible: self.entry != null
                   width: 260
                   height: 42
+                  visible: var.item0Visible
                   through: true
                 children:
-                  bg:
+                  bg_0:
                     type: Texture
                     attribute:
                       point: ~stretch_all
-                      normal: "var.selectedIndex == self.key.round() ? '60,140,220,160' : '40,40,50,120'"
+                      normal: "var.selectedIndex == 0 ? '60,140,220,160' : '40,40,50,120'"
                       shape: ~round_rect
                       radius: 8
                     action:
                       clickLeft: |-
-                        Packet.send('pickup', 'pick', self.key)
-                  icon:
+                        Packet.send('pickup', 'pick_0')
+                  icon_0:
+                    val: loot_slot_0
                     type: Slot
                     attribute:
                       point: ~middle_left
@@ -113,22 +214,292 @@ controls:
                       hover: ~0,0,0,0
                       itemScale: 0.8
                       through: true
-                      seticon: "self.setItemIcon(self.parent.entry['itemJson'])"
-                    action:
-                      create: |-
-                        self.seticon()
-                  name:
+                  name_0:
                     type: Text
                     attribute:
                       point: ~middle_left
                       x: 44
                       y: 0
                       fontSize: 28
-                      texts: "self.parent.entry['amount'] > 1 ? self.parent.entry['name'] + ' &7x' + self.parent.entry['amount'].round() : self.parent.entry['name']"
+                      texts: "var.item0Amount > 1 ? var.item0Name + ' &7x' + var.item0Amount.round() : var.item0Name"
                       through: true
-          loot_observer:
-            type: Observer
-            attribute:
-              target: val.loot_list['entry']
-              subscribe: var.items
-              maxSize: 8
+              entry_1:
+                type: Canvas
+                attribute:
+                  width: 260
+                  height: 42
+                  visible: var.item1Visible
+                children:
+                  bg_1:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 1 ? '60,140,220,160' : '40,40,50,120'"
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      clickLeft: |-
+                        Packet.send('pickup', 'pick_1')
+                  icon_1:
+                    val: loot_slot_1
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      y: 0
+                      width: 32
+                      height: 32
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      itemScale: 0.8
+                      through: true
+                  name_1:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 44
+                      y: 0
+                      fontSize: 28
+                      texts: "var.item1Amount > 1 ? var.item1Name + ' &7x' + var.item1Amount.round() : var.item1Name"
+                      through: true
+              entry_2:
+                type: Canvas
+                attribute:
+                  width: 260
+                  height: 42
+                  visible: var.item2Visible
+                children:
+                  bg_2:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 2 ? '60,140,220,160' : '40,40,50,120'"
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      clickLeft: |-
+                        Packet.send('pickup', 'pick_2')
+                  icon_2:
+                    val: loot_slot_2
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      y: 0
+                      width: 32
+                      height: 32
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      itemScale: 0.8
+                      through: true
+                  name_2:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 44
+                      y: 0
+                      fontSize: 28
+                      texts: "var.item2Amount > 1 ? var.item2Name + ' &7x' + var.item2Amount.round() : var.item2Name"
+                      through: true
+              entry_3:
+                type: Canvas
+                attribute:
+                  width: 260
+                  height: 42
+                  visible: var.item3Visible
+                children:
+                  bg_3:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 3 ? '60,140,220,160' : '40,40,50,120'"
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      clickLeft: |-
+                        Packet.send('pickup', 'pick_3')
+                  icon_3:
+                    val: loot_slot_3
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      y: 0
+                      width: 32
+                      height: 32
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      itemScale: 0.8
+                      through: true
+                  name_3:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 44
+                      y: 0
+                      fontSize: 28
+                      texts: "var.item3Amount > 1 ? var.item3Name + ' &7x' + var.item3Amount.round() : var.item3Name"
+                      through: true
+              entry_4:
+                type: Canvas
+                attribute:
+                  width: 260
+                  height: 42
+                  visible: var.item4Visible
+                children:
+                  bg_4:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 4 ? '60,140,220,160' : '40,40,50,120'"
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      clickLeft: |-
+                        Packet.send('pickup', 'pick_4')
+                  icon_4:
+                    val: loot_slot_4
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      y: 0
+                      width: 32
+                      height: 32
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      itemScale: 0.8
+                      through: true
+                  name_4:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 44
+                      y: 0
+                      fontSize: 28
+                      texts: "var.item4Amount > 1 ? var.item4Name + ' &7x' + var.item4Amount.round() : var.item4Name"
+                      through: true
+              entry_5:
+                type: Canvas
+                attribute:
+                  width: 260
+                  height: 42
+                  visible: var.item5Visible
+                children:
+                  bg_5:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 5 ? '60,140,220,160' : '40,40,50,120'"
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      clickLeft: |-
+                        Packet.send('pickup', 'pick_5')
+                  icon_5:
+                    val: loot_slot_5
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      y: 0
+                      width: 32
+                      height: 32
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      itemScale: 0.8
+                      through: true
+                  name_5:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 44
+                      y: 0
+                      fontSize: 28
+                      texts: "var.item5Amount > 1 ? var.item5Name + ' &7x' + var.item5Amount.round() : var.item5Name"
+                      through: true
+              entry_6:
+                type: Canvas
+                attribute:
+                  width: 260
+                  height: 42
+                  visible: var.item6Visible
+                children:
+                  bg_6:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 6 ? '60,140,220,160' : '40,40,50,120'"
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      clickLeft: |-
+                        Packet.send('pickup', 'pick_6')
+                  icon_6:
+                    val: loot_slot_6
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      y: 0
+                      width: 32
+                      height: 32
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      itemScale: 0.8
+                      through: true
+                  name_6:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 44
+                      y: 0
+                      fontSize: 28
+                      texts: "var.item6Amount > 1 ? var.item6Name + ' &7x' + var.item6Amount.round() : var.item6Name"
+                      through: true
+              entry_7:
+                type: Canvas
+                attribute:
+                  width: 260
+                  height: 42
+                  visible: var.item7Visible
+                children:
+                  bg_7:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: "var.selectedIndex == 7 ? '60,140,220,160' : '40,40,50,120'"
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      clickLeft: |-
+                        Packet.send('pickup', 'pick_7')
+                  icon_7:
+                    val: loot_slot_7
+                    type: Slot
+                    attribute:
+                      point: ~middle_left
+                      x: 6
+                      y: 0
+                      width: 32
+                      height: 32
+                      slotType: ~Icon
+                      normal: ~0,0,0,0
+                      hover: ~0,0,0,0
+                      itemScale: 0.8
+                      through: true
+                  name_7:
+                    type: Text
+                    attribute:
+                      point: ~middle_left
+                      x: 44
+                      y: 0
+                      fontSize: 28
+                      texts: "var.item7Amount > 1 ? var.item7Name + ' &7x' + var.item7Amount.round() : var.item7Name"
+                      through: true

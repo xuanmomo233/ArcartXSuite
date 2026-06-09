@@ -1,4 +1,4 @@
-ui:
+﻿ui:
   isHud: true
   hide:
   - player_list
@@ -6,11 +6,12 @@ ui:
   defaultOpen: true
   action:
     load: |-
+      var.RichTAB刷新轮次 = 0
       var.RichTAB显示 = false
     keyPress: |-
       if(self.currentKeyPress() == "TAB"){
         Packet.send("TAB","update")
-        var.RichTAB单列数量 = Math.ceil(server.server_online / val.player_grid.row)
+        var.RichTAB单列数量 = Math.ceil(server.server_online / val.RichTAB遍历.row)
         var.RichTAB第一列人数 = Math.min(server.server_online, 15)
         var.RichTAB显示 = true
       }
@@ -19,9 +20,31 @@ ui:
         var.RichTAB显示 = false
       }
   packetHandler:
+    # 完整版示例：消费 map 形态 pack（uuid / name / ping / health 等字段）。
+    # 服务端配置参考 ArcartXTab.yml 中的 tabs.demo，pack 写法为：
+    #   pack:
+    #     uuid: "{player_uuid}"
+    #     name: "%AXStab_pvp_color%%AXStab_vanish_color%%player_name%"
+    #     ping: "%AXStab_ping_icon%"
+    #     health: "%player_health%"
     tab: |-
-      var.entries = packet['entries']
-      var.RichTAB单列数量 = Math.ceil(server.server_online / val.player_grid.row)
+      i = 0
+      var.RichTAB刷新轮次 = var.RichTAB刷新轮次 + 1
+      while(val.RichTAB遍历2.childrenCount() > 1){
+        val.RichTAB遍历2.get(1).remove()
+      }
+      //与 tab.yml 同样使用伪判断绕过 ax 控件复制 BUG
+      while(i <= packet.size()){
+        if(val.player_row.width == 320){
+          ROW = val.player_row.copy('rich_player_' + var.RichTAB刷新轮次 + '_' + i)
+          ROW['head'].normal = 'PlayerSkin:' + packet.get(i).uuid
+          ROW['name_text'].texts = packet.get(i).name
+          ROW['ping_text'].texts = packet.get(i).ping
+          ROW.visible = true
+          i++
+        }
+      }
+      var.RichTAB单列数量 = Math.ceil(server.server_online / val.RichTAB遍历.row)
       var.RichTAB第一列人数 = Math.min(server.server_online, 15)
 controls:
   adaptive:
@@ -55,8 +78,37 @@ controls:
               fontSize: 33
               texts: "'&a&l在线玩家（完整版）：'"
               lineSpace: 8
-          player_grid:
+          RichTAB遍历:
             type: VGrid
+            val: RichTAB遍历
+            attribute:
+              spaceBetweenY: 2
+              spaceBetweenX: 2
+              row: 15
+              y: 60
+              x: 26
+            action:
+              create: |-
+                for(i in range(1, 119)){
+                  ROW = self['ROW'].copy('ROW' + i)
+                  ROW.ID = i
+                }
+            children:
+              ROW:
+                type: texture
+                val: ROW
+                attribute:
+                  point: ~top_center
+                  width: 320
+                  height: 30
+                  shape: ~round_rect
+                  radius: 8
+                  ID: 0
+                  normal: ~95,95,95,200
+                  visible: var.RichTAB显示 && self.ID < server.server_online
+          RichTAB遍历2:
+            type: VGrid
+            val: RichTAB遍历2
             attribute:
               spaceBetweenY: 2
               spaceBetweenX: 2
@@ -66,11 +118,13 @@ controls:
             children:
               player_row:
                 type: Canvas
+                val: player_row
                 attribute:
-                  entry: var.entries[self.key]
                   width: 320
                   height: 30
-                  visible: self.entry != null
+                  x: 4
+                  y: 4
+                  visible: false
                 children:
                   head:
                     type: texture
@@ -81,14 +135,14 @@ controls:
                       y: 0
                       shape: ~round_rect
                       radius: 4
-                      normal: "self.parent.entry != null ? 'PlayerSkin:' + self.parent.entry['uuid'] : '~120,120,120,255'"
+                      normal: "~120,120,120,255"
                   name_text:
                     type: text
                     attribute:
                       x: 36
                       y: 0
                       fontSize: 28
-                      texts: "self.parent.entry != null ? self.parent.entry['name'] : '~null'"
+                      texts: "~null"
                       lineSpace: 4
                   ping_text:
                     type: text
@@ -96,11 +150,5 @@ controls:
                       x: 250
                       y: 0
                       fontSize: 28
-                      texts: "self.parent.entry != null ? self.parent.entry['ping'] : '~null'"
+                      texts: "~null"
                       lineSpace: 4
-          rich_tab_observer:
-            type: Observer
-            attribute:
-              target: val.player_grid['player_row']
-              subscribe: var.entries
-              maxSize: 120

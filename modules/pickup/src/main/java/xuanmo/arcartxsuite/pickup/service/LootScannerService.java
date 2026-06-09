@@ -241,22 +241,13 @@ public final class LootScannerService implements Listener {
             return true;
         }
         switch (action) {
-            case "pick" -> {
-                int index = -1;
-                if (data != null && !data.isEmpty()) {
-                    try {
-                        index = Integer.parseInt(data.get(0));
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
-                handlePick(player, index);
-            }
+            case "pick" -> handlePick(player, -1);
             case "open_menu" -> menuOpenPlayers.add(player.getUniqueId());
             case "scroll_up" -> handleScroll(player, -1);
             case "scroll_down" -> handleScroll(player, 1);
             case "close_menu" -> menuOpenPlayers.remove(player.getUniqueId());
             default -> {
-                // 兼容旧版 pick_0 ~ pick_7
+                // pick_0 ~ pick_7：点击指定条目拾取
                 if (action.startsWith("pick_")) {
                     try {
                         int index = Integer.parseInt(action.substring(5));
@@ -473,19 +464,25 @@ public final class LootScannerService implements Listener {
         payload.put("count", state.visibleItems.size());
         payload.put("selectedIndex", state.selectedIndex);
 
-        Map<String, Object> items = new LinkedHashMap<>();
-        int maxDisplay = configuration.scanner().maxDisplay();
-        for (int i = 0; i < state.visibleItems.size() && i < maxDisplay; i++) {
-            LootEntry entry = state.visibleItems.get(i);
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("name", entry.displayName);
-            item.put("amount", entry.amount);
-            item.put("material", entry.material);
-            item.put("itemJson", entry.itemJson);
-            item.put("uuid", entry.entityUuid.toString());
-            items.put(Integer.toString(i), item);
+        for (int i = 0; i < configuration.scanner().maxDisplay(); i++) {
+            String prefix = "item" + i;
+            if (i < state.visibleItems.size()) {
+                LootEntry entry = state.visibleItems.get(i);
+                payload.put(prefix + "Visible", true);
+                payload.put(prefix + "Name", entry.displayName);
+                payload.put(prefix + "Amount", entry.amount);
+                payload.put(prefix + "Material", entry.material);
+                payload.put(prefix + "ItemJson", entry.itemJson);
+                payload.put(prefix + "Uuid", entry.entityUuid.toString());
+            } else {
+                payload.put(prefix + "Visible", false);
+                payload.put(prefix + "Name", "");
+                payload.put(prefix + "Amount", 0);
+                payload.put(prefix + "Material", "");
+                payload.put(prefix + "ItemJson", "");
+                payload.put(prefix + "Uuid", "");
+            }
         }
-        payload.put("items", items);
         return payload;
     }
 
