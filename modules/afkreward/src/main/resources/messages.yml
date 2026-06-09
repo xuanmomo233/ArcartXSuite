@@ -1,0 +1,74 @@
+# ============================================================
+#  AfkReward 模块消息文件
+# ------------------------------------------------------------
+#  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
+#  修改后执行 /axs reload afkreward 即可生效。
+# ============================================================
+
+prefix: "&3◆ &6ArcartXSuite &7| &r"
+
+# ── 通用 ──────────────────────────────────────────────
+common:
+  player-only: "&c该命令只能由玩家执行。"
+  no-permission: "&c你没有权限执行这个命令。"
+  service-down: "&c服务未启动。"
+
+# ── 玩家命令 ──────────────────────────────────────────
+player:
+  usage: "&e用法: /{0} toggle|status|start <区域>|end|list|top"
+  toggle:
+    on: "&a已开启挂机 HUD 显示。"
+    off: "&c已关闭挂机 HUD 显示。"
+  status:
+    title: "&6挂机状态"
+    none: "&7当前不在任何挂机区域。"
+    mode: "&7模式: &f{0}"
+    area: "&7区域: &f{0}"
+    time: "&7当前挂机: &f{0}"
+    total: "&7总挂机: &f{0}"
+    today: "&7今日奖励: &f{0} 次"
+    total-rewards: "&7总奖励: &f{0} 次"
+    next: "&7下次奖励: &f{0}"
+    players: "&7当前区域人数: &f{0}"
+  manual:
+    usage-start: "&e用法: /{0} start <区域名>"
+    list-title: "&6当前在线挂机玩家"
+    list-empty: "&7暂无在线挂机玩家。"
+    list-body: "&7{0} &7| 区域: &f{1} &7| 模式: &f{2} &7| 时长: &f{3}"
+    top-title: "&6挂机时长排行榜"
+    top-empty: "&7暂无数据。"
+    top-body: "&eNo.{0} &7{1} &7- 总时长: &f{2} &7- 总奖励: &f{3} 次"
+
+# ── 管理命令 ──────────────────────────────────────────
+admin:
+  reload-hint: "&e请使用 /{0} reload afkreward"
+  unknown: "&e未知命令，使用 /{0} afkreward help 查看帮助"
+  help:
+    title: "&6AfkReward 管理命令"
+    status: "&7{0} status&f - 查看模块状态"
+    reload: "&7{0} reload&f - 重载配置"
+  status:
+    title: "&6AfkReward 状态"
+    areas: "&7已加载区域: &f{0}"
+    types: "&7已加载类型: &f{0}"
+    online: "&7当前挂机玩家: &f{0}"
+  reload:
+    success: "&aAfkReward 配置已重载。"
+
+# ── 提示 ──────────────────────────────────────────────
+hints:
+  enter-area: "&a你已进入挂机区域 &f{0}&a，开始累计挂机时间。"
+  leave-area: "&c你已离开挂机区域 &f{0}&c。"
+  reward: "&a你在 &f{0}&a 挂机满 {1} 分钟，获得奖励！"
+  reward-limit: "&c你今日已达到该区域最大奖励次数限制。"
+  player-limit: "&c该区域已满员，请稍后再来。"
+  no-permission-area: "&c你没有权限在此区域挂机。"
+  manual:
+    start: "&a已开始原地挂机，区域: &f{0}&a。"
+    end: "&a挂机结束，本次挂机 &f{0}&a，获得奖励 &f{1} &a次。"
+    end-no-reward: "&e挂机结束，本次挂机 &f{0}&e，未达到奖励时间。"
+    already: "&c你已经在挂机中。"
+    not-started: "&c你未在挂机中。"
+    no-teleport: "&c区域 &f{0}&c 不支持原地挂机。"
+    broadcast: "&e恭喜玩家 &f{0} &e挂机结束，挂机时长 &f{1}&e，获得奖励 &f{2} &e次！"
+    recovered: "&e检测到上次服崩挂机记录，已自动结算 &f{0}&e，奖励次数 &f{1}&e。"

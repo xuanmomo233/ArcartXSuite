@@ -1,0 +1,11 @@
+id: afkreward
+name: AfkReward
+version: 1.0.0-beta
+main: xuanmo.arcartxsuite.afkreward.AfkRewardModule
+api-version: 1.0
+
+depends: []
+softdepends: []
+external-depends:
+external-softdepends:
+  - PlaceholderAPI

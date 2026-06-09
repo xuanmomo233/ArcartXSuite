@@ -1,0 +1,98 @@
+config-version: 2
+# ArcartXSuite AfkReward - 区域挂机奖励模块
+# 重载: /axs afkreward reload
+
+debug: false
+
+# 奖励周期（分钟/次）
+reward:
+  round: 15
+  # 每日最大奖励次数限制
+  max:
+    enable: true
+    limit: 32
+    # 无视限制权限: axs.afkreward.not.reward.limit
+  # 区域最大同时挂机人数
+  player:
+    enable: true
+    limit: 30
+    # 无视限制权限: axs.afkreward.not.player.limit
+
+# 奖励类型配置
+# 玩家需要有 axs.afkreward.start.<类型名> 权限才能进入该区域挂机
+types:
+  泡澡池:
+    describe: "泡澡的人越多，获取的铜币和经验越多"
+    # 权限等级从高到低检测，取玩家拥有的最高等级
+    vip3:
+      - "addbalance %player_name% 铜币 %axsafk_players%*35+%player_level%/4+250"
+      - "cmi give %player_name% cobblestone 54"
+      - "cmi exp %player_name% add %axsafk_players%*%player_level%/4+%player_level%"
+    vip2:
+      - "addbalance %player_name% 铜币 %axsafk_players%*30+%player_level%/6+200"
+      - "cmi give %player_name% cobblestone 54"
+      - "cmi exp %player_name% add %axsafk_players%*%player_level%/6+%player_level%/2"
+    vip1:
+      - "addbalance %player_name% 铜币 %axsafk_players%*25+%player_level%/8+150"
+      - "cmi exp %player_name% add %axsafk_players%*%player_level%/8+%player_level%/4"
+    common:
+      - "addbalance %player_name% 铜币 %axsafk_players%*20+%player_level%/10+100"
+      - "cmi exp %player_name% add %axsafk_players%*%player_level%/10+%player_level%/4"
+
+# 区域配置
+# 权限: axs.afkreward.area.* (如 axs.afkreward.area.泡澡池)
+areas:
+  泡澡池:
+    enable: true
+    world: bskyblock_world
+    # 多边形角坐标 (X,Z)，按顺序围成区域
+    pos:
+      - "-11,138"
+      - "17,114"
+      - "40,114"
+      - "48,128"
+      - "51,138"
+      - "42,167"
+      - "20,172"
+      - "10,171"
+      - "-4,159"
+    type: 泡澡池
+    # 是否支持原地挂机（/afk start 此区域）
+    manual-enabled: true
+    # 原地挂机传送点（为空则不支持原地挂机到此区域）
+    teleport:
+      world: bskyblock_world
+      x: 20.5
+      y: 64.0
+      z: 140.5
+      yaw: 0
+      pitch: 0
+
+# 原地挂机配置
+manual:
+  # 挂机期间是否封锁玩家行为（移动/交互/破坏/开箱/传送/受击）
+  restrict-actions: true
+  # 结束挂机后是否传送回原始位置
+  return-on-end: false
+  # 结束挂机时是否全服广播奖励消息
+  broadcast-rewards: true
+  # 排行榜显示人数
+  leaderboard-size: 10
+
+# 存储配置
+storage:
+  dialect: sqlite
+  sqlite-file: "afkreward.db"
+  host: "127.0.0.1"
+  port: 3306
+  database: "arcartxsuite"
+  username: "root"
+  password: ""
+  table-prefix: "axs_afk_"
+  pool-size: 3
+
+# HUD 配置
+ui:
+  hud-id: "AXS:afk_reward_hud"
+  register-on-enable: true
+  overwrite-ui-file: false

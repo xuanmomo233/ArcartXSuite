@@ -1,0 +1,118 @@
+package xuanmo.arcartxsuite.afkreward.placeholder;
+
+import java.util.function.Supplier;
+import me.clip.placeholderapi.expansion.PlaceholderExpansion;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.java.JavaPlugin;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.afkreward.service.AfkRewardService;
+import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository.PlayerStats;
+
+public final class AfkRewardPlaceholderExpansion extends PlaceholderExpansion {
+
+    private final JavaPlugin plugin;
+    private final Supplier<AfkRewardService> serviceSupplier;
+
+    public AfkRewardPlaceholderExpansion(JavaPlugin plugin, Supplier<AfkRewardService> serviceSupplier) {
+        this.plugin = plugin;
+        this.serviceSupplier = serviceSupplier;
+    }
+
+    @Override
+    public @NotNull String getIdentifier() {
+        return "axsafk";
+    }
+
+    @Override
+    public @NotNull String getAuthor() {
+        return plugin.getDescription().getAuthors().isEmpty()
+            ? "ArcartXSuite" : plugin.getDescription().getAuthors().get(0);
+    }
+
+    @Override
+    public @NotNull String getVersion() {
+        return plugin.getDescription().getVersion();
+    }
+
+    @Override
+    public boolean persist() {
+        return true;
+    }
+
+    @Override
+    public @Nullable String onPlaceholderRequest(Player player, @NotNull String identifier) {
+        if (player == null) return "";
+        AfkRewardService service = serviceSupplier.get();
+        if (service == null) return "";
+
+        AfkRewardService.PlayerAfkState state = service.getState(player.getUniqueId());
+        PlayerStats stats = service.getStatsSnapshot(player.getUniqueId());
+
+        String id = identifier.toLowerCase();
+        return switch (id) {
+            case "type" -> {
+                if (state == null || state.areaName == null) yield "未挂机";
+                yield state.mode == AfkRewardService.AfkMode.MANUAL ? "原地挂机" : "区域挂机";
+            }
+            case "area" -> (state != null && state.areaName != null) ? state.areaName : "";
+            case "time" -> formatTime(state != null ? state.seconds : 0);
+            case "total_time" -> formatTime(stats != null ? stats.totalSeconds() : 0);
+            case "today" -> String.valueOf(stats != null ? stats.todayCount() : 0);
+            case "total" -> String.valueOf(stats != null ? stats.totalCount() : 0);
+            case "players" -> {
+                if (state != null && state.areaName != null) {
+                    yield String.valueOf(service.getPlayersInArea(state.areaName));
+                }
+                yield "0";
+            }
+            case "next" -> {
+                if (state != null && state.areaName != null) {
+                    int roundSec = service.getRewardRoundMinutes() * 60;
+                    int elapsed = state.seconds - state.lastRewardSeconds;
+                    int remain = Math.max(0, roundSec - elapsed);
+                    yield String.valueOf(remain);
+                }
+                yield "0";
+            }
+            default -> {
+                // 支持 %axsafk_top_1_name% %axsafk_top_1_time% %axsafk_top_1_rewards%
+                if (id.startsWith("top_")) {
+                    yield resolveTopPlaceholder(service, id);
+                }
+                yield null;
+            }
+        };
+    }
+
+    private String resolveTopPlaceholder(AfkRewardService service, String id) {
+        try {
+            // id 格式: top_1_name / top_1_time / top_1_rewards
+            String[] parts = id.split("_", 4);
+            if (parts.length < 3) return "";
+            int rank = Integer.parseInt(parts[1]);
+            String field = parts[2];
+            var board = service.getLeaderboard();
+            if (rank < 1 || rank > board.size()) return "";
+            PlayerStats entry = board.get(rank - 1);
+            return switch (field) {
+                case "name" -> entry.playerName();
+                case "time" -> formatTime(entry.totalSeconds());
+                case "rewards" -> String.valueOf(entry.totalCount());
+                default -> "";
+            };
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private String formatTime(int totalSeconds) {
+        int hours = totalSeconds / 3600;
+        int minutes = (totalSeconds % 3600) / 60;
+        int seconds = totalSeconds % 60;
+        if (hours > 0) {
+            return String.format("%d时%02d分%02d秒", hours, minutes, seconds);
+        }
+        return String.format("%02d分%02d秒", minutes, seconds);
+    }
+}

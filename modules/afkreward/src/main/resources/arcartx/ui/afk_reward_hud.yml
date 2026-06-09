@@ -1,0 +1,69 @@
+ui:
+  id: AXS:afk_reward_hud
+  isHud: true
+  defaultOpen: true
+  level: 20
+  through: true
+  show: true
+  packetHandler:
+    init: |-
+      var.area = packet['area']
+      var.time = packet['time']
+      var.next = packet['next']
+      var.players = packet['players']
+      var.visible = packet['visible']
+    update: |-
+      var.area = packet['area']
+      var.time = packet['time']
+      var.next = packet['next']
+      var.players = packet['players']
+      var.visible = packet['visible']
+
+controls:
+  bg:
+    type: Texture
+    attribute:
+      x: 10
+      y: 10
+      width: 200
+      height: 100
+      normal: '30,30,40,200'
+      radius: 8
+      stroke:
+        width: 2
+        color: '80,180,255,180'
+      visible: var.visible
+    children:
+      title:
+        type: Text
+        attribute:
+          x: 100
+          y: 10
+          center: true
+          fontSize: 36
+          texts: "~&b&l挂机区域: &f{var.area}"
+          visible: var.visible
+      info_time:
+        type: Text
+        attribute:
+          x: 10
+          y: 40
+          fontSize: 22
+          texts: "~&7当前挂机: &f{var.time}"
+          visible: var.visible
+      info_next:
+        type: Text
+        attribute:
+          x: 10
+          y: 62
+          fontSize: 22
+          texts: "~&7下次奖励: &f{var.next}秒"
+          visible: var.visible
+      info_players:
+        type: Text
+        attribute:
+          x: 10
+          y: 84
+          fontSize: 22
+          texts: "~&7区域人数: &f{var.players}"
+          visible: var.visible
