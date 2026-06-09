@@ -51,5 +51,5 @@ player:
   no-permission: "&c你没有权限执行这个命令。"
   module-down: "&cWarehouse 模块当前未启用。"
   preview:
-    usage: "&e用法: /{0} preview <玩家UUID>"
-    invalid-uuid: "&c无效的玩家 UUID。"
+    usage: "&e用法: /{0} preview <玩家名或UUID>"
+    not-found: "&c找不到玩家: &f{0}&c，请检查拼写或使用 UUID。"

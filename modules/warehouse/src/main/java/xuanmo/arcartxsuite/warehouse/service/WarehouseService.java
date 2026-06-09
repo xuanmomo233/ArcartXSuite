@@ -355,7 +355,11 @@ public final class WarehouseService implements Listener {
             return ActionResult.failure("仓库存取 UI 尚未注册。");
         }
         try {
-            ViewState previewState = ViewState.preview(targetUuid, warehouseId);
+            String previewOwnerType = OWNER_PERSONAL;
+            if (warehouseId != null && !warehouseId.isBlank() && !configuration.warehouses().containsKey(warehouseId)) {
+                previewOwnerType = OWNER_SHARED;
+            }
+            ViewState previewState = ViewState.preview(targetUuid, warehouseId, previewOwnerType);
             viewStates.put(viewer.getUniqueId(), previewState);
             if (packetBridge != null) {
                 packetBridge.openUi(viewer, storageRuntimeUiId);
@@ -396,10 +400,35 @@ public final class WarehouseService implements Listener {
         }
         showcaseCooldowns.put(showcaseCooldownKey, now);
 
-        String previewCommand = "/wh preview " + player.getUniqueId();
+        UUID playerUuid = player.getUniqueId();
         String displayName = player.getName();
 
+        // 收集可展示仓库：个人仓库设置了可展示 + 主人设置了可展示的共享仓库
+        List<String[]> showcaseEntries = new ArrayList<>();
+        try {
+            Map<String, WarehouseRecord> personalRecords = personalWarehouseMap(playerUuid);
+            for (WarehouseDefinition definition : configuration.warehouses().values()) {
+                WarehouseRecord record = personalRecords.get(definition.id());
+                if (record != null && record.showcaseEnabled()) {
+                    String name = record.customName() == null || record.customName().isBlank()
+                        ? ChatColor.translateAlternateColorCodes('&', definition.displayName())
+                        : record.customName();
+                    showcaseEntries.add(new String[]{name, playerUuid.toString(), definition.id()});
+                }
+            }
+            for (SharedWarehouseRecord shared : repository.loadSharedWarehouses(playerUuid)) {
+                if ("owner".equalsIgnoreCase(shared.viewerRole()) && shared.showcaseEnabled()) {
+                    showcaseEntries.add(new String[]{shared.name(), playerUuid.toString(), shared.id()});
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        if (showcaseEntries.isEmpty()) {
+            return ActionResult.failure("没有可展示的仓库，请至少开启一个仓库的展示设置。");
+        }
+
         if (showcaseConfig.useCard()) {
+            String previewCommand = "/wh spreview " + playerUuid + " " + showcaseEntries.get(0)[2];
             if (packetBridge != null) {
                 packetBridge.sendChatCard(player, showcaseConfig.cardId(), Map.of(
                     "player_name", displayName,
@@ -407,15 +436,26 @@ public final class WarehouseService implements Listener {
                 ));
             }
         } else {
-            String message = ChatColor.GOLD + "[仓库展示] " + ChatColor.WHITE + displayName + " 正在展示仓库 " + ChatColor.AQUA + "[点击查看]";
-            net.md_5.bungee.api.chat.TextComponent component = new net.md_5.bungee.api.chat.TextComponent(message);
-            component.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND, previewCommand));
-            component.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
-                net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
-                new net.md_5.bungee.api.chat.hover.content.Text(ChatColor.GRAY + "点击预览 " + displayName + " 的仓库")
-            ));
+            net.md_5.bungee.api.chat.TextComponent prefix = new net.md_5.bungee.api.chat.TextComponent(
+                ChatColor.GOLD + "[仓库展示] " + ChatColor.WHITE + displayName + " 正在展示仓库： "
+            );
+            for (String[] entry : showcaseEntries) {
+                net.md_5.bungee.api.chat.TextComponent link = new net.md_5.bungee.api.chat.TextComponent(
+                    ChatColor.AQUA + "[" + entry[0] + "]"
+                );
+                link.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(
+                    net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND,
+                    "/wh spreview " + entry[1] + " " + entry[2]
+                ));
+                link.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
+                    net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
+                    new net.md_5.bungee.api.chat.hover.content.Text(ChatColor.GRAY + "点击预览 " + displayName + " 的 " + entry[0])
+                ));
+                prefix.addExtra(link);
+                prefix.addExtra(" ");
+            }
             for (Player onlinePlayer : org.bukkit.Bukkit.getOnlinePlayers()) {
-                onlinePlayer.spigot().sendMessage(component);
+                onlinePlayer.spigot().sendMessage(prefix);
             }
         }
         return ActionResult.success("已展示仓库。");
@@ -452,6 +492,9 @@ public final class WarehouseService implements Listener {
                     case "search" -> setSearch(player, value(data, 1, ""));
                     case "select" -> selectSlot(player, parsePacketSlot(value(data, 1, "-1")));
                     case "refresh" -> refreshBoth(player);
+                    case "warehouse" -> selectPersonalWarehouse(player, value(data, 1, firstPersonalWarehouseId()));
+                    case "shared" -> selectPreviewSharedWarehouse(player, value(data, 1, ""));
+                    case "close" -> handleUiClosed(player);
                     default -> sendMessage(player, false, "预览模式下无法执行此操作。");
                 }
                 return true;
@@ -461,6 +504,12 @@ public final class WarehouseService implements Listener {
                 case "manage" -> openManage(player, "init");
                 case "bank" -> openBank(player, "init");
                 case "refresh" -> refreshBoth(player);
+                case "showcase" -> {
+                    ActionResult result = showcase(player);
+                    if (!result.success()) {
+                        sendMessage(player, false, result.message());
+                    }
+                }
                 case "page" -> setPage(player, parseInt(value(data, 1, "1"), 1));
                 case "warehouse_upgrade" -> upgradeCurrentWarehouse(player);
                 case "warehouse" -> selectPersonalWarehouse(player, value(data, 1, firstPersonalWarehouseId()));
@@ -469,7 +518,7 @@ public final class WarehouseService implements Listener {
                 case "category" -> setCategory(player, value(data, 1, "all"));
                 case "search" -> setSearch(player, value(data, 1, ""));
                 case "select" -> selectSlot(player, parsePacketSlot(value(data, 1, "-1")));
-                case "deposit_slot" -> depositSlot(player, value(data, 1, ""));
+                case "deposit_slot" -> depositSlot(player, value(data, 1, ""), parseLong(value(data, 2, "1"), 1L));
                 case "deposit_all_backpack" -> depositAllBackpack(player);
                 case "withdraw" -> withdraw(player, parsePacketSlot(value(data, 1, "-1")), parseLong(value(data, 2, "1"), 1L), false);
                 case "withdraw_all" -> withdraw(player, parsePacketSlot(value(data, 1, "-1")), Long.MAX_VALUE, true);
@@ -479,6 +528,9 @@ public final class WarehouseService implements Listener {
                 case "fixed_claim" -> claimFixedDeposit(player, value(data, 1, ""));
                 case "shared_create" -> createSharedWarehouse(player, value(data, 1, "共享仓库"));
                 case "shared_rename" -> renameSharedWarehouse(player, value(data, 1, ""), value(data, 2, ""));
+                case "shared_showcase_toggle" -> toggleSharedWarehouseShowcase(player, value(data, 1, ""));
+                case "personal_rename" -> renamePersonalWarehouse(player, value(data, 1, ""), value(data, 2, ""));
+                case "personal_showcase_toggle" -> togglePersonalWarehouseShowcase(player, value(data, 1, ""));
                 case "shared_delete" -> deleteSharedWarehouse(player, value(data, 1, ""), value(data, 2, ""));
                 case "shared_invite" -> inviteSharedMember(player, value(data, 1, ""), value(data, 2, ""), value(data, 3, "member"));
                 case "shared_remove" -> removeSharedMember(player, value(data, 1, ""), value(data, 2, ""));
@@ -985,6 +1037,7 @@ public final class WarehouseService implements Listener {
         packet.put("autoPickup", state.autoPickup());
         packet.put("autoPickupMythic", state.autoPickupMythic());
         packet.put("autoPickupNotify", state.autoPickupNotify());
+        packet.put("showcaseEnabled", currentShowcaseEnabled(player, state));
         return packet;
     }
 
@@ -1009,8 +1062,15 @@ public final class WarehouseService implements Listener {
     private Map<String, Object> basePacket(Player player, ViewState state) throws Exception {
         Map<String, Object> packet = new LinkedHashMap<>();
         Map<String, Object> categories = categoryPacket();
-        Map<String, Object> personalWarehouses = personalWarehousePacket(player);
-        Map<String, Object> sharedWarehouses = sharedWarehousePacket(player);
+        Map<String, Object> personalWarehouses;
+        Map<String, Object> sharedWarehouses;
+        if (state.previewMode() && state.previewTargetUuid() != null) {
+            personalWarehouses = previewPersonalWarehousePacket(state.previewTargetUuid());
+            sharedWarehouses = previewSharedWarehousePacket(state.previewTargetUuid());
+        } else {
+            personalWarehouses = personalWarehousePacket(player);
+            sharedWarehouses = sharedWarehousePacket(player);
+        }
         Map<String, Object> manageWarehouses = manageWarehousePacket(personalWarehouses, sharedWarehouses, state);
         packet.put("packetId", configuration.ui().packetId());
         packet.put("ownerType", state.ownerType());
@@ -1090,7 +1150,11 @@ public final class WarehouseService implements Listener {
         releaseCurrentSharedLock(player);
         ViewState state = state(player);
         state.setOwnerType(OWNER_PERSONAL);
-        state.setOwnerId(player.getUniqueId().toString());
+        if (state.previewMode() && state.previewTargetUuid() != null) {
+            state.setOwnerId(state.previewTargetUuid().toString());
+        } else {
+            state.setOwnerId(player.getUniqueId().toString());
+        }
         state.setWarehouseId(normalizeId(warehouseId).isBlank() ? firstPersonalWarehouseId() : normalizeId(warehouseId));
         state.setSelectedSlot(-1);
         state.setPage(1);
@@ -1109,6 +1173,26 @@ public final class WarehouseService implements Listener {
             return;
         }
         releaseCurrentSharedLock(player);
+        ViewState state = state(player);
+        SharedWarehouseRecord shared = selected.get();
+        state.setOwnerType(OWNER_SHARED);
+        state.setOwnerId(shared.id());
+        state.setWarehouseId(shared.id());
+        state.setSelectedSlot(-1);
+        state.setPage(1);
+        state.setSharedEditMode(false);
+        refreshBoth(player);
+    }
+
+    private void selectPreviewSharedWarehouse(Player player, String sharedId) throws Exception {
+        Optional<SharedWarehouseRecord> selected = repository.loadSharedWarehousesByOwner(state(player).previewTargetUuid()).stream()
+            .filter(shared -> shared.id().equalsIgnoreCase(sharedId) && shared.showcaseEnabled())
+            .findFirst();
+        if (selected.isEmpty()) {
+            sendMessage(player, false, "该共享仓库不可预览。");
+            refreshBoth(player);
+            return;
+        }
         ViewState state = state(player);
         SharedWarehouseRecord shared = selected.get();
         state.setOwnerType(OWNER_SHARED);
@@ -1169,11 +1253,12 @@ public final class WarehouseService implements Listener {
     /**
      * 将玩家背包指定槽位的物品存入当前仓库。
      * 会检查只读权限、黑名单和容量上限，成功时扣除背包物品并刷新 UI。
+     * 支持指定存入数量（requestedAmount），若大于实际堆叠数量则按实际数量存入。
      */
-    private void depositSlot(Player player, String rawSlotValue) throws Exception {
+    private void depositSlot(Player player, String rawSlotValue, long requestedAmount) throws Exception {
         ViewState state = state(player);
         debug("DEPOSIT start player=" + player.getName() + " rawArg=" + safe(rawSlotValue)
-            + " ownerType=" + state.ownerType() + " ownerId=" + state.ownerId() + " warehouseId=" + state.warehouseId());
+            + " amount=" + requestedAmount + " ownerType=" + state.ownerType() + " ownerId=" + state.ownerId() + " warehouseId=" + state.warehouseId());
         if (!canModifyCurrent(player, state)) {
             debug("DEPOSIT reject player=" + player.getName() + " reason=read-only-or-locked");
             sendMessage(player, false, "当前仓库只读，无法存入。");
@@ -1202,7 +1287,11 @@ public final class WarehouseService implements Listener {
             refreshBoth(player);
             return;
         }
-        DepositResult result = depositStack(player, state.ownerType(), state.ownerId(), state.warehouseId(), stack);
+        int originalAmount = stack.getAmount();
+        int depositAmount = (requestedAmount <= 0) ? originalAmount : (int) Math.min(originalAmount, requestedAmount);
+        ItemStack depositStack = stack.clone();
+        depositStack.setAmount(depositAmount);
+        DepositResult result = depositStack(player, state.ownerType(), state.ownerId(), state.warehouseId(), depositStack);
         debug("DEPOSIT result player=" + player.getName() + " success=" + result.success()
             + " stored=" + result.storedAmount() + " remaining=" + result.remainingAmount() + " message=" + result.message());
         if (!result.success()) {
@@ -1210,11 +1299,12 @@ public final class WarehouseService implements Listener {
             refreshBoth(player);
             return;
         }
-        if (result.remainingAmount() <= 0) {
+        int remainingInSlot = originalAmount - (int) result.storedAmount();
+        if (remainingInSlot <= 0) {
             player.getInventory().setItem(slot, null);
         } else {
             ItemStack remaining = stack.clone();
-            remaining.setAmount(result.remainingAmount());
+            remaining.setAmount(remainingInSlot);
             player.getInventory().setItem(slot, remaining);
         }
         player.updateInventory();
@@ -1654,7 +1744,7 @@ public final class WarehouseService implements Listener {
         long now = System.currentTimeMillis();
         String id = UUID.randomUUID().toString();
         try {
-            repository.createSharedWarehouse(new SharedWarehouseRecord(id, player.getUniqueId(), crop(rawName.isBlank() ? "共享仓库" : rawName, 64), level, capacity, now, now, "owner"));
+            repository.createSharedWarehouse(new SharedWarehouseRecord(id, player.getUniqueId(), crop(rawName.isBlank() ? "共享仓库" : rawName, 64), level, capacity, now, now, "owner", true));
         } catch (Exception exception) {
             refundCost(player, cost);
             throw exception;
@@ -1713,6 +1803,52 @@ public final class WarehouseService implements Listener {
         }
         repository.updateSharedWarehouseName(sharedId, name, System.currentTimeMillis());
         sendMessage(player, true, "共享仓库名称已修改为 " + name + "。");
+        refreshBoth(player);
+    }
+
+    private void toggleSharedWarehouseShowcase(Player player, String sharedId) throws Exception {
+        Optional<SharedWarehouseRecord> shared = repository.loadSharedWarehouses(player.getUniqueId()).stream()
+            .filter(record -> record.id().equals(sharedId))
+            .findFirst();
+        if (shared.isEmpty() || !"owner".equalsIgnoreCase(shared.get().viewerRole())) {
+            sendMessage(player, false, "只有共享仓库主人可以修改展示设置。");
+            refreshBoth(player);
+            return;
+        }
+        boolean newValue = !shared.get().showcaseEnabled();
+        repository.updateSharedWarehouseShowcase(sharedId, newValue, System.currentTimeMillis());
+        sendMessage(player, true, "共享仓库展示已" + (newValue ? "开启" : "关闭") + "。");
+        refreshBoth(player);
+    }
+
+    private void renamePersonalWarehouse(Player player, String warehouseId, String rawName) throws Exception {
+        String name = crop(safe(rawName), 64);
+        if (name.isBlank()) {
+            sendMessage(player, false, "仓库名称不能为空。");
+            refreshBoth(player);
+            return;
+        }
+        WarehouseRecord record = personalWarehouseMap(player.getUniqueId()).get(warehouseId);
+        if (record == null) {
+            sendMessage(player, false, "当前仓库不存在。");
+            refreshBoth(player);
+            return;
+        }
+        repository.updatePersonalWarehouseName(player.getUniqueId(), warehouseId, name, System.currentTimeMillis());
+        sendMessage(player, true, "仓库名称已修改为 " + name + "。");
+        refreshBoth(player);
+    }
+
+    private void togglePersonalWarehouseShowcase(Player player, String warehouseId) throws Exception {
+        WarehouseRecord record = personalWarehouseMap(player.getUniqueId()).get(warehouseId);
+        if (record == null) {
+            sendMessage(player, false, "当前仓库不存在。");
+            refreshBoth(player);
+            return;
+        }
+        boolean newValue = !record.showcaseEnabled();
+        repository.updatePersonalWarehouseShowcase(player.getUniqueId(), warehouseId, newValue, System.currentTimeMillis());
+        sendMessage(player, true, "仓库展示已" + (newValue ? "开启" : "关闭") + "。");
         refreshBoth(player);
     }
 
@@ -1984,6 +2120,17 @@ public final class WarehouseService implements Listener {
             .findFirst()
             .map(shared -> canEditShared(shared.viewerRole()))
             .orElse(false);
+    }
+
+    private boolean currentShowcaseEnabled(Player player, ViewState state) throws Exception {
+        if (!OWNER_SHARED.equals(state.ownerType())) {
+            return personalWarehouseMap(player.getUniqueId()).getOrDefault(state.warehouseId(), new WarehouseRecord(player.getUniqueId(), state.warehouseId(), 1, "", true, 0L)).showcaseEnabled();
+        }
+        return repository.loadSharedWarehouses(player.getUniqueId()).stream()
+            .filter(record -> record.id().equals(state.ownerId()))
+            .findFirst()
+            .map(SharedWarehouseRecord::showcaseEnabled)
+            .orElse(true);
     }
 
     private boolean acquireCurrentSharedLock(Player player, ViewState state) throws Exception {
@@ -2300,80 +2447,147 @@ public final class WarehouseService implements Listener {
 
     private Map<String, Object> categoryPacket() {
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("all", Map.of("id", "all", "name", "全部", "text", "&0全部"));
-        configuration.categories().values().stream()
-            .sorted(Comparator.comparingInt(CategoryDefinition::priority))
-            .forEach(category -> result.put(category.id(), Map.of(
-                "id", category.id(),
-                "name", category.displayName(),
-                "text", "&0" + category.displayName()
-            )));
+        int idx = 0;
+        Map<String, Object> allRow = new LinkedHashMap<>();
+        allRow.put("id", "all");
+        allRow.put("name", "全部");
+        allRow.put("text", "&0全部");
+        result.put(Integer.toString(idx), allRow);
+        idx++;
+        for (CategoryDefinition category : configuration.categories().values().stream()
+                .sorted(Comparator.comparingInt(CategoryDefinition::priority))
+                .toList()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", category.id());
+            row.put("name", category.displayName());
+            row.put("text", "&0" + category.displayName());
+            result.put(Integer.toString(idx), row);
+            idx++;
+        }
         return result;
     }
 
     private Map<String, Object> personalWarehousePacket(Player player) throws Exception {
         Map<String, Object> result = new LinkedHashMap<>();
         Map<String, WarehouseRecord> records = personalWarehouseMap(player.getUniqueId());
+        int idx = 0;
         for (WarehouseDefinition definition : configuration.warehouses().values()) {
             if (!records.containsKey(definition.id())) {
                 continue;
             }
             WarehouseRecord record = records.get(definition.id());
             WarehouseLevelDefinition level = definition.level(record.level());
-            result.put(definition.id(), Map.of(
-                "id", definition.id(),
-                "name", ChatColor.translateAlternateColorCodes('&', definition.displayName()),
-                "text", "&0" + ChatColor.translateAlternateColorCodes('&', definition.displayName()),
-                "level", record.level(),
-                "capacity", level == null ? SLOT_COUNT : level.capacity()
-            ));
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", definition.id());
+            row.put("name", ChatColor.translateAlternateColorCodes('&', definition.displayName()));
+            row.put("text", "&0" + ChatColor.translateAlternateColorCodes('&', definition.displayName()));
+            row.put("level", record.level());
+            row.put("capacity", level == null ? SLOT_COUNT : level.capacity());
+            result.put(Integer.toString(idx), row);
+            idx++;
+        }
+        return result;
+    }
+
+    private Map<String, Object> previewPersonalWarehousePacket(UUID targetUuid) throws Exception {
+        Map<String, Object> result = new LinkedHashMap<>();
+        Map<String, WarehouseRecord> records = personalWarehouseMap(targetUuid);
+        int idx = 0;
+        for (WarehouseDefinition definition : configuration.warehouses().values()) {
+            if (!records.containsKey(definition.id())) {
+                continue;
+            }
+            WarehouseRecord record = records.get(definition.id());
+            if (!record.showcaseEnabled()) {
+                continue;
+            }
+            WarehouseLevelDefinition level = definition.level(record.level());
+            String name = record.customName() == null || record.customName().isBlank()
+                ? ChatColor.translateAlternateColorCodes('&', definition.displayName())
+                : record.customName();
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", definition.id());
+            row.put("name", name);
+            row.put("text", "&0" + name);
+            row.put("level", record.level());
+            row.put("capacity", level == null ? SLOT_COUNT : level.capacity());
+            result.put(Integer.toString(idx), row);
+            idx++;
+        }
+        return result;
+    }
+
+    private Map<String, Object> previewSharedWarehousePacket(UUID targetUuid) throws Exception {
+        Map<String, Object> result = new LinkedHashMap<>();
+        int idx = 0;
+        for (SharedWarehouseRecord shared : repository.loadSharedWarehousesByOwner(targetUuid)) {
+            if (!shared.showcaseEnabled()) {
+                continue;
+            }
+            Map<String, Object> rowMap = new LinkedHashMap<>();
+            rowMap.put("id", shared.id());
+            rowMap.put("name", shared.name());
+            rowMap.put("role", shared.viewerRole());
+            rowMap.put("roleName", sharedRoleName(shared.viewerRole()));
+            rowMap.put("level", shared.level());
+            rowMap.put("storageText", "&0共享 " + shared.name());
+            rowMap.put("manageText", "&0" + shared.name() + " &8[" + sharedRoleName(shared.viewerRole()) + "]\n&7Lv." + shared.level() + "  " + shared.capacity() + " 格");
+            rowMap.put("capacity", shared.capacity());
+            rowMap.put("lockedBy", "");
+            result.put(Integer.toString(idx), rowMap);
+            idx++;
         }
         return result;
     }
 
     private Map<String, Object> manageWarehousePacket(Map<String, Object> personalWarehouses, Map<String, Object> sharedWarehouses, ViewState state) {
         Map<String, Object> result = new LinkedHashMap<>();
+        int idx = 0;
         for (Map.Entry<String, Object> entry : personalWarehouses.entrySet()) {
             if (!(entry.getValue() instanceof Map<?, ?> row)) {
                 continue;
             }
-            String target = entry.getKey();
-            result.put("personal_" + target, Map.of(
-                "ownerType", OWNER_PERSONAL,
-                "target", target,
-                "selected", OWNER_PERSONAL.equals(state.ownerType()) && target.equals(state.warehouseId()),
-                "text", "&0个人 " + safe(String.valueOf(row.get("name"))) + "\n&7Lv." + row.get("level") + "  " + row.get("capacity") + " 格"
-            ));
+            String target = safe(String.valueOf(row.get("id")));
+            Map<String, Object> rowMap = new LinkedHashMap<>();
+            rowMap.put("ownerType", OWNER_PERSONAL);
+            rowMap.put("target", target);
+            rowMap.put("selected", OWNER_PERSONAL.equals(state.ownerType()) && target.equals(state.warehouseId()));
+            rowMap.put("text", "&0个人 " + safe(String.valueOf(row.get("name"))) + "\n&7Lv." + row.get("level") + "  " + row.get("capacity") + " 格");
+            result.put(Integer.toString(idx), rowMap);
+            idx++;
         }
         for (Map.Entry<String, Object> entry : sharedWarehouses.entrySet()) {
             if (!(entry.getValue() instanceof Map<?, ?> row)) {
                 continue;
             }
-            String target = entry.getKey();
-            result.put("shared_" + target, Map.of(
-                "ownerType", OWNER_SHARED,
-                "target", target,
-                "selected", OWNER_SHARED.equals(state.ownerType()) && target.equals(state.ownerId()),
-                "text", safe(String.valueOf(row.get("manageText")))
-            ));
+            String target = safe(String.valueOf(row.get("id")));
+            Map<String, Object> rowMap = new LinkedHashMap<>();
+            rowMap.put("ownerType", OWNER_SHARED);
+            rowMap.put("target", target);
+            rowMap.put("selected", OWNER_SHARED.equals(state.ownerType()) && target.equals(state.ownerId()));
+            rowMap.put("text", safe(String.valueOf(row.get("manageText"))));
+            result.put(Integer.toString(idx), rowMap);
+            idx++;
         }
         return result;
     }
 
     private Map<String, Object> sharedWarehousePacket(Player player) throws Exception {
         Map<String, Object> result = new LinkedHashMap<>();
+        int idx = 0;
         for (SharedWarehouseRecord shared : repository.loadSharedWarehouses(player.getUniqueId())) {
-            result.put(shared.id(), Map.of(
-                "id", shared.id(),
-                "name", shared.name(),
-                "role", shared.viewerRole(),
-                "roleName", sharedRoleName(shared.viewerRole()),
-                "level", shared.level(),
-                "storageText", "&0共享 " + shared.name(),
-                "manageText", "&0" + shared.name() + " &8[" + sharedRoleName(shared.viewerRole()) + "]\n&7Lv." + shared.level() + "  " + shared.capacity() + " 格",
-                "capacity", shared.capacity(),
-                "lockedBy", lockOwnerName(ViewState.shared(shared.id(), player, false, false, false))
-            ));
+            Map<String, Object> rowMap = new LinkedHashMap<>();
+            rowMap.put("id", shared.id());
+            rowMap.put("name", shared.name());
+            rowMap.put("role", shared.viewerRole());
+            rowMap.put("roleName", sharedRoleName(shared.viewerRole()));
+            rowMap.put("level", shared.level());
+            rowMap.put("storageText", "&0共享 " + shared.name());
+            rowMap.put("manageText", "&0" + shared.name() + " &8[" + sharedRoleName(shared.viewerRole()) + "]\n&7Lv." + shared.level() + "  " + shared.capacity() + " 格");
+            rowMap.put("capacity", shared.capacity());
+            rowMap.put("lockedBy", lockOwnerName(ViewState.shared(shared.id(), player, false, false, false)));
+            result.put(Integer.toString(idx), rowMap);
+            idx++;
         }
         return result;
     }
@@ -2389,15 +2603,17 @@ public final class WarehouseService implements Listener {
         if (shared.isEmpty() || !"owner".equalsIgnoreCase(shared.get().viewerRole())) {
             return result;
         }
+        int idx = 0;
         for (SharedMemberRecord member : repository.loadSharedMembers(state.ownerId())) {
             OfflinePlayer offline = Bukkit.getOfflinePlayer(member.playerUuid());
-            result.put(member.playerUuid().toString(), Map.of(
-                "uuid", member.playerUuid().toString(),
-                "name", offline.getName() == null ? member.playerUuid().toString() : offline.getName(),
-                "role", member.role(),
-                "roleName", sharedRoleName(member.role()),
-                "text", "&0" + (offline.getName() == null ? member.playerUuid().toString() : offline.getName()) + " &7" + sharedRoleName(member.role())
-            ));
+            Map<String, Object> rowMap = new LinkedHashMap<>();
+            rowMap.put("uuid", member.playerUuid().toString());
+            rowMap.put("name", offline.getName() == null ? member.playerUuid().toString() : offline.getName());
+            rowMap.put("role", member.role());
+            rowMap.put("roleName", sharedRoleName(member.role()));
+            rowMap.put("text", "&0" + (offline.getName() == null ? member.playerUuid().toString() : offline.getName()) + " &7" + sharedRoleName(member.role()));
+            result.put(Integer.toString(idx), rowMap);
+            idx++;
         }
         return result;
     }
@@ -2493,34 +2709,38 @@ public final class WarehouseService implements Listener {
     private Map<String, Object> bankBalancePacket(Player player) throws Exception {
         Map<String, Object> result = new LinkedHashMap<>();
         Map<String, BigDecimal> balances = repository.loadBankBalances(player.getUniqueId());
+        int idx = 0;
         for (String currencyId : configuration.currencies().keySet()) {
             BigDecimal balance = balances.getOrDefault(currencyId, BigDecimal.ZERO);
-            result.put(currencyId, Map.of(
-                "id", currencyId,
-                "name", configuration.currency(currencyId).displayName(),
-                "balance", formatCurrency(currencyId, balance),
-                "text", "&0" + configuration.currency(currencyId).displayName() + "  &7" + formatCurrency(currencyId, balance)
-            ));
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", currencyId);
+            row.put("name", configuration.currency(currencyId).displayName());
+            row.put("balance", formatCurrency(currencyId, balance));
+            row.put("text", "&0" + configuration.currency(currencyId).displayName() + "  &7" + formatCurrency(currencyId, balance));
+            result.put(Integer.toString(idx), row);
+            idx++;
         }
         return result;
     }
 
     private Map<String, Object> depositProductPacket(Player player) {
         Map<String, Object> result = new LinkedHashMap<>();
+        int idx = 0;
         for (DepositProductDefinition product : configuration.depositProducts().values()) {
             if (!canUseProduct(player, product)) {
                 continue;
             }
-            result.put(product.id(), Map.of(
-                "id", product.id(),
-                "name", product.displayName(),
-                "description", product.description(),
-                "currency", product.currencyId(),
-                "duration", product.durationSeconds(),
-                "min", formatCurrency(product.currencyId(), product.minAmount()),
-                "max", product.maxAmount().compareTo(BigDecimal.ZERO) <= 0 ? "不限" : formatCurrency(product.currencyId(), product.maxAmount()),
-                "text", "&0" + product.displayName() + "\n&7最低 " + formatCurrency(product.currencyId(), product.minAmount()) + "  " + product.description()
-            ));
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", product.id());
+            row.put("name", product.displayName());
+            row.put("description", product.description());
+            row.put("currency", product.currencyId());
+            row.put("duration", product.durationSeconds());
+            row.put("min", formatCurrency(product.currencyId(), product.minAmount()));
+            row.put("max", product.maxAmount().compareTo(BigDecimal.ZERO) <= 0 ? "不限" : formatCurrency(product.currencyId(), product.maxAmount()));
+            row.put("text", "&0" + product.displayName() + "\n&7最低 " + formatCurrency(product.currencyId(), product.minAmount()) + "  " + product.description());
+            result.put(Integer.toString(idx), row);
+            idx++;
         }
         return result;
     }
@@ -2528,18 +2748,19 @@ public final class WarehouseService implements Listener {
     private Map<String, Object> fixedDepositPacket(Player player) throws Exception {
         Map<String, Object> result = new LinkedHashMap<>();
         long now = System.currentTimeMillis();
+        int idx = 0;
         for (FixedDepositRecord deposit : repository.loadFixedDeposits(player.getUniqueId())) {
-            result.put(deposit.id(), Map.of(
-                "id", deposit.id(),
-                "product", deposit.productId(),
-                "currency", deposit.currencyId(),
-                "principal", formatCurrency(deposit.currencyId(), deposit.principal()),
-                "rate", deposit.interestRate().toPlainString(),
-                "maturesAt", TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt())),
-                "matured", deposit.maturesAt() <= now,
-                "claimed", deposit.claimed(),
-                "text", "&0" + deposit.productId() + " &7本金 " + formatCurrency(deposit.currencyId(), deposit.principal()) + "\n&7到期 " + TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt()))
-            ));
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", deposit.id());
+            row.put("product", deposit.productId());
+            row.put("currency", deposit.currencyId());
+            row.put("principal", formatCurrency(deposit.currencyId(), deposit.principal()));
+            row.put("rate", deposit.interestRate().toPlainString());
+            row.put("maturesAt", TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt())));
+            row.put("matured", deposit.maturesAt() <= now);
+            row.put("text", "&0" + deposit.productId() + " &7本金 " + formatCurrency(deposit.currencyId(), deposit.principal()) + "\n&7到期 " + TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt())));
+            result.put(Integer.toString(idx), row);
+            idx++;
         }
         return result;
     }
@@ -2577,12 +2798,17 @@ public final class WarehouseService implements Listener {
     }
 
     private String currentWarehouseName(Player player, ViewState state) throws Exception {
+        UUID lookupUuid = state.previewMode() && state.previewTargetUuid() != null ? state.previewTargetUuid() : player.getUniqueId();
         if (OWNER_SHARED.equals(state.ownerType())) {
-            return repository.loadSharedWarehouses(player.getUniqueId()).stream()
+            return repository.loadSharedWarehousesByOwner(lookupUuid).stream()
                 .filter(shared -> shared.id().equals(state.ownerId()))
                 .map(SharedWarehouseRecord::name)
                 .findFirst()
                 .orElse("共享仓库");
+        }
+        WarehouseRecord record = personalWarehouseMap(lookupUuid).get(state.warehouseId());
+        if (record != null && record.customName() != null && !record.customName().isBlank()) {
+            return record.customName();
         }
         WarehouseDefinition definition = configuration.warehouse(state.warehouseId());
         return definition == null ? "个人仓库" : ChatColor.translateAlternateColorCodes('&', definition.displayName());
@@ -3112,8 +3338,14 @@ public final class WarehouseService implements Listener {
             return new ViewState(OWNER_SHARED, sharedId, sharedId, "all", "", -1, autoPickup, autoPickupMythic, autoPickupNotify);
         }
 
-        static ViewState preview(UUID targetUuid, String warehouseId) {
-            ViewState state = new ViewState(OWNER_PERSONAL, targetUuid.toString(), warehouseId, "all", "", -1, false, false, false);
+        static ViewState preview(UUID targetUuid, String warehouseId, String ownerType) {
+            String effectiveWarehouseId = warehouseId;
+            String effectiveOwnerId = targetUuid.toString();
+            if (OWNER_SHARED.equals(ownerType)) {
+                effectiveOwnerId = warehouseId;
+                effectiveWarehouseId = warehouseId;
+            }
+            ViewState state = new ViewState(ownerType, effectiveOwnerId, effectiveWarehouseId, "all", "", -1, false, false, false);
             state.previewMode = true;
             state.previewTargetUuid = targetUuid;
             state.previewWarehouseId = warehouseId;

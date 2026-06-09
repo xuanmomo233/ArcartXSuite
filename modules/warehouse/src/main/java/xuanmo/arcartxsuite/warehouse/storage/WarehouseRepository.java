@@ -15,6 +15,10 @@ public interface WarehouseRepository {
 
     void upsertPersonalWarehouse(UUID playerUuid, String warehouseId, int level, String customName, long updatedAt) throws SQLException;
 
+    void updatePersonalWarehouseName(UUID playerUuid, String warehouseId, String customName, long updatedAt) throws SQLException;
+
+    void updatePersonalWarehouseShowcase(UUID playerUuid, String warehouseId, boolean showcaseEnabled, long updatedAt) throws SQLException;
+
     List<SlotItemRecord> loadSlots(String ownerType, String ownerId, String warehouseId) throws SQLException;
 
     Optional<SlotItemRecord> loadSlot(String ownerType, String ownerId, String warehouseId, int slot) throws SQLException;
@@ -58,11 +62,15 @@ public interface WarehouseRepository {
 
     void updateSharedWarehouseName(String sharedId, String name, long updatedAt) throws SQLException;
 
+    void updateSharedWarehouseShowcase(String sharedId, boolean showcaseEnabled, long updatedAt) throws SQLException;
+
     void transferSharedWarehouse(String sharedId, UUID previousOwnerUuid, UUID newOwnerUuid, long updatedAt) throws SQLException;
 
     void deleteSharedWarehouse(String sharedId) throws SQLException;
 
     List<SharedWarehouseRecord> loadSharedWarehouses(UUID playerUuid) throws SQLException;
+
+    List<SharedWarehouseRecord> loadSharedWarehousesByOwner(UUID ownerUuid) throws SQLException;
 
     List<SharedMemberRecord> loadSharedMembers(String sharedId) throws SQLException;
 
@@ -82,7 +90,7 @@ public interface WarehouseRepository {
 
     void close();
 
-    record WarehouseRecord(UUID playerUuid, String warehouseId, int level, String customName, long updatedAt) {
+    record WarehouseRecord(UUID playerUuid, String warehouseId, int level, String customName, boolean showcaseEnabled, long updatedAt) {
     }
 
     record SlotItemRecord(
@@ -127,7 +135,8 @@ public interface WarehouseRepository {
         long capacity,
         long createdAt,
         long updatedAt,
-        String viewerRole
+        String viewerRole,
+        boolean showcaseEnabled
     ) {
     }
 

@@ -54,6 +54,7 @@ ui:
       var.autoPickup = packet['autoPickup']
       var.autoPickupMythic = packet['autoPickupMythic']
       var.autoPickupNotify = packet['autoPickupNotify']
+      var.showcaseEnabled = packet['showcaseEnabled']
     update: |-
       var.packetId = packet['packetId']
       var.ownerType = packet['ownerType']
@@ -88,6 +89,7 @@ ui:
       var.autoPickup = packet['autoPickup']
       var.autoPickupMythic = packet['autoPickupMythic']
       var.autoPickupNotify = packet['autoPickupNotify']
+      var.showcaseEnabled = packet['showcaseEnabled']
   action:
     load: |-
       var.packetId = 'AXS_WAREHOUSE'
@@ -128,9 +130,22 @@ ui:
       var.deleteConfirm = false
       var.deletePassword = ''
       var.sharedListScrollRatio = 0
+      var.showcaseEnabled = true
       var.autoPickup = true
       var.autoPickupMythic = true
       var.autoPickupNotify = true
+      var.maxManageCount = 32
+      for(i in range(0, var.maxManageCount)){
+        key = i.round
+        item = val.共享列表['项'].copy('项' + key)
+        item.entryKey = key
+      }
+      var.maxMemberCount = 32
+      for(i in range(0, var.maxMemberCount)){
+        key = i.round
+        member = val.成员列表['项'].copy('项' + key)
+        member.entryKey = key
+      }
     open: |-
       Packet.send(var.packetId, 'refresh')
 
@@ -187,9 +202,9 @@ controls:
           返回仓库:
             type: Texture
             attribute:
-              x: 1350
+              x: 1335
               y: 42
-              width: 130
+              width: 80
               height: 50
               normal: ~255,255,255,150
               hover: ~Frosted:0;255,255,255,240
@@ -197,7 +212,7 @@ controls:
               radius: 14
               texts: "~&0仓库"
               center: true
-              fontSize: 34
+              fontSize: 42
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'storage')
@@ -208,9 +223,9 @@ controls:
           银行:
             type: Texture
             attribute:
-              x: 1500
+              x: 1435
               y: 42
-              width: 100
+              width: 80
               height: 50
               normal: ~255,255,255,150
               hover: ~Frosted:0;255,255,255,240
@@ -218,7 +233,7 @@ controls:
               radius: 14
               texts: "~&0银行"
               center: true
-              fontSize: 34
+              fontSize: 42
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'bank')
@@ -409,15 +424,16 @@ controls:
                       项:
                         type: Texture
                         attribute:
-                          entry: var.manageWarehouses[self.key]
+                          entryKey: 0
+                          entry: var.manageWarehouses[self.entryKey]
                           visible: self.entry != null
                           width: 370
                           height: 54
-                          normal: "var.manageWarehouseSelected[self.key] ? '110,170,230,255' : '190,190,195,255'"
+                          normal: "var.manageWarehouseSelected[self.entryKey] ? '110,170,230,255' : '255,255,255,150'"
                           hover: ~Frosted:0;255,255,255,240
                           shape: ~round_rect
                           radius: 14
-                          texts: "var.manageWarehouseTexts[self.key]"
+                          texts: "var.manageWarehouseTexts[self.entryKey]"
                           center: true
                           fontSize: 32
                         effect:
@@ -428,17 +444,11 @@ controls:
                           clickLeft: |-
                             var.deleteConfirm = false
                             var.renameName = ''
-                            if(var.manageWarehouseTypes[self.key] == 'shared'){
-                              Packet.send(var.packetId, 'shared', var.manageWarehouseTargets[self.key])
+                            if(var.manageWarehouseTypes[self.entryKey] == 'shared'){
+                              Packet.send(var.packetId, 'shared', var.manageWarehouseTargets[self.entryKey])
                             }else{
-                              Packet.send(var.packetId, 'warehouse', var.manageWarehouseTargets[self.key])
+                              Packet.send(var.packetId, 'warehouse', var.manageWarehouseTargets[self.entryKey])
                             }
-              共享观察:
-                type: Observer
-                attribute:
-                  target: val.共享列表['项']
-                  subscribe: var.manageWarehouses
-                  maxSize: 64
 
           删除卡片:
             type: Texture
@@ -538,17 +548,43 @@ controls:
                 type: Text
                 attribute:
                   x: 24
-                  y: 22
-                  texts: "~&f修改共享仓库名称"
-                  fontSize: 44
+                  y: 16
+                  texts: "~&f修改仓库名称与是否展示"
+                  fontSize: 40
               改名提示:
                 type: Text
                 attribute:
                   x: 24
-                  y: 76
+                  y: 56
                   width: 450
-                  texts: "var.ownerType == 'shared' ? ('&f当前: ' + var.warehouseName) : '&7请选择一个共享仓库'"
+                  texts: "var.ownerType != '' ? ('&f当前: ' + var.warehouseName) : '&7请选择一个仓库'"
                   fontSize: 32
+              展示按钮:
+                type: Texture
+                attribute:
+                  x: 330
+                  y: 84
+                  width: 90
+                  height: 34
+                  visible: var.ownerType != ''
+                  normal: "var.showcaseEnabled ? '110,170,230,255' : '190,190,195,255'"
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 12
+                  texts: "var.showcaseEnabled ? '&0展示:开' : '&0展示:关'"
+                  center: true
+                  fontSize: 30
+                action:
+                  clickLeft: |-
+                    if(var.ownerType == 'shared'){
+                      Packet.send(var.packetId, 'shared_showcase_toggle', var.ownerId)
+                    }else{
+                      Packet.send(var.packetId, 'personal_showcase_toggle', var.warehouseId)
+                    }
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
               新名称:
                 type: TextBox
                 attribute:
@@ -573,21 +609,23 @@ controls:
                 type: Texture
                 attribute:
                   x: 330
-                  y: 114
+                  y: 126
                   width: 90
-                  height: 42
-                  visible: var.ownerType == 'shared'
+                  height: 34
+                  visible: var.ownerType != ''
                   normal: ~255,255,255,150
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
                   radius: 12
                   texts: "~&0修改"
                   center: true
-                  fontSize: 34
+                  fontSize: 30
                 action:
                   clickLeft: |-
                     if(var.ownerType == 'shared'){
                       Packet.send(var.packetId, 'shared_rename', var.ownerId, var.renameName)
+                    }else{
+                      Packet.send(var.packetId, 'personal_rename', var.warehouseId, var.renameName)
                     }
                 effect:
                   stroke:
@@ -779,7 +817,7 @@ controls:
                   y: 70
                   width: 110
                   height: 42
-                  normal: "var.memberRole == 'member' ? '110,170,230,255' : '190,190,195,255'"
+                  normal: "var.memberRole == 'member' ? '110,170,230,255' : '255,255,255,150'"
                   hover: ~Frosted:0;200,200,200,255
                   shape: ~round_rect
                   radius: 14
@@ -896,24 +934,23 @@ controls:
                       项:
                         type: Texture
                         attribute:
-                          entry: var.sharedMembers[self.key]
+                          entryKey: 0
+                          entry: var.sharedMembers[self.entryKey]
                           visible: self.entry != null
                           width: 510
                           height: 56
-                          normal: ~190,190,195,255
+                          normal: ~255,255,255,150
                           hover: ~Frosted:0;255,255,255,240
                           shape: ~round_rect
                           radius: 14
-                          texts: "var.sharedMemberTexts[self.key]"
+                          texts: "var.sharedMemberTexts[self.entryKey]"
                           center: true
                           fontSize: 32
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~0,0,0,255
                         action:
                           clickLeft: |-
-                            var.memberName = var.sharedMemberNames[self.key]
-                            var.memberRole = var.sharedMemberRoles[self.key] == 'viewer' ? 'viewer' : 'member'
-              成员观察:
-                type: Observer
-                attribute:
-                  target: val.成员列表['项']
-                  subscribe: var.sharedMembers
-                  maxSize: 64
+                            var.memberName = var.sharedMemberNames[self.entryKey]
+                            var.memberRole = var.sharedMemberRoles[self.entryKey] == 'viewer' ? 'viewer' : 'member'

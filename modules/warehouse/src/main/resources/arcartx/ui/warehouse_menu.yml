@@ -66,8 +66,7 @@ ui:
         }
       }
       for(i in range(0, 54)){
-        key = i.round
-        icon = val.仓库网格['物品图标' + key]
+        icon = val.仓库网格['物品图标' + i.round]
         if(icon != null){
           icon.seticon()
         }
@@ -118,10 +117,11 @@ ui:
         }
       }
       for(i in range(0, 54)){
-        key = i.round
-        icon = val.仓库网格['物品图标' + key]
-        if(icon != null){
-          icon.seticon()
+        if(val.仓库网格.get(i.round) != null){
+          icon = val.仓库网格.get(i.round)
+          if(icon != null){
+            icon.seticon()
+          }
         }
       }
   action:
@@ -160,11 +160,34 @@ ui:
       var.level = 1
       var.canUpgrade = false
       var.nextUpgradeText = ''
-      var.withdrawAmount = ''
+      var.amount = 1
       var.passwordText = ''
       var.categoryScrollRatio = 0
       var.switchScrollRatio = 0
+      var.selectedBackpackSlot = -1
+      var.lastBackpackClickSlot = null
+      var.lastBackpackClickTime = 0
+      var.lastSlotClickSlot = null
+      var.lastSlotClickTime = 0
       var.emptyItemJson = '{"id": "minecraft:air","Count":1b}'
+      var.maxPersonalCount = 16
+      for(i in range(0, var.maxPersonalCount)){
+        key = i.round
+        pw = val.个人仓库列表['项'].copy('项' + key)
+        pw.entryKey = key
+      }
+      var.maxSharedCount = 32
+      for(i in range(0, var.maxSharedCount)){
+        key = i.round
+        sw = val.共享仓库列表['项'].copy('项' + key)
+        sw.entryKey = key
+      }
+      var.maxCategoryCount = 32
+      for(i in range(0, var.maxCategoryCount)){
+        key = i.round
+        cat = val.分类列表['项'].copy('项' + key)
+        cat.entryKey = key
+      }
       var.renderBackpackAmounts = -> {
         if(val.背包网格 != null){
           for(raw in range(9,44)){
@@ -239,9 +262,9 @@ controls:
           共享只读:
             type: Texture
             attribute:
-              x: 1120
+              x: 1090
               y: 42
-              width: 110
+              width: 80
               height: 50
               visible: var.ownerType == 'shared'
               normal: "var.sharedEditMode ? '255,255,255,150' : '120,190,255,230'"
@@ -261,9 +284,9 @@ controls:
           共享存取:
             type: Texture
             attribute:
-              x: 1242
+              x: 1182
               y: 42
-              width: 110
+              width: 80
               height: 50
               visible: var.ownerType == 'shared'
               normal: "var.sharedEditMode && !var.readOnly ? '120,190,255,230' : (var.sharedCanEdit ? '255,255,255,150' : '255,180,180,170')"
@@ -280,10 +303,31 @@ controls:
               stroke:
                 width: 2
                 color: ~0,0,0,255
+          展示按钮:
+            type: Texture
+            attribute:
+              x: 1274
+              y: 42
+              width: 80
+              height: 50
+              normal: ~255,255,255,150
+              hover: ~Frosted:0;255,255,255,240
+              shape: ~round_rect
+              radius: 14
+              texts: "~&0展示"
+              center: true
+              fontSize: 34
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'showcase')
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
           银行按钮:
             type: Texture
             attribute:
-              x: 1335
+              x: 1366
               y: 42
               width: 80
               height: 50
@@ -294,7 +338,7 @@ controls:
               radius: 14
               texts: "~&0银行"
               center: true
-              fontSize: 42
+              fontSize: 34
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'bank')
@@ -305,7 +349,7 @@ controls:
           管理按钮:
             type: Texture
             attribute:
-              x: 1435
+              x: 1458
               y: 42
               width: 80
               height: 50
@@ -315,7 +359,7 @@ controls:
               radius: 14
               texts: "~&0管理"
               center: true
-              fontSize: 42
+              fontSize: 34
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'manage')
@@ -326,7 +370,7 @@ controls:
           刷新按钮:
             type: Texture
             attribute:
-              x: 1535
+              x: 1550
               y: 42
               width: 80
               height: 50
@@ -336,7 +380,7 @@ controls:
               radius: 14
               texts: "~&0刷新"
               center: true
-              fontSize: 43
+              fontSize: 34
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'refresh')
@@ -360,6 +404,16 @@ controls:
                 width: 2
                 color: ~0,0,0,255
             children:
+              切换横向滑块:
+                type: Texture
+                val: 切换横向滑块
+                attribute:
+                  x: 18
+                  y: 66
+                  width: 50
+                  height: 6
+                  normal: ~120,120,120,200
+                  maxDragX: 1240
               切换滚动:
                 type: Scroll
                 val: 切换滚动
@@ -368,11 +422,15 @@ controls:
                   y: 12
                   width: 1290
                   height: 48
-                  moveX: var.switchScrollRatio
+                  moveX: "self.parent['切换横向滑块'].getDragXRatio()"
                 action:
                   wheel: |-
-                    var.switchScrollRatio = Math.max(0, Math.min(1, var.switchScrollRatio + self.wheelValue * 0.08))
-                    self.moveX = var.switchScrollRatio
+                    if(self.moveX >= 0 && self.wheelValue > 0){
+                      self.parent['切换横向滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveX <= 1 && self.wheelValue < 0){
+                      self.parent['切换横向滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
+                    }
                 children:
                   切换行:
                     type: HStack
@@ -390,20 +448,21 @@ controls:
                           项:
                             type: Texture
                             attribute:
-                              entry: var.personalWarehouses[self.key]
+                              entryKey: 0
+                              entry: var.personalWarehouses[self.entryKey]
                               visible: self.entry != null
                               width: 170
                               height: 48
-                              normal: "var.ownerType == 'personal' && self.key == var.warehouseId ? '120,190,255,230' : '255,255,255,145'"
+                              normal: "var.ownerType == 'personal' && self.entry != null && self.entry['id'] == var.warehouseId ? '120,190,255,230' : '255,255,255,145'"
                               hover: ~Frosted:0;255,255,255,240
                               shape: ~round_rect
                               radius: 14
-                              texts: "var.personalWarehouseTexts[self.key]"
+                              texts: "var.personalWarehouseTexts[self.entryKey]"
                               center: true
                               fontSize: 34
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'warehouse', self.key)
+                                Packet.send(var.packetId, 'warehouse', self.entry['id'])
                             effect:
                               stroke:
                                 width: 2
@@ -418,36 +477,25 @@ controls:
                           项:
                             type: Texture
                             attribute:
-                              entry: var.sharedWarehouses[self.key]
+                              entryKey: 0
+                              entry: var.sharedWarehouses[self.entryKey]
                               visible: self.entry != null
                               width: 190
                               height: 48
-                              normal: "var.ownerType == 'shared' && self.key == var.ownerId ? '120,190,255,230' : '255,255,255,145'"
+                              normal: "var.ownerType == 'shared' && self.entry != null && self.entry['id'] == var.ownerId ? '120,190,255,230' : '255,255,255,145'"
                               hover: ~Frosted:0;255,255,255,240
                               shape: ~round_rect
                               radius: 14
-                              texts: "var.sharedWarehouseStorageTexts[self.key]"
+                              texts: "var.sharedWarehouseStorageTexts[self.entryKey]"
                               center: true
                               fontSize: 32
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'shared', self.key)
+                                Packet.send(var.packetId, 'shared', self.entry['id'])
                             effect:
                               stroke:
                                 width: 2
                                 color: ~0,0,0,255
-              个人观察:
-                type: Observer
-                attribute:
-                  target: val.个人仓库列表['项']
-                  subscribe: var.personalWarehouses
-                  maxSize: 16
-              共享观察:
-                type: Observer
-                attribute:
-                  target: val.共享仓库列表['项']
-                  subscribe: var.sharedWarehouses
-                  maxSize: 32
 
           分类卡片:
             type: Texture
@@ -529,6 +577,16 @@ controls:
                   stroke:
                     width: 2
                     color: ~0,0,0,255
+              分类纵向滑块:
+                type: Texture
+                val: 分类纵向滑块
+                attribute:
+                  x: 214
+                  y: 142
+                  width: 6
+                  height: 50
+                  normal: ~120,120,120,200
+                  maxDragY: 390
               分类滚动:
                 type: Scroll
                 val: 分类滚动
@@ -537,11 +595,15 @@ controls:
                   y: 142
                   width: 220
                   height: 440
-                  moveY: var.categoryScrollRatio
+                  moveY: "self.parent['分类纵向滑块'].getDragYRatio()"
                 action:
                   wheel: |-
-                    var.categoryScrollRatio = Math.max(0, Math.min(1, var.categoryScrollRatio + self.wheelValue * 0.08))
-                    self.moveY = var.categoryScrollRatio
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['分类纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['分类纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
                 children:
                   分类列表:
                     val: 分类列表
@@ -553,30 +615,25 @@ controls:
                       项:
                         type: Texture
                         attribute:
-                          entry: var.categories[self.key]
+                          entryKey: 0
+                          entry: var.categories[self.entryKey]
                           visible: self.entry != null
                           width: 180
                           height: 44
-                          normal: "self.key == var.categoryId ? '120,190,255,230' : '255,255,255,145'"
+                          normal: "self.entry != null && self.entry['id'] == var.categoryId ? '120,190,255,230' : '255,255,255,145'"
                           hover: ~Frosted:0;255,255,255,240
                           shape: ~round_rect
                           radius: 12
-                          texts: "var.categoryTexts[self.key]"
+                          texts: "var.categoryTexts[self.entryKey]"
                           center: true
                           fontSize: 32
                         action:
                           clickLeft: |-
-                            Packet.send(var.packetId, 'category', self.key)
+                            Packet.send(var.packetId, 'category', self.entry['id'])
                         effect:
                           stroke:
                             width: 2
                             color: ~0,0,0,255
-              分类观察:
-                type: Observer
-                attribute:
-                  target: val.分类列表['项']
-                  subscribe: var.categories
-                  maxSize: 32
 
           仓库卡片:
             type: Texture
@@ -629,7 +686,15 @@ controls:
                       seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'select', self.entryKey)
+                        now = Time.currentTime()
+                        if(var.lastSlotClickSlot == self.entryKey && now - var.lastSlotClickTime < 300){
+                          Packet.send(var.packetId, 'withdraw_all', self.entryKey)
+                          var.lastSlotClickSlot = null
+                        }else{
+                          Packet.send(var.packetId, 'select', self.entryKey)
+                          var.lastSlotClickSlot = self.entryKey
+                          var.lastSlotClickTime = now
+                        }
                     effect:
                       stroke:
                         width: 2
@@ -768,13 +833,21 @@ controls:
                       entry: var.backpack[self.entryKey]
                       width: 62
                       height: 62
-                      normal: "~Frosted:0;95,95,95,255"
+                      normal: "self.entryKey == var.selectedBackpackSlot ? '120,190,255,255' : 'Frosted:0;95,95,95,255'"
                       hover: "~Frosted:0;255,255,255,255"
                       shape: ~round_rect
                       radius: 14
                     action:
                       clickLeft: |-
-                        Packet.send(var.packetId, 'deposit_slot', self.entryKey)
+                        now = Time.currentTime()
+                        if(var.lastBackpackClickSlot == self.entryKey && now - var.lastBackpackClickTime < 300){
+                          Packet.send(var.packetId, 'deposit_slot', self.entryKey, 0)
+                          var.lastBackpackClickSlot = null
+                        }else{
+                          var.selectedBackpackSlot = self.entryKey
+                          var.lastBackpackClickSlot = self.entryKey
+                          var.lastBackpackClickTime = now
+                        }
                     effect:
                       stroke:
                         width: 2
@@ -827,7 +900,7 @@ controls:
                   radius: 12
                 action:
                   textChange: |-
-                    var.withdrawAmount = self.getContent()
+                    var.amount = self.getContent()
                 effect:
                   stroke:
                     width: 2
@@ -848,7 +921,7 @@ controls:
                   fontSize: 38
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'withdraw', var.selectedSlot, var.withdrawAmount)
+                    Packet.send(var.packetId, 'withdraw', var.selectedSlot, var.amount)
                 effect:
                   stroke:
                     width: 2
@@ -870,6 +943,29 @@ controls:
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'withdraw_all', var.selectedSlot)
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              存入:
+                type: Texture
+                attribute:
+                  x: 710
+                  y: 22
+                  width: 110
+                  height: 48
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0存入"
+                  center: true
+                  fontSize: 38
+                action:
+                  clickLeft: |-
+                    if(var.selectedBackpackSlot != -1){
+                      Packet.send(var.packetId, 'deposit_slot', var.selectedBackpackSlot, var.amount)
+                    }
                 effect:
                   stroke:
                     width: 2

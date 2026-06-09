@@ -54,6 +54,9 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) return filter(ACTIONS, args[1]);
+        if (args.length == 3 && List.of("open", "info", "password", "bank").contains(args[1].toLowerCase(Locale.ROOT))) {
+            return null; // player names
+        }
         WarehouseService svc = serviceProvider.get();
         if (args.length == 4) {
             if ("password".equalsIgnoreCase(args[1])) return filter(List.of("clear"), args[3]);

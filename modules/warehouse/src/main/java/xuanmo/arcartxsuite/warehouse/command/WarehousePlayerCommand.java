@@ -10,6 +10,7 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import java.util.function.Supplier;
+import org.bukkit.Bukkit;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.warehouse.service.WarehouseService;
 
@@ -52,15 +53,61 @@ public final class WarehousePlayerCommand implements org.bukkit.command.TabExecu
                 }
             }
             case "preview" -> {
+                if (!player.hasPermission("arcartxsuite.warehouse.admin")) {
+                    player.sendMessage((messages != null ? messages.get("prefix") : "") + ChatColor.RED + "你没有权限使用此命令。");
+                    return true;
+                }
                 if (args.length < 2) {
                     player.sendMessage(fullMsg("player.preview.usage", label));
                     return true;
                 }
-                UUID targetUuid;
+                UUID targetUuid = null;
                 try {
                     targetUuid = UUID.fromString(args[1]);
-                } catch (IllegalArgumentException exception) {
-                    player.sendMessage(fullMsg("player.preview.invalid-uuid"));
+                } catch (IllegalArgumentException ignored) {
+                }
+                if (targetUuid == null) {
+                    Player online = Bukkit.getPlayer(args[1]);
+                    if (online != null) {
+                        targetUuid = online.getUniqueId();
+                    } else {
+                        org.bukkit.OfflinePlayer offline = Bukkit.getOfflinePlayer(args[1]);
+                        if (offline.hasPlayedBefore()) {
+                            targetUuid = offline.getUniqueId();
+                        }
+                    }
+                }
+                if (targetUuid == null) {
+                    player.sendMessage(fullMsg("player.preview.not-found", args[1]));
+                    return true;
+                }
+                String warehouseId = args.length > 2 ? args[2] : "";
+                WarehouseService.ActionResult previewResult = service.openPreview(player, targetUuid, warehouseId);
+                if (!previewResult.success()) {
+                    player.sendMessage((messages != null ? messages.get("prefix") : "") + ChatColor.RED + previewResult.message());
+                }
+            }
+            case "spreview" -> {
+                if (args.length < 2) {
+                    return true;
+                }
+                UUID targetUuid = null;
+                try {
+                    targetUuid = UUID.fromString(args[1]);
+                } catch (IllegalArgumentException ignored) {
+                }
+                if (targetUuid == null) {
+                    Player online = Bukkit.getPlayer(args[1]);
+                    if (online != null) {
+                        targetUuid = online.getUniqueId();
+                    } else {
+                        org.bukkit.OfflinePlayer offline = Bukkit.getOfflinePlayer(args[1]);
+                        if (offline.hasPlayedBefore()) {
+                            targetUuid = offline.getUniqueId();
+                        }
+                    }
+                }
+                if (targetUuid == null) {
                     return true;
                 }
                 String warehouseId = args.length > 2 ? args[2] : "";
@@ -97,6 +144,17 @@ public final class WarehousePlayerCommand implements org.bukkit.command.TabExecu
             List<String> completions = new ArrayList<>();
             for (String cmd : List.of("open", "showcase", "preview")) {
                 if (cmd.startsWith(prefix)) completions.add(cmd);
+            }
+            return completions;
+        }
+        if (args.length == 2 && "preview".equalsIgnoreCase(args[0])) {
+            String prefix = args[1].toLowerCase();
+            List<String> completions = new ArrayList<>();
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                String name = p.getName();
+                if (name.toLowerCase().startsWith(prefix)) {
+                    completions.add(name);
+                }
             }
             return completions;
         }
