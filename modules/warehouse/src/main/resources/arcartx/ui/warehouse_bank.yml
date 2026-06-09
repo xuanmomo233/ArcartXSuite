@@ -305,7 +305,7 @@ controls:
                 type: Texture
                 val: 余额纵向滑块
                 attribute:
-                  x: 445
+                  x: 494
                   y: 210
                   width: 6
                   height: 50
@@ -316,7 +316,7 @@ controls:
                 attribute:
                   x: 24
                   y: 210
-                  width: 440
+                  width: 460
                   height: 520
                   moveY: "self.parent['余额纵向滑块'].getDragYRatio()"
                 action:

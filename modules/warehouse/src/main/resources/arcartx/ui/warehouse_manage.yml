@@ -953,4 +953,4 @@ controls:
                         action:
                           clickLeft: |-
                             var.memberName = var.sharedMemberNames[self.entryKey]
-                            var.memberRole = var.sharedMemberRoles[self.entryKey] == 'viewer' ? 'viewer' : 'member'
+                            var.memberRole = (var.sharedMemberRoles[self.entryKey] == 'viewer' ? 'viewer' : 'member')
