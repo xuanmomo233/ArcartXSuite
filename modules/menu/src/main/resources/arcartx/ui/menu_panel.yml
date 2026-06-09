@@ -63,20 +63,20 @@ ui:
       var.buttonCount = 0
       var.footerRows = {}
       var.footerCount = 0
+      var.maxButtonCount = 128
+      for(i in range(0, var.maxButtonCount)){
+        key = i.round
+        mb = val.button_rows['menu_button'].copy('menu_button' + key)
+        mb.entryKey = key
+      }
+      var.maxFooterCount = 8
+      for(i in range(0, var.maxFooterCount)){
+        key = i.round
+        fb = val.footer_rows['footer_button'].copy('footer_button' + key)
+        fb.entryKey = key
+      }
 
 controls:
-  button_observer:
-    type: Observer
-    attribute:
-      target: val.button_rows['menu_button']
-      subscribe: var.buttonRows
-      maxSize: 128
-  footer_observer:
-    type: Observer
-    attribute:
-      target: val.footer_rows['footer_button']
-      subscribe: var.footerRows
-      maxSize: 8
   adaptive:
     type: Adaptive
     attribute:
@@ -174,7 +174,8 @@ controls:
                       menu_button:
                         type: Slot
                         attribute:
-                          entry: var.buttonRows[self.key]
+                          entryKey: 0
+                          entry: var.buttonRows[self.entryKey]
                           visible: self.entry != null
                           width: 218
                           height: 60
@@ -284,7 +285,8 @@ controls:
                   footer_button:
                     type: Slot
                     attribute:
-                      entry: var.footerRows[self.key]
+                      entryKey: 0
+                      entry: var.footerRows[self.entryKey]
                       visible: self.entry != null
                       width: 180
                       height: 48

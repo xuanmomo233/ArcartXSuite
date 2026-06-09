@@ -114,7 +114,7 @@ public final class MenuPacketFactory {
     }
 
     public static String rowKey(int index) {
-        return "b" + index;
+        return Integer.toString(index);
     }
 
     public static String runtimeUiId(MenuLayoutType layout, String panelUiId, String escUiId) {
