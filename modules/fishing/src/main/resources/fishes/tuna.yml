@@ -1,0 +1,20 @@
+id: "tuna"
+display-name: "金枪鱼"
+rarity: uncommon
+min-size: 30
+max-size: 120
+base-price: 250
+base-xp: 40
+seasons: [summer, fall]
+weathers: [clear]
+water-types: [ocean]
+time-ranges:
+  - start: "10:00"
+    end: "18:00"
+item: "minecraft:tropical_fish"
+difficulty: 50
+behaviors:
+  - type: dart
+    weight: 0.6
+  - type: sinker
+    weight: 0.4

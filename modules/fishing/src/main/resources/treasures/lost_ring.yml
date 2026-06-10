@@ -1,0 +1,6 @@
+id: "lost_ring"
+display-name: "遗失的戒指"
+item: "minecraft:gold_nugget"
+chance: 0.2
+min-amount: 1
+max-amount: 3

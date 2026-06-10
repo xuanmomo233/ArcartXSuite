@@ -1,0 +1,20 @@
+id: "sea_bass"
+display-name: "海鲈鱼"
+rarity: common
+min-size: 10
+max-size: 50
+base-price: 80
+base-xp: 15
+seasons: [spring, summer, fall, winter]
+weathers: [clear, rain]
+water-types: [ocean, river]
+time-ranges:
+  - start: "06:00"
+    end: "20:00"
+item: "minecraft:cod"
+difficulty: 30
+behaviors:
+  - type: smooth
+    weight: 0.6
+  - type: dart
+    weight: 0.4

@@ -1,0 +1,25 @@
+prefix: "&7[&b钓鱼&7] "
+
+fishing_start: "&e一条鱼上钩了！按住空格控制绿条，保持鱼在绿条内直到进度条填满！"
+fishing_success: "&a成功钓起 &e{0} &a(&7尺寸: {1}&a, &7品质: {2}&a)！获得 &e{3} &a经验！"
+fishing_failed: "&c鱼逃走了..."
+fishing_first_catch: "&6&e第一次钓到 {0}！"
+fishing_level_up: "&a恭喜！你的钓鱼等级提升到 &e{0}&a！"
+fishing_treasure_found: "&6你发现了一个宝箱：&e{0}"
+
+command_no_permission: "&c你没有权限使用此命令。"
+command_stats_header: "&6=== {0} 的钓鱼统计 ==="
+command_stats_level: "&7等级: &f{0}"
+command_stats_xp: "&7经验: &f{0}"
+command_stats_total_caught: "&7总捕获: &f{0}"
+command_stats_perfect: "&7完美钓鱼: &f{0}"
+command_stats_collection: "&7图鉴进度: &f{0}/{1}"
+command_give_xp: "&a给予 &e{0} &a{1} 点钓鱼经验。"
+command_reset: "&a已重置 &e{0} &a的钓鱼数据。"
+command_player_not_found: "&c玩家 {0} 不在线。"
+
+fishing_inventory_full: "&c你的背包已满，鱼掉落在地上了！"
+
+sell_not_fish: "&c手中物品不是钓鱼产物，无法出售。"
+sell_success: "&a成功出售 &e{0} &a获得 &6{1} {2}&a！"
+sell_none: "&c背包中没有可出售的鱼。"

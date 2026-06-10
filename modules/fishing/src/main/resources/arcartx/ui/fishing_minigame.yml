@@ -1,0 +1,174 @@
+# AXS 钓鱼小游戏 HUD
+# 数据交互: packetHandler init/update
+
+ui:
+  isHud: true
+  background: false
+  escClose: false
+  closeDied: true
+  through: true
+  screenScale: true
+  show: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.fishId = packet['fishId']
+      var.fishName = packet['fishName']
+      var.fishY = packet['fishY']
+      var.barY = packet['barY']
+      var.barHeight = packet['barHeight']
+      var.progress = packet['progress']
+      var.state = packet['state']
+      var.timeLeft = packet['timeLeft']
+      var.caughtSize = packet['caughtSize']
+      var.rarity = packet['rarity']
+      var.fishInside = false
+    update: |-
+      var.fishY = packet['fishY']
+      var.barY = packet['barY']
+      var.barHeight = packet['barHeight']
+      var.progress = packet['progress']
+      var.state = packet['state']
+      var.timeLeft = packet['timeLeft']
+      var.fishInside = packet['fishInside']
+  action:
+    load: |-
+      var.packetId = 'AXS_FISHING'
+      var.fishId = ''
+      var.fishName = ''
+      var.fishY = 0.5
+      var.barY = 0.5
+      var.barHeight = 0.24
+      var.progress = 0.5
+      var.state = 'playing'
+      var.timeLeft = 600
+      var.caughtSize = 0
+      var.rarity = 'common'
+      var.fishInside = false
+    keyPress: |-
+      if(self.currentKeyPress() == ' ' || self.currentKeyPress() == 'SPACE'){
+        Packet.send(var.packetId, 'input', true)
+      }
+    keyRelease: |-
+      if(self.currentKeyReleased() == ' ' || self.currentKeyReleased() == 'SPACE'){
+        Packet.send(var.packetId, 'input', false)
+      }
+    click: |-
+      Packet.send(var.packetId, 'input', true)
+    release: |-
+      Packet.send(var.packetId, 'input', false)
+
+controls:
+  根:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      钓鱼轨道区:
+        type: Canvas
+        attribute:
+          x: 100
+          y: 240
+          width: 140
+          height: 600
+        children:
+          轨道背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~40,40,50,200
+              shape: ~round_rect
+              radius: 12
+            effect:
+              stroke:
+                width: 2
+                color: ~80,120,160,180
+
+          绿条:
+            type: Texture
+            attribute:
+              x: 10
+              y: "(1 - var.barY - var.barHeight / 2) * 580"
+              width: 120
+              height: "var.barHeight * 580"
+              normal: ~100,200,100,220
+              shape: ~round_rect
+              radius: 8
+            visible: "var.state == 'playing'"
+
+          鱼图标:
+            type: Text
+            attribute:
+              x: 70
+              y: "(1 - var.fishY) * 580 - 18"
+              texts: "'&f\\u2693'"
+              fontSize: 36
+              center: true
+            visible: "var.state == 'playing'"
+            effect:
+              shadow:
+                xOffset: 1
+                yOffset: 1
+                blur: 3
+                color: ~0,0,0,200
+
+      进度条区:
+        type: Canvas
+        attribute:
+          x: 280
+          y: 240
+          width: 48
+          height: 600
+        children:
+          进度条背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~50,50,60,200
+              shape: ~round_rect
+              radius: 16
+
+          进度条填充:
+            type: Texture
+            attribute:
+              x: 8
+              y: "(1 - var.progress) * 584 + 8"
+              width: 32
+              height: "var.progress * 584"
+              normal: "var.progress >= 1.0 ? '100,200,120,255' : (var.fishInside ? '100,180,230,240' : '200,100,100,240')"
+              shape: ~round_rect
+              radius: 12
+
+      顶部信息:
+        type: Canvas
+        attribute:
+          x: 100
+          y: 160
+          width: 500
+          height: 60
+        children:
+          鱼名称:
+            type: Text
+            attribute:
+              x: 0
+              y: 0
+              texts: "'&e' + var.fishName + ' &7(尺寸: ' + var.caughtSize + ')'"
+              fontSize: 40
+
+          剩余时间:
+            type: Text
+            attribute:
+              x: 0
+              y: 36
+              texts: "'&7剩余时间: &f' + Math.ceil(var.timeLeft / 20).round + ' 秒'"
+              fontSize: 28
+
+          状态提示:
+            type: Text
+            attribute:
+              x: 280
+              y: 0
+              texts: "var.state == 'success' ? '&a成功！' : (var.state == 'failed' ? '&c失败...' : '&7按住空格控制绿条')"
+              fontSize: 32

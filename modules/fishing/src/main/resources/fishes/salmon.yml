@@ -1,0 +1,20 @@
+id: "salmon"
+display-name: "鲑鱼"
+rarity: common
+min-size: 15
+max-size: 60
+base-price: 100
+base-xp: 20
+seasons: [spring, fall]
+weathers: [clear, rain]
+water-types: [river]
+time-ranges:
+  - start: "06:00"
+    end: "19:00"
+item: "minecraft:salmon"
+difficulty: 35
+behaviors:
+  - type: smooth
+    weight: 0.7
+  - type: floater
+    weight: 0.3

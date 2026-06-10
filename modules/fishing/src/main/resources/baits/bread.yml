@@ -1,0 +1,9 @@
+id: "bread"
+display-name: "面包屑"
+item: "minecraft:bread"
+default: false
+fish-attract-modifiers:
+  sea_bass: 1.3
+  salmon: 1.2
+treasure-chance-boost: 0.0
+max-durability-bonus: 0

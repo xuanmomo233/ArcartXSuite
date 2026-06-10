@@ -1,0 +1,22 @@
+id: "legendary_carp"
+display-name: "传说鲤鱼"
+rarity: legendary
+min-size: 80
+max-size: 250
+base-price: 2000
+base-xp: 300
+seasons: [spring]
+weathers: [rain]
+water-types: [lake]
+time-ranges:
+  - start: "05:00"
+    end: "07:00"
+item: "minecraft:enchanted_golden_apple"
+difficulty: 90
+behaviors:
+  - type: dart
+    weight: 0.5
+  - type: sinker
+    weight: 0.3
+  - type: floater
+    weight: 0.2

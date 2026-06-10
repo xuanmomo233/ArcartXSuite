@@ -1,0 +1,224 @@
+# AXS 钓鱼图鉴界面
+# 打开方式: /fishing
+# 数据交互: packetHandler init/update
+
+ui:
+  isHud: false
+  background: true
+  escClose: true
+  closeDied: true
+  through: false
+  screenScale: true
+  show: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.playerLevel = packet['playerLevel']
+      var.totalXp = packet['totalXp']
+      var.totalCaught = packet['totalCaught']
+      var.collectionCount = packet['collectionCount']
+      var.totalFishTypes = packet['totalFishTypes']
+      var.collectionPercent = packet['collectionPercent']
+      var.fishList = packet['fishList']
+      for(i in range(0, var.maxFishCount)){
+        key = i.round
+        item = val.鱼类列表['鱼条目' + key]
+        if(item != null){
+          item.entryKey = key
+        }
+      }
+    update: |-
+      var.packetId = packet['packetId']
+      var.playerLevel = packet['playerLevel']
+      var.totalXp = packet['totalXp']
+      var.totalCaught = packet['totalCaught']
+      var.collectionCount = packet['collectionCount']
+      var.totalFishTypes = packet['totalFishTypes']
+      var.collectionPercent = packet['collectionPercent']
+      var.fishList = packet['fishList']
+  action:
+    load: |-
+      var.packetId = 'AXS_FISHING'
+      var.playerLevel = 1
+      var.totalXp = 0
+      var.totalCaught = 0
+      var.collectionCount = 0
+      var.totalFishTypes = 0
+      var.collectionPercent = 0
+      var.fishList = {}
+      var.maxFishCount = 30
+      for(i in range(0, var.maxFishCount)){
+        key = i.round
+        item = val.鱼类列表['鱼条目'].copy('鱼条目' + key)
+        item.entryKey = key
+      }
+
+controls:
+  根:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      主面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 800
+          height: 600
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~35,35,45,235
+              shape: ~round_rect
+              radius: 24
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,180
+              shadow:
+                xOffset: 2
+                yOffset: 2
+                blur: 6
+                color: ~0,0,0,120
+
+          标题:
+            type: Text
+            attribute:
+              x: 36
+              y: 28
+              texts: "&e&l钓鱼图鉴"
+              fontSize: 56
+
+          关闭按钮:
+            type: Texture
+            attribute:
+              x: 710
+              y: 24
+              width: 56
+              height: 56
+              normal: ~180,60,60,200
+              hover: ~Frosted:0;220,80,80,230
+              shape: ~round_rect
+              radius: 14
+            action:
+              clickLeft: |-
+                Screen.close()
+            effect:
+              stroke:
+                width: 2
+                color: ~255,120,120,120
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 14
+                  through: true
+                  center: true
+                  fontSize: 36
+                  texts: '&fX'
+
+          统计信息:
+            type: Canvas
+            attribute:
+              x: 36
+              y: 100
+              width: 728
+              height: 80
+            children:
+              等级文本:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 0
+                  texts: "'&fLv.' + var.playerLevel"
+                  fontSize: 36
+              经验文本:
+                type: Text
+                attribute:
+                  x: 0
+                  y: 38
+                  texts: "'&7总经验: &f' + var.totalXp"
+                  fontSize: 28
+              捕获统计:
+                type: Text
+                attribute:
+                  x: 200
+                  y: 0
+                  texts: "'&7捕获: &f' + var.totalCaught + ' 条'"
+                  fontSize: 28
+              图鉴进度:
+                type: Text
+                attribute:
+                  x: 200
+                  y: 38
+                  texts: "'&7图鉴: &f' + var.collectionCount + '/' + var.totalFishTypes + ' (' + var.collectionPercent + '%)'"
+                  fontSize: 28
+
+          滚动区:
+            type: Scroll
+            attribute:
+              x: 36
+              y: 200
+              width: 728
+              height: 370
+              moveY: 0
+            action:
+              wheel: |-
+                if(self.wheelValue > 0){
+                  self.moveY = Math.max(0, self.moveY - 0.1)
+                }elif(self.wheelValue < 0){
+                  self.moveY = Math.min(1, self.moveY + 0.1)
+                }
+            children:
+              鱼类列表:
+                val: 鱼类列表
+                type: VStack
+                attribute:
+                  width: 728
+                  spaceBetween: 6
+                children:
+                  鱼条目:
+                    type: Texture
+                    attribute:
+                      entryKey: 0
+                      entry: var.fishList[self.entryKey]
+                      visible: self.entry != null
+                      width: 728
+                      height: 50
+                      normal: "self.entry != null && self.entry['caught'] ? '60,80,60,200' : '60,60,70,200'"
+                      shape: ~round_rect
+                      radius: 8
+                    effect:
+                      stroke:
+                        width: 1
+                        color: ~80,180,255,60
+                    children:
+                      鱼名:
+                        type: Text
+                        attribute:
+                          x: 12
+                          y: 8
+                          texts: "self.parent.entry != null ? ('&f' + self.parent.entry['name'] + (self.parent.entry['caught'] ? ' &a✓' : ' &7?')) : ''"
+                          fontSize: 28
+                          through: true
+                      稀有度:
+                        type: Text
+                        attribute:
+                          x: 12
+                          y: 28
+                          texts: "self.parent.entry != null ? ('&7' + self.parent.entry['rarity']) : ''"
+                          fontSize: 22
+                          through: true
+                      最大尺寸:
+                        type: Text
+                        attribute:
+                          x: 500
+                          y: 14
+                          texts: "self.parent.entry != null && self.parent.entry['caught'] ? ('&7最大: &f' + self.parent.entry['maxSize']) : '&7未捕获'"
+                          fontSize: 24
+                          through: true

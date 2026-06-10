@@ -1,0 +1,20 @@
+id: "pufferfish"
+display-name: "河豚"
+rarity: uncommon
+min-size: 5
+max-size: 25
+base-price: 200
+base-xp: 35
+seasons: [summer]
+weathers: [clear, rain]
+water-types: [ocean]
+time-ranges:
+  - start: "12:00"
+    end: "16:00"
+item: "minecraft:pufferfish"
+difficulty: 55
+behaviors:
+  - type: dart
+    weight: 0.8
+  - type: floater
+    weight: 0.2

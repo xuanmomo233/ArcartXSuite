@@ -1,0 +1,20 @@
+id: "catfish"
+display-name: "鲶鱼"
+rarity: rare
+min-size: 40
+max-size: 150
+base-price: 500
+base-xp: 80
+seasons: [spring, summer]
+weathers: [rain]
+water-types: [river, lake]
+time-ranges:
+  - start: "18:00"
+    end: "06:00"
+item: "minecraft:cooked_cod"
+difficulty: 70
+behaviors:
+  - type: sinker
+    weight: 0.7
+  - type: smooth
+    weight: 0.3

@@ -1,0 +1,9 @@
+id: "corn"
+display-name: "玉米粒"
+item: "minecraft:wheat_seeds"
+default: false
+fish-attract-modifiers:
+  legendary_carp: 2.5
+  catfish: 1.8
+treasure-chance-boost: 0.05
+max-durability-bonus: 0

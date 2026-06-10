@@ -1,0 +1,9 @@
+id: "worm"
+display-name: "蚯蚓"
+item: "minecraft:string"
+default: true
+fish-attract-modifiers:
+  catfish: 2.0
+  sea_bass: 1.5
+treasure-chance-boost: 0.02
+max-durability-bonus: 0
