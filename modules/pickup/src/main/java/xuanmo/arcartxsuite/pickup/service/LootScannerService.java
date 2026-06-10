@@ -469,16 +469,12 @@ public final class LootScannerService implements Listener {
             if (i < state.visibleItems.size()) {
                 LootEntry entry = state.visibleItems.get(i);
                 payload.put(prefix + "Visible", true);
-                payload.put(prefix + "Name", entry.displayName);
                 payload.put(prefix + "Amount", entry.amount);
-                payload.put(prefix + "Material", entry.material);
                 payload.put(prefix + "ItemJson", entry.itemJson);
                 payload.put(prefix + "Uuid", entry.entityUuid.toString());
             } else {
                 payload.put(prefix + "Visible", false);
-                payload.put(prefix + "Name", "");
                 payload.put(prefix + "Amount", 0);
-                payload.put(prefix + "Material", "");
                 payload.put(prefix + "ItemJson", "");
                 payload.put(prefix + "Uuid", "");
             }
@@ -570,9 +566,16 @@ public final class LootScannerService implements Listener {
         }
     }
 
-    /** 解析物品显示名：优先取 ItemMeta 自定义名，否则将材质名转为首字母大写格式。 */
-    private static String resolveDisplayName(ItemStack itemStack) {
+    /** 解析物品显示名：优先通过 ArcartX 桥接取本地化名称，其次取 ItemMeta 自定义名，最后将材质名转为首字母大写格式。 */
+    private String resolveDisplayName(ItemStack itemStack) {
         if (itemStack == null) return "Unknown";
+        // 优先尝试通过 ArcartX 桥接获取本地化名称（可能包含中文）
+        if (itemStackBridge != null && itemStackBridge.isAvailable()) {
+            java.util.Optional<String> localized = itemStackBridge.getItemDisplayName(itemStack);
+            if (localized.isPresent() && !localized.get().isBlank()) {
+                return localized.get();
+            }
+        }
         ItemMeta meta = itemStack.getItemMeta();
         if (meta != null && meta.hasDisplayName()) {
             String name = meta.getDisplayName();

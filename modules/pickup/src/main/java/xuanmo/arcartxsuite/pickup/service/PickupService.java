@@ -8,17 +8,19 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration;
@@ -39,6 +41,7 @@ public final class PickupService implements Listener {
     private final Map<UUID, Deque<Map<String, Object>>> pendingPickups = new HashMap<>();
     /** 手动关闭拾取通知的玩家集合 */
     private final Set<UUID> disabledPlayers = new HashSet<>();
+    private Supplier<EventBusCapability> eventBusProvider;
     private boolean active;
 
     public PickupService(
@@ -59,11 +62,23 @@ public final class PickupService implements Listener {
         active = true;
         Bukkit.getPluginManager().registerEvents(this, plugin);
         Bukkit.getScheduler().runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS);
+        // reload 后 ArcartX 客户端重建 HUD 可能需要更长时间，安排二次确认重试
+        Bukkit.getScheduler().runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS + FALLBACK_OPEN_PACKET_DELAY_TICKS);
+    }
+
+    public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
+        this.eventBusProvider = eventBusProvider;
     }
 
     public void shutdown() {
         active = false;
         HandlerList.unregisterAll(this);
+        for (UUID playerId : openedPlayers) {
+            Player player = Bukkit.getPlayer(playerId);
+            if (player != null && player.isOnline()) {
+                bridge.closeUi(player, uiId);
+            }
+        }
         openedPlayers.clear();
         openingPlayers.clear();
         pendingPickups.clear();
@@ -98,7 +113,7 @@ public final class PickupService implements Listener {
         return !disabledPlayers.contains(playerId);
     }
 
-    @EventHandler(ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityPickupItem(EntityPickupItemEvent event) {
         if (!(event.getEntity() instanceof Player player) || !player.isOnline()) {
             return;
@@ -110,9 +125,7 @@ public final class PickupService implements Listener {
         ItemStack itemStack = event.getItem().getItemStack();
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("itemJson", itemStackBridge.itemToJson(itemStack).orElse(""));
-        payload.put("displayName", resolveDisplayName(itemStack));
         payload.put("amount", itemStack.getAmount());
-        payload.put("material", itemStack.getType().name());
 
         UUID playerId = player.getUniqueId();
         if (openedPlayers.contains(playerId)) {
@@ -125,6 +138,17 @@ public final class PickupService implements Listener {
             removeQueuedPayload(playerId, queuedPayload);
             logPickupPacket(player, payload, false);
         }
+        publishPickupEvent(player, itemStack);
+    }
+
+    private void publishPickupEvent(Player player, ItemStack itemStack) {
+        if (eventBusProvider == null) return;
+        EventBusCapability eventBus = eventBusProvider.get();
+        if (eventBus == null) return;
+        Map<String, String> eventPayload = new HashMap<>();
+        eventPayload.put("material", itemStack.getType().name());
+        eventPayload.put("amount", String.valueOf(itemStack.getAmount()));
+        eventBus.publish("axs.pickup.item_pickup", player, eventPayload);
     }
 
     @EventHandler
@@ -240,33 +264,4 @@ public final class PickupService implements Listener {
         }
     }
 
-    private static String resolveDisplayName(ItemStack itemStack) {
-        if (itemStack == null) {
-            return "Unknown Item";
-        }
-        ItemMeta itemMeta = itemStack.getItemMeta();
-        if (itemMeta != null && itemMeta.hasDisplayName()) {
-            String displayName = itemMeta.getDisplayName();
-            if (displayName != null && !displayName.isBlank()) {
-                return displayName;
-            }
-        }
-
-        Material material = itemStack.getType();
-        String[] parts = material.name().toLowerCase().split("_");
-        StringBuilder builder = new StringBuilder();
-        for (String part : parts) {
-            if (part.isBlank()) {
-                continue;
-            }
-            if (builder.length() > 0) {
-                builder.append(' ');
-            }
-            builder.append(Character.toUpperCase(part.charAt(0)));
-            if (part.length() > 1) {
-                builder.append(part.substring(1));
-            }
-        }
-        return builder.length() == 0 ? material.name() : builder.toString();
-    }
 }

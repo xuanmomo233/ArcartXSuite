@@ -1,4 +1,4 @@
-# AXS pickup_hud; version=5; maxVisible=4; ttlMs=3000
+# AXS pickup_hud; version=6; maxVisible=4; ttlMs=3000
 ui:
   isHud: true
   defaultOpen: false
@@ -12,30 +12,22 @@ ui:
       var.now = Time.currentTime()
       var.entry4Visible = var.entry3Visible
       var.entry4CreatedAt = var.entry3CreatedAt
-      var.entry4DisplayName = var.entry3DisplayName
       var.entry4Amount = var.entry3Amount
-      var.entry4Material = var.entry3Material
       var.entry4ItemJson = var.entry3ItemJson
       var.entry4IconDirty = true
       var.entry3Visible = var.entry2Visible
       var.entry3CreatedAt = var.entry2CreatedAt
-      var.entry3DisplayName = var.entry2DisplayName
       var.entry3Amount = var.entry2Amount
-      var.entry3Material = var.entry2Material
       var.entry3ItemJson = var.entry2ItemJson
       var.entry3IconDirty = true
       var.entry2Visible = var.entry1Visible
       var.entry2CreatedAt = var.entry1CreatedAt
-      var.entry2DisplayName = var.entry1DisplayName
       var.entry2Amount = var.entry1Amount
-      var.entry2Material = var.entry1Material
       var.entry2ItemJson = var.entry1ItemJson
       var.entry2IconDirty = true
       var.entry1Visible = true
       var.entry1CreatedAt = var.now
-      var.entry1DisplayName = packet['displayName']
       var.entry1Amount = packet['amount']
-      var.entry1Material = packet['material']
       var.entry1ItemJson = packet['itemJson']
       var.entry1IconDirty = true
   action:
@@ -44,30 +36,22 @@ ui:
       var.now = 0
       var.entry1Visible = false
       var.entry1CreatedAt = 0
-      var.entry1DisplayName = ''
       var.entry1Amount = 0
-      var.entry1Material = ''
       var.entry1ItemJson = ''
       var.entry1IconDirty = false
       var.entry2Visible = false
       var.entry2CreatedAt = 0
-      var.entry2DisplayName = ''
       var.entry2Amount = 0
-      var.entry2Material = ''
       var.entry2ItemJson = ''
       var.entry2IconDirty = false
       var.entry3Visible = false
       var.entry3CreatedAt = 0
-      var.entry3DisplayName = ''
       var.entry3Amount = 0
-      var.entry3Material = ''
       var.entry3ItemJson = ''
       var.entry3IconDirty = false
       var.entry4Visible = false
       var.entry4CreatedAt = 0
-      var.entry4DisplayName = ''
       var.entry4Amount = 0
-      var.entry4Material = ''
       var.entry4ItemJson = ''
       var.entry4IconDirty = false
     tick: |-
@@ -87,31 +71,28 @@ ui:
       if(var.entry1IconDirty){
         if(var.entry1ItemJson != ''){
           val.pickup_slot_1.setItemIcon(var.entry1ItemJson)
-          var.entry1DisplayName = val.pickup_slot_1.getName()
         }
         var.entry1IconDirty = false
       }
       if(var.entry2IconDirty){
         if(var.entry2ItemJson != ''){
           val.pickup_slot_2.setItemIcon(var.entry2ItemJson)
-          var.entry2DisplayName = val.pickup_slot_2.getName()
         }
         var.entry2IconDirty = false
       }
       if(var.entry3IconDirty){
         if(var.entry3ItemJson != ''){
           val.pickup_slot_3.setItemIcon(var.entry3ItemJson)
-          var.entry3DisplayName = val.pickup_slot_3.getName()
         }
         var.entry3IconDirty = false
       }
       if(var.entry4IconDirty){
         if(var.entry4ItemJson != ''){
           val.pickup_slot_4.setItemIcon(var.entry4ItemJson)
-          var.entry4DisplayName = val.pickup_slot_4.getName()
         }
         var.entry4IconDirty = false
       }
+
 
 controls:
   adaptive:
@@ -125,14 +106,14 @@ controls:
         type: VStack
         attribute:
           point: ~bottom_right
-          x: -210
+          x: -300
           y: -120
           spaceBetween: 8
         children:
           pickup_entry_1:
             type: Canvas
             attribute:
-              width: 240
+              width: self['text1'].width + 80
               height: 60
               visible: var.entry1Visible
             children:
@@ -167,21 +148,12 @@ controls:
                   point: ~middle_left
                   x: 60
                   y: 0
-                  texts: "var.entry1DisplayName + ' &fx' + var.entry1Amount.round()"
+                  texts: "val.pickup_slot_1.getSlotItemStack().getName() + ' &fx' + var.entry1Amount.round()"
                   fontSize: 36
-
-              #material1:
-              #  type: Text
-              #  attribute:
-              #    point: ~top_left
-              #    x: 62
-              #    y: 31
-              #    texts: "'&8' + var.entry1Material"
-              #    fontSize: 18
           pickup_entry_2:
             type: Canvas
             attribute:
-              width: 240
+              width: self['text2'].width + 80
               height: 60
               visible: var.entry2Visible
             children:
@@ -216,13 +188,13 @@ controls:
                   point: ~middle_left
                   x: 60
                   y: 0
-                  texts: "var.entry2DisplayName + ' &fx' + var.entry2Amount.round()"
+                  texts: "val.pickup_slot_2.getSlotItemStack().getName() + ' &fx' + var.entry2Amount.round()"
                   fontSize: 36
 
           pickup_entry_3:
             type: Canvas
             attribute:
-              width: 240
+              width: self['text3'].width + 80
               height: 60
               visible: var.entry3Visible
             children:
@@ -257,13 +229,13 @@ controls:
                   point: ~middle_left
                   x: 60
                   y: 0
-                  texts: "var.entry3DisplayName + ' &fx' + var.entry3Amount.round()"
+                  texts: "val.pickup_slot_3.getSlotItemStack().getName() + ' &fx' + var.entry3Amount.round()"
                   fontSize: 36
 
           pickup_entry_4:
             type: Canvas
             attribute:
-              width: 240
+              width: self['text4'].width + 80
               height: 60
               visible: var.entry4Visible
             children:
@@ -298,6 +270,6 @@ controls:
                   point: ~middle_left
                   x: 60
                   y: 0
-                  texts: "var.entry4DisplayName + ' &fx' + var.entry4Amount.round()"
+                  texts: "val.pickup_slot_4.getSlotItemStack().getName() + ' &fx' + var.entry4Amount.round()"
                   fontSize: 36
 

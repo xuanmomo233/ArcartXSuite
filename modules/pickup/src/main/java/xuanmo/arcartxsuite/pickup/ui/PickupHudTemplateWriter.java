@@ -15,7 +15,7 @@ public final class PickupHudTemplateWriter {
     }
 
     public static String signature(int maxVisible, long entryTtlMs) {
-        return "# AXS pickup_hud; version=5; maxVisible=" + maxVisible + "; ttlMs=" + entryTtlMs;
+        return "# AXS pickup_hud; version=6; maxVisible=" + maxVisible + "; ttlMs=" + entryTtlMs;
     }
 
     private static String build(int maxVisible, long entryTtlMs) {
@@ -36,17 +36,13 @@ public final class PickupHudTemplateWriter {
             int previous = index - 1;
             line(builder, 3, "var.entry" + index + "Visible = var.entry" + previous + "Visible");
             line(builder, 3, "var.entry" + index + "CreatedAt = var.entry" + previous + "CreatedAt");
-            line(builder, 3, "var.entry" + index + "DisplayName = var.entry" + previous + "DisplayName");
             line(builder, 3, "var.entry" + index + "Amount = var.entry" + previous + "Amount");
-            line(builder, 3, "var.entry" + index + "Material = var.entry" + previous + "Material");
             line(builder, 3, "var.entry" + index + "ItemJson = var.entry" + previous + "ItemJson");
             line(builder, 3, "var.entry" + index + "IconDirty = true");
         }
         line(builder, 3, "var.entry1Visible = true");
         line(builder, 3, "var.entry1CreatedAt = var.now");
-        line(builder, 3, "var.entry1DisplayName = packet['displayName']");
         line(builder, 3, "var.entry1Amount = packet['amount']");
-        line(builder, 3, "var.entry1Material = packet['material']");
         line(builder, 3, "var.entry1ItemJson = packet['itemJson']");
         line(builder, 3, "var.entry1IconDirty = true");
         line(builder, 1, "action:");
@@ -56,9 +52,7 @@ public final class PickupHudTemplateWriter {
         for (int index = 1; index <= maxVisible; index++) {
             line(builder, 3, "var.entry" + index + "Visible = false");
             line(builder, 3, "var.entry" + index + "CreatedAt = 0");
-            line(builder, 3, "var.entry" + index + "DisplayName = ''");
             line(builder, 3, "var.entry" + index + "Amount = 0");
-            line(builder, 3, "var.entry" + index + "Material = ''");
             line(builder, 3, "var.entry" + index + "ItemJson = ''");
             line(builder, 3, "var.entry" + index + "IconDirty = false");
         }
@@ -73,12 +67,10 @@ public final class PickupHudTemplateWriter {
             line(builder, 3, "if(var.entry" + index + "IconDirty){");
             line(builder, 4, "if(var.entry" + index + "ItemJson != ''){");
             line(builder, 5, "val.pickup_slot_" + index + ".setItemIcon(var.entry" + index + "ItemJson)");
-            line(builder, 5, "var.entry" + index + "DisplayName = val.pickup_slot_" + index + ".getName()");
             line(builder, 4, "}");
             line(builder, 4, "var.entry" + index + "IconDirty = false");
             line(builder, 3, "}");
         }
-
         line(builder, 0, "");
         line(builder, 0, "controls:");
         line(builder, 1, "adaptive:");
@@ -139,7 +131,7 @@ public final class PickupHudTemplateWriter {
             line(builder, 9, "point: ~middle_left");
             line(builder, 9, "x: 60");
             line(builder, 9, "y: 0");
-            line(builder, 9, "texts: \"var.entry" + index + "DisplayName + ' &fx' + var.entry" + index + "Amount.round()\"");
+            line(builder, 9, "texts: \"val.pickup_slot_" + index + ".getSlotItemStack().getName() + ' &fx' + var.entry" + index + "Amount.round()\"");
             line(builder, 9, "fontSize: 36");
         }
 

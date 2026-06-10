@@ -127,6 +127,7 @@ public final class PickupModule extends AbstractAXSModule {
             context.plugin(), configuration, packetBridge, itemStackBridge,
             uiBinding.runtimeUiId()
         );
+        notificationService.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         notificationService.start();
 
         // 注册通知能力，让 warehouse 等模块知道该玩家已有 HUD 拾取通知
