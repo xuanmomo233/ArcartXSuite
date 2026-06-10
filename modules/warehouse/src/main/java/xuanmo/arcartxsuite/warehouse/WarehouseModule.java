@@ -187,6 +187,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
             () -> context.getCapability(PickupNotifiable.class),
             context.crossServer(), crossServerChannelConfig
         );
+        service.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
         adminCommand = new WarehouseAdminCommand(() -> service, messages());
 

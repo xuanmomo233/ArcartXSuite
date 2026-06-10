@@ -13,6 +13,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -54,6 +55,7 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
@@ -140,6 +142,7 @@ public final class WarehouseService implements Listener {
     private final CrossServerAPI crossServerApi;
     private final CrossServerChannelConfig crossServerChannelConfig;
     private WarehouseCrossServerLockService crossServerLockService;
+    private Supplier<EventBusCapability> eventBusProvider;
     /** 玩家上次展示仓库的时间戳（毫秒），用于冷却控制。 */
     private final ConcurrentMap<UUID, Long> showcaseCooldowns = new ConcurrentHashMap<>();
     private String storageRuntimeUiId = "";
@@ -201,6 +204,10 @@ public final class WarehouseService implements Listener {
     /**
      * 启动服务：初始化数据库、绑定三套 AXUI、注册 Bukkit 事件监听。
      */
+    public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
+        this.eventBusProvider = eventBusProvider;
+    }
+
     public void start() throws Exception {
         repository.initialize();
         bindUis();
@@ -298,6 +305,9 @@ public final class WarehouseService implements Listener {
         }
         try {
             DepositResult result = depositStack(player, OWNER_PERSONAL, player.getUniqueId().toString(), firstPersonalWarehouseId(), stack);
+            if (result.success()) {
+                publishDepositEvent(player, stack, result.storedAmount());
+            }
             return new WarehouseAutoDepositable.DepositResult(
                 result.success(),
                 result.storedAmount(),
@@ -310,6 +320,16 @@ public final class WarehouseService implements Listener {
             }
             return new WarehouseAutoDepositable.DepositResult(false, 0L, stack.getAmount(), "自动入库失败。");
         }
+    }
+
+    private void publishDepositEvent(Player player, ItemStack stack, long storedAmount) {
+        if (eventBusProvider == null) return;
+        EventBusCapability eventBus = eventBusProvider.get();
+        if (eventBus == null) return;
+        Map<String, String> payload = new HashMap<>();
+        payload.put("material", stack.getType().name());
+        payload.put("amount", String.valueOf(storedAmount));
+        eventBus.publish("axs.warehouse.item_deposited", player, payload);
     }
 
     /**
