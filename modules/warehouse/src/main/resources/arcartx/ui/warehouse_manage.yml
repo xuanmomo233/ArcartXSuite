@@ -136,15 +136,13 @@ ui:
       var.autoPickupNotify = true
       var.maxManageCount = 32
       for(i in range(0, var.maxManageCount)){
-        key = i.round
-        item = val.共享列表['项'].copy('项' + key)
-        item.entryKey = key
+        item = val.共享列表['项'].copy('项' + i.round)
+        item.entryKey = i.round
       }
       var.maxMemberCount = 32
       for(i in range(0, var.maxMemberCount)){
-        key = i.round
-        member = val.成员列表['项'].copy('项' + key)
-        member.entryKey = key
+        member = val.成员列表['项'].copy('项' + i.round)
+        member.entryKey = i.round
       }
     open: |-
       Packet.send(var.packetId, 'refresh')

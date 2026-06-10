@@ -66,9 +66,11 @@ ui:
         }
       }
       for(i in range(0, 54)){
-        icon = val.仓库网格['物品图标' + i.round]
-        if(icon != null){
-          icon.seticon()
+        if(val.仓库网格.get(i.round) != null){
+          icon = val.仓库网格.get(i.round)
+          if(icon != null){
+            icon.seticon()
+          }
         }
       }
     update: |-
