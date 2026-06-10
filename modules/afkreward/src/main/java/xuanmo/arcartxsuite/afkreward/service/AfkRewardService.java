@@ -13,17 +13,24 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
+import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
+import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
+import xuanmo.arcartxsuite.api.capability.EssentialsQueryable;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.afkreward.config.AfkRewardConfiguration;
 import xuanmo.arcartxsuite.afkreward.model.AfkArea;
 import xuanmo.arcartxsuite.afkreward.model.AfkRewardType;
 import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository;
+import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository.AreaStats;
 import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository.PlayerStats;
 
 public final class AfkRewardService {
@@ -37,10 +44,18 @@ public final class AfkRewardService {
     private final Logger logger;
     private final MessageProvider messages;
 
+    private final Supplier<MailDispatchable> mailProvider;
+    private final Supplier<SignalDispatchable> signalProvider;
+    private final Supplier<SubtitlePlayable> subtitleProvider;
+    private final Supplier<EssentialsQueryable> essentialsProvider;
+    private Supplier<EventBusCapability> eventBusProvider;
+
     // 在线玩家状态
     private final Map<UUID, PlayerAfkState> afkStates = new ConcurrentHashMap<>();
     // 玩家统计缓存
     private final Map<UUID, PlayerStats> statsCache = new ConcurrentHashMap<>();
+    // 区域统计缓存
+    private final Map<String, Map<UUID, AreaStats>> areaStatsCache = new ConcurrentHashMap<>();
     // 已发送进入提示的玩家
     private final Set<UUID> enterNotified = ConcurrentHashMap.newKeySet();
     // HUD 显示开关
@@ -50,7 +65,7 @@ public final class AfkRewardService {
     private boolean active;
 
     // 排行榜缓存
-    private volatile List<AfkRewardRepository.PlayerStats> leaderboardCache = List.of();
+    private volatile List<PlayerStats> leaderboardCache = List.of();
     private volatile long leaderboardLastUpdate = 0;
 
     // 服务器启动时间，用于崩溃恢复
@@ -58,12 +73,24 @@ public final class AfkRewardService {
 
     public AfkRewardService(JavaPlugin plugin, AfkRewardConfiguration config,
                             AfkRewardRepository repository, Logger logger,
-                            MessageProvider messages) {
+                            MessageProvider messages,
+                            Supplier<MailDispatchable> mailProvider,
+                            Supplier<SignalDispatchable> signalProvider,
+                            Supplier<SubtitlePlayable> subtitleProvider,
+                            Supplier<EssentialsQueryable> essentialsProvider) {
         this.plugin = plugin;
         this.config = config;
         this.repository = repository;
         this.logger = logger;
         this.messages = messages;
+        this.mailProvider = mailProvider;
+        this.signalProvider = signalProvider;
+        this.subtitleProvider = subtitleProvider;
+        this.essentialsProvider = essentialsProvider;
+    }
+
+    public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
+        this.eventBusProvider = eventBusProvider;
     }
 
     public void start() {
@@ -148,6 +175,10 @@ public final class AfkRewardService {
         if (currentArea == null || !currentArea.enabled()) {
             if (state != null && state.areaName != null) {
                 // 离开区域
+                dispatchSignal("afk_leave_area", player, Map.of(
+                    "area", state.areaName, "mode", "REGION",
+                    "seconds", String.valueOf(state.seconds)
+                ));
                 sendLeaveHint(player, state.areaName);
                 state.areaName = null;
                 state.seconds = 0;
@@ -192,8 +223,11 @@ public final class AfkRewardService {
             }
         }
 
-        // 进入提示
+        // 进入提示 + 信号
         if (!enterNotified.contains(uuid)) {
+            dispatchSignal("afk_enter_area", player, Map.of(
+                "area", currentArea.name(), "mode", "REGION"
+            ));
             String msg = messages != null ? messages.get("hints.enter-area", currentArea.name()) : null;
             if (msg != null) player.sendMessage(msg);
             enterNotified.add(uuid);
@@ -278,12 +312,39 @@ public final class AfkRewardService {
         statsCache.put(uuid, stats);
         trySave(uuid, stats);
 
+        // 更新区域统计
+        updateAreaTime(uuid, area.name(), 0);
+
+        // 触发联动
+        AfkRewardType rewardTypeObj = config.types().get(area.rewardType());
+        if (rewardTypeObj != null) {
+            dispatchMail(player, rewardTypeObj.mailPresets());
+        }
+        PlayerAfkState currentState = afkStates.get(uuid);
+        dispatchSignal("afk_reward", player, Map.of(
+            "area", area.name(), "mode", "REGION",
+            "seconds", String.valueOf(currentState != null ? currentState.seconds : 0),
+            "rewards", "1"
+        ));
+        dispatchSubtitle(player, config.manual().subtitleOnReward());
+        publishRewardEvent(player, area.name());
+
         String msg = messages != null ? messages.get("hints.reward", area.name(), String.valueOf(config.reward().roundMinutes())) : null;
         if (msg != null) player.sendMessage(msg);
 
         if (config.debug()) {
             logger.info("[AfkReward] " + player.getName() + " 在 " + area.name() + " 获得奖励 (tier=" + matchedTier + ")");
         }
+    }
+
+    private void publishRewardEvent(Player player, String areaName) {
+        if (eventBusProvider == null) return;
+        EventBusCapability eventBus = eventBusProvider.get();
+        if (eventBus == null) return;
+        Map<String, String> payload = new HashMap<>();
+        payload.put("area", areaName);
+        payload.put("mode", "REGION");
+        eventBus.publish("axs.afkreward.reward_claimed", player, payload);
     }
 
     private int countPlayersInArea(String areaName) {
@@ -306,6 +367,12 @@ public final class AfkRewardService {
             stats.totalSeconds() + deltaSeconds
         );
         statsCache.put(uuid, stats);
+
+        // 同步更新区域统计
+        PlayerAfkState state = afkStates.get(uuid);
+        if (state != null && state.areaName != null) {
+            updateAreaTime(uuid, state.areaName, deltaSeconds);
+        }
     }
 
     private PlayerStats getStats(UUID uuid) {
@@ -373,6 +440,13 @@ public final class AfkRewardService {
             return false;
         }
 
+        // Essentials AFK 互斥检测
+        EssentialsQueryable essentials = essentialsProvider != null ? essentialsProvider.get() : null;
+        if (essentials != null && essentials.isAfk(uuid)) {
+            player.sendMessage(messages != null ? messages.get("hints.manual.essentials-afk") : "§c你当前处于 AFK 状态，请先解除后再开始挂机。");
+            return false;
+        }
+
         // 保存原始状态
         PlayerAfkState state = new PlayerAfkState();
         state.mode = AfkMode.MANUAL;
@@ -392,6 +466,9 @@ public final class AfkRewardService {
         if (config.manual().restrictActions()) {
             player.setWalkSpeed(0.0001f);
         }
+
+        // 信号触发
+        dispatchSignal("afk_start", player, Map.of("area", areaName, "mode", "MANUAL"));
 
         String msg = messages != null ? messages.get("hints.manual.start", areaName) : null;
         if (msg != null) player.sendMessage(msg);
@@ -439,12 +516,26 @@ public final class AfkRewardService {
             trySave(uuid, stats);
         }
 
+        // 保存区域统计
+        if (state.areaName != null) {
+            saveAreaStats(uuid, state.areaName);
+        }
+
         // 清理 session
         try {
             repository.deleteSession(uuid);
         } catch (Exception e) {
             logger.warning("[AfkReward] 删除 session 失败: " + e.getMessage());
         }
+
+        // 触发结束联动
+        dispatchSignal("afk_end", player, Map.of(
+            "area", state.areaName, "mode", "MANUAL",
+            "seconds", String.valueOf(state.seconds),
+            "rewards", String.valueOf(times)
+        ));
+        dispatchSubtitle(player, config.manual().subtitleOnEnd());
+        dispatchMail(player, config.manual().endMailPresets());
 
         afkStates.remove(uuid);
         enterNotified.remove(uuid);
@@ -655,9 +746,104 @@ public final class AfkRewardService {
         if (stats != null) {
             trySave(playerUuid, stats);
         }
+        // 保存区域统计
+        if (state != null && state.areaName != null) {
+            saveAreaStats(playerUuid, state.areaName);
+        }
         afkStates.remove(playerUuid);
         enterNotified.remove(playerUuid);
         statsCache.remove(playerUuid);
+    }
+
+    // ── 区域统计 ──
+
+    private void updateAreaTime(UUID uuid, String areaName, int deltaSeconds) {
+        String today = LocalDate.now().format(DATE_FMT);
+        Map<UUID, AreaStats> cache = areaStatsCache.computeIfAbsent(areaName, k -> new ConcurrentHashMap<>());
+        AreaStats stats = cache.computeIfAbsent(uuid, id -> {
+            try {
+                return repository.loadAreaStats(id, areaName);
+            } catch (Exception e) {
+                return new AreaStats(areaName, 0, 0, "");
+            }
+        });
+        if (!today.equals(stats.todayDate())) {
+            stats = new AreaStats(areaName, stats.totalSeconds(), 0, today);
+        }
+        stats = new AreaStats(areaName, stats.totalSeconds() + deltaSeconds,
+            stats.todaySeconds() + deltaSeconds, today);
+        cache.put(uuid, stats);
+    }
+
+    private void saveAreaStats(UUID uuid, String areaName) {
+        Map<UUID, AreaStats> cache = areaStatsCache.get(areaName);
+        if (cache == null) return;
+        AreaStats stats = cache.get(uuid);
+        if (stats == null) return;
+        try {
+            repository.saveAreaStats(uuid, areaName, stats.totalSeconds(), stats.todaySeconds(), stats.todayDate());
+        } catch (Exception e) {
+            logger.warning("[AfkReward] 保存区域统计失败: " + e.getMessage());
+        }
+    }
+
+    public AreaStats getAreaStats(UUID uuid, String areaName) {
+        Map<UUID, AreaStats> cache = areaStatsCache.get(areaName);
+        if (cache != null) {
+            AreaStats stats = cache.get(uuid);
+            if (stats != null) return stats;
+        }
+        try {
+            return repository.loadAreaStats(uuid, areaName);
+        } catch (Exception e) {
+            return new AreaStats(areaName, 0, 0, "");
+        }
+    }
+
+    // ── 联动派发 ──
+
+    private void dispatchSignal(String signal, Player player, Map<String, String> variables) {
+        if (signal == null || signal.isBlank()) return;
+        SignalDispatchable sd = signalProvider != null ? signalProvider.get() : null;
+        if (sd != null) {
+            try {
+                sd.dispatchSignal(signal, player, variables);
+            } catch (Exception e) {
+                logger.warning("[AfkReward] 信号派发失败 " + signal + ": " + e.getMessage());
+            }
+        }
+    }
+
+    private void dispatchSubtitle(Player player, String groupId) {
+        if (groupId == null || groupId.isBlank()) return;
+        SubtitlePlayable sp = subtitleProvider != null ? subtitleProvider.get() : null;
+        if (sp != null) {
+            try {
+                sp.playGroup(player, groupId);
+            } catch (Exception e) {
+                logger.warning("[AfkReward] 字幕播放失败 " + groupId + ": " + e.getMessage());
+            }
+        }
+    }
+
+    private void dispatchMail(Player player, List<String> presetIds) {
+        if (presetIds == null || presetIds.isEmpty()) return;
+        MailDispatchable md = mailProvider != null ? mailProvider.get() : null;
+        if (md == null) {
+            logger.fine("[AfkReward] Mail 模块不可用，跳过邮件派发");
+            return;
+        }
+        for (String presetId : presetIds) {
+            if (presetId == null || presetId.isBlank()) continue;
+            try {
+                boolean ok = md.dispatchPreset(presetId, player.getName(), "AfkReward");
+                if (config.debug()) {
+                    logger.info("[AfkReward] 邮件派发 -> preset=" + presetId + " player=" + player.getName() + " success=" + ok);
+                }
+            } catch (Exception e) {
+                logger.warning("[AfkReward] 邮件派发失败 " + presetId + ": " + e.getMessage());
+            }
+        }
     }
 
     public static String formatTime(int totalSeconds) {

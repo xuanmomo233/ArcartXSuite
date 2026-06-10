@@ -27,12 +27,14 @@ controls:
       y: 10
       width: 200
       height: 100
-      normal: '30,30,40,200'
+      normal: ~30,30,40,200
+      shape: ~round_rect
       radius: 8
+      visible: var.visible
+    effect:
       stroke:
         width: 2
-        color: '80,180,255,180'
-      visible: var.visible
+        color: ~80,180,255,180
     children:
       title:
         type: Text

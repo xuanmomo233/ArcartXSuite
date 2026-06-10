@@ -7,6 +7,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -30,12 +31,17 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
     protected void onInitialize(Connection conn) throws SQLException {
         createStatsTable(conn);
         createSessionsTable(conn);
+        createAreaStatsTable(conn);
         ensureIndexes(conn);
     }
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of(configuration.tablePrefix() + "stats", configuration.tablePrefix() + "sessions");
+        return List.of(
+            configuration.tablePrefix() + "stats",
+            configuration.tablePrefix() + "sessions",
+            configuration.tablePrefix() + "area_stats"
+        );
     }
 
     private void createStatsTable(Connection conn) throws SQLException {
@@ -100,6 +106,35 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
                         total_count INT NOT NULL DEFAULT 0,
                         today_date VARCHAR(32) NOT NULL DEFAULT '',
                         total_seconds INT NOT NULL DEFAULT 0
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                    """.formatted(table));
+            }
+        }
+    }
+
+    private void createAreaStatsTable(Connection conn) throws SQLException {
+        String table = configuration.tablePrefix() + "area_stats";
+        try (Statement stmt = conn.createStatement()) {
+            if (configuration.dialect() == AfkRewardConfiguration.StorageConfig.Dialect.SQLITE) {
+                stmt.execute("""
+                    CREATE TABLE IF NOT EXISTS %s (
+                        player_uuid TEXT NOT NULL,
+                        area_name TEXT NOT NULL,
+                        total_seconds INTEGER NOT NULL DEFAULT 0,
+                        today_seconds INTEGER NOT NULL DEFAULT 0,
+                        today_date TEXT NOT NULL DEFAULT '',
+                        PRIMARY KEY (player_uuid, area_name)
+                    );
+                    """.formatted(table));
+            } else {
+                stmt.execute("""
+                    CREATE TABLE IF NOT EXISTS %s (
+                        player_uuid VARCHAR(36) NOT NULL,
+                        area_name VARCHAR(64) NOT NULL,
+                        total_seconds INT NOT NULL DEFAULT 0,
+                        today_seconds INT NOT NULL DEFAULT 0,
+                        today_date VARCHAR(32) NOT NULL DEFAULT '',
+                        PRIMARY KEY (player_uuid, area_name)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                     """.formatted(table));
             }
@@ -252,6 +287,84 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
         }
     }
 
+    // ── Area Stats ──
+
+    public void saveAreaStats(UUID playerUuid, String areaName, int totalSeconds,
+                               int todaySeconds, String todayDate) throws SQLException {
+        String table = configuration.tablePrefix() + "area_stats";
+        String sql;
+        if (configuration.dialect() == AfkRewardConfiguration.StorageConfig.Dialect.SQLITE) {
+            sql = """
+                INSERT INTO %s (player_uuid, area_name, total_seconds, today_seconds, today_date)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(player_uuid, area_name) DO UPDATE SET
+                    total_seconds = excluded.total_seconds,
+                    today_seconds = excluded.today_seconds,
+                    today_date = excluded.today_date
+                """.formatted(table);
+        } else {
+            sql = """
+                INSERT INTO %s (player_uuid, area_name, total_seconds, today_seconds, today_date)
+                VALUES (?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    total_seconds = VALUES(total_seconds),
+                    today_seconds = VALUES(today_seconds),
+                    today_date = VALUES(today_date)
+                """.formatted(table);
+        }
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, playerUuid.toString());
+            ps.setString(2, areaName);
+            ps.setInt(3, totalSeconds);
+            ps.setInt(4, todaySeconds);
+            ps.setString(5, todayDate);
+            ps.executeUpdate();
+        }
+    }
+
+    public AreaStats loadAreaStats(UUID playerUuid, String areaName) throws SQLException {
+        String table = configuration.tablePrefix() + "area_stats";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                 "SELECT total_seconds, today_seconds, today_date FROM " + table + " WHERE player_uuid = ? AND area_name = ?")) {
+            ps.setString(1, playerUuid.toString());
+            ps.setString(2, areaName);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return new AreaStats(
+                        areaName,
+                        rs.getInt("total_seconds"),
+                        rs.getInt("today_seconds"),
+                        nullToEmpty(rs.getString("today_date"))
+                    );
+                }
+            }
+        }
+        return new AreaStats(areaName, 0, 0, "");
+    }
+
+    public List<AreaStats> loadAllAreaStats(UUID playerUuid) throws SQLException {
+        String table = configuration.tablePrefix() + "area_stats";
+        List<AreaStats> list = new ArrayList<>();
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                 "SELECT area_name, total_seconds, today_seconds, today_date FROM " + table + " WHERE player_uuid = ?")) {
+            ps.setString(1, playerUuid.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(new AreaStats(
+                        nullToEmpty(rs.getString("area_name")),
+                        rs.getInt("total_seconds"),
+                        rs.getInt("today_seconds"),
+                        nullToEmpty(rs.getString("today_date"))
+                    ));
+                }
+            }
+        }
+        return list;
+    }
+
     // ── Leaderboard ──
 
     public List<PlayerStats> loadLeaderboard(int limit) throws SQLException {
@@ -344,5 +457,12 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
         int totalCount,
         String todayDate,
         int totalSeconds
+    ) {}
+
+    public record AreaStats(
+        String areaName,
+        int totalSeconds,
+        int todaySeconds,
+        String todayDate
     ) {}
 }

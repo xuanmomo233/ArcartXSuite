@@ -19,6 +19,12 @@ import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.afkreward.command.AfkRewardAdminCommand;
 import xuanmo.arcartxsuite.afkreward.command.AfkRewardPlayerCommand;
+import xuanmo.arcartxsuite.api.capability.AfkRewardDispatchable;
+import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
+import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
+import xuanmo.arcartxsuite.api.capability.EssentialsQueryable;
+import xuanmo.arcartxsuite.afkreward.config.AreaConfiguration;
 import xuanmo.arcartxsuite.afkreward.config.AfkRewardConfiguration;
 import xuanmo.arcartxsuite.afkreward.listener.AfkRewardListener;
 import xuanmo.arcartxsuite.afkreward.placeholder.AfkRewardPlaceholderExpansion;
@@ -53,7 +59,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
 
     @Override
     protected int currentConfigVersion() {
-        return 2;
+        return 3;
     }
 
     @Override
@@ -79,10 +85,9 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
 
     @Override
     protected @NotNull SyncPolicy defaultSyncPolicy() {
-        // types.* 和 areas.* 允许用户自由增删
+        // types.* 允许用户自由增删
         return SyncPolicy.builder()
             .dynamicSection("types")
-            .dynamicSection("areas")
             .build();
     }
 
@@ -104,18 +109,37 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         configuration = AfkRewardConfiguration.load(
             YamlConfiguration.loadConfiguration(configFile), context.logger()
         );
+
+        // 导出默认区域文件（若目录为空）
+        AreaConfiguration.exportDefaultArea(moduleClassLoader(),
+            context.pluginDataFolder(), configuration.areasDirectory());
     }
 
     @Override
     protected void startService() throws Exception {
+        // 加载区域独立配置文件
+        java.util.Map<String, xuanmo.arcartxsuite.afkreward.model.AfkArea> loadedAreas =
+            AreaConfiguration.loadAreas(context.pluginDataFolder(), configuration.areasDirectory(), context.logger());
+        // 通过反射/构造将 areas 合并到 configuration（记录不可变，需重建）
+        configuration = new AfkRewardConfiguration(
+            configuration.debug(), configuration.areasDirectory(),
+            configuration.reward(), configuration.types(), loadedAreas,
+            configuration.storage(), configuration.ui(), configuration.manual()
+        );
+
         repository = new AfkRewardRepository(
             context.dataFolder(), configuration.storage(), context.logger()
         );
         repository.initialize();
 
         service = new AfkRewardService(
-            context.plugin(), configuration, repository, context.logger(), messages()
+            context.plugin(), configuration, repository, context.logger(), messages(),
+            () -> context.getCapability(MailDispatchable.class),
+            () -> context.getCapability(SignalDispatchable.class),
+            () -> context.getCapability(SubtitlePlayable.class),
+            () -> context.getCapability(EssentialsQueryable.class)
         );
+        service.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
 
         listener = new AfkRewardListener(() -> service);
@@ -158,6 +182,32 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
                     catch (Exception e) { context.logger().warning("AfkReward purgeAll 失败: " + e.getMessage()); return -1; }
                 }
             });
+
+        // 注册 AfkRewardDispatchable capability
+        AfkRewardService svc = service;
+        context.registerCapability(AfkRewardDispatchable.class, new AfkRewardDispatchable() {
+            @Override public boolean isAfk(@NotNull java.util.UUID playerUuid) {
+                return svc != null && svc.isInManualAfk(playerUuid);
+            }
+            @Override public @Nullable String getAreaName(@NotNull java.util.UUID playerUuid) {
+                if (svc == null) return null;
+                var st = svc.getState(playerUuid);
+                return st != null ? st.areaName : null;
+            }
+            @Override public int getAfkSeconds(@NotNull java.util.UUID playerUuid) {
+                if (svc == null) return 0;
+                var st = svc.getState(playerUuid);
+                return st != null ? st.seconds : 0;
+            }
+            @Override public @Nullable String getAfkMode(@NotNull java.util.UUID playerUuid) {
+                if (svc == null) return null;
+                var st = svc.getState(playerUuid);
+                return st != null ? st.mode.name() : null;
+            }
+            @Override public boolean startManualAfk(@NotNull org.bukkit.entity.Player player, @NotNull String areaName) {
+                return svc != null && svc.startManualAfk(player, areaName);
+            }
+        });
 
         context.logger().info(
             ChatColor.GOLD + "AfkReward 模块已启动 (区域=" + configuration.areas().size()

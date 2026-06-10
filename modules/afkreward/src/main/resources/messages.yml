@@ -70,5 +70,6 @@ hints:
     already: "&c你已经在挂机中。"
     not-started: "&c你未在挂机中。"
     no-teleport: "&c区域 &f{0}&c 不支持原地挂机。"
+    essentials-afk: "&c你当前处于 AFK 状态，请先解除后再开始挂机。"
     broadcast: "&e恭喜玩家 &f{0} &e挂机结束，挂机时长 &f{1}&e，获得奖励 &f{2} &e次！"
     recovered: "&e检测到上次服崩挂机记录，已自动结算 &f{0}&e，奖励次数 &f{1}&e。"

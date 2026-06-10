@@ -6,6 +6,7 @@ import org.bukkit.Location;
 import org.bukkit.World;
 
 public record AfkArea(
+    String id,
     String name,
     boolean enabled,
     String world,

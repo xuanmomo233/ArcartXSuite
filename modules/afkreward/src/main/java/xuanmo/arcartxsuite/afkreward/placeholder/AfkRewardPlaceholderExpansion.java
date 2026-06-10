@@ -80,6 +80,18 @@ public final class AfkRewardPlaceholderExpansion extends PlaceholderExpansion {
                 if (id.startsWith("top_")) {
                     yield resolveTopPlaceholder(service, id);
                 }
+                // 支持 %axsafk_area_<name>% %axsafk_area_<name>_today% %axsafk_area_<name>_status%
+                if (id.startsWith("area_")) {
+                    yield resolveAreaPlaceholder(service, player, id);
+                }
+                if (id.equals("total_all")) {
+                    int total = 0;
+                    for (var area : service.areas().values()) {
+                        var ast = service.getAreaStats(player.getUniqueId(), area.name());
+                        total += ast.totalSeconds();
+                    }
+                    yield formatTime(total);
+                }
                 yield null;
             }
         };
@@ -100,6 +112,39 @@ public final class AfkRewardPlaceholderExpansion extends PlaceholderExpansion {
                 case "time" -> formatTime(entry.totalSeconds());
                 case "rewards" -> String.valueOf(entry.totalCount());
                 default -> "";
+            };
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private String resolveAreaPlaceholder(AfkRewardService service, Player player, String id) {
+        try {
+            // id 格式: area_<name> 或 area_<name>_today 或 area_<name>_status
+            String rest = id.substring("area_".length());
+            String areaName;
+            String suffix = "";
+            int lastUnderscore = rest.lastIndexOf('_');
+            if (lastUnderscore > 0 && (rest.endsWith("_today") || rest.endsWith("_status"))) {
+                areaName = rest.substring(0, lastUnderscore);
+                suffix = rest.substring(lastUnderscore + 1);
+            } else {
+                areaName = rest;
+            }
+
+            return switch (suffix) {
+                case "today" -> {
+                    var ast = service.getAreaStats(player.getUniqueId(), areaName);
+                    yield formatTime(ast.todaySeconds());
+                }
+                case "status" -> {
+                    var st = service.getState(player.getUniqueId());
+                    yield (st != null && areaName.equals(st.areaName)) ? "是" : "否";
+                }
+                default -> {
+                    var ast = service.getAreaStats(player.getUniqueId(), areaName);
+                    yield formatTime(ast.totalSeconds());
+                }
             };
         } catch (Exception e) {
             return "";

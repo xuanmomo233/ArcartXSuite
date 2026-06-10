@@ -6,5 +6,6 @@ import java.util.Map;
 public record AfkRewardType(
     String name,
     String describe,
-    Map<String, List<String>> tierCommands
+    Map<String, List<String>> tierCommands,
+    List<String> mailPresets
 ) {}

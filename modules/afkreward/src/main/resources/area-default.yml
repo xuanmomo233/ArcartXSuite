@@ -1,0 +1,38 @@
+# 区域唯一 ID（内部标识）
+id: default
+
+# 区域显示名称（支持中文）
+name: "温泉"
+
+# 是否启用
+enabled: true
+
+# 所属世界
+world: bskyblock_world
+
+# 多边形坐标点（射线法判断）
+pos:
+  - "-11,138"
+  - "17,114"
+  - "40,114"
+  - "48,128"
+  - "51,138"
+  - "42,167"
+  - "20,172"
+  - "10,171"
+  - "-4,159"
+
+# 关联奖励类型（对应主配置 types 中的 key）
+type: 泡澡池
+
+# 是否支持原地挂机（/afk start 此区域）
+manual-enabled: true
+
+# 原地挂机传送点
+teleport:
+  world: bskyblock_world
+  x: 20.5
+  y: 64.0
+  z: 140.5
+  yaw: 0
+  pitch: 0

@@ -6,7 +6,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
-import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.afkreward.model.AfkArea;
@@ -14,6 +13,7 @@ import xuanmo.arcartxsuite.afkreward.model.AfkRewardType;
 
 public record AfkRewardConfiguration(
     boolean debug,
+    String areasDirectory,
     RewardConfig reward,
     Map<String, AfkRewardType> types,
     Map<String, AfkArea> areas,
@@ -63,7 +63,12 @@ public record AfkRewardConfiguration(
         boolean restrictActions,
         boolean returnOnEnd,
         boolean broadcastRewards,
-        int leaderboardSize
+        int leaderboardSize,
+        String signalOnReward,
+        String signalOnEnd,
+        String subtitleOnReward,
+        String subtitleOnEnd,
+        List<String> endMailPresets
     ) {}
 
     public static AfkRewardConfiguration load(YamlConfiguration yaml, Logger logger) {
@@ -91,61 +96,23 @@ public record AfkRewardConfiguration(
                 ConfigurationSection typeSec = typesSec.getConfigurationSection(typeName);
                 if (typeSec == null) continue;
                 String describe = typeSec.getString("describe", "");
+                List<String> mailPresets = typeSec.getStringList("mail-presets");
                 Map<String, List<String>> tiers = new LinkedHashMap<>();
                 for (String tierKey : typeSec.getKeys(false)) {
-                    if ("describe".equals(tierKey)) continue;
+                    if ("describe".equals(tierKey) || "mail-presets".equals(tierKey)) continue;
                     List<String> cmds = typeSec.getStringList(tierKey);
                     if (!cmds.isEmpty()) {
                         tiers.put(tierKey, new ArrayList<>(cmds));
                     }
                 }
-                types.put(typeName, new AfkRewardType(typeName, describe, Collections.unmodifiableMap(tiers)));
+                types.put(typeName, new AfkRewardType(typeName, describe,
+                    Collections.unmodifiableMap(tiers), Collections.unmodifiableList(mailPresets)));
             }
         }
 
-        // areas
+        // areas 现在由独立配置文件加载，此处仅解析 areas-directory
+        String areasDirectory = yaml.getString("areas-directory", "afkreward/areas");
         Map<String, AfkArea> areas = new LinkedHashMap<>();
-        ConfigurationSection areasSec = yaml.getConfigurationSection("areas");
-        if (areasSec != null) {
-            for (String areaName : areasSec.getKeys(false)) {
-                ConfigurationSection areaSec = areasSec.getConfigurationSection(areaName);
-                if (areaSec == null) continue;
-                boolean enabled = areaSec.getBoolean("enable", true);
-                String world = areaSec.getString("world", "");
-                List<String> posList = areaSec.getStringList("pos");
-                String type = areaSec.getString("type", areaName);
-                boolean manualEnabled = areaSec.getBoolean("manual-enabled", true);
-                List<AfkArea.Point> points = new ArrayList<>();
-                for (String pos : posList) {
-                    String[] parts = pos.split(",");
-                    if (parts.length >= 2) {
-                        try {
-                            int x = Integer.parseInt(parts[0].trim());
-                            int z = Integer.parseInt(parts[1].trim());
-                            points.add(new AfkArea.Point(x, z));
-                        } catch (NumberFormatException ignored) {}
-                    }
-                }
-                // 读取传送点（原地挂机用）
-                Location teleport = null;
-                ConfigurationSection tpSec = areaSec.getConfigurationSection("teleport");
-                if (tpSec != null) {
-                    String tpWorld = tpSec.getString("world", world);
-                    double tpx = tpSec.getDouble("x", 0);
-                    double tpy = tpSec.getDouble("y", 64);
-                    double tpz = tpSec.getDouble("z", 0);
-                    float yaw = (float) tpSec.getDouble("yaw", 0);
-                    float pitch = (float) tpSec.getDouble("pitch", 0);
-                    teleport = AfkArea.buildTeleport(tpWorld, tpx, tpy, tpz, yaw, pitch);
-                }
-                if (points.size() >= 3) {
-                    areas.put(areaName, new AfkArea(areaName, enabled, world, type,
-                        Collections.unmodifiableList(points), teleport, manualEnabled));
-                } else {
-                    logger.warning("[AfkReward] 区域 '" + areaName + "' 的坐标点不足 3 个，已跳过。");
-                }
-            }
-        }
 
         // storage
         ConfigurationSection storSec = yaml.getConfigurationSection("storage");
@@ -175,10 +142,15 @@ public record AfkRewardConfiguration(
             manualSec != null && manualSec.getBoolean("restrict-actions", true),
             manualSec != null && manualSec.getBoolean("return-on-end", false),
             manualSec != null && manualSec.getBoolean("broadcast-rewards", true),
-            manualSec != null ? Math.max(1, Math.min(100, manualSec.getInt("leaderboard-size", 10))) : 10
+            manualSec != null ? Math.max(1, Math.min(100, manualSec.getInt("leaderboard-size", 10))) : 10,
+            manualSec != null ? manualSec.getString("signal-on-reward", "") : "",
+            manualSec != null ? manualSec.getString("signal-on-end", "") : "",
+            manualSec != null ? manualSec.getString("subtitle-on-reward", "") : "",
+            manualSec != null ? manualSec.getString("subtitle-on-end", "") : "",
+            manualSec != null ? manualSec.getStringList("end-mail-presets") : List.of()
         );
 
-        return new AfkRewardConfiguration(debug, reward, Collections.unmodifiableMap(types),
+        return new AfkRewardConfiguration(debug, areasDirectory, reward, Collections.unmodifiableMap(types),
             Collections.unmodifiableMap(areas), storage, ui, manual);
     }
 }

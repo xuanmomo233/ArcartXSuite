@@ -1,4 +1,4 @@
-config-version: 2
+config-version: 3
 # ArcartXSuite AfkReward - 区域挂机奖励模块
 # 重载: /axs afkreward reload
 
@@ -23,6 +23,9 @@ reward:
 types:
   泡澡池:
     describe: "泡澡的人越多，获取的铜币和经验越多"
+    # 发奖时同时发送的邮件预设（对应 Mail 模块预设模板）
+    mail-presets:
+      - "afk_reward_mail"
     # 权限等级从高到低检测，取玩家拥有的最高等级
     vip3:
       - "addbalance %player_name% 铜币 %axsafk_players%*35+%player_level%/4+250"
@@ -39,34 +42,9 @@ types:
       - "addbalance %player_name% 铜币 %axsafk_players%*20+%player_level%/10+100"
       - "cmi exp %player_name% add %axsafk_players%*%player_level%/10+%player_level%/4"
 
-# 区域配置
-# 权限: axs.afkreward.area.* (如 axs.afkreward.area.泡澡池)
-areas:
-  泡澡池:
-    enable: true
-    world: bskyblock_world
-    # 多边形角坐标 (X,Z)，按顺序围成区域
-    pos:
-      - "-11,138"
-      - "17,114"
-      - "40,114"
-      - "48,128"
-      - "51,138"
-      - "42,167"
-      - "20,172"
-      - "10,171"
-      - "-4,159"
-    type: 泡澡池
-    # 是否支持原地挂机（/afk start 此区域）
-    manual-enabled: true
-    # 原地挂机传送点（为空则不支持原地挂机到此区域）
-    teleport:
-      world: bskyblock_world
-      x: 20.5
-      y: 64.0
-      z: 140.5
-      yaw: 0
-      pitch: 0
+# 区域配置目录（相对于 data/ 文件夹）
+# 每个区域为独立的 area-<id>.yml 文件
+areas-directory: "afkreward/areas"
 
 # 原地挂机配置
 manual:
@@ -78,6 +56,17 @@ manual:
   broadcast-rewards: true
   # 排行榜显示人数
   leaderboard-size: 10
+  # 发奖时触发的 EventPacket 信号名（为空则不触发）
+  signal-on-reward: "afk_reward"
+  # 结束挂机时触发的 EventPacket 信号名
+  signal-on-end: "afk_end"
+  # 发奖时播放的字幕组 ID（为空则不播放）
+  subtitle-on-reward: ""
+  # 结束挂机时播放的字幕组 ID
+  subtitle-on-end: ""
+  # 结束挂机时发送的邮件预设
+  end-mail-presets:
+    - "afk_end_mail"
 
 # 存储配置
 storage:
