@@ -1,0 +1,7 @@
+rename:
+  - from: "tasks.daily.*.xp-reward"
+    to: "tasks.daily.*.base-xp-reward"
+  - from: "tasks.weekly.*.xp-reward"
+    to: "tasks.weekly.*.base-xp-reward"
+  - from: "tasks.season.*.xp-reward"
+    to: "tasks.season.*.base-xp-reward"

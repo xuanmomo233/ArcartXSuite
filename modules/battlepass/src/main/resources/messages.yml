@@ -1,0 +1,47 @@
+prefix: '&7[&b战令&7] &f'
+common:
+  enabled: '&a已启用'
+  disabled: '&c未启用'
+  unknown: '&c未知指令，使用 /axs battlepass help 查看帮助。'
+  reload-hint: '&e请使用 /axs reload 重载配置。'
+  service-unavailable: '&c服务未就绪。'
+help:
+  title: '&6===== 战令系统 &7v{0} &6====='
+  status: '&e/bp status &7- 查看当前战令状态'
+  tasks: '&e/bp tasks &7- 打开任务面板'
+  rewards: '&e/bp rewards &7- 打开奖励面板'
+  claim: '&e/bp claim <等级> &7- 领取指定等级奖励'
+status:
+  title: '&6===== 战令状态 ====='
+  season: '&7赛季: &f{0}'
+  level: '&7等级: &f{0}/{1}'
+  xp: '&7经验: &f{0}/{1}'
+  premium: '&7进阶版: {0}'
+tasks:
+  title: '&6===== 任务进度 ====='
+  daily: '&e每日任务'
+  weekly: '&e每周任务'
+  season: '&e赛季任务'
+  completed: '&a已完成'
+  progress: '&7进度: &f{0}/{1}'
+claim:
+  success: '&a成功领取等级 &e{0} &a的奖励！'
+  already-claimed: '&c该等级奖励已领取。'
+  level-not-reached: '&c尚未达到该等级。'
+  premium-required: '&c需要激活进阶版战令。'
+admin:
+  help:
+    title: '&6===== 战令管理 &7v{0} &6====='
+    status: '&e/axs battlepass status &7- 查看模块状态'
+    reload: '&e/axs battlepass reload &7- 重载配置'
+    season: '&e/axs battlepass season <new|info> &7- 赛季管理'
+    reset: '&e/axs battlepass reset <玩家> &7- 重置玩家进度'
+  status:
+    title: '&6===== 战令模块状态 ====='
+    season: '&7当前赛季: &f{0}'
+    players: '&7活跃玩家: &f{0}'
+    cross-server: '&7跨服同步: {0}'
+  reset-success: '&a已重置玩家 &e{0} &a的战令进度。'
+  reset:
+    usage: '&c用法: {0}'
+    offline: '&c玩家不在线: {0}'

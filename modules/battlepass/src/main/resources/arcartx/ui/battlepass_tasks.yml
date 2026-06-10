@@ -1,0 +1,433 @@
+# AXS BattlePass 任务列表界面
+# 打开方式: 主界面点击任务按钮 或 Packet 触发
+# 数据交互: packetHandler init/update
+
+ui:
+  isHud: false
+  background: true
+  escClose: true
+  closeDied: true
+  through: false
+  screenScale: true
+  show: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.dailyTasks = packet['dailyTasks']
+      var.weeklyTasks = packet['weeklyTasks']
+      var.seasonTasks = packet['seasonTasks']
+      var.dailyTaskCount = packet['dailyTaskCount']
+      var.weeklyTaskCount = packet['weeklyTaskCount']
+      var.seasonTaskCount = packet['seasonTaskCount']
+      for(i in range(0, var.maxDailyCount)){
+        key = i.round
+        item = val.每日任务列表['任务项' + key]
+        if(item != null){
+          item.entryKey = key
+        }
+      }
+      for(i in range(0, var.maxWeeklyCount)){
+        key = i.round
+        item = val.每周任务列表['任务项' + key]
+        if(item != null){
+          item.entryKey = key
+        }
+      }
+      for(i in range(0, var.maxSeasonCount)){
+        key = i.round
+        item = val.赛季任务列表['任务项' + key]
+        if(item != null){
+          item.entryKey = key
+        }
+      }
+    update: |-
+      var.packetId = packet['packetId']
+      var.dailyTasks = packet['dailyTasks']
+      var.weeklyTasks = packet['weeklyTasks']
+      var.seasonTasks = packet['seasonTasks']
+      var.dailyTaskCount = packet['dailyTaskCount']
+      var.weeklyTaskCount = packet['weeklyTaskCount']
+      var.seasonTaskCount = packet['seasonTaskCount']
+  action:
+    load: |-
+      var.packetId = 'AXS_BATTLEPASS'
+      var.dailyTasks = {}
+      var.weeklyTasks = {}
+      var.seasonTasks = {}
+      var.dailyTaskCount = 0
+      var.weeklyTaskCount = 0
+      var.seasonTaskCount = 0
+      var.maxDailyCount = 10
+      var.maxWeeklyCount = 10
+      var.maxSeasonCount = 10
+      for(i in range(0, var.maxDailyCount)){
+        key = i.round
+        item = val.每日任务列表['任务项'].copy('任务项' + key)
+        item.entryKey = key
+      }
+      for(i in range(0, var.maxWeeklyCount)){
+        key = i.round
+        item = val.每周任务列表['任务项'].copy('任务项' + key)
+        item.entryKey = key
+      }
+      for(i in range(0, var.maxSeasonCount)){
+        key = i.round
+        item = val.赛季任务列表['任务项'].copy('任务项' + key)
+        item.entryKey = key
+      }
+
+controls:
+  根:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      主面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 800
+          height: 640
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~35,35,45,235
+              shape: ~round_rect
+              radius: 24
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,180
+              shadow:
+                xOffset: 2
+                yOffset: 2
+                blur: 6
+                color: ~0,0,0,120
+
+          标题:
+            type: Text
+            attribute:
+              x: 36
+              y: 28
+              texts: "&e&l任务列表"
+              fontSize: 56
+
+          关闭按钮:
+            type: Texture
+            attribute:
+              x: 710
+              y: 24
+              width: 56
+              height: 56
+              normal: ~180,60,60,200
+              hover: ~Frosted:0;220,80,80,230
+              shape: ~round_rect
+              radius: 14
+            action:
+              clickLeft: |-
+                Screen.close()
+            effect:
+              stroke:
+                width: 2
+                color: ~255,120,120,120
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 14
+                  through: true
+                  center: true
+                  fontSize: 36
+                  texts: '&fX'
+
+          滚动区:
+            type: Scroll
+            attribute:
+              x: 36
+              y: 100
+              width: 728
+              height: 500
+              moveY: 0
+            action:
+              wheel: |-
+                if(self.wheelValue > 0){
+                  self.moveY = Math.max(0, self.moveY - 0.1)
+                }elif(self.wheelValue < 0){
+                  self.moveY = Math.min(1, self.moveY + 0.1)
+                }
+            children:
+              任务总容器:
+                val: 任务总容器
+                type: VStack
+                attribute:
+                  width: 728
+                  spaceBetween: 16
+                children:
+                  每日任务区:
+                    type: Canvas
+                    attribute:
+                      width: 728
+                      height: "var.dailyTaskCount > 0 ? (var.dailyTaskCount * 66 + 50) : 0"
+                      visible: var.dailyTaskCount > 0
+                    children:
+                      每日标题:
+                        type: Text
+                        attribute:
+                          x: 0
+                          y: 0
+                          texts: "&b每日任务"
+                          fontSize: 36
+                      每日任务列表:
+                        val: 每日任务列表
+                        type: VStack
+                        attribute:
+                          x: 0
+                          y: 44
+                          width: 728
+                          spaceBetween: 6
+                        children:
+                          任务项:
+                            type: Texture
+                            attribute:
+                              entryKey: 0
+                              entry: var.dailyTasks[self.entryKey]
+                              visible: self.entry != null
+                              width: 728
+                              height: 60
+                              normal: "self.entry != null && self.entry['completed'] ? '75,175,120,200' : '60,60,70,200'"
+                              shape: ~round_rect
+                              radius: 12
+                            effect:
+                              stroke:
+                                width: 1
+                                color: ~80,180,255,60
+                            children:
+                              难度标签:
+                                type: Text
+                                attribute:
+                                  x: 16
+                                  y: 6
+                                  texts: "self.parent.entry != null ? self.parent.entry['difficultyDisplay'] : ''"
+                                  fontSize: 22
+                                  through: true
+                              任务名:
+                                type: Text
+                                attribute:
+                                  x: 80
+                                  y: 6
+                                  texts: "self.parent.entry != null ? '&f' + self.parent.entry['name'] : ''"
+                                  fontSize: 32
+                                  through: true
+                              任务描述:
+                                type: Text
+                                attribute:
+                                  x: 16
+                                  y: 32
+                                  texts: "self.parent.entry != null ? '&8' + self.parent.entry['description'] : ''"
+                                  fontSize: 22
+                                  through: true
+                              任务进度:
+                                type: Text
+                                attribute:
+                                  x: 16
+                                  y: 56
+                                  texts: "self.parent.entry != null ? '&7进度: &f' + self.parent.entry['progress'] + ' / ' + self.parent.entry['required'] + '  &8(' + self.parent.entry['progressPercent'] + ')' : ''"
+                                  fontSize: 24
+                                  through: true
+                              任务奖励:
+                                type: Text
+                                attribute:
+                                  x: 560
+                                  y: 24
+                                  texts: "self.parent.entry != null ? '&e+' + self.parent.entry['xpReward'] + ' XP' : ''"
+                                  fontSize: 26
+                                  through: true
+                              完成标记:
+                                type: Text
+                                attribute:
+                                  x: 660
+                                  y: 24
+                                  texts: "self.parent.entry != null && self.parent.entry['completed'] ? '&a已完成' : '&7进行中'"
+                                  fontSize: 26
+                                  through: true
+
+                  每周任务区:
+                    type: Canvas
+                    attribute:
+                      width: 728
+                      height: "var.weeklyTaskCount > 0 ? (var.weeklyTaskCount * 66 + 50) : 0"
+                      visible: var.weeklyTaskCount > 0
+                    children:
+                      每周标题:
+                        type: Text
+                        attribute:
+                          x: 0
+                          y: 0
+                          texts: "&6每周任务"
+                          fontSize: 36
+                      每周任务列表:
+                        val: 每周任务列表
+                        type: VStack
+                        attribute:
+                          x: 0
+                          y: 44
+                          width: 728
+                          spaceBetween: 6
+                        children:
+                          任务项:
+                            type: Texture
+                            attribute:
+                              entryKey: 0
+                              entry: var.weeklyTasks[self.entryKey]
+                              visible: self.entry != null
+                              width: 728
+                              height: 60
+                              normal: "self.entry != null && self.entry['completed'] ? '75,175,120,200' : '60,60,70,200'"
+                              shape: ~round_rect
+                              radius: 12
+                            effect:
+                              stroke:
+                                width: 1
+                                color: ~80,180,255,60
+                            children:
+                              难度标签:
+                                type: Text
+                                attribute:
+                                  x: 16
+                                  y: 6
+                                  texts: "self.parent.entry != null ? self.parent.entry['difficultyDisplay'] : ''"
+                                  fontSize: 22
+                                  through: true
+                              任务名:
+                                type: Text
+                                attribute:
+                                  x: 80
+                                  y: 6
+                                  texts: "self.parent.entry != null ? '&f' + self.parent.entry['name'] : ''"
+                                  fontSize: 32
+                                  through: true
+                              任务描述:
+                                type: Text
+                                attribute:
+                                  x: 16
+                                  y: 32
+                                  texts: "self.parent.entry != null ? '&8' + self.parent.entry['description'] : ''"
+                                  fontSize: 22
+                                  through: true
+                              任务进度:
+                                type: Text
+                                attribute:
+                                  x: 16
+                                  y: 56
+                                  texts: "self.parent.entry != null ? '&7进度: &f' + self.parent.entry['progress'] + ' / ' + self.parent.entry['required'] + '  &8(' + self.parent.entry['progressPercent'] + ')' : ''"
+                                  fontSize: 24
+                                  through: true
+                              任务奖励:
+                                type: Text
+                                attribute:
+                                  x: 560
+                                  y: 24
+                                  texts: "self.parent.entry != null ? '&e+' + self.parent.entry['xpReward'] + ' XP' : ''"
+                                  fontSize: 26
+                                  through: true
+                              完成标记:
+                                type: Text
+                                attribute:
+                                  x: 660
+                                  y: 24
+                                  texts: "self.parent.entry != null && self.parent.entry['completed'] ? '&a已完成' : '&7进行中'"
+                                  fontSize: 26
+                                  through: true
+
+                  赛季任务区:
+                    type: Canvas
+                    attribute:
+                      width: 728
+                      height: "var.seasonTaskCount > 0 ? (var.seasonTaskCount * 66 + 50) : 0"
+                      visible: var.seasonTaskCount > 0
+                    children:
+                      赛季标题:
+                        type: Text
+                        attribute:
+                          x: 0
+                          y: 0
+                          texts: "&d赛季任务"
+                          fontSize: 36
+                      赛季任务列表:
+                        val: 赛季任务列表
+                        type: VStack
+                        attribute:
+                          x: 0
+                          y: 44
+                          width: 728
+                          spaceBetween: 6
+                        children:
+                          任务项:
+                            type: Texture
+                            attribute:
+                              entryKey: 0
+                              entry: var.seasonTasks[self.entryKey]
+                              visible: self.entry != null
+                              width: 728
+                              height: 60
+                              normal: "self.entry != null && self.entry['completed'] ? '75,175,120,200' : '60,60,70,200'"
+                              shape: ~round_rect
+                              radius: 12
+                            effect:
+                              stroke:
+                                width: 1
+                                color: ~80,180,255,60
+                            children:
+                              难度标签:
+                                type: Text
+                                attribute:
+                                  x: 16
+                                  y: 6
+                                  texts: "self.parent.entry != null ? self.parent.entry['difficultyDisplay'] : ''"
+                                  fontSize: 22
+                                  through: true
+                              任务名:
+                                type: Text
+                                attribute:
+                                  x: 80
+                                  y: 6
+                                  texts: "self.parent.entry != null ? '&f' + self.parent.entry['name'] : ''"
+                                  fontSize: 32
+                                  through: true
+                              任务描述:
+                                type: Text
+                                attribute:
+                                  x: 16
+                                  y: 32
+                                  texts: "self.parent.entry != null ? '&8' + self.parent.entry['description'] : ''"
+                                  fontSize: 22
+                                  through: true
+                              任务进度:
+                                type: Text
+                                attribute:
+                                  x: 16
+                                  y: 56
+                                  texts: "self.parent.entry != null ? '&7进度: &f' + self.parent.entry['progress'] + ' / ' + self.parent.entry['required'] + '  &8(' + self.parent.entry['progressPercent'] + ')' : ''"
+                                  fontSize: 24
+                                  through: true
+                              任务奖励:
+                                type: Text
+                                attribute:
+                                  x: 560
+                                  y: 24
+                                  texts: "self.parent.entry != null ? '&e+' + self.parent.entry['xpReward'] + ' XP' : ''"
+                                  fontSize: 26
+                                  through: true
+                              完成标记:
+                                type: Text
+                                attribute:
+                                  x: 660
+                                  y: 24
+                                  texts: "self.parent.entry != null && self.parent.entry['completed'] ? '&a已完成' : '&7进行中'"
+                                  fontSize: 26
+                                  through: true

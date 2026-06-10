@@ -1,0 +1,31 @@
+# =============================================================================
+# 赛季任务池
+# 赛季任务不会重置，所有玩家共享同一批赛季目标
+# 直接通过旧进度表追踪，不生成 PlayerTaskInstance
+# =============================================================================
+
+# -------- 示例：千人斩 --------
+season-kill-1000:
+  display-name: "千人斩"
+  description: "本赛季累计击杀1000个生物"
+  difficulty: hard
+  event-topic: "axs.combateffect.kill_entity"
+  required-count: 1000
+  base-xp-reward: 2000
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+
+# -------- 示例：交易大师 --------
+season-market-50:
+  display-name: "交易大师"
+  description: "本赛季在市场累计交易50次"
+  difficulty: normal
+  event-topic: "axs.market.listing_created"
+  required-count: 50
+  base-xp-reward: 1500
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1

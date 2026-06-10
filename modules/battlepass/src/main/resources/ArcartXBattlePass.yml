@@ -1,0 +1,88 @@
+config-version: 2
+
+storage:
+  mode: sqlite
+  sqlite-file-name: battlepass.db
+  pool-size: 1
+  mysql-host: localhost
+  mysql-port: 3306
+  mysql-database: axs_battlepass
+  mysql-username: root
+  mysql-password: ""
+
+season:
+  season-id: "season-1"
+  display-name: "第一赛季"
+  max-level: 100
+  xp-per-level: 1000
+  start-date: "2026-06-01"
+  end-date: "2026-08-01"
+
+# ---------------------------------------------------------------------------
+# 任务配置
+# ---------------------------------------------------------------------------
+# 任务模板已拆分为外部文件，位于 <模块数据目录>/<tasks-directory>/ 下：
+#   - daily.yml  : 每日任务池
+#   - weekly.yml : 每周任务池
+#   - season.yml : 赛季任务池
+#
+# 每日/每周任务从池中按 weight 加权随机抽取，抽取数量由 daily-count / weekly-count 控制
+# ---------------------------------------------------------------------------
+tasks:
+  daily-count: 3                  # 每天分配给玩家的每日任务数量
+  weekly-count: 2                 # 每周分配给玩家的每周任务数量
+  tasks-directory: "tasks"        # 任务文件所在目录（相对模块数据目录）
+
+rewards:
+  - level: 1
+    free:
+      type: command
+      data: "give {player} diamond 1"
+    premium:
+      type: command
+      data: "give {player} diamond 5"
+    deluxe:
+      type: command
+      data: "give {player} diamond 8"
+  - level: 2
+    free:
+      type: command
+      data: "give {player} iron_ingot 8"
+    premium:
+      type: command
+      data: "give {player} iron_ingot 32"
+    deluxe:
+      type: command
+      data: "give {player} iron_ingot 48"
+  - level: 5
+    free:
+      type: command
+      data: "give {player} experience_bottle 4"
+    premium:
+      type: command
+      data: "give {player} experience_bottle 16"
+    deluxe:
+      type: command
+      data: "give {player} experience_bottle 24"
+  - level: 10
+    free:
+      type: command
+      data: "give {player} emerald 2"
+    premium:
+      type: command
+      data: "give {player} emerald 8"
+    deluxe:
+      type: command
+      data: "give {player} emerald 12"
+
+ui:
+  register-on-enable: true
+  main-id: "battlepass_main"
+  tasks-id: "battlepass_tasks"
+
+cross-server:
+  enabled: false
+  sync-fields:
+    - "progress"
+    - "task-progress"
+    - "claimed-rewards"

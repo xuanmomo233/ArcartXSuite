@@ -1,0 +1,57 @@
+# =============================================================================
+# 每日任务池
+# 分配给玩家的每日任务从这里按 weight 加权随机抽取 daily-count 个
+# 每天 0 点自动重置并重新分配
+# =============================================================================
+
+# -------- 示例：每日登录 --------
+daily-login:
+  display-name: "每日登录"
+  description: "每天登录游戏即可获得奖励"
+  difficulty: easy                # easy / normal / hard
+  event-topic: "axs.onlinerewards.signin_success"
+  required-count: 1
+  base-xp-reward: 100
+  conditions: []                  # 无条件限制
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 5                       # 权重越高，被抽中的概率越大
+
+# -------- 示例：击杀僵尸 --------
+daily-kill-zombie:
+  display-name: "击杀僵尸"
+  description: "在主世界击杀20个僵尸"
+  difficulty: normal
+  event-topic: "axs.combateffect.kill_entity"
+  required-count: 20
+  base-xp-reward: 150
+  conditions:
+    - type: event_payload
+      key: entity_type
+      operator: equals
+      value: zombie
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
+
+# -------- 示例：讨伐Boss --------
+daily-damage-boss:
+  display-name: "讨伐Boss"
+  description: "对Boss累计造成5000点伤害"
+  difficulty: hard
+  event-topic: "axs.combateffect.damage_dealt"
+  required-count: 5000
+  base-xp-reward: 200
+  conditions:
+    - type: event_payload
+      key: target_is_boss
+      operator: equals
+      value: "true"
+  increment-strategy:
+    type: payload_value          # 动态增量：从 Payload 读取伤害值
+    payload-key: damage_amount
+    max-per-event: 1000          # 单次事件最多增加 1000
+    scale: 1.0
+  weight: 1

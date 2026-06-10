@@ -1,0 +1,37 @@
+# =============================================================================
+# 每周任务池
+# 分配给玩家的每周任务从这里按 weight 加权随机抽取 weekly-count 个
+# 每 7 天自动重置并重新分配，周数自动递增
+# =============================================================================
+
+# -------- 示例：完成悬赏任务 --------
+weekly-quest-5:
+  display-name: "完成悬赏任务"
+  description: "本周累计完成5个悬赏任务"
+  difficulty: normal
+  event-topic: "axs.questgps.quest_completed"
+  required-count: 5
+  base-xp-reward: 500
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
+
+# -------- 示例：百斩 --------
+weekly-kill-100:
+  display-name: "百斩"
+  description: "本周累计击杀100个敌对生物"
+  difficulty: hard
+  event-topic: "axs.combateffect.kill_entity"
+  required-count: 100
+  base-xp-reward: 600
+  conditions:
+    - type: event_payload
+      key: entity_hostile
+      operator: equals
+      value: "true"
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2

@@ -1,0 +1,262 @@
+# AXS BattlePass 主界面
+# 打开方式: /axs battlepass open 或 Packet 触发
+# 数据交互: packetHandler init/update
+
+ui:
+  isHud: false
+  background: true
+  escClose: true
+  closeDied: true
+  through: false
+  screenScale: true
+  show: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.seasonName = packet['seasonName']
+      var.currentLevel = packet['currentLevel']
+      var.maxLevel = packet['maxLevel']
+      var.currentXp = packet['currentXp']
+      var.xpPerLevel = packet['xpPerLevel']
+      var.xpNeeded = packet['xpNeeded']
+      var.premiumUnlocked = packet['premiumUnlocked']
+      var.deluxeUnlocked = packet['deluxeUnlocked']
+      var.tier = packet['tier']
+      var.tierDisplay = packet['tierDisplay']
+      var.progressRatio = packet['progressRatio']
+    update: |-
+      var.packetId = packet['packetId']
+      var.seasonName = packet['seasonName']
+      var.currentLevel = packet['currentLevel']
+      var.maxLevel = packet['maxLevel']
+      var.currentXp = packet['currentXp']
+      var.xpPerLevel = packet['xpPerLevel']
+      var.xpNeeded = packet['xpNeeded']
+      var.premiumUnlocked = packet['premiumUnlocked']
+      var.deluxeUnlocked = packet['deluxeUnlocked']
+      var.tier = packet['tier']
+      var.tierDisplay = packet['tierDisplay']
+      var.progressRatio = packet['progressRatio']
+  action:
+    load: |-
+      var.packetId = 'AXS_BATTLEPASS'
+      var.seasonName = '等待同步'
+      var.currentLevel = 0
+      var.maxLevel = 100
+      var.currentXp = 0
+      var.xpPerLevel = 1000
+      var.xpNeeded = 1000
+      var.premiumUnlocked = false
+      var.deluxeUnlocked = false
+      var.tier = 'FREE'
+      var.tierDisplay = '&7免费'
+      var.progressRatio = 0
+
+controls:
+  根:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      主面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 600
+          height: 420
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~35,35,45,235
+              shape: ~round_rect
+              radius: 24
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,180
+              shadow:
+                xOffset: 2
+                yOffset: 2
+                blur: 6
+                color: ~0,0,0,120
+
+          标题:
+            type: Text
+            attribute:
+              x: 36
+              y: 28
+              texts: "&e&l战令系统"
+              fontSize: 56
+
+          赛季名:
+            type: Text
+            attribute:
+              x: 36
+              y: 78
+              texts: "'&7赛季: &f' + var.seasonName"
+              fontSize: 32
+
+          关闭按钮:
+            type: Texture
+            attribute:
+              x: 510
+              y: 24
+              width: 56
+              height: 56
+              normal: ~180,60,60,200
+              hover: ~Frosted:0;220,80,80,230
+              shape: ~round_rect
+              radius: 14
+            action:
+              clickLeft: |-
+                Screen.close()
+            effect:
+              stroke:
+                width: 2
+                color: ~255,120,120,120
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 28
+                  y: 14
+                  through: true
+                  center: true
+                  fontSize: 36
+                  texts: '&fX'
+
+          高级版标签:
+            type: Texture
+            attribute:
+              x: 360
+              y: 78
+              width: 200
+              height: 36
+              normal: "var.deluxeUnlocked ? '180,100,220,220' : var.premiumUnlocked ? '210,160,60,220' : '120,120,130,180'"
+              shape: ~round_rect
+              radius: 10
+              texts: "var.tierDisplay"
+              center: true
+              fontSize: 28
+
+          等级信息卡片:
+            type: Texture
+            attribute:
+              x: 36
+              y: 130
+              width: 528
+              height: 80
+              normal: ~50,50,60,180
+              shape: ~round_rect
+              radius: 18
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,100
+            children:
+              等级文本:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 12
+                  texts: "'&fLv.' + var.currentLevel + ' / ' + var.maxLevel"
+                  fontSize: 36
+              经验文本:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 46
+                  texts: "'&7经验: &f' + var.currentXp + ' / ' + var.xpPerLevel + '   (&8还需 ' + var.xpNeeded + '&8)'"
+                  fontSize: 28
+
+          进度条背景:
+            type: Texture
+            attribute:
+              x: 36
+              y: 226
+              width: 528
+              height: 24
+              normal: ~60,64,72,185
+              shape: ~round_rect
+              radius: 12
+
+          进度条填充:
+            type: Texture
+            attribute:
+              x: 36
+              y: 226
+              width: "var.progressRatio * 528"
+              height: 24
+              normal: ~75,175,120,255
+              shape: ~round_rect
+              radius: 12
+
+          按钮区:
+            type: Canvas
+            attribute:
+              x: 36
+              y: 280
+              width: 528
+              height: 80
+            children:
+              任务按钮:
+                type: Texture
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 250
+                  height: 56
+                  normal: ~60,120,200,220
+                  hover: ~Frosted:0;80,160,240,240
+                  shape: ~round_rect
+                  radius: 14
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'open_tasks')
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~80,180,255,120
+                children:
+                  任务按钮文字:
+                    type: Text
+                    attribute:
+                      x: 125
+                      y: 14
+                      through: true
+                      center: true
+                      fontSize: 36
+                      texts: "&f任务列表"
+
+              奖励按钮:
+                type: Texture
+                attribute:
+                  x: 278
+                  y: 0
+                  width: 250
+                  height: 56
+                  normal: ~200,100,60,220
+                  hover: ~Frosted:0;240,130,80,240
+                  shape: ~round_rect
+                  radius: 14
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'open_rewards')
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~255,160,100,120
+                children:
+                  奖励按钮文字:
+                    type: Text
+                    attribute:
+                      x: 125
+                      y: 14
+                      through: true
+                      center: true
+                      fontSize: 36
+                      texts: "&f领取奖励"
