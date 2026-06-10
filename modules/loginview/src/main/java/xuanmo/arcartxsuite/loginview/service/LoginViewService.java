@@ -34,6 +34,7 @@ import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.account.AccountType;
 import xuanmo.arcartxsuite.api.account.AccountTypeService;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.QqBindCapable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
@@ -68,6 +69,7 @@ public final class LoginViewService implements Listener {
     private final AuthMeBridge authMeBridge = new AuthMeBridge();
     private final AccountTypeService accountTypeService;
     private final Supplier<QqBindCapable> qqBindProvider;
+    private Supplier<EventBusCapability> eventBusProvider;
     private final Set<UUID> authenticatedPlayers = new HashSet<>();
     private final Map<UUID, Integer> failedAttempts = new HashMap<>();
     private final Set<String> allowedCommandPrefixes = new HashSet<>();
@@ -100,6 +102,10 @@ public final class LoginViewService implements Listener {
                 allowedCommandPrefixes.add(normalized);
             }
         }
+    }
+
+    public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
+        this.eventBusProvider = eventBusProvider;
     }
 
     public void start() throws SQLException {
@@ -479,6 +485,7 @@ public final class LoginViewService implements Listener {
             player.setInvulnerable(false);
         }
         sendResult(player, message, true);
+        publishLoginEvent(player);
         if (configuration.ui().closeOnLogin()) {
             packetBridge.sendPacket(player, uiId, "close", Map.of("message", message));
             Bukkit.getScheduler().runTaskLater(plugin, () -> packetBridge.closeUiUnsafe(player, uiId), 2L);
@@ -501,6 +508,17 @@ public final class LoginViewService implements Listener {
         if (attempts >= configuration.security().maxAttempts() && configuration.security().kickOnMaxAttempts()) {
             Bukkit.getScheduler().runTask(plugin, () -> player.kickPlayer(color(configuration.messages().kicked())));
         }
+    }
+
+    private void publishLoginEvent(Player player) {
+        if (eventBusProvider == null) return;
+        EventBusCapability eventBus = eventBusProvider.get();
+        if (eventBus == null) return;
+        java.util.Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("auth_mode", configuration.authMode().configKey());
+        AccountType accountType = accountType(player);
+        payload.put("account_type", accountType.id());
+        eventBus.publish("axs.loginview.login_success", player, payload);
     }
 
     private boolean validatePasswordShape(Player player, String password, boolean registering) {

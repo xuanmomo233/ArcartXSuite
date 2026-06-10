@@ -16,7 +16,9 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
     private boolean available;
     private Object itemStackNms;
     private Method item2jsonMethod;
+    private Method getDisplayNameMethod;
     private boolean failureWarned;
+    private boolean displayNameWarned;
 
     public ArcartXItemStackBridge(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -26,7 +28,9 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
         available = false;
         itemStackNms = null;
         item2jsonMethod = null;
+        getDisplayNameMethod = null;
         failureWarned = false;
+        displayNameWarned = false;
 
         Plugin arcartX = plugin.getServer().getPluginManager().getPlugin("ArcartX");
         if (arcartX == null) {
@@ -51,9 +55,27 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
                 throw new NoSuchMethodException("ItemBridge.item2json/item2Json(ItemStack)");
             }
 
+            // 尝试查找获取显示名称的方法（用于获取本地化中文名）
+            Method displayMethod = findMethod(itemStackNmsClass, "getDisplayName", ItemStack.class);
+            if (displayMethod == null) {
+                displayMethod = findMethod(itemStackNmsClass, "getName", ItemStack.class);
+            }
+            if (displayMethod == null && instance != null) {
+                displayMethod = findMethod(instance.getClass(), "getDisplayName", ItemStack.class);
+                if (displayMethod == null) {
+                    displayMethod = findMethod(instance.getClass(), "getName", ItemStack.class);
+                }
+            }
+
             itemStackNms = instance;
             item2jsonMethod = method;
+            getDisplayNameMethod = displayMethod;
             available = true;
+            if (displayMethod != null) {
+                plugin.getLogger().info("ArcartX ItemStackBridge 显示名方法已绑定: " + displayMethod.getDeclaringClass().getName() + "#" + displayMethod.getName());
+            } else {
+                plugin.getLogger().warning("ArcartX ItemStackBridge 未找到 getDisplayName/getName 方法，本地化名称将不可用。");
+            }
             return true;
         } catch (ReflectiveOperationException exception) {
             plugin.getLogger().warning("初始化 ArcartX ItemStack 桥接失败: " + exception.getMessage());
@@ -65,7 +87,9 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
         available = false;
         itemStackNms = null;
         item2jsonMethod = null;
+        getDisplayNameMethod = null;
         failureWarned = false;
+        displayNameWarned = false;
     }
 
     public boolean isAvailable() {
@@ -96,6 +120,44 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
                         + (cause == null ? exception.getClass().getSimpleName() : cause.getMessage())
                 );
                 failureWarned = true;
+            }
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * 尝试通过 ArcartX 桥接获取物品的本地化显示名称。
+     * <p>
+     * 若 ArcartX ItemBridge 提供 {@code getDisplayName} 或 {@code getName} 方法，
+     * 则返回其本地化结果（可能包含中文）；否则返回 empty。
+     *
+     * @param itemStack Bukkit 物品栈
+     * @return 本地化名称，不可用时返回 empty
+     */
+    public Optional<String> getItemDisplayName(ItemStack itemStack) {
+        if (!available || getDisplayNameMethod == null || itemStack == null) {
+            return Optional.empty();
+        }
+
+        try {
+            Object result = getDisplayNameMethod.invoke(
+                Modifier.isStatic(getDisplayNameMethod.getModifiers()) ? null : itemStackNms,
+                itemStack
+            );
+            if (result instanceof String name && !name.isBlank()) {
+                return Optional.of(name);
+            }
+            return Optional.empty();
+        } catch (IllegalAccessException | InvocationTargetException | IllegalArgumentException exception) {
+            if (!displayNameWarned) {
+                Throwable cause = exception instanceof InvocationTargetException invocationTargetException
+                    ? invocationTargetException.getCause()
+                    : exception;
+                plugin.getLogger().warning(
+                    "ArcartX ItemStack getDisplayName 调用失败: "
+                        + (cause == null ? exception.getClass().getSimpleName() : cause.getMessage())
+                );
+                displayNameWarned = true;
             }
             return Optional.empty();
         }

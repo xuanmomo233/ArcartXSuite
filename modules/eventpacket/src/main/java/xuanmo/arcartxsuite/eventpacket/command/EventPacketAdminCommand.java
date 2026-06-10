@@ -52,6 +52,9 @@ public final class EventPacketAdminCommand implements ModuleCommandHandler {
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) return filter(ACTIONS, args[1]);
+        if (args.length == 4 && "fire".equalsIgnoreCase(args[1])) {
+            return null; // player names
+        }
         return List.of();
     }
 

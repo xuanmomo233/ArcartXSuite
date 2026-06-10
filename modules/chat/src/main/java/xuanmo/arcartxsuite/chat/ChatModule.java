@@ -133,6 +133,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
             completionUiId,
             context.crossServer()
         );
+        service.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
         adminCommand = new ChatAdminCommand(() -> service, messages());
 

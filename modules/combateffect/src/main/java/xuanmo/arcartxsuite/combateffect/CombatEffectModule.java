@@ -128,6 +128,7 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
         exportDamageDisplayResources(context);
 
         packetService = new CombatEffectPacketService(plugin, packetConfiguration, packetBridge, logger);
+        packetService.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         packetService.start();
 
         if (clientBridge != null && clientBridge.isAvailable()) {

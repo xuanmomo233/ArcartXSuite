@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.LivingEntity;
@@ -16,6 +17,7 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
 import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
 import xuanmo.arcartxsuite.api.combat.EntityCombatMetadata;
@@ -31,6 +33,7 @@ public final class CombatEffectPacketService implements Listener {
     private final CombatEffectPacketConfiguration configuration;
     private final ArcartXPacketBridge packetBridge;
     private final Logger logger;
+    private Supplier<EventBusCapability> eventBusProvider;
 
     // cooldown: key = "packetId:playerUUID", value = expiry timestamp
     private final ConcurrentHashMap<String, Long> cooldownMap = new ConcurrentHashMap<>();
@@ -45,6 +48,10 @@ public final class CombatEffectPacketService implements Listener {
         this.configuration = configuration;
         this.packetBridge = packetBridge;
         this.logger = logger;
+    }
+
+    public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
+        this.eventBusProvider = eventBusProvider;
     }
 
     public void start() {
@@ -72,6 +79,7 @@ public final class CombatEffectPacketService implements Listener {
         }
         String deathMessage = event instanceof PlayerDeathEvent pde ? pde.getDeathMessage() : "";
         dispatchPackets(PacketTrigger.KILL, CombatPacketContext.fromKill(killer, victim, deathMessage));
+        publishKillEvent(killer, victim, event instanceof PlayerDeathEvent);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -139,6 +147,28 @@ public final class CombatEffectPacketService implements Listener {
                     );
                 }
             }
+        }
+    }
+
+    private void publishKillEvent(Player killer, LivingEntity victim, boolean isPlayerKill) {
+        if (eventBusProvider == null) {
+            return;
+        }
+        EventBusCapability eventBus = eventBusProvider.get();
+        if (eventBus == null) {
+            return;
+        }
+        try {
+            String topic = isPlayerKill ? "axs.combateffect.player_death" : "axs.combateffect.kill_entity";
+            Map<String, String> payload = new java.util.LinkedHashMap<>();
+            payload.put("entityType", victim.getType().name());
+            payload.put("entityName", victim.getName());
+            if (isPlayerKill) {
+                payload.put("victim", victim.getName());
+            }
+            eventBus.publish(topic, killer, payload);
+        } catch (Exception e) {
+            logger.warning("CombatEffect EventBus 发布失败: " + e.getMessage());
         }
     }
 

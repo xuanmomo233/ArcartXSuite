@@ -173,6 +173,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
             () -> context.getCapability(xuanmo.arcartxsuite.api.capability.QqBindCapable.class),
             uiBinding.runtimeUiId()
         );
+        service.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
 
         JdbcLoginViewRepository lvRepo = (JdbcLoginViewRepository) repository;

@@ -57,6 +57,7 @@ import xuanmo.arcartxsuite.chat.storage.ChatRepository;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.chat.service.ChatEnvelopeCodec;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
 
 public final class ChatService implements Listener {
@@ -82,6 +83,7 @@ public final class ChatService implements Listener {
     private final Map<String, Long> processedEnvelopeKeys = new ConcurrentHashMap<>();
     private final Set<String> cloudWords = ConcurrentHashMap.newKeySet();
     private final java.util.function.Supplier<TabRefreshable> tabRefreshableProvider;
+    private java.util.function.Supplier<EventBusCapability> eventBusProvider;
     private final String completionUiId;
     private final CrossServerAPI crossServer;
 
@@ -118,6 +120,10 @@ public final class ChatService implements Listener {
         });
     }
 
+    public void setEventBusProvider(java.util.function.Supplier<EventBusCapability> eventBusProvider) {
+        this.eventBusProvider = eventBusProvider;
+    }
+
     public void start() throws Exception {
         repository.initialize();
         crossServerChannel = crossServer.openChannel(
@@ -136,6 +142,16 @@ public final class ChatService implements Listener {
         cleanupTask = Bukkit.getScheduler().runTaskTimer(plugin, this::runCleanup, CLEANUP_PERIOD_TICKS, CLEANUP_PERIOD_TICKS);
         scheduleCloudRefresh();
         broadcastCompletionPlayerList();
+    }
+
+    private void publishChatEvent(Player player, String channelId, String type) {
+        if (eventBusProvider == null) return;
+        EventBusCapability eventBus = eventBusProvider.get();
+        if (eventBus == null) return;
+        Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("channel_id", channelId);
+        payload.put("type", type);
+        eventBus.publish("axs.chat.chat_message_sent", player, payload);
     }
 
     public void shutdown() {
@@ -572,6 +588,7 @@ public final class ChatService implements Listener {
             crossServerChannel.publish(ChatEnvelopeCodec.encode(envelope));
         }
         trackMessageFingerprint(sender.getUniqueId(), processedMessage);
+        publishChatEvent(sender, channel.id(), "channel");
         return ChatOperationResult.success("聊天已发送。");
     }
 

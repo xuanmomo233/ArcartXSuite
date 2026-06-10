@@ -75,6 +75,7 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
             new File(dataDir, "props"), context.logger());
 
         service = new PropService(context.plugin(), configuration, propBridge, keyMapping, language, definitions, context.attributeBridge());
+        service.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
         adminCommand = new PropAdminCommand(() -> service, messages());
 

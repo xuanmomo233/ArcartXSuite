@@ -276,6 +276,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                 rankingCacheService,
                 () -> context.crossServer().nodeId()
             );
+            killRecordingService.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
             killRecordingService.start();
             if (crossServerService != null) {
                 crossServerService.attachKillRecording(killRecordingService);

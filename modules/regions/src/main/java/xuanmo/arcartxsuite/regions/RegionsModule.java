@@ -107,6 +107,7 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         regionManager.loadAll();
 
         protectionListener = new RegionProtectionListener(regionManager, configuration);
+        protectionListener.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         selectionListener = new SelectionListener(regionManager, configuration);
         Bukkit.getPluginManager().registerEvents(protectionListener, context.plugin());
         Bukkit.getPluginManager().registerEvents(selectionListener, context.plugin());

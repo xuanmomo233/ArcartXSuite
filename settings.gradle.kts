@@ -27,6 +27,8 @@ include("modules:regions")
 include("modules:qqbot")
 include("modules:menu")
 include("modules:afkreward")
+include("modules:battlepass")
+include("modules:fishing")
 
 // ─── 代理端插件 ───
 include("proxy:common")

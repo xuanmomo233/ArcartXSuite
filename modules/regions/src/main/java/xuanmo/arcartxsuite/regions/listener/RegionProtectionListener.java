@@ -41,6 +41,9 @@ import org.bukkit.event.block.BlockPistonExtendEvent;
 import org.bukkit.event.block.BlockPistonRetractEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.entity.EntityRegainHealthEvent;
+import java.util.Map;
+import java.util.function.Supplier;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.regions.config.RegionsConfiguration;
 import xuanmo.arcartxsuite.regions.model.Region;
 import xuanmo.arcartxsuite.regions.model.RegionFlag;
@@ -53,10 +56,15 @@ public final class RegionProtectionListener implements Listener {
 
     private final RegionManager manager;
     private final RegionsConfiguration config;
+    private Supplier<EventBusCapability> eventBusProvider;
 
     public RegionProtectionListener(RegionManager manager, RegionsConfiguration config) {
         this.manager = manager;
         this.config = config;
+    }
+
+    public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
+        this.eventBusProvider = eventBusProvider;
     }
 
     // ─── 方块破坏 ───
@@ -380,6 +388,7 @@ public final class RegionProtectionListener implements Listener {
                         config.messages().regionLeave().replace("{region}", lastId)));
                 }
             }
+            publishRegionEvent(player, lastId, "leave");
         }
 
         // 进入新区域
@@ -397,9 +406,20 @@ public final class RegionProtectionListener implements Listener {
                 sendNotification(player, ChatColor.translateAlternateColorCodes('&',
                     config.messages().regionEnter().replace("{region}", currentId)));
             }
+            publishRegionEvent(player, currentId, "enter");
         }
 
         manager.setLastRegion(player.getUniqueId(), currentId);
+    }
+
+    private void publishRegionEvent(Player player, String regionId, String type) {
+        if (eventBusProvider == null) return;
+        EventBusCapability eventBus = eventBusProvider.get();
+        if (eventBus == null) return;
+        Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("region_id", regionId);
+        payload.put("type", type);
+        eventBus.publish("axs.regions.region_change", player, payload);
     }
 
     // ─── 药水泼溅 ───

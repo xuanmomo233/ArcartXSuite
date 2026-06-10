@@ -11,6 +11,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import javax.sql.DataSource;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -28,6 +29,7 @@ import xuanmo.arcartxsuite.entitytracker.boss.tracker.BossSession;
 import xuanmo.arcartxsuite.entitytracker.config.DropRecordingSettings;
 import xuanmo.arcartxsuite.entitytracker.config.EntityTrackerNewFeaturesSettings;
 import xuanmo.arcartxsuite.entitytracker.crossserver.EntityTrackerCrossServerService;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.entitytracker.dao.BossDropStatisticsDao;
 import xuanmo.arcartxsuite.entitytracker.dao.BossKillRecordDao;
 import xuanmo.arcartxsuite.entitytracker.entity.BossKillRecord;
@@ -47,6 +49,7 @@ public final class BossKillRecordingService implements Listener {
     private final EntityTrackerCrossServerService crossServerService;
     private final CrossServerRankingCacheService rankingCacheService;
     private final java.util.function.Supplier<String> nodeIdSupplier;
+    private Supplier<EventBusCapability> eventBusProvider;
     private final Map<UUID, PendingDeathCapture> pendingDeaths = new ConcurrentHashMap<>();
 
     public BossKillRecordingService(
@@ -72,6 +75,10 @@ public final class BossKillRecordingService implements Listener {
         if (settings.dropRecording().enabled() || settings.dropAllocation().enabled()) {
             Bukkit.getPluginManager().registerEvents(this, plugin);
         }
+    }
+
+    public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
+        this.eventBusProvider = eventBusProvider;
     }
 
     public void shutdown() {
@@ -198,6 +205,23 @@ public final class BossKillRecordingService implements Listener {
         if (rankingCacheService != null) {
             rankingCacheService.requestRefresh();
         }
+
+        publishBossKillEvent(settlement);
+    }
+
+    private void publishBossKillEvent(BossDamageSettlementRecord settlement) {
+        if (eventBusProvider == null) return;
+        EventBusCapability eventBus = eventBusProvider.get();
+        if (eventBus == null) return;
+        var topEntry = settlement.topEntry();
+        if (topEntry == null || topEntry.playerUuid() == null) return;
+        org.bukkit.entity.Player player = Bukkit.getPlayer(topEntry.playerUuid());
+        if (player == null || !player.isOnline()) return;
+        java.util.Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("boss_id", settlement.mythicMobId());
+        payload.put("boss_name", settlement.bossDisplayName());
+        payload.put("damage_rank", String.valueOf(topEntry.rank()));
+        eventBus.publish("axs.entitytracker.boss_kill", player, payload);
     }
 
     private void updateDropStatistics(String bossId, String serverName, List<DropItemSnapshot> drops)

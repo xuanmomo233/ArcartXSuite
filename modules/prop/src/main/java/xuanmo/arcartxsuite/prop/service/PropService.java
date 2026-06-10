@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -25,6 +26,7 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.bridge.ArcartXPropBridge;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.condition.ScriptConditionServices;
@@ -45,6 +47,7 @@ public final class PropService implements Listener {
     private final PropAttributePlusService attributePlusService;
     private final PropMythicLibService mythicLibService;
     private final PropSymphonyService symphonyService;
+    private Supplier<EventBusCapability> eventBusProvider;
     private final Set<String> registeredBindingIds = new LinkedHashSet<>();
 
     public PropService(
@@ -65,6 +68,10 @@ public final class PropService implements Listener {
         this.attributePlusService = new PropAttributePlusService(plugin, attributeBridge.attributePlus());
         this.mythicLibService = new PropMythicLibService(plugin, configuration.mythicLib(), attributeBridge.mythicLib());
         this.symphonyService = new PropSymphonyService(plugin, attributeBridge.symphony());
+    }
+
+    public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
+        this.eventBusProvider = eventBusProvider;
     }
 
     public void start() {
@@ -310,6 +317,7 @@ public final class PropService implements Listener {
         }
 
         executeEffects(player, definition);
+        publishPropUsedEvent(player, definition.id());
 
         if (configuration.debug()) {
             plugin.getLogger().info(
@@ -360,6 +368,15 @@ public final class PropService implements Listener {
         }
         bridge.setCooldownTag(working, coolDownGroup);
         return working;
+    }
+
+    private void publishPropUsedEvent(Player player, String propId) {
+        if (eventBusProvider == null) return;
+        EventBusCapability eventBus = eventBusProvider.get();
+        if (eventBus == null) return;
+        Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("prop_id", propId);
+        eventBus.publish("axs.prop.prop_used", player, payload);
     }
 
     private void executeEffects(Player player, PropDefinition definition) {
