@@ -29,6 +29,7 @@ include("modules:menu")
 include("modules:afkreward")
 include("modules:battlepass")
 include("modules:fishing")
+include("modules:lottery")
 
 // ─── 代理端插件 ───
 include("proxy:common")

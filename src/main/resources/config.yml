@@ -458,5 +458,20 @@ modules:
     enabled: false
     # Menu 通用 ArcartX 菜单系统（配置驱动，支持 ESC 暂停界面替换）。
 
+  battlepass:
+    enabled: false
+    # 付费模块，需 license.yml 授权通过。
+    # BattlePass 战令系统（免费/高级/典藏通行证 + 每日/每周/赛季任务池）。
+
+  fishing:
+    enabled: false
+    # 付费模块，需 license.yml 授权通过。
+    # Fishing 钓鱼系统（星露谷风格钓鱼小游戏、多水域生态、饵料加成、宝藏奖励）。
+
+  lottery:
+    enabled: false
+    # 付费模块，需 license.yml 授权通过。
+    # Lottery 抽奖系统（CS 开箱动画 + 原神祈愿卡池、保底机制、磨损度系统）。
+
 
 

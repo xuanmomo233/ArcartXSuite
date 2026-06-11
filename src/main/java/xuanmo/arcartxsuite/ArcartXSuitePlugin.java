@@ -82,6 +82,7 @@ public class ArcartXSuitePlugin extends JavaPlugin {
     private xuanmo.arcartxsuite.auth.AuthlibInjectorManager authlibInjectorManager;
     private xuanmo.arcartxsuite.auth.AuthCommand authCommand;
     private ChatSignBypassService chatSignBypassService;
+    private int integrityFlags;
     /** 宿主自身的 spec（config.yml） */
     private final List<ModuleConfigSpec> hostConfigSpecs = new ArrayList<>();
     /** 外部模块提交的 spec： ownerId -> (spec, classLoader) */
@@ -120,6 +121,20 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         // 1. License
         licenseService = new LicenseService(this);
         licenseService.initialize();
+        if (licenseService.currentConfig() == null || !licenseService.currentConfig().hasLicenseIdentity()) {
+            consoleError("license.yml 未配置有效的 QQ 号或授权码，ArcartXSuite 无法启动。");
+            consoleError("请编辑 plugins/ArcartXSuite/license.yml，填写 qq 和 keys 后重启服务器。");
+            Bukkit.getPluginManager().disablePlugin(this);
+            return;
+        }
+
+        // 1a. Native 库加载 + 运行时环境完整性检查（反破解）
+        xuanmo.arcartxsuite.security.NativeBridge.tryLoad(getDataFolder());
+        xuanmo.arcartxsuite.security.JarIntegrityVerifier integrityVerifier = new xuanmo.arcartxsuite.security.JarIntegrityVerifier(getLogger());
+        this.integrityFlags = integrityVerifier.verify(getClass());
+        if (!integrityVerifier.isClean()) {
+            consoleWarn(ChatColor.RED + "[AXS-Security] " + integrityVerifier.summary());
+        }
 
         // 2. ClientPacketGuard
         reloadClientPacketGuard();
@@ -200,8 +215,8 @@ public class ArcartXSuitePlugin extends JavaPlugin {
             command.setTabCompleter(handler);
         }
 
-        // 8. 启动心跳服务
-        heartbeatService = new HeartbeatService(this, licenseService, moduleRegistry);
+        // 8. 启动心跳服务（始终上报，即使无授权也纳入监控）
+        heartbeatService = new HeartbeatService(this, licenseService, moduleRegistry, integrityFlags);
         heartbeatService.start();
 
         // 9. 跑一轮全量诊断（只报警，不写盘）

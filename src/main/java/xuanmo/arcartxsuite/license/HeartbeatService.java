@@ -28,13 +28,15 @@ public final class HeartbeatService {
     private final Logger logger;
     private final LicenseService licenseService;
     private final ModuleRegistry moduleRegistry;
+    private final int initialIntegrityFlags;
     private ScheduledExecutorService scheduler;
 
-    public HeartbeatService(JavaPlugin plugin, LicenseService licenseService, ModuleRegistry moduleRegistry) {
+    public HeartbeatService(JavaPlugin plugin, LicenseService licenseService, ModuleRegistry moduleRegistry, int initialIntegrityFlags) {
         this.plugin = plugin;
         this.logger = plugin.getLogger();
         this.licenseService = licenseService;
         this.moduleRegistry = moduleRegistry;
+        this.initialIntegrityFlags = initialIntegrityFlags;
     }
 
     public void start() {
@@ -100,7 +102,7 @@ public final class HeartbeatService {
 
     private @org.jetbrains.annotations.Nullable HeartbeatSnapshot captureSnapshot() {
         LicenseConfig config = licenseService.currentConfig();
-        if (config == null || !config.hasLicenseIdentity()) {
+        if (config == null) {
             return null;
         }
         HostFingerprint.Snapshot fingerprint = licenseService.fingerprint();
@@ -112,6 +114,14 @@ public final class HeartbeatService {
         if (recentTps != null && recentTps.length > 0) {
             tps = Math.round(recentTps[0] * 10.0) / 10.0;
         }
+        // 运行时再做一次轻量 native 环境检测，合并到初始 flags 中
+        int runtimeFlags = initialIntegrityFlags;
+        if (xuanmo.arcartxsuite.security.NativeBridge.isAvailable()) {
+            try {
+                runtimeFlags |= xuanmo.arcartxsuite.security.NativeBridge.environmentCheck();
+            } catch (UnsatisfiedLinkError ignored) {
+            }
+        }
         return new HeartbeatSnapshot(
             config,
             fingerprint,
@@ -119,7 +129,8 @@ public final class HeartbeatService {
             Bukkit.getVersion(),
             Bukkit.getOnlinePlayers().size(),
             Bukkit.getMaxPlayers(),
-            tps
+            tps,
+            runtimeFlags
         );
     }
 
@@ -139,6 +150,7 @@ public final class HeartbeatService {
         if (snapshot.tps() != null) {
             request.addProperty("tps", snapshot.tps());
         }
+        request.addProperty("integrityFlags", snapshot.integrityFlags());
 
         JsonArray modules = new JsonArray();
         if (moduleRegistry != null) {
@@ -171,7 +183,8 @@ public final class HeartbeatService {
         String serverVersion,
         int onlinePlayers,
         int maxPlayers,
-        Double tps
+        Double tps,
+        int integrityFlags
     ) {}
 
     private long serverStartTime() {

@@ -16,7 +16,7 @@ import xuanmo.arcartxsuite.license.LicenseGateway.LicenseNetworkException;
 
 public final class LicenseService {
 
-    public static final Set<String> PAID_MODULES = Set.of("warehouse", "map", "mail", "title", "questgps", "conversation", "tab", "entitytracker", "market", "qqbot");
+    public static final Set<String> PAID_MODULES = Set.of("warehouse", "map", "mail", "title", "questgps", "conversation", "tab", "entitytracker", "market", "qqbot", "battlepass", "fishing", "lottery");
 
     private final JavaPlugin plugin;
     private final Logger logger;
