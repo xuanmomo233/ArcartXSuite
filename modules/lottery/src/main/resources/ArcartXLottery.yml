@@ -1,0 +1,20 @@
+config-version: 1
+
+pools-directory: "lottery/pools"
+
+storage:
+  mode: sqlite
+  sqlite-file-name: "lottery.db"
+  pool-size: 1
+  # mysql-host: "localhost"
+  # mysql-port: 3306
+  # mysql-database: "axs_lottery"
+  # mysql-username: "root"
+  # mysql-password: ""
+  # table-prefix: "lottery_"
+
+# 原神跨池共享组定义
+# 同一组内的 Gacha 池子共享保底计数
+shared-pity-groups:
+  character_events: "character_event_*"
+  weapon_events: "weapon_event_*"

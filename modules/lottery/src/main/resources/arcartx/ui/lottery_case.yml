@@ -1,0 +1,680 @@
+# AXS Lottery Case 开箱 UI
+# 全部使用纯色块与渐变色，无外部贴图依赖
+# 品质颜色由物品 lore 中 "rarity" 字段驱动
+ui:
+  match:
+    - "AXS:lottery_case"
+  isHud: false
+  through: false
+  escClose: true
+  background: false
+  closeDied: false
+  show: true
+  screenScale: true
+  action:
+    load: |-
+      # ── 品质颜色字典 ──
+      var.rarityColors = {}
+      var.rarityColors['COMMON']    = '~192,195,198,255'
+      var.rarityColors['UNCOMMON']  = '~176,195,217,255'
+      var.rarityColors['RARE']      = '~94,152,217,255'
+      var.rarityColors['EPIC']      = '~136,71,255,255'
+      var.rarityColors['LEGENDARY'] = '~235,75,75,255'
+      var.rarityColors['MYTHIC']    = '~255,215,0,255'
+      # 默认灰色兜底
+      var.rarityColors[''] = '~128,128,128,255'
+    open: |-
+      var.random = 0.8 + Math.random() * 0.01
+      var.V = TwoLerp(1, 3, 0.5, 2000, 6000)
+      val.Scroll.moveX = 0.0005
+      val.开箱动画.visible = true
+      val.奖励预览.visible = false
+      val.交互按键.visible = false
+      async {
+        Thread.sleep(10000)
+        val.Scroll.moveX = 0
+        val.开箱动画.visible = false
+        val.奖品展示单抽.visible = true
+      }
+    tick: |-
+      if(var.V < 1 && val.Scroll.moveX < 0.8){
+        var.V = Math.max(var.V, 0.5)
+      }
+      if(val.Scroll.moveX < var.random){
+        val.Scroll.moveX = val.Scroll.moveX + (0.0003 * var.V)
+      } elif(val.Scroll.moveX >= var.random){
+        val.Scroll.moveX = var.random
+        var.V = 0
+      }
+  defaultOpen: true
+
+controls:
+  # ── 全屏半透明遮罩背景 ──
+  背景遮罩:
+    type: Adaptive
+    attribute:
+      width: 1920
+      height: 1080
+      point: ~stretch_all
+    children:
+      遮罩色块:
+        type: Texture
+        attribute:
+          point: ~stretch_all
+          normal: ~0,0,0,200
+      # 顶部装饰渐变条
+      顶部渐变:
+        type: Texture
+        attribute:
+          width: 1920
+          height: 8
+          point: ~top_center
+          normal: ~255,255,255,0
+        effect:
+          gradient:
+            color1: ~255,215,0,200
+            color2: ~255,100,0,0
+            type: 0
+            angleDeg: 90
+      # 底部装饰渐变条
+      底部渐变:
+        type: Texture
+        attribute:
+          width: 1920
+          height: 8
+          point: ~bottom_center
+          normal: ~255,255,255,0
+        effect:
+          gradient:
+            color1: ~255,100,0,0
+            color2: ~255,215,0,200
+            type: 0
+            angleDeg: 90
+
+  # ── 奖品展示（单抽结果）──
+  奖品展示单抽:
+    type: Adaptive
+    val: 奖品展示单抽
+    attribute:
+      width: 1920
+      point: ~stretch_all
+      height: 1080
+      visible: false
+    children:
+      展示总布局:
+        type: Canvas
+        attribute:
+          width: 128
+          point: ~stretch_all
+          height: 128
+        children:
+          奖品名称:
+            type: Text
+            attribute:
+              texts: "self.parent['奖品槽位'].getSlotItemStack().getName()"
+              center: false
+              y: 20.0
+              fontSize: 120
+              point: ~top_center
+          奖品副标题:
+            type: Text
+            attribute:
+              texts: "self.parent['奖品槽位'].getItemText('rarity') != '' ? self.parent['奖品槽位'].getItemText('rarity') : 'COMMON'"
+              y: 100.0
+              fontSize: 81
+              point: ~top_center
+          奖品槽位:
+            type: Slot
+            attribute:
+              normal: ~0,0,0,0
+              width: 300
+              height: 300
+              point: ~middle_center
+              id: 13
+              itemScale: 1.2
+          # 传说级径向渐变背景
+          品质光环:
+            type: Texture
+            attribute:
+              width: 500
+              height: 500
+              point: ~middle_center
+              normal: ~0,0,0,0
+            effect:
+              gradient:
+                color1: ~255,215,0,60
+                color2: ~255,215,0,0
+                type: 1
+                angleDeg: 0
+          品质贴图:
+            type: Texture
+            attribute:
+              rarityColor: ''
+              normal: "{self.rarityColor}"
+              width: 600
+              y: 200
+              point: ~top_center
+              height: 10
+              shape: ~round_rect
+              radius: 5
+            action:
+              create: |-
+                var.r = self.parent['奖品槽位'].getItemText('rarity')
+                self.rarityColor = var.rarityColors[var.r] != null ? var.rarityColors[var.r] : var.rarityColors['']
+
+  # ── 奖品展示（十连抽结果）──
+  奖品展示十连抽:
+    type: Adaptive
+    val: 奖品展示十连抽
+    attribute:
+      width: 1920
+      point: ~stretch_all
+      height: 1080
+      visible: false
+    children:
+      十连总布局:
+        type: Canvas
+        val: 十连总布局
+        attribute:
+          width: 128
+          point: ~middle_center
+          height: 128
+        children:
+          十连网格:
+            type: HGrid
+            attribute:
+              spaceBetweenX: 50
+              spaceBetweenY: 20
+              column: 5
+              point: ~middle_center
+            action:
+              create: |-
+                for(i in range(1,9)){
+                  十连抽 = self['十连单个布局'].copy('十连单个布局' + i.round)
+                  十连抽['奖品槽位'].id = 8 + i.round
+                }
+            children:
+              十连单个布局:
+                type: Canvas
+                attribute:
+                  width: 300
+                  point: ~stretch_all
+                  height: 300
+                children:
+                  品质背景:
+                    type: Texture
+                    attribute:
+                      rarityColor: ''
+                      normal: "{self.rarityColor}"
+                      width: 200
+                      height: 150
+                      point: ~middle_center
+                      scale: 1.5
+                      shape: ~round_rect
+                      radius: 8
+                    action:
+                      create: |-
+                        var.r = self.parent['奖品槽位'].getItemText('rarity')
+                        self.rarityColor = var.rarityColors[var.r] != null ? var.rarityColors[var.r] : var.rarityColors['']
+                  奖品名称:
+                    type: Text
+                    attribute:
+                      texts: "self.parent['奖品槽位'].getSlotItemStack().getName()"
+                      center: false
+                      y: 20.0
+                      fontSize: 49
+                      point: ~bottom_center
+                  奖品槽位:
+                    type: Slot
+                    attribute:
+                      normal: ~0,0,0,0
+                      width: 200
+                      height: 200
+                      point: ~middle_center
+                      id: 8
+                      x: 15.0
+
+  # ── 开箱动画（横向滚动带）──
+  开箱动画:
+    type: Adaptive
+    val: 开箱动画
+    attribute:
+      width: 1920
+      height: 1080
+      visible: false
+      point: ~stretch_all
+    children:
+      总布局:
+        type: Canvas
+        attribute:
+          width: 1920
+          point: ~stretch_all
+          height: 1080
+        children:
+          横向滚动栏:
+            type: Scroll
+            val: Scroll
+            attribute:
+              width: 1780
+              y: 0
+              point: ~middle_center
+              height: 150
+              moveX: 0
+              through: false
+              scale: 1.5
+            children:
+              奖励网格:
+                type: HStack
+                attribute:
+                  y: 0
+                  maxSize: 999999
+                  spaceBetween: 100
+                  through: false
+                  maxDragX: 999999
+                action:
+                  create: |-
+                    for(i in range(1,9)){
+                      抽奖布局 = self['抽奖布局'].copy('抽奖布局' + i.round)
+                      抽奖布局['slot0'].id = i.round
+                    }
+                    for(i in range(1,9)){
+                      抽奖布局 = self['抽奖布局'].copy('抽奖布局' + 9 + i.round)
+                      抽奖布局['slot0'].id = i.round
+                    }
+                    for(i in range(1,9)){
+                      抽奖布局 = self['抽奖布局'].copy('抽奖布局' + 18 + i.round)
+                      抽奖布局['slot0'].id = i.round
+                    }
+                children:
+                  前占位布局:
+                    type: Canvas
+                    attribute:
+                      through: false
+                      width: 1500
+                      height: 150
+                      x: 0
+                      y: 0
+                      scale: 1.5
+                  抽奖布局:
+                    type: Canvas
+                    attribute:
+                      width: 200
+                      height: 150
+                      scale: 1.5
+                      through: false
+                    children:
+                      品质背景:
+                        type: Texture
+                        attribute:
+                          rarityColor: ''
+                          normal: "{self.rarityColor}"
+                          width: 200
+                          height: 150
+                          point: ~top_left
+                          scale: 1.5
+                          shape: ~round_rect
+                          radius: 8
+                        action:
+                          create: |-
+                            var.r = self.parent['slot0'].getItemText('rarity')
+                            self.rarityColor = var.rarityColors[var.r] != null ? var.rarityColors[var.r] : var.rarityColors['']
+                      slot0:
+                        type: Slot
+                        attribute:
+                          width: 100
+                          point: ~top_left
+                          height: 100
+                          x: 85
+                          y: 40
+                          scale: 1.5
+                          through: false
+                          id: 0
+          # 抽奖幕布（左右遮罩，聚焦中间）
+          抽奖幕布:
+            type: Texture
+            attribute:
+              normal: ~0,0,0,220
+              width: 4096
+              height: 2160
+              through: true
+              point: ~middle_center
+          # 准中线（高亮指示器）
+          准中线:
+            type: Texture
+            attribute:
+              normal: ~255,250,0,255
+              width: 5
+              point: ~middle_center
+              height: 150
+              through: true
+              scale: 1.5
+
+  # ── 奖励预览（开箱前展示所有可能奖品）──
+  奖励预览:
+    type: Adaptive
+    val: 奖励预览
+    attribute:
+      width: 1920
+      point: ~stretch_all
+      height: 1080
+      visible: true
+    children:
+      箱子总布局:
+        type: Canvas
+        val: 箱子总布局
+        attribute:
+          width: 128
+          point: ~stretch_all
+          height: 128
+          visible: true
+        children:
+          # 箱子图标用纯色圆角块代替
+          箱子贴图:
+            type: Texture
+            attribute:
+              normal: ~200,150,50,255
+              width: 200
+              y: 120.0
+              point: ~top_center
+              height: 200
+              shape: ~round_rect
+              radius: 20
+            effect:
+              stroke:
+                width: 3
+                color: ~255,215,0,255
+          开箱:
+            type: Text
+            attribute:
+              texts:
+                - ~开箱
+              center: false
+              y: 30.0
+              fontSize: 120
+              point: ~top_center
+          箱子名称:
+            type: Text
+            attribute:
+              texts: "~解锁  {var.poolName}"
+              center: false
+              y: 110.0
+              fontSize: 50
+              point: ~top_center
+      奖励展示总布局:
+        type: Canvas
+        attribute:
+          width: 1820
+          point: ~middle_center
+          height: 128
+          y: -70.0
+        children:
+          分界线:
+            type: Texture
+            attribute:
+              normal: ~255,255,255,255
+              width: 1820
+              height: 5
+              point: ~horizontal_stretch_bottom
+              shape: ~round_rect
+              radius: 4
+            children:
+              介绍文本:
+                type: Text
+                attribute:
+                  texts:
+                    - ~这个箱子可能有以下物品
+                  y: -40.0
+                  fontSize: 49
+                  point: ~bottom_left
+          纵向滑块:
+            type: Texture
+            attribute:
+              point: ~top_right
+              y: 150.0
+              width: 10
+              height: 35
+              normal: ~255,255,255,255
+              maxDragY: 350 - 35
+              dragY: 0
+              shape: ~round_rect
+              radius: 4
+          横向滚动栏:
+            type: Scroll
+            attribute:
+              width: 1780
+              y: 150.0
+              point: ~top_center
+              height: 350
+              moveY: self.parent['纵向滑块'].getDragYRatio()
+            action:
+              wheel: |-
+                if(self.moveY >= 0){
+                  if(self.wheelValue > 0){
+                    self.parent['纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  }
+                }
+                if(self.moveY <= 1){
+                  if(self.wheelValue < 0){
+                    self.parent['纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  }
+                }
+            children:
+              奖励网格:
+                type: HGrid
+                attribute:
+                  spaceBetweenX: 40
+                  spaceBetweenY: 60
+                  column: 9
+                  x: 10
+                action:
+                  create: |-
+                    for(i in range(1,44)){
+                      奖励布局 = self['奖励布局'].copy('奖励布局' + i.round)
+                      奖励布局['slot0'].id = i.round
+                    }
+                children:
+                  奖励布局:
+                    type: Canvas
+                    attribute:
+                      width: 200
+                      height: 150
+                      scale: 0.8
+                      visible: "self['slot0'].getSlotItemStack().getName() != ''"
+                    children:
+                      品质背景:
+                        type: Texture
+                        attribute:
+                          rarityColor: ''
+                          normal: "{self.rarityColor}"
+                          width: 200
+                          height: 150
+                          point: ~top_left
+                          scale: 0.8
+                          shape: ~round_rect
+                          radius: 6
+                        action:
+                          create: |-
+                            var.r = self.parent['slot0'].getItemText('rarity')
+                            self.rarityColor = var.rarityColors[var.r] != null ? var.rarityColors[var.r] : var.rarityColors['']
+                      slot0:
+                        type: Slot
+                        attribute:
+                          id: 0
+                          width: 100
+                          point: ~top_left
+                          height: 100
+                          x: 48
+                          y: 20
+                          scale: 0.8
+                      物品名称:
+                        type: Text
+                        attribute:
+                          texts: self.parent['slot0'].getSlotItemStack().getName()
+                          y: 30.0
+                          fontSize: 30
+                          point: ~bottom_left
+
+  # ── 交互按键 ──
+  交互按键:
+    type: Adaptive
+    val: 交互按键
+    attribute:
+      visible: true
+      width: 1920
+      point: ~stretch_all
+      height: 1080
+      through: true
+    children:
+      按键总布局:
+        type: Canvas
+        attribute:
+          width: 900
+          point: ~bottom_center
+          height: 128
+        children:
+          分界线:
+            type: Texture
+            attribute:
+              normal: ~255,255,255,255
+              width: 1820
+              height: 8
+              point: ~horizontal_stretch_top
+              shape: ~round_rect
+              radius: 4
+          箱子贴图:
+            type: Texture
+            attribute:
+              normal: ~200,150,50,255
+              width: 80
+              x: 10.0
+              y: 0.0
+              height: 80
+              point: ~middle_left
+              shape: ~round_rect
+              radius: 10
+            effect:
+              stroke:
+                width: 2
+                color: ~255,215,0,255
+          介绍文本:
+            type: Text
+            attribute:
+              texts:
+                - "~X{var.amount}"
+              y: 0.0
+              fontSize: 49
+              point: ~middle_left
+              x: 100.0
+          # 开箱按钮（绿色渐变）
+          开始:
+            type: Slot
+            attribute:
+              normal: ~60,179,113,255
+              alpha: 1
+              width: 100
+              x: 250.0
+              point: ~middle_center
+              height: 50
+              id: 49
+              shape: ~round_rect
+              radius: 20
+            effect:
+              gradient:
+                color1: ~60,179,113,255
+                color2: ~34,139,34,255
+                type: 0
+                angleDeg: 90
+              stroke:
+                width: 2
+                color: ~95,95,95,100
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts:
+                    - ~开箱
+                  center: true
+                  x: 50
+                  y: 10
+                  fontSize: 64
+              槽位:
+                type: Slot
+                attribute:
+                  alpha: 0.9
+                  id: 49
+                  width: 100
+                  height: 100
+          关闭:
+            type: Slot
+            attribute:
+              normal: ~165,165,165,255
+              alpha: 1
+              width: 100
+              x: 400.0
+              point: ~middle_center
+              height: 50
+              shape: ~round_rect
+              radius: 20
+            effect:
+              stroke:
+                width: 2
+                color: ~95,95,95,100
+            action:
+              click: Screen.close()
+            children:
+              文字:
+                type: Text
+                attribute:
+                  through: true
+                  texts:
+                    - ~关闭
+                  center: true
+                  x: 50
+                  y: 10
+                  fontSize: 64
+          上一页:
+            type: Slot
+            val: 上一页
+            attribute:
+              normal: ~255,219,0,255
+              alpha: 0.9
+              width: 150
+              x: -85
+              point: ~middle_center
+              height: 80
+              id: 45
+              visible: "self.getSlotItemStack().getType() == 'minecraft:arrow'"
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts:
+                    - ~上一页
+                  center: false
+                  x: 15
+                  y: 15.0
+                  fontSize: 81
+                  shadow: true
+          下一页:
+            type: Slot
+            val: 下一页
+            attribute:
+              normal: ~255,219,0,255
+              alpha: 0.9
+              width: 150
+              x: 85
+              point: ~middle_center
+              height: 80
+              id: 53
+              visible: "self.getSlotItemStack().getType() == 'minecraft:arrow'"
+            children:
+              文字:
+                type: Text
+                attribute:
+                  texts:
+                    - ~下一页
+                  center: false
+                  x: 15
+                  y: 15.0
+                  fontSize: 81
+                  shadow: true

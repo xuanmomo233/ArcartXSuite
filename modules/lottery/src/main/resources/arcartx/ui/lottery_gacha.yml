@@ -1,0 +1,796 @@
+# AXS Lottery Gacha 祈愿 UI
+# 全部使用纯色块与渐变色，无外部贴图依赖
+# 品质颜色由物品 lore 中 "rarity" 字段驱动
+ui:
+  match:
+    - "AXS:lottery_gacha"
+  isHud: false
+  through: false
+  escClose: true
+  background: true
+  closeDied: false
+  show: true
+  screenScale: true
+  defaultOpen: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.poolName = packet['poolName']
+      var.poolType = packet['poolType']
+      var.poolBanner = packet['poolBanner']
+      var.upItemName = packet['upItemName']
+      var.upItemStar = packet['upItemStar']
+      var.upItemDesc = packet['upItemDesc']
+      var.guaranteeDesc = packet['guaranteeDesc']
+      var.remainingTime = packet['remainingTime']
+      var.fateCount = packet['fateCount']
+      var.primogemCount = packet['primogemCount']
+      var.stardustCount = packet['stardustCount']
+      var.pity4 = packet['pity4']
+      var.pity5 = packet['pity5']
+      var.poolList = packet['poolList']
+      var.currentPoolIndex = packet['currentPoolIndex']
+    update: |-
+      var.packetId = packet['packetId']
+      var.poolName = packet['poolName']
+      var.poolType = packet['poolType']
+      var.poolBanner = packet['poolBanner']
+      var.upItemName = packet['upItemName']
+      var.upItemStar = packet['upItemStar']
+      var.upItemDesc = packet['upItemDesc']
+      var.guaranteeDesc = packet['guaranteeDesc']
+      var.remainingTime = packet['remainingTime']
+      var.fateCount = packet['fateCount']
+      var.primogemCount = packet['primogemCount']
+      var.stardustCount = packet['stardustCount']
+      var.pity4 = packet['pity4']
+      var.pity5 = packet['pity5']
+      var.poolList = packet['poolList']
+      var.currentPoolIndex = packet['currentPoolIndex']
+  action:
+    load: |-
+      var.packetId = 'AXS_LOTTERY_GACHA'
+      var.poolName = '等待同步'
+      var.poolType = ''
+      var.poolBanner = ''
+      var.upItemName = ''
+      var.upItemStar = 5
+      var.upItemDesc = ''
+      var.guaranteeDesc = ''
+      var.remainingTime = ''
+      var.fateCount = 0
+      var.primogemCount = 0
+      var.stardustCount = 0
+      var.pity4 = 0
+      var.pity5 = 0
+      var.poolList = {}
+      var.currentPoolIndex = 0
+      # 品质颜色字典
+      var.rarityColors = {}
+      var.rarityColors['COMMON']    = '~192,195,198,255'
+      var.rarityColors['UNCOMMON']  = '~176,195,217,255'
+      var.rarityColors['RARE']      = '~94,152,217,255'
+      var.rarityColors['EPIC']      = '~136,71,255,255'
+      var.rarityColors['LEGENDARY'] = '~235,75,75,255'
+      var.rarityColors['MYTHIC']    = '~255,215,0,255'
+      var.rarityColors[''] = '~128,128,128,255'
+      # 初始状态
+      val.祈愿界面.visible = true
+      val.单抽结果.visible = false
+      val.十连结果.visible = false
+    open: |-
+      # 初始状态控制
+      val.祈愿界面.visible = true
+      val.单抽结果.visible = false
+      val.十连结果.visible = false
+    tick: |-
+      # 可在此做动画或实时更新
+
+controls:
+  # ── 全屏背景 ──
+  背景层:
+    type: Adaptive
+    attribute:
+      width: 1920
+      height: 1080
+      point: ~stretch_all
+    children:
+      天空渐变:
+        type: Texture
+        attribute:
+          point: ~stretch_all
+          normal: ~255,255,255,0
+        effect:
+          gradient:
+            color1: ~100,150,220,255
+            color2: ~180,120,200,255
+            color3: ~220,180,200,255
+            type: 1
+            angleDeg: 0
+      星空噪点:
+        type: Texture
+        attribute:
+          point: ~stretch_all
+          normal: ~255,255,255,10
+
+  # ── 左侧卡池导航 ──
+  左侧导航:
+    type: Adaptive
+    attribute:
+      width: 220
+      height: 1080
+      point: ~middle_left
+      x: 20
+    children:
+      导航背景:
+        type: Texture
+        attribute:
+          point: ~stretch_all
+          normal: ~0,0,0,120
+      卡池列表:
+        type: Canvas
+        attribute:
+          width: 200
+          height: 600
+          point: ~middle_center
+        children:
+          卡池条目容器:
+            type: Canvas
+            val: 卡池条目容器
+            attribute:
+              width: 200
+              height: 80
+              point: ~top_center
+            action:
+              create: |-
+                for(i in range(0,6)){
+                  entry = self['卡池条目'].copy('卡池条目' + i.round)
+                  entry.index = i.round
+                }
+            children:
+              卡池条目:
+                type: Canvas
+                attribute:
+                  width: 200
+                  height: 70
+                  point: ~top_left
+                  visible: "var.poolList[self.index] != null"
+                action:
+                  click: |-
+                    if(var.poolList[self.index] != null){
+                      Packet.send(var.packetId, 'switch_pool', self.index)
+                    }
+                children:
+                  选中指示器:
+                    type: Texture
+                    attribute:
+                      width: 4
+                      height: 50
+                      point: ~middle_left
+                      x: 0
+                      normal: "self.index == var.currentPoolIndex ? '~255,215,0,255' : '~255,255,255,0'"
+                  条目背景:
+                    type: Texture
+                    attribute:
+                      width: 196
+                      height: 60
+                      point: ~middle_center
+                      normal: "self.index == var.currentPoolIndex ? '~255,215,0,60' : '~0,0,0,80'"
+                      shape: ~round_rect
+                      radius: 8
+                    effect:
+                      stroke:
+                        width: "self.index == var.currentPoolIndex ? 2 : 0"
+                        color: ~255,215,0,200
+                  条目图标:
+                    type: Slot
+                    attribute:
+                      width: 40
+                      height: 40
+                      point: ~middle_left
+                      x: 10
+                      id: 0
+                      itemScale: 0.8
+                      through: true
+                  条目名称:
+                    type: Text
+                    attribute:
+                      x: 55
+                      y: 15
+                      fontSize: 28
+                      texts: "var.poolList[self.index] != null ? var.poolList[self.index] : ''"
+                      through: true
+
+  # ── 中央主展示 ──
+  祈愿界面:
+    type: Adaptive
+    val: 祈愿界面
+    attribute:
+      width: 1080
+      height: 1080
+      point: ~middle_center
+      visible: true
+    children:
+      主面板:
+        type: Canvas
+        attribute:
+          width: 1080
+          height: 700
+          point: ~middle_center
+          y: -50
+        children:
+          # 卡池类型标签
+          卡池类型标签:
+            type: Texture
+            attribute:
+              width: 160
+              height: 36
+              point: ~top_left
+              x: 40
+              y: 20
+              normal: ~80,180,100,200
+              shape: ~round_rect
+              radius: 18
+            children:
+              标签文字:
+                type: Text
+                attribute:
+                  x: 80
+                  y: 8
+                  center: true
+                  fontSize: 24
+                  texts: "var.poolType"
+                  through: true
+          # 卡池标题
+          卡池标题:
+            type: Text
+            attribute:
+              x: 40
+              y: 70
+              fontSize: 120
+              texts: "var.poolName"
+          # 分隔线
+          标题分隔线:
+            type: Texture
+            attribute:
+              x: 40
+              y: 180
+              width: 200
+              height: 3
+              normal: ~255,215,0,200
+              shape: ~round_rect
+              radius: 2
+          # UP 物品名
+          UP名称:
+            type: Text
+            attribute:
+              x: 40
+              y: 200
+              fontSize: 72
+              texts: "var.upItemName"
+          # 星级
+          星级展示:
+            type: Text
+            attribute:
+              x: 40
+              y: 260
+              fontSize: 40
+              texts: "var.upItemStar >= 5 ? '~★★★★★' : var.upItemStar >= 4 ? '~★★★★' : '~★★★'"
+          # 描述
+          描述文本:
+            type: Text
+            attribute:
+              x: 40
+              y: 310
+              fontSize: 32
+              texts: "var.upItemDesc"
+          # 保底说明
+          保底说明:
+            type: Texture
+            attribute:
+              x: 40
+              y: 360
+              width: 400
+              height: 40
+              normal: ~50,50,50,180
+              shape: ~round_rect
+              radius: 8
+            children:
+              保底文字:
+                type: Text
+                attribute:
+                  x: 15
+                  y: 10
+                  fontSize: 24
+                  texts: "var.guaranteeDesc"
+                  through: true
+          # 剩余时间
+          剩余时间:
+            type: Text
+            attribute:
+              x: 40
+              y: 420
+              fontSize: 28
+              texts: "'~剩余时间: ' + var.remainingTime"
+              color: ~200,200,200,255
+          # 保底计数
+          保底计数:
+            type: Text
+            attribute:
+              x: 40
+              y: 460
+              fontSize: 24
+              texts: "'~4星保底: ' + var.pity4 + '  5星保底: ' + var.pity5"
+              color: ~180,180,180,255
+
+  # ── 顶部资源栏 ──
+  顶部资源:
+    type: Adaptive
+    attribute:
+      width: 500
+      height: 60
+      point: ~top_right
+      x: -30
+      y: 20
+    children:
+      资源总布局:
+        type: HStack
+        attribute:
+          spaceBetween: 20
+          point: ~top_right
+        children:
+          纠缠之缘:
+            type: Canvas
+            attribute:
+              width: 140
+              height: 50
+            children:
+              资源背景:
+                type: Texture
+                attribute:
+                  width: 140
+                  height: 50
+                  normal: ~0,0,0,180
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~255,255,255,60
+              资源图标:
+                type: Slot
+                attribute:
+                  width: 32
+                  height: 32
+                  x: 8
+                  y: 9
+                  id: 0
+                  through: true
+              资源数量:
+                type: Text
+                attribute:
+                  x: 45
+                  y: 12
+                  fontSize: 28
+                  texts: "var.fateCount"
+                  through: true
+          原石:
+            type: Canvas
+            attribute:
+              width: 140
+              height: 50
+            children:
+              资源背景:
+                type: Texture
+                attribute:
+                  width: 140
+                  height: 50
+                  normal: ~0,0,0,180
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~255,255,255,60
+              资源图标:
+                type: Slot
+                attribute:
+                  width: 32
+                  height: 32
+                  x: 8
+                  y: 9
+                  id: 0
+                  through: true
+              资源数量:
+                type: Text
+                attribute:
+                  x: 45
+                  y: 12
+                  fontSize: 28
+                  texts: "var.primogemCount"
+                  through: true
+          星辉:
+            type: Canvas
+            attribute:
+              width: 140
+              height: 50
+            children:
+              资源背景:
+                type: Texture
+                attribute:
+                  width: 140
+                  height: 50
+                  normal: ~0,0,0,180
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~255,255,255,60
+              资源图标:
+                type: Slot
+                attribute:
+                  width: 32
+                  height: 32
+                  x: 8
+                  y: 9
+                  id: 0
+                  through: true
+              资源数量:
+                type: Text
+                attribute:
+                  x: 45
+                  y: 12
+                  fontSize: 28
+                  texts: "var.stardustCount"
+                  through: true
+
+  # ── 底部操作区 ──
+  底部操作:
+    type: Adaptive
+    attribute:
+      width: 1080
+      height: 200
+      point: ~bottom_center
+      y: -40
+    children:
+      操作总布局:
+        type: HStack
+        attribute:
+          point: ~middle_center
+          spaceBetween: 30
+        children:
+          尘辉兑换:
+            type: Slot
+            attribute:
+              width: 140
+              height: 50
+              normal: ~80,80,80,180
+              hover: ~120,120,120,200
+              shape: ~round_rect
+              radius: 10
+            action:
+              click: |-
+                Packet.send(var.packetId, 'exchange')
+            children:
+              兑换文字:
+                type: Text
+                attribute:
+                  x: 70
+                  y: 12
+                  center: true
+                  fontSize: 28
+                  texts: "~尘辉兑换"
+                  through: true
+          详情:
+            type: Slot
+            attribute:
+              width: 100
+              height: 50
+              normal: ~80,80,80,180
+              hover: ~120,120,120,200
+              shape: ~round_rect
+              radius: 10
+            action:
+              click: |-
+                Packet.send(var.packetId, 'details')
+            children:
+              详情文字:
+                type: Text
+                attribute:
+                  x: 50
+                  y: 12
+                  center: true
+                  fontSize: 28
+                  texts: "~详情"
+                  through: true
+          历史记录:
+            type: Slot
+            attribute:
+              width: 120
+              height: 50
+              normal: ~80,80,80,180
+              hover: ~120,120,120,200
+              shape: ~round_rect
+              radius: 10
+            action:
+              click: |-
+                Packet.send(var.packetId, 'history')
+            children:
+              历史文字:
+                type: Text
+                attribute:
+                  x: 60
+                  y: 12
+                  center: true
+                  fontSize: 28
+                  texts: "~历史记录"
+                  through: true
+          祈愿1次:
+            type: Slot
+            attribute:
+              width: 180
+              height: 60
+              normal: ~60,120,200,220
+              hover: ~80,160,240,240
+              shape: ~round_rect
+              radius: 30
+            effect:
+              gradient:
+                color1: ~255,230,150,255
+                color2: ~255,180,50,255
+                type: 0
+                angleDeg: 90
+              stroke:
+                width: 2
+                color: ~255,240,200,200
+            action:
+              click: |-
+                Packet.send(var.packetId, 'pull', 1)
+            children:
+              祈愿1次文字:
+                type: Text
+                attribute:
+                  x: 90
+                  y: 8
+                  center: true
+                  fontSize: 36
+                  texts: "~祈愿1次"
+                  through: true
+              消耗1:
+                type: Text
+                attribute:
+                  x: 90
+                  y: 36
+                  center: true
+                  fontSize: 24
+                  texts: "~×1"
+                  through: true
+          祈愿10次:
+            type: Slot
+            attribute:
+              width: 180
+              height: 60
+              normal: ~60,120,200,220
+              hover: ~80,160,240,240
+              shape: ~round_rect
+              radius: 30
+            effect:
+              gradient:
+                color1: ~255,230,150,255
+                color2: ~255,180,50,255
+                type: 0
+                angleDeg: 90
+              stroke:
+                width: 2
+                color: ~255,240,200,200
+            action:
+              click: |-
+                Packet.send(var.packetId, 'pull', 10)
+            children:
+              祈愿10次文字:
+                type: Text
+                attribute:
+                  x: 90
+                  y: 8
+                  center: true
+                  fontSize: 36
+                  texts: "~祈愿10次"
+                  through: true
+              消耗10:
+                type: Text
+                attribute:
+                  x: 90
+                  y: 36
+                  center: true
+                  fontSize: 24
+                  texts: "~×10"
+                  through: true
+
+  # ── 单抽结果展示 ──
+  单抽结果:
+    type: Adaptive
+    val: 单抽结果
+    attribute:
+      width: 1920
+      height: 1080
+      point: ~stretch_all
+      visible: false
+    children:
+      结果遮罩:
+        type: Texture
+        attribute:
+          point: ~stretch_all
+          normal: ~0,0,0,220
+      单抽主面板:
+        type: Canvas
+        attribute:
+          width: 500
+          height: 600
+          point: ~middle_center
+        children:
+          品质光环:
+            type: Texture
+            attribute:
+              width: 400
+              height: 400
+              point: ~middle_center
+              normal: ~255,255,255,0
+            effect:
+              gradient:
+                color1: "var.upItemStar >= 5 ? '~255,215,0,80' : var.upItemStar >= 4 ? '~136,71,255,80' : '~94,152,217,80'"
+                color2: ~255,255,255,0
+                type: 1
+                angleDeg: 0
+          结果物品槽位:
+            type: Slot
+            attribute:
+              width: 200
+              height: 200
+              point: ~middle_center
+              id: 13
+              itemScale: 1.5
+          结果物品名:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 80
+              fontSize: 72
+              texts: "var.upItemName"
+          结果星级:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 140
+              fontSize: 40
+              texts: "var.upItemStar >= 5 ? '~★★★★★' : var.upItemStar >= 4 ? '~★★★★' : '~★★★'"
+          确认按钮:
+            type: Slot
+            attribute:
+              width: 160
+              height: 50
+              point: ~bottom_center
+              y: -20
+              normal: ~80,160,80,220
+              hover: ~100,200,100,240
+              shape: ~round_rect
+              radius: 12
+            action:
+              click: |-
+                val.单抽结果.visible = false
+                val.祈愿界面.visible = true
+            children:
+              确认文字:
+                type: Text
+                attribute:
+                  x: 80
+                  y: 12
+                  center: true
+                  fontSize: 32
+                  texts: "~确认"
+                  through: true
+
+  # ── 十连结果展示 ──
+  十连结果:
+    type: Adaptive
+    val: 十连结果
+    attribute:
+      width: 1920
+      height: 1080
+      point: ~stretch_all
+      visible: false
+    children:
+      十连遮罩:
+        type: Texture
+        attribute:
+          point: ~stretch_all
+          normal: ~0,0,0,220
+      十连主面板:
+        type: Canvas
+        attribute:
+          width: 1280
+          height: 600
+          point: ~middle_center
+        children:
+          十连标题:
+            type: Text
+            attribute:
+              point: ~top_center
+              y: 20
+              fontSize: 64
+              texts: "~祈愿结果"
+          十连网格:
+            type: HGrid
+            attribute:
+              point: ~middle_center
+              column: 5
+              spaceBetweenX: 30
+              spaceBetweenY: 30
+            action:
+              create: |-
+                for(i in range(0,10)){
+                  item = self['十连单个'].copy('十连单个' + i.round)
+                  item.slotId = 20 + i.round
+                }
+            children:
+              十连单个:
+                type: Canvas
+                attribute:
+                  width: 200
+                  height: 220
+                children:
+                  十连品质背景:
+                    type: Texture
+                    attribute:
+                      width: 200
+                      height: 180
+                      point: ~top_left
+                      normal: "{self.rarityColor}"
+                      shape: ~round_rect
+                      radius: 10
+                    action:
+                      create: |-
+                        var.r = self.parent['十连槽位'].getItemText('rarity')
+                        self.rarityColor = var.rarityColors[var.r] != null ? var.rarityColors[var.r] : var.rarityColors['']
+                  十连槽位:
+                    type: Slot
+                    attribute:
+                      width: 160
+                      height: 160
+                      point: ~top_left
+                      x: 20
+                      y: 10
+                      id: 20
+                      itemScale: 1.0
+                  十连物品名:
+                    type: Text
+                    attribute:
+                      point: ~bottom_center
+                      y: -5
+                      fontSize: 24
+                      texts: "self.parent['十连槽位'].getSlotItemStack().getName()"
+          十连确认:
+            type: Slot
+            attribute:
+              width: 160
+              height: 50
+              point: ~bottom_center
+              y: -20
+              normal: ~80,160,80,220
+              hover: ~100,200,100,240
+              shape: ~round_rect
+              radius: 12
+            action:
+              click: |-
+                val.十连结果.visible = false
+                val.祈愿界面.visible = true
+            children:
+              十连确认文字:
+                type: Text
+                attribute:
+                  x: 80
+                  y: 12
+                  center: true
+                  fontSize: 32
+                  texts: "~确认"
+                  through: true

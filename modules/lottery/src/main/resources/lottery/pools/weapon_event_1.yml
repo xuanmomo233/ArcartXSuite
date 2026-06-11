@@ -1,0 +1,62 @@
+id: "weapon_event_1"
+type: GACHA
+enabled: true
+display-name: "武器活动祈愿"
+
+cost:
+  mode: CURRENCY
+  currency: "gem"
+  single: 160
+  ten: 1600
+
+gacha:
+  pool-type: WEAPON
+  pity-5star: 80
+  pity-4star: 10
+  soft-pity-start: 63
+  soft-pity-increment: 0.07
+  base-5star-rate: 0.007
+  base-4star-rate: 0.06
+  up-rate: 0.75
+  fate-point-cap: 2
+  shared-pity-group: "weapon_events"
+
+  up-5star-items:
+    - id: "weapon_legend"
+      name: "传说之刃"
+      plugin-type: MYTHIC
+      plugin-id: "LegendBlade"
+      delivery: DIRECT
+      weight: 1
+
+  standard-5star-items:
+    - id: "weapon_epic"
+      name: "史诗长枪"
+      plugin-type: MYTHIC
+      plugin-id: "EpicSpear"
+      delivery: DIRECT
+      weight: 1
+
+  up-4star-items:
+    - id: "weapon_rare"
+      name: "稀有匕首"
+      plugin-type: NEIGE
+      plugin-id: "RareDagger"
+      delivery: DIRECT
+      weight: 1
+
+  standard-4star-items:
+    - id: "weapon_common"
+      name: "精良法杖"
+      plugin-type: NEIGE
+      plugin-id: "FineStaff"
+      delivery: DIRECT
+      weight: 1
+
+  star3-items:
+    - id: "material_iron"
+      name: "铁锭"
+      plugin-type: PLAIN
+      plugin-id: "minecraft:iron_ingot"
+      delivery: DIRECT
+      weight: 1

@@ -1,0 +1,61 @@
+id: "character_event_1"
+type: GACHA
+enabled: true
+display-name: "角色活动祈愿"
+
+cost:
+  mode: CURRENCY
+  currency: "gem"
+  single: 160
+  ten: 1600
+
+gacha:
+  pool-type: CHARACTER
+  pity-5star: 90
+  pity-4star: 10
+  soft-pity-start: 73
+  soft-pity-increment: 0.06
+  base-5star-rate: 0.006
+  base-4star-rate: 0.051
+  up-rate: 0.5
+  shared-pity-group: "character_events"
+
+  up-5star-items:
+    - id: "character_star"
+      name: "星辰"
+      plugin-type: MYTHIC
+      plugin-id: "StarCharacter"
+      delivery: DIRECT
+      weight: 1
+
+  standard-5star-items:
+    - id: "character_moon"
+      name: "月影"
+      plugin-type: MYTHIC
+      plugin-id: "MoonCharacter"
+      delivery: DIRECT
+      weight: 1
+
+  up-4star-items:
+    - id: "weapon_sword"
+      name: "星光剑"
+      plugin-type: NEIGE
+      plugin-id: "StarSword"
+      delivery: DIRECT
+      weight: 1
+
+  standard-4star-items:
+    - id: "weapon_bow"
+      name: "风之弓"
+      plugin-type: NEIGE
+      plugin-id: "WindBow"
+      delivery: DIRECT
+      weight: 1
+
+  star3-items:
+    - id: "material_common"
+      name: "普通材料"
+      plugin-type: PLAIN
+      plugin-id: "minecraft:stone"
+      delivery: DIRECT
+      weight: 1

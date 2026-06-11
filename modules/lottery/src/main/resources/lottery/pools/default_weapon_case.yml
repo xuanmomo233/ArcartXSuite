@@ -1,0 +1,94 @@
+id: "default_weapon_case"
+type: CASE
+enabled: true
+display-name: "常规武器箱"
+
+cost:
+  mode: ITEM
+  item-id: "CaseKey"
+  item-amount: 1
+
+case:
+  rarity-settings:
+    CONSUMER:
+      color: "&f"
+      base-weight: 15625
+    INDUSTRIAL:
+      color: "&b"
+      base-weight: 3125
+    MIL_SPEC:
+      color: "&9"
+      base-weight: 625
+    RESTRICTED:
+      color: "&5"
+      base-weight: 125
+    CLASSIFIED:
+      color: "&d"
+      base-weight: 25
+    COVERT:
+      color: "&c"
+      base-weight: 5
+    SPECIAL:
+      color: "&6"
+      base-weight: 2
+
+  stattrak-chance: 0.1
+
+  items:
+    - id: "skin_ak47_redline"
+      name: "AK-47 | 红线"
+      rarity: CLASSIFIED
+      plugin-type: NEIGE
+      plugin-id: "AK47_Redline"
+      delivery: DIRECT
+      stattrak-enabled: true
+      wear-distribution:
+        FACTORY_NEW:
+          min: 0.00
+          max: 0.07
+          weight: 0.05
+        MINIMAL_WEAR:
+          min: 0.07
+          max: 0.15
+          weight: 0.15
+        FIELD_TESTED:
+          min: 0.15
+          max: 0.38
+          weight: 0.50
+        WELL_WORN:
+          min: 0.38
+          max: 0.45
+          weight: 0.20
+        BATTLE_SCARRED:
+          min: 0.45
+          max: 1.00
+          weight: 0.10
+
+    - id: "skin_awp_dragon"
+      name: "AWP | 巨龙传说"
+      rarity: COVERT
+      plugin-type: NEIGE
+      plugin-id: "AWP_DragonLore"
+      delivery: DIRECT
+      stattrak-enabled: true
+      wear-distribution:
+        FACTORY_NEW:
+          min: 0.00
+          max: 0.07
+          weight: 0.01
+        MINIMAL_WEAR:
+          min: 0.07
+          max: 0.15
+          weight: 0.05
+        FIELD_TESTED:
+          min: 0.15
+          max: 0.38
+          weight: 0.15
+        WELL_WORN:
+          min: 0.38
+          max: 0.45
+          weight: 0.30
+        BATTLE_SCARRED:
+          min: 0.45
+          max: 1.00
+          weight: 0.49

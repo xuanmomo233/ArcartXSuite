@@ -1,0 +1,11 @@
+id: lottery
+name: Lottery
+version: 1.0.0
+main: xuanmo.arcartxsuite.lottery.LotteryModule
+api-version: 1.0
+
+depends: []
+softdepends: []
+external-depends:
+  - PlaceholderAPI
+external-softdepends: []
