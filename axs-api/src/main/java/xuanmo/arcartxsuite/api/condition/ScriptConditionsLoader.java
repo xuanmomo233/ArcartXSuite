@@ -22,11 +22,12 @@ public final class ScriptConditionsLoader {
                 continue;
             }
             boolean ariaKey = isAriaKey(key);
-            appendInlineLines(conditions, section.getStringList(key), ariaKey);
+            boolean jsKey = isJsKey(key);
+            appendInlineLines(conditions, section.getStringList(key), ariaKey, jsKey);
             appendMapList(conditions, section.getMapList(key));
             ConfigurationSection nested = section.getConfigurationSection(key);
             if (nested != null) {
-                appendInlineLines(conditions, nested.getStringList("list"), ariaKey);
+                appendInlineLines(conditions, nested.getStringList("list"), ariaKey, jsKey);
                 for (String childKey : nested.getKeys(false)) {
                     ConfigurationSection child = nested.getConfigurationSection(childKey);
                     if (child != null) {
@@ -46,16 +47,20 @@ public final class ScriptConditionsLoader {
             return List.of();
         }
         List<ScriptCondition> conditions = new ArrayList<>();
-        appendInlineLines(conditions, lines, false);
+        appendInlineLines(conditions, lines, false, false);
         return List.copyOf(conditions);
     }
 
-    private static void appendInlineLines(List<ScriptCondition> target, List<String> lines, boolean forceAria) {
+    private static void appendInlineLines(List<ScriptCondition> target, List<String> lines, boolean forceAria, boolean forceJs) {
         if (lines == null) {
             return;
         }
         for (String line : lines) {
             if (line == null || line.isBlank()) {
+                continue;
+            }
+            if (forceJs) {
+                target.add(ScriptCondition.js(line.trim(), line.trim()));
                 continue;
             }
             if (forceAria) {
@@ -104,5 +109,14 @@ public final class ScriptConditionsLoader {
             || normalized.equals("ariaconditions")
             || normalized.equals("aria-condition")
             || normalized.equals("ariacondition");
+    }
+
+    private static boolean isJsKey(String key) {
+        String normalized = key.trim().toLowerCase();
+        return normalized.equals("js")
+            || normalized.equals("js-conditions")
+            || normalized.equals("jsconditions")
+            || normalized.equals("js-condition")
+            || normalized.equals("jscondition");
     }
 }

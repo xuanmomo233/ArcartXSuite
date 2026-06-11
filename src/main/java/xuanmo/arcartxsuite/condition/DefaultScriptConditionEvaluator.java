@@ -6,6 +6,9 @@ import java.lang.invoke.MethodType;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.script.Bindings;
+import javax.script.ScriptEngine;
+import javax.script.ScriptEngineManager;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
@@ -21,9 +24,16 @@ public final class DefaultScriptConditionEvaluator implements ScriptConditionEva
     private static final MethodHandle PAPI_SET_PLACEHOLDERS = resolvePapiMethodHandle();
 
     private final AriaBridge ariaBridge;
+    private final ScriptEngine jsEngine;
 
     public DefaultScriptConditionEvaluator(AriaBridge ariaBridge) {
         this.ariaBridge = ariaBridge == null ? new UnavailableAriaBridge() : ariaBridge;
+        ScriptEngineManager manager = new ScriptEngineManager();
+        ScriptEngine engine = manager.getEngineByName("JavaScript");
+        if (engine == null) {
+            engine = manager.getEngineByName("nashorn");
+        }
+        this.jsEngine = engine;
     }
 
     @Override
@@ -75,6 +85,9 @@ public final class DefaultScriptConditionEvaluator implements ScriptConditionEva
         if (condition.kind() == ScriptConditionKind.ARIA) {
             return evaluateAria(player, condition.script());
         }
+        if (condition.kind() == ScriptConditionKind.JS) {
+            return evaluateJs(player, condition.script());
+        }
         String actual = resolvePlaceholder(player, condition.placeholder());
         ScriptConditionOperator operator = condition.operator() == null
             ? ScriptConditionOperator.EQ
@@ -92,6 +105,24 @@ public final class DefaultScriptConditionEvaluator implements ScriptConditionEva
         Map<String, Object> bindings = new HashMap<>();
         bindings.put("player", player);
         return ariaBridge.evalBoolean(script, bindings);
+    }
+
+    private boolean evaluateJs(Player player, @Nullable String script) {
+        if (script == null || script.isBlank()) {
+            return false;
+        }
+        if (jsEngine == null) {
+            return false;
+        }
+        try {
+            Bindings bindings = jsEngine.createBindings();
+            bindings.put("player", player);
+            bindings.put("Bukkit", Bukkit.class);
+            Object result = jsEngine.eval(script, bindings);
+            return AriaBridge.toBoolean(result);
+        } catch (Exception exception) {
+            return false;
+        }
     }
 
     private String resolvePlaceholder(Player player, @Nullable String placeholder) {

@@ -21,6 +21,7 @@ public record ScriptCondition(
         Pattern.CASE_INSENSITIVE
     );
     private static final Pattern INLINE_ARIA_PREFIX = Pattern.compile("^aria\\s*:\\s*(.+)$", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern INLINE_JS_PREFIX = Pattern.compile("^js\\s*:\\s*(.+)$", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     public static ScriptCondition papi(String placeholder, ScriptConditionOperator operator, String value, String raw) {
         return new ScriptCondition(ScriptConditionKind.PAPI, placeholder, operator, value, null, raw);
@@ -30,12 +31,21 @@ public record ScriptCondition(
         return new ScriptCondition(ScriptConditionKind.ARIA, null, null, null, script, raw);
     }
 
+    public static ScriptCondition js(String script, String raw) {
+        return new ScriptCondition(ScriptConditionKind.JS, null, null, null, script, raw);
+    }
+
     @Nullable
     public static ScriptCondition parseInline(String inline) {
         if (inline == null || inline.isBlank()) {
             return null;
         }
         String trimmed = inline.trim();
+        Matcher jsMatcher = INLINE_JS_PREFIX.matcher(trimmed);
+        if (jsMatcher.matches()) {
+            String script = jsMatcher.group(1).trim();
+            return script.isBlank() ? null : js(trimmed, trimmed);
+        }
         Matcher ariaMatcher = INLINE_ARIA_PREFIX.matcher(trimmed);
         if (ariaMatcher.matches()) {
             String script = ariaMatcher.group(1).trim();
@@ -64,6 +74,17 @@ public record ScriptCondition(
         String type = section.getString("type", section.getString("kind", "")).trim();
         if ("aria".equalsIgnoreCase(type)) {
             return parseAriaSection(section);
+        }
+        if ("js".equalsIgnoreCase(type)) {
+            return parseJsSection(section);
+        }
+        String jsInline = firstNonBlank(
+            section.getString("js"),
+            section.getString("js-condition"),
+            section.getString("jsCondition")
+        );
+        if (jsInline != null) {
+            return js(jsInline, jsInline);
         }
         String ariaInline = firstNonBlank(
             section.getString("aria"),
@@ -115,7 +136,25 @@ public record ScriptCondition(
         return aria(script, script);
     }
 
+    @Nullable
+    private static ScriptCondition parseJsSection(ConfigurationSection section) {
+        String script = firstNonBlank(
+            section.getString("script"),
+            section.getString("expression"),
+            section.getString("code"),
+            section.getString("js")
+        );
+        if (script == null) {
+            return null;
+        }
+        return js(script, script);
+    }
+
     public String serialize() {
+        if (kind == ScriptConditionKind.JS) {
+            String payload = script == null ? "" : script;
+            return "js\t" + Base64.getEncoder().encodeToString(payload.getBytes(StandardCharsets.UTF_8));
+        }
         if (kind == ScriptConditionKind.ARIA) {
             String payload = script == null ? "" : script;
             return "aria\t" + Base64.getEncoder().encodeToString(payload.getBytes(StandardCharsets.UTF_8));
@@ -132,6 +171,18 @@ public record ScriptCondition(
             return null;
         }
         String trimmed = rawValue.trim();
+        if (trimmed.startsWith("js\t") || trimmed.startsWith("js::")) {
+            String encoded = trimmed.substring(trimmed.indexOf('\t') >= 0 ? trimmed.indexOf('\t') + 1 : 3);
+            if (trimmed.startsWith("js::")) {
+                encoded = trimmed.substring("js::".length());
+            }
+            try {
+                String script = new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+                return js(script, trimmed);
+            } catch (IllegalArgumentException exception) {
+                return js(encoded, trimmed);
+            }
+        }
         if (trimmed.startsWith("aria\t") || trimmed.startsWith("aria::")) {
             String encoded = trimmed.substring(trimmed.indexOf('\t') >= 0 ? trimmed.indexOf('\t') + 1 : 6);
             if (trimmed.startsWith("aria::")) {
