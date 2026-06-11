@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -66,7 +67,11 @@ public final class RegionsMenuPacketHandler implements ClientPacketHandler {
     public void openMenu(Player player) {
         if (packetBridge == null) return;
         packetBridge.openUi(player, uiId);
-        pushData(player, "current");
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (player.isOnline()) {
+                pushData(player, "current");
+            }
+        }, 2L);
     }
 
     public void pushData(Player player, String page) {

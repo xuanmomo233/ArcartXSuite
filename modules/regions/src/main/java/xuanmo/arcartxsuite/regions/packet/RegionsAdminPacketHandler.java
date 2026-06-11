@@ -169,7 +169,11 @@ public final class RegionsAdminPacketHandler implements ClientPacketHandler {
     public void openMenu(Player player) {
         if (packetBridge == null) return;
         packetBridge.openUi(player, uiId);
-        pushData(player, "regions", null);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (player.isOnline()) {
+                pushData(player, "regions", null);
+            }
+        }, 2L);
     }
 
     public void pushData(Player player, String page, String selectedRegionId) {

@@ -172,6 +172,12 @@ public final class MenuService {
         }
         if (openUi) {
             packetBridge.openUi(player, runtimeUiId(definition.layout()));
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (player.isOnline()) {
+                    pushPayload(player, session, definition, true);
+                }
+            }, 2L);
+            return true;
         }
         pushPayload(player, session, definition, true);
         return true;

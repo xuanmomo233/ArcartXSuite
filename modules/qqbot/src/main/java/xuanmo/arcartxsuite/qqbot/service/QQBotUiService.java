@@ -90,17 +90,20 @@ public final class QQBotUiService {
         if (bindUiId == null) return;
         packetBridge.openUi(player, bindUiId);
 
-        QQBotBinding binding = repository.findByPlayerName(player.getName());
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("packetId", BIND_PACKET_ID);
-        payload.put("bound", binding != null);
-        payload.put("qqId", binding != null ? String.valueOf(binding.qqId()) : "");
-        payload.put("playerName", player.getName());
-        payload.put("bindTime", binding != null && binding.boundAt() > 0
-            ? TIME_FMT.format(java.time.Instant.ofEpochMilli(binding.boundAt())) : "");
-        payload.put("messages", getRecentMessagesPayload());
-        payload.put("msgCount", recentMessages.size());
-        packetBridge.sendPacket(player, bindUiId, "init", payload);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!player.isOnline()) return;
+            QQBotBinding binding = repository.findByPlayerName(player.getName());
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("packetId", BIND_PACKET_ID);
+            payload.put("bound", binding != null);
+            payload.put("qqId", binding != null ? String.valueOf(binding.qqId()) : "");
+            payload.put("playerName", player.getName());
+            payload.put("bindTime", binding != null && binding.boundAt() > 0
+                ? TIME_FMT.format(java.time.Instant.ofEpochMilli(binding.boundAt())) : "");
+            payload.put("messages", getRecentMessagesPayload());
+            payload.put("msgCount", recentMessages.size());
+            packetBridge.sendPacket(player, bindUiId, "init", payload);
+        }, 2L);
     }
 
     // ─── 管理后台 ──────────────────────────────────────
@@ -112,16 +115,19 @@ public final class QQBotUiService {
         if (adminUiId == null) return;
         packetBridge.openUi(player, adminUiId);
 
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("packetId", ADMIN_PACKET_ID);
-        payload.put("botConnected", isServiceConnected());
-        payload.put("totalBindings", repository.countBindings());
-        payload.put("onlinePlayers", Bukkit.getOnlinePlayers().size());
-        payload.put("maxPlayers", Bukkit.getMaxPlayers());
-        payload.put("groups", buildGroupList());
-        payload.put("bindings", buildBindingsPage(0));
-        payload.put("bindTotal", repository.countBindings());
-        packetBridge.sendPacket(player, adminUiId, "init", payload);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!player.isOnline()) return;
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("packetId", ADMIN_PACKET_ID);
+            payload.put("botConnected", isServiceConnected());
+            payload.put("totalBindings", repository.countBindings());
+            payload.put("onlinePlayers", Bukkit.getOnlinePlayers().size());
+            payload.put("maxPlayers", Bukkit.getMaxPlayers());
+            payload.put("groups", buildGroupList());
+            payload.put("bindings", buildBindingsPage(0));
+            payload.put("bindTotal", repository.countBindings());
+            packetBridge.sendPacket(player, adminUiId, "init", payload);
+        }, 2L);
     }
 
     // ─── 通知 HUD ──────────────────────────────────────

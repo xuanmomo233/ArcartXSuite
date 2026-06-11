@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
@@ -57,13 +58,21 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     public void openMain(Player player) {
         if (packetBridge == null) return;
         packetBridge.openUi(player, mainUiId);
-        pushMainData(player);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (player.isOnline()) {
+                pushMainData(player);
+            }
+        }, 2L);
     }
 
     public void openTasks(Player player) {
         if (packetBridge == null) return;
         packetBridge.openUi(player, tasksUiId);
-        pushTasksData(player);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (player.isOnline()) {
+                pushTasksData(player);
+            }
+        }, 2L);
     }
 
     private void pushMainData(Player player) {
