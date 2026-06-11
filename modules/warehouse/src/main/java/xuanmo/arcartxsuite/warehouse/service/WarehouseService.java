@@ -857,6 +857,7 @@ public final class WarehouseService implements Listener {
 
     /**
      * 打开仓库存取界面并发送初始化/更新数据包。
+     * 延迟 2 ticks 发送，避免低性能客户端 UI 加载未完成时丢失 packet。
      */
     private void openStorage(Player player, String handler) throws Exception {
         ensureEntitlements(player);
@@ -865,27 +866,53 @@ public final class WarehouseService implements Listener {
             state(player).setSharedEditMode(false);
         }
         packetBridge.openUi(player, storageRuntimeUiId);
-        sendStorage(player, handler);
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            try {
+                if (player.isOnline()) {
+                    sendStorage(player, handler);
+                }
+            } catch (Exception exception) {
+                plugin.getLogger().warning("延迟发送仓库数据包失败: " + exception.getMessage());
+            }
+        }, 2L);
     }
 
     /**
      * 打开共享管理界面并发送初始化/更新数据包。
+     * 延迟 2 ticks 发送，避免低性能客户端 UI 加载未完成时丢失 packet。
      */
     private void openManage(Player player, String handler) throws Exception {
         ensureEntitlements(player);
         ensureCurrentWarehouse(player, state(player));
         packetBridge.openUi(player, manageRuntimeUiId);
-        sendManage(player, handler);
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            try {
+                if (player.isOnline()) {
+                    sendManage(player, handler);
+                }
+            } catch (Exception exception) {
+                plugin.getLogger().warning("延迟发送管理数据包失败: " + exception.getMessage());
+            }
+        }, 2L);
     }
 
     /**
      * 打开银行界面并发送初始化/更新数据包。
+     * 延迟 2 ticks 发送，避免低性能客户端 UI 加载未完成时丢失 packet。
      */
     private void openBank(Player player, String handler) throws Exception {
         ensureEntitlements(player);
         ensureCurrentWarehouse(player, state(player));
         packetBridge.openUi(player, bankRuntimeUiId);
-        sendBank(player, handler);
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            try {
+                if (player.isOnline()) {
+                    sendBank(player, handler);
+                }
+            } catch (Exception exception) {
+                plugin.getLogger().warning("延迟发送银行数据包失败: " + exception.getMessage());
+            }
+        }, 2L);
     }
 
     /**
@@ -957,9 +984,8 @@ public final class WarehouseService implements Listener {
                 ? visibleSlots.get(index)
                 : null;
             Map<String, Object> row = item != null
-                ? slotPacket(item, true)
+                ? slotPacket(item)
                 : emptySlotPacket(displaySlot);
-            row.put("displaySlot", displaySlot);
             String key = String.valueOf(displaySlot);
             row.put("key", key);
             slots.put(key, row);
@@ -981,7 +1007,7 @@ public final class WarehouseService implements Listener {
         packet.put("slotCount", SLOT_COUNT);
         packet.put("selectedSlot", selectedDisplaySlot);
         packet.put("selectedActualSlot", state.selectedSlot());
-        packet.put("selectedItem", selected == null ? emptySelectionPacket() : slotPacket(selected, true));
+        packet.put("selectedItem", selected == null ? emptySelectionPacket() : slotPacket(selected));
         packet.put("backpack", backpackPacket(player));
         packet.put("page", state.page());
         packet.put("pageTotal", pageTotal);
@@ -2679,12 +2705,11 @@ public final class WarehouseService implements Listener {
         return row;
     }
 
-    private Map<String, Object> slotPacket(SlotItemRecord item, boolean matched) {
+    private Map<String, Object> slotPacket(SlotItemRecord item) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("key", Integer.toString(item.slot()));
         row.put("slot", item.slot());
         row.put("empty", false);
-        row.put("matched", matched);
         row.put("name", item.displayName());
         row.put("amount", item.amount());
         row.put("category", item.categoryId());
@@ -2709,7 +2734,6 @@ public final class WarehouseService implements Listener {
         row.put("key", Integer.toString(slot));
         row.put("slot", slot);
         row.put("empty", true);
-        row.put("matched", true);
         row.put("name", "");
         row.put("amount", 0L);
         row.put("category", "");

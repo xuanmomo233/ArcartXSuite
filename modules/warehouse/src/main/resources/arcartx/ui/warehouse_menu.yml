@@ -194,7 +194,7 @@ ui:
         if(val.背包网格 != null){
           for(raw in range(9,44)){
             control = raw == 9 ? val.背包网格['背包槽'] : val.背包网格['背包槽' + (raw - 9)]
-            entry = var.backpack[raw + '']
+            entry = var.backpack[raw.round]
             if(control != null){
               amountText = ''
               if(entry != null && !entry['empty']){
@@ -681,7 +681,7 @@ controls:
                       itemScale: 0.76
                       width: 72
                       height: 72
-                      normal: "self.entry['displaySlot'] == var.selectedSlot ? '120,190,255,255' : (self.entry['matched'] ? '95,95,95,255' : '55,55,55,185')"
+                      normal: "self.entryKey == var.selectedSlot.round ? '120,190,255,255' : '95,95,95,255'"
                       hover: ~Frosted:0;255,255,255,255
                       shape: ~round_rect
                       radius: 16
@@ -819,7 +819,7 @@ controls:
                   create: |-
                     for(i in range(1,35)){
                       slot = self['背包槽'].copy('背包槽' + i)
-                      slot.entryKey = (9 + i) + ''
+                      slot.entryKey = (9 + i).round
                       slot.id = 9 + i
                     }
                 children:
@@ -831,8 +831,7 @@ controls:
                       itemScale: 0.72
                       through: false
                       lock: true
-                      entryKey: '9'
-                      entry: var.backpack[self.entryKey]
+                      entryKey: 9
                       width: 62
                       height: 62
                       normal: "self.entryKey == var.selectedBackpackSlot ? '120,190,255,255' : 'Frosted:0;95,95,95,255'"
@@ -854,15 +853,6 @@ controls:
                       stroke:
                         width: 2
                         color: ~0,0,0,255
-                    children:
-                      数量:
-                        type: Text
-                        attribute:
-                          x: 32
-                          y: 40
-                          texts: "~"
-                          fontSize: 36
-                          through: true
 
           底部操作卡片:
             type: Texture
