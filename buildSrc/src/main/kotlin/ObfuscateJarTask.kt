@@ -130,10 +130,6 @@ abstract class ObfuscateJarTask : DefaultTask() {
 
         if (coreJar.get()) {
             sb.appendLine("-keep class xuanmo.arcartxsuite.bridge.** { public *; }")
-            sb.appendLine("-keep class xuanmo.arcartxsuite.license.LicenseService { public *; }")
-            sb.appendLine("-keep class xuanmo.arcartxsuite.license.LicenseDecision { *; }")
-            sb.appendLine("-keep class xuanmo.arcartxsuite.license.LicenseDiagnostics { *; }")
-            sb.appendLine("-keep class xuanmo.arcartxsuite.license.EncryptedResourceLoader { public *; }")
             sb.appendLine("-keep class xuanmo.arcartxsuite.module.ModuleRegistry { public *; }")
             sb.appendLine("-keep class xuanmo.arcartxsuite.module.ModuleClassLoader { *; }")
             sb.appendLine("-keep class xuanmo.arcartxsuite.security.** { public *; }")

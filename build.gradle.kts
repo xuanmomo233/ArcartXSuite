@@ -5,7 +5,6 @@ plugins {
 }
 
 val distDir = rootProject.layout.buildDirectory.dir("ArcartXSuite")
-val paidModules = setOf("warehouse", "map", "mail", "title", "questgps", "conversation", "tab", "entitytracker", "qqbot")
 
 subprojects {
     repositories {
@@ -18,12 +17,6 @@ subprojects {
     }
 
     afterEvaluate {
-        tasks.withType<ProtectYamlResourcesTask>().configureEach {
-            if (project.path.startsWith(":modules:") && project.name in paidModules) {
-                licenseBoundModuleId.set(project.name)
-            }
-        }
-
         // 模块子项目：注册混淆任务
         if (project.path.startsWith(":modules:")) {
             val moduleJarTask = tasks.named<Jar>("jar")

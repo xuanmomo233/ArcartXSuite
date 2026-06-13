@@ -34,16 +34,11 @@ abstract class ProtectYamlResourcesTask : DefaultTask() {
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
 
-    @get:Input
-    @get:Optional
-    abstract val licenseBoundModuleId: Property<String>
-
     @TaskAction
     fun generate() {
         val root = sourceDir.asFile.get().toPath()
         outputDir.asFile.get().deleteRecursively()
         val protectedRoot = outputDir.file("arcartx/internal/protected").get().asFile
-        val licenseRoot = outputDir.file("arcartx/internal/license").get().asFile
         protectedRoot.mkdirs()
 
         sourceDir.asFileTree.matching {
@@ -52,18 +47,9 @@ abstract class ProtectYamlResourcesTask : DefaultTask() {
             exclude("plugin.yml")
         }.files.sortedBy { it.path }.forEach { source ->
             val resourcePath = root.relativize(source.toPath()).toString().replace('\\', '/')
-            val moduleId = licenseBoundModuleId.orNull
-            val licenseBound = !moduleId.isNullOrBlank() && resourcePath != "module.yml"
-            if (!licenseBound) {
-                val encryptedOutput = File(protectedRoot, "${encodeResourcePath(resourcePath)}.axb")
-                encryptedOutput.parentFile.mkdirs()
-                encryptedOutput.writeBytes(encrypt(source.readBytes(), deriveResourceKey()))
-            } else {
-                val paidModuleId = moduleId ?: error("licenseBoundModuleId is required")
-                val encryptedOutput = File(File(licenseRoot, paidModuleId), "${encodeResourcePath(resourcePath)}.axl")
-                encryptedOutput.parentFile.mkdirs()
-                encryptedOutput.writeBytes(encryptLicenseBound(source.readBytes(), paidModuleId))
-            }
+            val encryptedOutput = File(protectedRoot, "${encodeResourcePath(resourcePath)}.axb")
+            encryptedOutput.parentFile.mkdirs()
+            encryptedOutput.writeBytes(encrypt(source.readBytes(), deriveResourceKey()))
         }
     }
 
@@ -87,12 +73,6 @@ abstract class ProtectYamlResourcesTask : DefaultTask() {
         }
     }
 
-    private fun encryptLicenseBound(bytes: ByteArray, moduleId: String): ByteArray {
-        val payload = encrypt(bytes, deriveModuleResourceKey(moduleId))
-        payload[2] = 0x4C.toByte()
-        return payload
-    }
-
     private fun encodeResourcePath(resourcePath: String): String {
         return Base64.getUrlEncoder()
             .withoutPadding()
@@ -111,11 +91,6 @@ abstract class ProtectYamlResourcesTask : DefaultTask() {
         digest.update(decodeResourceSeed())
         digest.update(RESOURCE_DIGEST_SALT)
         return digest.digest()
-    }
-
-    private fun deriveModuleResourceKey(moduleId: String): ByteArray {
-        return MessageDigest.getInstance("SHA-256")
-            .digest("AXS-MODULE-RESOURCE-v1|$moduleId".toByteArray(Charsets.UTF_8))
     }
 
     private fun gzip(bytes: ByteArray): ByteArray {

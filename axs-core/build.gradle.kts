@@ -63,7 +63,7 @@ tasks {
         dependsOn(protectYamlResources)
         exclude { details ->
             val path = details.relativePath.pathString
-            (path.endsWith(".yml") || path.endsWith(".yaml")) && path != "plugin.yml" && path != "config.yml" && path != "license.yml"
+            (path.endsWith(".yml") || path.endsWith(".yaml")) && path != "plugin.yml" && path != "config.yml"
         }
         inputs.property("version", version)
         val props = mapOf("version" to version)
@@ -130,33 +130,20 @@ val classFinalCore by tasks.registering(ClassFinalTask::class) {
     inputJar.set(step1Jar)
     outputJar.set(step3Jar)
     packages.set(listOf(
-        "xuanmo.arcartxsuite.license",
         "xuanmo.arcartxsuite.security",
         "xuanmo.arcartxsuite.config"
-    ))
-    excludes.set(listOf(
-        "xuanmo.arcartxsuite.security.NativeBridge"  // native 类不能被 VMP
     ))
     enabled = classFinalAvailable
 }
 
 // 选择 Step 3 的输出（如果 ClassFinal 可用），否则直接用 Step 1 的
-val preIntegrityJar = if (classFinalAvailable) step3Jar else step1Jar
-val preIntegrityTask = if (classFinalAvailable) "classFinalCore" else "obfuscateCore"
-
-// Step 4: 完整性摘要嵌入
-val finalJar = layout.buildDirectory.file("libs/ArcartXSuite-final.jar")
-
-val embedIntegrity by tasks.registering(EmbedIntegrityTask::class) {
-    dependsOn(tasks.named(preIntegrityTask))
-    inputJar.set(preIntegrityJar)
-    outputJar.set(finalJar)
-}
+val publishSrcJar = if (classFinalAvailable) step3Jar else step1Jar
+val publishSrcTask = if (classFinalAvailable) "classFinalCore" else "obfuscateCore"
 
 // 最终发布 — 使用自定义 task 避免 Copy lambda 捕获脚本上下文（配置缓存兼容）
 val publishCoreJar by tasks.registering {
-    dependsOn(embedIntegrity)
-    val src = finalJar.get().asFile
+    dependsOn(tasks.named(publishSrcTask))
+    val src = publishSrcJar.get().asFile
     val dst = rootDir.resolve("build/ArcartXSuite/ArcartXSuite-${version}.jar")
     inputs.file(src)
     outputs.file(dst)
