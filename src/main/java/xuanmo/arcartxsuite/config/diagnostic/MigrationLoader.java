@@ -182,8 +182,7 @@ public final class MigrationLoader {
     }
 
     /**
-     * 资源打开钩子，便于 axs-core 根据 ownerId 路由到 {@code ProtectedResourceStore}
-     * （宿主资源）或 {@code EncryptedResourceLoader}（付费模块受保护资源）。
+     * 资源打开钩子，便于 axs-core 根据 ownerId 路由到 {@code ProtectedResourceStore}。
      */
     @FunctionalInterface
     public interface ProtectedResourceOpener {

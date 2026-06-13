@@ -30,7 +30,7 @@ commands:
     permission: axs.regions.select
   arcartxsuite:
     description: ArcartXSuite 管理命令
-    usage: /axs help [module] | /axs <module> help | /axs status|reload|license
+    usage: /axs help [module] | /axs <module> help | /axs status|reload
     aliases: [axs]
     permission: arcartxsuite.admin
   title:

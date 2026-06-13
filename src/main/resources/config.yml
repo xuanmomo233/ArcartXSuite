@@ -1,12 +1,11 @@
 ﻿config-version: 1
 
 # AXS 资源说明
-# 用途: AXS 主配置，负责模块启用开关；付费模块授权请编辑 license.yml。
+# 用途: AXS 主配置，负责模块启用开关。
 # 前置依赖: ArcartX。
 # 启用开关: modules.<module>.enabled。
-# 关联文件: config.yml、license.yml、ArcartX*.yml。
+# 关联文件: config.yml、ArcartX*.yml。
 # 重载命令: /axs reload all 或 /axs <module> reload。
-# 最小使用路径: 免费模块 modules.<module>.enabled: true；付费模块还需 license.yml 授权通过。
 
 # ========== 全局货币定义 ==========
 # 所有模块共享同一组货币。provider 支持: vault / playerpoints / rondo / command / placeholder-command / custom。
@@ -383,12 +382,10 @@ modules:
 
   title:
     enabled: false
-    # 付费模块，需 license.yml 授权通过。
     # 具体称号定义请编辑 ArcartXTitle.yml，修改后可执行 /axs title reload。
 
   conversation:
     enabled: false
-    # 付费模块，需 license.yml 授权通过。
     # 具体对话桥接配置请编辑 ArcartXConversation.yml，修改后可执行 /axs conversation reload。
 
   announcer:
@@ -418,11 +415,9 @@ modules:
 
   warehouse:
     enabled: false
-    # 付费模块，需 license.yml 授权通过。
 
   mail:
     enabled: false
-    # 付费模块，需 license.yml 授权通过。
 
   chat:
     enabled: false
@@ -430,11 +425,9 @@ modules:
 
   questgps:
     enabled: false
-    # 付费模块，需 license.yml 授权通过。
 
   map:
     enabled: false
-    # 付费模块，需 license.yml 授权通过。
 
   essentials:
     enabled: false
@@ -446,12 +439,10 @@ modules:
 
   market:
     enabled: false
-    # 付费模块，需 license.yml 授权通过。
     # Market 全球市场（系统商店 + 玩家拍卖行 + 回收商店，多货币、跨服同步）。
 
   qqbot:
     enabled: false
-    # 付费模块，需 license.yml 授权通过。
     # QQBot QQ群服互联（OneBot 11 协议，消息同步、绑定、白名单、群指令查询）。
 
   menu:
@@ -460,17 +451,14 @@ modules:
 
   battlepass:
     enabled: false
-    # 付费模块，需 license.yml 授权通过。
     # BattlePass 战令系统（免费/高级/典藏通行证 + 每日/每周/赛季任务池）。
 
   fishing:
     enabled: false
-    # 付费模块，需 license.yml 授权通过。
     # Fishing 钓鱼系统（星露谷风格钓鱼小游戏、多水域生态、饵料加成、宝藏奖励）。
 
   lottery:
     enabled: false
-    # 付费模块，需 license.yml 授权通过。
     # Lottery 抽奖系统（CS 开箱动画 + 原神祈愿卡池、保底机制、磨损度系统）。
 
 

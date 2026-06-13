@@ -158,7 +158,7 @@ public record ClientPacketGuardConfiguration(
         LinkedHashMap<String, ClientPacketGuardRule> rules = new LinkedHashMap<>();
         rules.put("title", new ClientPacketGuardRule(true, 1000L, 4, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, ""));
         rules.put("mail", new ClientPacketGuardRule(true, 1000L, 4, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, ""));
-        rules.put("questgps", new ClientPacketGuardRule(true, 500L, 4, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, ""));
+        rules.put("questgps", new ClientPacketGuardRule(true, 500L, 10, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, ""));
         rules.put("map", new ClientPacketGuardRule(true, 500L, 4, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, ""));
         rules.put("pickup", new ClientPacketGuardRule(true, 500L, 8, ClientPacketGuardMode.SILENT, HARDCODED_DEFAULTS.notifyMessage(), 3000L, ""));
         return rules;
@@ -181,6 +181,13 @@ public record ClientPacketGuardConfiguration(
             actionRule("cdk", 3000L, 1, ClientPacketGuardMode.NOTIFY)
         ));
         rules.put("questgps", actionRules(
+            actionRule("switch_category", 200L, 8, ClientPacketGuardMode.NOTIFY),
+            actionRule("switch_page", 200L, 8, ClientPacketGuardMode.NOTIFY),
+            actionRule("select_quest", 200L, 8, ClientPacketGuardMode.NOTIFY),
+            actionRule("track_quest", 500L, 3, ClientPacketGuardMode.NOTIFY),
+            actionRule("track_task", 500L, 3, ClientPacketGuardMode.NOTIFY),
+            actionRule("clear_track", 500L, 3, ClientPacketGuardMode.NOTIFY),
+            actionRule("open_map", 500L, 3, ClientPacketGuardMode.NOTIFY),
             actionRule("accept_quest", 2000L, 1, ClientPacketGuardMode.NOTIFY),
             actionRule("abandon_quest", 2000L, 1, ClientPacketGuardMode.NOTIFY)
         ));

@@ -46,7 +46,6 @@ public final class DiagnosticDumpCommand {
             writeJvmInfo(pw);
             writePluginInfo(pw);
             writeModuleStatus(pw);
-            writeLicenseStatus(pw);
             writeRecentErrors(pw);
             pw.flush();
         } catch (IOException e) {
@@ -132,24 +131,6 @@ public final class DiagnosticDumpCommand {
         }
         if (status.isEmpty()) {
             pw.println("  (no modules loaded)");
-        }
-        pw.println();
-    }
-
-    private void writeLicenseStatus(PrintWriter pw) {
-        pw.println("── License ─────────────────────────────────────────────");
-        try {
-            var licenseService = plugin.getLicenseService();
-            if (licenseService != null) {
-                var decision = licenseService.decision();
-                pw.println("  State: " + decision.state());
-                pw.println("  Reason: " + decision.reason());
-                pw.println("  Allowed Modules: " + decision.modules());
-            } else {
-                pw.println("  LicenseService: null (dev mode or not initialized)");
-            }
-        } catch (Exception e) {
-            pw.println("  Error reading license: " + e.getMessage());
         }
         pw.println();
     }

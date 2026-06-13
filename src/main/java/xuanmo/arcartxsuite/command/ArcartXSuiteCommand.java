@@ -25,13 +25,12 @@ import xuanmo.arcartxsuite.module.ModuleRegistry;
 public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter {
 
     private static final String PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
-    private static final List<String> ROOT_ACTIONS = List.of("help", "status", "reload", "load", "unload", "config", "license", "purge", "diagnostic", "migrate", "auth");
+    private static final List<String> ROOT_ACTIONS = List.of("help", "status", "reload", "load", "unload", "config", "purge", "diagnostic", "migrate", "auth");
 
     private static final long PURGE_CONFIRM_TIMEOUT_MS = 10_000;
 
     private final ArcartXSuitePlugin plugin;
     private final ArcartXSuiteConfigSubCommand configSubCommand;
-    private final ArcartXSuiteLicenseSubCommand licenseSubCommand;
     private final DiagnosticDumpCommand diagnosticCommand;
     private String pendingPurgeKey;
     private long pendingPurgeTimestamp;
@@ -39,7 +38,6 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
     public ArcartXSuiteCommand(ArcartXSuitePlugin plugin) {
         this.plugin = plugin;
         this.configSubCommand = new ArcartXSuiteConfigSubCommand(plugin);
-        this.licenseSubCommand = new ArcartXSuiteLicenseSubCommand(plugin);
         this.diagnosticCommand = new DiagnosticDumpCommand(plugin);
     }
 
@@ -71,11 +69,6 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
             String[] subArgs = new String[args.length - 1];
             System.arraycopy(args, 1, subArgs, 0, subArgs.length);
             return configSubCommand.execute(sender, subArgs);
-        }
-        if ("license".equalsIgnoreCase(args[0])) {
-            String[] subArgs = new String[args.length - 1];
-            System.arraycopy(args, 1, subArgs, 0, subArgs.length);
-            return licenseSubCommand.execute(sender, subArgs);
         }
         if ("purge".equalsIgnoreCase(args[0])) {
             return handlePurge(sender, args);
@@ -178,11 +171,6 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
             System.arraycopy(args, 1, subArgs, 0, subArgs.length);
             return configSubCommand.tabComplete(subArgs);
         }
-        if ("license".equalsIgnoreCase(args[0])) {
-            String[] subArgs = new String[args.length - 1];
-            System.arraycopy(args, 1, subArgs, 0, subArgs.length);
-            return licenseSubCommand.tabComplete(subArgs);
-        }
         if (registry != null && args.length >= 2) {
             Optional<ModuleCommandHandler> handler = registry.getCommandHandler(args[0].toLowerCase(Locale.ROOT));
             if (handler.isPresent()) {
@@ -210,7 +198,6 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " unload <module>" + ChatColor.GRAY + " - 热卸载模块（释放 ClassLoader）");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " config <子命令>" + ChatColor.GRAY + " - 智能配置体检");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " auth <子命令>" + ChatColor.GRAY + " - 多方认证管理 (status/setup/update/check)");
-        sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " license <子命令>" + ChatColor.GRAY + " - 授权管理 (status/refresh/activate/rebind/cloud-code/fingerprint)");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " migrate <module|all> <direction> [overwrite]" + ChatColor.GRAY + " - 跨数据库一键无损迁移 (SQLite ↔ MySQL)");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " purge <玩家名|all> [模块ID|all]" + ChatColor.GRAY + " - 清除玩家模块数据 (控制台专用，10秒二次确认)");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " diagnostic" + ChatColor.GRAY + " - 生成诊断包到 diagnostics/ 目录");
@@ -530,7 +517,7 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
     }
 
     private void sendUsage(CommandSender sender, String label) {
-        sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /" + label + " help|status|reload|load|unload|config|license|purge|diagnostic|migrate|auth|<module>");
+        sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /" + label + " help|status|reload|load|unload|config|purge|diagnostic|migrate|auth|<module>");
     }
 
     // ─── 工具 ─────────────────────────────────────────────────
