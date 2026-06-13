@@ -22,7 +22,7 @@ public final class LoginViewPlaceholderExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getIdentifier() {
-        return "AXSloginview";
+        return "axsloginview";
     }
 
     @Override

@@ -41,7 +41,7 @@ public final class TitlePlaceholderExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getIdentifier() {
-        return "AXStitle";
+        return "axstitle";
     }
 
     @Override
@@ -155,19 +155,19 @@ public final class TitlePlaceholderExpansion extends PlaceholderExpansion {
     ) {
         if (normalized.startsWith("chat_") && normalized.endsWith("_prefix")) {
             TitleDefinition title = equippedTitleForGroup(resolvedState, normalized, "chat_", "_prefix");
-            return title == null ? "" : title.chatPrefix();
+            return title == null || title.chatPrefix() == null ? "" : title.chatPrefix();
         }
         if (normalized.startsWith("chat_") && normalized.endsWith("_suffix")) {
             TitleDefinition title = equippedTitleForGroup(resolvedState, normalized, "chat_", "_suffix");
-            return title == null ? "" : title.chatSuffix();
+            return title == null || title.chatSuffix() == null ? "" : title.chatSuffix();
         }
         if (normalized.startsWith("tab_") && normalized.endsWith("_prefix")) {
             TitleDefinition title = equippedTitleForGroup(resolvedState, normalized, "tab_", "_prefix");
-            return title == null ? "" : title.tabPrefix();
+            return title == null || title.tabPrefix() == null ? "" : title.tabPrefix();
         }
         if (normalized.startsWith("tab_") && normalized.endsWith("_suffix")) {
             TitleDefinition title = equippedTitleForGroup(resolvedState, normalized, "tab_", "_suffix");
-            return title == null ? "" : title.tabSuffix();
+            return title == null || title.tabSuffix() == null ? "" : title.tabSuffix();
         }
         if (!normalized.startsWith("equipped_")) {
             return null;
@@ -262,8 +262,18 @@ public final class TitlePlaceholderExpansion extends PlaceholderExpansion {
         Function<TitleDefinition, String> fieldExtractor
     ) {
         TitleDisplayConfiguration displayConfig = configuration.displayTitle();
+
+        // 若玩家手动设置了总展示称号，优先返回该称号的对应字段
+        TitleDefinition totalDisplay = resolvedState.totalDisplayTitle();
+        if (totalDisplay != null) {
+            String value = fieldExtractor.apply(totalDisplay);
+            if (value != null && !value.isEmpty()) {
+                return value;
+            }
+        }
+
+        // 未设置时，按 display-title.groups 顺序取第一个已装备且字段非空的称号
         List<String> groupOrder = configuration.displayTitleGroupOrder();
-        StringJoiner joiner = new StringJoiner(displayConfig.separator());
         for (String groupId : groupOrder) {
             TitleDefinition title = resolvedState.equippedTitlesByGroup().get(groupId);
             if (title == null) {
@@ -271,10 +281,10 @@ public final class TitlePlaceholderExpansion extends PlaceholderExpansion {
             }
             String value = fieldExtractor.apply(title);
             if (value != null && !value.isEmpty()) {
-                joiner.add(value);
+                return value;
             }
         }
-        return joiner.length() == 0 ? displayConfig.emptyText() : joiner.toString();
+        return displayConfig.emptyText();
     }
 
     private static String attributeValue(Map<String, Double> values, String key) {

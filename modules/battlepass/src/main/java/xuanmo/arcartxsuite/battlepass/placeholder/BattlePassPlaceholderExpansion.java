@@ -19,7 +19,7 @@ public final class BattlePassPlaceholderExpansion extends PlaceholderExpansion {
         this.serviceProvider = serviceProvider;
     }
 
-    @Override public @NotNull String getIdentifier() { return "AXSbattlepass"; }
+    @Override public @NotNull String getIdentifier() { return "axsbattlepass"; }
     @Override public @NotNull String getAuthor() { return "ArcartXSuite"; }
     @Override public @NotNull String getVersion() { return "1.0.0"; }
     @Override public boolean persist() { return true; }

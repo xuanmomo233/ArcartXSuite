@@ -25,7 +25,7 @@ public final class OnlineRewardsPlaceholderExpansion extends PlaceholderExpansio
 
     @Override
     public @NotNull String getIdentifier() {
-        return "AXSonlinerewards";
+        return "axsonlinerewards";
     }
 
     @Override

@@ -21,7 +21,7 @@ public final class QQBotPlaceholderExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getIdentifier() {
-        return "AXSqqbot";
+        return "axsqqbot";
     }
 
     @Override

@@ -22,7 +22,7 @@ public final class WarehousePlaceholderExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getIdentifier() {
-        return "AXSwarehouse";
+        return "axswarehouse";
     }
 
     @Override

@@ -24,7 +24,7 @@ public final class ChatPlaceholderExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getIdentifier() {
-        return "AXSchat";
+        return "axschat";
     }
 
     @Override

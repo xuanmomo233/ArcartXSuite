@@ -38,7 +38,7 @@ public final class EntityTrackerPlaceholderExpansion extends PlaceholderExpansio
 
     @Override
     public @NotNull String getIdentifier() {
-        return "AXSentitytracker";
+        return "axsentitytracker";
     }
 
     @Override

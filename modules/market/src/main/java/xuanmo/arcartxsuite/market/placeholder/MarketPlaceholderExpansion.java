@@ -9,7 +9,7 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.market.MarketService;
 
 /**
- * PlaceholderAPI 扩展：%AXSmarket_xxx%。
+ * PlaceholderAPI 扩展：%axsmarket_xxx%。
  */
 public class MarketPlaceholderExpansion extends PlaceholderExpansion {
 
@@ -21,7 +21,7 @@ public class MarketPlaceholderExpansion extends PlaceholderExpansion {
         this.serviceSupplier = serviceSupplier;
     }
 
-    @Override public @NotNull String getIdentifier() { return "AXSmarket"; }
+    @Override public @NotNull String getIdentifier() { return "axsmarket"; }
     @Override public @NotNull String getAuthor() { return "ArcartXSuite"; }
     @Override public @NotNull String getVersion() { return "1.0.0"; }
     @Override public boolean persist() { return true; }

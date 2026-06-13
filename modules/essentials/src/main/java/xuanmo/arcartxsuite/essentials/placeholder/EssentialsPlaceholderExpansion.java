@@ -14,13 +14,13 @@ import xuanmo.arcartxsuite.essentials.service.PlayerManagementService;
  *
  * <p>支持以下占位符：
  * <ul>
- *   <li>{@code %AXSess_afk%} — 是否 AFK（true/false）</li>
- *   <li>{@code %AXSess_afk_symbol%} — AFK 标记符号（可用于 Tab）</li>
- *   <li>{@code %AXSess_vanish%} — 是否隐身（true/false）</li>
- *   <li>{@code %AXSess_vanish_symbol%} — 隐身标记符号</li>
- *   <li>{@code %AXSess_flying%} — 是否飞行中</li>
- *   <li>{@code %AXSess_god%} — 是否无敌</li>
- *   <li>{@code %AXSess_nick%} — 昵称（未设置则返回玩家名）</li>
+ *   <li>{@code %axsess_afk%} — 是否 AFK（true/false）</li>
+ *   <li>{@code %axsess_afk_symbol%} — AFK 标记符号（可用于 Tab）</li>
+ *   <li>{@code %axsess_vanish%} — 是否隐身（true/false）</li>
+ *   <li>{@code %axsess_vanish_symbol%} — 隐身标记符号</li>
+ *   <li>{@code %axsess_flying%} — 是否飞行中</li>
+ *   <li>{@code %axsess_god%} — 是否无敌</li>
+ *   <li>{@code %axsess_nick%} — 昵称（未设置则返回玩家名）</li>
  * </ul>
  */
 public final class EssentialsPlaceholderExpansion extends PlaceholderExpansion {
@@ -35,7 +35,7 @@ public final class EssentialsPlaceholderExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getIdentifier() {
-        return "AXSess";
+        return "axsess";
     }
 
     @Override
