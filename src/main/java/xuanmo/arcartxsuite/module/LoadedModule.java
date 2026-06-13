@@ -11,16 +11,27 @@ final class LoadedModule {
 
     private final ModuleDescriptor descriptor;
     private final AXSModule instance;
-    private final ModuleClassLoader classLoader;
+    private final ClassLoader classLoader;
     private final File jarFile;
+    private final byte[] jarBytes;
     private DefaultModuleContext context;
     private boolean enabled;
 
-    LoadedModule(ModuleDescriptor descriptor, AXSModule instance, ModuleClassLoader classLoader, File jarFile) {
+    LoadedModule(ModuleDescriptor descriptor, AXSModule instance, ClassLoader classLoader, File jarFile) {
         this.descriptor = descriptor;
         this.instance = instance;
         this.classLoader = classLoader;
         this.jarFile = jarFile;
+        this.jarBytes = null;
+        this.enabled = false;
+    }
+
+    LoadedModule(ModuleDescriptor descriptor, AXSModule instance, ClassLoader classLoader, byte[] jarBytes) {
+        this.descriptor = descriptor;
+        this.instance = instance;
+        this.classLoader = classLoader;
+        this.jarFile = null;
+        this.jarBytes = jarBytes;
         this.enabled = false;
     }
 
@@ -40,12 +51,16 @@ final class LoadedModule {
         return instance;
     }
 
-    ModuleClassLoader classLoader() {
+    ClassLoader classLoader() {
         return classLoader;
     }
 
     File jarFile() {
         return jarFile;
+    }
+
+    byte[] jarBytes() {
+        return jarBytes;
     }
 
     boolean isEnabled() {

@@ -50,8 +50,6 @@ import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
 import xuanmo.arcartxsuite.api.script.AriaBridge;
 import xuanmo.arcartxsuite.crossserver.CrossServerService;
 import xuanmo.arcartxsuite.keybind.KeybindService;
-import xuanmo.arcartxsuite.license.LicenseMessages;
-import xuanmo.arcartxsuite.license.LicenseService;
 import xuanmo.arcartxsuite.security.ClientPacketGuard;
 
 /**
@@ -68,7 +66,6 @@ public final class ModuleRegistry {
     private final ArcartXItemStackBridge itemStackBridge;
     private final ArcartXPropBridge propBridge;
     private final ClientPacketGuard packetGuard;
-    private final LicenseService licenseService;
     private final KeybindService keybindService;
     private final TaczCombatBridge taczCombatBridge;
     private final CrossServerService crossServerService;
@@ -107,7 +104,6 @@ public final class ModuleRegistry {
         ArcartXItemStackBridge itemStackBridge,
         ArcartXPropBridge propBridge,
         ClientPacketGuard packetGuard,
-        LicenseService licenseService,
         KeybindService keybindService,
         TaczCombatBridge taczCombatBridge,
         CrossServerService crossServerService
@@ -119,7 +115,6 @@ public final class ModuleRegistry {
         this.itemStackBridge = itemStackBridge;
         this.propBridge = propBridge;
         this.packetGuard = packetGuard;
-        this.licenseService = licenseService;
         this.keybindService = keybindService;
         this.taczCombatBridge = taczCombatBridge;
         this.crossServerService = crossServerService;
@@ -190,7 +185,7 @@ public final class ModuleRegistry {
             }
         }
 
-        // 2. enabled + license entitlement 检查
+        // 2. enabled 检查
         YamlConfiguration rootConfig = loadRootConfig();
         Map<String, DiscoveredModule> authorized = new LinkedHashMap<>();
         List<String> skippedModules = new ArrayList<>();
@@ -202,13 +197,6 @@ public final class ModuleRegistry {
 
             if (!isModuleEnabled(rootConfig, id)) {
                 LOGGER.fine(dm.descriptor.name() + " 模块已在 config.yml 中关闭。");
-                skippedModules.add(dm.descriptor.name());
-                continue;
-            }
-
-            if (licenseService != null && !licenseService.isModuleAllowed(id)) {
-                LOGGER.warning(dm.descriptor.name() + " 模块授权未通过: " + LicenseMessages.state(licenseService.decision().state())
-                    + " | " + licenseService.decision().reason());
                 skippedModules.add(dm.descriptor.name());
                 continue;
             }
@@ -351,6 +339,35 @@ public final class ModuleRegistry {
     }
 
     /**
+     * 加载云端模块：从内存中的 jar 字节数组直接加载并启用。
+     *
+     * @param jarBytes 解密后的 jar 字节数组
+     * @return 是否成功加载并启用
+     */
+    public boolean loadCloudModule(byte[] jarBytes) {
+        initializeGlobalBridges();
+        try {
+            ModuleDescriptor descriptor = ModuleDescriptorParser.parse(jarBytes);
+            String moduleId = descriptor.id();
+            if (modules.containsKey(moduleId)) {
+                LOGGER.warning("云端模块 " + moduleId + " 已加载，跳过。");
+                return false;
+            }
+            if (packetBridge != null) {
+                packetBridge.resetUiRegistrationCount();
+            }
+            boolean ok = loadAndEnable(new DiscoveredModule(descriptor, jarBytes));
+            if (!ok) {
+                cleanupFailedModule(moduleId);
+            }
+            return ok;
+        } catch (Exception | LinkageError exception) {
+            LOGGER.log(Level.SEVERE, "加载云端模块失败", exception);
+            return false;
+        }
+    }
+
+    /**
      * 热加载模块：从 {@code modules/} 目录扫描指定 id 的 jar 并加载启用。
      * 若该模块已加载，返回 false 并提示。
      *
@@ -375,13 +392,6 @@ public final class ModuleRegistry {
                 ModuleDescriptor descriptor = ModuleDescriptorParser.parse(jar);
                 if (!moduleId.equals(descriptor.id())) continue;
 
-                // license 检查
-                if (licenseService != null && !licenseService.isModuleAllowed(descriptor.id())) {
-                    LOGGER.warning(descriptor.name() + " 模块授权未通过: "
-                        + LicenseMessages.state(licenseService.decision().state())
-                        + " | " + licenseService.decision().reason());
-                    return false;
-                }
                 // packetBridge UI 计数复位（仅用于本次加载日志）
                 if (packetBridge != null) {
                     packetBridge.resetUiRegistrationCount();
@@ -521,6 +531,7 @@ public final class ModuleRegistry {
     private boolean loadAndEnable(DiscoveredModule dm) throws Exception {
         ModuleDescriptor descriptor = dm.descriptor;
         File jarFile = dm.jarFile;
+        byte[] jarBytes = dm.jarBytes;
 
         // 检查外部插件依赖
         for (String externalPlugin : descriptor.externalDepends()) {
@@ -538,14 +549,21 @@ public final class ModuleRegistry {
             }
         }
 
-        // 创建 ClassLoader
-        URL jarUrl = jarFile.toURI().toURL();
-        ModuleClassLoader classLoader = new ModuleClassLoader(descriptor.id(), jarUrl, plugin.getClass().getClassLoader());
+        // 创建 ClassLoader（本地 jar 或内存 bytes）
+        ClassLoader classLoader;
+        if (jarBytes != null) {
+            classLoader = new ByteArrayModuleClassLoader(descriptor.id(), jarBytes, plugin.getClass().getClassLoader());
+        } else {
+            URL jarUrl = jarFile.toURI().toURL();
+            classLoader = new ModuleClassLoader(descriptor.id(), jarUrl, plugin.getClass().getClassLoader());
+        }
 
         // 实例化模块主类
         Class<?> mainClass = classLoader.loadClass(descriptor.mainClass());
         if (!AXSModule.class.isAssignableFrom(mainClass)) {
-            classLoader.close();
+            if (classLoader instanceof java.io.Closeable closeable) {
+                closeable.close();
+            }
             throw new ModuleLoadException(descriptor.mainClass() + " 未实现 AXSModule 接口");
         }
         AXSModule instance = (AXSModule) mainClass.getDeclaredConstructor().newInstance();
@@ -566,7 +584,9 @@ public final class ModuleRegistry {
             crossServerService
         );
 
-        LoadedModule loaded = new LoadedModule(descriptor, instance, classLoader, jarFile);
+        LoadedModule loaded = jarBytes != null
+            ? new LoadedModule(descriptor, instance, classLoader, jarBytes)
+            : new LoadedModule(descriptor, instance, classLoader, jarFile);
         loaded.setContext(context);
         modules.put(descriptor.id(), loaded);
 
@@ -617,7 +637,9 @@ public final class ModuleRegistry {
 
     private void closeClassLoader(LoadedModule loaded) {
         try {
-            loaded.classLoader().close();
+            if (loaded.classLoader() instanceof java.io.Closeable closeable) {
+                closeable.close();
+            }
         } catch (IOException exception) {
             LOGGER.warning("关闭模块 ClassLoader 失败: " + loaded.descriptor().id() + " | " + exception.getMessage());
         }
@@ -889,9 +911,6 @@ public final class ModuleRegistry {
     }
 
     public InputStream openProtectedResource(String moduleId, String resourcePath, ClassLoader loader) throws IOException {
-        if (licenseService != null) {
-            return licenseService.encryptedResourceLoader().open(moduleId, resourcePath, loader);
-        }
         return xuanmo.arcartxsuite.config.ProtectedResourceStore.open(resourcePath, loader);
     }
 
@@ -1129,7 +1148,14 @@ public final class ModuleRegistry {
     record PrioritizedInitializedHandler(String moduleId, ClientInitializedHandler handler) {
     }
 
-    private record DiscoveredModule(ModuleDescriptor descriptor, File jarFile) {
+    private record DiscoveredModule(ModuleDescriptor descriptor, File jarFile, byte[] jarBytes) {
+        DiscoveredModule(ModuleDescriptor descriptor, File jarFile) {
+            this(descriptor, jarFile, null);
+        }
+
+        DiscoveredModule(ModuleDescriptor descriptor, byte[] jarBytes) {
+            this(descriptor, null, jarBytes);
+        }
     }
 
     public record LoadSummary(
