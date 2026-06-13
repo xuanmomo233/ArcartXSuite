@@ -19,6 +19,7 @@ set(SOURCES
     src/ticket_verify.cpp
     src/key_unwrap.cpp
     src/env_check.cpp
+    src/module_decrypt.cpp
 )
 
 add_library(axs-native SHARED ${SOURCES})

@@ -25,6 +25,10 @@ Java_xuanmo_arcartxsuite_security_NativeBridge_unwrapResourceKey(
 JNIEXPORT jint JNICALL
 Java_xuanmo_arcartxsuite_security_NativeBridge_environmentCheck(JNIEnv *env, jclass clazz);
 
+JNIEXPORT jbyteArray JNICALL
+Java_xuanmo_arcartxsuite_security_NativeBridge_decryptModule(
+    JNIEnv *env, jclass clazz, jbyteArray encryptedAxb, jbyteArray key, jbyteArray iv);
+
 #ifdef __cplusplus
 }
 #endif
