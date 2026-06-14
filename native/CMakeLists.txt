@@ -13,7 +13,14 @@ include_directories(${JNI_INCLUDE_DIRS})
 find_package(OpenSSL REQUIRED)
 
 # ─── zlib（GZIP 解压） ──────────────────────────────────────────
-find_package(ZLIB REQUIRED)
+include(FetchContent)
+FetchContent_Declare(
+    zlib
+    GIT_REPOSITORY https://github.com/madler/zlib.git
+    GIT_TAG v1.3.1
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(zlib)
 
 # ─── 源文件 ─────────────────────────────────────────────────────
 set(SOURCES
@@ -26,7 +33,7 @@ set(SOURCES
 
 add_library(axs-native SHARED ${SOURCES})
 target_include_directories(axs-native PRIVATE include ${JNI_INCLUDE_DIRS})
-target_link_libraries(axs-native PRIVATE OpenSSL::Crypto ZLIB::ZLIB)
+target_link_libraries(axs-native PRIVATE OpenSSL::Crypto zlibstatic)
 
 # Strip symbols in release
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
