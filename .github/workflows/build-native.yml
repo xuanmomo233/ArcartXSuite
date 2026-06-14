@@ -44,17 +44,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Install vcpkg & OpenSSL
+      - name: Install vcpkg & dependencies
         run: |
           git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
           C:\vcpkg\bootstrap-vcpkg.bat
-          C:\vcpkg\vcpkg.exe install openssl:x64-windows-static
+          C:\vcpkg\vcpkg.exe install openssl:x64-windows-static zlib:x64-windows-static
         shell: cmd
 
       - name: Build native library
         run: |
           cd native
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static
           cmake --build build --config Release
         shell: cmd
 
@@ -83,8 +83,9 @@ jobs:
           path: src/main/resources/native/
 
       - name: Build Gradle project
-        run: ./gradlew.bat build
-        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew build
 
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
