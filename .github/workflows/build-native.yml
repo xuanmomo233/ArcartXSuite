@@ -121,9 +121,9 @@ jobs:
       - name: Rename artifacts
         run: |
           mkdir -p release
-          cp artifacts/native-linux/libaxs-native.so release/libaxs-native.so || cp artifacts/native-linux/src/main/resources/native/libaxs-native.so release/libaxs-native.so
-          cp artifacts/native-windows/axs-native.dll release/axs-native.dll || cp artifacts/native-windows/src/main/resources/native/Release/axs-native.dll release/axs-native.dll
-          cp artifacts/axs-jar/*/*.jar release/ || cp artifacts/axs-jar/*.jar release/
+          find artifacts/native-linux -name "libaxs-native.so" -exec cp {} release/ \;
+          find artifacts/native-windows -name "axs-native.dll" -exec cp {} release/ \;
+          find artifacts/axs-jar -name "*.jar" -exec cp {} release/ \;
           ls -la release/
 
       - name: Create Release
