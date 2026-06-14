@@ -126,16 +126,59 @@ jobs:
           find artifacts/axs-jar -name "*.jar" -exec cp {} release/ \;
           ls -la release/
 
+      - name: Generate Release Notes
+        id: notes
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=format:"%s")
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          DATE=$(date +%Y-%m-%d\ %H:%M:%S)
+
+          # 从 commit message 提取版本号
+          # 支持的格式: release: v1.2.0 / [release] v1.2.0 / release v1.2.0
+          VERSION=$(echo "$COMMIT_MSG" | grep -oP '(?i)(?:release[:\s]+)?v\d+\.\d+(?:\.\d+)?(?:-[\w.]+)?' | head -1)
+          if [ -z "$VERSION" ]; then
+            VERSION="v${{ github.run_number }}"
+            echo "未检测到版本号，使用默认: $VERSION"
+          else
+            echo "从 commit message 提取到版本号: $VERSION"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          cat << EOF > release_notes.md
+          ## ArcartXSuite $VERSION
+
+          - **构建时间**: $DATE
+          - **提交**: \`$COMMIT_SHA\`
+          - **提交信息**: $COMMIT_MSG
+
+          ### 构建产物
+
+          | 文件 | 说明 |
+          |------|------|
+          | \`ArcartXSuite-1.2.0-beta.jar\` | **服务端插件**（服主下载此文件放 plugins/） |
+          | \`libaxs-native.so\` | Linux 原生解密库（已内置在 jar 中） |
+          | \`axs-native.dll\` | Windows 原生解密库（已内置在 jar 中） |
+
+          ### 快速安装
+
+          1. 下载 \`ArcartXSuite-1.2.0-beta.jar\`（或其他 \`ArcartXSuite-*.jar\`）
+          2. 放入 Minecraft 服务器的 \`plugins/\` 目录
+          3. 启动服务器，编辑 \`plugins/ArcartXSuite/config.yml\`
+          4. 配置 \`cloud.qq\` 和 \`cloud.password\`
+          5. 重启服务器，自动连接云端加载模块
+
+          ### 注意
+
+          - 本构建为自动 CI 产物，标记为 Pre-release
+          - 如需稳定版本请关注正式 Release
+          EOF
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.run_number }}
-          name: Build ${{ github.run_number }}
-          body: |
-            自动构建产物：
-            - `libaxs-native.so` — Linux 原生库
-            - `axs-native.dll` — Windows 原生库
-            - `ArcartXSuite-*.jar` — 完整服务端插件
+          tag_name: ${{ steps.notes.outputs.version }}
+          name: Build ${{ steps.notes.outputs.version }}
+          body_path: release_notes.md
           files: release/*
           draft: false
           prerelease: true
