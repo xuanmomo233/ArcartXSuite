@@ -103,3 +103,39 @@ jobs:
         with:
           name: axs-jar
           path: '*/build/libs/*.jar'
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-windows, build-gradle]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Rename artifacts
+        run: |
+          mkdir -p release
+          cp artifacts/native-linux/libaxs-native.so release/libaxs-native.so || cp artifacts/native-linux/src/main/resources/native/libaxs-native.so release/libaxs-native.so
+          cp artifacts/native-windows/axs-native.dll release/axs-native.dll || cp artifacts/native-windows/src/main/resources/native/Release/axs-native.dll release/axs-native.dll
+          cp artifacts/axs-jar/*/*.jar release/ || cp artifacts/axs-jar/*.jar release/
+          ls -la release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Build ${{ github.run_number }}
+          body: |
+            自动构建产物：
+            - `libaxs-native.so` — Linux 原生库
+            - `axs-native.dll` — Windows 原生库
+            - `ArcartXSuite-*.jar` — 完整服务端插件
+          files: release/*
+          draft: false
+          prerelease: true
