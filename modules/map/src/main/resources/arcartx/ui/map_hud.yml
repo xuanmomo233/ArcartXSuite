@@ -55,14 +55,14 @@ ui:
       var.trackingText = '当前未导航'
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
       width: 1920
       height: 1080
     children:
-      root:
+      小地图面板:
         type: Canvas
         attribute:
           point: ~top_right
@@ -71,7 +71,7 @@ controls:
           width: 250
           height: 250
         children:
-          shell:
+          外壳:
             type: Texture
             attribute:
               point: ~top_right
@@ -83,7 +83,7 @@ controls:
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'open_menu')
-          title:
+          标题:
             type: Text
             attribute:
               point: ~top_left
@@ -92,7 +92,7 @@ controls:
               texts: "'&0小地图 &8/ &7' + var.worldId"
               fontSize: 18
               shadow: false
-          map_mask:
+          地图遮罩:
             type: Texture
             attribute:
               point: ~top_left
@@ -103,7 +103,7 @@ controls:
               normal: ~255,255,255,120
               shape: ~round_rect
               radius: 18
-          coords:
+          坐标:
             type: Text
             attribute:
               point: ~top_left
@@ -112,7 +112,7 @@ controls:
               texts: "'&7PX: &0' + var.clippedPlayerX + '  &7PZ: &0' + var.clippedPlayerZ"
               fontSize: 13
               shadow: false
-          tracking:
+          导航信息:
             type: Text
             attribute:
               point: ~top_left

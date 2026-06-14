@@ -16,10 +16,11 @@ ui:
   through: true
   screenScale: true
   action:
-    load: |-
+    open: |-
       var.view = 'list'
       var.resultMsg = ''
       var.editItemCount = 0
+      var.maxPresetCount = 100
   packetHandler:
     preset-list: |-
       var.presets = packet['presets']
@@ -47,7 +48,7 @@ ui:
       }
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
@@ -221,6 +222,16 @@ controls:
                   fontSize: 36
                   texts: "~&b操作"
 
+          预设滑块:
+            type: Texture
+            val: 预设滑块
+            attribute:
+              x: 1474
+              y: 132
+              width: 6
+              height: 50
+              normal: ~120,120,120,200
+              maxDragY: 670
           # 预设列表区域（可滚动）
           list_area:
             type: Scroll
@@ -230,6 +241,15 @@ controls:
               width: 1460
               height: 720
               visible: "var.view == 'list' || var.view == null"
+              moveY: "self.parent['预设滑块'].getDragYRatio()"
+            action:
+              wheel: |-
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['预设滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['预设滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
             children:
               preset_stack:
                 val: preset_data
@@ -239,11 +259,19 @@ controls:
                   y: 0
                   width: 1460
                   spaceBetween: 4
+                action:
+                  create: |-
+                    for(i in range(0, var.maxPresetCount)){
+                      key = i.round
+                      row = self['preset_row'].copy('preset_row' + key)
+                      row.entryKey = key
+                    }
                 children:
                   preset_row:
                     type: Texture
                     attribute:
-                      entry: var.presets[self.key]
+                      entryKey: 0
+                      entry: var.presets[self.entryKey]
                       width: 1460
                       height: 52
                       normal: ~45,45,55,220
@@ -368,14 +396,6 @@ controls:
                               center: true
                               fontSize: 36
                               texts: "~&f删除"
-          # Observer: 监听 var.presets 变化，驱动 VStack 更新
-          preset_observer:
-            type: Observer
-            attribute:
-              target: val.preset_data['preset_row']
-              subscribe: var.presets
-              maxSize: 2048
-
           # 空列表提示
           empty_hint:
             type: Text

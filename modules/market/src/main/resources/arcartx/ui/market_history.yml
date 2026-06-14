@@ -27,6 +27,18 @@ ui:
         json = packet['historyItemJson' + key]
         if(json != null && json != ''){
           var.itemJsons[key] = json
+        } else {
+          var.itemJsons[key] = var.emptyItemJson
+        }
+      }
+      for(i in range(0, var.maxRecordCount)){
+        key = i.round
+        row = val.记录列表['记录行' + key]
+        if(row != null){
+          icon = row['物品图标']
+          if(icon != null){
+            icon.seticon()
+          }
         }
       }
     update: |-
@@ -39,10 +51,22 @@ ui:
         json = packet['historyItemJson' + key]
         if(json != null && json != ''){
           var.itemJsons[key] = json
+        } else {
+          var.itemJsons[key] = var.emptyItemJson
+        }
+      }
+      for(i in range(0, var.maxRecordCount)){
+        key = i.round
+        row = val.记录列表['记录行' + key]
+        if(row != null){
+          icon = row['物品图标']
+          if(icon != null){
+            icon.seticon()
+          }
         }
       }
   action:
-    load: |-
+    open: |-
       var.packetId = 'AXS_MARKET'
       var.page = 0
       var.totalPages = 1
@@ -50,7 +74,7 @@ ui:
       var.itemJsons = {}
       var.scrollRatio = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-    open: |-
+      var.maxRecordCount = 20
       Packet.send(var.packetId, 'history_list', '0')
 
 controls:
@@ -145,19 +169,33 @@ controls:
                 width: 2
                 color: ~180,160,255,100
             children:
+              列表纵向滑块:
+                type: Texture
+                val: 列表纵向滑块
+                attribute:
+                  x: 1220
+                  y: 10
+                  width: 6
+                  height: 50
+                  normal: ~120,120,120,200
+                  maxDragY: 600
               列表滚动:
                 type: Scroll
                 val: 列表滚动
                 attribute:
                   x: 10
                   y: 10
-                  width: 1216
+                  width: 1210
                   height: 650
-                  moveY: var.scrollRatio
+                  moveY: "self.parent['列表纵向滑块'].getDragYRatio()"
                 action:
                   wheel: |-
-                    var.scrollRatio = Math.max(0, Math.min(1, var.scrollRatio + self.wheelValue * 0.05))
-                    self.moveY = var.scrollRatio
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['列表纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['列表纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
                 children:
                   记录列表:
                     val: 记录列表
@@ -165,11 +203,23 @@ controls:
                     attribute:
                       width: 1196
                       spaceBetween: 6
+                    action:
+                      create: |-
+                        for(i in range(0, var.maxRecordCount)){
+                          key = i.round
+                          row = self['记录行'].copy('记录行' + key)
+                          row.entryKey = key
+                          icon = row['物品图标']
+                          if(icon != null){
+                            icon.entryKey = key
+                          }
+                        }
                     children:
                       记录行:
                         type: Texture
                         attribute:
-                          entry: var.records[self.key]
+                          entryKey: 0
+                          entry: var.records[self.entryKey]
                           visible: self.entry != null
                           width: 1196
                           height: 68
@@ -184,6 +234,7 @@ controls:
                           物品图标:
                             type: Slot
                             attribute:
+                              entryKey: 0
                               slotType: ~Icon
                               itemScale: 0.64
                               x: 8
@@ -194,10 +245,7 @@ controls:
                               shape: ~round_rect
                               radius: 10
                               through: true
-                              seticon: "self.setItemIcon(var.itemJsons[self.parent.key])"
-                            action:
-                              create: |-
-                                self.seticon()
+                              seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
                           类型:
                             type: Text
                             attribute:
@@ -243,12 +291,6 @@ controls:
                               texts: "self.parent.entry != null ? '&7' + self.parent.entry['time'] : ''"
                               fontSize: 28
                               through: true
-              记录观察:
-                type: Observer
-                attribute:
-                  target: val.记录列表['记录行']
-                  subscribe: var.records
-                  maxSize: 20
 
           # ── 底部分页栏 ──────────────────────────────
           上一页:

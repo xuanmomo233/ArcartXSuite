@@ -36,14 +36,14 @@ ui:
       var.saved = packet['success']
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
       width: 1920
       height: 1080
     children:
-      root:
+      根面板:
         type: Texture
         attribute:
           point: ~middle_center
@@ -62,8 +62,7 @@ controls:
             blur: 12
             color: ~0,0,0,120
         children:
-          # 标题栏
-          header:
+          标题栏:
             type: Texture
             attribute:
               x: 0
@@ -74,14 +73,14 @@ controls:
               shape: ~round_rect
               radius: 16
             children:
-              title_text:
+              标题文字:
                 type: Text
                 attribute:
                   x: 28
                   y: 14
                   fontSize: 42
                   texts: "~&6&l{var.mode == 'edit' ? '编辑' : '新建'}奖励配置"
-              btn_save:
+              保存按钮:
                 type: Texture
                 attribute:
                   x: 748
@@ -95,13 +94,13 @@ controls:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'save-config', var.configId, var.rewardType, var.rankingType, var.bossId, var.rankStart, var.rankEnd, var.rewardName, var.rewardDescription, var.rewardMoney, var.rewardDkp)
                 children:
-                  btn_save_text:
+                  保存文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       fontSize: 28
                       texts: "~&f保存"
-              btn_cancel:
+              取消按钮:
                 type: Texture
                 attribute:
                   x: 872
@@ -115,15 +114,14 @@ controls:
                   click: |-
                     Screen.close()
                 children:
-                  btn_cancel_text:
+                  取消文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       fontSize: 28
                       texts: "~&f取消"
 
-          # 结果提示
-          result_bar:
+          结果提示:
             type: Text
             attribute:
               x: 28
@@ -131,8 +129,7 @@ controls:
               fontSize: 26
               texts: "~&e{var.resultMsg}"
 
-          # 表单区域
-          form_area:
+          表单区:
             type: Texture
             attribute:
               x: 20
@@ -143,15 +140,14 @@ controls:
               shape: ~round_rect
               radius: 10
             children:
-              # 奖励名称
-              label_name:
+              名称标签:
                 type: Text
                 attribute:
                   x: 20
                   y: 10
                   fontSize: 28
                   texts: "~&b奖励名称:"
-              val_name:
+              名称值:
                 type: Text
                 attribute:
                   x: 200
@@ -159,15 +155,14 @@ controls:
                   fontSize: 28
                   texts: "~&f{var.rewardName}"
 
-              # 奖励类型
-              label_reward_type:
+              奖励周期标签:
                 type: Text
                 attribute:
                   x: 20
                   y: 56
                   fontSize: 28
                   texts: "~&b奖励周期:"
-              val_reward_type:
+              奖励周期值:
                 type: Text
                 attribute:
                   x: 200
@@ -175,15 +170,14 @@ controls:
                   fontSize: 28
                   texts: "~&f{var.rewardType == 'weekly' ? '周奖励' : '月奖励'}"
 
-              # 排行类型
-              label_ranking_type:
+              排行类型标签:
                 type: Text
                 attribute:
                   x: 20
                   y: 102
                   fontSize: 28
                   texts: "~&b排行类型:"
-              val_ranking_type:
+              排行类型值:
                 type: Text
                 attribute:
                   x: 200
@@ -191,8 +185,7 @@ controls:
                   fontSize: 28
                   texts: "~&f{var.rankingType == 'best_damage' ? '最高伤害' : var.rankingType == 'boss_damage' ? 'Boss伤害' : var.rankingType == 'kills' ? '击杀排行' : '参与排行'}"
 
-              # Boss ID
-              label_boss:
+              Boss标签:
                 type: Text
                 attribute:
                   x: 20
@@ -201,7 +194,7 @@ controls:
                   texts: "~&b关联Boss:"
                   visible: |-
                     var.rankingType == 'boss_damage'
-              val_boss:
+              Boss值:
                 type: Text
                 attribute:
                   x: 200
@@ -211,15 +204,14 @@ controls:
                   visible: |-
                     var.rankingType == 'boss_damage'
 
-              # 名次范围
-              label_rank_range:
+              名次范围标签:
                 type: Text
                 attribute:
                   x: 20
                   y: 194
                   fontSize: 28
                   texts: "~&b名次范围:"
-              val_rank_range:
+              名次范围值:
                 type: Text
                 attribute:
                   x: 200
@@ -227,15 +219,14 @@ controls:
                   fontSize: 28
                   texts: "~&f第 {var.rankStart} ~ {var.rankEnd} 名"
 
-              # 奖励描述
-              label_desc:
+              描述标签:
                 type: Text
                 attribute:
                   x: 20
                   y: 240
                   fontSize: 28
                   texts: "~&b奖励描述:"
-              val_desc:
+              描述值:
                 type: Text
                 attribute:
                   x: 200
@@ -243,8 +234,7 @@ controls:
                   fontSize: 26
                   texts: "~&7{var.rewardDescription}"
 
-              # 分隔线
-              separator:
+              分隔线:
                 type: Texture
                 attribute:
                   x: 20
@@ -253,15 +243,14 @@ controls:
                   height: 2
                   normal: ~80,80,100,120
 
-              # 金钱奖励
-              label_money:
+              金钱标签:
                 type: Text
                 attribute:
                   x: 20
                   y: 300
                   fontSize: 28
                   texts: "~&e金钱奖励:"
-              val_money:
+              金钱值:
                 type: Text
                 attribute:
                   x: 200
@@ -269,15 +258,14 @@ controls:
                   fontSize: 28
                   texts: "~&f{var.rewardMoney} 金币"
 
-              # DKP奖励
-              label_dkp:
+              DKP标签:
                 type: Text
                 attribute:
                   x: 20
                   y: 346
                   fontSize: 28
                   texts: "~&eDKP积分:"
-              val_dkp:
+              DKP值:
                 type: Text
                 attribute:
                   x: 200
@@ -285,15 +273,14 @@ controls:
                   fontSize: 28
                   texts: "~&f{var.rewardDkp} DKP"
 
-              # 物品奖励预览
-              label_items:
+              物品标签:
                 type: Text
                 attribute:
                   x: 20
                   y: 392
                   fontSize: 28
                   texts: "~&e物品奖励:"
-              val_items:
+              物品值:
                 type: Text
                 attribute:
                   x: 200
@@ -301,15 +288,14 @@ controls:
                   fontSize: 26
                   texts: "~&7{var.rewardItemsPreview}"
 
-              # 命令奖励预览
-              label_commands:
+              命令标签:
                 type: Text
                 attribute:
                   x: 20
                   y: 438
                   fontSize: 28
                   texts: "~&e命令奖励:"
-              val_commands:
+              命令值:
                 type: Text
                 attribute:
                   x: 200
@@ -317,15 +303,14 @@ controls:
                   fontSize: 26
                   texts: "~&7{var.rewardCommandsPreview}"
 
-              # 启用状态
-              label_enabled:
+              启用标签:
                 type: Text
                 attribute:
                   x: 20
                   y: 500
                   fontSize: 28
                   texts: "~&b启用状态:"
-              val_enabled:
+              启用值:
                 type: Text
                 attribute:
                   x: 200

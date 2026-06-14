@@ -29,6 +29,18 @@ ui:
         json = packet['shopItemJson' + key]
         if(json != null && json != ''){
           var.itemJsons[key] = json
+        } else {
+          var.itemJsons[key] = var.emptyItemJson
+        }
+      }
+      for(i in range(0, var.maxItemCount)){
+        key = i.round
+        item = val.商品列表['商品项' + key]
+        if(item != null){
+          icon = item['物品图标']
+          if(icon != null){
+            icon.seticon()
+          }
         }
       }
     update: |-
@@ -43,10 +55,22 @@ ui:
         json = packet['shopItemJson' + key]
         if(json != null && json != ''){
           var.itemJsons[key] = json
+        } else {
+          var.itemJsons[key] = var.emptyItemJson
+        }
+      }
+      for(i in range(0, var.maxItemCount)){
+        key = i.round
+        item = val.商品列表['商品项' + key]
+        if(item != null){
+          icon = item['物品图标']
+          if(icon != null){
+            icon.seticon()
+          }
         }
       }
   action:
-    load: |-
+    open: |-
       var.packetId = 'AXS_MARKET'
       var.shopId = ''
       var.shopName = '系统商店'
@@ -57,7 +81,8 @@ ui:
       var.shopScrollRatio = 0
       var.itemScrollRatio = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-    open: |-
+      var.maxShopCount = 32
+      var.maxItemCount = 100
       Packet.send(var.packetId, 'shop_list', '')
 
 controls:
@@ -159,19 +184,33 @@ controls:
                   y: 16
                   texts: '&e商店列表'
                   fontSize: 36
+              商店纵向滑块:
+                type: Texture
+                val: 商店纵向滑块
+                attribute:
+                  x: 220
+                  y: 60
+                  width: 6
+                  height: 50
+                  normal: ~120,120,120,200
+                  maxDragY: 590
               商店滚动:
                 type: Scroll
                 val: 商店滚动
                 attribute:
                   x: 14
                   y: 60
-                  width: 212
+                  width: 206
                   height: 640
-                  moveY: var.shopScrollRatio
+                  moveY: "self.parent['商店纵向滑块'].getDragYRatio()"
                 action:
                   wheel: |-
-                    var.shopScrollRatio = Math.max(0, Math.min(1, var.shopScrollRatio + self.wheelValue * 0.08))
-                    self.moveY = var.shopScrollRatio
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['商店纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['商店纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
                 children:
                   商店列表:
                     val: 商店列表
@@ -179,34 +218,36 @@ controls:
                     attribute:
                       width: 200
                       spaceBetween: 8
+                    action:
+                      create: |-
+                        for(i in range(0, var.maxShopCount)){
+                          key = i.round
+                          shop = self['商店项'].copy('商店项' + key)
+                          shop.entryKey = key
+                        }
                     children:
                       商店项:
                         type: Texture
                         attribute:
-                          entry: var.shops[self.key]
+                          entryKey: 0
+                          entry: var.shops[self.entryKey]
                           visible: self.entry != null
                           width: 200
                           height: 48
-                          normal: "self.key == var.shopId ? '80,160,255,220' : '70,70,80,200'"
+                          normal: "self.entry != null && self.entry['id'] == var.shopId ? '80,160,255,220' : '70,70,80,200'"
                           hover: ~Frosted:0;255,255,255,200
                           shape: ~round_rect
                           radius: 12
-                          texts: "var.shopTexts[self.key]"
+                          texts: "var.shopTexts[self.entryKey]"
                           center: true
                           fontSize: 32
                         action:
                           clickLeft: |-
-                            Packet.send(var.packetId, 'shop_list', self.key)
+                            Packet.send(var.packetId, 'shop_list', self.entry['id'])
                         effect:
                           stroke:
                             width: 1
                             color: ~80,180,255,80
-              商店观察:
-                type: Observer
-                attribute:
-                  target: val.商店列表['商店项']
-                  subscribe: var.shops
-                  maxSize: 32
 
           # ── 右侧商品区 ──────────────────────────────
           商品卡片:
@@ -224,19 +265,33 @@ controls:
                 width: 2
                 color: ~80,180,255,100
             children:
+              商品纵向滑块:
+                type: Texture
+                val: 商品纵向滑块
+                attribute:
+                  x: 1062
+                  y: 10
+                  width: 6
+                  height: 50
+                  normal: ~120,120,120,200
+                  maxDragY: 650
               商品滚动:
                 type: Scroll
                 val: 商品滚动
                 attribute:
                   x: 10
                   y: 10
-                  width: 1058
+                  width: 1052
                   height: 700
-                  moveY: var.itemScrollRatio
+                  moveY: "self.parent['商品纵向滑块'].getDragYRatio()"
                 action:
                   wheel: |-
-                    var.itemScrollRatio = Math.max(0, Math.min(1, var.itemScrollRatio + self.wheelValue * 0.05))
-                    self.moveY = var.itemScrollRatio
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['商品纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['商品纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
                 children:
                   商品列表:
                     val: 商品列表
@@ -244,11 +299,23 @@ controls:
                     attribute:
                       width: 1038
                       spaceBetween: 6
+                    action:
+                      create: |-
+                        for(i in range(0, var.maxItemCount)){
+                          key = i.round
+                          item = self['商品项'].copy('商品项' + key)
+                          item.entryKey = key
+                          icon = item['物品图标']
+                          if(icon != null){
+                            icon.entryKey = key
+                          }
+                        }
                     children:
                       商品项:
                         type: Texture
                         attribute:
-                          entry: var.items[self.key]
+                          entryKey: 0
+                          entry: var.items[self.entryKey]
                           visible: self.entry != null
                           width: 1038
                           height: 68
@@ -264,6 +331,7 @@ controls:
                           商品图标:
                             type: Slot
                             attribute:
+                              entryKey: 0
                               slotType: ~Icon
                               itemScale: 0.68
                               x: 8
@@ -274,10 +342,7 @@ controls:
                               shape: ~round_rect
                               radius: 10
                               through: true
-                              seticon: "self.setItemIcon(var.itemJsons[self.parent.key])"
-                            action:
-                              create: |-
-                                self.seticon()
+                              seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
                           名称:
                             type: Text
                             attribute:
@@ -353,9 +418,3 @@ controls:
                   visible: "var.items == null || var.items.keys().length == 0"
                   texts: '&8暂无商品'
                   through: true
-              商品观察:
-                type: Observer
-                attribute:
-                  target: val.商品列表['商品项']
-                  subscribe: var.items
-                  maxSize: 999

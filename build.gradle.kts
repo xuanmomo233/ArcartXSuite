@@ -39,6 +39,25 @@ subprojects {
             tasks.named("build") {
                 dependsOn(obfuscateModule)
             }
+
+            // 将混淆后的模块 Jar 加密为 .axb，供上传到 AXS Cloud Platform。
+            // 不挂到 build；按需执行（如 :modules:afkreward:encryptModuleAxb）。
+            // 未配置 moduleKey/moduleIv 时会自动生成随机密钥并打印到控制台，
+            // 请将控制台输出的 moduleKey 保存并在上传到云端时填写。
+            tasks.register<EncryptModuleAxbTask>("encryptModuleAxb") {
+                group = "protection"
+                description = "将混淆后的模块 Jar 加密为 .axb（上传云端用）"
+                dependsOn(obfuscateModule)
+                inputJar.set(obfuscateModule.flatMap { it.outputJar })
+                outputAxb.set(distDir.map { it.file("module-axb/${project.name}.axb") })
+                // 可选：在 gradle.properties 中配置固定密钥
+                //   module.<name>.key=<base64-32bytes>
+                //   module.<name>.iv=<base64-12bytes>
+                val keyProp = project.findProperty("module.${project.name}.key") as String?
+                val ivProp = project.findProperty("module.${project.name}.iv") as String?
+                if (keyProp != null) moduleKey.set(keyProp)
+                if (ivProp != null) moduleIv.set(ivProp)
+            }
         }
     }
 }
@@ -54,6 +73,12 @@ tasks.register("buildModules") {
     group = "build"
     description = "Build all module JARs (with obfuscation)"
     dependsOn(subprojects.filter { it.path.startsWith(":modules:") }.map { "${it.path}:obfuscateModule" })
+}
+
+tasks.register("encryptAllModuleAxb") {
+    group = "protection"
+    description = "将所有模块加密为 .axb（输出到 build/ArcartXSuite/module-axb/，上传云端用）"
+    dependsOn(subprojects.filter { it.path.startsWith(":modules:") }.map { "${it.path}:encryptModuleAxb" })
 }
 
 // 快速构建（跳过混淆，仅开发测试用）

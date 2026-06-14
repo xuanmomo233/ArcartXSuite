@@ -116,7 +116,7 @@ ui:
       }
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
@@ -128,7 +128,7 @@ controls:
           Packet.send('pickup', 'pick')
         }
     children:
-      loot_panel:
+      拾取面板:
         type: Canvas
         attribute:
           point: ~middle_center
@@ -139,7 +139,7 @@ controls:
           visible: var.count > 0
           through: true
         children:
-          key_hint:
+          按键提示:
             type: Text
             attribute:
               point: ~top_left
@@ -149,7 +149,7 @@ controls:
               #这里是提示文本，随便怎么写
               texts: "~"
               through: true
-          loot_list:
+          拾取列表:
             type: VStack
             attribute:
               point: ~top_left
@@ -159,7 +159,7 @@ controls:
               spaceBetween: 4
               through: true
             children:
-              entry_0:
+              物品条目0:
                 type: Canvas
                 attribute:
                   width: 260
@@ -167,7 +167,7 @@ controls:
                   visible: var.item0Visible
                   through: true
                 children:
-                  bg_0:
+                  背景0:
                     type: Texture
                     attribute:
                       point: ~stretch_all
@@ -177,7 +177,7 @@ controls:
                     action:
                       clickLeft: |-
                         Packet.send('pickup', 'pick_0')
-                  icon_0:
+                  图标0:
                     val: loot_slot_0
                     type: Slot
                     attribute:
@@ -191,7 +191,7 @@ controls:
                       hover: ~0,0,0,0
                       itemScale: 0.8
                       through: true
-                  name_0:
+                  名称0:
                     type: Text
                     attribute:
                       point: ~middle_left
@@ -200,14 +200,14 @@ controls:
                       fontSize: 28
                       texts: "var.item0Amount > 1 ? val.loot_slot_0.getSlotItemStack().getName() + ' &7x' + var.item0Amount.round() : val.loot_slot_0.getSlotItemStack().getName()"
                       through: true
-              entry_1:
+              物品条目1:
                 type: Canvas
                 attribute:
                   width: 260
                   height: 42
                   visible: var.item1Visible
                 children:
-                  bg_1:
+                  背景1:
                     type: Texture
                     attribute:
                       point: ~stretch_all
@@ -217,7 +217,7 @@ controls:
                     action:
                       clickLeft: |-
                         Packet.send('pickup', 'pick_1')
-                  icon_1:
+                  图标1:
                     val: loot_slot_1
                     type: Slot
                     attribute:
@@ -231,7 +231,7 @@ controls:
                       hover: ~0,0,0,0
                       itemScale: 0.8
                       through: true
-                  name_1:
+                  名称1:
                     type: Text
                     attribute:
                       point: ~middle_left
@@ -240,14 +240,14 @@ controls:
                       fontSize: 28
                       texts: "var.item1Amount > 1 ? val.loot_slot_1.getSlotItemStack().getName() + ' &7x' + var.item1Amount.round() : val.loot_slot_1.getSlotItemStack().getName()"
                       through: true
-              entry_2:
+              物品条目2:
                 type: Canvas
                 attribute:
                   width: 260
                   height: 42
                   visible: var.item2Visible
                 children:
-                  bg_2:
+                  背景2:
                     type: Texture
                     attribute:
                       point: ~stretch_all
@@ -257,7 +257,7 @@ controls:
                     action:
                       clickLeft: |-
                         Packet.send('pickup', 'pick_2')
-                  icon_2:
+                  图标2:
                     val: loot_slot_2
                     type: Slot
                     attribute:
@@ -271,7 +271,7 @@ controls:
                       hover: ~0,0,0,0
                       itemScale: 0.8
                       through: true
-                  name_2:
+                  名称2:
                     type: Text
                     attribute:
                       point: ~middle_left
@@ -280,14 +280,14 @@ controls:
                       fontSize: 28
                       texts: "var.item2Amount > 1 ? val.loot_slot_2.getSlotItemStack().getName() + ' &7x' + var.item2Amount.round() : val.loot_slot_2.getSlotItemStack().getName()"
                       through: true
-              entry_3:
+              物品条目3:
                 type: Canvas
                 attribute:
                   width: 260
                   height: 42
                   visible: var.item3Visible
                 children:
-                  bg_3:
+                  背景3:
                     type: Texture
                     attribute:
                       point: ~stretch_all
@@ -297,7 +297,7 @@ controls:
                     action:
                       clickLeft: |-
                         Packet.send('pickup', 'pick_3')
-                  icon_3:
+                  图标3:
                     val: loot_slot_3
                     type: Slot
                     attribute:
@@ -311,7 +311,7 @@ controls:
                       hover: ~0,0,0,0
                       itemScale: 0.8
                       through: true
-                  name_3:
+                  名称3:
                     type: Text
                     attribute:
                       point: ~middle_left
@@ -320,14 +320,14 @@ controls:
                       fontSize: 28
                       texts: "var.item3Amount > 1 ? val.loot_slot_3.getSlotItemStack().getName() + ' &7x' + var.item3Amount.round() : val.loot_slot_3.getSlotItemStack().getName()"
                       through: true
-              entry_4:
+              物品条目4:
                 type: Canvas
                 attribute:
                   width: 260
                   height: 42
                   visible: var.item4Visible
                 children:
-                  bg_4:
+                  背景4:
                     type: Texture
                     attribute:
                       point: ~stretch_all
@@ -337,7 +337,7 @@ controls:
                     action:
                       clickLeft: |-
                         Packet.send('pickup', 'pick_4')
-                  icon_4:
+                  图标4:
                     val: loot_slot_4
                     type: Slot
                     attribute:
@@ -351,7 +351,7 @@ controls:
                       hover: ~0,0,0,0
                       itemScale: 0.8
                       through: true
-                  name_4:
+                  名称4:
                     type: Text
                     attribute:
                       point: ~middle_left
@@ -360,14 +360,14 @@ controls:
                       fontSize: 28
                       texts: "var.item4Amount > 1 ? val.loot_slot_4.getSlotItemStack().getName() + ' &7x' + var.item4Amount.round() : val.loot_slot_4.getSlotItemStack().getName()"
                       through: true
-              entry_5:
+              物品条目5:
                 type: Canvas
                 attribute:
                   width: 260
                   height: 42
                   visible: var.item5Visible
                 children:
-                  bg_5:
+                  背景5:
                     type: Texture
                     attribute:
                       point: ~stretch_all
@@ -377,7 +377,7 @@ controls:
                     action:
                       clickLeft: |-
                         Packet.send('pickup', 'pick_5')
-                  icon_5:
+                  图标5:
                     val: loot_slot_5
                     type: Slot
                     attribute:
@@ -391,7 +391,7 @@ controls:
                       hover: ~0,0,0,0
                       itemScale: 0.8
                       through: true
-                  name_5:
+                  名称5:
                     type: Text
                     attribute:
                       point: ~middle_left
@@ -400,14 +400,14 @@ controls:
                       fontSize: 28
                       texts: "var.item5Amount > 1 ? val.loot_slot_5.getSlotItemStack().getName() + ' &7x' + var.item5Amount.round() : val.loot_slot_5.getSlotItemStack().getName()"
                       through: true
-              entry_6:
+              物品条目6:
                 type: Canvas
                 attribute:
                   width: 260
                   height: 42
                   visible: var.item6Visible
                 children:
-                  bg_6:
+                  背景6:
                     type: Texture
                     attribute:
                       point: ~stretch_all
@@ -417,7 +417,7 @@ controls:
                     action:
                       clickLeft: |-
                         Packet.send('pickup', 'pick_6')
-                  icon_6:
+                  图标6:
                     val: loot_slot_6
                     type: Slot
                     attribute:
@@ -431,7 +431,7 @@ controls:
                       hover: ~0,0,0,0
                       itemScale: 0.8
                       through: true
-                  name_6:
+                  名称6:
                     type: Text
                     attribute:
                       point: ~middle_left
@@ -440,14 +440,14 @@ controls:
                       fontSize: 28
                       texts: "var.item6Amount > 1 ? val.loot_slot_6.getSlotItemStack().getName() + ' &7x' + var.item6Amount.round() : val.loot_slot_6.getSlotItemStack().getName()"
                       through: true
-              entry_7:
+              物品条目7:
                 type: Canvas
                 attribute:
                   width: 260
                   height: 42
                   visible: var.item7Visible
                 children:
-                  bg_7:
+                  背景7:
                     type: Texture
                     attribute:
                       point: ~stretch_all
@@ -457,7 +457,7 @@ controls:
                     action:
                       clickLeft: |-
                         Packet.send('pickup', 'pick_7')
-                  icon_7:
+                  图标7:
                     val: loot_slot_7
                     type: Slot
                     attribute:
@@ -471,7 +471,7 @@ controls:
                       hover: ~0,0,0,0
                       itemScale: 0.8
                       through: true
-                  name_7:
+                  名称7:
                     type: Text
                     attribute:
                       point: ~middle_left

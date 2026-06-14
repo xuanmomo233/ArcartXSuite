@@ -263,16 +263,6 @@ public final class TitlePlaceholderExpansion extends PlaceholderExpansion {
     ) {
         TitleDisplayConfiguration displayConfig = configuration.displayTitle();
 
-        // 若玩家手动设置了总展示称号，优先返回该称号的对应字段
-        TitleDefinition totalDisplay = resolvedState.totalDisplayTitle();
-        if (totalDisplay != null) {
-            String value = fieldExtractor.apply(totalDisplay);
-            if (value != null && !value.isEmpty()) {
-                return value;
-            }
-        }
-
-        // 未设置时，按 display-title.groups 顺序取第一个已装备且字段非空的称号
         List<String> groupOrder = configuration.displayTitleGroupOrder();
         for (String groupId : groupOrder) {
             TitleDefinition title = resolvedState.equippedTitlesByGroup().get(groupId);

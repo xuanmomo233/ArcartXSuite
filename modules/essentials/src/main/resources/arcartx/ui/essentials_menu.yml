@@ -31,7 +31,7 @@ ui:
       var.autotoolEnabled = packet['autotoolEnabled']
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
@@ -322,6 +322,16 @@ controls:
                           center: true
                           fontSize: 49
                           texts: '&f设置家'
+                  家滑块:
+                    type: Texture
+                    val: 家滑块
+                    attribute:
+                      x: 694
+                      y: 50
+                      width: 6
+                      height: 50
+                      normal: ~120,120,120,200
+                      maxDragY: 390
                   homes_scroll:
                     type: Scroll
                     attribute:
@@ -329,9 +339,15 @@ controls:
                       y: 50
                       width: 700
                       height: 440
+                      moveY: "self.parent['家滑块'].getDragYRatio()"
                     action:
                       wheel: |-
-                        self.moveY(self.wheelValue * 40)
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['家滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['家滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
                     children:
                       homes_list:
                         val: home_data
@@ -434,6 +450,16 @@ controls:
                       y: 0
                       fontSize: 64
                       texts: '&6&l传送点列表'
+                  传送点滑块:
+                    type: Texture
+                    val: 传送点滑块
+                    attribute:
+                      x: 694
+                      y: 50
+                      width: 6
+                      height: 50
+                      normal: ~120,120,120,200
+                      maxDragY: 390
                   warps_scroll:
                     type: Scroll
                     attribute:
@@ -441,9 +467,15 @@ controls:
                       y: 50
                       width: 700
                       height: 440
+                      moveY: "self.parent['传送点滑块'].getDragYRatio()"
                     action:
                       wheel: |-
-                        self.moveY(self.wheelValue * 40)
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['传送点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['传送点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
                     children:
                       warps_list:
                         val: warp_data
@@ -568,6 +600,16 @@ controls:
                           center: true
                           fontSize: 49
                           texts: '&f拒绝'
+                  玩家滑块:
+                    type: Texture
+                    val: 玩家滑块
+                    attribute:
+                      x: 694
+                      y: 80
+                      width: 6
+                      height: 50
+                      normal: ~120,120,120,200
+                      maxDragY: 350
                   tpa_scroll:
                     type: Scroll
                     attribute:
@@ -575,9 +617,15 @@ controls:
                       y: 80
                       width: 700
                       height: 400
+                      moveY: "self.parent['玩家滑块'].getDragYRatio()"
                     action:
                       wheel: |-
-                        self.moveY(self.wheelValue * 40)
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['玩家滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['玩家滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
                     children:
                       tpa_list:
                         val: tpa_data

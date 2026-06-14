@@ -37,7 +37,7 @@ ui:
       var.collectionPercent = packet['collectionPercent']
       var.fishList = packet['fishList']
   action:
-    load: |-
+    open: |-
       var.packetId = 'AXS_FISHING'
       var.playerLevel = 1
       var.totalXp = 0
@@ -47,11 +47,6 @@ ui:
       var.collectionPercent = 0
       var.fishList = {}
       var.maxFishCount = 30
-      for(i in range(0, var.maxFishCount)){
-        key = i.round
-        item = val.鱼类列表['鱼条目'].copy('鱼条目' + key)
-        item.entryKey = key
-      }
 
 controls:
   根:
@@ -159,6 +154,16 @@ controls:
                   texts: "'&7图鉴: &f' + var.collectionCount + '/' + var.totalFishTypes + ' (' + var.collectionPercent + '%)'"
                   fontSize: 28
 
+          图鉴滑块:
+            type: Texture
+            val: 图鉴滑块
+            attribute:
+              x: 758
+              y: 200
+              width: 6
+              height: 50
+              normal: ~120,120,120,200
+              maxDragY: 320
           滚动区:
             type: Scroll
             attribute:
@@ -166,13 +171,14 @@ controls:
               y: 200
               width: 728
               height: 370
-              moveY: 0
+              moveY: "self.parent['图鉴滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.wheelValue > 0){
-                  self.moveY = Math.max(0, self.moveY - 0.1)
-                }elif(self.wheelValue < 0){
-                  self.moveY = Math.min(1, self.moveY + 0.1)
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['图鉴滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['图鉴滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
               鱼类列表:
@@ -181,6 +187,13 @@ controls:
                 attribute:
                   width: 728
                   spaceBetween: 6
+                action:
+                  create: |-
+                    for(i in range(0, var.maxFishCount)){
+                      key = i.round
+                      item = self['鱼条目'].copy('鱼条目' + key)
+                      item.entryKey = key
+                    }
                 children:
                   鱼条目:
                     type: Texture

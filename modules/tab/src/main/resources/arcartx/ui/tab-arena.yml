@@ -1,215 +1,430 @@
-﻿ui:
+ui:
+
   isHud: true
+
   hide:
+
   - player_list
+
   escClose: false
+
   defaultOpen: true
+
   action:
+
     load: |-
+
       var.ArenaTAB刷新轮次 = 0
+
       var.ArenaTAB详细 = false
+
     keyPress: |-
+
       if(self.currentKeyPress() == "TAB"){
+
         Packet.send("TAB","update")
+
         var.ArenaTAB详细 = true
+
       }
+
     keyRelease: |-
+
       if(self.currentKeyReleased() == "TAB"){
+
         var.ArenaTAB详细 = false
+
       }
+
   packetHandler:
+
     # 竞技场 / 枪战 PVP 风格示例：消费 map 形态 pack（team / uuid / name / status / health）。
+
     # 服务端配置参考 ArcartXTab.yml 中的 tabs.arena，pack 字段：
+
     #   team:   "%player_scoreboardteam%"   分队来源（可替换为 BedWars / MatrixDuels 等 PAPI）
+
     #   uuid:   "{player_uuid}"             头像 PlayerSkin
-    #   name:   "%AXStab_pvp_color%%AXStab_vanish_color%%player_name%"
-    #   status: "%AXStab_pvp%"              战斗中=1，UI 按值切图标
+
+    #   name:   "%axstab_pvp_color%%axstab_vanish_color%%player_name%"
+
+    #   status: "%axstab_pvp%"              战斗中=1，UI 按值切图标
+
     #   health: "%player_health%/%player_max_health%"
+
     tab: |-
+
       i = 0
+
       var.ArenaTAB刷新轮次 = var.ArenaTAB刷新轮次 + 1
+
       while(val.RedList.childrenCount() > 1){
+
         val.RedList.get(1).remove()
+
       }
+
       while(val.BlueList.childrenCount() > 1){
+
         val.BlueList.get(1).remove()
+
       }
+
       //与 tab.yml 同款伪判断绕过 ax 控件复制 BUG（width 校验作为 sentinel）
+
       while(i <= packet.size()){
+
         if(val.red_player_row.width == 320){
+
           if(packet.get(i).team == "red"){
+
             ROW = val.red_player_row.copy('red_' + var.ArenaTAB刷新轮次 + '_' + i)
+
             ROW['head'].normal = 'PlayerSkin:' + packet.get(i).uuid
+
             ROW['name_text'].texts = packet.get(i).name
+
             //status 字段服务端发的是 "1" / "0"；UI 端转图标
+
             if(packet.get(i).status == "1"){
+
               ROW['status_text'].texts = "&c⚔"
+
             } else {
+
               ROW['status_text'].texts = "&7•"
+
             }
+
             ROW['health_text'].texts = "&c❤ " + packet.get(i).health
+
             ROW.visible = true
+
           } else if(packet.get(i).team == "blue"){
+
             ROW = val.blue_player_row.copy('blue_' + var.ArenaTAB刷新轮次 + '_' + i)
+
             ROW['head'].normal = 'PlayerSkin:' + packet.get(i).uuid
+
             ROW['name_text'].texts = packet.get(i).name
+
             if(packet.get(i).status == "1"){
+
               ROW['status_text'].texts = "&9⚔"
+
             } else {
+
               ROW['status_text'].texts = "&7•"
+
             }
+
             ROW['health_text'].texts = "&c❤ " + packet.get(i).health
+
             ROW.visible = true
+
           }
+
           //其他 team（含空 / spectator）跳过不渲染
+
           i++
+
         }
+
       }
+
       var.ArenaTAB红队人数 = val.RedList.childrenCount() - 1
+
       var.ArenaTAB蓝队人数 = val.BlueList.childrenCount() - 1
+
 controls:
-  adaptive:
+
+  自适应全局布局:
+
     type: adaptive
+
     attribute:
+
       point: ~top_center
+
       width: 1920
+
       height: 1080
+
     children:
+
       ArenaTAB背景:
+
         type: texture
+
         attribute:
+
           point: ~top_center
+
           width: 720
+
           height: 80 + 32 * Math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数)
+
           y: 30
+
           normal: ~Frosted:30;0,0,0,200
+
           shape: ~round_rect
+
           radius: 18
+
         effect:
+
           stroke:
+
             width: 3
+
             color: ~0,0,0,255
+
         children:
+
           标题:
+
             type: text
+
             attribute:
+
               point: ~top_center
+
               y: 18
+
               fontSize: 32
+
               texts: "'&c&lRED  &fvs  &9&lBLUE'"
+
               lineSpace: 6
+
           中线:
+
             type: texture
+
             attribute:
+
               point: ~top_center
+
               x: 0
+
               y: 60
+
               width: 2
+
               height: 28 * Math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数)
+
               normal: ~255,255,255,80
+
           # ============ 红队（左侧）============
+
           RedGrid:
+
             type: VGrid
+
             val: RedList
+
             attribute:
+
               spaceBetweenY: 2
+
               row: 16
+
               y: 60
+
               x: 20
+
             children:
+
               red_player_row:
+
                 type: Canvas
+
                 val: red_player_row
+
                 attribute:
+
                   width: 320
+
                   height: 30
+
                   visible: false
+
                 children:
+
                   head:
+
                     type: texture
+
                     attribute:
+
                       width: 28
+
                       height: 28
+
                       x: 0
+
                       y: 0
+
                       shape: ~round_rect
+
                       radius: 4
+
                       normal: "~120,120,120,255"
+
                   name_text:
+
                     type: text
+
                     attribute:
+
                       x: 36
+
                       y: 0
+
                       fontSize: 26
+
                       texts: "~null"
+
                       lineSpace: 4
+
                   status_text:
+
                     type: text
+
                     attribute:
+
                       x: 220
+
                       y: 0
+
                       fontSize: 26
+
                       texts: "~&7•"
+
                       lineSpace: 4
+
                   health_text:
+
                     type: text
+
                     attribute:
+
                       x: 250
+
                       y: 0
+
                       fontSize: 26
+
                       texts: "~null"
+
                       lineSpace: 4
+
                       visible: var.ArenaTAB详细
+
           # ============ 蓝队（右侧）============
+
           BlueGrid:
+
             type: VGrid
+
             val: BlueList
+
             attribute:
+
               spaceBetweenY: 2
+
               row: 16
+
               y: 60
+
               x: 380
+
             children:
+
               blue_player_row:
+
                 type: Canvas
+
                 val: blue_player_row
+
                 attribute:
+
                   width: 320
+
                   height: 30
+
                   visible: false
+
                 children:
+
                   head:
+
                     type: texture
+
                     attribute:
+
                       width: 28
+
                       height: 28
+
                       x: 0
+
                       y: 0
+
                       shape: ~round_rect
+
                       radius: 4
+
                       normal: "~120,120,120,255"
+
                   name_text:
+
                     type: text
+
                     attribute:
+
                       x: 36
+
                       y: 0
+
                       fontSize: 26
+
                       texts: "~null"
+
                       lineSpace: 4
+
                   status_text:
+
                     type: text
+
                     attribute:
+
                       x: 220
+
                       y: 0
+
                       fontSize: 26
+
                       texts: "~&7•"
+
                       lineSpace: 4
+
                   health_text:
+
                     type: text
+
                     attribute:
+
                       x: 250
+
                       y: 0
+
                       fontSize: 26
+
                       texts: "~null"
+
                       lineSpace: 4
+
                       visible: var.ArenaTAB详细
+

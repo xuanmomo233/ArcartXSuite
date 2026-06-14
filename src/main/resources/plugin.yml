@@ -99,6 +99,19 @@ commands:
     usage: /<command> open <菜单ID>|list
     aliases: [axmenu]
     permission: arcartxsuite.menu.use
+  fishing:
+    description: 玩家钓鱼命令
+    usage: /<command> [sell|sell all]
+    permission: arcartxsuite.fishing.use
+  lottery:
+    description: 玩家抽奖命令
+    usage: /<command> <pull|info|history> <poolId> [single|ten]
+    permission: arcartxsuite.lottery.use
+  bp:
+    description: 玩家战令命令
+    usage: /<command> [open|tasks|help]
+    aliases: [battlepass]
+    permission: arcartxsuite.battlepass.use
 permissions:
   arcartxsuite.admin:
     default: op
@@ -256,3 +269,12 @@ permissions:
     default: true
   arcartxsuite.qqbot.admin:
     default: op
+  # ─── Fishing ───
+  arcartxsuite.fishing.use:
+    default: true
+  # ─── Lottery ───
+  arcartxsuite.lottery.use:
+    default: true
+  # ─── BattlePass ───
+  arcartxsuite.battlepass.use:
+    default: true

@@ -28,14 +28,14 @@ ui:
       var.resultMsg = packet['message']
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
       width: 1920
       height: 1080
     children:
-      root:
+      根面板:
         type: Texture
         attribute:
           point: ~middle_center
@@ -54,8 +54,7 @@ controls:
             blur: 12
             color: ~0,0,0,120
         children:
-          # 标题栏
-          header:
+          标题栏:
             type: Texture
             attribute:
               x: 0
@@ -66,14 +65,14 @@ controls:
               shape: ~round_rect
               radius: 16
             children:
-              title_text:
+              标题文字:
                 type: Text
                 attribute:
                   x: 28
                   y: 14
                   fontSize: 42
                   texts: "~&d&l奖励发放历史"
-              btn_filter_all:
+              全部筛选按钮:
                 type: Texture
                 attribute:
                   x: 500
@@ -87,13 +86,13 @@ controls:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', '', '', 1)
                 children:
-                  btn_all_text:
+                  全部文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       fontSize: 26
                       texts: "~&f全部"
-              btn_filter_success:
+              成功筛选按钮:
                 type: Texture
                 attribute:
                   x: 592
@@ -107,13 +106,13 @@ controls:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'success', '', 1)
                 children:
-                  btn_success_text:
+                  成功文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       fontSize: 26
                       texts: "~&a成功"
-              btn_filter_failed:
+              失败筛选按钮:
                 type: Texture
                 attribute:
                   x: 684
@@ -127,13 +126,13 @@ controls:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'failed', '', 1)
                 children:
-                  btn_failed_text:
+                  失败文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       fontSize: 26
                       texts: "~&c失败"
-              btn_filter_pending:
+              待发筛选按钮:
                 type: Texture
                 attribute:
                   x: 776
@@ -147,13 +146,13 @@ controls:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'pending', '', 1)
                 children:
-                  btn_pending_text:
+                  待发文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       fontSize: 26
                       texts: "~&e待发"
-              btn_refresh:
+              刷新按钮:
                 type: Texture
                 attribute:
                   x: 920
@@ -167,13 +166,13 @@ controls:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', '', '', var.currentPage)
                 children:
-                  btn_refresh_text:
+                  刷新文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       fontSize: 26
                       texts: "~&f刷新"
-              btn_back:
+              返回按钮:
                 type: Texture
                 attribute:
                   x: 1034
@@ -187,7 +186,7 @@ controls:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'open-manage')
                 children:
-                  btn_back_text:
+                  返回文字:
                     type: Text
                     attribute:
                       point: ~middle_center
@@ -195,7 +194,7 @@ controls:
                       texts: "~&f← 返回管理"
 
           # 统计摘要
-          stats_bar:
+          统计栏:
             type: Texture
             attribute:
               x: 20
@@ -206,28 +205,28 @@ controls:
               shape: ~round_rect
               radius: 6
             children:
-              stat_total:
+              总计统计:
                 type: Text
                 attribute:
                   x: 20
                   y: 8
                   fontSize: 26
                   texts: "~&6总计: &e{var.totalCount}"
-              stat_success:
+              成功统计:
                 type: Text
                 attribute:
                   x: 240
                   y: 8
                   fontSize: 26
                   texts: "~&a成功: &f{var.successCount}"
-              stat_failed:
+              失败统计:
                 type: Text
                 attribute:
                   x: 480
                   y: 8
                   fontSize: 26
                   texts: "~&c失败: &f{var.failedCount}"
-              stat_pending:
+              待发统计:
                 type: Text
                 attribute:
                   x: 720
@@ -236,7 +235,7 @@ controls:
                   texts: "~&e待发: &f{var.pendingCount}"
 
           # 结果提示
-          result_bar:
+          结果提示:
             type: Text
             attribute:
               x: 28
@@ -245,15 +244,34 @@ controls:
               texts: "~&e{var.resultMsg}"
 
           # 记录列表
-          list_area:
+          记录滑块:
+            type: Texture
+            val: 记录滑块
+            attribute:
+              x: 1174
+              y: 132
+              width: 6
+              height: 50
+              normal: ~120,120,120,200
+              maxDragY: 460
+          列表滚动区:
             type: Scroll
             attribute:
               x: 20
               y: 132
               width: 1160
               height: 510
+              moveY: "self.parent['记录滑块'].getDragYRatio()"
+            action:
+              wheel: |-
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['记录滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['记录滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
             children:
-              list_header:
+              列表表头:
                 type: Texture
                 attribute:
                   x: 0
@@ -264,56 +282,56 @@ controls:
                   shape: ~round_rect
                   radius: 6
                 children:
-                  col_period:
+                  周期列:
                     type: Text
                     attribute:
                       x: 16
                       y: 6
                       fontSize: 26
                       texts: "~&b周期"
-                  col_player:
+                  玩家列:
                     type: Text
                     attribute:
                       x: 160
                       y: 6
                       fontSize: 26
                       texts: "~&b玩家"
-                  col_rank:
+                  排名列:
                     type: Text
                     attribute:
                       x: 340
                       y: 6
                       fontSize: 26
                       texts: "~&b排名"
-                  col_type:
+                  类型列:
                     type: Text
                     attribute:
                       x: 440
                       y: 6
                       fontSize: 26
                       texts: "~&b类型"
-                  col_reward:
+                  奖励列:
                     type: Text
                     attribute:
                       x: 600
                       y: 6
                       fontSize: 26
                       texts: "~&b奖励"
-                  col_status:
+                  状态列:
                     type: Text
                     attribute:
                       x: 860
                       y: 6
                       fontSize: 26
                       texts: "~&b状态"
-                  col_action:
+                  操作列:
                     type: Text
                     attribute:
                       x: 1020
                       y: 6
                       fontSize: 26
                       texts: "~&b操作"
-              list_body:
+              列表内容:
                 type: VGrid
                 attribute:
                   x: 0
@@ -322,7 +340,7 @@ controls:
                   eachHeight: 48
                   dataList: var.records
                 children:
-                  row_bg:
+                  行背景:
                     type: Texture
                     attribute:
                       width: 1160
@@ -331,49 +349,49 @@ controls:
                       shape: ~round_rect
                       radius: 4
                     children:
-                      cell_period:
+                      周期单元格:
                         type: Text
                         attribute:
                           x: 16
                           y: 8
                           fontSize: 24
                           texts: "~&f{each.periodDisplay}"
-                      cell_player:
+                      玩家单元格:
                         type: Text
                         attribute:
                           x: 160
                           y: 8
                           fontSize: 24
                           texts: "~&f{each.playerName}"
-                      cell_rank:
+                      排名单元格:
                         type: Text
                         attribute:
                           x: 340
                           y: 8
                           fontSize: 24
                           texts: "~&f#{each.rank}"
-                      cell_type:
+                      类型单元格:
                         type: Text
                         attribute:
                           x: 440
                           y: 8
                           fontSize: 24
                           texts: "~&7{each.rankingTypeDisplay}"
-                      cell_reward:
+                      奖励单元格:
                         type: Text
                         attribute:
                           x: 600
                           y: 8
                           fontSize: 22
                           texts: "~&a{each.rewardSummary}"
-                      cell_status:
+                      状态单元格:
                         type: Text
                         attribute:
                           x: 860
                           y: 8
                           fontSize: 24
                           texts: "~{each.statusIcon}"
-                      cell_retry:
+                      重试按钮:
                         type: Texture
                         attribute:
                           x: 1020
@@ -389,7 +407,7 @@ controls:
                           click: |-
                             Packet.send('AXS_ENTITY_TRACKER_REWARD', 'retry', each.id)
                         children:
-                          cell_retry_text:
+                          重试文字:
                             type: Text
                             attribute:
                               point: ~middle_center
@@ -397,7 +415,7 @@ controls:
                               texts: "~&f重试"
 
           # 分页控件
-          pagination:
+          分页控件:
             type: Texture
             attribute:
               x: 400
@@ -408,7 +426,7 @@ controls:
               shape: ~round_rect
               radius: 8
             children:
-              btn_prev:
+              上一页按钮:
                 type: Texture
                 attribute:
                   x: 10
@@ -422,19 +440,19 @@ controls:
                   click: |-
                     if (var.currentPage > 1) { Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', '', '', var.currentPage - 1) }
                 children:
-                  btn_prev_text:
+                  上一页文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       fontSize: 24
                       texts: "~&f上一页"
-              page_info:
+              页码信息:
                 type: Text
                 attribute:
                   point: ~middle_center
                   fontSize: 26
                   texts: "~&f{var.currentPage} / {var.totalPages}"
-              btn_next:
+              下一页按钮:
                 type: Texture
                 attribute:
                   x: 290
@@ -448,7 +466,7 @@ controls:
                   click: |-
                     if (var.currentPage < var.totalPages) { Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', '', '', var.currentPage + 1) }
                 children:
-                  btn_next_text:
+                  下一页文字:
                     type: Text
                     attribute:
                       point: ~middle_center

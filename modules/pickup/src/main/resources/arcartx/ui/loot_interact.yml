@@ -16,7 +16,7 @@ action:
       Packet.send('pickup', 'scroll_down')
     }
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all

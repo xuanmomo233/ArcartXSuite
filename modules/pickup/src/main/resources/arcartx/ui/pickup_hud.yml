@@ -95,14 +95,14 @@ ui:
 
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
       width: 1920
       height: 1080
     children:
-      pickup_stack:
+      拾取纵向布局:
         type: VStack
         attribute:
           point: ~bottom_right
@@ -110,14 +110,14 @@ controls:
           y: -120
           spaceBetween: 8
         children:
-          pickup_entry_1:
+          拾取条目1:
             type: Canvas
             attribute:
-              width: self['text1'].width + 80
+              width: self['文字'].width + 80
               height: 60
               visible: var.entry1Visible
             children:
-              background1:
+              背景:
                 type: Texture
                 attribute:
                   point: ~stretch_all
@@ -128,7 +128,7 @@ controls:
                   stroke:
                     width: 2
                     color: ~0,0,0,255
-              slot1:
+              图标:
                 val: pickup_slot_1
                 type: Slot
                 attribute:
@@ -142,7 +142,7 @@ controls:
                   hover: ~0,0,0,0
                   itemScale: 0.85
                   visible: var.entry1ItemJson != ''
-              text1:
+              文字:
                 type: Text
                 attribute:
                   point: ~middle_left
@@ -150,14 +150,14 @@ controls:
                   y: 0
                   texts: "val.pickup_slot_1.getSlotItemStack().getName() + ' &fx' + var.entry1Amount.round()"
                   fontSize: 36
-          pickup_entry_2:
+          拾取条目2:
             type: Canvas
             attribute:
-              width: self['text2'].width + 80
+              width: self['文字'].width + 80
               height: 60
               visible: var.entry2Visible
             children:
-              background2:
+              背景:
                 type: Texture
                 attribute:
                   point: ~stretch_all
@@ -168,7 +168,7 @@ controls:
                   stroke:
                     width: 2
                     color: ~0,0,0,255
-              slot2:
+              图标:
                 val: pickup_slot_2
                 type: Slot
                 attribute:
@@ -182,7 +182,7 @@ controls:
                   hover: ~0,0,0,0
                   itemScale: 0.85
                   visible: var.entry2ItemJson != ''
-              text2:
+              文字:
                 type: Text
                 attribute:
                   point: ~middle_left
@@ -191,14 +191,14 @@ controls:
                   texts: "val.pickup_slot_2.getSlotItemStack().getName() + ' &fx' + var.entry2Amount.round()"
                   fontSize: 36
 
-          pickup_entry_3:
+          拾取条目3:
             type: Canvas
             attribute:
-              width: self['text3'].width + 80
+              width: self['文字'].width + 80
               height: 60
               visible: var.entry3Visible
             children:
-              background3:
+              背景:
                 type: Texture
                 attribute:
                   point: ~stretch_all
@@ -209,7 +209,7 @@ controls:
                   stroke:
                     width: 2
                     color: ~0,0,0,255
-              slot3:
+              图标:
                 val: pickup_slot_3
                 type: Slot
                 attribute:
@@ -223,7 +223,7 @@ controls:
                   hover: ~0,0,0,0
                   itemScale: 0.85
                   visible: var.entry3ItemJson != ''
-              text3:
+              文字:
                 type: Text
                 attribute:
                   point: ~middle_left
@@ -232,14 +232,14 @@ controls:
                   texts: "val.pickup_slot_3.getSlotItemStack().getName() + ' &fx' + var.entry3Amount.round()"
                   fontSize: 36
 
-          pickup_entry_4:
+          拾取条目4:
             type: Canvas
             attribute:
-              width: self['text4'].width + 80
+              width: self['文字'].width + 80
               height: 60
               visible: var.entry4Visible
             children:
-              background4:
+              背景:
                 type: Texture
                 attribute:
                   point: ~stretch_all
@@ -250,7 +250,7 @@ controls:
                   stroke:
                     width: 2
                     color: ~0,0,0,255
-              slot4:
+              图标:
                 val: pickup_slot_4
                 type: Slot
                 attribute:
@@ -264,7 +264,7 @@ controls:
                   hover: ~0,0,0,0
                   itemScale: 0.85
                   visible: var.entry4ItemJson != ''
-              text4:
+              文字:
                 type: Text
                 attribute:
                   point: ~middle_left

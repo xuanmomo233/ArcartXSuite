@@ -173,23 +173,8 @@ ui:
       var.lastSlotClickTime = 0
       var.emptyItemJson = '{"id": "minecraft:air","Count":1b}'
       var.maxPersonalCount = 16
-      for(i in range(0, var.maxPersonalCount)){
-        key = i.round
-        pw = val.个人仓库列表['项'].copy('项' + key)
-        pw.entryKey = key
-      }
       var.maxSharedCount = 32
-      for(i in range(0, var.maxSharedCount)){
-        key = i.round
-        sw = val.共享仓库列表['项'].copy('项' + key)
-        sw.entryKey = key
-      }
       var.maxCategoryCount = 32
-      for(i in range(0, var.maxCategoryCount)){
-        key = i.round
-        cat = val.分类列表['项'].copy('项' + key)
-        cat.entryKey = key
-      }
       var.renderBackpackAmounts = -> {
         if(val.背包网格 != null){
           for(raw in range(9,44)){
@@ -446,6 +431,13 @@ controls:
                         attribute:
                           height: 48
                           spaceBetween: 10
+                        action:
+                          create: |-
+                            for(i in range(0, var.maxPersonalCount)){
+                              key = i.round
+                              pw = self['项'].copy('项' + key)
+                              pw.entryKey = key
+                            }
                         children:
                           项:
                             type: Texture
@@ -475,6 +467,13 @@ controls:
                         attribute:
                           height: 48
                           spaceBetween: 10
+                        action:
+                          create: |-
+                            for(i in range(0, var.maxSharedCount)){
+                              key = i.round
+                              sw = self['项'].copy('项' + key)
+                              sw.entryKey = key
+                            }
                         children:
                           项:
                             type: Texture
@@ -613,6 +612,13 @@ controls:
                     attribute:
                       width: 180
                       spaceBetween: 10
+                    action:
+                      create: |-
+                        for(i in range(0, var.maxCategoryCount)){
+                          key = i.round
+                          cat = self['项'].copy('项' + key)
+                          cat.entryKey = key
+                        }
                     children:
                       项:
                         type: Texture
@@ -666,9 +672,9 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, 54)){
-                      slot = self['物品图标'].copy('物品图标' + i.round)
-                      slot.entryKey = i.round
-
+                      key = i.round
+                      slot = self['物品图标'].copy('物品图标' + key)
+                      slot.entryKey = key
                     }
                 children:
                   物品图标:

@@ -1,4 +1,4 @@
-﻿# AXS 资源说明
+# AXS 资源说明
 # 用途: Mail 模块默认日志菜单，用于查询发信记录、领取状态与后台审计数据。
 # 前置依赖: ArcartX；Mail 模块启用后会自动注册或导出。
 # 启用开关: config.yml -> modules.mail.enabled + modules.mail.password
@@ -15,11 +15,12 @@ ui:
   through: false
   screenScale: true
   action:
-    load: |-
+    open: |-
       var.logs = {}
       var.page = 1
       var.maxPage = 1
       var.totalCount = 0
+      var.maxLogCount = 20
   # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
   packetHandler:
     init: |-
@@ -36,7 +37,7 @@ ui:
 # controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
@@ -155,6 +156,16 @@ controls:
               stroke:
                 width: 2
                 color: ~0,0,0,255
+          日志滑块:
+            type: Texture
+            val: 日志滑块
+            attribute:
+              x: 1374
+              y: 146
+              width: 6
+              height: 50
+              normal: ~120,120,120,200
+              maxDragY: 598
           scroll:
             type: Scroll
             attribute:
@@ -162,13 +173,14 @@ controls:
               y: 146
               width: 1320
               height: 648
-              moveY: 0
+              moveY: "self.parent['日志滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.wheelValue > 0){
-                  self.moveY = Math.max(0, self.moveY - 0.1)
-                }elif(self.wheelValue < 0){
-                  self.moveY = Math.min(1, self.moveY + 0.1)
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['日志滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['日志滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
               log_stack:
@@ -177,11 +189,19 @@ controls:
                 attribute:
                   width: 1300
                   spaceBetween: 10
+                action:
+                  create: |-
+                    for(i in range(0, var.maxLogCount)){
+                      key = i.round
+                      log = self['item'].copy('item' + key)
+                      log.entryKey = key
+                    }
                 children:
                   item:
                     type: Texture
                     attribute:
-                      entry: var.logs[self.key]
+                      entryKey: 0
+                      entry: var.logs[self.entryKey]
                       width: 1300
                       height: 98
                       normal: ~120,120,120,255
@@ -215,9 +235,3 @@ controls:
                           width: 1020
                           fontSize: 49
                           texts: "'&0' + self.parent.entry['content']"
-          logs_observer:
-            type: Observer
-            attribute:
-              target: val.logs_list['item']
-              subscribe: var.logs
-              maxSize: 2048

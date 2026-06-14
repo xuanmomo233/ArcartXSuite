@@ -1,4 +1,4 @@
-﻿# AXS 资源说明
+# AXS 资源说明
 # 用途: QuestGPS 模块默认菜单，用于查看任务分类、奖励预览和导航状态。
 # 前置依赖: ArcartX；QuestGPS 模块启用后会自动注册或导出。
 # 启用开关: config.yml -> modules.questgps.enabled + modules.questgps.password
@@ -112,25 +112,7 @@ ui:
 # controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
 
 controls:
-  quest_observer:
-    type: Observer
-    attribute:
-      target: val.quest_rows['quest_item']
-      subscribe: var.questRows
-      maxSize: 256
-  task_observer:
-    type: Observer
-    attribute:
-      target: val.task_rows['task_item']
-      subscribe: var.taskRows
-      maxSize: 256
-  reward_observer:
-    type: Observer
-    attribute:
-      target: val.reward_rows['reward_item']
-      subscribe: var.rewardRows
-      maxSize: 128
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
@@ -326,6 +308,16 @@ controls:
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'switch_page', 'completed')
+          任务滑块:
+            type: Texture
+            val: 任务滑块
+            attribute:
+              x: 460
+              y: 248
+              width: 6
+              height: 50
+              normal: ~120,120,120,200
+              maxDragY: 514
           quest_scroll:
             type: Scroll
             attribute:
@@ -333,13 +325,14 @@ controls:
               y: 248
               width: 424
               height: 564
-              moveY: 0
+              moveY: "self.parent['任务滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.wheelValue > 0){
-                  self.moveY = Math.max(0, self.moveY - 0.1)
-                }elif(self.wheelValue < 0){
-                  self.moveY = Math.min(1, self.moveY + 0.1)
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['任务滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['任务滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
               quest_list:
@@ -460,6 +453,16 @@ controls:
               y: 340
               texts: "~&0任务目标"
               fontSize: 49
+          任务目标滑块:
+            type: Texture
+            val: 任务目标滑块
+            attribute:
+              x: 938
+              y: 380
+              width: 6
+              height: 40
+              normal: ~120,120,120,200
+              maxDragY: 294
           task_scroll:
             type: Scroll
             attribute:
@@ -467,13 +470,14 @@ controls:
               y: 380
               width: 410
               height: 334
-              moveY: 0
+              moveY: "self.parent['任务目标滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.wheelValue > 0){
-                  self.moveY = Math.max(0, self.moveY - 0.1)
-                }elif(self.wheelValue < 0){
-                  self.moveY = Math.min(1, self.moveY + 0.1)
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['任务目标滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['任务目标滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
               task_list:
@@ -547,6 +551,16 @@ controls:
               y: 340
               texts: "~&0任务奖励"
               fontSize: 49
+          任务奖励滑块:
+            type: Texture
+            val: 任务奖励滑块
+            attribute:
+              x: 1388
+              y: 380
+              width: 6
+              height: 40
+              normal: ~120,120,120,200
+              maxDragY: 294
           reward_scroll:
             type: Scroll
             attribute:
@@ -554,13 +568,14 @@ controls:
               y: 380
               width: 420
               height: 334
-              moveY: 0
+              moveY: "self.parent['任务奖励滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.wheelValue > 0){
-                  self.moveY = Math.max(0, self.moveY - 0.1)
-                }elif(self.wheelValue < 0){
-                  self.moveY = Math.min(1, self.moveY + 0.1)
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['任务奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['任务奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
               reward_list:
@@ -573,7 +588,8 @@ controls:
                   reward_item:
                     type: Texture
                     attribute:
-                      entry: var.rewardRows[self.key]
+                      entryKey: 0
+                      entry: var.rewardRows[self.entryKey]
                       visible: self.entry != null
                       width: 420
                       height: 74

@@ -20,7 +20,7 @@ ui:
       var.visible = packet['visible']
 
 controls:
-  bg:
+  背景:
     type: Texture
     attribute:
       x: 10
@@ -36,7 +36,7 @@ controls:
         width: 2
         color: ~80,180,255,180
     children:
-      title:
+      标题:
         type: Text
         attribute:
           x: 100
@@ -45,7 +45,7 @@ controls:
           fontSize: 36
           texts: "~&b&l挂机区域: &f{var.area}"
           visible: var.visible
-      info_time:
+      时间:
         type: Text
         attribute:
           x: 10
@@ -53,7 +53,7 @@ controls:
           fontSize: 22
           texts: "~&7当前挂机: &f{var.time}"
           visible: var.visible
-      info_next:
+      下次奖励:
         type: Text
         attribute:
           x: 10
@@ -61,7 +61,7 @@ controls:
           fontSize: 22
           texts: "~&7下次奖励: &f{var.next}秒"
           visible: var.visible
-      info_players:
+      人数:
         type: Text
         attribute:
           x: 10

@@ -66,14 +66,14 @@ ui:
 # controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
       width: 1920
       height: 1080
     children:
-      root:
+      根面板:
         type: Texture
         attribute:
           point: ~middle_center
@@ -96,14 +96,14 @@ controls:
             color: ~255,255,255,110
             width: 0.05
         children:
-          title:
+          标题:
             type: Text
             attribute:
               x: 38
               y: 28
               fontSize: 49
               texts: "~&f&l写信中"
-          tips:
+          提示:
             type: Text
             attribute:
               x: 38
@@ -113,7 +113,7 @@ controls:
               texts: 
                 - "'&7前 ' + var.maxAttachments.round() + ' 个槽位放真实物品附件。'"
                 - "'&7基础邮费: &0' + var.baseFee + '   &7货币税率: &0' + var.vaultTaxRate"
-          attachment_panel:
+          附件面板:
             type: Texture
             attribute:
               x: 38
@@ -128,14 +128,14 @@ controls:
                 width: 2
                 color: ~0,0,0,255
             children:
-              title:
+              附件标题:
                 type: Text
                 attribute:
                   x: 18
                   y: 14
                   fontSize: 49
                   texts: "'&0物品附件 &7' + var.attachmentCount.round() + '/' + var.maxAttachments.round()"
-              hint_text:
+              提示文字:
                 type: Text
                 attribute:
                   x: 18
@@ -144,7 +144,7 @@ controls:
                   texts: 
                     - "~&7将寄出物品拖入下方槽位"
                     - "~&7未寄出物品关闭界面，物品会自动退回"
-              slot_grid:
+              槽位网格:
                 type: HGrid
                 attribute:
                   x: 18
@@ -155,11 +155,11 @@ controls:
                 action:
                   create: |-
                     for(i in range(1,5)){
-                      slot = self['slot0'].copy('slot' + i)
+                      slot = self['槽位0'].copy('slot' + i)
                       slot.id = i
                     }
                 children:
-                  slot0:
+                  槽位0:
                     type: Slot
                     attribute:
                       width: 54
@@ -176,7 +176,7 @@ controls:
                       stroke:
                         width: 2
                         color: ~0,0,0,255
-          Backpack:
+          背包:
             type: Texture
             attribute:
               x: 38
@@ -191,7 +191,7 @@ controls:
                 width: 2
                 color: ~0,0,0,255
             children:
-              bp_grid:
+              背包网格:
                 type: HGrid
                 attribute:
                   x: 18
@@ -202,11 +202,11 @@ controls:
                 action:
                   create: |-
                     for(i in range(1,35)){
-                      slot = self['slot0'].copy('slot' + i)
+                      slot = self['槽位0'].copy('slot' + i)
                       slot.id = i + 27
                     }
                 children:
-                  slot0:
+                  槽位0:
                     type: Slot
                     attribute:
                       width: 54
@@ -222,14 +222,14 @@ controls:
                       stroke:
                         width: 2
                         color: ~0,0,0,255
-          recipient_label:
+          收件人标签:
             type: Text
             attribute:
               x: 440
               y: 112
               fontSize: 49
               texts: "~&7收件人"
-          recipient_box:
+          收件人输入框:
             type: TextBox
             attribute:
               x: 440
@@ -247,14 +247,14 @@ controls:
             action:
               textChange: |-
                 var.composeRecipient = self.getContent()
-          subject_label:
+          标题标签:
             type: Text
             attribute:
               x: 770
               y: 112
               fontSize: 49
               texts: "~&7标题"
-          subject_box:
+          标题输入框:
             type: TextBox
             attribute:
               x: 770
@@ -272,14 +272,14 @@ controls:
             action:
               textChange: |-
                 var.composeSubject = self.getContent()
-          body_label:
+          正文标签:
             type: Text
             attribute:
               x: 440
               y: 214
               fontSize: 49
               texts: "~&7正文"
-          body_box:
+          正文输入框:
             type: TextBox
             attribute:
               x: 440
@@ -298,14 +298,14 @@ controls:
             action:
               textChange: |-
                 var.composeBody = self.getContent()
-          summary:
+          字数统计:
             type: Text
             attribute:
               x: 440
               y: 590
               fontSize: 49
               texts: "'&7标题文字上限: &0' + var.subjectMax.round() + '   &7正文文字上限: &0' + var.bodyMax.round()"
-          vault_box:
+          金币输入框:
             type: TextBox
             attribute:
               x: 440
@@ -324,7 +324,7 @@ controls:
               stroke:
                 width: 2
                 color: ~0,0,0,255
-          quote_summary:
+          费用汇总:
             type: Text
             attribute:
               x: 440
@@ -332,14 +332,14 @@ controls:
               fontSize: 49
               width: 880
               texts: "'&7邮件总费用: &0' + var.totalFee + '金币' + '   &7物品手续费: &0' + var.itemFee + '金币' + (var.quoteMessage == '' ? '' : '   &7提示: &0' + var.quoteMessage)"
-          bottom_buttons:
+          底部按钮区:
             type: HStack
             attribute:
               x: 440
               y: 708
               spaceBetween: 20
             children:
-              send_button:
+              发送按钮:
                 type: Texture
                 attribute:
                   width: 180
@@ -357,7 +357,7 @@ controls:
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'compose-send', var.sessionId, var.composeRecipient, var.composeSubject, var.composeBody, var.composeVault)
-              inbox_button:
+              返回收件箱按钮:
                 type: Texture
                 attribute:
                   width: 180

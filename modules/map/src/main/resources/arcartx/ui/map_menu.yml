@@ -1,4 +1,4 @@
-﻿# AXS 资源说明
+# AXS 资源说明
 # 用途: Map 模块默认全屏地图 GUI。
 # 前置依赖: ArcartX；Map 模块启用后会自动注册或导出。
 # 启用开关: config.yml -> modules.map.enabled + modules.map.password
@@ -75,7 +75,7 @@ ui:
       var.detailClearTrackVisible = packet['detailClearTrackVisible']
       var.detailTrackingText = packet['detailTrackingText']
   action:
-    load: |-
+    open: |-
       var.packetId = 'AXS_MAP'
       var.selectedWorldId = ''
       var.selectedWorldName = '未选择'
@@ -105,9 +105,13 @@ ui:
       var.detailCanCreateWaypoint = false
       var.detailClearTrackVisible = false
       var.detailTrackingText = '当前未导航'
+      var.maxWorldCount = 16
+      var.maxAnchorCount = 128
+      var.maxWaypointCount = 128
+      var.maxExternalCount = 128
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
@@ -173,6 +177,17 @@ controls:
               texts: "'&0世界列表'"
               fontSize: 20
               shadow: false
+          世界滑块:
+            type: Texture
+            val: 世界滑块
+            attribute:
+              point: ~top_left
+              x: 42
+              y: 248
+              width: 30
+              height: 6
+              normal: ~120,120,120,200
+              maxDragX: 294
           world_scroll:
             type: Scroll
             attribute:
@@ -181,13 +196,14 @@ controls:
               y: 162
               width: 324
               height: 82
-              moveX: 0
+              moveX: "self.parent['世界滑块'].getDragXRatio()"
             action:
               wheel: |-
-                if(self.wheelValue > 0){
-                  self.moveX = Math.max(0, self.moveX - 0.1)
-                }elif(self.wheelValue < 0){
-                  self.moveX = Math.min(1, self.moveX + 0.1)
+                if(self.moveX >= 0 && self.wheelValue > 0){
+                  self.parent['世界滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveX <= 1 && self.wheelValue < 0){
+                  self.parent['世界滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
                 }
             children:
               world_list:
@@ -196,15 +212,23 @@ controls:
                 attribute:
                   height: 68
                   spaceBetween: 12
+                action:
+                  create: |-
+                    for(i in range(0, var.maxWorldCount)){
+                      key = i.round
+                      wi = self['item'].copy('item' + key)
+                      wi.entryKey = key
+                    }
                 children:
                   item:
                     type: Texture
                     attribute:
-                      entry: var.worldRows[self.key]
+                      entryKey: 0
+                      entry: var.worldRows[self.entryKey]
                       visible: self.entry != null
                       width: 148
                       height: 68
-                      normal: "self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                      normal: "self.entry != null && self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
                       shape: ~round_rect
                       radius: 16
                     action:
@@ -215,16 +239,10 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "self.entry['displayName']"
+                          texts: "self.parent.entry != null ? self.parent.entry['displayName'] : ''"
                           fontSize: 18
                           shadow: false
                           through: true
-          world_observer:
-            type: Observer
-            attribute:
-              target: val.world_list['item']
-              subscribe: var.worldRows
-              maxSize: 16
           map_box:
             type: Texture
             attribute:
@@ -274,6 +292,17 @@ controls:
               texts: "'&0锚点列表'"
               fontSize: 20
               shadow: false
+          锚点滑块:
+            type: Texture
+            val: 锚点滑块
+            attribute:
+              point: ~top_left
+              x: 1466
+              y: 156
+              width: 6
+              height: 40
+              normal: ~120,120,120,200
+              maxDragY: 146
           anchor_scroll:
             type: Scroll
             attribute:
@@ -282,13 +311,14 @@ controls:
               y: 156
               width: 500
               height: 186
-              moveY: 0
+              moveY: "self.parent['锚点滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.wheelValue > 0){
-                  self.moveY = Math.max(0, self.moveY - 0.1)
-                }elif(self.wheelValue < 0){
-                  self.moveY = Math.min(1, self.moveY + 0.1)
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['锚点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['锚点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
               anchor_stack:
@@ -297,15 +327,23 @@ controls:
                 attribute:
                   width: 500
                   spaceBetween: 10
+                action:
+                  create: |-
+                    for(i in range(0, var.maxAnchorCount)){
+                      key = i.round
+                      ai = self['item'].copy('item' + key)
+                      ai.entryKey = key
+                    }
                 children:
                   item:
                     type: Texture
                     attribute:
-                      entry: var.anchorRows[self.key]
+                      entryKey: 0
+                      entry: var.anchorRows[self.entryKey]
                       visible: self.entry != null
                       width: 500
                       height: 70
-                      normal: "self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                      normal: "self.entry != null && self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
                       shape: ~round_rect
                       radius: 14
                     action:
@@ -318,7 +356,7 @@ controls:
                           point: ~top_left
                           x: 18
                           y: 12
-                          texts: "self.entry['displayName']"
+                          texts: "self.parent.entry != null ? self.parent.entry['displayName'] : ''"
                           fontSize: 18
                           shadow: false
                           through: true
@@ -328,16 +366,10 @@ controls:
                           point: ~top_left
                           x: 18
                           y: 40
-                          texts: "self.entry['unlocked'] ? '&a已解锁' : '&c未解锁'"
+                          texts: "self.parent.entry != null ? (self.parent.entry['unlocked'] ? '&a已解锁' : '&c未解锁') : ''"
                           fontSize: 14
                           shadow: false
                           through: true
-          anchor_observer:
-            type: Observer
-            attribute:
-              target: val.anchor_stack['item']
-              subscribe: var.anchorRows
-              maxSize: 128
           waypoint_box:
             type: Texture
             attribute:
@@ -358,6 +390,17 @@ controls:
               texts: "'&0路径点 &8(' + var.waypointCount + '/' + var.waypointLimit + '&8)'"
               fontSize: 20
               shadow: false
+          路径点滑块:
+            type: Texture
+            val: 路径点滑块
+            attribute:
+              point: ~top_left
+              x: 1466
+              y: 420
+              width: 6
+              height: 20
+              normal: ~120,120,120,200
+              maxDragY: 60
           waypoint_scroll:
             type: Scroll
             attribute:
@@ -366,13 +409,14 @@ controls:
               y: 420
               width: 500
               height: 80
-              moveY: 0
+              moveY: "self.parent['路径点滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.wheelValue > 0){
-                  self.moveY = Math.max(0, self.moveY - 0.1)
-                }elif(self.wheelValue < 0){
-                  self.moveY = Math.min(1, self.moveY + 0.1)
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['路径点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['路径点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
               waypoint_stack:
@@ -381,15 +425,23 @@ controls:
                 attribute:
                   width: 500
                   spaceBetween: 8
+                action:
+                  create: |-
+                    for(i in range(0, var.maxWaypointCount)){
+                      key = i.round
+                      wpi = self['item'].copy('item' + key)
+                      wpi.entryKey = key
+                    }
                 children:
                   item:
                     type: Texture
                     attribute:
-                      entry: var.waypointRows[self.key]
+                      entryKey: 0
+                      entry: var.waypointRows[self.entryKey]
                       visible: self.entry != null
                       width: 500
                       height: 48
-                      normal: "self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                      normal: "self.entry != null && self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
                       shape: ~round_rect
                       radius: 14
                     action:
@@ -401,16 +453,10 @@ controls:
                         attribute:
                           point: ~middle_left
                           x: 18
-                          texts: "self.entry['name']"
+                          texts: "self.parent.entry != null ? self.parent.entry['name'] : ''"
                           fontSize: 16
                           shadow: false
                           through: true
-          waypoint_observer:
-            type: Observer
-            attribute:
-              target: val.waypoint_stack['item']
-              subscribe: var.waypointRows
-              maxSize: 128
           external_box:
             type: Texture
             attribute:
@@ -431,6 +477,17 @@ controls:
               texts: "'&0任务目标'"
               fontSize: 20
               shadow: false
+          外部滑块:
+            type: Texture
+            val: 外部滑块
+            attribute:
+              point: ~top_left
+              x: 1466
+              y: 576
+              width: 6
+              height: 18
+              normal: ~120,120,120,200
+              maxDragY: 50
           external_scroll:
             type: Scroll
             attribute:
@@ -439,13 +496,14 @@ controls:
               y: 576
               width: 500
               height: 68
-              moveY: 0
+              moveY: "self.parent['外部滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.wheelValue > 0){
-                  self.moveY = Math.max(0, self.moveY - 0.1)
-                }elif(self.wheelValue < 0){
-                  self.moveY = Math.min(1, self.moveY + 0.1)
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['外部滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['外部滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
               external_stack:
@@ -454,15 +512,23 @@ controls:
                 attribute:
                   width: 500
                   spaceBetween: 8
+                action:
+                  create: |-
+                    for(i in range(0, var.maxExternalCount)){
+                      key = i.round
+                      ei = self['item'].copy('item' + key)
+                      ei.entryKey = key
+                    }
                 children:
                   item:
                     type: Texture
                     attribute:
-                      entry: var.externalTargetRows[self.key]
+                      entryKey: 0
+                      entry: var.externalTargetRows[self.entryKey]
                       visible: self.entry != null
                       width: 500
                       height: 48
-                      normal: "self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                      normal: "self.entry != null && self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
                       shape: ~round_rect
                       radius: 14
                     action:
@@ -474,16 +540,10 @@ controls:
                         attribute:
                           point: ~middle_left
                           x: 18
-                          texts: "self.entry['name']"
+                          texts: "self.parent.entry != null ? self.parent.entry['name'] : ''"
                           fontSize: 16
                           shadow: false
                           through: true
-          external_observer:
-            type: Observer
-            attribute:
-              target: val.external_stack['item']
-              subscribe: var.externalTargetRows
-              maxSize: 128
           detail_box:
             type: Texture
             attribute:

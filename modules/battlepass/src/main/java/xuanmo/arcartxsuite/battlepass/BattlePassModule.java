@@ -108,8 +108,23 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             throw new IllegalStateException("ArcartXBattlePass.yml 配置文件缺失");
         }
         File dataFolder = configFile.getParentFile();
+        // 首次安装时导出默认任务文件
+        ensureTaskDefaults(dataFolder);
         configuration = BattlePassModuleConfiguration.load(
             YamlConfiguration.loadConfiguration(configFile), dataFolder, context.logger());
+    }
+
+    private void ensureTaskDefaults(File dataFolder) {
+        File tasksDir = new File(dataFolder, "tasks");
+        if (!tasksDir.exists()) {
+            tasksDir.mkdirs();
+        }
+        for (String taskFile : new String[]{"daily.yml", "weekly.yml", "season.yml"}) {
+            File target = new File(tasksDir, taskFile);
+            if (!target.exists()) {
+                context.exportResource("tasks/" + taskFile, target, false);
+            }
+        }
     }
 
     @Override
@@ -152,7 +167,10 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
     protected @NotNull Map<String, TabExecutor> commandBindings() {
         BattlePassPlayerCommand cmd = new BattlePassPlayerCommand(
             () -> packetHandler, messages());
-        return Map.of("bp", (TabExecutor) cmd);
+        Map<String, TabExecutor> map = new LinkedHashMap<>();
+        map.put("bp", cmd);
+        map.put("battlepass", cmd);
+        return map;
     }
 
     @Override

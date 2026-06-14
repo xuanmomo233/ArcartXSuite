@@ -91,7 +91,7 @@ ui:
       var.autoPickupNotify = packet['autoPickupNotify']
       var.showcaseEnabled = packet['showcaseEnabled']
   action:
-    load: |-
+    open: |-
       var.packetId = 'AXS_WAREHOUSE'
       var.ownerType = 'personal'
       var.ownerId = ''
@@ -135,16 +135,7 @@ ui:
       var.autoPickupMythic = true
       var.autoPickupNotify = true
       var.maxManageCount = 32
-      for(i in range(0, var.maxManageCount)){
-        item = val.共享列表['项'].copy('项' + i.round)
-        item.entryKey = i.round
-      }
       var.maxMemberCount = 32
-      for(i in range(0, var.maxMemberCount)){
-        member = val.成员列表['项'].copy('项' + i.round)
-        member.entryKey = i.round
-      }
-    open: |-
       Packet.send(var.packetId, 'refresh')
 
 controls:
@@ -398,6 +389,16 @@ controls:
                   texts: "'&7' + var.sharedCreateCostText"
                   fontSize: 28
                   through: true
+              共享滑块:
+                type: Texture
+                val: 共享滑块
+                attribute:
+                  x: 388
+                  y: 160
+                  width: 6
+                  height: 50
+                  normal: ~120,120,120,200
+                  maxDragY: 520
               共享滚动:
                 type: Scroll
                 val: 共享滚动
@@ -406,11 +407,15 @@ controls:
                   y: 160
                   width: 370
                   height: 570
-                  moveY: var.sharedListScrollRatio
+                  moveY: "self.parent['共享滑块'].getDragYRatio()"
                 action:
                   wheel: |-
-                    var.sharedListScrollRatio = Math.max(0, Math.min(1, var.sharedListScrollRatio + self.wheelValue * 0.08))
-                    self.moveY = var.sharedListScrollRatio
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['共享滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['共享滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
                 children:
                   共享列表:
                     val: 共享列表
@@ -418,6 +423,13 @@ controls:
                     attribute:
                       width: 370
                       spaceBetween: 10
+                    action:
+                      create: |-
+                        for(i in range(0, var.maxManageCount)){
+                          key = i.round
+                          item = self['项'].copy('项' + key)
+                          item.entryKey = key
+                        }
                     children:
                       项:
                         type: Texture
@@ -913,6 +925,16 @@ controls:
                   stroke:
                     width: 2
                     color: ~0,0,0,255
+              成员滑块:
+                type: Texture
+                val: 成员滑块
+                attribute:
+                  x: 528
+                  y: 230
+                  width: 6
+                  height: 40
+                  normal: ~120,120,120,200
+                  maxDragY: 450
               成员滚动:
                 type: Scroll
                 attribute:
@@ -920,7 +942,15 @@ controls:
                   y: 230
                   width: 510
                   height: 490
-                  moveY: 0
+                  moveY: "self.parent['成员滑块'].getDragYRatio()"
+                action:
+                  wheel: |-
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['成员滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['成员滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
                 children:
                   成员列表:
                     val: 成员列表
@@ -928,6 +958,13 @@ controls:
                     attribute:
                       width: 510
                       spaceBetween: 10
+                    action:
+                      create: |-
+                        for(i in range(0, var.maxMemberCount)){
+                          key = i.round
+                          member = self['项'].copy('项' + key)
+                          member.entryKey = key
+                        }
                     children:
                       项:
                         type: Texture

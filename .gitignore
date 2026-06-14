@@ -37,6 +37,10 @@ axs-core/build/
 modules/*/build/
 axs-api/build/
 
+# Node (dev tools)
+node_modules/
+package-lock.json
+
 # Cache / Temp
 *.tmp
 *.swp
@@ -48,5 +52,9 @@ dist-scripts/temp/
 # Keep Gradle wrapper scripts
 !gradlew.bat
 
+# Dev scripts / temp files
+git_status.txt
+temp_*.txt
+temp_*.py
 
 .devin/rules/

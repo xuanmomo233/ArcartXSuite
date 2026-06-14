@@ -1,4 +1,4 @@
-﻿# AXS 资源说明
+# AXS 资源说明
 # 用途: EntityTracker 排行榜奖励管理主界面，展示奖励配置列表、手动发放和调度状态。
 # 前置依赖: ArcartX；EntityTracker 模块排行榜奖励功能启用后自动注册。
 # 打开方式: /axs entitytracker rewards manage
@@ -32,14 +32,14 @@ ui:
       var.resultMsg = packet['message']
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
       width: 1920
       height: 1080
     children:
-      root:
+      根面板:
         type: Texture
         attribute:
           point: ~middle_center
@@ -59,7 +59,7 @@ controls:
             color: ~0,0,0,120
         children:
           # 标题栏
-          header:
+          标题栏:
             type: Texture
             attribute:
               x: 0
@@ -70,14 +70,14 @@ controls:
               shape: ~round_rect
               radius: 16
             children:
-              title_text:
+              标题文字:
                 type: Text
                 attribute:
                   x: 28
                   y: 14
                   fontSize: 42
                   texts: "~&6&l排行榜奖励管理"
-              btn_weekly:
+              周奖励按钮:
                 type: Texture
                 attribute:
                   x: 520
@@ -91,13 +91,13 @@ controls:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', 'weekly')
                 children:
-                  btn_weekly_text:
+                  周奖励文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       fontSize: 28
                       texts: "~&f周奖励"
-              btn_monthly:
+              月奖励按钮:
                 type: Texture
                 attribute:
                   x: 654
@@ -111,13 +111,13 @@ controls:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', 'monthly')
                 children:
-                  btn_monthly_text:
+                  月奖励文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       fontSize: 28
                       texts: "~&f月奖励"
-              btn_status:
+              调度状态按钮:
                 type: Texture
                 attribute:
                   x: 788
@@ -131,13 +131,13 @@ controls:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'scheduler-status')
                 children:
-                  btn_status_text:
+                  调度状态文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       fontSize: 28
                       texts: "~&f调度状态"
-              btn_history:
+              发放历史按钮:
                 type: Texture
                 attribute:
                   x: 942
@@ -151,13 +151,13 @@ controls:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'open-history')
                 children:
-                  btn_history_text:
+                  发放历史文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       fontSize: 28
                       texts: "~&f发放历史"
-              btn_distribute:
+              手动发放按钮:
                 type: Texture
                 attribute:
                   x: 1076
@@ -171,7 +171,7 @@ controls:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'manual-distribute', var.rewardType)
                 children:
-                  btn_distribute_text:
+                  手动发放文字:
                     type: Text
                     attribute:
                       point: ~middle_center
@@ -179,7 +179,7 @@ controls:
                       texts: "~&f手动发放"
 
           # 结果提示
-          result_bar:
+          结果提示:
             type: Text
             attribute:
               x: 28
@@ -188,7 +188,17 @@ controls:
               texts: "~&e{var.resultMsg}"
 
           # 配置列表区域
-          list_area:
+          列表滑块:
+            type: Texture
+            val: 列表滑块
+            attribute:
+              x: 1174
+              y: 84
+              width: 6
+              height: 50
+              normal: ~120,120,120,200
+              maxDragY: 538
+          列表滚动区:
             type: Scroll
             attribute:
               x: 20
@@ -197,8 +207,17 @@ controls:
               height: 588
               visible: |-
                 var.view == 'list' || var.view == null
+              moveY: "self.parent['列表滑块'].getDragYRatio()"
+            action:
+              wheel: |-
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['列表滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['列表滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
             children:
-              list_header:
+              列表表头:
                 type: Texture
                 attribute:
                   x: 0
@@ -209,49 +228,49 @@ controls:
                   shape: ~round_rect
                   radius: 6
                 children:
-                  col_type:
+                  类型列:
                     type: Text
                     attribute:
                       x: 16
                       y: 8
                       fontSize: 28
                       texts: "~&b排行类型"
-                  col_range:
+                  范围列:
                     type: Text
                     attribute:
                       x: 240
                       y: 8
                       fontSize: 28
                       texts: "~&b名次范围"
-                  col_name:
+                  名称列:
                     type: Text
                     attribute:
                       x: 420
                       y: 8
                       fontSize: 28
                       texts: "~&b奖励名称"
-                  col_reward:
+                  奖励列:
                     type: Text
                     attribute:
                       x: 680
                       y: 8
                       fontSize: 28
                       texts: "~&b奖励内容"
-                  col_status:
+                  状态列:
                     type: Text
                     attribute:
                       x: 960
                       y: 8
                       fontSize: 28
                       texts: "~&b状态"
-                  col_action:
+                  操作列:
                     type: Text
                     attribute:
                       x: 1080
                       y: 8
                       fontSize: 28
                       texts: "~&b操作"
-              list_body:
+              列表内容:
                 type: VGrid
                 attribute:
                   x: 0
@@ -260,7 +279,7 @@ controls:
                   eachHeight: 52
                   dataList: var.configs
                 children:
-                  row_bg:
+                  行背景:
                     type: Texture
                     attribute:
                       width: 1160
@@ -269,42 +288,42 @@ controls:
                       shape: ~round_rect
                       radius: 6
                     children:
-                      cell_type:
+                      类型单元格:
                         type: Text
                         attribute:
                           x: 16
                           y: 10
                           fontSize: 26
                           texts: "~&f{each.rankingTypeDisplay}"
-                      cell_range:
+                      范围单元格:
                         type: Text
                         attribute:
                           x: 240
                           y: 10
                           fontSize: 26
                           texts: "~&7第{each.rankStart}-{each.rankEnd}名"
-                      cell_name:
+                      名称单元格:
                         type: Text
                         attribute:
                           x: 420
                           y: 10
                           fontSize: 26
                           texts: "~&e{each.rewardName}"
-                      cell_reward:
+                      奖励单元格:
                         type: Text
                         attribute:
                           x: 680
                           y: 10
                           fontSize: 24
                           texts: "~&a{each.rewardPreview}"
-                      cell_status:
+                      状态单元格:
                         type: Text
                         attribute:
                           x: 960
                           y: 10
                           fontSize: 26
                           texts: "~{each.statusIcon}"
-                      cell_toggle:
+                      切换按钮:
                         type: Texture
                         attribute:
                           x: 1060
@@ -318,7 +337,7 @@ controls:
                           click: |-
                             Packet.send('AXS_ENTITY_TRACKER_REWARD', 'toggle', each.id)
                         children:
-                          cell_toggle_text:
+                          切换文字:
                             type: Text
                             attribute:
                               point: ~middle_center
@@ -326,7 +345,7 @@ controls:
                               texts: "~&f切换"
 
           # 调度状态区域
-          status_area:
+          状态区:
             type: Texture
             attribute:
               x: 20
@@ -339,42 +358,42 @@ controls:
               shape: ~round_rect
               radius: 12
             children:
-              status_title:
+              状态标题:
                 type: Text
                 attribute:
                   x: 40
                   y: 20
                   fontSize: 36
                   texts: "~&6&l调度器状态"
-              weekly_status:
+              周奖励状态:
                 type: Text
                 attribute:
                   x: 40
                   y: 80
                   fontSize: 30
                   texts: "~&a周奖励任务: {var.weeklyRunning ? '&a运行中' : '&c已停止'}"
-              weekly_next:
+              周奖励下次:
                 type: Text
                 attribute:
                   x: 40
                   y: 130
                   fontSize: 28
                   texts: "~&7下次周奖励: &f{var.nextWeekly}"
-              monthly_status:
+              月奖励状态:
                 type: Text
                 attribute:
                   x: 40
                   y: 200
                   fontSize: 30
                   texts: "~&e月奖励任务: {var.monthlyRunning ? '&a运行中' : '&c已停止'}"
-              monthly_next:
+              月奖励下次:
                 type: Text
                 attribute:
                   x: 40
                   y: 250
                   fontSize: 28
                   texts: "~&7下次月奖励: &f{var.nextMonthly}"
-              btn_back_to_list:
+              返回列表按钮:
                 type: Texture
                 attribute:
                   x: 40
@@ -388,7 +407,7 @@ controls:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', var.rewardType)
                 children:
-                  btn_back_text:
+                  返回文字:
                     type: Text
                     attribute:
                       point: ~middle_center

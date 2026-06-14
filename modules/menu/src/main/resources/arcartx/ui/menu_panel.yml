@@ -47,7 +47,7 @@ ui:
       var.buttonRows = {}
       var.footerRows = {}
   action:
-    load: |-
+    open: |-
       var.packetId = 'AXS_MENU'
       var.menuId = ''
       var.layout = 'panel'
@@ -64,40 +64,30 @@ ui:
       var.footerRows = {}
       var.footerCount = 0
       var.maxButtonCount = 128
-      for(i in range(0, var.maxButtonCount)){
-        key = i.round
-        mb = val.button_rows['menu_button'].copy('menu_button' + key)
-        mb.entryKey = key
-      }
       var.maxFooterCount = 8
-      for(i in range(0, var.maxFooterCount)){
-        key = i.round
-        fb = val.footer_rows['footer_button'].copy('footer_button' + key)
-        fb.entryKey = key
-      }
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
       width: 1920
       height: 1080
     children:
-      backdrop:
+      背景遮罩:
         type: Texture
         attribute:
           point: ~stretch_all
           normal: ~Frosted:50;255,255,255,30
           alpha: 0.6
-      panel:
+      主面板:
         type: Canvas
         attribute:
           point: ~middle_center
           width: 980
           height: 760
         children:
-          shell:
+          外壳:
             type: Texture
             attribute:
               point: ~stretch_all
@@ -117,21 +107,21 @@ controls:
                 duration: 1200
                 color: ~255,255,255,110
                 width: 0.05
-          title:
+          标题:
             type: Text
             attribute:
               x: 36
               y: 28
               texts: "var.title"
               fontSize: 64
-          subtitle:
+          副标题:
             type: Text
             attribute:
               x: 36
               y: 82
               texts: "var.pageTitle + '  &7(' + (var.pageIndex + 1) + '/' + var.pageCount + ')'"
               fontSize: 42
-          divider:
+          分隔线:
             type: Texture
             attribute:
               x: 24
@@ -141,14 +131,24 @@ controls:
               normal: ~255,255,255,120
               shape: ~round_rect
               radius: 2
-          empty_hint:
+          空提示:
             type: Text
             attribute:
               point: ~middle_center
               visible: var.buttonCount <= 0
               texts: "~&7当前页没有可用按钮"
               fontSize: 42
-          button_scroll:
+          按钮滑块:
+            type: Texture
+            val: 按钮滑块
+            attribute:
+              x: 950
+              y: 140
+              width: 6
+              height: 50
+              normal: ~120,120,120,200
+              maxDragY: 470
+          按钮滚动区:
             type: Scroll
             attribute:
               x: 24
@@ -156,8 +156,17 @@ controls:
               width: 932
               height: 520
               point: ~top_left
+              moveY: "self.parent['按钮滑块'].getDragYRatio()"
+            action:
+              wheel: |-
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['按钮滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['按钮滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
             children:
-              button_grid:
+              按钮网格:
                 type: HGrid
                 attribute:
                   x: 20
@@ -167,11 +176,18 @@ controls:
                   spaceBetweenY: 24
                   point: ~top_center
                 children:
-                  button_rows:
+                  按钮行:
                     type: Canvas
                     val: button_rows
+                    action:
+                      create: |-
+                        for(i in range(0, var.maxButtonCount)){
+                          key = i.round
+                          mb = self['菜单按钮'].copy('菜单按钮' + key)
+                          mb.entryKey = key
+                        }
                     children:
-                      menu_button:
+                      菜单按钮:
                         type: Slot
                         attribute:
                           entryKey: 0
@@ -193,7 +209,7 @@ controls:
                               Packet.send(var.packetId, 'click', self.entry['id'])
                             }
                         children:
-                          icon:
+                          图标:
                             type: Slot
                             attribute:
                               slotType: ~Icon
@@ -211,7 +227,7 @@ controls:
                             action:
                               create: |-
                                 self.seticon()
-                          label:
+                          标签:
                             type: Text
                             attribute:
                               through: true
@@ -220,14 +236,14 @@ controls:
                               texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
                               center: true
                               fontSize: 42
-          nav_bar:
+          导航栏:
             type: HStack
             attribute:
               x: 36
               y: 680
               spaceBetween: 20
             children:
-              prev_btn:
+              上一页按钮:
                 type: Slot
                 attribute:
                   visible: var.hasPrev
@@ -240,7 +256,7 @@ controls:
                 action:
                   click: Packet.send(var.packetId, 'page', 'prev')
                 children:
-                  prev_text:
+                  上一页文字:
                     type: Text
                     attribute:
                       through: true
@@ -249,7 +265,7 @@ controls:
                       texts: "~&7上一页"
                       center: true
                       fontSize: 36
-              next_btn:
+              下一页按钮:
                 type: Slot
                 attribute:
                   visible: var.hasNext
@@ -262,7 +278,7 @@ controls:
                 action:
                   click: Packet.send(var.packetId, 'page', 'next')
                 children:
-                  next_text:
+                  下一页文字:
                     type: Text
                     attribute:
                       through: true
@@ -271,18 +287,25 @@ controls:
                       texts: "~&7下一页"
                       center: true
                       fontSize: 36
-          footer_bar:
+          页脚栏:
             type: HStack
             attribute:
               x: 520
               y: 680
               spaceBetween: 20
             children:
-              footer_rows:
+              页脚行:
                 type: Canvas
                 val: footer_rows
+                action:
+                  create: |-
+                    for(i in range(0, var.maxFooterCount)){
+                      key = i.round
+                      fb = self['页脚按钮'].copy('页脚按钮' + key)
+                      fb.entryKey = key
+                    }
                 children:
-                  footer_button:
+                  页脚按钮:
                     type: Slot
                     attribute:
                       entryKey: 0
@@ -306,7 +329,7 @@ controls:
                           }
                         }
                     children:
-                      footer_text:
+                      页脚文字:
                         type: Text
                         attribute:
                           through: true

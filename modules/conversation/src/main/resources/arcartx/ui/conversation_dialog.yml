@@ -1,4 +1,4 @@
-﻿# AXS 资源说明
+# AXS 资源说明
 # 用途: Conversation 模块默认对话 Menu，负责显示 NPC 正文与玩家回复。
 # 前置依赖: ArcartX、Chemdah、Adyeshach；Conversation 模块启用后会自动注册或导出。
 # 启用开关: config.yml -> modules.conversation.enabled + modules.conversation.password
@@ -76,27 +76,14 @@ ui:
       var.replyRows = {}
     keyPress: |-
       var.k = self.currentKeyPress
-      if(var.k == "1" && var.replyRows['r0000'] != null){
-        Chat.say("/session reply " + var.replyRows['r0000']['id'])
-      }elif(var.k == "2" && var.replyRows['r0001'] != null){
-        Chat.say("/session reply " + var.replyRows['r0001']['id'])
-      }elif(var.k == "3" && var.replyRows['r0002'] != null){
-        Chat.say("/session reply " + var.replyRows['r0002']['id'])
-      }elif(var.k == "4" && var.replyRows['r0003'] != null){
-        Chat.say("/session reply " + var.replyRows['r0003']['id'])
-      }elif(var.k == "5" && var.replyRows['r0004'] != null){
-        Chat.say("/session reply " + var.replyRows['r0004']['id'])
-      }elif(var.k == "6" && var.replyRows['r0005'] != null){
-        Chat.say("/session reply " + var.replyRows['r0005']['id'])
-      }elif(var.k == "7" && var.replyRows['r0006'] != null){
-        Chat.say("/session reply " + var.replyRows['r0006']['id'])
-      }elif(var.k == "8" && var.replyRows['r0007'] != null){
-        Chat.say("/session reply " + var.replyRows['r0007']['id'])
-      }elif(var.k == "9" && var.replyRows['r0008'] != null){
-        Chat.say("/session reply " + var.replyRows['r0008']['id'])
+      if(var.k >= "1" && var.k <= "9"){
+        var.rowKey = "r000" + (var.k - 1)
+        if(var.replyRows[var.rowKey] != null){
+          Chat.say("/session reply " + var.replyRows[var.rowKey]['id'])
+        }
       }
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
@@ -212,6 +199,17 @@ controls:
               visible: var.replyCount <= 0
               texts: "~&7当前没有可选回复"
               fontSize: 81
+          回复滑块:
+            type: Texture
+            val: 回复滑块
+            attribute:
+              point: ~top_right
+              x: -44
+              y: 78
+              width: 6
+              height: 30
+              normal: ~120,120,120,200
+              maxDragY: 218
           reply_scroll:
             type: Scroll
             attribute:
@@ -220,14 +218,14 @@ controls:
               y: 78
               width: 398
               height: 248
-              moveY: var.replyScrollRatio
+              moveY: "self.parent['回复滑块'].getDragYRatio()"
             action:
               wheel: |-
-                var.step = 0.16
-                if(self.wheelValue > 0){
-                  var.replyScrollRatio = Math.max(0, var.replyScrollRatio - var.step)
-                }elif(self.wheelValue < 0){
-                  var.replyScrollRatio = Math.min(1, var.replyScrollRatio + var.step)
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['回复滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['回复滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
               reply_stack:
@@ -236,526 +234,21 @@ controls:
                 attribute:
                   width: 394
                   spaceBetween: 8
+                action:
+                  create: |-
+                    for(i in range(0, var.replyCount)){
+                      key = "r000" + i.round
+                      ri = self['回复模板'].copy('reply_' + i.round)
+                      ri.entryKey = key
+                    }
                 children:
-                  reply_000:
+                  回复模板:
                     type: Texture
                     attribute:
-                      visible: "var.replyRows['r0000'] != null"
-                      entry: "var.replyRows['r0000'] != null ? var.replyRows['r0000'] : null"
-                      replyId: "var.replyRows['r0000'] != null ? var.replyRows['r0000']['id'] : ''"
-                      width: 394
-                      height: 42
-                      normal: ~150,150,150,200
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                    action:
-                      clickLeft: |-
-                        if(self.entry != null){
-                          if(self.entry['selected']){
-                            Chat.say("/session reply {self.replyId}")
-                          }else{
-                            Packet.send(var.packetId, 'select_reply', var.token, self.entry['id'])
-                          }
-                        }
-                    children:
-                      selected_overlay:
-                        type: Texture
-                        attribute:
-                          visible: "self.parent.entry != null ? self.parent.entry['selected'] : false"
-                          width: 394
-                          height: 42
-                          normal: ~200,200,200,200
-                          shape: ~round_rect
-                          radius: 10
-                          through: true
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~0,0,0,255
-                      reply_text:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 10
-                          y: 10
-                          texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
-                          fontSize: 49
-                          through: true
-                      reply_index:
-                        type: Text
-                        attribute:
-                          x: 300
-                          y: 12
-                          realtext: "self.parent.entry != null ? '&8选项：' + (self.parent.entry['index']+1).round() : ''"
-                          texts: "self.realtext"
-                          fontSize: 36
-                          through: true
-                  reply_001:
-                    type: Texture
-                    attribute:
-                      visible: "var.replyRows['r0001'] != null"
-                      entry: "var.replyRows['r0001'] != null ? var.replyRows['r0001'] : null"
-                      replyId: "var.replyRows['r0001'] != null ? var.replyRows['r0001']['id'] : ''"
-                      width: 394
-                      height: 42
-                      normal: ~150,150,150,200
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                    action:
-                      clickLeft: |-
-                        if(self.entry != null){
-                          if(self.entry['selected']){
-                            Chat.say("/session reply {self.replyId}")
-                          }else{
-                            Packet.send(var.packetId, 'select_reply', var.token, self.entry['id'])
-                          }
-                        }
-                    children:
-                      selected_overlay:
-                        type: Texture
-                        attribute:
-                          visible: "self.parent.entry != null ? self.parent.entry['selected'] : false"
-                          width: 394
-                          height: 42
-                          normal: ~200,200,200,200
-                          shape: ~round_rect
-                          radius: 10
-                          through: true
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~0,0,0,255
-                      reply_text:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 10
-                          y: 10
-                          texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
-                          fontSize: 49
-                          through: true
-                      reply_index:
-                        type: Text
-                        attribute:
-                          x: 300
-                          y: 12
-                          realtext: "self.parent.entry != null ? '&8选项：' + (self.parent.entry['index']+1).round() : ''"
-                          texts: "self.realtext"
-                          fontSize: 36
-                          through: true
-                  reply_002:
-                    type: Texture
-                    attribute:
-                      visible: "var.replyRows['r0002'] != null"
-                      entry: "var.replyRows['r0002'] != null ? var.replyRows['r0002'] : null"
-                      replyId: "var.replyRows['r0002'] != null ? var.replyRows['r0002']['id'] : ''"
-                      width: 394
-                      height: 42
-                      normal: ~150,150,150,200
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                    action:
-                      clickLeft: |-
-                        if(self.entry != null){
-                          if(self.entry['selected']){
-                            Chat.say("/session reply {self.replyId}")
-                          }else{
-                            Packet.send(var.packetId, 'select_reply', var.token, self.entry['id'])
-                          }
-                        }
-                    children:
-                      selected_overlay:
-                        type: Texture
-                        attribute:
-                          visible: "self.parent.entry != null ? self.parent.entry['selected'] : false"
-                          width: 394
-                          height: 42
-                          normal: ~200,200,200,200
-                          shape: ~round_rect
-                          radius: 10
-                          through: true
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~0,0,0,255
-                      reply_text:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 10
-                          y: 10
-                          texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
-                          fontSize: 49
-                          through: true
-                      reply_index:
-                        type: Text
-                        attribute:
-                          x: 300
-                          y: 12
-                          realtext: "self.parent.entry != null ? '&8选项：' + (self.parent.entry['index']+1).round() : ''"
-                          texts: "self.realtext"
-                          fontSize: 36
-                          through: true
-                  reply_003:
-                    type: Texture
-                    attribute:
-                      visible: "var.replyRows['r0003'] != null"
-                      entry: "var.replyRows['r0003'] != null ? var.replyRows['r0003'] : null"
-                      replyId: "var.replyRows['r0003'] != null ? var.replyRows['r0003']['id'] : ''"
-                      width: 394
-                      height: 42
-                      normal: ~150,150,150,200
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                    action:
-                      clickLeft: |-
-                        if(self.entry != null){
-                          if(self.entry['selected']){
-                            Chat.say("/session reply {self.replyId}")
-                          }else{
-                            Packet.send(var.packetId, 'select_reply', var.token, self.entry['id'])
-                          }
-                        }
-                    children:
-                      selected_overlay:
-                        type: Texture
-                        attribute:
-                          visible: "self.parent.entry != null ? self.parent.entry['selected'] : false"
-                          width: 394
-                          height: 42
-                          normal: ~200,200,200,200
-                          shape: ~round_rect
-                          radius: 10
-                          through: true
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~0,0,0,255
-                      reply_text:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 10
-                          y: 10
-                          texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
-                          fontSize: 49
-                          through: true
-                      reply_index:
-                        type: Text
-                        attribute:
-                          x: 300
-                          y: 12
-                          realtext: "self.parent.entry != null ? '&8选项：' + (self.parent.entry['index']+1).round() : ''"
-                          texts: "self.realtext"
-                          fontSize: 36
-                          through: true
-                  reply_004:
-                    type: Texture
-                    attribute:
-                      visible: "var.replyRows['r0004'] != null"
-                      entry: "var.replyRows['r0004'] != null ? var.replyRows['r0004'] : null"
-                      replyId: "var.replyRows['r0004'] != null ? var.replyRows['r0004']['id'] : ''"
-                      width: 394
-                      height: 42
-                      normal: ~150,150,150,200
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                    action:
-                      clickLeft: |-
-                        if(self.entry != null){
-                          if(self.entry['selected']){
-                            Chat.say("/session reply {self.replyId}")
-                          }else{
-                            Packet.send(var.packetId, 'select_reply', var.token, self.entry['id'])
-                          }
-                        }
-                    children:
-                      selected_overlay:
-                        type: Texture
-                        attribute:
-                          visible: "self.parent.entry != null ? self.parent.entry['selected'] : false"
-                          width: 394
-                          height: 42
-                          normal: ~200,200,200,200
-                          shape: ~round_rect
-                          radius: 10
-                          through: true
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~0,0,0,255
-                      reply_text:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 10
-                          y: 10
-                          texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
-                          fontSize: 49
-                          through: true
-                      reply_index:
-                        type: Text
-                        attribute:
-                          x: 300
-                          y: 12
-                          realtext: "self.parent.entry != null ? '&8选项：' + (self.parent.entry['index']+1).round() : ''"
-                          texts: "self.realtext"
-                          fontSize: 36
-                          through: true
-                  reply_005:
-                    type: Texture
-                    attribute:
-                      visible: "var.replyRows['r0005'] != null"
-                      entry: "var.replyRows['r0005'] != null ? var.replyRows['r0005'] : null"
-                      replyId: "var.replyRows['r0005'] != null ? var.replyRows['r0005']['id'] : ''"
-                      width: 394
-                      height: 42
-                      normal: ~150,150,150,200
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                    action:
-                      clickLeft: |-
-                        if(self.entry != null){
-                          if(self.entry['selected']){
-                            Chat.say("/session reply {self.replyId}")
-                          }else{
-                            Packet.send(var.packetId, 'select_reply', var.token, self.entry['id'])
-                          }
-                        }
-                    children:
-                      selected_overlay:
-                        type: Texture
-                        attribute:
-                          visible: "self.parent.entry != null ? self.parent.entry['selected'] : false"
-                          width: 394
-                          height: 42
-                          normal: ~200,200,200,200
-                          shape: ~round_rect
-                          radius: 10
-                          through: true
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~0,0,0,255
-                      reply_text:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 10
-                          y: 10
-                          texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
-                          fontSize: 49
-                          through: true
-                      reply_index:
-                        type: Text
-                        attribute:
-                          x: 300
-                          y: 12
-                          realtext: "self.parent.entry != null ? '&8选项：' + (self.parent.entry['index']+1).round() : ''"
-                          texts: "self.realtext"
-                          fontSize: 36
-                          through: true
-                  reply_006:
-                    type: Texture
-                    attribute:
-                      visible: "var.replyRows['r0006'] != null"
-                      entry: "var.replyRows['r0006'] != null ? var.replyRows['r0006'] : null"
-                      replyId: "var.replyRows['r0006'] != null ? var.replyRows['r0006']['id'] : ''"
-                      width: 394
-                      height: 42
-                      normal: ~150,150,150,200
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                    action:
-                      clickLeft: |-
-                        if(self.entry != null){
-                          if(self.entry['selected']){
-                            Chat.say("/session reply {self.replyId}")
-                          }else{
-                            Packet.send(var.packetId, 'select_reply', var.token, self.entry['id'])
-                          }
-                        }
-                    children:
-                      selected_overlay:
-                        type: Texture
-                        attribute:
-                          visible: "self.parent.entry != null ? self.parent.entry['selected'] : false"
-                          width: 394
-                          height: 42
-                          normal: ~200,200,200,200
-                          shape: ~round_rect
-                          radius: 10
-                          through: true
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~0,0,0,255
-                      reply_text:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 10
-                          y: 10
-                          texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
-                          fontSize: 49
-                          through: true
-                      reply_index:
-                        type: Text
-                        attribute:
-                          x: 300
-                          y: 12
-                          realtext: "self.parent.entry != null ? '&8选项：' + (self.parent.entry['index']+1).round() : ''"
-                          texts: "self.realtext"
-                          fontSize: 36
-                          through: true
-                  reply_007:
-                    type: Texture
-                    attribute:
-                      visible: "var.replyRows['r0007'] != null"
-                      entry: "var.replyRows['r0007'] != null ? var.replyRows['r0007'] : null"
-                      replyId: "var.replyRows['r0007'] != null ? var.replyRows['r0007']['id'] : ''"
-                      width: 394
-                      height: 42
-                      normal: ~150,150,150,200
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                    action:
-                      clickLeft: |-
-                        if(self.entry != null){
-                          if(self.entry['selected']){
-                            Chat.say("/session reply {self.replyId}")
-                          }else{
-                            Packet.send(var.packetId, 'select_reply', var.token, self.entry['id'])
-                          }
-                        }
-                    children:
-                      selected_overlay:
-                        type: Texture
-                        attribute:
-                          visible: "self.parent.entry != null ? self.parent.entry['selected'] : false"
-                          width: 394
-                          height: 42
-                          normal: ~200,200,200,200
-                          shape: ~round_rect
-                          radius: 10
-                          through: true
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~0,0,0,255
-                      reply_text:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 10
-                          y: 10
-                          texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
-                          fontSize: 49
-                          through: true
-                      reply_index:
-                        type: Text
-                        attribute:
-                          x: 300
-                          y: 12
-                          realtext: "self.parent.entry != null ? '&8选项：' + (self.parent.entry['index']+1).round() : ''"
-                          texts: "self.realtext"
-                          fontSize: 36
-                          through: true
-                  reply_008:
-                    type: Texture
-                    attribute:
-                      visible: "var.replyRows['r0008'] != null"
-                      entry: "var.replyRows['r0008'] != null ? var.replyRows['r0008'] : null"
-                      replyId: "var.replyRows['r0008'] != null ? var.replyRows['r0008']['id'] : ''"
-                      width: 394
-                      height: 42
-                      normal: ~150,150,150,200
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                    action:
-                      clickLeft: |-
-                        if(self.entry != null){
-                          if(self.entry['selected']){
-                            Chat.say("/session reply {self.replyId}")
-                          }else{
-                            Packet.send(var.packetId, 'select_reply', var.token, self.entry['id'])
-                          }
-                        }
-                    children:
-                      selected_overlay:
-                        type: Texture
-                        attribute:
-                          visible: "self.parent.entry != null ? self.parent.entry['selected'] : false"
-                          width: 394
-                          height: 42
-                          normal: ~200,200,200,200
-                          shape: ~round_rect
-                          radius: 10
-                          through: true
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~0,0,0,255
-                      reply_text:
-                        type: Text
-                        attribute:
-                          point: ~middle_left
-                          x: 10
-                          y: 10
-                          texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
-                          fontSize: 49
-                          through: true
-                      reply_index:
-                        type: Text
-                        attribute:
-                          x: 300
-                          y: 12
-                          realtext: "self.parent.entry != null ? '&8选项：' + (self.parent.entry['index']+1).round() : ''"
-                          texts: "self.realtext"
-                          fontSize: 36
-                          through: true
-                  reply_009:
-                    type: Texture
-                    attribute:
-                      visible: "var.replyRows['r0009'] != null"
-                      entry: "var.replyRows['r0009'] != null ? var.replyRows['r0009'] : null"
-                      replyId: "var.replyRows['r0009'] != null ? var.replyRows['r0009']['id'] : ''"
+                      entryKey: "r0000"
+                      visible: "var.replyRows[self.entryKey] != null"
+                      entry: "var.replyRows[self.entryKey] != null ? var.replyRows[self.entryKey] : null"
+                      replyId: "var.replyRows[self.entryKey] != null ? var.replyRows[self.entryKey]['id'] : ''"
                       width: 394
                       height: 42
                       normal: ~150,150,150,200

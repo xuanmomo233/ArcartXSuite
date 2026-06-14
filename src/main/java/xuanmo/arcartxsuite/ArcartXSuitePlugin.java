@@ -461,10 +461,6 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         return packetBridge == null ? "unavailable" : packetBridge.describePacketMode();
     }
 
-    public boolean isPasswordGateLocked() {
-        return false;
-    }
-
     // ─── ClientPacketGuard ───────────────────────────────────
 
     private void reloadClientPacketGuard() {

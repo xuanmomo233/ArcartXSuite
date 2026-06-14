@@ -25,7 +25,7 @@ ui:
       var.worldWeather = packet['worldWeather']
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
@@ -207,6 +207,16 @@ controls:
                       y: 0
                       fontSize: 36
                       texts: '&6&l在线玩家'
+                  在线玩家滑块:
+                    type: Texture
+                    val: 在线玩家滑块
+                    attribute:
+                      x: 794
+                      y: 46
+                      width: 6
+                      height: 50
+                      normal: ~120,120,120,200
+                      maxDragY: 460
                   players_scroll:
                     type: Scroll
                     attribute:
@@ -214,9 +224,15 @@ controls:
                       y: 46
                       width: 800
                       height: 510
+                      moveY: "self.parent['在线玩家滑块'].getDragYRatio()"
                     action:
                       wheel: |-
-                        self.moveY(self.wheelValue * 40)
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['在线玩家滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['在线玩家滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
                     children:
                       players_list:
                         val: player_data
@@ -420,6 +436,16 @@ controls:
                       visible: |-
                         var.banCount == '0'
                       texts: '&8暂无封禁记录'
+                  封禁滑块:
+                    type: Texture
+                    val: 封禁滑块
+                    attribute:
+                      x: 794
+                      y: 50
+                      width: 6
+                      height: 50
+                      normal: ~120,120,120,200
+                      maxDragY: 460
                   bans_scroll:
                     type: Scroll
                     attribute:
@@ -427,9 +453,15 @@ controls:
                       y: 50
                       width: 800
                       height: 510
+                      moveY: "self.parent['封禁滑块'].getDragYRatio()"
                     action:
                       wheel: |-
-                        self.moveY(self.wheelValue * 40)
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['封禁滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['封禁滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
                     children:
                       bans_list:
                         val: ban_data
@@ -744,6 +776,16 @@ controls:
                           center: true
                           fontSize: 36
                           texts: '&f+ 新建传送点'
+                  传送点滑块:
+                    type: Texture
+                    val: 传送点滑块
+                    attribute:
+                      x: 794
+                      y: 50
+                      width: 6
+                      height: 50
+                      normal: ~120,120,120,200
+                      maxDragY: 460
                   warps_scroll:
                     type: Scroll
                     attribute:
@@ -751,9 +793,15 @@ controls:
                       y: 50
                       width: 800
                       height: 510
+                      moveY: "self.parent['传送点滑块'].getDragYRatio()"
                     action:
                       wheel: |-
-                        self.moveY(self.wheelValue * 40)
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['传送点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['传送点滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
                     children:
                       warps_list:
                         val: warp_data

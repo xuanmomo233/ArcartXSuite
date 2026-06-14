@@ -58,14 +58,14 @@ ui:
       var.hasNav = false
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
       width: 1920
       height: 1080
     children:
-      root:
+      任务面板:
         type: Canvas
         attribute:
           point: ~top_left
@@ -81,16 +81,14 @@ controls:
             x: -440
             y: 0
         children:
-          # 背景面板
-          bg:
+          背景:
             type: Texture
             attribute:
               point: ~stretch_all
               normal: ~12,12,18,210
               shape: ~round_rect
               radius: 16
-          # 左侧金色强调竖条
-          accent_bar:
+          强调条:
             type: Texture
             attribute:
               point: ~top_left
@@ -101,8 +99,7 @@ controls:
               normal: ~248,202,83,255
               shape: ~round_rect
               radius: 4
-          # 标题区域
-          quest_icon:
+          任务图标:
             type: Text
             attribute:
               point: ~top_left
@@ -111,7 +108,7 @@ controls:
               texts: "~&6⬡"
               fontSize: 20
               shadow: false
-          quest_name:
+          任务名称:
             type: Text
             attribute:
               point: ~top_left
@@ -121,8 +118,7 @@ controls:
               texts: "'&e&l' + var.questName"
               fontSize: 18
               shadow: false
-          # 进度条背景
-          progress_bg:
+          进度条背景:
             type: Texture
             attribute:
               point: ~top_left
@@ -133,8 +129,7 @@ controls:
               normal: ~40,40,50,200
               shape: ~round_rect
               radius: 8
-          # 进度条填充
-          progress_fill:
+          进度条填充:
             type: Texture
             attribute:
               point: ~top_left
@@ -145,8 +140,7 @@ controls:
               normal: ~120,220,80,230
               shape: ~round_rect
               radius: 8
-          # 进度文字
-          progress_text:
+          进度文字:
             type: Text
             attribute:
               point: ~top_left
@@ -157,8 +151,7 @@ controls:
               fontSize: 12
               shadow: false
               center: true
-          # 分隔线
-          divider1:
+          上分隔线:
             type: Texture
             attribute:
               point: ~top_left
@@ -167,8 +160,7 @@ controls:
               width: 388
               height: 1
               normal: ~255,255,255,40
-          # 任务目标列表（最多 3 条）
-          task_list:
+          任务列表:
             type: List
             attribute:
               point: ~top_left
@@ -181,14 +173,14 @@ controls:
               source: var.tasks
               count: var.taskCount
             entryControls:
-              row:
+              行:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   width: 388
                   height: 66
                 children:
-                  status_icon:
+                  状态图标:
                     type: Text
                     attribute:
                       point: ~top_left
@@ -197,7 +189,7 @@ controls:
                       texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&a✓' : '&f◈') : ''"
                       fontSize: 16
                       shadow: false
-                  task_text:
+                  任务文字:
                     type: Text
                     attribute:
                       point: ~top_left
@@ -207,7 +199,7 @@ controls:
                       texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&7&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : ''"
                       fontSize: 14
                       shadow: false
-                  task_status:
+                  任务状态:
                     type: Text
                     attribute:
                       point: ~top_right
@@ -216,7 +208,7 @@ controls:
                       texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&a已完成' : '&e进行中') : ''"
                       fontSize: 12
                       shadow: false
-                  row_divider:
+                  行分隔线:
                     type: Texture
                     attribute:
                       point: ~bottom_left
@@ -225,8 +217,7 @@ controls:
                       width: 372
                       height: 1
                       normal: ~255,255,255,20
-          # 导航坐标区域
-          divider2:
+          下分隔线:
             type: Texture
             attribute:
               point: ~bottom_left
@@ -236,7 +227,7 @@ controls:
               height: 1
               normal: ~255,255,255,40
               visible: var.hasNav
-          nav_icon:
+          导航图标:
             type: Text
             attribute:
               point: ~bottom_left
@@ -246,7 +237,7 @@ controls:
               fontSize: 14
               shadow: false
               visible: var.hasNav
-          nav_coords:
+          导航坐标:
             type: Text
             attribute:
               point: ~bottom_left
@@ -257,8 +248,7 @@ controls:
               fontSize: 13
               shadow: false
               visible: var.hasNav
-          # 关闭按钮
-          close_btn:
+          关闭按钮:
             type: Texture
             attribute:
               point: ~top_right
@@ -273,7 +263,7 @@ controls:
               clickLeft: |-
                 Packet.send(var.packetId, 'clear_track')
             children:
-              close_text:
+              关闭文字:
                 type: Text
                 attribute:
                   point: ~middle_center

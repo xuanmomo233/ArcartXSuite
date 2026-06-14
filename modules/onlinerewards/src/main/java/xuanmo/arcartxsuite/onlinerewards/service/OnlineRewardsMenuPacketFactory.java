@@ -53,6 +53,7 @@ public final class OnlineRewardsMenuPacketFactory {
         payload.put("selectedActionEnabled", selectedActionEnabled(configuration, snapshot, calendarView));
         payload.put("rewardRows", buildRewardRows(configuration, state));
         payload.put("signInRewardRows", buildSignInRewardRows(configuration));
+        payload.put("calendarCount", calendarView.month().lengthOfMonth());
         payload.put("calendarRows", buildCalendarRows(calendarView));
         payload.put("selectedRewardRows", buildSelectedRewardRows(calendarView));
         return payload;
@@ -98,7 +99,7 @@ public final class OnlineRewardsMenuPacketFactory {
             row.put("rewardText", reward.rewardText().isBlank()
                 ? rewardSummary(reward.commands().size(), reward.mailPresetIds().size())
                 : reward.rewardText());
-            rows.put(rowKey(index), row);
+            rows.put(Integer.toString(index), row);
         }
         return rows;
     }
@@ -225,7 +226,7 @@ public final class OnlineRewardsMenuPacketFactory {
             row.put("title", reward.title());
             row.put("trigger", reward.trigger());
             row.put("rewardText", reward.rewardText());
-            rows.put(Integer.toString(index + 1), row);
+            rows.put(Integer.toString(index), row);
         }
         return rows;
     }

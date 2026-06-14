@@ -1,0 +1,464 @@
+# ── 全球市场 · 拍卖行上架 ──────────────────────────────
+# 左侧背包选择 → 右侧填写上架信息 → 确认上架
+# packetId: AXS_MARKET
+
+ui:
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.backpackItems = packet['backpackItems']
+      var.itemJsons = {}
+      for(key in var.backpackItems.keys()){
+        json = packet['itemJson' + key]
+        if(json != null && json != ''){
+          var.itemJsons[key] = json
+        } else {
+          var.itemJsons[key] = var.emptyItemJson
+        }
+      }
+      for(i in range(0, var.maxBackpackCount)){
+        key = i.round
+        slot = val.背包网格['背包槽' + key]
+        if(slot != null){
+          slot.seticon()
+        }
+      }
+      if(var.selectedSlot != null){
+        preview = val.信息面板['预览槽']
+        if(preview != null){
+          preview.seticon()
+        }
+      }
+    update: |-
+      var.backpackItems = packet['backpackItems']
+      var.itemJsons = {}
+      for(key in var.backpackItems.keys()){
+        json = packet['itemJson' + key]
+        if(json != null && json != ''){
+          var.itemJsons[key] = json
+        } else {
+          var.itemJsons[key] = var.emptyItemJson
+        }
+      }
+      for(i in range(0, var.maxBackpackCount)){
+        key = i.round
+        slot = val.背包网格['背包槽' + key]
+        if(slot != null){
+          slot.seticon()
+        }
+      }
+      if(var.selectedSlot != null){
+        preview = val.信息面板['预览槽']
+        if(preview != null){
+          preview.seticon()
+        }
+      }
+    load: |-
+      var.packetId = 'AXS_MARKET'
+      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      var.maxBackpackCount = 36
+      var.selectedSlot = null
+      var.selectedPrice = ''
+      var.selectedMessage = ''
+      var.selectedDuration = 86400
+    open: |-
+      Packet.send(var.packetId, 'auction_sell_open')
+
+controls:
+  根:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+    children:
+      背景遮罩:
+        type: Texture
+        attribute:
+          x: 0
+          y: 0
+          width: 1920
+          height: 1080
+          normal: ~0,0,0,180
+        action:
+          clickLeft: |-
+            Screen.close()
+
+      主面板:
+        type: Texture
+        attribute:
+          x: 350
+          y: 180
+          width: 1220
+          height: 720
+          normal: ~30,30,35,240
+          shape: ~round_rect
+          radius: 24
+        effect:
+          stroke:
+            width: 2
+            color: ~80,180,255,80
+        children:
+          标题:
+            type: Text
+            attribute:
+              x: 40
+              y: 24
+              texts: "&f物品上架"
+              fontSize: 42
+              through: true
+
+          关闭按钮:
+            type: Texture
+            attribute:
+              x: 1140
+              y: 16
+              width: 56
+              height: 56
+              normal: ~65,65,75,220
+              hover: ~Frosted:0;255,100,100,230
+              shape: ~round_rect
+              radius: 14
+              texts: "&cX"
+              center: true
+              fontSize: 32
+            action:
+              clickLeft: |-
+                Screen.close()
+            effect:
+              stroke:
+                width: 2
+                color: ~255,120,120,120
+
+          # ── 左侧背包选择区 ──────────────────────────────
+          背包面板:
+            type: Texture
+            attribute:
+              x: 40
+              y: 80
+              width: 560
+              height: 610
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 24
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            children:
+              背包标题:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 16
+                  texts: "&f选择背包物品"
+                  fontSize: 36
+                  through: true
+
+              背包网格:
+                type: HGrid
+                val: 背包网格
+                attribute:
+                  x: 20
+                  y: 60
+                  width: 520
+                  height: 520
+                  column: 6
+                  spaceBetweenX: 10
+                  spaceBetweenY: 10
+                action:
+                  create: |-
+                    for(i in range(0, var.maxBackpackCount)){
+                      key = i.round
+                      slot = self['背包槽'].copy('背包槽' + key)
+                      slot.entryKey = key
+                      slot.id = key
+                    }
+                children:
+                  背包槽:
+                    type: Slot
+                    attribute:
+                      id: 0
+                      entryKey: 0
+                      slotType: ~Backpack
+                      itemScale: 0.72
+                      width: 76
+                      height: 76
+                      normal: "self.entryKey == var.selectedSlot ? '120,190,255,255' : 'Frosted:0;95,95,95,255'"
+                      hover: "~Frosted:0;255,255,255,255"
+                      shape: ~round_rect
+                      radius: 14
+                      lock: true
+                      through: false
+                      seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
+                    action:
+                      clickLeft: |-
+                        entry = var.backpackItems[self.entryKey + '']
+                        if(entry != null && entry['hasItem']){
+                          if(var.selectedSlot == self.entryKey){
+                            var.selectedSlot = null
+                          } else {
+                            var.selectedSlot = self.entryKey
+                          }
+                          preview = val.信息面板['预览槽']
+                          if(preview != null){
+                            preview.seticon()
+                          }
+                        }
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+
+          # ── 右侧上架信息区 ──────────────────────────────
+          信息面板:
+            type: Texture
+            val: 信息面板
+            attribute:
+              x: 620
+              y: 80
+              width: 560
+              height: 610
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 24
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            children:
+              信息标题:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 16
+                  texts: "&f上架信息"
+                  fontSize: 36
+                  through: true
+
+              预览槽:
+                type: Slot
+                attribute:
+                  slotType: ~Icon
+                  itemScale: 0.8
+                  x: 20
+                  y: 64
+                  width: 80
+                  height: 80
+                  normal: ~45,45,55,200
+                  shape: ~round_rect
+                  radius: 14
+                  through: true
+                  seticon: "var.selectedSlot != null ? self.setItemIcon(var.itemJsons[var.selectedSlot]) : self.setItemIcon(var.emptyItemJson)"
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+
+              预览物品名:
+                type: Text
+                attribute:
+                  x: 120
+                  y: 72
+                  width: 400
+                  texts: "var.selectedSlot != null && var.backpackItems[var.selectedSlot + ''] != null ? '&f' + var.backpackItems[var.selectedSlot + '']['name'] : '&7未选择物品'"
+                  fontSize: 32
+                  through: true
+
+              价格标签:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 170
+                  texts: "&f起拍价格"
+                  fontSize: 30
+                  through: true
+
+              价格输入框:
+                type: TextBox
+                attribute:
+                  x: 20
+                  y: 210
+                  width: 240
+                  height: 42
+                  length: 12
+                  emptyText: ~输入价格...
+                  fontSize: 28
+                  background: ~60,60,70,200
+                  shape: ~round_rect
+                  radius: 10
+                action:
+                  textChange: |-
+                    var.selectedPrice = self.getContent()
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,80
+
+              留言标签:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 280
+                  texts: "&f物品留言"
+                  fontSize: 30
+                  through: true
+
+              留言输入框:
+                type: TextBox
+                attribute:
+                  x: 20
+                  y: 320
+                  width: 500
+                  height: 42
+                  length: 64
+                  emptyText: ~输入留言...
+                  fontSize: 28
+                  background: ~60,60,70,200
+                  shape: ~round_rect
+                  radius: 10
+                action:
+                  textChange: |-
+                    var.selectedMessage = self.getContent()
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,80
+
+              时长标签:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 390
+                  texts: "&f上架时长"
+                  fontSize: 30
+                  through: true
+
+              时长1天:
+                type: Texture
+                attribute:
+                  x: 20
+                  y: 430
+                  width: 120
+                  height: 42
+                  normal: "var.selectedDuration == 86400 ? '80,180,255,230' : '65,65,75,200'"
+                  hover: ~Frosted:0;255,255,255,180
+                  shape: ~round_rect
+                  radius: 10
+                  texts: "&f1天"
+                  center: true
+                  fontSize: 26
+                action:
+                  clickLeft: |-
+                    var.selectedDuration = 86400
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,120
+
+              时长3天:
+                type: Texture
+                attribute:
+                  x: 155
+                  y: 430
+                  width: 120
+                  height: 42
+                  normal: "var.selectedDuration == 259200 ? '80,180,255,230' : '65,65,75,200'"
+                  hover: ~Frosted:0;255,255,255,180
+                  shape: ~round_rect
+                  radius: 10
+                  texts: "&f3天"
+                  center: true
+                  fontSize: 26
+                action:
+                  clickLeft: |-
+                    var.selectedDuration = 259200
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,120
+
+              时长7天:
+                type: Texture
+                attribute:
+                  x: 290
+                  y: 430
+                  width: 120
+                  height: 42
+                  normal: "var.selectedDuration == 604800 ? '80,180,255,230' : '65,65,75,200'"
+                  hover: ~Frosted:0;255,255,255,180
+                  shape: ~round_rect
+                  radius: 10
+                  texts: "&f7天"
+                  center: true
+                  fontSize: 26
+                action:
+                  clickLeft: |-
+                    var.selectedDuration = 604800
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~80,180,255,120
+
+              确认上架按钮:
+                type: Texture
+                attribute:
+                  x: 160
+                  y: 520
+                  width: 240
+                  height: 56
+                  normal: ~60,180,100,200
+                  hover: ~Frosted:0;80,220,120,230
+                  shape: ~round_rect
+                  radius: 14
+                action:
+                  clickLeft: |-
+                    if(var.selectedSlot == null){
+                      return
+                    }
+                    if(var.selectedPrice == ''){
+                      return
+                    }
+                    Packet.send(var.packetId, 'auction_list_create', var.selectedSlot + '', var.selectedPrice, var.selectedMessage, var.selectedDuration + '')
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~80,255,140,120
+                children:
+                  按钮文字:
+                    type: Text
+                    attribute:
+                      x: 120
+                      y: 14
+                      through: true
+                      center: true
+                      fontSize: 32
+                      texts: "&f确认上架"
+
+              返回按钮:
+                type: Texture
+                attribute:
+                  x: 20
+                  y: 520
+                  width: 120
+                  height: 56
+                  normal: ~65,65,75,220
+                  hover: ~Frosted:0;255,255,255,180
+                  shape: ~round_rect
+                  radius: 14
+                action:
+                  clickLeft: |-
+                    Screen.close()
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~80,180,255,120
+                children:
+                  返回文字:
+                    type: Text
+                    attribute:
+                      x: 60
+                      y: 14
+                      through: true
+                      center: true
+                      fontSize: 32
+                      texts: "&f返回"

@@ -49,14 +49,14 @@ ui:
       }
 
 controls:
-  root:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
       width: 1920
       height: 1080
     children:
-      announcer_background:
+      公告背景:
         type: Texture
         attribute:
           point: ~horizontal_stretch_top
@@ -65,7 +65,7 @@ controls:
           height: 72
           normal: ~Frosted:30;95,95,95,220
           visible: var.displayVisible && var.currentText != ''
-      announcer_click:
+      公告点击区:
         type: Canvas
         attribute:
           point: ~top_center
@@ -78,7 +78,7 @@ controls:
         action:
           clickLeft: |-
             Packet.send("AXS_announcer_click", var.currentEntryId)
-      announcement_text:
+      公告文字:
         type: Text
         attribute:
           point: ~top_left

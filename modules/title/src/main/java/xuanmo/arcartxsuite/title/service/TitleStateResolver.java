@@ -20,7 +20,7 @@ public final class TitleStateResolver {
     public static ResolvedTitleState resolve(PlayerTitleState state, TitleModuleConfiguration configuration, Instant now) {
         PlayerTitleState sanitized = state == null ? null : state.sanitize(now);
         if (sanitized == null) {
-            return new ResolvedTitleState(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), List.of(), List.of(), List.of(), 0, 0, Map.of(), Map.of(), Map.of(), List.of());
+            return new ResolvedTitleState(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), List.of(), List.of(), List.of(), 0, 0, Map.of(), Map.of(), Map.of(), List.of(), null);
         }
 
         LinkedHashMap<String, Double> collectionAttributes = new LinkedHashMap<>();
@@ -91,7 +91,8 @@ public final class TitleStateResolver {
             setCompletionCounts,
             setActiveMap,
             setBonusAttributes,
-            TitleTextFormats.toSourceLines(setBonusAttributes, setBonusAttributeLines)
+            TitleTextFormats.toSourceLines(setBonusAttributes, setBonusAttributeLines),
+            null
         );
     }
 

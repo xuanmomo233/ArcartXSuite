@@ -1,0 +1,93 @@
+name: Build Native Library
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'native/**'
+  pull_request:
+    paths:
+      - 'native/**'
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libssl-dev default-jdk-headless
+
+      - name: Build native library
+        run: |
+          cd native
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-linux
+          path: src/main/resources/native/libaxs-native.so
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Install vcpkg & OpenSSL
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+          C:\vcpkg\bootstrap-vcpkg.bat
+          C:\vcpkg\vcpkg.exe install openssl:x64-windows-static
+        shell: cmd
+
+      - name: Build native library
+        run: |
+          cd native
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
+          cmake --build build --config Release
+        shell: cmd
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-windows
+          path: src/main/resources/native/axs-native.dll
+
+  build-gradle:
+    runs-on: ubuntu-latest
+    needs: [build-linux]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Download Linux native artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: native-linux
+          path: src/main/resources/native/
+
+      - name: Build Gradle project
+        run: ./gradlew.bat build
+        shell: bash
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: axs-jar
+          path: '*/build/libs/*.jar'

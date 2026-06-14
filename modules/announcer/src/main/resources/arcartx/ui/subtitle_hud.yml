@@ -31,14 +31,14 @@
       var.subtitleAnimation = Lerp(0, 0, 1)
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
       width: 1920
       height: 1080
     children:
-      subtitle_panel:
+      字幕面板:
         type: Canvas
         attribute:
           point: ~middle_center
@@ -48,7 +48,7 @@ controls:
           height: 72
           visible: var.subtitleVisible
         children:
-          subtitle_background:
+          字幕背景:
             type: Texture
             attribute:
               point: ~middle_center
@@ -62,7 +62,7 @@ controls:
               stroke:
                 width: 3
                 color: ~0,0,0,255
-          subtitle_text:
+          字幕文字:
             type: Text
             attribute:
               point: ~middle_center

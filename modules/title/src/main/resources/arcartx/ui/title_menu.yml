@@ -1,4 +1,4 @@
-﻿ui:
+ui:
   background: false
   escClose: true
   closeDied: true
@@ -95,14 +95,14 @@
       var.displayTitleTabSuffix = packet['display_title_tab_suffix']
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
       width: 1920
       height: 1080
     children:
-      root:
+      根面板:
         type: Texture
         attribute:
           point: ~middle_center
@@ -125,28 +125,28 @@ controls:
             color: ~255,255,255,110
             width: 0.05
         children:
-          title:
+          标题:
             type: Text
             attribute:
               x: 48
               y: 34
               fontSize: 81
               texts: "~&f&l称号总览"
-          summary:
+          统计摘要:
             type: Text
             attribute:
               x: 48
               y: 86
               fontSize: 49
               texts: "'&0已拥有: &0' + var.ownedCount.round() + '   &0已隐藏: &0' + var.hiddenCount.round() + '   &0已装备: &0' + var.equippedSummary"
-          display_title_preview:
+          展示称号预览:
             type: Text
             attribute:
               x: 48
               y: 108
               fontSize: 49
               texts: "'&0总展示称号: &0' + (var.displayTitleName == '' ? '无' : var.displayTitleName)"
-          mode_all:
+          全部模式:
             type: Texture
             attribute:
               x: 48
@@ -166,7 +166,7 @@ controls:
             action:
               clickLeft: |-
                 var.filterMode = 'all'
-          mode_owned:
+          已拥有模式:
             type: Texture
             attribute:
               x: 176
@@ -186,7 +186,7 @@ controls:
             action:
               clickLeft: |-
                 var.filterMode = 'owned'
-          mode_hidden:
+          已隐藏模式:
             type: Texture
             attribute:
               x: 304
@@ -206,30 +206,41 @@ controls:
             action:
               clickLeft: |-
                 var.filterMode = 'hidden'
-          group_label:
+          分组标签:
             type: Text
             attribute:
               x: 48
               y: 194
               fontSize: 49
               texts: "'&0分组筛选: &0' + var.filterGroup"
-          group_scroll:
+          分组滑块:
+            type: Texture
+            val: 分组滑块
+            attribute:
+              x: 48
+              y: 262
+              width: 60
+              height: 6
+              normal: ~120,120,120,200
+              maxDragX: 600
+          分组滚动区:
             type: Scroll
             attribute:
               x: 48
               y: 226
               width: 660
               height: 42
-              moveX: var.groupScrollRatio
+              moveX: "self.parent['分组滑块'].getDragXRatio()"
             action:
               wheel: |-
-                if(self.wheelValue > 0){
-                  var.groupScrollRatio = Math.max(0, var.groupScrollRatio - 0.1)
-                }elif(self.wheelValue < 0){
-                  var.groupScrollRatio = Math.min(1, var.groupScrollRatio + 0.1)
+                if(self.moveX >= 0 && self.wheelValue > 0){
+                  self.parent['分组滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveX <= 1 && self.wheelValue < 0){
+                  self.parent['分组滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
                 }
             children:
-              group_stack:
+              分组堆叠:
                 val: group_list
                 type: HStack
                 attribute:
@@ -256,36 +267,47 @@ controls:
                     action:
                       clickLeft: |-
                         var.filterGroup = self.key
-          group_observer:
+          分组观察者:
             type: Observer
             attribute:
               target: val.group_list['item']
               subscribe: var.groups
               maxSize: 64
-          quality_label:
+          品质标签:
             type: Text
             attribute:
               x: 48
               y: 286
               fontSize: 49
               texts: "'&0品质筛选: &0' + var.filterQuality"
-          quality_scroll:
+          品质滑块:
+            type: Texture
+            val: 品质滑块
+            attribute:
+              x: 48
+              y: 354
+              width: 60
+              height: 6
+              normal: ~120,120,120,200
+              maxDragX: 600
+          品质滚动区:
             type: Scroll
             attribute:
               x: 48
               y: 318
               width: 660
               height: 42
-              moveX: var.qualityScrollRatio
+              moveX: "self.parent['品质滑块'].getDragXRatio()"
             action:
               wheel: |-
-                if(self.wheelValue > 0){
-                  var.qualityScrollRatio = Math.max(0, var.qualityScrollRatio - 0.1)
-                }elif(self.wheelValue < 0){
-                  var.qualityScrollRatio = Math.min(1, var.qualityScrollRatio + 0.1)
+                if(self.moveX >= 0 && self.wheelValue > 0){
+                  self.parent['品质滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveX <= 1 && self.wheelValue < 0){
+                  self.parent['品质滑块'].setDragXRatio((self.moveX - self.wheelValue * 0.1).round(1))
                 }
             children:
-              quality_stack:
+              品质堆叠:
                 val: quality_list
                 type: HStack
                 attribute:
@@ -312,13 +334,13 @@ controls:
                     action:
                       clickLeft: |-
                         var.filterQuality = self.key
-          quality_observer:
+          品质观察者:
             type: Observer
             attribute:
               target: val.quality_list['item']
               subscribe: var.qualities
               maxSize: 64
-          left_panel:
+          左侧面板:
             type: Texture
             attribute:
               x: 48
@@ -332,23 +354,34 @@ controls:
               stroke:
                 width: 2
                 color: ~0,0,0,255
-          title_scroll:
+          称号滑块:
+            type: Texture
+            val: 称号滑块
+            attribute:
+              x: 690
+              y: 398
+              width: 6
+              height: 50
+              normal: ~120,120,120,200
+              maxDragY: 382
+          称号滚动区:
             type: Scroll
             attribute:
               x: 60
               y: 398
               width: 636
               height: 432
-              moveY: 0
+              moveY: "self.parent['称号滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.wheelValue > 0){
-                  self.moveY = Math.max(0, self.moveY - 0.1)
-                }elif(self.wheelValue < 0){
-                  self.moveY = Math.min(1, self.moveY + 0.1)
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['称号滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['称号滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
-              title_stack:
+              称号堆叠:
                 val: title_list
                 type: VStack
                 attribute:
@@ -373,27 +406,27 @@ controls:
                       clickLeft: |-
                         Packet.send('AXS_TITLE_MENU', 'select', self.key)
                     children:
-                      name:
+                      名称:
                         type: Text
                         attribute:
                           x: 18
                           y: 12
                           fontSize: 49
                           texts: "self.parent.entry['display_name']"
-                      state:
+                      状态:
                         type: Text
                         attribute:
                           x: 18
                           y: 42
                           fontSize: 49
                           texts: "'&0' + self.parent.entry['quality_name'] + ' / ' + self.parent.entry['group_name'] + ' / ' + self.parent.entry['remaining_text']"
-          title_observer:
+          称号观察者:
             type: Observer
             attribute:
               target: val.title_list['item']
               subscribe: var.titles
               maxSize: 1024
-          right_panel:
+          右侧面板:
             type: Texture
             attribute:
               x: 728
@@ -407,35 +440,46 @@ controls:
               stroke:
                 width: 2
                 color: ~0,0,0,255
-          detail_scroll:
+          详情滑块:
+            type: Texture
+            val: 详情滑块
+            attribute:
+              x: 1456
+              y: 164
+              width: 6
+              height: 50
+              normal: ~120,120,120,200
+              maxDragY: 510
+          详情滚动区:
             type: Scroll
             attribute:
               x: 780
               y: 164
               width: 680
               height: 560
-              moveY: var.detailScrollRatio
+              moveY: "self.parent['详情滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.wheelValue > 0){
-                  var.detailScrollRatio = Math.max(0, var.detailScrollRatio - 0.1)
-                }elif(self.wheelValue < 0){
-                  var.detailScrollRatio = Math.min(1, var.detailScrollRatio + 0.1)
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['详情滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['详情滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
-              detail_stack:
+              详情堆叠:
                 type: VStack
                 attribute:
                   width: 660
                   spaceBetween: 18
                 children:
-                  selected_name:
+                  selected_名称:
                     type: Text
                     attribute:
                       width: 660
                       fontSize: 49
                       texts: "var.selectedName == '' ? '&0未选择称号' : var.selectedName"
-                  selected_meta:
+                  选中元信息:
                     type: Text
                     attribute:
                       width: 660
@@ -444,7 +488,7 @@ controls:
                       texts:
                         - "'&0类型: &0' + var.selectedKind + '    &0分组: &0' + var.selectedGroupName + '    &0品质: &0' + var.selectedQualityName"
                         - "'&0本组已装备: &0' + var.selectedGroupEquippedName"
-                  selected_prefix:
+                  选中前缀:
                     type: Text
                     attribute:
                       width: 660
@@ -455,7 +499,7 @@ controls:
                         - "'&0聊天后缀: &0' + (var.selectedChatSuffix == '' ? '无' : var.selectedChatSuffix)"
                         - "'&0Tab 前缀: &0' + (var.selectedTabPrefix == '' ? '无' : var.selectedTabPrefix)"
                         - "'&0Tab 后缀: &0' + (var.selectedTabSuffix == '' ? '无' : var.selectedTabSuffix)"
-                  selected_desc:
+                  选中描述:
                     type: Text
                     attribute:
                       width: 660
@@ -466,86 +510,86 @@ controls:
                         - "'&0获取渠道: &0' + (var.selectedSource == '' ? '未填写' : var.selectedSource)"
                         - "'&0拥有状态: &0' + (var.selectedOwned ? '已拥有' : '未拥有')"
                         - "'&0剩余时间: &0' + var.selectedRemainingText"
-                  selected_display_label:
+                  佩戴属性标签:
                     type: Text
                     attribute:
                       width: 660
                       fontSize: 49
                       texts: "'&0佩戴属性'"
-                  selected_display_value:
+                  佩戴属性值:
                     type: Text
                     attribute:
                       width: 660
                       fontSize: 49
                       lineSpace: 4
                       texts: "var.selectedDisplayAttributesText"
-                  selected_collection_label:
+                  收集属性标签:
                     type: Text
                     attribute:
                       width: 660
                       fontSize: 49
                       texts: "'&0收集属性'"
-                  selected_collection_value:
+                  收集属性值:
                     type: Text
                     attribute:
                       width: 660
                       fontSize: 49
                       lineSpace: 4
                       texts: "var.selectedCollectionAttributesText"
-                  total_display_label:
+                  当前装备属性标签:
                     type: Text
                     attribute:
                       width: 660
                       fontSize: 49
                       texts: "'&0当前装备属性'"
-                  total_display_value:
+                  当前装备属性值:
                     type: Text
                     attribute:
                       width: 660
                       fontSize: 49
                       lineSpace: 4
                       texts: "var.displayAttributesText"
-                  total_collection_label:
+                  当前收集属性标签:
                     type: Text
                     attribute:
                       width: 660
                       fontSize: 49
                       texts: "'&0当前收集属性'"
-                  total_collection_value:
+                  当前收集属性值:
                     type: Text
                     attribute:
                       width: 660
                       fontSize: 49
                       lineSpace: 4
                       texts: "var.collectionAttributesText"
-                  total_label:
+                  总属性标签:
                     type: Text
                     attribute:
                       width: 660
                       fontSize: 49
                       texts: "'&0总属性'"
-                  total_value:
+                  总属性值:
                     type: Text
                     attribute:
                       width: 660
                       fontSize: 49
                       lineSpace: 4
                       texts: "var.totalAttributesText"
-                  set_divider:
+                  套装分隔线:
                     type: Text
                     attribute:
                       width: 660
                       fontSize: 49
                       texts: "'&0&l─── 套装效果 ───'"
                       visible: var.sets != null && var.sets.size() > 0
-                  set_bonus_label:
+                  套装加成标签:
                     type: Text
                     attribute:
                       width: 660
                       fontSize: 49
                       texts: "'&0套装加成属性'"
                       visible: var.sets != null && var.sets.size() > 0
-                  set_bonus_value:
+                  套装加成值:
                     type: Text
                     attribute:
                       width: 660
@@ -553,14 +597,14 @@ controls:
                       lineSpace: 4
                       texts: "var.setBonusAttributesText"
                       visible: var.sets != null && var.sets.size() > 0
-                  set_list_label:
+                  套装列表标签:
                     type: Text
                     attribute:
                       width: 660
                       fontSize: 49
                       texts: "'&0套装详情'"
                       visible: var.sets != null && var.sets.size() > 0
-                  set_stack:
+                  套装堆叠:
                     val: set_list
                     type: VStack
                     attribute:
@@ -578,7 +622,7 @@ controls:
                           radius: 14
                           visible: self.entry != null
                         children:
-                          set_info:
+                          套装信息:
                             type: Text
                             attribute:
                               x: 12
@@ -590,13 +634,13 @@ controls:
                                 - "(self.parent.entry['active'] ? '&a✔ ' : '&c✘ ') + '&0' + self.parent.entry['display_name'] + '  &0(' + self.parent.entry['progress'] + ')'"
                                 - "'&0所需: ' + self.parent.entry['required_titles_text']"
                                 - "'&0加成: &0' + self.parent.entry['bonus_text']"
-                  set_observer:
+                  套装观察者:
                     type: Observer
                     attribute:
                       target: val.set_list['item']
                       subscribe: var.sets
                       maxSize: 64
-          equip_btn:
+          装备按钮:
             type: Texture
             attribute:
               x: 760
@@ -616,7 +660,7 @@ controls:
             action:
               clickLeft: |-
                 Packet.send('AXS_TITLE_MENU', 'equip', var.selectedId)
-          unequip_btn:
+          un装备按钮:
             type: Texture
             attribute:
               x: 930
@@ -636,7 +680,7 @@ controls:
             action:
               clickLeft: |-
                 Packet.send('AXS_TITLE_MENU', 'unequip_group', var.selectedGroupId)
-          unequip_all_btn:
+          全部卸下按钮:
             type: Texture
             attribute:
               x: 1100
@@ -656,7 +700,7 @@ controls:
             action:
               clickLeft: |-
                 Packet.send('AXS_TITLE_MENU', 'unequip_all')
-          hide_btn:
+          隐藏按钮:
             type: Texture
             attribute:
               x: 760
@@ -676,7 +720,7 @@ controls:
             action:
               clickLeft: |-
                 Packet.send('AXS_TITLE_MENU', 'hide', var.selectedId)
-          unhide_btn:
+          取消隐藏按钮:
             type: Texture
             attribute:
               x: 930
@@ -696,7 +740,7 @@ controls:
             action:
               clickLeft: |-
                 Packet.send('AXS_TITLE_MENU', 'unhide', var.selectedId)
-          refresh_btn:
+          刷新按钮:
             type: Texture
             attribute:
               x: 1100

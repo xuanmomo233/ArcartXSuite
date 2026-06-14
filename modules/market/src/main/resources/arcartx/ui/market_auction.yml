@@ -32,6 +32,18 @@ ui:
         json = packet['itemJson' + key]
         if(json != null && json != ''){
           var.itemJsons[key] = json
+        } else {
+          var.itemJsons[key] = var.emptyItemJson
+        }
+      }
+      for(i in range(0, var.maxListingCount)){
+        key = i.round
+        row = val.物品列表['物品行' + key]
+        if(row != null){
+          icon = row['物品图标']
+          if(icon != null){
+            icon.seticon()
+          }
         }
       }
     update: |-
@@ -49,10 +61,22 @@ ui:
         json = packet['itemJson' + key]
         if(json != null && json != ''){
           var.itemJsons[key] = json
+        } else {
+          var.itemJsons[key] = var.emptyItemJson
+        }
+      }
+      for(i in range(0, var.maxListingCount)){
+        key = i.round
+        row = val.物品列表['物品行' + key]
+        if(row != null){
+          icon = row['物品图标']
+          if(icon != null){
+            icon.seticon()
+          }
         }
       }
   action:
-    load: |-
+    open: |-
       var.packetId = 'AXS_MARKET'
       var.page = 0
       var.totalPages = 1
@@ -67,6 +91,8 @@ ui:
       var.categoryScrollRatio = 0
       var.listingScrollRatio = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      var.maxCategoryCount = 32
+      var.maxListingCount = 20
     open: |-
       Packet.send(var.packetId, 'auction_list', '0', '', '')
 
@@ -206,6 +232,35 @@ controls:
                   fontSize: 36
                   texts: '&f刷新'
 
+          我要上架按钮:
+            type: Texture
+            attribute:
+              x: 710
+              y: 28
+              width: 130
+              height: 48
+              normal: ~80,160,255,220
+              hover: ~Frosted:0;255,255,255,180
+              shape: ~round_rect
+              radius: 14
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'auction_sell_ui_open')
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,120
+            children:
+              文字:
+                type: Text
+                attribute:
+                  x: 65
+                  y: 12
+                  through: true
+                  center: true
+                  fontSize: 32
+                  texts: '&f我要上架'
+
           # ── 搜索框 ──────────────────────────────────
           搜索区:
             type: Texture
@@ -292,19 +347,33 @@ controls:
                   y: 16
                   texts: '&e分类筛选'
                   fontSize: 36
+              分类纵向滑块:
+                type: Texture
+                val: 分类纵向滑块
+                attribute:
+                  x: 210
+                  y: 60
+                  width: 6
+                  height: 50
+                  normal: ~120,120,120,200
+                  maxDragY: 620
               分类滚动:
                 type: Scroll
                 val: 分类滚动
                 attribute:
                   x: 14
                   y: 60
-                  width: 202
+                  width: 196
                   height: 670
-                  moveY: var.categoryScrollRatio
+                  moveY: "self.parent['分类纵向滑块'].getDragYRatio()"
                 action:
                   wheel: |-
-                    var.categoryScrollRatio = Math.max(0, Math.min(1, var.categoryScrollRatio + self.wheelValue * 0.08))
-                    self.moveY = var.categoryScrollRatio
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['分类纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['分类纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
                 children:
                   分类列表:
                     val: 分类列表
@@ -312,34 +381,36 @@ controls:
                     attribute:
                       width: 190
                       spaceBetween: 8
+                    action:
+                      create: |-
+                        for(i in range(0, var.maxCategoryCount)){
+                          key = i.round
+                          cat = self['分类项'].copy('分类项' + key)
+                          cat.entryKey = key
+                        }
                     children:
                       分类项:
                         type: Texture
                         attribute:
-                          entry: var.categories[self.key]
+                          entryKey: 0
+                          entry: var.categories[self.entryKey]
                           visible: self.entry != null
                           width: 190
                           height: 44
-                          normal: "self.key == var.currentCategory ? '80,160,255,220' : '70,70,80,200'"
+                          normal: "self.entry != null && self.entry['id'] == var.currentCategory ? '80,160,255,220' : '70,70,80,200'"
                           hover: ~Frosted:0;255,255,255,200
                           shape: ~round_rect
                           radius: 12
-                          texts: "var.categoryTexts[self.key]"
+                          texts: "var.categoryTexts[self.entryKey]"
                           center: true
                           fontSize: 32
                         action:
                           clickLeft: |-
-                            Packet.send(var.packetId, 'auction_list', '0', self.key, var.search)
+                            Packet.send(var.packetId, 'auction_list', '0', self.entry['id'], var.search)
                         effect:
                           stroke:
                             width: 1
                             color: ~80,180,255,80
-              分类观察:
-                type: Observer
-                attribute:
-                  target: val.分类列表['分类项']
-                  subscribe: var.categories
-                  maxSize: 32
 
           # ── 物品列表区 ──────────────────────────────
           物品卡片:
@@ -357,19 +428,33 @@ controls:
                 width: 2
                 color: ~80,180,255,100
             children:
+              物品纵向滑块:
+                type: Texture
+                val: 物品纵向滑块
+                attribute:
+                  x: 1172
+                  y: 10
+                  width: 6
+                  height: 50
+                  normal: ~120,120,120,200
+                  maxDragY: 630
               物品滚动:
                 type: Scroll
                 val: 物品滚动
                 attribute:
                   x: 10
                   y: 10
-                  width: 1168
+                  width: 1162
                   height: 680
-                  moveY: var.listingScrollRatio
+                  moveY: "self.parent['物品纵向滑块'].getDragYRatio()"
                 action:
                   wheel: |-
-                    var.listingScrollRatio = Math.max(0, Math.min(1, var.listingScrollRatio + self.wheelValue * 0.05))
-                    self.moveY = var.listingScrollRatio
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['物品纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['物品纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
                 children:
                   物品列表:
                     val: 物品列表
@@ -377,11 +462,23 @@ controls:
                     attribute:
                       width: 1148
                       spaceBetween: 6
+                    action:
+                      create: |-
+                        for(i in range(0, var.maxListingCount)){
+                          key = i.round
+                          row = self['物品行'].copy('物品行' + key)
+                          row.entryKey = key
+                          icon = row['物品图标']
+                          if(icon != null){
+                            icon.entryKey = key
+                          }
+                        }
                     children:
                       物品行:
                         type: Texture
                         attribute:
-                          entry: var.listings[self.key]
+                          entryKey: 0
+                          entry: var.listings[self.entryKey]
                           visible: self.entry != null
                           width: 1148
                           height: 72
@@ -400,6 +497,7 @@ controls:
                           物品图标:
                             type: Slot
                             attribute:
+                              entryKey: 0
                               slotType: ~Icon
                               itemScale: 0.72
                               x: 8
@@ -410,10 +508,7 @@ controls:
                               shape: ~round_rect
                               radius: 10
                               through: true
-                              seticon: "self.setItemIcon(var.itemJsons[self.parent.key])"
-                            action:
-                              create: |-
-                                self.seticon()
+                              seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
                           名称:
                             type: Text
                             attribute:
@@ -525,12 +620,6 @@ controls:
                                   center: true
                                   fontSize: 28
                                   texts: '&f取消'
-              物品观察:
-                type: Observer
-                attribute:
-                  target: val.物品列表['物品行']
-                  subscribe: var.listings
-                  maxSize: 20
 
           # ── 底部分页栏 ──────────────────────────────
           上一页:

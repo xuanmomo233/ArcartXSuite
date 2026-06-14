@@ -9,7 +9,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
+import java.security.Signature;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -33,45 +35,65 @@ public final class CloudModuleService {
         .connectTimeout(TIMEOUT)
         .build();
 
+    /** 云端平台地址：硬编码于宿主内，禁止通过 config.yml 篡改。 */
+    private static final String API_BASE_URL = "https://cloud.021209.xyz";
+
     private final JavaPlugin plugin;
     private final ModuleRegistry registry;
     private final String apiBaseUrl;
-    private final String installId;
-    private final String serverPrivateKeyB64;
+    private final String qq;
+    private final String password;
+    private final String serverName;
+
+    private volatile String serverCode;
+    private final KeyPair keyPair;
     private final String serverPublicKeyB64;
 
     private volatile String moduleToken;
     private volatile long tokenExpiry;
+    private volatile List<String> allowedModules = List.of();
     private final Map<String, byte[]> cachedAxb = new ConcurrentHashMap<>();
 
     public CloudModuleService(JavaPlugin plugin, ModuleRegistry registry) {
         this.plugin = plugin;
         this.registry = registry;
         org.bukkit.configuration.file.FileConfiguration config = plugin.getConfig();
-        this.apiBaseUrl = config.getString("cloud.api-url", "https://axs.021209.xyz").replaceAll("/$", "");
-        this.installId = config.getString("cloud.install-id", generateInstallId());
-        this.serverPrivateKeyB64 = config.getString("cloud.private-key", "");
-        this.serverPublicKeyB64 = config.getString("cloud.public-key", "");
-
-        if (!config.contains("cloud.install-id")) {
-            config.set("cloud.install-id", installId);
-            plugin.saveConfig();
-        }
+        this.apiBaseUrl = API_BASE_URL;
+        this.qq = config.getString("cloud.qq", "").trim();
+        this.password = config.getString("cloud.password", "");
+        this.serverName = config.getString("cloud.server-name", plugin.getServer().getName());
+        this.serverCode = config.getString("cloud.server-code", "").trim();
+        this.keyPair = generateKeyPair();
+        this.serverPublicKeyB64 = keyPair != null
+            ? Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded())
+            : "";
     }
 
-    // -- 服务器注册 ---------------------------------------------
+    private boolean hasServerCode() {
+        return serverCode != null && !serverCode.isEmpty();
+    }
 
-    public CompletableFuture<Boolean> registerServer(String qq) {
+    // -- 服务器首次绑定 ---------------------------------------
+
+    /**
+     * 用 QQ+密码向云端换取服务器码。成功后写回 config.yml 的 cloud.server-code。
+     */
+    public CompletableFuture<Boolean> bindServer() {
+        if (qq.isEmpty() || password.isEmpty()) {
+            LOGGER.warning("[Cloud] 未配置 cloud.qq / cloud.password，无法绑定服务器。");
+            return CompletableFuture.completedFuture(false);
+        }
         String fingerprint = generateFingerprint();
         String payload = "{"
-            + "\"installId\":\"" + installId + "\","
+            + "\"qq\":\"" + escapeJson(qq) + "\","
+            + "\"password\":\"" + escapeJson(password) + "\","
             + "\"pubkey\":\"" + serverPublicKeyB64 + "\","
             + "\"fingerprintHash\":\"" + sha256(fingerprint) + "\","
-            + "\"qq\":\"" + qq + "\""
+            + "\"name\":\"" + escapeJson(serverName) + "\""
             + "}";
 
         HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(apiBaseUrl + "/v1/servers/register"))
+            .uri(URI.create(apiBaseUrl + "/v1/servers/bind"))
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(payload))
             .build();
@@ -79,14 +101,32 @@ public final class CloudModuleService {
         return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString())
             .thenApply(resp -> {
                 if (resp.statusCode() == 200) {
-                    LOGGER.info("[Cloud] 服务器注册成功: " + installId);
-                    return true;
+                    String body = resp.body();
+                    String code = extractJsonField(body, "serverCode");
+                    String token = extractJsonField(body, "token");
+                    if (code != null && !code.isEmpty()) {
+                        this.serverCode = code;
+                        this.allowedModules = extractStringArray(body, "allowedModules");
+                        if (token != null) {
+                            this.moduleToken = token;
+                            this.tokenExpiry = System.currentTimeMillis() + 23 * 3600 * 1000;
+                        }
+                        // 回写 server-code 到配置（主线程保存）
+                        plugin.getServer().getScheduler().runTask(plugin, () -> {
+                            plugin.getConfig().set("cloud.server-code", code);
+                            plugin.saveConfig();
+                        });
+                        LOGGER.info("[Cloud] 服务器绑定成功，服务器码: " + code);
+                        return true;
+                    }
+                    LOGGER.warning("[Cloud] 绑定响应缺少 serverCode: " + body);
+                    return false;
                 }
-                LOGGER.warning("[Cloud] 服务器注册失败: " + resp.statusCode() + " " + resp.body());
+                LOGGER.warning("[Cloud] 服务器绑定失败: " + resp.statusCode() + " " + resp.body());
                 return false;
             })
             .exceptionally(ex -> {
-                LOGGER.warning("[Cloud] 服务器注册异常: " + ex.getMessage());
+                LOGGER.warning("[Cloud] 服务器绑定异常: " + ex.getMessage());
                 return false;
             });
     }
@@ -97,14 +137,19 @@ public final class CloudModuleService {
         if (moduleToken != null && System.currentTimeMillis() < tokenExpiry - 300_000) {
             return CompletableFuture.completedFuture(true);
         }
+        if (!hasServerCode()) {
+            return CompletableFuture.completedFuture(false);
+        }
 
-        String payload = "{\"installId\":\"" + installId + "\"}";
+        long timestamp = System.currentTimeMillis();
+        String signature = sign(timestamp + serverCode);
         HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(apiBaseUrl + "/v1/modules/token"))
+            .uri(URI.create(apiBaseUrl + "/v1/servers/refresh"))
             .header("Content-Type", "application/json")
-            .header("X-Install-Id", installId)
-            .header("X-Module-Token", moduleToken != null ? moduleToken : "")
-            .POST(HttpRequest.BodyPublishers.ofString(payload))
+            .header("X-Server-Code", serverCode)
+            .header("X-Timestamp", String.valueOf(timestamp))
+            .header("X-Signature", signature)
+            .POST(HttpRequest.BodyPublishers.ofString("{}"))
             .build();
 
         return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString())
@@ -115,11 +160,12 @@ public final class CloudModuleService {
                     if (token != null) {
                         this.moduleToken = token;
                         this.tokenExpiry = System.currentTimeMillis() + 23 * 3600 * 1000;
-                        LOGGER.info("[Cloud] 模块令牌已刷新");
+                        this.allowedModules = extractStringArray(body, "allowedModules");
+                        LOGGER.info("[Cloud] 模块令牌已刷新，授权模块: " + allowedModules.size());
                         return true;
                     }
                 }
-                LOGGER.warning("[Cloud] 刷新令牌失败: " + resp.statusCode());
+                LOGGER.warning("[Cloud] 刷新令牌失败: " + resp.statusCode() + " " + resp.body());
                 return false;
             })
             .exceptionally(ex -> {
@@ -131,51 +177,31 @@ public final class CloudModuleService {
     // -- 同步并加载云端模块 --------------------------------------
 
     public CompletableFuture<Void> syncModules() {
-        return refreshToken().thenCompose(ok -> {
-            if (!ok) return CompletableFuture.<Void>completedFuture(null);
-            return fetchModuleList().thenCompose(list -> {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> modules = (List<Map<String, Object>>) list;
-                if (modules == null || modules.isEmpty()) {
+        // 1. 未绑定则先用 QQ+密码绑定服务器
+        CompletableFuture<Boolean> ready = hasServerCode()
+            ? CompletableFuture.completedFuture(true)
+            : bindServer();
+
+        return ready.thenCompose(bound -> {
+            if (!bound) {
+                LOGGER.warning("[Cloud] 未能绑定服务器，跳过云端模块同步。");
+                return CompletableFuture.<Void>completedFuture(null);
+            }
+            return refreshToken().thenCompose(ok -> {
+                if (!ok) return CompletableFuture.<Void>completedFuture(null);
+                List<String> mods = allowedModules;
+                if (mods == null || mods.isEmpty()) {
+                    LOGGER.info("[Cloud] 该服务器未装备任何云端模块。");
                     return CompletableFuture.<Void>completedFuture(null);
                 }
                 CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
-                for (Map<String, Object> mod : modules) {
-                    String id = (String) mod.get("id");
-                    if (id == null) continue;
+                for (String id : mods) {
+                    if (id == null || id.isEmpty()) continue;
                     chain = chain.thenCompose(v -> downloadAndLoad(id));
                 }
                 return chain;
             });
         });
-    }
-
-    @SuppressWarnings("unchecked")
-    private CompletableFuture<List<Map<String, Object>>> fetchModuleList() {
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(apiBaseUrl + "/v1/modules"))
-            .header("X-Module-Token", moduleToken)
-            .header("X-Install-Id", installId)
-            .GET()
-            .build();
-
-        return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-            .thenApply(resp -> {
-                if (resp.statusCode() == 200) {
-                    String body = resp.body();
-                    String modulesJson = extractJsonArray(body, "modules");
-                    if (modulesJson != null) {
-                        try {
-                            org.bukkit.configuration.file.YamlConfiguration yaml = new org.bukkit.configuration.file.YamlConfiguration();
-                            yaml.loadFromString("tmp:\n" + modulesJson.replaceAll("\\[", "").replaceAll("\\]", ""));
-                            return List.<Map<String, Object>>of();
-                        } catch (Exception e) {
-                            LOGGER.warning("[Cloud] 解析模块列表失败: " + e.getMessage());
-                        }
-                    }
-                }
-                return List.<Map<String, Object>>of();
-            });
     }
 
     private CompletableFuture<Void> downloadAndLoad(String moduleId) {
@@ -190,14 +216,13 @@ public final class CloudModuleService {
                     return;
                 }
                 String keyB64 = extractJsonField(keyResp, "key");
-                String ivB64  = extractJsonField(keyResp, "iv");
-                if (keyB64 == null || ivB64 == null) {
+                if (keyB64 == null) {
                     LOGGER.warning("[Cloud] 模块 " + moduleId + " 密钥数据不完整");
                     return;
                 }
                 byte[] key = Base64.getDecoder().decode(keyB64);
-                byte[] iv  = Base64.getDecoder().decode(ivB64);
-                byte[] jarBytes = NativeBridge.decryptModule(axb, key, iv);
+                // axb 自包含 IV（前 12 字节），native 内部读取，无需单独传入
+                byte[] jarBytes = NativeBridge.decryptModule(axb, key);
                 if (jarBytes == null || jarBytes.length == 0) {
                     LOGGER.warning("[Cloud] 解密模块 " + moduleId + " 失败");
                     return;
@@ -223,7 +248,7 @@ public final class CloudModuleService {
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(apiBaseUrl + "/v1/modules/" + moduleId + "/download"))
             .header("X-Module-Token", moduleToken)
-            .header("X-Install-Id", installId)
+            .header("X-Server-Code", serverCode)
             .GET()
             .build();
 
@@ -248,7 +273,7 @@ public final class CloudModuleService {
             .uri(URI.create(apiBaseUrl + "/v1/modules/" + moduleId + "/key"))
             .header("Content-Type", "application/json")
             .header("X-Module-Token", moduleToken)
-            .header("X-Install-Id", installId)
+            .header("X-Server-Code", serverCode)
             .POST(HttpRequest.BodyPublishers.ofString("{}"))
             .build();
 
@@ -259,8 +284,33 @@ public final class CloudModuleService {
 
     // -- 工具方法 ------------------------------------------------
 
-    private static String generateInstallId() {
-        return java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+    private static KeyPair generateKeyPair() {
+        try {
+            KeyPairGenerator kpg = KeyPairGenerator.getInstance("Ed25519");
+            return kpg.generateKeyPair();
+        } catch (Exception e) {
+            LOGGER.warning("[Cloud] 生成 Ed25519 密钥对失败: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /** 用服务器私钥对数据进行 Ed25519 签名，返回 Base64。 */
+    private String sign(String data) {
+        if (keyPair == null) return "";
+        try {
+            Signature sig = Signature.getInstance("Ed25519");
+            sig.initSign(keyPair.getPrivate());
+            sig.update(data.getBytes(StandardCharsets.UTF_8));
+            return Base64.getEncoder().encodeToString(sig.sign());
+        } catch (Exception e) {
+            LOGGER.warning("[Cloud] 签名失败: " + e.getMessage());
+            return "";
+        }
+    }
+
+    private static String escapeJson(String input) {
+        if (input == null) return "";
+        return input.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private static String generateFingerprint() {
@@ -305,5 +355,22 @@ public final class CloudModuleService {
         int bracketClose = json.indexOf(']', bracketOpen + 1);
         if (bracketClose < 0) return null;
         return json.substring(bracketOpen, bracketClose + 1);
+    }
+
+    /** 从 JSON 中提取字符串数组字段（如 ["a","b"]）。 */
+    private static List<String> extractStringArray(String json, String field) {
+        String arr = extractJsonArray(json, field);
+        List<String> result = new ArrayList<>();
+        if (arr == null) return result;
+        int i = 0;
+        while (i < arr.length()) {
+            int firstQuote = arr.indexOf('"', i);
+            if (firstQuote < 0) break;
+            int secondQuote = arr.indexOf('"', firstQuote + 1);
+            if (secondQuote < 0) break;
+            result.add(arr.substring(firstQuote + 1, secondQuote));
+            i = secondQuote + 1;
+        }
+        return result;
     }
 }

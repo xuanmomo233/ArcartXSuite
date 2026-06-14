@@ -35,7 +35,7 @@ ui:
       var.members = packet['members']
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
@@ -202,6 +202,16 @@ controls:
                       y: 210
                       fontSize: 30
                       texts: '&e标志:'
+                  当前标志滑块:
+                    type: Texture
+                    val: 当前标志滑块
+                    attribute:
+                      x: 664
+                      y: 246
+                      width: 6
+                      height: 50
+                      normal: ~120,120,120,200
+                      maxDragY: 190
                   cur_flags_scroll:
                     type: Scroll
                     attribute:
@@ -209,9 +219,15 @@ controls:
                       y: 246
                       width: 670
                       height: 240
+                      moveY: "self.parent['当前标志滑块'].getDragYRatio()"
                     action:
                       wheel: |-
-                        self.moveY(self.wheelValue * 36)
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['当前标志滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['当前标志滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
                     children:
                       cur_flags_list:
                         val: cur_flag_data
@@ -276,6 +292,16 @@ controls:
                       y: 0
                       fontSize: 36
                       texts: "~&a&l我的区域 &7({var.myRegionCount})"
+                  我的区域滑块:
+                    type: Texture
+                    val: 我的区域滑块
+                    attribute:
+                      x: 664
+                      y: 50
+                      width: 6
+                      height: 50
+                      normal: ~120,120,120,200
+                      maxDragY: 380
                   my_scroll:
                     type: Scroll
                     attribute:
@@ -283,9 +309,15 @@ controls:
                       y: 50
                       width: 670
                       height: 430
+                      moveY: "self.parent['我的区域滑块'].getDragYRatio()"
                     action:
                       wheel: |-
-                        self.moveY(self.wheelValue * 40)
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['我的区域滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['我的区域滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
                     children:
                       my_list:
                         val: my_region_data
@@ -381,6 +413,16 @@ controls:
                       y: 162
                       fontSize: 28
                       texts: '&6所有者:'
+                  所有者滑块:
+                    type: Texture
+                    val: 所有者滑块
+                    attribute:
+                      x: 294
+                      y: 194
+                      width: 6
+                      height: 20
+                      normal: ~120,120,120,200
+                      maxDragY: 80
                   detail_owners_scroll:
                     type: Scroll
                     attribute:
@@ -388,9 +430,15 @@ controls:
                       y: 194
                       width: 300
                       height: 100
+                      moveY: "self.parent['所有者滑块'].getDragYRatio()"
                     action:
                       wheel: |-
-                        self.moveY(self.wheelValue * 28)
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['所有者滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['所有者滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
                     children:
                       owners_list:
                         val: owner_data
@@ -417,6 +465,16 @@ controls:
                       y: 162
                       fontSize: 28
                       texts: '&b成员:'
+                  成员滑块:
+                    type: Texture
+                    val: 成员滑块
+                    attribute:
+                      x: 634
+                      y: 194
+                      width: 6
+                      height: 20
+                      normal: ~120,120,120,200
+                      maxDragY: 80
                   detail_members_scroll:
                     type: Scroll
                     attribute:
@@ -424,9 +482,15 @@ controls:
                       y: 194
                       width: 300
                       height: 100
+                      moveY: "self.parent['成员滑块'].getDragYRatio()"
                     action:
                       wheel: |-
-                        self.moveY(self.wheelValue * 28)
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['成员滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['成员滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
                     children:
                       members_list:
                         val: member_data
@@ -453,6 +517,16 @@ controls:
                       y: 310
                       fontSize: 28
                       texts: '&e标志:'
+                  详情标志滑块:
+                    type: Texture
+                    val: 详情标志滑块
+                    attribute:
+                      x: 664
+                      y: 342
+                      width: 6
+                      height: 30
+                      normal: ~120,120,120,200
+                      maxDragY: 110
                   detail_flags_scroll:
                     type: Scroll
                     attribute:
@@ -460,9 +534,15 @@ controls:
                       y: 342
                       width: 670
                       height: 140
+                      moveY: "self.parent['详情标志滑块'].getDragYRatio()"
                     action:
                       wheel: |-
-                        self.moveY(self.wheelValue * 34)
+                        if(self.moveY >= 0 && self.wheelValue > 0){
+                          self.parent['详情标志滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
+                        if(self.moveY <= 1 && self.wheelValue < 0){
+                          self.parent['详情标志滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                        }
                     children:
                       detail_flags_list:
                         val: detail_flag_data

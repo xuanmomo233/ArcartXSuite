@@ -28,15 +28,6 @@ public final class NativeBridge {
     public static native byte[] decryptResource(byte[] encrypted, byte[] keyMaterial);
 
     /**
-     * 验证 Ed25519 签名。
-     *
-     * @param ticketJson 待验证的 JSON 数据
-     * @param signature  签名字节
-     * @return 是否验证通过
-     */
-    public static native boolean verifyTicketSignature(byte[] ticketJson, byte[] signature);
-
-    /**
      * 解包资源密钥（AES-256-GCM unwrap）。
      *
      * @param wrappedKey 加密包装的密钥
@@ -56,10 +47,12 @@ public final class NativeBridge {
     /**
      * 解密云端模块 .axb 文件（AES-256-GCM + GZIP）。
      *
-     * @param encryptedAxb 加密的 axb 数据
-     * @param key          AES 密钥
-     * @param iv           初始化向量
+     * <p>axb 自包含格式：IV(12 字节) + 密文 + GCM 认证标签(16 字节)，
+     * IV 直接从 axb 前 12 字节读取，无需单独传入。
+     *
+     * @param encryptedAxb 加密的 axb 数据（含 IV 前缀）
+     * @param key          AES 密钥（32 字节）
      * @return 解密解压后的 jar 字节
      */
-    public static native byte[] decryptModule(byte[] encryptedAxb, byte[] key, byte[] iv);
+    public static native byte[] decryptModule(byte[] encryptedAxb, byte[] key);
 }

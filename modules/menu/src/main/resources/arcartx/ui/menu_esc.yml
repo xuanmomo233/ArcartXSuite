@@ -81,34 +81,24 @@ ui:
       var.footerRows = {}
       var.footerCount = 0
       var.maxButtonCount = 128
-      for(i in range(0, var.maxButtonCount)){
-        key = i.round
-        mb = val.button_rows['menu_button'].copy('menu_button' + key)
-        mb.entryKey = key
-      }
       var.maxFooterCount = 8
-      for(i in range(0, var.maxFooterCount)){
-        key = i.round
-        fb = val.footer_rows['footer_button'].copy('footer_button' + key)
-        fb.entryKey = key
-      }
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       width: 1920
       point: ~stretch_all
       height: 1080
     children:
-      left_panel:
+      左侧面板:
         type: Canvas
         attribute:
           width: 620
           x: "-20 - 600 * var.animation"
           point: ~vertical_stretch_left
         children:
-          bg:
+          背景:
             type: Texture
             attribute:
               normal: ~Frosted:30;255,255,255,100
@@ -123,7 +113,7 @@ controls:
                 duration: 1200
                 color: ~255,255,255,100
                 width: 0.05
-          title:
+          标题:
             type: Text
             attribute:
               texts:
@@ -132,7 +122,7 @@ controls:
               x: 120
               y: 40
               fontSize: 64
-          underline:
+          下划线:
             type: Texture
             attribute:
               normal: ~255,255,255
@@ -143,7 +133,7 @@ controls:
               height: 5
               shape: ~round_rect
               radius: 2
-          scroll_area:
+          滚动区:
             type: Scroll
             attribute:
               width: 0
@@ -151,17 +141,17 @@ controls:
               y: -15
               height: 960 - 200
               point: ~horizontal_stretch_middle
-              moveY: self.parent['drag_bar'].getDragYRatio()
+              moveY: self.parent['纵向滑块'].getDragYRatio()
             action:
               wheel: |-
                 if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['drag_bar'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  self.parent['纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
                 if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['drag_bar'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  self.parent['纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
-              button_grid:
+              按钮网格:
                 type: HGrid
                 attribute:
                   spaceBetweenX: 50
@@ -171,11 +161,18 @@ controls:
                   y: 0
                   point: ~top_center
                 children:
-                  button_rows:
+                  按钮行:
                     type: Canvas
                     val: button_rows
+                    action:
+                      create: |-
+                        for(i in range(0, var.maxButtonCount)){
+                          key = i.round
+                          mb = self['菜单按钮'].copy('菜单按钮' + key)
+                          mb.entryKey = key
+                        }
                     children:
-                      menu_button:
+                      菜单按钮:
                         type: Slot
                         attribute:
                           entryKey: 0
@@ -197,7 +194,7 @@ controls:
                               Packet.send(var.packetId, 'click', self.entry['id'])
                             }
                         children:
-                          icon:
+                          图标:
                             type: Slot
                             attribute:
                               slotType: ~Icon
@@ -215,7 +212,7 @@ controls:
                             action:
                               create: |-
                                 self.seticon()
-                          label:
+                          标签:
                             type: Text
                             attribute:
                               through: true
@@ -224,7 +221,7 @@ controls:
                               texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
                               center: true
                               fontSize: 49
-          drag_bar:
+          纵向滑块:
             type: Texture
             val: drag_bar
             attribute:
@@ -235,7 +232,7 @@ controls:
               x: 613
               y: -365
               maxDragY: 960 - 200 - 50
-          footer_grid:
+          页脚网格:
             type: HGrid
             attribute:
               spaceBetweenX: 50
@@ -245,11 +242,18 @@ controls:
               y: 460
               point: ~horizontal_stretch_middle
             children:
-              footer_rows:
+              页脚行:
                 type: Canvas
                 val: footer_rows
+                action:
+                  create: |-
+                    for(i in range(0, var.maxFooterCount)){
+                      key = i.round
+                      fb = self['页脚按钮'].copy('页脚按钮' + key)
+                      fb.entryKey = key
+                    }
                 children:
-                  footer_button:
+                  页脚按钮:
                     type: Slot
                     attribute:
                       entryKey: 0
@@ -277,7 +281,7 @@ controls:
                           }
                         }
                     children:
-                      footer_text:
+                      页脚文字:
                         type: Text
                         attribute:
                           through: true

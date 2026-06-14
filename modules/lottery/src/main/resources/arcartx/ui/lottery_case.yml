@@ -190,8 +190,9 @@ controls:
             action:
               create: |-
                 for(i in range(1,9)){
-                  十连抽 = self['十连单个布局'].copy('十连单个布局' + i.round)
-                  十连抽['奖品槽位'].id = 8 + i.round
+                  key = i.round
+                  十连抽 = self['十连单个布局'].copy('十连单个布局' + key)
+                  十连抽['奖品槽位'].id = 8 + key
                 }
             children:
               十连单个布局:
@@ -274,16 +275,19 @@ controls:
                 action:
                   create: |-
                     for(i in range(1,9)){
-                      抽奖布局 = self['抽奖布局'].copy('抽奖布局' + i.round)
-                      抽奖布局['slot0'].id = i.round
+                      key = i.round
+                      抽奖布局 = self['抽奖布局'].copy('抽奖布局' + key)
+                      抽奖布局['slot0'].id = key
                     }
                     for(i in range(1,9)){
-                      抽奖布局 = self['抽奖布局'].copy('抽奖布局' + 9 + i.round)
-                      抽奖布局['slot0'].id = i.round
+                      key = i.round
+                      抽奖布局 = self['抽奖布局'].copy('抽奖布局' + 9 + key)
+                      抽奖布局['slot0'].id = key
                     }
                     for(i in range(1,9)){
-                      抽奖布局 = self['抽奖布局'].copy('抽奖布局' + 18 + i.round)
-                      抽奖布局['slot0'].id = i.round
+                      key = i.round
+                      抽奖布局 = self['抽奖布局'].copy('抽奖布局' + 18 + key)
+                      抽奖布局['slot0'].id = key
                     }
                 children:
                   前占位布局:
@@ -469,8 +473,9 @@ controls:
                 action:
                   create: |-
                     for(i in range(1,44)){
-                      奖励布局 = self['奖励布局'].copy('奖励布局' + i.round)
-                      奖励布局['slot0'].id = i.round
+                      key = i.round
+                      奖励布局 = self['奖励布局'].copy('奖励布局' + key)
+                      奖励布局['slot0'].id = key
                     }
                 children:
                   奖励布局:

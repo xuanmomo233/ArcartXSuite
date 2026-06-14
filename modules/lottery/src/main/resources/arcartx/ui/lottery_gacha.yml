@@ -144,8 +144,9 @@ controls:
             action:
               create: |-
                 for(i in range(0,6)){
-                  entry = self['卡池条目'].copy('卡池条目' + i.round)
-                  entry.index = i.round
+                  key = i.round
+                  entry = self['卡池条目'].copy('卡池条目' + key)
+                  entry.index = key
                 }
             children:
               卡池条目:
@@ -729,8 +730,9 @@ controls:
             action:
               create: |-
                 for(i in range(0,10)){
-                  item = self['十连单个'].copy('十连单个' + i.round)
-                  item.slotId = 20 + i.round
+                  key = i.round
+                  item = self['十连单个'].copy('十连单个' + key)
+                  item.slotId = 20 + key
                 }
             children:
               十连单个:

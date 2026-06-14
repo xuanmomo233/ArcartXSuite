@@ -112,14 +112,14 @@
       var.timeoutMs = 0
 
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
       width: 1920
       height: 1080
     children:
-      target_panel:
+      目标面板:
         type: Canvas
         attribute:
           point: ~top_center
@@ -129,7 +129,7 @@ controls:
           height: 108
           visible: var.isVisible
         children:
-          background:
+          背景:
             type: Texture
             attribute:
               point: ~stretch_all
@@ -140,7 +140,7 @@ controls:
               stroke:
                 width: 3
                 color: ~0,0,0,255
-          title:
+          标题:
             type: Text
             attribute:
               point: ~top_left
@@ -148,7 +148,7 @@ controls:
               y: 14
               texts: "var.title"
               fontSize: 49
-          distance:
+          距离:
             type: Text
             attribute:
               point: ~top_right
@@ -156,7 +156,7 @@ controls:
               y: 18
               texts: "'&f' + var.distanceText"
               fontSize: 36
-          bar_background:
+          血条背景:
             type: Texture
             attribute:
               point: ~top_left
@@ -171,7 +171,7 @@ controls:
               stroke:
                 width: 2
                 color: ~0,0,0,180
-          bar_fill:
+          血条填充:
             type: Texture
             attribute:
               point: ~top_left
@@ -182,7 +182,7 @@ controls:
               normal: ~220,72,72,255
               shape: ~round_rect
               radius: 10
-          hp_text:
+          血量文字:
             type: Text
             attribute:
               point: ~top_left
@@ -190,7 +190,7 @@ controls:
               y: 80
               texts: "'&f' + var.healthText + '&8/&f' + var.maxHealthText + ' &7(' + var.healthPercentText + '%)'"
               fontSize: 36
-          age_text:
+          超时文字:
             type: Text
             attribute:
               point: ~top_right

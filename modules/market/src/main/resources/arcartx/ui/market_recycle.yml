@@ -28,6 +28,18 @@ ui:
         json = packet['recycleItemJson' + key]
         if(json != null && json != ''){
           var.itemJsons[key] = json
+        } else {
+          var.itemJsons[key] = var.emptyItemJson
+        }
+      }
+      for(i in range(0, var.maxRecycleCount)){
+        key = i.round
+        item = val.回收列表['回收项' + key]
+        if(item != null){
+          icon = item['物品图标']
+          if(icon != null){
+            icon.seticon()
+          }
         }
       }
     update: |-
@@ -41,10 +53,22 @@ ui:
         json = packet['recycleItemJson' + key]
         if(json != null && json != ''){
           var.itemJsons[key] = json
+        } else {
+          var.itemJsons[key] = var.emptyItemJson
+        }
+      }
+      for(i in range(0, var.maxRecycleCount)){
+        key = i.round
+        item = val.回收列表['回收项' + key]
+        if(item != null){
+          icon = item['物品图标']
+          if(icon != null){
+            icon.seticon()
+          }
         }
       }
   action:
-    load: |-
+    open: |-
       var.packetId = 'AXS_MARKET'
       var.totalValue = '0'
       var.currency = 'money'
@@ -53,7 +77,7 @@ ui:
       var.itemJsons = {}
       var.scrollRatio = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-    open: |-
+      var.maxRecycleCount = 36
       Packet.send(var.packetId, 'recycle_preview')
 
 controls:
@@ -155,19 +179,33 @@ controls:
                   y: 12
                   texts: '&7可回收物品'
                   fontSize: 32
+              列表纵向滑块:
+                type: Texture
+                val: 列表纵向滑块
+                attribute:
+                  x: 1020
+                  y: 48
+                  width: 6
+                  height: 50
+                  normal: ~120,120,120,200
+                  maxDragY: 420
               列表滚动:
                 type: Scroll
                 val: 列表滚动
                 attribute:
                   x: 10
                   y: 48
-                  width: 1016
+                  width: 1010
                   height: 470
-                  moveY: var.scrollRatio
+                  moveY: "self.parent['列表纵向滑块'].getDragYRatio()"
                 action:
                   wheel: |-
-                    var.scrollRatio = Math.max(0, Math.min(1, var.scrollRatio + self.wheelValue * 0.06))
-                    self.moveY = var.scrollRatio
+                    if(self.moveY >= 0 && self.wheelValue > 0){
+                      self.parent['列表纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
+                    if(self.moveY <= 1 && self.wheelValue < 0){
+                      self.parent['列表纵向滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                    }
                 children:
                   回收列表:
                     val: 回收列表
@@ -175,11 +213,23 @@ controls:
                     attribute:
                       width: 996
                       spaceBetween: 6
+                    action:
+                      create: |-
+                        for(i in range(0, var.maxRecycleCount)){
+                          key = i.round
+                          item = self['回收项'].copy('回收项' + key)
+                          item.entryKey = key
+                          icon = item['物品图标']
+                          if(icon != null){
+                            icon.entryKey = key
+                          }
+                        }
                     children:
                       回收项:
                         type: Texture
                         attribute:
-                          entry: var.recyclables[self.key]
+                          entryKey: 0
+                          entry: var.recyclables[self.entryKey]
                           visible: self.entry != null
                           width: 996
                           height: 64
@@ -195,6 +245,7 @@ controls:
                           物品图标:
                             type: Slot
                             attribute:
+                              entryKey: 0
                               slotType: ~Icon
                               itemScale: 0.64
                               x: 8
@@ -205,10 +256,7 @@ controls:
                               shape: ~round_rect
                               radius: 10
                               through: true
-                              seticon: "self.setItemIcon(var.itemJsons[self.parent.key])"
-                            action:
-                              create: |-
-                                self.seticon()
+                              seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
                           名称:
                             type: Text
                             attribute:
@@ -273,12 +321,6 @@ controls:
                                   center: true
                                   fontSize: 28
                                   texts: '&f回收'
-              回收观察:
-                type: Observer
-                attribute:
-                  target: val.回收列表['回收项']
-                  subscribe: var.recyclables
-                  maxSize: 36
 
           # ── 底部操作栏 ──────────────────────────────
           总价值:

@@ -49,7 +49,7 @@ ui:
       var.weeklyTaskCount = packet['weeklyTaskCount']
       var.seasonTaskCount = packet['seasonTaskCount']
   action:
-    load: |-
+    open: |-
       var.packetId = 'AXS_BATTLEPASS'
       var.dailyTasks = {}
       var.weeklyTasks = {}
@@ -60,21 +60,6 @@ ui:
       var.maxDailyCount = 10
       var.maxWeeklyCount = 10
       var.maxSeasonCount = 10
-      for(i in range(0, var.maxDailyCount)){
-        key = i.round
-        item = val.每日任务列表['任务项'].copy('任务项' + key)
-        item.entryKey = key
-      }
-      for(i in range(0, var.maxWeeklyCount)){
-        key = i.round
-        item = val.每周任务列表['任务项'].copy('任务项' + key)
-        item.entryKey = key
-      }
-      for(i in range(0, var.maxSeasonCount)){
-        key = i.round
-        item = val.赛季任务列表['任务项'].copy('任务项' + key)
-        item.entryKey = key
-      }
 
 controls:
   根:
@@ -145,6 +130,16 @@ controls:
                   fontSize: 36
                   texts: '&fX'
 
+          任务滑块:
+            type: Texture
+            val: 任务滑块
+            attribute:
+              x: 758
+              y: 100
+              width: 6
+              height: 50
+              normal: ~120,120,120,200
+              maxDragY: 450
           滚动区:
             type: Scroll
             attribute:
@@ -152,13 +147,14 @@ controls:
               y: 100
               width: 728
               height: 500
-              moveY: 0
+              moveY: "self.parent['任务滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.wheelValue > 0){
-                  self.moveY = Math.max(0, self.moveY - 0.1)
-                }elif(self.wheelValue < 0){
-                  self.moveY = Math.min(1, self.moveY + 0.1)
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['任务滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['任务滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
               任务总容器:
@@ -190,6 +186,13 @@ controls:
                           y: 44
                           width: 728
                           spaceBetween: 6
+                        action:
+                          create: |-
+                            for(i in range(0, var.maxDailyCount)){
+                              key = i.round
+                              item = self['任务项'].copy('任务项' + key)
+                              item.entryKey = key
+                            }
                         children:
                           任务项:
                             type: Texture
@@ -278,6 +281,13 @@ controls:
                           y: 44
                           width: 728
                           spaceBetween: 6
+                        action:
+                          create: |-
+                            for(i in range(0, var.maxWeeklyCount)){
+                              key = i.round
+                              item = self['任务项'].copy('任务项' + key)
+                              item.entryKey = key
+                            }
                         children:
                           任务项:
                             type: Texture
@@ -366,6 +376,13 @@ controls:
                           y: 44
                           width: 728
                           spaceBetween: 6
+                        action:
+                          create: |-
+                            for(i in range(0, var.maxSeasonCount)){
+                              key = i.round
+                              item = self['任务项'].copy('任务项' + key)
+                              item.entryKey = key
+                            }
                         children:
                           任务项:
                             type: Texture

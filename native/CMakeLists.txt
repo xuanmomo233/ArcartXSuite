@@ -9,14 +9,13 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 find_package(JNI REQUIRED)
 include_directories(${JNI_INCLUDE_DIRS})
 
-# ─── OpenSSL（AES-GCM / SHA-256 / 签名验证） ───────────────────
+# ─── OpenSSL（AES-GCM / SHA-256） ─────────────────────────────
 find_package(OpenSSL REQUIRED)
 
 # ─── 源文件 ─────────────────────────────────────────────────────
 set(SOURCES
     src/axs_native.cpp
     src/resource_decrypt.cpp
-    src/ticket_verify.cpp
     src/key_unwrap.cpp
     src/env_check.cpp
     src/module_decrypt.cpp

@@ -1,4 +1,4 @@
-﻿# AXS 资源说明
+# AXS 资源说明
 # 用途: OnlineRewards 模块默认菜单，用于签到、查看在线阶段奖励和签到奖励。
 # 前置依赖: ArcartX；OnlineRewards 模块启用后会自动注册或导出。
 # 启用开关: config.yml -> modules.onlinerewards.enabled + modules.onlinerewards.password
@@ -34,6 +34,7 @@ ui:
       var.signInTotal = packet['signInTotal']
       var.makeupCardCount = packet['makeupCardCount']
       var.calendarMonthText = packet['calendarMonthText']
+      var.calendarCount = packet['calendarCount']
       var.calendarMonthOffset = packet['calendarMonthOffset']
       var.selectedDateText = packet['selectedDateText']
       var.selectedCanMakeup = packet['selectedCanMakeup']
@@ -65,6 +66,7 @@ ui:
       var.signInTotal = packet['signInTotal']
       var.makeupCardCount = packet['makeupCardCount']
       var.calendarMonthText = packet['calendarMonthText']
+      var.calendarCount = packet['calendarCount']
       var.calendarMonthOffset = packet['calendarMonthOffset']
       var.selectedDateText = packet['selectedDateText']
       var.selectedCanMakeup = packet['selectedCanMakeup']
@@ -76,7 +78,7 @@ ui:
       var.calendarRows = packet['calendarRows']
       var.selectedRewardRows = packet['selectedRewardRows']
   action:
-    load: |-
+    open: |-
       var.packetId = 'AXS_ONLINE_REWARDS'
       var.dailyTimeText = '0分钟'
       var.weeklyTimeText = '0分钟'
@@ -107,8 +109,10 @@ ui:
       var.signInRewardRows = {}
       var.calendarRows = {}
       var.selectedRewardRows = {}
+      var.maxRewardCount = 32
+      var.maxSelectedRewardCount = 32
 controls:
-  adaptive:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
@@ -296,6 +300,16 @@ controls:
               y: 350
               texts: "~&0在线阶段奖励"
               fontSize: 49
+          奖励滑块:
+            type: Texture
+            val: 奖励滑块
+            attribute:
+              x: 644
+              y: 392
+              width: 6
+              height: 50
+              normal: ~120,120,120,200
+              maxDragY: 310
           reward_scroll:
             type: Scroll
             attribute:
@@ -303,13 +317,14 @@ controls:
               y: 392
               width: 588
               height: 360
-              moveY: 0
+              moveY: "self.parent['奖励滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.wheelValue > 0){
-                  self.moveY = Math.max(0, self.moveY - 0.1)
-                }elif(self.wheelValue < 0){
-                  self.moveY = Math.min(1, self.moveY + 0.1)
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
               reward_stack:
@@ -318,14 +333,22 @@ controls:
                 attribute:
                   width: 588
                   spaceBetween: 10
+                action:
+                  create: |-
+                    for(i in range(0, var.maxRewardCount)){
+                      key = i.round
+                      ri = self['item'].copy('item' + key)
+                      ri.entryKey = key
+                    }
                 children:
                   item:
                     type: Texture
                     attribute:
-                      entry: var.rewardRows[self.key]
+                      entryKey: 0
+                      entry: var.rewardRows[self.entryKey]
                       width: 588
                       height: 74
-                      normal: "self.entry['current'] ? '110,170,230,255' : '120,120,125,255'"
+                      normal: "self.entry != null && self.entry['current'] ? '110,170,230,255' : '120,120,125,255'"
                       shape: ~round_rect
                       radius: 14
                       visible: self.entry != null
@@ -335,28 +358,22 @@ controls:
                         attribute:
                           x: 18
                           y: 12
-                          texts: "'&0' + self.parent.entry['name']"
+                          texts: "self.parent.entry != null ? '&0' + self.parent.entry['name'] : ''"
                           fontSize: 36
                       meta:
                         type: Text
                         attribute:
                           x: 18
                           y: 42
-                          texts: "'&7' + self.parent.entry['thresholdText'] + '   &8' + self.parent.entry['rewardText']"
+                          texts: "self.parent.entry != null ? '&7' + self.parent.entry['thresholdText'] + '   &8' + self.parent.entry['rewardText'] : ''"
                           fontSize: 36
                       state:
                         type: Text
                         attribute:
                           x: 476
                           y: 25
-                          texts: "self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['current'] ? '&e进行中' : '&7未达成')"
+                          texts: "self.parent.entry != null ? (self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['current'] ? '&e进行中' : '&7未达成')) : ''"
                           fontSize: 36
-          reward_observer:
-            type: Observer
-            attribute:
-              target: val.reward_stack['item']
-              subscribe: var.rewardRows
-              maxSize: 32
           signin_reward_box:
             type: Texture
             attribute:
@@ -436,1301 +453,19 @@ controls:
               column: 7
               spaceBetweenX: 8
               spaceBetweenY: 8
+            action:
+              create: |-
+                for(i in range(0, var.calendarCount)){
+                  key = i.round
+                  di = self['日历模板'].copy('day_' + key)
+                  di.entryKey = key
+                }
             children:
-              day_0:
+              日历模板:
                 type: Texture
                 attribute:
-                  entry: var.calendarRows['0']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_1:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['1']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_2:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['2']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_3:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['3']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_4:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['4']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_5:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['5']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_6:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['6']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_7:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['7']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_8:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['8']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_9:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['9']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_10:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['10']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_11:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['11']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_12:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['12']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_13:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['13']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_14:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['14']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_15:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['15']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_16:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['16']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_17:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['17']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_18:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['18']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_19:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['19']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_20:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['20']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_21:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['21']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_22:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['22']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_23:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['23']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_24:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['24']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_25:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['25']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_26:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['26']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_27:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['27']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_28:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['28']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_29:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['29']
-                  width: 78
-                  height: 42
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 49
-                  visible: self.entry != null
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'preview_day', self.entry['date'])
-                children:
-                  selected:
-                    type: Texture
-                    attribute:
-                      through: true
-                      width: 78
-                      height: 42
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
-                      shape: ~round_rect
-                      radius: 10
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
-                  today:
-                    type: Text
-                    attribute:
-                      through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
-                      texts: "~&6今"
-                      fontSize: 36
-              day_30:
-                type: Texture
-                attribute:
-                  entry: var.calendarRows['30']
+                  entryKey: 0
+                  entry: var.calendarRows[self.entryKey]
                   width: 78
                   height: 42
                   normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
@@ -1777,6 +512,16 @@ controls:
               y: 642
               texts: "'&0' + var.selectedDateText + ' &7可能奖励'"
               fontSize: 36
+          日期奖励滑块:
+            type: Texture
+            val: 日期奖励滑块
+            attribute:
+              x: 1156
+              y: 674
+              width: 6
+              height: 20
+              normal: ~120,120,120,200
+              maxDragY: 66
           selected_reward_scroll:
             type: Scroll
             attribute:
@@ -1784,13 +529,14 @@ controls:
               y: 674
               width: 430
               height: 86
-              moveY: 0
+              moveY: "self.parent['日期奖励滑块'].getDragYRatio()"
             action:
               wheel: |-
-                if(self.wheelValue > 0){
-                  self.moveY = Math.max(0, self.moveY - 0.1)
-                }elif(self.wheelValue < 0){
-                  self.moveY = Math.min(1, self.moveY + 0.1)
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['日期奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['日期奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
               selected_reward_stack:
@@ -1799,11 +545,19 @@ controls:
                 attribute:
                   width: 430
                   spaceBetween: 6
+                action:
+                  create: |-
+                    for(i in range(0, var.maxSelectedRewardCount)){
+                      key = i.round
+                      sri = self['item'].copy('item' + key)
+                      sri.entryKey = key
+                    }
                 children:
                   item:
                     type: Texture
                     attribute:
-                      entry: var.selectedRewardRows[self.key]
+                      entryKey: 0
+                      entry: var.selectedRewardRows[self.entryKey]
                       width: 430
                       height: 52
                       normal: ~255,255,255,120
@@ -1816,18 +570,12 @@ controls:
                         attribute:
                           x: 12
                           y: 6
-                          texts: "self.parent.entry['title']"
+                          texts: "self.parent.entry != null ? self.parent.entry['title'] : ''"
                           fontSize: 28
                       trigger:
                         type: Text
                         attribute:
                           x: 12
                           y: 28
-                          texts: "'&7' + self.parent.entry['trigger'] + '   &8' + self.parent.entry['rewardText']"
+                          texts: "self.parent.entry != null ? '&7' + self.parent.entry['trigger'] + '   &8' + self.parent.entry['rewardText'] : ''"
                           fontSize: 24
-          selected_reward_observer:
-            type: Observer
-            attribute:
-              target: val.selected_reward_stack['item']
-              subscribe: var.selectedRewardRows
-              maxSize: 32

@@ -1,4 +1,4 @@
-﻿ui:
+ui:
   isHud: true
   hide:
   - player_list
@@ -38,7 +38,7 @@
       var.单列数量 = Math.ceil(server.server_online / val.TAB遍历.row)
       var.第一列人数 = Math.min(server.server_online, 15)
 controls:
-  adaptive:
+  自适应全局布局:
     type: adaptive
     attribute:
       point: ~top_center

@@ -20,7 +20,8 @@ public record ResolvedTitleState(
     Map<String, Integer> setCompletionCounts,
     Map<String, Boolean> setActiveMap,
     Map<String, Double> setBonusAttributes,
-    List<String> setBonusAttributeSourceLines
+    List<String> setBonusAttributeSourceLines,
+    TitleDefinition totalDisplayTitle
 ) {
     public ResolvedTitleState {
         equippedTitleIdsByGroup = immutableStringCopy(equippedTitleIdsByGroup);
