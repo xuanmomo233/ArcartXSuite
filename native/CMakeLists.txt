@@ -12,6 +12,9 @@ include_directories(${JNI_INCLUDE_DIRS})
 # ─── OpenSSL（AES-GCM / SHA-256） ─────────────────────────────
 find_package(OpenSSL REQUIRED)
 
+# ─── zlib（GZIP 解压） ──────────────────────────────────────────
+find_package(ZLIB REQUIRED)
+
 # ─── 源文件 ─────────────────────────────────────────────────────
 set(SOURCES
     src/axs_native.cpp
@@ -23,7 +26,7 @@ set(SOURCES
 
 add_library(axs-native SHARED ${SOURCES})
 target_include_directories(axs-native PRIVATE include ${JNI_INCLUDE_DIRS})
-target_link_libraries(axs-native PRIVATE OpenSSL::Crypto)
+target_link_libraries(axs-native PRIVATE OpenSSL::Crypto ZLIB::ZLIB)
 
 # Strip symbols in release
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
