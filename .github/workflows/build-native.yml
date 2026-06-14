@@ -33,13 +33,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-linux
-          path: native/build/libaxs-native.so
+          path: src/main/resources/native/libaxs-native.so
 
   build-windows:
     runs-on: windows-latest
     env:
       VCPKG_ROOT: C:\vcpkg
       VCPKG_DEFAULT_TRIPLET: x64-windows-static
+      CMAKE_PREFIX_PATH: C:\vcpkg\installed\x64-windows-static
     steps:
       - uses: actions/checkout@v4
 
@@ -60,7 +61,7 @@ jobs:
       - name: Build native library
         run: |
           cd native
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static
           cmake --build build --config Release
         shell: cmd
 
@@ -68,7 +69,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-windows
-          path: native/build/Release/axs-native.dll
+          path: src/main/resources/native/axs-native.dll
 
   build-gradle:
     runs-on: ubuntu-latest
