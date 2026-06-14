@@ -65,11 +65,20 @@ jobs:
           cmake --build build --config Release
         shell: cmd
 
+      - name: Check files
+        shell: cmd
+        run: |
+          dir src\main\resources\native\
+          dir native\build\Release\
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: native-windows
-          path: src/main/resources/native/axs-native.dll
+          path: |
+            src/main/resources/native/axs-native.dll
+            native/build/Release/axs-native.dll
+          if-no-files-found: warn
 
   build-gradle:
     runs-on: ubuntu-latest
