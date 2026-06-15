@@ -63,7 +63,7 @@ jobs:
         run: |
           cd native
           cmake -B build -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
-          cmake --build build
+          cmake --build build --verbose
 
       - name: Debug build output
         shell: msys2 {0}
@@ -79,14 +79,15 @@ jobs:
         shell: msys2 {0}
         run: |
           echo "Searching for built DLL..."
-          find native -name "*.dll" -type f
-          DLL_PATH=$(find native -name "*.dll" -type f | grep -E "(axs-native|libaxs-native)" | head -1)
+          find . -name "*.dll" -type f
+          DLL_PATH=$(find . -name "*.dll" -type f | grep -E "(axs-native|libaxs-native)" | head -1)
           if [ -z "$DLL_PATH" ]; then
-            echo "ERROR: No DLL found anywhere under native/"
+            echo "ERROR: No DLL found anywhere!"
             exit 1
           fi
           echo "Found DLL at: $DLL_PATH"
           mkdir -p src/main/resources/native
+          # MinGW 会生成 libaxs-native.dll，需要重命名为 axs-native.dll
           cp "$DLL_PATH" src/main/resources/native/axs-native.dll
           echo "Copied to src/main/resources/native/axs-native.dll"
           ls -la src/main/resources/native/axs-native.dll
