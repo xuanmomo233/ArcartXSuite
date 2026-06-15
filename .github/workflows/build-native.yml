@@ -64,6 +64,17 @@ jobs:
           cmake -B build -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
           cmake --build build
 
+      - name: Verify architecture
+        shell: msys2 {0}
+        run: |
+          file src/main/resources/native/axs-native.dll
+          if ! file src/main/resources/native/axs-native.dll | grep -q "x86-64"; then
+            echo "ERROR: DLL is NOT x86-64 architecture!"
+            file src/main/resources/native/axs-native.dll
+            exit 1
+          fi
+          echo "OK: DLL is x86-64"
+
       - name: Move artifact to root
         run: |
           copy src\main\resources\native\axs-native.dll axs-native.dll

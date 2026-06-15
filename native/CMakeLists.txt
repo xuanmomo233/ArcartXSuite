@@ -18,6 +18,10 @@ find_package(JNI REQUIRED)
 include_directories(${JNI_INCLUDE_DIRS})
 
 # ─── OpenSSL（AES-GCM / SHA-256） ─────────────────────────────
+# MinGW 下强制使用静态库，避免目标服务器缺少 libcrypto DLL
+if(MINGW)
+    set(OPENSSL_USE_STATIC_LIBS TRUE)
+endif()
 find_package(OpenSSL REQUIRED)
 
 # ─── zlib（GZIP 解压） ──────────────────────────────────────────
