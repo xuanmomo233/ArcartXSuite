@@ -65,14 +65,24 @@ jobs:
           cmake -B build -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
           cmake --build build
 
+      - name: Debug build output
+        shell: msys2 {0}
+        run: |
+          echo "=== native/build contents ==="
+          find native/build -type f | head -30
+          echo "=== Any .dll files ==="
+          find . -name "*.dll" -type f
+          echo "=== CMake cache output dirs ==="
+          grep -E "OUTPUT_DIRECTORY|CMAKE_.*_OUTPUT" native/build/CMakeCache.txt || true
+
       - name: Locate and copy DLL
         shell: msys2 {0}
         run: |
           echo "Searching for built DLL..."
-          find native -name "axs-native.dll" -type f
-          DLL_PATH=$(find native -name "axs-native.dll" -type f | head -1)
+          find native -name "*.dll" -type f
+          DLL_PATH=$(find native -name "*.dll" -type f | grep -E "(axs-native|libaxs-native)" | head -1)
           if [ -z "$DLL_PATH" ]; then
-            echo "ERROR: axs-native.dll not found anywhere under native/"
+            echo "ERROR: No DLL found anywhere under native/"
             exit 1
           fi
           echo "Found DLL at: $DLL_PATH"
