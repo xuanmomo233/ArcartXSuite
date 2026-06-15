@@ -173,19 +173,27 @@ jobs:
           gradle clean
           gradle build --no-build-cache
 
-      - name: Diagnose after build
+      - name: Fix DLL in final JAR
         run: |
-          echo "=== Source DLL (should be 31bca0...) ==="
-          md5sum src/main/resources/native/axs-native.dll || true
-          echo "=== axs-core build/resources/main DLL ==="
-          md5sum axs-core/build/resources/main/native/axs-native.dll || true
-          echo "=== All DLLs in build ==="
-          find . -name "*.dll" -type f -exec md5sum {} \; || true
+          # Gradle build 过程中 DLL 可能被损坏，直接用 jar 命令替换为正确的版本
+          JAR_PATH=$(find "$PWD/axs-core/build/libs" -maxdepth 1 -name "ArcartXSuite-[0-9]*.jar" -not -name "*plain*" -not -name "*unobf*" -not -name "*step*" | sort | tail -1)
+          if [ -z "$JAR_PATH" ]; then
+            echo "ERROR: Final JAR not found"
+            exit 1
+          fi
+          echo "Fixing DLL in: $JAR_PATH"
+          echo "Backup MD5:"
+          md5sum "$PWD/src/main/resources/native/axs-native.dll"
+          # 用 jar 更新 JAR 中的 DLL
+          cd "$PWD/src/main/resources"
+          jar uf "$JAR_PATH" native/axs-native.dll
+          cd - > /dev/null
+          echo "DLL replaced. Verifying..."
 
       - name: Verify DLL in JAR
         run: |
           # 查找构建产物中的 JAR（使用绝对路径）
-          JAR_PATH=$(find "$PWD" -name "ArcartXSuite-[0-9]*.jar" -not -name "*plain*" -not -name "*unobf*" -not -name "*step*" | head -1)
+          JAR_PATH=$(find "$PWD/axs-core/build/libs" -maxdepth 1 -name "ArcartXSuite-[0-9]*.jar" -not -name "*plain*" -not -name "*unobf*" -not -name "*step*" | sort | tail -1)
           if [ -z "$JAR_PATH" ]; then
             echo "ERROR: Final JAR not found"
             exit 1
