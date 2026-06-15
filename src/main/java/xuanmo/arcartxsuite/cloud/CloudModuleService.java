@@ -17,9 +17,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Logger;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.ArcartXSuitePlugin;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.module.ModuleRegistry;
 import xuanmo.arcartxsuite.security.NativeBridge;
@@ -29,7 +28,6 @@ import xuanmo.arcartxsuite.security.NativeBridge;
  */
 public final class CloudModuleService {
 
-    private static final Logger LOGGER = Logger.getLogger("AXS-Cloud");
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
     private static final HttpClient HTTP = HttpClient.newBuilder()
         .connectTimeout(TIMEOUT)
@@ -38,7 +36,7 @@ public final class CloudModuleService {
     /** 云端平台地址：硬编码于宿主内，禁止通过 config.yml 篡改。 */
     private static final String API_BASE_URL = "https://cloud.021209.xyz";
 
-    private final JavaPlugin plugin;
+    private final ArcartXSuitePlugin plugin;
     private final ModuleRegistry registry;
     private final String apiBaseUrl;
     private final String qq;
@@ -54,7 +52,7 @@ public final class CloudModuleService {
     private volatile List<String> allowedModules = List.of();
     private final Map<String, byte[]> cachedAxb = new ConcurrentHashMap<>();
 
-    public CloudModuleService(JavaPlugin plugin, ModuleRegistry registry) {
+    public CloudModuleService(ArcartXSuitePlugin plugin, ModuleRegistry registry) {
         this.plugin = plugin;
         this.registry = registry;
         org.bukkit.configuration.file.FileConfiguration config = plugin.getConfig();
@@ -80,7 +78,7 @@ public final class CloudModuleService {
      */
     public CompletableFuture<Boolean> bindServer() {
         if (qq.isEmpty() || password.isEmpty()) {
-            LOGGER.warning("[Cloud] 未配置 cloud.qq / cloud.password，无法绑定服务器。");
+            plugin.consoleWarn("[Cloud] 未配置 cloud.qq / cloud.password，无法绑定服务器。");
             return CompletableFuture.completedFuture(false);
         }
         String fingerprint = generateFingerprint();
@@ -116,17 +114,17 @@ public final class CloudModuleService {
                             plugin.getConfig().set("cloud.server-code", code);
                             plugin.saveConfig();
                         });
-                        LOGGER.info("[Cloud] 服务器绑定成功，服务器码: " + code);
+                        plugin.consoleInfo("[Cloud] 服务器绑定成功，服务器码: " + code);
                         return true;
                     }
-                    LOGGER.warning("[Cloud] 绑定响应缺少 serverCode: " + body);
+                    plugin.consoleWarn("[Cloud] 绑定响应缺少 serverCode: " + body);
                     return false;
                 }
-                LOGGER.warning("[Cloud] 服务器绑定失败: " + resp.statusCode() + " " + resp.body());
+                plugin.consoleWarn("[Cloud] 服务器绑定失败: " + resp.statusCode() + " " + resp.body());
                 return false;
             })
             .exceptionally(ex -> {
-                LOGGER.warning("[Cloud] 服务器绑定异常: " + ex.getMessage());
+                plugin.consoleWarn("[Cloud] 服务器绑定异常: " + ex.getMessage());
                 return false;
             });
     }
@@ -164,15 +162,15 @@ public final class CloudModuleService {
                         this.moduleToken = token;
                         this.tokenExpiry = System.currentTimeMillis() + 23 * 3600 * 1000;
                         this.allowedModules = extractStringArray(body, "allowedModules");
-                        LOGGER.info("[Cloud] 模块令牌已刷新，授权模块: " + allowedModules.size());
+                        plugin.consoleInfo("[Cloud] 模块令牌已刷新，授权模块: " + allowedModules.size());
                         return true;
                     }
                 }
-                LOGGER.warning("[Cloud] 刷新令牌失败: " + resp.statusCode() + " " + resp.body());
+                plugin.consoleWarn("[Cloud] 刷新令牌失败: " + resp.statusCode() + " " + resp.body());
                 return false;
             })
             .exceptionally(ex -> {
-                LOGGER.warning("[Cloud] 刷新令牌异常: " + ex.getMessage());
+                plugin.consoleWarn("[Cloud] 刷新令牌异常: " + ex.getMessage());
                 return false;
             });
     }
@@ -187,14 +185,14 @@ public final class CloudModuleService {
 
         return ready.thenCompose(bound -> {
             if (!bound) {
-                LOGGER.warning("[Cloud] 未能绑定服务器，跳过云端模块同步。");
+                plugin.consoleWarn("[Cloud] 未能绑定服务器，跳过云端模块同步。");
                 return CompletableFuture.<Void>completedFuture(null);
             }
             return refreshToken().thenCompose(ok -> {
                 if (!ok) return CompletableFuture.<Void>completedFuture(null);
                 List<String> mods = allowedModules;
                 if (mods == null || mods.isEmpty()) {
-                    LOGGER.info("[Cloud] 该服务器未装备任何云端模块。");
+                    plugin.consoleInfo("[Cloud] 该服务器未装备任何云端模块。");
                     return CompletableFuture.<Void>completedFuture(null);
                 }
                 CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
@@ -210,32 +208,32 @@ public final class CloudModuleService {
     private CompletableFuture<Void> downloadAndLoad(String moduleId) {
         return downloadAxb(moduleId).thenCompose(axb -> {
             if (axb == null || axb.length == 0) {
-                LOGGER.warning("[Cloud] 下载模块 " + moduleId + " 失败");
+                plugin.consoleWarn("[Cloud] 下载模块 " + moduleId + " 失败");
                 return CompletableFuture.<Void>completedFuture(null);
             }
             return requestModuleKey(moduleId).thenAccept(keyResp -> {
                 if (keyResp == null) {
-                    LOGGER.warning("[Cloud] 获取模块 " + moduleId + " 密钥失败");
+                    plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥失败");
                     return;
                 }
                 String keyB64 = extractJsonField(keyResp, "key");
                 if (keyB64 == null) {
-                    LOGGER.warning("[Cloud] 模块 " + moduleId + " 密钥数据不完整");
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 密钥数据不完整");
                     return;
                 }
                 byte[] key = Base64.getDecoder().decode(keyB64);
                 // axb 自包含 IV（前 12 字节），native 内部读取，无需单独传入
                 byte[] jarBytes = NativeBridge.decryptModule(axb, key);
                 if (jarBytes == null || jarBytes.length == 0) {
-                    LOGGER.warning("[Cloud] 解密模块 " + moduleId + " 失败");
+                    plugin.consoleWarn("[Cloud] 解密模块 " + moduleId + " 失败");
                     return;
                 }
                 plugin.getServer().getScheduler().runTask(plugin, () -> {
                     boolean ok = registry.loadCloudModule(jarBytes);
                     if (ok) {
-                        LOGGER.info("[Cloud] 模块 " + moduleId + " 已加载");
+                        plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载");
                     } else {
-                        LOGGER.warning("[Cloud] 模块 " + moduleId + " 加载失败");
+                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 加载失败");
                     }
                 });
             });
@@ -262,11 +260,11 @@ public final class CloudModuleService {
                     cachedAxb.put(moduleId, data);
                     return data;
                 }
-                LOGGER.warning("[Cloud] 下载 " + moduleId + " 失败: " + resp.statusCode());
+                plugin.consoleWarn("[Cloud] 下载 " + moduleId + " 失败: " + resp.statusCode());
                 return null;
             })
             .exceptionally(ex -> {
-                LOGGER.warning("[Cloud] 下载 " + moduleId + " 异常: " + ex.getMessage());
+                plugin.consoleWarn("[Cloud] 下载 " + moduleId + " 异常: " + ex.getMessage());
                 return null;
             });
     }
@@ -287,12 +285,12 @@ public final class CloudModuleService {
 
     // -- 工具方法 ------------------------------------------------
 
-    private static KeyPair generateKeyPair() {
+    private KeyPair generateKeyPair() {
         try {
             KeyPairGenerator kpg = KeyPairGenerator.getInstance("Ed25519");
             return kpg.generateKeyPair();
         } catch (Exception e) {
-            LOGGER.warning("[Cloud] 生成 Ed25519 密钥对失败: " + e.getMessage());
+            plugin.consoleWarn("[Cloud] 生成 Ed25519 密钥对失败: " + e.getMessage());
             return null;
         }
     }
@@ -306,7 +304,7 @@ public final class CloudModuleService {
             sig.update(data.getBytes(StandardCharsets.UTF_8));
             return Base64.getEncoder().encodeToString(sig.sign());
         } catch (Exception e) {
-            LOGGER.warning("[Cloud] 签名失败: " + e.getMessage());
+            plugin.consoleWarn("[Cloud] 签名失败: " + e.getMessage());
             return "";
         }
     }
