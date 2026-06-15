@@ -56,6 +56,7 @@ jobs:
             mingw-w64-x86_64-zlib
             mingw-w64-x86_64-make
             make
+            file
 
       - name: Build native library
         shell: msys2 {0}
@@ -64,9 +65,29 @@ jobs:
           cmake -B build -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
           cmake --build build
 
+      - name: Locate and copy DLL
+        shell: msys2 {0}
+        run: |
+          echo "Searching for built DLL..."
+          find native -name "axs-native.dll" -type f
+          DLL_PATH=$(find native -name "axs-native.dll" -type f | head -1)
+          if [ -z "$DLL_PATH" ]; then
+            echo "ERROR: axs-native.dll not found anywhere under native/"
+            exit 1
+          fi
+          echo "Found DLL at: $DLL_PATH"
+          mkdir -p src/main/resources/native
+          cp "$DLL_PATH" src/main/resources/native/axs-native.dll
+          echo "Copied to src/main/resources/native/axs-native.dll"
+          ls -la src/main/resources/native/axs-native.dll
+
       - name: Verify architecture
         shell: msys2 {0}
         run: |
+          if [ ! -f src/main/resources/native/axs-native.dll ]; then
+            echo "ERROR: DLL not found at src/main/resources/native/axs-native.dll"
+            exit 1
+          fi
           file src/main/resources/native/axs-native.dll
           if ! file src/main/resources/native/axs-native.dll | grep -q "x86-64"; then
             echo "ERROR: DLL is NOT x86-64 architecture!"
