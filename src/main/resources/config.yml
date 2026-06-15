@@ -140,7 +140,7 @@ chat-sign-bypass:
 account-type:
   # 是否查询 Mojang API 识别微软正版账号。
   # 关闭后仅按 UUID 版本判定（v4=LittleSkin，v3=离线），将无法识别微软正版账号。
-  enable-mojang-lookup: true
+  enable-mojang-lookup: false
   # Mojang API 请求超时（毫秒）。
   mojang-timeout-ms: 10000
   # Mojang API 代理配置（中国大陆网络环境建议配置）。
@@ -156,7 +156,7 @@ account-type:
 # 以及 authlib-injector 版本检测。
 auth:
   # 启动时自动检测 authlib-injector 版本并提示更新
-  auto-check-version: true
+  auto-check-version: false
   # Yggdrasil 认证源（用于 /axs auth setup 生成启动脚本）
   # 【混合登录】若 URL 包含 ?mixed，AXS 会：
   #   1. 生成的 start-mixed-auth 脚本会【先独立启动】本地 Yggdrasil 混合代理（见下方 mixed-proxy-port），
