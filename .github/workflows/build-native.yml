@@ -154,6 +154,31 @@ jobs:
       - name: Build Gradle project
         run: gradle build
 
+      - name: Verify DLL in JAR
+        run: |
+          # 查找构建产物中的 JAR
+          JAR_PATH=$(find . -name "ArcartXSuite-[0-9]*.jar" -not -name "*plain*" -not -name "*unobf*" -not -name "*step*" | head -1)
+          if [ -z "$JAR_PATH" ]; then
+            echo "ERROR: Final JAR not found"
+            exit 1
+          fi
+          echo "Found JAR: $JAR_PATH"
+          # 提取 DLL
+          mkdir -p /tmp/jar-verify
+          cd /tmp/jar-verify
+          jar xf "$JAR_PATH" native/axs-native.dll || true
+          if [ -f native/axs-native.dll ]; then
+            file native/axs-native.dll
+            if ! file native/axs-native.dll | grep -q "x86-64"; then
+              echo "ERROR: JAR 里的 DLL 不是 x86-64 架构!"
+              file native/axs-native.dll
+              exit 1
+            fi
+            echo "OK: JAR 里的 DLL 是 x86-64"
+          else
+            echo "WARN: JAR 里没有找到 axs-native.dll"
+          fi
+
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
