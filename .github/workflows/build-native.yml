@@ -144,7 +144,15 @@ jobs:
           path: src/main/resources/native/
 
       - name: List native artifacts
-        run: ls -la src/main/resources/native/
+        run: |
+          echo "=== Files in src/main/resources/native/ ==="
+          ls -la src/main/resources/native/
+          for f in src/main/resources/native/*; do
+            echo "--- $f ---"
+            md5sum "$f" || true
+            file "$f" || true
+            hexdump -C "$f" | head -4 || true
+          done
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
