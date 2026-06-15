@@ -156,8 +156,8 @@ jobs:
 
       - name: Verify DLL in JAR
         run: |
-          # 查找构建产物中的 JAR
-          JAR_PATH=$(find . -name "ArcartXSuite-[0-9]*.jar" -not -name "*plain*" -not -name "*unobf*" -not -name "*step*" | head -1)
+          # 查找构建产物中的 JAR（使用绝对路径）
+          JAR_PATH=$(find "$PWD" -name "ArcartXSuite-[0-9]*.jar" -not -name "*plain*" -not -name "*unobf*" -not -name "*step*" | head -1)
           if [ -z "$JAR_PATH" ]; then
             echo "ERROR: Final JAR not found"
             exit 1
