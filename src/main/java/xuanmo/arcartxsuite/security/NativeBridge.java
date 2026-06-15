@@ -1,5 +1,11 @@
 package xuanmo.arcartxsuite.security;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+
 /**
  * Native JNI 桥接类，提供加密/解密、签名验证等安全操作。
  */
@@ -7,9 +13,38 @@ public final class NativeBridge {
 
     static {
         try {
-            System.loadLibrary("axs_native");
-        } catch (UnsatisfiedLinkError e) {
+            loadNativeFromClasspath();
+        } catch (Exception e) {
             System.err.println("[AXS-Native] 无法加载 axs_native 库: " + e.getMessage());
+        }
+    }
+
+    private static void loadNativeFromClasspath() throws IOException {
+        String osName = System.getProperty("os.name").toLowerCase();
+        String libName;
+        if (osName.contains("win")) {
+            libName = "axs-native.dll";
+        } else if (osName.contains("linux")) {
+            libName = "libaxs-native.so";
+        } else if (osName.contains("mac")) {
+            libName = "libaxs-native.dylib";
+        } else {
+            throw new UnsupportedOperationException("不支持的操作系统: " + osName);
+        }
+
+        String resourcePath = "/native/" + libName;
+        try (InputStream in = NativeBridge.class.getResourceAsStream(resourcePath)) {
+            if (in == null) {
+                throw new IOException("Classpath 中未找到原生库: " + resourcePath);
+            }
+
+            Path tempDir = Files.createTempDirectory("axs_native");
+            tempDir.toFile().deleteOnExit();
+            Path tempFile = tempDir.resolve(libName);
+            tempFile.toFile().deleteOnExit();
+
+            Files.copy(in, tempFile, StandardCopyOption.REPLACE_EXISTING);
+            System.load(tempFile.toAbsolutePath().toString());
         }
     }
 
