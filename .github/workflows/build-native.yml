@@ -123,7 +123,8 @@ jobs:
           mkdir -p release
           find artifacts/native-linux -name "libaxs-native.so" -exec cp {} release/ \;
           find artifacts/native-windows -name "axs-native.dll" -exec cp {} release/ \;
-          find artifacts/axs-jar -name "*.jar" -exec cp {} release/ \;
+          # 只保留最终混淆产物 ArcartXSuite-<version>.jar，排除 plain/unobf/step 等中间产物
+          find artifacts/axs-jar -name "ArcartXSuite-[0-9]*.jar" -exec cp {} release/ \;
           ls -la release/
 
       - name: Generate Release Notes
@@ -161,7 +162,7 @@ jobs:
 
           ### 快速安装
 
-          1. 下载 \`ArcartXSuite-1.2.0-beta.jar\`（或其他 \`ArcartXSuite-*.jar\`）
+          1. 下载 \`ArcartXSuite-${VERSION}.jar\`（Release 中唯一的插件 JAR）
           2. 放入 Minecraft 服务器的 \`plugins/\` 目录
           3. 启动服务器，编辑 \`plugins/ArcartXSuite/config.yml\`
           4. 配置 \`cloud.qq\` 和 \`cloud.password\`

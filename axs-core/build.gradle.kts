@@ -144,7 +144,7 @@ val publishSrcTask = if (classFinalAvailable) "classFinalCore" else "obfuscateCo
 val publishCoreJar by tasks.registering {
     dependsOn(tasks.named(publishSrcTask))
     val src = publishSrcJar.get().asFile
-    val dst = rootDir.resolve("build/ArcartXSuite/ArcartXSuite-${version}.jar")
+    val dst = layout.buildDirectory.file("libs/ArcartXSuite-${version}.jar").get().asFile
     inputs.file(src)
     outputs.file(dst)
     doLast {
