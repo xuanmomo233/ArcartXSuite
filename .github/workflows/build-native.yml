@@ -3,13 +3,8 @@ name: Build Native Library
 on:
   push:
     branches: [main, master, develop]
-    paths:
-      - 'native/**'
-      - 'libs/**'
-      - '.github/workflows/build-native.yml'
   pull_request:
-    paths:
-      - 'native/**'
+    branches: [main, master, develop]
   workflow_dispatch:
 
 jobs:
