@@ -64,20 +64,15 @@ tasks {
     processResources {
         dependsOn(protectYamlResources)
         doFirst {
-            val osName = System.getProperty("os.name").lowercase()
-            val libName = when {
-                osName.contains("win") -> "axs-native.dll"
-                osName.contains("linux") -> "libaxs-native.so"
-                osName.contains("mac") -> "libaxs-native.dylib"
-                else -> throw GradleException("不支持的操作系统: $osName，无法确定 native 库名称")
-            }
-            val libFile = nativeLibDir.file(libName).asFile
-            if (!libFile.exists()) {
+            // jar 跨平台分发，只要包含任一平台的 native 库即可放行构建
+            val expectedLibs = listOf("axs-native.dll", "libaxs-native.so", "libaxs-native.dylib")
+            val found = expectedLibs.map { nativeLibDir.file(it).asFile }.filter { it.exists() }
+            if (found.isEmpty()) {
                 throw GradleException(
                     """
-                    Native 安全库缺失: ${libFile.absolutePath} 不存在。
+                    Native 安全库缺失: ${nativeLibDir.asFile.absolutePath} 下未找到任何平台原生库。
                     该库是云端模块解密（JNI）的必需组件，必须先构建后再打包 jar。
-                    构建步骤（CMake + OpenSSL + C++ 编译器）:
+                    本地构建步骤（CMake + OpenSSL + C++ 编译器）:
                       cd native
                       cmake -B build
                       cmake --build build --config Release
