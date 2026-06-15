@@ -11,12 +11,26 @@ import java.nio.file.StandardCopyOption;
  */
 public final class NativeBridge {
 
+    private static volatile boolean available = false;
+    private static volatile String loadError = null;
+
     static {
         try {
             loadNativeFromClasspath();
+            available = true;
         } catch (Exception e) {
-            System.err.println("[AXS-Native] 无法加载 axs_native 库: " + e.getMessage());
+            loadError = e.getMessage();
         }
+    }
+
+    /** 是否成功加载了原生库。 */
+    public static boolean isAvailable() {
+        return available;
+    }
+
+    /** 获取加载失败的错误信息（null 表示加载成功）。 */
+    public static String getLoadError() {
+        return loadError;
     }
 
     private static void loadNativeFromClasspath() throws IOException {

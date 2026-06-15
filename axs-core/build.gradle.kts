@@ -59,8 +59,33 @@ tasks {
         options.compilerArgs.add("-g:none")
     }
 
+    val nativeLibDir = rootProject.layout.projectDirectory.dir("src/main/resources/native")
+
     processResources {
         dependsOn(protectYamlResources)
+        doFirst {
+            val osName = System.getProperty("os.name").lowercase()
+            val libName = when {
+                osName.contains("win") -> "axs-native.dll"
+                osName.contains("linux") -> "libaxs-native.so"
+                osName.contains("mac") -> "libaxs-native.dylib"
+                else -> throw GradleException("不支持的操作系统: $osName，无法确定 native 库名称")
+            }
+            val libFile = nativeLibDir.file(libName).asFile
+            if (!libFile.exists()) {
+                throw GradleException(
+                    """
+                    Native 安全库缺失: ${libFile.absolutePath} 不存在。
+                    该库是云端模块解密（JNI）的必需组件，必须先构建后再打包 jar。
+                    构建步骤（CMake + OpenSSL + C++ 编译器）:
+                      cd native
+                      cmake -B build
+                      cmake --build build --config Release
+                    构建产物会自动输出到 src/main/resources/native/，随后重新执行 gradle build。
+                    """.trimIndent()
+                )
+            }
+        }
         exclude { details ->
             val path = details.relativePath.pathString
             (path.endsWith(".yml") || path.endsWith(".yaml")) && path != "plugin.yml" && path != "config.yml"

@@ -46,6 +46,7 @@ import xuanmo.arcartxsuite.cloud.CloudModuleService;
 import xuanmo.arcartxsuite.security.ClientPacketGuard;
 import xuanmo.arcartxsuite.security.ClientPacketGuardConfiguration;
 import xuanmo.arcartxsuite.security.MohistCompat;
+import xuanmo.arcartxsuite.security.NativeBridge;
 
 /**
  * ArcartXSuite 宿主插件入口（精简版）。
@@ -111,6 +112,12 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         // 屏蔽 PlaceholderAPI 的 "Successfully registered internal expansion" 噪音日志，
         // 让控制台保持 ◆ ArcartXSuite | INFO: 前缀连续输出。
         suppressPlaceholderApiNoise();
+
+        // 检查 Native 安全库
+        if (!NativeBridge.isAvailable()) {
+            consoleWarn("Native 安全库未加载: " + NativeBridge.getLoadError()
+                + "（如使用云端模块，请先构建 native/ 目录并确保 axs-native.dll 已打包到 jar）");
+        }
 
         // 0. 初始化智能配置诊断系统
         initConfigDiagnostic();
@@ -220,8 +227,11 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         // 本插件不再负责启动/停止，这里只做就绪探测与提示。
         String yggdrasilSource = getConfig().getString("auth.yggdrasil-source", "https://littleskin.cn/api/yggdrasil?mixed");
         boolean expectMixed = yggdrasilSource.contains("?mixed");
+        boolean autoCheckVersion = getConfig().getBoolean("auth.auto-check-version", false);
         getServer().getScheduler().runTaskAsynchronously(this, () -> {
-            authlibInjectorManager.checkVersionAndNotify();
+            if (autoCheckVersion) {
+                authlibInjectorManager.checkVersionAndNotify();
+            }
             authlibInjectorManager.checkServerProperties();
             if (expectMixed) {
                 if (authlibInjectorManager.isMixedProxyReachable()) {

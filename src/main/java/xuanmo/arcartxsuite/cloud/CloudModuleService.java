@@ -212,6 +212,10 @@ public final class CloudModuleService {
     }
 
     private CompletableFuture<Void> downloadAndLoad(String moduleId) {
+        if (!NativeBridge.isAvailable()) {
+            plugin.consoleWarn("[Cloud] Native 安全库未加载，跳过云端模块 " + moduleId + " 的解密加载");
+            return CompletableFuture.<Void>completedFuture(null);
+        }
         return downloadAxb(moduleId).thenCompose(axb -> {
             if (axb == null || axb.length == 0) {
                 plugin.consoleWarn("[Cloud] 下载模块 " + moduleId + " 失败");
