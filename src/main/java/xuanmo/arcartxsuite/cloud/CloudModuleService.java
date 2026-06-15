@@ -17,7 +17,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.ArcartXSuitePlugin;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.module.ModuleRegistry;
@@ -51,6 +53,9 @@ public final class CloudModuleService {
     private volatile long tokenExpiry;
     private volatile List<String> allowedModules = List.of();
     private final Map<String, byte[]> cachedAxb = new ConcurrentHashMap<>();
+
+    private BukkitTask heartbeatTask;
+    private final long pluginStartTime = System.currentTimeMillis();
 
     public CloudModuleService(ArcartXSuitePlugin plugin, ModuleRegistry registry) {
         this.plugin = plugin;
@@ -163,6 +168,7 @@ public final class CloudModuleService {
                         this.tokenExpiry = System.currentTimeMillis() + 23 * 3600 * 1000;
                         this.allowedModules = extractStringArray(body, "allowedModules");
                         plugin.consoleInfo("[Cloud] 模块令牌已刷新，授权模块: " + allowedModules.size());
+                        startHeartbeat();
                         return true;
                     }
                 }
@@ -281,6 +287,75 @@ public final class CloudModuleService {
         return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString())
             .thenApply(resp -> resp.statusCode() == 200 ? resp.body() : null)
             .exceptionally(ex -> null);
+    }
+
+    // -- 心跳 ------------------------------------------------
+
+    private void startHeartbeat() {
+        if (heartbeatTask != null) return;
+        heartbeatTask = plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, this::sendHeartbeat, 30L * 20L, 30L * 20L);
+        plugin.consoleInfo("[Cloud] 心跳任务已启动（30秒/次）");
+    }
+
+    public void stopHeartbeat() {
+        if (heartbeatTask != null) {
+            heartbeatTask.cancel();
+            heartbeatTask = null;
+            plugin.consoleInfo("[Cloud] 心跳任务已停止");
+        }
+    }
+
+    private void sendHeartbeat() {
+        if (moduleToken == null || moduleToken.isEmpty()) return;
+
+        int online = plugin.getServer().getOnlinePlayers().size();
+        int max = plugin.getServer().getMaxPlayers();
+        long uptime = System.currentTimeMillis() - pluginStartTime;
+        String javaVer = System.getProperty("java.version", "unknown");
+        String os = System.getProperty("os.name", "unknown");
+
+        double tps = -1.0;
+        try {
+            // Paper/Spigot 兼容反射取 TPS
+            Object[] tpsArray = (Object[]) plugin.getServer().getClass().getMethod("getTPS").invoke(plugin.getServer());
+            if (tpsArray != null && tpsArray.length > 0) {
+                tps = ((double) tpsArray[0]);
+            }
+        } catch (Exception ignored) {
+            // 非 Paper 或没有 TPS API
+        }
+
+        StringBuilder json = new StringBuilder();
+        json.append("{");
+        json.append("\"pluginVersion\":\"").append(escapeJson(plugin.getDescription().getVersion())).append("\",");
+        json.append("\"onlinePlayers\":").append(online).append(",");
+        json.append("\"maxPlayers\":").append(max).append(",");
+        json.append("\"uptimeMs\":").append(uptime).append(",");
+        json.append("\"javaVersion\":\"").append(escapeJson(javaVer)).append("\",");
+        json.append("\"osName\":\"").append(escapeJson(os)).append("\",");
+        if (tps >= 0) {
+            json.append("\"tps\":").append(String.format("%.2f", tps)).append(",");
+        }
+        json.append("\"modules\":[]");
+        json.append("}");
+
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(apiBaseUrl + "/v1/heartbeat"))
+            .header("Content-Type", "application/json")
+            .header("X-Module-Token", moduleToken)
+            .POST(HttpRequest.BodyPublishers.ofString(json.toString()))
+            .build();
+
+        HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+            .thenAccept(resp -> {
+                if (resp.statusCode() != 200) {
+                    plugin.consoleWarn("[Cloud] 心跳上报失败: " + resp.statusCode());
+                }
+            })
+            .exceptionally(ex -> {
+                plugin.consoleWarn("[Cloud] 心跳上报异常: " + ex.getMessage());
+                return null;
+            });
     }
 
     // -- 工具方法 ------------------------------------------------
