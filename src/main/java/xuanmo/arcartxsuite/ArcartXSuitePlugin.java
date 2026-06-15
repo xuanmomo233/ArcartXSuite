@@ -185,15 +185,13 @@ public class ArcartXSuitePlugin extends JavaPlugin {
             consoleWarn("失败模块: " + String.join(", ", summary.failedModules()));
         }
 
-        // 9. 云端模块同步（异步，不阻塞启动）
-        if (getConfig().getBoolean("cloud.enabled", false)) {
-            cloudModuleService = new CloudModuleService(this, moduleRegistry);
-            cloudModuleService.syncModules().thenRun(() -> {
-                Bukkit.getScheduler().runTask(this, () ->
-                    consoleInfo("[Cloud] 云端模块同步完成")
-                );
-            });
-        }
+        // 9. 云端模块同步（异步，不阻塞启动；只要配置了 qq+password 就自动连接）
+        cloudModuleService = new CloudModuleService(this, moduleRegistry);
+        cloudModuleService.syncModules().thenRun(() -> {
+            Bukkit.getScheduler().runTask(this, () ->
+                consoleInfo("[Cloud] 云端模块同步完成")
+            );
+        });
 
         // 7. 注册主命令
         PluginCommand command = getCommand("arcartxsuite");

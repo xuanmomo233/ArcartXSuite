@@ -143,13 +143,16 @@ public final class CloudModuleService {
 
         long timestamp = System.currentTimeMillis();
         String signature = sign(timestamp + serverCode);
+        String refreshPayload = "{"
+            + "\"password\":\"" + escapeJson(password) + "\""
+            + "}";
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(apiBaseUrl + "/v1/servers/refresh"))
             .header("Content-Type", "application/json")
             .header("X-Server-Code", serverCode)
             .header("X-Timestamp", String.valueOf(timestamp))
             .header("X-Signature", signature)
-            .POST(HttpRequest.BodyPublishers.ofString("{}"))
+            .POST(HttpRequest.BodyPublishers.ofString(refreshPayload))
             .build();
 
         return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString())
