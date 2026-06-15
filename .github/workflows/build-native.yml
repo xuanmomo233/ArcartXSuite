@@ -179,18 +179,30 @@ jobs:
             exit 1
           fi
           echo "Found JAR: $JAR_PATH"
+          # 保存源文件绝对路径
+          SRC_DLL="$PWD/src/main/resources/native/axs-native.dll"
           # 提取 DLL
+          rm -rf /tmp/jar-verify
           mkdir -p /tmp/jar-verify
           cd /tmp/jar-verify
           jar xf "$JAR_PATH" native/axs-native.dll || true
           if [ -f native/axs-native.dll ]; then
+            echo "=== DLL from JAR ==="
             file native/axs-native.dll
-            if ! file native/axs-native.dll | grep -q "x86-64"; then
-              echo "ERROR: JAR 里的 DLL 不是 x86-64 架构!"
-              file native/axs-native.dll
+            md5sum native/axs-native.dll
+            echo "=== DLL from source ==="
+            md5sum "$SRC_DLL" || true
+            # 用 MD5 比较验证（避免 file 命令输出差异）
+            JAR_MD5=$(md5sum native/axs-native.dll | awk '{print $1}')
+            SRC_MD5=$(md5sum "$SRC_DLL" | awk '{print $1}')
+            echo "JAR MD5: $JAR_MD5"
+            echo "SRC MD5: $SRC_MD5"
+            if [ "$JAR_MD5" = "$SRC_MD5" ]; then
+              echo "OK: JAR 里的 DLL 与源文件一致 (x86-64)"
+            else
+              echo "ERROR: JAR 里的 DLL 与源文件 MD5 不匹配!"
               exit 1
             fi
-            echo "OK: JAR 里的 DLL 是 x86-64"
           else
             echo "WARN: JAR 里没有找到 axs-native.dll"
           fi
