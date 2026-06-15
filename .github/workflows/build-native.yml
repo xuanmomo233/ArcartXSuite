@@ -24,11 +24,14 @@ jobs:
           cmake -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release
 
+      - name: Move artifact to root
+        run: cp src/main/resources/native/libaxs-native.so libaxs-native.so
+
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
           name: native-linux
-          path: src/main/resources/native/libaxs-native.so
+          path: libaxs-native.so
 
   build-windows:
     runs-on: windows-latest
@@ -65,11 +68,16 @@ jobs:
           copy src\main\resources\native\Release\axs-native.dll src\main\resources\native\axs-native.dll
         shell: cmd
 
+      - name: Move artifact to root
+        run: |
+          copy src\main\resources\native\axs-native.dll axs-native.dll
+        shell: cmd
+
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: native-windows
-          path: src/main/resources/native/axs-native.dll
+          path: axs-native.dll
           if-no-files-found: error
 
   build-gradle:
@@ -88,13 +96,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: native-linux
-          path: .
+          path: src/main/resources/native/
 
       - name: Download Windows native artifact
         uses: actions/download-artifact@v4
         with:
           name: native-windows
-          path: .
+          path: src/main/resources/native/
 
       - name: List native artifacts
         run: ls -la src/main/resources/native/
