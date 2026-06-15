@@ -5,6 +5,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# ─── 平台架构强制 ────────────────────────────────────────────────
+if(WIN32)
+    # Windows 上强制生成 AMD64 架构，防止默认选中 ARM64
+    if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+        message(FATAL_ERROR "axs-native 仅支持 64 位架构，当前 CMAKE_SIZEOF_VOID_P=${CMAKE_SIZEOF_VOID_P}")
+    endif()
+endif()
+
 # ─── JNI ────────────────────────────────────────────────────────
 find_package(JNI REQUIRED)
 include_directories(${JNI_INCLUDE_DIRS})
