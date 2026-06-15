@@ -167,8 +167,20 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Build Gradle project
-        run: gradle build
+      - name: Clean and rebuild
+        run: |
+          # 强制清理，避免缓存恢复旧的损坏 DLL
+          gradle clean
+          gradle build --no-build-cache
+
+      - name: Diagnose after build
+        run: |
+          echo "=== Source DLL (should be 31bca0...) ==="
+          md5sum src/main/resources/native/axs-native.dll || true
+          echo "=== axs-core build/resources/main DLL ==="
+          md5sum axs-core/build/resources/main/native/axs-native.dll || true
+          echo "=== All DLLs in build ==="
+          find . -name "*.dll" -type f -exec md5sum {} \; || true
 
       - name: Verify DLL in JAR
         run: |
