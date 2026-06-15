@@ -43,9 +43,17 @@ add_library(axs-native SHARED ${SOURCES})
 target_include_directories(axs-native PRIVATE include ${JNI_INCLUDE_DIRS})
 target_link_libraries(axs-native PRIVATE OpenSSL::Crypto zlibstatic)
 
+# MinGW 静态链接运行时库，避免目标服务器缺少 libgcc/libwinpthread
+if(MINGW)
+    target_link_options(axs-native PRIVATE -static-libgcc -static-libstdc++ -Wl,-Bstatic -lstdc++ -lpthread -Wl,-Bdynamic)
+endif()
+
 # Strip symbols in release
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     if(UNIX)
+        target_link_options(axs-native PRIVATE -s)
+    endif()
+    if(MINGW)
         target_link_options(axs-native PRIVATE -s)
     endif()
 endif()

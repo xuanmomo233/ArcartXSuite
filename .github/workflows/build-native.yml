@@ -34,11 +34,7 @@ jobs:
           path: libaxs-native.so
 
   build-windows:
-    runs-on: windows-latest
-    env:
-      VCPKG_ROOT: C:\vcpkg
-      VCPKG_DEFAULT_TRIPLET: x64-windows-static
-      CMAKE_PREFIX_PATH: C:\vcpkg\installed\x64-windows-static
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 
@@ -48,25 +44,25 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Install vcpkg & dependencies
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
-          C:\vcpkg\bootstrap-vcpkg.bat
-          C:\vcpkg\vcpkg.exe integrate install
-          C:\vcpkg\vcpkg.exe install openssl
-        shell: cmd
+      - name: Setup MSYS2 MinGW-w64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-make
+            make
 
       - name: Build native library
+        shell: msys2 {0}
         run: |
           cd native
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -A x64 -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static
-          cmake --build build --config Release
-        shell: cmd
-
-      - name: Move artifact to standard path
-        run: |
-          copy src\main\resources\native\Release\axs-native.dll src\main\resources\native\axs-native.dll
-        shell: cmd
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
+          cmake --build build
 
       - name: Move artifact to root
         run: |
