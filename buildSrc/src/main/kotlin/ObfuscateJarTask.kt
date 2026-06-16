@@ -129,12 +129,17 @@ abstract class ObfuscateJarTask : DefaultTask() {
         """.trimIndent())
 
         if (coreJar.get()) {
-            sb.appendLine("-keep class xuanmo.arcartxsuite.bridge.** { public *; }")
-            sb.appendLine("-keep class xuanmo.arcartxsuite.module.ModuleRegistry { public *; }")
-            sb.appendLine("-keep class xuanmo.arcartxsuite.module.ModuleClassLoader { *; }")
-            sb.appendLine("-keep class xuanmo.arcartxsuite.security.** { public *; }")
-            sb.appendLine("-keep class xuanmo.arcartxsuite.config.** { public *; }")
-            sb.appendLine("-keep class xuanmo.arcartxsuite.command.** { *; }")
+            // bridge：保留类名（外部可能反射获取实例），允许混淆方法名
+            sb.appendLine("-keep class xuanmo.arcartxsuite.bridge.** { public <init>(...); }")
+            // 模块注册表/类加载器：保留类名，混淆非必要方法
+            sb.appendLine("-keep class xuanmo.arcartxsuite.module.ModuleRegistry { public <init>(...); }")
+            sb.appendLine("-keep class xuanmo.arcartxsuite.module.ModuleClassLoader { public <init>(...); }")
+            // 安全：仅保留 NativeBridge（JNI_OnLoad 通过 RegisterNatives 注册，类名必须保留）
+            // t0() 是 environmentCheck 双向校验的 Java 回调入口，方法名必须保留
+            sb.appendLine("-keep class xuanmo.arcartxsuite.security.NativeBridge { *; }")
+            // 配置类：保留类名和构造函数
+            sb.appendLine("-keep class xuanmo.arcartxsuite.config.** { public <init>(...); }")
+            // command 已由全局 "-keep class * implements org.bukkit.command.TabExecutor { *; }" 覆盖，无需单独保留
             // ↑ currency/combat/item/mythiclib/util 已迁入 axs-api，由 api.** keep 规则覆盖
         } else if (moduleEntryClass.isPresent) {
             sb.appendLine("-keep class ${moduleEntryClass.get()} { *; }")

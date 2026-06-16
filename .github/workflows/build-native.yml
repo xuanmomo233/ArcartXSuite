@@ -148,6 +148,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Scan for hardcoded secrets
+        run: |
+          ERR=0
+          # 1. 扫描硬编码 QQ 号（已发现的模式）
+          if grep -Er 'QQ1451759359|QQ[ :]*[1-9][0-9]{4,11}' src/ --include='*.java' --include='*.kt' --include='*.yml' | grep -v 'example\|test\|placeholder\|\.example'; then
+            echo "::error::Hardcoded QQ number detected"
+            ERR=1
+          fi
+          # 2. 扫描硬编码密码（排除空字符串和明显占位符）
+          if grep -Er 'password\s*[=:]\s*"[^"]{6,}"' src/ --include='*.java' --include='*.kt' --include='*.yml' | grep -vi 'example\|test\|placeholder\|changeme\|empty\|default'; then
+            echo "::error::Potential hardcoded password detected"
+            ERR=1
+          fi
+          # 3. 扫描硬编码 JWT / API 密钥
+          if grep -Eri 'secret\s*[=:]\s*["'\''][a-z0-9]{16,}["'\'']' src/ --include='*.java' --include='*.kt' | grep -vi 'example\|test\|placeholder'; then
+            echo "::error::Potential hardcoded secret detected"
+            ERR=1
+          fi
+          if [ $ERR -ne 0 ]; then
+            echo "::error::Secret scan failed. Remove hardcoded credentials before pushing."
+            exit 1
+          fi
+          echo "Secret scan passed"
+
       - name: Setup JDK
         uses: actions/setup-java@v4
         with:

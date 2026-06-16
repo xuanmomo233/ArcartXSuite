@@ -69,9 +69,10 @@ public abstract class AbstractModuleRepository {
 
         if (descriptor.isMysql()) {
             hc.setMaximumPoolSize(descriptor.poolSize());
-            hc.setJdbcUrl("jdbc:mysql://" + descriptor.host() + ":" + descriptor.port()
+            String jdbcUrl = "jdbc:mysql://" + descriptor.host() + ":" + descriptor.port()
                 + "/" + descriptor.database()
-                + "?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&serverTimezone=UTC");
+                + "?useSSL=true&characterEncoding=UTF-8&serverTimezone=UTC";
+            hc.setJdbcUrl(jdbcUrl);
             hc.setDriverClassName("com.mysql.cj.jdbc.Driver");
             hc.setUsername(descriptor.username());
             hc.setPassword(descriptor.password());
@@ -284,9 +285,10 @@ public abstract class AbstractModuleRepository {
 
             if (targetDescriptor.isMysql()) {
                 hc.setMaximumPoolSize(2);
-                hc.setJdbcUrl("jdbc:mysql://" + targetDescriptor.host() + ":" + targetDescriptor.port()
+                String jdbcUrl = "jdbc:mysql://" + targetDescriptor.host() + ":" + targetDescriptor.port()
                     + "/" + targetDescriptor.database()
-                    + "?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&serverTimezone=UTC");
+                    + "?useSSL=true&characterEncoding=UTF-8&serverTimezone=UTC";
+                hc.setJdbcUrl(jdbcUrl);
                 hc.setDriverClassName("com.mysql.cj.jdbc.Driver");
                 hc.setUsername(targetDescriptor.username());
                 hc.setPassword(targetDescriptor.password());

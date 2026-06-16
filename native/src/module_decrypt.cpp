@@ -69,8 +69,7 @@ static std::vector<unsigned char> ungzip(const unsigned char *data, int data_len
 // axb 文件自包含格式：IV(12 字节) + 密文 + GCM 认证标签(16 字节)。
 // 故 IV 直接从 axb 前 12 字节读取，无需单独传入。
 
-JNIEXPORT jbyteArray JNICALL
-Java_xuanmo_arcartxsuite_security_NativeBridge_decryptModule(
+jbyteArray decryptModule(
     JNIEnv *env, jclass clazz, jbyteArray encryptedAxb, jbyteArray key) {
 
     if (!encryptedAxb || !key) return nullptr;
@@ -78,16 +77,17 @@ Java_xuanmo_arcartxsuite_security_NativeBridge_decryptModule(
     jsize enc_len = env->GetArrayLength(encryptedAxb);
     jsize key_len = env->GetArrayLength(key);
 
-    // 至少需要 IV(12) + TAG(16) 才有意义
-    if (enc_len <= GCM_IV_LEN + GCM_TAG_LEN || key_len != 32) return nullptr;
+    static constexpr int MAGIC_LEN = 4;
+    // 新格式：magic(4) + IV(12) + ciphertext + TAG(16)
+    if (enc_len <= MAGIC_LEN + GCM_IV_LEN + GCM_TAG_LEN || key_len != 32) return nullptr;
 
     auto *enc_data = (unsigned char *)env->GetByteArrayElements(encryptedAxb, nullptr);
     auto *key_data = (unsigned char *)env->GetByteArrayElements(key, nullptr);
 
-    // 前 12 字节为 IV，其余为 密文+认证标签
-    const unsigned char *iv_data = enc_data;
-    const unsigned char *cipher_data = enc_data + GCM_IV_LEN;
-    int cipher_len = (int)enc_len - GCM_IV_LEN;
+    // 新格式：magic(4) + IV(12) + 密文+认证标签
+    const unsigned char *iv_data = enc_data + MAGIC_LEN;
+    const unsigned char *cipher_data = enc_data + MAGIC_LEN + GCM_IV_LEN;
+    int cipher_len = (int)enc_len - MAGIC_LEN - GCM_IV_LEN;
 
     auto decrypted = aes_gcm_decrypt(cipher_data, cipher_len, iv_data, GCM_IV_LEN, key_data);
 

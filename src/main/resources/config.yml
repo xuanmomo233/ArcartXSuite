@@ -17,9 +17,25 @@ cloud:
   # 服主 QQ 号（须与云端注册账号一致）。
   qq: ""
   # 服主密码（每次连接云端都会验证，切勿泄露）。
+  # 【安全警告】此密码以明文形式存储在 config.yml 中。
+  #   建议：1) 设置 plugins/ArcartXSuite/ 目录权限为 700（仅服务器进程可读）。
+  #        2) 不要在公共仓库或聊天群中分享此配置文件。
+  #        3) 定期更换云端密码。
   password: ""
   # 服务器码：留空表示尚未绑定，绑定成功后由云端自动回填，请勿手动修改。
   server-code: ""
+
+
+# ========== 安全设置 ==========
+# 模块数字签名公钥（Base64 编码的 Ed25519 公钥，32 字节）。
+# 配置后，所有 modules/*.jar 必须包含有效的 module.yml signature 字段，否则拒绝加载。
+# 留空则不启用签名验证（向后兼容）。
+module-signature-public-key: ""
+
+# 版本检查响应签名公钥（Base64 编码的 Ed25519 公钥，32 字节）。
+# 配置后，版本检查响应必须携带有效签名，防止中间人伪造更新提示。
+# 留空则不启用签名校验。
+version-check-public-key: ""
 
 
 # AXS 资源说明
@@ -155,6 +171,9 @@ account-type:
 # 本配置控制 /axs auth setup 命令生成启动脚本时的行为，
 # 以及 authlib-injector 版本检测。
 auth:
+  # 是否启用 authlib-injector 相关功能（混合登录 / 外置登录）。默认禁用。
+  # 需要 LittleSkin / 微软正版混合登录时设为 true。
+  enabled: false
   # 启动时自动检测 authlib-injector 版本并提示更新
   auto-check-version: false
   # Yggdrasil 认证源（用于 /axs auth setup 生成启动脚本）

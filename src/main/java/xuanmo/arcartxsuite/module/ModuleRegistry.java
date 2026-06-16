@@ -69,6 +69,7 @@ public final class ModuleRegistry {
     private final KeybindService keybindService;
     private final TaczCombatBridge taczCombatBridge;
     private final CrossServerService crossServerService;
+    private final ModuleSignatureVerifier signatureVerifier;
 
     // ─── 全局桥接单例 ──────────────────────────────────────────
     private DefaultItemSourceRegistry itemSourceRegistry;
@@ -118,6 +119,8 @@ public final class ModuleRegistry {
         this.keybindService = keybindService;
         this.taczCombatBridge = taczCombatBridge;
         this.crossServerService = crossServerService;
+        String sigPubKey = plugin.getConfig().getString("module-signature-public-key", "");
+        this.signatureVerifier = new ModuleSignatureVerifier(sigPubKey, LOGGER);
     }
 
     // ─── 生命周期 ─────────────────────────────────────────────
@@ -547,6 +550,11 @@ public final class ModuleRegistry {
                 LOGGER.warning(descriptor.name() + " 模块依赖 " + depId + " 未就绪，已跳过加载。");
                 return false;
             }
+        }
+
+        // 数字签名验证（如配置了公钥则强制校验）
+        if (!signatureVerifier.verify(descriptor)) {
+            return false;
         }
 
         // 创建 ClassLoader（本地 jar 或内存 bytes）

@@ -104,8 +104,7 @@ static std::vector<unsigned char> ungzip(const unsigned char *data, int data_len
 
 // ─── JNI 导出 ───────────────────────────────────────────────────
 
-JNIEXPORT jbyteArray JNICALL
-Java_xuanmo_arcartxsuite_security_NativeBridge_decryptResource(
+jbyteArray decryptResource(
     JNIEnv *env, jclass clazz, jbyteArray encrypted, jbyteArray keyMaterial) {
 
     if (!encrypted) return nullptr;

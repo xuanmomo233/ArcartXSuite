@@ -76,8 +76,7 @@ static bool check_ptrace() {
 
 #endif
 
-JNIEXPORT jint JNICALL
-Java_xuanmo_arcartxsuite_security_NativeBridge_environmentCheck(JNIEnv *env, jclass clazz) {
+jint environmentCheck(JNIEnv *env, jclass clazz) {
     int flags = 0;
 
 #ifdef _WIN32
@@ -88,6 +87,20 @@ Java_xuanmo_arcartxsuite_security_NativeBridge_environmentCheck(JNIEnv *env, jcl
     // ptrace 检测仅在非调试模式下执行，避免误报
     if (!(flags & FLAG_DEBUGGER) && check_ptrace()) flags |= FLAG_DEBUGGER;
 #endif
+
+    // 双向校验：回调 Java 层验证入口 t0()，确认 Java 层未被剥离或篡改
+    jmethodID verifyMethod = env->GetStaticMethodID(clazz, "t0", "()Z");
+    if (!verifyMethod) {
+        flags |= FLAG_TAMPER;
+    } else {
+        jboolean ok = env->CallStaticBooleanMethod(clazz, verifyMethod);
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+            flags |= FLAG_TAMPER;
+        } else if (!ok) {
+            flags |= FLAG_TAMPER;
+        }
+    }
 
     return flags;
 }

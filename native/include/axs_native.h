@@ -5,25 +5,21 @@
 extern "C" {
 #endif
 
-// ═══ NativeBridge JNI 导出 ══════════════════════════════════════
+// ═══ NativeBridge 内部函数（由 JNI_OnLoad 通过 RegisterNatives 动态注册）════
+// 这种设计消除了静态符号表中的自解释 JNI 方法名，增加逆向分析难度。
 
-JNIEXPORT jint JNICALL
-Java_xuanmo_arcartxsuite_security_NativeBridge_nativeVersion(JNIEnv *env, jclass clazz);
+jint nativeVersion(JNIEnv *env, jclass clazz);
 
-JNIEXPORT jbyteArray JNICALL
-Java_xuanmo_arcartxsuite_security_NativeBridge_decryptResource(
-    JNIEnv *env, jclass clazz, jbyteArray encrypted, jbyteArray keyMaterial);
+jbyteArray decryptResource(JNIEnv *env, jclass clazz, jbyteArray encrypted, jbyteArray keyMaterial);
 
-JNIEXPORT jbyteArray JNICALL
-Java_xuanmo_arcartxsuite_security_NativeBridge_unwrapResourceKey(
-    JNIEnv *env, jclass clazz, jbyteArray wrappedKey, jbyteArray iv, jbyteArray material);
+jbyteArray unwrapResourceKey(JNIEnv *env, jclass clazz, jbyteArray wrappedKey, jbyteArray iv, jbyteArray material);
 
-JNIEXPORT jint JNICALL
-Java_xuanmo_arcartxsuite_security_NativeBridge_environmentCheck(JNIEnv *env, jclass clazz);
+jint environmentCheck(JNIEnv *env, jclass clazz);
 
-JNIEXPORT jbyteArray JNICALL
-Java_xuanmo_arcartxsuite_security_NativeBridge_decryptModule(
-    JNIEnv *env, jclass clazz, jbyteArray encryptedAxb, jbyteArray key);
+jbyteArray decryptModule(JNIEnv *env, jclass clazz, jbyteArray encryptedAxb, jbyteArray key);
+
+// JNI_OnLoad：动态注册 natives，消除静态符号暴露
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved);
 
 #ifdef __cplusplus
 }

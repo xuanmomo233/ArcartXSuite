@@ -86,6 +86,7 @@ final class ModuleDescriptorParser {
             .softDepends(toStringList(yaml, "softdepends"))
             .externalDepends(toStringList(yaml, "external-depends"))
             .externalSoftDepends(toStringList(yaml, "external-softdepends"))
+            .signature(yaml.getString("signature"))
             .build();
     }
 

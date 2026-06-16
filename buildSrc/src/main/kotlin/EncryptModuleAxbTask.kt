@@ -100,7 +100,11 @@ abstract class EncryptModuleAxbTask : DefaultTask() {
             GCMParameterSpec(128, iv)
         )
         val payload = cipher.doFinal(bytes)
+        // 在 IV 前加入 4 字节随机 magic，使每个 axb 的文件头特征不同，
+        // 增加逆向分析时定位加密边界的难度。
+        val magic = ByteArray(4).also { SecureRandom().nextBytes(it) }
         return ByteArrayOutputStream().use { output ->
+            output.write(magic)
             output.write(iv)
             output.write(payload)
             output.toByteArray()

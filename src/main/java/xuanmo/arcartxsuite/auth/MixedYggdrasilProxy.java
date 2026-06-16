@@ -55,13 +55,26 @@ public class MixedYggdrasilProxy {
     /** 认证来源标记：LittleSkin。 */
     private static final String SOURCE_LITTLESKIN = "littleskin";
     private static final String LOOPBACK_HOST = "127.0.0.1";
+    private static final int MAX_RESPONSE_BYTES = 1024 * 1024;
 
     /**
      * 玩家认证来源权威记录：无横线小写 UUID -> source。
      * <p>在 hasJoined / profile 命中时写入，是玩家实际认证链路的真实结果，
      * 比主进程事后猜测 Mojang API 更准确。
      */
-    private final ConcurrentMap<String, String> accountSource = new ConcurrentHashMap<>();
+    private static final long SOURCE_TTL_MS = 24L * 3600 * 1000;
+    private static final int SOURCE_MAX_SIZE = 4096;
+
+    private static final class SourceEntry {
+        final String source;
+        final long expiresAt;
+        SourceEntry(String source, long expiresAt) {
+            this.source = source;
+            this.expiresAt = expiresAt;
+        }
+    }
+
+    private final ConcurrentMap<String, SourceEntry> accountSource = new ConcurrentHashMap<>();
 
     private final Logger logger;
     private final boolean debug;
@@ -231,7 +244,11 @@ public class MixedYggdrasilProxy {
             return;
         }
         String key = id.replace("-", "").toLowerCase(Locale.ROOT);
-        accountSource.put(key, source);
+        accountSource.put(key, new SourceEntry(source, System.currentTimeMillis() + SOURCE_TTL_MS));
+        if (accountSource.size() > SOURCE_MAX_SIZE) {
+            long now = System.currentTimeMillis();
+            accountSource.entrySet().removeIf(e -> e.getValue().expiresAt < now);
+        }
         if (debug) {
             logger.info("[MixedProxy] 记录认证来源: " + key + " -> " + source);
         }
@@ -251,13 +268,16 @@ public class MixedYggdrasilProxy {
         if (uuid != null) {
             uuid = uuid.replace("-", "").toLowerCase(Locale.ROOT);
         }
-        String source = uuid == null ? null : accountSource.get(uuid);
-        if (source == null) {
+        SourceEntry entry = uuid == null ? null : accountSource.get(uuid);
+        if (entry == null || entry.expiresAt < System.currentTimeMillis()) {
+            if (entry != null && entry.expiresAt < System.currentTimeMillis()) {
+                accountSource.remove(uuid);
+            }
             exchange.sendResponseHeaders(404, -1);
             exchange.close();
             return;
         }
-        sendJson(exchange, 200, "{\"source\":\"" + source + "\"}");
+        sendJson(exchange, 200, "{\"source\":\"" + entry.source + "\"}");
     }
 
     private static boolean isLoopbackClient(HttpExchange exchange) {
@@ -302,11 +322,23 @@ public class MixedYggdrasilProxy {
         if (startQuote < 0) {
             return null;
         }
-        int endQuote = json.indexOf('"', startQuote + 1);
-        if (endQuote < 0) {
-            return null;
+        // 逐个字符扫描，处理 \" 转义
+        StringBuilder sb = new StringBuilder();
+        boolean escaped = false;
+        for (int i = startQuote + 1; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (escaped) {
+                sb.append(c);
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '"') {
+                return sb.toString().trim();
+            } else {
+                sb.append(c);
+            }
         }
-        return json.substring(startQuote + 1, endQuote).trim();
+        return null;
     }
 
     // ═════════════════════════════════════════════════════════════════
@@ -337,6 +369,12 @@ public class MixedYggdrasilProxy {
                     String line;
                     while ((line = reader.readLine()) != null) {
                         sb.append(line);
+                        if (sb.length() > MAX_RESPONSE_BYTES) {
+                            if (debug) {
+                                logger.warning("[MixedProxy] 响应超过 " + MAX_RESPONSE_BYTES + " 字节，放弃: " + urlString);
+                            }
+                            return null;
+                        }
                     }
                     return sb.toString();
                 }

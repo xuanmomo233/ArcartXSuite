@@ -8,6 +8,8 @@ final class CrossServerDedupe {
 
     private final long ttlMs;
     private final ConcurrentHashMap<String, Long> recent = new ConcurrentHashMap<>();
+    private volatile long lastCleanup = 0;
+    private static final long CLEANUP_INTERVAL_MS = 60_000L;
 
     CrossServerDedupe(long ttlMs) {
         this.ttlMs = Math.max(1000L, ttlMs);
@@ -19,15 +21,15 @@ final class CrossServerDedupe {
             return false;
         }
         long now = System.currentTimeMillis();
-        purgeExpired(now);
+        if (now - lastCleanup > CLEANUP_INTERVAL_MS || recent.size() >= 256) {
+            purgeExpired(now);
+            lastCleanup = now;
+        }
         Long previous = recent.putIfAbsent(messageId, now);
         return previous == null;
     }
 
     private void purgeExpired(long now) {
-        if (recent.size() < 256) {
-            return;
-        }
         Iterator<Map.Entry<String, Long>> iterator = recent.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<String, Long> entry = iterator.next();

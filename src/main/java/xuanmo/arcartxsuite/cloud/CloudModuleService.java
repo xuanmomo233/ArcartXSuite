@@ -52,7 +52,13 @@ public final class CloudModuleService {
     private volatile String moduleToken;
     private volatile long tokenExpiry;
     private volatile List<String> allowedModules = List.of();
-    private final Map<String, byte[]> cachedAxb = new ConcurrentHashMap<>();
+    private static final long AXB_CACHE_TTL_MS = 3600 * 1000L;
+    private static final class CachedAxb {
+        final byte[] data;
+        final long expiresAt;
+        CachedAxb(byte[] data, long expiresAt) { this.data = data; this.expiresAt = expiresAt; }
+    }
+    private final Map<String, CachedAxb> cachedAxb = new ConcurrentHashMap<>();
 
     private BukkitTask heartbeatTask;
     private final long pluginStartTime = System.currentTimeMillis();
@@ -211,7 +217,17 @@ public final class CloudModuleService {
         });
     }
 
+    private static final java.util.regex.Pattern MODULE_ID_PATTERN = java.util.regex.Pattern.compile("^[a-zA-Z0-9_-]+$");
+
+    private boolean isValidModuleId(String moduleId) {
+        return moduleId != null && MODULE_ID_PATTERN.matcher(moduleId).matches();
+    }
+
     private CompletableFuture<Void> downloadAndLoad(String moduleId) {
+        if (!isValidModuleId(moduleId)) {
+            plugin.consoleWarn("[Cloud] 非法 moduleId 格式，跳过: " + moduleId);
+            return CompletableFuture.<Void>completedFuture(null);
+        }
         if (!NativeBridge.isAvailable()) {
             plugin.consoleWarn("[Cloud] Native 安全库未加载，跳过云端模块 " + moduleId + " 的解密加载");
             return CompletableFuture.<Void>completedFuture(null);
@@ -233,7 +249,7 @@ public final class CloudModuleService {
                 }
                 byte[] key = Base64.getDecoder().decode(keyB64);
                 // axb 自包含 IV（前 12 字节），native 内部读取，无需单独传入
-                byte[] jarBytes = NativeBridge.decryptModule(axb, key);
+                byte[] jarBytes = NativeBridge.n4(axb, key);
                 if (jarBytes == null || jarBytes.length == 0) {
                     plugin.consoleWarn("[Cloud] 解密模块 " + moduleId + " 失败");
                     return;
@@ -251,9 +267,9 @@ public final class CloudModuleService {
     }
 
     private CompletableFuture<byte[]> downloadAxb(String moduleId) {
-        byte[] cached = cachedAxb.get(moduleId);
-        if (cached != null) {
-            return CompletableFuture.completedFuture(cached);
+        CachedAxb cached = cachedAxb.get(moduleId);
+        if (cached != null && cached.expiresAt > System.currentTimeMillis()) {
+            return CompletableFuture.completedFuture(cached.data);
         }
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -267,7 +283,7 @@ public final class CloudModuleService {
             .thenApply(resp -> {
                 if (resp.statusCode() == 200) {
                     byte[] data = resp.body();
-                    cachedAxb.put(moduleId, data);
+                    cachedAxb.put(moduleId, new CachedAxb(data, System.currentTimeMillis() + AXB_CACHE_TTL_MS));
                     return data;
                 }
                 plugin.consoleWarn("[Cloud] 下载 " + moduleId + " 失败: " + resp.statusCode());
@@ -390,7 +406,25 @@ public final class CloudModuleService {
 
     private static String escapeJson(String input) {
         if (input == null) return "";
-        return input.replace("\\", "\\\\").replace("\"", "\\\"");
+        StringBuilder sb = new StringBuilder();
+        for (char c : input.toCharArray()) {
+            switch (c) {
+                case '"':  sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\b': sb.append("\\b"); break;
+                case '\f': sb.append("\\f"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default:
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+            }
+        }
+        return sb.toString();
     }
 
     private static String generateFingerprint() {
@@ -419,11 +453,25 @@ public final class CloudModuleService {
         if (keyIdx < 0) return null;
         int colonIdx = json.indexOf(':', keyIdx + key.length());
         if (colonIdx < 0) return null;
-        int firstQuote = json.indexOf('"', colonIdx + 1);
-        if (firstQuote < 0) return null;
-        int secondQuote = json.indexOf('"', firstQuote + 1);
-        if (secondQuote < 0) return null;
-        return json.substring(firstQuote + 1, secondQuote);
+        int startQuote = json.indexOf('"', colonIdx + 1);
+        if (startQuote < 0) return null;
+        // 逐个字符扫描，处理 \" 转义
+        StringBuilder sb = new StringBuilder();
+        boolean escaped = false;
+        for (int i = startQuote + 1; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (escaped) {
+                sb.append(c);
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '"') {
+                return sb.toString();
+            } else {
+                sb.append(c);
+            }
+        }
+        return null;
     }
 
     private static String extractJsonArray(String json, String field) {

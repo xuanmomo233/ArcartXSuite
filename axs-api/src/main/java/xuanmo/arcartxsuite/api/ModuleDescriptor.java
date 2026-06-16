@@ -20,6 +20,7 @@ public final class ModuleDescriptor {
     private final List<String> softDepends;
     private final List<String> externalDepends;
     private final List<String> externalSoftDepends;
+    private final String signature;
 
     private ModuleDescriptor(Builder builder) {
         this.id = Objects.requireNonNull(builder.id, "id");
@@ -30,6 +31,7 @@ public final class ModuleDescriptor {
         this.softDepends = List.copyOf(builder.softDepends);
         this.externalDepends = List.copyOf(builder.externalDepends);
         this.externalSoftDepends = List.copyOf(builder.externalSoftDepends);
+        this.signature = builder.signature;
     }
 
     public String id() {
@@ -68,6 +70,11 @@ public final class ModuleDescriptor {
         return externalSoftDepends;
     }
 
+    /** Ed25519 Base64 数字签名（可为 null） */
+    public String signature() {
+        return signature;
+    }
+
     public static Builder builder(String id) {
         return new Builder(id);
     }
@@ -81,6 +88,7 @@ public final class ModuleDescriptor {
         private List<String> softDepends = Collections.emptyList();
         private List<String> externalDepends = Collections.emptyList();
         private List<String> externalSoftDepends = Collections.emptyList();
+        private String signature;
 
         private Builder(String id) {
             this.id = id;
@@ -118,6 +126,11 @@ public final class ModuleDescriptor {
 
         public Builder externalSoftDepends(List<String> externalSoftDepends) {
             this.externalSoftDepends = externalSoftDepends != null ? externalSoftDepends : Collections.emptyList();
+            return this;
+        }
+
+        public Builder signature(String signature) {
+            this.signature = signature;
             return this;
         }
 

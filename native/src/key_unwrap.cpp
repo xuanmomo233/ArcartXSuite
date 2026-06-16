@@ -4,8 +4,7 @@
 #include <cstring>
 #include <vector>
 
-JNIEXPORT jbyteArray JNICALL
-Java_xuanmo_arcartxsuite_security_NativeBridge_unwrapResourceKey(
+jbyteArray unwrapResourceKey(
     JNIEnv *env, jclass clazz, jbyteArray wrappedKey, jbyteArray iv, jbyteArray material) {
 
     if (!wrappedKey || !iv || !material) return nullptr;
