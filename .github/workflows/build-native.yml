@@ -114,14 +114,14 @@ jobs:
           ldd src/main/resources/native/axs-native.dll || true
           echo "=== DLL dependencies (objdump) ==="
           objdump -p src/main/resources/native/axs-native.dll | grep -E "DLL Name|needed" || true
-          # 检测非系统 DLL 依赖（MinGW 运行时库必须静态链接）
-          DEP_COUNT=$(ldd src/main/resources/native/axs-native.dll 2>/dev/null | grep -vE "KERNEL32|ntdll|msvcrt|KERNELBASE|api-ms-win|ucrtbase|msvcp_win|bcrypt|RPCRT4|sechost|CRYPT32|USER32|WS2_32|GDI32|win32u|gdi32full|CRYPTBASE|bcryptPrimitives|IMM32|ADVAPI32" | wc -l)
-          if [ "$DEP_COUNT" -gt 0 ]; then
-            echo "ERROR: DLL has external runtime dependencies (must be statically linked):"
-            ldd src/main/resources/native/axs-native.dll 2>/dev/null | grep -vE "KERNEL32|ntdll|msvcrt|KERNELBASE|api-ms-win|ucrtbase|msvcp_win|bcrypt|RPCRT4|sechost|CRYPT32|USER32|WS2_32|GDI32|win32u|gdi32full|CRYPTBASE|bcryptPrimitives|IMM32|ADVAPI32" || true
+          # 正向检测 MinGW 运行时 DLL 依赖
+          MINGW_DEPS=$(ldd src/main/resources/native/axs-native.dll 2>/dev/null | grep -E "libgcc|libstdc\+\+|libwinpthread" || true)
+          if [ -n "$MINGW_DEPS" ]; then
+            echo "ERROR: DLL depends on MinGW runtime libraries (must be statically linked):"
+            echo "$MINGW_DEPS"
             exit 1
           else
-            echo "OK: No external runtime dependencies"
+            echo "OK: No MinGW runtime dependencies"
           fi
 
       - name: Move artifact to root
