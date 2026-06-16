@@ -56,8 +56,10 @@ if(MINGW)
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
     get_filename_component(MINGW_LIBGCC_DIR "${MINGW_LIBGCC_PATH}" DIRECTORY)
-    # 从 gcc 版本子目录向上导航到 mingw64 根目录：.../lib/gcc/x86_64-w64-mingw32/16.1.0 -> ../../.. -> mingw64
-    get_filename_component(MINGW_ROOT "${MINGW_LIBGCC_DIR}/../../.." REALPATH)
+    # 从 gcc 版本子目录逐级向上导航到 mingw64 根目录
+    get_filename_component(MINGW_TEMP1 "${MINGW_LIBGCC_DIR}" DIRECTORY)
+    get_filename_component(MINGW_TEMP2 "${MINGW_TEMP1}" DIRECTORY)
+    get_filename_component(MINGW_ROOT "${MINGW_TEMP2}" DIRECTORY)
     message(STATUS "MinGW root: ${MINGW_ROOT}")
     message(STATUS "MinGW libgcc dir: ${MINGW_LIBGCC_DIR}")
     target_link_libraries(axs-native PRIVATE
