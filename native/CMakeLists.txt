@@ -49,6 +49,10 @@ target_link_libraries(axs-native PRIVATE OpenSSL::Crypto zlibstatic)
 
 # MinGW 静态链接运行时库，避免目标服务器缺少 libgcc/libwinpthread
 if(MINGW)
+    # 使用 -static 整体静态链接模式（更可靠）
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -static")
+    # 额外确保运行时库静态链接
     target_link_options(axs-native PRIVATE -static-libgcc -static-libstdc++ -Wl,-Bstatic -lstdc++ -lpthread -Wl,-Bdynamic)
 endif()
 

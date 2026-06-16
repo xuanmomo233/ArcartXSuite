@@ -107,6 +107,22 @@ jobs:
           fi
           echo "OK: DLL is x86-64"
 
+      - name: Check DLL dependencies
+        shell: msys2 {0}
+        run: |
+          echo "=== DLL dependencies (ldd) ==="
+          ldd src/main/resources/native/axs-native.dll || true
+          echo "=== DLL dependencies (objdump) ==="
+          objdump -p src/main/resources/native/axs-native.dll | grep -E "DLL Name|needed" || true
+          # 如果检测到非 KERNEL32/NTDLL 的系统 DLL 依赖，视为构建失败
+          DEP_COUNT=$(ldd src/main/resources/native/axs-native.dll 2>/dev/null | grep -vE "KERNEL32|ntdll|msvcrt|KERNELBASE|api-ms-win" | wc -l)
+          if [ "$DEP_COUNT" -gt 0 ]; then
+            echo "WARN: DLL has external dependencies (may need static linking):"
+            ldd src/main/resources/native/axs-native.dll 2>/dev/null | grep -vE "KERNEL32|ntdll|msvcrt|KERNELBASE|api-ms-win" || true
+          else
+            echo "OK: No external runtime dependencies"
+          fi
+
       - name: Move artifact to root
         run: |
           copy src\main\resources\native\axs-native.dll axs-native.dll
