@@ -49,11 +49,20 @@ target_link_libraries(axs-native PRIVATE OpenSSL::Crypto zlibstatic)
 
 # MinGW 静态链接运行时库，避免目标服务器缺少 libgcc/libwinpthread
 if(MINGW)
-    # 使用 -static 整体静态链接模式
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -static")
-    # 显式链接静态版本的运行时库（-lgcc 链接 libgcc.a，而非 libgcc_s.dll）
-    target_link_options(axs-native PRIVATE -Wl,-Bstatic -lgcc -lstdc++ -lwinpthread -Wl,-Bdynamic)
+    # libgcc.a 路径通过 gcc 命令获取（在 gcc 版本子目录中）
+    execute_process(
+        COMMAND x86_64-w64-mingw32-gcc -print-libgcc-file-name
+        OUTPUT_VARIABLE MINGW_LIBGCC_PATH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    get_filename_component(MINGW_LIBGCC_DIR "${MINGW_LIBGCC_PATH}" DIRECTORY)
+    message(STATUS "MinGW libgcc dir: ${MINGW_LIBGCC_DIR}")
+    # libstdc++.a 和 libwinpthread.a 在 /mingw64/lib/
+    target_link_libraries(axs-native PRIVATE
+        "${MINGW_LIBGCC_DIR}/libgcc.a"
+        "/mingw64/lib/libstdc++.a"
+        "/mingw64/lib/libwinpthread.a"
+    )
 endif()
 
 # Strip symbols in release
