@@ -49,6 +49,9 @@ target_link_libraries(axs-native PRIVATE OpenSSL::Crypto zlibstatic)
 
 # MinGW 静态链接运行时库，避免目标服务器缺少 libgcc/libwinpthread
 if(MINGW)
+    # 在编译阶段就告诉 GCC 使用静态运行时（SHARED library 默认会链接共享版本）
+    target_compile_options(axs-native PRIVATE -static-libgcc -static-libstdc++)
+    target_link_options(axs-native PRIVATE -static-libgcc -static-libstdc++)
     # 使用 gcc -print-file-name 直接获取静态库的绝对路径
     execute_process(
         COMMAND x86_64-w64-mingw32-gcc -print-file-name=libgcc.a
