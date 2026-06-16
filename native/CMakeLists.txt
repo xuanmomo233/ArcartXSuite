@@ -49,23 +49,29 @@ target_link_libraries(axs-native PRIVATE OpenSSL::Crypto zlibstatic)
 
 # MinGW 静态链接运行时库，避免目标服务器缺少 libgcc/libwinpthread
 if(MINGW)
-    # 通过 gcc 命令获取 libgcc.a 路径，推导 mingw64 根目录
+    # 使用 gcc -print-file-name 直接获取静态库的绝对路径
     execute_process(
-        COMMAND x86_64-w64-mingw32-gcc -print-libgcc-file-name
-        OUTPUT_VARIABLE MINGW_LIBGCC_PATH
+        COMMAND x86_64-w64-mingw32-gcc -print-file-name=libgcc.a
+        OUTPUT_VARIABLE MINGW_LIBGCC
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
-    get_filename_component(MINGW_LIBGCC_DIR "${MINGW_LIBGCC_PATH}" DIRECTORY)
-    # 从 gcc 版本子目录逐级向上导航到 mingw64 根目录
-    get_filename_component(MINGW_TEMP1 "${MINGW_LIBGCC_DIR}" DIRECTORY)
-    get_filename_component(MINGW_TEMP2 "${MINGW_TEMP1}" DIRECTORY)
-    get_filename_component(MINGW_ROOT "${MINGW_TEMP2}" DIRECTORY)
-    message(STATUS "MinGW root: ${MINGW_ROOT}")
-    message(STATUS "MinGW libgcc dir: ${MINGW_LIBGCC_DIR}")
+    execute_process(
+        COMMAND x86_64-w64-mingw32-g++ -print-file-name=libstdc++.a
+        OUTPUT_VARIABLE MINGW_LIBSTDCPP
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    execute_process(
+        COMMAND x86_64-w64-mingw32-gcc -print-file-name=libwinpthread.a
+        OUTPUT_VARIABLE MINGW_LIBWINPTHREAD
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    message(STATUS "libgcc: ${MINGW_LIBGCC}")
+    message(STATUS "libstdc++: ${MINGW_LIBSTDCPP}")
+    message(STATUS "libwinpthread: ${MINGW_LIBWINPTHREAD}")
     target_link_libraries(axs-native PRIVATE
-        "${MINGW_LIBGCC_DIR}/libgcc.a"
-        "${MINGW_ROOT}/lib/libstdc++.a"
-        "${MINGW_ROOT}/lib/libwinpthread.a"
+        "${MINGW_LIBGCC}"
+        "${MINGW_LIBSTDCPP}"
+        "${MINGW_LIBWINPTHREAD}"
     )
 endif()
 
