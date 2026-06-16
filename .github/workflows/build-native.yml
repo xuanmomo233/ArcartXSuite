@@ -244,6 +244,39 @@ jobs:
             echo "WARN: JAR 里没有找到 axs-native.dll"
           fi
 
+      - name: Build and upload module axb files
+        env:
+          CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
+        run: |
+          if [ -z "$CLOUD_CI_TOKEN" ]; then
+            echo "SKIP: CLOUD_CI_TOKEN not set, skipping module axb upload"
+            exit 0
+          fi
+          # 构建所有模块的 .axb
+          gradle encryptAllModuleAxb
+          # 上传每个 .axb 到云端
+          AXB_DIR="build/ArcartXSuite/module-axb"
+          if [ -d "$AXB_DIR" ]; then
+            for meta in "$AXB_DIR"/*.meta.json; do
+              [ -f "$meta" ] || continue
+              module=$(basename "$meta" .meta.json)
+              axb="$AXB_DIR/${module}.axb"
+              [ -f "$axb" ] || continue
+              key=$(jq -r '.moduleKey' "$meta")
+              iv=$(jq -r '.moduleIv' "$meta")
+              version="ci-${{ github.sha }}"
+              echo "Uploading $module ($version) ..."
+              curl -sS -F "axb=@$axb" \
+                -F "version=$version" \
+                -F "key=$key" \
+                -F "setCurrent=true" \
+                -H "X-CI-Token: $CLOUD_CI_TOKEN" \
+                "https://cloud.021209.xyz/v1/ci/modules/$module/versions" || echo "WARN: $module upload failed"
+            done
+          else
+            echo "SKIP: No axb files found"
+          fi
+
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:

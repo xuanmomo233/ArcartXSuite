@@ -57,17 +57,23 @@ abstract class EncryptModuleAxbTask : DefaultTask() {
         val key: ByteArray
         val iv: ByteArray
 
+        val keyB64: String
+        val ivB64: String
         if (moduleKey.isPresent && moduleIv.isPresent) {
-            key = Base64.getDecoder().decode(moduleKey.get())
-            iv = Base64.getDecoder().decode(moduleIv.get())
+            keyB64 = moduleKey.get()
+            ivB64 = moduleIv.get()
+            key = Base64.getDecoder().decode(keyB64)
+            iv = Base64.getDecoder().decode(ivB64)
             require(key.size == 32) { "moduleKey 必须是 32 bytes (Base64)" }
             require(iv.size == 12) { "moduleIv 必须是 12 bytes (Base64)" }
         } else {
             key = ByteArray(32).also { SecureRandom().nextBytes(it) }
             iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
+            keyB64 = Base64.getEncoder().encodeToString(key)
+            ivB64 = Base64.getEncoder().encodeToString(iv)
             logger.lifecycle("[EncryptModuleAxb] 自动生成密钥（请保存到平台）：")
-            logger.lifecycle("  moduleKey = ${Base64.getEncoder().encodeToString(key)}")
-            logger.lifecycle("  moduleIv  = ${Base64.getEncoder().encodeToString(iv)}")
+            logger.lifecycle("  moduleKey = $keyB64")
+            logger.lifecycle("  moduleIv  = $ivB64")
         }
 
         val plain = jarFile.readBytes()
@@ -76,6 +82,12 @@ abstract class EncryptModuleAxbTask : DefaultTask() {
         val outFile = outputAxb.asFile.get()
         outFile.parentFile.mkdirs()
         outFile.writeBytes(encrypted)
+
+        // 写入 metadata JSON，CI 上传时读取 key/iv
+        val metaFile = File(outFile.parentFile, outFile.name.replace(".axb", ".meta.json"))
+        metaFile.writeText(
+            """{"moduleKey":"$keyB64","moduleIv":"$ivB64","size":${encrypted.size}}"""
+        )
 
         logger.lifecycle("[EncryptModuleAxb] 已生成: ${outFile.absolutePath} (${encrypted.size} bytes)")
     }
