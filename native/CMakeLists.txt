@@ -49,19 +49,21 @@ target_link_libraries(axs-native PRIVATE OpenSSL::Crypto zlibstatic)
 
 # MinGW 静态链接运行时库，避免目标服务器缺少 libgcc/libwinpthread
 if(MINGW)
-    # libgcc.a 路径通过 gcc 命令获取（在 gcc 版本子目录中）
+    # 通过 gcc 命令获取 libgcc.a 路径，推导 mingw64 根目录
     execute_process(
         COMMAND x86_64-w64-mingw32-gcc -print-libgcc-file-name
         OUTPUT_VARIABLE MINGW_LIBGCC_PATH
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
     get_filename_component(MINGW_LIBGCC_DIR "${MINGW_LIBGCC_PATH}" DIRECTORY)
+    # 从 gcc 版本子目录向上导航到 mingw64 根目录：.../lib/gcc/x86_64-w64-mingw32/16.1.0 -> ../../.. -> mingw64
+    get_filename_component(MINGW_ROOT "${MINGW_LIBGCC_DIR}/../../.." REALPATH)
+    message(STATUS "MinGW root: ${MINGW_ROOT}")
     message(STATUS "MinGW libgcc dir: ${MINGW_LIBGCC_DIR}")
-    # libstdc++.a 和 libwinpthread.a 在 /mingw64/lib/
     target_link_libraries(axs-native PRIVATE
         "${MINGW_LIBGCC_DIR}/libgcc.a"
-        "/mingw64/lib/libstdc++.a"
-        "/mingw64/lib/libwinpthread.a"
+        "${MINGW_ROOT}/lib/libstdc++.a"
+        "${MINGW_ROOT}/lib/libwinpthread.a"
     )
 endif()
 
