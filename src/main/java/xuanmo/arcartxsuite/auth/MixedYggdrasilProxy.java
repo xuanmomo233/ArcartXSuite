@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -56,6 +57,7 @@ public class MixedYggdrasilProxy {
     private static final String SOURCE_LITTLESKIN = "littleskin";
     private static final String LOOPBACK_HOST = "127.0.0.1";
     private static final int MAX_RESPONSE_BYTES = 1024 * 1024;
+    private static final int MAX_REQUEST_BYTES = 512 * 1024;
 
     /**
      * 玩家认证来源权威记录：无横线小写 UUID -> source。
@@ -404,7 +406,7 @@ public class MixedYggdrasilProxy {
     private void proxyDirectly(HttpExchange exchange, String targetUrl) throws IOException {
         HttpURLConnection conn = null;
         try {
-            byte[] requestBody = readAllBytes(exchange.getRequestBody());
+            byte[] requestBody = readAllBytesLimited(exchange.getRequestBody(), MAX_REQUEST_BYTES);
             String method = exchange.getRequestMethod();
 
             conn = (HttpURLConnection) new URL(targetUrl).openConnection();
@@ -437,7 +439,7 @@ public class MixedYggdrasilProxy {
 
             InputStream in = (code >= 200 && code < 300) ? conn.getInputStream() : conn.getErrorStream();
             if (in != null) {
-                byte[] body = readAllBytes(in);
+                byte[] body = readAllBytesLimited(in, MAX_RESPONSE_BYTES);
                 exchange.sendResponseHeaders(code, body.length);
                 try (OutputStream out = exchange.getResponseBody()) {
                     out.write(body);
@@ -475,6 +477,26 @@ public class MixedYggdrasilProxy {
         }
         try (in) {
             return in.readAllBytes();
+        }
+    }
+
+    private static byte[] readAllBytesLimited(InputStream in, int maxBytes) throws IOException {
+        if (in == null) {
+            return new byte[0];
+        }
+        try (in) {
+            ByteArrayOutputStream buf = new ByteArrayOutputStream();
+            byte[] tmp = new byte[8192];
+            int n;
+            int total = 0;
+            while ((n = in.read(tmp)) != -1) {
+                total += n;
+                if (total > maxBytes) {
+                    throw new IOException("Body exceeds " + maxBytes + " bytes limit");
+                }
+                buf.write(tmp, 0, n);
+            }
+            return buf.toByteArray();
         }
     }
 
