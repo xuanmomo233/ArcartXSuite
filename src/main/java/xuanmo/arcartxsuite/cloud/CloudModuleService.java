@@ -485,7 +485,7 @@ public final class CloudModuleService {
         return json.substring(bracketOpen, bracketClose + 1);
     }
 
-    /** 从 JSON 中提取字符串数组字段（如 ["a","b"]）。 */
+    /** 从 JSON 中提取字符串数组字段（如 ["a","b"]），正确处理转义引号。 */
     private static List<String> extractStringArray(String json, String field) {
         String arr = extractJsonArray(json, field);
         List<String> result = new ArrayList<>();
@@ -494,10 +494,30 @@ public final class CloudModuleService {
         while (i < arr.length()) {
             int firstQuote = arr.indexOf('"', i);
             if (firstQuote < 0) break;
-            int secondQuote = arr.indexOf('"', firstQuote + 1);
-            if (secondQuote < 0) break;
-            result.add(arr.substring(firstQuote + 1, secondQuote));
-            i = secondQuote + 1;
+            StringBuilder sb = new StringBuilder();
+            boolean escaped = false;
+            int j = firstQuote + 1;
+            boolean found = false;
+            for (; j < arr.length(); j++) {
+                char c = arr.charAt(j);
+                if (escaped) {
+                    sb.append(c);
+                    escaped = false;
+                } else if (c == '\\') {
+                    escaped = true;
+                } else if (c == '"') {
+                    found = true;
+                    break;
+                } else {
+                    sb.append(c);
+                }
+            }
+            if (found) {
+                result.add(sb.toString());
+                i = j + 1;
+            } else {
+                break;
+            }
         }
         return result;
     }
