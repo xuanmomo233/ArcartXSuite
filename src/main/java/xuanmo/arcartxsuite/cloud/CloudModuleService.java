@@ -244,9 +244,9 @@ public final class CloudModuleService {
                 plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：axb 下载失败");
                 return CompletableFuture.<Void>completedFuture(null);
             }
-            // axb 结构：iv(12) + ciphertext + authTag(16)，至少 28 字节
-            if (axb.length < 28) {
-                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：axb 文件过小 (" + axb.length + " 字节)，可能下载不完整或文件损坏");
+            // 新版 axb 结构：magic(4) + iv(12) + ciphertext + authTag(16)，至少 32 字节
+            if (axb.length < 32) {
+                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：axb 文件过小 (" + axb.length + " 字节)，可能下载不完整或文件损坏。期望至少 32 字节 (4 字节 magic + 12 字节 IV + 16 字节 tag)");
                 return CompletableFuture.<Void>completedFuture(null);
             }
             return requestModuleKey(moduleId).thenAccept(keyResp -> {
@@ -270,10 +270,12 @@ public final class CloudModuleService {
                     plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：密钥长度错误 (" + key.length + " 字节)，应为 32 字节。请检查云端模块上传时填写的 moduleKey");
                     return;
                 }
-                // axb 自包含 IV（前 12 字节），native 内部读取，无需单独传入
+                // 新版 axb 文件头为 4 字节随机 magic，native 需要纯 IV(12) + ciphertext + tag(16)，
+                // 因此传给 n4 前需去掉 magic 前缀。
+                byte[] payload = java.util.Arrays.copyOfRange(axb, 4, axb.length);
                 byte[] jarBytes;
                 try {
-                    jarBytes = NativeBridge.n4(axb, key);
+                    jarBytes = NativeBridge.n4(payload, key);
                 } catch (Exception e) {
                     plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：native 解密抛异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
                     return;
