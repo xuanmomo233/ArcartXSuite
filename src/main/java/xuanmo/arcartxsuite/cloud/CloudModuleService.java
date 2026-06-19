@@ -191,22 +191,28 @@ public final class CloudModuleService {
 
     public CompletableFuture<Void> syncModules() {
         // 1. 未绑定则先用 QQ+密码绑定服务器
+        plugin.consoleInfo("[Cloud] 开始云端模块同步...");
         CompletableFuture<Boolean> ready = hasServerCode()
             ? CompletableFuture.completedFuture(true)
             : bindServer();
 
         return ready.thenCompose(bound -> {
             if (!bound) {
-                plugin.consoleWarn("[Cloud] 未能绑定服务器，跳过云端模块同步。");
+                plugin.consoleWarn("[Cloud] 未能绑定服务器，跳过云端模块同步。请检查 config.yml 中 cloud.qq 和 cloud.password 是否正确。");
                 return CompletableFuture.<Void>completedFuture(null);
             }
+            plugin.consoleInfo("[Cloud] 服务器已绑定: " + serverCode);
             return refreshToken().thenCompose(ok -> {
-                if (!ok) return CompletableFuture.<Void>completedFuture(null);
+                if (!ok) {
+                    plugin.consoleWarn("[Cloud] 刷新模块令牌失败，跳过云端模块同步。");
+                    return CompletableFuture.<Void>completedFuture(null);
+                }
                 List<String> mods = allowedModules;
                 if (mods == null || mods.isEmpty()) {
                     plugin.consoleInfo("[Cloud] 该服务器未装备任何云端模块。");
                     return CompletableFuture.<Void>completedFuture(null);
                 }
+                plugin.consoleInfo("[Cloud] 本次需同步 " + mods.size() + " 个云端模块: " + mods);
                 CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
                 for (String id : mods) {
                     if (id == null || id.isEmpty()) continue;
@@ -229,37 +235,60 @@ public final class CloudModuleService {
             return CompletableFuture.<Void>completedFuture(null);
         }
         if (!NativeBridge.isAvailable()) {
-            plugin.consoleWarn("[Cloud] Native 安全库未加载，跳过云端模块 " + moduleId + " 的解密加载");
+            plugin.consoleWarn("[Cloud] Native 安全库未加载，跳过云端模块 " + moduleId + " 的解密加载。错误: " + NativeBridge.getLoadError());
             return CompletableFuture.<Void>completedFuture(null);
         }
+        plugin.consoleInfo("[Cloud] 开始同步模块: " + moduleId + " (native 版本: " + NativeBridge.n0() + ")");
         return downloadAxb(moduleId).thenCompose(axb -> {
             if (axb == null || axb.length == 0) {
-                plugin.consoleWarn("[Cloud] 下载模块 " + moduleId + " 失败");
+                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：axb 下载失败");
+                return CompletableFuture.<Void>completedFuture(null);
+            }
+            // axb 结构：iv(12) + ciphertext + authTag(16)，至少 28 字节
+            if (axb.length < 28) {
+                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：axb 文件过小 (" + axb.length + " 字节)，可能下载不完整或文件损坏");
                 return CompletableFuture.<Void>completedFuture(null);
             }
             return requestModuleKey(moduleId).thenAccept(keyResp -> {
                 if (keyResp == null) {
-                    plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥失败");
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：无法获取解密密钥");
                     return;
                 }
                 String keyB64 = extractJsonField(keyResp, "key");
-                if (keyB64 == null) {
-                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 密钥数据不完整");
+                if (keyB64 == null || keyB64.isEmpty()) {
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：云端密钥响应缺少 key 字段");
                     return;
                 }
-                byte[] key = Base64.getDecoder().decode(keyB64);
+                byte[] key;
+                try {
+                    key = Base64.getDecoder().decode(keyB64);
+                } catch (IllegalArgumentException e) {
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：密钥不是有效的 Base64 编码");
+                    return;
+                }
+                if (key.length != 32) {
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：密钥长度错误 (" + key.length + " 字节)，应为 32 字节。请检查云端模块上传时填写的 moduleKey");
+                    return;
+                }
                 // axb 自包含 IV（前 12 字节），native 内部读取，无需单独传入
-                byte[] jarBytes = NativeBridge.n4(axb, key);
-                if (jarBytes == null || jarBytes.length == 0) {
-                    plugin.consoleWarn("[Cloud] 解密模块 " + moduleId + " 失败");
+                byte[] jarBytes;
+                try {
+                    jarBytes = NativeBridge.n4(axb, key);
+                } catch (Exception e) {
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：native 解密抛异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
                     return;
                 }
+                if (jarBytes == null || jarBytes.length == 0) {
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 解密失败。可能原因：1) 上传时填写的 moduleKey 与加密 axb 不匹配；2) axb 文件损坏；3) native 库与云端加密版本不一致。");
+                    return;
+                }
+                plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 解密成功: " + jarBytes.length + " 字节");
                 plugin.getServer().getScheduler().runTask(plugin, () -> {
                     boolean ok = registry.loadCloudModule(jarBytes);
                     if (ok) {
                         plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载");
                     } else {
-                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 加载失败");
+                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 加载失败：可能缺少依赖或该模块已在 config.yml 中关闭");
                     }
                 });
             });
@@ -269,6 +298,7 @@ public final class CloudModuleService {
     private CompletableFuture<byte[]> downloadAxb(String moduleId) {
         CachedAxb cached = cachedAxb.get(moduleId);
         if (cached != null && cached.expiresAt > System.currentTimeMillis()) {
+            plugin.consoleInfo("[Cloud] 使用缓存 axb: " + moduleId + " (" + cached.data.length + " 字节)");
             return CompletableFuture.completedFuture(cached.data);
         }
 
@@ -283,10 +313,15 @@ public final class CloudModuleService {
             .thenApply(resp -> {
                 if (resp.statusCode() == 200) {
                     byte[] data = resp.body();
+                    if (data == null || data.length == 0) {
+                        plugin.consoleWarn("[Cloud] 下载 " + moduleId + " 成功但响应体为空");
+                        return null;
+                    }
+                    plugin.consoleInfo("[Cloud] 下载 " + moduleId + " 成功: " + data.length + " 字节");
                     cachedAxb.put(moduleId, new CachedAxb(data, System.currentTimeMillis() + AXB_CACHE_TTL_MS));
                     return data;
                 }
-                plugin.consoleWarn("[Cloud] 下载 " + moduleId + " 失败: " + resp.statusCode());
+                plugin.consoleWarn("[Cloud] 下载 " + moduleId + " 失败，HTTP 状态码: " + resp.statusCode());
                 return null;
             })
             .exceptionally(ex -> {
@@ -305,8 +340,28 @@ public final class CloudModuleService {
             .build();
 
         return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-            .thenApply(resp -> resp.statusCode() == 200 ? resp.body() : null)
-            .exceptionally(ex -> null);
+            .thenApply(resp -> {
+                if (resp.statusCode() != 200) {
+                    plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥失败，HTTP 状态码: " + resp.statusCode());
+                    return null;
+                }
+                String body = resp.body();
+                if (body == null || body.isEmpty()) {
+                    plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥成功但响应体为空");
+                    return null;
+                }
+                String key = extractJsonField(body, "key");
+                if (key == null || key.isEmpty()) {
+                    plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥失败，响应中缺少 key 字段");
+                    return null;
+                }
+                plugin.consoleInfo("[Cloud] 获取模块 " + moduleId + " 密钥成功");
+                return body;
+            })
+            .exceptionally(ex -> {
+                plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥异常: " + ex.getMessage());
+                return null;
+            });
     }
 
     // -- 心跳 ------------------------------------------------
