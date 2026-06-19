@@ -356,6 +356,10 @@ public final class ModuleRegistry {
                 LOGGER.warning("云端模块 " + moduleId + " 已加载，跳过。");
                 return false;
             }
+            if (!isModuleEnabled(loadRootConfig(), moduleId)) {
+                LOGGER.fine("云端模块 " + moduleId + " 已在 config.yml 中关闭，跳过加载。");
+                return false;
+            }
             if (packetBridge != null) {
                 packetBridge.resetUiRegistrationCount();
             }
@@ -379,6 +383,10 @@ public final class ModuleRegistry {
     public boolean loadModuleById(String moduleId) {
         if (modules.containsKey(moduleId)) {
             LOGGER.warning("模块已加载: " + moduleId + "，如需重启请使用 reload 或 unload + load。");
+            return false;
+        }
+        if (!isModuleEnabled(loadRootConfig(), moduleId)) {
+            LOGGER.warning("模块 " + moduleId + " 已在 config.yml 中关闭，无法热加载。");
             return false;
         }
         initializeGlobalBridges();
