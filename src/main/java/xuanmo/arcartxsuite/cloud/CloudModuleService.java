@@ -53,6 +53,7 @@ public final class CloudModuleService {
     private volatile long tokenExpiry;
     private volatile List<String> allowedModules = List.of();
     private static final long AXB_CACHE_TTL_MS = 3600 * 1000L;
+    private int syncCounter = 0;
     private static final class CachedAxb {
         final byte[] data;
         final long expiresAt;
@@ -172,8 +173,10 @@ public final class CloudModuleService {
                     if (token != null) {
                         this.moduleToken = token;
                         this.tokenExpiry = System.currentTimeMillis() + 23 * 3600 * 1000;
+                        List<String> oldAllowed = this.allowedModules;
                         this.allowedModules = extractStringArray(body, "allowedModules");
                         plugin.consoleInfo("[Cloud] 模块令牌已刷新，授权模块: " + allowedModules.size());
+                        syncModuleChanges(oldAllowed);
                         startHeartbeat();
                         return true;
                     }
@@ -385,6 +388,12 @@ public final class CloudModuleService {
     private void sendHeartbeat() {
         if (moduleToken == null || moduleToken.isEmpty()) return;
 
+        syncCounter++;
+        boolean shouldSync = syncCounter >= 60 || System.currentTimeMillis() > tokenExpiry - 5 * 60 * 1000;
+        if (shouldSync) {
+            syncCounter = 0;
+        }
+
         int online = plugin.getServer().getOnlinePlayers().size();
         int max = plugin.getServer().getMaxPlayers();
         long uptime = System.currentTimeMillis() - pluginStartTime;
@@ -429,10 +438,55 @@ public final class CloudModuleService {
                     plugin.consoleWarn("[Cloud] 心跳上报失败: " + resp.statusCode());
                 }
             })
+            .thenRun(() -> {
+                if (shouldSync) {
+                    refreshToken().thenAccept(ok -> {
+                        if (ok) {
+                            plugin.consoleInfo("[Cloud] 定期同步完成");
+                        }
+                    });
+                }
+            })
             .exceptionally(ex -> {
                 plugin.consoleWarn("[Cloud] 心跳上报异常: " + ex.getMessage());
                 return null;
             });
+    }
+
+    // -- 模块授权变更同步 ------------------------------------------
+
+    /**
+     * 对比前后授权列表，卸载已撤销的云端模块，加载新授权的模块。
+     */
+    private void syncModuleChanges(List<String> oldAllowed) {
+        List<String> currentAllowed = this.allowedModules;
+        List<String> loadedCloud = registry.getLoadedCloudModuleIds();
+
+        // 需要卸载的：已加载的云端模块不再在授权列表中
+        for (String id : loadedCloud) {
+            if (!currentAllowed.contains(id)) {
+                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    boolean ok = registry.unloadModule(id);
+                    if (ok) {
+                        plugin.consoleInfo("[Cloud] 模块 " + id + " 授权已撤销，已卸载");
+                    }
+                    cachedAxb.remove(id);
+                });
+            }
+        }
+
+        // 需要加载的：新出现在授权列表中且尚未加载
+        List<String> toLoad = currentAllowed.stream()
+            .filter(id -> !loadedCloud.contains(id))
+            .toList();
+
+        if (!toLoad.isEmpty()) {
+            plugin.consoleInfo("[Cloud] 检测到 " + toLoad.size() + " 个新授权模块，开始加载: " + toLoad);
+            CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
+            for (String id : toLoad) {
+                chain = chain.thenCompose(v -> downloadAndLoad(id));
+            }
+        }
     }
 
     // -- 工具方法 ------------------------------------------------

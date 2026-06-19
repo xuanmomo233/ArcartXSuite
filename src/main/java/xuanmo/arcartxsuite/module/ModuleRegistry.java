@@ -525,6 +525,19 @@ public final class ModuleRegistry {
         return ids;
     }
 
+    /**
+     * 获取当前已加载的云端模块ID列表（从内存 jarBytes 加载的模块）。
+     */
+    public List<String> getLoadedCloudModuleIds() {
+        List<String> ids = new ArrayList<>();
+        for (LoadedModule loaded : modules.values()) {
+            if (loaded.jarBytes() != null) {
+                ids.add(loaded.descriptor().id());
+            }
+        }
+        return ids;
+    }
+
     public Map<String, ModuleCommandHandler> commandHandlerMap() {
         return Collections.unmodifiableMap(commandHandlers);
     }
