@@ -153,6 +153,10 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         if (!bossesDir.exists()) {
             bossesDir.mkdirs();
         }
+        File[] existing = bossesDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (existing != null && existing.length > 0) {
+            return;
+        }
         File target = new File(bossesDir, "ExampleBoss.yml");
         if (!target.exists()) {
             context.exportResource("bosses/ExampleBoss.yml", target, false);

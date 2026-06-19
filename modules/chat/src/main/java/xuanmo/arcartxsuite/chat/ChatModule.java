@@ -249,6 +249,10 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         if (!chatCardDir.exists()) {
             chatCardDir.mkdirs();
         }
+        File[] existing = chatCardDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (existing != null && existing.length > 0) {
+            return;
+        }
         String[] cards = {
             "axs_item_preview",
             "axs_chat_mention",
@@ -267,6 +271,10 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         File channelsDir = new File(context.dataFolder(), channelsRelative);
         if (!channelsDir.exists()) {
             channelsDir.mkdirs();
+        }
+        File[] existing = channelsDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (existing != null && existing.length > 0) {
+            return;
         }
         for (String channel : new String[]{"Normal.yml", "Global.yml", "Private.yml", "Staff.yml"}) {
             File target = new File(channelsDir, channel);

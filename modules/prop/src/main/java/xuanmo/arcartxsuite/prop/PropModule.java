@@ -129,7 +129,11 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
         }
         exportIfMissing("prop/key.yml");
         exportIfMissing("prop/language.yml");
-        exportIfMissing("prop/props/道具示例.yml");
+        // 若道具目录已有用户自定义内容，不再重复导出默认示例
+        File[] existing = propsDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (existing == null || existing.length == 0) {
+            exportIfMissing("prop/props/道具示例.yml");
+        }
     }
 
     private void exportIfMissing(String relativePath) {

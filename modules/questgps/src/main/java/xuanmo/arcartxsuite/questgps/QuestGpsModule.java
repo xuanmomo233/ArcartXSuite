@@ -103,6 +103,10 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     }
 
     private void ensureQuestDefaults(File questsDirectory) {
+        File[] existing = questsDirectory.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (existing != null && existing.length > 0) {
+            return;
+        }
         String[] defaults = {"quests/mainline.yml", "quests/side.yml", "quests/encounter.yml"};
         for (String res : defaults) {
             String fileName = res.substring(res.lastIndexOf('/') + 1);

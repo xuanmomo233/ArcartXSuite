@@ -108,6 +108,11 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
     }
 
     private void ensureTitleDefaults(File titlesDirectory) {
+        // 若目录已存在用户自定义内容，不再重复导出默认示例
+        File[] existing = titlesDirectory.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (existing != null && existing.length > 0) {
+            return;
+        }
         String[] defaults = {"titles/adventure.yml", "titles/exploration.yml", "titles/activity.yml"};
         for (String res : defaults) {
             String fileName = res.substring(res.lastIndexOf('/') + 1);

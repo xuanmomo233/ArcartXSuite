@@ -28,7 +28,6 @@ public final class ChatSignBypassService implements Listener {
         "signedMessageDecoder",
     };
     private static final String[] CONNECTION_FIELDS = {
-        "chatMessageChain",
         "chatDecorator",
         "signedMessageDecoder",
         "chatMessageValidator",

@@ -92,6 +92,10 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         if (!menusDirectory.exists()) {
             menusDirectory.mkdirs();
         }
+        File[] existing = menusDirectory.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (existing != null && existing.length > 0) {
+            return;
+        }
         exportMenuIfMissing(menusDirectory, "example.yml");
         exportMenuIfMissing(menusDirectory, "esc_main.yml");
     }

@@ -56,9 +56,12 @@ public final class RgbModule extends AbstractAXSModule {
         if (!entriesDirectory.exists()) {
             entriesDirectory.mkdirs();
         }
-        File defaultEntries = new File(entriesDirectory, "default.yml");
-        if (!defaultEntries.exists()) {
-            context.exportResource("entries/default.yml", defaultEntries, false);
+        File[] existing = entriesDirectory.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (existing == null || existing.length == 0) {
+            File defaultEntries = new File(entriesDirectory, "default.yml");
+            if (!defaultEntries.exists()) {
+                context.exportResource("entries/default.yml", defaultEntries, false);
+            }
         }
         configuration = ArcartRgbModuleConfiguration.load(yaml, context.logger(), entriesDirectory);
     }

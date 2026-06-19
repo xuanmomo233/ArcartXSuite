@@ -111,9 +111,12 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
         if (!packetsDirectory.exists()) {
             packetsDirectory.mkdirs();
         }
-        File defaultPackets = new File(packetsDirectory, "default.yml");
-        if (!defaultPackets.exists()) {
-            context.exportResource("packets/default.yml", defaultPackets, false);
+        File[] existingPackets = packetsDirectory.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (existingPackets == null || existingPackets.length == 0) {
+            File defaultPackets = new File(packetsDirectory, "default.yml");
+            if (!defaultPackets.exists()) {
+                context.exportResource("packets/default.yml", defaultPackets, false);
+            }
         }
         packetConfiguration = CombatEffectPacketConfiguration.load(killEffectSection, logger, packetsDirectory);
         displayConfiguration = CombatDisplayConfiguration.load(yaml.getConfigurationSection("digis-display"));

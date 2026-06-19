@@ -104,9 +104,12 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
         if (!anchorsDirectory.exists()) {
             anchorsDirectory.mkdirs();
         }
-        File defaultAnchors = new File(anchorsDirectory, "default.yml");
-        if (!defaultAnchors.exists()) {
-            context.exportResource("anchors/default.yml", defaultAnchors, false);
+        File[] existing = anchorsDirectory.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (existing == null || existing.length == 0) {
+            File defaultAnchors = new File(anchorsDirectory, "default.yml");
+            if (!defaultAnchors.exists()) {
+                context.exportResource("anchors/default.yml", defaultAnchors, false);
+            }
         }
         configuration = MapModuleConfiguration.load(yaml, context.logger(), anchorsDirectory);
     }

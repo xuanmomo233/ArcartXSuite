@@ -110,6 +110,10 @@ public final class TabModule extends AbstractAXSModule {
         if (!tabsDir.exists()) {
             tabsDir.mkdirs();
         }
+        File[] existing = tabsDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (existing != null && existing.length > 0) {
+            return;
+        }
         for (String tab : new String[]{"online-tab.yml", "demo.yml", "arena.yml"}) {
             File target = new File(tabsDir, tab);
             if (!target.exists()) {

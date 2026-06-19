@@ -115,6 +115,10 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         if (!rulesDir.exists()) {
             rulesDir.mkdirs();
         }
+        File[] existing = rulesDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (existing != null && existing.length > 0) {
+            return;
+        }
         File target = new File(rulesDir, "examples.yml");
         if (!target.exists()) {
             context.exportResource("rules/examples.yml", target, false);

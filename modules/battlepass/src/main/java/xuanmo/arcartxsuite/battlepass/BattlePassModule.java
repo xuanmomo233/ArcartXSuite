@@ -119,6 +119,10 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         if (!tasksDir.exists()) {
             tasksDir.mkdirs();
         }
+        File[] existing = tasksDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (existing != null && existing.length > 0) {
+            return;
+        }
         for (String taskFile : new String[]{"daily.yml", "weekly.yml", "season.yml"}) {
             File target = new File(tasksDir, taskFile);
             if (!target.exists()) {

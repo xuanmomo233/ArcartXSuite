@@ -109,6 +109,10 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         if (!poolsDir.exists()) {
             poolsDir.mkdirs();
         }
+        File[] existing = poolsDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (existing != null && existing.length > 0) {
+            return;
+        }
         for (String poolFile : new String[]{"character_event_1.yml", "weapon_event_1.yml", "default_weapon_case.yml"}) {
             File target = new File(poolsDir, poolFile);
             if (!target.exists()) {
