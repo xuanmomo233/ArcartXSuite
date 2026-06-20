@@ -78,18 +78,21 @@ jobs:
       - name: Locate and copy DLL
         shell: msys2 {0}
         run: |
-          echo "Searching for built DLL..."
-          find . -name "*.dll" -type f
-          DLL_PATH=$(find . -name "*.dll" -type f | grep -E "(axs-native|libaxs-native)" | head -1)
+          echo "CMake output directory: src/main/resources/native"
+          ls -la src/main/resources/native || true
+          DLL_PATH=$(find src/main/resources/native -maxdepth 1 -type f \( -name "axs-native.dll" -o -name "libaxs-native.dll" \) | head -1)
           if [ -z "$DLL_PATH" ]; then
-            echo "ERROR: No DLL found anywhere!"
+            echo "ERROR: No axs-native DLL found in src/main/resources/native!"
             exit 1
           fi
           echo "Found DLL at: $DLL_PATH"
-          mkdir -p src/main/resources/native
-          # MinGW 会生成 libaxs-native.dll，需要重命名为 axs-native.dll
-          cp "$DLL_PATH" src/main/resources/native/axs-native.dll
-          echo "Copied to src/main/resources/native/axs-native.dll"
+          # MinGW 生成 libaxs-native.dll，统一重命名为 axs-native.dll
+          if [ "$(basename "$DLL_PATH")" != "axs-native.dll" ]; then
+            cp "$DLL_PATH" src/main/resources/native/axs-native.dll
+            echo "Renamed and copied to src/main/resources/native/axs-native.dll"
+          else
+            echo "DLL already named axs-native.dll"
+          fi
           ls -la src/main/resources/native/axs-native.dll
 
       - name: Verify architecture
