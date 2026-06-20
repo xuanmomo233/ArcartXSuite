@@ -19,6 +19,11 @@
 -keep class xuanmo.arcartxsuite.auth.MixedYggdrasilProxy { *; }
 -keep class xuanmo.arcartxsuite.auth.MixedYggdrasilProxy$* { *; }
 
+# ─── bridge 包（被独立模块 compileOnly 引用，运行时链接）────────
+# ArcartXWorldTextureService 等 bridge 类被 title 等独立模块直接引用，
+# 但宿主 Java 代码中可能没有直接 new 它们，导致 ProGuard shrink 删除方法体。
+-keep class xuanmo.arcartxsuite.bridge.** { *; }
+
 # ─── Shadow 打包的第三方库不混淆 ─────────────────────────────
 -keep class com.zaxxer.hikari.** { *; }
 -keep class redis.clients.** { *; }
