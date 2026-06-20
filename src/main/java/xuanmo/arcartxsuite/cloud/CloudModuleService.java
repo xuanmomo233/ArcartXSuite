@@ -277,8 +277,9 @@ public final class CloudModuleService {
                     plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：密钥长度错误 (" + key.length + " 字节)，应为 32 字节。请检查云端模块上传时填写的 moduleKey");
                     return;
                 }
-                // 新版 axb 文件头为 4 字节随机 magic，native 需要纯 IV(12) + ciphertext + tag(16)，
-                // 因此传给 n4 前需去掉 magic 前缀。
+                // 新版 axb 文件头为 4 字节随机 magic。
+                // native 侧 decryptModule 自己会跳过 magic，因此传完整 axb；
+                // Java fallback 仍需要不含 magic 的 payload。
                 byte[] payload = java.util.Arrays.copyOfRange(axb, 4, axb.length);
 
                 // 诊断日志：打印 key 哈希与 axb 结构
@@ -288,7 +289,8 @@ public final class CloudModuleService {
 
                 byte[] jarBytes;
                 try {
-                    jarBytes = NativeBridge.n4(payload, key);
+                    // native 自己处理 magic(4)，传完整 axb
+                    jarBytes = NativeBridge.n4(axb, key);
                 } catch (Exception e) {
                     plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密抛异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
                     jarBytes = null;
