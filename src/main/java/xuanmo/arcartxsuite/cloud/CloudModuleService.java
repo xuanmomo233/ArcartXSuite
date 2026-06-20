@@ -236,6 +236,57 @@ public final class CloudModuleService {
         return moduleId != null && MODULE_ID_PATTERN.matcher(moduleId).matches();
     }
 
+    /**
+     * 指数退避重试包装器。maxRetries=0 表示不重试。
+     * 每次重试间隔 = baseDelayMs * 2^attempt
+     */
+    private <T> CompletableFuture<T> retryAsync(
+        String moduleId,
+        String operation,
+        int maxRetries,
+        long baseDelayMs,
+        java.util.function.Supplier<CompletableFuture<T>> supplier
+    ) {
+        return supplier.get().thenCompose(result -> {
+            if (result != null || maxRetries <= 0) {
+                return CompletableFuture.completedFuture(result);
+            }
+            return retryWithDelay(moduleId, operation, 1, maxRetries, baseDelayMs, supplier);
+        });
+    }
+
+    private <T> CompletableFuture<T> retryWithDelay(
+        String moduleId,
+        String operation,
+        int attempt,
+        int maxRetries,
+        long baseDelayMs,
+        java.util.function.Supplier<CompletableFuture<T>> supplier
+    ) {
+        long delay = baseDelayMs * (1L << (attempt - 1));
+        plugin.consoleInfo("[Cloud] 模块 " + moduleId + " " + operation + " 失败，" + delay + "ms 后第 " + attempt + "/" + maxRetries + " 次重试...");
+
+        CompletableFuture<T> future = new CompletableFuture<>();
+        plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, () -> {
+            supplier.get().thenAccept(result -> {
+                if (result != null || attempt >= maxRetries) {
+                    future.complete(result);
+                } else {
+                    retryWithDelay(moduleId, operation, attempt + 1, maxRetries, baseDelayMs, supplier)
+                        .thenAccept(future::complete)
+                        .exceptionally(ex -> {
+                            future.completeExceptionally(ex);
+                            return null;
+                        });
+                }
+            }).exceptionally(ex -> {
+                future.completeExceptionally(ex);
+                return null;
+            });
+        }, delay / 50L); // Bukkit tick = 50ms
+        return future;
+    }
+
     private CompletableFuture<Void> downloadAndLoad(String moduleId) {
         if (!isValidModuleId(moduleId)) {
             plugin.consoleWarn("[Cloud] 非法 moduleId 格式，跳过: " + moduleId);
@@ -246,7 +297,7 @@ public final class CloudModuleService {
             return CompletableFuture.<Void>completedFuture(null);
         }
         plugin.consoleInfo("[Cloud] 开始同步模块: " + moduleId + " (native 版本: " + NativeBridge.n0() + ")");
-        return downloadAxb(moduleId).thenCompose(axb -> {
+        return retryAsync(moduleId, "axb下载", 3, 2000L, () -> downloadAxb(moduleId)).thenCompose(axb -> {
             if (axb == null || axb.length == 0) {
                 plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：axb 下载失败");
                 return CompletableFuture.<Void>completedFuture(null);
@@ -256,7 +307,7 @@ public final class CloudModuleService {
                 plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：axb 文件过小 (" + axb.length + " 字节)，可能下载不完整或文件损坏。期望至少 32 字节 (4 字节 magic + 12 字节 IV + 16 字节 tag)");
                 return CompletableFuture.<Void>completedFuture(null);
             }
-            return requestModuleKey(moduleId).thenAccept(keyResp -> {
+            return retryAsync(moduleId, "密钥获取", 3, 2000L, () -> requestModuleKey(moduleId)).thenAccept(keyResp -> {
                 if (keyResp == null) {
                     plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：无法获取解密密钥");
                     return;
