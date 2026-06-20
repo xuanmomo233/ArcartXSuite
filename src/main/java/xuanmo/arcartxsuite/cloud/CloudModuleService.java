@@ -11,6 +11,10 @@ import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.Signature;
 import java.time.Duration;
+import java.util.zip.GZIPInputStream;
+import javax.crypto.Cipher;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -276,16 +280,28 @@ public final class CloudModuleService {
                 // 新版 axb 文件头为 4 字节随机 magic，native 需要纯 IV(12) + ciphertext + tag(16)，
                 // 因此传给 n4 前需去掉 magic 前缀。
                 byte[] payload = java.util.Arrays.copyOfRange(axb, 4, axb.length);
+
+                // 诊断日志：打印 key 哈希与 axb 结构
+                String keyHash = sha256Hex(key);
+                String ivHex = bytesToHex(java.util.Arrays.copyOfRange(axb, 4, 16));
+                plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 诊断: keyHash=" + keyHash + ", ivHex=" + ivHex + ", axbLen=" + axb.length + ", payloadLen=" + payload.length);
+
                 byte[] jarBytes;
                 try {
                     jarBytes = NativeBridge.n4(payload, key);
                 } catch (Exception e) {
-                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：native 解密抛异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
-                    return;
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密抛异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                    jarBytes = null;
                 }
                 if (jarBytes == null || jarBytes.length == 0) {
-                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 解密失败。可能原因：1) 上传时填写的 moduleKey 与加密 axb 不匹配；2) axb 文件损坏；3) native 库与云端加密版本不一致。");
-                    return;
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密失败，尝试 Java fallback...");
+                    jarBytes = decryptFallback(payload, key);
+                    if (jarBytes != null && jarBytes.length > 0) {
+                        plugin.consoleInfo("[Cloud] 模块 " + moduleId + " Java fallback 解密成功! 说明 native 库可能版本不匹配，请联系开发者更新 native 库。");
+                    } else {
+                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " Java fallback 也失败。说明上传的 moduleKey 与 axb 不匹配，或 axb 已损坏。请重新上传模块版本并确保 key 正确。");
+                        return;
+                    }
                 }
                 plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 解密成功: " + jarBytes.length + " 字节");
                 plugin.getServer().getScheduler().runTask(plugin, () -> {
@@ -631,5 +647,52 @@ public final class CloudModuleService {
             }
         }
         return result;
+    }
+
+    // -- 诊断辅助方法 ----------------------------------------------
+
+    private static String sha256Hex(byte[] data) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            return bytesToHex(md.digest(data));
+        } catch (Exception e) {
+            return "ERR";
+        }
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b & 0xff));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 纯 Java AES-256-GCM + GZIP 解密 fallback，用于诊断 native 库问题。
+     * payload 格式: iv(12) + ciphertext + authTag(16)
+     */
+    private static byte[] decryptFallback(byte[] payload, byte[] key) {
+        if (payload.length < 28) return null;
+        byte[] iv = java.util.Arrays.copyOfRange(payload, 0, 12);
+        byte[] ctAndTag = java.util.Arrays.copyOfRange(payload, 12, payload.length);
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(128, iv));
+            byte[] decrypted = cipher.doFinal(ctAndTag);
+            // GZIP 解压
+            try (java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(decrypted);
+                 GZIPInputStream gis = new GZIPInputStream(bais);
+                 java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream()) {
+                byte[] buffer = new byte[8192];
+                int len;
+                while ((len = gis.read(buffer)) != -1) {
+                    baos.write(buffer, 0, len);
+                }
+                return baos.toByteArray();
+            }
+        } catch (Exception e) {
+            return null;
+        }
     }
 }
