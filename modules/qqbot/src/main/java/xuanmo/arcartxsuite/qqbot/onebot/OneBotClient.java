@@ -27,6 +27,7 @@ public final class OneBotClient {
     private volatile WebSocketClient wsClient;
     private volatile boolean running = false;
     private volatile boolean connected = false;
+    private volatile boolean firstDisconnectLogged = false;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "OneBot-Client-Scheduler");
         t.setDaemon(true);
@@ -134,6 +135,7 @@ public final class OneBotClient {
                 @Override
                 public void onOpen(ServerHandshake handshake) {
                     connected = true;
+                    firstDisconnectLogged = false;
                     logger.info("[OneBot] WebSocket 已连接: " + wsUrl);
                     if (onConnected != null) onConnected.run();
                     startHeartbeat();
@@ -154,14 +156,20 @@ public final class OneBotClient {
                 @Override
                 public void onClose(int code, String reason, boolean remote) {
                     connected = false;
-                    logger.warning("[OneBot] WebSocket 断开: code=" + code + ", reason=" + reason);
+                    if (!firstDisconnectLogged) {
+                        logger.warning("[OneBot] WebSocket 断开: code=" + code + ", reason=" + reason);
+                        firstDisconnectLogged = true;
+                    }
                     if (onDisconnected != null) onDisconnected.run();
                     scheduleReconnect();
                 }
 
                 @Override
                 public void onError(Exception ex) {
-                    logger.log(Level.WARNING, "[OneBot] WebSocket 错误: " + ex.getMessage(), ex);
+                    if (!firstDisconnectLogged) {
+                        logger.log(Level.WARNING, "[OneBot] WebSocket 错误: " + ex.getMessage(), ex);
+                        firstDisconnectLogged = true;
+                    }
                 }
             };
             if (accessToken != null && !accessToken.isEmpty()) {

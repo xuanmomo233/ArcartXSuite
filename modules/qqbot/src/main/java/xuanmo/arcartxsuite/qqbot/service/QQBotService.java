@@ -45,6 +45,7 @@ public final class QQBotService implements Listener {
 
     private BukkitTask cleanupTask;
     private volatile boolean connected;
+    private volatile boolean disconnectWarned;
     private GroupMessageListener groupMessageListener;
     private final java.util.concurrent.CopyOnWriteArrayList<xuanmo.arcartxsuite.api.capability.QQBotNotifiable.QQGroupEventListener> eventListeners =
         new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -94,12 +95,16 @@ public final class QQBotService implements Listener {
 
     public void onBotConnected() {
         connected = true;
+        disconnectWarned = false;
         logger.info(ChatColor.GREEN + "[QQBot] OneBot 已连接 | client=" + (client != null) + " | 群数=" + config.groups().size());
     }
 
     public void onBotDisconnected() {
         connected = false;
-        logger.warning(ChatColor.RED + "[QQBot] OneBot 连接断开");
+        if (!disconnectWarned) {
+            logger.warning(ChatColor.RED + "[QQBot] OneBot 连接断开");
+            disconnectWarned = true;
+        }
     }
 
     public boolean isConnected() {
