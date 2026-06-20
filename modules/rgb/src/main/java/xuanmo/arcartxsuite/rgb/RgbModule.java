@@ -68,7 +68,8 @@ public final class RgbModule extends AbstractAXSModule {
 
     @Override
     protected void startService() throws Exception {
-        service = new ArcartRgbService(configuration, context.logger());
+        service = new ArcartRgbService(configuration, context.logger(), (player, text) ->
+            context.placeholderResolver().applyPlaceholders(player, text));
 
         context.logger().fine(
             "ArcartRGB 模块已载入，条目数: "

@@ -29,6 +29,7 @@ import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleContext;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.ModuleLoadException;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeManager;
 import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
@@ -70,6 +71,7 @@ public final class ModuleRegistry {
     private final TaczCombatBridge taczCombatBridge;
     private final CrossServerService crossServerService;
     private final ModuleSignatureVerifier signatureVerifier;
+    private final PlaceholderResolverAPI placeholderResolver;
 
     // ─── 全局桥接单例 ──────────────────────────────────────────
     private DefaultItemSourceRegistry itemSourceRegistry;
@@ -107,7 +109,8 @@ public final class ModuleRegistry {
         ClientPacketGuard packetGuard,
         KeybindService keybindService,
         TaczCombatBridge taczCombatBridge,
-        CrossServerService crossServerService
+        CrossServerService crossServerService,
+        PlaceholderResolverAPI placeholderResolver
     ) {
         this.plugin = plugin;
         this.modulesDir = modulesDir;
@@ -119,6 +122,7 @@ public final class ModuleRegistry {
         this.keybindService = keybindService;
         this.taczCombatBridge = taczCombatBridge;
         this.crossServerService = crossServerService;
+        this.placeholderResolver = placeholderResolver;
         String sigPubKey = plugin.getConfig().getString("module-signature-public-key", "");
         this.signatureVerifier = new ModuleSignatureVerifier(sigPubKey, LOGGER);
     }
@@ -610,7 +614,8 @@ public final class ModuleRegistry {
             classLoader,
             keybindService,
             taczCombatBridge,
-            crossServerService
+            crossServerService,
+            placeholderResolver
         );
 
         LoadedModule loaded = jarBytes != null
@@ -791,7 +796,7 @@ public final class ModuleRegistry {
 
         // 全局货币管理器
         if (currencyBridgeManager == null) {
-            currencyBridgeManager = new CurrencyBridgeManager(plugin);
+            currencyBridgeManager = new CurrencyBridgeManager(plugin, Map.of(), placeholderResolver);
         }
         YamlConfiguration rootConfig = loadRootConfig();
         currencyBridgeManager.registerCurrencies(parseGlobalCurrencies(rootConfig));
@@ -813,7 +818,7 @@ public final class ModuleRegistry {
             ariaBridge = new DefaultAriaBridge(plugin);
         }
         ariaBridge.initialize();
-        scriptConditionEvaluator = new DefaultScriptConditionEvaluator(ariaBridge);
+        scriptConditionEvaluator = new DefaultScriptConditionEvaluator(ariaBridge, placeholderResolver);
         ScriptConditionServices.install(scriptConditionEvaluator);
 
         // 全局事件总线
@@ -887,7 +892,7 @@ public final class ModuleRegistry {
     /** 获取统一条件评估器 */
     public ScriptConditionEvaluator scriptConditionEvaluator() {
         if (scriptConditionEvaluator == null) {
-            scriptConditionEvaluator = new DefaultScriptConditionEvaluator(ariaBridge());
+            scriptConditionEvaluator = new DefaultScriptConditionEvaluator(ariaBridge(), placeholderResolver);
             ScriptConditionServices.install(scriptConditionEvaluator);
         }
         return scriptConditionEvaluator;

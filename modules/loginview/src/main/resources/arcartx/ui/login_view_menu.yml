@@ -1,4 +1,4 @@
-﻿# AXS 资源说明
+# AXS 资源说明
 # 用途: LoginView 模块纯色块主菜单风格登录、注册与密码修改界面。
 # 前置依赖: ArcartX；LoginView 模块启用后会自动注册或导出。
 # 启用开关: config.yml -> modules.loginview.enabled + modules.loginview.password

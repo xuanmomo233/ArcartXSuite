@@ -21,7 +21,7 @@ public final class AfkRewardPlaceholderExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getIdentifier() {
-        return "axsafk";
+        return "axsafkreward";
     }
 
     @Override
@@ -76,11 +76,11 @@ public final class AfkRewardPlaceholderExpansion extends PlaceholderExpansion {
                 yield "0";
             }
             default -> {
-                // 支持 %axsafk_top_1_name% %axsafk_top_1_time% %axsafk_top_1_rewards%
+                // 支持 %axsafkreward_top_1_name% %axsafkreward_top_1_time% %axsafkreward_top_1_rewards%
                 if (id.startsWith("top_")) {
                     yield resolveTopPlaceholder(service, id);
                 }
-                // 支持 %axsafk_area_<name>% %axsafk_area_<name>_today% %axsafk_area_<name>_status%
+                // 支持 %axsafkreward_area_<name>% %axsafkreward_area_<name>_today% %axsafkreward_area_<name>_status%
                 if (id.startsWith("area_")) {
                     yield resolveAreaPlaceholder(service, player, id);
                 }

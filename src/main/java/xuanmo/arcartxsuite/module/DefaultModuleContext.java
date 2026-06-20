@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
+import org.jetbrains.annotations.NotNull;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.event.HandlerList;
@@ -30,6 +31,8 @@ import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderExpansionRegistry;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.bridge.ArcartXClientBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
@@ -65,8 +68,10 @@ final class DefaultModuleContext implements ModuleContext {
     // 模块注册的资源（onDisable 时自动清理）
     private final List<Listener> registeredListeners = new ArrayList<>();
     private final List<String> registeredCommandNames = new ArrayList<>();
-    private final List<Object> registeredPlaceholderExpansions = new ArrayList<>();
     private final List<xuanmo.arcartxsuite.api.KeybindHandler> registeredKeybindHandlers = new ArrayList<>();
+
+    private final PlaceholderResolverAPI placeholderResolver;
+    private final PlaceholderExpansionRegistry expansionRegistry;
 
     DefaultModuleContext(
         JavaPlugin plugin,
@@ -80,7 +85,8 @@ final class DefaultModuleContext implements ModuleContext {
         ClassLoader moduleClassLoader,
         KeybindService keybindService,
         TaczCombatBridge taczCombatBridge,
-        CrossServerService crossServerService
+        CrossServerService crossServerService,
+        PlaceholderResolverAPI placeholderResolver
     ) {
         this.plugin = plugin;
         this.moduleId = moduleId;
@@ -97,6 +103,8 @@ final class DefaultModuleContext implements ModuleContext {
         this.keybindService = keybindService;
         this.taczCombatBridge = taczCombatBridge;
         this.crossServerService = crossServerService;
+        this.placeholderResolver = placeholderResolver;
+        this.expansionRegistry = new xuanmo.arcartxsuite.placeholder.DefaultPlaceholderExpansionRegistry(logger);
     }
 
     @Override
@@ -402,30 +410,13 @@ final class DefaultModuleContext implements ModuleContext {
     // ─── 新增：PlaceholderAPI ────────────────────────────────
 
     @Override
-    public boolean registerPlaceholderExpansion(Object expansion) {
-        try {
-            Object result = expansion.getClass().getMethod("register").invoke(expansion);
-            if (result instanceof Boolean registered && registered) {
-                registeredPlaceholderExpansions.add(expansion);
-                return true;
-            }
-            logger.warning("PlaceholderAPI 占位符注册失败，register() 返回 false");
-            return false;
-        } catch (ReflectiveOperationException | LinkageError exception) {
-            logger.warning("PlaceholderAPI 占位符注册失败: " + exception.getMessage());
-            return false;
-        }
+    public @NotNull PlaceholderResolverAPI placeholderResolver() {
+        return placeholderResolver;
     }
 
     @Override
-    public void unregisterPlaceholderExpansions() {
-        for (Object expansion : List.copyOf(registeredPlaceholderExpansions)) {
-            try {
-                expansion.getClass().getMethod("unregister").invoke(expansion);
-            } catch (ReflectiveOperationException | LinkageError ignored) {
-            }
-        }
-        registeredPlaceholderExpansions.clear();
+    public @NotNull PlaceholderExpansionRegistry expansionRegistry() {
+        return expansionRegistry;
     }
 
     // ─── 新增：客户端事件路由 ────────────────────────────────

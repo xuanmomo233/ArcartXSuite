@@ -4,7 +4,7 @@ config-version: 1
 #       群指令查询玩家数据、QQ-游戏账号绑定、白名单管理。
 # 重载: /axs qqbot reload
 # 玩家入口: /qqbot bind <验证码> 绑定账号。
-# PAPI: %AXSqqbot_bound_qq%、%AXSqqbot_bound_name% 等。
+# PAPI: %axsqqbot_bound_qq%、%axsqqbot_bound_name% 等。
 
 settings:
   debug: false

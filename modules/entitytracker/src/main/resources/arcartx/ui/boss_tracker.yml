@@ -1,4 +1,4 @@
-﻿# ArcartXEntityTracker Boss Tracker HUD
+# ArcartXEntityTracker Boss Tracker HUD
 # AXS 资源说明
 # 用途: EntityTracker 模块默认 HUD 模板，负责展示 Boss 血条、目标信息与伤害排行。
 # 前置依赖: ArcartX、MythicMobs / MythicBukkit；EntityTracker 模块启用后会自动导出到 plugins/ArcartXSuite/ui。

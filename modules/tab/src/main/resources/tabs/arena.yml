@@ -29,8 +29,8 @@ pack:
   # UI 端按 == "red" / "blue" 判定，其他值（含空串）不渲染。
   team: "%player_scoreboardteam%"
   uuid: "{player_uuid}"
-  name: "%AXStab_pvp_color%%AXStab_vanish_color%%player_name%"
-  # 战斗中标志：%AXStab_pvp% 返回 "1" / "0"
-  status: "%AXStab_pvp%"
+  name: "%axstab_pvp_color%%axstab_vanish_color%%player_name%"
+  # 战斗中标志：%axstab_pvp% 返回 "1" / "0"
+  status: "%axstab_pvp%"
   # 血量：%player_max_health% 在部分版本可能不存在，可替换为常量 20
   health: "%player_health%/%player_max_health%"

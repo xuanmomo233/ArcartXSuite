@@ -8,7 +8,7 @@
 # 商店 ID 用法:
 #   - 命令: /market shop <商店ID> 打开指定商店
 #   - UI 中通过商店列表选择
-#   - PAPI 占位符: %AXSmarket_shop_<id>_stock% 等
+#   - PAPI 占位符: %axsmarket_shop_<id>_stock% 等
 #
 # 物品来源 (source) 支持:
 #   minecraft  - 原版 Minecraft 物品，item-id 为 Bukkit Material 名

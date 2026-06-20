@@ -14,20 +14,27 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 
 public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
 
     private final JavaPlugin plugin;
     private final Map<String, CurrencyDefinition> definitions;
     private final Map<String, CurrencyBridge> bridges = new LinkedHashMap<>();
+    private final PlaceholderResolverAPI placeholderResolver;
 
     public CurrencyBridgeManager(JavaPlugin plugin) {
-        this(plugin, Map.of());
+        this(plugin, Map.of(), null);
     }
 
     public CurrencyBridgeManager(JavaPlugin plugin, Map<String, CurrencyDefinition> definitions) {
+        this(plugin, definitions, null);
+    }
+
+    public CurrencyBridgeManager(JavaPlugin plugin, Map<String, CurrencyDefinition> definitions, PlaceholderResolverAPI placeholderResolver) {
         this.plugin = plugin;
         this.definitions = definitions == null ? new LinkedHashMap<>() : new LinkedHashMap<>(definitions);
+        this.placeholderResolver = placeholderResolver;
     }
 
     public void initialize() {
@@ -84,7 +91,7 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
     private CurrencyBridge createBridge(CurrencyDefinition definition) {
         return switch (normalizeId(definition.provider())) {
             case "playerpoints" -> new PlayerPointsBridge(definition);
-            case "placeholder-command", "command", "custom" -> new CommandCurrencyBridge(definition);
+            case "placeholder-command", "command", "custom" -> new CommandCurrencyBridge(definition, placeholderResolver);
             case "rondo" -> new RondoCurrencyBridge(definition);
             default -> new VaultCurrencyBridge(definition);
         };
@@ -310,17 +317,18 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
 
     private final class CommandCurrencyBridge extends AbstractCurrencyBridge {
 
-        private Method setPlaceholdersMethod;
+        private final PlaceholderResolverAPI placeholderResolver;
         private String unavailableReason = "";
 
-        private CommandCurrencyBridge(CurrencyDefinition definition) {
+        private CommandCurrencyBridge(CurrencyDefinition definition, PlaceholderResolverAPI placeholderResolver) {
             super(definition);
+            this.placeholderResolver = placeholderResolver;
             initializePlaceholderApi();
         }
 
         @Override
         public boolean available() {
-            return setPlaceholdersMethod != null
+            return placeholderResolver != null
                 && !definition().balancePlaceholder().isBlank()
                 && !definition().withdrawCommand().isBlank()
                 && !definition().depositCommand().isBlank();
@@ -336,12 +344,8 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
             if (!available() || player == null) {
                 return BigDecimal.ZERO;
             }
-            try {
-                String resolved = String.valueOf(setPlaceholdersMethod.invoke(null, player, definition().balancePlaceholder()));
-                return parseNumericString(resolved);
-            } catch (ReflectiveOperationException exception) {
-                return BigDecimal.ZERO;
-            }
+            String resolved = placeholderResolver.applyPlaceholders(player, definition().balancePlaceholder());
+            return parseNumericString(resolved);
         }
 
         @Override
@@ -374,16 +378,12 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
         }
 
         private void initializePlaceholderApi() {
-            Plugin placeholderApi = Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
-            if (placeholderApi == null) {
-                unavailableReason = "PlaceholderAPI 未安装";
+            if (placeholderResolver == null) {
+                unavailableReason = "PlaceholderAPI 解析器未注入";
                 return;
             }
-            try {
-                Class<?> placeholderApiClass = Class.forName("me.clip.placeholderapi.PlaceholderAPI");
-                setPlaceholdersMethod = placeholderApiClass.getMethod("setPlaceholders", OfflinePlayer.class, String.class);
-            } catch (ReflectiveOperationException exception) {
-                unavailableReason = "PlaceholderAPI 调用方法不存在";
+            if (!placeholderResolver.available()) {
+                unavailableReason = "PlaceholderAPI 未安装";
             }
         }
 

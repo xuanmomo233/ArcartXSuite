@@ -4,29 +4,29 @@ config-version: 1
 # 依赖: ArcartX；PlaceholderAPI、Mail 可选。
 # 重载: /axs onlinereward reload
 # PAPI 输出:
-#   %AXSonlinerewards_daily_minutes% 今日在线原始分钟数。
-#   %AXSonlinerewards_weekly_minutes% 本周在线原始分钟数。
-#   %AXSonlinerewards_monthly_minutes% 本月在线原始分钟数。
-#   %AXSonlinerewards_total_minutes% 总在线原始分钟数。
-#   %AXSonlinerewards_daily_time% 今日在线格式化时长。
-#   %AXSonlinerewards_weekly_time% 本周在线格式化时长。
-#   %AXSonlinerewards_monthly_time% 本月在线格式化时长。
-#   %AXSonlinerewards_total_time% 总在线格式化时长。
-#   %AXSonlinerewards_signin_signed_today% 今日是否已签到。
-#   %AXSonlinerewards_signin_streak% 当前连续签到天数。
-#   %AXSonlinerewards_signin_total% 累计签到天数。
-#   %AXSonlinerewards_top_daily_<rank>_name% 日榜 Top1-10 玩家名。
-#   %AXSonlinerewards_top_daily_<rank>_minutes% 日榜 Top1-10 分钟数。
-#   %AXSonlinerewards_top_daily_<rank>_time% 日榜 Top1-10 格式化时长。
-#   %AXSonlinerewards_top_weekly_<rank>_name% 周榜 Top1-10 玩家名。
-#   %AXSonlinerewards_top_weekly_<rank>_minutes% 周榜 Top1-10 分钟数。
-#   %AXSonlinerewards_top_weekly_<rank>_time% 周榜 Top1-10 格式化时长。
-#   %AXSonlinerewards_top_monthly_<rank>_name% 月榜 Top1-10 玩家名。
-#   %AXSonlinerewards_top_monthly_<rank>_minutes% 月榜 Top1-10 分钟数。
-#   %AXSonlinerewards_top_monthly_<rank>_time% 月榜 Top1-10 格式化时长。
-#   %AXSonlinerewards_top_total_<rank>_name% 总榜 Top1-10 玩家名。
-#   %AXSonlinerewards_top_total_<rank>_minutes% 总榜 Top1-10 分钟数。
-#   %AXSonlinerewards_top_total_<rank>_time% 总榜 Top1-10 格式化时长。
+#   %axsonlinerewards_daily_minutes% 今日在线原始分钟数。
+#   %axsonlinerewards_weekly_minutes% 本周在线原始分钟数。
+#   %axsonlinerewards_monthly_minutes% 本月在线原始分钟数。
+#   %axsonlinerewards_total_minutes% 总在线原始分钟数。
+#   %axsonlinerewards_daily_time% 今日在线格式化时长。
+#   %axsonlinerewards_weekly_time% 本周在线格式化时长。
+#   %axsonlinerewards_monthly_time% 本月在线格式化时长。
+#   %axsonlinerewards_total_time% 总在线格式化时长。
+#   %axsonlinerewards_signin_signed_today% 今日是否已签到。
+#   %axsonlinerewards_signin_streak% 当前连续签到天数。
+#   %axsonlinerewards_signin_total% 累计签到天数。
+#   %axsonlinerewards_top_daily_<rank>_name% 日榜 Top1-10 玩家名。
+#   %axsonlinerewards_top_daily_<rank>_minutes% 日榜 Top1-10 分钟数。
+#   %axsonlinerewards_top_daily_<rank>_time% 日榜 Top1-10 格式化时长。
+#   %axsonlinerewards_top_weekly_<rank>_name% 周榜 Top1-10 玩家名。
+#   %axsonlinerewards_top_weekly_<rank>_minutes% 周榜 Top1-10 分钟数。
+#   %axsonlinerewards_top_weekly_<rank>_time% 周榜 Top1-10 格式化时长。
+#   %axsonlinerewards_top_monthly_<rank>_name% 月榜 Top1-10 玩家名。
+#   %axsonlinerewards_top_monthly_<rank>_minutes% 月榜 Top1-10 分钟数。
+#   %axsonlinerewards_top_monthly_<rank>_time% 月榜 Top1-10 格式化时长。
+#   %axsonlinerewards_top_total_<rank>_name% 总榜 Top1-10 玩家名。
+#   %axsonlinerewards_top_total_<rank>_minutes% 总榜 Top1-10 分钟数。
+#   %axsonlinerewards_top_total_<rank>_time% 总榜 Top1-10 格式化时长。
 # 可消费的 PAPI: 无直接 PAPI 条件；倍率和额外签到奖励通过权限节点匹配。
 # 关联资源: ui/online_rewards_menu.yml；可联动 Mail 的 mail/presets/*.yml。
 

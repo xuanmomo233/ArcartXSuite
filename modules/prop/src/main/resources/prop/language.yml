@@ -1,4 +1,4 @@
-﻿# AXS 资源说明
+# AXS 资源说明
 # 用途: Prop 模块语言配置；定义冷却、权限、按键和手持限制提示。
 # 前置依赖: ArcartX；Prop 模块启用后生效。
 # 启用开关: config.yml -> modules.prop.enabled + modules.prop.password

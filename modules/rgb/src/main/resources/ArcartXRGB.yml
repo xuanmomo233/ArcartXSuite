@@ -4,9 +4,9 @@ config-version: 1
 # 依赖: ArcartX、PlaceholderAPI。
 # 重载: /axs rgb reload
 # PAPI 输出:
-#   %arcartrgb_welcome% 渲染默认 welcome 文本。
-#   %arcartrgb_momo% 渲染默认 momo 文本。
-#   %arcartrgb_<entryId>% 渲染任意 entries.<entryId> 文本。
+#   %axsrgb_welcome% 渲染默认 welcome 文本。
+#   %axsrgb_momo% 渲染默认 momo 文本。
+#   %axsrgb_<entryId>% 渲染任意 entries.<entryId> 文本。
 # 可使用的 PAPI: entries.<id>.text 会先按目标玩家解析 PlaceholderAPI，再叠加 RGB 渐变/扫光。
 
 settings:

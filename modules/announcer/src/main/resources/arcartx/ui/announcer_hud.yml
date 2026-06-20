@@ -1,4 +1,4 @@
-﻿# AXS announcer_hud; version=2
+# AXS announcer_hud; version=2
 # AXS 资源说明
 # 用途: Announcer 模块默认 HUD，负责轮播公告显示与点击事件回传。
 # 前置依赖: ArcartX；Announcer 模块启用后会自动注册或导出。

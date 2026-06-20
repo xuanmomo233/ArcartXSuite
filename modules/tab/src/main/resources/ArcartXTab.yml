@@ -3,7 +3,8 @@ config-version: 1
 # 作用: 周期生成在线玩家列表并推送给 ArcartX Tab UI，支持按玩家名、权限组或 PAPI 数值排序。
 # 依赖: ArcartX、PlaceholderAPI。
 # 重载: /axs tab reload
-# PAPI 输出: 无独立 PlaceholderAPI 输出。
+# PAPI 输出: %axstab_pvp% / %axstab_pvp_color% / %axstab_vanished% / %axstab_vanish_color% /
+#            %axstab_ping% / %axstab_ping_icon% / %axstab_uuid% / %axstab_ip%。
 # 可消费的 PAPI: tabs.<id>.pack 会按每个目标玩家解析完整 PAPI，例如 %player_name%、%player_health%、%axstitle_tab_<groupId>_prefix%。
 # 排序 PAPI: sort-mode=papi 时 sort-papi-key 填完整 PAPI，例如 %player_level%；sort-papi-numeric 控制数字/文本排序。
 
@@ -37,12 +38,12 @@ settings:
   # 见 docs/modules/tab.md "PAPI 输出" 章节。
   papi:
     enabled: false
-    expansion-id: "AXStab"
+    expansion-id: "axstab"
 
   # 视觉风格（由 PAPI 占位符执行，不修改 pack 渲染逻辑）：
-  # - pvp-highlight: %AXStab_pvp% / %AXStab_pvp_color%；window-ms 内仍视为 PVP 状态
-  # - vanish-grey:   %AXStab_vanished% / %AXStab_vanish_color%
-  # - ping-icon:     %AXStab_ping% / %AXStab_ping_icon%；tiers 按 max-ms 升序匹配
+  # - pvp-highlight: %axstab_pvp% / %axstab_pvp_color%；window-ms 内仍视为 PVP 状态
+  # - vanish-grey:   %axstab_vanished% / %axstab_vanish_color%
+  # - ping-icon:     %axstab_ping% / %axstab_ping_icon%；tiers 按 max-ms 升序匹配
   style:
     pvp-highlight:
       enabled: false
@@ -59,7 +60,7 @@ settings:
         - { max-ms: 300,  icon: "&6▮▮▯▯" }
         - { max-ms: 9999, icon: "&c▮▯▯▯" }
 
-  # 隐私脱敏：仅影响 %AXStab_uuid% / %AXStab_ip% 占位符，便于在 pack 中用它们替代
+  # 隐私脱敏：仅影响 %axstab_uuid% / %axstab_ip% 占位符，便于在 pack 中用它们替代
   # %player_uuid% / %player_ip% 集中开关脱敏。
   privacy:
     hide-uuid: false

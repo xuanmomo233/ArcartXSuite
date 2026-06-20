@@ -59,7 +59,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
 
     @Override
     protected int currentConfigVersion() {
-        return 3;
+        return 4;
     }
 
     @Override
@@ -110,16 +110,20 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
             YamlConfiguration.loadConfiguration(configFile), context.logger()
         );
 
+        // 区域目录应位于模块 data 目录下，而非插件根目录
+        String effectiveAreasDir = effectiveAreasDirectory(configuration.areasDirectory());
+
         // 导出默认区域文件（若目录为空）
         AreaConfiguration.exportDefaultArea(moduleClassLoader(),
-            context.pluginDataFolder(), configuration.areasDirectory());
+            context.dataFolder(), effectiveAreasDir);
     }
 
     @Override
     protected void startService() throws Exception {
         // 加载区域独立配置文件
+        String effectiveAreasDir = effectiveAreasDirectory(configuration.areasDirectory());
         java.util.Map<String, xuanmo.arcartxsuite.afkreward.model.AfkArea> loadedAreas =
-            AreaConfiguration.loadAreas(context.pluginDataFolder(), configuration.areasDirectory(), context.logger());
+            AreaConfiguration.loadAreas(context.dataFolder(), effectiveAreasDir, context.logger());
         // 通过反射/构造将 areas 合并到 configuration（记录不可变，需重建）
         configuration = new AfkRewardConfiguration(
             configuration.debug(), configuration.areasDirectory(),
@@ -270,5 +274,13 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
 
     public AfkRewardService getService() {
         return service;
+    }
+
+    /**
+     * 将旧版默认区域目录 {@code "afkreward/areas"} 映射为新默认 {@code "areas"}。
+     * 若用户已自定义其他路径，则保持原值不变。
+     */
+    private static String effectiveAreasDirectory(String configured) {
+        return "afkreward/areas".equals(configured) ? "areas" : configured;
     }
 }

@@ -4,12 +4,12 @@ config-version: 1
 # 依赖: ArcartX；PlaceholderAPI、Redis、数据库按功能选用。
 # 重载: /axs chat reload
 # PAPI 输出:
-#   %AXSchat_current_channel% 当前频道 ID。
-#   %AXSchat_current_channel_display% 当前频道显示名。
-#   %AXSchat_reply_target% 当前 /reply 目标玩家名。
-#   %AXSchat_spy_enabled% 当前玩家是否开启社交监听。
-#   %AXSchat_ignore_count% 当前玩家忽略列表数量。
-#   %AXSchat_muted% 当前玩家是否处于禁言中。
+#   %axschat_current_channel% 当前频道 ID。
+#   %axschat_current_channel_display% 当前频道显示名。
+#   %axschat_reply_target% 当前 /reply 目标玩家名。
+#   %axschat_spy_enabled% 当前玩家是否开启社交监听。
+#   %axschat_ignore_count% 当前玩家忽略列表数量。
+#   %axschat_muted% 当前玩家是否处于禁言中。
 # 可解析的 PAPI: 频道格式、卡片文本和展示文本会按聊天上下文解析 PlaceholderAPI。
 # 关联资源: chat/channels/*.yml
 

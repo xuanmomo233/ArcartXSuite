@@ -3,7 +3,7 @@ config-version: 1
 # 作用: AXUI 驱动个人仓库、共享仓库、NBT 分类、银行、多利率定期存款和二级密码。
 # 重载: /axs warehouse reload
 # 玩家入口: /warehouse 或 /wh 打开 UI，业务操作全部在 AXUI 内完成。
-# PAPI: %AXSwarehouse_total_items%、%AXSwarehouse_bank_balance_money% 等。
+# PAPI: %axswarehouse_total_items%、%axswarehouse_bank_balance_money% 等。
 
 settings:
   debug: false

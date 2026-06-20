@@ -25,6 +25,7 @@ public record TabModuleConfiguration(
     long leaveGraceMs,
     boolean dryRun,
     TabStyleConfiguration style,
+    TabPrivacyConfiguration privacy,
     CrossServerChannelConfig crossServer,
     List<TabDefinition> definitions
 ) {
@@ -53,6 +54,7 @@ public record TabModuleConfiguration(
         int batchWindowTicks = Math.max(0, configuration.getInt("settings.batch.window-ticks", 0));
         long leaveGraceMs = Math.max(0L, configuration.getLong("settings.leave-grace-ms", 0L));
         TabStyleConfiguration style = readStyleConfiguration(configuration.getConfigurationSection("settings.style"));
+        TabPrivacyConfiguration privacy = readPrivacyConfiguration(configuration.getConfigurationSection("settings.privacy"));
         boolean dryRun = configuration.getBoolean("settings.debug-tools.dry-run", false);
 
         CrossServerChannelConfig crossServer = CrossServerChannelConfigs.fromSection(
@@ -71,7 +73,7 @@ public record TabModuleConfiguration(
         return new TabModuleConfiguration(
             refreshIntervalTicks, debug, registerUiOnEnable, overwriteUiFile,
             serverId, crossServerDefault, staleSnapshotMs, batchWindowTicks, leaveGraceMs,
-            dryRun, style, crossServer, definitions
+            dryRun, style, privacy, crossServer, definitions
         );
     }
 
@@ -211,7 +213,49 @@ public record TabModuleConfiguration(
         ConfigurationSection pvp = section.getConfigurationSection("pvp-highlight");
         boolean pvpEnabled = pvp != null && pvp.getBoolean("enabled", false);
         long pvpWindowMs = pvp == null ? 5_000L : Math.max(0L, pvp.getLong("window-ms", 5_000L));
-        return new TabStyleConfiguration(pvpEnabled, pvpWindowMs);
+        String pvpColor = pvp == null ? "&c" : nullToEmpty(pvp.getString("color", "&c"));
+
+        ConfigurationSection vanish = section.getConfigurationSection("vanish-grey");
+        boolean vanishEnabled = vanish != null && vanish.getBoolean("enabled", false);
+        String vanishColor = vanish == null ? "&7" : nullToEmpty(vanish.getString("color", "&7"));
+
+        ConfigurationSection ping = section.getConfigurationSection("ping-icon");
+        boolean pingEnabled = ping != null && ping.getBoolean("enabled", false);
+        List<TabStyleConfiguration.TabPingTier> pingTiers = readPingTiers(ping);
+
+        return new TabStyleConfiguration(pvpEnabled, pvpWindowMs, pvpColor, vanishEnabled, vanishColor, pingEnabled, pingTiers);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<TabStyleConfiguration.TabPingTier> readPingTiers(ConfigurationSection pingSection) {
+        if (pingSection == null) {
+            return TabStyleConfiguration.defaults().pingTiers();
+        }
+        List<?> rawList = pingSection.getList("tiers");
+        if (rawList == null || rawList.isEmpty()) {
+            return TabStyleConfiguration.defaults().pingTiers();
+        }
+        List<TabStyleConfiguration.TabPingTier> result = new ArrayList<>();
+        for (Object raw : rawList) {
+            if (raw instanceof Map<?, ?> map) {
+                int maxMs = map.get("max-ms") instanceof Number n ? n.intValue() : 9999;
+                String icon = map.get("icon") != null ? String.valueOf(map.get("icon")) : "&c▮▯▯▯";
+                result.add(new TabStyleConfiguration.TabPingTier(maxMs, icon));
+            }
+        }
+        if (result.isEmpty()) {
+            return TabStyleConfiguration.defaults().pingTiers();
+        }
+        return List.copyOf(result);
+    }
+
+    private static TabPrivacyConfiguration readPrivacyConfiguration(ConfigurationSection section) {
+        if (section == null) {
+            return TabPrivacyConfiguration.defaults();
+        }
+        boolean hideUuid = section.getBoolean("hide-uuid", false);
+        boolean hideIp = section.getBoolean("hide-ip", false);
+        return new TabPrivacyConfiguration(hideUuid, hideIp);
     }
 
     private static TabClientRefreshGuardConfiguration readClientRefreshGuard(

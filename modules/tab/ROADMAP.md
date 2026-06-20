@@ -160,11 +160,11 @@ transport:
 
 | 占位符 | 含义 |
 | --- | --- |
-| `%AXStab_<defId>_count%` | 当前定义可见玩家数 |
-| `%AXStab_<defId>_total%` | 包含跨服玩家在内的总数 |
-| `%AXStab_<defId>_rank%` | 自己在排序中的位次（1 起） |
-| `%AXStab_<defId>_view%` | 自己当前所在 view（多视图） |
-| `%AXStab_<defId>_page%` | 自己当前页码 |
+| `%axstab_<defId>_count%` | 当前定义可见玩家数 |
+| `%axstab_<defId>_total%` | 包含跨服玩家在内的总数 |
+| `%axstab_<defId>_rank%` | 自己在排序中的位次（1 起） |
+| `%axstab_<defId>_view%` | 自己当前所在 view（多视图） |
+| `%axstab_<defId>_page%` | 自己当前页码 |
 
 ```yaml
 settings:
@@ -195,7 +195,7 @@ tabs:
 ```
 
 - 客户端 UI 端按颜色字段切换 icon / texture，服务端只做语义标签注入。
-- **当前形态**：style 不修改 pack 渲染流程，改为通过 `%AXStab_pvp%` / `%AXStab_pvp_color%` / `%AXStab_vanished%` / `%AXStab_vanish_color%` / `%AXStab_ping%` / `%AXStab_ping_icon%` 占位符暴露，pack 主动消费。
+- **当前形态**：style 不修改 pack 渲染流程，改为通过 `%axstab_pvp%` / `%axstab_pvp_color%` / `%axstab_vanished%` / `%axstab_vanish_color%` / `%axstab_ping%` / `%axstab_ping_icon%` 占位符暴露，pack 主动消费。
 - 实现位置：`TabStyleConfiguration` + `TabSyncService.recordPvpEvent / isPvpActive / isVanishedPublic / pingOf / pingIcon` + `TabPvpListener`（EntityDamageByEntityEvent / Projectile 双向记录）+ `TabPlaceholderExpansion.resolveGlobalMetric`。
 - 同步：`docs/modules/tab.md` 的「视觉风格」章节、`ArcartXTab.yml` `settings.style.*` 注释。
 
@@ -229,7 +229,7 @@ settings:
     hide-ip: true
 ```
 
-- 实现位置：`TabPrivacyConfiguration` + `TabPlaceholderExpansion.resolveGlobalMetric`（仅在占位符层生效，建议 pack 改用 `%AXStab_uuid%` / `%AXStab_ip%` 替代 `%player_uuid%` / `%player_ip%`）。
+- 实现位置：`TabPrivacyConfiguration` + `TabPlaceholderExpansion.resolveGlobalMetric`（仅在占位符层生效，建议 pack 改用 `%axstab_uuid%` / `%axstab_ip%` 替代 `%player_uuid%` / `%player_ip%`）。
 - `{player_uuid}` 花括号占位符**不受 `hide-uuid` 影响**，因为它用于客户端 `PlayerSkin:` 头像渲染，需要保留真实 UUID。
 
 ---

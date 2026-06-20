@@ -12,8 +12,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
-import me.clip.placeholderapi.PlaceholderAPI;
 import org.bukkit.Bukkit;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -50,6 +50,7 @@ public final class AnnouncerService implements Listener {
     private final PacketGuardAPI packetGuard;
     private final java.util.List<String> uiIds;
     private final CrossServerAPI crossServer;
+    private final PlaceholderResolverAPI placeholderResolver;
 
     private CrossServerChannel crossServerChannel;
     private final Set<UUID> initializedPlayers = ConcurrentHashMap.newKeySet();
@@ -81,7 +82,8 @@ public final class AnnouncerService implements Listener {
         ArcartXClientBridge clientBridge,
         PacketGuardAPI packetGuard,
         java.util.List<String> uiIds,
-        CrossServerAPI crossServer
+        CrossServerAPI crossServer,
+        PlaceholderResolverAPI placeholderResolver
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
@@ -90,6 +92,7 @@ public final class AnnouncerService implements Listener {
         this.packetGuard = packetGuard;
         this.uiIds = uiIds;
         this.crossServer = crossServer;
+        this.placeholderResolver = placeholderResolver;
         this.currentDisplay = AnnouncerDisplay.hidden(nextRevision());
     }
 
@@ -381,7 +384,7 @@ public final class AnnouncerService implements Listener {
         nextBroadcastAtMs = now + nextDelayMs;
         return AnnouncerDisplay.visible(
             entry.id(),
-            renderText(null, entry.text(), false),
+            renderText(null, entry.text()),
             !entry.clickCommand().isBlank(),
             nextRevision()
         );
@@ -460,13 +463,13 @@ public final class AnnouncerService implements Listener {
     }
 
     private AnnouncerDisplay renderDisplayFor(Player player, AnnouncerDisplay display) {
-        if (!display.isShow() || Bukkit.getPluginManager().getPlugin("PlaceholderAPI") == null) {
+        if (!display.isShow() || !placeholderResolver.available()) {
             return display;
         }
         return new AnnouncerDisplay(
             true,
             display.id(),
-            renderText(player, display.text(), true),
+            renderText(player, display.text()),
             display.clickable(),
             display.revision()
         );
@@ -476,15 +479,14 @@ public final class AnnouncerService implements Listener {
         return System.currentTimeMillis() + "-" + revisionSequence.incrementAndGet();
     }
 
-    static AnnouncerDisplay buildDisplayPayload(
+    AnnouncerDisplay buildDisplayPayload(
         AnnouncerEntry entry,
         String revision,
-        Player player,
-        boolean placeholderApiAvailable
+        Player player
     ) {
         return AnnouncerDisplay.visible(
             entry.id(),
-            renderText(player, entry.text(), placeholderApiAvailable),
+            renderText(player, entry.text()),
             !entry.clickCommand().isBlank(),
             revision
         );
@@ -514,10 +516,10 @@ public final class AnnouncerService implements Listener {
         return null;
     }
 
-    private static String renderText(Player player, String text, boolean placeholderApiAvailable) {
+    private String renderText(Player player, String text) {
         String rendered = text == null ? "" : text;
-        if (placeholderApiAvailable && player != null) {
-            rendered = PlaceholderAPI.setPlaceholders(player, rendered);
+        if (player != null) {
+            rendered = placeholderResolver.applyPlaceholders(player, rendered);
         }
         return rendered;
     }

@@ -1,0 +1,13 @@
+# AfkReward 配置迁移: 3 -> 4
+# 说明: 区域目录 areas-directory 的基准从插件根目录改为模块 data 目录，
+# 并将旧默认路径 "afkreward/areas" 映射为新的 "areas"，最终落到 data/afkreward/areas/。
+
+from-version: 3
+to-version: 4
+description: "区域目录基准改为相对于模块 data 目录"
+
+operations:
+  - type: value-map
+    path: "areas-directory"
+    mapping:
+      "afkreward/areas": "areas"

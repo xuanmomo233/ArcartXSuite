@@ -132,7 +132,7 @@ welcome_after_register:
   trigger: command-signal
   signal: "first_register"
   conditions:
-    - "%AXSloginview_account_type% == microsoft"
+    - "%axsloginview_account_type% == microsoft"
   repeatable: false
   actions:
     - type: subtitle.play
@@ -148,7 +148,7 @@ welcome_littleskin_after_register:
   trigger: command-signal
   signal: "first_register"
   conditions:
-    - "%AXSloginview_account_type% == littleskin"
+    - "%axsloginview_account_type% == littleskin"
   repeatable: false
   actions:
     - type: subtitle.play

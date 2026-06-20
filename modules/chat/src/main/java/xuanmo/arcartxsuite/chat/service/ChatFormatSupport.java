@@ -5,8 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import me.clip.placeholderapi.PlaceholderAPI;
 import net.md_5.bungee.api.ChatColor;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.ComponentBuilder;
 import net.md_5.bungee.api.chat.HoverEvent;
@@ -23,15 +23,20 @@ public final class ChatFormatSupport {
     private ChatFormatSupport() {
     }
 
-    public static String renderTemplate(Player player, String template, Map<String, String> variables, boolean papiAvailable) {
+    public static String renderTemplate(
+        Player player,
+        String template,
+        Map<String, String> variables,
+        PlaceholderResolverAPI placeholderResolver
+    ) {
         String rendered = template == null ? "" : template;
         if (variables != null) {
             for (Map.Entry<String, String> entry : variables.entrySet()) {
                 rendered = rendered.replace("{" + entry.getKey() + "}", nullToEmpty(entry.getValue()));
             }
         }
-        if (papiAvailable && player != null) {
-            rendered = PlaceholderAPI.setPlaceholders(player, rendered);
+        if (player != null && placeholderResolver != null) {
+            rendered = placeholderResolver.applyPlaceholders(player, rendered);
         }
         return translateColors(rendered);
     }

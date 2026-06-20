@@ -1,8 +1,5 @@
 package xuanmo.arcartxsuite.eventpacket.service;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.HashMap;
@@ -20,6 +17,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketContext;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketRule;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketTrigger;
@@ -29,13 +27,13 @@ import xuanmo.arcartxsuite.eventpacket.storage.EventPacketRepository;
 public final class PapiWatcherService {
 
     private static final Pattern NUMBER_PATTERN = Pattern.compile("[-+]?\\d+(?:\\.\\d+)?");
-    private static final MethodHandle PAPI_SET_PLACEHOLDERS = resolvePapiMethodHandle();
 
     private final JavaPlugin plugin;
     private final EventPacketDispatchService dispatchService;
     private final PluginConfiguration configuration;
     private final ArcartXPacketBridge packetBridge;
     private final EventPacketRepository repository;
+    private final PlaceholderResolverAPI placeholderResolver;
     private final Map<String, Map<UUID, String>> lastValues = new HashMap<>();
     private final Map<String, Integer> mobKillCounts = new ConcurrentHashMap<>();
 
@@ -46,13 +44,15 @@ public final class PapiWatcherService {
         EventPacketDispatchService dispatchService,
         PluginConfiguration configuration,
         ArcartXPacketBridge packetBridge,
-        EventPacketRepository repository
+        EventPacketRepository repository,
+        PlaceholderResolverAPI placeholderResolver
     ) {
         this.plugin = plugin;
         this.dispatchService = dispatchService;
         this.configuration = configuration;
         this.packetBridge = packetBridge;
         this.repository = repository;
+        this.placeholderResolver = placeholderResolver;
     }
 
     public void start() {
@@ -249,28 +249,12 @@ public final class PapiWatcherService {
     }
 
 
-    private static MethodHandle resolvePapiMethodHandle() {
-        try {
-            Class<?> papiClass = Class.forName("me.clip.placeholderapi.PlaceholderAPI");
-            return MethodHandles.publicLookup().findStatic(
-                papiClass, "setPlaceholders",
-                MethodType.methodType(String.class, Player.class, String.class)
-            );
-        } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException ignored) {
-            return null;
-        }
-    }
-
-    private static String resolvePlaceholder(Player player, String placeholder) {
-        if (PAPI_SET_PLACEHOLDERS == null) {
+    private String resolvePlaceholder(Player player, String placeholder) {
+        if (placeholderResolver == null) {
             return placeholder;
         }
-        try {
-            String result = (String) PAPI_SET_PLACEHOLDERS.invokeExact(player, placeholder);
-            return result == null ? "" : result;
-        } catch (Throwable throwable) {
-            return placeholder;
-        }
+        String result = placeholderResolver.applyPlaceholders(player, placeholder);
+        return result == null ? "" : result;
     }
 
     private static String normalizeEntityType(String value) {

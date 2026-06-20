@@ -178,7 +178,7 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         }
         if ((papiPacketCount > 0 && placeholderApiAvailable) || hasMobKillRules) {
             watcherService = new PapiWatcherService(
-                context.plugin(), dispatchService, configuration, packetBridge, repository
+                context.plugin(), dispatchService, configuration, packetBridge, repository, context.placeholderResolver()
             );
             watcherService.start();
         }

@@ -55,6 +55,7 @@ import xuanmo.arcartxsuite.chat.model.ChatPlayerProfile;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerState;
 import xuanmo.arcartxsuite.chat.storage.ChatRepository;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.chat.service.ChatEnvelopeCodec;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
@@ -86,6 +87,7 @@ public final class ChatService implements Listener {
     private java.util.function.Supplier<EventBusCapability> eventBusProvider;
     private final String completionUiId;
     private final CrossServerAPI crossServer;
+    private final PlaceholderResolverAPI placeholderResolver;
 
     private CrossServerChannel crossServerChannel;
     private BukkitTask cleanupTask;
@@ -103,7 +105,8 @@ public final class ChatService implements Listener {
         ArcartXPacketBridge packetBridge,
         ArcartXItemStackBridge itemStackBridge,
         String completionUiId,
-        CrossServerAPI crossServer
+        CrossServerAPI crossServer,
+        PlaceholderResolverAPI placeholderResolver
     ) {
         this.plugin = Objects.requireNonNull(plugin);
         this.tabRefreshableProvider = tabRefreshableProvider;
@@ -113,6 +116,7 @@ public final class ChatService implements Listener {
         this.itemStackBridge = Objects.requireNonNull(itemStackBridge);
         this.completionUiId = completionUiId;
         this.crossServer = Objects.requireNonNull(crossServer);
+        this.placeholderResolver = placeholderResolver;
         this.ioExecutor = Executors.newSingleThreadExecutor(runnable -> {
             Thread thread = new Thread(runnable, "AXS-Chat-IO");
             thread.setDaemon(true);
@@ -553,13 +557,13 @@ public final class ChatService implements Listener {
             sender,
             channel.format(),
             variables,
-            org.bukkit.Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")
+            placeholderResolver
         );
         String consoleText = ChatFormatSupport.renderTemplate(
             sender,
             channel.consoleFormat(),
             variables,
-            org.bukkit.Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")
+            placeholderResolver
         );
         ChatEnvelope envelope = new ChatEnvelope(
             UUID.randomUUID().toString(),
@@ -645,25 +649,25 @@ public final class ChatService implements Listener {
             sender,
             channel.senderFormat(),
             variables,
-            org.bukkit.Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")
+            placeholderResolver
         );
         String recipientText = ChatFormatSupport.renderTemplate(
             sender,
             channel.recipientFormat(),
             variables,
-            org.bukkit.Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")
+            placeholderResolver
         );
         String spyText = ChatFormatSupport.renderTemplate(
             sender,
             channel.spyFormat(),
             variables,
-            org.bukkit.Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")
+            placeholderResolver
         );
         String consoleText = ChatFormatSupport.renderTemplate(
             sender,
             channel.consoleFormat(),
             variables,
-            org.bukkit.Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")
+            placeholderResolver
         );
         ChatEnvelope envelope = new ChatEnvelope(
             UUID.randomUUID().toString(),
@@ -805,7 +809,7 @@ public final class ChatService implements Listener {
         variables.put("item_name", itemName);
         variables.put("item_amount", Integer.toString(itemStack.getAmount()));
         variables.put("item_material", itemStack.getType().getKey().toString());
-        String displayText = ChatFormatSupport.renderTemplate(sender, configuration.functions().itemFormat(), variables, false);
+        String displayText = ChatFormatSupport.renderTemplate(sender, configuration.functions().itemFormat(), variables, placeholderResolver);
         return new ChatItemPreview(
             itemJson.get(),
             displayText,

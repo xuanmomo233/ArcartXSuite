@@ -20,6 +20,6 @@ sort-keys:
   - { mode: name }
 pack:
   uuid: "{player_uuid}"
-  name: "%AXStab_pvp_color%%AXStab_vanish_color%%player_name%"
-  ping: "%AXStab_ping_icon%"
+  name: "%axstab_pvp_color%%axstab_vanish_color%%player_name%"
+  ping: "%axstab_ping_icon%"
   health: "%player_health%"

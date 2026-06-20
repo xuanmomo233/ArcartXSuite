@@ -1,6 +1,5 @@
 package xuanmo.arcartxsuite.entitytracker.reward;
 
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +18,7 @@ import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardActionType;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardInventoryFullStrategy;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardMessageTarget;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 
 /**
  * 通用奖励动作执行器，可由死亡即时结算和排行榜定时奖励共用。
@@ -34,19 +34,20 @@ public final class RewardActionExecutor {
     private final java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider;
     private final java.util.function.BiConsumer<String, Player> signalDispatcher;
     private final ItemSourceRegistry itemSourceRegistry;
-    private Method papiSetPlaceholdersMethod;
+    private final PlaceholderResolverAPI placeholderResolver;
 
     public RewardActionExecutor(
         JavaPlugin plugin,
         java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider,
         java.util.function.BiConsumer<String, Player> signalDispatcher,
-        ItemSourceRegistry itemSourceRegistry
+        ItemSourceRegistry itemSourceRegistry,
+        PlaceholderResolverAPI placeholderResolver
     ) {
         this.plugin = plugin;
         this.mailDispatchableProvider = mailDispatchableProvider == null ? () -> null : mailDispatchableProvider;
         this.signalDispatcher = signalDispatcher;
         this.itemSourceRegistry = itemSourceRegistry;
-        initializePlaceholderApi();
+        this.placeholderResolver = placeholderResolver;
     }
 
     /**
@@ -295,26 +296,13 @@ public final class RewardActionExecutor {
         return trimmed.startsWith("/") ? trimmed.substring(1) : trimmed;
     }
 
-    private void initializePlaceholderApi() {
-        papiSetPlaceholdersMethod = null;
-        if (!Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) return;
-        try {
-            Class<?> placeholderApiClass = Class.forName("me.clip.placeholderapi.PlaceholderAPI");
-            papiSetPlaceholdersMethod = placeholderApiClass.getMethod("setPlaceholders", OfflinePlayer.class, String.class);
-        } catch (ReflectiveOperationException exception) {
-            plugin.getLogger().warning("初始化 RewardActionExecutor PlaceholderAPI 支持失败: " + exception.getMessage());
-        }
-    }
-
     private String applyPlaceholderApi(OfflinePlayer player, String text) {
-        if (papiSetPlaceholdersMethod == null || text == null || text.isBlank()) {
+        if (placeholderResolver == null || text == null || text.isBlank()) {
             return text == null ? "" : text;
         }
-        try {
-            Object result = papiSetPlaceholdersMethod.invoke(null, player, text);
-            return result == null ? "" : String.valueOf(result);
-        } catch (ReflectiveOperationException exception) {
-            return text;
+        if (player instanceof Player online) {
+            return placeholderResolver.applyPlaceholders(online, text);
         }
+        return text;
     }
 }

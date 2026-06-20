@@ -1,4 +1,4 @@
-﻿# AXS 资源说明
+# AXS 资源说明
 # 用途: EventPacket 客户端回包预设示例；客户端 UI 通过 presetId 触发服务端命令。
 # 前置依赖: ArcartX；EventPacket 模块启用后生效。
 # 启用开关: config.yml -> modules.eventpacket.enabled + modules.eventpacket.password

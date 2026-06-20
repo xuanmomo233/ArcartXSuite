@@ -4,28 +4,28 @@ config-version: 1
 # 依赖: ArcartX；PlaceholderAPI、AttributePlus、MythicLib、MMOItems、CraneAttribute 按功能选用。
 # 重载: /axs title reload
 # PAPI 输出:
-#   %AXStitle_owned_count% 当前玩家拥有称号数量。
-#   %AXStitle_hidden_count% 当前玩家隐藏称号数量。
-#   %AXStitle_chat_<groupId>_prefix% 指定分组已装备称号的聊天前缀。
-#   %AXStitle_chat_<groupId>_suffix% 指定分组已装备称号的聊天后缀。
-#   %AXStitle_tab_<groupId>_prefix% 指定分组已装备称号的 TAB 前缀。
-#   %AXStitle_tab_<groupId>_suffix% 指定分组已装备称号的 TAB 后缀。
-#   %AXStitle_equipped_<groupId>_id% 指定分组已装备称号 ID。
-#   %AXStitle_equipped_<groupId>_name% 指定分组已装备称号名称。
-#   %AXStitle_equipped_<groupId>_group% 指定分组已装备称号的分组名。
-#   %AXStitle_equipped_<groupId>_quality% 指定分组已装备称号的品质名。
-#   %AXStitle_owned_<titleId>% 判断是否拥有指定称号。
-#   %AXStitle_hidden_<titleId>% 判断指定称号是否隐藏。
-#   %AXStitle_remaining_<titleId>% 返回指定称号剩余毫秒或“永久”。
-#   %AXStitle_display% 总展示称号名称（按 display-title.groups 顺序拼接，分隔符见 separator）。
-#   %AXStitle_display_name% 同 %AXStitle_display%。
-#   %AXStitle_display_chat_prefix% 总展示称号的聊天前缀拼接。
-#   %AXStitle_display_chat_suffix% 总展示称号的聊天后缀拼接。
-#   %AXStitle_display_tab_prefix% 总展示称号的 TAB 前缀拼接。
-#   %AXStitle_display_tab_suffix% 总展示称号的 TAB 后缀拼接。
-#   %AXStitle_display_attr_<key>% 输出当前展示属性值。
-#   %AXStitle_collection_attr_<key>% 输出当前收藏属性值。
-#   %AXStitle_total_attr_<key>% 输出展示属性和收藏属性合计值。
+#   %axstitle_owned_count% 当前玩家拥有称号数量。
+#   %axstitle_hidden_count% 当前玩家隐藏称号数量。
+#   %axstitle_chat_<groupId>_prefix% 指定分组已装备称号的聊天前缀。
+#   %axstitle_chat_<groupId>_suffix% 指定分组已装备称号的聊天后缀。
+#   %axstitle_tab_<groupId>_prefix% 指定分组已装备称号的 TAB 前缀。
+#   %axstitle_tab_<groupId>_suffix% 指定分组已装备称号的 TAB 后缀。
+#   %axstitle_equipped_<groupId>_id% 指定分组已装备称号 ID。
+#   %axstitle_equipped_<groupId>_name% 指定分组已装备称号名称。
+#   %axstitle_equipped_<groupId>_group% 指定分组已装备称号的分组名。
+#   %axstitle_equipped_<groupId>_quality% 指定分组已装备称号的品质名。
+#   %axstitle_owned_<titleId>% 判断是否拥有指定称号。
+#   %axstitle_hidden_<titleId>% 判断指定称号是否隐藏。
+#   %axstitle_remaining_<titleId>% 返回指定称号剩余毫秒或“永久”。
+#   %axstitle_display% 总展示称号名称（按 display-title.groups 顺序拼接，分隔符见 separator）。
+#   %axstitle_display_name% 同 %axstitle_display%。
+#   %axstitle_display_chat_prefix% 总展示称号的聊天前缀拼接。
+#   %axstitle_display_chat_suffix% 总展示称号的聊天后缀拼接。
+#   %axstitle_display_tab_prefix% 总展示称号的 TAB 前缀拼接。
+#   %axstitle_display_tab_suffix% 总展示称号的 TAB 后缀拼接。
+#   %axstitle_display_attr_<key>% 输出当前展示属性值。
+#   %axstitle_collection_attr_<key>% 输出当前收藏属性值。
+#   %axstitle_total_attr_<key>% 输出展示属性和收藏属性合计值。
 # 可消费的 PAPI: 本模块配置不主动解析外部 PAPI；输出常被 Chat、Tab 或计分板引用。
 # 关联资源: ui/title_menu.yml
 

@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.logging.Logger;
-import me.clip.placeholderapi.PlaceholderAPI;
 import org.bukkit.OfflinePlayer;
 import xuanmo.arcartxsuite.rgb.config.ArcartRgbEntry;
 import xuanmo.arcartxsuite.rgb.config.ArcartRgbModuleConfiguration;
@@ -23,10 +22,10 @@ public final class ArcartRgbService {
     private final ThreadLocal<Boolean> recursiveReferenceDetected = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public ArcartRgbService(ArcartRgbModuleConfiguration configuration, Logger logger) {
-        this(configuration, logger, PlaceholderAPI::setPlaceholders);
+        this(configuration, logger, (player, text) -> text);
     }
 
-    ArcartRgbService(
+    public ArcartRgbService(
         ArcartRgbModuleConfiguration configuration,
         Logger logger,
         PlaceholderResolver placeholderResolver
@@ -118,7 +117,7 @@ public final class ArcartRgbService {
     }
 
     @FunctionalInterface
-    interface PlaceholderResolver {
+    public interface PlaceholderResolver {
         String resolve(OfflinePlayer player, String text);
     }
 }

@@ -1,4 +1,4 @@
-﻿# AXS 资源说明
+# AXS 资源说明
 # 用途: EntityTracker 排行榜奖励发放历史查看界面，展示发放记录、筛选和重试。
 # 前置依赖: ArcartX；EntityTracker 模块排行榜奖励功能启用后自动注册。
 # 打开方式: /axs entitytracker rewards history 或从管理界面跳转

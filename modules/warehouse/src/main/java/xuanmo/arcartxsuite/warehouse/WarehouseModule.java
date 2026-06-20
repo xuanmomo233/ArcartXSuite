@@ -248,7 +248,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
     }
 
     /**
-     * 注册 PAPI 占位符扩展，前缀 {@code %AXSwarehouse_xxx%}。
+     * 注册 PAPI 占位符扩展，前缀 {@code %axswarehouse_xxx%}。
      */
     @Override
     protected @Nullable Object createPlaceholderExpansion() {

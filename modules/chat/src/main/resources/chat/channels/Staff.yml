@@ -1,4 +1,4 @@
-﻿# AXS 资源说明
+# AXS 资源说明
 # 用途: Chat 模块的管理频道示例；适合值班、监控或内部沟通。
 # 前置依赖: ArcartX；Chat 模块启用后生效。
 # 启用开关: config.yml -> modules.chat.enabled + modules.chat.password

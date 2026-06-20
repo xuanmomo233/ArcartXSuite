@@ -1,6 +1,5 @@
 package xuanmo.arcartxsuite.entitytracker.boss.tracker;
 
-import java.lang.reflect.Method;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -25,6 +24,7 @@ import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardActionType;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardInventoryFullStrategy;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardMessageTarget;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 
 final class BossDamageSettlementService {
 
@@ -39,24 +39,25 @@ final class BossDamageSettlementService {
     private final Map<String, BossDamageSettlementRecord> settlementsById = new LinkedHashMap<>();
     private final Map<UUID, BossDamagePlayerSettlementView> lastSettlementByPlayer = new LinkedHashMap<>();
 
-    private Method papiSetPlaceholdersMethod;
+    private final PlaceholderResolverAPI placeholderResolver;
     private long nextSettlementId;
 
-    public BossDamageSettlementService(JavaPlugin plugin, ItemSourceRegistry itemSourceRegistry) {
-        this(plugin, () -> null, null, itemSourceRegistry);
+    public BossDamageSettlementService(JavaPlugin plugin, ItemSourceRegistry itemSourceRegistry, PlaceholderResolverAPI placeholderResolver) {
+        this(plugin, () -> null, null, itemSourceRegistry, placeholderResolver);
     }
 
     public BossDamageSettlementService(
         JavaPlugin plugin,
         java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider,
         java.util.function.BiConsumer<String, org.bukkit.entity.Player> signalDispatcher,
-        ItemSourceRegistry itemSourceRegistry
+        ItemSourceRegistry itemSourceRegistry,
+        PlaceholderResolverAPI placeholderResolver
     ) {
         this.plugin = plugin;
         this.mailDispatchableProvider = mailDispatchableProvider == null ? () -> null : mailDispatchableProvider;
         this.signalDispatcher = signalDispatcher;
         this.itemSourceRegistry = itemSourceRegistry;
-        initializePlaceholderApi();
+        this.placeholderResolver = placeholderResolver;
     }
 
     public void shutdown() {
@@ -468,29 +469,14 @@ final class BossDamageSettlementService {
         }
     }
 
-    private void initializePlaceholderApi() {
-        papiSetPlaceholdersMethod = null;
-        if (!org.bukkit.Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) {
-            return;
-        }
-        try {
-            Class<?> placeholderApiClass = Class.forName("me.clip.placeholderapi.PlaceholderAPI");
-            papiSetPlaceholdersMethod = placeholderApiClass.getMethod("setPlaceholders", OfflinePlayer.class, String.class);
-        } catch (ReflectiveOperationException exception) {
-            plugin.getLogger().warning("初始化 EntityTracker 奖励 PlaceholderAPI 支持失败: " + exception.getMessage());
-        }
-    }
-
     private String applyPlaceholderApi(OfflinePlayer player, String text) {
-        if (papiSetPlaceholdersMethod == null || text == null || text.isBlank()) {
+        if (placeholderResolver == null || text == null || text.isBlank()) {
             return text == null ? "" : text;
         }
-        try {
-            Object result = papiSetPlaceholdersMethod.invoke(null, player, text);
-            return result == null ? "" : String.valueOf(result);
-        } catch (ReflectiveOperationException exception) {
-            return text;
+        if (player instanceof Player online) {
+            return placeholderResolver.applyPlaceholders(online, text);
         }
+        return text;
     }
 
     private String nextSettlementId() {

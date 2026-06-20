@@ -1,4 +1,4 @@
-﻿# AXS 资源说明
+# AXS 资源说明
 # 用途: Mail 模块默认写信菜单，用于编辑标题、正文、附件和发送动作。
 # 前置依赖: ArcartX；Mail 模块启用后会自动注册或导出。
 # 启用开关: config.yml -> modules.mail.enabled + modules.mail.password

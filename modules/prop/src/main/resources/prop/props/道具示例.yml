@@ -1,4 +1,4 @@
-﻿# AXS 资源说明
+# AXS 资源说明
 # 用途: Prop 模块默认道具示例，演示冷却、使用限制与效果列表写法。
 # 前置依赖: ArcartX；Prop 模块启用后生效。
 # 启用开关: config.yml -> modules.prop.enabled + modules.prop.password

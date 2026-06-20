@@ -1,4 +1,4 @@
-﻿config-version: 1
+config-version: 1
 # AXS Prop
 # 作用: 管理快捷道具定义、玩家绑定、按键触发、冷却、消耗、提示文案和临时属性效果。
 # 依赖: ArcartX；AttributePlus、MythicLib、MMOItems 按功能选用。

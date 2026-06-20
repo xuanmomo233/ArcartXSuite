@@ -22,6 +22,7 @@ import xuanmo.arcartxsuite.tab.config.TabDefinition;
 import xuanmo.arcartxsuite.tab.config.TabModuleConfiguration;
 import xuanmo.arcartxsuite.tab.debug.TabSnapshotStore;
 import xuanmo.arcartxsuite.tab.listener.TabPvpListener;
+import xuanmo.arcartxsuite.tab.placeholder.TabPlaceholderExpansion;
 import xuanmo.arcartxsuite.tab.sync.TabSyncService;
 
 /**
@@ -127,7 +128,7 @@ public final class TabModule extends AbstractAXSModule {
         Map<String, UiBinding> tabUiBindings = registerTabUis();
         ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
-        service = new TabSyncService(context.plugin(), configuration, packetBridge, packetGuard, context.crossServer());
+        service = new TabSyncService(context.plugin(), configuration, packetBridge, packetGuard, context.crossServer(), context.placeholderResolver());
         service.start();
 
         // Snapshot 调试存储：plugins/ArcartXSuite/data/tab/snapshots/
@@ -172,7 +173,15 @@ public final class TabModule extends AbstractAXSModule {
 
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
-        return null;
+        if (service == null || configuration == null) {
+            return null;
+        }
+        return new TabPlaceholderExpansion(
+            context.plugin(),
+            service,
+            configuration.style(),
+            configuration.privacy()
+        );
     }
 
     public TabSyncService getService() {

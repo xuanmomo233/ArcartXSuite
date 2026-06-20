@@ -1,4 +1,4 @@
-﻿# AXS 资源说明
+# AXS 资源说明
 # 用途: QuestGPS 任务指引清单 HUD — 左侧竖排信息流/RPG 风格。
 # 前置依赖: ArcartX；QuestGPS 模块启用后会自动注册或导出。
 # 关联文件: ArcartXQuestGPS.yml、ui/questgps_menu.yml

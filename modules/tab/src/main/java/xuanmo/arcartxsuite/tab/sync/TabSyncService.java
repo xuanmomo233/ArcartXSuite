@@ -25,6 +25,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.tab.config.TabDefinition;
 import xuanmo.arcartxsuite.tab.config.TabFilterRule;
@@ -48,6 +49,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
     private final ArcartXPacketBridge bridge;
     private final PacketGuardAPI packetGuard;
     private final CrossServerAPI crossServer;
+    private final PlaceholderResolverAPI placeholderResolver;
     private final Map<String, Map<UUID, Object>> lastPayloads = new LinkedHashMap<>();
     private final Map<String, TabDefinition> definitionsById = new LinkedHashMap<>();
     private final TabRefreshQueue refreshQueue = new TabRefreshQueue();
@@ -79,13 +81,15 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
         TabModuleConfiguration configuration,
         ArcartXPacketBridge bridge,
         PacketGuardAPI packetGuard,
-        CrossServerAPI crossServer
+        CrossServerAPI crossServer,
+        PlaceholderResolverAPI placeholderResolver
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
         this.bridge = bridge;
         this.packetGuard = packetGuard;
         this.crossServer = crossServer;
+        this.placeholderResolver = placeholderResolver;
         this.clientRefreshGuard = new TabClientRefreshGuard(plugin.getLogger());
         for (TabDefinition definition : configuration.definitions()) {
             definitionsById.put(definition.id(), definition);
@@ -101,11 +105,8 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
             return "";
         }
         String rendered = BuiltinPlaceholderResolver.resolve(text, player);
-        if (player != null && Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) {
-            try {
-                rendered = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, rendered);
-            } catch (Exception ignored) {
-            }
+        if (player != null) {
+            rendered = placeholderResolver.applyPlaceholders(player, rendered);
         }
         return rendered;
     }
@@ -1471,7 +1472,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
         return result;
     }
 
-    private boolean isVanished(Player player) {
+    public boolean isVanished(Player player) {
         for (org.bukkit.metadata.MetadataValue value : player.getMetadata("vanished")) {
             if (value.asBoolean()) {
                 return true;

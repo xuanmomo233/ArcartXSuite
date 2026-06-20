@@ -299,7 +299,7 @@ public abstract class AbstractAXSModule implements AXSModule {
                 try {
                     Object expansion = createPlaceholderExpansion();
                     if (expansion != null) {
-                        context.registerPlaceholderExpansion(expansion);
+                        context.expansionRegistry().register(expansion);
                     }
                 } catch (LinkageError error) {
                     logger.warning(descriptor().name() + " PlaceholderAPI 占位符不可用，已跳过注册: " + error.getMessage());
@@ -356,7 +356,7 @@ public abstract class AbstractAXSModule implements AXSModule {
         // 自动注销所有已注册的监听器、命令、占位符等
         if (context != null) {
             context.unregisterListeners();
-            context.unregisterPlaceholderExpansions();
+            context.expansionRegistry().unregisterAll();
         }
     }
 
@@ -523,7 +523,7 @@ public abstract class AbstractAXSModule implements AXSModule {
         uiBindings.clear();
         if (context != null) {
             context.unregisterListeners();
-            context.unregisterPlaceholderExpansions();
+            context.expansionRegistry().unregisterAll();
         }
     }
 

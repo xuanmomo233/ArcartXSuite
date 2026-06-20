@@ -21,6 +21,8 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderExpansionRegistry;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.script.AriaBridge;
 
@@ -226,18 +228,23 @@ public interface ModuleContext {
     // ─── PlaceholderAPI ────────────────────────────────────────
 
     /**
-     * 注册 PlaceholderAPI 占位符扩展。
-     * 模块 onDisable 时自动注销。
-     *
-     * @param expansion PlaceholderExpansion 实例
-     * @return {@code true} 表示注册成功
+     * 获取统一 PlaceholderAPI 解析器（永不为 null）。
+     * <p>
+     * 未安装 PlaceholderAPI 时返回 no-op 实现，原样返回输入字符串。
      */
-    boolean registerPlaceholderExpansion(Object expansion);
+    @ApiStability.Stable
+    @NotNull
+    PlaceholderResolverAPI placeholderResolver();
 
     /**
-     * 注销当前模块注册的所有占位符扩展。
+     * 获取模块级 PlaceholderAPI 扩展注册表（永不为 null）。
+     * <p>
+     * 模块通过它注册/注销自己的 {@code PlaceholderExpansion}，
+     * 模块 onDisable 时自动注销本注册表下所有扩展。
      */
-    void unregisterPlaceholderExpansions();
+    @ApiStability.Stable
+    @NotNull
+    PlaceholderExpansionRegistry expansionRegistry();
 
     // ─── 客户端事件路由 ────────────────────────────────────────
 

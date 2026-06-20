@@ -42,9 +42,9 @@ types:
       - "addbalance %player_name% 铜币 %axsafk_players%*20+%player_level%/10+100"
       - "cmi exp %player_name% add %axsafk_players%*%player_level%/10+%player_level%/4"
 
-# 区域配置目录（相对于 data/ 文件夹）
+# 区域配置目录（相对于 data/afkreward/ 文件夹）
 # 每个区域为独立的 area-<id>.yml 文件
-areas-directory: "afkreward/areas"
+areas-directory: "areas"
 
 # 原地挂机配置
 manual:

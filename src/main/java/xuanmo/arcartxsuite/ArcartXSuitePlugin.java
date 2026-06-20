@@ -41,6 +41,7 @@ import xuanmo.arcartxsuite.crossserver.CrossServerService;
 import xuanmo.arcartxsuite.keybind.KeybindService;
 import xuanmo.arcartxsuite.module.ModuleRegistry;
 import xuanmo.arcartxsuite.module.PluginConsoleLogger;
+import xuanmo.arcartxsuite.placeholder.PlaceholderResolverImpl;
 import xuanmo.arcartxsuite.module.VersionCheckService;
 import xuanmo.arcartxsuite.cloud.CloudModuleService;
 import xuanmo.arcartxsuite.security.ClientPacketGuard;
@@ -69,6 +70,7 @@ public class ArcartXSuitePlugin extends JavaPlugin {
     private ClientPacketGuard clientPacketGuard;
     private ClientPacketGuardConfiguration clientPacketGuardConfiguration;
     private ModuleRegistry moduleRegistry;
+    private PlaceholderResolverImpl placeholderResolver;
     private CloudModuleService cloudModuleService;
     private KeybindService keybindService;
     private CrossServerService crossServerService;
@@ -161,6 +163,9 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         chatSignBypassService = new ChatSignBypassService(this, chatSignBypassEnabled);
         chatSignBypassService.initialize();
 
+        // 7.5 统一 PAPI 解析器
+        placeholderResolver = new PlaceholderResolverImpl();
+
         // 8. ModuleRegistry：扫描并加载所有外部模块
         moduleRegistry = new ModuleRegistry(
             this,
@@ -172,7 +177,8 @@ public class ArcartXSuitePlugin extends JavaPlugin {
             clientPacketGuard,
             keybindService,
             taczCombatBridge,
-            crossServerService
+            crossServerService,
+            placeholderResolver
         );
         ModuleRegistry.LoadSummary summary = moduleRegistry.loadAll();
         consoleInfo(

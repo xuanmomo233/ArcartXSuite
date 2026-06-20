@@ -27,6 +27,7 @@ import xuanmo.arcartxsuite.qqbot.onebot.OneBotClient;
 import xuanmo.arcartxsuite.qqbot.onebot.OneBotEvent;
 import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository;
 import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.QQBotBinding;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 
 public final class QQBotService implements Listener {
 
@@ -38,6 +39,7 @@ public final class QQBotService implements Listener {
     private volatile OneBotClient client;
     private final QQBotBindService bindService;
     private final QQBotRepository repository;
+    private final PlaceholderResolverAPI placeholderResolver;
     private volatile QQBotCommandRouter commandRouter;
     private volatile QQBotSignInService signInService;
     private final Logger logger;
@@ -56,13 +58,15 @@ public final class QQBotService implements Listener {
         QQBotConfiguration config,
         QQBotBindService bindService,
         QQBotRepository repository,
-        Logger logger
+        Logger logger,
+        PlaceholderResolverAPI placeholderResolver
     ) {
         this.plugin = plugin;
         this.config = config;
         this.bindService = bindService;
         this.repository = repository;
         this.logger = logger;
+        this.placeholderResolver = placeholderResolver;
     }
 
     /**
@@ -71,7 +75,7 @@ public final class QQBotService implements Listener {
      */
     public void setClient(OneBotClient client) {
         this.client = client;
-        this.commandRouter = new QQBotCommandRouter(plugin, config, client, bindService, repository, logger);
+        this.commandRouter = new QQBotCommandRouter(plugin, config, client, bindService, repository, logger, placeholderResolver);
     }
 
     public void start() {

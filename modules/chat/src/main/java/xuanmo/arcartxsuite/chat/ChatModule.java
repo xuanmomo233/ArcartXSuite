@@ -131,7 +131,8 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
             chatRepo,
             packetBridge, itemStackBridge,
             completionUiId,
-            context.crossServer()
+            context.crossServer(),
+            context.placeholderResolver()
         );
         service.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();

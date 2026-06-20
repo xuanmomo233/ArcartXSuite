@@ -197,7 +197,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                 context.plugin(), configuration, packetBridge, bossRuntimeUiIds,
                 platform, null, () -> context.getCapability(MailDispatchable.class),
                 context.itemSourceRegistry(), context.attributeBridge(),
-                crossServerService, killRecordingService
+                crossServerService, killRecordingService, context.placeholderResolver()
             );
             bossService.start();
             adminCommand = new EntityTrackerAdminCommand(() -> bossService, messages());
@@ -377,7 +377,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             java.util.function.BiConsumer<String, org.bukkit.entity.Player> signalDispatcher =
                 (signal, player) -> {}; // 待接入实际信号派发器
             RewardActionExecutor actionExecutor = new RewardActionExecutor(
-                context.plugin(), mailSupplier, signalDispatcher, context.itemSourceRegistry()
+                context.plugin(), mailSupplier, signalDispatcher, context.itemSourceRegistry(), context.placeholderResolver()
             );
 
             // 创建服务实例

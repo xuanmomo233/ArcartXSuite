@@ -20,7 +20,7 @@ public class LotteryPlaceholderExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getIdentifier() {
-        return "lottery";
+        return "axslottery";
     }
 
     @Override

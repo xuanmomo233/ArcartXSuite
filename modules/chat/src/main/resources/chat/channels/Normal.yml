@@ -1,4 +1,4 @@
-﻿# AXS 资源说明
+# AXS 资源说明
 # 用途: Chat 模块的默认普通频道示例；适合作为 settings.default-channel 对应频道。
 # 前置依赖: ArcartX；Chat 模块启用后生效。
 # 启用开关: config.yml -> modules.chat.enabled + modules.chat.password

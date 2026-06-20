@@ -165,7 +165,8 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         service = new AnnouncerService(
             context.plugin(), configuration, packetBridge, clientBridge, packetGuard,
             java.util.List.copyOf(announcerRuntimeUiIds),
-            context.crossServer()
+            context.crossServer(),
+            context.placeholderResolver()
         );
         service.setQQBotProvider(() -> context.getCapability(
             xuanmo.arcartxsuite.api.capability.QQBotBroadcastable.class));
@@ -195,7 +196,8 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
 
             subtitleService = new SubtitleService(
                 context.plugin(), context.logger(), packetBridge,
-                subtitleCfg, java.util.List.copyOf(subtitleRuntimeUiIds), context.dataFolder()
+                subtitleCfg, java.util.List.copyOf(subtitleRuntimeUiIds), context.dataFolder(),
+                context.placeholderResolver()
             );
             subtitleService.loadGroups();
             context.registerCapability(SubtitlePlayable.class,

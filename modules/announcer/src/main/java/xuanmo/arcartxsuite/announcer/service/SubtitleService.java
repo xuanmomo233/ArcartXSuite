@@ -10,8 +10,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
-import me.clip.placeholderapi.PlaceholderAPI;
 import org.bukkit.Bukkit;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -38,6 +38,7 @@ public final class SubtitleService implements Listener {
     private final SubtitleSettings settings;
     private final java.util.List<String> subtitleUiIds;
     private final File groupsDirectory;
+    private final PlaceholderResolverAPI placeholderResolver;
 
     /** groupId -> definition */
     private final Map<String, SubtitleGroupDefinition> groups = new LinkedHashMap<>();
@@ -54,7 +55,8 @@ public final class SubtitleService implements Listener {
         ArcartXPacketBridge packetBridge,
         SubtitleSettings settings,
         java.util.List<String> subtitleUiIds,
-        File dataFolder
+        File dataFolder,
+        PlaceholderResolverAPI placeholderResolver
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -62,6 +64,7 @@ public final class SubtitleService implements Listener {
         this.settings = settings;
         this.subtitleUiIds = subtitleUiIds;
         this.groupsDirectory = new File(dataFolder, settings.groupsDirectory());
+        this.placeholderResolver = placeholderResolver;
     }
 
     public void loadGroups() {
@@ -221,10 +224,7 @@ public final class SubtitleService implements Listener {
 
     private String renderText(Player player, String text) {
         if (text == null) return "";
-        if (Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) {
-            return PlaceholderAPI.setPlaceholders(player, text);
-        }
-        return text;
+        return placeholderResolver.applyPlaceholders(player, text);
     }
 
     private static int visibleLength(String text) {

@@ -10,7 +10,7 @@ import xuanmo.arcartxsuite.tab.sync.TabSyncService;
 
 /**
  * 监听玩家间伤害事件，记录最近一次 PVP 时间戳，
- * 供 {@code %AXStab_pvp%} / {@code %AXStab_pvp_color%} 占位符判定 PVP 高亮窗口。
+ * 供 {@code %axstab_pvp%} / {@code %axstab_pvp_color%} 占位符判定 PVP 高亮窗口。
  *
  * <p>受 {@code settings.style.pvp-highlight.enabled} 控制；事件总是被监听，
  * 由 {@link TabSyncService#isPvpActive} 在读取时校验开关，避免反复装拆 Listener。

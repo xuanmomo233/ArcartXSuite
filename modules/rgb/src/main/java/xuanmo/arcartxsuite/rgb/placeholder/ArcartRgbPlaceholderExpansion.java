@@ -19,7 +19,7 @@ public final class ArcartRgbPlaceholderExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getIdentifier() {
-        return "arcartrgb";
+        return "axsrgb";
     }
 
     @Override

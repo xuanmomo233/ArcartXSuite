@@ -111,7 +111,7 @@ public record AfkRewardConfiguration(
         }
 
         // areas 现在由独立配置文件加载，此处仅解析 areas-directory
-        String areasDirectory = yaml.getString("areas-directory", "afkreward/areas");
+        String areasDirectory = yaml.getString("areas-directory", "areas");
         Map<String, AfkArea> areas = new LinkedHashMap<>();
 
         // storage

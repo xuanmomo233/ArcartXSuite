@@ -4,7 +4,7 @@ config-version: 1
 # 新增: Boss掉落记录、掉落分配系统、跨服Boss排行功能
 # 依赖: ArcartX、MythicMobs/MythicBukkit；PlaceholderAPI 可选，仅用于对外输出 PAPI 和解析显示文本。
 # 重载: /axs entitytracker reload
-# PAPI 输出: %AXSentitytracker_*%
+# PAPI 输出: %axsentitytracker_*%
 # 关联资源: ui/boss_tracker.yml、ui/attack_target_hud.yml
 # 福利模块: 消费额度满¥150获得授权
 

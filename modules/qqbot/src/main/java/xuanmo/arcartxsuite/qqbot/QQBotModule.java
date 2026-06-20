@@ -129,7 +129,8 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             configuration,
             bindService,
             repository,
-            context.logger()
+            context.logger(),
+            context.placeholderResolver()
         );
 
         // 4. 初始化 OneBot WebSocket 客户端

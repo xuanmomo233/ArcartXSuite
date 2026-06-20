@@ -13,6 +13,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.capability.EssentialsQueryable;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.qqbot.config.QQBotConfiguration;
 import xuanmo.arcartxsuite.qqbot.config.QQBotCustomCommand;
 import xuanmo.arcartxsuite.qqbot.onebot.OneBotClient;
@@ -28,6 +29,7 @@ public final class QQBotCommandRouter {
     private final QQBotBindService bindService;
     private final QQBotRepository repository;
     private final Logger logger;
+    private final PlaceholderResolverAPI placeholderResolver;
     private volatile Supplier<EssentialsQueryable> essentialsProvider;
     private volatile Supplier<MailDispatchable> mailProvider;
     private volatile QQBotSignInService signInService;
@@ -38,7 +40,8 @@ public final class QQBotCommandRouter {
         OneBotClient client,
         QQBotBindService bindService,
         QQBotRepository repository,
-        Logger logger
+        Logger logger,
+        PlaceholderResolverAPI placeholderResolver
     ) {
         this.plugin = plugin;
         this.config = config;
@@ -46,6 +49,7 @@ public final class QQBotCommandRouter {
         this.bindService = bindService;
         this.repository = repository;
         this.logger = logger;
+        this.placeholderResolver = placeholderResolver;
     }
 
     public void setEssentialsProvider(Supplier<EssentialsQueryable> provider) {
@@ -611,7 +615,6 @@ public final class QQBotCommandRouter {
             return;
         }
 
-        // 通过反射调用 PlaceholderAPI.setPlaceholders
         Bukkit.getScheduler().runTask(plugin, () -> {
             try {
                 String format = cmd.format().replace("{name}", player.getName());
@@ -636,16 +639,9 @@ public final class QQBotCommandRouter {
     }
 
     private String parsePlaceholder(Player player, String placeholder) {
-        try {
-            Class<?> papiClass = Class.forName("me.clip.placeholderapi.PlaceholderAPI");
-            var method = papiClass.getMethod("setPlaceholders",
-                org.bukkit.OfflinePlayer.class, String.class);
-            Object result = method.invoke(null, player, placeholder);
-            return result != null ? result.toString() : placeholder;
-        } catch (Exception e) {
-            return placeholder;
-        }
+        return placeholderResolver.applyPlaceholders(player, placeholder);
     }
+
 
     private static double[] getServerTps() {
         try {

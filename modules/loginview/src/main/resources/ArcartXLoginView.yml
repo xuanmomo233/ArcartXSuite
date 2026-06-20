@@ -3,9 +3,9 @@ config-version: 1
 # 密码同步不保存明文：AuthMe 迁移只复制数据库 hash，独立模式登录成功后可重写为 AXS 自己的 PBKDF2 hash。
 
 # PlaceholderAPI:
-# - %AXSloginview_account_type% -> microsoft / littleskin / offline
-# - %AXSloginview_account_type_display% -> 微软正版 / LittleSkin / 离线
-# - %AXSloginview_is_microsoft% / %AXSloginview_is_littleskin% / %AXSloginview_is_offline%
+# - %axsloginview_account_type% -> microsoft / littleskin / offline
+# - %axsloginview_account_type_display% -> 微软正版 / LittleSkin / 离线
+# - %axsloginview_is_microsoft% / %axsloginview_is_littleskin% / %axsloginview_is_offline%
 
 debug: false
 

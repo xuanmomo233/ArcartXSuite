@@ -1,8 +1,5 @@
 package xuanmo.arcartxsuite.condition;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,17 +14,22 @@ import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionKind;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionOperator;
+import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.api.script.AriaBridge;
 
 public final class DefaultScriptConditionEvaluator implements ScriptConditionEvaluator {
 
-    private static final MethodHandle PAPI_SET_PLACEHOLDERS = resolvePapiMethodHandle();
-
     private final AriaBridge ariaBridge;
     private final ScriptEngine jsEngine;
+    private final PlaceholderResolverAPI placeholderResolver;
 
     public DefaultScriptConditionEvaluator(AriaBridge ariaBridge) {
+        this(ariaBridge, null);
+    }
+
+    public DefaultScriptConditionEvaluator(AriaBridge ariaBridge, PlaceholderResolverAPI placeholderResolver) {
         this.ariaBridge = ariaBridge == null ? new UnavailableAriaBridge() : ariaBridge;
+        this.placeholderResolver = placeholderResolver;
         ScriptEngineManager manager = new ScriptEngineManager();
         ScriptEngine engine = manager.getEngineByName("JavaScript");
         if (engine == null) {
@@ -65,16 +67,12 @@ public final class DefaultScriptConditionEvaluator implements ScriptConditionEva
         if (player == null) {
             return input;
         }
-        if (PAPI_SET_PLACEHOLDERS == null) {
-            return input.replace("{player}", player.getName());
+        String withPlayer = input.replace("{player}", player.getName());
+        if (placeholderResolver == null) {
+            return withPlayer;
         }
-        try {
-            String withPlayer = input.replace("{player}", player.getName());
-            String result = (String) PAPI_SET_PLACEHOLDERS.invokeExact(player, withPlayer);
-            return result == null ? withPlayer : result;
-        } catch (Throwable throwable) {
-            return input.replace("{player}", player.getName());
-        }
+        String result = placeholderResolver.applyPlaceholders(player, withPlayer);
+        return result == null ? withPlayer : result;
     }
 
     public static boolean hasPermission(@Nullable Player player, @Nullable String permission) {
@@ -129,31 +127,14 @@ public final class DefaultScriptConditionEvaluator implements ScriptConditionEva
         if (placeholder == null) {
             return "";
         }
-        if (PAPI_SET_PLACEHOLDERS == null || placeholder.isBlank()) {
+        if (placeholder.isBlank()) {
             return placeholder;
         }
-        try {
-            String result = (String) PAPI_SET_PLACEHOLDERS.invokeExact(player, placeholder);
-            return result == null ? "" : result;
-        } catch (Throwable throwable) {
+        if (placeholderResolver == null) {
             return placeholder;
         }
-    }
-
-    private static MethodHandle resolvePapiMethodHandle() {
-        if (!Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) {
-            return null;
-        }
-        try {
-            Class<?> papiClass = Class.forName("me.clip.placeholderapi.PlaceholderAPI");
-            return MethodHandles.publicLookup().findStatic(
-                papiClass,
-                "setPlaceholders",
-                MethodType.methodType(String.class, Player.class, String.class)
-            );
-        } catch (Throwable ignored) {
-            return null;
-        }
+        String result = placeholderResolver.applyPlaceholders(player, placeholder);
+        return result == null ? "" : result;
     }
 
     private static final class UnavailableAriaBridge implements AriaBridge {

@@ -22,7 +22,7 @@ public final class FishingPlaceholderExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getIdentifier() {
-        return "axs_fishing";
+        return "axsfishing";
     }
 
     @Override
