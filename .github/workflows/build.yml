@@ -1,0 +1,159 @@
+name: Build ArcartXSuite
+
+on:
+  push:
+    branches: [main, master, dev]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  # ═══════════════════════════════════════════════════════════
+  # Step 0: 编译 Windows Native 库 (axs-native.dll)
+  # ═══════════════════════════════════════════════════════════
+  build-native-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Install OpenSSL
+        run: choco install openssl --no-progress -y
+        shell: powershell
+
+      - name: Build Native (Windows)
+        run: |
+          cmake -B native/build -S native -DCMAKE_BUILD_TYPE=Release
+          cmake --build native/build --config Release
+        shell: cmd
+
+      - name: Upload Windows Native Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-windows
+          path: src/main/resources/native/axs-native.dll
+          if-no-files-found: error
+
+  # ═══════════════════════════════════════════════════════════
+  # Step 0: 编译 Linux Native 库 (libaxs-native.so)
+  # ═══════════════════════════════════════════════════════════
+  build-native-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake libssl-dev
+
+      - name: Build Native (Linux)
+        run: |
+          cmake -B native/build -S native -DCMAKE_BUILD_TYPE=Release
+          cmake --build native/build --config Release
+
+      - name: Upload Linux Native Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-linux
+          path: src/main/resources/native/libaxs-native.so
+          if-no-files-found: error
+
+  # ═══════════════════════════════════════════════════════════
+  # Step 1-5: Gradle 构建（依赖混淆后的 core + 字符串加密）
+  # ═══════════════════════════════════════════════════════════
+  build-java:
+    needs: [build-native-windows, build-native-linux]
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      # 下载两个平台的 Native 库，覆盖占位符
+      - name: Download Windows Native
+        uses: actions/download-artifact@v4
+        with:
+          name: native-windows
+          path: src/main/resources/native/
+
+      - name: Download Linux Native
+        uses: actions/download-artifact@v4
+        with:
+          name: native-linux
+          path: src/main/resources/native/
+
+      - name: Verify Native Files
+        run: |
+          echo "Native files in place:"
+          dir src\main\resources\native\
+        shell: cmd
+
+      # Gradle 构建（全量构建含混淆 + 字符串加密）
+      - name: Build with Gradle
+        run: .\gradlew.bat buildAll --no-daemon
+        shell: cmd
+
+      # 上传最终产物
+      - name: Upload Core JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArcartXSuite-core
+          path: axs-core/build/libs/ArcartXSuite-*.jar
+
+      - name: Upload Module JARs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArcartXSuite-modules
+          path: build/ArcartXSuite/modules/*.jar
+
+      - name: Upload Encrypted Modules (.axb)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArcartXSuite-module-axb
+          path: build/ArcartXSuite/module-axb/*.axb
+          if-no-files-found: warn
+
+  # ═══════════════════════════════════════════════════════════
+  # 发布 Release（仅在打 tag 时触发）
+  # ═══════════════════════════════════════════════════════════
+  release:
+    needs: build-java
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/ArcartXSuite-core/*.jar
+            artifacts/ArcartXSuite-modules/*.jar
+            artifacts/ArcartXSuite-module-axb/*.axb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

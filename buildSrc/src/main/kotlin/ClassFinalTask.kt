@@ -1,4 +1,5 @@
 import org.gradle.api.DefaultTask
+import org.gradle.api.GradleException
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
@@ -18,7 +19,7 @@ import org.gradle.api.tasks.TaskAction
  *
  * ClassFinal 开源版本：https://github.com/core-lib/classfinal
  *
- * 构建流水线：编译 → 混淆 → Native 下沉 → **ClassFinal VMP** → 完整性嵌入。
+ * 构建流水线：编译 → 混淆 → 字符串加密 → **ClassFinal VMP** → 完整性嵌入。
  */
 abstract class ClassFinalTask : DefaultTask() {
 
@@ -32,7 +33,7 @@ abstract class ClassFinalTask : DefaultTask() {
     @get:Input
     abstract val password: Property<String>
 
-    /** 需要加密的包名列表（如 xuanmo.arcartxsuite.license） */
+    /** 需要加密的包名列表 */
     @get:Input
     abstract val packages: ListProperty<String>
 
@@ -43,7 +44,6 @@ abstract class ClassFinalTask : DefaultTask() {
 
     /** ClassFinal jar 路径（tools/classfinal/classfinal-fatjar.jar） */
     @get:InputFile
-    @get:Optional
     abstract val classFinalJar: RegularFileProperty
 
     init {
@@ -55,7 +55,14 @@ abstract class ClassFinalTask : DefaultTask() {
 
     @TaskAction
     fun execute() {
-        val cfJar = resolveClassFinalJar()
+        val cfJar = classFinalJar.get().asFile
+        if (!cfJar.isFile) {
+            throw IllegalStateException(
+                "ClassFinal jar 未找到: ${cfJar.absolutePath}\n" +
+                "请将 classfinal-fatjar.jar 放到 tools/classfinal/ 目录下"
+            )
+        }
+
         logger.lifecycle("[AXS-Protect] Step 3 (ClassFinal): ${inputJar.get().asFile.name}")
         logger.lifecycle("  加密包: ${packages.get().joinToString(", ")}")
 
@@ -69,27 +76,27 @@ abstract class ClassFinalTask : DefaultTask() {
             args.addAll(listOf("-exclude", excludes.get().joinToString(",")))
         }
 
-        // ClassFinal 通过命令行调用
-        project.javaexec {
-            classpath = project.files(cfJar)
-            mainClass.set("net.roseboy.classfinal.ClassFinal")
-            this.args = args
-            jvmArgs = listOf("-Xmx512m")
+        // 使用 ProcessBuilder 避免 project.javaexec（Gradle 配置缓存不兼容）
+        val javaExe = resolveJavaExecutable()
+        val cmd = listOf(javaExe, "-Xmx512m", "-cp", cfJar.absolutePath) +
+                listOf("net.roseboy.classfinal.ClassFinal") + args
+
+        logger.lifecycle("  执行: ${cmd.joinToString(" ")}")
+        val process = ProcessBuilder(cmd).inheritIO().start()
+        val exitCode = process.waitFor()
+        if (exitCode != 0) {
+            throw GradleException("ClassFinal 执行失败，exit code: $exitCode")
         }
 
         logger.lifecycle("[AXS-Protect] Step 3 完成: ${outputJar.get().asFile.name}")
     }
 
-    private fun resolveClassFinalJar(): java.io.File {
-        if (classFinalJar.isPresent) {
-            val f = classFinalJar.get().asFile
-            if (f.isFile) return f
-        }
-        val local = project.rootProject.file("tools/classfinal/classfinal-fatjar.jar")
-        if (local.isFile) return local
-        throw IllegalStateException(
-            "ClassFinal jar 未找到。请将 classfinal-fatjar.jar 放到 tools/classfinal/ 目录下\n" +
-            "下载地址: https://github.com/core-lib/classfinal/releases"
-        )
+    private fun resolveJavaExecutable(): String {
+        val javaHome = System.getProperty("java.home")
+        val winExe = java.io.File(javaHome, "bin/java.exe")
+        if (winExe.exists()) return winExe.absolutePath
+        val unixExe = java.io.File(javaHome, "bin/java")
+        if (unixExe.exists()) return unixExe.absolutePath
+        return "java"
     }
 }
