@@ -353,7 +353,7 @@ public final class ModuleRegistry {
             ModuleDescriptor descriptor = ModuleDescriptorParser.parse(jarBytes);
             String moduleId = descriptor.id();
             if (modules.containsKey(moduleId)) {
-                LOGGER.warning("云端模块 " + moduleId + " 已加载，跳过。");
+                LOGGER.info("云端模块 " + moduleId + " 已加载，跳过。");
                 return false;
             }
             if (!isModuleEnabled(loadRootConfig(), moduleId)) {

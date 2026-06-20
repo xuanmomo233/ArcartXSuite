@@ -308,6 +308,10 @@ public final class CloudModuleService {
                 plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 解密成功: " + jarBytes.length + " 字节");
                 final byte[] finalJarBytes = jarBytes;
                 plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    if (registry.isModuleLoaded(moduleId)) {
+                        plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载，跳过重复加载");
+                        return;
+                    }
                     boolean ok = registry.loadCloudModule(finalJarBytes);
                     if (ok) {
                         plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载");
