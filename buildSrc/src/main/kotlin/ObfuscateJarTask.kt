@@ -99,22 +99,46 @@ abstract class ObfuscateJarTask : DefaultTask() {
         // 通用规则
         sb.appendLine("-dontwarn")
         sb.appendLine("-dontoptimize")
+        sb.appendLine("-dontshrink")
         sb.appendLine("-keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod,Exceptions")
 
-        // ── 公开 API 全保留 ──
+        // ── 公开 API 全保留（对外契约，不混淆） ──
         sb.appendLine("-keep class xuanmo.arcartxsuite.api.** { *; }")
 
-        // ── Bukkit 反射 ──
+        // ── Bukkit 反射：仅保留 JavaPlugin 子类 ──
         sb.appendLine("-keep class * extends org.bukkit.plugin.java.JavaPlugin { *; }")
-        sb.appendLine("-keep class * extends xuanmo.arcartxsuite.api.AbstractAXSModule { *; }")
-        sb.appendLine("-keep class * implements xuanmo.arcartxsuite.api.AXSModule { *; }")
+
+        // ── AXSModule 入口类：保留类名（模块加载器按名反射），混淆内部 ──
+        sb.appendLine("-keep class * extends xuanmo.arcartxsuite.api.AbstractAXSModule { public <init>(...); }")
+        sb.appendLine("-keep class * implements xuanmo.arcartxsuite.api.AXSModule { public <init>(...); }")
+
+        // ── Listener：仅保留 @EventHandler 方法签名，类名可混淆 ──
         sb.appendLine("""
--keep class * implements org.bukkit.event.Listener {
+-keepclassmembers class * implements org.bukkit.event.Listener {
     @org.bukkit.event.EventHandler <methods>;
 }
         """.trimIndent())
-        sb.appendLine("-keep class * implements org.bukkit.command.TabExecutor { *; }")
-        sb.appendLine("-keep class * extends me.clip.placeholderapi.expansion.PlaceholderExpansion { *; }")
+
+        // ── TabExecutor：仅保留接口方法签名，类名可混淆 ──
+        sb.appendLine("""
+-keepclassmembers class * implements org.bukkit.command.TabExecutor {
+    public boolean onCommand(org.bukkit.command.CommandSender, org.bukkit.command.Command, java.lang.String, java.lang.String[]);
+    public java.util.List onTabComplete(org.bukkit.command.CommandSender, org.bukkit.command.Command, java.lang.String, java.lang.String[]);
+}
+        """.trimIndent())
+
+        // ── PAPI：保留必须被反射调用的方法，类名可混淆 ──
+        sb.appendLine("""
+-keepclassmembers class * extends me.clip.placeholderapi.expansion.PlaceholderExpansion {
+    public java.lang.String getIdentifier();
+    public java.lang.String getAuthor();
+    public java.lang.String getVersion();
+    public java.lang.String onPlaceholderRequest(org.bukkit.entity.Player, java.lang.String);
+    public java.lang.String onRequest(org.bukkit.OfflinePlayer, java.lang.String);
+}
+        """.trimIndent())
+
+        // ── enum：保留 values()/valueOf() ──
         sb.appendLine("-keep enum * { public static **[] values(); public static ** valueOf(java.lang.String); }")
 
         // ── JNI native 方法保留（Step 2 桥接层） ──
@@ -129,18 +153,8 @@ abstract class ObfuscateJarTask : DefaultTask() {
         """.trimIndent())
 
         if (coreJar.get()) {
-            // bridge：保留类名（外部可能反射获取实例），允许混淆方法名
-            sb.appendLine("-keep class xuanmo.arcartxsuite.bridge.** { public <init>(...); }")
-            // 模块注册表/类加载器：保留类名，混淆非必要方法
-            sb.appendLine("-keep class xuanmo.arcartxsuite.module.ModuleRegistry { public <init>(...); }")
-            sb.appendLine("-keep class xuanmo.arcartxsuite.module.ModuleClassLoader { public <init>(...); }")
-            // 安全：仅保留 NativeBridge（JNI_OnLoad 通过 RegisterNatives 注册，类名必须保留）
-            // t0() 是 environmentCheck 双向校验的 Java 回调入口，方法名必须保留
+            // 安全：NativeBridge（JNI_OnLoad 通过 RegisterNatives 注册，类名 + t0 必须保留）
             sb.appendLine("-keep class xuanmo.arcartxsuite.security.NativeBridge { *; }")
-            // 配置类：保留类名和构造函数
-            sb.appendLine("-keep class xuanmo.arcartxsuite.config.** { public <init>(...); }")
-            // command 已由全局 "-keep class * implements org.bukkit.command.TabExecutor { *; }" 覆盖，无需单独保留
-            // ↑ currency/combat/item/mythiclib/util 已迁入 axs-api，由 api.** keep 规则覆盖
         } else if (moduleEntryClass.isPresent) {
             sb.appendLine("-keep class ${moduleEntryClass.get()} { *; }")
         }

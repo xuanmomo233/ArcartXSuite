@@ -1,10 +1,16 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import org.gradle.api.artifacts.ProjectDependency
+import org.gradle.api.file.RegularFile
+import org.gradle.api.provider.Provider
 
 plugins {
     id("com.gradleup.shadow") version "8.3.5" apply false
 }
 
 val distDir = rootProject.layout.buildDirectory.dir("ArcartXSuite")
+
+// 混淆后的 core jar 路径（模块编译时依赖此产物，使得 bridge 等类被完全混淆后仍可链接）
+val obfuscatedCoreJar: Provider<RegularFile> = project(":axs-core").layout.buildDirectory.file("libs/ArcartXSuite-step1-obfuscated.jar")
 
 subprojects {
     repositories {
@@ -17,8 +23,29 @@ subprojects {
     }
 
     afterEvaluate {
-        // 模块子项目：注册混淆任务
+        // 模块子项目：注册混淆任务 + 字符串加密任务
         if (project.path.startsWith(":modules:")) {
+
+            // ── 模块编译依赖：用混淆后的 core jar 替换源码项目依赖 ──
+            // 移除对 :axs-core 的项目依赖，改为依赖混淆后的 jar 文件。
+            // 这样模块编译出的字节码引用的是混淆后的 bridge/config 类名。
+            configurations.named("compileOnly") {
+                dependencies.removeAll { dep ->
+                    dep is ProjectDependency && dep.dependencyProject.path == ":axs-core"
+                }
+            }
+            dependencies.add("compileOnly", files(obfuscatedCoreJar))
+
+            // 模块编译必须等 core 混淆完成
+            tasks.named("compileJava") {
+                dependsOn(":axs-core:obfuscateCore")
+            }
+
+            // 统一移除调试信息
+            tasks.withType<JavaCompile> {
+                options.compilerArgs.add("-g:none")
+            }
+
             val moduleJarTask = tasks.named<Jar>("jar")
 
             // 原始 jar 输出到 build/libs（中间产物）
@@ -26,33 +53,53 @@ subprojects {
                 destinationDirectory.set(layout.buildDirectory.dir("libs"))
             }
 
-            // 混淆后的 jar 输出到 dist/modules/
+            // 混淆后的 jar
+            val obfuscatedModuleJar = distDir.map { it.file("modules/${moduleJarTask.get().archiveFileName.get()}") }
             val obfuscateModule = tasks.register<ObfuscateJarTask>("obfuscateModule") {
                 dependsOn(moduleJarTask)
                 inputJar.set(moduleJarTask.flatMap { it.archiveFile })
-                outputJar.set(distDir.map { it.file("modules/${moduleJarTask.get().archiveFileName.get()}") })
+                outputJar.set(obfuscatedModuleJar)
                 coreJar.set(false)
-                libraryJars.from(configurations.named("compileClasspath"))
+                // library jars 使用混淆后的 core（保持引用一致）
+                libraryJars.from(files(obfuscatedCoreJar))
+                libraryJars.from(configurations.named("compileClasspath").get().files.filter {
+                    !it.absolutePath.contains("axs-core")
+                })
                 configFiles.from(rootProject.file("proguard/modules.pro"))
             }
 
-            tasks.named("build") {
+            // 字符串加密（ProGuard 之后）
+            val stringEncryptedModuleJar = distDir.map { it.file("modules-enc/${moduleJarTask.get().archiveFileName.get()}") }
+            val stringEncryptModule = tasks.register<StringEncryptTask>("stringEncryptModule") {
                 dependsOn(obfuscateModule)
+                inputJar.set(obfuscateModule.flatMap { it.outputJar })
+                outputJar.set(stringEncryptedModuleJar)
+            }
+
+            // 最终产物：从字符串加密后的 jar 复制到 modules/ 目录
+            val publishModuleJar = tasks.register("publishModuleJar") {
+                dependsOn(stringEncryptModule)
+                val src = stringEncryptedModuleJar.get().asFile
+                val dst = obfuscatedModuleJar.get().asFile
+                inputs.file(src)
+                outputs.file(dst)
+                doLast {
+                    dst.parentFile.mkdirs()
+                    src.copyTo(dst, overwrite = true)
+                }
+            }
+
+            tasks.named("build") {
+                dependsOn(publishModuleJar)
             }
 
             // 将混淆后的模块 Jar 加密为 .axb，供上传到 AXS Cloud Platform。
-            // 不挂到 build；按需执行（如 :modules:afkreward:encryptModuleAxb）。
-            // 未配置 moduleKey/moduleIv 时会自动生成随机密钥并打印到控制台，
-            // 请将控制台输出的 moduleKey 保存并在上传到云端时填写。
             tasks.register<EncryptModuleAxbTask>("encryptModuleAxb") {
                 group = "protection"
                 description = "将混淆后的模块 Jar 加密为 .axb（上传云端用）"
-                dependsOn(obfuscateModule)
-                inputJar.set(obfuscateModule.flatMap { it.outputJar })
+                dependsOn(publishModuleJar)
+                inputJar.set(obfuscatedModuleJar.map { it } as Provider<RegularFile>)
                 outputAxb.set(distDir.map { it.file("module-axb/${project.name}.axb") })
-                // 可选：在 gradle.properties 中配置固定密钥
-                //   module.<name>.key=<base64-32bytes>
-                //   module.<name>.iv=<base64-12bytes>
                 val keyProp = project.findProperty("module.${project.name}.key") as String?
                 val ivProp = project.findProperty("module.${project.name}.iv") as String?
                 if (keyProp != null) moduleKey.set(keyProp)

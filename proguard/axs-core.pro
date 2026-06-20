@@ -2,16 +2,6 @@
 # ArcartXSuite Core - ProGuard Rules
 # ═══════════════════════════════════════════════════════════════════
 
-# ─── 字符串加密候选（后续可用 Allatori 替代此段） ─────────────
-# 目前 ProGuard 不支持字符串加密，此处标记需要保护的包
-# 待升级到 Allatori 时启用 string encryption 对以下包
-
-# ─── 内部实现混淆（license 包内部细节） ───────────────────────
--keepclassmembers class xuanmo.arcartxsuite.license.LicenseVerifier {
-    # 保留 public static 方法（被 ResourceKeyManager 引用）
-    public static *** base64UrlDecode(java.lang.String);
-}
-
 # ─── 混合认证代理（独立进程入口，必须保留类名/包名/成员） ──────
 # 该类由 start-mixed-auth 脚本以 `java -cp ArcartXSuite.jar
 # xuanmo.arcartxsuite.auth.MixedYggdrasilProxy <port>` 独立启动，
@@ -19,10 +9,10 @@
 -keep class xuanmo.arcartxsuite.auth.MixedYggdrasilProxy { *; }
 -keep class xuanmo.arcartxsuite.auth.MixedYggdrasilProxy$* { *; }
 
-# ─── bridge 包（被独立模块 compileOnly 引用，运行时链接）────────
-# ArcartXWorldTextureService 等 bridge 类被 title 等独立模块直接引用，
-# 但宿主 Java 代码中可能没有直接 new 它们，导致 ProGuard shrink 删除方法体。
--keep class xuanmo.arcartxsuite.bridge.** { *; }
+# ─── bridge 包：不再 blanket keep ──────────────────────────────
+# 模块编译时已依赖混淆后的 core jar，运行时按混淆后的名称链接。
+# 只需防止 ProGuard shrink 掉模块间实际使用但宿主未直接引用的类/方法。
+# 通过 -dontshrink 已全局禁止 shrink（见 ObfuscateJarTask），此处无需 keep。
 
 # ─── Shadow 打包的第三方库不混淆 ─────────────────────────────
 -keep class com.zaxxer.hikari.** { *; }
@@ -50,5 +40,8 @@
 -classobfuscationdictionary dictionary.txt
 -packageobfuscationdictionary dictionary.txt
 
-# ─── 重定向包名 ──────────────────────────────────────────────
+# ─── 重定向包名（所有未 keep 的类扁平化到 internal） ─────────
 -repackageclasses 'xuanmo.arcartxsuite.internal'
+
+# ─── 允许更激进的重命名 ──────────────────────────────────────
+-allowaccessmodification

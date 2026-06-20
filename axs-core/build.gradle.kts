@@ -110,17 +110,19 @@ tasks {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 4 步保护流水线
+// 5 步保护流水线
 //
 //   shadowJar (未混淆)
 //       ↓
-//   Step 1: ProGuard 混淆 ─── 擦除名称、死代码剔除
+//   Step 1:   ProGuard 混淆 ─── 擦除名称、重打包到 internal
 //       ↓
-//   Step 3: ClassFinal VMP ── 抽空方法体加密（可选，需 tools/classfinal/）
+//   Step 1.5: 字符串加密 ───── ASM XOR 加密所有 LDC String
 //       ↓
-//   Step 4: 完整性嵌入 ───── SHA-256 摘要写入 META-INF
+//   Step 3:   ClassFinal VMP ── 抽空方法体加密（可选）
 //       ↓
-//   publishCoreJar ────────── 输出到 build/dist/
+//   Step 4:   完整性嵌入 ───── SHA-256 摘要写入 META-INF
+//       ↓
+//   publishCoreJar ────────── 输出到 build/libs/
 //
 // (Step 2 Native 下沉 是编译期独立步骤，native/ 目录 CMake 构建后
 //  产物放入 src/main/resources/native/，随 shadowJar 一起打入)
@@ -141,26 +143,34 @@ val obfuscateCore by tasks.registering(ObfuscateJarTask::class) {
     configFiles.from(rootProject.file("proguard/axs-core.pro"))
 }
 
+// Step 1.5: 字符串加密（ASM，ProGuard 之后）
+val step15Jar = layout.buildDirectory.file("libs/ArcartXSuite-step15-strenc.jar")
+
+val stringEncryptCore by tasks.registering(StringEncryptTask::class) {
+    dependsOn(obfuscateCore)
+    inputJar.set(step1Jar)
+    outputJar.set(step15Jar)
+}
+
 // Step 3: ClassFinal VMP（仅当 tools/classfinal/ 存在时执行）
 val step3Jar = layout.buildDirectory.file("libs/ArcartXSuite-step3-vmp.jar")
 val classFinalAvailable = rootProject.file("tools/classfinal/classfinal-fatjar.jar").isFile
 
 val classFinalCore by tasks.registering(ClassFinalTask::class) {
-    dependsOn(obfuscateCore)
-    inputJar.set(step1Jar)
+    dependsOn(stringEncryptCore)
+    inputJar.set(step15Jar)
     outputJar.set(step3Jar)
     packages.set(listOf(
-        "xuanmo.arcartxsuite.security",
-        "xuanmo.arcartxsuite.config"
+        "xuanmo.arcartxsuite.internal"
     ))
     enabled = classFinalAvailable
 }
 
-// 选择 Step 3 的输出（如果 ClassFinal 可用），否则直接用 Step 1 的
-val publishSrcJar = if (classFinalAvailable) step3Jar else step1Jar
-val publishSrcTask = if (classFinalAvailable) "classFinalCore" else "obfuscateCore"
+// 选择 Step 3 的输出（如果 ClassFinal 可用），否则直接用 Step 1.5 的
+val publishSrcJar = if (classFinalAvailable) step3Jar else step15Jar
+val publishSrcTask = if (classFinalAvailable) "classFinalCore" else "stringEncryptCore"
 
-// 最终发布 — 使用自定义 task 避免 Copy lambda 捕获脚本上下文（配置缓存兼容）
+// 最终发布
 val publishCoreJar by tasks.registering {
     dependsOn(tasks.named(publishSrcTask))
     val src = publishSrcJar.get().asFile
