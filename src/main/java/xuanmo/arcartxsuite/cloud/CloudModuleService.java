@@ -304,8 +304,9 @@ public final class CloudModuleService {
                     }
                 }
                 plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 解密成功: " + jarBytes.length + " 字节");
+                final byte[] finalJarBytes = jarBytes;
                 plugin.getServer().getScheduler().runTask(plugin, () -> {
-                    boolean ok = registry.loadCloudModule(jarBytes);
+                    boolean ok = registry.loadCloudModule(finalJarBytes);
                     if (ok) {
                         plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载");
                     } else {
