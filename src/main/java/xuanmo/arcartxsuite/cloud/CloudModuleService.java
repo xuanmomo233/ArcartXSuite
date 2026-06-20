@@ -64,6 +64,8 @@ public final class CloudModuleService {
         CachedAxb(byte[] data, long expiresAt) { this.data = data; this.expiresAt = expiresAt; }
     }
     private final Map<String, CachedAxb> cachedAxb = new ConcurrentHashMap<>();
+    /** 正在下载中的模块去重：同一模块多个并发入口时复用同一个 Future */
+    private final Map<String, CompletableFuture<Void>> downloading = new ConcurrentHashMap<>();
 
     private BukkitTask heartbeatTask;
     private final long pluginStartTime = System.currentTimeMillis();
@@ -296,8 +298,19 @@ public final class CloudModuleService {
             plugin.consoleWarn("[Cloud] Native 安全库未加载，跳过云端模块 " + moduleId + " 的解密加载。错误: " + NativeBridge.getLoadError());
             return CompletableFuture.<Void>completedFuture(null);
         }
+        // 并发去重：syncModules 和 syncModuleChanges 可能同时触发同一模块
+        CompletableFuture<Void> existing = downloading.get(moduleId);
+        if (existing != null) {
+            plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 正在下载中，复用已有任务");
+            return existing;
+        }
+        CompletableFuture<Void> placeholder = new CompletableFuture<>();
+        if (downloading.putIfAbsent(moduleId, placeholder) != null) {
+            return downloading.get(moduleId);
+        }
+
         plugin.consoleInfo("[Cloud] 开始同步模块: " + moduleId + " (native 版本: " + NativeBridge.n0() + ")");
-        return retryAsync(moduleId, "axb下载", 3, 2000L, () -> downloadAxb(moduleId)).thenCompose(axb -> {
+        CompletableFuture<Void> work = retryAsync(moduleId, "axb下载", 3, 2000L, () -> downloadAxb(moduleId)).thenCompose(axb -> {
             if (axb == null || axb.length == 0) {
                 plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：axb 下载失败");
                 return CompletableFuture.<Void>completedFuture(null);
@@ -372,6 +385,13 @@ public final class CloudModuleService {
                 });
             });
         });
+
+        work.whenComplete((v, ex) -> {
+            downloading.remove(moduleId);
+            if (ex != null) placeholder.completeExceptionally(ex);
+            else placeholder.complete(v);
+        });
+        return placeholder;
     }
 
     private CompletableFuture<byte[]> downloadAxb(String moduleId) {

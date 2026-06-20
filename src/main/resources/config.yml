@@ -568,6 +568,11 @@ modules:
     # Fishing 钓鱼系统
     # 功能：星露谷风格钓鱼小游戏（进度条拉扯）、多水域生态（不同水域不同鱼池）、饵料加成、稀有宝藏奖励。
 
+  afkreward:
+    enabled: false
+    # AfkReward 挂机奖励
+    # 功能：多区域挂机奖励、手动/自动 AFK 模式、排行榜、HUD 显示、PlaceholderAPI 变量。
+
   lottery:
     enabled: false
     # Lottery 抽奖系统
