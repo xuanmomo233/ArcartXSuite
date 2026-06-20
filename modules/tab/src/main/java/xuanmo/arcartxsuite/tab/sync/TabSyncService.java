@@ -93,14 +93,21 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
     }
 
     /**
-     * 统一占位符解析入口：完全由内置解析器处理，不依赖 PlaceholderAPI。
-     * 支持常见的 %player_xxx% / %server_xxx% 占位符。
+     * 统一占位符解析入口：先走内置解析器处理 %player_xxx% / %server_xxx%，
+     * 若 PlaceholderAPI 存在则继续解析剩余外部占位符（如 %axstitle_xxx% 等）。
      */
     private String resolvePlaceholders(Player player, String text) {
         if (text == null) {
             return "";
         }
-        return BuiltinPlaceholderResolver.resolve(text, player);
+        String rendered = BuiltinPlaceholderResolver.resolve(text, player);
+        if (player != null && Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) {
+            try {
+                rendered = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(player, rendered);
+            } catch (Exception ignored) {
+            }
+        }
+        return rendered;
     }
 
     public void start() {

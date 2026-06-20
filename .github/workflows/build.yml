@@ -36,6 +36,17 @@ jobs:
           cmake --build native/build --config Release
         shell: cmd
 
+      # Visual Studio 生成器会把 Release 配置输出到 RUNTIME_OUTPUT_DIRECTORY/Release/
+      # 需要把 DLL 提取到稳定路径供后续 artifact 上传
+      - name: Locate & Copy DLL
+        run: |
+          $dll = Get-ChildItem -Path native/build -Recurse -Filter "axs-native.dll" | Select-Object -First 1
+          if (-not $dll) { throw "axs-native.dll not found after build" }
+          New-Item -ItemType Directory -Force -Path src/main/resources/native | Out-Null
+          Copy-Item $dll.FullName -Destination src/main/resources/native/axs-native.dll -Force
+          Write-Host "Copied DLL from $($dll.FullName)"
+        shell: powershell
+
       - name: Upload Windows Native Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -76,12 +87,11 @@ jobs:
           if-no-files-found: error
 
   # ═══════════════════════════════════════════════════════════
-  # Step 1-5: Gradle 构建（Linux runner，启用 ClassFinal VMP）
+  # Step 1-4: Gradle 构建（Linux runner）
   # ═══════════════════════════════════════════════════════════
   # 使用 ubuntu-latest：
-  #   1. ClassFinal VMP 在 Linux 上无 Windows 路径长度 bug，可正常执行
-  #   2. Gradle 全量构建在 Linux 上通过测试
-  #   3. 两个平台 Native 库均通过 artifact 传入
+  #   1. Gradle 全量构建在 Linux 上通过测试
+  #   2. 两个平台 Native 库均通过 artifact 传入
   build-java:
     needs: [build-native-windows, build-native-linux]
     runs-on: ubuntu-latest
@@ -113,7 +123,7 @@ jobs:
           echo "Native files in place:"
           ls -la src/main/resources/native/
 
-      # Gradle 全量构建（Linux 下启用 ClassFinal VMP）
+      # Gradle 全量构建（ProGuard + 字符串加密 + 完整性校验）
       - name: Build with Gradle
         run: ./gradlew buildAll --no-daemon --stacktrace
         shell: bash

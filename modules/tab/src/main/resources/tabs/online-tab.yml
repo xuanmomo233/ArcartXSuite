@@ -122,27 +122,27 @@ omit-blank-values: false
 # - pack 是字典时：按玩家渲染后把每个玩家的字典合并成一个根字典，相同 key 以后者覆盖前者
 #
 # pack 为字符串时，最终类似：
-# - "%AXStitle_tab_adventure_prefix%Alice%AXStitle_tab_adventure_suffix%20"
-# - "%AXStitle_tab_adventure_prefix%Bob%AXStitle_tab_adventure_suffix%18"
+# - "%axstitle_tab_adventure_prefix%Alice%axstitle_tab_adventure_suffix%20"
+# - "%axstitle_tab_adventure_prefix%Bob%axstitle_tab_adventure_suffix%18"
 #
 # pack 也可以写成列表，例如：
 # pack:
-#   - "%AXStitle_tab_adventure_prefix%%player_name%%AXStitle_tab_adventure_suffix%"
+#   - "%axstitle_tab_adventure_prefix%%player_name%%axstitle_tab_adventure_suffix%"
 #   - "%player_health%"
 #
 # pack 也可以写成字典，例如：
 # pack:
 #   "%player_uuid%":
-#     name: "%AXStitle_tab_adventure_prefix%%player_name%%AXStitle_tab_adventure_suffix%"
+#     name: "%axstitle_tab_adventure_prefix%%player_name%%axstitle_tab_adventure_suffix%"
 #     health: "%player_health%"
 # 如果 pack / sort-papi-key 依赖 PlaceholderAPI 动态变量，仍由服务端周期扫描兜底。
-# 聊天栏前后缀可按分组接入，例如 %AXStitle_chat_adventure_prefix% 与 %AXStitle_chat_adventure_suffix%
+# 聊天栏前后缀可按分组接入，例如 %axstitle_chat_adventure_prefix% 与 %axstitle_chat_adventure_suffix%
 #
 # 玩家头像（PlayerSkin 纹理表达式）：
 # 服务端 pack 把玩家 UUID 输出给 UI，UI 端 Texture 控件用 normal: "PlayerSkin:{var.uuid}" 渲染。
 # 服务端不抓 Mojang，纯靠客户端 ArcartX 渲染。示例：
 # pack:
-#   name: "%AXStitle_tab_adventure_prefix%%player_name%"
+#   name: "%axstitle_tab_adventure_prefix%%player_name%"
 #   uuid: "{player_uuid}"
 #   health: "%player_health%"
-pack: "%AXStitle_tab_adventure_prefix%%player_name%%AXStitle_tab_adventure_suffix%%player_health%"
+pack: "%axstitle_tab_adventure_prefix%%player_name%%axstitle_tab_adventure_suffix%%player_health%"

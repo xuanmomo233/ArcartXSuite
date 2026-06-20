@@ -4,7 +4,7 @@ config-version: 1
 # 依赖: ArcartX、PlaceholderAPI。
 # 重载: /axs tab reload
 # PAPI 输出: 无独立 PlaceholderAPI 输出。
-# 可消费的 PAPI: tabs.<id>.pack 会按每个目标玩家解析完整 PAPI，例如 %player_name%、%player_health%、%AXStitle_tab_<groupId>_prefix%。
+# 可消费的 PAPI: tabs.<id>.pack 会按每个目标玩家解析完整 PAPI，例如 %player_name%、%player_health%、%axstitle_tab_<groupId>_prefix%。
 # 排序 PAPI: sort-mode=papi 时 sort-papi-key 填完整 PAPI，例如 %player_level%；sort-papi-numeric 控制数字/文本排序。
 
 settings:
