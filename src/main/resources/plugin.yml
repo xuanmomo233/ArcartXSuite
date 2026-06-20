@@ -28,6 +28,14 @@ commands:
     description: Regions 玩家命令（/axs regions 缩写）
     usage: /rg <action> [args...]
     permission: axs.regions.select
+  afk:
+    description: 玩家挂机命令
+    usage: /<command> [toggle|status|start <区域>|end|list|top]
+    permission: arcartxsuite.afkreward.use
+  afkreward:
+    description: 玩家挂机奖励命令
+    usage: /<command> [toggle|status|start <区域>|end|list|top]
+    permission: arcartxsuite.afkreward.use
   arcartxsuite:
     description: ArcartXSuite 管理命令
     usage: /axs help [module] | /axs <module> help | /axs status|reload
