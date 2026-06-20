@@ -26,21 +26,6 @@ subprojects {
         // 模块子项目：注册混淆任务 + 字符串加密任务
         if (project.path.startsWith(":modules:")) {
 
-            // ── 模块编译依赖：用混淆后的 core jar 替换源码项目依赖 ──
-            // 移除对 :axs-core 的项目依赖，改为依赖混淆后的 jar 文件。
-            // 这样模块编译出的字节码引用的是混淆后的 bridge/config 类名。
-            configurations.named("compileOnly") {
-                dependencies.removeAll { dep ->
-                    dep is ProjectDependency && dep.dependencyProject.path == ":axs-core"
-                }
-            }
-            dependencies.add("compileOnly", files(obfuscatedCoreJar))
-
-            // 模块编译必须等 core 混淆完成
-            tasks.named("compileJava") {
-                dependsOn(":axs-core:obfuscateCore")
-            }
-
             // 统一移除调试信息
             tasks.withType<JavaCompile> {
                 options.compilerArgs.add("-g:none")
@@ -54,13 +39,17 @@ subprojects {
             }
 
             // 混淆后的 jar
+            // 注意：模块编译时仍依赖未混淆的 :axs-core（compileOnly），
+            //       ProGuard 混淆时才以混淆后的 core 为 library jar，
+            //       这样 ProGuard 会自动把模块中的原始类名引用替换为混淆后的名称。
             val obfuscatedModuleJar = distDir.map { it.file("modules/${moduleJarTask.get().archiveFileName.get()}") }
             val obfuscateModule = tasks.register<ObfuscateJarTask>("obfuscateModule") {
                 dependsOn(moduleJarTask)
+                dependsOn(":axs-core:obfuscateCore")
                 inputJar.set(moduleJarTask.flatMap { it.archiveFile })
                 outputJar.set(obfuscatedModuleJar)
                 coreJar.set(false)
-                // library jars 使用混淆后的 core（保持引用一致）
+                // library jars：混淆后的 core（用于解析引用并自动重命名）+ 其他依赖
                 libraryJars.from(files(obfuscatedCoreJar))
                 libraryJars.from(configurations.named("compileClasspath").get().files.filter {
                     !it.absolutePath.contains("axs-core")

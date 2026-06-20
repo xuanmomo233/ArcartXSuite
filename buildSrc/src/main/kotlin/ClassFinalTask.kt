@@ -66,11 +66,16 @@ abstract class ClassFinalTask : DefaultTask() {
         logger.lifecycle("[AXS-Protect] Step 3 (ClassFinal): ${inputJar.get().asFile.name}")
         logger.lifecycle("  加密包: ${packages.get().joinToString(", ")}")
 
+        val input = inputJar.get().asFile
+        val output = outputJar.get().asFile
+        val expectedEncrypted = java.io.File(input.parentFile, "${input.nameWithoutExtension}-encrypted.jar")
+
         val args = mutableListOf<String>()
-        args.addAll(listOf("-jar", inputJar.get().asFile.absolutePath))
-        args.addAll(listOf("-o", outputJar.get().asFile.absolutePath))
+        // classfinal 1.2.1 参数格式：-file <input> -packages <pkgs> -pwd <pwd> -Y
+        args.addAll(listOf("-file", input.absolutePath))
+        args.addAll(listOf("-packages", packages.get().joinToString(",")))
         args.addAll(listOf("-pwd", password.get()))
-        args.addAll(listOf("-pkg", packages.get().joinToString(",")))
+        args.add("-Y") // 自动确认，避免交互式阻塞
 
         if (excludes.get().isNotEmpty()) {
             args.addAll(listOf("-exclude", excludes.get().joinToString(",")))
@@ -79,7 +84,7 @@ abstract class ClassFinalTask : DefaultTask() {
         // 使用 ProcessBuilder 避免 project.javaexec（Gradle 配置缓存不兼容）
         val javaExe = resolveJavaExecutable()
         val cmd = listOf(javaExe, "-Xmx512m", "-cp", cfJar.absolutePath) +
-                listOf("net.roseboy.classfinal.ClassFinal") + args
+                listOf("net.roseboy.classfinal.Main") + args
 
         logger.lifecycle("  执行: ${cmd.joinToString(" ")}")
         val process = ProcessBuilder(cmd).inheritIO().start()
@@ -88,7 +93,16 @@ abstract class ClassFinalTask : DefaultTask() {
             throw GradleException("ClassFinal 执行失败，exit code: $exitCode")
         }
 
-        logger.lifecycle("[AXS-Protect] Step 3 完成: ${outputJar.get().asFile.name}")
+        // classfinal 输出固定为 "{input}-encrypted.jar"，需要重命名到指定 output
+        if (expectedEncrypted.isFile) {
+            expectedEncrypted.copyTo(output, overwrite = true)
+            expectedEncrypted.delete()
+            logger.lifecycle("[AXS-Protect] Step 3 完成: ${output.name}")
+        } else {
+            throw GradleException(
+                "ClassFinal 未生成预期输出文件: ${expectedEncrypted.absolutePath}"
+            )
+        }
     }
 
     private fun resolveJavaExecutable(): String {

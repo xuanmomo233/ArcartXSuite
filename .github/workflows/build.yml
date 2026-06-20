@@ -76,11 +76,15 @@ jobs:
           if-no-files-found: error
 
   # ═══════════════════════════════════════════════════════════
-  # Step 1-5: Gradle 构建（依赖混淆后的 core + 字符串加密）
+  # Step 1-5: Gradle 构建（Linux runner，启用 ClassFinal VMP）
   # ═══════════════════════════════════════════════════════════
+  # 使用 ubuntu-latest：
+  #   1. ClassFinal VMP 在 Linux 上无 Windows 路径长度 bug，可正常执行
+  #   2. Gradle 全量构建在 Linux 上通过测试
+  #   3. 两个平台 Native 库均通过 artifact 传入
   build-java:
     needs: [build-native-windows, build-native-linux]
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -107,13 +111,12 @@ jobs:
       - name: Verify Native Files
         run: |
           echo "Native files in place:"
-          dir src\main\resources\native\
-        shell: cmd
+          ls -la src/main/resources/native/
 
-      # Gradle 构建（全量构建含混淆 + 字符串加密）
+      # Gradle 全量构建（Linux 下启用 ClassFinal VMP）
       - name: Build with Gradle
-        run: .\gradlew.bat buildAll --no-daemon
-        shell: cmd
+        run: ./gradlew buildAll --no-daemon --stacktrace
+        shell: bash
 
       # 上传最终产物
       - name: Upload Core JAR

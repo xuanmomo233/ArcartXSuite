@@ -56,3 +56,7 @@ temp_*.txt
 temp_*.py
 
 .devin/rules/
+
+# Native libraries (compiled by CI, do not commit)
+src/main/resources/native/*.dll
+src/main/resources/native/*.so

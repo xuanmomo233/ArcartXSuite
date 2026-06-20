@@ -67,18 +67,22 @@ tasks {
             // jar 跨平台分发，只要包含任一平台的 native 库即可放行构建
             val expectedLibs = listOf("axs-native.dll", "libaxs-native.so", "libaxs-native.dylib")
             val found = expectedLibs.map { nativeLibDir.file(it).asFile }.filter { it.exists() }
+            val isCi = System.getenv("GITHUB_ACTIONS") != null
             if (found.isEmpty()) {
-                throw GradleException(
-                    """
+                val msg = """
                     Native 安全库缺失: ${nativeLibDir.asFile.absolutePath} 下未找到任何平台原生库。
-                    该库是云端模块解密（JNI）的必需组件，必须先构建后再打包 jar。
-                    本地构建步骤（CMake + OpenSSL + C++ 编译器）:
+                    该库是云端模块解密（JNI）的必需组件，CI 构建时必须存在。
+                    本地开发可跳过（不影响 ProGuard/字符串加密测试）。
+                    如需本地构建 Native 库（CMake + OpenSSL + C++）:
                       cd native
                       cmake -B build
                       cmake --build build --config Release
-                    构建产物会自动输出到 src/main/resources/native/，随后重新执行 gradle build。
                     """.trimIndent()
-                )
+                if (isCi) {
+                    throw GradleException(msg)
+                } else {
+                    logger.warn("[AXS-Protect] $msg")
+                }
             }
         }
         exclude { details ->
@@ -110,21 +114,19 @@ tasks {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 5 步保护流水线
+// 4 步保护流水线
 //
 //   shadowJar (未混淆)
 //       ↓
 //   Step 1:   ProGuard 混淆 ─── 擦除名称、重打包到 internal
 //       ↓
-//   Step 1.5: 字符串加密 ───── ASM XOR 加密所有 LDC String
+//   Step 2:   字符串加密 ───── ASM XOR 加密所有 LDC String
 //       ↓
-//   Step 3:   ClassFinal VMP ── 抽空方法体加密（可选）
-//       ↓
-//   Step 4:   完整性嵌入 ───── SHA-256 摘要写入 META-INF
+//   Step 3:   完整性嵌入 ───── SHA-256 摘要写入 META-INF
 //       ↓
 //   publishCoreJar ────────── 输出到 build/libs/
 //
-// (Step 2 Native 下沉 是编译期独立步骤，native/ 目录 CMake 构建后
+// (Native 下沉是编译期独立步骤，native/ 目录 CMake 构建后
 //  产物放入 src/main/resources/native/，随 shadowJar 一起打入)
 // ═══════════════════════════════════════════════════════════════════
 
@@ -143,37 +145,28 @@ val obfuscateCore by tasks.registering(ObfuscateJarTask::class) {
     configFiles.from(rootProject.file("proguard/axs-core.pro"))
 }
 
-// Step 1.5: 字符串加密（ASM，ProGuard 之后）
-val step15Jar = layout.buildDirectory.file("libs/ArcartXSuite-step15-strenc.jar")
+// Step 2: 字符串加密（ASM，ProGuard 之后）
+val step2Jar = layout.buildDirectory.file("libs/ArcartXSuite-step2-strenc.jar")
 
 val stringEncryptCore by tasks.registering(StringEncryptTask::class) {
     dependsOn(obfuscateCore)
     inputJar.set(step1Jar)
-    outputJar.set(step15Jar)
+    outputJar.set(step2Jar)
 }
 
-// Step 3: ClassFinal VMP（仅当 tools/classfinal/ 存在时执行）
-val step3Jar = layout.buildDirectory.file("libs/ArcartXSuite-step3-vmp.jar")
-val classFinalAvailable = rootProject.file("tools/classfinal/classfinal-fatjar.jar").isFile
+// Step 3: 完整性嵌入（SHA-256 摘要校验）
+val step3Jar = layout.buildDirectory.file("libs/ArcartXSuite-step3-integrity.jar")
 
-val classFinalCore by tasks.registering(ClassFinalTask::class) {
+val embedIntegrityCore by tasks.registering(EmbedIntegrityTask::class) {
     dependsOn(stringEncryptCore)
-    inputJar.set(step15Jar)
+    inputJar.set(step2Jar)
     outputJar.set(step3Jar)
-    packages.set(listOf(
-        "xuanmo.arcartxsuite.internal"
-    ))
-    enabled = classFinalAvailable
 }
-
-// 选择 Step 3 的输出（如果 ClassFinal 可用），否则直接用 Step 1.5 的
-val publishSrcJar = if (classFinalAvailable) step3Jar else step15Jar
-val publishSrcTask = if (classFinalAvailable) "classFinalCore" else "stringEncryptCore"
 
 // 最终发布
 val publishCoreJar by tasks.registering {
-    dependsOn(tasks.named(publishSrcTask))
-    val src = publishSrcJar.get().asFile
+    dependsOn(embedIntegrityCore)
+    val src = step3Jar.get().asFile
     val dst = layout.buildDirectory.file("libs/ArcartXSuite-${version}.jar").get().asFile
     inputs.file(src)
     outputs.file(dst)
