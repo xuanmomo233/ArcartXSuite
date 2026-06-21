@@ -123,7 +123,12 @@ public final class ArcartXSuiteConfigSubCommand {
             sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /arcartxsuite config preview <ownerId>");
             return true;
         }
-        Optional<ConfigDiagnosisStore.Entry> opt = plugin.getConfigDiagnosisStore().get(args[0]);
+        ConfigDiagnosisStore store = plugin.getConfigDiagnosisStore();
+        if (store == null) {
+            sender.sendMessage(PREFIX + ChatColor.RED + "诊断引擎未初始化。");
+            return true;
+        }
+        Optional<ConfigDiagnosisStore.Entry> opt = store.get(args[0]);
         if (opt.isEmpty()) {
             sender.sendMessage(PREFIX + ChatColor.RED + "未找到 " + args[0] + " 的诊断结果。");
             return true;
@@ -160,13 +165,19 @@ public final class ArcartXSuiteConfigSubCommand {
             return true;
         }
         boolean force = args.length > 1 && "--force".equalsIgnoreCase(args[1]);
-        Optional<ConfigDiagnosisStore.Entry> opt = plugin.getConfigDiagnosisStore().get(args[0]);
+        ConfigDiagnosisStore store = plugin.getConfigDiagnosisStore();
+        ConfigDiagnosticEngine engine = plugin.getConfigDiagnosticEngine();
+        if (store == null || engine == null) {
+            sender.sendMessage(PREFIX + ChatColor.RED + "诊断引擎未初始化。");
+            return true;
+        }
+        Optional<ConfigDiagnosisStore.Entry> opt = store.get(args[0]);
         if (opt.isEmpty()) {
             sender.sendMessage(PREFIX + ChatColor.RED + "未找到 " + args[0] + " 的诊断结果。");
             return true;
         }
         var entry = opt.get();
-        var result = plugin.getConfigDiagnosticEngine().apply(entry.spec(), entry.report(), force);
+        var result = engine.apply(entry.spec(), entry.report(), force);
         sender.sendMessage(PREFIX + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
         if (result.success()) {
             // 应用后重跑一遍诊断刷新结果
@@ -187,12 +198,18 @@ public final class ArcartXSuiteConfigSubCommand {
                 break;
             }
         }
-        Optional<ConfigDiagnosisStore.Entry> opt = plugin.getConfigDiagnosisStore().get(args[0]);
+        ConfigDiagnosisStore store = plugin.getConfigDiagnosisStore();
+        ConfigDiagnosticEngine engine = plugin.getConfigDiagnosticEngine();
+        if (store == null || engine == null) {
+            sender.sendMessage(PREFIX + ChatColor.RED + "诊断引擎未初始化。");
+            return true;
+        }
+        Optional<ConfigDiagnosisStore.Entry> opt = store.get(args[0]);
         if (opt.isEmpty()) {
             sender.sendMessage(PREFIX + ChatColor.RED + "未找到 " + args[0] + " 的诊断结果。");
             return true;
         }
-        var result = plugin.getConfigDiagnosticEngine().rollback(opt.get().spec(), timestamp);
+        var result = engine.rollback(opt.get().spec(), timestamp);
         sender.sendMessage(PREFIX + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
         if (result.success()) {
             plugin.runConfigDiagnosis(args[0], true);
