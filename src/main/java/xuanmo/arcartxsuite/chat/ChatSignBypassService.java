@@ -25,12 +25,10 @@ public final class ChatSignBypassService implements Listener {
     private static final String[] SERVER_PLAYER_FIELDS = {
         "chatSession",
         "remoteChatSession",
-        "signedMessageDecoder",
     };
     private static final String[] CONNECTION_FIELDS = {
-        "chatDecorator",
-        "signedMessageDecoder",
         "chatMessageValidator",
+        "chatDecorator",
     };
 
     private final JavaPlugin plugin;
