@@ -10,15 +10,17 @@ public record PlayerTitleState(
     UUID playerUuid,
     Map<String, String> equippedTitleIdsByGroup,
     Map<String, PlayerOwnedTitle> ownedTitles,
+    String displayTitleId,
     Instant updatedAt
 ) {
     public PlayerTitleState {
         equippedTitleIdsByGroup = immutableStringCopy(equippedTitleIdsByGroup);
         ownedTitles = immutableCopy(ownedTitles);
+        displayTitleId = normalize(displayTitleId);
     }
 
     public static PlayerTitleState empty(UUID playerUuid) {
-        return new PlayerTitleState(playerUuid, Map.of(), Map.of(), Instant.EPOCH);
+        return new PlayerTitleState(playerUuid, Map.of(), Map.of(), "", Instant.EPOCH);
     }
 
     public boolean hasOwnedTitle(String titleId) {
@@ -45,17 +47,28 @@ public record PlayerTitleState(
             sanitizedEquipped.put(groupId, titleId);
         }
 
-        if (sanitized.size() == ownedTitles.size() && sanitizedEquipped.equals(equippedTitleIdsByGroup)) {
+        String sanitizedDisplayTitleId = normalize(displayTitleId);
+        if (!sanitizedDisplayTitleId.isBlank()) {
+            PlayerOwnedTitle displayOwned = sanitized.get(sanitizedDisplayTitleId);
+            boolean stillEquipped = sanitizedEquipped.containsValue(sanitizedDisplayTitleId);
+            if (displayOwned == null || !displayOwned.isEffective(now) || !stillEquipped) {
+                sanitizedDisplayTitleId = "";
+            }
+        }
+
+        if (sanitized.size() == ownedTitles.size()
+            && sanitizedEquipped.equals(equippedTitleIdsByGroup)
+            && sanitizedDisplayTitleId.equals(displayTitleId)) {
             return this;
         }
-        return new PlayerTitleState(playerUuid, sanitizedEquipped, sanitized, now);
+        return new PlayerTitleState(playerUuid, sanitizedEquipped, sanitized, sanitizedDisplayTitleId, now);
     }
 
     public PlayerTitleState grant(String titleId, Instant grantedAt, Instant activatesAt, Instant expiresAt, Instant now, String grantedBy) {
         LinkedHashMap<String, PlayerOwnedTitle> updatedTitles = new LinkedHashMap<>(ownedTitles);
         boolean hidden = updatedTitles.containsKey(titleId) && updatedTitles.get(titleId).hidden();
         updatedTitles.put(titleId, new PlayerOwnedTitle(titleId, hidden, grantedAt, activatesAt, expiresAt, now, grantedBy));
-        return new PlayerTitleState(playerUuid, equippedTitleIdsByGroup, updatedTitles, now).sanitize(now);
+        return new PlayerTitleState(playerUuid, equippedTitleIdsByGroup, updatedTitles, displayTitleId, now).sanitize(now);
     }
 
     public PlayerTitleState revoke(String titleId, Instant now) {
@@ -66,7 +79,8 @@ public record PlayerTitleState(
         updatedTitles.remove(titleId);
         LinkedHashMap<String, String> updatedEquipped = new LinkedHashMap<>(equippedTitleIdsByGroup);
         updatedEquipped.entrySet().removeIf(entry -> titleId.equals(entry.getValue()));
-        return new PlayerTitleState(playerUuid, updatedEquipped, updatedTitles, now);
+        String updatedDisplayTitleId = titleId.equals(displayTitleId) ? "" : displayTitleId;
+        return new PlayerTitleState(playerUuid, updatedEquipped, updatedTitles, updatedDisplayTitleId, now);
     }
 
     public PlayerTitleState setHidden(String titleId, boolean hidden, Instant now) {
@@ -76,7 +90,7 @@ public record PlayerTitleState(
         }
         LinkedHashMap<String, PlayerOwnedTitle> updatedTitles = new LinkedHashMap<>(ownedTitles);
         updatedTitles.put(titleId, ownedTitle.withHidden(hidden, now));
-        return new PlayerTitleState(playerUuid, equippedTitleIdsByGroup, updatedTitles, now);
+        return new PlayerTitleState(playerUuid, equippedTitleIdsByGroup, updatedTitles, displayTitleId, now);
     }
 
     public PlayerTitleState equip(String groupId, String titleId, Instant now) {
@@ -90,7 +104,7 @@ public record PlayerTitleState(
         }
         LinkedHashMap<String, String> updatedEquipped = new LinkedHashMap<>(equippedTitleIdsByGroup);
         updatedEquipped.put(normalizedGroupId, normalizedTitleId);
-        return new PlayerTitleState(playerUuid, updatedEquipped, ownedTitles, now);
+        return new PlayerTitleState(playerUuid, updatedEquipped, ownedTitles, displayTitleId, now);
     }
 
     public PlayerTitleState unequipGroup(String groupId, Instant now) {
@@ -99,15 +113,27 @@ public record PlayerTitleState(
             return this;
         }
         LinkedHashMap<String, String> updatedEquipped = new LinkedHashMap<>(equippedTitleIdsByGroup);
-        updatedEquipped.remove(normalizedGroupId);
-        return new PlayerTitleState(playerUuid, updatedEquipped, ownedTitles, now);
+        String removedTitleId = updatedEquipped.remove(normalizedGroupId);
+        String updatedDisplayTitleId = removedTitleId != null && removedTitleId.equals(displayTitleId) ? "" : displayTitleId;
+        return new PlayerTitleState(playerUuid, updatedEquipped, ownedTitles, updatedDisplayTitleId, now);
     }
 
     public PlayerTitleState unequipAll(Instant now) {
         if (equippedTitleIdsByGroup.isEmpty()) {
             return this;
         }
-        return new PlayerTitleState(playerUuid, Map.of(), ownedTitles, now);
+        return new PlayerTitleState(playerUuid, Map.of(), ownedTitles, "", now);
+    }
+
+    public PlayerTitleState withDisplayTitle(String titleId, Instant now) {
+        String normalizedTitleId = normalize(titleId);
+        if (normalizedTitleId.isBlank()) {
+            return new PlayerTitleState(playerUuid, equippedTitleIdsByGroup, ownedTitles, "", now);
+        }
+        if (!ownedTitles.containsKey(normalizedTitleId)) {
+            return this;
+        }
+        return new PlayerTitleState(playerUuid, equippedTitleIdsByGroup, ownedTitles, normalizedTitleId, now);
     }
 
     public int hiddenCount() {

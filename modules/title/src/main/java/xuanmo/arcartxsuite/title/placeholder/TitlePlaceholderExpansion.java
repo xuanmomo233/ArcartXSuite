@@ -1,10 +1,8 @@
 package xuanmo.arcartxsuite.title.placeholder;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.StringJoiner;
 import java.util.function.Function;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.OfflinePlayer;
@@ -247,34 +245,26 @@ public final class TitlePlaceholderExpansion extends PlaceholderExpansion {
         String normalized
     ) {
         return switch (normalized) {
-            case "display", "display_name" -> joinEquippedField(configuration, resolvedState, TitleDefinition::displayName);
-            case "display_chat_prefix" -> joinEquippedField(configuration, resolvedState, TitleDefinition::chatPrefix);
-            case "display_chat_suffix" -> joinEquippedField(configuration, resolvedState, TitleDefinition::chatSuffix);
-            case "display_tab_prefix" -> joinEquippedField(configuration, resolvedState, TitleDefinition::tabPrefix);
-            case "display_tab_suffix" -> joinEquippedField(configuration, resolvedState, TitleDefinition::tabSuffix);
+            case "display", "display_name" -> displayTitleField(configuration, resolvedState, TitleDefinition::displayName);
+            case "display_chat_prefix" -> displayTitleField(configuration, resolvedState, TitleDefinition::chatPrefix);
+            case "display_chat_suffix" -> displayTitleField(configuration, resolvedState, TitleDefinition::chatSuffix);
+            case "display_tab_prefix" -> displayTitleField(configuration, resolvedState, TitleDefinition::tabPrefix);
+            case "display_tab_suffix" -> displayTitleField(configuration, resolvedState, TitleDefinition::tabSuffix);
             default -> null;
         };
     }
 
-    private static String joinEquippedField(
+    private static String displayTitleField(
         TitleModuleConfiguration configuration,
         ResolvedTitleState resolvedState,
         Function<TitleDefinition, String> fieldExtractor
     ) {
-        TitleDisplayConfiguration displayConfig = configuration.displayTitle();
-
-        List<String> groupOrder = configuration.displayTitleGroupOrder();
-        for (String groupId : groupOrder) {
-            TitleDefinition title = resolvedState.equippedTitlesByGroup().get(groupId);
-            if (title == null) {
-                continue;
-            }
-            String value = fieldExtractor.apply(title);
-            if (value != null && !value.isEmpty()) {
-                return value;
-            }
+        TitleDefinition displayTitle = resolvedState.totalDisplayTitle();
+        if (displayTitle == null) {
+            return configuration.displayTitle().emptyText();
         }
-        return displayConfig.emptyText();
+        String value = fieldExtractor.apply(displayTitle);
+        return value == null ? "" : value;
     }
 
     private static String attributeValue(Map<String, Double> values, String key) {

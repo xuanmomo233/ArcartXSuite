@@ -24,6 +24,10 @@ public interface TitleRepository {
 
     void deleteOwnedTitle(UUID playerUuid, String titleId) throws SQLException;
 
+    void saveDisplayTitle(UUID playerUuid, String titleId, Instant updatedAt) throws SQLException;
+
+    void deleteDisplayTitle(UUID playerUuid) throws SQLException;
+
     int deleteExpiredTitles(Instant now) throws SQLException;
 
     void close();

@@ -290,16 +290,9 @@ public class TitleService {
             case "equip" -> equipTitle(player, data.size() > 1 ? data.get(1) : selectedTitleIds.getOrDefault(player.getUniqueId(), ""));
             case "unequip_group" -> unequipGroup(player, data.size() > 1 ? data.get(1) : selectedGroupId(player));
             case "unequip_all" -> unequipAll(player);
-            case "unequip" -> {
-                String target = data.size() > 1 ? data.get(1) : selectedGroupId(player);
-                if ("all".equalsIgnoreCase(target)) {
-                    unequipAll(player);
-                } else {
-                    unequipGroup(player, target);
-                }
-            }
             case "hide" -> hideTitle(player, data.size() > 1 ? data.get(1) : selectedTitleIds.getOrDefault(player.getUniqueId(), ""), true);
             case "unhide" -> unhideTitle(player, data.size() > 1 ? data.get(1) : selectedTitleIds.getOrDefault(player.getUniqueId(), ""), true);
+            case "set_display" -> selectDisplayTitle(player, data.size() > 1 ? data.get(1) : selectedTitleIds.getOrDefault(player.getUniqueId(), ""));
             case "refresh" -> refreshMenu(player);
             default -> refreshMenu(player);
         }
@@ -368,6 +361,9 @@ public class TitleService {
                 PlayerTitleState updatedState = state.unequipGroup(normalizedGroupId, now).sanitize(now);
                 storeState(player.getUniqueId(), updatedState);
                 queueWrite("delete-equipped:group", () -> repository.deleteEquippedGroup(player.getUniqueId(), normalizedGroupId));
+                if (!state.displayTitleId().equals(updatedState.displayTitleId()) && updatedState.displayTitleId().isBlank()) {
+                    queueWrite("delete-display-title:unequip-group", () -> repository.deleteDisplayTitle(player.getUniqueId()));
+                }
                 syncExternalAttributes(player, updatedState);
                 refreshMenu(player);
                 requestGlobalTabRefresh("title-unequip");
@@ -395,6 +391,9 @@ public class TitleService {
                 PlayerTitleState updatedState = state.unequipAll(now).sanitize(now);
                 storeState(player.getUniqueId(), updatedState);
                 queueWrite("delete-equipped:all", () -> repository.deleteAllEquippedGroups(player.getUniqueId()));
+                if (!state.displayTitleId().isBlank()) {
+                    queueWrite("delete-display-title:unequip-all", () -> repository.deleteDisplayTitle(player.getUniqueId()));
+                }
                 syncExternalAttributes(player, updatedState);
                 refreshMenu(player);
                 requestGlobalTabRefresh("title-unequip-all");
@@ -596,11 +595,39 @@ public class TitleService {
                 if (definition == null) {
                     return;
                 }
-                if (!state.hasOwnedTitle(normalizedTitleId)) {
-                    return;
-                }
                 selectedTitleIds.put(player.getUniqueId(), normalizedTitleId);
                 refreshMenu(player);
+            },
+            exception -> { }
+        );
+    }
+
+    private void selectDisplayTitle(Player player, String titleId) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        String normalizedTitleId = normalizeTitleId(titleId);
+        withLoadedState(
+            player,
+            state -> {
+                TitleDefinition definition = requireTitle(normalizedTitleId);
+                if (definition == null) {
+                    return;
+                }
+                if (!state.equippedTitleIdsByGroup().containsValue(normalizedTitleId)) {
+                    player.sendMessage(prefix() + ChatColor.RED + "只能将已装备的称号设为主展示称号。");
+                    return;
+                }
+                Instant now = clock.instant();
+                PlayerTitleState updatedState = state.withDisplayTitle(normalizedTitleId, now).sanitize(now);
+                storeState(player.getUniqueId(), updatedState);
+                queueWrite(
+                    "save-display-title",
+                    () -> repository.saveDisplayTitle(player.getUniqueId(), normalizedTitleId, updatedState.updatedAt())
+                );
+                refreshMenu(player);
+                requestGlobalTabRefresh("title-display-change");
+                player.sendMessage(prefix() + ChatColor.GREEN + "已将 " + definition.displayName() + " 设为主展示称号。");
             },
             exception -> { }
         );
@@ -673,6 +700,16 @@ public class TitleService {
         storeState(playerUuid, sanitizedState);
         if (!state.equippedTitleIdsByGroup().equals(sanitizedState.equippedTitleIdsByGroup())) {
             persistEquippedState(playerUuid, sanitizedState, "sanitize");
+        }
+        if (!state.displayTitleId().equals(sanitizedState.displayTitleId())) {
+            if (sanitizedState.displayTitleId().isBlank()) {
+                queueWrite("delete-display-title:sanitize", () -> repository.deleteDisplayTitle(playerUuid));
+            } else {
+                queueWrite(
+                    "save-display-title:sanitize",
+                    () -> repository.saveDisplayTitle(playerUuid, sanitizedState.displayTitleId(), sanitizedState.updatedAt())
+                );
+            }
         }
         return sanitizedState;
     }
@@ -787,6 +824,11 @@ public class TitleService {
                 repository.deleteAllEquippedGroups(playerUuid);
                 for (var entry : state.equippedTitleIdsByGroup().entrySet()) {
                     repository.saveEquippedTitle(playerUuid, entry.getKey(), entry.getValue(), state.updatedAt());
+                }
+                if (state.displayTitleId().isBlank()) {
+                    repository.deleteDisplayTitle(playerUuid);
+                } else {
+                    repository.saveDisplayTitle(playerUuid, state.displayTitleId(), state.updatedAt());
                 }
             }
         );

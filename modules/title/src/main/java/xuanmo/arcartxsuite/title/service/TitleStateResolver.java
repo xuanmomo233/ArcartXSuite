@@ -23,6 +23,8 @@ public final class TitleStateResolver {
             return new ResolvedTitleState(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), List.of(), List.of(), List.of(), 0, 0, Map.of(), Map.of(), Map.of(), List.of(), null);
         }
 
+        TitleDefinition totalDisplayTitle = resolveTotalDisplayTitle(sanitized, configuration);
+
         LinkedHashMap<String, Double> collectionAttributes = new LinkedHashMap<>();
         List<String> collectionAttributeLines = new ArrayList<>();
         for (PlayerOwnedTitle ownedTitle : sanitized.ownedTitles().values()) {
@@ -92,8 +94,30 @@ public final class TitleStateResolver {
             setActiveMap,
             setBonusAttributes,
             TitleTextFormats.toSourceLines(setBonusAttributes, setBonusAttributeLines),
-            null
+            totalDisplayTitle
         );
+    }
+
+    private static TitleDefinition resolveTotalDisplayTitle(PlayerTitleState state, TitleModuleConfiguration configuration) {
+        String displayTitleId = state.displayTitleId();
+        if (!displayTitleId.isBlank()) {
+            TitleDefinition explicit = configuration.title(displayTitleId);
+            if (explicit != null && state.equippedTitleIdsByGroup().containsValue(displayTitleId)) {
+                return explicit;
+            }
+        }
+        List<String> groupOrder = configuration.displayTitleGroupOrder();
+        for (String groupId : groupOrder) {
+            String titleId = state.equippedTitleIdsByGroup().get(groupId);
+            if (titleId == null) {
+                continue;
+            }
+            TitleDefinition title = configuration.title(titleId);
+            if (title != null) {
+                return title;
+            }
+        }
+        return null;
     }
 
     private static void mergeAttributes(Map<String, Double> target, Map<String, Double> source) {

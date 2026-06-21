@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.StringJoiner;
 import java.util.function.Function;
 import xuanmo.arcartxsuite.title.config.TitleDefinition;
 import xuanmo.arcartxsuite.title.config.TitleDisplayConfiguration;
@@ -30,6 +29,9 @@ public final class TitleMenuPacketFactory {
     ) {
         TitleDefinition selectedDefinition = configuration.title(selectedTitleId);
         PlayerOwnedTitle selectedOwnedTitle = selectedTitleId.isBlank() ? null : state.ownedTitles().get(selectedTitleId);
+        boolean selectedIsEquipped = selectedDefinition != null
+            && selectedDefinition.id().equals(resolvedState.equippedTitleIdsByGroup().get(selectedDefinition.groupId()));
+        boolean selectedCanEquip = selectedOwnedTitle != null && !selectedIsEquipped;
 
         Map<String, Object> titles = new LinkedHashMap<>();
         for (TitleDefinition definition : configuration.orderedTitles()) {
@@ -81,10 +83,13 @@ public final class TitleMenuPacketFactory {
         packet.put("titles", titles);
         packet.put("groups", buildGroupPacket(configuration));
         packet.put("qualities", buildQualityPacket(configuration));
+        packet.put("filter_modes", buildFilterModesPacket());
         packet.put("selected_id", selectedTitleId);
         packet.put("equipped_summary", equippedSummary(configuration, resolvedState));
         packet.put("owned_count", resolvedState.ownedCount());
         packet.put("hidden_count", resolvedState.hiddenCount());
+        packet.put("equipped_count", resolvedState.equippedTitleIdsByGroup().size());
+        packet.put("equipped_by_group", buildEquippedByGroupPacket(configuration, resolvedState));
         packet.put("selected_display_name", selectedDefinition == null ? "" : selectedDefinition.displayName());
         packet.put("selected_kind", selectedDefinition == null ? "" : selectedDefinition.kind().configKey());
         packet.put("selected_chat_prefix", selectedDefinition == null ? "" : selectedDefinition.chatPrefix());
@@ -115,6 +120,8 @@ public final class TitleMenuPacketFactory {
         packet.put("selected_owned", selectedOwnedTitle != null);
         packet.put("selected_hidden", selectedOwnedTitle != null && selectedOwnedTitle.hidden());
         packet.put("selected_remaining_text", selectedOwnedTitle == null ? "未拥有" : TitleTextFormats.formatRemaining(selectedOwnedTitle, now));
+        packet.put("selected_can_equip", selectedCanEquip);
+        packet.put("selected_is_equipped", selectedIsEquipped);
         List<String> selectedDisplayLines = selectedDefinition == null
             ? List.of()
             : TitleTextFormats.formatAttributesAsList(
@@ -155,13 +162,17 @@ public final class TitleMenuPacketFactory {
         packet.put("total_attributes_text", colorize(totalLines, colorPrefix, emptyPlaceholder));
         packet.put("set_bonus_attributes_text", colorize(setBonusLines, colorPrefix, emptyPlaceholder));
         packet.put("sets", buildSetPacket(configuration, resolvedState, state));
-        packet.put("display_title_name", buildDisplayTitle(configuration, resolvedState, TitleDefinition::displayName));
-        packet.put("display_title_chat_prefix", buildDisplayTitle(configuration, resolvedState, TitleDefinition::chatPrefix));
-        packet.put("display_title_chat_suffix", buildDisplayTitle(configuration, resolvedState, TitleDefinition::chatSuffix));
-        packet.put("display_title_tab_prefix", buildDisplayTitle(configuration, resolvedState, TitleDefinition::tabPrefix));
-        packet.put("display_title_tab_suffix", buildDisplayTitle(configuration, resolvedState, TitleDefinition::tabSuffix));
+        packet.put("display_title_id", resolvedState.totalDisplayTitle() == null ? "" : resolvedState.totalDisplayTitle().id());
+        packet.put("display_title_name", displayTitleField(configuration, resolvedState, TitleDefinition::displayName));
+        packet.put("display_title_chat_prefix", displayTitleField(configuration, resolvedState, TitleDefinition::chatPrefix));
+        packet.put("display_title_chat_suffix", displayTitleField(configuration, resolvedState, TitleDefinition::chatSuffix));
+        packet.put("display_title_tab_prefix", displayTitleField(configuration, resolvedState, TitleDefinition::tabPrefix));
+        packet.put("display_title_tab_suffix", displayTitleField(configuration, resolvedState, TitleDefinition::tabSuffix));
+        packet.put("selected_display_title_id", state.displayTitleId());
+        packet.put("selected_is_display_title", selectedDefinition != null && selectedDefinition.id().equals(state.displayTitleId()));
         return packet;
     }
+
 
     private static final java.util.regex.Pattern LEADING_COLOR_CODE = java.util.regex.Pattern.compile(
         "^(?:[&§][0-9a-fk-orA-FK-OR])+.*"
@@ -184,25 +195,17 @@ public final class TitleMenuPacketFactory {
         return List.copyOf(result);
     }
 
-    private static String buildDisplayTitle(
+    private static String displayTitleField(
         TitleModuleConfiguration configuration,
         ResolvedTitleState resolvedState,
         Function<TitleDefinition, String> fieldExtractor
     ) {
-        TitleDisplayConfiguration displayConfig = configuration.displayTitle();
-        List<String> groupOrder = configuration.displayTitleGroupOrder();
-        StringJoiner joiner = new StringJoiner(displayConfig.separator());
-        for (String groupId : groupOrder) {
-            TitleDefinition title = resolvedState.equippedTitlesByGroup().get(groupId);
-            if (title == null) {
-                continue;
-            }
-            String value = fieldExtractor.apply(title);
-            if (value != null && !value.isEmpty()) {
-                joiner.add(value);
-            }
+        TitleDefinition displayTitle = resolvedState.totalDisplayTitle();
+        if (displayTitle == null) {
+            return configuration.displayTitle().emptyText();
         }
-        return joiner.length() == 0 ? displayConfig.emptyText() : joiner.toString();
+        String value = fieldExtractor.apply(displayTitle);
+        return value == null ? "" : value;
     }
 
     private static Map<String, Object> buildGroupPacket(TitleModuleConfiguration configuration) {
@@ -235,6 +238,34 @@ public final class TitleMenuPacketFactory {
             );
         }
         return qualities;
+    }
+
+    private static Map<String, Object> buildFilterModesPacket() {
+        Map<String, Object> modes = new LinkedHashMap<>();
+        modes.put("all", Map.of("id", "all", "name", "全部"));
+        modes.put("owned", Map.of("id", "owned", "name", "已拥有"));
+        modes.put("hidden", Map.of("id", "hidden", "name", "已隐藏"));
+        return modes;
+    }
+
+    private static Map<String, Object> buildEquippedByGroupPacket(
+        TitleModuleConfiguration configuration,
+        ResolvedTitleState resolvedState
+    ) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (TitleGroupDefinition groupDefinition : configuration.groups().values()) {
+            String groupId = groupDefinition.id();
+            TitleDefinition title = resolvedState.equippedTitlesByGroup().get(groupId);
+            TitleQualityDefinition quality = title == null ? null : configuration.quality(title.qualityId());
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("group_id", groupId);
+            entry.put("group_name", groupDefinition.name());
+            entry.put("title_id", title == null ? "" : title.id());
+            entry.put("display_name", title == null ? "" : title.displayName());
+            entry.put("quality_name", quality == null ? (title == null ? "" : title.qualityId()) : quality.name());
+            result.put(groupId, entry);
+        }
+        return result;
     }
 
     private static String equippedSummary(TitleModuleConfiguration configuration, ResolvedTitleState resolvedState) {

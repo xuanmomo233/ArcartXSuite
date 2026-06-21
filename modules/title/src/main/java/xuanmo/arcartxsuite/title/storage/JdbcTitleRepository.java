@@ -36,7 +36,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of("title_player_titles", "title_player_equipped_groups");
+        return List.of("title_player_titles", "title_player_equipped_groups", "title_player_display_title");
     }
 
     @Override
@@ -90,7 +90,24 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
             }
         }
 
-        return new PlayerTitleState(playerUuid, equippedTitleIdsByGroup, ownedTitles, updatedAt);
+        String displayTitleId = "";
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT title_id, updated_at FROM title_player_display_title WHERE player_uuid = ?"
+             )) {
+            statement.setString(1, playerUuid.toString());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    displayTitleId = nullToEmpty(resultSet.getString("title_id"));
+                    Instant displayUpdatedAt = readInstant(resultSet, "updated_at");
+                    if (displayUpdatedAt.isAfter(updatedAt)) {
+                        updatedAt = displayUpdatedAt;
+                    }
+                }
+            }
+        }
+
+        return new PlayerTitleState(playerUuid, equippedTitleIdsByGroup, ownedTitles, displayTitleId, updatedAt);
     }
 
     @Override
@@ -180,6 +197,31 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
     }
 
     @Override
+    public void saveDisplayTitle(UUID playerUuid, String titleId, Instant updatedAt) throws SQLException {
+        if (titleId == null || titleId.isBlank()) {
+            return;
+        }
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement(displayTitleUpsertSql())) {
+            statement.setString(1, playerUuid.toString());
+            statement.setString(2, titleId);
+            statement.setLong(3, updatedAt.toEpochMilli());
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
+    public void deleteDisplayTitle(UUID playerUuid) throws SQLException {
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "DELETE FROM title_player_display_title WHERE player_uuid = ?"
+             )) {
+            statement.setString(1, playerUuid.toString());
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
     public int deleteExpiredTitles(Instant now) throws SQLException {
         try (Connection connection = connection();
              PreparedStatement statement = connection.prepareStatement(
@@ -220,6 +262,14 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
                         PRIMARY KEY (player_uuid, group_id)
                     );
                     """);
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS title_player_display_title (
+                        player_uuid TEXT NOT NULL,
+                        title_id TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        PRIMARY KEY (player_uuid)
+                    );
+                    """);
                 statement.execute("CREATE INDEX IF NOT EXISTS idx_title_player_titles_expires_at ON title_player_titles(expires_at);");
             } else {
                 statement.execute("""
@@ -245,8 +295,35 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
                         PRIMARY KEY (player_uuid, group_id)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                     """);
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS title_player_display_title (
+                        player_uuid VARCHAR(36) NOT NULL,
+                        title_id VARCHAR(128) NOT NULL,
+                        updated_at BIGINT NOT NULL,
+                        PRIMARY KEY (player_uuid)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                    """);
             }
         }
+    }
+
+    private String displayTitleUpsertSql() {
+        if (configuration.dialect() == TitlePersistenceDialect.SQLITE) {
+            return """
+                INSERT INTO title_player_display_title (player_uuid, title_id, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(player_uuid) DO UPDATE SET
+                    title_id = excluded.title_id,
+                    updated_at = excluded.updated_at
+                """;
+        }
+        return """
+            INSERT INTO title_player_display_title (player_uuid, title_id, updated_at)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                title_id = VALUES(title_id),
+                updated_at = VALUES(updated_at)
+            """;
     }
 
     private String equippedUpsertSql() {
