@@ -121,6 +121,16 @@ abstract class StringEncryptTask : DefaultTask() {
     private fun encryptStrings(bytecode: ByteArray, entryName: String, threshold: Int): EncryptResult {
         val className = entryName.removeSuffix(".class")
         val xorKey = deriveKey(className)
+
+        // 前置检查：如果类中已有 $s 解密方法，说明已被加密过，跳过
+        // 这通常发生在某个类被意外打包进多个 JAR 且多次经过字符串加密
+        val checker = DecryptorExistenceChecker()
+        ClassReader(bytecode).accept(checker, ClassReader.SKIP_FRAMES)
+        if (checker.hasDecryptor) {
+            logger.debug("[AXS-Protect] 跳过已加密类: $entryName")
+            return EncryptResult(bytecode, 0)
+        }
+
         val collector = StringCollectorVisitor(threshold)
 
         // 第一遍：收集需要加密的字符串
@@ -164,6 +174,22 @@ abstract class StringEncryptTask : DefaultTask() {
     }
 
     data class EncryptResult(val bytecode: ByteArray, val modifiedCount: Int)
+
+    // ─── 前置检查：类中是否已有 $s 解密方法 ─────────────────────
+
+    private class DecryptorExistenceChecker : ClassVisitor(Opcodes.ASM9) {
+        var hasDecryptor = false
+
+        override fun visitMethod(
+            access: Int, name: String?, descriptor: String?,
+            signature: String?, exceptions: Array<out String>?
+        ): MethodVisitor? {
+            if (name == "\$s" && descriptor == "(Ljava/lang/String;)Ljava/lang/String;") {
+                hasDecryptor = true
+            }
+            return null
+        }
+    }
 
     // ─── 第一遍：收集字符串 ──────────────────────────────────
 
