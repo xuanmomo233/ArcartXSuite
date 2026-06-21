@@ -46,7 +46,7 @@ public final class CloudModuleService {
     private final ModuleRegistry registry;
     private final String apiBaseUrl;
     private final String qq;
-    private final String password;
+    private final String apiKey;
     private final String serverName;
 
     private volatile String serverCode;
@@ -76,27 +76,7 @@ public final class CloudModuleService {
         org.bukkit.configuration.file.FileConfiguration config = plugin.getConfig();
         this.apiBaseUrl = API_BASE_URL;
         this.qq = config.getString("cloud.qq", "").trim();
-        String rawPassword = config.getString("cloud.password", "");
-        // 如果密码是明文（不含加密前缀），自动加密并回写
-        if (!rawPassword.isEmpty() && !rawPassword.startsWith("ENC:")) {
-            String encrypted = encryptPassword(rawPassword);
-            config.set("cloud.password", encrypted);
-            plugin.saveConfig();
-            this.password = rawPassword; // 首次启动直接使用明文
-        } else if (rawPassword.startsWith("ENC:")) {
-            this.password = decryptPassword(rawPassword);
-            // 如果旧 fingerprint 成功解密（非空且 rawPassword 未变），重新用稳定指纹加密回写
-            if (!this.password.isEmpty()) {
-                String reEncrypted = encryptPassword(this.password);
-                if (!reEncrypted.equals(rawPassword)) {
-                    config.set("cloud.password", reEncrypted);
-                    plugin.saveConfig();
-                    System.out.println("[Cloud] 密码加密已迁移到稳定指纹算法");
-                }
-            }
-        } else {
-            this.password = rawPassword;
-        }
+        this.apiKey = config.getString("cloud.apiKey", "").trim();
         this.serverName = config.getString("cloud.server-name", plugin.getServer().getName());
         this.serverCode = config.getString("cloud.server-code", "").trim();
         this.keyPair = generateKeyPair();
@@ -112,17 +92,17 @@ public final class CloudModuleService {
     // -- 服务器首次绑定 ---------------------------------------
 
     /**
-     * 用 QQ+密码向云端换取服务器码。成功后写回 config.yml 的 cloud.server-code。
+     * 用 QQ+apiKey 向云端换取服务器码。成功后写回 config.yml 的 cloud.server-code。
      */
     public CompletableFuture<Boolean> bindServer() {
-        if (qq.isEmpty() || password.isEmpty()) {
-            plugin.consoleWarn("[Cloud] 未配置 cloud.qq / cloud.password，无法绑定服务器。");
+        if (qq.isEmpty() || apiKey.isEmpty()) {
+            plugin.consoleWarn("[Cloud] 未配置 cloud.qq / cloud.apiKey，无法绑定服务器。");
             return CompletableFuture.completedFuture(false);
         }
         String fingerprint = generateFingerprint();
         String payload = "{"
             + "\"qq\":\"" + escapeJson(qq) + "\","
-            + "\"password\":\"" + escapeJson(password) + "\","
+            + "\"apiKey\":\"" + escapeJson(apiKey) + "\","
             + "\"pubkey\":\"" + serverPublicKeyB64 + "\","
             + "\"fingerprintHash\":\"" + sha256(fingerprint) + "\","
             + "\"name\":\"" + escapeJson(serverName) + "\""
@@ -140,6 +120,7 @@ public final class CloudModuleService {
                     String body = resp.body();
                     String code = extractJsonField(body, "serverCode");
                     String token = extractJsonField(body, "token");
+                    String responseApiKey = extractJsonField(body, "apiKey");
                     if (code != null && !code.isEmpty()) {
                         this.serverCode = code;
                         this.allowedModules = extractStringArray(body, "allowedModules");
@@ -147,9 +128,12 @@ public final class CloudModuleService {
                             this.moduleToken = token;
                             this.tokenExpiry = System.currentTimeMillis() + 23 * 3600 * 1000;
                         }
-                        // 回写 server-code 到配置（主线程保存）
+                        // 回写 server-code 和 apiKey 到配置（主线程保存）
                         plugin.getServer().getScheduler().runTask(plugin, () -> {
                             plugin.getConfig().set("cloud.server-code", code);
+                            if (responseApiKey != null && !responseApiKey.isEmpty()) {
+                                plugin.getConfig().set("cloud.apiKey", responseApiKey);
+                            }
                             plugin.saveConfig();
                         });
                         plugin.consoleInfo("[Cloud] 服务器绑定成功，服务器码: " + code);
@@ -178,9 +162,9 @@ public final class CloudModuleService {
         }
 
         long timestamp = System.currentTimeMillis();
-        String signature = sign(timestamp + serverCode);
+        String signature = sign("POST\n/v1/servers/refresh\n" + timestamp + "\n" + serverCode);
         String refreshPayload = "{"
-            + "\"password\":\"" + escapeJson(password) + "\""
+            + "\"apiKey\":\"" + escapeJson(apiKey) + "\""
             + "}";
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(apiBaseUrl + "/v1/servers/refresh"))
@@ -219,7 +203,7 @@ public final class CloudModuleService {
     // -- 同步并加载云端模块 --------------------------------------
 
     public CompletableFuture<Void> syncModules() {
-        // 1. 未绑定则先用 QQ+密码绑定服务器
+        // 1. 未绑定则先用 QQ+apiKey 绑定服务器
         plugin.consoleInfo("[Cloud] 开始云端模块同步...");
         CompletableFuture<Boolean> ready = hasServerCode()
             ? CompletableFuture.completedFuture(true)
@@ -227,7 +211,7 @@ public final class CloudModuleService {
 
         return ready.thenCompose(bound -> {
             if (!bound) {
-                plugin.consoleWarn("[Cloud] 未能绑定服务器，跳过云端模块同步。请检查 config.yml 中 cloud.qq 和 cloud.password 是否正确。");
+                plugin.consoleWarn("[Cloud] 未能绑定服务器，跳过云端模块同步。请检查 config.yml 中 cloud.qq 和 cloud.apiKey 是否正确。");
                 return CompletableFuture.<Void>completedFuture(null);
             }
             plugin.consoleInfo("[Cloud] 服务器已绑定: " + serverCode);
@@ -664,17 +648,6 @@ public final class CloudModuleService {
         }
     }
 
-    private static String generateFingerprintLegacy() {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            md.update(java.net.InetAddress.getLocalHost().getHostName().getBytes(StandardCharsets.UTF_8));
-            md.update(java.lang.management.ManagementFactory.getRuntimeMXBean().getName().getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(md.digest());
-        } catch (Exception e) {
-            return "unknown";
-        }
-    }
-
     private static String sha256(String input) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -757,67 +730,6 @@ public final class CloudModuleService {
             }
         }
         return result;
-    }
-
-    // -- 密码加密（config.yml 中 cloud.password 自动加密存储） --
-
-    private static String encryptPassword(String plain) {
-        try {
-            String fingerprint = generateFingerprint();
-            byte[] key = sha256Raw(fingerprint + "AXS_CLOUD_PWD_SALT_v1");
-            byte[] iv = new byte[12];
-            java.security.SecureRandom.getInstanceStrong().nextBytes(iv);
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(128, iv));
-            byte[] encrypted = cipher.doFinal(plain.getBytes(StandardCharsets.UTF_8));
-            byte[] combined = new byte[iv.length + encrypted.length];
-            System.arraycopy(iv, 0, combined, 0, iv.length);
-            System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
-            return "ENC:" + Base64.getEncoder().encodeToString(combined);
-        } catch (Exception e) {
-            System.err.println("[Cloud] 密码加密失败，回退到明文存储: " + e.getMessage());
-            return plain;
-        }
-    }
-
-    private static String decryptPassword(String encrypted) {
-        if (encrypted == null || encrypted.isEmpty()) return "";
-        if (!encrypted.startsWith("ENC:")) return encrypted;
-        String result = decryptWithFingerprint(encrypted, generateFingerprint());
-        if (result != null) return result;
-        // 回退：旧 fingerprint（含 PID，不稳定）
-        result = decryptWithFingerprint(encrypted, generateFingerprintLegacy());
-        if (result != null) {
-            System.out.println("[Cloud] 使用旧指纹成功解密密码，建议检查 config.yml 是否已迁移");
-            return result;
-        }
-        System.err.println("[Cloud] 密码解密失败: 指纹不匹配或密文损坏");
-        return "";
-    }
-
-    private static String decryptWithFingerprint(String encrypted, String fingerprint) {
-        try {
-            byte[] key = sha256Raw(fingerprint + "AXS_CLOUD_PWD_SALT_v1");
-            byte[] data = Base64.getDecoder().decode(encrypted.substring(4));
-            if (data.length < 28) return null;
-            byte[] iv = java.util.Arrays.copyOfRange(data, 0, 12);
-            byte[] ctAndTag = java.util.Arrays.copyOfRange(data, 12, data.length);
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(128, iv));
-            byte[] decrypted = cipher.doFinal(ctAndTag);
-            return new String(decrypted, StandardCharsets.UTF_8);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private static byte[] sha256Raw(String input) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            return md.digest(input.getBytes(StandardCharsets.UTF_8));
-        } catch (Exception e) {
-            return new byte[32];
-        }
     }
 
     // -- 诊断辅助方法 ----------------------------------------------
