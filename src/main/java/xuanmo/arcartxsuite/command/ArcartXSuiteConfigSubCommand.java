@@ -112,7 +112,7 @@ public final class ArcartXSuiteConfigSubCommand {
             sender.sendMessage(PREFIX + ChatColor.RED + "诊断引擎未初始化。");
             return true;
         }
-        plugin.runConfigDiagnosis(args.length > 0 ? args[0] : null);
+        plugin.runConfigDiagnosis(args.length > 0 ? args[0] : null, true);
         sender.sendMessage(PREFIX + ChatColor.GREEN + "诊断已完成。报告: "
             + plugin.getConfigDiagnosticEngine().diagnosisRoot().getAbsolutePath());
         return handleStatus(sender);
@@ -170,7 +170,7 @@ public final class ArcartXSuiteConfigSubCommand {
         sender.sendMessage(PREFIX + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
         if (result.success()) {
             // 应用后重跑一遍诊断刷新结果
-            plugin.runConfigDiagnosis(args[0]);
+            plugin.runConfigDiagnosis(args[0], true);
         }
         return true;
     }
@@ -195,7 +195,7 @@ public final class ArcartXSuiteConfigSubCommand {
         var result = plugin.getConfigDiagnosticEngine().rollback(opt.get().spec(), timestamp);
         sender.sendMessage(PREFIX + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
         if (result.success()) {
-            plugin.runConfigDiagnosis(args[0]);
+            plugin.runConfigDiagnosis(args[0], true);
         }
         return true;
     }

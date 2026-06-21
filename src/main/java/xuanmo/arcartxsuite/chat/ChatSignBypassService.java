@@ -7,6 +7,8 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.account.AccountType;
+import xuanmo.arcartxsuite.api.account.AccountTypeService;
 import xuanmo.arcartxsuite.util.ReflectionCache;
 
 import java.lang.reflect.Field;
@@ -36,14 +38,20 @@ public final class ChatSignBypassService implements Listener {
     private final JavaPlugin plugin;
     private final Logger logger;
     private final boolean enabled;
+    private final boolean onlyForNonPremium;
+    private final AccountTypeService accountTypeService;
     private final ReflectionCache reflectionCache;
     private boolean paperDetected;
     private volatile boolean reflectionSuccessLogged;
+    private volatile boolean skipLogged;
 
-    public ChatSignBypassService(JavaPlugin plugin, boolean enabled) {
+    public ChatSignBypassService(JavaPlugin plugin, boolean enabled,
+                                 boolean onlyForNonPremium, AccountTypeService accountTypeService) {
         this.plugin = plugin;
         this.logger = plugin.getLogger();
         this.enabled = enabled;
+        this.onlyForNonPremium = onlyForNonPremium;
+        this.accountTypeService = accountTypeService;
         this.reflectionCache = new ReflectionCache(plugin.getClass().getClassLoader());
     }
 
@@ -93,6 +101,20 @@ public final class ChatSignBypassService implements Listener {
         if (!paperDetected) {
             return;
         }
+
+        // 智能模式：利用 AccountTypeService 仅对非正版玩家绕过签名验证
+        if (onlyForNonPremium && accountTypeService != null) {
+            AccountType type = accountTypeService.resolve(player.getUniqueId(), player.getName());
+            if (type == AccountType.MICROSOFT) {
+                if (!skipLogged) {
+                    skipLogged = true;
+                    logger.fine("聊天签名绕过：跳过正版玩家 " + player.getName()
+                        + "（保留 Mojang 签名验证，后续同类日志将抑制）。");
+                }
+                return;
+            }
+        }
+
         try {
             // CraftPlayer -> getHandle() -> ServerPlayer (NMS)
             Method getHandle = reflectionCache.method(player.getClass(), "getHandle");

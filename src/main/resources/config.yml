@@ -133,6 +133,10 @@ tacz-compat:
 # 若服务器仅使用微软正版账号（无 LittleSkin / 离线），可关闭此选项。
 chat-sign-bypass:
   enabled: true
+  # 智能模式：仅对非正版玩家（LittleSkin / 离线）绕过签名验证。
+  # 微软正版玩家保留 Mojang 签名验证，确保其聊天消息仍能被其他正版客户端正确验证。
+  # 若设为 false，则对所有玩家统一绕过（旧行为，纯离线服可用）。
+  only-for-non-premium: true
 
 # ========== 账号识别（统一服务）==========
 # 微软正版 / LittleSkin / 离线账号判定，由本体统一提供，供 loginview、qqbot、eventpacket 共享。

@@ -133,11 +133,6 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         clientEventLifecycleManager = new ClientEventLifecycleManager(this, () -> moduleRegistry);
         clientEventLifecycleManager.start();
 
-        // 7. 聊天签名绕过（Paper 1.21+ 混合登录兼容）
-        boolean chatSignBypassEnabled = getConfig().getBoolean("chat-sign-bypass.enabled", true);
-        chatSignBypassService = new ChatSignBypassService(this, chatSignBypassEnabled);
-        chatSignBypassService.initialize();
-
         // 7.5 统一 PAPI 解析器
         placeholderResolver = new PlaceholderResolverImpl();
 
@@ -172,6 +167,16 @@ public class ArcartXSuitePlugin extends JavaPlugin {
             consoleWarn("失败模块: " + String.join(", ", summary.failedModules()));
         }
 
+        // 7. 聊天签名绕过（Paper 1.21+ 混合登录兼容）
+        // 放在 ModuleRegistry 之后，确保 AccountTypeService 已就绪，实现按玩家类型精准 bypass
+        boolean chatSignBypassEnabled = getConfig().getBoolean("chat-sign-bypass.enabled", true);
+        boolean chatSignBypassOnlyNonPremium = getConfig().getBoolean("chat-sign-bypass.only-for-non-premium", true);
+        chatSignBypassService = new ChatSignBypassService(
+            this, chatSignBypassEnabled, chatSignBypassOnlyNonPremium,
+            moduleRegistry.accountTypeService()
+        );
+        chatSignBypassService.initialize();
+
         // 9. 云端模块同步（异步，不阻塞启动；只要配置了 qq+password 就自动连接）
         cloudModuleService = new CloudModuleService(this, moduleRegistry);
         cloudModuleService.syncModules().thenRun(() -> {
@@ -189,7 +194,7 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         }
 
         // 8. 跑一轮全量诊断（只报警，不写盘）
-        runConfigDiagnosis(null);
+        runConfigDiagnosis(null, false);
         printConfigDiagnosisSummary();
 
         // 10. 异步版本检查
@@ -271,7 +276,7 @@ public class ArcartXSuitePlugin extends JavaPlugin {
 
         // 启动时清理过期诊断/备份目录
         try {
-            new RetentionCleaner(getLogger(), Duration.ofDays(30), Duration.ofDays(60))
+            new RetentionCleaner(getLogger(), Duration.ofDays(7), Duration.ofDays(60), 5)
                 .cleanup(getDataFolder());
         } catch (RuntimeException ignored) {
         }
@@ -288,16 +293,11 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         }
         for (ModuleConfigSpec spec : specs) {
             moduleConfigSpecs.put(spec.ownerId(), new ModuleSpecRegistration(spec, moduleClassLoader));
-            // 立即跑诊断（以便报告在 onEnable 之前可见）
-            ConfigDiagnosisReport report = configDiagnosticEngine.diagnose(spec, moduleClassLoader, true);
+            // 立即跑诊断（以便报告在 onEnable 之前可见，启动阶段不写盘）
+            ConfigDiagnosisReport report = configDiagnosticEngine.diagnose(spec, moduleClassLoader, false);
             configDiagnosisStore.put(spec, report);
         }
-        // 重写 summary（合并全量）
-        List<ConfigDiagnosisReport> all = new ArrayList<>();
-        for (var entry : configDiagnosisStore.all()) {
-            all.add(entry.report());
-        }
-        configDiagnosticEngine.writeSummary(all);
+        // 启动阶段不写盘，诊断结果仅保留在内存中供控制台摘要显示
     }
 
     /** 除名外部模块的 spec（模块卸载时）。 */
@@ -307,7 +307,7 @@ public class ArcartXSuitePlugin extends JavaPlugin {
     }
 
     /** 对全量或单个 ownerId 跑一次诊断。 */
-    public void runConfigDiagnosis(String ownerId) {
+    public void runConfigDiagnosis(String ownerId, boolean writeArtifacts) {
         if (configDiagnosticEngine == null) {
             return;
         }
@@ -318,7 +318,7 @@ public class ArcartXSuitePlugin extends JavaPlugin {
                 continue;
             }
             ConfigDiagnosisReport report = configDiagnosticEngine.diagnose(
-                spec, getClass().getClassLoader(), true);
+                spec, getClass().getClassLoader(), writeArtifacts);
             configDiagnosisStore.put(spec, report);
             reports.add(report);
         }
@@ -328,9 +328,12 @@ public class ArcartXSuitePlugin extends JavaPlugin {
                 continue;
             }
             ConfigDiagnosisReport report = configDiagnosticEngine.diagnose(
-                reg.spec(), reg.classLoader(), true);
+                reg.spec(), reg.classLoader(), writeArtifacts);
             configDiagnosisStore.put(reg.spec(), report);
             reports.add(report);
+        }
+        if (!writeArtifacts) {
+            return;
         }
         if (ownerId == null) {
             configDiagnosticEngine.writeSummary(reports);
@@ -356,9 +359,8 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         }
         consoleInfo("配置诊断: " + configDiagnosisStore.all().size() + " 个目标, "
             + err + " ERROR / " + warn + " WARN / " + info + " INFO");
-        consoleInfo("报告: " + configDiagnosticEngine.diagnosisRoot().getAbsolutePath());
         if (info + warn + err > 0) {
-            consoleInfo("使用 /arcartxsuite config preview <ownerId> 查看详情，apply 应用修复。");
+            consoleInfo(ChatColor.YELLOW + "检测到配置问题。运行 /axs config diagnose 生成详细报告，随后用 preview / apply 查看和修复。");
         }
     }
 
