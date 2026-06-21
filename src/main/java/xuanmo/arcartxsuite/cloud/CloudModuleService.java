@@ -94,6 +94,14 @@ public final class CloudModuleService {
         return serverCode != null && !serverCode.isEmpty();
     }
 
+    private void clearServerCode() {
+        this.serverCode = null;
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            plugin.getConfig().set("cloud.server-code", "");
+            plugin.saveConfig();
+        });
+    }
+
     // -- 服务器首次绑定 ---------------------------------------
 
     /**
@@ -159,6 +167,10 @@ public final class CloudModuleService {
     // -- 申请/刷新模块令牌 --------------------------------------
 
     public CompletableFuture<Boolean> refreshToken() {
+        return refreshToken(false);
+    }
+
+    private CompletableFuture<Boolean> refreshToken(boolean isRebind) {
         if (moduleToken != null && System.currentTimeMillis() < tokenExpiry - 300_000) {
             return CompletableFuture.completedFuture(true);
         }
@@ -185,7 +197,7 @@ public final class CloudModuleService {
             .build();
 
         return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-            .thenApply(resp -> {
+            .thenCompose(resp -> {
                 if (resp.statusCode() == 200) {
                     String body = resp.body();
                     plugin.consoleInfo("[Cloud] refresh 响应: " + body);
@@ -198,11 +210,26 @@ public final class CloudModuleService {
                         plugin.consoleInfo("[Cloud] 模块令牌已刷新，授权模块: " + allowedModules.size() + " 列表: " + allowedModules);
                         syncModuleChanges(oldAllowed);
                         startHeartbeat();
-                        return true;
+                        return CompletableFuture.completedFuture(true);
                     }
                 }
-                plugin.consoleWarn("[Cloud] 刷新令牌失败: " + resp.statusCode() + " " + resp.body());
-                return false;
+                String body = resp.body();
+                // 签名验证失败 → 自动重新绑定（仅一次，防止无限循环）
+                if (resp.statusCode() == 403 && !isRebind
+                    && (body.contains("SIGNATURE_VERIFICATION_ERROR") || body.contains("SIGNATURE_VERIFICATION_FAILED"))) {
+                    plugin.consoleWarn("[Cloud] 签名验证失败，自动重新绑定服务器...");
+                    clearServerCode();
+                    return bindServer().thenCompose(bound -> {
+                        if (bound) {
+                            plugin.consoleInfo("[Cloud] 重新绑定成功，再次刷新令牌...");
+                            return refreshToken(true);
+                        }
+                        plugin.consoleWarn("[Cloud] 自动重新绑定失败，跳过云端模块同步。");
+                        return CompletableFuture.completedFuture(false);
+                    });
+                }
+                plugin.consoleWarn("[Cloud] 刷新令牌失败: " + resp.statusCode() + " " + body);
+                return CompletableFuture.completedFuture(false);
             })
             .exceptionally(ex -> {
                 plugin.consoleWarn("[Cloud] 刷新令牌异常: " + ex.getMessage());
