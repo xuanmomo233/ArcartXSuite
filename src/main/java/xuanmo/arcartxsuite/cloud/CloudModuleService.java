@@ -188,13 +188,14 @@ public final class CloudModuleService {
             .thenApply(resp -> {
                 if (resp.statusCode() == 200) {
                     String body = resp.body();
+                    plugin.consoleInfo("[Cloud] refresh 响应: " + body);
                     String token = extractJsonField(body, "token");
                     if (token != null) {
                         this.moduleToken = token;
                         this.tokenExpiry = System.currentTimeMillis() + 23 * 3600 * 1000;
                         List<String> oldAllowed = this.allowedModules;
                         this.allowedModules = extractStringArray(body, "allowedModules");
-                        plugin.consoleInfo("[Cloud] 模块令牌已刷新，授权模块: " + allowedModules.size());
+                        plugin.consoleInfo("[Cloud] 模块令牌已刷新，授权模块: " + allowedModules.size() + " 列表: " + allowedModules);
                         syncModuleChanges(oldAllowed);
                         startHeartbeat();
                         return true;
