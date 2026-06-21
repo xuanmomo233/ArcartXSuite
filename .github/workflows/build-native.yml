@@ -8,8 +8,73 @@ on:
   workflow_dispatch:
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      core_changed: ${{ steps.changes.outputs.core_changed }}
+      native_changed: ${{ steps.changes.outputs.native_changed }}
+      module_changed: ${{ steps.changes.outputs.module_changed }}
+      changed_modules: ${{ steps.changes.outputs.changed_modules }}
+      any_changed: ${{ steps.changes.outputs.any_changed }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed scopes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          # 首次提交或没有 before 时，无法 diff，保守地全量构建
+          if [ -z "$BASE" ]; then
+            echo "core_changed=true" >> $GITHUB_OUTPUT
+            echo "native_changed=true" >> $GITHUB_OUTPUT
+            echo "module_changed=false" >> $GITHUB_OUTPUT
+            echo "changed_modules=[]" >> $GITHUB_OUTPUT
+            echo "any_changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          git diff --name-only "$BASE" HEAD > /tmp/changed_files.txt
+          echo "=== Changed files ==="
+          cat /tmp/changed_files.txt
+
+          # 核心/共享构建变更
+          CORE_CHANGED=false
+          if grep -Eq '^(src/main/|axs-core/|axs-api/|buildSrc/|proguard/|proxy/|gradle\.properties|settings\.gradle\.kts|build\.gradle\.kts|\.github/workflows/)' /tmp/changed_files.txt; then
+            CORE_CHANGED=true
+          fi
+          echo "core_changed=$CORE_CHANGED" >> $GITHUB_OUTPUT
+
+          # native 库变更
+          NATIVE_CHANGED=false
+          if grep -Eq '^native/' /tmp/changed_files.txt; then
+            NATIVE_CHANGED=true
+          fi
+          echo "native_changed=$NATIVE_CHANGED" >> $GITHUB_OUTPUT
+
+          # 模块变更
+          CHANGED_MODULES=$(grep -E '^modules/' /tmp/changed_files.txt | cut -d'/' -f2 | sort -u | jq -R -s -c 'split("\n") | map(select(. != ""))')
+          echo "changed_modules=$CHANGED_MODULES" >> $GITHUB_OUTPUT
+          if [ "$CHANGED_MODULES" != "[]" ]; then
+            echo "module_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "module_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+          if [ "$CORE_CHANGED" = "true" ] || [ "$NATIVE_CHANGED" = "true" ] || [ "$CHANGED_MODULES" != "[]" ]; then
+            echo "any_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "any_changed=false" >> $GITHUB_OUTPUT
+          fi
+
   build-linux:
     runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any_changed == 'true'
     steps:
       - uses: actions/checkout@v5
 
@@ -35,6 +100,8 @@ jobs:
 
   build-windows:
     runs-on: windows-2022
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any_changed == 'true'
     steps:
       - uses: actions/checkout@v5
 
@@ -147,7 +214,8 @@ jobs:
 
   build-gradle:
     runs-on: ubuntu-latest
-    needs: [build-linux, build-windows]
+    needs: [detect-changes, build-linux, build-windows]
+    if: needs.detect-changes.outputs.any_changed == 'true'
     steps:
       - uses: actions/checkout@v5
 
@@ -214,13 +282,25 @@ jobs:
           # 减少 GitHub 缓存服务的写入压力，避免偶发的缓存保存失败
           cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
 
-      - name: Clean and rebuild
+      - name: Clean and rebuild (full)
+        if: needs.detect-changes.outputs.core_changed == 'true' || needs.detect-changes.outputs.native_changed == 'true'
         run: |
           # 强制清理，避免缓存恢复旧的损坏 DLL
           gradle clean
           gradle build --no-build-cache
 
+      - name: Build only changed modules
+        if: needs.detect-changes.outputs.core_changed != 'true' && needs.detect-changes.outputs.native_changed != 'true'
+        run: |
+          CHANGED='${{ needs.detect-changes.outputs.changed_modules }}'
+          echo "Changed modules: $CHANGED"
+          for module in $(echo "$CHANGED" | jq -r '.[]'); do
+            echo "=== Building module: $module ==="
+            gradle :modules:$module:encryptModuleAxb
+          done
+
       - name: Fix DLL in final JAR
+        if: needs.detect-changes.outputs.core_changed == 'true' || needs.detect-changes.outputs.native_changed == 'true'
         run: |
           # Gradle build 过程中 DLL 可能被损坏，直接用 jar 命令替换为正确的版本
           JAR_PATH=$(find "$PWD/axs-core/build/libs" -maxdepth 1 -name "ArcartXSuite-[0-9]*.jar" -not -name "*plain*" -not -name "*unobf*" -not -name "*step*" | sort | tail -1)
@@ -238,6 +318,7 @@ jobs:
           echo "DLL replaced. Verifying..."
 
       - name: Verify DLL in JAR
+        if: needs.detect-changes.outputs.core_changed == 'true' || needs.detect-changes.outputs.native_changed == 'true'
         run: |
           # 查找构建产物中的 JAR（使用绝对路径）
           JAR_PATH=$(find "$PWD/axs-core/build/libs" -maxdepth 1 -name "ArcartXSuite-[0-9]*.jar" -not -name "*plain*" -not -name "*unobf*" -not -name "*step*" | sort | tail -1)
@@ -282,16 +363,42 @@ jobs:
             echo "SKIP: CLOUD_CI_TOKEN not set, skipping module axb upload"
             exit 0
           fi
-          # 构建所有模块的 .axb
-          gradle encryptAllModuleAxb
-          # 上传每个 .axb 到云端
+          CORE_CHANGED=${{ needs.detect-changes.outputs.core_changed }}
+          NATIVE_CHANGED=${{ needs.detect-changes.outputs.native_changed }}
           AXB_DIR="build/ArcartXSuite/module-axb"
-          if [ -d "$AXB_DIR" ]; then
-            for meta in "$AXB_DIR"/*.meta.json; do
-              [ -f "$meta" ] || continue
-              module=$(basename "$meta" .meta.json)
+          if [ "$CORE_CHANGED" = "true" ] || [ "$NATIVE_CHANGED" = "true" ]; then
+            # 全量构建已经生成所有 .axb，上传全部
+            if [ -d "$AXB_DIR" ]; then
+              for meta in "$AXB_DIR"/*.meta.json; do
+                [ -f "$meta" ] || continue
+                module=$(basename "$meta" .meta.json)
+                axb="$AXB_DIR/${module}.axb"
+                [ -f "$axb" ] || continue
+                key=$(jq -r '.moduleKey' "$meta")
+                iv=$(jq -r '.moduleIv' "$meta")
+                version="ci-${{ github.sha }}"
+                echo "Uploading $module ($version) ..."
+                curl -sS -F "axb=@$axb" \
+                  -F "version=$version" \
+                  -F "key=$key" \
+                  -F "setCurrent=true" \
+                  -H "X-CI-Token: $CLOUD_CI_TOKEN" \
+                  "https://cloud.021209.xyz/v1/ci/modules/$module/versions" || echo "WARN: $module upload failed"
+              done
+            else
+              echo "SKIP: No axb files found"
+            fi
+          else
+            # 仅模块变更，只上传改动的模块
+            CHANGED='${{ needs.detect-changes.outputs.changed_modules }}'
+            echo "Uploading changed modules: $CHANGED"
+            for module in $(echo "$CHANGED" | jq -r '.[]'); do
+              meta="$AXB_DIR/${module}.meta.json"
               axb="$AXB_DIR/${module}.axb"
-              [ -f "$axb" ] || continue
+              if [ ! -f "$meta" ] || [ ! -f "$axb" ]; then
+                echo "WARN: axb or meta not found for $module"
+                continue
+              fi
               key=$(jq -r '.moduleKey' "$meta")
               iv=$(jq -r '.moduleIv' "$meta")
               version="ci-${{ github.sha }}"
@@ -303,11 +410,10 @@ jobs:
                 -H "X-CI-Token: $CLOUD_CI_TOKEN" \
                 "https://cloud.021209.xyz/v1/ci/modules/$module/versions" || echo "WARN: $module upload failed"
             done
-          else
-            echo "SKIP: No axb files found"
           fi
 
       - name: Upload JAR artifact
+        if: needs.detect-changes.outputs.core_changed == 'true' || needs.detect-changes.outputs.native_changed == 'true'
         uses: actions/upload-artifact@v5
         with:
           name: axs-jar
@@ -315,8 +421,8 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
-    needs: [build-linux, build-windows, build-gradle]
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    needs: [detect-changes, build-linux, build-windows, build-gradle]
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && (needs.detect-changes.outputs.core_changed == 'true' || needs.detect-changes.outputs.native_changed == 'true')
     permissions:
       contents: write
     steps:

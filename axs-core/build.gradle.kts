@@ -60,6 +60,7 @@ tasks {
     }
 
     val nativeLibDir = rootProject.layout.projectDirectory.dir("src/main/resources/native")
+    val skipNativeCheck = project.findProperty("skipNativeCheck") == "true"
 
     processResources {
         dependsOn(protectYamlResources)
@@ -78,7 +79,7 @@ tasks {
                       cmake -B build
                       cmake --build build --config Release
                     """.trimIndent()
-                if (isCi) {
+                if (isCi && !skipNativeCheck) {
                     throw GradleException(msg)
                 } else {
                     logger.warn("[AXS-Protect] $msg")
