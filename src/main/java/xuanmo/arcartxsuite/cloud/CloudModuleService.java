@@ -1,15 +1,22 @@
 package xuanmo.arcartxsuite.cloud;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.Signature;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.util.zip.GZIPInputStream;
 import javax.crypto.Cipher;
@@ -79,10 +86,8 @@ public final class CloudModuleService {
         this.apiKey = config.getString("cloud.apiKey", "").trim();
         this.serverName = config.getString("cloud.server-name", plugin.getServer().getName());
         this.serverCode = config.getString("cloud.server-code", "").trim();
-        this.keyPair = generateKeyPair();
-        this.serverPublicKeyB64 = keyPair != null
-            ? Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded())
-            : "";
+        this.keyPair = loadOrGenerateKeyPair();
+        this.serverPublicKeyB64 = encodeRawEd25519PublicKey(keyPair);
     }
 
     private boolean hasServerCode() {
@@ -597,6 +602,65 @@ public final class CloudModuleService {
             plugin.consoleWarn("[Cloud] 生成 Ed25519 密钥对失败: " + e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * 从持久化文件加载 Ed25519 密钥对；不存在则生成并保存。
+     * 必须持久化：每次生成新密钥对会导致后端 pubkey 与私钥不匹配。
+     */
+    private KeyPair loadOrGenerateKeyPair() {
+        File keyFile = new File(plugin.getDataFolder(), ".cloud-keypair");
+        if (keyFile.exists()) {
+            try {
+                String[] parts = new String(Files.readAllBytes(keyFile.toPath()), StandardCharsets.UTF_8).split("\n");
+                if (parts.length >= 2) {
+                    byte[] publicEncoded = Base64.getDecoder().decode(parts[0].trim());
+                    byte[] privateEncoded = Base64.getDecoder().decode(parts[1].trim());
+                    KeyFactory kf = KeyFactory.getInstance("Ed25519");
+                    PublicKey publicKey = kf.generatePublic(new X509EncodedKeySpec(publicEncoded));
+                    PrivateKey privateKey = kf.generatePrivate(new PKCS8EncodedKeySpec(privateEncoded));
+                    plugin.consoleInfo("[Cloud] 已加载持久化 Ed25519 密钥对。");
+                    return new KeyPair(publicKey, privateKey);
+                }
+            } catch (Exception e) {
+                plugin.consoleWarn("[Cloud] 读取持久化密钥对失败，将重新生成: " + e.getMessage());
+            }
+        }
+        KeyPair kp = generateKeyPair();
+        if (kp != null) {
+            saveKeyPair(kp, keyFile);
+        }
+        return kp;
+    }
+
+    private void saveKeyPair(KeyPair keyPair, File keyFile) {
+        try {
+            if (!keyFile.getParentFile().exists()) {
+                keyFile.getParentFile().mkdirs();
+            }
+            String publicB64 = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
+            String privateB64 = Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
+            Files.write(keyFile.toPath(), (publicB64 + "\n" + privateB64).getBytes(StandardCharsets.UTF_8));
+            plugin.consoleInfo("[Cloud] Ed25519 密钥对已持久化到 " + keyFile.getAbsolutePath());
+        } catch (Exception e) {
+            plugin.consoleWarn("[Cloud] 保存密钥对失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 从 Java X.509 SubjectPublicKeyInfo 编码中提取裸 32 字节 Ed25519 公钥。
+     * Java 15+ 的 EdECPublicKey.getEncoded() 返回 44 字节 X.509 格式
+     *（12 字节 ASN.1 头 + 32 字节裸公钥），后端验证需要裸 32 字节。
+     */
+    private static String encodeRawEd25519PublicKey(KeyPair keyPair) {
+        if (keyPair == null) return "";
+        byte[] encoded = keyPair.getPublic().getEncoded();
+        // 标准 X.509 SubjectPublicKeyInfo for Ed25519 固定 44 字节，最后 32 字节为裸公钥
+        if (encoded != null && encoded.length == 44) {
+            byte[] raw = java.util.Arrays.copyOfRange(encoded, 12, 44);
+            return Base64.getEncoder().encodeToString(raw);
+        }
+        return Base64.getEncoder().encodeToString(encoded);
     }
 
     /** 用服务器私钥对数据进行 Ed25519 签名，返回 Base64。 */
