@@ -96,8 +96,8 @@ controls:
         type: Canvas
         attribute:
           point: ~middle_center
-          width: 720
-          height: 420
+          width: 680
+          height: 360
         children:
           背景:
             type: Texture
@@ -125,44 +125,61 @@ controls:
           标题:
             type: Text
             attribute:
-              x: 52
+              x: 42
               y: 24
               texts: "'&f' + var.title"
               fontSize: 56
           副标题:
             type: Text
             attribute:
-              x: 52
+              x: 42
               y: 66
               texts: "'&b' + var.playerName"
               fontSize: 38
           服务器信息:
             type: Text
             attribute:
-              x: 52
+              x: 42
               y: 98
               texts: "'&7' + var.serverName + '  在线 ' + var.online.round() + '/' + var.maxPlayers.round() + '  IP地址 ' + var.address"
               fontSize: 34
           服务器时间:
             type: Text
             attribute:
-              x: 52
+              x: 42
               y: 124
-              texts: "'&f时间: ' + Placeholder.parse('%server_time_yyyy年MM月dd日hh:mm:ss%')"
+              texts: "'&f时间: ' + (Placeholder.parse('%server_time_yyyy年MM月dd日hh:mm:ss%') != null ? Placeholder.parse('%server_time_yyyy年MM月dd日hh:mm:ss%') : var.time )"
               fontSize: 28
-          登录提示:
+          登录须知:
             type: Text
             attribute:
-              x: 52
+              x: 42
               y: 160
-              texts: ~&f输入密码登录
+              texts: "var.agreed ? '&a✔ &f我已阅读并同意服务器游玩须知' : '      &f我已阅读并同意服务器游玩须知'"
               fontSize: 36
-              visible: "var.type == 'login'"
+              visible: "(var.type == 'login' || var.type == 'register' || var.type == 'bypass') && var.requireTerms"
+            action:
+              click: var.showRules = true
+            children:
+              方框:
+                type: Texture
+                attribute:
+                  normal: ~26,32,42,232
+                  width: 15
+                  x: 5
+                  y: 2
+                  height: 15
+                  visible: "!var.agreed"
+                  through: true
+                effect:
+                  stroke:
+                    width: 2.0
+                    color: ~255,255,255,255
           登录密码:
             type: TextBox
             attribute:
-              x: 52
-              y: 200
+              x: 42
+              y: 190
               width: 420
               height: 42
               length: 64
@@ -180,8 +197,8 @@ controls:
           登录按钮:
             type: Texture
             attribute:
-              x: 488
-              y: 200
+              x: 478
+              y: 190
               width: 180
               height: 42
               normal: ~80,180,122,238
@@ -201,8 +218,8 @@ controls:
           切换修改密码:
             type: Texture
             attribute:
-              x: 52
-              y: 256
+              x: 42
+              y: 246
               width: 616
               height: 38
               normal: ~191,160,72,220
@@ -229,8 +246,8 @@ controls:
           退出服务器:
             type: Texture
             attribute:
-              x: 52
-              y: 310
+              x: 42
+              y: 300
               width: 616
               height: 42
               normal: ~160,50,50,220
@@ -249,39 +266,15 @@ controls:
           免登录提示:
             type: Text
             attribute:
-              x: 52
+              x: 42
               y: 190
               texts: ~&a✔ &f身份已通过正版验证，无需输入密码
               fontSize: 36
               visible: "var.type == 'bypass'"
-          进服须知:
-            type: Text
-            attribute:
-              x: 52
-              y: 160
-              texts: "var.agreed ? '&a✔ &f我已阅读并同意服务器游玩须知' : '      &f我已阅读并同意服务器游玩须知'"
-              fontSize: 36
-              visible: "var.type == 'bypass' && var.requireTerms"
-            action:
-              click: var.showRules = true
-            children:
-              方框:
-                type: Texture
-                attribute:
-                  normal: ~26,32,42,232
-                  width: 15
-                  x: 5
-                  y: 2
-                  height: 15
-                  visible: "!var.agreed"
-                effect:
-                  stroke:
-                    width: 2.0
-                    color: ~255,255,255,255
           进入服务器:
             type: Texture
             attribute:
-              x: 52
+              x: 42
               y: 240
               width: 616
               height: 42
@@ -302,16 +295,16 @@ controls:
           绑定提示:
             type: Text
             attribute:
-              x: 52
+              x: 42
               y: 152
-              width: 616
+              width: 600
               texts: var.bindPrompt
               fontSize: 30
               visible: "var.type == 'bypass_unbound'"
           绑定码输入框:
             type: TextBox
             attribute:
-              x: 52
+              x: 42
               y: 218
               width: 420
               height: 42
@@ -329,7 +322,7 @@ controls:
           确认绑定:
             type: Texture
             attribute:
-              x: 488
+              x: 478
               y: 218
               width: 180
               height: 42
@@ -347,18 +340,10 @@ controls:
               stroke:
                 width: 2
                 color: ~165,190,220,255
-          注册提示:
-            type: Text
-            attribute:
-              x: 52
-              y: 160
-              texts: ~&f设置密码注册账号
-              fontSize: 36
-              visible: "var.type == 'register'"
           注册密码:
             type: TextBox
             attribute:
-              x: 52
+              x: 42
               y: 190
               width: 300
               height: 42
@@ -377,7 +362,7 @@ controls:
           注册确认:
             type: TextBox
             attribute:
-              x: 368
+              x: 358
               y: 190
               width: 300
               height: 42
@@ -393,36 +378,11 @@ controls:
               stroke:
                 width: 2
                 color: ~165,190,220,255
-          注册须知:
-            type: Text
-            attribute:
-              x: 52
-              y: 246
-              texts: "var.agreed ? '&a✔ &f我已阅读并同意服务器游玩须知' : '      &f我已阅读并同意服务器游玩须知'"
-              fontSize: 36
-              visible: "var.type == 'register' && var.requireTerms"
-            action:
-              click: var.showRules = true
-            children:
-              方框:
-                type: Texture
-                attribute:
-                  normal: ~26,32,42,232
-                  width: 15
-                  x: 5
-                  y: 2
-                  height: 15
-                  visible: "!var.agreed"
-                  through: true
-                effect:
-                  stroke:
-                    width: 2.0
-                    color: ~255,255,255,255
           注册按钮:
             type: Texture
             attribute:
-              x: 52
-              y: 290
+              x: 42
+              y: 246
               width: 616
               height: 42
               normal: ~80,180,122,238
@@ -435,18 +395,10 @@ controls:
               visible: "var.type == 'register'"
             action:
               clickLeft: "Packet.send(var.packetId, 'register', var.password, var.confirmPassword, var.agreed)"
-          修改提示:
-            type: Text
-            attribute:
-              x: 52
-              y: 160
-              texts: ~&f输入旧密码并设置新密码
-              fontSize: 36
-              visible: "var.type == 'change'"
           修改旧密码:
             type: TextBox
             attribute:
-              x: 52
+              x: 42
               y: 190
               width: 196
               height: 40
@@ -465,7 +417,7 @@ controls:
           修改新密码:
             type: TextBox
             attribute:
-              x: 262
+              x: 252
               y: 190
               width: 196
               height: 40
@@ -484,7 +436,7 @@ controls:
           修改确认:
             type: TextBox
             attribute:
-              x: 472
+              x: 462
               y: 190
               width: 196
               height: 40
@@ -503,7 +455,7 @@ controls:
           修改按钮:
             type: Texture
             attribute:
-              x: 52
+              x: 42
               y: 246
               width: 300
               height: 42
@@ -524,7 +476,7 @@ controls:
           返回登录:
             type: Texture
             attribute:
-              x: 368
+              x: 358
               y: 246
               width: 300
               height: 42
@@ -549,22 +501,14 @@ controls:
                 width: 2
                 color: ~165,190,220,255
           结果:
-            type: Texture
+            type: Text
             attribute:
-              x: 52
-              y: 180
+              point: ~middle_center
               width: 616
-              height: 60
-              normal: ~26,32,42,232
+              texts: var.result
+              fontSize: 81
               alpha: var.resultAlpha
               visible: var.resultAlpha > 0
-              texts: var.result
-              center: true
-              fontSize: 36
-            effect:
-              stroke:
-                width: 2
-                color: ~210,225,245,230
           服规覆盖层:
             type: Canvas
             attribute:

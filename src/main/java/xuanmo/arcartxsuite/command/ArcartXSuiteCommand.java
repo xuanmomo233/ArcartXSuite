@@ -82,7 +82,12 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         if ("auth".equalsIgnoreCase(args[0])) {
             String[] subArgs = new String[args.length - 1];
             System.arraycopy(args, 1, subArgs, 0, subArgs.length);
-            return plugin.getAuthCommand().execute(sender, subArgs);
+            xuanmo.arcartxsuite.auth.AuthCommand auth = plugin.getAuthCommand();
+            if (auth == null) {
+                sender.sendMessage(PREFIX + ChatColor.RED + "多方认证功能未启用，请在 config.yml 中设置 auth.enabled 为 true 后重启服务器。");
+                return true;
+            }
+            return auth.execute(sender, subArgs);
         }
 
         // 委托给外部模块命令处理器
@@ -164,7 +169,11 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         if ("auth".equalsIgnoreCase(args[0])) {
             String[] subArgs = new String[args.length - 1];
             System.arraycopy(args, 1, subArgs, 0, subArgs.length);
-            return plugin.getAuthCommand().tabComplete(subArgs);
+            xuanmo.arcartxsuite.auth.AuthCommand auth = plugin.getAuthCommand();
+            if (auth == null) {
+                return List.of();
+            }
+            return auth.tabComplete(subArgs);
         }
         if ("config".equalsIgnoreCase(args[0])) {
             String[] subArgs = new String[args.length - 1];

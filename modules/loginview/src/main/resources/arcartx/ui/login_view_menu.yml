@@ -230,6 +230,7 @@ controls:
                   y: 2
                   height: 15
                   visible: "!var.agreed"
+                  through: true
                 effect:
                   stroke:
                     width: 2.0
@@ -369,6 +370,7 @@ controls:
                   y: 2
                   height: 15
                   visible: "!var.agreed"
+                  through: true
                 effect:
                   stroke:
                     width: 2.0
@@ -507,6 +509,7 @@ controls:
                   y: 2
                   height: 15
                   visible: "!var.agreed"
+                  through: true
                 effect:
                   stroke:
                     width: 2.0
