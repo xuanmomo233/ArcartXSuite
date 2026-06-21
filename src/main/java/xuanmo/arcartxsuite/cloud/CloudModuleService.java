@@ -85,6 +85,15 @@ public final class CloudModuleService {
             this.password = rawPassword; // 首次启动直接使用明文
         } else if (rawPassword.startsWith("ENC:")) {
             this.password = decryptPassword(rawPassword);
+            // 如果旧 fingerprint 成功解密（非空且 rawPassword 未变），重新用稳定指纹加密回写
+            if (!this.password.isEmpty()) {
+                String reEncrypted = encryptPassword(this.password);
+                if (!reEncrypted.equals(rawPassword)) {
+                    config.set("cloud.password", reEncrypted);
+                    plugin.saveConfig();
+                    System.out.println("[Cloud] 密码加密已迁移到稳定指纹算法");
+                }
+            }
         } else {
             this.password = rawPassword;
         }
@@ -646,6 +655,18 @@ public final class CloudModuleService {
     private static String generateFingerprint() {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
+            md.update(System.getProperty("user.dir", "unknown").getBytes(StandardCharsets.UTF_8));
+            md.update(System.getProperty("os.name", "unknown").getBytes(StandardCharsets.UTF_8));
+            md.update(System.getProperty("os.arch", "unknown").getBytes(StandardCharsets.UTF_8));
+            return Base64.getEncoder().encodeToString(md.digest());
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
+
+    private static String generateFingerprintLegacy() {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
             md.update(java.net.InetAddress.getLocalHost().getHostName().getBytes(StandardCharsets.UTF_8));
             md.update(java.lang.management.ManagementFactory.getRuntimeMXBean().getName().getBytes(StandardCharsets.UTF_8));
             return Base64.getEncoder().encodeToString(md.digest());
@@ -762,11 +783,23 @@ public final class CloudModuleService {
     private static String decryptPassword(String encrypted) {
         if (encrypted == null || encrypted.isEmpty()) return "";
         if (!encrypted.startsWith("ENC:")) return encrypted;
+        String result = decryptWithFingerprint(encrypted, generateFingerprint());
+        if (result != null) return result;
+        // 回退：旧 fingerprint（含 PID，不稳定）
+        result = decryptWithFingerprint(encrypted, generateFingerprintLegacy());
+        if (result != null) {
+            System.out.println("[Cloud] 使用旧指纹成功解密密码，建议检查 config.yml 是否已迁移");
+            return result;
+        }
+        System.err.println("[Cloud] 密码解密失败: 指纹不匹配或密文损坏");
+        return "";
+    }
+
+    private static String decryptWithFingerprint(String encrypted, String fingerprint) {
         try {
-            String fingerprint = generateFingerprint();
             byte[] key = sha256Raw(fingerprint + "AXS_CLOUD_PWD_SALT_v1");
             byte[] data = Base64.getDecoder().decode(encrypted.substring(4));
-            if (data.length < 28) return "";
+            if (data.length < 28) return null;
             byte[] iv = java.util.Arrays.copyOfRange(data, 0, 12);
             byte[] ctAndTag = java.util.Arrays.copyOfRange(data, 12, data.length);
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
@@ -774,8 +807,7 @@ public final class CloudModuleService {
             byte[] decrypted = cipher.doFinal(ctAndTag);
             return new String(decrypted, StandardCharsets.UTF_8);
         } catch (Exception e) {
-            System.err.println("[Cloud] 密码解密失败: " + e.getMessage());
-            return "";
+            return null;
         }
     }
 
