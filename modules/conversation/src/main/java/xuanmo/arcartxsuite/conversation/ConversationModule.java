@@ -16,7 +16,7 @@ import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.conversation.command.ConversationAdminCommand;
 import xuanmo.arcartxsuite.conversation.config.ConversationModuleConfiguration;
 import xuanmo.arcartxsuite.conversation.service.ConversationService;
@@ -84,7 +84,7 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
 
     @Override
     protected void startService() throws Exception {
-        ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
 
         File dialogFile = new File(context.pluginDataFolder(), DIALOG_UI_FILE_PATH);
@@ -118,7 +118,8 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
 
         service = new ConversationService(
             context.plugin(), packetGuard, configuration, packetBridge,
-            java.util.List.copyOf(dialogRuntimeUiIds), java.util.List.copyOf(selectorRuntimeUiIds)
+            java.util.List.copyOf(dialogRuntimeUiIds), java.util.List.copyOf(selectorRuntimeUiIds),
+            context.createAdyeshachNpcBridge()
         );
         service.start();
         adminCommand = new ConversationAdminCommand(() -> service, () -> service == null ? null : service.npcBridge(), messages());

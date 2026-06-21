@@ -180,7 +180,7 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         context.registerCapability(EssentialsQueryable.class, new EssentialsQueryableImpl());
 
         // UI 绑定与 Packet Handler 初始化
-        PacketBridgeAPI packetBridge = (PacketBridgeAPI) context.packetBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
         if (packetBridge != null && packetBridge.isAvailable()) {
             File menuFile = new File(context.pluginDataFolder(), EssentialsMenuPacketHandler.UI_FILE_PATH);

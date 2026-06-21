@@ -23,8 +23,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXWaypointBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI.CurrencyBridge;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
@@ -58,7 +58,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private final PacketGuardAPI packetGuard;
     private final MapModuleConfiguration configuration;
     private final MapRepository repository;
-    private final ArcartXPacketBridge bridge;
+    private final PacketBridgeAPI bridge;
     private final String menuUiId;
     private final String hudUiId;
     private final MapSnapshotBuilder snapshotBuilder = new MapSnapshotBuilder();
@@ -66,7 +66,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private final CurrencyBridgeAPI currencyBridgeManager;
     private final ItemSourceRegistry itemSourceRegistry;
     private final ItemMatcherAPI itemMatcherSupport;
-    private final ArcartXWaypointBridge waypointBridge;
+    private final WaypointBridgeAPI waypointBridge;
     private final ConcurrentMap<UUID, MapPlayerViewState> viewStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, MapNavigationState> navigationStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, ConcurrentMap<String, MapExternalTarget>> externalTargets = new ConcurrentHashMap<>();
@@ -82,12 +82,13 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         PacketGuardAPI packetGuard,
         MapModuleConfiguration configuration,
         MapRepository repository,
-        ArcartXPacketBridge bridge,
+        PacketBridgeAPI bridge,
         String menuUiId,
         String hudUiId,
         ItemSourceRegistry itemSourceRegistry,
         ItemMatcherAPI itemMatcherSupport,
-        CurrencyBridgeAPI currencyBridgeManager
+        CurrencyBridgeAPI currencyBridgeManager,
+        WaypointBridgeAPI waypointBridge
     ) {
         this.plugin = plugin;
         this.packetGuard = packetGuard;
@@ -100,7 +101,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         this.currencyBridgeManager = currencyBridgeManager;
         this.itemSourceRegistry = itemSourceRegistry;
         this.itemMatcherSupport = itemMatcherSupport;
-        this.waypointBridge = new ArcartXWaypointBridge(plugin);
+        this.waypointBridge = waypointBridge;
     }
 
     public void start() throws Exception {

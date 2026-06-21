@@ -8,11 +8,11 @@
 
 ## 💡 项目定位
 
-**ArcartXSuite** 是专为 **ArcartX** 生态构建的下一代全场景核心套件与玩法基础设施。一个插件覆盖 **21 个功能领域**，统一 ArcartX UI 体验，模块间深度联动，消除适配烦恼。
+**ArcartXSuite** 是专为 **ArcartX** 生态构建的下一代全场景核心套件与玩法基础设施。一个插件覆盖 **25+ 个功能领域**，统一 ArcartX UI 体验，模块间深度联动，消除适配烦恼。
 
 ---
 
-## 📦 模块一览（21 个）
+## 📦 模块一览（25+ 个）
 
 ### 免费模块
 
@@ -29,6 +29,11 @@
 | **Chat** | 全频道聊天系统 |
 | **Essentials** | 基础工具（传送/管控/一键砍树） |
 | **Regions** | 区域保护（40+ 标志） |
+| **AFKReward** | 挂机奖励 |
+| **Fishing** | 钓鱼小游戏 |
+| **Lottery** | 抽奖系统 |
+| **Menu** | 通用菜单框架 |
+| **BattlePass** | 战斗通行证 |
 
 ### 付费模块
 
@@ -50,7 +55,13 @@
 ## 🛠️ 核心设计
 
 ### ❖ 模块化
-全部 21 个模块独立 jar，支持热加载 / 热卸载，`config.yml` 一键开关，按需启用。
+全部 25+ 个模块独立 jar，支持热加载 / 热卸载，`config.yml` 一键开关，按需启用。
+
+### ❖ API 接口隔离
+模块仅通过 `axs-api` 中的接口（如 `PacketBridgeAPI`、`ModuleContext`）与宿主通信，核心实现类可被 ProGuard 完全混淆，防止模块直接依赖内部类。
+
+### ❖ 生命周期管理
+`ArcartXSuitePlugin` 将桥接与客户端事件管理拆分为 `BridgeLifecycleManager` 和 `ClientEventLifecycleManager`，核心入口更精简、职责更清晰。
 
 ### ❖ 跨模块联动
 原生 Capability 桥接，模块间零配置联动。事件包、称号、邮件、聊天卡片、QQ 推送等能力可自由组合。

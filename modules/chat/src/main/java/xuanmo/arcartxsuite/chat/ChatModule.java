@@ -22,8 +22,8 @@ import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
 import xuanmo.arcartxsuite.api.capability.ChatMutable;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
-import xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.chat.command.ChatAdminCommand;
 import xuanmo.arcartxsuite.chat.command.ChatPlayerCommand;
 import xuanmo.arcartxsuite.chat.config.ChatModuleConfiguration;
@@ -104,8 +104,8 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected void startService() throws Exception {
-        ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
-        ArcartXItemStackBridge itemStackBridge = (ArcartXItemStackBridge) context.itemStackBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
+        ItemBridgeAPI itemStackBridge = context.itemStackBridge();
 
         // 绑定 @补全 overlay UI
         completionUiId = null;
@@ -139,7 +139,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         adminCommand = new ChatAdminCommand(() -> service, messages());
 
         // 注册 ChatCardSendable capability，通过 packetBridge 转发
-        ArcartXPacketBridge cardBridge = packetBridge;
+        PacketBridgeAPI cardBridge = packetBridge;
         context.registerCapability(ChatCardSendable.class, (player, cardId, data) ->
             cardBridge.sendChatCard(player, cardId, data));
 

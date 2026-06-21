@@ -16,8 +16,8 @@ import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
-import xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.PickupNotifiable;
 import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable;
 import xuanmo.arcartxsuite.pickup.command.PickupPlayerCommand;
@@ -103,8 +103,8 @@ public final class PickupModule extends AbstractAXSModule {
 
     @Override
     protected void startService() throws Exception {
-        ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
-        ArcartXItemStackBridge itemStackBridge = (ArcartXItemStackBridge) context.itemStackBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
+        ItemBridgeAPI itemStackBridge = context.itemStackBridge();
 
         if (configuration.mode() == PickupMode.SCANNER) {
             startScannerMode(packetBridge, itemStackBridge);
@@ -113,7 +113,7 @@ public final class PickupModule extends AbstractAXSModule {
         }
     }
 
-    private void startNotificationMode(ArcartXPacketBridge packetBridge, ArcartXItemStackBridge itemStackBridge) throws IOException {
+    private void startNotificationMode(PacketBridgeAPI packetBridge, ItemBridgeAPI itemStackBridge) throws IOException {
         File uiFile = exportPickupUiFile(configuration);
         UiBinding uiBinding = context.prepareUiBinding(
             "Pickup", configuration.uiId(), configuration.registerUiOnEnable(), uiFile
@@ -141,7 +141,7 @@ public final class PickupModule extends AbstractAXSModule {
         );
     }
 
-    private void startScannerMode(ArcartXPacketBridge packetBridge, ArcartXItemStackBridge itemStackBridge) throws IOException {
+    private void startScannerMode(PacketBridgeAPI packetBridge, ItemBridgeAPI itemStackBridge) throws IOException {
         boolean overwrite = configuration.scanner().overwriteUiFile();
         // HUD（被动显示）
         File uiFile = context.exportUiResource(

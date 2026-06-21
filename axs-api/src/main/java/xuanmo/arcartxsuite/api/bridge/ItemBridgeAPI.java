@@ -17,6 +17,12 @@ public interface ItemBridgeAPI {
     /** 桥接是否可用 */
     boolean isAvailable();
 
+    /** 初始化桥接（由宿主调用） */
+    boolean initialize();
+
+    /** 关闭桥接（由宿主调用） */
+    void shutdown();
+
     /**
      * 将 ItemStack 序列化为 ArcartX 客户端可识别的 JSON 字符串。
      *

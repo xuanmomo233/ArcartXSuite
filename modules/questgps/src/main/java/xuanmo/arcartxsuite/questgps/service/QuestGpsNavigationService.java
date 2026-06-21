@@ -10,8 +10,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
-import xuanmo.arcartxsuite.bridge.AdyeshachNpcBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXWaypointBridge;
+import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 
 public final class QuestGpsNavigationService {
@@ -20,6 +20,7 @@ public final class QuestGpsNavigationService {
     private final WaypointRuntime waypointRuntime;
     private final Logger logger;
     private final JavaPlugin plugin;
+    private final AdyeshachNpcBridgeAPI npcBridge;
     private final ConcurrentMap<java.util.UUID, TrackingState> trackingStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<java.util.UUID, NavigationPoint> trackingPoints = new ConcurrentHashMap<>();
 
@@ -28,13 +29,16 @@ public final class QuestGpsNavigationService {
 
     public QuestGpsNavigationService(
         JavaPlugin plugin,
-        QuestGpsModuleConfiguration configuration
+        QuestGpsModuleConfiguration configuration,
+        WaypointBridgeAPI waypointBridge,
+        AdyeshachNpcBridgeAPI npcBridge
     ) {
         this(
             plugin,
             configuration,
-            new BridgeWaypointRuntime(new ArcartXWaypointBridge(plugin)),
-            plugin.getLogger()
+            new BridgeWaypointRuntime(waypointBridge),
+            plugin.getLogger(),
+            npcBridge
         );
     }
 
@@ -42,22 +46,23 @@ public final class QuestGpsNavigationService {
         JavaPlugin plugin,
         QuestGpsModuleConfiguration configuration,
         WaypointRuntime waypointRuntime,
-        Logger logger
+        Logger logger,
+        AdyeshachNpcBridgeAPI npcBridge
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
         this.waypointRuntime = waypointRuntime;
         this.logger = logger;
+        this.npcBridge = npcBridge;
     }
 
     public void start() {
         runtimeReady = configuration.navigation().enabled() && waypointRuntime.initialize("QuestGPS 导航");
         if (configuration.navigation().marker().enabled()) {
             if (configuration.debug()) logger.info("QuestGPS: 正在初始化导航标记 (Adyeshach + ArcartX)...");
-            AdyeshachNpcBridge npcBridge = new AdyeshachNpcBridge(plugin);
             npcBridge.setDebug(configuration.debug());
             boolean adyAvailable = npcBridge.initialize();
-            if (configuration.debug()) logger.info("QuestGPS: AdyeshachNpcBridge.initialize() = " + adyAvailable);
+            if (configuration.debug()) logger.info("QuestGPS: AdyeshachNpcBridgeAPI.initialize() = " + adyAvailable);
             markerService = new QuestGpsMarkerService(
                 plugin, npcBridge, configuration.navigation().marker(), logger, configuration.debug()
             );
@@ -334,9 +339,9 @@ public final class QuestGpsNavigationService {
 
     private static final class BridgeWaypointRuntime implements WaypointRuntime {
 
-        private final ArcartXWaypointBridge bridge;
+        private final WaypointBridgeAPI bridge;
 
-        private BridgeWaypointRuntime(ArcartXWaypointBridge bridge) {
+        private BridgeWaypointRuntime(WaypointBridgeAPI bridge) {
             this.bridge = bridge;
         }
 

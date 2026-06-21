@@ -122,7 +122,7 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         }
 
         // UI 绑定与 Packet Handler 初始化
-        PacketBridgeAPI packetBridge = (PacketBridgeAPI) context.packetBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
         if (packetBridge != null && packetBridge.isAvailable()) {
             File menuFile = new File(context.pluginDataFolder(), RegionsMenuPacketHandler.UI_FILE_PATH);

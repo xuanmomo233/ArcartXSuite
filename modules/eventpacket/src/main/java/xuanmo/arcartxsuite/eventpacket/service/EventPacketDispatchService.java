@@ -22,7 +22,7 @@ import xuanmo.arcartxsuite.api.capability.QQBotBroadcastable;
 import xuanmo.arcartxsuite.api.capability.QuestGpsNavigable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
 import xuanmo.arcartxsuite.api.capability.TitleGrantable;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketAction;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.condition.ScriptConditionServices;
@@ -42,7 +42,7 @@ public final class EventPacketDispatchService {
 
     private final Logger logger;
     private final PacketGuardAPI packetGuard;
-    private final ArcartXPacketBridge packetBridge;
+    private final PacketBridgeAPI packetBridge;
     private final Supplier<PluginConfiguration> configurationProvider;
     private final Supplier<QuestGpsNavigable> questGpsProvider;
     private final Supplier<TitleGrantable> titleProvider;
@@ -59,7 +59,7 @@ public final class EventPacketDispatchService {
     public EventPacketDispatchService(
         Logger logger,
         PacketGuardAPI packetGuard,
-        ArcartXPacketBridge packetBridge,
+        PacketBridgeAPI packetBridge,
         Supplier<PluginConfiguration> configurationProvider,
         Supplier<QuestGpsNavigable> questGpsProvider,
         Supplier<TitleGrantable> titleProvider,

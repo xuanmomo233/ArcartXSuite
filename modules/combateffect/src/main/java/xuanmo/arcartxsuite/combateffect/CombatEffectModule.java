@@ -27,8 +27,8 @@ import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.config.ConfigSyncSpec;
 import xuanmo.arcartxsuite.api.config.ModuleConfigSpec;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
-import xuanmo.arcartxsuite.bridge.ArcartXClientBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.combateffect.combo.ComboTrackerConfiguration;
 import xuanmo.arcartxsuite.combateffect.combo.ComboTrackerService;
 import xuanmo.arcartxsuite.combateffect.deathbuffer.DeathBufferConfiguration;
@@ -121,8 +121,8 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
         packetConfiguration = CombatEffectPacketConfiguration.load(killEffectSection, logger, packetsDirectory);
         displayConfiguration = CombatDisplayConfiguration.load(yaml.getConfigurationSection("digis-display"));
 
-        ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
-        ArcartXClientBridge clientBridge = (ArcartXClientBridge) context.clientBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
+        ClientBridgeAPI clientBridge = context.clientBridge();
         JavaPlugin plugin = (JavaPlugin) context.plugin();
 
         // 导出 UI 资源到 ArcartX ui/ 目录

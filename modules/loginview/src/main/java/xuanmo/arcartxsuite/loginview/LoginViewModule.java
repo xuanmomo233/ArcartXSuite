@@ -22,7 +22,7 @@ import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.loginview.config.LoginViewModuleConfiguration;
 import xuanmo.arcartxsuite.loginview.migration.AuthMeMigrationService.MigrationResult;
@@ -161,7 +161,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         }
         recordUiBinding(selectedUiPath, uiBinding);
 
-        ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
 
         repository = new JdbcLoginViewRepository(

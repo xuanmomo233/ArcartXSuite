@@ -23,7 +23,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitTask;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -46,7 +46,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
 
     private final JavaPlugin plugin;
     private final TabModuleConfiguration configuration;
-    private final ArcartXPacketBridge bridge;
+    private final PacketBridgeAPI bridge;
     private final PacketGuardAPI packetGuard;
     private final CrossServerAPI crossServer;
     private final PlaceholderResolverAPI placeholderResolver;
@@ -79,7 +79,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
     public TabSyncService(
         JavaPlugin plugin,
         TabModuleConfiguration configuration,
-        ArcartXPacketBridge bridge,
+        PacketBridgeAPI bridge,
         PacketGuardAPI packetGuard,
         CrossServerAPI crossServer,
         PlaceholderResolverAPI placeholderResolver

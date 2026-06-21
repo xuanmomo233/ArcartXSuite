@@ -15,7 +15,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  * 通过 {@code ArcartXEffectManager.spawnWorldTextureEffect} 在实体上方或世界坐标处
  * 渲染客户端自定义文字贴图（与 ArcartX UI 文字控件同一渲染管线）。
  */
-public class ArcartXWorldTextureService {
+public class ArcartXWorldTextureService implements xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI {
 
     private final JavaPlugin plugin;
     private final Logger logger;
@@ -43,6 +43,7 @@ public class ArcartXWorldTextureService {
         this.logger = plugin.getLogger();
     }
 
+    @Override
     public boolean initialize() {
         available = false;
         Plugin arcartX = plugin.getServer().getPluginManager().getPlugin("ArcartX");
@@ -93,6 +94,7 @@ public class ArcartXWorldTextureService {
         }
     }
 
+    @Override
     public boolean isAvailable() {
         return available;
     }
@@ -108,6 +110,7 @@ public class ArcartXWorldTextureService {
      * @param offsetY   Y 轴偏移
      * @param billboard 是否始终面向玩家
      */
+    @Override
     public void spawnOnEntity(Entity entity, String id, String texture,
                               double width, double height, double offsetY, boolean billboard) {
         if (!available) return;
@@ -127,6 +130,7 @@ public class ArcartXWorldTextureService {
     /**
      * 在世界坐标处渲染文字贴图。
      */
+    @Override
     public void spawnAtLocation(World world, Location location, String id, String texture,
                                 double width, double height) {
         if (!available || spawnAtLocationMethod == null) return;
@@ -145,6 +149,7 @@ public class ArcartXWorldTextureService {
     /**
      * 移除实体附着的贴图特效。
      */
+    @Override
     public void removeFromEntity(Entity entity, String id) {
         if (!available || removeFromEntityMethod == null) return;
         try {
@@ -157,6 +162,7 @@ public class ArcartXWorldTextureService {
     /**
      * 移除世界坐标上的贴图特效。
      */
+    @Override
     public void removeFromWorld(World world, String id, Location location) {
         if (!available || removeFromWorldMethod == null) return;
         try {

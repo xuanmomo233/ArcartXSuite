@@ -9,7 +9,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
-import xuanmo.arcartxsuite.bridge.ArcartXWorldTextureService;
+import xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI;
 import xuanmo.arcartxsuite.title.config.TitleDefinition;
 import xuanmo.arcartxsuite.title.config.TitleDefinition.OverheadMode;
 import xuanmo.arcartxsuite.title.model.ResolvedTitleState;
@@ -19,11 +19,11 @@ public class TitleOverheadService {
     private static final String EFFECT_PREFIX = "axs_title_";
     private static final String TEAM_PREFIX = "AXS_T_";
 
-    private final ArcartXWorldTextureService worldTextureService;
+    private final WorldTextureBridgeAPI worldTextureService;
     private final Logger logger;
     private final Map<UUID, OverheadMode> activeMode = new ConcurrentHashMap<>();
 
-    public TitleOverheadService(ArcartXWorldTextureService worldTextureService, Logger logger) {
+    public TitleOverheadService(WorldTextureBridgeAPI worldTextureService, Logger logger) {
         this.worldTextureService = worldTextureService;
         this.logger = logger;
     }

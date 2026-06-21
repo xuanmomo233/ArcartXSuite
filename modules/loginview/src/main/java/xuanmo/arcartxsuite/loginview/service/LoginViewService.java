@@ -37,7 +37,7 @@ import xuanmo.arcartxsuite.api.account.AccountTypeService;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.QqBindCapable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.loginview.auth.AuthMeBridge;
 import xuanmo.arcartxsuite.loginview.config.LoginViewModuleConfiguration;
 import xuanmo.arcartxsuite.loginview.config.LoginViewModuleConfiguration.AuthMode;
@@ -61,7 +61,7 @@ public final class LoginViewService implements Listener {
     private final JavaPlugin plugin;
     private final LoginViewModuleConfiguration configuration;
     private final LoginViewRepository repository;
-    private final ArcartXPacketBridge packetBridge;
+    private final PacketBridgeAPI packetBridge;
     private final PacketGuardAPI packetGuard;
     private final Supplier<SignalDispatchable> signalProvider;
     private final String uiId;
@@ -80,7 +80,7 @@ public final class LoginViewService implements Listener {
         JavaPlugin plugin,
         LoginViewModuleConfiguration configuration,
         LoginViewRepository repository,
-        ArcartXPacketBridge packetBridge,
+        PacketBridgeAPI packetBridge,
         PacketGuardAPI packetGuard,
         Supplier<SignalDispatchable> signalProvider,
         AccountTypeService accountTypeService,

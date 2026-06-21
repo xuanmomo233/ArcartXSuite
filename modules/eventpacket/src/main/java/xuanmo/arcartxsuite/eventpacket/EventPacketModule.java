@@ -26,7 +26,7 @@ import xuanmo.arcartxsuite.api.capability.QuestGpsNavigable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
 import xuanmo.arcartxsuite.api.capability.TitleGrantable;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketContext;
 import xuanmo.arcartxsuite.eventpacket.config.PluginConfiguration;
 import xuanmo.arcartxsuite.eventpacket.listener.PlayerEventPacketListener;
@@ -127,7 +127,7 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
 
     @Override
     protected void startService() throws Exception {
-        ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
 
         repository = new JdbcEventPacketRepository(
             context.migrateLegacyDataFile(configuration.storage().sqliteFileName()),

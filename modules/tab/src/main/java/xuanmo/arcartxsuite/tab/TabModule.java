@@ -15,7 +15,7 @@ import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.tab.command.TabPlayerCommand;
 import xuanmo.arcartxsuite.tab.config.TabDefinition;
@@ -126,7 +126,7 @@ public final class TabModule extends AbstractAXSModule {
     @Override
     protected void startService() throws Exception {
         Map<String, UiBinding> tabUiBindings = registerTabUis();
-        ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
         service = new TabSyncService(context.plugin(), configuration, packetBridge, packetGuard, context.crossServer(), context.placeholderResolver());
         service.start();

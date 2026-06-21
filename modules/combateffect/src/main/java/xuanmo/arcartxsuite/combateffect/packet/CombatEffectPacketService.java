@@ -18,7 +18,7 @@ import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
 import xuanmo.arcartxsuite.api.combat.EntityCombatMetadata;
 import xuanmo.arcartxsuite.combateffect.packet.config.CombatPacketContext;
@@ -31,7 +31,7 @@ public final class CombatEffectPacketService implements Listener {
 
     private final JavaPlugin plugin;
     private final CombatEffectPacketConfiguration configuration;
-    private final ArcartXPacketBridge packetBridge;
+    private final PacketBridgeAPI packetBridge;
     private final Logger logger;
     private Supplier<EventBusCapability> eventBusProvider;
 
@@ -41,7 +41,7 @@ public final class CombatEffectPacketService implements Listener {
     public CombatEffectPacketService(
         JavaPlugin plugin,
         CombatEffectPacketConfiguration configuration,
-        ArcartXPacketBridge packetBridge,
+        PacketBridgeAPI packetBridge,
         Logger logger
     ) {
         this.plugin = plugin;

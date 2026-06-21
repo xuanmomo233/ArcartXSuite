@@ -20,7 +20,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.entitytracker.target.config.EntityTargetHudConfiguration;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDefinition;
 import xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration;
 import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
@@ -30,7 +30,7 @@ public final class EntityTargetHudService implements Listener {
 
     private final JavaPlugin plugin;
     private final EntityTargetHudConfiguration configuration;
-    private final ArcartXPacketBridge bridge;
+    private final PacketBridgeAPI bridge;
     private final List<String> uiIds;
     private final Map<UUID, TrackedTarget> trackedTargets = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> openViewers = new ConcurrentHashMap<>();
@@ -42,7 +42,7 @@ public final class EntityTargetHudService implements Listener {
         JavaPlugin plugin,
         java.util.function.Supplier<xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration> bossConfigurationProvider,
         EntityTargetHudConfiguration configuration,
-        ArcartXPacketBridge bridge,
+        PacketBridgeAPI bridge,
         List<String> uiIds
     ) {
         this.plugin = plugin;

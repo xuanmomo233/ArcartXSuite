@@ -19,7 +19,7 @@ import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
 import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
 import xuanmo.arcartxsuite.api.capability.TitleGrantable;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.title.command.TitleAdminCommand;
 import xuanmo.arcartxsuite.title.command.TitlePlayerCommand;
@@ -137,7 +137,7 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
      */
     @Override
     protected void startService() throws Exception {
-        ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
 
         TitleService.UiResourceExporter uiExporter = (resourcePath, relativeUiPath, overwrite) ->
@@ -152,7 +152,8 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
             packetBridge, packetGuard,
             () -> context.getCapability(TabRefreshable.class),
             uiExporter,
-            context.attributeBridge()
+            context.attributeBridge(),
+            context.worldTextureBridge()
         );
         service.start();
         adminCommand = new TitleAdminCommand(() -> service, messages());

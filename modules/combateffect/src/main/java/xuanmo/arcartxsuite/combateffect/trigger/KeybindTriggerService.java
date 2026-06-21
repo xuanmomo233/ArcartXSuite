@@ -13,7 +13,7 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.EventExecutor;
 import org.bukkit.plugin.java.JavaPlugin;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.combateffect.packet.config.CombatEffectPacketConfiguration;
 import xuanmo.arcartxsuite.combateffect.packet.config.PacketDefinition;
 
@@ -24,7 +24,7 @@ public final class KeybindTriggerService {
 
     private final JavaPlugin plugin;
     private final CombatEffectPacketConfiguration configuration;
-    private final ArcartXPacketBridge packetBridge;
+    private final PacketBridgeAPI packetBridge;
     private final Logger logger;
     private final Listener dummyListener = new Listener() {};
     private boolean registered;
@@ -35,7 +35,7 @@ public final class KeybindTriggerService {
     public KeybindTriggerService(
         JavaPlugin plugin,
         CombatEffectPacketConfiguration configuration,
-        ArcartXPacketBridge packetBridge,
+        PacketBridgeAPI packetBridge,
         Logger logger
     ) {
         this.plugin = plugin;

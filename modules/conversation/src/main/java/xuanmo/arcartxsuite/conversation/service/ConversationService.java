@@ -32,9 +32,9 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.plugin.java.JavaPlugin;
-import xuanmo.arcartxsuite.bridge.AdyeshachNpcBridge;
-import xuanmo.arcartxsuite.bridge.AdyeshachNpcBridge.NearbyNpc;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.AdyeshachNearbyNpc;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.conversation.config.ConversationModuleConfiguration;
 import xuanmo.arcartxsuite.conversation.config.NpcAppearanceEntry;
 import xuanmo.arcartxsuite.conversation.theme.ArcartXConversationTheme;
@@ -68,11 +68,11 @@ public final class ConversationService implements Listener {
     private final JavaPlugin plugin;
     private final PacketGuardAPI packetGuard;
     private final ConversationModuleConfiguration configuration;
-    private final ArcartXPacketBridge bridge;
+    private final PacketBridgeAPI bridge;
     private final java.util.List<String> dialogUiIds;
     private final java.util.List<String> selectorUiIds;
     private final ArcartXConversationTheme theme;
-    private final AdyeshachNpcBridge npcBridge;
+    private final AdyeshachNpcBridgeAPI npcBridge;
     private final ChemdahAxRenderer dialogRenderer;
     private final ConcurrentMap<UUID, SelectorState> selectorStates = new ConcurrentHashMap<>();
     private final Set<UUID> selectorOpenedPlayers = ConcurrentHashMap.newKeySet();
@@ -97,9 +97,10 @@ public final class ConversationService implements Listener {
         JavaPlugin plugin,
         PacketGuardAPI packetGuard,
         ConversationModuleConfiguration configuration,
-        ArcartXPacketBridge bridge,
+        PacketBridgeAPI bridge,
         java.util.List<String> dialogUiIds,
-        java.util.List<String> selectorUiIds
+        java.util.List<String> selectorUiIds,
+        AdyeshachNpcBridgeAPI npcBridge
     ) {
         this.plugin = plugin;
         this.packetGuard = packetGuard;
@@ -108,7 +109,7 @@ public final class ConversationService implements Listener {
         this.dialogUiIds = dialogUiIds;
         this.selectorUiIds = selectorUiIds;
         this.theme = new ArcartXConversationTheme(this);
-        this.npcBridge = new AdyeshachNpcBridge(plugin);
+        this.npcBridge = npcBridge;
         this.dialogRenderer = new ChemdahAxRenderer(plugin, configuration, bridge, dialogUiIds, this);
     }
 
@@ -264,7 +265,7 @@ public final class ConversationService implements Listener {
         return npcBridgeReady;
     }
 
-    public AdyeshachNpcBridge npcBridge() {
+    public AdyeshachNpcBridgeAPI npcBridge() {
         return npcBridge;
     }
 
@@ -686,13 +687,13 @@ public final class ConversationService implements Listener {
     }
 
     private List<NpcCandidate> findCandidatesForPlayer(Player player, Map<String, Boolean> conversationCache) {
-        List<NearbyNpc> nearbyNpcs = npcBridge.findNearby(player, configuration.interaction().scanRange());
+        List<AdyeshachNearbyNpc> nearbyNpcs = npcBridge.findNearby(player, configuration.interaction().scanRange());
         if (nearbyNpcs.isEmpty()) {
             return List.of();
         }
 
         List<NpcCandidate> result = new ArrayList<>();
-        for (NearbyNpc npc : nearbyNpcs) {
+        for (AdyeshachNearbyNpc npc : nearbyNpcs) {
             try {
                 if (!hasConversationForNpcId(npc.npcId(), conversationCache)) {
                     continue;

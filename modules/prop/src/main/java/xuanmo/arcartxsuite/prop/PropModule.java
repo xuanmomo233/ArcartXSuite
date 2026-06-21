@@ -13,7 +13,7 @@ import xuanmo.arcartxsuite.api.ClientInitializedHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.prop.command.PropAdminCommand;
-import xuanmo.arcartxsuite.bridge.ArcartXPropBridge;
+import xuanmo.arcartxsuite.api.bridge.PropBridgeAPI;
 import xuanmo.arcartxsuite.prop.config.PropDefinition;
 import xuanmo.arcartxsuite.prop.config.PropDefinitionLoader;
 import xuanmo.arcartxsuite.prop.config.PropKeyMappingConfiguration;
@@ -60,7 +60,7 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected void startService() throws Exception {
-        ArcartXPropBridge propBridge = (ArcartXPropBridge) context.propBridge();
+        PropBridgeAPI propBridge = context.propBridge();
         if (propBridge == null || !propBridge.isAvailable()) {
             throw new IllegalStateException("Prop 模块需要 ArcartX API 桥接，当前不可用");
         }

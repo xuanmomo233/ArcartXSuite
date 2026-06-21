@@ -17,13 +17,13 @@ import org.bukkit.event.Listener;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.KeybindHandler;
+import xuanmo.arcartxsuite.api.bridge.PropBridgeAPI;
 import xuanmo.arcartxsuite.bridge.ArcartXKeyBindBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPropBridge;
 
 /**
  * 宿主级全局按键服务。
  * <p>
- * 从 config.yml keybinds 节读取按键定义，通过 {@link ArcartXPropBridge} 统一注册到 ArcartX 客户端，
+ * 从 config.yml keybinds 节读取按键定义，通过 {@link PropBridgeAPI} 统一注册到 ArcartX 客户端，
  * 并监听 {@code ClientKeyPressEvent} 将按键回调按优先级分发给模块注册的 {@link KeybindHandler}。
  */
 public final class KeybindService {
@@ -39,7 +39,7 @@ public final class KeybindService {
     /** ClientKeyPressEvent 监听器 */
     private Listener keyPressListener;
 
-    public KeybindService(JavaPlugin plugin, ArcartXPropBridge propBridge) {
+    public KeybindService(JavaPlugin plugin, PropBridgeAPI propBridge) {
         this.plugin = plugin;
         this.keyBindBridge = new ArcartXKeyBindBridge(plugin);
     }

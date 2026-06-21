@@ -18,8 +18,8 @@ import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
-import xuanmo.arcartxsuite.bridge.ArcartXClientBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.onlinerewards.command.OnlineRewardsAdminCommand;
 import xuanmo.arcartxsuite.onlinerewards.command.OnlineRewardsPlayerCommand;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsModuleConfiguration;
@@ -110,8 +110,8 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
 
     @Override
     protected void startService() throws Exception {
-        ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
-        ArcartXClientBridge clientBridge = (ArcartXClientBridge) context.clientBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
+        ClientBridgeAPI clientBridge = context.clientBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
 
         if (clientBridge == null || !clientBridge.isAvailable()) {

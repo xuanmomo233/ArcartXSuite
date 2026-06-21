@@ -37,10 +37,10 @@ import xuanmo.arcartxsuite.api.item.ItemMatcherSupport;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.account.AccountTypeService;
 import xuanmo.arcartxsuite.account.AccountTypeServiceImpl;
-import xuanmo.arcartxsuite.bridge.ArcartXClientBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPropBridge;
+import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PropBridgeAPI;
 import xuanmo.arcartxsuite.bridge.DefaultAttributeBridgeRegistry;
 import xuanmo.arcartxsuite.bridge.DefaultAriaBridge;
 import xuanmo.arcartxsuite.bridge.DefaultItemSourceRegistry;
@@ -62,10 +62,10 @@ public final class ModuleRegistry {
 
     private final JavaPlugin plugin;
     private final File modulesDir;
-    private final ArcartXPacketBridge packetBridge;
-    private final ArcartXClientBridge clientBridge;
-    private final ArcartXItemStackBridge itemStackBridge;
-    private final ArcartXPropBridge propBridge;
+    private final PacketBridgeAPI packetBridge;
+    private final ClientBridgeAPI clientBridge;
+    private final ItemBridgeAPI itemStackBridge;
+    private final PropBridgeAPI propBridge;
     private final ClientPacketGuard packetGuard;
     private final KeybindService keybindService;
     private final TaczCombatBridge taczCombatBridge;
@@ -102,10 +102,10 @@ public final class ModuleRegistry {
     public ModuleRegistry(
         JavaPlugin plugin,
         File modulesDir,
-        ArcartXPacketBridge packetBridge,
-        ArcartXClientBridge clientBridge,
-        ArcartXItemStackBridge itemStackBridge,
-        ArcartXPropBridge propBridge,
+        PacketBridgeAPI packetBridge,
+        ClientBridgeAPI clientBridge,
+        ItemBridgeAPI itemStackBridge,
+        PropBridgeAPI propBridge,
         ClientPacketGuard packetGuard,
         KeybindService keybindService,
         TaczCombatBridge taczCombatBridge,

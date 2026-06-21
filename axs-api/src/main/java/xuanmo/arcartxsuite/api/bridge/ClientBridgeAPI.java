@@ -19,6 +19,12 @@ public interface ClientBridgeAPI {
     /** 桥接是否可用 */
     boolean isAvailable();
 
+    /** 初始化桥接（由宿主调用） */
+    boolean initialize();
+
+    /** 关闭桥接（由宿主调用） */
+    void shutdown();
+
     /**
      * 向玩家发送伤害飘字显示。
      *

@@ -12,7 +12,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
-import xuanmo.arcartxsuite.bridge.AdyeshachNpcBridge;
+import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 
 /**
@@ -29,7 +29,7 @@ public final class QuestGpsMarkerService {
     private static final String MARKER_ID_PREFIX = "questgps_path_";
 
     private final JavaPlugin plugin;
-    private final AdyeshachNpcBridge npcBridge;
+    private final AdyeshachNpcBridgeAPI npcBridge;
     private final QuestGpsModuleConfiguration.MarkerDefaults config;
     private final Logger logger;
     private final boolean debug;
@@ -41,7 +41,7 @@ public final class QuestGpsMarkerService {
 
     public QuestGpsMarkerService(
         JavaPlugin plugin,
-        AdyeshachNpcBridge npcBridge,
+        AdyeshachNpcBridgeAPI npcBridge,
         QuestGpsModuleConfiguration.MarkerDefaults config,
         Logger logger,
         boolean debug

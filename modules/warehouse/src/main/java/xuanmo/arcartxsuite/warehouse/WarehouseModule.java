@@ -21,7 +21,7 @@ import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.PickupNotifiable;
 import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
@@ -164,7 +164,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
      */
     @Override
     protected void startService() throws Exception {
-        ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
 
         WarehouseService.UiResourceExporter uiExporter = (resourcePath, relativeUiPath, overwrite) -> {
@@ -175,8 +175,8 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
             }
         };
 
-        xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge itemStackBridge =
-            (xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge) context.itemStackBridge();
+        xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI itemStackBridge =
+            context.itemStackBridge();
         JdbcWarehouseRepository warehouseRepo = new JdbcWarehouseRepository(
             context.migrateLegacyDataFile(configuration.storage().sqliteFileName()),
             configuration.storage(), context.logger());

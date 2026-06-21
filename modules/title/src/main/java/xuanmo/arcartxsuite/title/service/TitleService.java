@@ -27,8 +27,8 @@ import org.bukkit.scheduler.BukkitTask;
 import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
-import xuanmo.arcartxsuite.bridge.ArcartXWorldTextureService;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.title.TitleDurationParser.TitleDurationSpec;
 import xuanmo.arcartxsuite.title.config.TitleDefinition;
@@ -56,7 +56,7 @@ public class TitleService {
     private final JavaPlugin plugin;
     private final TitleModuleConfiguration configuration;
     private final TitleRepository repository;
-    private final ArcartXPacketBridge bridge;
+    private final PacketBridgeAPI bridge;
     private final PacketGuardAPI packetGuard;
     private final Supplier<TabRefreshable> tabRefreshableProvider;
     private final UiResourceExporter uiResourceExporter;
@@ -82,25 +82,27 @@ public class TitleService {
         JavaPlugin plugin,
         TitleModuleConfiguration configuration,
         TitleRepository repository,
-        ArcartXPacketBridge bridge,
+        PacketBridgeAPI bridge,
         PacketGuardAPI packetGuard,
         Supplier<TabRefreshable> tabRefreshableProvider,
         UiResourceExporter uiResourceExporter,
-        xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge
+        xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge,
+        WorldTextureBridgeAPI worldTextureBridge
     ) {
-        this(plugin, configuration, repository, bridge, packetGuard, tabRefreshableProvider, uiResourceExporter, Clock.systemUTC(), attributeBridge);
+        this(plugin, configuration, repository, bridge, packetGuard, tabRefreshableProvider, uiResourceExporter, Clock.systemUTC(), attributeBridge, worldTextureBridge);
     }
 
     public TitleService(
         JavaPlugin plugin,
         TitleModuleConfiguration configuration,
         TitleRepository repository,
-        ArcartXPacketBridge bridge,
+        PacketBridgeAPI bridge,
         PacketGuardAPI packetGuard,
         Supplier<TabRefreshable> tabRefreshableProvider,
         UiResourceExporter uiResourceExporter,
         Clock clock,
-        xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge
+        xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge,
+        WorldTextureBridgeAPI worldTextureBridge
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
@@ -115,9 +117,7 @@ public class TitleService {
         this.mythicLibService = new TitleMythicLibService(plugin, configuration.mythicLib(), attributeBridge.mythicLib());
         this.craneAttributeService = new TitleCraneAttributeService(plugin, configuration.craneAttribute(), attributeBridge.craneAttribute());
         this.symphonyService = new TitleSymphonyService(plugin, configuration.symphony(), attributeBridge.symphony());
-        ArcartXWorldTextureService worldTextureService = new ArcartXWorldTextureService(plugin);
-        worldTextureService.initialize();
-        this.overheadService = new TitleOverheadService(worldTextureService, logger);
+        this.overheadService = new TitleOverheadService(worldTextureBridge, logger);
     }
 
     /**
@@ -242,7 +242,7 @@ public class TitleService {
     /**
      * 为指定玩家打开称号管理菜单。
      * <p>
-     * 异步加载玩家数据后，通过 {@link ArcartXPacketBridge} 发送 UI 初始化包。
+     * 异步加载玩家数据后，通过 {@link PacketBridgeAPI} 发送 UI 初始化包。
      *
      * @param player 目标玩家
      */

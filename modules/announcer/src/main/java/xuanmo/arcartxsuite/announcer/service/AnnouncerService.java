@@ -29,8 +29,8 @@ import xuanmo.arcartxsuite.announcer.transport.AnnouncerEnvelopeCodec;
 import xuanmo.arcartxsuite.api.capability.QQBotBroadcastable;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
-import xuanmo.arcartxsuite.bridge.ArcartXClientBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 
 public final class AnnouncerService implements Listener {
@@ -45,8 +45,8 @@ public final class AnnouncerService implements Listener {
 
     private final JavaPlugin plugin;
     private final AnnouncerModuleConfiguration configuration;
-    private final ArcartXPacketBridge bridge;
-    private final ArcartXClientBridge clientBridge;
+    private final PacketBridgeAPI bridge;
+    private final ClientBridgeAPI clientBridge;
     private final PacketGuardAPI packetGuard;
     private final java.util.List<String> uiIds;
     private final CrossServerAPI crossServer;
@@ -78,8 +78,8 @@ public final class AnnouncerService implements Listener {
     public AnnouncerService(
         JavaPlugin plugin,
         AnnouncerModuleConfiguration configuration,
-        ArcartXPacketBridge bridge,
-        ArcartXClientBridge clientBridge,
+        PacketBridgeAPI bridge,
+        ClientBridgeAPI clientBridge,
         PacketGuardAPI packetGuard,
         java.util.List<String> uiIds,
         CrossServerAPI crossServer,

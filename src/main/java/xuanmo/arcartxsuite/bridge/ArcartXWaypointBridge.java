@@ -11,7 +11,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public final class ArcartXWaypointBridge {
+public final class ArcartXWaypointBridge implements xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI {
 
     private final JavaPlugin plugin;
     private final Set<String> availableStyleIds = new LinkedHashSet<>();
@@ -26,6 +26,7 @@ public final class ArcartXWaypointBridge {
         this.plugin = plugin;
     }
 
+    @Override
     public boolean initialize(String ownerLabel) {
         reset();
 
@@ -50,18 +51,22 @@ public final class ArcartXWaypointBridge {
         }
     }
 
+    @Override
     public void shutdown() {
         reset();
     }
 
+    @Override
     public boolean available() {
         return available;
     }
 
+    @Override
     public Set<String> availableStyleIds() {
         return Set.copyOf(availableStyleIds);
     }
 
+    @Override
     public String resolveStyleId(String preferredStyleId, String fallbackStyleId, String ownerLabel) {
         String preferred = safe(preferredStyleId).isBlank() ? safe(fallbackStyleId) : preferredStyleId.trim();
         if (availableStyleIds.isEmpty() || availableStyleIds.contains(normalize(preferred))) {
@@ -74,6 +79,7 @@ public final class ArcartXWaypointBridge {
         return preferred;
     }
 
+    @Override
     public boolean addWaypoint(
         Player player,
         String waypointId,
@@ -99,6 +105,7 @@ public final class ArcartXWaypointBridge {
         }
     }
 
+    @Override
     public boolean removeWaypoint(Player player, String waypointId, boolean animated) {
         if (!available || player == null || safe(waypointId).isBlank()) {
             return false;
@@ -116,6 +123,7 @@ public final class ArcartXWaypointBridge {
         }
     }
 
+    @Override
     public boolean clearWaypoints(Player player) {
         if (!available || player == null) {
             return false;

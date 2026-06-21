@@ -31,8 +31,8 @@ import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
-import xuanmo.arcartxsuite.bridge.ArcartXClientBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsDayOfMonthReward;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsHolidayReward;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsMilestoneReward;
@@ -62,8 +62,8 @@ public class OnlineRewardsService implements Listener {
     private final JavaPlugin plugin;
     private final OnlineRewardsModuleConfiguration configuration;
     private final OnlineRewardsRepository repository;
-    private final ArcartXClientBridge clientBridge;
-    private final ArcartXPacketBridge packetBridge;
+    private final ClientBridgeAPI clientBridge;
+    private final PacketBridgeAPI packetBridge;
     private final PacketGuardAPI packetGuard;
     private final Supplier<MailDispatchable> mailProvider;
     private final Supplier<SignalDispatchable> signalProvider;
@@ -87,8 +87,8 @@ public class OnlineRewardsService implements Listener {
         JavaPlugin plugin,
         OnlineRewardsModuleConfiguration configuration,
         OnlineRewardsRepository repository,
-        ArcartXClientBridge clientBridge,
-        ArcartXPacketBridge packetBridge,
+        ClientBridgeAPI clientBridge,
+        PacketBridgeAPI packetBridge,
         PacketGuardAPI packetGuard,
         Supplier<MailDispatchable> mailProvider,
         Supplier<SignalDispatchable> signalProvider,
@@ -104,8 +104,8 @@ public class OnlineRewardsService implements Listener {
         JavaPlugin plugin,
         OnlineRewardsModuleConfiguration configuration,
         OnlineRewardsRepository repository,
-        ArcartXClientBridge clientBridge,
-        ArcartXPacketBridge packetBridge,
+        ClientBridgeAPI clientBridge,
+        PacketBridgeAPI packetBridge,
         PacketGuardAPI packetGuard,
         Supplier<MailDispatchable> mailProvider,
         Supplier<SignalDispatchable> signalProvider,

@@ -54,7 +54,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
@@ -87,7 +87,7 @@ import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.WarehouseRecord
 /**
  * Warehouse 核心业务服务，统筹个人仓库、共享仓库、多货币银行、二级密码与自动拾取逻辑。
  * <p>
- * 通过 {@link ArcartXPacketBridge} 与客户端 AXUI 通信，所有状态变更后回发更新包刷新界面。
+ * 通过 {@link PacketBridgeAPI} 与客户端 AXUI 通信，所有状态变更后回发更新包刷新界面。
  * 共享仓库使用 {@link #sharedEditLocks} 实现编辑互斥锁；启用 cross-server 时经 SDK 同步至其他子服。
  */
 public final class WarehouseService implements Listener {
@@ -122,8 +122,8 @@ public final class WarehouseService implements Listener {
     }
 
     private final JavaPlugin plugin;
-    private final ArcartXPacketBridge packetBridge;
-    private final xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge itemStackBridge;
+    private final PacketBridgeAPI packetBridge;
+    private final xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI itemStackBridge;
     private final PacketGuardAPI packetGuard;
     private final UiResourceExporter uiResourceExporter;
     private final WarehouseModuleConfiguration configuration;
@@ -154,8 +154,8 @@ public final class WarehouseService implements Listener {
 
     public WarehouseService(
         JavaPlugin plugin,
-        ArcartXPacketBridge packetBridge,
-        xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge itemStackBridge,
+        PacketBridgeAPI packetBridge,
+        xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI itemStackBridge,
         PacketGuardAPI packetGuard,
         UiResourceExporter uiResourceExporter,
         WarehouseModuleConfiguration configuration,
@@ -185,8 +185,8 @@ public final class WarehouseService implements Listener {
 
     public WarehouseService(
         JavaPlugin plugin,
-        ArcartXPacketBridge packetBridge,
-        xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge itemStackBridge,
+        PacketBridgeAPI packetBridge,
+        xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI itemStackBridge,
         PacketGuardAPI packetGuard,
         UiResourceExporter uiResourceExporter,
         WarehouseModuleConfiguration configuration,
@@ -833,7 +833,7 @@ public final class WarehouseService implements Listener {
      * @return 运行时 UI ID
      */
     private String bindUi(String configuredId, String resourcePath, String destinationPath, String uiKind) throws Exception {
-        ArcartXPacketBridge bridge = packetBridge;
+        PacketBridgeAPI bridge = packetBridge;
         File uiFile = uiResourceExporter.export(resourcePath, destinationPath, configuration.ui().overwriteUiFiles());
         if (bridge == null || !configuration.ui().registerUiOnEnable()) {
             String runtime = xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.normalizeUiId(configuredId, uiFile);

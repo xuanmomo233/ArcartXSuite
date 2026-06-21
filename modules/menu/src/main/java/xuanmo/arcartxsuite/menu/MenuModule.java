@@ -109,7 +109,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = (PacketBridgeAPI) context.packetBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
         if (packetBridge == null || !packetBridge.isAvailable()) {
             throw new IllegalStateException("Menu 模块需要 ArcartX PacketBridge");
@@ -141,7 +141,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
             packetBridge,
             packetGuard,
             configuration,
-            (ItemBridgeAPI) context.itemStackBridge(),
+            context.itemStackBridge(),
             context.itemSourceRegistry()
         );
         service.setRuntimeUiIds(panelBinding.runtimeUiId(), escBinding.runtimeUiId());

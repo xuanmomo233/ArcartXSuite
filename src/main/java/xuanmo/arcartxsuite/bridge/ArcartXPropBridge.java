@@ -18,7 +18,7 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public final class ArcartXPropBridge {
+public final class ArcartXPropBridge implements xuanmo.arcartxsuite.api.bridge.PropBridgeAPI {
 
     private static final String ARCARTX_API_CLASS_NAME = "priv.seventeen.artist.arcartx.api.ArcartXAPI";
     private static final String PLAYER_UTILS_CLASS_NAME = "priv.seventeen.artist.arcartx.util.PlayerUtils";
@@ -203,7 +203,8 @@ public final class ArcartXPropBridge {
         }
     }
 
-    public Optional<PlayerHandle> resolvePlayerHandle(Player player) {
+    @Override
+    public Optional<xuanmo.arcartxsuite.api.bridge.PropPlayerHandle> resolvePlayerHandle(Player player) {
         if (!available || player == null) {
             return Optional.empty();
         }
@@ -320,7 +321,7 @@ public final class ArcartXPropBridge {
             : cause.getClass().getSimpleName() + ": " + message;
     }
 
-    public final class PlayerHandle {
+    public final class PlayerHandle implements xuanmo.arcartxsuite.api.bridge.PropPlayerHandle {
 
         private final Object handle;
 

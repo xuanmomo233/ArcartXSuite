@@ -10,42 +10,62 @@ ArcartXSuite 已从单体插件重构为 **宿主 + 模块 Jar** 架构。
 
 ```
 ArcartXSuite/
-├── axs-api/              # 模块 API 接口层（AXSModule, ModuleContext 等）
+├── axs-api/              # 模块 API 接口层（AXSModule, ModuleContext, bridge API 等）
 ├── axs-core/             # 宿主核心（ShadowJar 输出）
+│   ├── lifecycle/        # BridgeLifecycleManager / ClientEventLifecycleManager
+│   ├── module/           # ModuleRegistry, DefaultModuleContext
+│   ├── bridge/           # ArcartX 桥接实现（仅核心内部使用）
+│   └── util/             # ReflectionCache 等内部工具
 ├── modules/
+│   ├── afkreward/        # AFK 奖励
 │   ├── announcer/        # Announcer 播报 + Subtitle 字幕
-│   ├── entitytracker/    # EntityTracker 实体追踪 + AttackTarget 攻击目标
+│   ├── battlepass/       # BattlePass 战斗通行证
 │   ├── chat/             # Chat 频道聊天
-│   ├── conversation/     # Conversation 对话桥（需要 Chemdah）
-│   ├── eventpacket/      # EventPacket 事件引擎
 │   ├── combateffect/     # CombatEffect 战斗特效 + DigisDisplay 伤害飘字
+│   ├── conversation/     # Conversation 对话桥（需要 Chemdah）
+│   ├── entitytracker/    # EntityTracker 实体追踪 + AttackTarget 攻击目标
+│   ├── eventpacket/      # EventPacket 事件引擎
+│   ├── fishing/          # Fishing 钓鱼小游戏
 │   ├── loginview/        # LoginView 登录界面
+│   ├── lottery/          # Lottery 抽奖
 │   ├── mail/             # Mail 邮箱
 │   ├── map/              # Map 世界地图
+│   ├── market/           # Market 全球市场
+│   ├── menu/             # Menu 通用菜单
 │   ├── onlinerewards/    # OnlineRewards 在线奖励
 │   ├── pickup/           # Pickup 拾取提示
 │   ├── prop/             # Prop 快捷道具
 │   ├── questgps/         # QuestGPS 任务导航（需要 Chemdah）
+│   ├── regions/          # Regions 区域保护
 │   ├── rgb/              # RGB 渐变色文本
 │   ├── tab/              # Tab 在线列表
 │   ├── title/            # Title 称号
-│   └── warehouse/        # Warehouse 仓库银行
+│   ├── warehouse/        # Warehouse 仓库银行
+│   └── qqbot/            # QQBot 群服互联
+├── proxy/                # Bungee / Velocity 代理端公共库
+└── native/               # Native 安全库（可选）
 ```
 
 ## 构建
 
 ```bash
-# 构建宿主
+# 清理所有构建产物与缓存
+./gradlew clean
+
+# 构建宿主（含混淆）
 ./gradlew :axs-core:shadowJar
 
-# 构建全部模块 Jar
+# 构建全部模块 Jar（含混淆 + 字符串加密）
 ./gradlew buildModules
 
 # 构建单个模块
 ./gradlew :modules:rgb:jar
 
-# 全量构建（宿主 + 所有模块）
-./gradlew :axs-core:shadowJar buildModules
+# 全量构建（宿主 + 所有模块 + 代理）
+./gradlew buildAll
+
+# 运行测试
+./gradlew test
 ```
 
 ## 部署
@@ -74,19 +94,22 @@ plugins/
 
 ```
 onEnable()
-  ├── 初始化桥接 (packetBridge, clientBridge, itemStackBridge, propBridge, vaultEconomyBridge)
-  ├── 创建 ModuleRegistry
-  ├── scanAvailableModuleIds() → 预扫描 modules/ 目录
-  ├── 对每个模块:
-  │     externalModuleIds.contains(id) → 跳过内置加载（交给 ModuleRegistry）
-  │     否则 → 走内置 reloadXxxState() 加载
-  ├── printModuleStatusSummary()
+  ├── 初始化智能配置诊断 ConfigDiagnosticEngine
+  ├── 初始化 ClientPacketGuard
+  ├── BridgeLifecycleManager.initialize() → 创建并初始化所有桥接实现
+  ├── KeybindService.initialize() → 注册全局按键
+  ├── CrossServerService.start() → 启动跨服通道
+  ├── ClientEventLifecycleManager.start() → 监听 ArcartX 客户端事件
+  ├── ChatSignBypassService.initialize() → Paper 1.21+ 签名绕过
+  ├── 创建 ModuleRegistry（接收桥接 API 接口）
   ├── moduleRegistry.loadAll() → 按拓扑排序加载外部模块 Jar
   └── 完成
 ```
 
-> **关键设计**：短路求值 `externalModuleIds.contains(id) || reloadXxxState(true)` 避免双重初始化。  
-> 外部模块的 `onEnable()` 负责调用宿主 `reloadXxxState()` 或使用自建 Service。
+> **关键设计**：
+> - 桥接生命周期由 `BridgeLifecycleManager` 集中管理，模块只通过 `ModuleContext` 获取 API 接口。
+> - 客户端事件（自定义包、初始化完成）由 `ClientEventLifecycleManager` 监听并路由到模块。
+> - `ArcartXSuitePlugin` 不再直接持有桥接实现类，核心内部实现可安全混淆。
 
 ## 重载流程
 
@@ -145,31 +168,26 @@ public final class RgbModule implements AXSModule {
 }
 ```
 
-### 委托模式
+### 使用桥接 API 接口
 
-模块的 `onEnable`/`onDisable` 委托给宿主的 `reloadXxxState()`/`shutdownXxxModule()`。  
-适合 Service 与宿主紧密耦合、短期内不宜全面解耦的模块。
+模块通过 `ModuleContext` 获取 `PacketBridgeAPI` 等接口，而非直接引用核心实现类。
 
 ```java
-public final class AnnouncerModule implements AXSModule {
+public final class MyModule implements AXSModule {
     private ModuleContext context;
-    private boolean ready;
+    private PacketBridgeAPI packetBridge;
 
     @Override
     public boolean onEnable(ModuleContext context) throws Exception {
         this.context = context;
-        ArcartXSuitePlugin plugin = (ArcartXSuitePlugin) context.plugin();
-        ready = plugin.reloadAnnouncerState(true);
-        return ready;
+        this.packetBridge = context.packetBridge();
+        // 注册 UI、监听客户端包等
+        return true;
     }
 
     @Override
     public void onDisable() {
-        if (ready) {
-            ArcartXSuitePlugin plugin = (ArcartXSuitePlugin) context.plugin();
-            plugin.shutdownAnnouncerModule();
-        }
-        ready = false;
+        // 模块通过 context 注册的资源会自动清理
     }
 
     @Override
@@ -179,6 +197,8 @@ public final class AnnouncerModule implements AXSModule {
     }
 }
 ```
+
+> **禁止**：模块源码中不得 `import xuanmo.arcartxsuite.bridge.*` 或引用 `ArcartXSuitePlugin` 等核心实现类，否则混淆后可能无法加载。
 
 ## 模块开发指南
 
@@ -261,7 +281,15 @@ public final class MyModule implements AXSModule, ModuleCommandHandler {
 | `packetBridge()` | ArcartX 发包桥接 |
 | `clientBridge()` | ArcartX 客户端桥接 |
 | `itemStackBridge()` | ItemStack 桥接 |
+| `propBridge()` | Prop / 按键绑定桥接 |
+| `worldTextureBridge()` | 世界文字贴图桥接 |
+| `createWaypointBridge()` | 创建独立路标桥接实例 |
+| `createAdyeshachNpcBridge()` | 创建独立 Adyeshach NPC 桥接实例 |
 | `packetGuard()` | 客户端包守卫 |
+| `crossServer()` | 跨服通道 |
+| `accountTypeService()` | 统一账号识别服务 |
+| `registerCapability(Class, T)` | 注册跨模块能力 |
+| `getCapability(Class)` | 查找跨模块能力 |
 | `hasPlugin(String)` | 检查外部插件是否可用 |
 
 ## 核心组件
@@ -275,33 +303,57 @@ public final class MyModule implements AXSModule, ModuleCommandHandler {
 | `ModuleRegistry` | 模块扫描 / 加载 / 启用 / 禁用 / 重载 |
 | `ModuleClassLoader` | 模块隔离 ClassLoader |
 | `DefaultModuleContext` | ModuleContext 默认实现 |
+| `BridgeLifecycleManager` | 核心桥接生命周期管理 |
+| `ClientEventLifecycleManager` | ArcartX 客户端事件监听与路由 |
+| `ReflectionCache` | 核心内部反射缓存工具 |
+| `ClientPacketGuard` | 客户端包安全校验 |
+| `ChatSignBypassService` | Paper 1.21+ 聊天签名绕过 |
+| `CloudModuleService` | 云端模块同步 |
 
 ## 迁移状态
 
-| 模块 Jar | 对应功能模块 | 模式 | UI | 说明 |
-|----------|-------------|------|-----|------|
-| rgb | RGB | ✅ 独立 | — | 自建 ArcartRgbService |
-| pickup | Pickup | ✅ 独立 | HUD | 自建 PickupService |
-| tab | Tab | ✅ 独立 | — | 自建 TabSyncService |
-| combateffect | CombatEffect + DigisDisplay | ✅ 独立 | — | 自建 CombatEffectService，DigisDisplay 随 CombatEffect 加载 |
-| announcer | Announcer + Subtitle | 🔗 委托 | HUD | reloadAnnouncerState，Subtitle 随 Announcer 加载 |
-| entitytracker | EntityTracker + AttackTarget | 🔗 委托 | HUD | reloadEntityTrackerState，AttackTarget 随 EntityTracker 加载 |
-| chat | Chat | 🔗 委托 | — | reloadChatState |
-| conversation | Conversation | 🔗 委托 | UI+Selector | reloadConversationState |
-| eventpacket | EventPacket | 🔗 委托 | — | reloadEventPacketState |
-| loginview | LoginView | 🔗 委托 | UI | reloadLoginViewState |
-| mail | Mail | 🔗 委托 | — | reloadMailState |
-| map | Map | 🔗 委托 | Menu+HUD | reloadMapState |
-| onlinerewards | OnlineRewards | 🔗 委托 | — | reloadOnlineRewardsState |
-| prop | Prop | 🔗 委托 | — | reloadPropState |
-| questgps | QuestGPS | 🔗 委托 | Menu+HUD | reloadQuestGpsState |
-| title | Title | 🔗 委托 | — | reloadTitleState |
-| warehouse | Warehouse | 🔗 委托 | — | reloadWarehouseState |
+所有模块均已独立为外部 Jar，通过 `AbstractAXSModule` 实现生命周期，业务逻辑不再依赖宿主内置 Service。
 
-> **委托模式**：模块 Jar 控制「是否加载」，业务逻辑仍在宿主中执行。  
-> 后续可逐步将 Service 源码搬到模块子项目实现完全解耦。
+| 模块 Jar | 对应功能模块 | 模式 | UI |
+|----------|-------------|------|-----|
+| afkreward | AFK 奖励 | ✅ 独立 | — |
+| announcer | Announcer + Subtitle | ✅ 独立 | HUD |
+| battlepass | BattlePass 战斗通行证 | ✅ 独立 | UI |
+| chat | Chat 频道聊天 | ✅ 独立 | — |
+| combateffect | CombatEffect + DigisDisplay | ✅ 独立 | — |
+| conversation | Conversation 对话 | ✅ 独立 | UI+Selector |
+| entitytracker | EntityTracker + AttackTarget | ✅ 独立 | HUD |
+| eventpacket | EventPacket 事件引擎 | ✅ 独立 | — |
+| fishing | Fishing 钓鱼 | ✅ 独立 | UI |
+| loginview | LoginView 登录界面 | ✅ 独立 | UI |
+| lottery | Lottery 抽奖 | ✅ 独立 | UI |
+| mail | Mail 邮箱 | ✅ 独立 | UI |
+| map | Map 世界地图 | ✅ 独立 | Menu+HUD |
+| market | Market 全球市场 | ✅ 独立 | UI |
+| menu | Menu 通用菜单 | ✅ 独立 | UI |
+| onlinerewards | OnlineRewards 在线奖励 | ✅ 独立 | — |
+| pickup | Pickup 拾取提示 | ✅ 独立 | HUD |
+| prop | Prop 快捷道具 | ✅ 独立 | — |
+| questgps | QuestGPS 任务导航 | ✅ 独立 | Menu+HUD |
+| regions | Regions 区域保护 | ✅ 独立 | — |
+| rgb | RGB 渐变色文本 | ✅ 独立 | — |
+| tab | Tab 在线列表 | ✅ 独立 | — |
+| title | Title 称号 | ✅ 独立 | — |
+| warehouse | Warehouse 仓库银行 | ✅ 独立 | UI |
+| qqbot | QQBot 群服互联 | ✅ 独立 | — |
+
+> 委托模式已完全淘汰，模块与宿主之间仅通过 `axs-api` 接口与 Capability 通信。
 
 ## 近期变更记录
+
+### v4 — Bridge API 接口化 & 核心生命周期拆分
+
+- **Bridge API 全面接口化**：`PacketBridgeAPI` / `ClientBridgeAPI` / `ItemBridgeAPI` / `PropBridgeAPI` / `WaypointBridgeAPI` / `AdyeshachNpcBridgeAPI` / `WorldTextureBridgeAPI` 成为模块唯一可见的桥接面；模块禁止直接引用 `xuanmo.arcartxsuite.bridge.*` 实现类。
+- **核心内部字段接口化**：`ArcartXSuitePlugin`、`ModuleRegistry`、`DefaultModuleContext`、`KeybindService` 字段与参数全部使用 API 接口类型。
+- **生命周期拆分**：新增 `BridgeLifecycleManager` 管理桥接创建/初始化/关闭；新增 `ClientEventLifecycleManager` 管理客户端事件监听与路由；`ArcartXSuitePlugin` 从 765 行精简到约 578 行。
+- **反射缓存工具**：新增 `ReflectionCache`，已应用于 `ChatSignBypassService` 和 `ClientEventLifecycleManager`，减少重复反射样板代码。
+- **混淆安全**：核心 bridge 实现类可被 ProGuard 完全混淆，`modules/` 下 17 个模块 JAR 中不再出现任何原始 bridge 实现类名。
+- **委托模式淘汰**：所有模块均通过 `AbstractAXSModule` 独立实现，不再依赖 `ArcartXSuitePlugin.reloadXxxState()` 等宿主方法。
 
 ### v3 — 混合登录代理重构（独立进程架构）
 

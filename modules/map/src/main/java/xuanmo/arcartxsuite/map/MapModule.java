@@ -21,7 +21,7 @@ import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.capability.MapNavigable;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.map.command.MapAdminCommand;
 import xuanmo.arcartxsuite.map.command.MapPlayerCommand;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration;
@@ -116,7 +116,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
 
     @Override
     protected void startService() throws Exception {
-        ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
 
         File menuFile = new File(context.pluginDataFolder(), MapService.MENU_UI_FILE_PATH);
@@ -143,7 +143,8 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             context.plugin(), packetGuard, configuration,
             mapRepo,
             packetBridge, menuBinding.runtimeUiId(), hudBinding.runtimeUiId(),
-            context.itemSourceRegistry(), context.itemMatcher(), context.currencyManager()
+            context.itemSourceRegistry(), context.itemMatcher(), context.currencyManager(),
+            context.createWaypointBridge()
         );
         service.start();
 

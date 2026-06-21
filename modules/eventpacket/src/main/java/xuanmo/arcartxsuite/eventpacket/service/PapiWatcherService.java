@@ -16,7 +16,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.plugin.java.JavaPlugin;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketContext;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketRule;
@@ -31,7 +31,7 @@ public final class PapiWatcherService {
     private final JavaPlugin plugin;
     private final EventPacketDispatchService dispatchService;
     private final PluginConfiguration configuration;
-    private final ArcartXPacketBridge packetBridge;
+    private final PacketBridgeAPI packetBridge;
     private final EventPacketRepository repository;
     private final PlaceholderResolverAPI placeholderResolver;
     private final Map<String, Map<UUID, String>> lastValues = new HashMap<>();
@@ -43,7 +43,7 @@ public final class PapiWatcherService {
         JavaPlugin plugin,
         EventPacketDispatchService dispatchService,
         PluginConfiguration configuration,
-        ArcartXPacketBridge packetBridge,
+        PacketBridgeAPI packetBridge,
         EventPacketRepository repository,
         PlaceholderResolverAPI placeholderResolver
     ) {

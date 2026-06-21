@@ -22,6 +22,21 @@ public interface PacketBridgeAPI {
     /** 桥接是否可用（ArcartX 插件已加载且初始化成功） */
     boolean isAvailable();
 
+    /** 初始化桥接（由宿主调用，模块不应调用） */
+    boolean initialize();
+
+    /** 关闭桥接（由宿主调用，模块不应调用） */
+    void shutdown();
+
+    /** 返回当前 packet 发送模式描述（用于日志/诊断） */
+    String describePacketMode();
+
+    /** 复位 UI 注册计数（模块加载期间统计用） */
+    void resetUiRegistrationCount();
+
+    /** 获取自上次复位以来成功注册的 UI 数量 */
+    int successfulUiRegistrationCount();
+
     // ─── UI 生命周期 ────────────────────────────────────────────
 
     /**
@@ -74,6 +89,17 @@ public interface PacketBridgeAPI {
 
     /** 发送聊天卡片 */
     boolean sendChatCard(@NotNull Player player, @NotNull String cardId, @NotNull Map<String, String> data);
+
+    // ─── 非安全 UI 操作（不触发 ArcartX 服务端校验/回调，模块按需使用） ──
+
+    /** 非安全打开 UI（不经过 ArcartX 服务端校验） */
+    boolean openUiUnsafe(@NotNull Player player, @NotNull String uiId);
+
+    /** 非安全打开 UI 并带关闭回调 */
+    boolean openUiUnsafeWithCallback(@NotNull Player player, @NotNull String uiId, @NotNull Runnable callback);
+
+    /** 非安全关闭 UI（不经过 ArcartX 服务端校验） */
+    boolean closeUiUnsafe(@NotNull Player player, @NotNull String uiId);
 
     // ─── 关闭回调 ──────────────────────────────────────────────
 

@@ -9,10 +9,10 @@
 -keep class xuanmo.arcartxsuite.auth.MixedYggdrasilProxy { *; }
 -keep class xuanmo.arcartxsuite.auth.MixedYggdrasilProxy$* { *; }
 
-# ─── bridge 包：不再 blanket keep ──────────────────────────────
-# 模块编译时已依赖混淆后的 core jar，运行时按混淆后的名称链接。
-# 只需防止 ProGuard shrink 掉模块间实际使用但宿主未直接引用的类/方法。
-# 通过 -dontshrink 已全局禁止 shrink（见 ObfuscateJarTask），此处无需 keep。
+# ─── bridge 包：不再保留任何实现类名 ─────────────────────────────
+# 所有核心 bridge 均通过 xuanmo.arcartxsuite.api.bridge.* 接口暴露，并由宿主实现。
+# 模块不直接引用 xuanmo.arcartxsuite.bridge.* 下的任何实现类，核心 bridge 可完全混淆。
+
 
 # ─── Shadow 打包的第三方库不混淆 ─────────────────────────────
 -keep class com.zaxxer.hikari.** { *; }

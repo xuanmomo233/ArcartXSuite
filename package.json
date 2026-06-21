@@ -1,7 +1,0 @@
-{
-  "devDependencies": {
-    "@types/node-cron": "^3.0.11",
-    "mermaid": "^11.15.0",
-    "vitepress-plugin-mermaid": "^2.0.17"
-  }
-}

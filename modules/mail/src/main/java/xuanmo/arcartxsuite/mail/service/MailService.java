@@ -44,7 +44,7 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitTask;
 import java.util.function.BiConsumer;
 import org.bukkit.plugin.java.JavaPlugin;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.UiRegistrationResult;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
@@ -118,7 +118,7 @@ public final class MailService implements Listener {
     private final File baseDataDir;
     private final MailModuleConfiguration configuration;
     private final MailRepository repository;
-    private final ArcartXPacketBridge bridge;
+    private final PacketBridgeAPI bridge;
     private final PacketGuardAPI packetGuard;
     private final UiResourceExporter uiResourceExporter;
     private final BundledResourceWriter bundledResourceWriter;
@@ -151,7 +151,7 @@ public final class MailService implements Listener {
         JavaPlugin plugin,
         MailModuleConfiguration configuration,
         MailRepository repository,
-        ArcartXPacketBridge bridge,
+        PacketBridgeAPI bridge,
         PacketGuardAPI packetGuard,
         UiResourceExporter uiResourceExporter,
         BundledResourceWriter bundledResourceWriter,
@@ -168,7 +168,7 @@ public final class MailService implements Listener {
         File baseDataDir,
         MailModuleConfiguration configuration,
         MailRepository repository,
-        ArcartXPacketBridge bridge,
+        PacketBridgeAPI bridge,
         PacketGuardAPI packetGuard,
         UiResourceExporter uiResourceExporter,
         BundledResourceWriter bundledResourceWriter,

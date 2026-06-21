@@ -23,7 +23,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.announcer.config.AnnouncerModuleConfiguration.SubtitleSettings;
 import xuanmo.arcartxsuite.api.config.UiIdParser;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 
 /**
  * 字幕打字机播放服务。
@@ -34,7 +34,7 @@ public final class SubtitleService implements Listener {
 
     private final JavaPlugin plugin;
     private final Logger logger;
-    private final ArcartXPacketBridge packetBridge;
+    private final PacketBridgeAPI packetBridge;
     private final SubtitleSettings settings;
     private final java.util.List<String> subtitleUiIds;
     private final File groupsDirectory;
@@ -52,7 +52,7 @@ public final class SubtitleService implements Listener {
     public SubtitleService(
         JavaPlugin plugin,
         Logger logger,
-        ArcartXPacketBridge packetBridge,
+        PacketBridgeAPI packetBridge,
         SubtitleSettings settings,
         java.util.List<String> subtitleUiIds,
         File dataFolder,

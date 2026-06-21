@@ -32,7 +32,7 @@ import xuanmo.arcartxsuite.entitytracker.service.RankingRewardService;
 import xuanmo.arcartxsuite.entitytracker.scheduler.RankingRewardScheduler;
 import xuanmo.arcartxsuite.entitytracker.reward.RewardActionExecutor;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration;
 import xuanmo.arcartxsuite.entitytracker.boss.placeholder.EntityTrackerPlaceholderExpansion;
 import xuanmo.arcartxsuite.entitytracker.boss.platform.ServerPlatform;
@@ -165,7 +165,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
 
     @Override
     protected void startService() throws Exception {
-        ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
 
         moduleDataSource = initializeModuleDatabaseIfNeeded();
         initializePersistenceServices();
@@ -335,7 +335,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             () -> configuration,
             () -> bossService,
             () -> bossRuntimeUiIds.isEmpty() ? "" : bossRuntimeUiIds.get(0),
-            () -> (ArcartXPacketBridge) context.packetBridge()
+            () -> context.packetBridge()
         );
     }
 

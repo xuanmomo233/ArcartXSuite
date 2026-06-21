@@ -7,8 +7,10 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.util.ReflectionCache;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.logging.Logger;
 
 /**
@@ -34,6 +36,7 @@ public final class ChatSignBypassService implements Listener {
     private final JavaPlugin plugin;
     private final Logger logger;
     private final boolean enabled;
+    private final ReflectionCache reflectionCache;
     private boolean paperDetected;
     private volatile boolean reflectionSuccessLogged;
 
@@ -41,6 +44,7 @@ public final class ChatSignBypassService implements Listener {
         this.plugin = plugin;
         this.logger = plugin.getLogger();
         this.enabled = enabled;
+        this.reflectionCache = new ReflectionCache(plugin.getClass().getClassLoader());
     }
 
     public void initialize() {
@@ -70,11 +74,11 @@ public final class ChatSignBypassService implements Listener {
 
     private void detectPaper() {
         try {
-            Class.forName("com.destroystokyo.paper.PaperConfig");
+            reflectionCache.forName("com.destroystokyo.paper.PaperConfig");
             paperDetected = true;
         } catch (ClassNotFoundException e) {
             try {
-                Class.forName("io.papermc.paper.configuration.Configuration");
+                reflectionCache.forName("io.papermc.paper.configuration.Configuration");
                 paperDetected = true;
             } catch (ClassNotFoundException e2) {
                 paperDetected = false;
@@ -91,7 +95,8 @@ public final class ChatSignBypassService implements Listener {
         }
         try {
             // CraftPlayer -> getHandle() -> ServerPlayer (NMS)
-            Object handle = player.getClass().getMethod("getHandle").invoke(player);
+            Method getHandle = reflectionCache.method(player.getClass(), "getHandle");
+            Object handle = getHandle.invoke(player);
 
             // 1. 尝试清除 ServerPlayer 上的聊天会话字段
             boolean playerFieldCleared = false;
@@ -104,7 +109,8 @@ public final class ChatSignBypassService implements Listener {
 
             // 2. 尝试清除 ServerGamePacketListenerImpl 上的签名字段
             // ServerPlayer.connection -> ServerGamePacketListenerImpl
-            Object connection = handle.getClass().getField("connection").get(handle);
+            Field connectionField = reflectionCache.field(handle.getClass(), "connection");
+            Object connection = connectionField.get(handle);
             boolean connectionFieldCleared = false;
             for (String fieldName : CONNECTION_FIELDS) {
                 if (trySetField(connection, fieldName, null)) {
@@ -123,28 +129,16 @@ public final class ChatSignBypassService implements Listener {
     }
 
     private boolean trySetField(Object target, String fieldName, Object value) {
+        Field field = reflectionCache.findFieldInHierarchy(target.getClass(), fieldName);
+        if (field == null) {
+            return false;
+        }
         try {
-            Field field = findFieldInHierarchy(target.getClass(), fieldName);
-            if (field == null) {
-                return false;
-            }
             field.setAccessible(true);
             field.set(target, value);
             return true;
         } catch (IllegalAccessException e) {
             return false;
         }
-    }
-
-    private Field findFieldInHierarchy(Class<?> clazz, String fieldName) {
-        Class<?> current = clazz;
-        while (current != null && current != Object.class) {
-            try {
-                return current.getDeclaredField(fieldName);
-            } catch (NoSuchFieldException e) {
-                current = current.getSuperclass();
-            }
-        }
-        return null;
     }
 }

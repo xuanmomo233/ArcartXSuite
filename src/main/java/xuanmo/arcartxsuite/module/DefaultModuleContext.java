@@ -24,6 +24,7 @@ import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PropBridgeAPI;
 import xuanmo.arcartxsuite.api.account.AccountTypeService;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry;
@@ -33,10 +34,9 @@ import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderExpansionRegistry;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
-import xuanmo.arcartxsuite.bridge.ArcartXClientBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPropBridge;
+import xuanmo.arcartxsuite.bridge.ArcartXWaypointBridge;
+import xuanmo.arcartxsuite.bridge.ArcartXWorldTextureService;
+import xuanmo.arcartxsuite.bridge.AdyeshachNpcBridge;
 import xuanmo.arcartxsuite.crossserver.CrossServerService;
 import xuanmo.arcartxsuite.keybind.KeybindService;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
@@ -54,10 +54,11 @@ final class DefaultModuleContext implements ModuleContext {
     private final Logger logger;
     private final File dataFolder;
     private final File uiFolder;
-    private final ArcartXPacketBridge packetBridge;
-    private final ArcartXClientBridge clientBridge;
-    private final ArcartXItemStackBridge itemStackBridge;
-    private final ArcartXPropBridge propBridge;
+    private final PacketBridgeAPI packetBridge;
+    private final ClientBridgeAPI clientBridge;
+    private final ItemBridgeAPI itemStackBridge;
+    private final PropBridgeAPI propBridge;
+    private final xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI worldTextureBridge;
     private final ClientPacketGuard packetGuard;
     private final ModuleRegistry registry;
     private final ClassLoader moduleClassLoader;
@@ -76,10 +77,10 @@ final class DefaultModuleContext implements ModuleContext {
     DefaultModuleContext(
         JavaPlugin plugin,
         String moduleId,
-        ArcartXPacketBridge packetBridge,
-        ArcartXClientBridge clientBridge,
-        ArcartXItemStackBridge itemStackBridge,
-        ArcartXPropBridge propBridge,
+        PacketBridgeAPI packetBridge,
+        ClientBridgeAPI clientBridge,
+        ItemBridgeAPI itemStackBridge,
+        PropBridgeAPI propBridge,
         ClientPacketGuard packetGuard,
         ModuleRegistry registry,
         ClassLoader moduleClassLoader,
@@ -97,6 +98,8 @@ final class DefaultModuleContext implements ModuleContext {
         this.clientBridge = clientBridge;
         this.itemStackBridge = itemStackBridge;
         this.propBridge = propBridge;
+        this.worldTextureBridge = new ArcartXWorldTextureService(plugin);
+        this.worldTextureBridge.initialize();
         this.packetGuard = packetGuard;
         this.registry = registry;
         this.moduleClassLoader = moduleClassLoader;
@@ -360,8 +363,23 @@ final class DefaultModuleContext implements ModuleContext {
     }
 
     @Override
-    public Object propBridge() {
+    public xuanmo.arcartxsuite.api.bridge.PropBridgeAPI propBridge() {
         return propBridge;
+    }
+
+    @Override
+    public xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI worldTextureBridge() {
+        return worldTextureBridge;
+    }
+
+    @Override
+    public xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI createWaypointBridge() {
+        return new ArcartXWaypointBridge(plugin);
+    }
+
+    @Override
+    public xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI createAdyeshachNpcBridge() {
+        return new AdyeshachNpcBridge(plugin);
     }
 
     // ─── 新增：事件与命令注册 ────────────────────────────────

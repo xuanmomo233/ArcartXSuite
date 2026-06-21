@@ -23,7 +23,7 @@ import org.bukkit.plugin.EventExecutor;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public final class AdyeshachNpcBridge {
+public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI {
 
     private static final long REFLECTION_WARNING_INTERVAL_MS = 5000L;
 
@@ -77,10 +77,12 @@ public final class AdyeshachNpcBridge {
         this.plugin = plugin;
     }
 
+    @Override
     public void setDebug(boolean debug) {
         this.debug = debug;
     }
 
+    @Override
     public boolean initialize() {
         available = false;
         apiInstance = null;
@@ -128,6 +130,7 @@ public final class AdyeshachNpcBridge {
         }
     }
 
+    @Override
     public void shutdown() {
         unregisterVisibleHandler();
         clearAllPrivateMarkers();
@@ -155,11 +158,13 @@ public final class AdyeshachNpcBridge {
         entitySetMetaMethod = null;
     }
 
+    @Override
     public boolean isAvailable() {
         return available;
     }
 
-    public List<NearbyNpc> findNearby(Player player, double range) {
+    @Override
+    public List<xuanmo.arcartxsuite.api.bridge.AdyeshachNearbyNpc> findNearby(Player player, double range) {
         if (!available || player == null || !player.isOnline() || range <= 0.0D) {
             return List.of();
         }
@@ -167,10 +172,10 @@ public final class AdyeshachNpcBridge {
         World playerWorld = player.getWorld();
         Location playerLocation = player.getLocation();
         double rangeSquared = range * range;
-        List<NearbyNpc> result = new ArrayList<>();
+        List<xuanmo.arcartxsuite.api.bridge.AdyeshachNearbyNpc> result = new ArrayList<>();
         for (Object entity : invokeEntities()) {
             try {
-                NearbyNpc nearbyNpc = resolveNearbyNpc(entity, player, playerWorld, playerLocation, rangeSquared);
+                xuanmo.arcartxsuite.api.bridge.AdyeshachNearbyNpc nearbyNpc = resolveNearbyNpc(entity, player, playerWorld, playerLocation, rangeSquared);
                 if (nearbyNpc != null) {
                     result.add(nearbyNpc);
                 }
@@ -180,7 +185,7 @@ public final class AdyeshachNpcBridge {
         }
 
         result.sort(
-            Comparator.comparingDouble(NearbyNpc::distanceSquared)
+            Comparator.comparingDouble(xuanmo.arcartxsuite.api.bridge.AdyeshachNearbyNpc::distanceSquared)
                 .thenComparing(nearbyNpc -> nearbyNpc.label().toLowerCase(Locale.ROOT))
                 .thenComparing(nearbyNpc -> nearbyNpc.npcId().toLowerCase(Locale.ROOT))
         );
@@ -191,6 +196,7 @@ public final class AdyeshachNpcBridge {
      * 按显示名（或 ID）精确查找第一个匹配的 Adyeshach NPC。
      * 先比较 displayName/customName，再比较 id，均忽略大小写。
      */
+    @Override
     public Optional<Object> findByName(String name) {
         if (!available || name == null || name.isBlank()) {
             return Optional.empty();
@@ -233,6 +239,7 @@ public final class AdyeshachNpcBridge {
      * @param adyeshachEntity Adyeshach 实体对象
      * @return 非空名称列表（去除空白）
      */
+    @Override
     public List<String> getEntityNames(Object adyeshachEntity) {
         if (adyeshachEntity == null) {
             return List.of();
@@ -268,6 +275,7 @@ public final class AdyeshachNpcBridge {
      * @param handler 回调，参数为 (viewer, adyeshachEntity)
      * @return 注册成功返回 true；Adyeshach 不可用、事件类无法加载或反射失败返回 false
      */
+    @Override
     public boolean registerVisibleHandler(BiConsumer<Player, Object> handler) {
         unregisterVisibleHandler();
         if (!available || handler == null) {
@@ -317,6 +325,7 @@ public final class AdyeshachNpcBridge {
     /**
      * 取消已注册的可见事件监听器。重复调用安全。
      */
+    @Override
     public void unregisterVisibleHandler() {
         if (adyeshachVisibleListener != null) {
             try {
@@ -366,6 +375,7 @@ public final class AdyeshachNpcBridge {
      * @param location 目标位置
      * @return 成功返回生成的 Adyeshach 实体对象，失败返回 null
      */
+    @Override
     public Object spawnPrivateMarker(Player player, String markerId, Location location) {
         if (!available || player == null || markerId == null || location == null) {
             plugin.getLogger().warning("AdyeshachNpcBridge: spawnPrivateMarker 前置检查失败 available=" + available);
@@ -470,6 +480,7 @@ public final class AdyeshachNpcBridge {
     /**
      * 传送指定玩家的导航标记实体到新位置。
      */
+    @Override
     public boolean teleportMarker(Player player, String markerId, Location location) {
         if (player == null || markerId == null || location == null) {
             return false;
@@ -495,6 +506,7 @@ public final class AdyeshachNpcBridge {
     /**
      * 移除指定玩家的导航标记实体。
      */
+    @Override
     public boolean removePrivateMarker(Player player, String markerId) {
         if (player == null || markerId == null) {
             return false;
@@ -509,6 +521,7 @@ public final class AdyeshachNpcBridge {
     /**
      * 清除所有私有标记实体（shutdown 时调用）。
      */
+    @Override
     public void clearAllPrivateMarkers() {
         for (Object entity : privateMarkerEntities.values()) {
             deleteEntity(entity);
@@ -519,6 +532,7 @@ public final class AdyeshachNpcBridge {
     /**
      * 获取已生成的私有标记实体（用于后续 applyModel 调用）。
      */
+    @Override
     public Object getPrivateMarker(Player player, String markerId) {
         if (player == null || markerId == null) {
             return null;
@@ -668,6 +682,7 @@ public final class AdyeshachNpcBridge {
      * @param scale           缩放比例
      * @return 成功返回 true
      */
+    @Override
     public boolean applyModel(Object adyeshachEntity, String modelId, double scale) {
         if (!available || adyeshachEntity == null || modelId == null || modelId.isBlank()) {
             return false;
@@ -739,6 +754,7 @@ public final class AdyeshachNpcBridge {
      * @param scale           缩放比例
      * @return 成功返回 true
      */
+    @Override
     public boolean applyModelForPlayer(Player player, Object adyeshachEntity, String modelId, double scale) {
         if (!available || player == null || adyeshachEntity == null || modelId == null || modelId.isBlank()) {
             plugin.getLogger().warning("AdyeshachNpcBridge: applyModelForPlayer 参数无效 available=" + available
@@ -771,6 +787,7 @@ public final class AdyeshachNpcBridge {
     /**
      * 为私有临时实体通过 ArcartXNetworkSender 点对点播放动画。
      */
+    @Override
     public boolean applyAnimationForPlayer(Player player, Object adyeshachEntity, String animation, double speed, int transitionTime, long keepTime) {
         if (!available || player == null || adyeshachEntity == null || animation == null || animation.isBlank()) {
             return false;
@@ -796,6 +813,7 @@ public final class AdyeshachNpcBridge {
      * 为私有临时实体设置默认状态。
      * NetworkSender 无 setDefaultState 方法，使用 sendSetEntityAnimation 以 -1 keepTime 模拟。
      */
+    @Override
     public boolean applyDefaultStateForPlayer(Player player, Object adyeshachEntity, String state, String animName) {
         if (!available || player == null || adyeshachEntity == null || state == null || animName == null) {
             return false;
@@ -884,6 +902,7 @@ public final class AdyeshachNpcBridge {
      * @param keepTime        持续时间（毫秒），-1 表示播放完整动画
      * @return 成功返回 true
      */
+    @Override
     public boolean applyAnimation(Object adyeshachEntity, String animation, double speed, int transitionTime, long keepTime) {
         if (!available || adyeshachEntity == null || animation == null || animation.isBlank()) {
             return false;
@@ -951,6 +970,7 @@ public final class AdyeshachNpcBridge {
      * @param animName        动画名称
      * @return 成功返回 true
      */
+    @Override
     public boolean applyDefaultState(Object adyeshachEntity, String state, String animName) {
         if (!available || adyeshachEntity == null || state == null || animName == null) {
             return false;
@@ -1111,7 +1131,7 @@ public final class AdyeshachNpcBridge {
         return null;
     }
 
-    private NearbyNpc resolveNearbyNpc(
+    private xuanmo.arcartxsuite.api.bridge.AdyeshachNearbyNpc resolveNearbyNpc(
         Object entity,
         Player player,
         World playerWorld,
@@ -1155,7 +1175,7 @@ public final class AdyeshachNpcBridge {
             return null;
         }
 
-        return new NearbyNpc(npcId, label, location.clone(), entity, conversationEntity, distanceSquared);
+        return new xuanmo.arcartxsuite.api.bridge.AdyeshachNearbyNpc(npcId, label, location.clone(), entity, conversationEntity, distanceSquared);
     }
 
     @SuppressWarnings("unchecked")
@@ -1507,13 +1527,4 @@ public final class AdyeshachNpcBridge {
         }
     }
 
-    public record NearbyNpc(
-        String npcId,
-        String label,
-        Location location,
-        Object rawEntity,
-        Object conversationEntity,
-        double distanceSquared
-    ) {
-    }
 }

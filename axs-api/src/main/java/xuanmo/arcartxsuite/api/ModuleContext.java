@@ -117,6 +117,18 @@ public interface ModuleContext {
     @ApiStability.Stable
     boolean taczActive();
 
+    /** 获取 ArcartX WorldTexture 文字贴图桥接（可能为 null） */
+    @ApiStability.Internal
+    @Nullable xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI worldTextureBridge();
+
+    /** 创建新的 ArcartX 路标桥接实例（模块独立管理生命周期） */
+    @ApiStability.Internal
+    @NotNull xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI createWaypointBridge();
+
+    /** 创建新的 Adyeshach NPC 桥接实例（模块独立管理生命周期） */
+    @ApiStability.Internal
+    @NotNull xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI createAdyeshachNpcBridge();
+
     // ─── 模块间通信 ───────────────────────────────────────────
 
     /**
@@ -199,7 +211,7 @@ public interface ModuleContext {
 
     /** 获取 ArcartX Prop 桥接（可能为 null） */
     @ApiStability.Internal
-    @Nullable Object propBridge();
+    @Nullable xuanmo.arcartxsuite.api.bridge.PropBridgeAPI propBridge();
 
     // ─── 事件与命令注册 ────────────────────────────────────────
 

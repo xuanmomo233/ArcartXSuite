@@ -11,7 +11,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
-import xuanmo.arcartxsuite.bridge.AdyeshachNpcBridge;
+import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
 import xuanmo.arcartxsuite.conversation.service.ConversationService;
 
 /**
@@ -25,12 +25,12 @@ public final class ConversationAdminCommand implements ModuleCommandHandler {
     private static final List<String> ADYESHACH_ACTIONS = List.of("setModel", "setAnimation", "playAnimation");
 
     private final Supplier<ConversationService> serviceProvider;
-    private final Supplier<AdyeshachNpcBridge> npcBridgeProvider;
+    private final Supplier<AdyeshachNpcBridgeAPI> npcBridgeProvider;
     private final MessageProvider messages;
 
     public ConversationAdminCommand(
         Supplier<ConversationService> serviceProvider,
-        Supplier<AdyeshachNpcBridge> npcBridgeProvider,
+        Supplier<AdyeshachNpcBridgeAPI> npcBridgeProvider,
         MessageProvider messages
     ) {
         this.serviceProvider = serviceProvider;
@@ -115,7 +115,7 @@ public final class ConversationAdminCommand implements ModuleCommandHandler {
             return;
         }
 
-        AdyeshachNpcBridge bridge = npcBridgeProvider.get();
+        AdyeshachNpcBridgeAPI bridge = npcBridgeProvider.get();
         if (bridge == null || !bridge.isAvailable()) {
             sender.sendMessage(fullMsg("adyeshach.setmodel.bridge-unavailable"));
             return;
@@ -147,7 +147,7 @@ public final class ConversationAdminCommand implements ModuleCommandHandler {
         String state = args[4];
         String animName = args[5];
 
-        AdyeshachNpcBridge bridge = npcBridgeProvider.get();
+        AdyeshachNpcBridgeAPI bridge = npcBridgeProvider.get();
         if (bridge == null || !bridge.isAvailable()) {
             sender.sendMessage(fullMsg("adyeshach.setmodel.bridge-unavailable"));
             return;
@@ -207,7 +207,7 @@ public final class ConversationAdminCommand implements ModuleCommandHandler {
             }
         }
 
-        AdyeshachNpcBridge bridge = npcBridgeProvider.get();
+        AdyeshachNpcBridgeAPI bridge = npcBridgeProvider.get();
         if (bridge == null || !bridge.isAvailable()) {
             sender.sendMessage(fullMsg("adyeshach.setmodel.bridge-unavailable"));
             return;

@@ -22,7 +22,7 @@ import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.mail.command.MailAdminCommand;
 import xuanmo.arcartxsuite.mail.command.MailPlayerCommand;
 import xuanmo.arcartxsuite.mail.config.MailModuleConfiguration;
@@ -110,7 +110,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected void startService() throws Exception {
-        ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
 
         MailService.UiResourceExporter uiExporter = (resourcePath, relativeUiPath, overwrite) -> {

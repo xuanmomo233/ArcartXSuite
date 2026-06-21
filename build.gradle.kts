@@ -4,6 +4,7 @@ import org.gradle.api.file.RegularFile
 import org.gradle.api.provider.Provider
 
 plugins {
+    id("base")
     id("com.gradleup.shadow") version "8.3.5" apply false
 }
 
@@ -102,6 +103,11 @@ tasks.register("encryptAllModuleAxb") {
     group = "protection"
     description = "将所有模块加密为 .axb（输出到 build/ArcartXSuite/module-axb/，上传云端用）"
     dependsOn(subprojects.filter { it.path.startsWith(":modules:") }.map { "${it.path}:encryptModuleAxb" })
+}
+
+// 扩展 clean 任务，确保自定义分发目录 build/ArcartXSuite/ 也被清理
+tasks.named<Delete>("clean") {
+    delete(distDir)
 }
 
 // 快速构建（跳过混淆，仅开发测试用）

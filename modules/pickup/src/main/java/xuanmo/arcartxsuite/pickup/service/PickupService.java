@@ -21,8 +21,8 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
-import xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration;
 
 public final class PickupService implements Listener {
@@ -33,8 +33,8 @@ public final class PickupService implements Listener {
 
     private final JavaPlugin plugin;
     private final PickupModuleConfiguration configuration;
-    private final ArcartXPacketBridge bridge;
-    private final ArcartXItemStackBridge itemStackBridge;
+    private final PacketBridgeAPI bridge;
+    private final ItemBridgeAPI itemStackBridge;
     private final String uiId;
     private final Set<UUID> openedPlayers = new HashSet<>();
     private final Set<UUID> openingPlayers = new HashSet<>();
@@ -47,8 +47,8 @@ public final class PickupService implements Listener {
     public PickupService(
         JavaPlugin plugin,
         PickupModuleConfiguration configuration,
-        ArcartXPacketBridge bridge,
-        ArcartXItemStackBridge itemStackBridge,
+        PacketBridgeAPI bridge,
+        ItemBridgeAPI itemStackBridge,
         String uiId
     ) {
         this.plugin = plugin;

@@ -33,8 +33,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
 import xuanmo.arcartxsuite.api.capability.MapNavigable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
-import xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
 import xuanmo.arcartxsuite.questgps.QuestGpsPage;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
@@ -58,7 +58,7 @@ public final class QuestGpsService implements Listener {
     private final Supplier<ChatCardSendable> chatCardSendableProvider;
     private final BiConsumer<String, Player> signalDispatcher;
     private final QuestGpsModuleConfiguration configuration;
-    private final ArcartXPacketBridge bridge;
+    private final PacketBridgeAPI bridge;
     private final java.util.List<String> menuUiIds;
     private final java.util.List<String> guideUiIds;
     private final QuestGpsRewardPreviewResolver rewardResolver;
@@ -72,8 +72,8 @@ public final class QuestGpsService implements Listener {
         JavaPlugin plugin,
         PacketGuardAPI packetGuard,
         QuestGpsModuleConfiguration configuration,
-        ArcartXPacketBridge bridge,
-        ArcartXItemStackBridge itemStackBridge,
+        PacketBridgeAPI bridge,
+        ItemBridgeAPI itemStackBridge,
         Supplier<TitleConfigQueryable> titleConfigurationProvider,
         Supplier<MapNavigable> mapNavigableProvider,
         Supplier<SubtitlePlayable> subtitlePlayableProvider,
@@ -81,7 +81,9 @@ public final class QuestGpsService implements Listener {
         BiConsumer<String, Player> signalDispatcher,
         java.util.List<String> menuUiIds,
         java.util.List<String> guideUiIds,
-        xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry
+        xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry,
+        xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI waypointBridge,
+        xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI npcBridge
     ) {
         this.plugin = plugin;
         this.packetGuard = packetGuard;
@@ -99,7 +101,7 @@ public final class QuestGpsService implements Listener {
             itemStack -> itemStackBridge == null ? java.util.Optional.empty() : itemStackBridge.itemToJson(itemStack),
             itemSourceRegistry
         );
-        this.navigationService = new QuestGpsNavigationService(plugin, configuration);
+        this.navigationService = new QuestGpsNavigationService(plugin, configuration, waypointBridge, npcBridge);
         this.uiPacketHandler = new QuestGpsUiPacketHandler(this, configuration.client().packetId());
     }
 

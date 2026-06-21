@@ -17,7 +17,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
 import xuanmo.arcartxsuite.combateffect.packet.config.CombatEffectPacketConfiguration;
 import xuanmo.arcartxsuite.combateffect.packet.config.CombatPacketContext;
@@ -37,7 +37,7 @@ public final class DeathBufferService implements Listener {
     private final JavaPlugin plugin;
     private final DeathBufferConfiguration config;
     private final CombatEffectPacketConfiguration packetConfig;
-    private final ArcartXPacketBridge packetBridge;
+    private final PacketBridgeAPI packetBridge;
     private final Logger logger;
 
     private final ConcurrentHashMap<UUID, BufferState> bufferedPlayers = new ConcurrentHashMap<>();
@@ -61,7 +61,7 @@ public final class DeathBufferService implements Listener {
         JavaPlugin plugin,
         DeathBufferConfiguration config,
         CombatEffectPacketConfiguration packetConfig,
-        ArcartXPacketBridge packetBridge,
+        PacketBridgeAPI packetBridge,
         Logger logger
     ) {
         this.plugin = plugin;

@@ -21,8 +21,8 @@ import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
-import xuanmo.arcartxsuite.bridge.ArcartXClientBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
 import xuanmo.arcartxsuite.announcer.config.AnnouncerModuleConfiguration;
@@ -157,8 +157,8 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
             }
         }
 
-        ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
-        ArcartXClientBridge clientBridge = (ArcartXClientBridge) context.clientBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
+        ClientBridgeAPI clientBridge = context.clientBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
 
         // 跨服广播

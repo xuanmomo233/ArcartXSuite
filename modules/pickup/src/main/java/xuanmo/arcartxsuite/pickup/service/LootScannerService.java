@@ -28,8 +28,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
-import xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration.ScannerConfig;
 import xuanmo.arcartxsuite.pickup.filter.LootFilterEngine;
@@ -50,8 +50,8 @@ public final class LootScannerService implements Listener {
     private final JavaPlugin plugin;
     private final PickupModuleConfiguration configuration;
     private final PacketGuardAPI packetGuard;
-    private final ArcartXPacketBridge packetBridge;
-    private final ArcartXItemStackBridge itemStackBridge;
+    private final PacketBridgeAPI packetBridge;
+    private final ItemBridgeAPI itemStackBridge;
     private final Supplier<WarehouseAutoDepositable> warehouseAutoDepositableSupplier;
     /** 过滤引擎：根据配置决定哪些物品应在面板中显示 */
     private final LootFilterEngine filterEngine;
@@ -78,8 +78,8 @@ public final class LootScannerService implements Listener {
         JavaPlugin plugin,
         PickupModuleConfiguration configuration,
         PacketGuardAPI packetGuard,
-        ArcartXPacketBridge packetBridge,
-        ArcartXItemStackBridge itemStackBridge,
+        PacketBridgeAPI packetBridge,
+        ItemBridgeAPI itemStackBridge,
         String uiId,
         String interactUiId,
         Supplier<WarehouseAutoDepositable> warehouseAutoDepositableSupplier

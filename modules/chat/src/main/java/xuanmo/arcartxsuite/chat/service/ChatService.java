@@ -40,8 +40,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.plugin.java.JavaPlugin;
-import xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.chat.config.ChatCardConfiguration;
 import xuanmo.arcartxsuite.chat.config.ChatChannelDefinition;
 import xuanmo.arcartxsuite.chat.config.ChatChannelMode;
@@ -72,8 +72,8 @@ public final class ChatService implements Listener {
     private final JavaPlugin plugin;
     private final ChatModuleConfiguration configuration;
     private final ChatRepository repository;
-    private final ArcartXPacketBridge packetBridge;
-    private final ArcartXItemStackBridge itemStackBridge;
+    private final PacketBridgeAPI packetBridge;
+    private final ItemBridgeAPI itemStackBridge;
     private final ExecutorService ioExecutor;
     private final Map<UUID, ChatPlayerState> states = new ConcurrentHashMap<>();
     private final Map<UUID, ChatPlayerProfile> profiles = new ConcurrentHashMap<>();
@@ -102,8 +102,8 @@ public final class ChatService implements Listener {
         java.util.function.Supplier<TabRefreshable> tabRefreshableProvider,
         ChatModuleConfiguration configuration,
         ChatRepository repository,
-        ArcartXPacketBridge packetBridge,
-        ArcartXItemStackBridge itemStackBridge,
+        PacketBridgeAPI packetBridge,
+        ItemBridgeAPI itemStackBridge,
         String completionUiId,
         CrossServerAPI crossServer,
         PlaceholderResolverAPI placeholderResolver

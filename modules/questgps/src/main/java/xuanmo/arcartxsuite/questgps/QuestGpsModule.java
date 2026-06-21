@@ -21,8 +21,8 @@ import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
 import xuanmo.arcartxsuite.api.capability.MapNavigable;
 import xuanmo.arcartxsuite.api.capability.QuestGpsNavigable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
-import xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.questgps.command.QuestGpsAdminCommand;
 import xuanmo.arcartxsuite.questgps.command.QuestGpsPlayerCommand;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
@@ -119,9 +119,9 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
 
     @Override
     protected void startService() throws Exception {
-        ArcartXPacketBridge packetBridge = (ArcartXPacketBridge) context.packetBridge();
+        PacketBridgeAPI packetBridge = context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
-        ArcartXItemStackBridge itemStackBridge = (ArcartXItemStackBridge) context.itemStackBridge();
+        ItemBridgeAPI itemStackBridge = context.itemStackBridge();
 
         File menuFile = new File(context.pluginDataFolder(), QuestGpsService.MENU_UI_FILE_PATH);
         File guideFile = new File(context.pluginDataFolder(), QuestGpsService.GUIDE_UI_FILE_PATH);
@@ -161,7 +161,9 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
             (signal, player) -> context.logger().fine("QuestGPS hook signal: " + signal + " -> " + player.getName()),
             java.util.List.copyOf(menuRuntimeUiIds),
             java.util.List.copyOf(guideRuntimeUiIds),
-            context.itemSourceRegistry()
+            context.itemSourceRegistry(),
+            context.createWaypointBridge(),
+            context.createAdyeshachNpcBridge()
         );
         service.start();
 

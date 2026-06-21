@@ -17,8 +17,8 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
-import xuanmo.arcartxsuite.bridge.ArcartXClientBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
 import xuanmo.arcartxsuite.combateffect.combo.ComboTrackerConfiguration.ComboSource;
 import xuanmo.arcartxsuite.combateffect.packet.config.CombatEffectPacketConfiguration;
@@ -41,8 +41,8 @@ public final class ComboTrackerService implements Listener {
     private final JavaPlugin plugin;
     private final ComboTrackerConfiguration config;
     private final CombatEffectPacketConfiguration packetConfig;
-    private final ArcartXPacketBridge packetBridge;
-    private final ArcartXClientBridge clientBridge;
+    private final PacketBridgeAPI packetBridge;
+    private final ClientBridgeAPI clientBridge;
     private final Logger logger;
 
     private final ConcurrentHashMap<UUID, ComboState> comboStates = new ConcurrentHashMap<>();
@@ -60,8 +60,8 @@ public final class ComboTrackerService implements Listener {
         JavaPlugin plugin,
         ComboTrackerConfiguration config,
         CombatEffectPacketConfiguration packetConfig,
-        ArcartXPacketBridge packetBridge,
-        ArcartXClientBridge clientBridge,
+        PacketBridgeAPI packetBridge,
+        ClientBridgeAPI clientBridge,
         Logger logger
     ) {
         this.plugin = plugin;

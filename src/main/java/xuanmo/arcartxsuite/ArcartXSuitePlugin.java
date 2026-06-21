@@ -3,7 +3,6 @@ package xuanmo.arcartxsuite;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
@@ -11,19 +10,10 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
-import org.bukkit.entity.Player;
-import org.bukkit.event.Event;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.HandlerList;
-import org.bukkit.event.Listener;
-import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
-import xuanmo.arcartxsuite.bridge.ArcartXClientBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXPropBridge;
-import xuanmo.arcartxsuite.bridge.TaczCombatBridge;
 import xuanmo.arcartxsuite.api.config.ConfigDiagnosisReport;
+import xuanmo.arcartxsuite.lifecycle.BridgeLifecycleManager;
+import xuanmo.arcartxsuite.lifecycle.ClientEventLifecycleManager;
 import xuanmo.arcartxsuite.api.config.ConfigIssueSeverity;
 import xuanmo.arcartxsuite.api.config.ConfigSyncSpec;
 import xuanmo.arcartxsuite.api.config.ModuleConfigSpec;
@@ -62,11 +52,6 @@ public class ArcartXSuitePlugin extends JavaPlugin {
     private static final String CONSOLE_PREFIX =
         ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
 
-    private ArcartXPacketBridge packetBridge;
-    private ArcartXClientBridge clientBridge;
-    private ArcartXItemStackBridge itemStackBridge;
-    private ArcartXPropBridge propBridge;
-    private TaczCombatBridge taczCombatBridge;
     private ClientPacketGuard clientPacketGuard;
     private ClientPacketGuardConfiguration clientPacketGuardConfiguration;
     private ModuleRegistry moduleRegistry;
@@ -74,14 +59,14 @@ public class ArcartXSuitePlugin extends JavaPlugin {
     private CloudModuleService cloudModuleService;
     private KeybindService keybindService;
     private CrossServerService crossServerService;
-    private Listener clientCustomPacketListener;
-    private Listener clientInitializedListener;
     private ConfigDiagnosticEngine configDiagnosticEngine;
     private ConfigDiagnosisStore configDiagnosisStore;
     private VersionCheckService versionCheckService;
     private xuanmo.arcartxsuite.auth.AuthlibInjectorManager authlibInjectorManager;
     private xuanmo.arcartxsuite.auth.AuthCommand authCommand;
     private ChatSignBypassService chatSignBypassService;
+    private BridgeLifecycleManager bridgeLifecycleManager;
+    private ClientEventLifecycleManager clientEventLifecycleManager;
     /** 宿主自身的 spec（config.yml） */
     private final List<ModuleConfigSpec> hostConfigSpecs = new ArrayList<>();
     /** 外部模块提交的 spec： ownerId -> (spec, classLoader) */
@@ -127,36 +112,26 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         reloadClientPacketGuard();
 
         // 3. Bridges
-        packetBridge = new ArcartXPacketBridge(this);
-        if (!packetBridge.initialize()) {
+        bridgeLifecycleManager = new BridgeLifecycleManager(this);
+        if (!bridgeLifecycleManager.initialize(
+            getConfig().getBoolean("tacz-compat.enabled", true),
+            getConfig().getBoolean("tacz-compat.debug", false)
+        )) {
             consoleError("ArcartX 桥接初始化失败，已禁用插件。");
             Bukkit.getPluginManager().disablePlugin(this);
             return;
         }
-        clientBridge = new ArcartXClientBridge(this);
-        clientBridge.initialize();
-        itemStackBridge = new ArcartXItemStackBridge(this);
-        itemStackBridge.initialize();
-        propBridge = new ArcartXPropBridge(this);
-        propBridge.initialize();
 
-        // 4. TACZ 兼容
-        taczCombatBridge = TaczCombatBridge.tryInitialize(
-            this,
-            getConfig().getBoolean("tacz-compat.enabled", true),
-            getConfig().getBoolean("tacz-compat.debug", false)
-        );
-
-        // 5. 全局按键注册
-        keybindService = new KeybindService(this, propBridge);
+        // 4. 全局按键注册
+        keybindService = new KeybindService(this, bridgeLifecycleManager.propBridge());
         keybindService.initialize(getConfig());
 
         crossServerService = new CrossServerService(this);
         crossServerService.start();
 
-        // 6. 客户端事件转发到 ModuleRegistry
-        registerClientCustomPacketListener();
-        registerClientInitializedListener();
+        // 5. 客户端事件转发到 ModuleRegistry
+        clientEventLifecycleManager = new ClientEventLifecycleManager(this, () -> moduleRegistry);
+        clientEventLifecycleManager.start();
 
         // 7. 聊天签名绕过（Paper 1.21+ 混合登录兼容）
         boolean chatSignBypassEnabled = getConfig().getBoolean("chat-sign-bypass.enabled", true);
@@ -170,13 +145,13 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         moduleRegistry = new ModuleRegistry(
             this,
             new File(getDataFolder(), "modules"),
-            packetBridge,
-            clientBridge,
-            itemStackBridge,
-            propBridge,
+            bridgeLifecycleManager.packetBridge(),
+            bridgeLifecycleManager.clientBridge(),
+            bridgeLifecycleManager.itemStackBridge(),
+            bridgeLifecycleManager.propBridge(),
             clientPacketGuard,
             keybindService,
-            taczCombatBridge,
+            bridgeLifecycleManager.taczCombatBridge(),
             crossServerService,
             placeholderResolver
         );
@@ -417,27 +392,11 @@ public class ArcartXSuitePlugin extends JavaPlugin {
             crossServerService.shutdown();
             crossServerService = null;
         }
-        unregisterClientCustomPacketListener();
-        unregisterClientInitializedListener();
-        if (taczCombatBridge != null) {
-            taczCombatBridge.shutdown();
-            taczCombatBridge = null;
+        if (clientEventLifecycleManager != null) {
+            clientEventLifecycleManager.stop();
         }
-        if (propBridge != null) {
-            propBridge.shutdown();
-            propBridge = null;
-        }
-        if (itemStackBridge != null) {
-            itemStackBridge.shutdown();
-            itemStackBridge = null;
-        }
-        if (clientBridge != null) {
-            clientBridge.shutdown();
-            clientBridge = null;
-        }
-        if (packetBridge != null) {
-            packetBridge.shutdown();
-            packetBridge = null;
+        if (bridgeLifecycleManager != null) {
+            bridgeLifecycleManager.shutdown();
         }
         if (clientPacketGuard != null) {
             clientPacketGuard.shutdown();
@@ -452,20 +411,20 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         return moduleRegistry;
     }
 
-    public ArcartXPacketBridge getPacketBridge() {
-        return packetBridge;
+    public xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI getPacketBridge() {
+        return bridgeLifecycleManager == null ? null : bridgeLifecycleManager.packetBridge();
     }
 
-    public ArcartXClientBridge getClientBridge() {
-        return clientBridge;
+    public xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI getClientBridge() {
+        return bridgeLifecycleManager == null ? null : bridgeLifecycleManager.clientBridge();
     }
 
-    public ArcartXItemStackBridge getItemStackBridge() {
-        return itemStackBridge;
+    public xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI getItemStackBridge() {
+        return bridgeLifecycleManager == null ? null : bridgeLifecycleManager.itemStackBridge();
     }
 
-    public ArcartXPropBridge getPropBridge() {
-        return propBridge;
+    public xuanmo.arcartxsuite.api.bridge.PropBridgeAPI getPropBridge() {
+        return bridgeLifecycleManager == null ? null : bridgeLifecycleManager.propBridge();
     }
 
     public ClientPacketGuard getClientPacketGuard() {
@@ -477,7 +436,7 @@ public class ArcartXSuitePlugin extends JavaPlugin {
     }
 
     public String describePacketBridgeMode() {
-        return packetBridge == null ? "unavailable" : packetBridge.describePacketMode();
+        return bridgeLifecycleManager == null ? "unavailable" : bridgeLifecycleManager.describePacketMode();
     }
 
     // ─── ClientPacketGuard ───────────────────────────────────
@@ -489,152 +448,6 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         }
         clientPacketGuard = new ClientPacketGuard(this, clientPacketGuardConfiguration);
         clientPacketGuard.start();
-    }
-
-    // ─── ArcartX 客户端事件转发 ────────────────────────────────
-
-    @SuppressWarnings("unchecked")
-    private void registerClientCustomPacketListener() {
-        unregisterClientCustomPacketListener();
-
-        Plugin arcartX = Bukkit.getPluginManager().getPlugin("ArcartX");
-        if (arcartX == null) {
-            return;
-        }
-
-        try {
-            ClassLoader classLoader = arcartX.getClass().getClassLoader();
-            Class<?> rawEventClass = Class.forName(
-                "priv.seventeen.artist.arcartx.event.client.ClientCustomPacketEvent",
-                true,
-                classLoader
-            );
-            if (!Event.class.isAssignableFrom(rawEventClass)) {
-                getLogger().warning("ArcartX ClientCustomPacketEvent 不是 Bukkit Event，已跳过监听。");
-                return;
-            }
-            Class<? extends Event> eventClass = (Class<? extends Event>) rawEventClass;
-            Method getPlayerMethod = rawEventClass.getMethod("getPlayer");
-            Method getIdMethod = rawEventClass.getMethod("getId");
-            Method getDataMethod = rawEventClass.getMethod("getData");
-
-            clientCustomPacketListener = new Listener() {
-            };
-            getServer().getPluginManager().registerEvent(
-                eventClass,
-                clientCustomPacketListener,
-                EventPriority.MONITOR,
-                (listener, event) -> dispatchClientCustomPacket(event, rawEventClass, getPlayerMethod, getIdMethod, getDataMethod),
-                this,
-                true
-            );
-        } catch (ReflectiveOperationException exception) {
-            getLogger().warning("注册 ArcartX 客户端自定义包监听失败: " + exception.getMessage());
-        }
-    }
-
-    private void unregisterClientCustomPacketListener() {
-        if (clientCustomPacketListener == null) {
-            return;
-        }
-        HandlerList.unregisterAll(clientCustomPacketListener);
-        clientCustomPacketListener = null;
-    }
-
-    private void dispatchClientCustomPacket(
-        Event event,
-        Class<?> eventClass,
-        Method getPlayerMethod,
-        Method getIdMethod,
-        Method getDataMethod
-    ) {
-        if (!eventClass.isInstance(event) || moduleRegistry == null) {
-            return;
-        }
-        try {
-            Object rawPlayer = getPlayerMethod.invoke(event);
-            Object rawId = getIdMethod.invoke(event);
-            Object rawData = getDataMethod.invoke(event);
-            if (!(rawPlayer instanceof Player player) || !(rawId instanceof String packetId)) {
-                return;
-            }
-            List<String> data = rawData instanceof List<?> rawList
-                ? rawList.stream().map(String::valueOf).toList()
-                : List.of();
-            Runnable route = () -> moduleRegistry.routeClientPacket(player, packetId, data);
-            if (Bukkit.isPrimaryThread()) {
-                route.run();
-            } else {
-                Bukkit.getScheduler().runTask(this, route);
-            }
-        } catch (ReflectiveOperationException ignored) {
-            // ArcartX API 不兼容时已记录在注册阶段
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void registerClientInitializedListener() {
-        unregisterClientInitializedListener();
-
-        Plugin arcartX = Bukkit.getPluginManager().getPlugin("ArcartX");
-        if (arcartX == null) {
-            return;
-        }
-
-        try {
-            ClassLoader classLoader = arcartX.getClass().getClassLoader();
-            Class<?> rawEventClass = Class.forName(
-                "priv.seventeen.artist.arcartx.event.client.ClientInitializedEvent$End",
-                true,
-                classLoader
-            );
-            if (!Event.class.isAssignableFrom(rawEventClass)) {
-                getLogger().warning("ArcartX ClientInitializedEvent$End 不是 Bukkit Event，已跳过监听。");
-                return;
-            }
-            Class<? extends Event> eventClass = (Class<? extends Event>) rawEventClass;
-            Method getPlayerMethod = rawEventClass.getMethod("getPlayer");
-
-            clientInitializedListener = new Listener() {
-            };
-            getServer().getPluginManager().registerEvent(
-                eventClass,
-                clientInitializedListener,
-                EventPriority.MONITOR,
-                (listener, event) -> dispatchClientInitialized(event, rawEventClass, getPlayerMethod),
-                this,
-                true
-            );
-        } catch (ReflectiveOperationException exception) {
-            getLogger().warning("注册 ArcartX 客户端初始化监听失败: " + exception.getMessage());
-        }
-    }
-
-    private void unregisterClientInitializedListener() {
-        if (clientInitializedListener == null) {
-            return;
-        }
-        HandlerList.unregisterAll(clientInitializedListener);
-        clientInitializedListener = null;
-    }
-
-    private void dispatchClientInitialized(Event event, Class<?> eventClass, Method getPlayerMethod) {
-        if (!eventClass.isInstance(event) || moduleRegistry == null) {
-            return;
-        }
-        try {
-            Object rawPlayer = getPlayerMethod.invoke(event);
-            if (rawPlayer instanceof Player player) {
-                Runnable route = () -> moduleRegistry.routeClientInitialized(player);
-                if (Bukkit.isPrimaryThread()) {
-                    route.run();
-                } else {
-                    Bukkit.getScheduler().runTask(this, route);
-                }
-            }
-        } catch (ReflectiveOperationException ignored) {
-            // 已在注册阶段告警
-        }
     }
 
     // ─── 资源/输出辅助 ────────────────────────────────────────

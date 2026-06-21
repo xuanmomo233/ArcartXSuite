@@ -27,7 +27,8 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
-import xuanmo.arcartxsuite.bridge.ArcartXPropBridge;
+import xuanmo.arcartxsuite.api.bridge.PropBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.PropPlayerHandle;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.condition.ScriptConditionServices;
 import xuanmo.arcartxsuite.prop.config.PropDefinition;
@@ -40,7 +41,7 @@ public final class PropService implements Listener {
 
     private final JavaPlugin plugin;
     private final PropModuleConfiguration configuration;
-    private final ArcartXPropBridge bridge;
+    private final PropBridgeAPI bridge;
     private final PropKeyMappingConfiguration keyMappingConfiguration;
     private final PropLanguageConfiguration languageConfiguration;
     private final Map<String, PropDefinition> definitionsByNormalizedId;
@@ -53,7 +54,7 @@ public final class PropService implements Listener {
     public PropService(
         JavaPlugin plugin,
         PropModuleConfiguration configuration,
-        ArcartXPropBridge bridge,
+        PropBridgeAPI bridge,
         PropKeyMappingConfiguration keyMappingConfiguration,
         PropLanguageConfiguration languageConfiguration,
         Map<String, PropDefinition> definitionsByNormalizedId,
@@ -176,7 +177,7 @@ public final class PropService implements Listener {
             player.getInventory().setItemInMainHand(resolved.itemStack());
         }
 
-        ArcartXPropBridge.PlayerHandle handle = bridge.resolvePlayerHandle(player).orElse(null);
+        PropPlayerHandle handle = bridge.resolvePlayerHandle(player).orElse(null);
         if (handle == null) {
             return;
         }
@@ -228,7 +229,7 @@ public final class PropService implements Listener {
             return;
         }
 
-        ArcartXPropBridge.PlayerHandle handle = bridge.resolvePlayerHandle(player).orElse(null);
+        PropPlayerHandle handle = bridge.resolvePlayerHandle(player).orElse(null);
         if (handle == null) {
             return;
         }
@@ -259,7 +260,7 @@ public final class PropService implements Listener {
         long cooldown,
         PropUseMode useMode,
         String slotId,
-        ArcartXPropBridge.PlayerHandle handle
+        PropPlayerHandle handle
     ) {
         PropDefinition definition = resolved.definition();
         ItemStack itemStack = resolved.itemStack();
@@ -479,7 +480,7 @@ public final class PropService implements Listener {
             return;
         }
 
-        ArcartXPropBridge.PlayerHandle handle = bridge.resolvePlayerHandle(player).orElse(null);
+        PropPlayerHandle handle = bridge.resolvePlayerHandle(player).orElse(null);
         if (handle == null) {
             return;
         }

@@ -33,7 +33,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.plugin.java.JavaPlugin;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDefinition;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossSortMode;
 import xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration;
@@ -56,7 +56,7 @@ public final class BossTrackerService implements Listener {
 
     private final JavaPlugin plugin;
     private final PluginConfiguration configuration;
-    private final ArcartXPacketBridge arcartXBridge;
+    private final PacketBridgeAPI arcartXBridge;
     private final List<String> runtimeUiIds;
     private final java.util.function.BiConsumer<String, Player> signalDispatcher;
     private final xuanmo.arcartxsuite.entitytracker.boss.platform.ServerPlatform serverPlatform;
@@ -78,7 +78,7 @@ public final class BossTrackerService implements Listener {
     public BossTrackerService(
         JavaPlugin plugin,
         PluginConfiguration configuration,
-        ArcartXPacketBridge arcartXBridge,
+        PacketBridgeAPI arcartXBridge,
         List<String> runtimeUiIds,
         xuanmo.arcartxsuite.entitytracker.boss.platform.ServerPlatform serverPlatform,
         java.util.function.BiConsumer<String, Player> signalDispatcher,
@@ -92,7 +92,7 @@ public final class BossTrackerService implements Listener {
     public BossTrackerService(
         JavaPlugin plugin,
         PluginConfiguration configuration,
-        ArcartXPacketBridge arcartXBridge,
+        PacketBridgeAPI arcartXBridge,
         List<String> runtimeUiIds,
         xuanmo.arcartxsuite.entitytracker.boss.platform.ServerPlatform serverPlatform,
         java.util.function.BiConsumer<String, Player> signalDispatcher,
@@ -107,7 +107,7 @@ public final class BossTrackerService implements Listener {
     public BossTrackerService(
         JavaPlugin plugin,
         PluginConfiguration configuration,
-        ArcartXPacketBridge arcartXBridge,
+        PacketBridgeAPI arcartXBridge,
         List<String> runtimeUiIds,
         xuanmo.arcartxsuite.entitytracker.boss.platform.ServerPlatform serverPlatform,
         java.util.function.BiConsumer<String, Player> signalDispatcher,
@@ -123,7 +123,7 @@ public final class BossTrackerService implements Listener {
     public BossTrackerService(
         JavaPlugin plugin,
         PluginConfiguration configuration,
-        ArcartXPacketBridge arcartXBridge,
+        PacketBridgeAPI arcartXBridge,
         List<String> runtimeUiIds,
         xuanmo.arcartxsuite.entitytracker.boss.platform.ServerPlatform serverPlatform,
         java.util.function.BiConsumer<String, Player> signalDispatcher,
@@ -151,7 +151,7 @@ public final class BossTrackerService implements Listener {
     public BossTrackerService(
         JavaPlugin plugin,
         PluginConfiguration configuration,
-        ArcartXPacketBridge arcartXBridge,
+        PacketBridgeAPI arcartXBridge,
         List<String> runtimeUiIds,
         xuanmo.arcartxsuite.entitytracker.boss.platform.ServerPlatform serverPlatform,
         java.util.function.BiConsumer<String, Player> signalDispatcher,

@@ -20,14 +20,14 @@ public final class EntityTrackerPlaceholderExpansion extends PlaceholderExpansio
     private final java.util.function.Supplier<xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration> configurationProvider;
     private final java.util.function.Supplier<BossTrackerService> serviceProvider;
     private final java.util.function.Supplier<String> runtimeUiIdProvider;
-    private final java.util.function.Supplier<xuanmo.arcartxsuite.bridge.ArcartXPacketBridge> packetBridgeProvider;
+    private final java.util.function.Supplier<xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI> packetBridgeProvider;
 
     public EntityTrackerPlaceholderExpansion(
         JavaPlugin plugin,
         java.util.function.Supplier<xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration> configurationProvider,
         java.util.function.Supplier<BossTrackerService> serviceProvider,
         java.util.function.Supplier<String> runtimeUiIdProvider,
-        java.util.function.Supplier<xuanmo.arcartxsuite.bridge.ArcartXPacketBridge> packetBridgeProvider
+        java.util.function.Supplier<xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI> packetBridgeProvider
     ) {
         this.plugin = plugin;
         this.configurationProvider = configurationProvider == null ? () -> null : configurationProvider;
@@ -80,7 +80,7 @@ public final class EntityTrackerPlaceholderExpansion extends PlaceholderExpansio
                     ? (configuration == null ? "" : configuration.uiId())
                     : runtimeUiId;
             case "bridge_ready":
-                xuanmo.arcartxsuite.bridge.ArcartXPacketBridge pb = packetBridgeProvider.get();
+                xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI pb = packetBridgeProvider.get();
                 return Boolean.toString(pb != null && pb.isAvailable());
             case "password_gate_locked":
                 return "false";

@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentMap;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
-import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.conversation.config.ConversationModuleConfiguration;
 
 final class ChemdahAxRenderer {
@@ -27,7 +27,7 @@ final class ChemdahAxRenderer {
 
     private final JavaPlugin plugin;
     private final ConversationModuleConfiguration configuration;
-    private final ArcartXPacketBridge bridge;
+    private final PacketBridgeAPI bridge;
     private final java.util.List<String> dialogUiIds;
     private final ConversationService owner;
     private final ConcurrentMap<UUID, DialogState> dialogStates = new ConcurrentHashMap<>();
@@ -39,7 +39,7 @@ final class ChemdahAxRenderer {
     ChemdahAxRenderer(
         JavaPlugin plugin,
         ConversationModuleConfiguration configuration,
-        ArcartXPacketBridge bridge,
+        PacketBridgeAPI bridge,
         java.util.List<String> dialogUiIds,
         ConversationService owner
     ) {

@@ -19,14 +19,14 @@ import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageEvent;
 import xuanmo.arcartxsuite.api.attribute.AttributeHealEvent;
-import xuanmo.arcartxsuite.bridge.ArcartXClientBridge;
+import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.combateffect.display.config.CombatDisplayConfiguration;
 
 public final class CombatDisplayService {
 
     private final JavaPlugin plugin;
     private final CombatDisplayConfiguration configuration;
-    private final ArcartXClientBridge clientBridge;
+    private final ClientBridgeAPI clientBridge;
     private final AttributeBridgeRegistry attributeBridge;
     private final List<Listener> registeredListeners = new ArrayList<>();
 
@@ -73,7 +73,7 @@ public final class CombatDisplayService {
     public CombatDisplayService(
         JavaPlugin plugin,
         CombatDisplayConfiguration configuration,
-        ArcartXClientBridge clientBridge,
+        ClientBridgeAPI clientBridge,
         AttributeBridgeRegistry attributeBridge
     ) {
         this.plugin = plugin;
