@@ -76,7 +76,18 @@ public final class CloudModuleService {
         org.bukkit.configuration.file.FileConfiguration config = plugin.getConfig();
         this.apiBaseUrl = API_BASE_URL;
         this.qq = config.getString("cloud.qq", "").trim();
-        this.password = config.getString("cloud.password", "");
+        String rawPassword = config.getString("cloud.password", "");
+        // 如果密码是明文（不含加密前缀），自动加密并回写
+        if (!rawPassword.isEmpty() && !rawPassword.startsWith("ENC:")) {
+            String encrypted = encryptPassword(rawPassword);
+            config.set("cloud.password", encrypted);
+            plugin.saveConfig();
+            this.password = rawPassword; // 首次启动直接使用明文
+        } else if (rawPassword.startsWith("ENC:")) {
+            this.password = decryptPassword(rawPassword);
+        } else {
+            this.password = rawPassword;
+        }
         this.serverName = config.getString("cloud.server-name", plugin.getServer().getName());
         this.serverCode = config.getString("cloud.server-code", "").trim();
         this.keyPair = generateKeyPair();
@@ -725,6 +736,56 @@ public final class CloudModuleService {
             }
         }
         return result;
+    }
+
+    // -- 密码加密（config.yml 中 cloud.password 自动加密存储） --
+
+    private static String encryptPassword(String plain) {
+        try {
+            String fingerprint = generateFingerprint();
+            byte[] key = sha256Raw(fingerprint + "AXS_CLOUD_PWD_SALT_v1");
+            byte[] iv = new byte[12];
+            java.security.SecureRandom.getInstanceStrong().nextBytes(iv);
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(128, iv));
+            byte[] encrypted = cipher.doFinal(plain.getBytes(StandardCharsets.UTF_8));
+            byte[] combined = new byte[iv.length + encrypted.length];
+            System.arraycopy(iv, 0, combined, 0, iv.length);
+            System.arraycopy(encrypted, 0, combined, iv.length, encrypted.length);
+            return "ENC:" + Base64.getEncoder().encodeToString(combined);
+        } catch (Exception e) {
+            System.err.println("[Cloud] 密码加密失败，回退到明文存储: " + e.getMessage());
+            return plain;
+        }
+    }
+
+    private static String decryptPassword(String encrypted) {
+        if (encrypted == null || encrypted.isEmpty()) return "";
+        if (!encrypted.startsWith("ENC:")) return encrypted;
+        try {
+            String fingerprint = generateFingerprint();
+            byte[] key = sha256Raw(fingerprint + "AXS_CLOUD_PWD_SALT_v1");
+            byte[] data = Base64.getDecoder().decode(encrypted.substring(4));
+            if (data.length < 28) return "";
+            byte[] iv = java.util.Arrays.copyOfRange(data, 0, 12);
+            byte[] ctAndTag = java.util.Arrays.copyOfRange(data, 12, data.length);
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(128, iv));
+            byte[] decrypted = cipher.doFinal(ctAndTag);
+            return new String(decrypted, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            System.err.println("[Cloud] 密码解密失败: " + e.getMessage());
+            return "";
+        }
+    }
+
+    private static byte[] sha256Raw(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            return md.digest(input.getBytes(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            return new byte[32];
+        }
     }
 
     // -- 诊断辅助方法 ----------------------------------------------
