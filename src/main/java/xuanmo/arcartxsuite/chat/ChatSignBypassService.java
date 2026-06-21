@@ -60,6 +60,10 @@ public final class ChatSignBypassService implements Listener {
             logger.fine("聊天签名绕过已关闭（混合登录/离线玩家可能在 Paper 1.21+ 无法发送聊天消息）。");
             return;
         }
+        if (isBelow1_21()) {
+            // 1.21 以下不存在 secure-chat validation，无需绕过，静默退出
+            return;
+        }
         detectPaper();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         // 对当前在线玩家立即生效（热重载场景）
@@ -94,6 +98,29 @@ public final class ChatSignBypassService implements Listener {
         }
         if (!paperDetected) {
             logger.warning("当前不是 Paper 服务端，聊天签名绕过可能无效。");
+        }
+    }
+
+    /**
+     * 检测服务器版本是否低于 1.21。
+     * secure-chat validation 仅在 Paper 1.21+ 存在，低版本无需任何绕过操作。
+     */
+    private boolean isBelow1_21() {
+        String version = Bukkit.getBukkitVersion(); // e.g. "1.20.1-R0.1-SNAPSHOT"
+        try {
+            int dot = version.indexOf('.');
+            if (dot == -1) return true;
+            int major = Integer.parseInt(version.substring(0, dot));
+            int minorDot = version.indexOf('.', dot + 1);
+            String minorStr = minorDot == -1 ? version.substring(dot + 1) : version.substring(dot + 1, minorDot);
+            // 去除可能的 "-R" 后缀
+            int dash = minorStr.indexOf('-');
+            if (dash != -1) minorStr = minorStr.substring(0, dash);
+            int minor = Integer.parseInt(minorStr);
+            return major < 1 || (major == 1 && minor < 21);
+        } catch (NumberFormatException | IndexOutOfBoundsException e) {
+            // 无法解析时保守处理：假设需要 bypass
+            return false;
         }
     }
 

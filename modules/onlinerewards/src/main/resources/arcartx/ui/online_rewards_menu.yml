@@ -78,6 +78,10 @@ ui:
       var.calendarRows = packet['calendarRows']
       var.selectedRewardRows = packet['selectedRewardRows']
   action:
+    load: |-
+      var.maxRewardCount = 32
+      var.maxSelectedRewardCount = 32
+      var.calendarCount = 31
     open: |-
       var.packetId = 'AXS_ONLINE_REWARDS'
       var.dailyTimeText = '0分钟'
@@ -109,8 +113,6 @@ ui:
       var.signInRewardRows = {}
       var.calendarRows = {}
       var.selectedRewardRows = {}
-      var.maxRewardCount = 32
-      var.maxSelectedRewardCount = 32
 controls:
   自适应全局布局:
     type: Adaptive

@@ -81,7 +81,7 @@ ui:
       var.bindCode = ''
       var.agreed = false
       var.showRules = false
-      var.requireTerms = true
+      var.requireTerms = packet['requireTerms']
     close: "var.result = packet['message']"
   defaultOpen: false
 controls:
@@ -97,7 +97,7 @@ controls:
         attribute:
           point: ~middle_center
           width: 680
-          height: 360
+          height: 400
         children:
           背景:
             type: Texture
@@ -230,7 +230,7 @@ controls:
             type: Texture
             attribute:
               x: 42
-              y: 300
+              y: 340
               width: 616
               height: 42
               normal: ~160,50,50,220
@@ -393,11 +393,35 @@ controls:
               stroke:
                 width: 2
                 color: ~165,190,220,255
+          注册须知:
+            type: Text
+            attribute:
+              x: 42
+              y: 246
+              texts: "var.agreed ? '&a✔ &f我已阅读并同意服务器游玩须知' : '      &f我已阅读并同意服务器游玩须知'"
+              fontSize: 36
+              visible: "var.type == 'register' && var.requireTerms"
+            action:
+              click: var.showRules = true
+            children:
+              方框:
+                type: Texture
+                attribute:
+                  normal: ~26,32,42,232
+                  width: 15
+                  x: 5
+                  y: 2
+                  height: 15
+                  visible: "!var.agreed"
+                effect:
+                  stroke:
+                    width: 2.0
+                    color: ~255,255,255,255
           注册按钮:
             type: Texture
             attribute:
               x: 42
-              y: 246
+              y: 290
               width: 616
               height: 42
               normal: ~80,180,122,238
@@ -409,7 +433,7 @@ controls:
               fontSize: 38
               visible: "var.type == 'register'"
             action:
-              clickLeft: "Packet.send(var.packetId, 'register', var.password, var.confirmPassword)"
+              clickLeft: "Packet.send(var.packetId, 'register', var.password, var.confirmPassword, var.agreed)"
           修改提示:
             type: Text
             attribute:
@@ -523,15 +547,29 @@ controls:
               stroke:
                 width: 2
                 color: ~165,190,220,255
+          结果背景:
+            type: Texture
+            attribute:
+              point: ~middle_center
+              width: 600
+              height: 60
+              normal: ~160,50,50,200
+              alpha: var.resultAlpha
+              visible: var.resultAlpha > 0
+            effect:
+              stroke:
+                width: 2
+                color: ~200,60,60,255
           结果:
             type: Text
             attribute:
               point: ~middle_center
-              width: 616
+              width: 580
               texts: var.result
-              fontSize: 81
+              fontSize: 36
               alpha: var.resultAlpha
               visible: var.resultAlpha > 0
+              center: true
           服规覆盖层:
             type: Canvas
             attribute:
