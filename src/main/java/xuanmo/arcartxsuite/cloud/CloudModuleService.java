@@ -167,7 +167,11 @@ public final class CloudModuleService {
         }
 
         long timestamp = System.currentTimeMillis();
-        String signature = sign("POST\n/v1/servers/refresh\n" + timestamp + "\n" + serverCode);
+        String signMessage = "POST\n/v1/servers/refresh\n" + timestamp + "\n" + serverCode;
+        plugin.consoleInfo("[Cloud] 签名消息: " + signMessage.replace("\n", "\\n"));
+        plugin.consoleInfo("[Cloud] serverCode: " + serverCode + " | 私钥存在: " + (keyPair != null && keyPair.getPrivate() != null));
+        String signature = sign(signMessage);
+        plugin.consoleInfo("[Cloud] 签名结果(base64): " + signature);
         String refreshPayload = "{"
             + "\"apiKey\":\"" + escapeJson(apiKey) + "\""
             + "}";
