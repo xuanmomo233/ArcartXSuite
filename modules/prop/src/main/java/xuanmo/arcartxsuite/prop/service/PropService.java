@@ -30,7 +30,7 @@ import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.bridge.PropBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PropPlayerHandle;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
-import xuanmo.arcartxsuite.condition.ScriptConditionServices;
+import xuanmo.arcartxsuite.api.condition.ScriptConditionServices;
 import xuanmo.arcartxsuite.prop.config.PropDefinition;
 import xuanmo.arcartxsuite.prop.config.PropKeyBindingDefinition;
 import xuanmo.arcartxsuite.prop.config.PropKeyMappingConfiguration;

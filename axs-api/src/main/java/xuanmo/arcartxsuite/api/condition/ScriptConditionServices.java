@@ -1,7 +1,11 @@
-package xuanmo.arcartxsuite.condition;
+package xuanmo.arcartxsuite.api.condition;
 
-import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
-
+/**
+ * 全局条件评估服务定位器。
+ * <p>
+ * 宿主在初始化时通过 {@link #install(ScriptConditionEvaluator)} 注入实现，
+ * 模块通过 {@link #evaluator()} 获取当前已注册的条件评估器。
+ */
 public final class ScriptConditionServices {
 
     private static volatile ScriptConditionEvaluator evaluator = ScriptConditionEvaluator.noop();

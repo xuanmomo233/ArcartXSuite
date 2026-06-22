@@ -15,6 +15,10 @@ public interface ScriptConditionEvaluator {
     @NotNull
     String applyPlaceholders(@Nullable Player player, @NotNull String input);
 
+    default boolean hasPermission(@Nullable Player player, @Nullable String permission) {
+        return permission == null || permission.isBlank() || (player != null && player.hasPermission(permission));
+    }
+
     static ScriptConditionEvaluator noop() {
         return NoopScriptConditionEvaluator.INSTANCE;
     }

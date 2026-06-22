@@ -75,10 +75,6 @@ public final class DefaultScriptConditionEvaluator implements ScriptConditionEva
         return result == null ? withPlayer : result;
     }
 
-    public static boolean hasPermission(@Nullable Player player, @Nullable String permission) {
-        return permission == null || permission.isBlank() || (player != null && player.hasPermission(permission));
-    }
-
     private boolean evaluate(Player player, ScriptCondition condition) {
         if (condition.kind() == ScriptConditionKind.ARIA) {
             return evaluateAria(player, condition.script());

@@ -4,8 +4,7 @@ import java.util.List;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
-import xuanmo.arcartxsuite.condition.DefaultScriptConditionEvaluator;
-import xuanmo.arcartxsuite.condition.ScriptConditionServices;
+import xuanmo.arcartxsuite.api.condition.ScriptConditionServices;
 
 public final class MenuConditionEvaluator {
 
@@ -22,7 +21,7 @@ public final class MenuConditionEvaluator {
     }
 
     public static boolean hasPermission(Player player, String permission) {
-        return DefaultScriptConditionEvaluator.hasPermission(player, permission);
+        return ScriptConditionServices.evaluator().hasPermission(player, permission);
     }
 
     public static String resolvePlaceholder(Player player, String placeholder) {

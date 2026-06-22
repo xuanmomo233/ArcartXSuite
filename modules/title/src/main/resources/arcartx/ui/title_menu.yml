@@ -85,8 +85,8 @@ ui:
       var.totalAttributesText = packet['total_attributes_text']
       var.setBonusAttributesText = packet['set_bonus_attributes_text']
       var.displayTitleName = packet['display_title_name']
-      var.displayTitleId = packet['display_title_id']
-      var.selectedIsDisplayTitle = packet['selected_is_display_title']
+      var.displayTitleId = packet['display_title_id'] != null ? packet['display_title_id'] : ''
+      var.selectedIsDisplayTitle = packet['selected_is_display_title'] != null ? packet['selected_is_display_title'] : false
       var.ownedCount = packet['owned_count']
       var.hiddenCount = packet['hidden_count']
       var.equippedCount = packet['equipped_count']
@@ -215,8 +215,8 @@ ui:
       var.totalAttributesText = packet['total_attributes_text']
       var.setBonusAttributesText = packet['set_bonus_attributes_text']
       var.displayTitleName = packet['display_title_name']
-      var.displayTitleId = packet['display_title_id']
-      var.selectedIsDisplayTitle = packet['selected_is_display_title']
+      var.displayTitleId = packet['display_title_id'] != null ? packet['display_title_id'] : ''
+      var.selectedIsDisplayTitle = packet['selected_is_display_title'] != null ? packet['selected_is_display_title'] : false
       var.ownedCount = packet['owned_count']
       var.hiddenCount = packet['hidden_count']
       var.equippedCount = packet['equipped_count']
@@ -1024,7 +1024,7 @@ controls:
             type: Text
             attribute:
               x: 1056
-              y: 600
+              y: 618
               width: 408
               fontSize: 36
               texts: "var.displayTitleId != '' && var.displayTitleName != '' ? '&0' + var.displayTitleName : '&7未设置'"

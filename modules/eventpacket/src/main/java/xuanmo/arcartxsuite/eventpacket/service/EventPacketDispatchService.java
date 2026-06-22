@@ -25,7 +25,7 @@ import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketAction;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
-import xuanmo.arcartxsuite.condition.ScriptConditionServices;
+import xuanmo.arcartxsuite.api.condition.ScriptConditionServices;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketContext;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketRecipient;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketRule;

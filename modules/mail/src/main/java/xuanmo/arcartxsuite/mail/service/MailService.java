@@ -52,7 +52,7 @@ import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI.CurrencyBridge;
 import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
-import xuanmo.arcartxsuite.condition.ScriptConditionServices;
+import xuanmo.arcartxsuite.api.condition.ScriptConditionServices;
 import xuanmo.arcartxsuite.mail.config.MailModuleConfiguration;
 import xuanmo.arcartxsuite.mail.config.MailPlayerSendConfiguration;
 import xuanmo.arcartxsuite.mail.config.MailUiConfiguration;
