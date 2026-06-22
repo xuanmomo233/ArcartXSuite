@@ -171,7 +171,8 @@ public final class CloudModuleService {
     }
 
     private CompletableFuture<Boolean> refreshToken(boolean isRebind) {
-        if (moduleToken != null && System.currentTimeMillis() < tokenExpiry - 300_000) {
+        // 自动修复重新绑定后必须强制刷新，以获取正确的 allowedModules
+        if (!isRebind && moduleToken != null && System.currentTimeMillis() < tokenExpiry - 300_000) {
             return CompletableFuture.completedFuture(true);
         }
         if (!hasServerCode()) {
@@ -651,8 +652,10 @@ public final class CloudModuleService {
                     KeyFactory kf = KeyFactory.getInstance("Ed25519");
                     PublicKey publicKey = kf.generatePublic(new X509EncodedKeySpec(publicEncoded));
                     PrivateKey privateKey = kf.generatePrivate(new PKCS8EncodedKeySpec(privateEncoded));
-                    plugin.consoleInfo("[Cloud] 已加载持久化 Ed25519 密钥对。");
-                    return new KeyPair(publicKey, privateKey);
+                    KeyPair loaded = new KeyPair(publicKey, privateKey);
+                    String loadedRawPub = encodeRawEd25519PublicKey(loaded);
+                    plugin.consoleInfo("[Cloud] 已加载持久化 Ed25519 密钥对，裸公钥: " + loadedRawPub);
+                    return loaded;
                 }
             } catch (Exception e) {
                 plugin.consoleWarn("[Cloud] 读取持久化密钥对失败，将重新生成: " + e.getMessage());
