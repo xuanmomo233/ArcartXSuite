@@ -97,6 +97,7 @@ jobs:
         with:
           name: native-linux
           path: libaxs-native.so
+          retention-days: 1
 
   build-windows:
     runs-on: windows-2022
@@ -211,6 +212,7 @@ jobs:
           name: native-windows
           path: axs-native.dll
           if-no-files-found: error
+          retention-days: 1
 
   build-gradle:
     runs-on: ubuntu-latest
@@ -418,6 +420,7 @@ jobs:
         with:
           name: axs-jar
           path: '*/build/libs/*.jar'
+          retention-days: 1
 
   release:
     runs-on: ubuntu-latest
