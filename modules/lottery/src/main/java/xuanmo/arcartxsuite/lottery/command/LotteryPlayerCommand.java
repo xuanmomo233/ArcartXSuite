@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
+import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
@@ -90,12 +91,12 @@ public class LotteryPlayerCommand implements TabExecutor {
         try {
             if (pool.type() == xuanmo.arcartxsuite.lottery.config.PoolType.GACHA) {
                 var result = service.pullGacha(player, poolId, count);
-                player.sendMessage(fullMsg("pull.result", pool.displayName(), formatItems(result.items())));
+                player.sendMessage(fullMsg("pull.result", ChatColor.translateAlternateColorCodes('&', pool.displayName()), formatItems(result.items())));
             } else {
                 for (int i = 0; i < count; i++) {
                     var result = service.openCase(player, poolId);
                     if (result != null) {
-                        player.sendMessage(fullMsg("pull.result", pool.displayName(), result.item().name()));
+                        player.sendMessage(fullMsg("pull.result", ChatColor.translateAlternateColorCodes('&', pool.displayName()), result.item().name()));
                     }
                 }
             }
@@ -112,10 +113,10 @@ public class LotteryPlayerCommand implements TabExecutor {
         }
         if (pool.type() == xuanmo.arcartxsuite.lottery.config.PoolType.GACHA) {
             var state = service.getGachaState(player, poolId);
-            player.sendMessage(fullMsg("player.info.gacha", pool.displayName(), state.pity5star(), state.pity4star()));
+            player.sendMessage(fullMsg("player.info.gacha", ChatColor.translateAlternateColorCodes('&', pool.displayName()), state.pity5star(), state.pity4star()));
         } else {
             var state = service.getCaseState(player, poolId);
-            player.sendMessage(fullMsg("player.info.case", pool.displayName(), state.openCount()));
+            player.sendMessage(fullMsg("player.info.case", ChatColor.translateAlternateColorCodes('&', pool.displayName()), state.openCount()));
         }
     }
 
@@ -127,13 +128,13 @@ public class LotteryPlayerCommand implements TabExecutor {
         }
         if (pool.type() == xuanmo.arcartxsuite.lottery.config.PoolType.GACHA) {
             var history = service.getGachaHistory(player.getUniqueId(), poolId, 10);
-            player.sendMessage(fullMsg("player.history.title", pool.displayName()));
+            player.sendMessage(fullMsg("player.history.title", ChatColor.translateAlternateColorCodes('&', pool.displayName())));
             for (var entry : history) {
                 player.sendMessage(fullMsg("player.history.entry", entry.itemsJson(), entry.pullTime()));
             }
         } else {
             var history = service.getCaseHistory(player.getUniqueId(), poolId, 10);
-            player.sendMessage(fullMsg("player.history.title", pool.displayName()));
+            player.sendMessage(fullMsg("player.history.title", ChatColor.translateAlternateColorCodes('&', pool.displayName())));
             for (var entry : history) {
                 player.sendMessage(fullMsg("player.history.entry", entry.itemId(), entry.openTime()));
             }

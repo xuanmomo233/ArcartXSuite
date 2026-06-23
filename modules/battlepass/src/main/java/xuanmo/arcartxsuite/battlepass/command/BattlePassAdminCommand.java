@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
@@ -138,9 +139,9 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
             return;
         }
         if (service.unlockTier(target, tier)) {
-            sender.sendMessage(msg("admin.unlock-success", target.getName(), tier.name()));
+            sender.sendMessage(msg("admin.unlock-success", target.getName(), ChatColor.translateAlternateColorCodes('&', tier.name())));
         } else {
-            sender.sendMessage(msg("admin.unlock-already", target.getName(), tier.name()));
+            sender.sendMessage(msg("admin.unlock-already", target.getName(), ChatColor.translateAlternateColorCodes('&', tier.name())));
         }
     }
 

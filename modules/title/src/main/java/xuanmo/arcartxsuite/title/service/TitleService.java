@@ -321,7 +321,7 @@ public class TitleService {
                     return;
                 }
                 if (!state.hasOwnedTitle(normalizedTitleId)) {
-                    player.sendMessage(prefix() + ChatColor.RED + "你尚未拥有称号: " + definition.displayName());
+                    player.sendMessage(prefix() + ChatColor.RED + "你尚未拥有称号: " + ChatColor.translateAlternateColorCodes('&', definition.displayName()));
                     return;
                 }
                 Instant now = clock.instant();
@@ -335,7 +335,7 @@ public class TitleService {
                 syncExternalAttributes(player, updatedState);
                 refreshMenu(player);
                 requestGlobalTabRefresh("title-equip");
-                player.sendMessage(prefix() + ChatColor.GREEN + "已装备称号到分组 " + definition.groupId() + ": " + definition.displayName());
+                player.sendMessage(prefix() + ChatColor.GREEN + "已装备称号到分组 " + definition.groupId() + ": " + ChatColor.translateAlternateColorCodes('&', definition.displayName()));
             },
             exception -> player.sendMessage(prefix() + ChatColor.RED + "称号数据加载失败，请稍后重试。")
         );
@@ -456,7 +456,7 @@ public class TitleService {
         syncExternalAttributesForOnlinePlayer(playerUuid);
         refreshMenuForOnlinePlayer(playerUuid);
         requestGlobalTabRefresh("title-grant");
-        return TitleOperationResult.success("已授予称号: " + definition.displayName());
+        return TitleOperationResult.success("已授予称号: " + ChatColor.translateAlternateColorCodes('&', definition.displayName()));
     }
 
     /**
@@ -485,7 +485,7 @@ public class TitleService {
         syncExternalAttributesForOnlinePlayer(playerUuid);
         refreshMenuForOnlinePlayer(playerUuid);
         requestGlobalTabRefresh("title-revoke");
-        return TitleOperationResult.success("已扣除称号: " + definition.displayName());
+        return TitleOperationResult.success("已扣除称号: " + ChatColor.translateAlternateColorCodes('&', definition.displayName()));
     }
 
     public ResolvedTitleState resolveState(UUID playerUuid) {
@@ -554,7 +554,7 @@ public class TitleService {
                 }
                 if (!state.hasOwnedTitle(normalizedTitleId)) {
                     if (notify) {
-                        player.sendMessage(prefix() + ChatColor.RED + "你尚未拥有称号: " + definition.displayName());
+                        player.sendMessage(prefix() + ChatColor.RED + "你尚未拥有称号: " + ChatColor.translateAlternateColorCodes('&', definition.displayName()));
                     }
                     return;
                 }
@@ -571,7 +571,7 @@ public class TitleService {
                     player.sendMessage(
                         prefix()
                             + (hidden ? ChatColor.YELLOW + "已隐藏称号: " : ChatColor.GREEN + "已取消隐藏称号: ")
-                            + definition.displayName()
+                            + ChatColor.translateAlternateColorCodes('&', definition.displayName())
                     );
                 }
             },
@@ -627,7 +627,7 @@ public class TitleService {
                 );
                 refreshMenu(player);
                 requestGlobalTabRefresh("title-display-change");
-                player.sendMessage(prefix() + ChatColor.GREEN + "已将 " + definition.displayName() + " 设为主展示称号。");
+                player.sendMessage(prefix() + ChatColor.GREEN + "已将 " + ChatColor.translateAlternateColorCodes('&', definition.displayName()) + " 设为主展示称号。");
             },
             exception -> { }
         );

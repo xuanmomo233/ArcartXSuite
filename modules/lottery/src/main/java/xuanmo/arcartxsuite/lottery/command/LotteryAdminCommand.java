@@ -7,6 +7,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
@@ -105,7 +106,7 @@ public class LotteryAdminCommand {
         var pools = service.getPools();
         sender.sendMessage(msg("admin.status.title"));
         for (var entry : pools.entrySet()) {
-            sender.sendMessage(msg("admin.status.pool", entry.getKey(), entry.getValue().type().name(), entry.getValue().displayName()));
+            sender.sendMessage(msg("admin.status.pool", entry.getKey(), entry.getValue().type().name(), ChatColor.translateAlternateColorCodes('&', entry.getValue().displayName())));
         }
     }
 

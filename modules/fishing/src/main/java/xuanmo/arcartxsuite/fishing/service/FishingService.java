@@ -11,6 +11,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
@@ -255,13 +256,13 @@ public final class FishingService {
 
         // 发送消息
         String quality = perfect ? "完美" : "普通";
-        String successMsg = getMessage("fishing_success", fish.displayName(), String.valueOf(size), quality, String.valueOf(xp));
+        String successMsg = getMessage("fishing_success", ChatColor.translateAlternateColorCodes('&', fish.displayName()), String.valueOf(size), quality, String.valueOf(xp));
         if (successMsg != null) {
             player.sendMessage(successMsg);
         }
 
         if (isFirstCatch) {
-            String firstMsg = getMessage("fishing_first_catch", fish.displayName());
+            String firstMsg = getMessage("fishing_first_catch", ChatColor.translateAlternateColorCodes('&', fish.displayName()));
             if (firstMsg != null) {
                 player.sendMessage(firstMsg);
             }

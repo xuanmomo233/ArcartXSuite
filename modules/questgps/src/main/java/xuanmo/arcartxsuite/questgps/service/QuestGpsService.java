@@ -308,7 +308,7 @@ public final class QuestGpsService implements Listener {
             return;
         }
         afterTrackChanged(player, descriptor.questId());
-        player.sendMessage(PREFIX + ChatColor.GREEN + "已设置任务导航: " + descriptor.displayName());
+        player.sendMessage(PREFIX + ChatColor.GREEN + "已设置任务导航: " + ChatColor.translateAlternateColorCodes('&', descriptor.displayName()));
         refreshViewer(player);
     }
 

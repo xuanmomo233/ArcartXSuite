@@ -181,7 +181,7 @@ public final class MailAdminCommand implements ModuleCommandHandler {
             String check = def.enabled() ? ChatColor.GREEN + "✔" : ChatColor.RED + "✖";
             int attCount = def.attachments() != null ? def.attachments().size() : 0;
             int cmdCount = def.claimCommands() != null ? def.claimCommands().size() : 0;
-            sender.sendMessage(fullMsg("admin.preset.item-format", check, def.id(), def.displayName(), attCount, cmdCount));
+            sender.sendMessage(fullMsg("admin.preset.item-format", check, def.id(), ChatColor.translateAlternateColorCodes('&', def.displayName()), attCount, cmdCount));
         }
     }
 
@@ -193,7 +193,7 @@ public final class MailAdminCommand implements ModuleCommandHandler {
         }
         sender.sendMessage(fullMsg("admin.preset.info-title", def.id()));
         sender.sendMessage(fullMsg("admin.preset.info-enabled", def.enabled()));
-        sender.sendMessage(fullMsg("admin.preset.info-display", def.displayName()));
+        sender.sendMessage(fullMsg("admin.preset.info-display", ChatColor.translateAlternateColorCodes('&', def.displayName())));
         sender.sendMessage(fullMsg("admin.preset.info-subject", def.subject()));
         String displayBody = def.body().length() > 50 ? def.body().substring(0, 50) + "..." : def.body();
         sender.sendMessage(fullMsg("admin.preset.info-body", displayBody));
