@@ -38,6 +38,7 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
     private Method closeUnsafeMethod;
     private Method sendPacketUnsafeMethod;
     private List<Method> sendPacketMethods = List.of();
+    private Object entityManager;
     private Method getArcartXHandlerMethod;
     private Class<?> callbackInterface;
     private Object closeCallbackType;
@@ -94,7 +95,7 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
         try {
             ClassLoader classLoader = arcartX.getClass().getClassLoader();
             Class<?> apiClass = Class.forName("priv.seventeen.artist.arcartx.api.ArcartXAPI", true, classLoader);
-            Class<?> playerUtilsClass = Class.forName("priv.seventeen.artist.arcartx.util.PlayerUtils", true, classLoader);
+            Class<?> entityManagerClass = Class.forName("priv.seventeen.artist.arcartx.core.entity.ArcartXEntityManager", true, classLoader);
 
             uiRegistry = apiClass.getMethod("getUIRegistry").invoke(null);
             initializeOpenCallbackBridge(classLoader);
@@ -114,7 +115,8 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
             closeUnsafeMethod = findMethod(uiRegistry.getClass(), "closeUnsafe", Player.class, String.class);
             sendPacketUnsafeMethod = findMethod(uiRegistry.getClass(), "sendPacketUnsafe", Player.class, String.class, String.class, Object.class);
             sendPacketMethods = findSendPacketMethods(uiRegistry.getClass());
-            getArcartXHandlerMethod = findMethod(playerUtilsClass, "getArcartXHandler", Player.class);
+            entityManager = apiClass.getMethod("getEntityManager").invoke(null);
+            getArcartXHandlerMethod = findMethod(entityManagerClass, "getPlayer", Player.class);
             initializeUiCallbackBridge(classLoader);
 
             if (sendPacketMethods.isEmpty()) {
@@ -138,6 +140,8 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
         closeUnsafeMethod = null;
         sendPacketUnsafeMethod = null;
         sendPacketMethods = List.of();
+        entityManager = null;
+        getArcartXHandlerMethod = null;
         uiAdapters.clear();
         closeCallbacks.clear();
         closeCallbackRegisteredUiIds.clear();
@@ -393,11 +397,11 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
 
     @SuppressWarnings("unchecked")
     public boolean sendChatCard(Player player, String cardId, Map<String, String> data) {
-        if (!available || cardId == null || cardId.isBlank() || getArcartXHandlerMethod == null) {
+        if (!available || cardId == null || cardId.isBlank() || getArcartXHandlerMethod == null || entityManager == null) {
             return false;
         }
         try {
-            Object handler = getArcartXHandlerMethod.invoke(null, player);
+            Object handler = getArcartXHandlerMethod.invoke(entityManager, player);
             if (handler == null) {
                 return false;
             }

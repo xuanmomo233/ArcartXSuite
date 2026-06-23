@@ -21,7 +21,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class ArcartXPropBridge implements xuanmo.arcartxsuite.api.bridge.PropBridgeAPI {
 
     private static final String ARCARTX_API_CLASS_NAME = "priv.seventeen.artist.arcartx.api.ArcartXAPI";
-    private static final String PLAYER_UTILS_CLASS_NAME = "priv.seventeen.artist.arcartx.util.PlayerUtils";
     private static final String ENTITY_MANAGER_CLASS_NAME = "priv.seventeen.artist.arcartx.core.entity.ArcartXEntityManager";
     private static final String ARCARTX_PLAYER_CLASS_NAME = "priv.seventeen.artist.arcartx.core.entity.data.ArcartXPlayer";
     private static final String ITEM_STACK_UTILS_CLASS_NAME = "priv.seventeen.artist.arcartx.util.ItemStackUtils";
@@ -37,7 +36,6 @@ public final class ArcartXPropBridge implements xuanmo.arcartxsuite.api.bridge.P
     private Method registerClientKeyBindMethod;
     private Method unregisterClientKeyBindMethod;
     private Class<?> keyCallbackType;
-    private Method getArcartXHandlerMethod;
     private Object entityManager;
     private Method entityManagerGetPlayerMethod;
     private Method playerGetSlotItemStackMethod;
@@ -61,7 +59,6 @@ public final class ArcartXPropBridge implements xuanmo.arcartxsuite.api.bridge.P
         registerClientKeyBindMethod = null;
         unregisterClientKeyBindMethod = null;
         keyCallbackType = null;
-        getArcartXHandlerMethod = null;
         entityManager = null;
         entityManagerGetPlayerMethod = null;
         playerGetSlotItemStackMethod = null;
@@ -83,7 +80,6 @@ public final class ArcartXPropBridge implements xuanmo.arcartxsuite.api.bridge.P
         try {
             ClassLoader classLoader = arcartX.getClass().getClassLoader();
             Class<?> apiClass = Class.forName(ARCARTX_API_CLASS_NAME, true, classLoader);
-            Class<?> playerUtilsClass = Class.forName(PLAYER_UTILS_CLASS_NAME, true, classLoader);
             Class<?> entityManagerClass = Class.forName(ENTITY_MANAGER_CLASS_NAME, true, classLoader);
             Class<?> arcartXPlayerClass = Class.forName(ARCARTX_PLAYER_CLASS_NAME, true, classLoader);
             Class<?> itemStackUtilsClass = Class.forName(ITEM_STACK_UTILS_CLASS_NAME, true, classLoader);
@@ -102,7 +98,6 @@ public final class ArcartXPropBridge implements xuanmo.arcartxsuite.api.bridge.P
                 unregisterClientKeyBindMethod = keyBindRegistry.getClass().getMethod("unRegisterClientKeyBind", String.class);
             }
 
-            getArcartXHandlerMethod = findMethod(playerUtilsClass, "getArcartXHandler", Player.class);
             entityManager = apiClass.getMethod("getEntityManager").invoke(null);
             entityManagerGetPlayerMethod = entityManagerClass.getMethod("getPlayer", Player.class);
 
@@ -135,7 +130,6 @@ public final class ArcartXPropBridge implements xuanmo.arcartxsuite.api.bridge.P
         registerClientKeyBindMethod = null;
         unregisterClientKeyBindMethod = null;
         keyCallbackType = null;
-        getArcartXHandlerMethod = null;
         entityManager = null;
         entityManagerGetPlayerMethod = null;
         playerGetSlotItemStackMethod = null;
@@ -211,10 +205,7 @@ public final class ArcartXPropBridge implements xuanmo.arcartxsuite.api.bridge.P
 
         try {
             Object handle = null;
-            if (getArcartXHandlerMethod != null) {
-                handle = getArcartXHandlerMethod.invoke(null, player);
-            }
-            if (handle == null && entityManager != null && entityManagerGetPlayerMethod != null) {
+            if (entityManager != null && entityManagerGetPlayerMethod != null) {
                 handle = entityManagerGetPlayerMethod.invoke(entityManager, player);
             }
             return handle == null ? Optional.empty() : Optional.of(new PlayerHandle(handle));

@@ -17,7 +17,8 @@ public final class ArcartXWaypointBridge implements xuanmo.arcartxsuite.api.brid
     private final Set<String> availableStyleIds = new LinkedHashSet<>();
 
     private boolean available;
-    private Method getArcartXHandlerMethod;
+    private Object entityManager;
+    private Method entityManagerGetPlayerMethod;
     private Method addWaypointByHandlerMethod;
     private Method deleteWaypointByHandlerMethod;
     private Method clearWaypointByHandlerMethod;
@@ -38,7 +39,8 @@ public final class ArcartXWaypointBridge implements xuanmo.arcartxsuite.api.brid
 
         try {
             ClassLoader classLoader = arcartX.getClass().getClassLoader();
-            initializeHandlerWaypointBridge(classLoader);
+            Class<?> apiClass = Class.forName("priv.seventeen.artist.arcartx.api.ArcartXAPI", true, classLoader);
+            initializeHandlerWaypointBridge(classLoader, apiClass);
             loadAvailableStyleIds(arcartX.getDataFolder());
             available = hasHandlerBridge();
             if (!available) {
@@ -141,9 +143,14 @@ public final class ArcartXWaypointBridge implements xuanmo.arcartxsuite.api.brid
         }
     }
 
-    private void initializeHandlerWaypointBridge(ClassLoader classLoader) throws ReflectiveOperationException {
-        Class<?> playerUtilsClass = Class.forName("priv.seventeen.artist.arcartx.util.PlayerUtils", true, classLoader);
-        getArcartXHandlerMethod = playerUtilsClass.getMethod("getArcartXHandler", Player.class);
+    private void initializeHandlerWaypointBridge(ClassLoader classLoader, Class<?> apiClass) throws ReflectiveOperationException {
+        Class<?> entityManagerClass = Class.forName(
+            "priv.seventeen.artist.arcartx.core.entity.ArcartXEntityManager",
+            true,
+            classLoader
+        );
+        entityManager = apiClass.getMethod("getEntityManager").invoke(null);
+        entityManagerGetPlayerMethod = entityManagerClass.getMethod("getPlayer", Player.class);
         Class<?> handlerClass = Class.forName(
             "priv.seventeen.artist.arcartx.core.entity.data.ArcartXPlayer",
             true,
@@ -163,10 +170,10 @@ public final class ArcartXWaypointBridge implements xuanmo.arcartxsuite.api.brid
     }
 
     private Object resolvePlayerHandler(Player player) throws ReflectiveOperationException {
-        if (player == null || getArcartXHandlerMethod == null) {
+        if (player == null || entityManager == null || entityManagerGetPlayerMethod == null) {
             return null;
         }
-        return getArcartXHandlerMethod.invoke(null, player);
+        return entityManagerGetPlayerMethod.invoke(entityManager, player);
     }
 
     private void loadAvailableStyleIds(File arcartXDataFolder) {
@@ -187,7 +194,8 @@ public final class ArcartXWaypointBridge implements xuanmo.arcartxsuite.api.brid
     }
 
     private boolean hasHandlerBridge() {
-        return getArcartXHandlerMethod != null
+        return entityManager != null
+            && entityManagerGetPlayerMethod != null
             && addWaypointByHandlerMethod != null
             && deleteWaypointByHandlerMethod != null
             && clearWaypointByHandlerMethod != null;
@@ -195,7 +203,8 @@ public final class ArcartXWaypointBridge implements xuanmo.arcartxsuite.api.brid
 
     private void reset() {
         available = false;
-        getArcartXHandlerMethod = null;
+        entityManager = null;
+        entityManagerGetPlayerMethod = null;
         addWaypointByHandlerMethod = null;
         deleteWaypointByHandlerMethod = null;
         clearWaypointByHandlerMethod = null;
