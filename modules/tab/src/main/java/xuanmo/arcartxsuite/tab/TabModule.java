@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
@@ -193,22 +194,91 @@ public final class TabModule extends AbstractAXSModule {
         return service;
     }
 
+    private final AtomicBoolean fallbackChecked = new AtomicBoolean(false);
+
     private void registerFallbackPapiExpansionsIfNeeded() {
         if (!context.hasPlugin("PlaceholderAPI")) {
             return;
         }
-        // PAPI 的外部扩展在 ServerLoadEvent（所有插件 onEnable 完成后）才加载，
-        // Tab 的 startService 执行时机过早，延迟 1 tick 确保 PAPI 扩展已就位后再检测。
-        context.plugin().getServer().getScheduler().runTaskLater(context.plugin(), () -> {
-            if (!isPapiExpansionRegistered("player")) {
-                context.logger().info("PlaceholderAPI 未检测到 player 扩展，Tab 模块将注入内置 player 占位符。");
-                context.expansionRegistry().register(new TabPlayerFallbackExpansion(context.plugin()));
-            }
-            if (!isPapiExpansionRegistered("server")) {
-                context.logger().info("PlaceholderAPI 未检测到 server 扩展，Tab 模块将注入内置 server 占位符。");
-                context.expansionRegistry().register(new TabServerFallbackExpansion(context.plugin()));
-            }
-        }, 1L);
+        // 先立即检测一次（PAPI 内部扩展可能已经注册）
+        if (checkAndRegisterFallbacks()) {
+            return;
+        }
+        // 方案 1：反射注册 PAPI 官方的 ExpansionsLoadedEvent（最精确，所有外部扩展注册完成后触发）
+        if (registerExpansionLoadedListener()) {
+            return;
+        }
+        // 方案 2：回退到 Paper 的 ServerLoadEvent（PAPI 外部扩展加载时机）
+        if (registerServerLoadListener()) {
+            return;
+        }
+        // 方案 3：最终回退到固定延迟
+        context.plugin().getServer().getScheduler().runTaskLater(context.plugin(), this::checkAndRegisterFallbacks, 40L);
+        context.logger().warning("Tab 无法注册 PAPI ExpansionsLoadedEvent 或 ServerLoadEvent，将使用延迟检测 PAPI 扩展。");
+    }
+
+    /**
+     * 尝试反射注册 PAPI 的 ExpansionsLoadedEvent 监听器。
+     * @return true 如果注册成功
+     */
+    private boolean registerExpansionLoadedListener() {
+        try {
+            Class<?> eventClass = Class.forName("me.clip.placeholderapi.events.ExpansionsLoadedEvent");
+            context.plugin().getServer().getPluginManager().registerEvent(
+                (Class<? extends org.bukkit.event.Event>) eventClass,
+                new org.bukkit.event.Listener() {},
+                org.bukkit.event.EventPriority.HIGHEST,
+                (listener, event) -> {
+                    context.logger().fine("收到 PAPI ExpansionsLoadedEvent，开始检测 player/server 扩展。");
+                    checkAndRegisterFallbacks();
+                },
+                context.plugin()
+            );
+            context.logger().fine("Tab 已注册 PAPI ExpansionsLoadedEvent 监听器。");
+            return true;
+        } catch (ClassNotFoundException e) {
+            context.logger().fine("当前 PAPI 版本不支持 ExpansionsLoadedEvent，将尝试其他方案。");
+            return false;
+        }
+    }
+
+    /**
+     * 尝试反射注册 Paper 的 ServerLoadEvent 监听器。
+     * @return true 如果注册成功
+     */
+    private boolean registerServerLoadListener() {
+        try {
+            Class<?> eventClass = Class.forName("com.destroystokyo.paper.event.server.ServerLoadEvent");
+            context.plugin().getServer().getPluginManager().registerEvent(
+                (Class<? extends org.bukkit.event.Event>) eventClass,
+                new org.bukkit.event.Listener() {},
+                org.bukkit.event.EventPriority.HIGHEST,
+                (listener, event) -> {
+                    context.logger().fine("收到 Paper ServerLoadEvent，开始检测 player/server 扩展。");
+                    checkAndRegisterFallbacks();
+                },
+                context.plugin()
+            );
+            context.logger().fine("Tab 已注册 ServerLoadEvent 监听器。");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
+
+    private boolean checkAndRegisterFallbacks() {
+        if (!fallbackChecked.compareAndSet(false, true)) {
+            return true; // 已经执行过
+        }
+        if (!isPapiExpansionRegistered("player")) {
+            context.logger().info("PlaceholderAPI 未检测到 player 扩展，Tab 模块将注入内置 player 占位符。");
+            context.expansionRegistry().register(new TabPlayerFallbackExpansion(context.plugin()));
+        }
+        if (!isPapiExpansionRegistered("server")) {
+            context.logger().info("PlaceholderAPI 未检测到 server 扩展，Tab 模块将注入内置 server 占位符。");
+            context.expansionRegistry().register(new TabServerFallbackExpansion(context.plugin()));
+        }
+        return true;
     }
 
     private boolean isPapiExpansionRegistered(String identifier) {
