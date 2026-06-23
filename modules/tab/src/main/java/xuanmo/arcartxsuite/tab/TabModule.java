@@ -197,25 +197,28 @@ public final class TabModule extends AbstractAXSModule {
         if (!context.hasPlugin("PlaceholderAPI")) {
             return;
         }
-        if (!isPapiExpansionRegistered("player")) {
-            context.logger().info("PlaceholderAPI 未检测到 player 扩展，Tab 模块将注入内置 player 占位符。");
-            context.expansionRegistry().register(new TabPlayerFallbackExpansion(context.plugin()));
-        }
-        if (!isPapiExpansionRegistered("server")) {
-            context.logger().info("PlaceholderAPI 未检测到 server 扩展，Tab 模块将注入内置 server 占位符。");
-            context.expansionRegistry().register(new TabServerFallbackExpansion(context.plugin()));
-        }
+        // PAPI 的外部扩展在 ServerLoadEvent（所有插件 onEnable 完成后）才加载，
+        // Tab 的 startService 执行时机过早，延迟 1 tick 确保 PAPI 扩展已就位后再检测。
+        context.plugin().getServer().getScheduler().runTaskLater(context.plugin(), () -> {
+            if (!isPapiExpansionRegistered("player")) {
+                context.logger().info("PlaceholderAPI 未检测到 player 扩展，Tab 模块将注入内置 player 占位符。");
+                context.expansionRegistry().register(new TabPlayerFallbackExpansion(context.plugin()));
+            }
+            if (!isPapiExpansionRegistered("server")) {
+                context.logger().info("PlaceholderAPI 未检测到 server 扩展，Tab 模块将注入内置 server 占位符。");
+                context.expansionRegistry().register(new TabServerFallbackExpansion(context.plugin()));
+            }
+        }, 1L);
     }
 
     private boolean isPapiExpansionRegistered(String identifier) {
-        try {
-            // 通过 Bukkit 获取 PAPI 插件实例，避免依赖可能不存在的静态 getInstance()
-            org.bukkit.plugin.Plugin papi = org.bukkit.Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
-            if (papi == null) {
-                return false;
-            }
+        org.bukkit.plugin.Plugin papi = org.bukkit.Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
+        if (papi == null) {
+            return false;
+        }
 
-            // 兼容 2.11.x (getLocalExpansionManager) 和旧版 (getExpansionManager)
+        // 方案 A：通过 PAPI API 检测扩展是否已注册
+        try {
             Object manager;
             try {
                 java.lang.reflect.Method getManager = papi.getClass().getMethod("getLocalExpansionManager");
@@ -225,16 +228,39 @@ public final class TabModule extends AbstractAXSModule {
                 manager = getManager.invoke(papi);
             }
 
-            java.lang.reflect.Method find = manager.getClass().getMethod("findExpansionByIdentifier", String.class);
-            Object result = find.invoke(manager, identifier);
+            if (manager != null) {
+                java.lang.reflect.Method find = manager.getClass().getMethod("findExpansionByIdentifier", String.class);
+                Object result = find.invoke(manager, identifier);
 
-            if (result instanceof java.util.Optional<?> optional) {
-                return optional.isPresent();
+                if (result instanceof java.util.Optional<?> optional) {
+                    boolean present = optional.isPresent();
+                    context.logger().fine("PAPI 检测 [" + identifier + "] via Optional: " + present);
+                    return present;
+                }
+                boolean found = result != null;
+                context.logger().fine("PAPI 检测 [" + identifier + "] via direct: " + found);
+                return found;
             }
-            return result != null;
         } catch (ReflectiveOperationException | LinkageError e) {
-            return false;
+            context.logger().fine("PAPI API 检测 [" + identifier + "] 失败: " + e.getClass().getSimpleName() + " - " + e.getMessage());
         }
+
+        // 方案 B（兜底）：检查 expansions/ 目录下是否存在对应 jar
+        try {
+            java.io.File expansionsDir = new java.io.File(papi.getDataFolder(), "expansions");
+            if (expansionsDir.exists() && expansionsDir.isDirectory()) {
+                java.io.File[] jars = expansionsDir.listFiles((dir, name) ->
+                    name.toLowerCase().startsWith("expansion-" + identifier.toLowerCase()) && name.endsWith(".jar")
+                );
+                boolean exists = jars != null && jars.length > 0;
+                context.logger().fine("PAPI 检测 [" + identifier + "] via jar: " + exists);
+                return exists;
+            }
+        } catch (Exception e) {
+            context.logger().fine("PAPI jar 检测 [" + identifier + "] 失败: " + e.getMessage());
+        }
+
+        return false;
     }
 
     private Map<String, UiBinding> registerTabUis() {
