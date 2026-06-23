@@ -123,8 +123,15 @@ public final class ModuleRegistry {
         this.taczCombatBridge = taczCombatBridge;
         this.crossServerService = crossServerService;
         this.placeholderResolver = placeholderResolver;
-        String sigPubKey = plugin.getConfig().getString("module-signature-public-key", "");
-        this.signatureVerifier = new ModuleSignatureVerifier(sigPubKey, LOGGER);
+        List<String> sigPubKeys = plugin.getConfig().getStringList("module-signature-public-keys");
+        if (sigPubKeys.isEmpty()) {
+            // 向后兼容旧版单个字符串配置
+            String legacy = plugin.getConfig().getString("module-signature-public-key", "");
+            if (legacy != null && !legacy.isBlank()) {
+                sigPubKeys = List.of(legacy);
+            }
+        }
+        this.signatureVerifier = new ModuleSignatureVerifier(sigPubKeys, LOGGER);
     }
 
     // ─── 生命周期 ─────────────────────────────────────────────
