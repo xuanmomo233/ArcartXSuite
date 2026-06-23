@@ -209,9 +209,28 @@ public final class TabModule extends AbstractAXSModule {
 
     private boolean isPapiExpansionRegistered(String identifier) {
         try {
-            Class<?> papiClass = Class.forName("me.clip.placeholderapi.PlaceholderAPI");
-            java.lang.reflect.Method method = papiClass.getMethod("getRegisteredPlaceholderExpansion", String.class);
-            Object result = method.invoke(null, identifier);
+            // 通过 Bukkit 获取 PAPI 插件实例，避免依赖可能不存在的静态 getInstance()
+            org.bukkit.plugin.Plugin papi = org.bukkit.Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
+            if (papi == null) {
+                return false;
+            }
+
+            // 兼容 2.11.x (getLocalExpansionManager) 和旧版 (getExpansionManager)
+            Object manager;
+            try {
+                java.lang.reflect.Method getManager = papi.getClass().getMethod("getLocalExpansionManager");
+                manager = getManager.invoke(papi);
+            } catch (NoSuchMethodException e) {
+                java.lang.reflect.Method getManager = papi.getClass().getMethod("getExpansionManager");
+                manager = getManager.invoke(papi);
+            }
+
+            java.lang.reflect.Method find = manager.getClass().getMethod("findExpansionByIdentifier", String.class);
+            Object result = find.invoke(manager, identifier);
+
+            if (result instanceof java.util.Optional<?> optional) {
+                return optional.isPresent();
+            }
             return result != null;
         } catch (ReflectiveOperationException | LinkageError e) {
             return false;

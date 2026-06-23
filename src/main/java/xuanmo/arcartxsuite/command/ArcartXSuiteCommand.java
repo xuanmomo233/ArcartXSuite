@@ -26,7 +26,7 @@ import xuanmo.arcartxsuite.module.ModuleRegistry;
 public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter {
 
     private static final String PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
-    private static final List<String> ROOT_ACTIONS = List.of("help", "status", "reload", "load", "unload", "update", "config", "purge", "diagnostic", "migrate", "auth");
+    private static final List<String> ROOT_ACTIONS = List.of("help", "status", "reload", "load", "unload", "update", "sync", "config", "purge", "diagnostic", "migrate", "auth");
 
     private static final long PURGE_CONFIRM_TIMEOUT_MS = 10_000;
 
@@ -68,6 +68,9 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         }
         if ("update".equalsIgnoreCase(args[0])) {
             return handleUpdate(sender, args);
+        }
+        if ("sync".equalsIgnoreCase(args[0])) {
+            return handleSync(sender, args);
         }
         if ("config".equalsIgnoreCase(args[0])) {
             String[] subArgs = new String[args.length - 1];
@@ -218,6 +221,7 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " load <module>" + ChatColor.GRAY + " - 热加载新模块（从 modules/ 扫描）");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " unload <module>" + ChatColor.GRAY + " - 热卸载模块（释放 ClassLoader）");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " update <module|all>" + ChatColor.GRAY + " - 从云端强制更新模块到最新版本并热加载");
+        sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " sync" + ChatColor.GRAY + " - 立即从云端同步授权模块列表并加载新授权的模块");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " config <子命令>" + ChatColor.GRAY + " - 智能配置体检");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " auth <子命令>" + ChatColor.GRAY + " - 多方认证管理 (status/setup/update/check)");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " migrate <module|all> <direction> [overwrite]" + ChatColor.GRAY + " - 跨数据库一键无损迁移 (SQLite ↔ MySQL)");
@@ -538,6 +542,23 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         return true;
     }
 
+    private boolean handleSync(CommandSender sender, String[] args) {
+        CloudModuleService cloudService = plugin.getCloudModuleService();
+        if (cloudService == null) {
+            sender.sendMessage(PREFIX + ChatColor.RED + "云端服务未初始化。");
+            return true;
+        }
+        sender.sendMessage(PREFIX + ChatColor.GRAY + "正在从云端同步授权模块列表...");
+        cloudService.forceSyncModules().thenAccept(ok ->
+            Bukkit.getScheduler().runTask(plugin, () ->
+                sender.sendMessage(PREFIX + (ok
+                    ? ChatColor.GREEN + "同步完成。新授权的云端模块已自动加载，已撤销的模块已卸载。"
+                    : ChatColor.RED + "同步失败，请查看控制台日志。"))
+            )
+        );
+        return true;
+    }
+
     private boolean handleUpdate(CommandSender sender, String[] args) {
         CloudModuleService cloudService = plugin.getCloudModuleService();
         if (cloudService == null) {
@@ -578,7 +599,7 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
     }
 
     private void sendUsage(CommandSender sender, String label) {
-        sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /" + label + " help|status|reload|load|unload|update|config|purge|diagnostic|migrate|auth|<module>");
+        sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /" + label + " help|status|reload|load|unload|update|sync|config|purge|diagnostic|migrate|auth|<module>");
     }
 
     // ─── 工具 ─────────────────────────────────────────────────

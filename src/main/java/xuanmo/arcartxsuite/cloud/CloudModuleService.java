@@ -170,6 +170,17 @@ public final class CloudModuleService {
         return refreshToken(false);
     }
 
+    /**
+     * 强制向云端刷新令牌并同步授权模块列表（跳过本地缓存），用于手动触发同步。
+     */
+    public CompletableFuture<Boolean> forceSyncModules() {
+        if (!hasServerCode()) {
+            plugin.consoleWarn("[Cloud] 服务器尚未绑定，无法同步。请检查 cloud.qq 和 cloud.apiKey 配置。");
+            return CompletableFuture.completedFuture(false);
+        }
+        return refreshToken(true);
+    }
+
     private CompletableFuture<Boolean> refreshToken(boolean isRebind) {
         // 自动修复重新绑定后必须强制刷新，以获取正确的 allowedModules
         if (!isRebind && moduleToken != null && System.currentTimeMillis() < tokenExpiry - 300_000) {
@@ -287,40 +298,56 @@ public final class CloudModuleService {
             plugin.consoleWarn("[Cloud] 非法 moduleId 格式，跳过: " + moduleId);
             return CompletableFuture.completedFuture(false);
         }
+
+        // 若本地缓存不包含该模块，先刷新令牌获取最新授权列表（应对启动后云端新装备模块的场景）
+        CompletableFuture<Boolean> ready;
         if (!allowedModules.contains(moduleId)) {
-            plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 不在云端授权列表中，无法通过云端更新。");
-            return CompletableFuture.completedFuture(false);
+            plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 不在本地缓存授权列表中，尝试刷新令牌...");
+            ready = refreshToken();
+        } else {
+            ready = CompletableFuture.completedFuture(true);
         }
 
-        // 在主线程同步卸载（确保 unload 完成后再 download）
-        if (registry.isModuleLoaded(moduleId)) {
-            boolean unloaded = registry.unloadModule(moduleId);
-            if (!unloaded) {
-                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 卸载失败，取消更新。");
+        return ready.thenCompose(ok -> {
+            if (!ok) {
+                plugin.consoleWarn("[Cloud] 刷新令牌失败，无法确认模块 " + moduleId + " 的授权状态。");
                 return CompletableFuture.completedFuture(false);
             }
-            plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已卸载，开始下载新版本...");
-        } else {
-            plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 未加载，直接下载最新版本...");
-        }
+            if (!allowedModules.contains(moduleId)) {
+                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 不在云端授权列表中，无法通过云端更新。");
+                return CompletableFuture.completedFuture(false);
+            }
 
-        // 清除缓存，强制重新下载
-        cachedAxb.remove(moduleId);
-
-        // 重新下载并加载；downloadAndLoad 内部的加载在主线程异步执行，
-        // 因此延迟 5 ticks 后检查是否真正加载成功
-        return downloadAndLoad(moduleId).thenCompose(v -> {
-            CompletableFuture<Boolean> result = new CompletableFuture<>();
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                boolean loaded = registry.isModuleLoaded(moduleId);
-                if (loaded) {
-                    plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 更新成功并已加载");
-                } else {
-                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新后未能成功加载");
+            // 在主线程同步卸载（确保 unload 完成后再 download）
+            if (registry.isModuleLoaded(moduleId)) {
+                boolean unloaded = registry.unloadModule(moduleId);
+                if (!unloaded) {
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 卸载失败，取消更新。");
+                    return CompletableFuture.completedFuture(false);
                 }
-                result.complete(loaded);
-            }, 5L);
-            return result;
+                plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已卸载，开始下载新版本...");
+            } else {
+                plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 未加载，直接下载最新版本...");
+            }
+
+            // 清除缓存，强制重新下载
+            cachedAxb.remove(moduleId);
+
+            // 重新下载并加载；downloadAndLoad 内部的加载在主线程异步执行，
+            // 因此延迟 5 ticks 后检查是否真正加载成功
+            return downloadAndLoad(moduleId).thenCompose(v -> {
+                CompletableFuture<Boolean> result = new CompletableFuture<>();
+                plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                    boolean loaded = registry.isModuleLoaded(moduleId);
+                    if (loaded) {
+                        plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 更新成功并已加载");
+                    } else {
+                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新后未能成功加载");
+                    }
+                    result.complete(loaded);
+                }, 5L);
+                return result;
+            });
         });
     }
 
