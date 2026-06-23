@@ -58,7 +58,7 @@ public final class OnlineRewardsMenuPacketFactory {
         LinkedHashMap<String, Object> periodicRows = new LinkedHashMap<>();
         periodicRows.putAll(buildPeriodicRewardRows(configuration.weeklyRewards(), state.weekMinutes(), state.claimedWeeklyRewardIds(), "本周"));
         int weeklySize = periodicRows.size();
-        LinkedHashMap<String, Object> monthlyRows = buildPeriodicRewardRows(configuration.monthlyRewards(), state.monthMinutes(), state.claimedMonthlyRewardIds(), "本月");
+        Map<String, Object> monthlyRows = buildPeriodicRewardRows(configuration.monthlyRewards(), state.monthMinutes(), state.claimedMonthlyRewardIds(), "本月");
         int index = 0;
         for (Map.Entry<String, Object> entry : monthlyRows.entrySet()) {
             periodicRows.put(Integer.toString(weeklySize + index), entry.getValue());
