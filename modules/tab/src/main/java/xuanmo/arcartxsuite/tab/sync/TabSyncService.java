@@ -97,14 +97,16 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
     }
 
     /**
-     * 统一占位符解析入口：先走内置解析器处理 %player_xxx% / %server_xxx%，
-     * 若 PlaceholderAPI 存在则继续解析剩余外部占位符（如 %axstitle_xxx% 等）。
+     * 统一占位符解析入口：完全委托给 PlaceholderAPI。
+     * <p>
+     * Tab 模块在启动时会检测并自动注入 player/server fallback 扩展，
+     * 因此无需再维护内置解析器。
      */
     private String resolvePlaceholders(Player player, String text) {
         if (text == null) {
             return "";
         }
-        String rendered = BuiltinPlaceholderResolver.resolve(text, player);
+        String rendered = text;
         if (player != null) {
             rendered = placeholderResolver.applyPlaceholders(player, rendered);
         }

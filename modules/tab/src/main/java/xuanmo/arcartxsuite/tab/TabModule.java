@@ -23,6 +23,8 @@ import xuanmo.arcartxsuite.tab.config.TabModuleConfiguration;
 import xuanmo.arcartxsuite.tab.debug.TabSnapshotStore;
 import xuanmo.arcartxsuite.tab.listener.TabPvpListener;
 import xuanmo.arcartxsuite.tab.placeholder.TabPlaceholderExpansion;
+import xuanmo.arcartxsuite.tab.placeholder.TabPlayerFallbackExpansion;
+import xuanmo.arcartxsuite.tab.placeholder.TabServerFallbackExpansion;
 import xuanmo.arcartxsuite.tab.sync.TabSyncService;
 
 /**
@@ -143,6 +145,9 @@ public final class TabModule extends AbstractAXSModule {
         // 注册 TabRefreshable capability，供其他模块刷新 Tab
         context.registerCapability(xuanmo.arcartxsuite.api.capability.TabRefreshable.class, service);
 
+        // 检测并注册 fallback PAPI 扩展（若原生 player/server 扩展缺失）
+        registerFallbackPapiExpansionsIfNeeded();
+
         context.logger().fine(
             "Tab 模块已载入，定义数量: " + configuration.definitions().size()
                 + " | UI: " + tabUiBindings.keySet()
@@ -186,6 +191,31 @@ public final class TabModule extends AbstractAXSModule {
 
     public TabSyncService getService() {
         return service;
+    }
+
+    private void registerFallbackPapiExpansionsIfNeeded() {
+        if (!context.hasPlugin("PlaceholderAPI")) {
+            return;
+        }
+        if (!isPapiExpansionRegistered("player")) {
+            context.logger().info("PlaceholderAPI 未检测到 player 扩展，Tab 模块将注入内置 player 占位符。");
+            context.expansionRegistry().register(new TabPlayerFallbackExpansion(context.plugin()));
+        }
+        if (!isPapiExpansionRegistered("server")) {
+            context.logger().info("PlaceholderAPI 未检测到 server 扩展，Tab 模块将注入内置 server 占位符。");
+            context.expansionRegistry().register(new TabServerFallbackExpansion(context.plugin()));
+        }
+    }
+
+    private boolean isPapiExpansionRegistered(String identifier) {
+        try {
+            Class<?> papiClass = Class.forName("me.clip.placeholderapi.PlaceholderAPI");
+            java.lang.reflect.Method method = papiClass.getMethod("getRegisteredPlaceholderExpansion", String.class);
+            Object result = method.invoke(null, identifier);
+            return result != null;
+        } catch (ReflectiveOperationException | LinkageError e) {
+            return false;
+        }
     }
 
     private Map<String, UiBinding> registerTabUis() {
