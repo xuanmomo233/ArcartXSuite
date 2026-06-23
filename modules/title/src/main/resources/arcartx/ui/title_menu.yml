@@ -470,11 +470,11 @@ controls:
             val: 分组滑块
             attribute:
               x: 56
-              y: 270
-              width: 60
-              height: 6
+              y: 280
+              width: 40
+              height: 4
               normal: ~120,120,120,200
-              maxDragX: 280
+              maxDragX: 348
           分组滚动区:
             type: Scroll
             attribute:
@@ -545,11 +545,11 @@ controls:
             val: 品质滑块
             attribute:
               x: 56
-              y: 350
-              width: 60
-              height: 6
+              y: 360
+              width: 40
+              height: 4
               normal: ~120,120,120,200
-              maxDragX: 280
+              maxDragX: 348
           品质滚动区:
             type: Scroll
             attribute:
@@ -620,11 +620,11 @@ controls:
             val: 称号滑块
             attribute:
               x: 442
-              y: 410
+              y: 400
               width: 6
-              height: 50
+              height: 60
               normal: ~120,120,120,200
-              maxDragY: 390
+              maxDragY: 380
           称号滚动区:
             type: Scroll
             attribute:

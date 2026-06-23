@@ -1,5 +1,8 @@
 package xuanmo.arcartxsuite.onlinerewards.command;
 
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
@@ -22,7 +25,7 @@ import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsTextFormats;
 public final class OnlineRewardsPlayerCommand implements org.bukkit.command.TabExecutor {
 
     private static final int PAGE_SIZE = 10;
-    private static final List<String> ROOT_ACTIONS = List.of("open", "status", "signin", "top");
+    private static final List<String> ROOT_ACTIONS = List.of("open", "status", "signin", "top", "history");
 
     private final Supplier<OnlineRewardsService> serviceProvider;
     private final Supplier<OnlineRewardsModuleConfiguration> configurationProvider;
@@ -73,6 +76,7 @@ public final class OnlineRewardsPlayerCommand implements org.bukkit.command.TabE
             case "status" -> sendStatus(player, service);
             case "signin" -> sendOperationResult(player, service.signIn(player));
             case "top" -> sendLeaderboard(player, service, label, args);
+            case "history" -> sendHistory(player, service, label, args);
             default -> player.sendMessage(msg("player.usage", label));
         }
         return true;
@@ -95,6 +99,11 @@ public final class OnlineRewardsPlayerCommand implements org.bukkit.command.TabE
         }
         if (args.length == 3 && "top".equalsIgnoreCase(args[0])) {
             return List.of("1", "2", "3");
+        }
+        if (args.length == 2 && "history".equalsIgnoreCase(args[0])) {
+            return List.of("1", "2", "3", "6", "12").stream()
+                .filter(value -> value.startsWith(args[1].toLowerCase()))
+                .toList();
         }
         return List.of();
     }
@@ -143,6 +152,30 @@ public final class OnlineRewardsPlayerCommand implements org.bukkit.command.TabE
                 entry.playerName(),
                 OnlineRewardsTextFormats.formatMinutes(entry.minutes()),
                 entry.minutes()));
+        }
+    }
+
+    private void sendHistory(Player player, OnlineRewardsService service, String label, String[] args) {
+        int months = args.length >= 2 ? parseInt(args[1], 6) : 6;
+        months = Math.max(1, Math.min(24, months));
+        List<String> historyMonths = service.loadSignInHistoryMonths(player.getUniqueId(), months);
+        if (historyMonths.isEmpty()) {
+            player.sendMessage(msg("player.history.empty"));
+            return;
+        }
+        player.sendMessage(msg("player.history.header", months));
+        for (String month : historyMonths) {
+            YearMonth ym = parseYearMonth(month);
+            int days = ym == null ? 0 : service.countSignInDaysForMonth(player.getUniqueId(), ym);
+            player.sendMessage(msg("player.history.entry", month, days, ym == null ? 0 : ym.lengthOfMonth()));
+        }
+    }
+
+    private YearMonth parseYearMonth(String value) {
+        try {
+            return YearMonth.parse(value, DateTimeFormatter.ofPattern("yyyy-MM"));
+        } catch (DateTimeParseException exception) {
+            return null;
         }
     }
 

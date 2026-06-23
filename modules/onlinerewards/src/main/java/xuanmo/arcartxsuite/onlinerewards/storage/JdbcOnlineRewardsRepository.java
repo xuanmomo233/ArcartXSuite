@@ -38,7 +38,7 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of("online_rewards_players", "online_rewards_sign_ins");
+        return List.of("online_rewards_players", "online_rewards_sign_ins", "online_rewards_server_goals");
     }
 
     @Override
@@ -48,7 +48,8 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
                  """
                  SELECT player_name, reward_date, online_minutes, reward_stage, week_key, week_minutes,
                         month_key, month_minutes, total_minutes, last_sign_in_date, sign_in_streak, sign_in_total,
-                        makeup_cards, time_bonus_remainder
+                        makeup_cards, time_bonus_remainder, offline_savings_minutes,
+                        claimed_weekly_reward_ids, claimed_monthly_reward_ids
                  FROM online_rewards_players
                  WHERE player_uuid = ?
                  """
@@ -70,7 +71,10 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
                         resultSet.getInt("sign_in_streak"),
                         resultSet.getInt("sign_in_total"),
                         resultSet.getInt("makeup_cards"),
-                        resultSet.getDouble("time_bonus_remainder")
+                        resultSet.getDouble("time_bonus_remainder"),
+                        resultSet.getInt("offline_savings_minutes"),
+                        parseIdSet(nullToEmpty(resultSet.getString("claimed_weekly_reward_ids"))),
+                        parseIdSet(nullToEmpty(resultSet.getString("claimed_monthly_reward_ids")))
                     );
                 }
             }
@@ -97,6 +101,9 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
             statement.setInt(13, state.signInTotal());
             statement.setInt(14, state.makeupCards());
             statement.setDouble(15, state.timeBonusRemainder());
+            statement.setInt(16, state.offlineSavingsMinutes());
+            statement.setString(17, String.join(",", state.claimedWeeklyRewardIds()));
+            statement.setString(18, String.join(",", state.claimedMonthlyRewardIds()));
             statement.executeUpdate();
         }
     }
@@ -261,8 +268,70 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
     }
 
     @Override
+    public int countSignInRecords(String datePrefix) throws SQLException {
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT COUNT(DISTINCT player_uuid) FROM online_rewards_sign_ins WHERE sign_in_date LIKE ?"
+             )) {
+            statement.setString(1, datePrefix == null ? "" : datePrefix + "%");
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getInt(1) : 0;
+            }
+        }
+    }
+
+    @Override
+    public boolean isServerGoalTriggered(String date, String goalId) throws SQLException {
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT 1 FROM online_rewards_server_goals WHERE goal_date = ? AND goal_id = ? AND triggered = 1"
+             )) {
+            statement.setString(1, date == null ? "" : date);
+            statement.setString(2, goalId == null ? "" : goalId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next();
+            }
+        }
+    }
+
+    @Override
+    public void saveServerGoalTriggered(String date, String goalId) throws SQLException {
+        String sql = configuration.dialect() == OnlineRewardsPersistenceDialect.SQLITE
+            ? """
+                INSERT INTO online_rewards_server_goals (goal_date, goal_id, triggered)
+                VALUES (?, ?, 1)
+                ON CONFLICT(goal_date, goal_id) DO UPDATE SET triggered = 1
+                """
+            : """
+                INSERT INTO online_rewards_server_goals (goal_date, goal_id, triggered)
+                VALUES (?, ?, 1)
+                ON DUPLICATE KEY UPDATE triggered = 1
+                """;
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, date == null ? "" : date);
+            statement.setString(2, goalId == null ? "" : goalId);
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
     public void close() {
         shutdown();
+    }
+
+    private Set<String> parseIdSet(String value) {
+        if (value == null || value.isBlank()) {
+            return Set.of();
+        }
+        Set<String> ids = new HashSet<>();
+        for (String part : value.split(",")) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty()) {
+                ids.add(trimmed);
+            }
+        }
+        return Set.copyOf(ids);
     }
 
     private void createOrMigrateTable(Connection connection) throws SQLException {
@@ -284,7 +353,10 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
                         sign_in_streak INTEGER NOT NULL DEFAULT 0,
                         sign_in_total INTEGER NOT NULL DEFAULT 0,
                         makeup_cards INTEGER NOT NULL DEFAULT 0,
-                        time_bonus_remainder REAL NOT NULL DEFAULT 0
+                        time_bonus_remainder REAL NOT NULL DEFAULT 0,
+                        offline_savings_minutes INTEGER NOT NULL DEFAULT 0,
+                        claimed_weekly_reward_ids TEXT NOT NULL DEFAULT '',
+                        claimed_monthly_reward_ids TEXT NOT NULL DEFAULT ''
                     );
                     """);
                 statement.execute("""
@@ -295,6 +367,15 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
                         makeup INTEGER NOT NULL DEFAULT 0,
                         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         PRIMARY KEY (player_uuid, sign_in_date)
+                    );
+                    """);
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS online_rewards_server_goals (
+                        goal_date TEXT NOT NULL,
+                        goal_id TEXT NOT NULL,
+                        triggered INTEGER NOT NULL DEFAULT 0,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (goal_date, goal_id)
                     );
                     """);
             } else {
@@ -314,7 +395,10 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
                         sign_in_streak INT NOT NULL DEFAULT 0,
                         sign_in_total INT NOT NULL DEFAULT 0,
                         makeup_cards INT NOT NULL DEFAULT 0,
-                        time_bonus_remainder DOUBLE NOT NULL DEFAULT 0
+                        time_bonus_remainder DOUBLE NOT NULL DEFAULT 0,
+                        offline_savings_minutes INT NOT NULL DEFAULT 0,
+                        claimed_weekly_reward_ids TEXT NOT NULL DEFAULT '',
+                        claimed_monthly_reward_ids TEXT NOT NULL DEFAULT ''
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                     """);
                 statement.execute("""
@@ -325,6 +409,15 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
                         makeup TINYINT NOT NULL DEFAULT 0,
                         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         PRIMARY KEY (player_uuid, sign_in_date)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                    """);
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS online_rewards_server_goals (
+                        goal_date VARCHAR(32) NOT NULL,
+                        goal_id VARCHAR(64) NOT NULL,
+                        triggered TINYINT NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (goal_date, goal_id)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                     """);
             }
@@ -350,6 +443,9 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
             ensureColumn(statement, columns, "sign_in_total", sqliteType("INTEGER NOT NULL DEFAULT 0", "INT NOT NULL DEFAULT 0"));
             ensureColumn(statement, columns, "makeup_cards", sqliteType("INTEGER NOT NULL DEFAULT 0", "INT NOT NULL DEFAULT 0"));
             ensureColumn(statement, columns, "time_bonus_remainder", sqliteType("REAL NOT NULL DEFAULT 0", "DOUBLE NOT NULL DEFAULT 0"));
+            ensureColumn(statement, columns, "offline_savings_minutes", sqliteType("INTEGER NOT NULL DEFAULT 0", "INT NOT NULL DEFAULT 0"));
+            ensureColumn(statement, columns, "claimed_weekly_reward_ids", sqliteType("TEXT NOT NULL DEFAULT ''", "TEXT NOT NULL DEFAULT ''"));
+            ensureColumn(statement, columns, "claimed_monthly_reward_ids", sqliteType("TEXT NOT NULL DEFAULT ''", "TEXT NOT NULL DEFAULT ''"));
         }
     }
 
@@ -394,9 +490,10 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
                 INSERT INTO online_rewards_players (
                     player_uuid, player_name, reward_date, online_minutes, reward_stage,
                     week_key, week_minutes, month_key, month_minutes, total_minutes,
-                    last_sign_in_date, sign_in_streak, sign_in_total, makeup_cards, time_bonus_remainder
+                    last_sign_in_date, sign_in_streak, sign_in_total, makeup_cards, time_bonus_remainder,
+                    offline_savings_minutes, claimed_weekly_reward_ids, claimed_monthly_reward_ids
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(player_uuid) DO UPDATE SET
                     player_name = excluded.player_name,
                     reward_date = excluded.reward_date,
@@ -411,16 +508,20 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
                     sign_in_streak = excluded.sign_in_streak,
                     sign_in_total = excluded.sign_in_total,
                     makeup_cards = excluded.makeup_cards,
-                    time_bonus_remainder = excluded.time_bonus_remainder
+                    time_bonus_remainder = excluded.time_bonus_remainder,
+                    offline_savings_minutes = excluded.offline_savings_minutes,
+                    claimed_weekly_reward_ids = excluded.claimed_weekly_reward_ids,
+                    claimed_monthly_reward_ids = excluded.claimed_monthly_reward_ids
                 """;
         }
         return """
             INSERT INTO online_rewards_players (
                 player_uuid, player_name, reward_date, online_minutes, reward_stage,
                 week_key, week_minutes, month_key, month_minutes, total_minutes,
-                last_sign_in_date, sign_in_streak, sign_in_total, makeup_cards, time_bonus_remainder
+                last_sign_in_date, sign_in_streak, sign_in_total, makeup_cards, time_bonus_remainder,
+                offline_savings_minutes, claimed_weekly_reward_ids, claimed_monthly_reward_ids
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 player_name = VALUES(player_name),
                 reward_date = VALUES(reward_date),
@@ -435,7 +536,10 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
                 sign_in_streak = VALUES(sign_in_streak),
                 sign_in_total = VALUES(sign_in_total),
                 makeup_cards = VALUES(makeup_cards),
-                time_bonus_remainder = VALUES(time_bonus_remainder)
+                time_bonus_remainder = VALUES(time_bonus_remainder),
+                offline_savings_minutes = VALUES(offline_savings_minutes),
+                claimed_weekly_reward_ids = VALUES(claimed_weekly_reward_ids),
+                claimed_monthly_reward_ids = VALUES(claimed_monthly_reward_ids)
             """;
     }
 

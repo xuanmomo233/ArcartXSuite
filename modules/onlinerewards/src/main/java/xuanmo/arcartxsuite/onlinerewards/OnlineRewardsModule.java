@@ -9,6 +9,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.bukkit.command.CommandSender;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
+import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
 import java.util.Set;
@@ -16,10 +17,16 @@ import xuanmo.arcartxsuite.api.ClientInitializedHandler;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
+import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.QQBotBroadcastable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
+import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
+import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.onlinerewards.capability.OnlineRewardsQueryable;
 import xuanmo.arcartxsuite.onlinerewards.command.OnlineRewardsAdminCommand;
 import xuanmo.arcartxsuite.onlinerewards.command.OnlineRewardsPlayerCommand;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsModuleConfiguration;
@@ -56,6 +63,20 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
     }
 
     @Override
+    protected int currentConfigVersion() {
+        return 2;
+    }
+
+    @Override
+    protected @NotNull SyncPolicy defaultSyncPolicy() {
+        return SyncPolicy.builder()
+            .dynamicSection("weekly-rewards")
+            .dynamicSection("monthly-rewards")
+            .dynamicSection("server-sign-in-goal.targets")
+            .build();
+    }
+
+    @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
             // storage.mode 必须是 sqlite 或 mysql
@@ -69,7 +90,13 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
                 .withRange(0, 168),
             // 最大连续签到天数
             ValidationRule.of("settings.max-consecutive-days", ValueType.INT)
-                .withRange(1, 365)
+                .withRange(1, 365),
+            // 离线储蓄上限
+            ValidationRule.of("offline-savings.max-minutes", ValueType.INT)
+                .withRange(0, 1440),
+            // 离线储蓄存储率
+            ValidationRule.of("offline-savings.storage-rate", ValueType.DOUBLE)
+                .withRange(0.0, 1.0)
         );
     }
 
@@ -127,6 +154,11 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
             clientBridge, packetBridge, packetGuard,
             () -> context.getCapability(MailDispatchable.class),
             () -> context.getCapability(SignalDispatchable.class),
+            () -> context.getCapability(ChatCardSendable.class),
+            () -> context.getCapability(TitleGrantable.class),
+            () -> context.getCapability(SubtitlePlayable.class),
+            () -> context.getCapability(QQBotBroadcastable.class),
+            () -> context.getCapability(EventBusCapability.class),
             overwrite -> {
                 try {
                     return context.exportUiResource(
@@ -140,6 +172,18 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
             context.crossServer()
         );
         service.start();
+
+        context.registerCapability(OnlineRewardsQueryable.class, new OnlineRewardsQueryable() {
+            @Override public boolean hasSignedToday(@NotNull java.util.UUID playerUuid) { return service.hasSignedTodayPublic(playerUuid); }
+            @Override public int todayOnlineMinutes(@NotNull java.util.UUID playerUuid) { return service.todayOnlineMinutesPublic(playerUuid); }
+            @Override public int weeklyOnlineMinutes(@NotNull java.util.UUID playerUuid) { return service.weeklyOnlineMinutesPublic(playerUuid); }
+            @Override public int monthlyOnlineMinutes(@NotNull java.util.UUID playerUuid) { return service.monthlyOnlineMinutesPublic(playerUuid); }
+            @Override public boolean signIn(@NotNull Player player) { return service.signIn(player).success(); }
+            @Override public boolean makeupSignIn(@NotNull Player player, @NotNull String date) { return service.makeupSignIn(player, date).success(); }
+            @Override public boolean addMakeupCards(@NotNull Player player, int amount) { return service.addMakeupCardsPublic(player, amount); }
+            @Override public void grantDailyRewards(@NotNull Player player) { service.grantDailyRewardsPublic(player); }
+            @Override public boolean addOnlineMinutes(@NotNull Player player, int minutes) { return service.addOnlineMinutesPublic(player, minutes); }
+        });
         adminCommand = new OnlineRewardsAdminCommand(() -> service, messages());
 
         context.registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,

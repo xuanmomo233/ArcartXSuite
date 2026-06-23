@@ -1,5 +1,8 @@
 package xuanmo.arcartxsuite.onlinerewards.placeholder;
 
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Locale;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.OfflinePlayer;
@@ -54,6 +57,15 @@ public final class OnlineRewardsPlaceholderExpansion extends PlaceholderExpansio
         if (normalized.startsWith("top_")) {
             return resolveLeaderboardPlaceholder(service, normalized);
         }
+        if (normalized.startsWith("signin_history_")) {
+            return resolveSignInHistoryPlaceholder(service, offlinePlayer, normalized);
+        }
+        if ("server_signin_count".equals(normalized)) {
+            return Integer.toString(service.todaySignInCount());
+        }
+        if ("server_signin_next_goal".equals(normalized)) {
+            return Integer.toString(service.nextServerSignInGoalRequired());
+        }
 
         if (offlinePlayer == null || offlinePlayer.getUniqueId() == null) {
             return "";
@@ -69,11 +81,37 @@ public final class OnlineRewardsPlaceholderExpansion extends PlaceholderExpansio
             case "weekly_time" -> OnlineRewardsTextFormats.formatMinutes(snapshot.state().weekMinutes());
             case "monthly_time" -> OnlineRewardsTextFormats.formatMinutes(snapshot.state().monthMinutes());
             case "total_time" -> OnlineRewardsTextFormats.formatMinutes(snapshot.state().totalMinutes());
+            case "offline_savings_minutes" -> Integer.toString(snapshot.state().offlineSavingsMinutes());
+            case "offline_savings_time" -> OnlineRewardsTextFormats.formatMinutes(snapshot.state().offlineSavingsMinutes());
             case "signin_signed_today" -> Boolean.toString(snapshot.signedToday());
             case "signin_streak" -> Integer.toString(snapshot.state().signInStreak());
             case "signin_total" -> Integer.toString(snapshot.state().signInTotal());
             default -> null;
         };
+    }
+
+    private String resolveSignInHistoryPlaceholder(OnlineRewardsService service, OfflinePlayer offlinePlayer, String normalized) {
+        if (offlinePlayer == null || offlinePlayer.getUniqueId() == null) {
+            return "0";
+        }
+        String suffix = normalized.substring("signin_history_".length());
+        if (suffix.endsWith("_count")) {
+            String monthPart = suffix.substring(0, suffix.length() - "_count".length());
+            YearMonth month = parseYearMonth(monthPart);
+            if (month == null) {
+                return "0";
+            }
+            return Integer.toString(service.countSignInDaysForMonth(offlinePlayer.getUniqueId(), month));
+        }
+        return null;
+    }
+
+    private YearMonth parseYearMonth(String value) {
+        try {
+            return YearMonth.parse(value, DateTimeFormatter.ofPattern("yyyy-MM"));
+        } catch (DateTimeParseException exception) {
+            return null;
+        }
     }
 
     private String resolveLeaderboardPlaceholder(OnlineRewardsService service, String normalized) {

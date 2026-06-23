@@ -1,9 +1,12 @@
 package xuanmo.arcartxsuite.onlinerewards.service;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardDefinition;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsModuleConfiguration;
+import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsPeriodicReward;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsPlayerState;
 
 public final class OnlineRewardsStateEngine {
@@ -29,14 +32,58 @@ public final class OnlineRewardsStateEngine {
         if (!context.weekKey().equals(state.weekKey())) {
             state.setWeekKey(context.weekKey());
             state.setWeekMinutes(0);
+            state.setClaimedWeeklyRewardIds(retainNonRepeatableIds(state.claimedWeeklyRewardIds(), configuration.weeklyRewards()));
             changed = true;
         }
         if (!context.monthKey().equals(state.monthKey())) {
             state.setMonthKey(context.monthKey());
             state.setMonthMinutes(0);
+            state.setClaimedMonthlyRewardIds(retainNonRepeatableIds(state.claimedMonthlyRewardIds(), configuration.monthlyRewards()));
             changed = true;
         }
         return changed;
+    }
+
+    private Set<String> retainNonRepeatableIds(Set<String> claimedIds, List<OnlineRewardsPeriodicReward> rewards) {
+        Set<String> repeatableIds = new HashSet<>();
+        for (OnlineRewardsPeriodicReward reward : rewards) {
+            if (reward.repeat() && claimedIds.contains(reward.id())) {
+                repeatableIds.add(reward.id());
+            }
+        }
+        return Set.copyOf(repeatableIds);
+    }
+
+    public List<OnlineRewardsPeriodicReward> checkWeeklyRewards(OnlineRewardsPlayerState state) {
+        return checkPeriodicRewards(state, configuration.weeklyRewards(), state.weekMinutes(), state.claimedWeeklyRewardIds());
+    }
+
+    public List<OnlineRewardsPeriodicReward> checkMonthlyRewards(OnlineRewardsPlayerState state) {
+        return checkPeriodicRewards(state, configuration.monthlyRewards(), state.monthMinutes(), state.claimedMonthlyRewardIds());
+    }
+
+    private List<OnlineRewardsPeriodicReward> checkPeriodicRewards(
+        OnlineRewardsPlayerState state,
+        List<OnlineRewardsPeriodicReward> rewards,
+        int minutes,
+        Set<String> claimedIds
+    ) {
+        List<OnlineRewardsPeriodicReward> triggered = new ArrayList<>();
+        Set<String> newlyClaimed = new HashSet<>(claimedIds);
+        for (OnlineRewardsPeriodicReward reward : rewards) {
+            if (minutes >= reward.minutes() && !claimedIds.contains(reward.id())) {
+                triggered.add(reward);
+                newlyClaimed.add(reward.id());
+            }
+        }
+        if (!triggered.isEmpty()) {
+            if (rewards == configuration.weeklyRewards()) {
+                state.setClaimedWeeklyRewardIds(newlyClaimed);
+            } else {
+                state.setClaimedMonthlyRewardIds(newlyClaimed);
+            }
+        }
+        return List.copyOf(triggered);
     }
 
     public OnlineRewardsProgressSnapshot snapshot(OnlineRewardsPlayerState state) {

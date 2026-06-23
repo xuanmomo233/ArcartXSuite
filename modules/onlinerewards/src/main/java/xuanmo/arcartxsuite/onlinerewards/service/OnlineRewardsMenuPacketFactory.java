@@ -10,6 +10,7 @@ import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardDefinition;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsDayOfMonthReward;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsMilestoneReward;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsModuleConfiguration;
+import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsPeriodicReward;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsPlayerState;
 
 public final class OnlineRewardsMenuPacketFactory {
@@ -30,6 +31,8 @@ public final class OnlineRewardsMenuPacketFactory {
         payload.put("weeklyTimeText", OnlineRewardsTextFormats.formatMinutes(state.weekMinutes()));
         payload.put("monthlyTimeText", OnlineRewardsTextFormats.formatMinutes(state.monthMinutes()));
         payload.put("totalTimeText", OnlineRewardsTextFormats.formatMinutes(state.totalMinutes()));
+        payload.put("offlineSavingsMinutes", state.offlineSavingsMinutes());
+        payload.put("offlineSavingsText", OnlineRewardsTextFormats.formatMinutes(state.offlineSavingsMinutes()));
         payload.put("progress", progress.progress());
         payload.put("progressPercent", Math.round(progress.progress() * 100.0F));
         payload.put("progressPercentText", Integer.toString(Math.round(progress.progress() * 100.0F)));
@@ -52,7 +55,20 @@ public final class OnlineRewardsMenuPacketFactory {
         payload.put("selectedActionText", selectedActionText(configuration, snapshot, calendarView));
         payload.put("selectedActionEnabled", selectedActionEnabled(configuration, snapshot, calendarView));
         payload.put("rewardRows", buildRewardRows(configuration, state));
+        LinkedHashMap<String, Object> periodicRows = new LinkedHashMap<>();
+        periodicRows.putAll(buildPeriodicRewardRows(configuration.weeklyRewards(), state.weekMinutes(), state.claimedWeeklyRewardIds(), "本周"));
+        int weeklySize = periodicRows.size();
+        LinkedHashMap<String, Object> monthlyRows = buildPeriodicRewardRows(configuration.monthlyRewards(), state.monthMinutes(), state.claimedMonthlyRewardIds(), "本月");
+        int index = 0;
+        for (Map.Entry<String, Object> entry : monthlyRows.entrySet()) {
+            periodicRows.put(Integer.toString(weeklySize + index), entry.getValue());
+            index++;
+        }
+        payload.put("periodicRewardRows", periodicRows);
         payload.put("signInRewardRows", buildSignInRewardRows(configuration));
+        payload.put("serverSignInGoalEnabled", configuration.serverSignInGoal().enabled());
+        payload.put("serverSignInGoalCurrent", 0);
+        payload.put("serverSignInGoalNext", 0);
         payload.put("calendarCount", calendarView.month().lengthOfMonth());
         payload.put("calendarRows", buildCalendarRows(calendarView));
         payload.put("selectedRewardRows", buildSelectedRewardRows(calendarView));
@@ -94,6 +110,34 @@ public final class OnlineRewardsMenuPacketFactory {
             row.put("thresholdText", OnlineRewardsTextFormats.formatMinutes(reward.minutes()));
             row.put("statusText", claimed ? "已领取" : current ? (reached ? "待发放" : "进行中") : "未达成");
             row.put("current", current);
+            row.put("claimed", claimed);
+            row.put("reached", reached);
+            row.put("rewardText", reward.rewardText().isBlank()
+                ? rewardSummary(reward.commands().size(), reward.mailPresetIds().size())
+                : reward.rewardText());
+            rows.put(Integer.toString(index), row);
+        }
+        return rows;
+    }
+
+    private static Map<String, Object> buildPeriodicRewardRows(
+        List<OnlineRewardsPeriodicReward> rewards,
+        int minutes,
+        Set<String> claimedIds,
+        String periodLabel
+    ) {
+        LinkedHashMap<String, Object> rows = new LinkedHashMap<>();
+        for (int index = 0; index < rewards.size(); index++) {
+            OnlineRewardsPeriodicReward reward = rewards.get(index);
+            boolean claimed = claimedIds.contains(reward.id());
+            boolean reached = minutes >= reward.minutes();
+            LinkedHashMap<String, Object> row = new LinkedHashMap<>();
+            row.put("id", reward.id());
+            row.put("index", index + 1);
+            row.put("name", reward.name());
+            row.put("periodLabel", periodLabel);
+            row.put("thresholdText", OnlineRewardsTextFormats.formatMinutes(reward.minutes()));
+            row.put("statusText", claimed ? "已领取" : reached ? "待发放" : "未达成");
             row.put("claimed", claimed);
             row.put("reached", reached);
             row.put("rewardText", reward.rewardText().isBlank()

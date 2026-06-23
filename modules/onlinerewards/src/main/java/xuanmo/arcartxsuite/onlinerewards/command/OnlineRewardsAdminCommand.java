@@ -17,7 +17,7 @@ import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsService;
 
 public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "reload", "add", "remove", "set", "card");
+    private static final List<String> ACTIONS = List.of("help", "status", "reload", "add", "remove", "set", "card", "savings");
 
     private final Supplier<OnlineRewardsService> serviceProvider;
     private final MessageProvider messages;
@@ -43,6 +43,7 @@ public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
             case "reload" -> sender.sendMessage(msg("admin.reload-hint", label));
             case "add", "remove", "set" -> handleTimeAdjust(sender, action, args);
             case "card" -> handleCard(sender, args);
+            case "savings" -> handleSavings(sender, args);
             default -> sender.sendMessage(msg("admin.unknown", label));
         }
         return true;
@@ -55,13 +56,15 @@ public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
             String a = args[1].toLowerCase(Locale.ROOT);
             if (List.of("add", "remove", "set").contains(a)) return filter(List.of("30m", "1h", "2h", "12h", "1d"), args[2]);
             if ("card".equals(a)) return filter(List.of("add", "remove", "set"), args[2]);
+            if ("savings".equals(a)) return filter(List.of("add", "set", "reset"), args[2]);
         }
         if (args.length == 4) {
             String a = args[1].toLowerCase(Locale.ROOT);
             if (List.of("add", "remove", "set").contains(a)) return null; // player names
             if ("card".equals(a)) return filter(List.of("1", "5", "10"), args[3]);
+            if ("savings".equals(a)) return filter(List.of("30m", "1h", "2h"), args[3]);
         }
-        if (args.length == 5 && "card".equalsIgnoreCase(args[1])) {
+        if (args.length == 5 && ("card".equalsIgnoreCase(args[1]) || "savings".equalsIgnoreCase(args[1]))) {
             return null; // player names
         }
         return List.of();
@@ -73,6 +76,7 @@ public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(msg("admin.help.status", cmd));
         sender.sendMessage(msg("admin.help.time", cmd));
         sender.sendMessage(msg("admin.help.card", cmd));
+        sender.sendMessage(msg("admin.help.savings", cmd));
     }
 
     private void sendStatus(CommandSender sender) {
@@ -117,6 +121,25 @@ public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
         Player target = Bukkit.getPlayer(args[4]);
         if (target == null) { sender.sendMessage(msg("common.player-offline", args[4])); return; }
         OnlineRewardsOperationResult result = svc.adjustMakeupCards(target, operation, amount);
+        sender.sendMessage(messages.get("prefix") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+    }
+
+    private void handleSavings(CommandSender sender, String[] args) {
+        OnlineRewardsService svc = serviceProvider.get();
+        if (svc == null) { sender.sendMessage(msg("common.service-down")); return; }
+        if (args.length < 5) {
+            sender.sendMessage(msg("admin.savings.usage"));
+            return;
+        }
+        String operation = args[2].toLowerCase(Locale.ROOT);
+        int minutes = parseDurationMinutes(args[3]);
+        if (minutes <= 0 && !"reset".equals(operation) && !"set".equals(operation)) {
+            sender.sendMessage(msg("admin.savings.invalid", args[3]));
+            return;
+        }
+        Player target = Bukkit.getPlayer(args[4]);
+        if (target == null) { sender.sendMessage(msg("common.player-offline", args[4])); return; }
+        OnlineRewardsOperationResult result = svc.adjustOfflineSavings(target, operation, minutes);
         sender.sendMessage(messages.get("prefix") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
     }
 

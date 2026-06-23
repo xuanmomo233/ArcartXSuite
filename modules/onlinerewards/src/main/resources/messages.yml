@@ -18,7 +18,7 @@ common:
 
 # ── 玩家命令 ──────────────────────────────────────────
 player:
-  usage: "&e用法: /{0} open|status|signin|top <daily|weekly|monthly|total> [page]"
+  usage: "&e用法: /{0} open|status|signin|top|history <daily|weekly|monthly|total> [page]"
   status:
     online: "&7今日在线: &f{0}&7 | 本周在线: &f{1}"
     monthly: "&7本月在线: &f{0}&7 | 总在线: &f{1}"
@@ -32,6 +32,10 @@ player:
     header: "&7排行榜: &f{0}&7 | 页数: &f{1}"
     empty: "&e当前排行榜暂无数据。"
     entry: "&f#{0}&7 {1}&7 | 时长: &f{2}&7 | 分钟: &f{3}"
+  history:
+    empty: "&e暂无签到历史。"
+    header: "&7最近 {0} 个月签到历史："
+    entry: "&f{0}&7: &f{1}&7 / &f{2}&7 天"
 
 # ── 管理命令 ──────────────────────────────────────────
 admin:
@@ -42,6 +46,7 @@ admin:
     status: "&7{0} status&f - 查看模块状态"
     time: "&7{0} add|remove|set <时长> <玩家>&f - 修改在线时长"
     card: "&7{0} card add|remove|set <数量> <玩家>&f - 修改补签卡"
+    savings: "&7{0} savings add|set|reset <时长> <玩家>&f - 修改离线储蓄"
   status:
     title: "&6OnlineRewards 状态"
     cached: "&7缓存玩家: &f{0}"
@@ -52,3 +57,6 @@ admin:
   card:
     usage: "&e用法: /axs onlinerewards card add|remove|set <数量> <玩家>"
     invalid-amount: "&c无效数量: {0}"
+  savings:
+    usage: "&e用法: /axs onlinerewards savings add|set|reset <时长> <玩家>"
+    invalid: "&c无效时长: {0} (支持 30m/2h/1d)"

@@ -21,7 +21,11 @@ public record OnlineRewardsModuleConfiguration(
     CrossServerChannelConfig crossServer,
     OnlineRewardsSignInConfiguration signIn,
     List<OnlineRewardsTimeBonusGroup> timeBonusGroups,
-    List<OnlineRewardDefinition> rewards
+    List<OnlineRewardDefinition> rewards,
+    List<OnlineRewardsPeriodicReward> weeklyRewards,
+    List<OnlineRewardsPeriodicReward> monthlyRewards,
+    OnlineRewardsOfflineSavingsConfiguration offlineSavings,
+    OnlineRewardsServerSignInGoalConfiguration serverSignInGoal
 ) {
 
     public static OnlineRewardsModuleConfiguration load(FileConfiguration configuration) {
@@ -88,7 +92,11 @@ public record OnlineRewardsModuleConfiguration(
             crossServer,
             signIn,
             loadTimeBonusGroups(configuration.getMapList("time-bonus.permission-groups")),
-            List.copyOf(rewards)
+            List.copyOf(rewards),
+            loadPeriodicRewards(configuration.getMapList("weekly-rewards")),
+            loadPeriodicRewards(configuration.getMapList("monthly-rewards")),
+            loadOfflineSavings(configuration.getConfigurationSection("offline-savings")),
+            loadServerSignInGoal(configuration.getConfigurationSection("server-sign-in-goal"))
         );
     }
 
@@ -255,6 +263,76 @@ public record OnlineRewardsModuleConfiguration(
             nullToDefault(section.getString("makeup.invalid-date"), "§c只能补签本月今天之前未签到的日期。"),
             nullToDefault(section.getString("makeup.already-signed"), "§e该日期已经签到过了。")
         );
+    }
+
+    private static List<OnlineRewardsPeriodicReward> loadPeriodicRewards(List<Map<?, ?>> values) {
+        List<OnlineRewardsPeriodicReward> rewards = new ArrayList<>();
+        int index = 0;
+        for (Map<?, ?> value : values) {
+            String id = nullToDefault(value.get("id"), "reward-" + index);
+            int minutes = Math.max(0, parseInt(value.get("minutes"), 0));
+            String name = nullToDefault(value.get("name"), "周期奖励");
+            String rewardText = nullToDefault(value.get("rewardText"), "");
+            List<String> commands = toStringList(value.get("commands"));
+            List<String> mailPresetIds = readMailPresetIds(value);
+            boolean repeat = parseBoolean(value.get("repeat"), false);
+            rewards.add(new OnlineRewardsPeriodicReward(id, minutes, name, rewardText, commands, mailPresetIds, repeat));
+            index++;
+        }
+        return List.copyOf(rewards);
+    }
+
+    private static OnlineRewardsOfflineSavingsConfiguration loadOfflineSavings(ConfigurationSection section) {
+        if (section == null) {
+            return new OnlineRewardsOfflineSavingsConfiguration(false, 0, 1.0D, 1);
+        }
+        return new OnlineRewardsOfflineSavingsConfiguration(
+            section.getBoolean("enabled", false),
+            Math.max(0, section.getInt("max-minutes", 0)),
+            Math.max(0.0D, Math.min(1.0D, section.getDouble("storage-rate", 1.0D))),
+            Math.max(1, section.getInt("expire-days", 1))
+        );
+    }
+
+    private static OnlineRewardsServerSignInGoalConfiguration loadServerSignInGoal(ConfigurationSection section) {
+        if (section == null) {
+            return new OnlineRewardsServerSignInGoalConfiguration(false, false, List.of());
+        }
+        List<OnlineRewardsServerSignInGoalTarget> targets = new ArrayList<>();
+        List<Map<?, ?>> targetList = section.getMapList("targets");
+        int index = 0;
+        for (Map<?, ?> value : targetList) {
+            String id = nullToDefault(value.get("id"), "goal-" + index);
+            int required = Math.max(0, parseInt(value.get("required"), 0));
+            String name = nullToDefault(value.get("name"), "全服签到目标");
+            String rewardText = nullToDefault(value.get("rewardText"), "");
+            List<String> commands = toStringList(value.get("commands"));
+            List<String> mailPresetIds = readMailPresetIds(value);
+            List<String> chatCardIds = toStringList(value.get("chat-cards"));
+            List<String> subtitleGroupIds = toStringList(value.get("subtitle-groups"));
+            List<String> titleIds = toStringList(value.get("title-ids"));
+            String broadcastMessage = nullToDefault(value.get("broadcast"), "");
+            targets.add(new OnlineRewardsServerSignInGoalTarget(id, required, name, rewardText, commands, mailPresetIds, chatCardIds, subtitleGroupIds, titleIds, broadcastMessage));
+            index++;
+        }
+        return new OnlineRewardsServerSignInGoalConfiguration(
+            section.getBoolean("enabled", false),
+            section.getBoolean("broadcast", true),
+            List.copyOf(targets)
+        );
+    }
+
+    private static boolean parseBoolean(Object value, boolean defaultValue) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value instanceof String string) {
+            return Boolean.parseBoolean(string.trim());
+        }
+        if (value instanceof Number number) {
+            return number.intValue() != 0;
+        }
+        return defaultValue;
     }
 
     private static String nullToDefault(Object value, String defaultValue) {

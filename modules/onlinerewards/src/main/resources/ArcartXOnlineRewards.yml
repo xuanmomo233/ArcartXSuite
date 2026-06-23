@@ -1,6 +1,7 @@
-config-version: 1
+config-version: 2
 # AXS OnlineRewards
-# 作用: 统计今日/本周/本月/总在线时长，发放在线阶段奖励；提供签到、连续/累计/每月/节日奖励、补签卡、排行榜和日历 UI。
+# 作用: 统计今日/本周/本月/总在线时长，发放在线阶段奖励；提供签到、连续/累计/每月/节日奖励、补签卡、排行榜和日历 UI；
+#       新增周/月累计在线时长奖励、离线时长储蓄、全服签到目标/集体奖励、签到历史回顾。
 # 依赖: ArcartX；PlaceholderAPI、Mail 可选。
 # 重载: /axs onlinereward reload
 # PAPI 输出:
@@ -15,6 +16,11 @@ config-version: 1
 #   %axsonlinerewards_signin_signed_today% 今日是否已签到。
 #   %axsonlinerewards_signin_streak% 当前连续签到天数。
 #   %axsonlinerewards_signin_total% 累计签到天数。
+#   %axsonlinerewards_signin_history_yyyy-MM_count% 指定月份签到天数。
+#   %axsonlinerewards_offline_savings_minutes% 离线储蓄分钟数。
+#   %axsonlinerewards_offline_savings_time% 离线储蓄格式化时长。
+#   %axsonlinerewards_server_signin_count% 今日已签到人数。
+#   %axsonlinerewards_server_signin_next_goal% 下一个全服签到目标所需人数（0 表示无目标）。
 #   %axsonlinerewards_top_daily_<rank>_name% 日榜 Top1-10 玩家名。
 #   %axsonlinerewards_top_daily_<rank>_minutes% 日榜 Top1-10 分钟数。
 #   %axsonlinerewards_top_daily_<rank>_time% 日榜 Top1-10 格式化时长。
@@ -105,3 +111,71 @@ sign-in-file: "sign-in.yml"
 
 # 在线阶段奖励文件路径，相对模块数据目录。
 rewards-file: "rewards.yml"
+
+# 每周累计在线时长奖励。每周期自动重置，repeat: true 表示每周期都可重复领取一次。
+weekly-rewards:
+  - id: "weekly_2h"
+    minutes: 120
+    name: "本周活跃 2 小时"
+    rewardText: ""
+    commands: []
+    mail-presets: []
+    repeat: false
+  - id: "weekly_5h"
+    minutes: 300
+    name: "本周活跃 5 小时"
+    rewardText: ""
+    commands: []
+    mail-presets: []
+    repeat: false
+
+# 每月累计在线时长奖励。
+monthly-rewards:
+  - id: "monthly_10h"
+    minutes: 600
+    name: "本月活跃 10 小时"
+    rewardText: ""
+    commands: []
+    mail-presets: []
+    repeat: false
+  - id: "monthly_30h"
+    minutes: 1800
+    name: "本月活跃 30 小时"
+    rewardText: ""
+    commands: []
+    mail-presets: []
+    repeat: false
+
+# 离线时长储蓄：下线时按 storage-rate 比例存储当日已在线时长，次日登录时作为初始在线时长加成。
+# 每日上限 max-minutes 分钟；expire-days 保留用于未来扩展（当前跨天自动清零）。
+offline-savings:
+  enabled: true
+  max-minutes: 120
+  storage-rate: 1.0
+  expire-days: 1
+
+# 全服签到目标/集体奖励。每当玩家签到时统计今日签到人数，达到目标后给所有在线玩家发奖励。
+server-sign-in-goal:
+  enabled: true
+  broadcast: true
+  targets:
+    - id: "goal_10"
+      required: 10
+      name: "今日 10 人签到"
+      rewardText: ""
+      commands: []
+      mail-presets: []
+      chat-cards: []
+      subtitle-groups: []
+      title-ids: []
+      broadcast: "§e[全服签到] §f今日 10 人签到 §7已达成！"
+    - id: "goal_50"
+      required: 50
+      name: "今日 50 人签到"
+      rewardText: ""
+      commands: []
+      mail-presets: []
+      chat-cards: []
+      subtitle-groups: []
+      title-ids: []
+      broadcast: "§e[全服签到] §f今日 50 人签到 §7已达成！"

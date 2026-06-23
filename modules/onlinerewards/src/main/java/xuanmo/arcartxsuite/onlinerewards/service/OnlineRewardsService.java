@@ -29,16 +29,25 @@ import org.bukkit.scheduler.BukkitTask;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.QQBotBroadcastable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
+import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
+import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsDayOfMonthReward;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsHolidayReward;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsMilestoneReward;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardDefinition;
-import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsPermissionBonusReward;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsModuleConfiguration;
+import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsOfflineSavingsConfiguration;
+import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsPermissionBonusReward;
+import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsPeriodicReward;
+import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsServerSignInGoalConfiguration;
+import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsServerSignInGoalTarget;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsSignInConfiguration;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsTimeBonusGroup;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsLeaderboardEntry;
@@ -67,6 +76,11 @@ public class OnlineRewardsService implements Listener {
     private final PacketGuardAPI packetGuard;
     private final Supplier<MailDispatchable> mailProvider;
     private final Supplier<SignalDispatchable> signalProvider;
+    private final Supplier<ChatCardSendable> chatCardProvider;
+    private final Supplier<TitleGrantable> titleProvider;
+    private final Supplier<SubtitlePlayable> subtitleProvider;
+    private final Supplier<QQBotBroadcastable> qqBotProvider;
+    private final Supplier<EventBusCapability> eventBusProvider;
     private final Function<Boolean, File> menuUiFileExporter;
     private final OnlineRewardsStateEngine stateEngine;
     private final Clock clock;
@@ -92,11 +106,17 @@ public class OnlineRewardsService implements Listener {
         PacketGuardAPI packetGuard,
         Supplier<MailDispatchable> mailProvider,
         Supplier<SignalDispatchable> signalProvider,
+        Supplier<ChatCardSendable> chatCardProvider,
+        Supplier<TitleGrantable> titleProvider,
+        Supplier<SubtitlePlayable> subtitleProvider,
+        Supplier<QQBotBroadcastable> qqBotProvider,
+        Supplier<EventBusCapability> eventBusProvider,
         Function<Boolean, File> menuUiFileExporter,
         CrossServerAPI crossServer
     ) {
         this(plugin, configuration, repository, clientBridge, packetBridge,
-            packetGuard, mailProvider, signalProvider, menuUiFileExporter,
+            packetGuard, mailProvider, signalProvider, chatCardProvider, titleProvider,
+            subtitleProvider, qqBotProvider, eventBusProvider, menuUiFileExporter,
             Clock.systemDefaultZone(), crossServer);
     }
 
@@ -109,6 +129,11 @@ public class OnlineRewardsService implements Listener {
         PacketGuardAPI packetGuard,
         Supplier<MailDispatchable> mailProvider,
         Supplier<SignalDispatchable> signalProvider,
+        Supplier<ChatCardSendable> chatCardProvider,
+        Supplier<TitleGrantable> titleProvider,
+        Supplier<SubtitlePlayable> subtitleProvider,
+        Supplier<QQBotBroadcastable> qqBotProvider,
+        Supplier<EventBusCapability> eventBusProvider,
         Function<Boolean, File> menuUiFileExporter,
         Clock clock,
         CrossServerAPI crossServer
@@ -121,6 +146,11 @@ public class OnlineRewardsService implements Listener {
         this.packetGuard = packetGuard;
         this.mailProvider = mailProvider;
         this.signalProvider = signalProvider;
+        this.chatCardProvider = chatCardProvider;
+        this.titleProvider = titleProvider;
+        this.subtitleProvider = subtitleProvider;
+        this.qqBotProvider = qqBotProvider;
+        this.eventBusProvider = eventBusProvider;
         this.menuUiFileExporter = menuUiFileExporter;
         this.clock = clock;
         this.crossServer = crossServer;
@@ -325,6 +355,112 @@ public class OnlineRewardsService implements Listener {
         return leaderboardCache.getOrDefault(scope, List.of()).size();
     }
 
+    public List<String> loadSignInHistoryMonths(UUID playerUuid, int limit) {
+        Set<String> dates = loadAllSignInDates(playerUuid);
+        Set<String> months = new HashSet<>();
+        for (String date : dates) {
+            LocalDate parsed = parseDate(date);
+            if (parsed != null) {
+                months.add(parsed.format(DateTimeFormatter.ofPattern("yyyy-MM")));
+            }
+        }
+        List<String> sorted = new ArrayList<>(months);
+        sorted.sort(Comparator.reverseOrder());
+        return sorted.stream().limit(Math.max(1, limit)).toList();
+    }
+
+    public int countSignInDaysForMonth(UUID playerUuid, YearMonth month) {
+        Set<String> dates = loadSignInDates(playerUuid, month.atDay(1), month.atEndOfMonth());
+        return dates.size();
+    }
+
+    public int todaySignInCount() {
+        try {
+            return repository.countSignInRecords(currentPeriodContext().rewardDate());
+        } catch (SQLException exception) {
+            plugin.getLogger().log(Level.WARNING, "统计今日签到人数失败", exception);
+            return 0;
+        }
+    }
+
+    public boolean hasSignedTodayPublic(UUID playerUuid) {
+        return hasSignInRecord(playerUuid, currentPeriodContext().rewardDate());
+    }
+
+    public int todayOnlineMinutesPublic(UUID playerUuid) {
+        OnlineRewardsPlayerState state = loadState(playerUuid);
+        return state.onlineMinutes();
+    }
+
+    public int weeklyOnlineMinutesPublic(UUID playerUuid) {
+        OnlineRewardsPlayerState state = loadState(playerUuid);
+        return state.weekMinutes();
+    }
+
+    public int monthlyOnlineMinutesPublic(UUID playerUuid) {
+        OnlineRewardsPlayerState state = loadState(playerUuid);
+        return state.monthMinutes();
+    }
+
+    public boolean addOnlineMinutesPublic(Player player, int minutes) {
+        if (player == null || !player.isOnline()) {
+            return false;
+        }
+        adjustOnlineTime(player, "add", Math.max(0, minutes));
+        return true;
+    }
+
+    public boolean addMakeupCardsPublic(Player player, int amount) {
+        if (player == null || !player.isOnline()) {
+            return false;
+        }
+        adjustMakeupCards(player, "add", Math.max(0, amount));
+        return true;
+    }
+
+    public void grantDailyRewardsPublic(Player player) {
+        if (player == null || !player.isOnline()) {
+            return;
+        }
+        OnlineRewardsPlayerState state = attachPlayerState(player);
+        OnlineRewardsPeriodContext context = currentPeriodContext();
+        List<OnlineRewardDefinition> triggered = collectReachedRewards(state);
+        if (!triggered.isEmpty()) {
+            for (OnlineRewardDefinition reward : triggered) {
+                executeRewardCommands(player, reward, context);
+            }
+            saveImmediately(player.getUniqueId(), state);
+            dirtyStates.remove(player.getUniqueId());
+            pushSnapshot(player, stateEngine.snapshot(state));
+            refreshMenu(player);
+        }
+    }
+
+    public int nextServerSignInGoalRequired() {
+        OnlineRewardsServerSignInGoalConfiguration goalConfig = configuration.serverSignInGoal();
+        if (!goalConfig.enabled() || goalConfig.targets().isEmpty()) {
+            return 0;
+        }
+        int signed = todaySignInCount();
+        int next = 0;
+        String today = currentPeriodContext().rewardDate();
+        for (OnlineRewardsServerSignInGoalTarget target : goalConfig.targets()) {
+            if (target.required() <= signed) {
+                try {
+                    if (repository.isServerGoalTriggered(today, target.id())) {
+                        continue;
+                    }
+                } catch (SQLException ignored) {
+                    continue;
+                }
+            }
+            if (next == 0 || target.required() < next) {
+                next = target.required();
+            }
+        }
+        return next;
+    }
+
     public OnlineRewardsOperationResult signIn(Player player) {
         if (player == null || !player.isOnline()) {
             return new OnlineRewardsOperationResult(false, "玩家当前不在线。");
@@ -351,6 +487,7 @@ public class OnlineRewardsService implements Listener {
         refreshMenu(player);
         publishRefresh(player.getUniqueId());
         dispatchSignInSignal(player, result);
+        checkServerSignInGoals(player);
         return new OnlineRewardsOperationResult(true, renderSignInText(configuration.signIn().signInSuccessMessage(), player, result));
     }
 
@@ -389,12 +526,40 @@ public class OnlineRewardsService implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
-        flushPlayer(event.getPlayer().getUniqueId());
-        cachedStates.remove(event.getPlayer().getUniqueId());
-        dirtyStates.remove(event.getPlayer().getUniqueId());
-        calendarMonthOffsets.remove(event.getPlayer().getUniqueId());
-        selectedCalendarDates.remove(event.getPlayer().getUniqueId());
+        Player player = event.getPlayer();
+        UUID playerUuid = player.getUniqueId();
+        OnlineRewardsPlayerState state = cachedStates.get(playerUuid);
+        if (state != null) {
+            storeOfflineSavings(player, state);
+        }
+        flushPlayer(playerUuid);
+        cachedStates.remove(playerUuid);
+        dirtyStates.remove(playerUuid);
+        calendarMonthOffsets.remove(playerUuid);
+        selectedCalendarDates.remove(playerUuid);
         refreshLeaderboardSnapshots();
+    }
+
+    private void storeOfflineSavings(Player player, OnlineRewardsPlayerState state) {
+        OnlineRewardsOfflineSavingsConfiguration savings = configuration.offlineSavings();
+        if (!savings.enabled() || savings.maxMinutes() <= 0 || savings.storageRate() <= 0.0D) {
+            return;
+        }
+        int available = Math.max(0, state.onlineMinutes());
+        int stored = (int) Math.floor(available * savings.storageRate());
+        int capped = Math.min(stored, savings.maxMinutes());
+        if (capped > 0) {
+            state.setOfflineSavingsMinutes(Math.min(savings.maxMinutes(), state.offlineSavingsMinutes() + capped));
+            dirtyStates.put(player.getUniqueId(), state.copy());
+            if (configuration.debug()) {
+                plugin.getLogger().info(
+                    "OfflineRewards 储蓄 -> player=" + player.getName()
+                        + " | available=" + available
+                        + " | stored=" + capped
+                        + " | totalSavings=" + state.offlineSavingsMinutes()
+                );
+            }
+        }
     }
 
     void tickOnlinePlayers() {
@@ -405,8 +570,13 @@ public class OnlineRewardsService implements Listener {
             if (state == null) {
                 continue;
             }
+            boolean stateChanged = stateEngine.normalizeForPeriod(state, context);
+            stateChanged |= applyOfflineSavings(player, state, context);
             if (!player.getName().equals(state.playerName())) {
                 state.setPlayerName(player.getName());
+                stateChanged = true;
+            }
+            if (stateChanged) {
                 dirtyStates.put(player.getUniqueId(), state.copy());
                 dirty = true;
             }
@@ -415,10 +585,25 @@ public class OnlineRewardsService implements Listener {
             OnlineRewardsTickResult result = stateEngine.advanceMinutes(state, context, gainedMinutes);
             dirtyStates.put(player.getUniqueId(), state.copy());
             dirty = true;
+            boolean savedImmediate = false;
             if (!result.triggeredRewards().isEmpty()) {
                 for (OnlineRewardDefinition reward : result.triggeredRewards()) {
                     executeRewardCommands(player, reward, context);
                 }
+                savedImmediate = true;
+            }
+            List<OnlineRewardsPeriodicReward> weeklyTriggered = stateEngine.checkWeeklyRewards(state);
+            List<OnlineRewardsPeriodicReward> monthlyTriggered = stateEngine.checkMonthlyRewards(state);
+            if (!weeklyTriggered.isEmpty() || !monthlyTriggered.isEmpty()) {
+                for (OnlineRewardsPeriodicReward reward : weeklyTriggered) {
+                    executePeriodicRewardCommands(player, reward, context, "weekly");
+                }
+                for (OnlineRewardsPeriodicReward reward : monthlyTriggered) {
+                    executePeriodicRewardCommands(player, reward, context, "monthly");
+                }
+                savedImmediate = true;
+            }
+            if (savedImmediate) {
                 saveImmediately(player.getUniqueId(), state);
                 dirtyStates.remove(player.getUniqueId());
             }
@@ -549,11 +734,14 @@ public class OnlineRewardsService implements Listener {
             return;
         }
         OnlineRewardsPlayerSnapshot snapshot = loadSnapshot(player.getUniqueId(), player.getName());
+        Map<String, Object> payload = OnlineRewardsMenuPacketFactory.build(configuration, snapshot, buildCalendarView(player, snapshot.state()));
+        payload.put("serverSignInGoalCurrent", todaySignInCount());
+        payload.put("serverSignInGoalNext", nextServerSignInGoalRequired());
         packetBridge.sendPacketToAll(
             player,
             runtimeMenuUiIds,
             handlerName,
-            OnlineRewardsMenuPacketFactory.build(configuration, snapshot, buildCalendarView(player, snapshot.state()))
+            payload
         );
     }
 
@@ -574,6 +762,7 @@ public class OnlineRewardsService implements Listener {
         OnlineRewardsPlayerState state = cachedStates.computeIfAbsent(player.getUniqueId(), this::loadState);
         OnlineRewardsPeriodContext context = currentPeriodContext();
         boolean changed = stateEngine.normalizeForPeriod(state, context);
+        changed |= applyOfflineSavings(player, state, context);
         if (!player.getName().equals(state.playerName())) {
             state.setPlayerName(player.getName());
             changed = true;
@@ -582,6 +771,30 @@ public class OnlineRewardsService implements Listener {
             dirtyStates.put(player.getUniqueId(), state.copy());
         }
         return state;
+    }
+
+    private boolean applyOfflineSavings(Player player, OnlineRewardsPlayerState state, OnlineRewardsPeriodContext context) {
+        OnlineRewardsOfflineSavingsConfiguration savings = configuration.offlineSavings();
+        if (!savings.enabled() || state.offlineSavingsMinutes() <= 0) {
+            return false;
+        }
+        if (context.rewardDate().equals(state.rewardDate())) {
+            return false;
+        }
+        int bonus = Math.min(state.offlineSavingsMinutes(), savings.maxMinutes());
+        if (bonus <= 0) {
+            return false;
+        }
+        state.setOnlineMinutes(state.onlineMinutes() + bonus);
+        state.setOfflineSavingsMinutes(0);
+        if (configuration.debug()) {
+            plugin.getLogger().info(
+                "OfflineRewards 次日应用 -> player=" + player.getName()
+                    + " | bonus=" + bonus
+                    + " | onlineMinutes=" + state.onlineMinutes()
+            );
+        }
+        return true;
     }
 
     private void executeRewardCommands(Player player, OnlineRewardDefinition reward, OnlineRewardsPeriodContext context) {
@@ -607,6 +820,31 @@ public class OnlineRewardsService implements Listener {
             }
         }
         dispatchMailPresets(player, reward.mailPresetIds(), "奖励 '" + reward.name() + "'", "OnlineRewards:" + reward.name());
+    }
+
+    private void executePeriodicRewardCommands(Player player, OnlineRewardsPeriodicReward reward, OnlineRewardsPeriodContext context, String periodLabel) {
+        for (String rawCommand : reward.commands()) {
+            String command = renderCommand(rawCommand, player, new OnlineRewardsSignInResult(
+                false,
+                false,
+                0,
+                0,
+                context.rewardDate(),
+                context.date().getDayOfMonth()
+            ));
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+            if (configuration.debug()) {
+                plugin.getLogger().info(
+                    "OnlineRewards 发放" + periodLabel + "奖励 -> player="
+                        + player.getName()
+                        + " | reward="
+                        + reward.name()
+                        + " | command="
+                        + command
+                );
+            }
+        }
+        dispatchMailPresets(player, reward.mailPresetIds(), periodLabel + "奖励 '" + reward.name() + "'", "OnlineRewards:" + periodLabel + ":" + reward.name());
     }
 
     private void dispatchSignInMailPresets(Player player, List<String> mailPresetIds) {
@@ -778,6 +1016,33 @@ public class OnlineRewardsService implements Listener {
                 + "，本周=" + OnlineRewardsTextFormats.formatMinutes(state.weekMinutes())
                 + "，本月=" + OnlineRewardsTextFormats.formatMinutes(state.monthMinutes())
                 + "，总计=" + OnlineRewardsTextFormats.formatMinutes(state.totalMinutes())
+        );
+    }
+
+    public OnlineRewardsOperationResult adjustOfflineSavings(Player player, String operation, int minutes) {
+        if (player == null || !player.isOnline()) {
+            return new OnlineRewardsOperationResult(false, "目标玩家必须在线。");
+        }
+        int safeMinutes = Math.max(0, minutes);
+        OnlineRewardsPlayerState state = attachPlayerState(player);
+        String normalizedOperation = operation == null ? "" : operation.toLowerCase();
+        switch (normalizedOperation) {
+            case "add" -> state.setOfflineSavingsMinutes(state.offlineSavingsMinutes() + safeMinutes);
+            case "remove", "take" -> state.setOfflineSavingsMinutes(Math.max(0, state.offlineSavingsMinutes() - safeMinutes));
+            case "set" -> state.setOfflineSavingsMinutes(safeMinutes);
+            case "reset" -> state.setOfflineSavingsMinutes(0);
+            default -> {
+                return new OnlineRewardsOperationResult(false, "无效离线储蓄操作: " + operation);
+            }
+        }
+        dirtyStates.put(player.getUniqueId(), state.copy());
+        saveImmediately(player.getUniqueId(), state);
+        dirtyStates.remove(player.getUniqueId());
+        refreshMenu(player);
+        publishRefresh(player.getUniqueId());
+        return new OnlineRewardsOperationResult(
+            true,
+            "已更新 " + player.getName() + " 离线储蓄=" + OnlineRewardsTextFormats.formatMinutes(state.offlineSavingsMinutes())
         );
     }
 
@@ -1174,5 +1439,94 @@ public class OnlineRewardsService implements Listener {
         variables.put("date", result.signInDate());
         variables.put("day_of_month", String.valueOf(result.dayOfMonth()));
         signal.dispatchSignal("signin_success", player, variables);
+    }
+
+    private void checkServerSignInGoals(Player triggerPlayer) {
+        OnlineRewardsServerSignInGoalConfiguration goalConfig = configuration.serverSignInGoal();
+        if (!goalConfig.enabled() || goalConfig.targets().isEmpty()) {
+            return;
+        }
+        String today = currentPeriodContext().rewardDate();
+        int signedCount;
+        try {
+            signedCount = repository.countSignInRecords(today);
+        } catch (SQLException exception) {
+            plugin.getLogger().log(Level.WARNING, "统计今日签到人数失败", exception);
+            return;
+        }
+        for (OnlineRewardsServerSignInGoalTarget target : goalConfig.targets()) {
+            if (signedCount < target.required()) {
+                continue;
+            }
+            try {
+                if (repository.isServerGoalTriggered(today, target.id())) {
+                    continue;
+                }
+                repository.saveServerGoalTriggered(today, target.id());
+            } catch (SQLException exception) {
+                plugin.getLogger().log(Level.WARNING, "保存全服签到目标状态失败: " + target.id(), exception);
+                continue;
+            }
+            broadcastServerGoal(triggerPlayer, target, signedCount);
+            for (Player online : Bukkit.getOnlinePlayers()) {
+                executeServerGoalCommands(online, target);
+            }
+            publishEventBus("onlinerewards.server_goal_reached", triggerPlayer, Map.of(
+                "goal_id", target.id(),
+                "goal_name", target.name(),
+                "required", String.valueOf(target.required()),
+                "signed_count", String.valueOf(signedCount)
+            ));
+        }
+    }
+
+    private void broadcastServerGoal(Player triggerPlayer, OnlineRewardsServerSignInGoalTarget target, int signedCount) {
+        OnlineRewardsServerSignInGoalConfiguration goalConfig = configuration.serverSignInGoal();
+        String message = target.broadcastMessage();
+        if (message == null || message.isBlank()) {
+            message = "§e[全服签到] §f" + target.name() + " §7已达成！今日签到人数：§f" + signedCount + "§7。";
+        }
+        if (goalConfig.broadcast()) {
+            Bukkit.broadcastMessage(message.replace("{player}", triggerPlayer.getName()));
+        }
+        QQBotBroadcastable qqBot = qqBotProvider != null ? qqBotProvider.get() : null;
+        if (qqBot != null) {
+            try {
+                qqBot.sendToAllGroups(message.replace("{player}", triggerPlayer.getName()));
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private void executeServerGoalCommands(Player player, OnlineRewardsServerSignInGoalTarget target) {
+        for (String rawCommand : target.commands()) {
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), rawCommand.replace("{player}", player.getName()));
+        }
+        dispatchMailPresets(player, target.mailPresetIds(), "全服签到目标 '" + target.name() + "'", "OnlineRewards:ServerGoal:" + target.id());
+        ChatCardSendable chatCard = chatCardProvider != null ? chatCardProvider.get() : null;
+        for (String cardId : target.chatCardIds()) {
+            if (chatCard != null) {
+                chatCard.sendChatCard(player, cardId, Map.of("goal", target.name()));
+            }
+        }
+        SubtitlePlayable subtitle = subtitleProvider != null ? subtitleProvider.get() : null;
+        for (String groupId : target.subtitleGroupIds()) {
+            if (subtitle != null) {
+                subtitle.playGroup(player, groupId);
+            }
+        }
+        TitleGrantable title = titleProvider != null ? titleProvider.get() : null;
+        for (String titleId : target.titleIds()) {
+            if (title != null) {
+                title.giveTitle(player.getUniqueId(), titleId, "permanent", "OnlineRewards:ServerGoal");
+            }
+        }
+    }
+
+    private void publishEventBus(String topic, Player player, Map<String, String> payload) {
+        EventBusCapability bus = eventBusProvider != null ? eventBusProvider.get() : null;
+        if (bus != null) {
+            bus.publish(topic, player, payload);
+        }
     }
 }

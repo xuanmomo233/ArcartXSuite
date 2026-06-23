@@ -1,7 +1,6 @@
 # AXS 资源说明
-# 用途: OnlineRewards 模块默认菜单，用于签到、查看在线阶段奖励和签到奖励。
+# 用途: OnlineRewards 模块默认菜单，三栏布局：左签到日历 / 中在线进度 / 右奖励列表。
 # 前置依赖: ArcartX；OnlineRewards 模块启用后会自动注册或导出。
-# 启用开关: config.yml -> modules.onlinerewards.enabled + modules.onlinerewards.password
 # 关联文件: ArcartXOnlineRewards.yml
 # 重载命令: /axs onlinereward reload
 ui:
@@ -19,6 +18,7 @@ ui:
       var.weeklyTimeText = packet['weeklyTimeText']
       var.monthlyTimeText = packet['monthlyTimeText']
       var.totalTimeText = packet['totalTimeText']
+      var.offlineSavingsText = packet['offlineSavingsText']
       var.progress = packet['progress']
       var.progressPercent = packet['progressPercent']
       var.progressPercentText = packet['progressPercentText']
@@ -42,15 +42,20 @@ ui:
       var.selectedActionText = packet['selectedActionText']
       var.selectedActionEnabled = packet['selectedActionEnabled']
       var.rewardRows = packet['rewardRows']
+      var.periodicRewardRows = packet['periodicRewardRows']
       var.signInRewardRows = packet['signInRewardRows']
       var.calendarRows = packet['calendarRows']
       var.selectedRewardRows = packet['selectedRewardRows']
+      var.serverSignInGoalEnabled = packet['serverSignInGoalEnabled']
+      var.serverSignInGoalCurrent = packet['serverSignInGoalCurrent']
+      var.serverSignInGoalNext = packet['serverSignInGoalNext']
     update: |-
       var.packetId = packet['packetId']
       var.dailyTimeText = packet['dailyTimeText']
       var.weeklyTimeText = packet['weeklyTimeText']
       var.monthlyTimeText = packet['monthlyTimeText']
       var.totalTimeText = packet['totalTimeText']
+      var.offlineSavingsText = packet['offlineSavingsText']
       var.progress = packet['progress']
       var.progressPercent = packet['progressPercent']
       var.progressPercentText = packet['progressPercentText']
@@ -74,13 +79,18 @@ ui:
       var.selectedActionText = packet['selectedActionText']
       var.selectedActionEnabled = packet['selectedActionEnabled']
       var.rewardRows = packet['rewardRows']
+      var.periodicRewardRows = packet['periodicRewardRows']
       var.signInRewardRows = packet['signInRewardRows']
       var.calendarRows = packet['calendarRows']
       var.selectedRewardRows = packet['selectedRewardRows']
+      var.serverSignInGoalEnabled = packet['serverSignInGoalEnabled']
+      var.serverSignInGoalCurrent = packet['serverSignInGoalCurrent']
+      var.serverSignInGoalNext = packet['serverSignInGoalNext']
   action:
     load: |-
       var.maxRewardCount = 32
-      var.maxSelectedRewardCount = 32
+      var.maxPeriodicCount = 8
+      var.maxSelectedRewardCount = 16
       var.calendarCount = 31
     open: |-
       var.packetId = 'AXS_ONLINE_REWARDS'
@@ -88,6 +98,7 @@ ui:
       var.weeklyTimeText = '0分钟'
       var.monthlyTimeText = '0分钟'
       var.totalTimeText = '0分钟'
+      var.offlineSavingsText = '0分钟'
       var.progress = 0
       var.progressPercent = 0
       var.progressPercentText = '0'
@@ -110,9 +121,13 @@ ui:
       var.selectedActionText = '等待同步'
       var.selectedActionEnabled = false
       var.rewardRows = {}
+      var.periodicRewardRows = {}
       var.signInRewardRows = {}
       var.calendarRows = {}
       var.selectedRewardRows = {}
+      var.serverSignInGoalEnabled = false
+      var.serverSignInGoalCurrent = 0
+      var.serverSignInGoalNext = 0
 controls:
   自适应全局布局:
     type: Adaptive
@@ -132,41 +147,30 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~95,95,95,220
+              normal: ~40,42,48,240
               shape: ~round_rect
               radius: 24
             effect:
               stroke:
-                width: 3
-                color: ~255,255,255,255
+                width: 2
+                color: ~80,180,255,180
               shadow:
                 xOffset: 2
                 yOffset: 2
-                blur: 5
-                color: ~255,255,255,75
-              ripple:
-                duration: 1200
-                color: ~255,255,255,110
-                width: 0.05
+                blur: 6
+                color: ~0,0,0,100
           title:
             type: Text
             attribute:
               x: 36
               y: 28
               texts: "~&f在线奖励"
-              fontSize: 64
-          subtitle:
-            type: Text
-            attribute:
-              x: 36
-              y: 70
-              texts: "'&f今日阶段 ' + var.rewardStageText + '   &8签到 ' + var.signInStatusText"
               fontSize: 49
           refresh:
             type: Texture
             attribute:
-              x: 1238
-              y: 30
+              x: 1258
+              y: 28
               width: 120
               height: 42
               normal: ~255,255,255,150
@@ -174,17 +178,19 @@ controls:
               radius: 12
               texts: "~&0刷新"
               center: true
-              fontSize: 49
+              fontSize: 36
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'refresh')
-          progress_box:
+
+          # ────────────────── 左栏：签到与日历 ──────────────────
+          left_bg:
             type: Texture
             attribute:
-              x: 36
-              y: 112
-              width: 640
-              height: 186
+              x: 20
+              y: 90
+              width: 420
+              height: 710
               normal: ~255,255,255,130
               shape: ~round_rect
               radius: 18
@@ -192,88 +198,45 @@ controls:
               stroke:
                 width: 2
                 color: ~0,0,0,120
-          progress_title:
+
+          left_signin_title:
             type: Text
             attribute:
-              x: 62
-              y: 136
-              texts: "'&0' + var.progressTitle + ' &8/ &7' + var.progressPercentText + '%'"
-              fontSize: 49
-          progress_track:
-            type: Texture
-            attribute:
-              x: 62
-              y: 182
-              width: 520
-              height: 24
-              normal: ~60,64,72,185
-              shape: ~round_rect
-              radius: 12
-          progress_fill:
-            type: Texture
-            attribute:
-              x: 62
-              y: 182
-              width: "var.progress * 520"
-              height: 24
-              normal: ~75,175,120,255
-              shape: ~round_rect
-              radius: 12
-          time_daily_weekly:
-            type: Text
-            attribute:
-              x: 62
-              y: 232
-              texts: "'&7今日 &0' + var.dailyTimeText + '  &7本周 &0' + var.weeklyTimeText"
-              fontSize: 49
-          time_monthly_total:
-            type: Text
-            attribute:
-              x: 62
-              y: 262
-              texts: "'&7本月 &0' + var.monthlyTimeText + '  &7总计 &0' + var.totalTimeText"
-              fontSize: 49
-          signin_box:
-            type: Texture
-            attribute:
-              x: 706
-              y: 112
-              width: 652
-              height: 186
-              normal: ~255,255,255,130
-              shape: ~round_rect
-              radius: 18
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,120
-          signin_title:
-            type: Text
-            attribute:
-              x: 732
-              y: 136
+              x: 40
+              y: 106
               texts: "~&0每日签到"
               fontSize: 49
-          signin_state:
+
+          left_signin_info:
             type: Text
             attribute:
-              x: 732
-              y: 178
-              texts: "'&7状态 &0' + var.signInStatusText + '   &7连续 &0' + var.signInStreak.round(0) + '天   &7累计 &0' + var.signInTotal.round(0) + '天   &7补签卡数量 &0' + var.makeupCardCount.round(0)"
-              fontSize: 49
-          signin_button:
+              x: 40
+              y: 152
+              texts: "'&7状态 &0' + var.signInStatusText + '   &7连续 &0' + var.signInStreak.round(0) + '天   &7累计 &0' + var.signInTotal.round(0) + '天'"
+              fontSize: 36
+
+          left_signin_btn:
             type: Texture
             attribute:
-              x: 732
-              y: 232
-              width: 190
-              height: 46
+              x: 40
+              y: 200
+              width: 200
+              height: 48
               normal: "var.selectedActionEnabled ? '75,175,120,255' : '185,188,195,255'"
               shape: ~round_rect
               radius: 14
-              texts: "'&0' + var.selectedActionText"
               center: true
-              fontSize: 49
+              fontSize: 36
+            children:
+              left_signin_btn_text:
+                type: Text
+                attribute:
+                  x: 100
+                  y: 12
+                  through: true
+                  center: true
+                  fontSize: 36
+                  texts: "'&0' + var.selectedActionText"
             action:
               clickLeft: |-
                 if(var.selectedAction == 'signin'){
@@ -281,129 +244,22 @@ controls:
                 }elif(var.selectedAction == 'makeup'){
                   Packet.send(var.packetId, 'makeup', var.selectedDateText)
                 }
-          reward_box:
-            type: Texture
-            attribute:
-              x: 36
-              y: 326
-              width: 640
-              height: 458
-              normal: ~255,255,255,130
-              shape: ~round_rect
-              radius: 18
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,120
-          reward_title:
+
+          left_calendar_title:
             type: Text
             attribute:
-              x: 62
-              y: 350
-              texts: "~&0在线阶段奖励"
-              fontSize: 49
-          奖励滑块:
-            type: Texture
-            val: 奖励滑块
-            attribute:
-              x: 644
-              y: 392
-              width: 6
-              height: 50
-              normal: ~120,120,120,200
-              maxDragY: 310
-          reward_scroll:
-            type: Scroll
-            attribute:
-              x: 62
-              y: 392
-              width: 588
-              height: 360
-              moveY: "self.parent['奖励滑块'].getDragYRatio()"
-            action:
-              wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-            children:
-              reward_stack:
-                val: reward_stack
-                type: VStack
-                attribute:
-                  width: 588
-                  spaceBetween: 10
-                action:
-                  create: |-
-                    for(i in range(0, var.maxRewardCount)){
-                      key = i.round
-                      ri = self['item'].copy('item' + key)
-                      ri.entryKey = key
-                    }
-                children:
-                  item:
-                    type: Texture
-                    attribute:
-                      entryKey: 0
-                      entry: var.rewardRows[self.entryKey]
-                      width: 588
-                      height: 74
-                      normal: "self.entry != null && self.entry['current'] ? '110,170,230,255' : '120,120,125,255'"
-                      shape: ~round_rect
-                      radius: 14
-                      visible: self.entry != null
-                    children:
-                      title:
-                        type: Text
-                        attribute:
-                          x: 18
-                          y: 12
-                          texts: "self.parent.entry != null ? '&0' + self.parent.entry['name'] : ''"
-                          fontSize: 36
-                      meta:
-                        type: Text
-                        attribute:
-                          x: 18
-                          y: 42
-                          texts: "self.parent.entry != null ? '&7' + self.parent.entry['thresholdText'] + '   &8' + self.parent.entry['rewardText'] : ''"
-                          fontSize: 36
-                      state:
-                        type: Text
-                        attribute:
-                          x: 476
-                          y: 25
-                          texts: "self.parent.entry != null ? (self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['current'] ? '&e进行中' : '&7未达成')) : ''"
-                          fontSize: 36
-          signin_reward_box:
-            type: Texture
-            attribute:
-              x: 706
-              y: 326
-              width: 652
-              height: 458
-              normal: ~255,255,255,130
-              shape: ~round_rect
-              radius: 18
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,120
-          signin_reward_title:
-            type: Text
-            attribute:
-              x: 732
-              y: 350
+              x: 40
+              y: 276
               texts: "'&0签到日历 &8/ &7' + var.calendarMonthText"
               fontSize: 49
-          calendar_prev:
+
+          left_calendar_prev:
             type: Texture
             attribute:
-              x: 1090
-              y: 350
-              width: 58
-              height: 34
+              x: 240
+              y: 278
+              width: 52
+              height: 32
               normal: ~255,255,255,150
               shape: ~round_rect
               radius: 10
@@ -413,13 +269,14 @@ controls:
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'calendar_prev')
-          calendar_today:
+
+          left_calendar_today:
             type: Texture
             attribute:
-              x: 1158
-              y: 350
-              width: 80
-              height: 34
+              x: 300
+              y: 278
+              width: 68
+              height: 32
               normal: ~255,255,255,150
               shape: ~round_rect
               radius: 10
@@ -429,13 +286,14 @@ controls:
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'calendar_today')
-          calendar_next:
+
+          left_calendar_next:
             type: Texture
             attribute:
-              x: 1248
-              y: 350
-              width: 58
-              height: 34
+              x: 378
+              y: 278
+              width: 52
+              height: 32
               normal: ~255,255,255,150
               shape: ~round_rect
               radius: 10
@@ -445,16 +303,17 @@ controls:
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'calendar_next')
-          calendar_grid:
+
+          left_calendar_grid:
             type: HGrid
             attribute:
-              x: 732
-              y: 396
-              width: 600
-              height: 230
+              x: 40
+              y: 324
+              width: 380
+              height: 220
               column: 7
-              spaceBetweenX: 8
-              spaceBetweenY: 8
+              spaceBetweenX: 6
+              spaceBetweenY: 6
             action:
               create: |-
                 for(i in range(0, var.calendarCount)){
@@ -468,84 +327,75 @@ controls:
                 attribute:
                   entryKey: 0
                   entry: var.calendarRows[self.entryKey]
-                  width: 78
-                  height: 42
+                  width: 48
+                  height: 34
                   normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '75,175,120,255' : (self.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
                   shape: ~round_rect
-                  radius: 10
+                  radius: 8
                   texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
                   center: true
-                  fontSize: 49
+                  fontSize: 36
                   visible: self.entry != null
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'preview_day', self.entry['date'])
                 children:
-                  selected:
+                  日历选中框:
                     type: Texture
                     attribute:
                       through: true
-                      width: 78
-                      height: 42
+                      width: 48
+                      height: 34
                       normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '75,175,120,255' : (self.parent.entry['status'] == 'expired' ? '210,90,90,255' : '95,95,95,255'))"
                       shape: ~round_rect
-                      radius: 10
+                      radius: 8
                       texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
                       center: true
-                      fontSize: 49
-                      visible: self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText
+                      fontSize: 36
+                      visible: "self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText"
                     effect:
                       stroke:
                         width: 2
                         color: ~0,0,0,255
-                  today:
+                  日历今日标:
                     type: Text
                     attribute:
                       through: true
-                      x: 54
-                      y: 20
-                      visible: self.parent.entry != null && self.parent.entry['today']
+                      x: 34
+                      y: 18
+                      visible: "self.parent.entry != null && self.parent.entry['today']"
                       texts: "~&6今"
-                      fontSize: 36
-          selected_date_title:
+                      fontSize: 28
+
+          left_makeup_info:
             type: Text
             attribute:
-              x: 732
-              y: 642
+              x: 40
+              y: 560
+              texts: "'&7补签卡数量 &0' + var.makeupCardCount.round(0)"
+              fontSize: 36
+
+          left_selected_title:
+            type: Text
+            attribute:
+              x: 40
+              y: 606
               texts: "'&0' + var.selectedDateText + ' &7可能奖励'"
               fontSize: 36
-          日期奖励滑块:
-            type: Texture
-            val: 日期奖励滑块
-            attribute:
-              x: 1156
-              y: 674
-              width: 6
-              height: 20
-              normal: ~120,120,120,200
-              maxDragY: 66
-          selected_reward_scroll:
+
+          left_selected_scroll:
             type: Scroll
             attribute:
-              x: 732
-              y: 674
-              width: 430
-              height: 86
-              moveY: "self.parent['日期奖励滑块'].getDragYRatio()"
-            action:
-              wheel: |-
-                if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['日期奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
-                if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['日期奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                }
+              x: 40
+              y: 646
+              width: 380
+              height: 130
             children:
-              selected_reward_stack:
-                val: selected_reward_stack
+              left_selected_stack:
+                val: left_selected_stack
                 type: VStack
                 attribute:
-                  width: 430
+                  width: 380
                   spaceBetween: 6
                 action:
                   create: |-
@@ -560,8 +410,8 @@ controls:
                     attribute:
                       entryKey: 0
                       entry: var.selectedRewardRows[self.entryKey]
-                      width: 430
-                      height: 52
+                      width: 380
+                      height: 48
                       normal: ~255,255,255,120
                       shape: ~round_rect
                       radius: 10
@@ -571,13 +421,350 @@ controls:
                         type: Text
                         attribute:
                           x: 12
-                          y: 6
+                          y: 4
                           texts: "self.parent.entry != null ? self.parent.entry['title'] : ''"
                           fontSize: 28
                       trigger:
                         type: Text
                         attribute:
                           x: 12
+                          y: 26
+                          texts: "self.parent.entry != null ? '&7' + self.parent.entry['trigger'] + '   &8' + self.parent.entry['rewardText'] : ''"
+                          fontSize: 24
+
+          # ────────────────── 中栏：在线进度与信息 ──────────────────
+          mid_bg:
+            type: Texture
+            attribute:
+              x: 460
+              y: 90
+              width: 500
+              height: 710
+              normal: ~255,255,255,130
+              shape: ~round_rect
+              radius: 18
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,120
+
+          mid_time_title:
+            type: Text
+            attribute:
+              x: 480
+              y: 106
+              texts: "~&0在线时长"
+              fontSize: 49
+
+          mid_time_daily:
+            type: Text
+            attribute:
+              x: 480
+              y: 158
+              texts: "'&7今日 &0' + var.dailyTimeText + '   &7本周 &0' + var.weeklyTimeText"
+              fontSize: 36
+
+          mid_time_monthly:
+            type: Text
+            attribute:
+              x: 480
+              y: 196
+              texts: "'&7本月 &0' + var.monthlyTimeText + '   &7总计 &0' + var.totalTimeText"
+              fontSize: 36
+
+          mid_time_savings:
+            type: Text
+            attribute:
+              x: 480
+              y: 234
+              texts: "'&7离线储蓄 &0' + var.offlineSavingsText"
+              fontSize: 36
+
+          mid_progress_title:
+            type: Text
+            attribute:
+              x: 480
+              y: 310
+              texts: "~&0阶段进度"
+              fontSize: 49
+
+          mid_progress_name:
+            type: Text
+            attribute:
+              x: 480
+              y: 362
+              texts: "'&0' + var.progressTitle + ' &8/ &7' + var.progressPercentText + '%'"
+              fontSize: 36
+
+          mid_progress_track:
+            type: Texture
+            attribute:
+              x: 480
+              y: 406
+              width: 460
+              height: 22
+              normal: ~60,64,72,185
+              shape: ~round_rect
+              radius: 11
+
+          mid_progress_fill:
+            type: Texture
+            attribute:
+              x: 480
+              y: 406
+              width: "var.progress * 460"
+              height: 22
+              normal: ~75,175,120,255
+              shape: ~round_rect
+              radius: 11
+
+          mid_stage_text:
+            type: Text
+            attribute:
+              x: 480
+              y: 442
+              texts: "'&7当前阶段 &0' + var.rewardStageText"
+              fontSize: 36
+
+          mid_goal_title:
+            type: Text
+            attribute:
+              x: 480
+              y: 530
+              texts: "~&0全服签到目标"
+              fontSize: 49
+              visible: var.serverSignInGoalEnabled
+
+          mid_goal_text:
+            type: Text
+            attribute:
+              x: 480
+              y: 582
+              texts: "'&7今日已签到 &0' + var.serverSignInGoalCurrent.round(0) + ' &7人  下一目标 &0' + var.serverSignInGoalNext.round(0) + ' &7人'"
+              fontSize: 36
+              visible: var.serverSignInGoalEnabled
+
+          mid_goal_track:
+            type: Texture
+            attribute:
+              x: 480
+              y: 626
+              width: 460
+              height: 18
+              normal: ~60,64,72,185
+              shape: ~round_rect
+              radius: 9
+              visible: "var.serverSignInGoalEnabled && var.serverSignInGoalNext > 0"
+
+          mid_goal_fill:
+            type: Texture
+            attribute:
+              x: 480
+              y: 626
+              width: "var.serverSignInGoalNext > 0 ? (var.serverSignInGoalCurrent / var.serverSignInGoalNext * 460).min(460) : 0"
+              height: 18
+              normal: ~80,180,255,255
+              shape: ~round_rect
+              radius: 9
+              visible: "var.serverSignInGoalEnabled && var.serverSignInGoalNext > 0"
+
+          # ────────────────── 右栏：奖励列表 ──────────────────
+          right_bg:
+            type: Texture
+            attribute:
+              x: 980
+              y: 90
+              width: 400
+              height: 710
+              normal: ~255,255,255,130
+              shape: ~round_rect
+              radius: 18
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,120
+
+          right_stage_title:
+            type: Text
+            attribute:
+              x: 1000
+              y: 106
+              texts: "~&0在线阶段奖励"
+              fontSize: 49
+
+          right_stage_scroll:
+            type: Scroll
+            attribute:
+              x: 1000
+              y: 156
+              width: 360
+              height: 260
+            children:
+              right_stage_stack:
+                val: right_stage_stack
+                type: VStack
+                attribute:
+                  width: 360
+                  spaceBetween: 8
+                action:
+                  create: |-
+                    for(i in range(0, var.maxRewardCount)){
+                      key = i.round
+                      ri = self['item'].copy('item' + key)
+                      ri.entryKey = key
+                    }
+                children:
+                  item:
+                    type: Texture
+                    attribute:
+                      entryKey: 0
+                      entry: var.rewardRows[self.entryKey]
+                      width: 360
+                      height: 64
+                      normal: "self.entry != null && self.entry['current'] ? '110,170,230,255' : '120,120,125,255'"
+                      shape: ~round_rect
+                      radius: 12
+                      visible: self.entry != null
+                    children:
+                      name:
+                        type: Text
+                        attribute:
+                          x: 14
+                          y: 8
+                          texts: "self.parent.entry != null ? '&0' + self.parent.entry['name'] : ''"
+                          fontSize: 36
+                      meta:
+                        type: Text
+                        attribute:
+                          x: 14
+                          y: 36
+                          texts: "self.parent.entry != null ? '&7' + self.parent.entry['thresholdText'] + '   &8' + self.parent.entry['rewardText'] : ''"
+                          fontSize: 28
+                      state:
+                        type: Text
+                        attribute:
+                          x: 270
+                          y: 18
+                          texts: "self.parent.entry != null ? (self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['current'] ? '&e进行中' : '&7未达成')) : ''"
+                          fontSize: 36
+
+          right_periodic_title:
+            type: Text
+            attribute:
+              x: 1000
+              y: 432
+              texts: "~&0周/月奖励"
+              fontSize: 49
+
+          right_periodic_scroll:
+            type: Scroll
+            attribute:
+              x: 1000
+              y: 482
+              width: 360
+              height: 120
+            children:
+              right_periodic_stack:
+                val: right_periodic_stack
+                type: VStack
+                attribute:
+                  width: 360
+                  spaceBetween: 6
+                action:
+                  create: |-
+                    for(i in range(0, var.maxPeriodicCount)){
+                      key = i.round
+                      pi = self['item'].copy('item' + key)
+                      pi.entryKey = key
+                    }
+                children:
+                  item:
+                    type: Texture
+                    attribute:
+                      entryKey: 0
+                      entry: var.periodicRewardRows[self.entryKey]
+                      width: 360
+                      height: 52
+                      normal: "self.entry != null && self.entry['reached'] && !self.entry['claimed'] ? '110,170,230,255' : '120,120,125,255'"
+                      shape: ~round_rect
+                      radius: 10
+                      visible: self.entry != null
+                    children:
+                      name:
+                        type: Text
+                        attribute:
+                          x: 12
+                          y: 6
+                          texts: "self.parent.entry != null ? '&0' + self.parent.entry['name'] + ' &8(' + self.parent.entry['periodLabel'] + ')' : ''"
+                          fontSize: 28
+                      meta:
+                        type: Text
+                        attribute:
+                          x: 12
                           y: 28
+                          texts: "self.parent.entry != null ? '&7' + self.parent.entry['thresholdText'] + '   &8' + self.parent.entry['rewardText'] : ''"
+                          fontSize: 24
+                      state:
+                        type: Text
+                        attribute:
+                          x: 290
+                          y: 14
+                          texts: "self.parent.entry != null ? (self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['reached'] ? '&e待发放' : '&7未达成')) : ''"
+                          fontSize: 28
+
+          right_signin_title:
+            type: Text
+            attribute:
+              x: 1000
+              y: 616
+              texts: "~&0签到奖励"
+              fontSize: 49
+
+          right_signin_scroll:
+            type: Scroll
+            attribute:
+              x: 1000
+              y: 666
+              width: 360
+              height: 110
+            children:
+              right_signin_stack:
+                val: right_signin_stack
+                type: VStack
+                attribute:
+                  width: 360
+                  spaceBetween: 6
+                action:
+                  create: |-
+                    for(i in range(0, var.maxSelectedRewardCount)){
+                      key = i.round
+                      si = self['item'].copy('item' + key)
+                      si.entryKey = key
+                    }
+                children:
+                  item:
+                    type: Texture
+                    attribute:
+                      entryKey: 0
+                      entry: var.signInRewardRows[self.entryKey]
+                      width: 360
+                      height: 48
+                      normal: ~255,255,255,120
+                      shape: ~round_rect
+                      radius: 10
+                      visible: self.entry != null
+                    children:
+                      title:
+                        type: Text
+                        attribute:
+                          x: 12
+                          y: 4
+                          texts: "self.parent.entry != null ? self.parent.entry['title'] : ''"
+                          fontSize: 28
+                      trigger:
+                        type: Text
+                        attribute:
+                          x: 12
+                          y: 26
                           texts: "self.parent.entry != null ? '&7' + self.parent.entry['trigger'] + '   &8' + self.parent.entry['rewardText'] : ''"
                           fontSize: 24

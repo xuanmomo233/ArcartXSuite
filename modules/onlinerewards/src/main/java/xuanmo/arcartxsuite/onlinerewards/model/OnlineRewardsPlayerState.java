@@ -16,9 +16,12 @@ public final class OnlineRewardsPlayerState {
     private int signInTotal;
     private int makeupCards;
     private double timeBonusRemainder;
+    private int offlineSavingsMinutes;
+    private java.util.Set<String> claimedWeeklyRewardIds;
+    private java.util.Set<String> claimedMonthlyRewardIds;
 
     public OnlineRewardsPlayerState() {
-        this("", "", 0, 0, "", 0, "", 0, 0, "", 0, 0, 0, 0.0D);
+        this("", "", 0, 0, "", 0, "", 0, 0, "", 0, 0, 0, 0.0D, 0, java.util.Set.of(), java.util.Set.of());
     }
 
     public OnlineRewardsPlayerState(
@@ -35,7 +38,10 @@ public final class OnlineRewardsPlayerState {
         int signInStreak,
         int signInTotal,
         int makeupCards,
-        double timeBonusRemainder
+        double timeBonusRemainder,
+        int offlineSavingsMinutes,
+        java.util.Set<String> claimedWeeklyRewardIds,
+        java.util.Set<String> claimedMonthlyRewardIds
     ) {
         this.playerName = playerName == null ? "" : playerName;
         this.rewardDate = rewardDate == null ? "" : rewardDate;
@@ -51,6 +57,9 @@ public final class OnlineRewardsPlayerState {
         this.signInTotal = Math.max(0, signInTotal);
         this.makeupCards = Math.max(0, makeupCards);
         this.timeBonusRemainder = Math.max(0.0D, timeBonusRemainder);
+        this.offlineSavingsMinutes = Math.max(0, offlineSavingsMinutes);
+        this.claimedWeeklyRewardIds = claimedWeeklyRewardIds == null ? java.util.Set.of() : java.util.Set.copyOf(claimedWeeklyRewardIds);
+        this.claimedMonthlyRewardIds = claimedMonthlyRewardIds == null ? java.util.Set.of() : java.util.Set.copyOf(claimedMonthlyRewardIds);
     }
 
     public String playerName() {
@@ -109,6 +118,18 @@ public final class OnlineRewardsPlayerState {
         return timeBonusRemainder;
     }
 
+    public int offlineSavingsMinutes() {
+        return offlineSavingsMinutes;
+    }
+
+    public java.util.Set<String> claimedWeeklyRewardIds() {
+        return claimedWeeklyRewardIds;
+    }
+
+    public java.util.Set<String> claimedMonthlyRewardIds() {
+        return claimedMonthlyRewardIds;
+    }
+
     public void setPlayerName(String playerName) {
         this.playerName = playerName == null ? "" : playerName;
     }
@@ -165,6 +186,18 @@ public final class OnlineRewardsPlayerState {
         this.timeBonusRemainder = Math.max(0.0D, timeBonusRemainder);
     }
 
+    public void setOfflineSavingsMinutes(int offlineSavingsMinutes) {
+        this.offlineSavingsMinutes = Math.max(0, offlineSavingsMinutes);
+    }
+
+    public void setClaimedWeeklyRewardIds(java.util.Set<String> claimedWeeklyRewardIds) {
+        this.claimedWeeklyRewardIds = claimedWeeklyRewardIds == null ? java.util.Set.of() : java.util.Set.copyOf(claimedWeeklyRewardIds);
+    }
+
+    public void setClaimedMonthlyRewardIds(java.util.Set<String> claimedMonthlyRewardIds) {
+        this.claimedMonthlyRewardIds = claimedMonthlyRewardIds == null ? java.util.Set.of() : java.util.Set.copyOf(claimedMonthlyRewardIds);
+    }
+
     public OnlineRewardsPlayerState copy() {
         return new OnlineRewardsPlayerState(
             playerName,
@@ -180,7 +213,10 @@ public final class OnlineRewardsPlayerState {
             signInStreak,
             signInTotal,
             makeupCards,
-            timeBonusRemainder
+            timeBonusRemainder,
+            offlineSavingsMinutes,
+            claimedWeeklyRewardIds,
+            claimedMonthlyRewardIds
         );
     }
 }
