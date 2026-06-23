@@ -15,6 +15,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.ArcartXSuitePlugin;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
+import xuanmo.arcartxsuite.cloud.CloudModuleService;
 import xuanmo.arcartxsuite.module.ModuleRegistry;
 
 /**
@@ -25,7 +26,7 @@ import xuanmo.arcartxsuite.module.ModuleRegistry;
 public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter {
 
     private static final String PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
-    private static final List<String> ROOT_ACTIONS = List.of("help", "status", "reload", "load", "unload", "config", "purge", "diagnostic", "migrate", "auth");
+    private static final List<String> ROOT_ACTIONS = List.of("help", "status", "reload", "load", "unload", "update", "config", "purge", "diagnostic", "migrate", "auth");
 
     private static final long PURGE_CONFIRM_TIMEOUT_MS = 10_000;
 
@@ -64,6 +65,9 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         }
         if ("unload".equalsIgnoreCase(args[0])) {
             return handleUnload(sender, args);
+        }
+        if ("update".equalsIgnoreCase(args[0])) {
+            return handleUpdate(sender, args);
         }
         if ("config".equalsIgnoreCase(args[0])) {
             String[] subArgs = new String[args.length - 1];
@@ -136,6 +140,14 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         if (args.length == 2 && "unload".equalsIgnoreCase(args[0])) {
             return filter(registry == null ? List.of() : registry.externalModuleIds(), args[1]);
         }
+        if (args.length == 2 && "update".equalsIgnoreCase(args[0])) {
+            List<String> options = new ArrayList<>();
+            options.add("all");
+            if (registry != null) {
+                options.addAll(registry.getLoadedCloudModuleIds());
+            }
+            return filter(options, args[1]);
+        }
         if ("purge".equalsIgnoreCase(args[0]) && sender instanceof org.bukkit.command.ConsoleCommandSender) {
             if (args.length == 2) {
                 List<String> playerOptions = new ArrayList<>();
@@ -205,6 +217,7 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " reload [all|<module>]" + ChatColor.GRAY + " - 重载模块（onDisable + onEnable）");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " load <module>" + ChatColor.GRAY + " - 热加载新模块（从 modules/ 扫描）");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " unload <module>" + ChatColor.GRAY + " - 热卸载模块（释放 ClassLoader）");
+        sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " update <module|all>" + ChatColor.GRAY + " - 从云端强制更新模块到最新版本并热加载");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " config <子命令>" + ChatColor.GRAY + " - 智能配置体检");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " auth <子命令>" + ChatColor.GRAY + " - 多方认证管理 (status/setup/update/check)");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " migrate <module|all> <direction> [overwrite]" + ChatColor.GRAY + " - 跨数据库一键无损迁移 (SQLite ↔ MySQL)");
@@ -525,8 +538,47 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         return true;
     }
 
+    private boolean handleUpdate(CommandSender sender, String[] args) {
+        CloudModuleService cloudService = plugin.getCloudModuleService();
+        if (cloudService == null) {
+            sender.sendMessage(PREFIX + ChatColor.RED + "云端服务未初始化。");
+            return true;
+        }
+        if (args.length < 2) {
+            sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /axs update <moduleId|all>");
+            sender.sendMessage(PREFIX + ChatColor.GRAY + "moduleId: 已加载的云端模块 ID");
+            sender.sendMessage(PREFIX + ChatColor.GRAY + "all: 更新所有已加载的云端模块");
+            ModuleRegistry registry = plugin.getModuleRegistry();
+            if (registry != null && !registry.getLoadedCloudModuleIds().isEmpty()) {
+                sender.sendMessage(PREFIX + ChatColor.GRAY + "可更新的云端模块: " + ChatColor.WHITE + String.join(", ", registry.getLoadedCloudModuleIds()));
+            }
+            return true;
+        }
+        String target = args[1].toLowerCase(Locale.ROOT);
+        sender.sendMessage(PREFIX + ChatColor.GRAY + "正在更新云端模块...");
+
+        if ("all".equals(target)) {
+            cloudService.updateAllModules().thenAccept(ok ->
+                Bukkit.getScheduler().runTask(plugin, () ->
+                    sender.sendMessage(PREFIX + (ok
+                        ? ChatColor.GREEN + "所有云端模块更新完成。"
+                        : ChatColor.YELLOW + "部分云端模块更新失败，请查看控制台日志。"))
+                )
+            );
+        } else {
+            cloudService.updateModule(target).thenAccept(ok ->
+                Bukkit.getScheduler().runTask(plugin, () ->
+                    sender.sendMessage(PREFIX + (ok
+                        ? ChatColor.GREEN + "模块 " + target + " 更新成功并已加载。"
+                        : ChatColor.RED + "模块 " + target + " 更新失败，请查看控制台日志。"))
+                )
+            );
+        }
+        return true;
+    }
+
     private void sendUsage(CommandSender sender, String label) {
-        sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /" + label + " help|status|reload|load|unload|config|purge|diagnostic|migrate|auth|<module>");
+        sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /" + label + " help|status|reload|load|unload|update|config|purge|diagnostic|migrate|auth|<module>");
     }
 
     // ─── 工具 ─────────────────────────────────────────────────

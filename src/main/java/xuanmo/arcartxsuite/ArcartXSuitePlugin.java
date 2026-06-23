@@ -437,6 +437,10 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         return authCommand;
     }
 
+    public CloudModuleService getCloudModuleService() {
+        return cloudModuleService;
+    }
+
     public String describePacketBridgeMode() {
         return bridgeLifecycleManager == null ? "unavailable" : bridgeLifecycleManager.describePacketMode();
     }

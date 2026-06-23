@@ -274,6 +274,76 @@ public final class CloudModuleService {
         });
     }
 
+    // -- 手动强制更新模块 ------------------------------------------
+
+    /**
+     * 强制更新指定云端模块：卸载旧版本（如已加载）→ 清除 axb 缓存 → 重新下载 → 重新加载。
+     *
+     * @param moduleId 云端模块 ID
+     * @return 更新后是否成功加载
+     */
+    public CompletableFuture<Boolean> updateModule(String moduleId) {
+        if (!isValidModuleId(moduleId)) {
+            plugin.consoleWarn("[Cloud] 非法 moduleId 格式，跳过: " + moduleId);
+            return CompletableFuture.completedFuture(false);
+        }
+        if (!allowedModules.contains(moduleId)) {
+            plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 不在云端授权列表中，无法通过云端更新。");
+            return CompletableFuture.completedFuture(false);
+        }
+
+        // 在主线程同步卸载（确保 unload 完成后再 download）
+        if (registry.isModuleLoaded(moduleId)) {
+            boolean unloaded = registry.unloadModule(moduleId);
+            if (!unloaded) {
+                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 卸载失败，取消更新。");
+                return CompletableFuture.completedFuture(false);
+            }
+            plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已卸载，开始下载新版本...");
+        } else {
+            plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 未加载，直接下载最新版本...");
+        }
+
+        // 清除缓存，强制重新下载
+        cachedAxb.remove(moduleId);
+
+        // 重新下载并加载；downloadAndLoad 内部的加载在主线程异步执行，
+        // 因此延迟 5 ticks 后检查是否真正加载成功
+        return downloadAndLoad(moduleId).thenCompose(v -> {
+            CompletableFuture<Boolean> result = new CompletableFuture<>();
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                boolean loaded = registry.isModuleLoaded(moduleId);
+                if (loaded) {
+                    plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 更新成功并已加载");
+                } else {
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新后未能成功加载");
+                }
+                result.complete(loaded);
+            }, 5L);
+            return result;
+        });
+    }
+
+    /**
+     * 批量更新所有已加载的云端模块。
+     *
+     * @return true 表示全部更新成功（无模块时也算成功），false 表示至少一个失败
+     */
+    public CompletableFuture<Boolean> updateAllModules() {
+        List<String> loadedCloud = registry.getLoadedCloudModuleIds();
+        if (loadedCloud.isEmpty()) {
+            plugin.consoleInfo("[Cloud] 没有已加载的云端模块需要更新。");
+            return CompletableFuture.completedFuture(true);
+        }
+
+        plugin.consoleInfo("[Cloud] 开始批量更新 " + loadedCloud.size() + " 个云端模块: " + loadedCloud);
+        CompletableFuture<Boolean> chain = CompletableFuture.completedFuture(true);
+        for (String id : loadedCloud) {
+            chain = chain.thenCompose(prev -> updateModule(id).thenApply(current -> prev && current));
+        }
+        return chain;
+    }
+
     private static final java.util.regex.Pattern MODULE_ID_PATTERN = java.util.regex.Pattern.compile("^[a-zA-Z0-9_-]+$");
 
     private boolean isValidModuleId(String moduleId) {

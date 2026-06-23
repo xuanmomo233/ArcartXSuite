@@ -85,8 +85,8 @@ ui:
       var.totalAttributesText = packet['total_attributes_text']
       var.setBonusAttributesText = packet['set_bonus_attributes_text']
       var.displayTitleName = packet['display_title_name']
-      var.displayTitleId = packet['display_title_id'] != null ? packet['display_title_id'] : ''
-      var.selectedIsDisplayTitle = packet['selected_is_display_title'] != null ? packet['selected_is_display_title'] : false
+      var.displayTitleId = packet['display_title_id']
+      var.selectedIsDisplayTitle = packet['selected_is_display_title']
       var.ownedCount = packet['owned_count']
       var.hiddenCount = packet['hidden_count']
       var.equippedCount = packet['equipped_count']
@@ -106,14 +106,14 @@ ui:
       var.titleKeys = var.titles.keys()
       var.titleIndex = 0
       for(key in var.titleKeys){
-        item = val.称号列表['称号项' + var.titleIndex.round()]
+        item = val.title_list['称号项' + var.titleIndex.round()]
         if(item != null){
           item.entryKey = key
         }
         var.titleIndex = var.titleIndex + 1
       }
       while(var.titleIndex < 200){
-        item = val.称号列表['称号项' + var.titleIndex.round()]
+        item = val.title_list['称号项' + var.titleIndex.round()]
         if(item != null){
           item.entryKey = ''
         }
@@ -122,14 +122,14 @@ ui:
       var.groupKeys = var.groups.keys()
       var.groupIndex = 0
       for(key in var.groupKeys){
-        item = val.分组列表['分组项' + var.groupIndex.round()]
+        item = val.group_list['分组项' + var.groupIndex.round()]
         if(item != null){
           item.entryKey = key
         }
         var.groupIndex = var.groupIndex + 1
       }
       while(var.groupIndex < 64){
-        item = val.分组列表['分组项' + var.groupIndex.round()]
+        item = val.group_list['分组项' + var.groupIndex.round()]
         if(item != null){
           item.entryKey = ''
         }
@@ -138,14 +138,14 @@ ui:
       var.qualityKeys = var.qualities.keys()
       var.qualityIndex = 0
       for(key in var.qualityKeys){
-        item = val.品质列表['品质项' + var.qualityIndex.round()]
+        item = val.quality_list['品质项' + var.qualityIndex.round()]
         if(item != null){
           item.entryKey = key
         }
         var.qualityIndex = var.qualityIndex + 1
       }
       while(var.qualityIndex < 64){
-        item = val.品质列表['品质项' + var.qualityIndex.round()]
+        item = val.quality_list['品质项' + var.qualityIndex.round()]
         if(item != null){
           item.entryKey = ''
         }
@@ -154,14 +154,14 @@ ui:
       var.equippedKeys = var.equippedByGroup.keys()
       var.equippedIndex = 0
       for(key in var.equippedKeys){
-        item = val.已装备列表['已装备项' + var.equippedIndex.round()]
+        item = val.equipped_list['已装备项' + var.equippedIndex.round()]
         if(item != null){
           item.entryKey = key
         }
         var.equippedIndex = var.equippedIndex + 1
       }
       while(var.equippedIndex < 64){
-        item = val.已装备列表['已装备项' + var.equippedIndex.round()]
+        item = val.equipped_list['已装备项' + var.equippedIndex.round()]
         if(item != null){
           item.entryKey = ''
         }
@@ -170,14 +170,14 @@ ui:
       var.setKeys = var.sets.keys()
       var.setIndex = 0
       for(key in var.setKeys){
-        item = val.套装列表['套装项' + var.setIndex.round()]
+        item = val.set_list['套装项' + var.setIndex.round()]
         if(item != null){
           item.entryKey = key
         }
         var.setIndex = var.setIndex + 1
       }
       while(var.setIndex < 64){
-        item = val.套装列表['套装项' + var.setIndex.round()]
+        item = val.set_list['套装项' + var.setIndex.round()]
         if(item != null){
           item.entryKey = ''
         }
@@ -215,8 +215,8 @@ ui:
       var.totalAttributesText = packet['total_attributes_text']
       var.setBonusAttributesText = packet['set_bonus_attributes_text']
       var.displayTitleName = packet['display_title_name']
-      var.displayTitleId = packet['display_title_id'] != null ? packet['display_title_id'] : ''
-      var.selectedIsDisplayTitle = packet['selected_is_display_title'] != null ? packet['selected_is_display_title'] : false
+      var.displayTitleId = packet['display_title_id']
+      var.selectedIsDisplayTitle = packet['selected_is_display_title']
       var.ownedCount = packet['owned_count']
       var.hiddenCount = packet['hidden_count']
       var.equippedCount = packet['equipped_count']
@@ -231,14 +231,14 @@ ui:
       var.titleKeys = var.titles.keys()
       var.titleIndex = 0
       for(key in var.titleKeys){
-        item = val.称号列表['称号项' + var.titleIndex.round()]
+        item = val.title_list['称号项' + var.titleIndex.round()]
         if(item != null){
           item.entryKey = key
         }
         var.titleIndex = var.titleIndex + 1
       }
       while(var.titleIndex < 200){
-        item = val.称号列表['称号项' + var.titleIndex.round()]
+        item = val.title_list['称号项' + var.titleIndex.round()]
         if(item != null){
           item.entryKey = ''
         }
@@ -247,14 +247,14 @@ ui:
       var.groupKeys = var.groups.keys()
       var.groupIndex = 0
       for(key in var.groupKeys){
-        item = val.分组列表['分组项' + var.groupIndex.round()]
+        item = val.group_list['分组项' + var.groupIndex.round()]
         if(item != null){
           item.entryKey = key
         }
         var.groupIndex = var.groupIndex + 1
       }
       while(var.groupIndex < 64){
-        item = val.分组列表['分组项' + var.groupIndex.round()]
+        item = val.group_list['分组项' + var.groupIndex.round()]
         if(item != null){
           item.entryKey = ''
         }
@@ -263,14 +263,14 @@ ui:
       var.qualityKeys = var.qualities.keys()
       var.qualityIndex = 0
       for(key in var.qualityKeys){
-        item = val.品质列表['品质项' + var.qualityIndex.round()]
+        item = val.quality_list['品质项' + var.qualityIndex.round()]
         if(item != null){
           item.entryKey = key
         }
         var.qualityIndex = var.qualityIndex + 1
       }
       while(var.qualityIndex < 64){
-        item = val.品质列表['品质项' + var.qualityIndex.round()]
+        item = val.quality_list['品质项' + var.qualityIndex.round()]
         if(item != null){
           item.entryKey = ''
         }
@@ -279,14 +279,14 @@ ui:
       var.equippedKeys = var.equippedByGroup.keys()
       var.equippedIndex = 0
       for(key in var.equippedKeys){
-        item = val.已装备列表['已装备项' + var.equippedIndex.round()]
+        item = val.equipped_list['已装备项' + var.equippedIndex.round()]
         if(item != null){
           item.entryKey = key
         }
         var.equippedIndex = var.equippedIndex + 1
       }
       while(var.equippedIndex < 64){
-        item = val.已装备列表['已装备项' + var.equippedIndex.round()]
+        item = val.equipped_list['已装备项' + var.equippedIndex.round()]
         if(item != null){
           item.entryKey = ''
         }
@@ -295,14 +295,14 @@ ui:
       var.setKeys = var.sets.keys()
       var.setIndex = 0
       for(key in var.setKeys){
-        item = val.套装列表['套装项' + var.setIndex.round()]
+        item = val.set_list['套装项' + var.setIndex.round()]
         if(item != null){
           item.entryKey = key
         }
         var.setIndex = var.setIndex + 1
       }
       while(var.setIndex < 64){
-        item = val.套装列表['套装项' + var.setIndex.round()]
+        item = val.set_list['套装项' + var.setIndex.round()]
         if(item != null){
           item.entryKey = ''
         }
@@ -531,8 +531,8 @@ controls:
                           y: 8
                           through: true
                           center: true
-                          fontSize: 22
-                          texts: "self.entry != null ? self.entry['name'] : ''"
+                          fontSize: 36
+                          texts: "self.parent.entry != null ? self.parent.entry['name'] : ''"
           品质标签:
             type: Text
             attribute:
@@ -606,8 +606,8 @@ controls:
                           y: 8
                           through: true
                           center: true
-                          fontSize: 22
-                          texts: "self.entry != null ? self.entry['name'] : ''"
+                          fontSize: 36
+                          texts: "self.parent.entry != null ? self.parent.entry['name'] : ''"
           称号列表标签:
             type: Text
             attribute:
@@ -680,9 +680,8 @@ controls:
                           x: 12
                           y: 8
                           width: 324
-                          fontSize: 36
-                          texts: "self.parent.entry != null ? self.parent.entry['display_name'] : ''"
-                          visible: self.parent.entry != null
+                          fontSize: 48
+                          texts: "self.parent.entry['display_name']"
                           through: true
                       称号状态:
                         type: Text
@@ -690,9 +689,8 @@ controls:
                           x: 12
                           y: 36
                           width: 324
-                          fontSize: 22
-                          texts: "self.parent.entry != null ? '&0' + self.parent.entry['quality_name'] + ' / ' + self.parent.entry['group_name'] + ' / ' + self.parent.entry['remaining_text'] : ''"
-                          visible: self.parent.entry != null
+                          fontSize: 36
+                          texts: "self.parent.entry['quality_name'] + ' &0/ &f' + self.parent.entry['group_name'] + ' &0/ &f' + self.parent.entry['remaining_text']"
                           through: true
                       装备标记:
                         type: Text
@@ -700,7 +698,7 @@ controls:
                           x: 336
                           y: 14
                           width: 28
-                          fontSize: 36
+                          fontSize: 48
                           texts: '&a✔'
                           visible: self.parent.entry != null && self.parent.entry['equipped']
                           through: true
@@ -734,16 +732,24 @@ controls:
               y: 196
               fontSize: 36
               texts: "var.selectedKindText == '' ? '' : '&0' + var.selectedKindText + '    &0分组: &0' + var.selectedGroupName + '    &0品质: &0' + var.selectedQualityName"
+          分割线:
+            type: Texture
+            attribute:
+              x: 480
+              y: 225
+              width: 540
+              height: 2
+              normal: ~0,0,0,100
           详情滑块:
             type: Texture
             val: 详情滑块
             attribute:
               x: 1000
-              y: 250
+              y: 240
               width: 6
               height: 50
               normal: ~120,120,120,200
-              maxDragY: 540
+              maxDragY: 550
           详情滚动区:
             type: Scroll
             attribute:
@@ -925,276 +931,278 @@ controls:
               stroke:
                 width: 2
                 color: ~0,0,0,255
-          已装备标题:
-            type: Text
-            attribute:
-              x: 1056
-              y: 160
-              fontSize: 49
-              texts: '&0&l当前已装备'
-          已装备滑块:
+          右栏滑块:
             type: Texture
-            val: 已装备滑块
+            val: 右栏滑块
             attribute:
               x: 1462
-              y: 206
+              y: 160
               width: 6
               height: 40
               normal: ~120,120,120,200
-              maxDragY: 140
-          已装备滚动区:
+              maxDragY: 480
+          右栏滚动区:
             type: Scroll
             attribute:
               x: 1056
-              y: 210
+              y: 160
               width: 408
-              height: 180
-              moveY: "self.parent['已装备滑块'].getDragYRatio()"
+              height: 520
+              moveY: "self.parent['右栏滑块'].getDragYRatio()"
             action:
               wheel: |-
                 if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['已装备滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  self.parent['右栏滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
                 if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['已装备滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  self.parent['右栏滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
-              已装备列表:
-                val: equipped_list
+              右栏内容:
                 type: VStack
                 attribute:
                   width: 392
-                  spaceBetween: 8
-                action:
-                  create: |-
-                    for(i in range(0, 64)){
-                      item = self['已装备模板'].copy('已装备项' + i.round)
-                      item.entryKey = ''
-                    }
+                  spaceBetween: 12
                 children:
-                  已装备模板:
-                    type: Texture
+                  已装备标题:
+                    type: Text
                     attribute:
-                      entryKey: ''
-                      entry: var.equippedByGroup[self.entryKey]
+                      fontSize: 49
+                      texts: '&0&l当前已装备'
+                  已装备列表:
+                    val: equipped_list
+                    type: VStack
+                    attribute:
                       width: 392
-                      height: 52
-                      normal: ~255,255,255,80
-                      shape: ~round_rect
-                      radius: 10
-                      visible: self.entryKey != '' && self.entry != null
+                      spaceBetween: 8
+                    action:
+                      create: |-
+                        for(i in range(0, 64)){
+                          item = self['已装备模板'].copy('已装备项' + i.round)
+                          item.entryKey = ''
+                        }
                     children:
-                      已装备信息:
-                        type: Text
+                      已装备模板:
+                        type: Texture
                         attribute:
-                          x: 10
-                          y: 6
-                          width: 372
-                          fontSize: 36
-                          lineSpace: 6
-                          texts:
-                            - "'&0' + self.parent.entry['group_name'] + ': ' + (self.parent.entry['title_id'] == '' ? '&7未装备' : self.parent.entry['display_name'])"
-                            - "self.parent.entry['title_id'] != '' ? '&0' + self.parent.entry['quality_name'] : ''"
-                          visible: self.parent.entry != null
-                          through: true
-          总属性标题:
-            type: Text
+                          entryKey: ''
+                          entry: var.equippedByGroup[self.entryKey]
+                          width: 392
+                          height: 52
+                          normal: ~255,255,255,80
+                          shape: ~round_rect
+                          radius: 10
+                          visible: self.entryKey != '' && self.entry != null
+                        children:
+                          已装备信息:
+                            type: Text
+                            attribute:
+                              x: 10
+                              y: 6
+                              width: 372
+                              fontSize: 36
+                              lineSpace: 6
+                              texts:
+                                - "'&0' + self.parent.entry['group_name'] + ': ' + (self.parent.entry['title_id'] == '' ? '&7未装备' : self.parent.entry['display_name'])"
+                                - "self.parent.entry['title_id'] != '' ? '&0' + self.parent.entry['quality_name'] : ''"
+                              visible: self.parent.entry != null
+                              through: true
+                  总属性标题:
+                    type: Text
+                    attribute:
+                      fontSize: 49
+                      texts: '&0&l总属性汇总'
+                  总属性汇总值:
+                    type: Text
+                    attribute:
+                      width: 408
+                      fontSize: 36
+                      lineSpace: 4
+                      texts: var.totalAttributesText
+                  主展示标题:
+                    type: Text
+                    attribute:
+                      fontSize: 49
+                      texts: '&0&l当前主展示'
+                  主展示值:
+                    type: Text
+                    attribute:
+                      width: 408
+                      fontSize: 36
+                      texts: "var.displayTitleId != '' && var.displayTitleName != '' ? '&0' + var.displayTitleName : '&7未设置'"
+          按钮行1:
+            type: HStack
             attribute:
               x: 1056
-              y: 404
-              fontSize: 49
-              texts: '&0&l总属性汇总'
-          总属性汇总值:
-            type: Text
-            attribute:
-              x: 1056
-              y: 444
+              y: 690
               width: 408
-              fontSize: 36
-              lineSpace: 4
-              texts: var.totalAttributesText
-          主展示标题:
-            type: Text
+              height: 42
+              spaceBetween: 12
+            children:
+              设为主展示按钮:
+                type: Texture
+                attribute:
+                  width: 196
+                  height: 42
+                  normal: "var.selectedIsEquipped && !var.selectedIsDisplayTitle ? '120,190,255,230' : '100,100,100,200'"
+                  shape: ~round_rect
+                  radius: 14
+                  visible: var.selectedIsEquipped && !var.selectedIsDisplayTitle
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_TITLE_MENU', 'set_display', var.selectedId)
+                children:
+                  设为主展示按钮文字:
+                    type: Text
+                    attribute:
+                      x: 98
+                      y: 10
+                      through: true
+                      center: true
+                      fontSize: 36
+                      texts: '&0设为主展示'
+              装备按钮:
+                type: Texture
+                attribute:
+                  width: 196
+                  height: 42
+                  normal: "var.selectedCanEquip ? '120,190,255,230' : '100,100,100,200'"
+                  shape: ~round_rect
+                  radius: 14
+                  visible: var.selectedCanEquip
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_TITLE_MENU', 'equip', var.selectedId)
+                children:
+                  装备按钮文字:
+                    type: Text
+                    attribute:
+                      x: 98
+                      y: 10
+                      through: true
+                      center: true
+                      fontSize: 36
+                      texts: '&0装备本组'
+              卸下本组按钮:
+                type: Texture
+                attribute:
+                  width: 196
+                  height: 42
+                  normal: "var.selectedIsEquipped ? '200,150,80,230' : '100,100,100,200'"
+                  shape: ~round_rect
+                  radius: 14
+                  visible: var.selectedIsEquipped
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_TITLE_MENU', 'unequip_group', var.selectedGroupId)
+                children:
+                  卸下本组按钮文字:
+                    type: Text
+                    attribute:
+                      x: 98
+                      y: 10
+                      through: true
+                      center: true
+                      fontSize: 36
+                      texts: '&0卸下本组'
+          按钮行2:
+            type: HStack
             attribute:
               x: 1056
-              y: 560
-              fontSize: 49
-              texts: '&0&l当前主展示'
-          主展示值:
-            type: Text
-            attribute:
-              x: 1056
-              y: 618
+              y: 742
               width: 408
-              fontSize: 36
-              texts: "var.displayTitleId != '' && var.displayTitleName != '' ? '&0' + var.displayTitleName : '&7未设置'"
-          设为主展示按钮:
-            type: Texture
-            attribute:
-              x: 1056
-              y: 690
-              width: 196
               height: 42
-              normal: "var.selectedIsEquipped && !var.selectedIsDisplayTitle ? '120,190,255,230' : '100,100,100,200'"
-              shape: ~round_rect
-              radius: 14
-              visible: var.selectedIsEquipped && !var.selectedIsDisplayTitle
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-            action:
-              clickLeft: |-
-                Packet.send('AXS_TITLE_MENU', 'set_display', var.selectedId)
+              spaceBetween: 12
             children:
-              设为主展示按钮文字:
-                type: Text
+              全部卸下按钮:
+                type: Texture
                 attribute:
-                  x: 98
-                  y: 10
-                  through: true
-                  center: true
-                  fontSize: 36
-                  texts: '&0设为主展示'
-          装备按钮:
-            type: Texture
-            attribute:
-              x: 1056
-              y: 690
-              width: 196
-              height: 42
-              normal: "var.selectedCanEquip ? '120,190,255,230' : '100,100,100,200'"
-              shape: ~round_rect
-              radius: 14
-              visible: var.selectedCanEquip
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-            action:
-              clickLeft: |-
-                Packet.send('AXS_TITLE_MENU', 'equip', var.selectedId)
-            children:
-              装备按钮文字:
-                type: Text
+                  width: 196
+                  height: 42
+                  normal: ~150,150,150,255
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_TITLE_MENU', 'unequip_all')
+                children:
+                  全部卸下按钮文字:
+                    type: Text
+                    attribute:
+                      x: 98
+                      y: 10
+                      through: true
+                      center: true
+                      fontSize: 36
+                      texts: '&0全部卸下'
+              隐藏按钮:
+                type: Texture
                 attribute:
-                  x: 98
-                  y: 10
-                  through: true
-                  center: true
-                  fontSize: 36
-                  texts: '&0装备本组'
-          卸下本组按钮:
-            type: Texture
-            attribute:
-              x: 1268
-              y: 690
-              width: 196
-              height: 42
-              normal: "var.selectedIsEquipped ? '200,150,80,230' : '100,100,100,200'"
-              shape: ~round_rect
-              radius: 14
-              visible: var.selectedIsEquipped
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-            action:
-              clickLeft: |-
-                Packet.send('AXS_TITLE_MENU', 'unequip_group', var.selectedGroupId)
-            children:
-              卸下本组按钮文字:
-                type: Text
+                  width: 196
+                  height: 42
+                  normal: "var.selectedOwned && !var.selectedHidden ? '100,100,100,200' : '150,150,150,255'"
+                  shape: ~round_rect
+                  radius: 14
+                  visible: var.selectedOwned && !var.selectedHidden
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_TITLE_MENU', 'hide', var.selectedId)
+                children:
+                  隐藏按钮文字:
+                    type: Text
+                    attribute:
+                      x: 98
+                      y: 10
+                      through: true
+                      center: true
+                      fontSize: 36
+                      texts: '&0隐藏'
+              取消隐藏按钮:
+                type: Texture
                 attribute:
-                  x: 98
-                  y: 10
-                  through: true
-                  center: true
-                  fontSize: 36
-                  texts: '&0卸下本组'
-          全部卸下按钮:
-            type: Texture
-            attribute:
-              x: 1056
-              y: 742
-              width: 196
-              height: 42
-              normal: ~150,150,150,255
-              shape: ~round_rect
-              radius: 14
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-            action:
-              clickLeft: |-
-                Packet.send('AXS_TITLE_MENU', 'unequip_all')
-            children:
-              全部卸下按钮文字:
-                type: Text
-                attribute:
-                  x: 98
-                  y: 10
-                  through: true
-                  center: true
-                  fontSize: 36
-                  texts: '&0全部卸下'
-          隐藏按钮:
-            type: Texture
-            attribute:
-              x: 1268
-              y: 742
-              width: 196
-              height: 42
-              normal: "var.selectedOwned && !var.selectedHidden ? '100,100,100,200' : '150,150,150,255'"
-              shape: ~round_rect
-              radius: 14
-              visible: var.selectedOwned && !var.selectedHidden
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-            action:
-              clickLeft: |-
-                Packet.send('AXS_TITLE_MENU', 'hide', var.selectedId)
-            children:
-              隐藏按钮文字:
-                type: Text
-                attribute:
-                  x: 98
-                  y: 10
-                  through: true
-                  center: true
-                  fontSize: 36
-                  texts: '&0隐藏'
-          取消隐藏按钮:
-            type: Texture
-            attribute:
-              x: 1268
-              y: 742
-              width: 196
-              height: 42
-              normal: "var.selectedOwned && var.selectedHidden ? '200,150,80,230' : '100,100,100,200'"
-              shape: ~round_rect
-              radius: 14
-              visible: var.selectedOwned && var.selectedHidden
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-            action:
-              clickLeft: |-
-                Packet.send('AXS_TITLE_MENU', 'unhide', var.selectedId)
-            children:
-              取消隐藏按钮文字:
-                type: Text
-                attribute:
-                  x: 98
-                  y: 10
-                  through: true
-                  center: true
-                  fontSize: 36
-                  texts: '&0取消隐藏'
+                  width: 196
+                  height: 42
+                  normal: "var.selectedOwned && var.selectedHidden ? '200,150,80,230' : '100,100,100,200'"
+                  shape: ~round_rect
+                  radius: 14
+                  visible: var.selectedOwned && var.selectedHidden
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_TITLE_MENU', 'unhide', var.selectedId)
+                children:
+                  取消隐藏按钮文字:
+                    type: Text
+                    attribute:
+                      x: 98
+                      y: 10
+                      through: true
+                      center: true
+                      fontSize: 36
+                      texts: '&0取消隐藏'
           刷新按钮:
             type: Texture
             attribute:
