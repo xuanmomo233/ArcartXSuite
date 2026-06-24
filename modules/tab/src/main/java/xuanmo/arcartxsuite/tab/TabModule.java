@@ -203,14 +203,14 @@ public final class TabModule extends AbstractAXSModule {
         if (checkAndRegisterFallbacks()) {
             return;
         }
-        // 没查到则启动轮询：每秒检测一次，最多 15 秒
+        // 没查到则启动轮询：每秒检测一次，最多 60 秒
         // PAPI 的 ecloud 扩展可能在服务器启动后才异步加载完成
         startFallbackPolling(0);
     }
 
     private void startFallbackPolling(int attempt) {
-        if (attempt >= 15) {
-            context.logger().warning("[tab] PAPI 扩展检测已达最大重试次数，按当前结果注册缺失的 fallback 扩展。");
+        if (attempt >= 60) {
+            context.logger().warning("[tab] PAPI 扩展检测已达最大重试次数(60秒)，按当前结果注册缺失的 fallback 扩展。");
             checkAndRegisterFallbacks();
             return;
         }
@@ -219,7 +219,7 @@ public final class TabModule extends AbstractAXSModule {
                 return; // 已处理
             }
             boolean found = checkAndRegisterFallbacks();
-            if (!found && attempt < 14) {
+            if (!found && attempt < 59) {
                 startFallbackPolling(attempt + 1);
             }
         }, attempt == 0 ? 1L : 20L);
@@ -235,20 +235,9 @@ public final class TabModule extends AbstractAXSModule {
             if (papi == null) {
                 return false;
             }
-            java.util.Collection<me.clip.placeholderapi.expansion.PlaceholderExpansion> expansions =
-                papi.getLocalExpansionManager().getExpansions();
 
-            boolean hasPlayer = false;
-            boolean hasServer = false;
-            for (me.clip.placeholderapi.expansion.PlaceholderExpansion expansion : expansions) {
-                String id = expansion.getIdentifier().toLowerCase();
-                if ("player".equals(id)) {
-                    hasPlayer = true;
-                }
-                if ("server".equals(id)) {
-                    hasServer = true;
-                }
-            }
+            boolean hasPlayer = detectExpansion(papi, "player");
+            boolean hasServer = detectExpansion(papi, "server");
 
             context.logger().info("[tab] PAPI 扩展检测: player=" + hasPlayer + ", server=" + hasServer);
 
@@ -265,6 +254,35 @@ public final class TabModule extends AbstractAXSModule {
             context.logger().warning("[tab] PAPI 扩展检测失败: " + e.getMessage());
             return false;
         }
+    }
+
+    private boolean detectExpansion(me.clip.placeholderapi.PlaceholderAPIPlugin papi, String identifier) {
+        // 方式1: 通过 LocalExpansionManager 检测（标准扩展、expansions 文件夹加载的扩展）
+        java.util.Collection<me.clip.placeholderapi.expansion.PlaceholderExpansion> expansions =
+            papi.getLocalExpansionManager().getExpansions();
+        for (me.clip.placeholderapi.expansion.PlaceholderExpansion expansion : expansions) {
+            if (identifier.equalsIgnoreCase(expansion.getIdentifier())) {
+                return true;
+            }
+        }
+
+        // 方式2: 通过占位符解析测试兜底（PAPI 2.11+ ecloud 扩展可能不显示在 getExpansions 中）
+        try {
+            if ("player".equals(identifier)) {
+                if (org.bukkit.Bukkit.getOnlinePlayers().isEmpty()) {
+                    return false;
+                }
+                org.bukkit.entity.Player testPlayer = org.bukkit.Bukkit.getOnlinePlayers().iterator().next();
+                String result = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(testPlayer, "%player_name%");
+                return !result.equals("%player_name%");
+            } else if ("server".equals(identifier)) {
+                String result = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(null, "%server_online%");
+                return !result.equals("%server_online%");
+            }
+        } catch (Exception e) {
+            context.logger().warning("[tab] 占位符解析检测 " + identifier + " 失败: " + e.getMessage());
+        }
+        return false;
     }
 
     private Map<String, UiBinding> registerTabUis() {
