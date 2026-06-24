@@ -266,21 +266,14 @@ public final class TabModule extends AbstractAXSModule {
             }
         }
 
-        // 方式2: 通过占位符解析测试兜底（PAPI 2.11+ ecloud 扩展可能不显示在 getExpansions 中）
+        // 方式2: 通过 PlaceholderAPI 全局注册表兜底（PAPI 2.11+ ecloud 扩展可能不显示在 LocalExpansionManager 中）
         try {
-            if ("player".equals(identifier)) {
-                if (org.bukkit.Bukkit.getOnlinePlayers().isEmpty()) {
-                    return false;
-                }
-                org.bukkit.entity.Player testPlayer = org.bukkit.Bukkit.getOnlinePlayers().iterator().next();
-                String result = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(testPlayer, "%player_name%");
-                return !result.equals("%player_name%");
-            } else if ("server".equals(identifier)) {
-                String result = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(null, "%server_online%");
-                return !result.equals("%server_online%");
+            java.util.Set<String> registered = me.clip.placeholderapi.PlaceholderAPI.getRegisteredIdentifiers();
+            if (registered != null && registered.contains(identifier.toLowerCase())) {
+                return true;
             }
         } catch (Exception e) {
-            context.logger().warning("[tab] 占位符解析检测 " + identifier + " 失败: " + e.getMessage());
+            context.logger().warning("[tab] 注册表检测 " + identifier + " 失败: " + e.getMessage());
         }
         return false;
     }
