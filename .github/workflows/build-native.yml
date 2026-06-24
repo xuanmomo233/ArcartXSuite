@@ -288,13 +288,17 @@ jobs:
           # 强制清理，避免缓存恢复旧的损坏 DLL
           gradle clean
           gradle build --no-build-cache
+
+      - name: Encrypt all modules (native changed)
+        if: needs.detect-changes.outputs.native_changed == 'true'
+        run: |
           gradle encryptAllModuleAxb
           echo "=== Checking generated .axb files ==="
           ls -la build/ArcartXSuite/module-axb/ || echo "DIR NOT FOUND"
           find build/ArcartXSuite/module-axb/ -type f 2>/dev/null || echo "NO FILES"
 
       - name: Build only changed modules
-        if: needs.detect-changes.outputs.core_changed != 'true' && needs.detect-changes.outputs.native_changed != 'true'
+        if: needs.detect-changes.outputs.native_changed != 'true' && needs.detect-changes.outputs.module_changed == 'true'
         run: |
           CHANGED='${{ needs.detect-changes.outputs.changed_modules }}'
           echo "Changed modules: $CHANGED"
@@ -367,14 +371,20 @@ jobs:
             echo "SKIP: CLOUD_CI_TOKEN not set, skipping module axb upload"
             exit 0
           fi
-          CORE_CHANGED=${{ needs.detect-changes.outputs.core_changed }}
           NATIVE_CHANGED=${{ needs.detect-changes.outputs.native_changed }}
+          MODULE_CHANGED=${{ needs.detect-changes.outputs.module_changed }}
           AXB_DIR="build/ArcartXSuite/module-axb"
           echo "=== AXB_DIR check ==="
           ls -la "$AXB_DIR" 2>/dev/null || echo "AXB_DIR does not exist: $AXB_DIR"
-          echo "CORE_CHANGED=$CORE_CHANGED, NATIVE_CHANGED=$NATIVE_CHANGED"
-          if [ "$CORE_CHANGED" = "true" ] || [ "$NATIVE_CHANGED" = "true" ]; then
-            # 全量构建已经生成所有 .axb，上传全部
+          echo "NATIVE_CHANGED=$NATIVE_CHANGED, MODULE_CHANGED=$MODULE_CHANGED"
+
+          if [ "$NATIVE_CHANGED" != "true" ] && [ "$MODULE_CHANGED" != "true" ]; then
+            echo "SKIP: No module or native changes, skipping module axb upload"
+            exit 0
+          fi
+
+          if [ "$NATIVE_CHANGED" = "true" ]; then
+            # Native 变更触发了全量加密，上传所有模块
             if [ -d "$AXB_DIR" ]; then
               for meta in "$AXB_DIR"/*.meta.json; do
                 [ -f "$meta" ] || continue
@@ -396,7 +406,7 @@ jobs:
             else
               echo "SKIP: No axb files found"
             fi
-          else
+          elif [ "$MODULE_CHANGED" = "true" ]; then
             # 仅模块变更，只上传改动的模块
             CHANGED='${{ needs.detect-changes.outputs.changed_modules }}'
             echo "Uploading changed modules: $CHANGED"
