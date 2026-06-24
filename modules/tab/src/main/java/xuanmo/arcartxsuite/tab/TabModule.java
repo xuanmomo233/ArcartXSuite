@@ -151,7 +151,7 @@ public final class TabModule extends AbstractAXSModule {
                 new PapiExpansionListener(), context.plugin());
             // 延迟 1 tick 先检测一次（PAPI 可能已加载完毕）
             org.bukkit.Bukkit.getScheduler().runTaskLater(context.plugin(),
-                () -> detectPapiExpansions(), 1L);
+                () -> { if (!papiDetected.get()) detectPapiExpansions(); }, 1L);
         }
 
         context.logger().fine(
@@ -203,18 +203,8 @@ public final class TabModule extends AbstractAXSModule {
 
     private class PapiExpansionListener implements org.bukkit.event.Listener {
         @org.bukkit.event.EventHandler
-        public void onExpansionRegister(me.clip.placeholderapi.events.ExpansionRegisterEvent event) {
-            String id = event.getExpansion().getIdentifier().toLowerCase();
-            if ("player".equals(id) || "server".equals(id)) {
-                context.logger().info("[tab] 监听到 PAPI 扩展注册: " + id);
-                // 延迟 1 tick：事件触发时扩展尚未加入 LocalExpansionManager
-                org.bukkit.Bukkit.getScheduler().runTaskLater(context.plugin(),
-                    () -> detectPapiExpansions(), 1L);
-            }
-        }
-
-        @org.bukkit.event.EventHandler
         public void onExpansionsLoaded(me.clip.placeholderapi.events.ExpansionsLoadedEvent event) {
+            if (papiDetected.get()) return;
             context.logger().info("[tab] 监听到 PAPI 全部扩展加载完成，开始检测");
             detectPapiExpansions();
         }
