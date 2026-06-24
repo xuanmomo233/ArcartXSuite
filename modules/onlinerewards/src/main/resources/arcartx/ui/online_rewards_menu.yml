@@ -156,7 +156,7 @@ controls:
       width: 1920
       height: 1080
     children:
-      panel:
+      主面板:
         type: Texture
         attribute:
           point: ~middle_center
@@ -179,14 +179,14 @@ controls:
             color: ~255,255,255,110
             width: 0.05
         children:
-          title:
+          标题:
             type: Text
             attribute:
               x: 40
               y: 30
               texts: '~&f&l在线奖励中心'
               fontSize: 81
-          refresh:
+          刷新按钮:
             type: Texture
             attribute:
               x: 1480
@@ -201,7 +201,7 @@ controls:
                 width: 2
                 color: ~0,0,0,255
             children:
-              refresh_text:
+              刷新文本:
                 type: Text
                 attribute:
                   x: 60
@@ -215,7 +215,7 @@ controls:
                 Packet.send(var.packetId, 'refresh')
 
           # ========== 左栏：签到日历 ==========
-          left_panel:
+          左栏背景:
             type: Texture
             attribute:
               x: 40
@@ -229,21 +229,21 @@ controls:
               stroke:
                 width: 2
                 color: ~0,0,0,255
-          left_title:
+          左栏标题:
             type: Text
             attribute:
               x: 56
               y: 128
               texts: "~&0&l每日签到"
               fontSize: 49
-          left_streak:
+          左栏签到统计:
             type: Text
             attribute:
               x: 56
               y: 178
               texts: "'&0连续: &0' + var.signInStreak.round(0) + '   &0累计: &0' + var.signInTotal.round(0) + '   &0补签卡: &0' + var.makeupCardCount.round(0)"
               fontSize: 36
-          left_signin_btn:
+          签到按钮:
             type: Texture
             attribute:
               x: 56
@@ -258,7 +258,7 @@ controls:
                 width: 2
                 color: ~0,0,0,255
             children:
-              left_signin_btn_text:
+              签到按钮文本:
                 type: Text
                 attribute:
                   x: 90
@@ -275,14 +275,14 @@ controls:
                   Packet.send(var.packetId, 'makeup', var.selectedDateText)
                 }
 
-          left_calendar_title:
+          日历标题:
             type: Text
             attribute:
               x: 56
               y: 276
               texts: "'&0签到日历 &0| &0' + var.calendarMonthText"
               fontSize: 36
-          left_prev:
+          上月按钮:
             type: Texture
             attribute:
               x: 312
@@ -302,7 +302,7 @@ controls:
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'calendar_prev')
-          left_today:
+          本月按钮:
             type: Texture
             attribute:
               x: 364
@@ -322,7 +322,7 @@ controls:
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'calendar_today')
-          left_next:
+          下月按钮:
             type: Texture
             attribute:
               x: 434
@@ -343,7 +343,7 @@ controls:
               clickLeft: |-
                 Packet.send(var.packetId, 'calendar_next')
 
-          left_calendar_grid:
+          日历网格:
             type: HGrid
             attribute:
               x: 56
@@ -357,7 +357,7 @@ controls:
               create: |-
                 for(i in range(0, var.calendarCount)){
                   key = i.round
-                  di = self['日历模板'].copy('day_' + key)
+                  di = self['日历模板'].copy('日历项_' + key)
                   di.entryKey = key
                 }
             children:
@@ -410,21 +410,21 @@ controls:
                       texts: "~&6今"
                       fontSize: 22
 
-          left_stats_title:
+          统计标题:
             type: Text
             attribute:
               x: 56
               y: 616
               texts: "~&0&l本月签到统计"
               fontSize: 49
-          left_stats_signed:
+          已签到统计:
             type: Text
             attribute:
               x: 56
               y: 670
               texts: "'&0已签到: &0' + var.calendarSignedCount + ' &0/ &0' + var.calendarCount.round(0) + ' &0天'"
               fontSize: 36
-          left_stats_rate:
+          签到进度:
             type: Text
             attribute:
               x: 56
@@ -433,7 +433,7 @@ controls:
               fontSize: 36
 
           # ========== 中栏：在线进度 ==========
-          mid_panel:
+          中栏背景:
             type: Texture
             attribute:
               x: 520
@@ -447,42 +447,42 @@ controls:
               stroke:
                 width: 2
                 color: ~0,0,0,255
-          mid_title:
+          中栏标题:
             type: Text
             attribute:
               x: 540
               y: 128
               texts: "~&0&l在线时长统计"
               fontSize: 49
-          mid_daily:
+          今日在线:
             type: Text
             attribute:
               x: 540
               y: 178
               texts: "'&0今日在线  &0' + var.dailyTimeText"
               fontSize: 36
-          mid_weekly:
+          本周在线:
             type: Text
             attribute:
               x: 540
               y: 216
               texts: "'&0本周在线  &0' + var.weeklyTimeText"
               fontSize: 36
-          mid_monthly:
+          本月在线:
             type: Text
             attribute:
               x: 540
               y: 254
               texts: "'&0本月在线  &0' + var.monthlyTimeText"
               fontSize: 36
-          mid_total:
+          总计在线:
             type: Text
             attribute:
               x: 540
               y: 292
               texts: "'&0总计在线  &0' + var.totalTimeText"
               fontSize: 36
-          mid_savings:
+          离线储蓄:
             type: Text
             attribute:
               x: 540
@@ -491,7 +491,7 @@ controls:
               texts: "'&0离线储蓄  &0' + var.offlineSavingsText"
               fontSize: 36
 
-          mid_divider_1:
+          中栏分隔线1:
             type: Texture
             attribute:
               x: 540
@@ -502,28 +502,28 @@ controls:
               shape: ~round_rect
               radius: 1
 
-          mid_stage_title:
+          阶段标题:
             type: Text
             attribute:
               x: 540
               y: 460
               texts: "~&0&l阶段进度"
               fontSize: 49
-          mid_stage_name:
+          阶段名称:
             type: Text
             attribute:
               x: 540
               y: 510
               texts: "'&0' + var.progressTitle + ' &0| &0' + var.progressPercentText + '%'"
               fontSize: 36
-          mid_stage_ratio:
+          阶段比例:
             type: Text
             attribute:
               x: 1030
               y: 510
               texts: "'&0' + var.rewardStageText"
               fontSize: 36
-          mid_track:
+          阶段轨道:
             type: Texture
             attribute:
               x: 540
@@ -537,7 +537,7 @@ controls:
               stroke:
                 width: 2
                 color: ~0,0,0,255
-          mid_fill:
+          阶段填充:
             type: progress
             attribute:
               x: 540
@@ -553,7 +553,7 @@ controls:
                 width: 2
                 color: ~0,0,0,255
 
-          mid_divider_2:
+          中栏分隔线2:
             type: Texture
             attribute:
               x: 540
@@ -565,7 +565,7 @@ controls:
               radius: 1
               visible: var.serverSignInGoalEnabled
 
-          mid_goal_title:
+          目标标题:
             type: Text
             attribute:
               x: 540
@@ -573,7 +573,7 @@ controls:
               texts: "~&0&l全服签到目标"
               fontSize: 49
               visible: var.serverSignInGoalEnabled
-          mid_goal_text:
+          目标文本:
             type: Text
             attribute:
               x: 540
@@ -581,7 +581,7 @@ controls:
               texts: "'&0今日已签到 &0' + var.serverSignInGoalCurrent.round(0) + ' &0人  下一目标 &0' + var.serverSignInGoalNext.round(0) + ' &0人'"
               fontSize: 36
               visible: var.serverSignInGoalEnabled
-          mid_goal_track:
+          目标轨道:
             type: Texture
             attribute:
               x: 540
@@ -596,7 +596,7 @@ controls:
               stroke:
                 width: 2
                 color: ~0,0,0,255
-          mid_goal_fill:
+          目标填充:
             type: progress
             attribute:
               x: 540
@@ -613,7 +613,7 @@ controls:
                 width: 2
                 color: ~0,0,0,255
 
-          mid_tip:
+          完成提示:
             type: Text
             attribute:
               x: 540
@@ -623,7 +623,7 @@ controls:
               fontSize: 36
 
           # ========== 右栏：奖励列表 ==========
-          right_panel:
+          右栏背景:
             type: Texture
             attribute:
               x: 1100
@@ -638,16 +638,16 @@ controls:
                 width: 2
                 color: ~0,0,0,255
 
-          right_stage_title:
+          阶段奖励标题:
             type: Text
             attribute:
               x: 1120
               y: 128
               texts: "~&0&l在线阶段奖励"
               fontSize: 49
-          right_stage_slider:
+          阶段滑块:
             type: Texture
-            val: right_stage_slider
+            val: 阶段滑块
             attribute:
               x: 1620
               y: 176
@@ -655,25 +655,25 @@ controls:
               height: 40
               normal: ~120,120,120,200
               maxDragY: 210
-          right_stage_scroll:
+          阶段滚动区域:
             type: Scroll
             attribute:
               x: 1120
               y: 176
               width: 510
               height: 250
-              moveY: "self.parent['right_stage_slider'].getDragYRatio()"
+              moveY: "self.parent['阶段滑块'].getDragYRatio()"
             action:
               wheel: |-
                 if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['right_stage_slider'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  self.parent['阶段滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
                 if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['right_stage_slider'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  self.parent['阶段滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
-              right_stage_stack:
-                val: right_stage_stack
+              阶段堆叠:
+                val: 阶段堆叠
                 type: VStack
                 attribute:
                   width: 510
@@ -682,11 +682,11 @@ controls:
                   create: |-
                     for(i in range(0, var.maxRewardCount)){
                       key = i.round
-                      ri = self['item'].copy('item' + key)
+                      ri = self['阶段奖励项'].copy('阶段奖励项_' + key)
                       ri.entryKey = key
                     }
                 children:
-                  item:
+                  阶段奖励项:
                     type: Texture
                     attribute:
                       entryKey: 0
@@ -702,21 +702,21 @@ controls:
                         width: 2
                         color: ~0,0,0,255
                     children:
-                      name:
+                      奖励项名称:
                         type: Text
                         attribute:
                           x: 14
                           y: 6
                           texts: "self.parent.entry != null ? '&0' + self.parent.entry['name'] : ''"
                           fontSize: 36
-                      meta:
+                      奖励项信息:
                         type: Text
                         attribute:
                           x: 14
                           y: 34
                           texts: "self.parent.entry != null ? '&0' + self.parent.entry['thresholdText'] + '   &0' + self.parent.entry['rewardText'] : ''"
                           fontSize: 28
-                      state:
+                      奖励项状态:
                         type: Text
                         attribute:
                           x: 380
@@ -724,14 +724,14 @@ controls:
                           texts: "self.parent.entry != null ? (self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['current'] ? '&e进行中' : '&7未达成')) : ''"
                           fontSize: 36
 
-          right_periodic_title:
+          周期奖励标题:
             type: Text
             attribute:
               x: 1120
               y: 438
               texts: "~&0&l周/月周期奖励"
               fontSize: 49
-          right_periodic_empty:
+          周期奖励空提示:
             type: Text
             attribute:
               x: 1120
@@ -739,9 +739,9 @@ controls:
               visible: "var.periodicRewardRows.size == 0 || var.periodicRewardRows.size == null"
               texts: "~&0暂无周期奖励"
               fontSize: 36
-          right_periodic_slider:
+          周期滑块:
             type: Texture
-            val: right_periodic_slider
+            val: 周期滑块
             attribute:
               x: 1620
               y: 486
@@ -749,25 +749,25 @@ controls:
               height: 40
               normal: ~120,120,120,200
               maxDragY: 140
-          right_periodic_scroll:
+          周期滚动区域:
             type: Scroll
             attribute:
               x: 1120
               y: 486
               width: 510
               height: 180
-              moveY: "self.parent['right_periodic_slider'].getDragYRatio()"
+              moveY: "self.parent['周期滑块'].getDragYRatio()"
             action:
               wheel: |-
                 if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['right_periodic_slider'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  self.parent['周期滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
                 if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['right_periodic_slider'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  self.parent['周期滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
-              right_periodic_stack:
-                val: right_periodic_stack
+              周期堆叠:
+                val: 周期堆叠
                 type: VStack
                 attribute:
                   width: 510
@@ -776,11 +776,11 @@ controls:
                   create: |-
                     for(i in range(0, var.maxPeriodicCount)){
                       key = i.round
-                      pi = self['item'].copy('item' + key)
+                      pi = self['周期奖励项'].copy('周期奖励项_' + key)
                       pi.entryKey = key
                     }
                 children:
-                  item:
+                  周期奖励项:
                     type: Texture
                     attribute:
                       entryKey: 0
@@ -796,21 +796,21 @@ controls:
                         width: 2
                         color: ~0,0,0,255
                     children:
-                      name:
+                      周期奖励名称:
                         type: Text
                         attribute:
                           x: 12
                           y: 4
                           texts: "self.parent.entry != null ? '&0' + self.parent.entry['name'] + ' &0(' + self.parent.entry['periodLabel'] + ')' : ''"
                           fontSize: 28
-                      meta:
+                      周期奖励信息:
                         type: Text
                         attribute:
                           x: 12
                           y: 26
                           texts: "self.parent.entry != null ? '&0' + self.parent.entry['thresholdText'] + '   &0' + self.parent.entry['rewardText'] : ''"
                           fontSize: 24
-                      state:
+                      周期奖励状态:
                         type: Text
                         attribute:
                           x: 420
@@ -818,14 +818,14 @@ controls:
                           texts: "self.parent.entry != null ? (self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['reached'] ? '&e待发放' : '&7未达成')) : ''"
                           fontSize: 28
 
-          right_signin_title:
+          签到奖励标题:
             type: Text
             attribute:
               x: 1120
               y: 678
               texts: "~&0&l签到奖励"
               fontSize: 49
-          right_signin_empty:
+          签到奖励空提示:
             type: Text
             attribute:
               x: 1120
@@ -833,9 +833,9 @@ controls:
               visible: "var.signInRewardRows.size == 0 || var.signInRewardRows.size == null"
               texts: "~&0暂无签到奖励"
               fontSize: 36
-          right_signin_slider:
+          签到滑块:
             type: Texture
-            val: right_signin_slider
+            val: 签到滑块
             attribute:
               x: 1620
               y: 726
@@ -843,25 +843,25 @@ controls:
               height: 40
               normal: ~120,120,120,200
               maxDragY: 150
-          right_signin_scroll:
+          签到滚动区域:
             type: Scroll
             attribute:
               x: 1120
               y: 726
               width: 510
               height: 190
-              moveY: "self.parent['right_signin_slider'].getDragYRatio()"
+              moveY: "self.parent['签到滑块'].getDragYRatio()"
             action:
               wheel: |-
                 if(self.moveY >= 0 && self.wheelValue > 0){
-                  self.parent['right_signin_slider'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  self.parent['签到滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
                 if(self.moveY <= 1 && self.wheelValue < 0){
-                  self.parent['right_signin_slider'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                  self.parent['签到滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
-              right_signin_stack:
-                val: right_signin_stack
+              签到堆叠:
+                val: 签到堆叠
                 type: VStack
                 attribute:
                   width: 510
@@ -870,11 +870,11 @@ controls:
                   create: |-
                     for(i in range(0, var.maxSigninRewardCount)){
                       key = i.round
-                      si = self['item'].copy('item' + key)
+                      si = self['签到奖励项'].copy('签到奖励项_' + key)
                       si.entryKey = key
                     }
                 children:
-                  item:
+                  签到奖励项:
                     type: Texture
                     attribute:
                       entryKey: 0
@@ -890,14 +890,14 @@ controls:
                         width: 2
                         color: ~0,0,0,255
                     children:
-                      title:
+                      签到奖励名称:
                         type: Text
                         attribute:
                           x: 12
                           y: 4
                           texts: "self.parent.entry != null ? '&0' + self.parent.entry['title'] : ''"
                           fontSize: 28
-                      trigger:
+                      签到奖励条件:
                         type: Text
                         attribute:
                           x: 12
