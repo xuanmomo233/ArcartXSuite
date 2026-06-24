@@ -46,12 +46,12 @@ public final class TabServerFallbackExpansion extends PlaceholderExpansion {
 
     private String getTps() {
         try {
-            double[] tps = Bukkit.getServer().getTPS();
-            if (tps != null && tps.length > 0) {
+            Object result = Bukkit.getServer().getClass().getMethod("getTPS").invoke(Bukkit.getServer());
+            if (result instanceof double[] tps && tps.length > 0) {
                 return String.format("%.2f", tps[0]);
             }
-        } catch (NoSuchMethodError ignored) {
-            // 旧版本不支持 getTPS()
+        } catch (Exception ignored) {
+            // 旧版本或不同服务端不支持 getTPS()
         }
         return "";
     }
