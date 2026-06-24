@@ -145,8 +145,8 @@ public final class TabModule extends AbstractAXSModule {
         // 注册 TabRefreshable capability，供其他模块刷新 Tab
         context.registerCapability(xuanmo.arcartxsuite.api.capability.TabRefreshable.class, service);
 
-        // 检测 PAPI 扩展是否已安装（仅记录日志，不注册 fallback）
-        detectPapiExpansions();
+        // 检测 PAPI 扩展是否已安装（延迟到下一 tick，给其他插件加载时间）
+        org.bukkit.Bukkit.getScheduler().runTaskLater(context.plugin(), () -> detectPapiExpansions(), 1L);
 
         context.logger().fine(
             "Tab 模块已载入，定义数量: " + configuration.definitions().size()
@@ -194,6 +194,10 @@ public final class TabModule extends AbstractAXSModule {
     }
 
     private void detectPapiExpansions() {
+        detectPapiExpansions(0);
+    }
+
+    private void detectPapiExpansions(int attempt) {
         if (!context.hasPlugin("PlaceholderAPI")) {
             return;
         }
@@ -217,13 +221,23 @@ public final class TabModule extends AbstractAXSModule {
                 }
             }
             context.logger().info("[tab] PAPI 扩展状态 — player: " + (hasPlayer ? "已安装" : "未安装") + "，server: " + (hasServer ? "已安装" : "未安装"));
-            if (!hasPlayer) {
-                context.logger().info("[tab] PAPI player 扩展未安装，已注册内置 fallback");
-                context.expansionRegistry().register(new TabPlayerFallbackExpansion(context.plugin()));
-            }
-            if (!hasServer) {
-                context.logger().info("[tab] PAPI server 扩展未安装，已注册内置 fallback");
-                context.expansionRegistry().register(new TabServerFallbackExpansion(context.plugin()));
+
+            if (!hasPlayer || !hasServer) {
+                if (attempt < 2) {
+                    // ecloud 扩展可能还在异步加载，延迟 3 秒后重试
+                    org.bukkit.Bukkit.getScheduler().runTaskLater(context.plugin(),
+                        () -> detectPapiExpansions(attempt + 1), 60L);
+                    return;
+                }
+                // 重试结束仍未找到，注册 fallback
+                if (!hasPlayer) {
+                    context.logger().info("[tab] PAPI player 扩展未安装，已注册内置 fallback");
+                    context.expansionRegistry().register(new TabPlayerFallbackExpansion(context.plugin()));
+                }
+                if (!hasServer) {
+                    context.logger().info("[tab] PAPI server 扩展未安装，已注册内置 fallback");
+                    context.expansionRegistry().register(new TabServerFallbackExpansion(context.plugin()));
+                }
             }
         } catch (Exception e) {
             context.logger().warning("[tab] PAPI 扩展检测失败: " + e.getMessage());

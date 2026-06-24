@@ -47,7 +47,7 @@ import xuanmo.arcartxsuite.security.NativeBridge;
  */
 public class ArcartXSuitePlugin extends JavaPlugin {
 
-    private static final String AUTHOR_NAME = "墨墨墨";
+    private static final String AUTHOR_NAME = "墨墨墨 QQ:1451759359";
     private static final String DISPLAY_NAME = "ArcartXSuite";
     private static final String CONSOLE_PREFIX =
         ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
