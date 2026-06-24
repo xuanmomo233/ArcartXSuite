@@ -373,7 +373,7 @@ jobs:
           fi
           NATIVE_CHANGED=${{ needs.detect-changes.outputs.native_changed }}
           MODULE_CHANGED=${{ needs.detect-changes.outputs.module_changed }}
-          AXB_DIR="build/ArcartXSuite/module-axb"
+          AXB_DIR="build/ArcartX-Suite/module-axb"
           echo "=== AXB_DIR check ==="
           ls -la "$AXB_DIR" 2>/dev/null || echo "AXB_DIR does not exist: $AXB_DIR"
           echo "NATIVE_CHANGED=$NATIVE_CHANGED, MODULE_CHANGED=$MODULE_CHANGED"

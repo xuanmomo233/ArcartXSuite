@@ -99,12 +99,12 @@ tasks {
     }
 
     jar {
-        archiveBaseName.set("ArcartXSuite")
+        archiveBaseName.set("ArcartX-Suite")
         archiveClassifier.set("plain")
     }
 
     named<ShadowJar>("shadowJar") {
-        archiveBaseName.set("ArcartXSuite")
+        archiveBaseName.set("ArcartX-Suite")
         archiveClassifier.set("unobf")
         destinationDirectory.set(layout.buildDirectory.dir("libs"))
         mergeServiceFiles()
