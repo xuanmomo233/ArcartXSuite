@@ -147,11 +147,15 @@ public final class TabModule extends AbstractAXSModule {
 
         // 注册 PAPI 扩展加载事件监听器
         if (context.hasPlugin("PlaceholderAPI")) {
-            org.bukkit.Bukkit.getPluginManager().registerEvents(
-                new PapiExpansionListener(), context.plugin());
-            // 延迟 1 tick 预检一次（时机可能偏早，发现缺失不注册 fallback）
-            org.bukkit.Bukkit.getScheduler().runTaskLater(context.plugin(),
-                () -> { if (!papiDetected.get()) detectPapiExpansions(0, false); }, 1L);
+            if (xuanmo.arcartxsuite.ArcartXSuitePlugin.isInitialLoadComplete()) {
+                // 核心首次加载已完成（服务器运行中重载/后加载 tab），PAPI 早已加载完，直接检测
+                org.bukkit.Bukkit.getScheduler().runTaskLater(context.plugin(),
+                    () -> detectPapiExpansions(0, true), 1L);
+            } else {
+                // 服务器启动中，注册事件监听器等待 PAPI 全部加载完成
+                org.bukkit.Bukkit.getPluginManager().registerEvents(
+                    new PapiExpansionListener(), context.plugin());
+            }
         }
 
         context.logger().fine(
