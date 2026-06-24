@@ -23,6 +23,8 @@ import xuanmo.arcartxsuite.tab.config.TabModuleConfiguration;
 import xuanmo.arcartxsuite.tab.debug.TabSnapshotStore;
 import xuanmo.arcartxsuite.tab.listener.TabPvpListener;
 import xuanmo.arcartxsuite.tab.placeholder.TabPlaceholderExpansion;
+import xuanmo.arcartxsuite.tab.placeholder.TabPlayerFallbackExpansion;
+import xuanmo.arcartxsuite.tab.placeholder.TabServerFallbackExpansion;
 import xuanmo.arcartxsuite.tab.sync.TabSyncService;
 
 /**
@@ -216,10 +218,12 @@ public final class TabModule extends AbstractAXSModule {
             }
             context.logger().info("[tab] PAPI 扩展检测: player=" + hasPlayer + ", server=" + hasServer);
             if (!hasPlayer) {
-                context.logger().warning("[tab] PAPI player 扩展未安装，%player_xxx% 占位符不可用");
+                context.logger().warning("[tab] PAPI player 扩展未安装，注册内置 fallback");
+                context.expansionRegistry().register(new TabPlayerFallbackExpansion(context.plugin()));
             }
             if (!hasServer) {
-                context.logger().warning("[tab] PAPI server 扩展未安装，%server_xxx% 占位符不可用");
+                context.logger().warning("[tab] PAPI server 扩展未安装，注册内置 fallback");
+                context.expansionRegistry().register(new TabServerFallbackExpansion(context.plugin()));
             }
         } catch (Exception e) {
             context.logger().warning("[tab] PAPI 扩展检测失败: " + e.getMessage());
