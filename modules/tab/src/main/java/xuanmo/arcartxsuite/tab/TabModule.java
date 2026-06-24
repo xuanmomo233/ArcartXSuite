@@ -218,11 +218,11 @@ public final class TabModule extends AbstractAXSModule {
             }
             context.logger().info("[tab] PAPI 扩展检测: player=" + hasPlayer + ", server=" + hasServer);
             if (!hasPlayer) {
-                context.logger().warning("[tab] PAPI player 扩展未安装，注册内置 fallback");
+                context.logger().info("[tab] PAPI player 扩展未安装，已注册内置 fallback");
                 context.expansionRegistry().register(new TabPlayerFallbackExpansion(context.plugin()));
             }
             if (!hasServer) {
-                context.logger().warning("[tab] PAPI server 扩展未安装，注册内置 fallback");
+                context.logger().info("[tab] PAPI server 扩展未安装，已注册内置 fallback");
                 context.expansionRegistry().register(new TabServerFallbackExpansion(context.plugin()));
             }
         } catch (Exception e) {
