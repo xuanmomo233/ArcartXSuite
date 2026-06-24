@@ -161,7 +161,7 @@ controls:
         attribute:
           point: ~middle_center
           width: 1680
-          height: 960
+          height: 980
           normal: ~95,95,95,220
           shape: ~round_rect
           radius: 28
@@ -221,7 +221,7 @@ controls:
               x: 40
               y: 110
               width: 460
-              height: 820
+              height: 830
               normal: ~255,255,255,120
               shape: ~round_rect
               radius: 20
@@ -439,7 +439,7 @@ controls:
               x: 520
               y: 110
               width: 560
-              height: 820
+              height: 830
               normal: ~255,255,255,120
               shape: ~round_rect
               radius: 20
@@ -629,7 +629,7 @@ controls:
               x: 1100
               y: 110
               width: 540
-              height: 820
+              height: 830
               normal: ~255,255,255,120
               shape: ~round_rect
               radius: 20
