@@ -1,6 +1,5 @@
 package xuanmo.arcartxsuite.tab.placeholder;
 
-import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
@@ -8,24 +7,10 @@ import org.jetbrains.annotations.Nullable;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 
 /**
- * Tab 模块内置的 PAPI player 占位符回退扩展。
+ * PAPI {@code player} 扩展的 fallback 实现。
  * <p>
- * 当 PlaceholderAPI 未安装 {@code Expansion-player.jar} 时，由 Tab 模块主动注入，
- * 提供与 PAPI Player 扩展对齐的 {@code %player_xxx%} 占位符，保证 Tab 基础功能可用。
- * <p>
- * 支持的占位符：
- * <ul>
- *   <li>{@code %player_name%}</li>
- *   <li>{@code %player_displayname%} / {@code %player_display_name%}</li>
- *   <li>{@code %player_uuid%}</li>
- *   <li>{@code %player_world%}</li>
- *   <li>{@code %player_x%} / {@code %player_y%} / {@code %player_z%}</li>
- *   <li>{@code %player_health%}</li>
- *   <li>{@code %player_max_health%}</li>
- *   <li>{@code %player_ping%}</li>
- *   <li>{@code %player_gamemode%}</li>
- *   <li>{@code %player_scoreboardteam%} / {@code %player_scoreboard_team%}</li>
- * </ul>
+ * 当 PlaceholderAPI 未加载原生 Expansion-player.jar 时，由 Tab 模块注入，
+ * 提供基础 player 占位符（player_name、player_health、player_ping 等）。
  */
 public final class TabPlayerFallbackExpansion extends PlaceholderExpansion {
 
@@ -42,17 +27,13 @@ public final class TabPlayerFallbackExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getAuthor() {
-        return "ArcartXSuite";
+        return plugin.getDescription().getAuthors().isEmpty()
+            ? "ArcartXSuite" : plugin.getDescription().getAuthors().get(0);
     }
 
     @Override
     public @NotNull String getVersion() {
         return plugin.getDescription().getVersion();
-    }
-
-    @Override
-    public boolean persist() {
-        return true;
     }
 
     @Override
@@ -62,37 +43,16 @@ public final class TabPlayerFallbackExpansion extends PlaceholderExpansion {
         }
         return switch (identifier) {
             case "name" -> player.getName();
-            case "displayname", "display_name" -> nullToEmpty(player.getDisplayName());
+            case "displayname" -> player.getDisplayName();
             case "uuid" -> player.getUniqueId().toString();
+            case "health" -> String.valueOf((int) player.getHealth());
+            case "max_health" -> String.valueOf((int) player.getMaxHealth());
+            case "ping" -> String.valueOf(player.getPing());
             case "world" -> player.getWorld().getName();
-            case "x" -> String.valueOf(player.getLocation().getBlockX());
-            case "y" -> String.valueOf(player.getLocation().getBlockY());
-            case "z" -> String.valueOf(player.getLocation().getBlockZ());
-            case "health" -> formatNumber(player.getHealth());
-            case "max_health" -> formatNumber(resolveMaxHealth(player));
-            case "ping" -> String.valueOf(Math.max(0, player.getPing()));
-            case "gamemode" -> player.getGameMode().name();
-            case "scoreboardteam", "scoreboard_team" -> {
-                var team = player.getScoreboard().getEntryTeam(player.getName());
-                yield team != null ? team.getName() : "";
-            }
-            default -> null;
+            case "x" -> String.valueOf((int) player.getLocation().getX());
+            case "y" -> String.valueOf((int) player.getLocation().getY());
+            case "z" -> String.valueOf((int) player.getLocation().getZ());
+            default -> "";
         };
-    }
-
-    private static double resolveMaxHealth(Player player) {
-        var attr = player.getAttribute(Attribute.GENERIC_MAX_HEALTH);
-        return attr != null ? attr.getValue() : 20.0D;
-    }
-
-    private static String formatNumber(double value) {
-        if (Math.abs(value - Math.rint(value)) < 0.000001D) {
-            return String.valueOf((long) Math.rint(value));
-        }
-        return String.format(java.util.Locale.ROOT, "%.2f", value);
-    }
-
-    private static String nullToEmpty(String s) {
-        return s == null ? "" : s;
     }
 }

@@ -107,7 +107,30 @@ final class DefaultModuleContext implements ModuleContext {
         this.taczCombatBridge = taczCombatBridge;
         this.crossServerService = crossServerService;
         this.placeholderResolver = placeholderResolver;
-        this.expansionRegistry = new xuanmo.arcartxsuite.placeholder.DefaultPlaceholderExpansionRegistry(logger);
+        this.expansionRegistry = resolveExpansionRegistry(logger);
+    }
+
+    private static PlaceholderExpansionRegistry resolveExpansionRegistry(Logger logger) {
+        try {
+            // 先检测 PAPI 是否存在
+            Class.forName("me.clip.placeholderapi.expansion.PlaceholderExpansion");
+            // 通过反射实例化 DirectPlaceholderExpansionRegistry，避免 PAPI 缺失时
+            // 直接引用该类导致 NoClassDefFoundError（该类强引用 PlaceholderExpansion）
+            Class<?> directRegistry = Class.forName(
+                "xuanmo.arcartxsuite.placeholder.DirectPlaceholderExpansionRegistry"
+            );
+            PlaceholderExpansionRegistry registry = (PlaceholderExpansionRegistry)
+                directRegistry.getConstructor(Logger.class).newInstance(logger);
+            logger.info("PlaceholderAPI 已安装，使用强引用实现的 PlaceholderExpansionRegistry。");
+            return registry;
+        } catch (ClassNotFoundException e) {
+            logger.info("PlaceholderAPI 未安装，使用反射实现的 PlaceholderExpansionRegistry。");
+            return new xuanmo.arcartxsuite.placeholder.DefaultPlaceholderExpansionRegistry(logger);
+        } catch (ReflectiveOperationException e) {
+            logger.warning("DirectPlaceholderExpansionRegistry 反射实例化失败: " + e.getMessage()
+                + "，回退到反射实现。");
+            return new xuanmo.arcartxsuite.placeholder.DefaultPlaceholderExpansionRegistry(logger);
+        }
     }
 
     @Override

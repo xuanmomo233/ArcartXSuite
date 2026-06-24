@@ -4,7 +4,6 @@ import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
@@ -194,157 +193,78 @@ public final class TabModule extends AbstractAXSModule {
         return service;
     }
 
-    private final AtomicBoolean fallbackChecked = new AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicBoolean fallbackRegistered = new java.util.concurrent.atomic.AtomicBoolean(false);
 
     private void registerFallbackPapiExpansionsIfNeeded() {
         if (!context.hasPlugin("PlaceholderAPI")) {
             return;
         }
-        // 先立即检测一次（PAPI 内部扩展可能已经注册）
+        // 先立即检测一次
         if (checkAndRegisterFallbacks()) {
             return;
         }
-        // 方案 1：反射注册 PAPI 官方的 ExpansionsLoadedEvent（最精确，所有外部扩展注册完成后触发）
-        if (registerExpansionLoadedListener()) {
-            return;
-        }
-        // 方案 2：回退到 Paper 的 ServerLoadEvent（PAPI 外部扩展加载时机）
-        if (registerServerLoadListener()) {
-            return;
-        }
-        // 方案 3：最终回退到固定延迟
-        context.plugin().getServer().getScheduler().runTaskLater(context.plugin(), this::checkAndRegisterFallbacks, 40L);
-        context.logger().warning("Tab 无法注册 PAPI ExpansionsLoadedEvent 或 ServerLoadEvent，将使用延迟检测 PAPI 扩展。");
+        // 没查到则启动轮询：每秒检测一次，最多 15 秒
+        // PAPI 的 ecloud 扩展可能在服务器启动后才异步加载完成
+        startFallbackPolling(0);
     }
 
-    /**
-     * 尝试反射注册 PAPI 的 ExpansionsLoadedEvent 监听器。
-     * @return true 如果注册成功
-     */
-    private boolean registerExpansionLoadedListener() {
-        try {
-            org.bukkit.plugin.Plugin papi = org.bukkit.Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
-            if (papi == null) return false;
-            Class<?> eventClass = papi.getClass().getClassLoader().loadClass("me.clip.placeholderapi.events.ExpansionsLoadedEvent");
-            context.plugin().getServer().getPluginManager().registerEvent(
-                (Class<? extends org.bukkit.event.Event>) eventClass,
-                new org.bukkit.event.Listener() {},
-                org.bukkit.event.EventPriority.HIGHEST,
-                (listener, event) -> {
-                    context.logger().info("[tab] 收到 PAPI ExpansionsLoadedEvent，开始检测 player/server 扩展。");
-                    checkAndRegisterFallbacks();
-                },
-                context.plugin()
-            );
-            context.logger().info("[tab] 已注册 PAPI ExpansionsLoadedEvent 监听器。");
-            return true;
-        } catch (ClassNotFoundException e) {
-            context.logger().info("[tab] 当前 PAPI 版本不支持 ExpansionsLoadedEvent，将尝试其他方案。");
-            return false;
+    private void startFallbackPolling(int attempt) {
+        if (attempt >= 15) {
+            context.logger().warning("[tab] PAPI 扩展检测已达最大重试次数，按当前结果注册缺失的 fallback 扩展。");
+            checkAndRegisterFallbacks();
+            return;
         }
-    }
-
-    /**
-     * 尝试反射注册 Paper 的 ServerLoadEvent 监听器。
-     * @return true 如果注册成功
-     */
-    private boolean registerServerLoadListener() {
-        try {
-            Class<?> eventClass = Class.forName("com.destroystokyo.paper.event.server.ServerLoadEvent");
-            context.plugin().getServer().getPluginManager().registerEvent(
-                (Class<? extends org.bukkit.event.Event>) eventClass,
-                new org.bukkit.event.Listener() {},
-                org.bukkit.event.EventPriority.HIGHEST,
-                (listener, event) -> {
-                    context.logger().fine("收到 Paper ServerLoadEvent，开始检测 player/server 扩展。");
-                    checkAndRegisterFallbacks();
-                },
-                context.plugin()
-            );
-            context.logger().fine("Tab 已注册 ServerLoadEvent 监听器。");
-            return true;
-        } catch (ClassNotFoundException e) {
-            return false;
-        }
+        context.plugin().getServer().getScheduler().runTaskLater(context.plugin(), () -> {
+            if (fallbackRegistered.get()) {
+                return; // 已处理
+            }
+            boolean found = checkAndRegisterFallbacks();
+            if (!found && attempt < 14) {
+                startFallbackPolling(attempt + 1);
+            }
+        }, attempt == 0 ? 1L : 20L);
     }
 
     private boolean checkAndRegisterFallbacks() {
-        if (!fallbackChecked.compareAndSet(false, true)) {
-            return true; // 已经执行过
+        if (!fallbackRegistered.compareAndSet(false, true)) {
+            return true;
         }
-        if (!isPapiExpansionRegistered("player")) {
-            context.logger().info("PlaceholderAPI 未检测到 player 扩展，Tab 模块将注入内置 player 占位符。");
-            context.expansionRegistry().register(new TabPlayerFallbackExpansion(context.plugin()));
-        }
-        if (!isPapiExpansionRegistered("server")) {
-            context.logger().info("PlaceholderAPI 未检测到 server 扩展，Tab 模块将注入内置 server 占位符。");
-            context.expansionRegistry().register(new TabServerFallbackExpansion(context.plugin()));
-        }
-        return true;
-    }
+        try {
+            me.clip.placeholderapi.PlaceholderAPIPlugin papi =
+                (me.clip.placeholderapi.PlaceholderAPIPlugin) org.bukkit.Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
+            if (papi == null) {
+                return false;
+            }
+            java.util.Collection<me.clip.placeholderapi.expansion.PlaceholderExpansion> expansions =
+                papi.getLocalExpansionManager().getExpansions();
 
-    private boolean isPapiExpansionRegistered(String identifier) {
-        org.bukkit.plugin.Plugin papi = org.bukkit.Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
-        if (papi == null) {
+            boolean hasPlayer = false;
+            boolean hasServer = false;
+            for (me.clip.placeholderapi.expansion.PlaceholderExpansion expansion : expansions) {
+                String id = expansion.getIdentifier().toLowerCase();
+                if ("player".equals(id)) {
+                    hasPlayer = true;
+                }
+                if ("server".equals(id)) {
+                    hasServer = true;
+                }
+            }
+
+            context.logger().info("[tab] PAPI 扩展检测: player=" + hasPlayer + ", server=" + hasServer);
+
+            if (!hasPlayer) {
+                context.logger().info("[tab] PAPI player 扩展未找到，注册内置 fallback。");
+                context.expansionRegistry().register(new TabPlayerFallbackExpansion(context.plugin()));
+            }
+            if (!hasServer) {
+                context.logger().info("[tab] PAPI server 扩展未找到，注册内置 fallback。");
+                context.expansionRegistry().register(new TabServerFallbackExpansion(context.plugin()));
+            }
+            return true;
+        } catch (Exception e) {
+            context.logger().warning("[tab] PAPI 扩展检测失败: " + e.getMessage());
             return false;
         }
-
-        // 方案 A：直接反射调用 PlaceholderAPI 静态方法 getRegisteredPlaceholderIdentifiers()
-        try {
-            Class<?> papiClass = papi.getClass().getClassLoader().loadClass("me.clip.placeholderapi.PlaceholderAPI");
-            java.lang.reflect.Method getIdentifiers = papiClass.getMethod("getRegisteredPlaceholderIdentifiers");
-            java.util.Set<String> identifiers = (java.util.Set<String>) getIdentifiers.invoke(null);
-            boolean found = identifiers != null && identifiers.contains(identifier.toLowerCase(java.util.Locale.ROOT));
-            context.logger().info("[tab] PAPI 检测 [" + identifier + "] via identifiers: " + found + ", 所有标识: " + (identifiers != null ? identifiers.toString() : "null"));
-            return found;
-        } catch (ReflectiveOperationException | LinkageError e) {
-            context.logger().info("[tab] PAPI identifiers 检测 [" + identifier + "] 失败: " + e.getClass().getSimpleName() + " - " + e.getMessage());
-        }
-
-        // 方案 B：通过 PlaceholderAPIPlugin 的 LocalExpansionManager 检测
-        try {
-            Object manager;
-            try {
-                java.lang.reflect.Method getManager = papi.getClass().getMethod("getLocalExpansionManager");
-                manager = getManager.invoke(papi);
-            } catch (NoSuchMethodException e) {
-                java.lang.reflect.Method getManager = papi.getClass().getMethod("getExpansionManager");
-                manager = getManager.invoke(papi);
-            }
-
-            if (manager != null) {
-                java.lang.reflect.Method find = manager.getClass().getMethod("findExpansionByIdentifier", String.class);
-                Object result = find.invoke(manager, identifier);
-
-                if (result instanceof java.util.Optional<?> optional) {
-                    boolean present = optional.isPresent();
-                    context.logger().info("[tab] PAPI 检测 [" + identifier + "] via Optional: " + present);
-                    return present;
-                }
-                boolean found = result != null;
-                context.logger().info("[tab] PAPI 检测 [" + identifier + "] via direct: " + found);
-                return found;
-            }
-        } catch (ReflectiveOperationException | LinkageError e) {
-            context.logger().info("[tab] PAPI API 检测 [" + identifier + "] 失败: " + e.getClass().getSimpleName() + " - " + e.getMessage());
-        }
-
-        // 方案 C（兜底）：检查 expansions/ 目录下是否存在对应 jar
-        try {
-            java.io.File expansionsDir = new java.io.File(papi.getDataFolder(), "expansions");
-            if (expansionsDir.exists() && expansionsDir.isDirectory()) {
-                java.io.File[] jars = expansionsDir.listFiles((dir, name) ->
-                    name.toLowerCase().startsWith("expansion-" + identifier.toLowerCase()) && name.endsWith(".jar")
-                );
-                boolean exists = jars != null && jars.length > 0;
-                context.logger().info("[tab] PAPI 检测 [" + identifier + "] via jar: " + exists);
-                return exists;
-            }
-        } catch (Exception e) {
-            context.logger().info("[tab] PAPI jar 检测 [" + identifier + "] 失败: " + e.getMessage());
-        }
-
-        return false;
     }
 
     private Map<String, UiBinding> registerTabUis() {

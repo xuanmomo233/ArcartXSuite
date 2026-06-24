@@ -1,30 +1,18 @@
 package xuanmo.arcartxsuite.tab.placeholder;
 
+import java.lang.reflect.Method;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 
-import java.lang.reflect.Method;
-
 /**
- * Tab 模块内置的 PAPI server 占位符回退扩展。
+ * PAPI {@code server} 扩展的 fallback 实现。
  * <p>
- * 当 PlaceholderAPI 未安装 {@code Expansion-server.jar} 时，由 Tab 模块主动注入，
- * 提供与 PAPI Server 扩展对齐的 {@code %server_xxx%} 占位符，保证 Tab 基础功能可用。
- * <p>
- * 支持的占位符：
- * <ul>
- *   <li>{@code %server_online%}</li>
- *   <li>{@code %server_max_players%}</li>
- *   <li>{@code %server_name%}</li>
- *   <li>{@code %server_version%}</li>
- *   <li>{@code %server_motd%}</li>
- *   <li>{@code %server_tps%} / {@code %server_tps_1%}</li>
- *   <li>{@code %server_tps_5%}</li>
- *   <li>{@code %server_tps_15%}</li>
- * </ul>
+ * 当 PlaceholderAPI 未加载原生 Expansion-server.jar 时，由 Tab 模块注入，
+ * 提供基础 server 占位符（server_online、server_tps_1 等）。
  */
 public final class TabServerFallbackExpansion extends PlaceholderExpansion {
 
@@ -41,7 +29,8 @@ public final class TabServerFallbackExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getAuthor() {
-        return "ArcartXSuite";
+        return plugin.getDescription().getAuthors().isEmpty()
+            ? "ArcartXSuite" : plugin.getDescription().getAuthors().get(0);
     }
 
     @Override
@@ -50,51 +39,41 @@ public final class TabServerFallbackExpansion extends PlaceholderExpansion {
     }
 
     @Override
-    public boolean persist() {
-        return true;
-    }
-
-    private static final double[] EMPTY_TPS = new double[]{20.0, 20.0, 20.0};
-    private static volatile double[] cachedTps = null;
-    private static volatile long lastTpsFetch = 0L;
-
-    @Override
-    public @Nullable String onRequest(@Nullable org.bukkit.OfflinePlayer player, @NotNull String identifier) {
+    public @Nullable String onPlaceholderRequest(Player player, @NotNull String identifier) {
         return switch (identifier) {
             case "online" -> String.valueOf(Bukkit.getOnlinePlayers().size());
             case "max_players" -> String.valueOf(Bukkit.getMaxPlayers());
+            case "tps_1" -> resolveTps1();
+            case "tps_5" -> resolveTps5();
+            case "tps_15" -> resolveTps15();
             case "name" -> Bukkit.getServer().getName();
             case "version" -> Bukkit.getVersion();
-            case "motd" -> Bukkit.getServer().getMotd();
-            case "tps", "tps_1" -> formatNumber(fetchTps()[0]);
-            case "tps_5" -> formatNumber(fetchTps()[1]);
-            case "tps_15" -> formatNumber(fetchTps()[2]);
-            default -> null;
+            default -> "";
         };
     }
 
-    private static double[] fetchTps() {
-        long now = System.currentTimeMillis();
-        double[] cached = cachedTps;
-        long fetchedAt = lastTpsFetch;
-        if (cached != null && now - fetchedAt < 1000L) {
-            return cached;
-        }
-        try {
-            Method getTPS = Bukkit.class.getMethod("getTPS");
-            double[] fresh = (double[]) getTPS.invoke(null);
-            cachedTps = fresh;
-            lastTpsFetch = now;
-            return fresh;
-        } catch (Exception ignored) {
-            return EMPTY_TPS;
-        }
+    private String resolveTps1() {
+        return resolveTpsIndex(0);
     }
 
-    private static String formatNumber(double value) {
-        if (Math.abs(value - Math.rint(value)) < 0.000001D) {
-            return String.valueOf((long) Math.rint(value));
+    private String resolveTps5() {
+        return resolveTpsIndex(1);
+    }
+
+    private String resolveTps15() {
+        return resolveTpsIndex(2);
+    }
+
+    private String resolveTpsIndex(int index) {
+        try {
+            Method getTPS = Bukkit.getServer().getClass().getMethod("getTPS");
+            double[] tps = (double[]) getTPS.invoke(Bukkit.getServer());
+            if (index < tps.length) {
+                return String.format("%.2f", tps[index]);
+            }
+            return "";
+        } catch (Exception e) {
+            return "";
         }
-        return String.format(java.util.Locale.ROOT, "%.2f", value);
     }
 }

@@ -2,6 +2,7 @@ rootProject.name = "ArcartXSuite"
 
 include("axs-api")
 include("axs-core")
+include("axs-placeholder")
 
 // ─── 可插拔模块 ───
 include("modules:announcer")
