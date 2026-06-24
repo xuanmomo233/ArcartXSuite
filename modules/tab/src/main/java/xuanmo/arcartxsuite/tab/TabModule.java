@@ -287,7 +287,19 @@ public final class TabModule extends AbstractAXSModule {
             return false;
         }
 
-        // 方案 A：通过 PAPI API 检测扩展是否已注册
+        // 方案 A：直接反射调用 PlaceholderAPI 静态方法 getRegisteredPlaceholderIdentifiers()
+        try {
+            Class<?> papiClass = Class.forName("me.clip.placeholderapi.PlaceholderAPI");
+            java.lang.reflect.Method getIdentifiers = papiClass.getMethod("getRegisteredPlaceholderIdentifiers");
+            java.util.Set<String> identifiers = (java.util.Set<String>) getIdentifiers.invoke(null);
+            boolean found = identifiers != null && identifiers.contains(identifier.toLowerCase(java.util.Locale.ROOT));
+            context.logger().fine("PAPI 检测 [" + identifier + "] via identifiers: " + found);
+            return found;
+        } catch (ReflectiveOperationException | LinkageError e) {
+            context.logger().fine("PAPI identifiers 检测 [" + identifier + "] 失败: " + e.getClass().getSimpleName());
+        }
+
+        // 方案 B：通过 PlaceholderAPIPlugin 的 LocalExpansionManager 检测
         try {
             Object manager;
             try {
@@ -315,7 +327,7 @@ public final class TabModule extends AbstractAXSModule {
             context.logger().fine("PAPI API 检测 [" + identifier + "] 失败: " + e.getClass().getSimpleName() + " - " + e.getMessage());
         }
 
-        // 方案 B（兜底）：检查 expansions/ 目录下是否存在对应 jar
+        // 方案 C（兜底）：检查 expansions/ 目录下是否存在对应 jar
         try {
             java.io.File expansionsDir = new java.io.File(papi.getDataFolder(), "expansions");
             if (expansionsDir.exists() && expansionsDir.isDirectory()) {
