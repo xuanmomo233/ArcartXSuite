@@ -266,14 +266,27 @@ public final class TabModule extends AbstractAXSModule {
             }
         }
 
-        // 方式2: 通过 PlaceholderAPI 全局注册表兜底（PAPI 2.11+ ecloud 扩展可能不显示在 LocalExpansionManager 中）
+        // 方式2: 占位符解析测试（PAPI 2.11+ ecloud 扩展可能不显示在注册表中，但仍能解析占位符）
         try {
-            java.util.Set<String> registered = me.clip.placeholderapi.PlaceholderAPI.getRegisteredIdentifiers();
-            if (registered != null && registered.contains(identifier.toLowerCase())) {
-                return true;
+            if ("player".equals(identifier)) {
+                if (org.bukkit.Bukkit.getOnlinePlayers().isEmpty()) {
+                    return false; // 无玩家时无法测试 player 占位符
+                }
+                org.bukkit.entity.Player testPlayer = org.bukkit.Bukkit.getOnlinePlayers().iterator().next();
+                // %player_ping% 是 player 扩展特有的，PAPI 本身不提供
+                String result = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(testPlayer, "%player_ping%");
+                if (!result.equals("%player_ping%") && !result.isEmpty()) {
+                    return true;
+                }
+            } else if ("server".equals(identifier)) {
+                // %server_tps_1% 是 server 扩展特有的
+                String result = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(null, "%server_tps_1%");
+                if (!result.equals("%server_tps_1%") && !result.isEmpty()) {
+                    return true;
+                }
             }
         } catch (Exception e) {
-            context.logger().warning("[tab] 注册表检测 " + identifier + " 失败: " + e.getMessage());
+            context.logger().warning("[tab] 占位符解析检测 " + identifier + " 失败: " + e.getMessage());
         }
         return false;
     }
