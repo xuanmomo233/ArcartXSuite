@@ -206,8 +206,10 @@ public final class TabModule extends AbstractAXSModule {
         public void onExpansionRegister(me.clip.placeholderapi.events.ExpansionRegisterEvent event) {
             String id = event.getExpansion().getIdentifier().toLowerCase();
             if ("player".equals(id) || "server".equals(id)) {
-                context.logger().info("[tab] 监听到 PAPI 扩展注册: " + id + "，重新检测");
-                detectPapiExpansions();
+                context.logger().info("[tab] 监听到 PAPI 扩展注册: " + id);
+                // 延迟 1 tick：事件触发时扩展尚未加入 LocalExpansionManager
+                org.bukkit.Bukkit.getScheduler().runTaskLater(context.plugin(),
+                    () -> detectPapiExpansions(), 1L);
             }
         }
 
