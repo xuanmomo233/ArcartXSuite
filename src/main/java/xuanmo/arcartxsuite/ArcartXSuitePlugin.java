@@ -65,7 +65,6 @@ public class ArcartXSuitePlugin extends JavaPlugin {
     private xuanmo.arcartxsuite.auth.AuthlibInjectorManager authlibInjectorManager;
     private xuanmo.arcartxsuite.auth.AuthCommand authCommand;
     private ChatSignBypassService chatSignBypassService;
-    private static volatile boolean initialLoadComplete = false;
     private BridgeLifecycleManager bridgeLifecycleManager;
     private ClientEventLifecycleManager clientEventLifecycleManager;
     /** 宿主自身的 spec（config.yml） */
@@ -167,7 +166,6 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         if (!summary.failedModules().isEmpty()) {
             consoleWarn("失败模块: " + String.join(", ", summary.failedModules()));
         }
-        initialLoadComplete = true;
 
         // 7. 聊天签名绕过（Paper 1.21+ 混合登录兼容）
         // 放在 ModuleRegistry 之后，确保 AccountTypeService 已就绪，实现按玩家类型精准 bypass
@@ -413,10 +411,6 @@ public class ArcartXSuitePlugin extends JavaPlugin {
 
     public ModuleRegistry getModuleRegistry() {
         return moduleRegistry;
-    }
-
-    public static boolean isInitialLoadComplete() {
-        return initialLoadComplete;
     }
 
     public xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI getPacketBridge() {
