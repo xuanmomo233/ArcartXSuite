@@ -145,8 +145,14 @@ public final class TabModule extends AbstractAXSModule {
         // 注册 TabRefreshable capability，供其他模块刷新 Tab
         context.registerCapability(xuanmo.arcartxsuite.api.capability.TabRefreshable.class, service);
 
-        // 检测 PAPI 扩展是否已安装（延迟到下一 tick，给其他插件加载时间）
-        org.bukkit.Bukkit.getScheduler().runTaskLater(context.plugin(), () -> detectPapiExpansions(), 1L);
+        // 注册 PAPI 扩展加载事件监听器
+        if (context.hasPlugin("PlaceholderAPI")) {
+            org.bukkit.Bukkit.getPluginManager().registerEvents(
+                new PapiExpansionListener(), context.plugin());
+            // 兜底：延迟 10 秒后如果事件未触发完成检测
+            org.bukkit.Bukkit.getScheduler().runTaskLater(context.plugin(),
+                () -> detectPapiExpansions(), 200L);
+        }
 
         context.logger().fine(
             "Tab 模块已载入，定义数量: " + configuration.definitions().size()
@@ -193,6 +199,26 @@ public final class TabModule extends AbstractAXSModule {
         return service;
     }
 
+    private final java.util.concurrent.atomic.AtomicBoolean papiDetected = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    private class PapiExpansionListener implements org.bukkit.event.Listener {
+        @org.bukkit.event.EventHandler
+        public void onExpansionRegister(me.clip.placeholderapi.events.ExpansionRegisterEvent event) {
+            if (papiDetected.get()) return;
+            String id = event.getExpansion().getIdentifier().toLowerCase();
+            if ("player".equals(id) || "server".equals(id)) {
+                context.logger().info("[tab] 监听到 PAPI 扩展注册: " + id);
+            }
+        }
+
+        @org.bukkit.event.EventHandler
+        public void onExpansionsLoaded(me.clip.placeholderapi.events.ExpansionsLoadedEvent event) {
+            if (papiDetected.get()) return;
+            context.logger().info("[tab] 监听到 PAPI 全部扩展加载完成，开始检测");
+            detectPapiExpansions();
+        }
+    }
+
     private void detectPapiExpansions() {
         detectPapiExpansions(0);
     }
@@ -200,6 +226,9 @@ public final class TabModule extends AbstractAXSModule {
     private void detectPapiExpansions(int attempt) {
         if (!context.hasPlugin("PlaceholderAPI")) {
             return;
+        }
+        if (!papiDetected.compareAndSet(false, true)) {
+            return; // 已检测过
         }
         try {
             me.clip.placeholderapi.PlaceholderAPIPlugin papi =
@@ -224,6 +253,7 @@ public final class TabModule extends AbstractAXSModule {
 
             if (!hasPlayer || !hasServer) {
                 if (attempt < 2) {
+                    papiDetected.set(false); // 允许重试
                     // ecloud 扩展可能还在异步加载，延迟 3 秒后重试
                     org.bukkit.Bukkit.getScheduler().runTaskLater(context.plugin(),
                         () -> detectPapiExpansions(attempt + 1), 60L);
