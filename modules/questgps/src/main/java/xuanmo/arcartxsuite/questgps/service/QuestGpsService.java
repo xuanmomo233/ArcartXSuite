@@ -726,7 +726,7 @@ public final class QuestGpsService implements Listener {
         for (int index = 0; index < sortedCategories.size(); index++) {
             QuestGpsCategory cat = sortedCategories.get(index);
             categoryRows.put(
-                QuestGpsPayloadSupport.rowKey('c', index),
+                QuestGpsPayloadSupport.rowKey(index),
                 QuestGpsPayloadSupport.flatRow(
                     "id", cat.id(),
                     "name", cat.displayName(),
@@ -741,7 +741,7 @@ public final class QuestGpsService implements Listener {
         for (int index = 0; index < snapshot.questRows().size(); index++) {
             QuestGpsSnapshotBuilder.ListRow row = snapshot.questRows().get(index);
             questRows.put(
-                QuestGpsPayloadSupport.rowKey('q', index),
+                QuestGpsPayloadSupport.rowKey(index),
                 QuestGpsPayloadSupport.flatRow(
                     "id", row.questId(),
                     "name", row.displayName(),
@@ -762,7 +762,7 @@ public final class QuestGpsService implements Listener {
         LinkedHashMap<String, Object> descRows = new LinkedHashMap<>();
         for (int index = 0; index < detail.descriptionLines().size(); index++) {
             descRows.put(
-                QuestGpsPayloadSupport.rowKey('d', index),
+                QuestGpsPayloadSupport.rowKey(index),
                 QuestGpsPayloadSupport.flatRow("text", detail.descriptionLines().get(index))
             );
         }
@@ -781,7 +781,7 @@ public final class QuestGpsService implements Listener {
         for (int index = 0; index < detail.taskRows().size(); index++) {
             QuestGpsSnapshotBuilder.TaskRow row = detail.taskRows().get(index);
             taskRows.put(
-                QuestGpsPayloadSupport.rowKey('t', index),
+                QuestGpsPayloadSupport.rowKey(index),
                 QuestGpsPayloadSupport.flatRow(
                     "id", row.taskId(),
                     "text", row.text(),
@@ -799,7 +799,7 @@ public final class QuestGpsService implements Listener {
         for (int index = 0; index < detail.rewardRows().size(); index++) {
             QuestGpsSnapshotBuilder.RewardRow row = detail.rewardRows().get(index);
             rewardRows.put(
-                QuestGpsPayloadSupport.rowKey('r', index),
+                QuestGpsPayloadSupport.rowKey(index),
                 QuestGpsPayloadSupport.flatRow(
                     "id", row.rewardId(),
                     "title", row.title(),

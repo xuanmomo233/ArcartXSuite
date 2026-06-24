@@ -929,7 +929,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             entry.put("displayName", row.displayName());
             entry.put("texture", row.texture());
             entry.put("selected", row.selected());
-            worldRows.put("w" + i, entry);
+            worldRows.put(Integer.toString(i), entry);
         }
         payload.put("worldRows", worldRows);
 
@@ -948,7 +948,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             entry.put("teleportCostText", row.teleportCostText());
             entry.put("selected", row.selected());
             entry.put("tracked", row.tracked());
-            anchorRows.put("a" + i, entry);
+            anchorRows.put(Integer.toString(i), entry);
         }
         payload.put("anchorRows", anchorRows);
 
@@ -963,7 +963,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             entry.put("z", row.z());
             entry.put("selected", row.selected());
             entry.put("tracked", row.tracked());
-            waypointRows.put("wp" + i, entry);
+            waypointRows.put(Integer.toString(i), entry);
         }
         payload.put("waypointRows", waypointRows);
 
@@ -980,7 +980,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             entry.put("z", row.z());
             entry.put("selected", row.selected());
             entry.put("tracked", row.tracked());
-            externalRows.put("e" + i, entry);
+            externalRows.put(Integer.toString(i), entry);
         }
         payload.put("externalTargetRows", externalRows);
 

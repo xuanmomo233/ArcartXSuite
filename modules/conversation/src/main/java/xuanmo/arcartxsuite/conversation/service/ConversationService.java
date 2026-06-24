@@ -849,7 +849,7 @@ public final class ConversationService implements Listener {
         for (int index = 0; index < state.candidates().size(); index++) {
             NpcCandidate candidate = state.candidates().get(index);
             rows.put(
-                ConversationPayloadSupport.rowKey('n', index),
+                ConversationPayloadSupport.rowKey(index),
                 ConversationPayloadSupport.flatRow(
                     "id", candidate.npcId(),
                     "text", candidate.label(),

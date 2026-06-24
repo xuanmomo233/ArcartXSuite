@@ -208,23 +208,28 @@ public final class OnlineRewardsMenuPacketFactory {
 
     private static Map<String, Object> buildSignInRewardRows(OnlineRewardsModuleConfiguration configuration) {
         LinkedHashMap<String, Object> rows = new LinkedHashMap<>();
+        int index = 0;
         addSignInRow(
             rows,
-            "base",
+            index,
             "每日签到",
             "每次成功签到",
             configuration.signIn().baseRewardText(),
             configuration.signIn().baseCommands().size(),
             configuration.signIn().baseMailPresetIds().size()
         );
+        index++;
         for (OnlineRewardsMilestoneReward reward : configuration.signIn().streakRewards()) {
-            addSignInRow(rows, "streak-" + reward.days(), "连续 " + reward.days() + " 天", "连续签到恰好 " + reward.days() + " 天", reward.rewardText(), reward.commands().size(), reward.mailPresetIds().size());
+            addSignInRow(rows, index, "连续 " + reward.days() + " 天", "连续签到恰好 " + reward.days() + " 天", reward.rewardText(), reward.commands().size(), reward.mailPresetIds().size());
+            index++;
         }
         for (OnlineRewardsMilestoneReward reward : configuration.signIn().totalRewards()) {
-            addSignInRow(rows, "total-" + reward.days(), "累计 " + reward.days() + " 天", "累计签到恰好 " + reward.days() + " 天", reward.rewardText(), reward.commands().size(), reward.mailPresetIds().size());
+            addSignInRow(rows, index, "累计 " + reward.days() + " 天", "累计签到恰好 " + reward.days() + " 天", reward.rewardText(), reward.commands().size(), reward.mailPresetIds().size());
+            index++;
         }
         for (OnlineRewardsDayOfMonthReward reward : configuration.signIn().dayOfMonthRewards()) {
-            addSignInRow(rows, "month-" + reward.day(), "每月 " + reward.day() + " 日", "每月 " + reward.day() + " 日签到", reward.rewardText(), reward.commands().size(), reward.mailPresetIds().size());
+            addSignInRow(rows, index, "每月 " + reward.day() + " 日", "每月 " + reward.day() + " 日签到", reward.rewardText(), reward.commands().size(), reward.mailPresetIds().size());
+            index++;
         }
         return rows;
     }
@@ -277,7 +282,7 @@ public final class OnlineRewardsMenuPacketFactory {
 
     private static void addSignInRow(
         LinkedHashMap<String, Object> rows,
-        String id,
+        int index,
         String title,
         String trigger,
         String rewardText,
@@ -285,11 +290,11 @@ public final class OnlineRewardsMenuPacketFactory {
         int mailPresetCount
     ) {
         LinkedHashMap<String, Object> row = new LinkedHashMap<>();
-        row.put("id", id);
+        row.put("id", Integer.toString(index));
         row.put("title", title);
         row.put("trigger", trigger);
         row.put("rewardText", rewardText.isBlank() ? rewardSummary(commandCount, mailPresetCount) : rewardText);
-        rows.put(id, row);
+        rows.put(Integer.toString(index), row);
     }
 
     private static String rowKey(int index) {

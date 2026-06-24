@@ -529,20 +529,29 @@ controls:
               x: 540
               y: 554
               width: 520
-              height: 20
+              height: 16
               normal: ~145,145,145,255
               shape: ~round_rect
-              radius: 10
+              radius: 2
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
           mid_fill:
-            type: Texture
+            type: progress
             attribute:
               x: 540
               y: 554
-              width: "var.progress * 520"
-              height: 20
-              normal: ~80,180,255,255
+              width: 520
+              height: 16
+              texture: ~80,180,255,255
+              progress: var.progress
               shape: ~round_rect
-              radius: 10
+              radius: 2
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
 
           mid_divider_2:
             type: Texture
@@ -581,19 +590,28 @@ controls:
               height: 16
               normal: ~145,145,145,255
               shape: ~round_rect
-              radius: 8
+              radius: 2
               visible: "var.serverSignInGoalEnabled && var.serverSignInGoalNext > 0"
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
           mid_goal_fill:
-            type: Texture
+            type: progress
             attribute:
               x: 540
               y: 712
-              width: "var.serverSignInGoalNext > 0 ? (var.serverSignInGoalCurrent / var.serverSignInGoalNext * 520).min(520) : 0"
+              width: 520
               height: 16
-              normal: ~100,200,130,255
+              texture: ~100,200,130,255
+              progress: "var.serverSignInGoalNext > 0 ? (var.serverSignInGoalCurrent / var.serverSignInGoalNext).min(1) : 0"
               shape: ~round_rect
-              radius: 8
+              radius: 2
               visible: "var.serverSignInGoalEnabled && var.serverSignInGoalNext > 0"
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
 
           mid_tip:
             type: Text
@@ -627,19 +645,38 @@ controls:
               y: 128
               texts: "~&0&l在线阶段奖励"
               fontSize: 49
+          right_stage_slider:
+            type: Texture
+            val: right_stage_slider
+            attribute:
+              x: 1620
+              y: 176
+              width: 4
+              height: 40
+              normal: ~120,120,120,200
+              maxDragY: 210
           right_stage_scroll:
             type: Scroll
             attribute:
               x: 1120
               y: 176
-              width: 500
+              width: 510
               height: 250
+              moveY: "self.parent['right_stage_slider'].getDragYRatio()"
+            action:
+              wheel: |-
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['right_stage_slider'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['right_stage_slider'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
             children:
               right_stage_stack:
                 val: right_stage_stack
                 type: VStack
                 attribute:
-                  width: 500
+                  width: 510
                   spaceBetween: 8
                 action:
                   create: |-
@@ -702,19 +739,38 @@ controls:
               visible: "var.periodicRewardRows.size == 0 || var.periodicRewardRows.size == null"
               texts: "~&0暂无周期奖励"
               fontSize: 36
+          right_periodic_slider:
+            type: Texture
+            val: right_periodic_slider
+            attribute:
+              x: 1620
+              y: 486
+              width: 4
+              height: 40
+              normal: ~120,120,120,200
+              maxDragY: 140
           right_periodic_scroll:
             type: Scroll
             attribute:
               x: 1120
               y: 486
-              width: 500
+              width: 510
               height: 180
+              moveY: "self.parent['right_periodic_slider'].getDragYRatio()"
+            action:
+              wheel: |-
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['right_periodic_slider'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['right_periodic_slider'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
             children:
               right_periodic_stack:
                 val: right_periodic_stack
                 type: VStack
                 attribute:
-                  width: 500
+                  width: 510
                   spaceBetween: 6
                 action:
                   create: |-
@@ -777,19 +833,38 @@ controls:
               visible: "var.signInRewardRows.size == 0 || var.signInRewardRows.size == null"
               texts: "~&0暂无签到奖励"
               fontSize: 36
+          right_signin_slider:
+            type: Texture
+            val: right_signin_slider
+            attribute:
+              x: 1620
+              y: 726
+              width: 4
+              height: 40
+              normal: ~120,120,120,200
+              maxDragY: 150
           right_signin_scroll:
             type: Scroll
             attribute:
               x: 1120
               y: 726
-              width: 500
+              width: 510
               height: 190
+              moveY: "self.parent['right_signin_slider'].getDragYRatio()"
+            action:
+              wheel: |-
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['right_signin_slider'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['right_signin_slider'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
             children:
               right_signin_stack:
                 val: right_signin_stack
                 type: VStack
                 attribute:
-                  width: 500
+                  width: 510
                   spaceBetween: 6
                 action:
                   create: |-

@@ -475,7 +475,7 @@ final class ChemdahAxRenderer {
             String replyId = state.replyIds().get(index);
             ReplyView replyView = state.replyViews().get(replyId);
             rows.put(
-                ConversationPayloadSupport.rowKey('r', index),
+                ConversationPayloadSupport.rowKey(index),
                 ConversationPayloadSupport.flatRow(
                     "id", replyId,
                     "text", replyView == null ? "" : replyView.text(),

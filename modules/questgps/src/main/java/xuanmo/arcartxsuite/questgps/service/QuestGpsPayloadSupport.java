@@ -9,8 +9,8 @@ final class QuestGpsPayloadSupport {
     private QuestGpsPayloadSupport() {
     }
 
-    static String rowKey(char prefix, int index) {
-        return String.format(Locale.ROOT, "%c%04d", prefix, index);
+    static String rowKey(int index) {
+        return Integer.toString(index);
     }
 
     static LinkedHashMap<String, Object> flatRow(Object... entries) {

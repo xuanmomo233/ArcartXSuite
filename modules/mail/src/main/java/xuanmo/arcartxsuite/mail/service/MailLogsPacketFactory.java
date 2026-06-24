@@ -17,6 +17,7 @@ public final class MailLogsPacketFactory {
     public static Map<String, Object> build(MailPage<MailLogEntry> page) {
         Map<String, Object> packet = new LinkedHashMap<>();
         Map<String, Object> entries = new LinkedHashMap<>();
+        int index = 0;
         for (MailLogEntry entry : page.entries()) {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", Long.toString(entry.id()));
@@ -24,7 +25,8 @@ public final class MailLogsPacketFactory {
             item.put("type_text", typeText(entry.type()));
             item.put("content", entry.content());
             item.put("created_at", TIME_FORMATTER.format(entry.createdAt()));
-            entries.put(Long.toString(entry.id()), item);
+            entries.put(Integer.toString(index), item);
+            index++;
         }
         packet.put("logs", entries);
         packet.put("page", page.page());

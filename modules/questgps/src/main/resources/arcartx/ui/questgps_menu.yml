@@ -588,8 +588,7 @@ controls:
                   reward_item:
                     type: Texture
                     attribute:
-                      entryKey: 0
-                      entry: var.rewardRows[self.entryKey]
+                      entry: var.rewardRows[self.key]
                       visible: self.entry != null
                       width: 420
                       height: 74

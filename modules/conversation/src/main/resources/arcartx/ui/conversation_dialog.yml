@@ -237,7 +237,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, var.replyCount)){
-                      key = "r000" + i.round
+                      key = i.round
                       ri = self['回复模板'].copy('reply_' + i.round)
                       ri.entryKey = key
                     }
@@ -245,7 +245,7 @@ controls:
                   回复模板:
                     type: Texture
                     attribute:
-                      entryKey: "r0000"
+                      entryKey: 0
                       visible: "var.replyRows[self.entryKey] != null"
                       entry: "var.replyRows[self.entryKey] != null ? var.replyRows[self.entryKey] : null"
                       replyId: "var.replyRows[self.entryKey] != null ? var.replyRows[self.entryKey]['id'] : ''"

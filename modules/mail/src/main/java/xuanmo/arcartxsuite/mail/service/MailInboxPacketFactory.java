@@ -32,6 +32,7 @@ public final class MailInboxPacketFactory {
         MailMessage selected = null;
         List<MailMessage> messages = mailPage.entries();
 
+        int index = 0;
         for (MailMessage message : messages) {
             if (message.id() == selectedMailId) {
                 selected = message;
@@ -51,7 +52,8 @@ public final class MailInboxPacketFactory {
             entry.put("claimable", message.claimable());
             entry.put("unread", message.unread());
             entry.put("has_attachments", message.hasAttachments());
-            entries.put(Long.toString(message.id()), entry);
+            entries.put(Integer.toString(index), entry);
+            index++;
         }
 
         if (selected == null && !messages.isEmpty()) {
