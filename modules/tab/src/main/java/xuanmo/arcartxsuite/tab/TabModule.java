@@ -143,6 +143,9 @@ public final class TabModule extends AbstractAXSModule {
         // 注册 TabRefreshable capability，供其他模块刷新 Tab
         context.registerCapability(xuanmo.arcartxsuite.api.capability.TabRefreshable.class, service);
 
+        // 检测 PAPI 扩展是否已安装（仅记录日志，不注册 fallback）
+        detectPapiExpansions();
+
         context.logger().fine(
             "Tab 模块已载入，定义数量: " + configuration.definitions().size()
                 + " | UI: " + tabUiBindings.keySet()
@@ -186,6 +189,41 @@ public final class TabModule extends AbstractAXSModule {
 
     public TabSyncService getService() {
         return service;
+    }
+
+    private void detectPapiExpansions() {
+        if (!context.hasPlugin("PlaceholderAPI")) {
+            return;
+        }
+        try {
+            me.clip.placeholderapi.PlaceholderAPIPlugin papi =
+                (me.clip.placeholderapi.PlaceholderAPIPlugin) org.bukkit.Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
+            if (papi == null) {
+                return;
+            }
+            java.util.Collection<me.clip.placeholderapi.expansion.PlaceholderExpansion> expansions =
+                papi.getLocalExpansionManager().getExpansions();
+            boolean hasPlayer = false;
+            boolean hasServer = false;
+            for (me.clip.placeholderapi.expansion.PlaceholderExpansion expansion : expansions) {
+                String id = expansion.getIdentifier().toLowerCase();
+                if ("player".equals(id)) {
+                    hasPlayer = true;
+                }
+                if ("server".equals(id)) {
+                    hasServer = true;
+                }
+            }
+            context.logger().info("[tab] PAPI 扩展检测: player=" + hasPlayer + ", server=" + hasServer);
+            if (!hasPlayer) {
+                context.logger().warning("[tab] PAPI player 扩展未安装，%player_xxx% 占位符不可用");
+            }
+            if (!hasServer) {
+                context.logger().warning("[tab] PAPI server 扩展未安装，%server_xxx% 占位符不可用");
+            }
+        } catch (Exception e) {
+            context.logger().warning("[tab] PAPI 扩展检测失败: " + e.getMessage());
+        }
     }
 
     private Map<String, UiBinding> registerTabUis() {
