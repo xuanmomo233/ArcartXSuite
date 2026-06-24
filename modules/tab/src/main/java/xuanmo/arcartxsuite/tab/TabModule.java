@@ -149,9 +149,9 @@ public final class TabModule extends AbstractAXSModule {
         if (context.hasPlugin("PlaceholderAPI")) {
             org.bukkit.Bukkit.getPluginManager().registerEvents(
                 new PapiExpansionListener(), context.plugin());
-            // 延迟 1 tick 先检测一次（PAPI 可能已加载完毕）
+            // 延迟 1 tick 预检一次（时机可能偏早，发现缺失不注册 fallback）
             org.bukkit.Bukkit.getScheduler().runTaskLater(context.plugin(),
-                () -> { if (!papiDetected.get()) detectPapiExpansions(); }, 1L);
+                () -> { if (!papiDetected.get()) detectPapiExpansions(0, false); }, 1L);
         }
 
         context.logger().fine(
@@ -206,15 +206,11 @@ public final class TabModule extends AbstractAXSModule {
         public void onExpansionsLoaded(me.clip.placeholderapi.events.ExpansionsLoadedEvent event) {
             if (papiDetected.get()) return;
             context.logger().info("[tab] 监听到 PAPI 全部扩展加载完成，开始检测");
-            detectPapiExpansions();
+            detectPapiExpansions(0, true);
         }
     }
 
-    private void detectPapiExpansions() {
-        detectPapiExpansions(0);
-    }
-
-    private void detectPapiExpansions(int attempt) {
+    private void detectPapiExpansions(int attempt, boolean finalCheck) {
         if (!context.hasPlugin("PlaceholderAPI")) {
             return;
         }
@@ -243,14 +239,19 @@ public final class TabModule extends AbstractAXSModule {
             context.logger().info("[tab] PAPI 扩展状态 — player: " + (hasPlayer ? "已安装" : "未安装") + "，server: " + (hasServer ? "已安装" : "未安装"));
 
             if (!hasPlayer || !hasServer) {
-                if (attempt < 2) {
-                    papiDetected.set(false); // 允许重试
-                    // ecloud 扩展可能还在异步加载，延迟 3 秒后重试
-                    org.bukkit.Bukkit.getScheduler().runTaskLater(context.plugin(),
-                        () -> detectPapiExpansions(attempt + 1), 60L);
+                if (!finalCheck) {
+                    // 预检发现缺失，可能是时机问题，重置标记等待 ExpansionsLoadedEvent
+                    context.logger().info("[tab] 预检发现扩展缺失，等待 PAPI 全部加载完成后再检测");
+                    papiDetected.set(false);
                     return;
                 }
-                // 重试结束仍未找到，注册 fallback
+                if (attempt < 2) {
+                    papiDetected.set(false); // 允许重试
+                    org.bukkit.Bukkit.getScheduler().runTaskLater(context.plugin(),
+                        () -> detectPapiExpansions(attempt + 1, true), 60L);
+                    return;
+                }
+                // 终检且重试结束仍未找到，注册 fallback
                 if (!hasPlayer) {
                     context.logger().info("[tab] PAPI player 扩展未安装，已注册内置 fallback");
                     context.expansionRegistry().register(new TabPlayerFallbackExpansion(context.plugin()));
