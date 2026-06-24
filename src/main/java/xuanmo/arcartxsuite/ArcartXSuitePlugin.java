@@ -47,7 +47,7 @@ import xuanmo.arcartxsuite.security.NativeBridge;
  */
 public class ArcartXSuitePlugin extends JavaPlugin {
 
-    private static final String AUTHOR_NAME = "墨墨墨";
+    private static final String AUTHOR_NAME = "墨墨墨 Q";
     private static final String DISPLAY_NAME = "ArcartXSuite";
     private static final String CONSOLE_PREFIX =
         ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
@@ -536,7 +536,7 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         }
         console.sendMessage("");
         console.sendMessage(ChatColor.GRAY + "  版本: " + ChatColor.YELLOW + "v" + version
-            + ChatColor.GRAY + "  |  作者: " + ChatColor.WHITE + AUTHOR_NAME);
+            + ChatColor.GRAY + "  |  作者: " + ChatColor.WHITE + AUTHOR_NAME + "Q联系 1451759359");
         console.sendMessage("");
     }
 
