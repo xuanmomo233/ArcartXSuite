@@ -223,21 +223,23 @@ public final class TabModule extends AbstractAXSModule {
      */
     private boolean registerExpansionLoadedListener() {
         try {
-            Class<?> eventClass = Class.forName("me.clip.placeholderapi.events.ExpansionsLoadedEvent");
+            org.bukkit.plugin.Plugin papi = org.bukkit.Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
+            if (papi == null) return false;
+            Class<?> eventClass = papi.getClass().getClassLoader().loadClass("me.clip.placeholderapi.events.ExpansionsLoadedEvent");
             context.plugin().getServer().getPluginManager().registerEvent(
                 (Class<? extends org.bukkit.event.Event>) eventClass,
                 new org.bukkit.event.Listener() {},
                 org.bukkit.event.EventPriority.HIGHEST,
                 (listener, event) -> {
-                    context.logger().fine("收到 PAPI ExpansionsLoadedEvent，开始检测 player/server 扩展。");
+                    context.logger().info("[tab] 收到 PAPI ExpansionsLoadedEvent，开始检测 player/server 扩展。");
                     checkAndRegisterFallbacks();
                 },
                 context.plugin()
             );
-            context.logger().fine("Tab 已注册 PAPI ExpansionsLoadedEvent 监听器。");
+            context.logger().info("[tab] 已注册 PAPI ExpansionsLoadedEvent 监听器。");
             return true;
         } catch (ClassNotFoundException e) {
-            context.logger().fine("当前 PAPI 版本不支持 ExpansionsLoadedEvent，将尝试其他方案。");
+            context.logger().info("[tab] 当前 PAPI 版本不支持 ExpansionsLoadedEvent，将尝试其他方案。");
             return false;
         }
     }
@@ -289,14 +291,14 @@ public final class TabModule extends AbstractAXSModule {
 
         // 方案 A：直接反射调用 PlaceholderAPI 静态方法 getRegisteredPlaceholderIdentifiers()
         try {
-            Class<?> papiClass = Class.forName("me.clip.placeholderapi.PlaceholderAPI");
+            Class<?> papiClass = papi.getClass().getClassLoader().loadClass("me.clip.placeholderapi.PlaceholderAPI");
             java.lang.reflect.Method getIdentifiers = papiClass.getMethod("getRegisteredPlaceholderIdentifiers");
             java.util.Set<String> identifiers = (java.util.Set<String>) getIdentifiers.invoke(null);
             boolean found = identifiers != null && identifiers.contains(identifier.toLowerCase(java.util.Locale.ROOT));
-            context.logger().fine("PAPI 检测 [" + identifier + "] via identifiers: " + found);
+            context.logger().info("[tab] PAPI 检测 [" + identifier + "] via identifiers: " + found + ", 所有标识: " + (identifiers != null ? identifiers.toString() : "null"));
             return found;
         } catch (ReflectiveOperationException | LinkageError e) {
-            context.logger().fine("PAPI identifiers 检测 [" + identifier + "] 失败: " + e.getClass().getSimpleName());
+            context.logger().info("[tab] PAPI identifiers 检测 [" + identifier + "] 失败: " + e.getClass().getSimpleName() + " - " + e.getMessage());
         }
 
         // 方案 B：通过 PlaceholderAPIPlugin 的 LocalExpansionManager 检测
@@ -316,15 +318,15 @@ public final class TabModule extends AbstractAXSModule {
 
                 if (result instanceof java.util.Optional<?> optional) {
                     boolean present = optional.isPresent();
-                    context.logger().fine("PAPI 检测 [" + identifier + "] via Optional: " + present);
+                    context.logger().info("[tab] PAPI 检测 [" + identifier + "] via Optional: " + present);
                     return present;
                 }
                 boolean found = result != null;
-                context.logger().fine("PAPI 检测 [" + identifier + "] via direct: " + found);
+                context.logger().info("[tab] PAPI 检测 [" + identifier + "] via direct: " + found);
                 return found;
             }
         } catch (ReflectiveOperationException | LinkageError e) {
-            context.logger().fine("PAPI API 检测 [" + identifier + "] 失败: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+            context.logger().info("[tab] PAPI API 检测 [" + identifier + "] 失败: " + e.getClass().getSimpleName() + " - " + e.getMessage());
         }
 
         // 方案 C（兜底）：检查 expansions/ 目录下是否存在对应 jar
@@ -335,11 +337,11 @@ public final class TabModule extends AbstractAXSModule {
                     name.toLowerCase().startsWith("expansion-" + identifier.toLowerCase()) && name.endsWith(".jar")
                 );
                 boolean exists = jars != null && jars.length > 0;
-                context.logger().fine("PAPI 检测 [" + identifier + "] via jar: " + exists);
+                context.logger().info("[tab] PAPI 检测 [" + identifier + "] via jar: " + exists);
                 return exists;
             }
         } catch (Exception e) {
-            context.logger().fine("PAPI jar 检测 [" + identifier + "] 失败: " + e.getMessage());
+            context.logger().info("[tab] PAPI jar 检测 [" + identifier + "] 失败: " + e.getMessage());
         }
 
         return false;
