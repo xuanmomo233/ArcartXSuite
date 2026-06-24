@@ -1,245 +1,130 @@
-# AXS 资源说明
-
+﻿# AXS 资源说明
 # 用途: Conversation 模块默认 NPC 选择 HUD，负责展示附近可触发对话的 NPC。
-
 # 前置依赖: ArcartX、Chemdah、Adyeshach；Conversation 模块启用后会自动注册或导出。
-
 # 启用开关: config.yml -> modules.conversation.enabled + modules.conversation.password
-
 # 关联文件: ArcartXConversation.yml、ui/conversation_menu.yml
-
 # 重载命令: /axs conversation reload
-
 # 最小使用路径: ui + controls
-
 # 结构提示: 顶层 ui 节点定义 HUD 行为；packetHandler 负责刷新 NPC 列表；controls 定义每个候选项的可视组件。
-
 # 服务端 sync 字段:
-
 #   token, packetId, title, hintText, selectedNpcId, selectedNpcIndex,
-
 #   npcCount, npcScrollRatio, npcRows
-
 # npcRows 单行字段:
-
 #   id, text, distanceText, selected, index
-
 # 客户端回包:
-
 #   navigate_npc / confirm_npc / select_npc
-
 # 回包格式:
-
 #   action, token, targetId
-
-
-
 ui:
-
   isHud: true
-
   defaultOpen: false
-
   through: true
-
   show: true
-
   screenScale: true
-
   level: 0
-
   packetHandler:
-
     sync: |-
-
       var.token = packet['token']
-
       var.packetId = packet['packetId']
-
       var.title = packet['title']
-
       var.hintText = packet['hintText']
-
       var.selectedNpcId = packet['selectedNpcId']
-
       var.selectedNpcIndex = packet['selectedNpcIndex']
-
       var.npcCount = packet['npcCount']
-
       var.npcScrollRatio = packet['npcScrollRatio']
-
       var.npcRows = packet['npcRows']
-
     close: |-
-
       var.token = ''
-
       var.packetId = packet['packetId'] == null ? '' : packet['packetId']
-
       var.title = ''
-
       var.hintText = ''
-
       var.selectedNpcId = ''
-
       var.selectedNpcIndex = -1
-
       var.npcCount = 0
-
       var.npcScrollRatio = 0
-
       var.npcRows = {}
-
   action:
-
     load: |-
-
       var.token = ''
-
       var.packetId = ''
-
       var.title = ''
-
       var.hintText = ''
-
       var.selectedNpcId = ''
-
       var.selectedNpcIndex = -1
-
       var.npcCount = 0
-
       var.npcScrollRatio = 0
-
       var.npcRows = {}
-
       var.maxNpcCount = 128
-
+      var.interactKey = Keyboard.getKeyBindingKeyName("AXS_INTERACT")
+      var.navPrevKey = Keyboard.getKeyBindingKeyName("AXS_NAVIGATE_PREV")
+      var.navNextKey = Keyboard.getKeyBindingKeyName("AXS_NAVIGATE_NEXT")
+      if(var.navPrevKey == "UP"){
+        var.navPrevKey = "↑"
+      }
+      if(var.navNextKey == "DOWN"){
+        var.navNextKey = "↓"
+      }
     close: |-
-
       var.npcRows = {}
-
-
-
 controls:
-
   自适应全局布局:
-
     type: Adaptive
-
     attribute:
-
       point: ~stretch_all
-
       width: 1920
-
       height: 1080
-
     children:
-
       选择器根面板:
-
         type: Canvas
-
         attribute:
-
           point: ~middle_right
-
           x: -58
-
           y: -18
-
           width: 430
-
           height: 104 + var.npcCount * 50
-
         action:
-
           enter: |-
-
             client.pickup = false
-
           leave: |-
-
             client.pickup = true
-
         children:
-
           外壳:
-
             type: Texture
-
             attribute:
-
               point: ~stretch_all
-
               normal: ~95,95,95,220
-
               shape: ~round_rect
-
               radius: 22
-
             effect:
-
               stroke:
-
                 width: 2
-
                 color: ~0,0,0,255
-
           选择器标题:
-
             type: Text
-
             attribute:
-
               point: ~top_left
-
               x: 24
-
               y: 20
-
               texts: "'&0' + var.title"
-
               fontSize: 28
-
           选择器提示:
-
             type: Text
-
             attribute:
-
               point: ~top_left
-
               x: 24
-
               y: 52
-
-              texts:
-
-                - "~&7滚轮滑动查看选项,按[↑]与[↓]选择选项,按[F]确定选项"
-
+              texts: "'~&7滚轮滑动查看选项,按[' + var.navPrevKey + ']与[' + var.navNextKey + ']选择选项,按[' + var.interactKey + ']确定选项'"
               fontSize: 25
-
           选择器索引:
-
             type: Text
-
             attribute:
-
               point: ~top_right
-
               x: -22
-
               y: 22
-
               texts:
-
                 - "'&8总选项数：' + var.npcCount.round()"
-
                 - "'&8所选选项：' + (var.selectedNpcIndex + 1).round()"
-
               fontSize: 25
-
           选择器滑块:
             type: Texture
             val: 选择器滑块
@@ -269,160 +154,81 @@ controls:
                   self.parent['选择器滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
                 }
             children:
-
               选择器列表:
-
                 val: selector_list
-
                 type: VStack
-
                 attribute:
-
                   width: 392
-
                   spaceBetween: 8
-
                 action:
-
                   create: |-
-
                     for(i in range(0, var.maxNpcCount)){
-
                       key = i.round
-
                       ni = self['选择器项'].copy('选择器项' + key)
-
                       ni.entryKey = key
-
                     }
-
                 children:
-
                   选择器项:
-
                     type: Texture
-
                     attribute:
-
                       entryKey: 0
-
                       entry: var.npcRows[self.entryKey]
-
                       visible: self.entry != null
-
                       width: 392
-
                       height: 42
-
                       normal: ~150,150,150,175
-
                       shape: ~round_rect
-
                       radius: 14
-
                     effect:
-
                       stroke:
-
                         width: 2
-
                         color: ~0,0,0,255
-
                     action:
-
                       clickLeft: |-
-
                         if(self.entry != null && self.entry['selected']){
-
                           Packet.send(var.packetId, 'confirm_npc', var.token, self.entry['id'])
-
                         }else if(self.entry != null){
-
                           Packet.send(var.packetId, 'select_npc', var.token, self.entry['id'])
-
                         }
-
                     children:
-
                       选中覆盖:
-
                         type: Texture
-
                         attribute:
-
                           visible: "self.parent.entry != null ? self.parent.entry['selected'] : false"
-
                           width: 392
-
                           height: 42
-
                           normal: ~200,200,200,200
-
                           shape: ~round_rect
-
                           radius: 14
-
                           through: true
-
                         effect:
-
                           stroke:
-
                             width: 2
-
                             color: ~0,0,0,255
-
                       选中NPC名:
-
                         type: Text
-
                         attribute:
-
                           x: 18
-
                           y: 9
-
                           texts: "'&F➣ ' + (self.parent.entry != null ? self.parent.entry['text'] : '')"
-
                           fontSize: 49
-
                           through: true
-
                           visible: "self.parent.entry != null ? self.parent.entry['selected'] : false"
-
                       NPC名:
-
                         type: Text
-
                         attribute:
-
                           x: 18
-
                           y: 9
-
                           texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
-
                           fontSize: 49
-
                           through: true
-
                           visible: "self.parent.entry != null ? !self.parent.entry['selected'] : false"
-
                       NPC距离:
-
                         type: Text
-
                         attribute:
-
                           x: 250
-
                           y: 12
-
                           realtext: "'&7距离: ' + self.parent.entry['distanceText']"
-
                           texts: "self.parent.entry != null ? self.realtext : ''"
-
                           fontSize: 36
-
                           through: true
-

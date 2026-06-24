@@ -51,7 +51,7 @@ scanner:
   pickup-delay-ticks: 40
   # 同类物品是否合并显示（SuperStack）
   merge-same-items: true
-  # 交互 Menu 的 UI ID（按 F 打开的透明菜单，用于捕获滚轮/按键输入）
+  # 交互 Menu 的 UI ID（按自定义交互键打开的透明菜单，用于捕获滚轮/按键输入）
   interact-ui-id: "AXS:loot_interact"
   # 拾取按键绑定（注册为 ArcartX 自定义按键，玩家可在按键设置中修改）
   keybind:

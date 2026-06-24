@@ -286,7 +286,7 @@ public final class ConversationService implements Listener {
     }
 
     /**
-     * 宿主按键回调：处理确认键（F），返回 true 表示已消费。
+     * 宿主按键回调：处理确认键（AXS_INTERACT），返回 true 表示已消费。
      */
     public boolean handleConfirmKeyFromHost(Player player) {
         if (player == null || !player.isOnline()) {

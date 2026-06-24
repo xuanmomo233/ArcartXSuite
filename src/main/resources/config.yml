@@ -109,20 +109,20 @@ attribute-bridges:
 # ========== 全局按键绑定 ==========
 # 由宿主统一注册到 ArcartX 客户端，各模块共享。
 # name: ArcartX 注册名（玩家可在按键设置中看到）
-# default-key: 默认键位（GLFW 键名，如 F、G、H、NUMPAD_8 等）
+# default-key: 默认键位（GLFW 键名，如 F、G、H、KP_8 等）
 # category: 按键分类名（显示在按键设置界面）
 keybinds:
   interact:
     name: AXS_INTERACT
-    default-key: F
+    default-key: G
     category: ArcartXSuite
   navigate-prev:
     name: AXS_NAVIGATE_PREV
-    default-key: NUMPAD_8
+    default-key: UP
     category: ArcartXSuite
   navigate-next:
     name: AXS_NAVIGATE_NEXT
-    default-key: NUMPAD_2
+    default-key: DOWN
     category: ArcartXSuite
 
 # ========== Tacz 模组伤害兼容 ==========
