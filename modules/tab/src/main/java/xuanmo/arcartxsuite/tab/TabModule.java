@@ -23,8 +23,6 @@ import xuanmo.arcartxsuite.tab.config.TabModuleConfiguration;
 import xuanmo.arcartxsuite.tab.debug.TabSnapshotStore;
 import xuanmo.arcartxsuite.tab.listener.TabPvpListener;
 import xuanmo.arcartxsuite.tab.placeholder.TabPlaceholderExpansion;
-import xuanmo.arcartxsuite.tab.placeholder.TabPlayerFallbackExpansion;
-import xuanmo.arcartxsuite.tab.placeholder.TabServerFallbackExpansion;
 import xuanmo.arcartxsuite.tab.sync.TabSyncService;
 
 /**
@@ -145,9 +143,6 @@ public final class TabModule extends AbstractAXSModule {
         // 注册 TabRefreshable capability，供其他模块刷新 Tab
         context.registerCapability(xuanmo.arcartxsuite.api.capability.TabRefreshable.class, service);
 
-        // 检测并注册 fallback PAPI 扩展（若原生 player/server 扩展缺失）
-        registerFallbackPapiExpansionsIfNeeded();
-
         context.logger().fine(
             "Tab 模块已载入，定义数量: " + configuration.definitions().size()
                 + " | UI: " + tabUiBindings.keySet()
@@ -191,104 +186,6 @@ public final class TabModule extends AbstractAXSModule {
 
     public TabSyncService getService() {
         return service;
-    }
-
-    private final java.util.concurrent.atomic.AtomicBoolean fallbackRegistered = new java.util.concurrent.atomic.AtomicBoolean(false);
-
-    private void registerFallbackPapiExpansionsIfNeeded() {
-        if (!context.hasPlugin("PlaceholderAPI")) {
-            return;
-        }
-        // 先立即检测一次
-        if (checkAndRegisterFallbacks()) {
-            return;
-        }
-        // 没查到则启动轮询：每秒检测一次，最多 60 秒
-        // PAPI 的 ecloud 扩展可能在服务器启动后才异步加载完成
-        startFallbackPolling(0);
-    }
-
-    private void startFallbackPolling(int attempt) {
-        if (attempt >= 60) {
-            context.logger().warning("[tab] PAPI 扩展检测已达最大重试次数(60秒)，按当前结果注册缺失的 fallback 扩展。");
-            checkAndRegisterFallbacks();
-            return;
-        }
-        context.plugin().getServer().getScheduler().runTaskLater(context.plugin(), () -> {
-            if (fallbackRegistered.get()) {
-                return; // 已处理
-            }
-            boolean found = checkAndRegisterFallbacks();
-            if (!found && attempt < 59) {
-                startFallbackPolling(attempt + 1);
-            }
-        }, attempt == 0 ? 1L : 20L);
-    }
-
-    private boolean checkAndRegisterFallbacks() {
-        if (!fallbackRegistered.compareAndSet(false, true)) {
-            return true;
-        }
-        try {
-            me.clip.placeholderapi.PlaceholderAPIPlugin papi =
-                (me.clip.placeholderapi.PlaceholderAPIPlugin) org.bukkit.Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
-            if (papi == null) {
-                return false;
-            }
-
-            boolean hasPlayer = detectExpansion(papi, "player");
-            boolean hasServer = detectExpansion(papi, "server");
-
-            context.logger().info("[tab] PAPI 扩展检测: player=" + hasPlayer + ", server=" + hasServer);
-
-            if (!hasPlayer) {
-                context.logger().info("[tab] PAPI player 扩展未找到，注册内置 fallback。");
-                context.expansionRegistry().register(new TabPlayerFallbackExpansion(context.plugin()));
-            }
-            if (!hasServer) {
-                context.logger().info("[tab] PAPI server 扩展未找到，注册内置 fallback。");
-                context.expansionRegistry().register(new TabServerFallbackExpansion(context.plugin()));
-            }
-            return true;
-        } catch (Exception e) {
-            context.logger().warning("[tab] PAPI 扩展检测失败: " + e.getMessage());
-            return false;
-        }
-    }
-
-    private boolean detectExpansion(me.clip.placeholderapi.PlaceholderAPIPlugin papi, String identifier) {
-        // 方式1: 通过 LocalExpansionManager 检测（标准扩展、expansions 文件夹加载的扩展）
-        java.util.Collection<me.clip.placeholderapi.expansion.PlaceholderExpansion> expansions =
-            papi.getLocalExpansionManager().getExpansions();
-        for (me.clip.placeholderapi.expansion.PlaceholderExpansion expansion : expansions) {
-            if (identifier.equalsIgnoreCase(expansion.getIdentifier())) {
-                return true;
-            }
-        }
-
-        // 方式2: 占位符解析测试（PAPI 2.11+ ecloud 扩展可能不显示在注册表中，但仍能解析占位符）
-        try {
-            if ("player".equals(identifier)) {
-                if (org.bukkit.Bukkit.getOnlinePlayers().isEmpty()) {
-                    return false; // 无玩家时无法测试 player 占位符
-                }
-                org.bukkit.entity.Player testPlayer = org.bukkit.Bukkit.getOnlinePlayers().iterator().next();
-                // %player_ping% 是 player 扩展特有的，PAPI 本身不提供
-                String result = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(testPlayer, "%player_ping%");
-                if (!result.equals("%player_ping%") && !result.isEmpty()) {
-                    return true;
-                }
-            } else if ("server".equals(identifier)) {
-                // %server_tps_1% 是 server 扩展特有的
-                String result = me.clip.placeholderapi.PlaceholderAPI.setPlaceholders(null, "%server_tps_1%");
-                if (!result.equals("%server_tps_1%") && !result.isEmpty()) {
-                    return true;
-                }
-            }
-        } catch (Exception e) {
-            context.logger().warning("[tab] 占位符解析检测 " + identifier + " 失败: " + e.getMessage());
-        }
-        return false;
     }
 
     private Map<String, UiBinding> registerTabUis() {

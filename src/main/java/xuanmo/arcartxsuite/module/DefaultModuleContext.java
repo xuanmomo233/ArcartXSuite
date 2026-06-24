@@ -121,7 +121,6 @@ final class DefaultModuleContext implements ModuleContext {
             );
             PlaceholderExpansionRegistry registry = (PlaceholderExpansionRegistry)
                 directRegistry.getConstructor(Logger.class).newInstance(logger);
-            logger.info("PlaceholderAPI 已安装，使用强引用实现的 PlaceholderExpansionRegistry。");
             return registry;
         } catch (ClassNotFoundException e) {
             logger.info("PlaceholderAPI 未安装，使用反射实现的 PlaceholderExpansionRegistry。");
