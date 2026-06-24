@@ -1,14 +1,22 @@
-# ArcartXSuite
+# ArcartX-Suite
 
-> **生态全面 · 自带UI · 为每一个 ArcartX 服务器筑梦未来**
+> **生态全面 · 自带UI · 为每一个 ArcartX 服务器谱写未来**
 >
-> 「 从登录到击杀，每一帧都由你定义 」——不只是插件，是服务器玩法的基础设施。
+> 「 从登录到击杀，每一帧都是一个音符 」——不只是插件，是服务器玩法的交响组曲。
+
+---
+
+## 🎵 品牌寓意 · Suite 组曲
+
+在音乐中，**Suite（组曲）** 是由多首独立小曲串联而成的成套器乐作品。巴赫的《英国组曲》、德彪西的《贝加莫组曲》——每一段风格、节奏各不相同，**分开能单独演奏，合起来是一部完整作品**，统一于同一调性之下。
+
+**ArcartX-Suite** 正是这样的理念：**26+ 个模块如同 26 个乐章**，每一个独立运作、各具音色、按需启用，共享 ArcartX 的统一调性与 UI 主题，组合成一部属于你自己的**服务器交响乐**。
 
 ---
 
 ## 💡 项目定位
 
-**ArcartXSuite** 是专为 **ArcartX** 生态构建的下一代全场景核心套件与玩法基础设施。一个插件覆盖 **25+ 个功能领域**，统一 ArcartX UI 体验，模块间深度联动，消除适配烦恼。
+**ArcartX-Suite** 是专为 **ArcartX** 生态构建的下一代全场景核心套件与玩法基础设施。一个插件覆盖 **25+ 个功能领域**，统一 ArcartX UI 体验，模块间深度联动，消除适配烦恼。
 
 ---
 
@@ -84,6 +92,6 @@
 
 ## 🌐 相关链接
 
-- 📖 **[官方文档](https://xuanmomo233.github.io/ArcartXSuite/)** — 配置教程与 API 参考
-- 💻 **[GitHub 仓库](https://github.com/xuanmomo233/ArcartXSuite)** — 文档源码与 Issue 反馈
+- 📖 **[官方文档](https://xuanmomo233.github.io/ArcartX-Suite/)** — 配置教程与 API 参考
+- 💻 **[GitHub 仓库](https://github.com/xuanmomo233/ArcartX-Suite)** — 文档源码与 Issue 反馈
 - 🏰 **[ArcartX 社区](https://arcartx.com)** — 连接服主与开发者

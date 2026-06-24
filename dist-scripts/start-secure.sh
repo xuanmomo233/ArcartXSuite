@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════════
-# ArcartXSuite 安全启动脚本 (Linux)
+# ArcartX-Suite 安全启动脚本 (Linux)
 #
 # 安全封锁参数：
 #   -XX:+DisableAttachMechanism  彻底关闭 JVM Attach API，防止内存抓取
@@ -14,11 +14,11 @@ SECURITY_OPTS="-XX:+DisableAttachMechanism -XX:+UseG1GC"
 
 # ClassFinal agent（如果存在）
 CF_AGENT=""
-if [ -f "plugins/ArcartXSuite/classfinal-agent.jar" ]; then
-    CF_AGENT="-javaagent:plugins/ArcartXSuite/classfinal-agent.jar=-pwd AXS-CF-KEY"
+if [ -f "plugins/ArcartX-Suite/classfinal-agent.jar" ]; then
+    CF_AGENT="-javaagent:plugins/ArcartX-Suite/classfinal-agent.jar=-pwd AXS-CF-KEY"
 fi
 
-echo "[ArcartXSuite] 安全启动模式"
+echo "[ArcartX-Suite] 安全启动模式"
 echo "  DisableAttachMechanism = ON"
 echo "  ClassFinal Agent = ${CF_AGENT:-无}"
 echo

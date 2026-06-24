@@ -8,10 +8,10 @@ plugins {
     id("com.gradleup.shadow") version "8.3.5" apply false
 }
 
-val distDir = rootProject.layout.buildDirectory.dir("ArcartXSuite")
+val distDir = rootProject.layout.buildDirectory.dir("ArcartX-Suite")
 
 // 混淆后的 core jar 路径（模块编译时依赖此产物，使得 bridge 等类被完全混淆后仍可链接）
-val obfuscatedCoreJar: Provider<RegularFile> = project(":axs-core").layout.buildDirectory.file("libs/ArcartXSuite-step1-obfuscated.jar")
+val obfuscatedCoreJar: Provider<RegularFile> = project(":axs-core").layout.buildDirectory.file("libs/ArcartX-Suite-step1-obfuscated.jar")
 
 subprojects {
     repositories {
@@ -101,11 +101,11 @@ tasks.register("buildModules") {
 
 tasks.register("encryptAllModuleAxb") {
     group = "protection"
-    description = "将所有模块加密为 .axb（输出到 build/ArcartXSuite/module-axb/，上传云端用）"
+    description = "将所有模块加密为 .axb（输出到 build/ArcartX-Suite/module-axb/，上传云端用）"
     dependsOn(subprojects.filter { it.path.startsWith(":modules:") }.map { "${it.path}:encryptModuleAxb" })
 }
 
-// 扩展 clean 任务，确保自定义分发目录 build/ArcartXSuite/ 也被清理
+// 扩展 clean 任务，确保自定义分发目录 build/ArcartX-Suite/ 也被清理
 tasks.named<Delete>("clean") {
     delete(distDir)
 }

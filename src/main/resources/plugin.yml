@@ -1,4 +1,4 @@
-name: ArcartXSuite
+name: ArcartX-Suite
 version: '${version}'
 main: xuanmo.arcartxsuite.ArcartXSuitePlugin
 api-version: '1.20'

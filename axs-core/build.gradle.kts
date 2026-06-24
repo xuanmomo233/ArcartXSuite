@@ -51,7 +51,7 @@ val protectYamlResources by tasks.registering(ProtectYamlResourcesTask::class) {
     outputDir.set(protectedResourcesDir)
 }
 
-val obfuscatedJar = layout.buildDirectory.file("libs/ArcartXSuite-obfuscated.jar")
+val obfuscatedJar = layout.buildDirectory.file("libs/ArcartX-Suite-obfuscated.jar")
 
 tasks {
     compileJava {
@@ -133,7 +133,7 @@ tasks {
 // ═══════════════════════════════════════════════════════════════════
 
 // Step 1: ProGuard
-val step1Jar = layout.buildDirectory.file("libs/ArcartXSuite-step1-obfuscated.jar")
+val step1Jar = layout.buildDirectory.file("libs/ArcartX-Suite-step1-obfuscated.jar")
 
 val obfuscateCore by tasks.registering(ObfuscateJarTask::class) {
     dependsOn(tasks.named("shadowJar"))
@@ -148,7 +148,7 @@ val obfuscateCore by tasks.registering(ObfuscateJarTask::class) {
 }
 
 // Step 2: 字符串加密（ASM，ProGuard 之后）
-val step2Jar = layout.buildDirectory.file("libs/ArcartXSuite-step2-strenc.jar")
+val step2Jar = layout.buildDirectory.file("libs/ArcartX-Suite-step2-strenc.jar")
 
 val stringEncryptCore by tasks.registering(StringEncryptTask::class) {
     dependsOn(obfuscateCore)
@@ -157,7 +157,7 @@ val stringEncryptCore by tasks.registering(StringEncryptTask::class) {
 }
 
 // Step 3: 完整性嵌入（SHA-256 摘要校验）
-val step3Jar = layout.buildDirectory.file("libs/ArcartXSuite-step3-integrity.jar")
+val step3Jar = layout.buildDirectory.file("libs/ArcartX-Suite-step3-integrity.jar")
 
 val embedIntegrityCore by tasks.registering(EmbedIntegrityTask::class) {
     dependsOn(stringEncryptCore)
@@ -169,7 +169,7 @@ val embedIntegrityCore by tasks.registering(EmbedIntegrityTask::class) {
 val publishCoreJar by tasks.registering {
     dependsOn(embedIntegrityCore)
     val src = step3Jar.get().asFile
-    val dst = layout.buildDirectory.file("libs/ArcartXSuite-${version}.jar").get().asFile
+    val dst = layout.buildDirectory.file("libs/ArcartX-Suite-${version}.jar").get().asFile
     inputs.file(src)
     outputs.file(dst)
     doLast {

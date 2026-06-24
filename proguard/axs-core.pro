@@ -1,9 +1,9 @@
 # ═══════════════════════════════════════════════════════════════════
-# ArcartXSuite Core - ProGuard Rules
+# ArcartX-Suite Core - ProGuard Rules
 # ═══════════════════════════════════════════════════════════════════
 
 # ─── 混合认证代理（独立进程入口，必须保留类名/包名/成员） ──────
-# 该类由 start-mixed-auth 脚本以 `java -cp ArcartXSuite.jar
+# 该类由 start-mixed-auth 脚本以 `java -cp ArcartX-Suite.jar
 # xuanmo.arcartxsuite.auth.MixedYggdrasilProxy <port>` 独立启动，
 # 插件内不再直接 new 它，故必须 keep，否则会被混淆删除或 repackage 而无法定位。
 -keep class xuanmo.arcartxsuite.auth.MixedYggdrasilProxy { *; }

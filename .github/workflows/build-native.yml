@@ -294,8 +294,8 @@ jobs:
         run: |
           gradle encryptAllModuleAxb
           echo "=== Checking generated .axb files ==="
-          ls -la build/ArcartXSuite/module-axb/ || echo "DIR NOT FOUND"
-          find build/ArcartXSuite/module-axb/ -type f 2>/dev/null || echo "NO FILES"
+          ls -la build/ArcartX-Suite/module-axb/ || echo "DIR NOT FOUND"
+          find build/ArcartX-Suite/module-axb/ -type f 2>/dev/null || echo "NO FILES"
 
       - name: Build only changed modules
         if: needs.detect-changes.outputs.native_changed != 'true' && needs.detect-changes.outputs.module_changed == 'true'
@@ -311,7 +311,7 @@ jobs:
         if: needs.detect-changes.outputs.core_changed == 'true' || needs.detect-changes.outputs.native_changed == 'true'
         run: |
           # Gradle build 过程中 DLL 可能被损坏，直接用 jar 命令替换为正确的版本
-          JAR_PATH=$(find "$PWD/axs-core/build/libs" -maxdepth 1 -name "ArcartXSuite-[0-9]*.jar" -not -name "*plain*" -not -name "*unobf*" -not -name "*step*" | sort | tail -1)
+          JAR_PATH=$(find "$PWD/axs-core/build/libs" -maxdepth 1 -name "ArcartX-Suite-[0-9]*.jar" -not -name "*plain*" -not -name "*unobf*" -not -name "*step*" | sort | tail -1)
           if [ -z "$JAR_PATH" ]; then
             echo "ERROR: Final JAR not found"
             exit 1
@@ -329,7 +329,7 @@ jobs:
         if: needs.detect-changes.outputs.core_changed == 'true' || needs.detect-changes.outputs.native_changed == 'true'
         run: |
           # 查找构建产物中的 JAR（使用绝对路径）
-          JAR_PATH=$(find "$PWD/axs-core/build/libs" -maxdepth 1 -name "ArcartXSuite-[0-9]*.jar" -not -name "*plain*" -not -name "*unobf*" -not -name "*step*" | sort | tail -1)
+          JAR_PATH=$(find "$PWD/axs-core/build/libs" -maxdepth 1 -name "ArcartX-Suite-[0-9]*.jar" -not -name "*plain*" -not -name "*unobf*" -not -name "*step*" | sort | tail -1)
           if [ -z "$JAR_PATH" ]; then
             echo "ERROR: Final JAR not found"
             exit 1
@@ -455,8 +455,8 @@ jobs:
       - name: Rename artifacts
         run: |
           mkdir -p release
-          # 只保留最终混淆产物 ArcartXSuite-<version>.jar，排除 plain/unobf/step 等中间产物
-          find artifacts/axs-jar -name "ArcartXSuite-[0-9]*.jar" -exec cp {} release/ \;
+          # 只保留最终混淆产物 ArcartX-Suite-<version>.jar，排除 plain/unobf/step 等中间产物
+          find artifacts/axs-jar -name "ArcartX-Suite-[0-9]*.jar" -exec cp {} release/ \;
           # 同时包含 axs-api jar（供外部模块编译依赖）
           find artifacts/axs-jar -name "axs-api-*.jar" -exec cp {} release/ \;
           ls -la release/
@@ -480,7 +480,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
           cat << EOF > release_notes.md
-          ## ArcartXSuite $VERSION
+          ## ArcartX-Suite $VERSION
 
           - **构建时间**: $DATE
           - **提交**: \`$COMMIT_SHA\`
@@ -490,15 +490,15 @@ jobs:
 
           | 文件 | 说明 |
           |------|------|
-          | \`ArcartXSuite-${VERSION}.jar\` | **服务端插件**（已内置 Linux / Windows 双平台 native 库） |
+          | \`ArcartX-Suite-${VERSION}.jar\` | **服务端插件**（已内置 Linux / Windows 双平台 native 库） |
           | \`axs-api-${VERSION}.jar\` | **API 库**（供外部模块编译依赖） |
 
           ### 快速安装
 
-          1. 下载 \`ArcartXSuite-${VERSION}.jar\`
+          1. 下载 \`ArcartX-Suite-${VERSION}.jar\`
           2. 放入 Minecraft 服务器的 \`plugins/\` 目录
-          3. 启动服务器，编辑 \`plugins/ArcartXSuite/config.yml\`
-          4. 配置 \`cloud.qq\` 和 \`cloud.password\`
+          3. 启动服务器，编辑 \`plugins/ArcartX-Suite/config.yml\`
+          4. 配置 \`cloud.qq\` 和 \`cloud.apiKey\`
           5. 重启服务器，自动连接云端加载模块
 
           ### 注意

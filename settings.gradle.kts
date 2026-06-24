@@ -1,4 +1,4 @@
-rootProject.name = "ArcartXSuite"
+rootProject.name = "ArcartX-Suite"
 
 include("axs-api")
 include("axs-core")
