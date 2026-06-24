@@ -289,6 +289,9 @@ jobs:
           gradle clean
           gradle build --no-build-cache
           gradle encryptAllModuleAxb
+          echo "=== Checking generated .axb files ==="
+          ls -la build/ArcartXSuite/module-axb/ || echo "DIR NOT FOUND"
+          find build/ArcartXSuite/module-axb/ -type f 2>/dev/null || echo "NO FILES"
 
       - name: Build only changed modules
         if: needs.detect-changes.outputs.core_changed != 'true' && needs.detect-changes.outputs.native_changed != 'true'
@@ -367,6 +370,9 @@ jobs:
           CORE_CHANGED=${{ needs.detect-changes.outputs.core_changed }}
           NATIVE_CHANGED=${{ needs.detect-changes.outputs.native_changed }}
           AXB_DIR="build/ArcartXSuite/module-axb"
+          echo "=== AXB_DIR check ==="
+          ls -la "$AXB_DIR" 2>/dev/null || echo "AXB_DIR does not exist: $AXB_DIR"
+          echo "CORE_CHANGED=$CORE_CHANGED, NATIVE_CHANGED=$NATIVE_CHANGED"
           if [ "$CORE_CHANGED" = "true" ] || [ "$NATIVE_CHANGED" = "true" ]; then
             # 全量构建已经生成所有 .axb，上传全部
             if [ -d "$AXB_DIR" ]; then
@@ -382,6 +388,7 @@ jobs:
                 curl -sS -F "axb=@$axb" \
                   -F "version=$version" \
                   -F "key=$key" \
+                  -F "iv=$iv" \
                   -F "setCurrent=true" \
                   -H "X-CI-Token: $CLOUD_CI_TOKEN" \
                   "https://cloud.021209.xyz/v1/ci/modules/$module/versions" || echo "WARN: $module upload failed"
@@ -407,6 +414,7 @@ jobs:
               curl -sS -F "axb=@$axb" \
                 -F "version=$version" \
                 -F "key=$key" \
+                -F "iv=$iv" \
                 -F "setCurrent=true" \
                 -H "X-CI-Token: $CLOUD_CI_TOKEN" \
                 "https://cloud.021209.xyz/v1/ci/modules/$module/versions" || echo "WARN: $module upload failed"
