@@ -288,6 +288,7 @@ jobs:
           # 强制清理，避免缓存恢复旧的损坏 DLL
           gradle clean
           gradle build --no-build-cache
+          gradle encryptAllModuleAxb
 
       - name: Build only changed modules
         if: needs.detect-changes.outputs.core_changed != 'true' && needs.detect-changes.outputs.native_changed != 'true'
