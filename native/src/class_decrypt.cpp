@@ -5,11 +5,16 @@
 #include <cstring>
 #include <cstdlib>
 
-// ═══ 密钥分层架构 ═══════════════════════════════════════════════
+// ═══ 密钥分层架构（方案 B：字节码加密 key 与机器/时间解耦） ═══════
 // Layer 0: Root Seed (编译时嵌入，分散存储)
-// Layer 1: Master Key = HKDF(root_seed, hardware_fingerprint)
-// Layer 2: Session Key = HKDF(master_key, time_window)
-// Layer 3: Per-Class Key = HKDF(session_key, class_name_hash)
+// Layer 1: Master Key = HKDF(root_seed, salt=build_salt_l1)
+// Layer 2: Session Key = HKDF(master_key, salt=build_salt_l2)
+// Layer 3: Per-Class Key = HKDF(session_key, salt=class_name_hash)
+//
+// 说明：类解密 key 仅由 root_seed + 固定 build salt 派生，
+//       不再混入硬件指纹/时间窗，保证"构建期加密一次、任意机器任意时刻解密一致"。
+//       机器绑定由云端 moduleKey 的指纹 HKDF 绑定层负责（见后端 crypto.ts）。
+//       这两个常量必须与 scripts/encrypt-jar.py 中的同名常量逐字节一致。
 
 // root seed 分散存储（构建时由 generate-keys.py 生成并替换）
 // !!!  以下占位值必须在构建前替换为真实密钥  !!!
@@ -74,10 +79,11 @@ static void assemble_root_seed(uint8_t out[32]) {
     }
 }
 
-// ─── 硬件指纹（声明，实现在 env_check.cpp 或单独文件中） ──────────
-extern void get_hardware_fingerprint(uint8_t out[32]);
-
 // ─── 密钥初始化 ─────────────────────────────────────────────────
+
+// 固定 build salt（方案 B）。必须与 scripts/encrypt-jar.py 中的同名常量逐字节一致。
+static const uint8_t build_salt_l1[] = "AXS-class-enc-master-salt-v1";
+static const uint8_t build_salt_l2[] = "AXS-class-enc-session-salt-v1";
 
 bool protection_init_keys() {
     if (keys_initialized) return true;
@@ -85,29 +91,19 @@ bool protection_init_keys() {
     uint8_t root_seed[32];
     assemble_root_seed(root_seed);
 
-    // 获取硬件指纹作为 salt
-    uint8_t hw_fp[32];
-    get_hardware_fingerprint(hw_fp);
-
-    // Layer 1: master_key = HKDF(root_seed, salt=hw_fingerprint)
+    // Layer 1: master_key = HKDF(root_seed, salt=build_salt_l1)
     uint8_t prk[32];
-    hkdf_extract(hw_fp, 32, root_seed, 32, prk);
+    hkdf_extract(build_salt_l1, sizeof(build_salt_l1) - 1, root_seed, 32, prk);
     static const uint8_t info_master[] = "master_key_v1";
     hkdf_expand(prk, info_master, sizeof(info_master) - 1, master_key, 32);
 
-    // Layer 2: session_key = HKDF(master_key, salt=time_window)
-    // 时间窗口 = 当前小时戳（±1 小时容差在解密时处理）
-    uint64_t time_window = (uint64_t)time(nullptr) / 3600;
-    uint8_t tw_bytes[8];
-    for (int i = 7; i >= 0; i--) { tw_bytes[i] = time_window & 0xFF; time_window >>= 8; }
-
-    hkdf_extract(tw_bytes, 8, master_key, 32, prk);
+    // Layer 2: session_key = HKDF(master_key, salt=build_salt_l2)
+    hkdf_extract(build_salt_l2, sizeof(build_salt_l2) - 1, master_key, 32, prk);
     static const uint8_t info_session[] = "session_key_v1";
     hkdf_expand(prk, info_session, sizeof(info_session) - 1, session_key, 32);
 
     // 清零中间值
     memset(root_seed, 0, sizeof(root_seed));
-    memset(hw_fp, 0, sizeof(hw_fp));
     memset(prk, 0, sizeof(prk));
 
     keys_initialized = true;

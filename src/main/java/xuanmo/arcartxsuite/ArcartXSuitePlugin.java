@@ -38,6 +38,7 @@ import xuanmo.arcartxsuite.security.ClientPacketGuard;
 import xuanmo.arcartxsuite.security.ClientPacketGuardConfiguration;
 import xuanmo.arcartxsuite.security.MohistCompat;
 import xuanmo.arcartxsuite.security.NativeBridge;
+import xuanmo.arcartxsuite.security.protection.ProtectionInit;
 
 /**
  * ArcartXSuite 宿主插件入口（精简版）。
@@ -103,6 +104,16 @@ public class ArcartXSuitePlugin extends JavaPlugin {
         if (!NativeBridge.isAvailable()) {
             consoleWarn("Native 安全库未加载: " + NativeBridge.getLoadError()
                 + "（如使用云端模块，请先构建 native/ 目录并确保 axs-native.dll 已打包到 jar）");
+        }
+
+        // 初始化 JAR 保护子系统（密钥派生 + 反调试 + 完整性校验）
+        try {
+            String jarPath = getFile().getAbsolutePath();
+            if (!ProtectionInit.initialize(jarPath)) {
+                consoleWarn("[Protection] 保护子系统初始化失败（插件仍可运行，但保护层未启用）");
+            }
+        } catch (Exception e) {
+            consoleWarn("[Protection] 保护子系统异常: " + e.getMessage());
         }
 
         // 0. 初始化智能配置诊断系统
@@ -405,6 +416,9 @@ public class ArcartXSuitePlugin extends JavaPlugin {
             clientPacketGuard = null;
         }
         clientPacketGuardConfiguration = null;
+
+        // 关闭保护子系统
+        ProtectionInit.shutdown();
     }
 
     // ─── 公共访问 ─────────────────────────────────────────────

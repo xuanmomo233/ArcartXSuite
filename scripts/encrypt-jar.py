@@ -56,10 +56,18 @@ except ImportError:
     HAS_SIGN = False
 
 
-def derive_class_key(root_seed, hardware_fingerprint, time_window, class_name_hash):
+# 固定 build salt（方案 B）。必须与 native/src/class_decrypt.cpp 中的同名常量逐字节一致。
+BUILD_SALT_L1 = b"AXS-class-enc-master-salt-v1"
+BUILD_SALT_L2 = b"AXS-class-enc-session-salt-v1"
+
+
+def derive_class_key(root_seed, class_name_hash):
     """
-    模拟 native 层的密钥派生流程（仅用于打包时的测试加密）
-    实际运行时密钥派生在 native 层完成
+    与 native 层 protection_init_keys()/derive_class_key() 逐位等价（方案 B）。
+
+    类解密 key 仅由 root_seed + 固定 build salt 派生，不混入硬件指纹/时间窗，
+    保证"构建期加密一次、任意机器任意时刻解密一致"。
+    机器绑定由云端 moduleKey 的指纹 HKDF 绑定层负责。
 
     HKDF-SHA256: root_seed → master_key → session_key → class_key
     """
@@ -78,12 +86,12 @@ def derive_class_key(root_seed, hardware_fingerprint, time_window, class_name_ha
             i += 1
         return okm[:length]
 
-    # Layer 1: master_key = HKDF(root_seed, salt=hw_fingerprint)
-    prk = hkdf_extract(hardware_fingerprint, root_seed)
+    # Layer 1: master_key = HKDF(root_seed, salt=build_salt_l1)
+    prk = hkdf_extract(BUILD_SALT_L1, root_seed)
     master_key = hkdf_expand(prk, b"master_key_v1", 32)
 
-    # Layer 2: session_key = HKDF(master_key, salt=time_window)
-    prk2 = hkdf_extract(time_window, master_key)
+    # Layer 2: session_key = HKDF(master_key, salt=build_salt_l2)
+    prk2 = hkdf_extract(BUILD_SALT_L2, master_key)
     session_key = hkdf_expand(prk2, b"session_key_v1", 32)
 
     # Layer 3: class_key = HKDF(session_key, salt=class_name_hash)
@@ -276,11 +284,7 @@ def main():
 
     if root_seed is None:
         root_seed = secrets.token_bytes(32)
-        print("[!] 未找到 root_seed.bin，使用随机种子（仅用于测试）")
-
-    # 模拟硬件指纹和时间窗口（实际在 native 层运行时获取）
-    hw_fingerprint = secrets.token_bytes(32)
-    time_window = struct.pack('>Q', int(time.time()) // 3600)  # 当前小时戳
+        print("[!] 未找到 root_seed.bin，使用随机种子（仅用于测试，运行时无法解密）")
 
     # 读取输入 JAR
     print(f"\n[1/6] 读取输入 JAR...")
@@ -314,8 +318,8 @@ def main():
         class_name = name.replace('/', '.').replace('.class', '')
         class_name_hash = hashlib.sha256(class_name.encode('utf-8')).digest()
 
-        # 派生类密钥
-        class_key = derive_class_key(root_seed, hw_fingerprint, time_window, class_name_hash)
+        # 派生类密钥（方案 B：仅 root_seed + 固定 build salt）
+        class_key = derive_class_key(root_seed, class_name_hash)
 
         # 加密
         if mixed_mode:

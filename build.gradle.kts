@@ -105,6 +105,9 @@ tasks.register("encryptAllModuleAxb") {
     dependsOn(subprojects.filter { it.path.startsWith(":modules:") }.map { "${it.path}:encryptModuleAxb" })
 }
 
+// ─── JAR 加密保护构建任务 ─────────────────────────────────────────
+apply(from = "gradle/encryption-tasks.gradle.kts")
+
 // 扩展 clean 任务，确保自定义分发目录 build/ArcartX-Suite/ 也被清理
 tasks.named<Delete>("clean") {
     delete(distDir)
