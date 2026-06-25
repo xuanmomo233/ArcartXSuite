@@ -60,3 +60,6 @@ temp_*.py
 # Native libraries (compiled by CI, do not commit)
 src/main/resources/native/*.dll
 src/main/resources/native/*.so
+
+# Protection keys (NEVER commit)
+keys/

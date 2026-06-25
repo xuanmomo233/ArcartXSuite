@@ -54,6 +54,8 @@ public final class CloudModuleService {
 
     /** 加密密钥对文件格式版本标识。 */
     private static final String KEYPAIR_MAGIC = "AXSKP1";
+    /** 指纹绑定密钥派生用的 HKDF salt，必须与云端 crypto.ts 中的 KEY_BIND_SALT 一致。 */
+    private static final String KEY_BIND_SALT = "ArcartXSuite-key-bind-v1";
     /** PBKDF2 迭代次数，用于从机器指纹派生密钥文件的加密密钥。 */
     private static final int KDF_ITERATIONS = 120_000;
 
@@ -488,6 +490,25 @@ public final class CloudModuleService {
                     plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：密钥长度错误 (" + key.length + " 字节)，应为 32 字节。请检查云端模块上传时填写的 moduleKey");
                     return;
                 }
+                // 指纹绑定密钥还原：云端下发的 key = moduleKey XOR HKDF(本机指纹)。
+                // 用本机实时指纹重新派生 pad 还原真实 moduleKey；换机器指纹不同 → 还原出错误 key → native 解密失败。
+                String keyBind = extractJsonField(keyResp, "keyBind");
+                if ("fp-hkdf-v1".equals(keyBind)) {
+                    String version = extractJsonField(keyResp, "version");
+                    String fph = sha256(generateFingerprint());
+                    byte[] pad = hkdfSha256(
+                        fph.getBytes(StandardCharsets.UTF_8),
+                        KEY_BIND_SALT.getBytes(StandardCharsets.UTF_8),
+                        ("axs-module-key|" + moduleId + "|" + (version == null ? "" : version)).getBytes(StandardCharsets.UTF_8),
+                        32);
+                    if (pad == null) {
+                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：指纹密钥派生失败");
+                        return;
+                    }
+                    for (int i = 0; i < 32; i++) {
+                        key[i] ^= pad[i];
+                    }
+                }
                 // 诊断日志：打印 key 哈希与 axb 结构。解密 100% 在 native 层完成，
                 // Java 层不再持有任何 AES/GZIP 解密逻辑，因此不构造明文 payload。
                 String keyHash = sha256Hex(key);
@@ -543,6 +564,7 @@ public final class CloudModuleService {
             .uri(URI.create(apiBaseUrl + "/v1/modules/" + moduleId + "/download"))
             .header("X-Module-Token", moduleToken)
             .header("X-Server-Code", serverCode)
+            .header("X-Fingerprint", sha256(generateFingerprint()))
             .GET()
             .build();
 
@@ -573,6 +595,7 @@ public final class CloudModuleService {
             .header("Content-Type", "application/json")
             .header("X-Module-Token", moduleToken)
             .header("X-Server-Code", serverCode)
+            .header("X-Fingerprint", sha256(generateFingerprint()))
             .POST(HttpRequest.BodyPublishers.ofString("{}"))
             .build();
 
@@ -992,6 +1015,39 @@ public final class CloudModuleService {
             return Base64.getEncoder().encodeToString(md.digest(input.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
             return "";
+        }
+    }
+
+    /**
+     * HKDF-SHA256（RFC 5869），仅用于从机器指纹派生模块密钥还原 pad。
+     * 使用 HMAC-SHA256（非 AES/GZIP/Cipher 解密），不构成模块解密回退路径。
+     */
+    private static byte[] hkdfSha256(byte[] ikm, byte[] salt, byte[] info, int length) {
+        try {
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            // extract: PRK = HMAC(salt, ikm)
+            byte[] saltKey = (salt == null || salt.length == 0) ? new byte[32] : salt;
+            mac.init(new javax.crypto.spec.SecretKeySpec(saltKey, "HmacSHA256"));
+            byte[] prk = mac.doFinal(ikm);
+            // expand: T(n) = HMAC(PRK, T(n-1) | info | n)
+            mac.init(new javax.crypto.spec.SecretKeySpec(prk, "HmacSHA256"));
+            byte[] okm = new byte[length];
+            byte[] t = new byte[0];
+            int pos = 0;
+            byte counter = 1;
+            while (pos < length) {
+                mac.update(t);
+                mac.update(info);
+                mac.update(counter);
+                t = mac.doFinal();
+                int n = Math.min(t.length, length - pos);
+                System.arraycopy(t, 0, okm, pos, n);
+                pos += n;
+                counter++;
+            }
+            return okm;
+        } catch (Exception e) {
+            return null;
         }
     }
 

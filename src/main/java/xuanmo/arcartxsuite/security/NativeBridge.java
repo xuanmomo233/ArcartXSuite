@@ -7,7 +7,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 /**
- * Native JNI 桥接类，提供加密/解密、签名验证等安全操作。
+ * Native JNI 桥接类，提供加密/解密、签名验证、反调试等安全操作。
+ * 所有 native 方法名已随机化，实际映射由 JNI_OnLoad 通过 RegisterNatives 动态注册。
  */
 public final class NativeBridge {
 
@@ -23,12 +24,10 @@ public final class NativeBridge {
         }
     }
 
-    /** 是否成功加载了原生库。 */
     public static boolean isAvailable() {
         return available;
     }
 
-    /** 获取加载失败的错误信息（null 表示加载成功）。 */
     public static String getLoadError() {
         return loadError;
     }
@@ -43,13 +42,13 @@ public final class NativeBridge {
         } else if (osName.contains("mac")) {
             libName = "libaxs-native.dylib";
         } else {
-            throw new UnsupportedOperationException("不支持的操作系统: " + osName);
+            throw new UnsupportedOperationException("Unsupported OS: " + osName);
         }
 
         String resourcePath = "/native/" + libName;
         try (InputStream in = NativeBridge.class.getResourceAsStream(resourcePath)) {
             if (in == null) {
-                throw new IOException("Classpath 中未找到原生库: " + resourcePath);
+                throw new IOException("Native library not found: " + resourcePath);
             }
 
             Path tempDir = Files.createTempDirectory("axs_native");
@@ -64,38 +63,59 @@ public final class NativeBridge {
 
     private NativeBridge() {}
 
-    // Native 层双向校验入口（方法名必须保留）。
-    // environmentCheck 在 native 侧会回调此方法来验证 Java 层未被篡改/剥离。
+    // Native 层双向校验入口
     @SuppressWarnings("unused")
     static boolean t0() { return true; }
 
-    // 以下 native 方法名已随机化，实际映射由 JNI_OnLoad 通过 RegisterNatives 动态注册。
-    // 这种设计消除了静态符号表中的自解释 JNI 方法名，增加逆向分析难度。
+    // ═══ 原有 native 方法 ════════════════════════════════════════
 
     /** native 库版本号 */
     public static native int n0();
 
-    /**
-     * 解密受保护的资源（AES-256-GCM + GZIP）。
-     * 对应原 decryptResource。
-     */
+    /** 解密受保护的资源（AES-256-GCM + GZIP） */
     public static native byte[] n1(byte[] encrypted, byte[] keyMaterial);
 
-    /**
-     * 解包资源密钥（AES-256-GCM unwrap）。
-     * 对应原 unwrapResourceKey。
-     */
+    /** 解包资源密钥（AES-256-GCM unwrap） */
     public static native byte[] n2(byte[] wrappedKey, byte[] iv, byte[] material);
 
-    /**
-     * 环境安全检查（反调试/反篡改）。
-     * 对应原 environmentCheck。
-     */
+    /** 环境安全检查（反调试/反篡改） */
     public static native int n3();
 
-    /**
-     * 解密云端模块 .axb 文件（AES-256-GCM + GZIP）。
-     * 对应原 decryptModule。
-     */
+    /** 解密云端模块 .axb 文件（AES-256-GCM + GZIP） */
     public static native byte[] n4(byte[] encryptedAxb, byte[] key);
+
+    // ═══ JAR 保护层新增 native 方法 ══════════════════════════════
+
+    /**
+     * 初始化保护子系统（派生 master key、启动反调试监控、执行初始完整性校验）。
+     * 返回 0 = 成功，非 0 = 错误码。
+     */
+    public static native int n5();
+
+    /**
+     * 解密加密的 .class 字节码。
+     * @param classNameHash 类名的 SHA-256 哈希（32 字节）
+     * @param encData       .enc 格式的加密数据
+     * @return 解密后的原始字节码，失败返回 null
+     */
+    public static native byte[] n6(byte[] classNameHash, byte[] encData);
+
+    /**
+     * 验证 JAR 完整性（Merkle 树 + Ed25519 签名）。
+     * @param rootHash   计算得到的 Merkle 根哈希（32 字节）
+     * @param signature  PROTECTION.MF 中的 Ed25519 签名（64 字节）
+     * @return true = 完整性通过
+     */
+    public static native boolean n7(byte[] rootHash, byte[] signature);
+
+    /**
+     * 增强型调试环境检测（Frida、硬件断点、IAT/PLT hook）。
+     * 返回威胁等级 bitmap（0 = 安全）。
+     */
+    public static native int n8();
+
+    /**
+     * 获取当前硬件指纹哈希（32 字节 SHA-256）。
+     */
+    public static native byte[] n9();
 }

@@ -7,9 +7,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # ─── 平台架构强制 ────────────────────────────────────────────────
 if(WIN32)
-    # Windows 上强制生成 AMD64 架构，防止默认选中 ARM64
     if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-        message(FATAL_ERROR "axs-native 仅支持 64 位架构，当前 CMAKE_SIZEOF_VOID_P=${CMAKE_SIZEOF_VOID_P}")
+        message(FATAL_ERROR "axs-native 仅支持 64 位架构")
     endif()
 endif()
 
@@ -17,8 +16,7 @@ endif()
 find_package(JNI REQUIRED)
 include_directories(${JNI_INCLUDE_DIRS})
 
-# ─── OpenSSL（AES-GCM / SHA-256） ─────────────────────────────
-# MinGW 下强制使用静态库，避免目标服务器缺少 libcrypto DLL
+# ─── OpenSSL（AES-GCM / ChaCha20 / SHA-256 / HMAC / Ed25519） ──
 if(MINGW)
     set(OPENSSL_USE_STATIC_LIBS TRUE)
 endif()
@@ -36,55 +34,70 @@ FetchContent_MakeAvailable(zlib)
 
 # ─── 源文件 ─────────────────────────────────────────────────────
 set(SOURCES
+    # 原有模块
     src/axs_native.cpp
     src/resource_decrypt.cpp
     src/key_unwrap.cpp
     src/env_check.cpp
     src/module_decrypt.cpp
+    # JAR 保护层新增
+    src/class_decrypt.cpp
+    src/anti_debug_enhanced.cpp
+    src/integrity_check.cpp
+    src/hw_fingerprint.cpp
 )
 
 add_library(axs-native SHARED ${SOURCES})
 target_include_directories(axs-native PRIVATE include ${JNI_INCLUDE_DIRS})
 target_link_libraries(axs-native PRIVATE OpenSSL::Crypto zlibstatic)
 
-# MinGW 静态链接运行时库，避免目标服务器缺少 libgcc/libwinpthread
+# Windows: 需要 psapi 和 ws2_32（完整性校验 + Frida 端口检测）
+if(WIN32)
+    target_link_libraries(axs-native PRIVATE psapi ws2_32 iphlpapi)
+endif()
+
+# MinGW 静态链接运行时库
 if(MINGW)
-    # 在编译阶段就告诉 GCC 使用静态运行时（SHARED library 默认会链接共享版本）
     target_compile_options(axs-native PRIVATE -static-libgcc -static-libstdc++)
     target_link_options(axs-native PRIVATE -static-libgcc -static-libstdc++)
-    # 使用 gcc -print-file-name 直接获取静态库的绝对路径
     execute_process(
         COMMAND x86_64-w64-mingw32-gcc -print-file-name=libgcc.a
-        OUTPUT_VARIABLE MINGW_LIBGCC
-        OUTPUT_STRIP_TRAILING_WHITESPACE
+        OUTPUT_VARIABLE MINGW_LIBGCC OUTPUT_STRIP_TRAILING_WHITESPACE
     )
     execute_process(
         COMMAND x86_64-w64-mingw32-g++ -print-file-name=libstdc++.a
-        OUTPUT_VARIABLE MINGW_LIBSTDCPP
-        OUTPUT_STRIP_TRAILING_WHITESPACE
+        OUTPUT_VARIABLE MINGW_LIBSTDCPP OUTPUT_STRIP_TRAILING_WHITESPACE
     )
     execute_process(
         COMMAND x86_64-w64-mingw32-gcc -print-file-name=libwinpthread.a
-        OUTPUT_VARIABLE MINGW_LIBWINPTHREAD
-        OUTPUT_STRIP_TRAILING_WHITESPACE
+        OUTPUT_VARIABLE MINGW_LIBWINPTHREAD OUTPUT_STRIP_TRAILING_WHITESPACE
     )
-    message(STATUS "libgcc: ${MINGW_LIBGCC}")
-    message(STATUS "libstdc++: ${MINGW_LIBSTDCPP}")
-    message(STATUS "libwinpthread: ${MINGW_LIBWINPTHREAD}")
     target_link_libraries(axs-native PRIVATE
-        "${MINGW_LIBGCC}"
-        "${MINGW_LIBSTDCPP}"
-        "${MINGW_LIBWINPTHREAD}"
+        "${MINGW_LIBGCC}" "${MINGW_LIBSTDCPP}" "${MINGW_LIBWINPTHREAD}"
     )
 endif()
 
-# Strip symbols in release
+# ─── OLLVM 混淆（可选，极高保护级别） ───────────────────────────
+option(ENABLE_OLLVM "Enable OLLVM obfuscation" OFF)
+if(ENABLE_OLLVM)
+    target_compile_options(axs-native PRIVATE
+        -mllvm -fla    # 控制流平坦化
+        -mllvm -bcf    # 虚假控制流
+        -mllvm -sub    # 指令替换
+    )
+endif()
+
+# ─── Release 优化 ──────────────────────────────────────────────
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    if(UNIX)
-        target_link_options(axs-native PRIVATE -s)
+    if(UNIX OR MINGW)
+        target_link_options(axs-native PRIVATE -s) # strip symbols
     endif()
-    if(MINGW)
-        target_link_options(axs-native PRIVATE -s)
+    target_compile_options(axs-native PRIVATE -O2)
+    if(UNIX AND NOT APPLE)
+        target_compile_options(axs-native PRIVATE
+            -fvisibility=hidden -fstack-protector-strong
+        )
+        target_link_options(axs-native PRIVATE -Wl,--exclude-libs,ALL)
     endif()
 endif()
 
