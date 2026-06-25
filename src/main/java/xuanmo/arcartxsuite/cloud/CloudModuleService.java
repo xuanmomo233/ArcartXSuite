@@ -1,6 +1,5 @@
 package xuanmo.arcartxsuite.cloud;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -18,11 +17,15 @@ import java.security.Signature;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
-import java.util.zip.GZIPInputStream;
 import javax.crypto.Cipher;
+import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.net.NetworkInterface;
+import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +51,11 @@ public final class CloudModuleService {
 
     /** 云端平台地址：硬编码于宿主内，禁止通过 config.yml 篡改。 */
     private static final String API_BASE_URL = "https://cloud.021209.xyz";
+
+    /** 加密密钥对文件格式版本标识。 */
+    private static final String KEYPAIR_MAGIC = "AXSKP1";
+    /** PBKDF2 迭代次数，用于从机器指纹派生密钥文件的加密密钥。 */
+    private static final int KDF_ITERATIONS = 120_000;
 
     private final ArcartXSuitePlugin plugin;
     private final ModuleRegistry registry;
@@ -480,15 +488,11 @@ public final class CloudModuleService {
                     plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：密钥长度错误 (" + key.length + " 字节)，应为 32 字节。请检查云端模块上传时填写的 moduleKey");
                     return;
                 }
-                // 新版 axb 文件头为 4 字节随机 magic。
-                // native 侧 decryptModule 自己会跳过 magic，因此传完整 axb；
-                // Java fallback 仍需要不含 magic 的 payload。
-                byte[] payload = java.util.Arrays.copyOfRange(axb, 4, axb.length);
-
-                // 诊断日志：打印 key 哈希与 axb 结构
+                // 诊断日志：打印 key 哈希与 axb 结构。解密 100% 在 native 层完成，
+                // Java 层不再持有任何 AES/GZIP 解密逻辑，因此不构造明文 payload。
                 String keyHash = sha256Hex(key);
                 String ivHex = bytesToHex(java.util.Arrays.copyOfRange(axb, 4, 16));
-                plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 诊断: keyHash=" + keyHash + ", ivHex=" + ivHex + ", axbLen=" + axb.length + ", payloadLen=" + payload.length);
+                plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 诊断: keyHash=" + keyHash + ", ivHex=" + ivHex + ", axbLen=" + axb.length);
 
                 byte[] jarBytes;
                 try {
@@ -499,14 +503,9 @@ public final class CloudModuleService {
                     jarBytes = null;
                 }
                 if (jarBytes == null || jarBytes.length == 0) {
-                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密失败，尝试 Java fallback...");
-                    jarBytes = decryptFallback(payload, key);
-                    if (jarBytes != null && jarBytes.length > 0) {
-                        plugin.consoleInfo("[Cloud] 模块 " + moduleId + " Java fallback 解密成功! 说明 native 库可能版本不匹配，请联系开发者更新 native 库。");
-                    } else {
-                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " Java fallback 也失败。说明上传的 moduleKey 与 axb 不匹配，或 axb 已损坏。请重新上传模块版本并确保 key 正确。");
-                        return;
-                    }
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密失败，已拒绝加载该模块。"
+                        + "解密仅在 native 安全库中进行，不提供 Java 回退。请确认 native 库版本与 axb 匹配且 moduleKey 正确。");
+                    return;
                 }
                 plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 解密成功: " + jarBytes.length + " 字节");
                 final byte[] finalJarBytes = jarBytes;
@@ -741,22 +740,11 @@ public final class CloudModuleService {
     private KeyPair loadOrGenerateKeyPair() {
         File keyFile = new File(plugin.getDataFolder(), ".cloud-keypair");
         if (keyFile.exists()) {
-            try {
-                String[] parts = new String(Files.readAllBytes(keyFile.toPath()), StandardCharsets.UTF_8).split("\n");
-                if (parts.length >= 2) {
-                    byte[] publicEncoded = Base64.getDecoder().decode(parts[0].trim());
-                    byte[] privateEncoded = Base64.getDecoder().decode(parts[1].trim());
-                    KeyFactory kf = KeyFactory.getInstance("Ed25519");
-                    PublicKey publicKey = kf.generatePublic(new X509EncodedKeySpec(publicEncoded));
-                    PrivateKey privateKey = kf.generatePrivate(new PKCS8EncodedKeySpec(privateEncoded));
-                    KeyPair loaded = new KeyPair(publicKey, privateKey);
-                    String loadedRawPub = encodeRawEd25519PublicKey(loaded);
-                    plugin.consoleInfo("[Cloud] 已加载持久化 Ed25519 密钥对，裸公钥: " + loadedRawPub);
-                    return loaded;
-                }
-            } catch (Exception e) {
-                plugin.consoleWarn("[Cloud] 读取持久化密钥对失败，将重新生成: " + e.getMessage());
+            KeyPair loaded = tryLoadKeyPair(keyFile);
+            if (loaded != null) {
+                return loaded;
             }
+            plugin.consoleWarn("[Cloud] 持久化密钥对无法在本机解密或已损坏，将重新生成（会触发自动重新绑定）。");
         }
         KeyPair kp = generateKeyPair();
         if (kp != null) {
@@ -765,17 +753,131 @@ public final class CloudModuleService {
         return kp;
     }
 
+    /**
+     * 尝试加载持久化密钥对：优先按加密格式（AXSKP1）解密；
+     * 兼容旧版明文格式，成功后自动迁移为加密存储。
+     */
+    private KeyPair tryLoadKeyPair(File keyFile) {
+        try {
+            String content = new String(Files.readAllBytes(keyFile.toPath()), StandardCharsets.UTF_8).trim();
+            String[] parts = content.split("\\R");
+            if (parts.length >= 5 && KEYPAIR_MAGIC.equals(parts[0].trim())) {
+                byte[] publicEncoded = Base64.getDecoder().decode(parts[1].trim());
+                byte[] salt = Base64.getDecoder().decode(parts[2].trim());
+                byte[] iv = Base64.getDecoder().decode(parts[3].trim());
+                byte[] ciphertext = Base64.getDecoder().decode(parts[4].trim());
+                byte[] privateEncoded = decryptPrivateKey(ciphertext, iv, salt);
+                if (privateEncoded == null) return null;
+                KeyPair kp = rebuildKeyPair(publicEncoded, privateEncoded);
+                if (kp != null) {
+                    plugin.consoleInfo("[Cloud] 已加载加密持久化 Ed25519 密钥对，裸公钥: " + encodeRawEd25519PublicKey(kp));
+                }
+                return kp;
+            }
+            // 兼容旧版明文格式：pub / priv
+            if (parts.length >= 2) {
+                byte[] publicEncoded = Base64.getDecoder().decode(parts[0].trim());
+                byte[] privateEncoded = Base64.getDecoder().decode(parts[1].trim());
+                KeyPair kp = rebuildKeyPair(publicEncoded, privateEncoded);
+                if (kp != null) {
+                    plugin.consoleWarn("[Cloud] 检测到旧版明文密钥对，正在迁移为加密存储...");
+                    saveKeyPair(kp, keyFile);
+                }
+                return kp;
+            }
+        } catch (Exception e) {
+            plugin.consoleWarn("[Cloud] 读取持久化密钥对失败: " + e.getMessage());
+        }
+        return null;
+    }
+
+    private KeyPair rebuildKeyPair(byte[] publicEncoded, byte[] privateEncoded) {
+        try {
+            KeyFactory kf = KeyFactory.getInstance("Ed25519");
+            PublicKey publicKey = kf.generatePublic(new X509EncodedKeySpec(publicEncoded));
+            PrivateKey privateKey = kf.generatePrivate(new PKCS8EncodedKeySpec(privateEncoded));
+            return new KeyPair(publicKey, privateKey);
+        } catch (Exception e) {
+            plugin.consoleWarn("[Cloud] 重建密钥对失败: " + e.getMessage());
+            return null;
+        }
+    }
+
     private void saveKeyPair(KeyPair keyPair, File keyFile) {
         try {
             if (!keyFile.getParentFile().exists()) {
                 keyFile.getParentFile().mkdirs();
             }
-            String publicB64 = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
-            String privateB64 = Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
-            Files.write(keyFile.toPath(), (publicB64 + "\n" + privateB64).getBytes(StandardCharsets.UTF_8));
-            plugin.consoleInfo("[Cloud] Ed25519 密钥对已持久化到 " + keyFile.getAbsolutePath());
+            byte[] salt = new byte[16];
+            byte[] iv = new byte[12];
+            SecureRandom rng = new SecureRandom();
+            rng.nextBytes(salt);
+            rng.nextBytes(iv);
+            byte[] ciphertext = encryptPrivateKey(keyPair.getPrivate().getEncoded(), iv, salt);
+            if (ciphertext == null) {
+                plugin.consoleWarn("[Cloud] 私钥加密失败，未写入密钥文件。");
+                return;
+            }
+            String out = KEYPAIR_MAGIC + "\n"
+                + Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded()) + "\n"
+                + Base64.getEncoder().encodeToString(salt) + "\n"
+                + Base64.getEncoder().encodeToString(iv) + "\n"
+                + Base64.getEncoder().encodeToString(ciphertext);
+            Files.write(keyFile.toPath(), out.getBytes(StandardCharsets.UTF_8));
+            restrictFilePermissions(keyFile);
+            plugin.consoleInfo("[Cloud] Ed25519 密钥对已加密持久化到 " + keyFile.getAbsolutePath());
         } catch (Exception e) {
             plugin.consoleWarn("[Cloud] 保存密钥对失败: " + e.getMessage());
+        }
+    }
+
+    /** 基于机器指纹派生 256 位 AES 密钥，使密钥文件与本机硬件绑定，复制到其它机器无法解密。 */
+    private static SecretKeySpec deriveKeyFromFingerprint(byte[] salt) throws Exception {
+        char[] password = generateFingerprint().toCharArray();
+        SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+        PBEKeySpec spec = new PBEKeySpec(password, salt, KDF_ITERATIONS, 256);
+        byte[] keyBytes = factory.generateSecret(spec).getEncoded();
+        return new SecretKeySpec(keyBytes, "AES");
+    }
+
+    private byte[] encryptPrivateKey(byte[] plaintext, byte[] iv, byte[] salt) {
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, deriveKeyFromFingerprint(salt), new GCMParameterSpec(128, iv));
+            return cipher.doFinal(plaintext);
+        } catch (Exception e) {
+            plugin.consoleWarn("[Cloud] 私钥加密异常: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private byte[] decryptPrivateKey(byte[] ciphertext, byte[] iv, byte[] salt) {
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, deriveKeyFromFingerprint(salt), new GCMParameterSpec(128, iv));
+            return cipher.doFinal(ciphertext);
+        } catch (Exception e) {
+            // 指纹变化（换机器/换网卡）或文件损坏都会走到这里
+            return null;
+        }
+    }
+
+    /** 尽力收紧密钥文件权限（POSIX 设为 owner-only；Windows 等不支持则降级为只读）。 */
+    private void restrictFilePermissions(File keyFile) {
+        try {
+            java.nio.file.Path path = keyFile.toPath();
+            java.nio.file.attribute.PosixFileAttributeView posix =
+                Files.getFileAttributeView(path, java.nio.file.attribute.PosixFileAttributeView.class);
+            if (posix != null) {
+                Files.setPosixFilePermissions(path, java.util.EnumSet.of(
+                    java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                    java.nio.file.attribute.PosixFilePermission.OWNER_WRITE));
+            } else {
+                keyFile.setReadable(false, false);
+                keyFile.setReadable(true, true);
+            }
+        } catch (Exception ignored) {
+            // 权限收紧失败不影响主流程
         }
     }
 
@@ -832,16 +934,56 @@ public final class CloudModuleService {
         return sb.toString();
     }
 
+    /**
+     * 生成机器指纹。除操作系统信息外，还纳入网卡 MAC 地址、主机名、CPU 核心数等
+     * 较难在虚拟机中伪造的硬件特征，使凭据更难脱离原机器复用。
+     * MAC 列表经排序，保证同一机器多次启动结果稳定。
+     */
     private static String generateFingerprint() {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            md.update(System.getProperty("user.dir", "unknown").getBytes(StandardCharsets.UTF_8));
             md.update(System.getProperty("os.name", "unknown").getBytes(StandardCharsets.UTF_8));
             md.update(System.getProperty("os.arch", "unknown").getBytes(StandardCharsets.UTF_8));
+            md.update(System.getProperty("os.version", "unknown").getBytes(StandardCharsets.UTF_8));
+            md.update(Integer.toString(Runtime.getRuntime().availableProcessors()).getBytes(StandardCharsets.UTF_8));
+            try {
+                md.update(java.net.InetAddress.getLocalHost().getHostName().getBytes(StandardCharsets.UTF_8));
+            } catch (Exception ignored) {
+                // 某些环境无法解析主机名，忽略
+            }
+            for (String mac : collectHardwareAddresses()) {
+                md.update(mac.getBytes(StandardCharsets.UTF_8));
+            }
             return Base64.getEncoder().encodeToString(md.digest());
         } catch (Exception e) {
             return "unknown";
         }
+    }
+
+    /** 收集所有可用物理网卡的 MAC 地址（去重、排序、过滤回环与未启用网卡）。 */
+    private static List<String> collectHardwareAddresses() {
+        List<String> macs = new ArrayList<>();
+        try {
+            Enumeration<NetworkInterface> nics = NetworkInterface.getNetworkInterfaces();
+            while (nics != null && nics.hasMoreElements()) {
+                NetworkInterface nic = nics.nextElement();
+                try {
+                    if (nic.isLoopback() || nic.isVirtual() || !nic.isUp()) continue;
+                } catch (Exception ignored) {
+                    continue;
+                }
+                byte[] hw = nic.getHardwareAddress();
+                if (hw == null || hw.length == 0) continue;
+                String mac = bytesToHex(hw);
+                if (!macs.contains(mac)) {
+                    macs.add(mac);
+                }
+            }
+        } catch (Exception ignored) {
+            // 无法枚举网卡时返回已收集到的内容
+        }
+        java.util.Collections.sort(macs);
+        return macs;
     }
 
     private static String sha256(String input) {
@@ -947,31 +1089,4 @@ public final class CloudModuleService {
         return sb.toString();
     }
 
-    /**
-     * 纯 Java AES-256-GCM + GZIP 解密 fallback，用于诊断 native 库问题。
-     * payload 格式: iv(12) + ciphertext + authTag(16)
-     */
-    private static byte[] decryptFallback(byte[] payload, byte[] key) {
-        if (payload.length < 28) return null;
-        byte[] iv = java.util.Arrays.copyOfRange(payload, 0, 12);
-        byte[] ctAndTag = java.util.Arrays.copyOfRange(payload, 12, payload.length);
-        try {
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(128, iv));
-            byte[] decrypted = cipher.doFinal(ctAndTag);
-            // GZIP 解压
-            try (java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(decrypted);
-                 GZIPInputStream gis = new GZIPInputStream(bais);
-                 java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream()) {
-                byte[] buffer = new byte[8192];
-                int len;
-                while ((len = gis.read(buffer)) != -1) {
-                    baos.write(buffer, 0, len);
-                }
-                return baos.toByteArray();
-            }
-        } catch (Exception e) {
-            return null;
-        }
-    }
 }
