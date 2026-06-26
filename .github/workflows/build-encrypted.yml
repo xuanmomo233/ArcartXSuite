@@ -389,13 +389,31 @@ jobs:
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           VERSION="${BASEVER}-ci.${SHORT_SHA}"
           echo "Uploading 本体 jar version=$VERSION file=$OUT"
-          curl -fSs -X POST \
+          RESP=$(mktemp)
+          set +e
+          curl -fS --retry 3 --retry-delay 5 --retry-max-time 60 --max-time 120 \
+            -o "$RESP" \
+            -X POST \
             -F "jar=@$OUT" \
             -F "version=$VERSION" \
             -F "releaseNotes=CI build ${{ github.sha }}" \
             -F "setCurrent=true" \
             -H "X-CI-Token: $CLOUD_CI_TOKEN" \
             "https://cloud.021209.xyz/v1/ci/app-jar/versions"
+          CURL_EXIT=$?
+          set -e
+          echo ""
+          if [ $CURL_EXIT -ne 0 ]; then
+            echo "ERROR: 本体 jar 上传失败 (curl exit=$CURL_EXIT)"
+            if [ -s "$RESP" ]; then
+              echo "Server response:"
+              cat "$RESP"
+            fi
+            rm -f "$RESP"
+            exit 1
+          fi
+          cat "$RESP"
+          rm -f "$RESP"
           echo ""
           echo "OK: 本体 jar 已上传云端（setCurrent=true）"
 
@@ -483,13 +501,31 @@ jobs:
             iv=$(jq -r '.moduleIv' "$meta")
             version="$VERSION"
             echo "Uploading $module ($version) ..."
-            curl -fSs -F "axb=@$axb" \
+            RESP=$(mktemp)
+            set +e
+            curl -fS --retry 3 --retry-delay 5 --retry-max-time 60 --max-time 120 \
+              -o "$RESP" \
+              -F "axb=@$axb" \
               -F "version=$version" \
               -F "key=$key" \
               -F "iv=$iv" \
               -F "setCurrent=true" \
               -H "X-CI-Token: $CLOUD_CI_TOKEN" \
               "https://cloud.021209.xyz/v1/ci/modules/$module/versions"
+            CURL_EXIT=$?
+            set -e
+            echo ""
+            if [ $CURL_EXIT -ne 0 ]; then
+              echo "ERROR: 模块 $module 上传失败 (curl exit=$CURL_EXIT)"
+              if [ -s "$RESP" ]; then
+                echo "Server response:"
+                cat "$RESP"
+              fi
+              rm -f "$RESP"
+              exit 1
+            fi
+            cat "$RESP"
+            rm -f "$RESP"
             echo ""
             echo "OK: $module 已上传云端（setCurrent=true）"
           done
