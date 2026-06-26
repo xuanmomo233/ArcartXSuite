@@ -27,6 +27,7 @@ public final class JvmAntiDebug {
     public static final int THREAT_SUSPICIOUS = 0x10;
 
     private static volatile int lastThreatLevel = 0;
+    private static volatile String lastTrigger = "";
     private static volatile ThreatResponseHandler responseHandler;
     private static ScheduledExecutorService scheduler;
 
@@ -62,6 +63,21 @@ public final class JvmAntiDebug {
         return lastThreatLevel;
     }
 
+    public static String getLastTrigger() {
+        return lastTrigger;
+    }
+
+    public static String describeThreat(int t) {
+        StringBuilder sb = new StringBuilder();
+        if ((t & THREAT_JDWP) != 0) sb.append("JDWP ");
+        if ((t & THREAT_AGENT) != 0) sb.append("AGENT ");
+        if ((t & THREAT_FRIDA) != 0) sb.append("FRIDA ");
+        if ((t & THREAT_ATTACH) != 0) sb.append("ATTACH ");
+        if ((t & THREAT_SUSPICIOUS) != 0) sb.append("SUSPICIOUS ");
+        if (lastTrigger != null && !lastTrigger.isEmpty()) sb.append("thread='").append(lastTrigger).append("'");
+        return sb.toString().trim();
+    }
+
     private static void performCheck() {
         try {
             int threats = checkAll();
@@ -72,7 +88,10 @@ public final class JvmAntiDebug {
             }
 
             lastThreatLevel = threats;
-            if (threats != 0 && responseHandler != null) {
+            // AGENT(instrumentation present) alone must NOT trigger downgrade:
+            // legit profilers/monitors (Spark/async-profiler) load as javaagent.
+            final int TRIGGER_MASK = THREAT_JDWP | THREAT_FRIDA | THREAT_ATTACH | THREAT_SUSPICIOUS;
+            if ((threats & TRIGGER_MASK) != 0 && responseHandler != null) {
                 responseHandler.onThreatDetected(threats);
             }
         } catch (Exception ignored) {
@@ -120,18 +139,27 @@ public final class JvmAntiDebug {
             Set<Thread> threads = Thread.getAllStackTraces().keySet();
             for (Thread t : threads) {
                 String name = t.getName().toLowerCase();
+                // Strong signal: Frida-family injection/hook threads
                 if (name.contains("frida") || name.contains("gum-js-loop")
-                        || name.contains("interceptor") || name.contains("gmain")
                         || name.contains("linjector")) {
+                    lastTrigger = t.getName();
                     return true;
                 }
+                // Strong signal: runtime debugger attach (JDWP/JDI/debugger threads)
                 if (name.contains("jdwp") || name.contains("debugger")
-                        || name.contains("jdi-") || name.contains("attach listener")) {
+                        || name.contains("jdi-")) {
+                    lastTrigger = t.getName();
                     return true;
                 }
+                // Strong signal: JVMTI bytecode-injection frameworks
                 if (name.contains("jvmti") || name.contains("byteman")) {
+                    lastTrigger = t.getName();
                     return true;
                 }
+                // Removed broad substrings "interceptor"/"gmain"/"attach listener":
+                // legit profilers (Spark/async-profiler attach via the Attach API,
+                // creating the standard "Attach Listener" thread) false-positived,
+                // wrongly downgrading protection (the 0x16 false alarm).
             }
         } catch (Exception ignored) {}
         return false;

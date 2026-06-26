@@ -305,7 +305,8 @@ public final class ProtectionInit {
 
     private static void onThreatDetected(int threatLevel) {
         // 静默降级：不崩溃，但禁用保护功能（使后续类加载失败）
-        LOGGER.warning("[Protection] Threat detected: 0x" + Integer.toHexString(threatLevel));
+        LOGGER.warning("[Protection] Threat detected: 0x" + Integer.toHexString(threatLevel)
+                + " (" + JvmAntiDebug.describeThreat(threatLevel) + ")");
         triggerTamperResponse();
     }
 
