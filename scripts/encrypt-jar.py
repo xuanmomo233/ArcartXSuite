@@ -470,9 +470,10 @@ def main():
     except UnicodeDecodeError:
         manifest_text = "Manifest-Version: 1.0\n"
     if "Protection-Enabled" not in manifest_text:
-        if not manifest_text.endswith("\n"):
-            manifest_text += "\n"
+        # 先去掉末尾的 section terminator（空行），在 main section 内追加属性，再补回空行
+        manifest_text = manifest_text.rstrip('\r\n') + '\n'
         manifest_text += "Protection-Enabled: true\n"
+        manifest_text += "\n"  # section terminator
 
     def _is_sig_file(n):
         u = n.upper()
