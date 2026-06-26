@@ -17,6 +17,9 @@ name: Build Encrypted Core JAR (opt-in)
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -35,6 +38,8 @@ jobs:
         run: pip install cryptography
 
       - name: Generate keys + embed into native sources
+        env:
+          AXB_SIGN_SEED_B64: ${{ secrets.AXB_SIGN_SEED_B64 }}
         run: |
           set -euo pipefail
           python scripts/generate-keys.py --output keys/
@@ -286,3 +291,31 @@ jobs:
           name: axs-jar-encrypted
           path: axs-core/build/libs/*-encrypted.jar
           if-no-files-found: error
+
+      - name: Upload encrypted core JAR to cloud (本体 jar 自动上传)
+        if: success()
+        env:
+          CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUD_CI_TOKEN:-}" ]; then
+            echo "SKIP: CLOUD_CI_TOKEN 未配置，跳过本体 jar 上传"
+            exit 0
+          fi
+          if [ -z "${OUT:-}" ] || [ ! -f "$OUT" ]; then
+            echo "ERROR: 加密本体 jar 未找到 (OUT=${OUT:-})"; exit 1
+          fi
+          BASE=$(basename "$JAR_PATH" .jar)
+          BASEVER=${BASE#ArcartX-Suite-}
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          VERSION="${BASEVER}-ci.${SHORT_SHA}"
+          echo "Uploading 本体 jar version=$VERSION file=$OUT"
+          curl -fSs -X POST \
+            -F "jar=@$OUT" \
+            -F "version=$VERSION" \
+            -F "releaseNotes=CI build ${{ github.sha }}" \
+            -F "setCurrent=true" \
+            -H "X-CI-Token: $CLOUD_CI_TOKEN" \
+            "https://cloud.021209.xyz/v1/ci/app-jar/versions"
+          echo ""
+          echo "OK: 本体 jar 已上传云端（setCurrent=true）"

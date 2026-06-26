@@ -30,9 +30,17 @@ except ImportError:
 
 
 def generate_ed25519_keypair():
-    """生成 Ed25519 签名密钥对"""
+    """生成 Ed25519 签名密钥对（优先复用 env 固定种子 AXB_SIGN_SEED_B64，缺省随机生成）"""
+    fixed_b64 = os.environ.get("AXB_SIGN_SEED_B64", "").strip()
     if HAS_CRYPTO:
-        private_key = Ed25519PrivateKey.generate()
+        if fixed_b64:
+            seed = base64.b64decode(fixed_b64)
+            if len(seed) != 32:
+                raise ValueError(f"AXB_SIGN_SEED_B64 解码后必须为 32 字节, 实际 {len(seed)}")
+            private_key = Ed25519PrivateKey.from_private_bytes(seed)
+            print("[*] 复用固定 Ed25519 签名密钥对 (env AXB_SIGN_SEED_B64)")
+        else:
+            private_key = Ed25519PrivateKey.generate()
         public_key = private_key.public_key()
 
         private_pem = private_key.private_bytes(
@@ -54,7 +62,7 @@ def generate_ed25519_keypair():
         # 回退：使用 secrets 生成随机种子（不生成真正的 Ed25519 密钥）
         print("[!] cryptography 库未安装，使用随机种子替代 Ed25519 密钥")
         print("[!] 请安装: pip install cryptography")
-        private_seed = secrets.token_bytes(32)
+        private_seed = base64.b64decode(fixed_b64) if fixed_b64 else secrets.token_bytes(32)
         public_seed = hashlib.sha256(private_seed).digest()
         return private_seed, public_seed, private_seed
 
