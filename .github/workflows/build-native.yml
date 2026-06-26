@@ -1,80 +1,24 @@
 name: Build Native Library
 
+# 目标①：仅手动触发，产出【明文 / 不混淆 / 不加密】的本体 + 模块，不上传云端。
+#
+#   - 取消 push / pull_request 自动触发，只保留 workflow_dispatch（手动）。
+#   - 本体走 :axs-core:shadowJar（未混淆、未字符串加密、未逐类加密）。
+#   - 模块走 :modules:<name>:jar（原始 Jar，未混淆、未加密、未封装 .axb）。
+#   - 不做任何 .axb 封装、不上传 cloud、不发 Release。
+#   - 通过根任务 `buildDev` 一次性产出全部明文 Jar。
+#
+# 加密 / 混淆 / 上传云端的管线见 build-encrypted.yml（push 触发）。
+
 on:
-  push:
-    branches: [main, master, develop]
-  pull_request:
-    branches: [main, master, develop]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  detect-changes:
-    runs-on: ubuntu-latest
-    outputs:
-      core_changed: ${{ steps.changes.outputs.core_changed }}
-      native_changed: ${{ steps.changes.outputs.native_changed }}
-      module_changed: ${{ steps.changes.outputs.module_changed }}
-      changed_modules: ${{ steps.changes.outputs.changed_modules }}
-      any_changed: ${{ steps.changes.outputs.any_changed }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Detect changed scopes
-        id: changes
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.event.pull_request.base.sha }}"
-          else
-            BASE="${{ github.event.before }}"
-          fi
-          # 首次提交或没有 before 时，无法 diff，保守地全量构建
-          if [ -z "$BASE" ]; then
-            echo "core_changed=true" >> $GITHUB_OUTPUT
-            echo "native_changed=true" >> $GITHUB_OUTPUT
-            echo "module_changed=false" >> $GITHUB_OUTPUT
-            echo "changed_modules=[]" >> $GITHUB_OUTPUT
-            echo "any_changed=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          git diff --name-only "$BASE" HEAD > /tmp/changed_files.txt
-          echo "=== Changed files ==="
-          cat /tmp/changed_files.txt
-
-          # 核心/共享构建变更
-          CORE_CHANGED=false
-          if grep -Eq '^(src/main/|axs-core/|axs-api/|buildSrc/|proguard/|proxy/|gradle\.properties|settings\.gradle\.kts|build\.gradle\.kts|\.github/workflows/)' /tmp/changed_files.txt; then
-            CORE_CHANGED=true
-          fi
-          echo "core_changed=$CORE_CHANGED" >> $GITHUB_OUTPUT
-
-          # native 库变更
-          NATIVE_CHANGED=false
-          if grep -Eq '^native/' /tmp/changed_files.txt; then
-            NATIVE_CHANGED=true
-          fi
-          echo "native_changed=$NATIVE_CHANGED" >> $GITHUB_OUTPUT
-
-          # 模块变更
-          CHANGED_MODULES=$(grep -E '^modules/' /tmp/changed_files.txt | cut -d'/' -f2 | sort -u | jq -R -s -c 'split("\n") | map(select(. != ""))')
-          echo "changed_modules=$CHANGED_MODULES" >> $GITHUB_OUTPUT
-          if [ "$CHANGED_MODULES" != "[]" ]; then
-            echo "module_changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "module_changed=false" >> $GITHUB_OUTPUT
-          fi
-
-          if [ "$CORE_CHANGED" = "true" ] || [ "$NATIVE_CHANGED" = "true" ] || [ "$CHANGED_MODULES" != "[]" ]; then
-            echo "any_changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "any_changed=false" >> $GITHUB_OUTPUT
-          fi
-
   build-linux:
     runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.any_changed == 'true'
     steps:
       - uses: actions/checkout@v5
 
@@ -100,8 +44,6 @@ jobs:
 
   build-windows:
     runs-on: windows-2022
-    needs: detect-changes
-    if: needs.detect-changes.outputs.any_changed == 'true'
     steps:
       - uses: actions/checkout@v5
 
@@ -214,8 +156,7 @@ jobs:
 
   build-gradle:
     runs-on: ubuntu-latest
-    needs: [detect-changes, build-linux, build-windows]
-    if: needs.detect-changes.outputs.any_changed == 'true'
+    needs: [build-linux, build-windows]
     steps:
       - uses: actions/checkout@v5
 
@@ -265,254 +206,48 @@ jobs:
         run: |
           echo "=== Files in src/main/resources/native/ ==="
           ls -la src/main/resources/native/
-          for f in src/main/resources/native/*; do
-            echo "--- $f ---"
-            md5sum "$f" || true
-            file "$f" || true
-            hexdump -C "$f" | head -4 || true
-          done
-          echo "=== Windows DLL MD5 for comparison ==="
-          md5sum src/main/resources/native/axs-native.dll || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.10.2'
-          # 仅在主分支写入缓存，PR 和 feature 分支只读
-          # 减少 GitHub 缓存服务的写入压力，避免偶发的缓存保存失败
-          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+          cache-read-only: true
 
-      - name: Clean and rebuild (full)
-        if: needs.detect-changes.outputs.core_changed == 'true' || needs.detect-changes.outputs.native_changed == 'true'
+      - name: Build plaintext JARs (no obfuscation / no encryption)
         run: |
-          # 强制清理，避免缓存恢复旧的损坏 DLL
-          gradle clean
-          gradle build --no-build-cache
+          # buildDev：本体 shadowJar（明文未混淆）+ 各模块原始 jar（明文）+ proxy shadowJar
+          gradle clean buildDev --no-build-cache
 
-      - name: Encrypt all modules (native changed)
-        if: needs.detect-changes.outputs.native_changed == 'true'
+      - name: Fix DLL in plaintext core JAR
         run: |
-          gradle encryptAllModuleAxb
-          echo "=== Checking generated .axb files ==="
-          ls -la build/ArcartX-Suite/module-axb/ || echo "DIR NOT FOUND"
-          find build/ArcartX-Suite/module-axb/ -type f 2>/dev/null || echo "NO FILES"
-
-      - name: Build only changed modules
-        if: needs.detect-changes.outputs.native_changed != 'true' && needs.detect-changes.outputs.module_changed == 'true'
-        run: |
-          CHANGED='${{ needs.detect-changes.outputs.changed_modules }}'
-          echo "Changed modules: $CHANGED"
-          for module in $(echo "$CHANGED" | jq -r '.[]'); do
-            echo "=== Building module: $module ==="
-            gradle :modules:$module:encryptModuleAxb
-          done
-
-      - name: Fix DLL in final JAR
-        if: needs.detect-changes.outputs.core_changed == 'true' || needs.detect-changes.outputs.native_changed == 'true'
-        run: |
-          # Gradle build 过程中 DLL 可能被损坏，直接用 jar 命令替换为正确的版本
-          JAR_PATH=$(find "$PWD/axs-core/build/libs" -maxdepth 1 -name "ArcartX-Suite-[0-9]*.jar" -not -name "*plain*" -not -name "*unobf*" -not -name "*step*" | sort | tail -1)
+          # shadowJar 重压缩可能损坏 DLL，直接用 jar 命令替换为正确版本
+          JAR_PATH=$(find "$PWD/axs-core/build/libs" -maxdepth 1 -name "ArcartX-Suite-*-unobf.jar" | sort | tail -1)
           if [ -z "$JAR_PATH" ]; then
-            echo "ERROR: Final JAR not found"
+            echo "ERROR: 明文本体 JAR (unobf) 未找到"
+            ls -la axs-core/build/libs || true
             exit 1
           fi
           echo "Fixing DLL in: $JAR_PATH"
-          echo "Backup MD5:"
           md5sum "$PWD/src/main/resources/native/axs-native.dll"
-          # 用 jar 更新 JAR 中的 DLL
           cd "$PWD/src/main/resources"
           jar uf "$JAR_PATH" native/axs-native.dll
           cd - > /dev/null
-          echo "DLL replaced. Verifying..."
+          echo "DLL replaced."
 
-      - name: Verify DLL in JAR
-        if: needs.detect-changes.outputs.core_changed == 'true' || needs.detect-changes.outputs.native_changed == 'true'
+      - name: List plaintext artifacts
         run: |
-          # 查找构建产物中的 JAR（使用绝对路径）
-          JAR_PATH=$(find "$PWD/axs-core/build/libs" -maxdepth 1 -name "ArcartX-Suite-[0-9]*.jar" -not -name "*plain*" -not -name "*unobf*" -not -name "*step*" | sort | tail -1)
-          if [ -z "$JAR_PATH" ]; then
-            echo "ERROR: Final JAR not found"
-            exit 1
-          fi
-          echo "Found JAR: $JAR_PATH"
-          # 保存源文件绝对路径
-          SRC_DLL="$PWD/src/main/resources/native/axs-native.dll"
-          # 提取 DLL
-          rm -rf /tmp/jar-verify
-          mkdir -p /tmp/jar-verify
-          cd /tmp/jar-verify
-          jar xf "$JAR_PATH" native/axs-native.dll || true
-          if [ -f native/axs-native.dll ]; then
-            echo "=== DLL from JAR ==="
-            file native/axs-native.dll
-            md5sum native/axs-native.dll
-            echo "=== DLL from source ==="
-            md5sum "$SRC_DLL" || true
-            # 用 MD5 比较验证（避免 file 命令输出差异）
-            JAR_MD5=$(md5sum native/axs-native.dll | awk '{print $1}')
-            SRC_MD5=$(md5sum "$SRC_DLL" | awk '{print $1}')
-            echo "JAR MD5: $JAR_MD5"
-            echo "SRC MD5: $SRC_MD5"
-            if [ "$JAR_MD5" = "$SRC_MD5" ]; then
-              echo "OK: JAR 里的 DLL 与源文件一致 (x86-64)"
-            else
-              echo "ERROR: JAR 里的 DLL 与源文件 MD5 不匹配!"
-              exit 1
-            fi
-          else
-            echo "WARN: JAR 里没有找到 axs-native.dll"
-          fi
+          echo "=== 明文本体 ==="
+          ls -la axs-core/build/libs/ || true
+          echo "=== 明文模块 ==="
+          ls -la modules/*/build/libs/*.jar || true
 
-      - name: Build and upload module axb files
-        env:
-          CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
-        run: |
-          if [ -z "$CLOUD_CI_TOKEN" ]; then
-            echo "SKIP: CLOUD_CI_TOKEN not set, skipping module axb upload"
-            exit 0
-          fi
-          NATIVE_CHANGED=${{ needs.detect-changes.outputs.native_changed }}
-          MODULE_CHANGED=${{ needs.detect-changes.outputs.module_changed }}
-          AXB_DIR="build/ArcartX-Suite/module-axb"
-          echo "=== AXB_DIR check ==="
-          ls -la "$AXB_DIR" 2>/dev/null || echo "AXB_DIR does not exist: $AXB_DIR"
-          echo "NATIVE_CHANGED=$NATIVE_CHANGED, MODULE_CHANGED=$MODULE_CHANGED"
-
-          if [ "$NATIVE_CHANGED" != "true" ] && [ "$MODULE_CHANGED" != "true" ]; then
-            echo "SKIP: No module or native changes, skipping module axb upload"
-            exit 0
-          fi
-
-          if [ "$NATIVE_CHANGED" = "true" ]; then
-            # Native 变更触发了全量加密，上传所有模块
-            if [ -d "$AXB_DIR" ]; then
-              for meta in "$AXB_DIR"/*.meta.json; do
-                [ -f "$meta" ] || continue
-                module=$(basename "$meta" .meta.json)
-                axb="$AXB_DIR/${module}.axb"
-                [ -f "$axb" ] || continue
-                key=$(jq -r '.moduleKey' "$meta")
-                iv=$(jq -r '.moduleIv' "$meta")
-                version="ci-${{ github.sha }}"
-                echo "Uploading $module ($version) ..."
-                curl -sS -F "axb=@$axb" \
-                  -F "version=$version" \
-                  -F "key=$key" \
-                  -F "iv=$iv" \
-                  -F "setCurrent=true" \
-                  -H "X-CI-Token: $CLOUD_CI_TOKEN" \
-                  "https://cloud.021209.xyz/v1/ci/modules/$module/versions" || echo "WARN: $module upload failed"
-              done
-            else
-              echo "SKIP: No axb files found"
-            fi
-          elif [ "$MODULE_CHANGED" = "true" ]; then
-            # 仅模块变更，只上传改动的模块
-            CHANGED='${{ needs.detect-changes.outputs.changed_modules }}'
-            echo "Uploading changed modules: $CHANGED"
-            for module in $(echo "$CHANGED" | jq -r '.[]'); do
-              meta="$AXB_DIR/${module}.meta.json"
-              axb="$AXB_DIR/${module}.axb"
-              if [ ! -f "$meta" ] || [ ! -f "$axb" ]; then
-                echo "WARN: axb or meta not found for $module"
-                continue
-              fi
-              key=$(jq -r '.moduleKey' "$meta")
-              iv=$(jq -r '.moduleIv' "$meta")
-              version="ci-${{ github.sha }}"
-              echo "Uploading $module ($version) ..."
-              curl -sS -F "axb=@$axb" \
-                -F "version=$version" \
-                -F "key=$key" \
-                -F "iv=$iv" \
-                -F "setCurrent=true" \
-                -H "X-CI-Token: $CLOUD_CI_TOKEN" \
-                "https://cloud.021209.xyz/v1/ci/modules/$module/versions" || echo "WARN: $module upload failed"
-            done
-          fi
-
-      - name: Upload JAR artifact
-        if: needs.detect-changes.outputs.core_changed == 'true' || needs.detect-changes.outputs.native_changed == 'true'
+      - name: Upload plaintext JARs
         uses: actions/upload-artifact@v5
         with:
-          name: axs-jar
-          path: '*/build/libs/*.jar'
-
-  release:
-    runs-on: ubuntu-latest
-    needs: [detect-changes, build-linux, build-windows, build-gradle]
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && (needs.detect-changes.outputs.core_changed == 'true' || needs.detect-changes.outputs.native_changed == 'true')
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v5
-        with:
-          path: artifacts
-
-      - name: Rename artifacts
-        run: |
-          mkdir -p release
-          # 只保留最终混淆产物 ArcartX-Suite-<version>.jar，排除 plain/unobf/step 等中间产物
-          find artifacts/axs-jar -name "ArcartX-Suite-[0-9]*.jar" -exec cp {} release/ \;
-          # 同时包含 axs-api jar（供外部模块编译依赖）
-          find artifacts/axs-jar -name "axs-api-*.jar" -exec cp {} release/ \;
-          ls -la release/
-
-      - name: Generate Release Notes
-        id: notes
-        run: |
-          COMMIT_MSG=$(git log -1 --pretty=format:"%s")
-          COMMIT_SHA=$(git rev-parse --short HEAD)
-          DATE=$(date +%Y-%m-%d\ %H:%M:%S)
-
-          # 从 commit message 提取版本号
-          # 支持的格式: release: v1.2.0 / [release] v1.2.0 / release v1.2.0
-          VERSION=$(echo "$COMMIT_MSG" | grep -oP '(?i)(?:release[:\s]+)?v\d+\.\d+(?:\.\d+)?(?:-[\w.]+)?' | head -1)
-          if [ -z "$VERSION" ]; then
-            VERSION="v${{ github.run_number }}"
-            echo "未检测到版本号，使用默认: $VERSION"
-          else
-            echo "从 commit message 提取到版本号: $VERSION"
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-          cat << EOF > release_notes.md
-          ## ArcartX-Suite $VERSION
-
-          - **构建时间**: $DATE
-          - **提交**: \`$COMMIT_SHA\`
-          - **提交信息**: $COMMIT_MSG
-
-          ### 构建产物
-
-          | 文件 | 说明 |
-          |------|------|
-          | \`ArcartX-Suite-${VERSION}.jar\` | **服务端插件**（已内置 Linux / Windows 双平台 native 库） |
-          | \`axs-api-${VERSION}.jar\` | **API 库**（供外部模块编译依赖） |
-
-          ### 快速安装
-
-          1. 下载 \`ArcartX-Suite-${VERSION}.jar\`
-          2. 放入 Minecraft 服务器的 \`plugins/\` 目录
-          3. 启动服务器，编辑 \`plugins/ArcartX-Suite/config.yml\`
-          4. 配置 \`cloud.qq\` 和 \`cloud.apiKey\`
-          5. 重启服务器，自动连接云端加载模块
-
-          ### 注意
-
-          - 本构建为自动 CI 产物，标记为 Pre-release
-          - 如需稳定版本请关注正式 Release
-          EOF
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ steps.notes.outputs.version }}
-          name: Build ${{ steps.notes.outputs.version }}
-          body_path: release_notes.md
-          files: release/*
-          draft: false
-          prerelease: true
+          name: axs-plaintext-jars
+          path: |
+            axs-core/build/libs/ArcartX-Suite-*-unobf.jar
+            axs-api/build/libs/*.jar
+            modules/*/build/libs/*.jar
+            proxy/*/build/libs/*.jar
+          if-no-files-found: warn

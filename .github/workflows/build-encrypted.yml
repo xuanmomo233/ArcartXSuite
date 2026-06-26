@@ -2,18 +2,28 @@ name: Build Encrypted Core JAR (opt-in)
 
 # 方案 ②（类字节码加密 + ProtectedClassLoader 注入）的专用构建管线。
 #
-# 为什么独立于 build-native.yml：
-#   - 类加密要求 native 库用【真实 root_seed】编译，且与 encrypt-jar 使用同一 seed；
-#   - 该路径依赖运行时 PluginClassLoader 内部实现，有 brick 风险，需在测试服反复验证；
-#   - 独立、仅手动触发（workflow_dispatch）可避免影响现有 release 管线的稳定性。
+# 触发（目标②）：
+#   - push 到 main 时自动运行（build-native 已不再 push 触发，push 只跑本工作流）；
+#   - 也保留 workflow_dispatch 手动全量构建。
 #
-# 触发：Actions → 选择本工作流 → Run workflow（在目标分支上运行）。
-# 产物：axs-jar-encrypted（核心类已加密的插件 JAR），下载后丢测试服验证加载/解密。
+# 按改动检测（目标②）：
+#   - detect-changes 作业按 diff 判定「本体(core) / 模块(modules)」是否变更；
+#   - 改本体 → 只构建并上传本体加密 jar；
+#   - 改某模块 → 只构建并上传该模块的逐类加密 .axb；
+#   - 手动触发或无法 diff 时全量构建（本体 + 全部模块）。
+#
+# 模块逐类加密（目标③）：
+#   - build-modules-encrypted 作业用 -Paxs.protectModules 对变更模块逐类 AES-GCM/ChaCha20 加密；
+#   - 与本体共用同一【真实 root_seed】：gen-keys 通过固定 env AXS_SEED_PARTS_B64 算出
+#     canonical root_seed，使本体与模块（即便分次构建）seed 完全一致——
+#     已部署的本体 native 才能解密单独重建上传的模块逐类加密类；
+#   - 加密后的 .axb 上传云端，达到与本体一致的保护级别。
 #
 # 密钥一致性：gen-keys 作业一次性生成密钥并 embed 进 native 源码，再把
-#   keys/ + 打补丁后的 native 源码作为短时（1天）artifact 共享给三平台作业，
-#   保证 Linux native / Windows native / encrypt-jar 三端 root_seed 完全一致。
+#   keys/ + 打补丁后的 native 源码作为短时（1天）artifact 共享给下游作业。
 #   ⚠️ 该 artifact 含私钥材料（仅测试用，retention 1 天）；正式上线应改用 GitHub Secrets 注入。
+#   ⚠️ 必须配置仓库 Secret AXS_SEED_PARTS_B64（32 字节 Base64）与 AXB_SIGN_SEED_B64，
+#      否则每次构建 seed/签名密钥都会变化，导致「只构建变更模块」无法被已部署本体解密。
 
 on:
   workflow_dispatch:
@@ -25,8 +35,72 @@ permissions:
   contents: read
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      core_changed: ${{ steps.changes.outputs.core_changed }}
+      module_changed: ${{ steps.changes.outputs.module_changed }}
+      changed_modules: ${{ steps.changes.outputs.changed_modules }}
+      any_changed: ${{ steps.changes.outputs.any_changed }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed scopes
+        id: changes
+        run: |
+          # 全部模块清单（用于手动 / 无法 diff 时的全量构建）
+          ALL_MODULES=$(ls -d modules/*/ 2>/dev/null | sed 's#modules/##; s#/##' | sort -u | jq -R -s -c 'split("\n") | map(select(. != ""))')
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            BASE=""
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+
+          # 首次提交 / 手动触发 / 无法解析 BASE 时全量构建（本体 + 全部模块）
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git rev-parse --verify "$BASE^{commit}" >/dev/null 2>&1; then
+            echo "无法 diff（手动/首提），全量构建本体 + 全部模块"
+            echo "core_changed=true" >> $GITHUB_OUTPUT
+            echo "module_changed=true" >> $GITHUB_OUTPUT
+            echo "changed_modules=$ALL_MODULES" >> $GITHUB_OUTPUT
+            echo "any_changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          git diff --name-only "$BASE" HEAD > /tmp/changed_files.txt
+          echo "=== Changed files ==="
+          cat /tmp/changed_files.txt
+
+          # 本体(core)：本体源码 / axs-core / api / placeholder / 构建脚本 / native / 加密脚本 / 密钥 / 工作流
+          CORE_CHANGED=false
+          if grep -Eq '^(src/main/|axs-core/|axs-api/|axs-placeholder/|buildSrc/|proguard/|native/|scripts/|gradle/|keys/|gradle\.properties|settings\.gradle\.kts|build\.gradle\.kts|\.github/workflows/)' /tmp/changed_files.txt; then
+            CORE_CHANGED=true
+          fi
+          echo "core_changed=$CORE_CHANGED" >> $GITHUB_OUTPUT
+
+          # 模块：仅收集 modules/<name>/ 下变更的模块
+          CHANGED_MODULES=$(grep -E '^modules/' /tmp/changed_files.txt | cut -d'/' -f2 | sort -u | jq -R -s -c 'split("\n") | map(select(. != ""))')
+          echo "changed_modules=$CHANGED_MODULES" >> $GITHUB_OUTPUT
+          if [ "$CHANGED_MODULES" != "[]" ]; then
+            echo "module_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "module_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+          if [ "$CORE_CHANGED" = "true" ] || [ "$CHANGED_MODULES" != "[]" ]; then
+            echo "any_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "any_changed=false" >> $GITHUB_OUTPUT
+          fi
+
   gen-keys:
     runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any_changed == 'true'
     steps:
       - uses: actions/checkout@v5
 
@@ -40,12 +114,14 @@ jobs:
       - name: Generate keys + embed into native sources
         env:
           AXB_SIGN_SEED_B64: ${{ secrets.AXB_SIGN_SEED_B64 }}
+          # 固定 seed 分片 → canonical root_seed 跨 CI 稳定，本体与单独重建的模块同一真实 seed
+          AXS_SEED_PARTS_B64: ${{ secrets.AXS_SEED_PARTS_B64 }}
         run: |
           set -euo pipefail
           python scripts/generate-keys.py --output keys/
           KEYS_DIR="keys/$(cat keys/current_version.txt)"
           echo "Resolved keys dir: $KEYS_DIR"
-          # embed-keys：随机生成 seed 分片 → 用 C++ 同款 XOR 公式算 canonical root_seed
+          # embed-keys：优先复用固定 env AXS_SEED_PARTS_B64 → 用 C++ 同款 XOR 公式算 canonical root_seed
           #   → 覆盖 root_seed.bin（encrypt-jar 用）→ patch class_decrypt.cpp / integrity_check.cpp
           python scripts/embed-keys.py --keys-dir "$KEYS_DIR" --native-dir native/src
 
@@ -77,7 +153,8 @@ jobs:
 
   build-linux:
     runs-on: ubuntu-latest
-    needs: gen-keys
+    needs: [detect-changes, gen-keys]
+    if: needs.detect-changes.outputs.core_changed == 'true'
     steps:
       - uses: actions/checkout@v5
 
@@ -113,7 +190,8 @@ jobs:
 
   build-windows:
     runs-on: windows-2022
-    needs: gen-keys
+    needs: [detect-changes, gen-keys]
+    if: needs.detect-changes.outputs.core_changed == 'true'
     steps:
       - uses: actions/checkout@v5
 
@@ -190,7 +268,8 @@ jobs:
 
   build-encrypted:
     runs-on: ubuntu-latest
-    needs: [gen-keys, build-linux, build-windows]
+    needs: [detect-changes, gen-keys, build-linux, build-windows]
+    if: needs.detect-changes.outputs.core_changed == 'true'
     steps:
       - uses: actions/checkout@v5
 
@@ -319,3 +398,91 @@ jobs:
             "https://cloud.021209.xyz/v1/ci/app-jar/versions"
           echo ""
           echo "OK: 本体 jar 已上传云端（setCurrent=true）"
+
+  build-modules-encrypted:
+    runs-on: ubuntu-latest
+    needs: [detect-changes, gen-keys]
+    if: needs.detect-changes.outputs.module_changed == 'true'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install cryptography
+        run: pip install cryptography
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: protect-material
+          path: protect-material
+
+      - name: Restore keys (含 canonical root_seed.bin / ed25519 私钥)
+        run: cp -r protect-material/keys keys
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.10.2'
+          cache-read-only: true
+
+      - name: Encrypt changed modules per-class (-Paxs.protectModules)
+        run: |
+          set -euo pipefail
+          CHANGED='${{ needs.detect-changes.outputs.changed_modules }}'
+          echo "变更模块: $CHANGED"
+          TASKS=""
+          for module in $(echo "$CHANGED" | jq -r '.[]'); do
+            TASKS="$TASKS :modules:$module:encryptModuleAxb"
+          done
+          if [ -z "$TASKS" ]; then
+            echo "没有需要构建的模块"; exit 0
+          fi
+          echo "Gradle tasks:$TASKS"
+          # -Paxs.protectModules：逐类 AES-GCM/ChaCha20 加密（与本体同一 canonical root_seed）
+          #   encryptModuleClasses 内部以 --no-native 调 encrypt-jar.py，复用 keys/ 里的 root_seed，
+          #   不需要本体 native 库；任务链 jar→obfuscate→stringEncrypt→encryptClasses→axb 可独立运行。
+          gradle clean $TASKS -Paxs.protectModules --no-build-cache
+          echo "=== 生成的 .axb ==="
+          ls -la build/ArcartX-Suite/module-axb/ || echo "DIR NOT FOUND"
+
+      - name: Upload encrypted modules (.axb) to cloud
+        env:
+          CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUD_CI_TOKEN:-}" ]; then
+            echo "SKIP: CLOUD_CI_TOKEN 未配置，跳过模块 .axb 上传"
+            exit 0
+          fi
+          AXB_DIR="build/ArcartX-Suite/module-axb"
+          if [ ! -d "$AXB_DIR" ]; then
+            echo "ERROR: 未找到 .axb 目录 $AXB_DIR"; exit 1
+          fi
+          CHANGED='${{ needs.detect-changes.outputs.changed_modules }}'
+          for module in $(echo "$CHANGED" | jq -r '.[]'); do
+            meta="$AXB_DIR/${module}.meta.json"
+            axb="$AXB_DIR/${module}.axb"
+            if [ ! -f "$meta" ] || [ ! -f "$axb" ]; then
+              echo "WARN: $module 的 axb 或 meta 缺失，跳过"
+              continue
+            fi
+            key=$(jq -r '.moduleKey' "$meta")
+            iv=$(jq -r '.moduleIv' "$meta")
+            version="ci-${{ github.sha }}"
+            echo "Uploading $module ($version) ..."
+            curl -fSs -F "axb=@$axb" \
+              -F "version=$version" \
+              -F "key=$key" \
+              -F "iv=$iv" \
+              -F "setCurrent=true" \
+              -H "X-CI-Token: $CLOUD_CI_TOKEN" \
+              "https://cloud.021209.xyz/v1/ci/modules/$module/versions"
+            echo ""
+            echo "OK: $module 已上传云端（setCurrent=true）"
+          done
