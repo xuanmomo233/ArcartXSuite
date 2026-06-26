@@ -22,6 +22,7 @@ import java.util.logging.Logger;
 public final class ProtectionInit {
 
     private static volatile boolean initialized = false;
+    private static volatile boolean active = false;
     private static volatile ProtectedClassLoader protectedLoader = null;
     private static final Logger LOGGER = Logger.getLogger("AXS-Protection");
 
@@ -31,57 +32,172 @@ public final class ProtectionInit {
     private ProtectionInit() {}
 
     /**
-     * 初始化保护系统。应在插件 onLoad() 中调用。
-     * @param pluginJarPath 插件 JAR 文件的绝对路径
-     * @return true = 初始化成功
+     * 初始化保护系统。必须在插件主类的 <b>静态初始化块</b> 中、尽可能早地调用，
+     * 以保证在任何加密类被加载之前完成 PluginClassLoader 的 parent 注入。
+     *
+     * <p>JAR 路径与 PluginClassLoader 都从 {@code pluginMainClass} 推导，无需外部传参。
+     *
+     * @param pluginMainClass 插件主类（其 ClassLoader 即 Bukkit PluginClassLoader）
+     * @return true = 初始化成功（或为兼容模式的明文 JAR）
      */
-    public static boolean initialize(String pluginJarPath) {
+    public static synchronized boolean initialize(Class<?> pluginMainClass) {
         if (initialized) return true;
+        initialized = true; // 防重入：即使后续失败也不再重试，避免半安装状态
 
-        // 1. 确认 native 库可用
-        if (!NativeBridge.isAvailable()) {
-            LOGGER.severe("[Protection] Native library unavailable: " + NativeBridge.getLoadError());
-            return false;
-        }
+        ClassLoader pluginCL = pluginMainClass.getClassLoader();
+        String jarPath = resolveJarPath(pluginMainClass);
+        boolean nativeOk = NativeBridge.isAvailable();
 
-        // 2. 初始化 native 保护引擎
-        int initResult = NativeBridge.n5();
-        if (initResult != 0) {
-            LOGGER.severe("[Protection] Native init failed: code " + initResult);
-            return false;
-        }
-
-        // 3. 启动双层反调试监控
-        JvmAntiDebug.startMonitoring(ProtectionInit::onThreatDetected, CHECK_INTERVAL_SECONDS);
-
-        // 4. 完整性校验
+        boolean encrypted = false;
         try {
-            if (!verifyJarIntegrity(pluginJarPath)) {
-                LOGGER.severe("[Protection] JAR integrity check failed");
+            encrypted = jarPath != null && jarHasEncryptedClasses(jarPath);
+        } catch (Exception ignored) {}
+
+        // 兼容模式：明文 JAR（开发/未加密构建）——不安装 classloader hook
+        if (!encrypted) {
+            if (nativeOk) {
+                try { NativeBridge.n5(); } catch (Throwable ignored) {}
+                JvmAntiDebug.startMonitoring(ProtectionInit::onThreatDetected, CHECK_INTERVAL_SECONDS);
+            }
+            active = true;
+            LOGGER.info("[Protection] 未检测到加密类，保护层以兼容模式运行（明文 JAR）。");
+            return true;
+        }
+
+        // 加密 JAR：native 必须可用，否则无法解密任何类
+        if (!nativeOk) {
+            LOGGER.severe("[Protection] 加密 JAR 但 native 库不可用，无法解密: " + NativeBridge.getLoadError());
+            return false;
+        }
+
+        int initResult;
+        try { initResult = NativeBridge.n5(); }
+        catch (Throwable t) { LOGGER.severe("[Protection] native n5 异常: " + t); return false; }
+        if (initResult != 0) {
+            LOGGER.severe("[Protection] native 初始化失败 code=" + initResult);
+            return false;
+        }
+
+        try {
+            if (!verifyJarIntegrity(jarPath)) {
+                LOGGER.severe("[Protection] JAR 完整性校验失败");
                 triggerTamperResponse();
                 return false;
             }
         } catch (Exception e) {
-            LOGGER.severe("[Protection] Integrity verification error");
+            LOGGER.severe("[Protection] 完整性校验异常: " + e);
             return false;
         }
 
-        // 5. 设置 ProtectedClassLoader（如果存在加密类）
+        // 安装 ProtectedClassLoader 为 PluginClassLoader 的 parent（方案 ②）。
+        // 必须在启动反调试监控之前完成：监控会触发 JvmAntiDebug 等类加载，
+        // 这些类需经由已注入的 ProtectedClassLoader 统一加载，避免与 PluginClassLoader 双重定义。
         try {
-            JarFile jar = new JarFile(pluginJarPath);
-            if (jar.getJarEntry("ENCRYPTED/") != null) {
-                protectedLoader = new ProtectedClassLoader(
-                        ProtectionInit.class.getClassLoader(), jar);
-                LOGGER.info("[Protection] ProtectedClassLoader active");
-            } else {
+            JarFile jar = new JarFile(jarPath);
+            Map<String, Class<?>> captured = captureBootstrapClasses(pluginMainClass, pluginCL, jar);
+            ClassLoader originalParent = pluginCL.getParent();
+            ProtectedClassLoader pcl = new ProtectedClassLoader(originalParent, jar, captured);
+
+            if (!installAsParent(pluginCL, pcl)) {
+                LOGGER.severe("[Protection] 无法将 ProtectedClassLoader 注入 PluginClassLoader（parent 替换失败），"
+                        + "加密类将无法加载。PluginClassLoader=" + pluginCL.getClass().getName());
                 jar.close();
+                return false;
             }
-        } catch (Exception e) {
-            LOGGER.warning("[Protection] ClassLoader setup failed: " + e.getMessage());
+            protectedLoader = pcl;
+            LOGGER.info("[Protection] ProtectedClassLoader 已注入 (引导类=" + captured.size()
+                    + ", 原parent=" + (originalParent == null ? "null" : originalParent.getClass().getName()) + ")");
+        } catch (Throwable t) {
+            LOGGER.severe("[Protection] ClassLoader 注入失败: " + t);
+            return false;
         }
 
-        initialized = true;
+        // hook 就位后再启动反调试监控
+        JvmAntiDebug.startMonitoring(ProtectionInit::onThreatDetected, CHECK_INTERVAL_SECONDS);
+
+        active = true;
         return true;
+    }
+
+    /** 从主类的 CodeSource 推导插件 JAR 的绝对路径。 */
+    private static String resolveJarPath(Class<?> c) {
+        try {
+            java.security.CodeSource src = c.getProtectionDomain().getCodeSource();
+            if (src == null || src.getLocation() == null) return null;
+            return new java.io.File(src.getLocation().toURI()).getAbsolutePath();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static boolean jarHasEncryptedClasses(String jarPath) throws Exception {
+        try (JarFile jar = new JarFile(jarPath)) {
+            java.util.Enumeration<java.util.jar.JarEntry> e = jar.entries();
+            while (e.hasMoreElements()) {
+                String n = e.nextElement().getName();
+                if (n.startsWith("ENCRYPTED/") && n.endsWith(".enc")) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 捕获 hook 安装前已被 PluginClassLoader 定义的明文引导类，供 ProtectedClassLoader 复用，
+     * 避免被重复 define 造成 LinkageError。这些类必须与 encrypt-jar 的 --bootstrap-classes 一致。
+     */
+    private static Map<String, Class<?>> captureBootstrapClasses(Class<?> mainClass, ClassLoader pluginCL, JarFile jar) {
+        Map<String, Class<?>> m = new java.util.HashMap<>();
+        // 注意：不含 JvmAntiDebug —— 它在 hook 安装后才首次加载，交由 ProtectedClassLoader 统一加载即可。
+        Class<?>[] boot = {
+            mainClass,
+            NativeBridge.class,
+            ProtectionInit.class,
+            ProtectedClassLoader.class,
+        };
+        for (Class<?> c : boot) {
+            m.put(c.getName(), c);
+            // 捕获其全部内部类/匿名类（ProGuard 已 -keep 为明文），在 hook 安装前由 PluginClassLoader 定义，
+            // 与外部类保持同一 ClassLoader，避免 nestmate 跨加载器 IllegalAccessError。
+            String base = c.getName().replace('.', '/') + "$";
+            java.util.Enumeration<java.util.jar.JarEntry> e = jar.entries();
+            while (e.hasMoreElements()) {
+                String n = e.nextElement().getName();
+                if (n.endsWith(".class") && n.startsWith(base)) {
+                    String fqn = n.substring(0, n.length() - ".class".length()).replace('/', '.');
+                    try {
+                        m.put(fqn, Class.forName(fqn, false, pluginCL));
+                    } catch (Throwable ignored) {}
+                }
+            }
+        }
+        return m;
+    }
+
+    /**
+     * 用 sun.misc.Unsafe 把 target 的 {@code parent} 字段（java.base 的 final 字段，
+     * Java 17 普通反射封封无法写）替换为 newParent。这是方案 ② 在「不加 --add-opens /
+     * 不改启动脚本」前提下唯一可行的 parent 替换手段，也是最依赖运行时内部实现的一环。
+     */
+    @SuppressWarnings("removal")
+    private static boolean installAsParent(ClassLoader target, ClassLoader newParent) {
+        if (target.getParent() == newParent) return true;
+        try {
+            Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
+            java.lang.reflect.Field tu = unsafeClass.getDeclaredField("theUnsafe");
+            tu.setAccessible(true);
+            Object unsafe = tu.get(null);
+            java.lang.reflect.Field parentField = ClassLoader.class.getDeclaredField("parent");
+            java.lang.reflect.Method offsetM =
+                    unsafeClass.getMethod("objectFieldOffset", java.lang.reflect.Field.class);
+            long off = (Long) offsetM.invoke(unsafe, parentField);
+            java.lang.reflect.Method putM =
+                    unsafeClass.getMethod("putObject", Object.class, long.class, Object.class);
+            putM.invoke(unsafe, target, off, newParent);
+            return target.getParent() == newParent;
+        } catch (Throwable t) {
+            LOGGER.severe("[Protection] Unsafe parent 替换异常: " + t);
+            return false;
+        }
     }
 
     /**
@@ -91,8 +207,9 @@ public final class ProtectionInit {
         return protectedLoader;
     }
 
+    /** @return true 表示保护层已成功就位（加密 JAR 已注入 hook，或明文 JAR 兼容模式）。 */
     public static boolean isInitialized() {
-        return initialized;
+        return active;
     }
 
     /**
@@ -103,7 +220,7 @@ public final class ProtectionInit {
         if (protectedLoader != null) {
             protectedLoader.deactivate();
         }
-        initialized = false;
+        active = false;
     }
 
     // ─── 完整性校验 ─────────────────────────────────────────────

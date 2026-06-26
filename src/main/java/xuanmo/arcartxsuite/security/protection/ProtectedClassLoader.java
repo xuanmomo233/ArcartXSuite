@@ -8,68 +8,142 @@ import java.io.InputStream;
 import java.net.URL;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
- * 受保护的 ClassLoader：拦截类加载请求，从 ENCRYPTED/ 目录读取 .enc 文件，
- * 调用 native 层解密后通过 defineClass 加载。
+ * 受保护的 ClassLoader（方案 ②：作为 Bukkit PluginClassLoader 的 parent 注入）。
  *
- * 安全要求：
- * - 解密后明文仅在 defineClass 调用期间短暂存在于 JVM 堆中
- * - 不缓存解密后的字节码
- * - 类名验证：解密前验证类名哈希防止伪造请求
+ * <p>注入后，PluginClassLoader 采用 parent-first 委托，把每个类/资源请求先转交本加载器。
+ * 本加载器是插件 JAR 内全部类与资源的唯一权威来源：
+ * <ol>
+ *   <li>加密类（{@code ENCRYPTED/<path>.enc}）：native n6 解密 → defineClass；</li>
+ *   <li>明文类（JAR 内 {@code <path>.class}，如 ProGuard -keep 的主类/桥接库/被保留的第三方库）：
+ *       直接从 JAR 读取字节 defineClass；</li>
+ *   <li>引导类（hook 安装前已被 PluginClassLoader 定义的类，见 capturedClasses）：复用，避免重复 define；</li>
+ *   <li>其它（Bukkit API、JDK）：委托给 originalParent。</li>
+ * </ol>
+ * 资源（yml/lang/axb 等）同样优先从本 JAR 提供，保证被本加载器定义的类能 getResource 自身资源。
+ *
+ * <p>由于本加载器统一供给 JAR 内所有类，PluginClassLoader 在 parent-first 下基本不会再自行
+ * define JAR 类（除了 hook 安装前已加载的引导类），从而避免重复定义。
  */
 public final class ProtectedClassLoader extends ClassLoader {
 
+    static {
+        ClassLoader.registerAsParallelCapable();
+    }
+
+    private static final Logger LOGGER = Logger.getLogger("AXS-Protection");
+
     private final JarFile protectedJar;
+    private final String jarUrlPrefix;
+    private final Map<String, Class<?>> capturedClasses;
     private final ConcurrentHashMap<String, Class<?>> loadedClasses = new ConcurrentHashMap<>();
     private volatile boolean protectionActive = true;
 
-    public ProtectedClassLoader(ClassLoader parent, JarFile protectedJar) {
-        super(parent);
+    public ProtectedClassLoader(ClassLoader originalParent, JarFile protectedJar,
+                                Map<String, Class<?>> capturedClasses) {
+        super(originalParent);
         this.protectedJar = protectedJar;
+        this.capturedClasses = capturedClasses != null
+                ? new ConcurrentHashMap<>(capturedClasses) : new ConcurrentHashMap<>();
+        String prefix;
+        try {
+            prefix = "jar:" + new java.io.File(protectedJar.getName()).toURI().toURL() + "!/";
+        } catch (Exception e) {
+            prefix = null;
+        }
+        this.jarUrlPrefix = prefix;
+    }
+
+    private static String encEntryPath(String name) {
+        return "ENCRYPTED/" + name.replace('.', '/') + ".enc";
+    }
+
+    private static String classEntryPath(String name) {
+        return name.replace('.', '/') + ".class";
+    }
+
+    @Override
+    protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+        synchronized (getClassLoadingLock(name)) {
+            Class<?> c = findLoadedClass(name);
+            if (c == null) c = loadedClasses.get(name);
+            if (c == null) c = capturedClasses.get(name);
+
+            if (c == null) {
+                JarEntry enc = protectedJar.getJarEntry(encEntryPath(name));
+                if (enc != null) {
+                    c = defineEncrypted(name, enc);
+                } else {
+                    JarEntry plain = protectedJar.getJarEntry(classEntryPath(name));
+                    if (plain != null) {
+                        c = definePlain(name, plain);
+                    } else {
+                        c = getParent().loadClass(name);
+                    }
+                }
+            }
+
+            if (resolve) resolveClass(c);
+            return c;
+        }
     }
 
     @Override
     protected Class<?> findClass(String name) throws ClassNotFoundException {
-        // 检查是否已加载
         Class<?> cached = loadedClasses.get(name);
         if (cached != null) return cached;
+        JarEntry enc = protectedJar.getJarEntry(encEntryPath(name));
+        if (enc != null) return defineEncrypted(name, enc);
+        JarEntry plain = protectedJar.getJarEntry(classEntryPath(name));
+        if (plain != null) return definePlain(name, plain);
+        throw new ClassNotFoundException(name);
+    }
+
+    private Class<?> defineEncrypted(String name, JarEntry entry) throws ClassNotFoundException {
+        Class<?> existing = loadedClasses.get(name);
+        if (existing != null) return existing;
 
         if (!protectionActive || !NativeBridge.isAvailable()) {
             throw new ClassNotFoundException("Protection unavailable: " + name);
         }
 
-        // 转换类名为 JAR 路径格式
-        String entryPath = "ENCRYPTED/" + name.replace('.', '/') + ".enc";
-        JarEntry entry = protectedJar.getJarEntry(entryPath);
-        if (entry == null) {
-            // 不在加密区域，委托给 parent
-            return super.findClass(name);
-        }
-
+        byte[] plain = null;
         try {
-            // 读取加密数据
             byte[] encData = readEntry(entry);
-
-            // 计算类名哈希
             byte[] classNameHash = sha256(name);
-
-            // 调用 native 解密
-            byte[] plainBytecode = NativeBridge.n6(classNameHash, encData);
-            if (plainBytecode == null || plainBytecode.length == 0) {
+            plain = NativeBridge.n6(classNameHash, encData);
+            if (plain == null || plain.length == 0) {
                 throw new ClassNotFoundException("Decryption failed: " + name);
             }
-
-            // defineClass
-            Class<?> clazz = defineClass(name, plainBytecode, 0, plainBytecode.length);
+            definePackageIfNeeded(name);
+            Class<?> clazz = defineClass(name, plain, 0, plain.length);
             loadedClasses.put(name, clazz);
+            if (LOGGER.isLoggable(Level.FINE)) LOGGER.fine("[Protection] decrypt-define " + name);
+            return clazz;
+        } catch (IOException e) {
+            throw new ClassNotFoundException("IO error loading " + name, e);
+        } finally {
+            if (plain != null) java.util.Arrays.fill(plain, (byte) 0);
+        }
+    }
 
-            // 解密后立即清零引用（GC 会回收实际内存，但避免长时间持有引用）
-            java.util.Arrays.fill(plainBytecode, (byte) 0);
-
+    private Class<?> definePlain(String name, JarEntry entry) throws ClassNotFoundException {
+        Class<?> existing = loadedClasses.get(name);
+        if (existing != null) return existing;
+        try {
+            byte[] data = readEntry(entry);
+            definePackageIfNeeded(name);
+            Class<?> clazz = defineClass(name, data, 0, data.length);
+            loadedClasses.put(name, clazz);
             return clazz;
         } catch (IOException e) {
             throw new ClassNotFoundException("IO error loading " + name, e);
@@ -77,31 +151,45 @@ public final class ProtectedClassLoader extends ClassLoader {
     }
 
     @Override
-    public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-        // 先检查是否已加载（JVM 缓存）
-        Class<?> c = findLoadedClass(name);
-        if (c != null) return c;
-
-        // 检查是否在加密区域
-        String entryPath = "ENCRYPTED/" + name.replace('.', '/') + ".enc";
-        if (protectedJar.getJarEntry(entryPath) != null) {
-            c = findClass(name);
-        } else {
-            // 非加密类委托给 parent
-            c = getParent().loadClass(name);
+    protected URL findResource(String name) {
+        if (jarUrlPrefix == null) return null;
+        JarEntry entry = protectedJar.getJarEntry(name);
+        if (entry == null) return null;
+        try {
+            return new URL(jarUrlPrefix + name);
+        } catch (Exception e) {
+            return null;
         }
+    }
 
-        if (resolve) resolveClass(c);
-        return c;
+    @Override
+    protected Enumeration<URL> findResources(String name) {
+        URL u = findResource(name);
+        if (u == null) return Collections.emptyEnumeration();
+        return Collections.enumeration(java.util.List.of(u));
+    }
+
+    private void definePackageIfNeeded(String name) {
+        int i = name.lastIndexOf('.');
+        if (i <= 0) return;
+        String pkg = name.substring(0, i);
+        if (getDefinedPackage(pkg) == null) {
+            try {
+                definePackage(pkg, null, null, null, null, null, null, null);
+            } catch (IllegalArgumentException ignored) {
+                // 并发下可能已被定义
+            }
+        }
     }
 
     public void deactivate() {
         protectionActive = false;
+        LOGGER.severe("[Protection] ProtectedClassLoader deactivated; encrypted classes will fail to load.");
     }
 
     private byte[] readEntry(JarEntry entry) throws IOException {
         try (InputStream is = protectedJar.getInputStream(entry)) {
-            ByteArrayOutputStream bos = new ByteArrayOutputStream((int) entry.getSize());
+            ByteArrayOutputStream bos = new ByteArrayOutputStream((int) Math.max(64, entry.getSize()));
             byte[] buf = new byte[8192];
             int n;
             while ((n = is.read(buf)) != -1) {

@@ -208,30 +208,69 @@ def sign_hash(root_hash, private_key_path):
     return signature
 
 
-def create_protection_mf(encrypted_files, algorithms_used, native_platforms, signature):
-    """创建 PROTECTION.MF 保护元数据"""
-    root_hash = build_hash_tree(encrypted_files)
-    root_hash_hex = root_hash.hex()
-
+def create_protection_mf(encrypted_count, algorithms_used, native_platforms, signature, root_hash):
+    """创建 PROTECTION.MF 保护元数据。
+    root_hash 必须由调用方按【最终 JAR 条目名排序】计算，确保与 Java/native 端
+    computeMerkleRoot 逐位一致。
+    """
     content = f"""Protection-Version: 1.0
 Encryption-Algorithms: {', '.join(algorithms_used)}
 Key-Derivation: HKDF-SHA256
 Native-Required: true
 Native-Platforms: {', '.join(native_platforms)}
-Integrity-Hash: {root_hash_hex}
+Integrity-Hash: {root_hash.hex()}
 Signature: {signature.hex()}
-Encrypted-Class-Count: {len(encrypted_files)}
+Encrypted-Class-Count: {encrypted_count}
 Created-At: {datetime.now().isoformat()}
 """
-    return content, root_hash
+    return content
 
 
 def is_bootstrap_class(class_name, bootstrap_classes):
-    """检查是否为引导类（不加密）"""
+    """检查是否为引导类（不加密）。
+    class_name 是 JAR 条目名，如 'xuanmo/arcartxsuite/security/NativeBridge.class'。
+    bootstrap_classes 可以是全限定名（推荐，精确）或简单类名。
+    """
+    fqn = class_name
+    if fqn.endswith('.class'):
+        fqn = fqn[:-len('.class')]
+    fqn = fqn.replace('/', '.')
+    simple = fqn.rsplit('.', 1)[-1]
     for bc in bootstrap_classes:
-        if class_name.replace('/', '.') == bc or class_name == bc:
+        bc = bc.strip()
+        if not bc:
+            continue
+        if fqn == bc or simple == bc:
+            return True
+        # 内部类（Main$1 / Main$Inner）随其外部引导类保持明文，否则会与外部类
+        # 跨 ClassLoader 定义（外部=PluginClassLoader，内部=ProtectedClassLoader）触发 nestmate 错误。
+        if fqn.startswith(bc + '$') or simple.startswith(bc + '$'):
             return True
     return False
+
+
+def should_encrypt(fqn, encrypt_prefixes, keep_prefixes, encrypt_mode="prefix"):
+    """是否加密该类。
+    - encrypt_mode=="default-package": 仅加密"默认包"（无 '.' 的 FQN）的类。用于模块：
+      ProGuard `-repackageclasses ''` 把模块自身代码扁平化到默认包（如 a、b、c），
+      而 shaded 第三方库（com.zaxxer.* 等）与被 -keep 的入口类仍保留点分包名，
+      据此精确区分"模块自身代码"与"库/入口"，无需逐库枚举 keep 前缀；
+    - encrypt_mode=="prefix"（默认，用于 core）: encrypt_prefixes 非空时仅加密以其开头的类；
+    - 两种模式下，命中 keep_prefixes 的类一律保持明文。
+    """
+    if any(fqn.startswith(p) for p in keep_prefixes):
+        return False
+    if encrypt_mode == "default-package":
+        return "." not in fqn
+    if encrypt_prefixes and not any(fqn.startswith(p) for p in encrypt_prefixes):
+        return False
+    return True
+
+
+def real_enc_entry(class_entry_name):
+    """原始 .class 条目名 → 最终加密条目名 ENCRYPTED/<path>.enc。"""
+    assert class_entry_name.endswith('.class'), class_entry_name
+    return "ENCRYPTED/" + class_entry_name[:-len('.class')] + ".enc"
 
 
 def main():
@@ -248,6 +287,17 @@ def main():
     parser.add_argument("--fake-classes-count", type=int, default=0,
                        help="虚假加密类数量（噪声注入）")
     parser.add_argument("--no-native", action="store_true", help="不嵌入 native 库")
+    parser.add_argument("--encrypt-prefixes", default="xuanmo.arcartxsuite.",
+                       help="仅加密 FQN 以这些前缀开头的类（逗号分隔）。默认仅加密插件自身代码，"
+                            "shaded 第三方库保持明文（由 ProtectedClassLoader 明文分支加载）。传空串表示加密全部。")
+    parser.add_argument("--keep-prefixes",
+                       default="xuanmo.arcartxsuite.api.,xuanmo.arcartxsuite.auth.",
+                       help="即使匹配 encrypt-prefixes 也保持明文的前缀（逗号分隔）。"
+                            "默认排除 api（模块编译/运行依赖）与 auth（MixedYggdrasilProxy 以独立进程启动，无法解密）。")
+    parser.add_argument("--encrypt-mode", default="prefix", choices=["prefix", "default-package"],
+                       help="加密选择策略。prefix（默认，core 用）按 encrypt-prefixes 匹配；"
+                            "default-package（模块用）仅加密默认包（无点分包名）的类，"
+                            "即 ProGuard -repackageclasses '' 扁平化后的模块自身代码。")
     args = parser.parse_args()
 
     if not HAS_CRYPTO:
@@ -259,6 +309,8 @@ def main():
     output_jar = Path(args.output)
     native_dir = Path(args.native_dir)
     bootstrap_classes = args.bootstrap_classes.split(",")
+    encrypt_prefixes = [p.strip() for p in args.encrypt_prefixes.split(",") if p.strip()]
+    keep_prefixes = [p.strip() for p in args.keep_prefixes.split(",") if p.strip()]
 
     # 根据保护级别设置参数
     if args.protection_level == "extreme":
@@ -301,12 +353,14 @@ def main():
     bootstrap = {}
     to_encrypt = {}
     for name, data in class_files.items():
-        if is_bootstrap_class(name, bootstrap_classes):
+        fqn = name[:-len('.class')].replace('/', '.') if name.endswith('.class') else name.replace('/', '.')
+        if is_bootstrap_class(name, bootstrap_classes) or not should_encrypt(fqn, encrypt_prefixes, keep_prefixes, args.encrypt_mode):
             bootstrap[name] = data
         else:
             to_encrypt[name] = data
 
-    print(f"    引导类（不加密）: {len(bootstrap)}")
+    print(f"    加密前缀: {encrypt_prefixes or '(全部)'}  保留明文前缀: {keep_prefixes}")
+    print(f"    明文类（引导/库/api/auth，不加密）: {len(bootstrap)}")
     print(f"    待加密类: {len(to_encrypt)}")
 
     # 加密类文件
@@ -333,24 +387,27 @@ def main():
     print(f"    已加密: {len(encrypted_files)} 个类")
     print(f"    使用算法: {', '.join(algorithms_used)}")
 
-    # 生成虚假加密类
+    # 生成虚假加密类（键 = 最终 ENCRYPTED/ 条目名）
+    fake_entries = {}
     if args.fake_classes_count > 0:
         print(f"\n[3/6] 生成 {args.fake_classes_count} 个虚假加密类...")
         fake_classes = generate_fake_classes(args.fake_classes_count, None)
         for name, enc_data in fake_classes.items():
             enc_path = name.replace('.', '/') + ".enc"
-            encrypted_files["ENCRYPTED/" + enc_path] = enc_data
-        print(f"    虚假类已注入")
+            fake_entries["ENCRYPTED/" + enc_path] = enc_data
+        print(f"    虚假类已注入: {len(fake_entries)}")
     else:
         print(f"\n[3/6] 跳过虚假类生成")
 
     # 准备 native 库
+    # 注意：CI 流程中 native 库（axs-native.dll / libaxs-native.so）已由 gradle 作为
+    # src/main/resources/native/ 资源打包进输入 JAR，且 NativeBridge 从 /native/ 加载，
+    # 因此通常使用 --no-native，仅保留输入 JAR 中已有的 native/ 资源。
     print(f"\n[4/6] 准备 native 库...")
     native_files = {}
     native_platforms = []
 
     if not args.no_native:
-        # Windows
         win_dll = native_dir / "windows" / "protection-x86_64.dll"
         if not win_dll.exists():
             win_dll = native_dir / "protection.dll"
@@ -361,7 +418,6 @@ def main():
         else:
             print(f"    [!] Windows native 库未找到")
 
-        # Linux
         linux_so = native_dir / "linux" / "libprotection-x86_64.so"
         if not linux_so.exists():
             linux_so = native_dir / "libprotection.so"
@@ -372,59 +428,88 @@ def main():
         else:
             print(f"    [!] Linux native 库未找到")
     else:
-        print(f"    跳过 native 库嵌入")
+        print(f"    跳过 native 库嵌入（沿用输入 JAR 中已有的 native/ 资源）")
 
-    # 构建哈希树并签名
+    # 从输入 JAR 的 native/ 资源探测平台（仅用于 PROTECTION.MF 元数据展示）
+    if any(k.startswith("native/") and k.endswith(".dll") for k in resource_files):
+        if "windows-x86_64" not in native_platforms:
+            native_platforms.append("windows-x86_64")
+    if any(k.startswith("native/") and k.endswith(".so") for k in resource_files):
+        if "linux-x86_64" not in native_platforms:
+            native_platforms.append("linux-x86_64")
+
+    # 构建完整性哈希树并签名
+    # 关键：叶子集合与排序必须与 Java/native 端 computeMerkleRoot 完全一致——
+    #   即【所有 ENCRYPTED/*.enc 条目（真实 + 虚假），按最终 JAR 条目名字典序】，
+    #   叶子哈希 = SHA256(enc_data)。否则 root 不一致 → 完整性校验必失败。
     print(f"\n[5/6] 构建完整性哈希树并签名...")
-    # 合并加密文件和 native 文件用于哈希树
-    all_protected = {}
-    all_protected.update(encrypted_files)
+    final_enc_entries = {}
+    for name, enc_data in encrypted_files.items():   # name = xuanmo/.../Foo.class
+        final_enc_entries[real_enc_entry(name)] = enc_data
+    final_enc_entries.update(fake_entries)
 
-    root_hash = build_hash_tree(all_protected)
+    root_hash = build_hash_tree(final_enc_entries)
 
-    # 签名
     signature = b'\x00' * 64
     if args.keys_dir:
         priv_key_path = Path(args.keys_dir) / "ed25519_private.pem"
         if priv_key_path.exists():
             signature = sign_hash(root_hash, priv_key_path)
-            print(f"    已使用 Ed25519 签名")
+            print(f"    已使用 Ed25519 签名 (root={root_hash.hex()[:16]}...)")
         else:
             print(f"    [!] Ed25519 私钥未找到，使用占位签名")
 
-    protection_mf, _ = create_protection_mf(
-        all_protected, list(algorithms_used), native_platforms, signature
+    protection_mf = create_protection_mf(
+        len(final_enc_entries), list(algorithms_used), native_platforms, signature, root_hash
     )
+
+    # 合并原始 MANIFEST（保留原有属性，仅追加保护标记），避免丢失构建期 Manifest 属性
+    orig_manifest = all_files.get("META-INF/MANIFEST.MF", b"Manifest-Version: 1.0\n")
+    try:
+        manifest_text = orig_manifest.decode("utf-8")
+    except UnicodeDecodeError:
+        manifest_text = "Manifest-Version: 1.0\n"
+    if "Protection-Enabled" not in manifest_text:
+        if not manifest_text.endswith("\n"):
+            manifest_text += "\n"
+        manifest_text += "Protection-Enabled: true\n"
+
+    def _is_sig_file(n):
+        u = n.upper()
+        return u.startswith("META-INF/") and (
+            u.endswith(".SF") or u.endswith(".RSA") or u.endswith(".DSA") or u.endswith(".EC"))
 
     # 写入输出 JAR
     print(f"\n[6/6] 写入加密 JAR...")
     output_jar.parent.mkdir(parents=True, exist_ok=True)
 
     with zipfile.ZipFile(output_jar, 'w', zipfile.ZIP_DEFLATED) as zout:
-        # META-INF
-        zout.writestr("META-INF/MANIFEST.MF", "Manifest-Version: 1.0\nProtection-Enabled: true\n")
+        zout.writestr("META-INF/MANIFEST.MF", manifest_text)
         zout.writestr("META-INF/PROTECTION.MF", protection_mf)
 
-        # Native 库
+        # 额外嵌入的 native 库（--no-native 时为空；正常 CI 走资源保留分支）
         for name, data in native_files.items():
             zout.writestr(name, data)
 
-        # 引导类（不加密，放 BOOTSTRAP/ 目录）
+        # 引导类（不加密）：写在【原始路径】，供 Bukkit PluginClassLoader 正常加载主类等
         for name, data in bootstrap.items():
-            zout.writestr(f"BOOTSTRAP/{name}", data)
+            zout.writestr(name, data)
 
-        # 加密类
-        for name, data in encrypted_files.items():
-            # 将 .class 改为 .enc，放入 ENCRYPTED/ 目录
-            enc_name = name.replace('.class', '.enc')
-            if not enc_name.startswith("ENCRYPTED/"):
-                enc_name = f"ENCRYPTED/{enc_name}"
-            zout.writestr(enc_name, data)
+        # 加密类（真实）：ENCRYPTED/<path>.enc
+        for name, enc_data in encrypted_files.items():
+            zout.writestr(real_enc_entry(name), enc_data)
 
-        # 资源文件（不加密）
+        # 虚假加密类
+        for entry, enc_data in fake_entries.items():
+            zout.writestr(entry, enc_data)
+
+        # 资源文件（不加密）：保留除 MANIFEST/PROTECTION/JAR 签名文件外的所有原始资源
+        # （含 plugin.yml、native/ 库、语言文件等），确保插件运行所需资源完整
         for name, data in resource_files.items():
-            if name.startswith("META-INF/"):
-                continue  # 跳过原始 META-INF
+            if name in ("META-INF/MANIFEST.MF", "META-INF/PROTECTION.MF"):
+                continue
+            if _is_sig_file(name):
+                continue
             zout.writestr(name, data)
 
     jar_size = output_jar.stat().st_size

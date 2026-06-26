@@ -37,14 +37,31 @@ tasks.register<Exec>("encryptCoreJar") {
     inputs.file(obfuscatedJar)
     outputs.file(encryptedJar)
 
+    // generate-keys 写入 keys/<version>/，并在 keys/current_version.txt 记录当前版本；
+    // encrypt-jar 直接读 <keys-dir>/root_seed.bin，因此必须解析到带版本号的子目录。
+    val currentMarker = keysDir.resolve("current_version.txt")
+    val resolvedKeysDir = if (currentMarker.exists())
+        keysDir.resolve(currentMarker.readText().trim()).absolutePath
+    else
+        keysDir.absolutePath
+
     commandLine(
         "python", "${scriptsDir}/encrypt-jar.py",
         "--input", obfuscatedJar.get().asFile.absolutePath,
         "--output", encryptedJar.get().asFile.absolutePath,
         "--native-dir", nativeBuildDir.absolutePath,
-        "--keys-dir", keysDir.absolutePath,
+        "--keys-dir", resolvedKeysDir,
         "--protection-level", "high",
-        "--bootstrap-classes", "NativeBridge,ProtectedClassLoader,ProtectionInit,JvmAntiDebug",
+        // 引导类必须用全限定名（含主类）：encrypt-jar 据此保持明文，ProtectionInit 据此捕获复用
+        "--bootstrap-classes",
+        "xuanmo.arcartxsuite.ArcartXSuitePlugin," +
+            "xuanmo.arcartxsuite.security.NativeBridge," +
+            "xuanmo.arcartxsuite.security.protection.ProtectionInit," +
+            "xuanmo.arcartxsuite.security.protection.ProtectedClassLoader," +
+            "xuanmo.arcartxsuite.security.protection.JvmAntiDebug",
+        // 仅加密插件自身代码；shaded 第三方库保持明文，api/auth 排除（模块依赖 / 独立进程入口）
+        "--encrypt-prefixes", "xuanmo.arcartxsuite.",
+        "--keep-prefixes", "xuanmo.arcartxsuite.api.,xuanmo.arcartxsuite.auth.",
         "--fake-classes-count", "20"
     )
 
@@ -53,39 +70,16 @@ tasks.register<Exec>("encryptCoreJar") {
     }
 }
 
-// ─── 加密模块 JAR ─────────────────────────────────────────────────
-// 每个模块子项目的混淆产物也需要加密
-subprojects {
-    if (project.path.startsWith(":modules:")) {
-        afterEvaluate {
-            val obfModule = tasks.findByName("obfuscateModule") ?: return@afterEvaluate
-
-            tasks.register<Exec>("encryptModule") {
-                group = "protection"
-                description = "加密模块 JAR"
-                dependsOn(obfModule)
-
-                val moduleJarTask = tasks.named<Jar>("jar").get()
-                val obfJar = rootProject.layout.buildDirectory.file(
-                    "ArcartX-Suite/modules-obf/${moduleJarTask.archiveFileName.get()}"
-                )
-                val encJar = rootProject.layout.buildDirectory.file(
-                    "ArcartX-Suite/modules/${moduleJarTask.archiveFileName.get()}"
-                )
-
-                commandLine(
-                    "python", "${scriptsDir}/encrypt-jar.py",
-                    "--input", obfJar.get().asFile.absolutePath,
-                    "--output", encJar.get().asFile.absolutePath,
-                    "--native-dir", nativeBuildDir.absolutePath,
-                    "--keys-dir", keysDir.absolutePath,
-                    "--protection-level", "high",
-                    "--no-native",  // 模块不嵌入 native（由 core 提供）
-                    "--fake-classes-count", "5"
-                )
-            }
-        }
-    }
+// ─── 加密模块 JAR（逐类，Option 2） ──────────────────────────────────
+// 模块逐类加密任务 encryptModuleClasses + .axb 封装的 opt-in 切换在
+// 根 build.gradle.kts 的模块 afterEvaluate 块中定义（-Paxs.protectModules），
+// 因其需与 stringEncryptModule / encryptModuleAxb 共享 Provider，故不在此重复注册。
+//
+// 一次性加密全部模块（逐类）：
+tasks.register("encryptAllModuleClasses") {
+    group = "protection"
+    description = "对所有模块做逐类字节码加密（Option 2，需 -Paxs.protectModules + 已生成密钥）"
+    dependsOn(subprojects.filter { it.path.startsWith(":modules:") }.map { "${it.path}:encryptModuleClasses" })
 }
 
 // ─── Native 编译 ──────────────────────────────────────────────────

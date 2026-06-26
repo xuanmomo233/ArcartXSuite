@@ -1,0 +1,265 @@
+name: Build Encrypted Core JAR (opt-in)
+
+# 方案 ②（类字节码加密 + ProtectedClassLoader 注入）的专用构建管线。
+#
+# 为什么独立于 build-native.yml：
+#   - 类加密要求 native 库用【真实 root_seed】编译，且与 encrypt-jar 使用同一 seed；
+#   - 该路径依赖运行时 PluginClassLoader 内部实现，有 brick 风险，需在测试服反复验证；
+#   - 独立、仅手动触发（workflow_dispatch）可避免影响现有 release 管线的稳定性。
+#
+# 触发：Actions → 选择本工作流 → Run workflow（在目标分支上运行）。
+# 产物：axs-jar-encrypted（核心类已加密的插件 JAR），下载后丢测试服验证加载/解密。
+#
+# 密钥一致性：gen-keys 作业一次性生成密钥并 embed 进 native 源码，再把
+#   keys/ + 打补丁后的 native 源码作为短时（1天）artifact 共享给三平台作业，
+#   保证 Linux native / Windows native / encrypt-jar 三端 root_seed 完全一致。
+#   ⚠️ 该 artifact 含私钥材料（仅测试用，retention 1 天）；正式上线应改用 GitHub Secrets 注入。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gen-keys:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install cryptography
+        run: pip install cryptography
+
+      - name: Generate keys + embed into native sources
+        run: |
+          set -euo pipefail
+          python scripts/generate-keys.py --output keys/
+          KEYS_DIR="keys/$(cat keys/current_version.txt)"
+          echo "Resolved keys dir: $KEYS_DIR"
+          # embed-keys：随机生成 seed 分片 → 用 C++ 同款 XOR 公式算 canonical root_seed
+          #   → 覆盖 root_seed.bin（encrypt-jar 用）→ patch class_decrypt.cpp / integrity_check.cpp
+          python scripts/embed-keys.py --keys-dir "$KEYS_DIR" --native-dir native/src
+
+      - name: Package protection material
+        run: |
+          set -euo pipefail
+          mkdir -p protect-out/native-src
+          cp -r keys protect-out/keys
+          cp native/src/class_decrypt.cpp protect-out/native-src/class_decrypt.cpp
+          cp native/src/integrity_check.cpp protect-out/native-src/integrity_check.cpp
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: protect-material
+          path: protect-out
+          retention-days: 1
+          if-no-files-found: error
+
+  build-linux:
+    runs-on: ubuntu-latest
+    needs: gen-keys
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: protect-material
+          path: protect-material
+
+      - name: Apply embedded-key native sources
+        run: |
+          cp protect-material/native-src/class_decrypt.cpp native/src/class_decrypt.cpp
+          cp protect-material/native-src/integrity_check.cpp native/src/integrity_check.cpp
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libssl-dev zlib1g-dev
+
+      - name: Build native library
+        run: |
+          cd native
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
+
+      - name: Move artifact to root
+        run: cp src/main/resources/native/libaxs-native.so libaxs-native.so
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: native-linux-enc
+          path: libaxs-native.so
+          if-no-files-found: error
+
+  build-windows:
+    runs-on: windows-2022
+    needs: gen-keys
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: protect-material
+          path: protect-material
+
+      - name: Apply embedded-key native sources
+        shell: bash
+        run: |
+          cp protect-material/native-src/class_decrypt.cpp native/src/class_decrypt.cpp
+          cp protect-material/native-src/integrity_check.cpp native/src/integrity_check.cpp
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-make
+            make
+            file
+
+      - name: Build native library
+        shell: msys2 {0}
+        run: |
+          cd native
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
+          cmake --build build --verbose
+
+      - name: Locate and normalize DLL name
+        shell: msys2 {0}
+        run: |
+          DLL_PATH=$(find src/main/resources/native -maxdepth 1 -type f \( -name "axs-native.dll" -o -name "libaxs-native.dll" \) | head -1)
+          if [ -z "$DLL_PATH" ]; then
+            echo "ERROR: No axs-native DLL found"
+            find src/main/resources/native -type f || true
+            exit 1
+          fi
+          if [ "$(basename "$DLL_PATH")" != "axs-native.dll" ]; then
+            cp "$DLL_PATH" src/main/resources/native/axs-native.dll
+          fi
+          file src/main/resources/native/axs-native.dll
+
+      - name: Verify no MinGW runtime dependency
+        shell: msys2 {0}
+        run: |
+          MINGW_DEPS=$(ldd src/main/resources/native/axs-native.dll 2>/dev/null | grep -E "libgcc|libstdc\+\+|libwinpthread" || true)
+          if [ -n "$MINGW_DEPS" ]; then
+            echo "ERROR: DLL depends on MinGW runtime (must be static):"
+            echo "$MINGW_DEPS"
+            exit 1
+          fi
+          echo "OK: statically linked"
+
+      - name: Move artifact to root
+        shell: cmd
+        run: copy src\main\resources\native\axs-native.dll axs-native.dll
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: native-windows-enc
+          path: axs-native.dll
+          if-no-files-found: error
+
+  build-encrypted:
+    runs-on: ubuntu-latest
+    needs: [gen-keys, build-linux, build-windows]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install cryptography
+        run: pip install cryptography
+
+      - uses: actions/download-artifact@v5
+        with:
+          name: protect-material
+          path: protect-material
+
+      - name: Restore keys
+        run: cp -r protect-material/keys keys
+
+      - name: Download Linux native (real-seed)
+        uses: actions/download-artifact@v5
+        with:
+          name: native-linux-enc
+          path: src/main/resources/native/
+
+      - name: Download Windows native (real-seed)
+        uses: actions/download-artifact@v5
+        with:
+          name: native-windows-enc
+          path: src/main/resources/native/
+
+      - name: List native artifacts
+        run: ls -la src/main/resources/native/
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.10.2'
+          cache-read-only: true
+
+      - name: Build obfuscated JAR
+        run: |
+          gradle clean build --no-build-cache
+
+      - name: Ensure real-seed native libs intact in obfuscated JAR
+        run: |
+          set -euo pipefail
+          JAR_PATH=$(find "$PWD/axs-core/build/libs" -maxdepth 1 -name "ArcartX-Suite-[0-9]*.jar" -not -name "*plain*" -not -name "*unobf*" -not -name "*step*" | sort | tail -1)
+          if [ -z "$JAR_PATH" ]; then echo "ERROR: final obfuscated JAR not found"; ls -la axs-core/build/libs || true; exit 1; fi
+          echo "Obfuscated JAR: $JAR_PATH"
+          echo "JAR_PATH=$JAR_PATH" >> "$GITHUB_ENV"
+          cd src/main/resources
+          jar uf "$JAR_PATH" native/axs-native.dll native/libaxs-native.so
+          cd - > /dev/null
+
+      - name: Encrypt core classes
+        run: |
+          set -euo pipefail
+          KEYS_DIR="keys/$(cat keys/current_version.txt)"
+          OUT="${JAR_PATH%.jar}-encrypted.jar"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+          python scripts/encrypt-jar.py \
+            --input "$JAR_PATH" \
+            --output "$OUT" \
+            --native-dir src/main/resources/native \
+            --keys-dir "$KEYS_DIR" \
+            --protection-level high \
+            --no-native \
+            --bootstrap-classes "xuanmo.arcartxsuite.ArcartXSuitePlugin,xuanmo.arcartxsuite.security.NativeBridge,xuanmo.arcartxsuite.security.protection.ProtectionInit,xuanmo.arcartxsuite.security.protection.ProtectedClassLoader,xuanmo.arcartxsuite.security.protection.JvmAntiDebug" \
+            --encrypt-prefixes "xuanmo.arcartxsuite." \
+            --keep-prefixes "xuanmo.arcartxsuite.api.,xuanmo.arcartxsuite.auth." \
+            --fake-classes-count 20
+          ls -la "$OUT"
+
+      - name: Verify protection (best-effort)
+        run: |
+          KEYS_DIR="keys/$(cat keys/current_version.txt)"
+          python scripts/verify-protection.py --input "$OUT" --keys-dir "$KEYS_DIR" --verbose || true
+
+      - name: Upload encrypted JAR
+        uses: actions/upload-artifact@v5
+        with:
+          name: axs-jar-encrypted
+          path: axs-core/build/libs/*-encrypted.jar
+          if-no-files-found: error

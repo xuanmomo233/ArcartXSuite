@@ -137,13 +137,15 @@ def main():
     print("[1/5] 生成 Ed25519 签名密钥对...")
     private_key, public_key = generate_ed25519_keypair()
 
-    if isinstance(private_key, bytes):
-        # 回退模式
-        (version_dir / "ed25519_private_seed.bin").write_bytes(private_key)
-        (version_dir / "ed25519_public_seed.bin").write_bytes(public_key)
-    else:
+    # 注意：crypto 分支返回的是 PEM 字节（也是 bytes），不能用 isinstance(bytes) 区分，
+    # 必须用 HAS_CRYPTO 判定，否则会永远走回退命名、永远不产出 .pem。
+    if HAS_CRYPTO:
         (version_dir / "ed25519_private.pem").write_bytes(private_key)
         (version_dir / "ed25519_public.pem").write_bytes(public_key)
+    else:
+        # 回退模式（无 cryptography）：写原始字节，文件名与 embed-keys 期望的 *_raw.bin 对齐
+        (version_dir / "ed25519_private_raw.bin").write_bytes(private_key)
+        (version_dir / "ed25519_public_raw.bin").write_bytes(public_key)
 
     # 2. 生成 root seed
     print("[2/5] 生成 root seed...")

@@ -70,12 +70,50 @@ subprojects {
                 dependsOn(stringEncryptModule)
             }
 
-            // 将混淆后的模块 Jar 加密为 .axb，供上传到 AXS Cloud Platform。
+            // ─── Option 2：逐类字节码加密（opt-in，-Paxs.protectModules）─────────
+            // 对字符串加密后的模块 Jar 再做逐类 AES-GCM/ChaCha20 加密（ENCRYPTED/<path>.enc），
+            // 运行时由升级后的 ByteArrayModuleClassLoader 调 native n6 逐类解密。
+            // 默认关闭：未传 -Paxs.protectModules 时 .axb 仍封装明文类 Jar（与现有发布流程一致）。
+            val protectModules = project.hasProperty("axs.protectModules")
+            val encryptedClassesModuleJar = distDir.map { it.file("modules-enc/${moduleJarTask.get().archiveFileName.get()}") }
+            val scriptsDir = rootProject.file("scripts")
+            val nativeBuildDir = rootProject.file("native/build")
+            val keysRoot = rootProject.file("keys")
+            val keysMarker = keysRoot.resolve("current_version.txt")
+            val resolvedModuleKeysDir = if (keysMarker.exists())
+                keysRoot.resolve(keysMarker.readText().trim()).absolutePath
+            else
+                keysRoot.absolutePath
+            val encryptModuleClasses = tasks.register<Exec>("encryptModuleClasses") {
+                group = "protection"
+                description = "对模块 Jar 做逐类字节码加密（Option 2，供云端下发）"
+                dependsOn(stringEncryptModule)
+                inputs.file(stringEncryptedModuleJar)
+                outputs.file(encryptedClassesModuleJar)
+                commandLine(
+                    "python", "${scriptsDir}/encrypt-jar.py",
+                    "--input", stringEncryptedModuleJar.get().asFile.absolutePath,
+                    "--output", encryptedClassesModuleJar.get().asFile.absolutePath,
+                    "--native-dir", nativeBuildDir.absolutePath,
+                    "--keys-dir", resolvedModuleKeysDir,
+                    "--protection-level", "high",
+                    "--no-native",                         // 模块不嵌 native，复用 core 提供的 root_seed
+                    "--bootstrap-classes", "",             // 模块无引导类（入口由 -keep 保持明文）
+                    "--encrypt-prefixes", "",              // default-package 模式忽略前缀
+                    "--keep-prefixes", "xuanmo.arcartxsuite.api.,xuanmo.arcartxsuite.auth.",
+                    "--encrypt-mode", "default-package",   // 仅加密 -repackageclasses '' 扁平化后的模块自身代码
+                    "--fake-classes-count", "5"
+                )
+            }
+
+            // 将模块 Jar 加密为 .axb，供上传到 AXS Cloud Platform。
+            // 开启 Option 2 时封装逐类加密 Jar；否则封装明文类 Jar（默认）。
+            val axbSourceJar = if (protectModules) encryptedClassesModuleJar else stringEncryptedModuleJar
             tasks.register<EncryptModuleAxbTask>("encryptModuleAxb") {
                 group = "protection"
-                description = "将混淆后的模块 Jar 加密为 .axb（上传云端用）"
-                dependsOn(stringEncryptModule)
-                inputJar.set(stringEncryptedModuleJar.map { it } as Provider<RegularFile>)
+                description = "将模块 Jar 加密为 .axb（上传云端用）"
+                dependsOn(if (protectModules) encryptModuleClasses else stringEncryptModule)
+                inputJar.set(axbSourceJar.map { it } as Provider<RegularFile>)
                 outputAxb.set(distDir.map { it.file("module-axb/${project.name}.axb") })
                 val keyProp = project.findProperty("module.${project.name}.key") as String?
                 val ivProp = project.findProperty("module.${project.name}.iv") as String?

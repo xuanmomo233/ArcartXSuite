@@ -16,12 +16,24 @@
 //       机器绑定由云端 moduleKey 的指纹 HKDF 绑定层负责（见后端 crypto.ts）。
 //       这两个常量必须与 scripts/encrypt-jar.py 中的同名常量逐字节一致。
 
-// root seed 分散存储（构建时由 generate-keys.py 生成并替换）
-// !!!  以下占位值必须在构建前替换为真实密钥  !!!
+// root seed 分散存储（构建时由 embed-keys.py 生成并替换）
+// !!!  以下为占位值；embed-keys.py 会替换为【HKDF-keystream 包裹后的密文分片】  !!!
 static volatile uint8_t seed_part_a[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE };
 static volatile uint8_t seed_part_b[] = { 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
 static volatile uint8_t seed_part_c[] = { 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10 };
 static volatile uint8_t seed_part_d[] = { 0x42, 0x5A, 0x7E, 0x3C, 0x9D, 0x1F, 0x8A, 0x6B };
+
+// 固定 build salt（方案 B）。必须与 scripts/encrypt-jar.py / embed-keys.py 同名常量逐字节一致。
+static const uint8_t build_salt_l1[] = "AXS-class-enc-master-salt-v1";
+static const uint8_t build_salt_l2[] = "AXS-class-enc-session-salt-v1";
+
+// seed 分片 at-rest 解包常量：seed_part_* 存的是 plaintext XOR HKDF-keystream 的密文。
+// keystream 由两个 build salt 在代码中拼接后 SHA-256 派生，不以连续可识别形态存在于
+// 二进制；运行时重算 keystream 解包后再做 XOR 重组。威胁模型：抵御 strings/静态字节
+// 数组提取与朴素内存扫描；对完整逆向二进制者非密码学级保密（自包含离线解密的固有
+// 上限），机器级强绑定由云端指纹 HKDF 层负责。须与 embed-keys.py SEED_WRAP_* 一致。
+static const uint8_t seed_wrap_salt[] = "AXS-seed-wrap-salt-v1";
+static const uint8_t seed_wrap_info[] = "axs-seed-unwrap-v1";
 
 // 运行时派生的密钥（仅存在于内存中）
 static uint8_t master_key[32] = {0};
@@ -70,20 +82,49 @@ static void hkdf_expand(const uint8_t prk[32],
 
 // ─── Root Seed 组装（XOR 混淆） ─────────────────────────────────
 
+// 由 build salt 在代码中重算 seed 解包 keystream（不存储连续密钥）。
+static void compute_seed_keystream(uint8_t ks[32]) {
+    uint8_t ikm_buf[64];
+    size_t n = 0;
+    memcpy(ikm_buf + n, build_salt_l1, sizeof(build_salt_l1) - 1); n += sizeof(build_salt_l1) - 1;
+    ikm_buf[n++] = '|';
+    memcpy(ikm_buf + n, build_salt_l2, sizeof(build_salt_l2) - 1); n += sizeof(build_salt_l2) - 1;
+    uint8_t wrap_ikm[32];
+    SHA256(ikm_buf, n, wrap_ikm);
+    uint8_t prk[32];
+    hkdf_extract(seed_wrap_salt, sizeof(seed_wrap_salt) - 1, wrap_ikm, 32, prk);
+    hkdf_expand(prk, seed_wrap_info, sizeof(seed_wrap_info) - 1, ks, 32);
+    memset(ikm_buf, 0, sizeof(ikm_buf));
+    memset(wrap_ikm, 0, sizeof(wrap_ikm));
+    memset(prk, 0, sizeof(prk));
+}
+
 static void assemble_root_seed(uint8_t out[32]) {
+    // 1) 解包密文分片 -> 明文分片（仅存在于栈上）
+    uint8_t ks[32];
+    compute_seed_keystream(ks);
+    uint8_t a[8], b[8], c[8], d[8];
     for (int i = 0; i < 8; i++) {
-        out[i]      = seed_part_a[i] ^ seed_part_c[7 - i];
-        out[8 + i]  = seed_part_b[i] ^ seed_part_d[7 - i];
-        out[16 + i] = seed_part_c[i] ^ seed_part_a[7 - i];
-        out[24 + i] = seed_part_d[i] ^ seed_part_b[7 - i];
+        a[i] = seed_part_a[i] ^ ks[i];
+        b[i] = seed_part_b[i] ^ ks[8 + i];
+        c[i] = seed_part_c[i] ^ ks[16 + i];
+        d[i] = seed_part_d[i] ^ ks[24 + i];
     }
+    // 2) 原 XOR 重组公式（在解包后的明文分片上进行）
+    for (int i = 0; i < 8; i++) {
+        out[i]      = a[i] ^ c[7 - i];
+        out[8 + i]  = b[i] ^ d[7 - i];
+        out[16 + i] = c[i] ^ a[7 - i];
+        out[24 + i] = d[i] ^ b[7 - i];
+    }
+    memset(ks, 0, sizeof(ks));
+    memset(a, 0, sizeof(a)); memset(b, 0, sizeof(b));
+    memset(c, 0, sizeof(c)); memset(d, 0, sizeof(d));
 }
 
 // ─── 密钥初始化 ─────────────────────────────────────────────────
 
-// 固定 build salt（方案 B）。必须与 scripts/encrypt-jar.py 中的同名常量逐字节一致。
-static const uint8_t build_salt_l1[] = "AXS-class-enc-master-salt-v1";
-static const uint8_t build_salt_l2[] = "AXS-class-enc-session-salt-v1";
+// build_salt_l1 / build_salt_l2 已上移至文件顶部（seed 分片附近）。
 
 bool protection_init_keys() {
     if (keys_initialized) return true;

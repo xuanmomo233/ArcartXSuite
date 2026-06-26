@@ -48,6 +48,18 @@ import xuanmo.arcartxsuite.security.protection.ProtectionInit;
  */
 public class ArcartXSuitePlugin extends JavaPlugin {
 
+    static {
+        // 方案 ②：在主类静态初始化（最早时机，早于构造器与 onLoad/onEnable）注入保护层，
+        // 用 Unsafe 把 ProtectedClassLoader 设为 PluginClassLoader 的 parent，
+        // 确保后续任何加密类被加载前 hook 已就位。明文 JAR 下自动降级为兼容模式。
+        try {
+            ProtectionInit.initialize(ArcartXSuitePlugin.class);
+        } catch (Throwable t) {
+            java.util.logging.Logger.getLogger("AXS-Protection")
+                .severe("[Protection] 静态初始化注入异常: " + t);
+        }
+    }
+
     private static final String AUTHOR_NAME = "墨墨墨 Q";
     private static final String DISPLAY_NAME = "ArcartXSuite";
     private static final String CONSOLE_PREFIX =
@@ -106,14 +118,9 @@ public class ArcartXSuitePlugin extends JavaPlugin {
                 + "（如使用云端模块，请先构建 native/ 目录并确保 axs-native.dll 已打包到 jar）");
         }
 
-        // 初始化 JAR 保护子系统（密钥派生 + 反调试 + 完整性校验）
-        try {
-            String jarPath = getFile().getAbsolutePath();
-            if (!ProtectionInit.initialize(jarPath)) {
-                consoleWarn("[Protection] 保护子系统初始化失败（插件仍可运行，但保护层未启用）");
-            }
-        } catch (Exception e) {
-            consoleWarn("[Protection] 保护子系统异常: " + e.getMessage());
+        // JAR 保护子系统已在主类静态初始化块中注入（见类顶部 static 块）。
+        if (!ProtectionInit.isInitialized()) {
+            consoleWarn("[Protection] 保护子系统未初始化（明文 JAR 或注入失败，插件仍可运行）");
         }
 
         // 0. 初始化智能配置诊断系统

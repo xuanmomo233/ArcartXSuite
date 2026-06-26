@@ -48,6 +48,43 @@ def assemble_root_seed(a, b, c, d) -> bytes:
     return bytes(out)
 
 
+# ─── seed 分片 at-rest 包裹（须与 native/src/class_decrypt.cpp 解包逻辑逐字节一致）───
+SEED_WRAP_SALT = b"AXS-seed-wrap-salt-v1"
+SEED_WRAP_INFO = b"axs-seed-unwrap-v1"
+_BUILD_SALT_L1 = b"AXS-class-enc-master-salt-v1"
+_BUILD_SALT_L2 = b"AXS-class-enc-session-salt-v1"
+
+
+def _hkdf(salt, ikm, info, length=32):
+    import hashlib
+    import hmac as _hmac
+    prk = _hmac.new(salt, ikm, hashlib.sha256).digest()
+    okm = b""
+    t = b""
+    counter = 1
+    while len(okm) < length:
+        t = _hmac.new(prk, t + info + bytes([counter]), hashlib.sha256).digest()
+        okm += t
+        counter += 1
+    return okm[:length]
+
+
+def seed_keystream() -> bytes:
+    """与 C++ compute_seed_keystream() 逐字节等价。"""
+    import hashlib
+    wrap_ikm = hashlib.sha256(_BUILD_SALT_L1 + b"|" + _BUILD_SALT_L2).digest()
+    return _hkdf(SEED_WRAP_SALT, wrap_ikm, SEED_WRAP_INFO, 32)
+
+
+def wrap_seed_parts(a, b, c, d):
+    """明文分片 -> 密文分片：cipher = plaintext XOR keystream（确定性，无随机 IV）。"""
+    ks = seed_keystream()
+    plain = bytes(a) + bytes(b) + bytes(c) + bytes(d)
+    cipher = bytes(x ^ ks[i] for i, x in enumerate(plain))
+    return (list(cipher[0:8]), list(cipher[8:16]),
+            list(cipher[16:24]), list(cipher[24:32]))
+
+
 def generate_seed_parts():
     """随机生成 4 个 8 字节分片。"""
     return (
@@ -156,7 +193,9 @@ def main():
     # 3. patch class_decrypt.cpp
     print("\n[3/4] 嵌入 seed 分片到 class_decrypt.cpp...")
     source = decrypt_file.read_text(encoding='utf-8')
-    source = replace_seed_in_source(source, a, b, c, d)
+    ca, cb, cc, cd = wrap_seed_parts(a, b, c, d)
+    print(f"    seed 分片已 HKDF-keystream 包裹（密文分片 a = {bytes(ca).hex()}）")
+    source = replace_seed_in_source(source, ca, cb, cc, cd)
     decrypt_file.write_text(source, encoding='utf-8')
     print(f"    已更新: {decrypt_file}")
 
@@ -172,7 +211,7 @@ def main():
     print("\n[+] 密钥嵌入完成！C++ 与 Python 两端 root_seed 现已一致。")
     print("[!] 安全提醒:")
     print("    - 嵌入后的 class_decrypt.cpp / integrity_check.cpp 含敏感密钥材料")
-    print("    - 公钥嵌入安全；seed 分片虽经 XOR 混淆但仍是密钥材料")
+    print("    - 公钥嵌入安全；seed 分片已 HKDF-keystream 包裹（抗 strings/静态提取），但对完整逆向非密码学级保密")
     print("    - 建议将含真实密钥的 .cpp 排除出公开仓库，或在 CI 构建时动态注入")
 
 
