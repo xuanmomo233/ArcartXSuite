@@ -1,4 +1,4 @@
-name: Build Native Library
+name: Build Plaintext Dev Artifacts
 
 # 目标①：仅手动触发，产出【明文 / 不混淆 / 不加密】的本体 + 模块，不上传云端。
 #

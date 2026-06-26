@@ -1,9 +1,9 @@
-name: Build Encrypted Core JAR (opt-in)
+name: Encrypted CI Pipeline
 
 # 方案 ②（类字节码加密 + ProtectedClassLoader 注入）的专用构建管线。
 #
 # 触发（目标②）：
-#   - push 到 main 时自动运行（build-native 已不再 push 触发，push 只跑本工作流）；
+#   - push 到 main 时自动运行（Build Plaintext Dev Artifacts 已不再 push 触发，push 只跑本工作流）；
 #   - 也保留 workflow_dispatch 手动全量构建。
 #
 # 按改动检测（目标②）：
