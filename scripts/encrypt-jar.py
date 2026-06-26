@@ -463,17 +463,10 @@ def main():
         len(final_enc_entries), list(algorithms_used), native_platforms, signature, root_hash
     )
 
-    # 合并原始 MANIFEST（保留原有属性，仅追加保护标记），避免丢失构建期 Manifest 属性
-    orig_manifest = all_files.get("META-INF/MANIFEST.MF", b"Manifest-Version: 1.0\n")
-    try:
-        manifest_text = orig_manifest.decode("utf-8")
-    except UnicodeDecodeError:
-        manifest_text = "Manifest-Version: 1.0\n"
-    if "Protection-Enabled" not in manifest_text:
-        # 先去掉末尾的 section terminator（空行），在 main section 内追加属性，再补回空行
-        manifest_text = manifest_text.rstrip('\r\n') + '\n'
-        manifest_text += "Protection-Enabled: true\n"
-        manifest_text += "\n"  # section terminator
+    # 保留原始 MANIFEST.MF 字节，不做任何修改
+    # Protection-Enabled 标记已移至 PROTECTION.MF，无需写入 MANIFEST.MF
+    manifest_bytes = all_files.get("META-INF/MANIFEST.MF", b"Manifest-Version: 1.0\r\n\r\n")
+    print(f"    MANIFEST.MF 原始字节: {repr(manifest_bytes[:120])}")
 
     def _is_sig_file(n):
         u = n.upper()
@@ -485,7 +478,10 @@ def main():
     output_jar.parent.mkdir(parents=True, exist_ok=True)
 
     with zipfile.ZipFile(output_jar, 'w', zipfile.ZIP_DEFLATED) as zout:
-        zout.writestr("META-INF/MANIFEST.MF", manifest_text)
+        # MANIFEST.MF 使用 STORED（不压缩），匹配标准 JAR 惯例
+        mf_info = zipfile.ZipInfo("META-INF/MANIFEST.MF")
+        mf_info.compress_type = zipfile.ZIP_STORED
+        zout.writestr(mf_info, manifest_bytes)
         zout.writestr("META-INF/PROTECTION.MF", protection_mf)
 
         # 额外嵌入的 native 库（--no-native 时为空；正常 CI 走资源保留分支）
