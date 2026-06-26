@@ -469,80 +469,7 @@ public final class CloudModuleService {
                 plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：axb 文件过小 (" + axb.length + " 字节)，可能下载不完整或文件损坏。期望至少 32 字节 (4 字节 magic + 12 字节 IV + 16 字节 tag)");
                 return CompletableFuture.<Void>completedFuture(null);
             }
-            return retryAsync(moduleId, "密钥获取", 3, 2000L, () -> requestModuleKey(moduleId)).thenAccept(keyResp -> {
-                if (keyResp == null) {
-                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：无法获取解密密钥");
-                    return;
-                }
-                String keyB64 = extractJsonField(keyResp, "key");
-                if (keyB64 == null || keyB64.isEmpty()) {
-                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：云端密钥响应缺少 key 字段");
-                    return;
-                }
-                byte[] key;
-                try {
-                    key = Base64.getDecoder().decode(keyB64);
-                } catch (IllegalArgumentException e) {
-                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：密钥不是有效的 Base64 编码");
-                    return;
-                }
-                if (key.length != 32) {
-                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：密钥长度错误 (" + key.length + " 字节)，应为 32 字节。请检查云端模块上传时填写的 moduleKey");
-                    return;
-                }
-                // 指纹绑定密钥还原：云端下发的 key = moduleKey XOR HKDF(本机指纹)。
-                // 用本机实时指纹重新派生 pad 还原真实 moduleKey；换机器指纹不同 → 还原出错误 key → native 解密失败。
-                String keyBind = extractJsonField(keyResp, "keyBind");
-                if ("fp-hkdf-v1".equals(keyBind)) {
-                    String version = extractJsonField(keyResp, "version");
-                    String fph = sha256(generateFingerprint());
-                    byte[] pad = hkdfSha256(
-                        fph.getBytes(StandardCharsets.UTF_8),
-                        KEY_BIND_SALT.getBytes(StandardCharsets.UTF_8),
-                        ("axs-module-key|" + moduleId + "|" + (version == null ? "" : version)).getBytes(StandardCharsets.UTF_8),
-                        32);
-                    if (pad == null) {
-                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：指纹密钥派生失败");
-                        return;
-                    }
-                    for (int i = 0; i < 32; i++) {
-                        key[i] ^= pad[i];
-                    }
-                }
-                // 诊断日志：打印 key 哈希与 axb 结构。解密 100% 在 native 层完成，
-                // Java 层不再持有任何 AES/GZIP 解密逻辑，因此不构造明文 payload。
-                String keyHash = sha256Hex(key);
-                String ivHex = bytesToHex(java.util.Arrays.copyOfRange(axb, 4, 16));
-                plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 诊断: keyHash=" + keyHash + ", ivHex=" + ivHex + ", axbLen=" + axb.length);
-
-                byte[] jarBytes;
-                try {
-                    // native 自己处理 magic(4)，传完整 axb
-                    jarBytes = NativeBridge.n4(axb, key);
-                } catch (Exception e) {
-                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密抛异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
-                    jarBytes = null;
-                }
-                if (jarBytes == null || jarBytes.length == 0) {
-                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密失败，已拒绝加载该模块。"
-                        + "解密仅在 native 安全库中进行，不提供 Java 回退。请确认 native 库版本与 axb 匹配且 moduleKey 正确。");
-                    return;
-                }
-                plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 解密成功: " + jarBytes.length + " 字节");
-                final byte[] finalJarBytes = jarBytes;
-                plugin.getServer().getScheduler().runTask(plugin, () -> {
-                    if (registry.isModuleLoaded(moduleId)) {
-                        plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载，跳过重复加载");
-                        return;
-                    }
-                    boolean ok = registry.loadCloudModule(finalJarBytes);
-                    if (ok) {
-                        plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载");
-                    } else {
-                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 加载失败：可能缺少依赖或该模块已在 config.yml 中关闭");
-                    }
-                });
-            });
+            return decryptAndLoad(moduleId, axb, false);
         });
 
         work.whenComplete((v, ex) -> {
@@ -551,6 +478,110 @@ public final class CloudModuleService {
             else placeholder.complete(v);
         });
         return placeholder;
+    }
+
+    /**
+     * 获取模块密钥 → 指纹解绑 → native 解密 → 主线程加载。
+     * 当下发了指纹绑定 key（keyBind=fp-hkdf-v1）但 native 解密失败时（多为本机指纹与服务端
+     * 存库指纹漂移，导致解绑 pad 不一致、还原出错误 key），自动重新绑定一次（服务端按
+     * userQq+pubkey 命中既有 serverCode 并刷新 fingerprintHash）后用刷新的指纹/令牌重试一次，
+     * isRetry 作为防循环标志，确保最多自愈一次。
+     */
+    private CompletableFuture<Void> decryptAndLoad(String moduleId, byte[] axb, boolean isRetry) {
+        return retryAsync(moduleId, "密钥获取", 3, 2000L, () -> requestModuleKey(moduleId)).thenCompose(keyResp -> {
+            if (keyResp == null) {
+                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：无法获取解密密钥");
+                return CompletableFuture.<Void>completedFuture(null);
+            }
+            String keyB64 = extractJsonField(keyResp, "key");
+            if (keyB64 == null || keyB64.isEmpty()) {
+                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：云端密钥响应缺少 key 字段");
+                return CompletableFuture.<Void>completedFuture(null);
+            }
+            byte[] key;
+            try {
+                key = Base64.getDecoder().decode(keyB64);
+            } catch (IllegalArgumentException e) {
+                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：密钥不是有效的 Base64 编码");
+                return CompletableFuture.<Void>completedFuture(null);
+            }
+            if (key.length != 32) {
+                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：密钥长度错误 (" + key.length + " 字节)，应为 32 字节。请检查云端模块上传时填写的 moduleKey");
+                return CompletableFuture.<Void>completedFuture(null);
+            }
+            // 指纹绑定密钥还原：云端下发的 key = moduleKey XOR HKDF(本机指纹)。
+            // 用本机实时指纹重新派生 pad 还原真实 moduleKey；换机器指纹不同 → 还原出错误 key → native 解密失败。
+            String keyBind = extractJsonField(keyResp, "keyBind");
+            if ("fp-hkdf-v1".equals(keyBind)) {
+                String version = extractJsonField(keyResp, "version");
+                String fph = sha256(generateFingerprint());
+                byte[] pad = hkdfSha256(
+                    fph.getBytes(StandardCharsets.UTF_8),
+                    KEY_BIND_SALT.getBytes(StandardCharsets.UTF_8),
+                    ("axs-module-key|" + moduleId + "|" + (version == null ? "" : version)).getBytes(StandardCharsets.UTF_8),
+                    32);
+                if (pad == null) {
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 同步中止：指纹密钥派生失败");
+                    return CompletableFuture.<Void>completedFuture(null);
+                }
+                for (int i = 0; i < 32; i++) {
+                    key[i] ^= pad[i];
+                }
+            }
+            // 诊断日志：打印 key 哈希与 axb 结构。解密 100% 在 native 层完成，
+            // Java 层不再持有任何 AES/GZIP 解密逻辑，因此不构造明文 payload。
+            String keyHash = sha256Hex(key);
+            String ivHex = bytesToHex(java.util.Arrays.copyOfRange(axb, 4, 16));
+            plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 诊断: keyHash=" + keyHash + ", ivHex=" + ivHex + ", axbLen=" + axb.length);
+
+            byte[] jarBytes;
+            try {
+                // native 自己处理 magic(4)，传完整 axb
+                jarBytes = NativeBridge.n4(axb, key);
+            } catch (Exception e) {
+                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密抛异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                jarBytes = null;
+            }
+            if (jarBytes == null || jarBytes.length == 0) {
+                // 自愈：指纹绑定 key 但 native 解密失败，多为本机指纹与服务端存库指纹漂移。
+                // 重新绑定一次（服务端按 userQq+pubkey 命中既有 serverCode 并刷新指纹）后重试，isRetry 防循环。
+                if (!isRetry && "fp-hkdf-v1".equals(keyBind)) {
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密失败，疑似本机指纹已变化，自动重新绑定并重试一次...");
+                    return bindServer().thenCompose(bound -> {
+                        if (!bound) {
+                            plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 自动重新绑定失败，放弃加载。");
+                            return CompletableFuture.<Void>completedFuture(null);
+                        }
+                        return refreshToken(true).thenCompose(ok -> {
+                            if (!ok) {
+                                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 重绑后刷新令牌失败，放弃加载。");
+                                return CompletableFuture.<Void>completedFuture(null);
+                            }
+                            plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已重新绑定指纹，重试解密同步...");
+                            return decryptAndLoad(moduleId, axb, true);
+                        });
+                    });
+                }
+                plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密失败，已拒绝加载该模块。"
+                    + "解密仅在 native 安全库中进行，不提供 Java 回退。请确认 native 库版本与 axb 匹配且 moduleKey 正确。");
+                return CompletableFuture.<Void>completedFuture(null);
+            }
+            plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 解密成功: " + jarBytes.length + " 字节");
+            final byte[] finalJarBytes = jarBytes;
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                if (registry.isModuleLoaded(moduleId)) {
+                    plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载，跳过重复加载");
+                    return;
+                }
+                boolean ok = registry.loadCloudModule(finalJarBytes);
+                if (ok) {
+                    plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载");
+                } else {
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 加载失败：可能缺少依赖或该模块已在 config.yml 中关闭");
+                }
+            });
+            return CompletableFuture.<Void>completedFuture(null);
+        });
     }
 
     private CompletableFuture<byte[]> downloadAxb(String moduleId) {
