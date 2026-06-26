@@ -12,6 +12,7 @@ jbyteArray decryptResource(JNIEnv *env, jclass clazz, jbyteArray encrypted, jbyt
 jbyteArray unwrapResourceKey(JNIEnv *env, jclass clazz, jbyteArray wrappedKey, jbyteArray iv, jbyteArray material);
 jint environmentCheck(JNIEnv *env, jclass clazz);
 jbyteArray decryptModule(JNIEnv *env, jclass clazz, jbyteArray encryptedAxb, jbyteArray key);
+jbyteArray decryptModuleVerified(JNIEnv *env, jclass clazz, jbyteArray encryptedAxb, jbyteArray key, jbyteArray signature);
 
 // ═══ JAR 保护层新增方法 ═══════════════════════════════════════════
 jint initProtection(JNIEnv *env, jclass clazz);
@@ -30,6 +31,8 @@ void get_hardware_fingerprint(uint8_t out[32]);
 
 // Native 自校验（integrity_check.cpp）
 bool verify_native_self_integrity();
+// .axb 验签复用的 Ed25519 公钥（integrity_check.cpp 内嵌的同一密钥）
+const uint8_t* axb_sign_pubkey();
 
 // JNI_OnLoad
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved);

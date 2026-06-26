@@ -103,3 +103,63 @@ jbyteArray decryptModule(
     env->SetByteArrayRegion(result, 0, (jsize)plain.size(), (jbyte *)plain.data());
     return result;
 }
+
+// ─── V6：先验 .axb 的 Ed25519 平台签名，再解密 ───────────────────
+//
+// 平台用私钥对整条 .axb 文件签名（services/crypto.ts signAxb），native 用
+// integrity_check.cpp 内嵌的同一密钥对公钥验签。验签通过才解密，阻断被篡改/
+// 伪造的 .axb 注入。
+//
+// 公钥占位（全 0，generate-keys/embed-keys 尚未注入真实公钥）时跳过验签，兼容
+// 未启用平台签名的构建；一旦嵌入真实公钥即强制验签：签名缺失/长度不符/无效一律拒绝。
+
+static bool axb_signature_valid(
+    const unsigned char *axb, size_t axb_len,
+    const unsigned char *sig, size_t sig_len) {
+
+    const uint8_t *pub = axb_sign_pubkey();
+    bool placeholder = true;
+    for (int i = 0; i < 32; i++) {
+        if (pub[i] != 0) { placeholder = false; break; }
+    }
+    if (placeholder) return true; // 未启用平台签名，放行（与后端空签名策略一致）
+
+    if (!sig || sig_len != 64) return false;
+
+    EVP_PKEY *pkey = EVP_PKEY_new_raw_public_key(EVP_PKEY_ED25519, nullptr, pub, 32);
+    if (!pkey) return false;
+
+    bool ok = false;
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    if (mdctx && EVP_DigestVerifyInit(mdctx, nullptr, nullptr, nullptr, pkey) == 1) {
+        ok = (EVP_DigestVerify(mdctx, sig, sig_len, axb, axb_len) == 1);
+    }
+    if (mdctx) EVP_MD_CTX_free(mdctx);
+    EVP_PKEY_free(pkey);
+    return ok;
+}
+
+jbyteArray decryptModuleVerified(
+    JNIEnv *env, jclass clazz,
+    jbyteArray encryptedAxb, jbyteArray key, jbyteArray signature) {
+
+    if (!encryptedAxb || !key) return nullptr;
+
+    jsize axb_len = env->GetArrayLength(encryptedAxb);
+    jsize sig_len = signature ? env->GetArrayLength(signature) : 0;
+
+    auto *axb_data = (unsigned char *)env->GetByteArrayElements(encryptedAxb, nullptr);
+    unsigned char *sig_data = signature
+        ? (unsigned char *)env->GetByteArrayElements(signature, nullptr)
+        : nullptr;
+
+    bool ok = axb_signature_valid(axb_data, (size_t)axb_len, sig_data, (size_t)sig_len);
+
+    env->ReleaseByteArrayElements(encryptedAxb, (jbyte *)axb_data, JNI_ABORT);
+    if (sig_data) env->ReleaseByteArrayElements(signature, (jbyte *)sig_data, JNI_ABORT);
+
+    if (!ok) return nullptr; // 平台签名校验未通过，拒绝解密
+
+    // 验签通过：复用既有 AES-256-GCM + GZIP 解密路径
+    return decryptModule(env, clazz, encryptedAxb, key);
+}

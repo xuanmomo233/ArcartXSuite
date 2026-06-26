@@ -12,6 +12,9 @@ static const uint8_t ed25519_public_key[32] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
+// 供 module_decrypt.cpp 复用同一 Ed25519 公钥验证 .axb 签名（单一来源，避免重复嵌入）。
+const uint8_t* axb_sign_pubkey() { return ed25519_public_key; }
+
 /**
  * 验证 Merkle 根哈希的 Ed25519 签名。
  * rootHash: 32 字节 SHA-256

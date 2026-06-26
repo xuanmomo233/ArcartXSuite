@@ -534,10 +534,21 @@ public final class CloudModuleService {
             String ivHex = bytesToHex(java.util.Arrays.copyOfRange(axb, 4, 16));
             plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 诊断: keyHash=" + keyHash + ", ivHex=" + ivHex + ", axbLen=" + axb.length);
 
+            // V6：.axb Ed25519 签名（服务端用平台私钥对完整 axb 签名）。
+            // native 在 AES-GCM 解密前先验签；签名为空（后端未启用签名）时 native 跳过验签。
+            String sigB64 = extractJsonField(keyResp, "signature");
+            byte[] sigBytes;
+            try {
+                sigBytes = (sigB64 == null || sigB64.isEmpty())
+                    ? new byte[0]
+                    : Base64.getDecoder().decode(sigB64);
+            } catch (IllegalArgumentException e) {
+                sigBytes = new byte[0];
+            }
             byte[] jarBytes;
             try {
-                // native 自己处理 magic(4)，传完整 axb
-                jarBytes = NativeBridge.n4(axb, key);
+                // native 自己处理 magic(4)，传完整 axb；先验签再解密
+                jarBytes = NativeBridge.n10(axb, key, sigBytes);
             } catch (Exception e) {
                 plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密抛异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
                 jarBytes = null;

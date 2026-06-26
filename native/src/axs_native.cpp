@@ -46,6 +46,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
         {"n2", "([B[B[B)[B", reinterpret_cast<void *>(unwrapResourceKey)},
         {"n3", "()I",         reinterpret_cast<void *>(environmentCheck)},
         {"n4", "([B[B)[B",   reinterpret_cast<void *>(decryptModule)},
+        {"n10", "([B[B[B)[B", reinterpret_cast<void *>(decryptModuleVerified)},
         // JAR 保护层新增
         {"n5", "()I",         reinterpret_cast<void *>(initProtection)},
         {"n6", "([B[B)[B",   reinterpret_cast<void *>(decryptClass)},

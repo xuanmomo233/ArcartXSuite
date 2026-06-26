@@ -44,6 +44,15 @@ jobs:
           #   → 覆盖 root_seed.bin（encrypt-jar 用）→ patch class_decrypt.cpp / integrity_check.cpp
           python scripts/embed-keys.py --keys-dir "$KEYS_DIR" --native-dir native/src
 
+      - name: Generate DLL encryption key + patch NativeBridge
+        run: |
+          set -euo pipefail
+          mkdir -p protect-out
+          # V2: 生成 32 字节 DLL 加密密钥，将密钥片段嵌入 NativeBridge.java，输出 dll_key.bin
+          python scripts/encrypt-native.py gen-key \
+            --patch-java src/main/java/xuanmo/arcartxsuite/security/NativeBridge.java \
+            --output-key protect-out/dll_key.bin
+
       - name: Package protection material
         run: |
           set -euo pipefail
@@ -51,6 +60,8 @@ jobs:
           cp -r keys protect-out/keys
           cp native/src/class_decrypt.cpp protect-out/native-src/class_decrypt.cpp
           cp native/src/integrity_check.cpp protect-out/native-src/integrity_check.cpp
+          # V2: 携带已 patch 密钥片段的 NativeBridge.java（dll_key.bin 已在上一步写入 protect-out）
+          cp src/main/java/xuanmo/arcartxsuite/security/NativeBridge.java protect-out/native-src/NativeBridge.java
 
       - uses: actions/upload-artifact@v5
         with:
@@ -213,6 +224,18 @@ jobs:
       - name: List native artifacts
         run: ls -la src/main/resources/native/
 
+      - name: Apply patched NativeBridge (V2 DLL 加密密钥片段)
+        run: cp protect-material/native-src/NativeBridge.java src/main/java/xuanmo/arcartxsuite/security/NativeBridge.java
+
+      - name: Encrypt native libraries (V2 at-rest)
+        run: |
+          set -euo pipefail
+          # 将明文 .dll/.so 用 AES-256-GCM 加密为 .enc，删除明文；密钥由上面 NativeBridge 内片段重组
+          python scripts/encrypt-native.py encrypt \
+            --key protect-material/dll_key.bin \
+            --native-dir src/main/resources/native/
+          ls -la src/main/resources/native/
+
       - uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.10.2'
@@ -230,7 +253,7 @@ jobs:
           echo "Obfuscated JAR: $JAR_PATH"
           echo "JAR_PATH=$JAR_PATH" >> "$GITHUB_ENV"
           cd src/main/resources
-          jar uf "$JAR_PATH" native/axs-native.dll native/libaxs-native.so
+          jar uf "$JAR_PATH" native/axs-native.enc native/libaxs-native.enc
           cd - > /dev/null
 
       - name: Encrypt core classes

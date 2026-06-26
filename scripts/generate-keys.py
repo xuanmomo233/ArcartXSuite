@@ -17,6 +17,7 @@ import os
 import secrets
 import struct
 import sys
+import base64
 from pathlib import Path
 from datetime import datetime
 
@@ -43,14 +44,19 @@ def generate_ed25519_keypair():
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
-        return private_pem, public_pem
+        raw_seed = private_key.private_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PrivateFormat.Raw,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+        return private_pem, public_pem, raw_seed
     else:
         # 回退：使用 secrets 生成随机种子（不生成真正的 Ed25519 密钥）
         print("[!] cryptography 库未安装，使用随机种子替代 Ed25519 密钥")
         print("[!] 请安装: pip install cryptography")
         private_seed = secrets.token_bytes(32)
         public_seed = hashlib.sha256(private_seed).digest()
-        return private_seed, public_seed
+        return private_seed, public_seed, private_seed
 
 
 def generate_root_seed():
@@ -135,7 +141,7 @@ def main():
 
     # 1. 生成 Ed25519 密钥对
     print("[1/5] 生成 Ed25519 签名密钥对...")
-    private_key, public_key = generate_ed25519_keypair()
+    private_key, public_key, axb_sign_seed = generate_ed25519_keypair()
 
     # 注意：crypto 分支返回的是 PEM 字节（也是 bytes），不能用 isinstance(bytes) 区分，
     # 必须用 HAS_CRYPTO 判定，否则会永远走回退命名、永远不产出 .pem。
@@ -146,6 +152,12 @@ def main():
         # 回退模式（无 cryptography）：写原始字节，文件名与 embed-keys 期望的 *_raw.bin 对齐
         (version_dir / "ed25519_private_raw.bin").write_bytes(private_key)
         (version_dir / "ed25519_public_raw.bin").write_bytes(public_key)
+
+    # V6: 后端 .axb 签名私钥（= 与 native 内嵌公钥同一 Ed25519 密钥对的原始 32 字节种子）。
+    # 运维把此 Base64 配置到后端 AXB_SIGN_PRIVATE_KEY_B64，即可与 native 验签公钥匹配。
+    (version_dir / "axb_sign_private_key_b64.txt").write_text(
+        base64.b64encode(axb_sign_seed).decode("ascii")
+    )
 
     # 2. 生成 root seed
     print("[2/5] 生成 root seed...")
