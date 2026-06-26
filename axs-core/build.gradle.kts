@@ -67,7 +67,7 @@ tasks {
         dependsOn(protectYamlResources)
         doFirst {
             // jar 跨平台分发，只要包含任一平台的 native 库即可放行构建
-            val expectedLibs = listOf("axs-native.dll", "libaxs-native.so", "libaxs-native.dylib")
+            val expectedLibs = listOf("axs-native.dll", "libaxs-native.so", "libaxs-native.dylib", "axs-native.enc", "libaxs-native.enc", "libaxs-native.dylib.enc")
             val found = expectedLibs.map { nativeLibDir.file(it).asFile }.filter { it.exists() }
             val isCi = System.getenv("GITHUB_ACTIONS") != null
             if (found.isEmpty()) {
