@@ -447,7 +447,7 @@ jobs:
           # -Paxs.protectModules：逐类 AES-GCM/ChaCha20 加密（与本体同一 canonical root_seed）
           #   encryptModuleClasses 内部以 --no-native 调 encrypt-jar.py，复用 keys/ 里的 root_seed，
           #   不需要本体 native 库；任务链 jar→obfuscate→stringEncrypt→encryptClasses→axb 可独立运行。
-          gradle clean $TASKS -Paxs.protectModules --no-build-cache
+          gradle clean $TASKS -Paxs.protectModules -PskipNativeCheck=true --no-build-cache
           echo "=== 生成的 .axb ==="
           ls -la build/ArcartX-Suite/module-axb/ || echo "DIR NOT FOUND"
 
