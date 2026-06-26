@@ -464,6 +464,13 @@ jobs:
           if [ ! -d "$AXB_DIR" ]; then
             echo "ERROR: 未找到 .axb 目录 $AXB_DIR"; exit 1
           fi
+          # 模块版本与本体统一为 <ver>-ci.<短sha>：ver 取自 gradle.properties（与本体同源）。
+          BASEVER=$(grep -E '^version=' gradle.properties | head -n1 | cut -d= -f2 | tr -d '[:space:]')
+          if [ -z "$BASEVER" ]; then
+            echo "ERROR: 无法从 gradle.properties 读取 version"; exit 1
+          fi
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          VERSION="${BASEVER}-ci.${SHORT_SHA}"
           CHANGED='${{ needs.detect-changes.outputs.changed_modules }}'
           for module in $(echo "$CHANGED" | jq -r '.[]'); do
             meta="$AXB_DIR/${module}.meta.json"
@@ -474,7 +481,7 @@ jobs:
             fi
             key=$(jq -r '.moduleKey' "$meta")
             iv=$(jq -r '.moduleIv' "$meta")
-            version="ci-${{ github.sha }}"
+            version="$VERSION"
             echo "Uploading $module ($version) ..."
             curl -fSs -F "axb=@$axb" \
               -F "version=$version" \
