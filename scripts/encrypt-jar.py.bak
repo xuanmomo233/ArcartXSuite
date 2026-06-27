@@ -463,33 +463,10 @@ def main():
         len(final_enc_entries), list(algorithms_used), native_platforms, signature, root_hash
     )
 
-    # 保留原始 MANIFEST.MF 主属性区，并做净化防御。
-    # Protection-Enabled 标记已移至 PROTECTION.MF，无需写入 MANIFEST.MF。
-    # 防御点：旧版本曾把 Protection-Enabled 追加到「终止空行之后」，导致 Java
-    #   java.util.jar.Manifest 把它当成必须以 "Name:" 开头的分段条目，抛
-    #   "invalid manifest format (line N)"，插件无法加载。这里只保留首个空行前的
-    #   主属性区（含折叠续行），丢弃空行后的任何残留（插件 jar 无 per-entry 段，
-    #   签名段也已在别处剥离），确保输出 manifest 永远合法。
-    def _sanitize_main_manifest(raw: bytes) -> bytes:
-        text = raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
-        main = []
-        for line in text.split(b"\n"):
-            if line == b"":
-                break  # 主属性区在首个空行结束
-            main.append(line)
-        if not main or not main[0].lower().startswith(b"manifest-version:"):
-            main = [b"Manifest-Version: 1.0"] + [
-                l for l in main if not l.lower().startswith(b"manifest-version:")
-            ]
-        return b"".join(l + b"\r\n" for l in main) + b"\r\n"
-
-    raw_manifest = all_files.get("META-INF/MANIFEST.MF", b"Manifest-Version: 1.0\r\n\r\n")
-    manifest_bytes = _sanitize_main_manifest(raw_manifest)
-    if manifest_bytes != raw_manifest:
-        print(f"    MANIFEST.MF 原始字节: {repr(raw_manifest[:120])}")
-        print(f"    MANIFEST.MF 净化后:   {repr(manifest_bytes[:120])}")
-    else:
-        print(f"    MANIFEST.MF 字节: {repr(manifest_bytes[:120])}")
+    # 保留原始 MANIFEST.MF 字节，不做任何修改
+    # Protection-Enabled 标记已移至 PROTECTION.MF，无需写入 MANIFEST.MF
+    manifest_bytes = all_files.get("META-INF/MANIFEST.MF", b"Manifest-Version: 1.0\r\n\r\n")
+    print(f"    MANIFEST.MF 原始字节: {repr(manifest_bytes[:120])}")
 
     def _is_sig_file(n):
         u = n.upper()
