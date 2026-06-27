@@ -186,18 +186,59 @@ public final class ProtectionInit {
             java.lang.reflect.Field tu = unsafeClass.getDeclaredField("theUnsafe");
             tu.setAccessible(true);
             Object unsafe = tu.get(null);
-            java.lang.reflect.Field parentField = ClassLoader.class.getDeclaredField("parent");
-            java.lang.reflect.Method offsetM =
-                    unsafeClass.getMethod("objectFieldOffset", java.lang.reflect.Field.class);
-            long off = (Long) offsetM.invoke(unsafe, parentField);
             java.lang.reflect.Method putM =
                     unsafeClass.getMethod("putObject", Object.class, long.class, Object.class);
+
+            long off = resolveParentFieldOffset(unsafeClass, unsafe);
+            if (off < 0L) {
+                LOGGER.severe("[Protection] 无法定位 ClassLoader.parent 字段偏移");
+                return false;
+            }
             putM.invoke(unsafe, target, off, newParent);
             return target.getParent() == newParent;
         } catch (Throwable t) {
             LOGGER.severe("[Protection] Unsafe parent 替换异常: " + t);
             return false;
         }
+    }
+
+    /**
+     * 定位 {@code java.lang.ClassLoader.parent} 实例字段的偏移量。
+     *
+     * <p>Java 12+ 的核心反射「字段过滤」会隐藏 {@code java.lang.ClassLoader} 的全部声明字段，
+     * 使 {@code ClassLoader.class.getDeclaredField("parent")} 抛 {@link NoSuchFieldException}。
+     * 为此优先尝试常规反射（旧 JDK 可行），失败后改用「唯一哨兵探针」：构造一个 parent 指向
+     * 全新唯一对象的临时 ClassLoader，用 Unsafe 逐偏移扫描该引用所在位置——因为 parent 声明于
+     * 基类 ClassLoader，其字段偏移对所有子类（含 PluginClassLoader）一致。
+     *
+     * @return parent 字段偏移；定位失败返回 -1。
+     */
+    @SuppressWarnings("removal")
+    private static long resolveParentFieldOffset(Class<?> unsafeClass, Object unsafe) {
+        // 优先：常规反射 + objectFieldOffset（未启用字段过滤的旧 JDK 可行）。
+        try {
+            java.lang.reflect.Field parentField = ClassLoader.class.getDeclaredField("parent");
+            java.lang.reflect.Method offsetM =
+                    unsafeClass.getMethod("objectFieldOffset", java.lang.reflect.Field.class);
+            return (Long) offsetM.invoke(unsafe, parentField);
+        } catch (Throwable ignored) {
+            // 落到哨兵探针。
+        }
+        try {
+            java.lang.reflect.Method getObjM =
+                    unsafeClass.getMethod("getObject", Object.class, long.class);
+            final ClassLoader sentinel = new ClassLoader(null) {};
+            final ClassLoader probe = new ClassLoader(sentinel) {};
+            for (long off = 8L; off <= 512L; off += 4L) {
+                Object v = getObjM.invoke(unsafe, probe, off);
+                if (v == sentinel) {
+                    return off;
+                }
+            }
+        } catch (Throwable t) {
+            LOGGER.severe("[Protection] 哨兵探针定位 parent 偏移失败: " + t);
+        }
+        return -1L;
     }
 
     /**
