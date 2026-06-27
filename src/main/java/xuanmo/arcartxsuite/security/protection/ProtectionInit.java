@@ -225,14 +225,44 @@ public final class ProtectionInit {
             // 落到哨兵探针。
         }
         try {
-            java.lang.reflect.Method getObjM =
-                    unsafeClass.getMethod("getObject", Object.class, long.class);
+            // 安全扫描：只用 getInt/getLong 读「原始字节」，绝不用 getObject——后者会把任意槽
+            // 当作压缩 oop 解码，读到非引用槽时会产出野指针，GC/JIT 处理时崩溃（EXCEPTION_ACCESS_VIOLATION）。
+            // 做法：把哨兵放进一个已知的 Object[] 槽，用 getInt/getLong 读出它的「压缩 oop 原始值」，
+            // 再在 probe 的字节里精确匹配该值定位 parent 偏移。匹配是数值相等，不解引用，故安全。
+            java.lang.reflect.Method getIntM =
+                    unsafeClass.getMethod("getInt", Object.class, long.class);
+            java.lang.reflect.Method getLongM =
+                    unsafeClass.getMethod("getLong", Object.class, long.class);
+            java.lang.reflect.Method abaseM =
+                    unsafeClass.getMethod("arrayBaseOffset", Class.class);
+            java.lang.reflect.Method ascaleM =
+                    unsafeClass.getMethod("arrayIndexScale", Class.class);
+
+            int scale = (Integer) ascaleM.invoke(unsafe, Object[].class);
+            long base = ((Number) abaseM.invoke(unsafe, Object[].class)).longValue();
+
             final ClassLoader sentinel = new ClassLoader(null) {};
             final ClassLoader probe = new ClassLoader(sentinel) {};
-            for (long off = 8L; off <= 512L; off += 4L) {
-                Object v = getObjM.invoke(unsafe, probe, off);
-                if (v == sentinel) {
-                    return off;
+            final Object[] holder = new Object[] { sentinel };
+
+            // GC 可能在两次读之间移动 sentinel（其压缩 oop 值随之改变），重试数次规避 TOCTOU。
+            for (int attempt = 0; attempt < 8; attempt++) {
+                if (scale == 4) {
+                    int needle = (Integer) getIntM.invoke(unsafe, holder, base);
+                    if (needle == 0) continue;
+                    for (long off = 8L; off <= 256L; off += 4L) {
+                        if ((Integer) getIntM.invoke(unsafe, probe, off) == needle) {
+                            return off;
+                        }
+                    }
+                } else {
+                    long needle = (Long) getLongM.invoke(unsafe, holder, base);
+                    if (needle == 0L) continue;
+                    for (long off = 8L; off <= 256L; off += 8L) {
+                        if ((Long) getLongM.invoke(unsafe, probe, off) == needle) {
+                            return off;
+                        }
+                    }
                 }
             }
         } catch (Throwable t) {
