@@ -75,9 +75,6 @@ subprojects {
             // 运行时由升级后的 ByteArrayModuleClassLoader 调 native n6 逐类解密。
             // 默认关闭：未传 -Paxs.protectModules 时 .axb 仍封装明文类 Jar（与现有发布流程一致）。
             val protectModules = project.hasProperty("axs.protectModules")
-            // 配置期捕获模块名，避免在执行期（doLast / 懒求值 lambda）调用 Task.project
-            // ——会触发 Gradle 配置缓存报错（config_cache:requirements:use_project_during_execution）。
-            val moduleName = project.name
             val encryptedClassesModuleJar = distDir.map { it.file("modules-enc/${moduleJarTask.get().archiveFileName.get()}") }
             val scriptsDir = rootProject.file("scripts")
             val nativeBuildDir = rootProject.file("native/build")
@@ -87,7 +84,7 @@ subprojects {
             //   (2) 外层 .axb 的 AES-256-GCM 密钥（EncryptModuleAxbTask）
             // 于是模块逐类加密与本体 root_seed 完全解耦、自包含；moduleKey 随 .axb 上传云端，
             // 运行期指纹绑定下发，ByteArrayModuleClassLoader 用它调 native n11 解密。
-            val moduleKeyFileProvider = distDir.map { it.file("modulekeys/${moduleName}.key") }
+            val moduleKeyFileProvider = distDir.map { it.file("modulekeys/${project.name}.key") }
             val generateModuleKey = tasks.register("generateModuleKey") {
                 group = "protection"
                 description = "生成/复用该模块的 32 字节 moduleKey（逐类种子 = 外层 .axb AES key）"
@@ -100,9 +97,9 @@ subprojects {
                         val k = ByteArray(32)
                         java.security.SecureRandom().nextBytes(k)
                         f.writeText(java.util.Base64.getEncoder().encodeToString(k))
-                        logger.lifecycle("[generateModuleKey] ${moduleName} 新建 moduleKey")
+                        logger.lifecycle("[generateModuleKey] ${project.name} 新建 moduleKey")
                     } else {
-                        logger.lifecycle("[generateModuleKey] ${moduleName} 复用已有 moduleKey")
+                        logger.lifecycle("[generateModuleKey] ${project.name} 复用已有 moduleKey")
                     }
                 }
             }
@@ -147,9 +144,9 @@ subprojects {
                 description = "将模块 Jar 加密为 .axb（上传云端用）"
                 dependsOn(if (protectModules) encryptModuleClasses else stringEncryptModule)
                 inputJar.set(axbSourceJar.map { it } as Provider<RegularFile>)
-                outputAxb.set(distDir.map { it.file("module-axb/${moduleName}.axb") })
-                val keyProp = project.findProperty("module.${moduleName}.key") as String?
-                val ivProp = project.findProperty("module.${moduleName}.iv") as String?
+                outputAxb.set(distDir.map { it.file("module-axb/${project.name}.axb") })
+                val keyProp = project.findProperty("module.${project.name}.key") as String?
+                val ivProp = project.findProperty("module.${project.name}.iv") as String?
                 if (keyProp != null) moduleKey.set(keyProp)
                 if (ivProp != null) moduleIv.set(ivProp)
                 // 方案 B：开启逐类加密时，外层 .axb 复用与逐类加密同一份 moduleKey（取代随机/-P）。
