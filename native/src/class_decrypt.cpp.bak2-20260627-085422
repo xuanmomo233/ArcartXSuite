@@ -153,32 +153,12 @@ bool protection_init_keys() {
 
 // ─── Per-Class 密钥派生 ──────────────────────────────────────────
 
-static void derive_class_key_from_session(const uint8_t session[32],
-                                          const uint8_t class_name_hash[32],
-                                          uint8_t class_key[32]) {
+static void derive_class_key(const uint8_t class_name_hash[32], uint8_t class_key[32]) {
     uint8_t prk[32];
-    hkdf_extract(class_name_hash, 32, session, 32, prk);
+    hkdf_extract(class_name_hash, 32, session_key, 32, prk);
     static const uint8_t info_class[] = "class_key_v1";
     hkdf_expand(prk, info_class, sizeof(info_class) - 1, class_key, 32);
     memset(prk, 0, sizeof(prk));
-}
-
-// 方案 B（自包含模块）：由任意 32 字节种子（= 云端下发的 moduleKey）派生 session_key。
-// HKDF 链与 protection_init_keys() 逐位等价，仅 root_seed 输入替换为外部种子，
-// 因此与 scripts/encrypt-jar.py --module-seed-b64 路径产出的密文兼容。
-static void derive_session_from_seed(const uint8_t seed[32], uint8_t out_session[32]) {
-    uint8_t prk[32];
-    uint8_t mk[32];
-    // Layer 1: master_key = HKDF(seed, salt=build_salt_l1)
-    hkdf_extract(build_salt_l1, sizeof(build_salt_l1) - 1, seed, 32, prk);
-    static const uint8_t info_master[] = "master_key_v1";
-    hkdf_expand(prk, info_master, sizeof(info_master) - 1, mk, 32);
-    // Layer 2: session_key = HKDF(master_key, salt=build_salt_l2)
-    hkdf_extract(build_salt_l2, sizeof(build_salt_l2) - 1, mk, 32, prk);
-    static const uint8_t info_session[] = "session_key_v1";
-    hkdf_expand(prk, info_session, sizeof(info_session) - 1, out_session, 32);
-    memset(prk, 0, sizeof(prk));
-    memset(mk, 0, sizeof(mk));
 }
 
 // ─── 解密单个类 ─────────────────────────────────────────────────
@@ -190,10 +170,9 @@ static void derive_session_from_seed(const uint8_t seed[32], uint8_t out_session
 // [16 bytes] auth tag
 // [32 bytes] class name hash
 
-// 用给定 session_key 解密单个 .enc 类（本体路径与模块路径共用）。
-static jbyteArray decrypt_class_with_session(
-        JNIEnv *env, const uint8_t session[32],
-        jbyteArray classNameHash, jbyteArray encData) {
+jbyteArray decryptClass(JNIEnv *env, jclass clazz, jbyteArray classNameHash, jbyteArray encData) {
+    if (!keys_initialized) return nullptr;
+
     jsize hash_len = env->GetArrayLength(classNameHash);
     jsize enc_len = env->GetArrayLength(encData);
     if (hash_len != 32 || enc_len < 1 + 12 + 4 + 16 + 32) return nullptr;
@@ -231,7 +210,7 @@ static jbyteArray decrypt_class_with_session(
 
     // 派生 per-class 密钥
     uint8_t class_key[32];
-    derive_class_key_from_session(session, hash_bytes, class_key);
+    derive_class_key(hash_bytes, class_key);
 
     // AAD = 类名哈希前 16 字节
     uint8_t aad[16];
@@ -282,28 +261,6 @@ static jbyteArray decrypt_class_with_session(
     env->ReleaseByteArrayElements(classNameHash, hash_raw, JNI_ABORT);
     env->ReleaseByteArrayElements(encData, enc_raw, JNI_ABORT);
 
-    return result;
-}
-
-// ─── 本体路径：用全局 session_key（root_seed 派生）解密 ──────────
-jbyteArray decryptClass(JNIEnv *env, jclass clazz, jbyteArray classNameHash, jbyteArray encData) {
-    if (!keys_initialized) return nullptr;
-    return decrypt_class_with_session(env, session_key, classNameHash, encData);
-}
-
-// ─── 模块路径（方案 B）：用云端下发的 moduleKey 作种子派生 session 后解密 ──
-// n11：与 decryptClass 同样的 .enc 格式，但 session 来自模块自带的 32 字节种子，
-// 与本体 root_seed 完全解耦——模块自包含，任意已装 native 的本体都能解密。
-jbyteArray decryptModuleClass(
-        JNIEnv *env, jclass clazz,
-        jbyteArray classNameHash, jbyteArray encData, jbyteArray moduleSeed) {
-    if (!moduleSeed || env->GetArrayLength(moduleSeed) != 32) return nullptr;
-    jbyte *seed_raw = env->GetByteArrayElements(moduleSeed, nullptr);
-    uint8_t session[32];
-    derive_session_from_seed(reinterpret_cast<uint8_t*>(seed_raw), session);
-    env->ReleaseByteArrayElements(moduleSeed, seed_raw, JNI_ABORT);
-    jbyteArray result = decrypt_class_with_session(env, session, classNameHash, encData);
-    memset(session, 0, sizeof(session));
     return result;
 }
 

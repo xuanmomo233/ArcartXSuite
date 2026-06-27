@@ -78,62 +78,32 @@ subprojects {
             val encryptedClassesModuleJar = distDir.map { it.file("modules-enc/${moduleJarTask.get().archiveFileName.get()}") }
             val scriptsDir = rootProject.file("scripts")
             val nativeBuildDir = rootProject.file("native/build")
-
-            // 方案 B：每模块一个 32 字节 moduleKey，同时作为
-            //   (1) 逐类加密种子（encrypt-jar.py --module-seed-b64）
-            //   (2) 外层 .axb 的 AES-256-GCM 密钥（EncryptModuleAxbTask）
-            // 于是模块逐类加密与本体 root_seed 完全解耦、自包含；moduleKey 随 .axb 上传云端，
-            // 运行期指纹绑定下发，ByteArrayModuleClassLoader 用它调 native n11 解密。
-            val moduleKeyFileProvider = distDir.map { it.file("modulekeys/${project.name}.key") }
-            val generateModuleKey = tasks.register("generateModuleKey") {
-                group = "protection"
-                description = "生成/复用该模块的 32 字节 moduleKey（逐类种子 = 外层 .axb AES key）"
-                val outFile = moduleKeyFileProvider
-                outputs.file(outFile)
-                doLast {
-                    val f = outFile.get().asFile
-                    if (!f.exists() || f.readText().trim().isEmpty()) {
-                        f.parentFile.mkdirs()
-                        val k = ByteArray(32)
-                        java.security.SecureRandom().nextBytes(k)
-                        f.writeText(java.util.Base64.getEncoder().encodeToString(k))
-                        logger.lifecycle("[generateModuleKey] ${project.name} 新建 moduleKey")
-                    } else {
-                        logger.lifecycle("[generateModuleKey] ${project.name} 复用已有 moduleKey")
-                    }
-                }
-            }
-
+            val keysRoot = rootProject.file("keys")
+            val keysMarker = keysRoot.resolve("current_version.txt")
+            val resolvedModuleKeysDir = if (keysMarker.exists())
+                keysRoot.resolve(keysMarker.readText().trim()).absolutePath
+            else
+                keysRoot.absolutePath
             val encryptModuleClasses = tasks.register<Exec>("encryptModuleClasses") {
                 group = "protection"
                 description = "对模块 Jar 做逐类字节码加密（Option 2，供云端下发）"
-                dependsOn(stringEncryptModule, generateModuleKey)
+                dependsOn(stringEncryptModule)
                 inputs.file(stringEncryptedModuleJar)
-                inputs.file(moduleKeyFileProvider)
                 outputs.file(encryptedClassesModuleJar)
-                val sIn = stringEncryptedModuleJar
-                val sOut = encryptedClassesModuleJar
-                val nbd = nativeBuildDir
-                val sdir = scriptsDir
-                val keyFp = moduleKeyFileProvider
-                // 种子在执行期才可读（generateModuleKey 产出），故在 doFirst 里设置 commandLine。
-                doFirst {
-                    val seedB64 = keyFp.get().asFile.readText().trim()
-                    commandLine(
-                        "python", "${sdir}/encrypt-jar.py",
-                        "--input", sIn.get().asFile.absolutePath,
-                        "--output", sOut.get().asFile.absolutePath,
-                        "--native-dir", nbd.absolutePath,
-                        "--module-seed-b64", seedB64,        // 方案 B：用模块自带 moduleKey 作种子，与本体 root_seed 解耦
-                        "--protection-level", "high",
-                        "--no-native",                         // 模块不嵌 native
-                        "--bootstrap-classes", "",             // 模块无引导类（入口由 -keep 保持明文）
-                        "--encrypt-prefixes", "",              // default-package 模式忽略前缀
-                        "--keep-prefixes", "xuanmo.arcartxsuite.api.,xuanmo.arcartxsuite.auth.",
-                        "--encrypt-mode", "default-package",   // 仅加密 -repackageclasses '' 扁平化后的模块自身代码
-                        "--fake-classes-count", "5"
-                    )
-                }
+                commandLine(
+                    "python", "${scriptsDir}/encrypt-jar.py",
+                    "--input", stringEncryptedModuleJar.get().asFile.absolutePath,
+                    "--output", encryptedClassesModuleJar.get().asFile.absolutePath,
+                    "--native-dir", nativeBuildDir.absolutePath,
+                    "--keys-dir", resolvedModuleKeysDir,
+                    "--protection-level", "high",
+                    "--no-native",                         // 模块不嵌 native，复用 core 提供的 root_seed
+                    "--bootstrap-classes", "",             // 模块无引导类（入口由 -keep 保持明文）
+                    "--encrypt-prefixes", "",              // default-package 模式忽略前缀
+                    "--keep-prefixes", "xuanmo.arcartxsuite.api.,xuanmo.arcartxsuite.auth.",
+                    "--encrypt-mode", "default-package",   // 仅加密 -repackageclasses '' 扁平化后的模块自身代码
+                    "--fake-classes-count", "5"
+                )
             }
 
             // 将模块 Jar 加密为 .axb，供上传到 AXS Cloud Platform。
@@ -149,11 +119,6 @@ subprojects {
                 val ivProp = project.findProperty("module.${project.name}.iv") as String?
                 if (keyProp != null) moduleKey.set(keyProp)
                 if (ivProp != null) moduleIv.set(ivProp)
-                // 方案 B：开启逐类加密时，外层 .axb 复用与逐类加密同一份 moduleKey（取代随机/-P）。
-                if (protectModules) {
-                    dependsOn(generateModuleKey)
-                    moduleKeyFile.set(moduleKeyFileProvider)
-                }
             }
         }
     }

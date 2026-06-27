@@ -366,17 +366,6 @@ public final class ModuleRegistry {
      * @return 是否成功加载并启用
      */
     public boolean loadCloudModule(byte[] jarBytes) {
-        return loadCloudModule(jarBytes, null);
-    }
-
-    /**
-     * 加载云端模块：从内存中的 jar 字节数组直接加载并启用。
-     *
-     * @param jarBytes   解密后的 jar 字节数组
-     * @param moduleSeed 方案 B 的逐类解密种子（= 云端下发的 32 字节 moduleKey）；null 时回退本体 root_seed
-     * @return 是否成功加载并启用
-     */
-    public boolean loadCloudModule(byte[] jarBytes, byte[] moduleSeed) {
         initializeGlobalBridges();
         try {
             ModuleDescriptor descriptor = ModuleDescriptorParser.parse(jarBytes);
@@ -392,7 +381,7 @@ public final class ModuleRegistry {
             if (packetBridge != null) {
                 packetBridge.resetUiRegistrationCount();
             }
-            boolean ok = loadAndEnable(new DiscoveredModule(descriptor, jarBytes, moduleSeed));
+            boolean ok = loadAndEnable(new DiscoveredModule(descriptor, jarBytes));
             if (!ok) {
                 cleanupFailedModule(moduleId);
             }
@@ -610,7 +599,7 @@ public final class ModuleRegistry {
         // 创建 ClassLoader（本地 jar 或内存 bytes）
         ClassLoader classLoader;
         if (jarBytes != null) {
-            classLoader = new ByteArrayModuleClassLoader(descriptor.id(), jarBytes, dm.moduleSeed(), plugin.getClass().getClassLoader());
+            classLoader = new ByteArrayModuleClassLoader(descriptor.id(), jarBytes, plugin.getClass().getClassLoader());
         } else {
             URL jarUrl = jarFile.toURI().toURL();
             classLoader = new ModuleClassLoader(descriptor.id(), jarUrl, plugin.getClass().getClassLoader());
@@ -1207,17 +1196,13 @@ public final class ModuleRegistry {
     record PrioritizedInitializedHandler(String moduleId, ClientInitializedHandler handler) {
     }
 
-    private record DiscoveredModule(ModuleDescriptor descriptor, File jarFile, byte[] jarBytes, byte[] moduleSeed) {
+    private record DiscoveredModule(ModuleDescriptor descriptor, File jarFile, byte[] jarBytes) {
         DiscoveredModule(ModuleDescriptor descriptor, File jarFile) {
-            this(descriptor, jarFile, null, null);
+            this(descriptor, jarFile, null);
         }
 
         DiscoveredModule(ModuleDescriptor descriptor, byte[] jarBytes) {
-            this(descriptor, null, jarBytes, null);
-        }
-
-        DiscoveredModule(ModuleDescriptor descriptor, byte[] jarBytes, byte[] moduleSeed) {
-            this(descriptor, null, jarBytes, moduleSeed);
+            this(descriptor, null, jarBytes);
         }
     }
 

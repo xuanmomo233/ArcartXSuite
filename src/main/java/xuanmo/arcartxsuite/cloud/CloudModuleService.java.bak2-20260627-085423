@@ -579,15 +579,12 @@ public final class CloudModuleService {
             }
             plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 解密成功: " + jarBytes.length + " 字节");
             final byte[] finalJarBytes = jarBytes;
-            // 方案 B：把云端下发的 moduleKey 同时作为逐类解密种子下传给 ByteArrayModuleClassLoader（n11），
-            // 使模块逐类加密与本体 root_seed 解耦、自包含。clone 一份，避免被后续清理影响。
-            final byte[] moduleSeed = key.clone();
             plugin.getServer().getScheduler().runTask(plugin.host(), () -> {
                 if (registry.isModuleLoaded(moduleId)) {
                     plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载，跳过重复加载");
                     return;
                 }
-                boolean ok = registry.loadCloudModule(finalJarBytes, moduleSeed);
+                boolean ok = registry.loadCloudModule(finalJarBytes);
                 if (ok) {
                     plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载");
                 } else {

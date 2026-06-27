@@ -18,7 +18,6 @@ encrypt-jar.py - JAR 加密打包脚本
 """
 
 import argparse
-import base64
 import hashlib
 import json
 import os
@@ -280,9 +279,6 @@ def main():
     parser.add_argument("--output", required=True, help="输出加密 JAR 文件路径")
     parser.add_argument("--native-dir", required=True, help="native 库目录")
     parser.add_argument("--keys-dir", default=None, help="密钥目录（包含 root_seed.bin）")
-    parser.add_argument("--module-seed-b64", default=None,
-                        help="方案 B：模块逐类加密种子（Base64 32 字节，= 该模块的 moduleKey）。"
-                             "提供时替代 keys-dir/root_seed.bin，使模块与本体 root_seed 解耦、自包含。")
     parser.add_argument("--protection-level", default="high",
                        choices=["standard", "high", "extreme"],
                        help="保护级别")
@@ -330,17 +326,9 @@ def main():
     print(f"[*] 输入: {input_jar}")
     print(f"[*] 输出: {output_jar}")
 
-    # 加载 root seed（方案 B：--module-seed-b64 优先，代表该模块自包含的种子）
+    # 加载 root seed
     root_seed = None
-    if args.module_seed_b64:
-        try:
-            root_seed = base64.b64decode(args.module_seed_b64)
-        except Exception as exc:
-            sys.exit(f"[!] --module-seed-b64 不是合法 Base64: {exc}")
-        if len(root_seed) != 32:
-            sys.exit(f"[!] --module-seed-b64 解码后须为 32 字节，实际 {len(root_seed)}")
-        print("[*] 方案 B：使用模块种子（moduleKey）派生逐类密钥，与本体 root_seed 解耦。")
-    elif args.keys_dir:
+    if args.keys_dir:
         seed_path = Path(args.keys_dir) / "root_seed.bin"
         if seed_path.exists():
             root_seed = seed_path.read_bytes()
@@ -348,7 +336,7 @@ def main():
 
     if root_seed is None:
         root_seed = secrets.token_bytes(32)
-        print("[!] 未找到 root_seed.bin / --module-seed-b64，使用随机种子（仅用于测试，运行时无法解密）")
+        print("[!] 未找到 root_seed.bin，使用随机种子（仅用于测试，运行时无法解密）")
 
     # 读取输入 JAR
     print(f"\n[1/6] 读取输入 JAR...")

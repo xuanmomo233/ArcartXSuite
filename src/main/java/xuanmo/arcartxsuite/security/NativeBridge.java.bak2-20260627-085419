@@ -194,16 +194,6 @@ public final class NativeBridge {
     public static native byte[] n6(byte[] classNameHash, byte[] encData);
 
     /**
-     * 方案 B：自包含模块逐类解密。session 由 moduleSeed（云端下发的 32 字节 moduleKey）派生，
-     * 与本体内嵌 root_seed 完全解耦，因此模块单独重建/任意已装 native 的本体均可解密。
-     * @param classNameHash 类名的 SHA-256 哈希（32 字节）
-     * @param encData       .enc 格式的加密数据
-     * @param moduleSeed    模块种子（32 字节，= 云端下发的 moduleKey）
-     * @return 解密后的原始字节码，失败返回 null
-     */
-    public static native byte[] n11(byte[] classNameHash, byte[] encData, byte[] moduleSeed);
-
-    /**
      * 验证 JAR 完整性（Merkle 树 + Ed25519 签名）。
      * @param rootHash   计算得到的 Merkle 根哈希（32 字节）
      * @param signature  PROTECTION.MF 中的 Ed25519 签名（64 字节）

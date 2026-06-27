@@ -1,7 +1,7 @@
 #include "axs_native.h"
 #include <cstring>
 
-static constexpr int AXS_NATIVE_VERSION = 3; // v3: 模块逐类自包含解密 n11（方案 B）
+static constexpr int AXS_NATIVE_VERSION = 2; // v2: 含 JAR 保护层
 
 jint nativeVersion(JNIEnv *env, jclass clazz) {
     return AXS_NATIVE_VERSION;
@@ -50,7 +50,6 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
         // JAR 保护层新增
         {"n5", "()I",         reinterpret_cast<void *>(initProtection)},
         {"n6", "([B[B)[B",   reinterpret_cast<void *>(decryptClass)},
-        {"n11", "([B[B[B)[B", reinterpret_cast<void *>(decryptModuleClass)},
         {"n7", "([B[B)Z",    reinterpret_cast<void *>(verifyIntegrity)},
         {"n8", "()I",         reinterpret_cast<void *>(enhancedEnvironmentCheck)},
         {"n9", "()[B",        reinterpret_cast<void *>(getHardwareFingerprint)},

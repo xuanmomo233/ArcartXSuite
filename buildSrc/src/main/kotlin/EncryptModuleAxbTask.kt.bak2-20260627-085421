@@ -47,16 +47,6 @@ abstract class EncryptModuleAxbTask : DefaultTask() {
     @get:Optional
     abstract val moduleIv: Property<String>
 
-    /**
-     * 方案 B：moduleKey 文件（Base64 32 字节）。设置时优先级最高——
-     * 外层 .axb 的 AES 密钥复用此 key，使其与逐类加密种子完全一致（自包含模块）。
-     * IV 仍随机生成。
-     */
-    @get:InputFile
-    @get:Optional
-    @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val moduleKeyFile: RegularFileProperty
-
     @TaskAction
     fun encrypt() {
         val jarFile = inputJar.asFile.get()
@@ -69,15 +59,7 @@ abstract class EncryptModuleAxbTask : DefaultTask() {
 
         val keyB64: String
         val ivB64: String
-        if (moduleKeyFile.isPresent && moduleKeyFile.get().asFile.exists()) {
-            // 方案 B：复用逐类加密同一 moduleKey 作为外层 .axb AES key（IV 随机）。
-            keyB64 = moduleKeyFile.get().asFile.readText().trim()
-            key = Base64.getDecoder().decode(keyB64)
-            require(key.size == 32) { "moduleKeyFile 必须是 32 bytes (Base64)" }
-            iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
-            ivB64 = Base64.getEncoder().encodeToString(iv)
-            logger.lifecycle("[EncryptModuleAxb] 方案 B：外层 .axb 复用 moduleKey（与逐类加密同种子）")
-        } else if (moduleKey.isPresent && moduleIv.isPresent) {
+        if (moduleKey.isPresent && moduleIv.isPresent) {
             keyB64 = moduleKey.get()
             ivB64 = moduleIv.get()
             key = Base64.getDecoder().decode(keyB64)
