@@ -432,7 +432,7 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
                 pw.println("Total rows affected: " + total);
             }
         } catch (java.io.IOException e) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning("[Purge] 审计日志写入失败: " + e.getMessage());
+            plugin.getLogger().warning("[Purge] 审计日志写入失败: " + e.getMessage());
         }
     }
 

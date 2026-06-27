@@ -526,7 +526,7 @@ public class MixedYggdrasilProxy {
             }
         }
 
-        Logger log = xuanmo.arcartxsuite.module.AxsLog.logger();
+        Logger log = Logger.getLogger("AXS-MixedProxy");
         log.setUseParentHandlers(false);
         ConsoleHandler handler = new ConsoleHandler();
         handler.setFormatter(new Formatter() {

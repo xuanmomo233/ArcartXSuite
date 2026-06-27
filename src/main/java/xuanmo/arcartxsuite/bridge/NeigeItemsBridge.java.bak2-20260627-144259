@@ -40,7 +40,7 @@ public final class NeigeItemsBridge {
             getItemStackMethod = itemManagerClass.getMethod("getItemStack", String.class);
             available = true;
         } catch (Exception exception) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning("初始化 NeigeItems 物品桥接失败: " + exception.getMessage());
+            plugin.getLogger().warning("初始化 NeigeItems 物品桥接失败: " + exception.getMessage());
         }
     }
 

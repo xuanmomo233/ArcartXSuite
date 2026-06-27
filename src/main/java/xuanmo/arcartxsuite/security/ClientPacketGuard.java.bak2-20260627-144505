@@ -126,7 +126,7 @@ public final class ClientPacketGuard implements PacketGuardAPI {
         }
 
         if (!allowed && debugLogging && plugin != null) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().info(
+            plugin.getLogger().info(
                 "ClientPacketGuard 拒绝回包 -> player="
                     + playerName
                     + " | route="

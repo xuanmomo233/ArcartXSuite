@@ -40,7 +40,7 @@ public class ArcartXWorldTextureService implements xuanmo.arcartxsuite.api.bridg
 
     public ArcartXWorldTextureService(JavaPlugin plugin) {
         this.plugin = plugin;
-        this.logger = xuanmo.arcartxsuite.module.AxsLog.logger();
+        this.logger = plugin.getLogger();
     }
 
     @Override
