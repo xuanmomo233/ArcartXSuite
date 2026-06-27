@@ -61,6 +61,8 @@ public final class ModuleRegistry {
     private static final Logger LOGGER = new PluginConsoleLogger("AXS-ModuleRegistry", null);
 
     private final JavaPlugin plugin;
+    /** 业务核心实例（用于 ConfigSpec 注册诊断），由 SuiteCoreImpl 在构造后注入。 */
+    private xuanmo.arcartxsuite.SuiteCoreImpl core;
     private final File modulesDir;
     private final PacketBridgeAPI packetBridge;
     private final ClientBridgeAPI clientBridge;
@@ -132,6 +134,11 @@ public final class ModuleRegistry {
             }
         }
         this.signatureVerifier = new ModuleSignatureVerifier(sigPubKeys, LOGGER);
+    }
+
+    /** 由业务核心在构造完成后注入自身引用，用于 ConfigSpec 注册/诊断回调。 */
+    public void attachCore(xuanmo.arcartxsuite.SuiteCoreImpl core) {
+        this.core = core;
     }
 
     // ─── 生命周期 ─────────────────────────────────────────────
@@ -633,10 +640,10 @@ public final class ModuleRegistry {
 
         // 在 onEnable 之前注册并跑模块的 ConfigSpec 诊断（dry-run，不动玩家 yml）
         try {
-            if (plugin instanceof xuanmo.arcartxsuite.ArcartXSuitePlugin axsPlugin) {
+            if (core != null) {
                 List<xuanmo.arcartxsuite.api.config.ModuleConfigSpec> specs = instance.configSpecs();
                 if (specs != null && !specs.isEmpty()) {
-                    axsPlugin.registerModuleConfigSpecs(descriptor.id(), specs, classLoader);
+                    core.registerModuleConfigSpecs(descriptor.id(), specs, classLoader);
                 }
             }
         } catch (RuntimeException exception) {
@@ -713,8 +720,8 @@ public final class ModuleRegistry {
         removePacketHandlers(moduleId);
         removeInitializedHandlers(moduleId);
         removeCapabilities(moduleId);
-        if (plugin instanceof xuanmo.arcartxsuite.ArcartXSuitePlugin axsPlugin) {
-            axsPlugin.unregisterModuleConfigSpecs(moduleId);
+        if (core != null) {
+            core.unregisterModuleConfigSpecs(moduleId);
         }
     }
 

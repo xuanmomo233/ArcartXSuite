@@ -6,7 +6,7 @@ import java.util.Locale;
 import java.util.Optional;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
-import xuanmo.arcartxsuite.ArcartXSuitePlugin;
+import xuanmo.arcartxsuite.SuiteCoreImpl;
 import xuanmo.arcartxsuite.api.config.ConfigDiagnosisReport;
 import xuanmo.arcartxsuite.api.config.ConfigIssue;
 import xuanmo.arcartxsuite.api.config.ConfigIssueSeverity;
@@ -23,9 +23,9 @@ public final class ArcartXSuiteConfigSubCommand {
     private static final String PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
     private static final List<String> SUB_ACTIONS = List.of("status", "diagnose", "preview", "apply", "rollback");
 
-    private final ArcartXSuitePlugin plugin;
+    private final SuiteCoreImpl plugin;
 
-    public ArcartXSuiteConfigSubCommand(ArcartXSuitePlugin plugin) {
+    public ArcartXSuiteConfigSubCommand(SuiteCoreImpl plugin) {
         this.plugin = plugin;
     }
 

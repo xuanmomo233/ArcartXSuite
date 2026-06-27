@@ -34,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
-import xuanmo.arcartxsuite.ArcartXSuitePlugin;
+import xuanmo.arcartxsuite.SuiteCoreImpl;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.module.ModuleRegistry;
 import xuanmo.arcartxsuite.security.NativeBridge;
@@ -59,7 +59,7 @@ public final class CloudModuleService {
     /** PBKDF2 迭代次数，用于从机器指纹派生密钥文件的加密密钥。 */
     private static final int KDF_ITERATIONS = 120_000;
 
-    private final ArcartXSuitePlugin plugin;
+    private final SuiteCoreImpl plugin;
     private final ModuleRegistry registry;
     private final String apiBaseUrl;
     private final String qq;
@@ -87,7 +87,7 @@ public final class CloudModuleService {
     private BukkitTask heartbeatTask;
     private final long pluginStartTime = System.currentTimeMillis();
 
-    public CloudModuleService(ArcartXSuitePlugin plugin, ModuleRegistry registry) {
+    public CloudModuleService(SuiteCoreImpl plugin, ModuleRegistry registry) {
         this.plugin = plugin;
         this.registry = registry;
         org.bukkit.configuration.file.FileConfiguration config = plugin.getConfig();
@@ -106,7 +106,7 @@ public final class CloudModuleService {
 
     private void clearServerCode() {
         this.serverCode = null;
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
+        plugin.getServer().getScheduler().runTask(plugin.host(), () -> {
             plugin.getConfig().set("cloud.server-code", "");
             plugin.saveConfig();
         });
@@ -152,7 +152,7 @@ public final class CloudModuleService {
                             this.tokenExpiry = System.currentTimeMillis() + 23 * 3600 * 1000;
                         }
                         // 回写 server-code 和 apiKey 到配置（主线程保存）
-                        plugin.getServer().getScheduler().runTask(plugin, () -> {
+                        plugin.getServer().getScheduler().runTask(plugin.host(), () -> {
                             plugin.getConfig().set("cloud.server-code", code);
                             if (responseApiKey != null && !responseApiKey.isEmpty()) {
                                 plugin.getConfig().set("cloud.apiKey", responseApiKey);
@@ -347,7 +347,7 @@ public final class CloudModuleService {
             // 因此延迟 5 ticks 后检查是否真正加载成功
             return downloadAndLoad(moduleId).thenCompose(v -> {
                 CompletableFuture<Boolean> result = new CompletableFuture<>();
-                plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                plugin.getServer().getScheduler().runTaskLater(plugin.host(), () -> {
                     boolean loaded = registry.isModuleLoaded(moduleId);
                     if (loaded) {
                         plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 更新成功并已加载");
@@ -418,7 +418,7 @@ public final class CloudModuleService {
         plugin.consoleInfo("[Cloud] 模块 " + moduleId + " " + operation + " 失败，" + delay + "ms 后第 " + attempt + "/" + maxRetries + " 次重试...");
 
         CompletableFuture<T> future = new CompletableFuture<>();
-        plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin, () -> {
+        plugin.getServer().getScheduler().runTaskLaterAsynchronously(plugin.host(), () -> {
             supplier.get().thenAccept(result -> {
                 if (result != null || attempt >= maxRetries) {
                     future.complete(result);
@@ -579,7 +579,7 @@ public final class CloudModuleService {
             }
             plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 解密成功: " + jarBytes.length + " 字节");
             final byte[] finalJarBytes = jarBytes;
-            plugin.getServer().getScheduler().runTask(plugin, () -> {
+            plugin.getServer().getScheduler().runTask(plugin.host(), () -> {
                 if (registry.isModuleLoaded(moduleId)) {
                     plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已加载，跳过重复加载");
                     return;
@@ -670,7 +670,7 @@ public final class CloudModuleService {
 
     private void startHeartbeat() {
         if (heartbeatTask != null) return;
-        heartbeatTask = plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, this::sendHeartbeat, 30L * 20L, 30L * 20L);
+        heartbeatTask = plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin.host(), this::sendHeartbeat, 30L * 20L, 30L * 20L);
         plugin.consoleInfo("[Cloud] 心跳任务已启动（30秒/次）");
     }
 
@@ -762,7 +762,7 @@ public final class CloudModuleService {
         // 需要卸载的：已加载的云端模块不再在授权列表中
         for (String id : loadedCloud) {
             if (!currentAllowed.contains(id)) {
-                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                plugin.getServer().getScheduler().runTask(plugin.host(), () -> {
                     boolean ok = registry.unloadModule(id);
                     if (ok) {
                         plugin.consoleInfo("[Cloud] 模块 " + id + " 授权已撤销，已卸载");

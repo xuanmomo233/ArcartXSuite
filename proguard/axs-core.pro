@@ -24,6 +24,17 @@
 -keep class xuanmo.arcartxsuite.security.protection.JvmAntiDebug { *; }
 -keep class xuanmo.arcartxsuite.security.protection.JvmAntiDebug$* { *; }
 
+# ─── Suite-core 契约接口（明文、版本化，宿主薄壳与业务核心唯一耦合点） ──
+# 宿主薄壳直接引用本接口，必须保留全限定名与成员（且 encrypt-jar 保持明文）。
+-keep interface xuanmo.arcartxsuite.bootstrap.SuiteCore { *; }
+
+# ─── 业务核心实现类：保留类名 + 无参构造器供宿主反射加载 ───────────
+# 宿主以 Class.forName("xuanmo.arcartxsuite.SuiteCoreImpl") 反射实例化，故类名与
+# 无参构造器不可被重命名/裁剪；类体其余成员仍正常混淆，随后由 encrypt-jar 逐类加密。
+-keep class xuanmo.arcartxsuite.SuiteCoreImpl {
+    public <init>();
+}
+
 # ─── bridge 包：不再保留任何实现类名 ─────────────────────────────
 # 所有核心 bridge 均通过 xuanmo.arcartxsuite.api.bridge.* 接口暴露，并由宿主实现。
 # 模块不直接引用 xuanmo.arcartxsuite.bridge.* 下的任何实现类，核心 bridge 可完全混淆。

@@ -13,7 +13,7 @@ import java.util.Map;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
-import xuanmo.arcartxsuite.ArcartXSuitePlugin;
+import xuanmo.arcartxsuite.SuiteCoreImpl;
 import xuanmo.arcartxsuite.module.ModuleRegistry;
 
 /**
@@ -23,9 +23,9 @@ public final class DiagnosticDumpCommand {
 
     private static final String PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
 
-    private final ArcartXSuitePlugin plugin;
+    private final SuiteCoreImpl plugin;
 
-    public DiagnosticDumpCommand(ArcartXSuitePlugin plugin) {
+    public DiagnosticDumpCommand(SuiteCoreImpl plugin) {
         this.plugin = plugin;
     }
 
