@@ -111,19 +111,25 @@ final class DefaultModuleContext implements ModuleContext {
     }
 
     private static PlaceholderExpansionRegistry resolveExpansionRegistry(Logger logger) {
-        // 用 Bukkit API 探测 PAPI，避免依赖类加载器可见性：
-        // 本体业务核心由加密类加载器加载，看不到 PlaceholderAPI 的类，
-        // 旧实现里的 Class.forName("me.clip...") 会误抛 ClassNotFoundException，
-        // 导致明明装了 PAPI 仍打印“未安装”。
-        org.bukkit.plugin.Plugin papi = org.bukkit.Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
-        if (papi != null && papi.isEnabled()) {
-            logger.fine("检测到 PlaceholderAPI，启用占位符扩展注册。");
-        } else {
-            logger.fine("未检测到 PlaceholderAPI，占位符扩展将不会注册。");
+        try {
+            // 先检测 PAPI 是否存在
+            Class.forName("me.clip.placeholderapi.expansion.PlaceholderExpansion");
+            // 通过反射实例化 DirectPlaceholderExpansionRegistry，避免 PAPI 缺失时
+            // 直接引用该类导致 NoClassDefFoundError（该类强引用 PlaceholderExpansion）
+            Class<?> directRegistry = Class.forName(
+                "xuanmo.arcartxsuite.placeholder.DirectPlaceholderExpansionRegistry"
+            );
+            PlaceholderExpansionRegistry registry = (PlaceholderExpansionRegistry)
+                directRegistry.getConstructor(Logger.class).newInstance(logger);
+            return registry;
+        } catch (ClassNotFoundException e) {
+            logger.info("PlaceholderAPI 未安装，使用反射实现的 PlaceholderExpansionRegistry。");
+            return new xuanmo.arcartxsuite.placeholder.DefaultPlaceholderExpansionRegistry(logger);
+        } catch (ReflectiveOperationException e) {
+            logger.warning("DirectPlaceholderExpansionRegistry 反射实例化失败: " + e.getMessage()
+                + "，回退到反射实现。");
+            return new xuanmo.arcartxsuite.placeholder.DefaultPlaceholderExpansionRegistry(logger);
         }
-        // 统一使用反射实现：它对“扩展对象自身的类加载器”调用 register()，
-        // 在任意类加载器下都能正确注册，且不让本体核心强链接 PlaceholderAPI 的类。
-        return new xuanmo.arcartxsuite.placeholder.DefaultPlaceholderExpansionRegistry(logger);
     }
 
     @Override
