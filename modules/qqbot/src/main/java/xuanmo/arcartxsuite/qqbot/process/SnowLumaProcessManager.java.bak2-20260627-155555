@@ -23,30 +23,21 @@ public final class SnowLumaProcessManager {
     private final Path installDir;
     private final Logger logger;
     private final BooleanSupplier debugMode;
-    // 原生模式下 SnowLuma 的 WS 端口（由 onebot.ws-url 解析得到），用于「按端口找残留」兜底；
-    // 用户改了端口时也能正确清理，而不是写死 3001。
     private final AtomicReference<Status> status = new AtomicReference<>(Status.STOPPED);
     private volatile Process process;
     private Thread outputThread;
     private volatile Boolean nodeAvailable;
     private volatile String nodeVersion;
-    private volatile Thread shutdownHook;
 
-    private final int nativeWsPort;
-
-    public SnowLumaProcessManager(Path serverRoot, QQBotSnowLumaConfig config, Logger logger, BooleanSupplier debugMode, int nativeWsPort) {
+    public SnowLumaProcessManager(Path serverRoot, QQBotSnowLumaConfig config, Logger logger, BooleanSupplier debugMode) {
         this.config = config;
         this.installDir = serverRoot.resolve(config.dir());
         this.logger = logger;
         this.debugMode = debugMode;
-        this.nativeWsPort = nativeWsPort > 0 ? nativeWsPort : 3001;
     }
 
     public void init() {
         if (!config.autoStart()) return;
-        // JVM 兜底清理钩子：即使 onDisable 未被正常调用（如异常退出），也尝试杀掉 SnowLuma 进程树，
-        // 避免孤儿进程跨重启堆积。正常 shutdown() 会注销该钩子，不会累积。
-        registerShutdownHook();
         if (config.isDocker()) {
             if (isInstalled()) { start(); }
             else { logger.info("[QQBot/SnowLuma] Docker: 未检测到容器 '" + config.dockerContainerName() + "'，请执行 install"); }
@@ -103,25 +94,9 @@ public final class SnowLumaProcessManager {
     public String start() { return config.isDocker() ? startDocker() : startNative(); }
     public String stop() { return config.isDocker() ? stopDocker() : stopNative(); }
     public void shutdown() {
-        unregisterShutdownHook();
         if (config.isDocker()) { if (dockerContainerRunning()) stopDocker(); return; }
         if (process != null && process.isAlive()) stopNative();
         else { String c = killResidue(); if (c != null) logger.info("[QQBot/SnowLuma] 卸载清理残留: " + c); }
-    }
-
-    private void registerShutdownHook() {
-        if (shutdownHook != null) return;
-        Thread hook = new Thread(() -> { try { shutdown(); } catch (Throwable ignored) {} }, "AXS-SnowLuma-ShutdownHook");
-        try { Runtime.getRuntime().addShutdownHook(hook); shutdownHook = hook; }
-        catch (IllegalStateException ignored) { /* JVM 已在关闭中，无需注册 */ }
-    }
-
-    private void unregisterShutdownHook() {
-        Thread hook = shutdownHook;
-        if (hook == null) return;
-        shutdownHook = null;
-        // 若是关闭钩子自身触发的 shutdown()，此时 JVM 正在关闭，removeShutdownHook 会抛 IllegalStateException，忽略即可。
-        try { Runtime.getRuntime().removeShutdownHook(hook); } catch (IllegalStateException ignored) {}
     }
     public CompletableFuture<String> installAsync() { return config.isDocker() ? installDockerAsync() : installNativeAsync(); }
     public String logs() { return config.isDocker() ? dockerLogs() : "仅 Docker 模式支持日志查看"; }
@@ -281,15 +256,9 @@ public final class SnowLumaProcessManager {
         String m="SnowLuma 已停止 (PID: "+pid+")"; if (c!=null) m+="，清理残留: "+c; return m;
     }
 
-    /** 需要清理残留的端口：docker 取宿主映射端口，native 取 WebUI(5099)+用户配置的 WS 端口。 */
-    private int[] residuePorts() {
-        if (config.isDocker()) return new int[]{config.dockerWebUiPort(), config.dockerWsPort(), config.dockerHttpPort()};
-        return nativeWsPort == 5099 ? new int[]{5099} : new int[]{5099, nativeWsPort};
-    }
-
     private String killResidue() {
         StringBuilder killed = new StringBuilder();
-        for (int port : residuePorts()) {
+        for (int port : new int[]{5099,3001}) {
             long pid = findPidOnPort(port);
             if (pid>0) {
                 if (process!=null && process.isAlive() && process.pid()==pid) continue;
@@ -304,20 +273,6 @@ public final class SnowLumaProcessManager {
     }
 
     private void forceKill(long pid) {
-        // 先精确杀掉「该 PID 派生的子孙进程」——descendants() 仅按进程父子关系圈定本进程树，
-        // 不按进程名全局匹配，绝不会误伤系统里其它 node/无关进程。
-        try {
-            java.util.Optional<ProcessHandle> handleOpt = ProcessHandle.of(pid);
-            if (handleOpt.isPresent()) {
-                // 先快照（避免父进程被杀后子进程被 init 收养、丢失父子链导致漏杀）
-                java.util.List<ProcessHandle> descendants = handleOpt.get().descendants().toList();
-                for (ProcessHandle child : descendants) { try { child.destroy(); } catch (Exception ignored) {} }
-                for (ProcessHandle child : descendants) {
-                    if (child.isAlive()) { try { child.destroyForcibly(); } catch (Exception ignored) {} }
-                }
-                if (!descendants.isEmpty()) logger.info("[QQBot/SnowLuma] 已清理 " + descendants.size() + " 个子进程 (父 PID: " + pid + ")");
-            }
-        } catch (Exception e) { if (debugMode.getAsBoolean()) logger.info("[QQBot/SnowLuma] 子进程清理异常: " + e.getMessage()); }
         String os = System.getProperty("os.name","").toLowerCase();
         if (os.contains("win")) {
             try { new ProcessBuilder("taskkill","/F","/T","/PID",String.valueOf(pid)).redirectErrorStream(true).start().waitFor(10,java.util.concurrent.TimeUnit.SECONDS); }

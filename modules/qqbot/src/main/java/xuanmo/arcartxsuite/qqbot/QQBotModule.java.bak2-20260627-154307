@@ -48,8 +48,6 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     private QQBotAdminCommand adminCommand;
     private SnowLumaProcessManager snowLumaManager;
     private QQBotLoginGateListener loginGateListener;
-    // 异步启动守卫：startService 后台拉起 SnowLuma 期间若模块被关闭，置位以阻止/回收启动，避免孤儿进程。
-    private volatile boolean closed = false;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -112,7 +110,6 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
 
     @Override
     protected void startService() throws Exception {
-        closed = false;
         // 1. 初始化存储
         repository = new JdbcQQBotRepository(
             context.dataFolder(),
@@ -165,48 +162,25 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         service.start();
 
         // 7. SnowLuma 进程管理（必须在 WS 连接前启动）
-        // 从 onebot.ws-url 解析出 WS 端口传入，使「按端口清理残留」跟随用户配置，而非写死 3001。
-        int snowLumaWsPort = 3001;
-        try {
-            int p = java.net.URI.create(configuration.onebot().wsUrl()).getPort();
-            if (p > 0) snowLumaWsPort = p;
-        } catch (Exception ignored) {}
         snowLumaManager = new SnowLumaProcessManager(
             java.nio.file.Path.of("").toAbsolutePath(),
             configuration.onebot().snowluma(),
             context.logger(),
-            () -> configuration.debug(),
-            snowLumaWsPort
+            () -> configuration.debug()
         );
-        // 8. SnowLuma 启动 + 等待 WS 端口 + 连接 OneBot —— 放到异步线程执行。
-        // 这些步骤会阻塞数秒（node/docker 进程启动、端口探测最多 8s），若在主线程
-        // （onEnable）里串行执行会触发 Paper 看门狗「server has not responded for 10 seconds」。
-        final xuanmo.arcartxsuite.qqbot.process.SnowLumaProcessManager slm = snowLumaManager;
-        final OneBotClient obc = oneBotClient;
-        final String wsUrl = configuration.onebot().wsUrl();
-        final boolean autoStartSnowLuma = configuration.onebot().snowluma().autoStart();
-        Bukkit.getScheduler().runTaskAsynchronously(context.plugin(), () -> {
-            if (closed) return;                       // 已关闭：不再拉起进程
-            slm.init();
-            boolean running = slm.getStatus() == xuanmo.arcartxsuite.qqbot.process.SnowLumaProcessManager.Status.RUNNING;
-            if (running) {
-                waitForPort(wsUrl, 8000);
-            }
-            if (closed) {                             // 启动期间模块被关闭：立即回收，避免孤儿进程
-                slm.shutdown();
-                obc.shutdown();
-                return;
-            }
-            if (running) {
-                obc.start();
-            } else if (autoStartSnowLuma) {
-                context.logger().warning("[QQBot] SnowLuma 启动失败或已停止，OneBot 连接被跳过。" +
-                    "请检查 SnowLuma 进程状态，或手动启动后执行 /axs qqbot reload");
-            } else {
-                // 用户手动管理 SnowLuma，直接尝试连接
-                obc.start();
-            }
-        });
+        snowLumaManager.init();
+
+        // 8. 等待 SnowLuma WS 端口就绪后连接 OneBot
+        if (snowLumaManager.getStatus() == xuanmo.arcartxsuite.qqbot.process.SnowLumaProcessManager.Status.RUNNING) {
+            waitForPort(configuration.onebot().wsUrl(), 8000);
+            oneBotClient.start();
+        } else if (configuration.onebot().snowluma().autoStart()) {
+            context.logger().warning("[QQBot] SnowLuma 启动失败或已停止，OneBot 连接被跳过。" +
+                "请检查 SnowLuma 进程状态，或手动启动后执行 /axs qqbot reload");
+        } else {
+            // 用户手动管理 SnowLuma，直接尝试连接
+            oneBotClient.start();
+        }
 
         // 9. 注册管理命令
         adminCommand = new QQBotAdminCommand(() -> service, () -> repository, snowLumaManager, messages());
@@ -419,7 +393,6 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
 
     @Override
     protected void stopService() {
-        closed = true;   // 通知后台异步启动任务停止/回收
         uiService = null;
         if (monitorService != null) {
             monitorService.stop();
