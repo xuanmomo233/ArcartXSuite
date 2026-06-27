@@ -4,6 +4,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import org.bukkit.Bukkit;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class NeigeItemsBridge {
@@ -25,12 +26,14 @@ public final class NeigeItemsBridge {
         getItemIdMethod = null;
         getItemStackMethod = null;
 
-        if (Bukkit.getPluginManager().getPlugin("NeigeItems") == null) {
+        Plugin neigeItems = Bukkit.getPluginManager().getPlugin("NeigeItems");
+        if (neigeItems == null) {
             return;
         }
 
         try {
-            Class<?> itemManagerClass = Class.forName("pers.neige.neigeitems.manager.ItemManager");
+            ClassLoader classLoader = neigeItems.getClass().getClassLoader();
+            Class<?> itemManagerClass = Class.forName("pers.neige.neigeitems.manager.ItemManager", true, classLoader);
             Field instanceField = itemManagerClass.getField("INSTANCE");
             itemManager = instanceField.get(null);
             getItemIdMethod = itemManagerClass.getMethod("getItemId", ItemStack.class);

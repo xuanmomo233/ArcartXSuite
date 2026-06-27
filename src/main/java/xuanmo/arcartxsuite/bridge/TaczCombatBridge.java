@@ -29,6 +29,7 @@ public final class TaczCombatBridge {
 
     private final JavaPlugin plugin;
     private final boolean debug;
+    private final ClassLoader modClassLoader;
     private boolean active;
 
     // Forge 反射缓存
@@ -39,9 +40,20 @@ public final class TaczCombatBridge {
     private Method getGunIdMethod;
     private Method getBukkitEntityMethod;
 
-    private TaczCombatBridge(JavaPlugin plugin, boolean debug) {
+    private TaczCombatBridge(JavaPlugin plugin, boolean debug, ClassLoader modClassLoader) {
         this.plugin = plugin;
         this.debug = debug;
+        this.modClassLoader = modClassLoader;
+    }
+
+    /**
+     * 解析能看到 TACZ Mod / Forge / NMS 类的类加载器。
+     * <p>这些类由服务端（混合核心）类加载器加载，不属于任何 Bukkit 插件加载器。
+     * 薄壳重构后插件类由 ProtectedClassLoader 定义，单参 {@code Class.forName} 的
+     * 调用者加载器够不到 Mod/NMS 类，因此必须显式使用服务端类加载器。
+     */
+    private static ClassLoader resolveModClassLoader() {
+        return Bukkit.getServer().getClass().getClassLoader();
     }
 
     public static TaczCombatBridge tryInitialize(JavaPlugin plugin, boolean enabled, boolean debug) {
@@ -49,8 +61,9 @@ public final class TaczCombatBridge {
             plugin.getLogger().fine("[TaczCombat] TACZ 兼容已在 config.yml 中关闭。");
             return null;
         }
+        ClassLoader modClassLoader = resolveModClassLoader();
         try {
-            Class.forName("com.tacz.guns.GunMod");
+            Class.forName("com.tacz.guns.GunMod", false, modClassLoader);
         } catch (ClassNotFoundException ignored) {
             if (debug) {
                 plugin.getLogger().fine("[TaczCombat] TACZ Mod 未检测到，跳过桥接初始化。");
@@ -58,7 +71,7 @@ public final class TaczCombatBridge {
             return null;
         }
         try {
-            TaczCombatBridge bridge = new TaczCombatBridge(plugin, debug);
+            TaczCombatBridge bridge = new TaczCombatBridge(plugin, debug, modClassLoader);
             if (!bridge.registerForgeEventListener()) {
                 plugin.getLogger().warning("[TaczCombat] 无法注册 Forge 事件监听器，TACZ 伤害桥接未启用。");
                 return null;
@@ -89,7 +102,7 @@ public final class TaczCombatBridge {
     private boolean registerForgeEventListener() {
         try {
             // 1. 加载 TACZ 事件类
-            Class<?> eventPreClass = Class.forName(TACZ_EVENT_CLASS);
+            Class<?> eventPreClass = Class.forName(TACZ_EVENT_CLASS, true, modClassLoader);
 
             // 2. 缓存事件方法（尝试多种可能的方法名）
             getHurtEntityMethod = findMethodByNames(eventPreClass, "getHurtEntity", "getEntity", "getTarget");
@@ -107,16 +120,16 @@ public final class TaczCombatBridge {
             }
 
             // 3. NMS Entity -> Bukkit Entity 转换
-            Class<?> nmsEntityClass = Class.forName(NMS_ENTITY_CLASS);
+            Class<?> nmsEntityClass = Class.forName(NMS_ENTITY_CLASS, true, modClassLoader);
             getBukkitEntityMethod = nmsEntityClass.getMethod("getBukkitEntity");
 
             // 4. 获取 Forge 事件总线
-            Class<?> forgeClass = Class.forName(FORGE_CLASS);
+            Class<?> forgeClass = Class.forName(FORGE_CLASS, true, modClassLoader);
             Field eventBusField = forgeClass.getDeclaredField("EVENT_BUS");
             Object eventBus = eventBusField.get(null);
 
             // 5. 获取 EventPriority.NORMAL
-            Class<?> priorityClass = Class.forName(FORGE_PRIORITY_CLASS);
+            Class<?> priorityClass = Class.forName(FORGE_PRIORITY_CLASS, true, modClassLoader);
             Object normalPriority = Enum.valueOf((Class<Enum>) priorityClass, "NORMAL");
 
             // 6. 注册监听器: addListener(EventPriority, boolean, Class<T>, Consumer<T>)
