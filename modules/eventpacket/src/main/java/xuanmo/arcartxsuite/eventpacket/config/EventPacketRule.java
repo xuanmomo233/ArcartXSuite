@@ -21,7 +21,8 @@ public record EventPacketRule(
     long cooldownMillis,
     List<ScriptCondition> conditions,
     List<EventPacketAction> actions,
-    String clientPacketId
+    String clientPacketId,
+    String script
 ) {
     public EventPacketRule(
         String id, boolean enabled, EventPacketTrigger trigger,
@@ -32,7 +33,7 @@ public record EventPacketRule(
     ) {
         this(id, enabled, trigger, signal, placeholder, threshold,
             requireNonEmpty, requiredCount, worlds, entityTypes, mythicMobIds,
-            repeatable, cooldownMillis, conditions, actions, "");
+            repeatable, cooldownMillis, conditions, actions, "", "");
     }
 
     public boolean papiTrigger() {
@@ -41,5 +42,9 @@ public record EventPacketRule(
 
     public boolean isClientPacketTrigger() {
         return trigger == EventPacketTrigger.CLIENT_PACKET;
+    }
+
+    public boolean isScriptTrigger() {
+        return trigger != null && trigger.scriptTrigger();
     }
 }

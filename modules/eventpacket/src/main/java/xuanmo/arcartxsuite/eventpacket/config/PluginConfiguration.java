@@ -123,6 +123,11 @@ public record PluginConfiguration(
             logger.warning("EventPacket 规则没有动作，已跳过: " + id);
             return null;
         }
+        String script = nullToEmpty(section.getString("script")).trim();
+        if (trigger.scriptTrigger() && script.isBlank()) {
+            logger.warning("EventPacket 脚本触发器规则缺少 script 字段，已跳过: " + id);
+            return null;
+        }
         return new EventPacketRule(
             id,
             section.getBoolean("enabled", true),
@@ -138,7 +143,9 @@ public record PluginConfiguration(
             section.getBoolean("repeatable", false),
             parseCooldownMillis(section.get("cooldown")),
             conditions,
-            actions
+            actions,
+            "",
+            script
         );
     }
 
@@ -362,7 +369,8 @@ public record PluginConfiguration(
                         0L,
                         List.of(),
                         List.copyOf(actions),
-                        packetId
+                        packetId,
+                        ""
                     ));
                 } catch (IllegalArgumentException exception) {
                     logger.warning(

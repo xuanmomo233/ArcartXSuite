@@ -10,6 +10,15 @@
 # - placeholder-threshold 指定 PAPI 数值达到阈值时触发。
 # - mob-kill-count 玩家击杀指定怪物累计到条件时触发。
 # - command-signal 管理命令手动发送信号时触发。
+# - quest-accept Chemdah 任务接受后触发（signal 可指定任务ID过滤）。
+# - quest-complete Chemdah 任务完成后触发（signal 可指定任务ID过滤）。
+# - quest-fail Chemdah 任务失败后触发（signal 可指定任务ID过滤）。
+# - objective-complete Chemdah 目标完成后触发（signal 可指定 quest_id 或 objective_name 过滤）。
+# - objective-continue Chemdah 目标继续时触发（signal 可指定 quest_id 或 objective_name 过滤）。
+# - objective-restart Chemdah 目标重启时触发（signal 可指定 quest_id 或 objective_name 过滤）。
+# - chemdah-level-change Chemdah 等级变化时触发（signal 可指定等级选项ID过滤）。
+# - script-js JavaScript 脚本表达式返回 true 时触发（script 字段写 JS 代码）。
+# - script-aria Aria 脚本表达式返回 true 时触发（script 字段写 Aria 代码）。
 #
 # 默认每个玩家只触发一次；repeatable: true 可重复触发，cooldown 支持 10s / 5m / 2h / 1d。
 # conditions 与 prop 模块相同，格式为 "%placeholder% operator value"，支持 == != >= <= > < contains regex。
@@ -170,3 +179,156 @@ cdk_redeemed_effect:
       pack: "{player_name};CDK;{preset_name}"
     - type: subtitle.play
       group-id: "cdk_success"
+
+# ── Chemdah 任务事件示例 ────────────────────────────────────────
+
+# 玩家接受任务时播放字幕
+chemdah_quest_accepted:
+  enabled: false
+  trigger: quest-accept
+  # signal 留空则匹配所有任务；填入任务ID可限定特定任务
+  # signal: "main/tutorial"
+  repeatable: true
+  cooldown: "3s"
+  actions:
+    - type: subtitle.play
+      group-id: "quest_accepted"
+    - type: ui-packet
+      ui-id: "任务通知UI"
+      packet-handler: "questAccepted"
+      recipients:
+        - self
+      pack:
+        player: "{player_name}"
+        quest_id: "{quest_id}"
+
+# 玩家完成特定任务时发放称号和邮件奖励
+chemdah_quest_completed_reward:
+  enabled: false
+  trigger: quest-complete
+  signal: "main/tutorial"
+  repeatable: false
+  actions:
+    - type: title.give
+      title-id: "quest_master"
+      duration: "permanent"
+    - type: mail.send
+      preset-id: "quest_complete_reward"
+    - type: subtitle.play
+      group-id: "quest_completed"
+
+# 任务失败时提示
+chemdah_quest_failed_notify:
+  enabled: false
+  trigger: quest-fail
+  repeatable: true
+  cooldown: "5s"
+  actions:
+    - type: subtitle.play
+      group-id: "quest_failed"
+
+# 目标完成时发送 UI 通知
+# 变量: {quest_id} {task_id} {objective_type} {objective_name}
+# signal 可填 quest_id（如 "main/tutorial"）或 objective_name（如 "player kill"）过滤
+chemdah_objective_completed:
+  enabled: false
+  trigger: objective-complete
+  repeatable: true
+  cooldown: "1s"
+  actions:
+    - type: ui-packet
+      ui-id: "任务进度UI"
+      packet-handler: "objectiveComplete"
+      recipients:
+        - self
+      pack:
+        quest_id: "{quest_id}"
+        task_id: "{task_id}"
+        objective_type: "{objective_type}"
+        objective_name: "{objective_name}"
+
+# 仅当 "player kill" 类型的目标完成时触发
+# signal 填 objective_name 即可按目标类型过滤
+chemdah_kill_objective_done:
+  enabled: false
+  trigger: objective-complete
+  signal: "player kill"
+  repeatable: true
+  cooldown: "3s"
+  actions:
+    - type: subtitle.play
+      group-id: "kill_objective_done"
+
+# 目标继续时触发（进度推进但尚未完成）
+chemdah_objective_continue:
+  enabled: false
+  trigger: objective-continue
+  repeatable: true
+  cooldown: "1s"
+  actions:
+    - type: ui-packet
+      ui-id: "任务进度UI"
+      packet-handler: "objectiveContinue"
+      recipients:
+        - self
+      pack:
+        quest_id: "{quest_id}"
+        objective_name: "{objective_name}"
+
+# 目标重启时触发（进度重置）
+chemdah_objective_restart:
+  enabled: false
+  trigger: objective-restart
+  repeatable: true
+  cooldown: "5s"
+  actions:
+    - type: subtitle.play
+      group-id: "objective_restart"
+
+# Chemdah 等级提升时庆祝
+# 变量: {level_option} {old_level} {new_level} {old_experience} {new_experience} {level_delta}
+chemdah_level_up_celebrate:
+  enabled: false
+  trigger: chemdah-level-change
+  # signal 可指定等级选项ID，如 "adventure" 仅匹配冒险等级
+  # signal: "adventure"
+  repeatable: true
+  cooldown: "5s"
+  conditions:
+    - "{new_level} > {old_level}"
+  actions:
+    - type: subtitle.play
+      group-id: "level_up"
+    - type: command.dispatch
+      executor: console
+      command: "say {player_name} 的 {level_option} 等级提升到了 {new_level} 级！"
+
+# ── 脚本触发器示例 ──────────────────────────────────────────
+
+# JavaScript 脚本触发器：玩家血量低于 25% 时触发急救 UI
+js_low_health_alert:
+  enabled: false
+  trigger: script-js
+  repeatable: true
+  cooldown: "30s"
+  script: |
+    player.getHealth() / player.getMaxHealth() < 0.25
+  actions:
+    - type: subtitle.play
+      group-id: "low_health_warning"
+
+# Aria 脚本触发器：玩家 Y 坐标高于 200 时触发高空成就
+aria_high_altitude:
+  enabled: false
+  trigger: script-aria
+  repeatable: true
+  cooldown: "1m"
+  script: |
+    playerY = player.getLocation().getY()
+    playerY > 200
+  actions:
+    - type: subtitle.play
+      group-id: "high_altitude"
+    - type: command.dispatch
+      executor: console
+      command: "say {player_name} 飞到了 Y={script_result} 的高空！"

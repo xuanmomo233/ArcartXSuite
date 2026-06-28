@@ -139,10 +139,18 @@ public final class EventPacketDispatchService {
         if (configuration == null || rule == null || context == null || !rule.enabled() || rule.trigger() != trigger) {
             return;
         }
-        if (trigger == EventPacketTrigger.COMMAND_SIGNAL && !rule.signal().isBlank()) {
+        if (trigger.signalFilterable() && !rule.signal().isBlank()) {
             Object renderedSignal = context.renderPayload("{signal}", EventPacketRecipient.SELF, subject);
             if (!rule.signal().equalsIgnoreCase(String.valueOf(renderedSignal))) {
-                return;
+                // 对于 Objective 事件（complete/continue/restart），signal 同时支持 quest_id 和 objective_name 过滤
+                if (trigger.isObjectiveTrigger()) {
+                    Object objectiveName = context.renderPayload("{objective_name}", EventPacketRecipient.SELF, subject);
+                    if (!rule.signal().equalsIgnoreCase(String.valueOf(objectiveName))) {
+                        return;
+                    }
+                } else {
+                    return;
+                }
             }
         }
         ScriptCondition failedCondition = ScriptConditionServices.evaluator().firstFailed(subject, rule.conditions());

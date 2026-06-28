@@ -138,6 +138,15 @@ public final class EventPacketContext {
         Player subject,
         Map<String, String> variables
     ) {
+        return fromVariables(trigger, subject, "", variables);
+    }
+
+    public static EventPacketContext fromVariables(
+        EventPacketTrigger trigger,
+        Player subject,
+        String signal,
+        Map<String, String> variables
+    ) {
         long unix = Instant.now().getEpochSecond();
         return new EventPacketContext(
             trigger,
@@ -147,7 +156,7 @@ public final class EventPacketContext {
             "",
             null,
             null,
-            "",
+            nullToEmpty(signal),
             variables,
             unix,
             LOCAL_TIME_FORMATTER.format(Instant.ofEpochSecond(unix))

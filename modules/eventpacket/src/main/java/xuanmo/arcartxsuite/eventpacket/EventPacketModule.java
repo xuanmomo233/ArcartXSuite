@@ -29,6 +29,7 @@ import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketContext;
 import xuanmo.arcartxsuite.eventpacket.config.PluginConfiguration;
+import xuanmo.arcartxsuite.eventpacket.listener.ChemdahEventBridge;
 import xuanmo.arcartxsuite.eventpacket.listener.PlayerEventPacketListener;
 import xuanmo.arcartxsuite.eventpacket.service.EntityCleanupService;
 import xuanmo.arcartxsuite.eventpacket.service.EventPacketDispatchService;
@@ -48,6 +49,7 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
     private PlayerEventPacketListener listener;
     private EntityCleanupService cleanupService;
     private ScheduledCommandService scheduledCommandService;
+    private ChemdahEventBridge chemdahBridge;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -169,6 +171,8 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         boolean hasMobKillRules = configuration.rules().stream()
             .anyMatch(rule -> rule.enabled()
                 && rule.trigger() == xuanmo.arcartxsuite.eventpacket.config.EventPacketTrigger.MOB_KILL_COUNT);
+        boolean hasScriptTriggers = configuration.rules().stream()
+            .anyMatch(rule -> rule.enabled() && rule.isScriptTrigger());
         int papiPacketCount = configuration.papiPacketCount();
         if (papiPacketCount > 0 && !placeholderApiAvailable) {
             context.logger().warning(
@@ -176,9 +180,10 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
                     + " 个 PAPI 触发配置，但当前未安装 PlaceholderAPI，这部分触发器不会生效。"
             );
         }
-        if ((papiPacketCount > 0 && placeholderApiAvailable) || hasMobKillRules) {
+        if ((papiPacketCount > 0 && placeholderApiAvailable) || hasMobKillRules || hasScriptTriggers) {
             watcherService = new PapiWatcherService(
-                context.plugin(), dispatchService, configuration, packetBridge, repository, context.placeholderResolver()
+                context.plugin(), dispatchService, configuration, packetBridge, repository,
+                context.placeholderResolver(), context.scriptConditionEvaluator()
             );
             watcherService.start();
         }
@@ -237,6 +242,24 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
                 }
             });
 
+        // 注册 Chemdah 事件桥接
+        boolean chemdahAvailable = Bukkit.getPluginManager().isPluginEnabled("Chemdah");
+        boolean hasChemdahRules = configuration.rules().stream()
+            .anyMatch(rule -> rule.enabled() && rule.trigger() != null && rule.trigger().chemdahTrigger());
+        if (chemdahAvailable && hasChemdahRules) {
+            try {
+                chemdahBridge = new ChemdahEventBridge(context.plugin(), context.logger(), dispatchService);
+                chemdahBridge.register();
+            } catch (Exception e) {
+                context.logger().warning("EventPacket Chemdah 桥接初始化失败: " + e.getMessage());
+                chemdahBridge = null;
+            }
+        } else if (hasChemdahRules && !chemdahAvailable) {
+            context.logger().warning(
+                "EventPacket 模块检测到 Chemdah 触发配置，但当前未安装 Chemdah，这部分触发器不会生效。"
+            );
+        }
+
         context.logger().fine(
             "EventPacket 模块已载入，rules=" + configuration.enabledRuleCount()
                 + "/" + configuration.rules().size()
@@ -247,6 +270,10 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
     @Override
     protected void stopService() {
         EventPacketContext.setAccountInfoResolver(null);
+        if (chemdahBridge != null) {
+            chemdahBridge.unregister();
+            chemdahBridge = null;
+        }
         if (scheduledCommandService != null) {
             scheduledCommandService.shutdown();
             scheduledCommandService = null;

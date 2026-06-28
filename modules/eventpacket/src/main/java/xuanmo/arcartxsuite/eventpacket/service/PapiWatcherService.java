@@ -5,6 +5,7 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -17,6 +18,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.condition.ScriptCondition;
+import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
+import xuanmo.arcartxsuite.api.condition.ScriptConditionKind;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketContext;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketRule;
@@ -36,6 +40,8 @@ public final class PapiWatcherService {
     private final PlaceholderResolverAPI placeholderResolver;
     private final Map<String, Map<UUID, String>> lastValues = new HashMap<>();
     private final Map<String, Integer> mobKillCounts = new ConcurrentHashMap<>();
+    private final Map<String, Map<UUID, Boolean>> scriptLastState = new ConcurrentHashMap<>();
+    private final ScriptConditionEvaluator scriptConditionEvaluator;
 
     private BukkitTask task;
 
@@ -45,7 +51,8 @@ public final class PapiWatcherService {
         PluginConfiguration configuration,
         PacketBridgeAPI packetBridge,
         EventPacketRepository repository,
-        PlaceholderResolverAPI placeholderResolver
+        PlaceholderResolverAPI placeholderResolver,
+        ScriptConditionEvaluator scriptConditionEvaluator
     ) {
         this.plugin = plugin;
         this.dispatchService = dispatchService;
@@ -53,6 +60,7 @@ public final class PapiWatcherService {
         this.packetBridge = packetBridge;
         this.repository = repository;
         this.placeholderResolver = placeholderResolver;
+        this.scriptConditionEvaluator = scriptConditionEvaluator;
     }
 
     public void start() {
@@ -72,6 +80,7 @@ public final class PapiWatcherService {
         }
         lastValues.clear();
         mobKillCounts.clear();
+        scriptLastState.clear();
     }
 
     public boolean isRunning() {
@@ -80,6 +89,9 @@ public final class PapiWatcherService {
 
     public void clearPlayer(UUID playerId) {
         for (Map<UUID, String> state : lastValues.values()) {
+            state.remove(playerId);
+        }
+        for (Map<UUID, Boolean> state : scriptLastState.values()) {
             state.remove(playerId);
         }
     }
@@ -213,6 +225,61 @@ public final class PapiWatcherService {
                             oldNumber,
                             newNumber
                         )
+                    );
+                }
+            }
+        }
+
+        // ── 脚本触发器评估 ────────────────────────────────────────
+        tickScriptTriggers(onlinePlayerIds);
+    }
+
+    private void tickScriptTriggers(Set<UUID> onlinePlayerIds) {
+        if (scriptConditionEvaluator == null) {
+            return;
+        }
+        for (EventPacketRule rule : configuration.rules()) {
+            if (!rule.enabled() || !rule.isScriptTrigger() || rule.script().isBlank()) {
+                continue;
+            }
+            ScriptConditionKind kind = rule.trigger() == EventPacketTrigger.SCRIPT_JS
+                ? ScriptConditionKind.JS
+                : ScriptConditionKind.ARIA;
+            ScriptCondition condition = kind == ScriptConditionKind.JS
+                ? ScriptCondition.js(rule.script(), rule.script())
+                : ScriptCondition.aria(rule.script(), rule.script());
+            List<ScriptCondition> conditions = List.of(condition);
+
+            Map<UUID, Boolean> state = scriptLastState.computeIfAbsent(rule.id(), k -> new ConcurrentHashMap<>());
+            state.keySet().removeIf(uuid -> !onlinePlayerIds.contains(uuid));
+
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                UUID playerId = player.getUniqueId();
+                boolean previous = state.getOrDefault(playerId, Boolean.FALSE);
+                boolean current;
+                try {
+                    current = scriptConditionEvaluator.passes(player, conditions);
+                } catch (Exception exception) {
+                    if (configuration.debug()) {
+                        plugin.getLogger().fine(
+                            "EventPacket 脚本触发器["
+                                + rule.id()
+                                + "] 评估失败: "
+                                + exception.getMessage()
+                        );
+                    }
+                    continue;
+                }
+                state.put(playerId, current);
+                if (!previous && current) {
+                    Map<String, String> variables = new LinkedHashMap<>();
+                    variables.put("rule_id", rule.id());
+                    variables.put("script_result", "true");
+                    dispatchService.dispatchRule(
+                        rule,
+                        rule.trigger(),
+                        player,
+                        EventPacketContext.fromVariables(rule.trigger(), player, variables)
                     );
                 }
             }
