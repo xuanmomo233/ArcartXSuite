@@ -61,6 +61,8 @@ public final class CloudModuleService {
 
     private final SuiteCoreImpl plugin;
     private final ModuleRegistry registry;
+    /** 为 true 时输出签名、密钥 hash 等敏感诊断日志（见 config.yml cloud.debug）。 */
+    private final boolean debugLogging;
     private final String apiBaseUrl;
     private final String qq;
     private final String apiKey;
@@ -91,6 +93,7 @@ public final class CloudModuleService {
         this.plugin = plugin;
         this.registry = registry;
         org.bukkit.configuration.file.FileConfiguration config = plugin.getConfig();
+        this.debugLogging = config.getBoolean("cloud.debug", false);
         this.apiBaseUrl = API_BASE_URL;
         this.qq = config.getString("cloud.qq", "").trim();
         this.apiKey = config.getString("cloud.apiKey", "").trim();
@@ -202,10 +205,10 @@ public final class CloudModuleService {
 
         long timestamp = System.currentTimeMillis();
         String signMessage = "POST\n/v1/servers/refresh\n" + timestamp + "\n" + serverCode;
-        plugin.consoleInfo("[Cloud] 签名消息: " + signMessage.replace("\n", "\\n"));
-        plugin.consoleInfo("[Cloud] serverCode: " + serverCode + " | 私钥存在: " + (keyPair != null && keyPair.getPrivate() != null));
+        debugLog("[Cloud] 签名消息: " + signMessage.replace("\n", "\\n"));
+        debugLog("[Cloud] serverCode: " + serverCode + " | 私钥存在: " + (keyPair != null && keyPair.getPrivate() != null));
         String signature = sign(signMessage);
-        plugin.consoleInfo("[Cloud] 签名结果(base64): " + signature);
+        debugLog("[Cloud] 签名结果(base64): " + signature);
         String refreshPayload = "{"
             + "\"apiKey\":\"" + escapeJson(apiKey) + "\""
             + "}";
@@ -222,7 +225,7 @@ public final class CloudModuleService {
             .thenCompose(resp -> {
                 if (resp.statusCode() == 200) {
                     String body = resp.body();
-                    plugin.consoleInfo("[Cloud] refresh 响应: " + body);
+                    debugLog("[Cloud] refresh 响应: " + body);
                     String token = extractJsonField(body, "token");
                     if (token != null) {
                         this.moduleToken = token;
@@ -528,11 +531,11 @@ public final class CloudModuleService {
                     key[i] ^= pad[i];
                 }
             }
-            // 诊断日志：打印 key 哈希与 axb 结构。解密 100% 在 native 层完成，
-            // Java 层不再持有任何 AES/GZIP 解密逻辑，因此不构造明文 payload。
-            String keyHash = sha256Hex(key);
-            String ivHex = bytesToHex(java.util.Arrays.copyOfRange(axb, 4, 16));
-            plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 诊断: keyHash=" + keyHash + ", ivHex=" + ivHex + ", axbLen=" + axb.length);
+            if (debugLogging) {
+                String keyHash = sha256Hex(key);
+                String ivHex = bytesToHex(java.util.Arrays.copyOfRange(axb, 4, 16));
+                debugLog("[Cloud] 模块 " + moduleId + " 诊断: keyHash=" + keyHash + ", ivHex=" + ivHex + ", axbLen=" + axb.length);
+            }
 
             // V6：.axb Ed25519 签名（服务端用平台私钥对完整 axb 签名）。
             // native 在 AES-GCM 解密前先验签；签名为空（后端未启用签名）时 native 跳过验签。
@@ -791,6 +794,12 @@ public final class CloudModuleService {
 
     // -- 工具方法 ------------------------------------------------
 
+    private void debugLog(String message) {
+        if (debugLogging) {
+            plugin.consoleInfo(message);
+        }
+    }
+
     private KeyPair generateKeyPair() {
         try {
             KeyPairGenerator kpg = KeyPairGenerator.getInstance("Ed25519");
@@ -838,7 +847,7 @@ public final class CloudModuleService {
                 if (privateEncoded == null) return null;
                 KeyPair kp = rebuildKeyPair(publicEncoded, privateEncoded);
                 if (kp != null) {
-                    plugin.consoleInfo("[Cloud] 已加载加密持久化 Ed25519 密钥对，裸公钥: " + encodeRawEd25519PublicKey(kp));
+                    debugLog("[Cloud] 已加载加密持久化 Ed25519 密钥对，裸公钥: " + encodeRawEd25519PublicKey(kp));
                 }
                 return kp;
             }

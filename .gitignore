@@ -43,6 +43,8 @@ package-lock.json
 *.tmp
 *.swp
 *~
+*.bak
+*.bak*
 
 # Windows
 dist-scripts/temp/
