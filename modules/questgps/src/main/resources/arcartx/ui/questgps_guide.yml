@@ -208,6 +208,7 @@ controls:
                   point: ~top_left
                   width: 388
                   height: 66
+                  entryKey: ''
                   visible: self.entryKey != '' && var.tasks[self.entryKey] != null
                   entry: var.tasks[self.entryKey]
                 children:
@@ -254,6 +255,7 @@ controls:
                   point: ~top_left
                   width: 388
                   height: 66
+                  entryKey: ''
                   visible: self.entryKey != '' && var.tasks[self.entryKey] != null
                   entry: var.tasks[self.entryKey]
                 children:
@@ -300,6 +302,7 @@ controls:
                   point: ~top_left
                   width: 388
                   height: 66
+                  entryKey: ''
                   visible: self.entryKey != '' && var.tasks[self.entryKey] != null
                   entry: var.tasks[self.entryKey]
                 children:

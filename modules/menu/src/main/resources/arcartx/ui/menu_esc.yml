@@ -173,7 +173,7 @@ controls:
                         }
                     children:
                       菜单按钮:
-                        type: Slot
+                        type: Texture
                         attribute:
                           entryKey: 0
                           entry: var.buttonRows[self.entryKey]
@@ -186,10 +186,10 @@ controls:
                           radius: 10
                         effect:
                           stroke:
-                            width: 4
-                            color: "self.entry != null && self.entry['enabled'] ? '~255,255,255' : '~120,120,120'"
+                            width: 3
+                            color: "self.entry != null && self.entry['enabled'] ? '~255,255,255,255' : '~120,120,120,255'"
                         action:
-                          click: |-
+                          clickLeft: |-
                             if(self.entry != null && self.entry['enabled']){
                               Packet.send(var.packetId, 'click', self.entry['id'])
                             }
@@ -220,7 +220,7 @@ controls:
                               y: 18
                               texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
                               center: true
-                              fontSize: 49
+                              fontSize: 36
           纵向滑块:
             type: Texture
             val: drag_bar
@@ -254,7 +254,7 @@ controls:
                     }
                 children:
                   页脚按钮:
-                    type: Slot
+                    type: Texture
                     attribute:
                       entryKey: 0
                       entry: var.footerRows[self.entryKey]
@@ -267,10 +267,10 @@ controls:
                       radius: 10
                     effect:
                       stroke:
-                        width: 4
-                        color: "self.entry != null && self.entry['enabled'] ? '~255,255,255' : '~120,120,120'"
+                        width: 3
+                        color: "self.entry != null && self.entry['enabled'] ? '~255,255,255,255' : '~120,120,120,255'"
                     action:
-                      click: |-
+                      clickLeft: |-
                         if(self.entry != null && self.entry['enabled']){
                           if(self.entry['clientAction'] == 'options'){
                             Game.options()
@@ -289,4 +289,4 @@ controls:
                           y: 18
                           texts: "self.entry != null ? self.entry['text'] : ''"
                           center: true
-                          fontSize: 49
+                          fontSize: 36

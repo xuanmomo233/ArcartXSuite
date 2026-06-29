@@ -96,8 +96,8 @@ controls:
               radius: 24
             effect:
               stroke:
-                width: 3
-                color: ~255,255,255,255
+                width: 2
+                color: ~80,180,255,180
               shadow:
                 xOffset: 2
                 yOffset: 2
@@ -188,7 +188,7 @@ controls:
                         }
                     children:
                       菜单按钮:
-                        type: Slot
+                        type: Texture
                         attribute:
                           entryKey: 0
                           entry: var.buttonRows[self.entryKey]
@@ -201,10 +201,10 @@ controls:
                           radius: 10
                         effect:
                           stroke:
-                            width: 3
-                            color: "self.entry != null && self.entry['enabled'] ? '~255,255,255' : '~120,120,120'"
+                            width: 2
+                            color: "self.entry != null && self.entry['enabled'] ? '~255,255,255,255' : '~120,120,120,255'"
                         action:
-                          click: |-
+                          clickLeft: |-
                             if(self.entry != null && self.entry['enabled']){
                               Packet.send(var.packetId, 'click', self.entry['id'])
                             }
@@ -235,7 +235,7 @@ controls:
                               y: 18
                               texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
                               center: true
-                              fontSize: 42
+                              fontSize: 36
           导航栏:
             type: HStack
             attribute:
@@ -244,7 +244,7 @@ controls:
               spaceBetween: 20
             children:
               上一页按钮:
-                type: Slot
+                type: Texture
                 attribute:
                   visible: var.hasPrev
                   width: 160
@@ -254,7 +254,8 @@ controls:
                   shape: ~round_rect
                   radius: 10
                 action:
-                  click: Packet.send(var.packetId, 'page', 'prev')
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'page', 'prev')
                 children:
                   上一页文字:
                     type: Text
@@ -266,7 +267,7 @@ controls:
                       center: true
                       fontSize: 36
               下一页按钮:
-                type: Slot
+                type: Texture
                 attribute:
                   visible: var.hasNext
                   width: 160
@@ -276,7 +277,8 @@ controls:
                   shape: ~round_rect
                   radius: 10
                 action:
-                  click: Packet.send(var.packetId, 'page', 'next')
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'page', 'next')
                 children:
                   下一页文字:
                     type: Text
@@ -306,7 +308,7 @@ controls:
                     }
                 children:
                   页脚按钮:
-                    type: Slot
+                    type: Texture
                     attribute:
                       entryKey: 0
                       entry: var.footerRows[self.entryKey]
@@ -317,8 +319,12 @@ controls:
                       hover: "self.entry != null && self.entry['enabled'] ? '~255,255,255,255' : '~35,35,35,200'"
                       shape: ~round_rect
                       radius: 10
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.entry != null && self.entry['enabled'] ? '~255,255,255,255' : '~120,120,120,255'"
                     action:
-                      click: |-
+                      clickLeft: |-
                         if(self.entry != null && self.entry['enabled']){
                           if(self.entry['clientAction'] == 'options'){
                             Game.options()
