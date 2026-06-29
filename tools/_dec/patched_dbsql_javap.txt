@@ -1,0 +1,28 @@
+﻿Compiled from "DatabaseSQL.kt"
+public final class ink.ptms.chemdah.core.database.DatabaseSQL extends ink.ptms.chemdah.core.database.Relational<ink.ptms.chemdah.taboolib.module.database.SQL, java.lang.Long, java.lang.Long> {
+  public static final ink.ptms.chemdah.core.database.DatabaseSQL$Companion Companion;
+  public ink.ptms.chemdah.core.database.DatabaseSQL();
+  public ink.ptms.chemdah.taboolib.module.database.HostSQL getHost();
+  public final ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<ink.ptms.chemdah.taboolib.module.database.SQL>, ink.ptms.chemdah.taboolib.module.database.SQL> getTableUser();
+  public ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<ink.ptms.chemdah.taboolib.module.database.SQL>, ink.ptms.chemdah.taboolib.module.database.SQL> getTableUserData();
+  public ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<ink.ptms.chemdah.taboolib.module.database.SQL>, ink.ptms.chemdah.taboolib.module.database.SQL> getTableVariables();
+  public java.lang.String getQuestKey();
+  public boolean isDuplicateKeyUpdateSupported();
+  public ink.ptms.chemdah.core.database.Relational<ink.ptms.chemdah.taboolib.module.database.SQL, java.lang.Long, java.lang.Long> setup();
+  public final void updateUserTime(long);
+  public final ink.ptms.chemdah.core.PlayerProfile init(ink.ptms.chemdah.core.PlayerProfile);
+  public ink.ptms.chemdah.core.database.QuestTable<ink.ptms.chemdah.taboolib.module.database.SQL> newQuestTable(java.lang.String);
+  public java.lang.Long getUserId(org.bukkit.entity.Player);
+  public java.lang.Long getQuestId(org.bukkit.entity.Player, ink.ptms.chemdah.core.quest.Quest);
+  public java.util.concurrent.CompletableFuture<java.lang.Long> createUser(ink.ptms.chemdah.core.PlayerProfile, org.bukkit.entity.Player);
+  public void createQuest(ink.ptms.chemdah.core.PlayerProfile, long, ink.ptms.chemdah.core.quest.Quest);
+  public ink.ptms.chemdah.core.PlayerProfile select(org.bukkit.entity.Player);
+  public void update(org.bukkit.entity.Player, ink.ptms.chemdah.core.PlayerProfile);
+  public ink.ptms.chemdah.taboolib.module.database.Host getHost();
+  public java.lang.Object getUserId(org.bukkit.entity.Player);
+  public java.lang.Object getQuestId(org.bukkit.entity.Player, ink.ptms.chemdah.core.quest.Quest);
+  public void createQuest(ink.ptms.chemdah.core.PlayerProfile, java.lang.Object, ink.ptms.chemdah.core.quest.Quest);
+  public static final java.util.concurrent.ConcurrentHashMap access$getCacheUserId$cp();
+  public static final java.util.concurrent.ConcurrentHashMap access$getCacheQuestId$cp();
+  static {};
+}

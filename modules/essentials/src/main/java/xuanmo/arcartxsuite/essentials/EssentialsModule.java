@@ -146,7 +146,7 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
     @Override
     protected void startService() throws Exception {
         repository = new EssentialsRepository(
-            context.migrateLegacyDataFile(configuration.storage().sqliteFile()),
+            context.dataFolder(),
             configuration.storage(), context.logger());
         repository.initialize();
 

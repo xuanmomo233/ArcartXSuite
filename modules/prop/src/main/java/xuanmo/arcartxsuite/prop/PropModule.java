@@ -115,10 +115,6 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
     }
 
     private void ensureDefaults() throws IOException {
-        // 一次性迁移老路径 plugins/ArcartXSuite/prop/ -> data/prop/prop/
-        // （PROP_DATA_DIRECTORY 历史值就叫 "prop"，因此最终路径是 data/prop/prop/）
-        context.migrateLegacyDirectory(PROP_DATA_DIRECTORY);
-
         File dataDir = new File(context.dataFolder(), PROP_DATA_DIRECTORY);
         if (!dataDir.exists() && !dataDir.mkdirs()) {
             throw new IOException("无法创建 Prop 数据目录: " + dataDir.getAbsolutePath());

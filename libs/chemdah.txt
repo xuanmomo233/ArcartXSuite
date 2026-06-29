@@ -1,0 +1,11 @@
+﻿Compiled from "Chemdah.kt"
+public final class ink.ptms.chemdah.Chemdah extends ink.ptms.chemdah.taboolib.common.platform.Plugin {
+  public static final ink.ptms.chemdah.Chemdah INSTANCE;
+  public final ink.ptms.chemdah.taboolib.module.configuration.Configuration getConf();
+  public final ink.ptms.chemdah.api.ChemdahAPI getApi();
+  public final ink.ptms.chemdah.taboolib.platform.BukkitPlugin getPlugin();
+  public void onLoad();
+  public void onActive();
+  public final <T extends ink.ptms.chemdah.core.database.Database> void registerDatabaseImpl(T);
+  static {};
+}

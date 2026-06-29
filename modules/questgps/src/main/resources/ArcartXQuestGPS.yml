@@ -7,9 +7,11 @@ config-version: 1
 # 可解析的 PAPI: 无；任务名称、目标、状态和奖励由 Chemdah 任务系统提供，本模块整理后发包给 UI。
 # 关联资源: ui/questgps_menu.yml
 
+#开发者调试按钮
 debug:
   enabled: false
 
+#客户端发包
 client:
   packet-id: "AXS_QUESTGPS"
   # 任务菜单 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
@@ -27,12 +29,51 @@ client:
   register-ui-on-enable: true
   overwrite-ui-files: false
 
+# UI 展示数据来源（全局二选一，无链式回退）
+# chemdah：名称、描述、目标文案、目标说明、奖励预览均读 Chemdah
+# overlay：上述字段均读 overlay（display-name-override、description、tasks、rewards 等）
+# 单任务可在 quests/*.yml 的 presentation.source 覆盖
+presentation:
+  source: chemdah          # chemdah | overlay 全局二选一，无链式回退
+
+# 分类数据来源（全局二选一，无链式回退）
+category:
+  # chemdah：仅读 Chemdah meta.type → categories 注册表
+  # overlay：仅读 quests/*.yml 的 category 字段
+  source: chemdah          # chemdah | overlay 全局二选一，无链式回退
+
+# 任务列表发现: overlay（白名单，仅 quests/*.yml 登记的任务进菜单）| auto（扫描全部 Chemdah 模板）
+discovery:
+  mode: auto            # overlay | auto 全局二选一，无链式回退
+
+# 任务分类 Tab（仅此处注册的分类会显示；删除本段可关闭分类 Tab）
+# Chemdah meta.type 与 overlay category 均须与下列 ID 之一一致，否则任务不进菜单
+categories:
+  mainline:
+    display-name: "主线"
+    sort-order: 0
+  side:
+    display-name: "支线"
+    sort-order: 100
+  encounter:
+    display-name: "奇遇"
+    sort-order: 200
+  # 自定义分类示例（配合 quests/custom_example.yml）：
+  # daily:
+  #   display-name: "日常"
+  #   sort-order: 300
+
+
+#导航配置，有 ArcartX 的 路标导航（waypoint） 和 Suite 提供的路径导航（marker）
 navigation:
   enabled: true
+  # ArcartX 的 路标导航（waypoint）样式，在 ArcartX waypoint 目录下定义
   waypoint-style-id: "default"
   quest-id-prefix: "AXS-questgps-"
   remove-on-finish: true
-  # 导航标记 — 使用 Adyeshach 私有实体 + ArcartX 模型渲染客户端导航标记（与罗盘路点并存）。
+  # 导航坐标来源: chemdah（仅 Chemdah tracker）| overlay（仅 YAML）| hybrid（默认，Chemdah 优先）
+  mode: hybrid
+  # 导航标记 — 使用 Adyeshach 私有实体 + ArcartX 模型渲染客户端导航标记。
   # 仅在追踪状态变更时发包，客户端独立渲染，零服务端 tick 开销。
   # 依赖: Adyeshach + ArcartX 客户端。
   marker:
@@ -59,37 +100,47 @@ navigation:
     # A* 寻路最大迭代次数（防止服务端卡顿，越大路径越精确但越耗时）。
     path-max-iterations: 2000
 
-# 任务分类定义。
-# 内置分类: mainline(主线, sortOrder=0)、side(支线, sortOrder=100)、encounter(奇遇, sortOrder=200)。
-# 你可以在此新增自定义分类，也可以覆盖内置分类的显示名和排序。
-# 同一分类的任务可以分散在 quests/ 目录下的不同 yml 文件中。
-categories:
-  # 示例: 新增"日常"分类
-  # daily:
-  #   display-name: "日常"
-  #   sort-order: 150
-  # 示例: 覆盖内置"支线"分类的显示名
-  # side:
-  #   display-name: "支线任务"
-  #   sort-order: 100
+# Chemdah 玩家任务进度怎么存（与任务菜单 UI 无关）
+# · 大多数服：Chemdah config.yml 用 database.use=LOCAL → 保持 enabled: false
+# · 要用 MySQL：Chemdah 设 database.use=SQL，此处 enabled: true
+#   且 Chemdah JAR 须包含 DatabaseSQL（付费版，或带该类的 patched 免费 JAR）
+database:
+  enabled: false                      # true = 由 QuestGPS 为 Chemdah 注册 MySQL 存储
+  load-in-join-event: true            # 玩家进服时加载 Chemdah 档案
+  release-in-quit-event: true         # 玩家退服时释放档案
+  disable-auto-save: false            # false = 允许 Chemdah 定时自动保存
+  disable-auto-create-table: false    # false = 首次使用时自动建表
 
+# 主线门禁：未完成指定主线前，限制部分玩法（类似新手引导锁）
+# required-mainline-quest-ids 为空 = 整段门禁关闭，下列拦截均不生效
 gate:
-  # 必须完成的主线任务 ID；为空则不启用主线门禁。
+  # 玩家须完成的 Chemdah 任务 ID（全部完成才「过关」）
+  # 示例: ["example_mainline_quest"]
   required-mainline-quest-ids: []
-  # blocked-categories 可选: mainline 主线；side 支线；encounter 奇遇；以及你自定义的分类 ID。
+  # 未过关时，任务菜单里这些分类 Tab 锁定（不能查看/接取）
+  # ID 须与上方 categories 段一致
   blocked-categories:
     - side
     - encounter
-  # 玩家输入这些命令前缀时会被主线门禁拦截。
+  # 未过关时，玩家输入以这些前缀开头的命令会被拦截（不含 /）
   blocked-command-prefixes:
     - "warp"
     - "rtp"
     - "shop"
+  # 未过关时，其他模块入口被锁定（模块打开 UI 前调用 QuestGpsNavigable.moduleEntryLocked）
+  # 填写各模块约定的入口 ID 字符串，示例：
+  #   - "market"           # 商店/拍卖行入口
+  #   - "regions_warp"     # 区域传送面板
   blocked-module-entries: []
+  # 未过关时，EventPacket 规则不触发（与 data/eventpacket/rules/*.yml 根键一致）
+  # 示例：
+  #   - "first_join_offer_mainline"      # rules/examples.yml
+  #   - "kill_zombie_trigger_encounter"  # 击杀僵尸累计触发奇遇
   blocked-event-rule-ids: []
+  # 被拦截时发给玩家的提示
   deny-message: "&c你需要先完成必要主线任务。"
-  deny-chat-card: ""
-  deny-subtitle: ""
+  deny-chat-card: ""                  # 可选，ArcartX 聊天卡片 ID
+  deny-subtitle: ""                   # 可选，ArcartX 字幕组 ID
 
 # 任务定义目录，路径相对模块数据目录。
 # 目录下每个 *.yml 文件可包含多个任务，根键即为任务 ID。

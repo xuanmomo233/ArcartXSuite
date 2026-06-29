@@ -27,6 +27,22 @@ ui:
       var.navY = packet['navY']
       var.navZ = packet['navZ']
       var.hasNav = packet['hasNav']
+      var.taskKeys = var.tasks.keys()
+      var.taskIndex = 0
+      for(key in var.taskKeys){
+        item = val.guide_task_list['引导项' + var.taskIndex.round()]
+        if(item != null){
+          item.entryKey = key
+        }
+        var.taskIndex = var.taskIndex + 1
+      }
+      while(var.taskIndex < 3){
+        item = val.guide_task_list['引导项' + var.taskIndex.round()]
+        if(item != null){
+          item.entryKey = ''
+        }
+        var.taskIndex = var.taskIndex + 1
+      }
     update: |-
       var.packetId = packet['packetId']
       var.active = packet['active']
@@ -41,6 +57,22 @@ ui:
       var.navY = packet['navY']
       var.navZ = packet['navZ']
       var.hasNav = packet['hasNav']
+      var.taskKeys = var.tasks.keys()
+      var.taskIndex = 0
+      for(key in var.taskKeys){
+        item = val.guide_task_list['引导项' + var.taskIndex.round()]
+        if(item != null){
+          item.entryKey = key
+        }
+        var.taskIndex = var.taskIndex + 1
+      }
+      while(var.taskIndex < 3){
+        item = val.guide_task_list['引导项' + var.taskIndex.round()]
+        if(item != null){
+          item.entryKey = ''
+        }
+        var.taskIndex = var.taskIndex + 1
+      }
   action:
     load: |-
       var.packetId = 'AXS_QUESTGPS'
@@ -161,24 +193,115 @@ controls:
               height: 1
               normal: ~255,255,255,40
           任务列表:
-            type: List
+            val: guide_task_list
+            type: VStack
             attribute:
               point: ~top_left
               x: 16
               y: 50
               width: 388
-              height: 210
-              entryWidth: 388
-              entryHeight: 66
-              source: var.tasks
-              count: var.taskCount
-            entryControls:
-              行:
+              spaceBetween: 4
+            children:
+              引导项0:
                 type: Canvas
                 attribute:
                   point: ~top_left
                   width: 388
                   height: 66
+                  visible: self.entryKey != '' && var.tasks[self.entryKey] != null
+                  entry: var.tasks[self.entryKey]
+                children:
+                  状态图标:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 8
+                      y: 10
+                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&a✓' : '&f◈') : ''"
+                      fontSize: 16
+                      shadow: false
+                  任务文字:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 10
+                      width: 280
+                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&7&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : ''"
+                      fontSize: 14
+                      shadow: false
+                  任务状态:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -8
+                      y: 10
+                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&a已完成' : '&e进行中') : ''"
+                      fontSize: 12
+                      shadow: false
+                  行分隔线:
+                    type: Texture
+                    attribute:
+                      point: ~bottom_left
+                      x: 8
+                      y: -2
+                      width: 372
+                      height: 1
+                      normal: ~255,255,255,20
+              引导项1:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  width: 388
+                  height: 66
+                  visible: self.entryKey != '' && var.tasks[self.entryKey] != null
+                  entry: var.tasks[self.entryKey]
+                children:
+                  状态图标:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 8
+                      y: 10
+                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&a✓' : '&f◈') : ''"
+                      fontSize: 16
+                      shadow: false
+                  任务文字:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 30
+                      y: 10
+                      width: 280
+                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&7&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : ''"
+                      fontSize: 14
+                      shadow: false
+                  任务状态:
+                    type: Text
+                    attribute:
+                      point: ~top_right
+                      x: -8
+                      y: 10
+                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&a已完成' : '&e进行中') : ''"
+                      fontSize: 12
+                      shadow: false
+                  行分隔线:
+                    type: Texture
+                    attribute:
+                      point: ~bottom_left
+                      x: 8
+                      y: -2
+                      width: 372
+                      height: 1
+                      normal: ~255,255,255,20
+              引导项2:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  width: 388
+                  height: 66
+                  visible: self.entryKey != '' && var.tasks[self.entryKey] != null
+                  entry: var.tasks[self.entryKey]
                 children:
                   状态图标:
                     type: Text

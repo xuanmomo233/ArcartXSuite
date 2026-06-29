@@ -165,7 +165,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         PacketGuardAPI packetGuard = context.packetGuard();
 
         repository = new JdbcLoginViewRepository(
-            context.migrateLegacyDataFile(configuration.storage().sqliteFileName()),
+            context.dataFolder(),
             configuration.storage(), context.logger());
         service = new LoginViewService(
             context.plugin(), configuration, repository, packetBridge, packetGuard,

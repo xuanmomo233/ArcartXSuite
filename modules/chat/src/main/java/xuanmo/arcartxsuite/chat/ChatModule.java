@@ -89,8 +89,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         }
         var yaml = YamlConfiguration.loadConfiguration(configFile);
         String channelsRelative = yaml.getString("channels-directory", "chat/channels");
-        // 一次性迁移老路径 plugins/ArcartXSuite/<channelsRelative> -> data/chat/<channelsRelative>
-        File channelsDirectory = context.migrateLegacyDirectory(channelsRelative);
+        File channelsDirectory = new File(context.dataFolder(), channelsRelative);
         ensureChannelDefaults(channelsRelative);
         configuration = ChatModuleConfiguration.load(yaml, channelsDirectory, context.logger());
     }
@@ -122,7 +121,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         }
 
         JdbcChatRepository chatRepo = new JdbcChatRepository(
-            context.migrateLegacyDataFile(configuration.storage().sqliteFileName()),
+            context.dataFolder(),
             configuration.storage(), context.logger());
         service = new ChatService(
             context.plugin(),

@@ -1,0 +1,74 @@
+﻿Compiled from "DatabaseSQL.kt"
+final class ink.ptms.chemdah.core.database.DatabaseSQL$getUserId$userId$1 extends kotlin1822.jvm.internal.Lambda implements kotlin1822.jvm.functions.Function1<ink.ptms.chemdah.taboolib.module.database.ActionSelect, kotlin1822.Unit> {
+  final org.bukkit.entity.Player $player;
+
+  ink.ptms.chemdah.core.database.DatabaseSQL$getUserId$userId$1(org.bukkit.entity.Player);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: putfield      #48                 // Field $player:Lorg/bukkit/entity/Player;
+       5: aload_0
+       6: iconst_1
+       7: invokespecial #51                 // Method kotlin1822/jvm/internal/Lambda."<init>":(I)V
+      10: return
+
+  public final void invoke(ink.ptms.chemdah.taboolib.module.database.ActionSelect);
+    Code:
+       0: aload_1
+       1: ldc           #57                 // String $this$select
+       3: invokestatic  #63                 // Method kotlin1822/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       6: aload_1
+       7: iconst_1
+       8: anewarray     #65                 // class java/lang/String
+      11: astore_2
+      12: aload_2
+      13: iconst_0
+      14: ldc           #67                 // String id
+      16: aastore
+      17: aload_2
+      18: invokevirtual #73                 // Method ink/ptms/chemdah/taboolib/module/database/ActionSelect.rows:([Ljava/lang/String;)V
+      21: getstatic     #76                 // Field ink/ptms/chemdah/core/database/UserIndex.Companion:Link/ptms/chemdah/core/database/UserIndex$Companion;
+      24: invokevirtual #80                 // Method ink/ptms/chemdah/core/database/UserIndex$Companion.getINSTANCE:()Link/ptms/chemdah/core/database/UserIndex;
+      27: getstatic     #84                 // Field ink/ptms/chemdah/core/database/DatabaseSQL$getUserId$userId$1$WhenMappings.$EnumSwitchMapping$0:[I
+      30: swap
+      31: invokevirtual #88                 // Method ink/ptms/chemdah/core/database/UserIndex.ordinal:()I
+      34: iaload
+      35: tableswitch   { // 1 to 2
+
+                     1: 56
+
+                     2: 78
+               default: 100
+          }
+      56: aload_1
+      57: aload_1
+      58: ldc           #92                 // String uuid
+      60: aload_0
+      61: getfield      #48                 // Field $player:Lorg/bukkit/entity/Player;
+      64: invokeinterface #98,  1           // InterfaceMethod org/bukkit/entity/Player.getName:()Ljava/lang/String;
+      69: invokevirtual #102                // Method ink/ptms/chemdah/taboolib/module/database/ActionSelect.eq:(Ljava/lang/String;Ljava/lang/Object;)Link/ptms/chemdah/taboolib/module/database/Filterable$Criteria;
+      72: invokevirtual #106                // Method ink/ptms/chemdah/taboolib/module/database/ActionSelect.where:(Link/ptms/chemdah/taboolib/module/database/Filterable$Criteria;)V
+      75: goto          100
+      78: aload_1
+      79: aload_1
+      80: ldc           #92                 // String uuid
+      82: aload_0
+      83: getfield      #48                 // Field $player:Lorg/bukkit/entity/Player;
+      86: invokeinterface #110,  1          // InterfaceMethod org/bukkit/entity/Player.getUniqueId:()Ljava/util/UUID;
+      91: invokevirtual #115                // Method java/util/UUID.toString:()Ljava/lang/String;
+      94: invokevirtual #102                // Method ink/ptms/chemdah/taboolib/module/database/ActionSelect.eq:(Ljava/lang/String;Ljava/lang/Object;)Link/ptms/chemdah/taboolib/module/database/Filterable$Criteria;
+      97: invokevirtual #106                // Method ink/ptms/chemdah/taboolib/module/database/ActionSelect.where:(Link/ptms/chemdah/taboolib/module/database/Filterable$Criteria;)V
+     100: aload_1
+     101: iconst_1
+     102: invokevirtual #118                // Method ink/ptms/chemdah/taboolib/module/database/ActionSelect.limit:(I)V
+     105: return
+
+  public java.lang.Object invoke(java.lang.Object);
+    Code:
+       0: aload_0
+       1: aload_1
+       2: checkcast     #69                 // class ink/ptms/chemdah/taboolib/module/database/ActionSelect
+       5: invokevirtual #121                // Method invoke:(Link/ptms/chemdah/taboolib/module/database/ActionSelect;)V
+       8: getstatic     #127                // Field kotlin1822/Unit.INSTANCE:Lkotlin1822/Unit;
+      11: areturn
+}

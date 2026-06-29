@@ -335,6 +335,29 @@ public final class MyModule implements AXSModule, ModuleCommandHandler {
 | pickup | Pickup 拾取提示 | ✅ 独立 | HUD |
 | prop | Prop 快捷道具 | ✅ 独立 | — |
 | questgps | QuestGPS 任务导航 | ✅ 独立 | Menu+HUD |
+
+### QuestGPS × Chemdah 整合
+
+QuestGPS 以 **Chemdah 为单一事实来源**（名称、描述、目标进度、追踪目标、奖励执行），`quests/*.yml` 仅作 overlay（排序、门禁、hooks、可选字段覆盖）。overlay 根键 = Chemdah `Template.getId()`（裸 ID，如 `gps_main_newcomer`）。
+
+| 配置项 | 说明 |
+|--------|------|
+| `presentation.source` | `chemdah`（默认）或 `overlay`，UI 展示字段全局二选一 |
+| `category.source` | `chemdah`（仅 meta.type）或 `overlay`（仅 overlay category），二选一 |
+| `navigation.mode` | `chemdah` / `overlay` / `hybrid`（默认），导航坐标来源 |
+| `discovery.mode` | `overlay`（白名单）或 `auto`（扫描 Chemdah 全部模板） |
+| `database.enabled` | 通过 `registerDatabaseImpl` 注册 MySQL（需 patched/付费 JAR 含 `DatabaseSQL`） |
+
+UI 发包结构对齐 Title 模块：`categories` / `pages` / `quests` / `tasks` / `rewards` 均为 `Map<id, {...}>`，客户端用 `entryKey` 绑定模板列表；分类 Tab 由 `categories` 动态驱动。
+
+**测试清单**
+
+- LOCAL SQLite：`database.enabled=false`，overlay 白名单行为与现网一致
+- MySQL：`database.enabled=true`，进服/退服/重进数据一致
+- 描述/进度：UI 显示 Chemdah meta，修改 Chemdah YAML 后 reload 生效
+- 追踪：Waypoint/Marker 跟随 Chemdah tracker；`remove-on-finish` 在 Complete/Fail 时清除
+- 奖励：完成任务由 Chemdah 发放；UI 预览与模板 `QUEST_COMPLETED` agent 一致
+
 | regions | Regions 区域保护 | ✅ 独立 | — |
 | rgb | RGB 渐变色文本 | ✅ 独立 | — |
 | tab | Tab 在线列表 | ✅ 独立 | — |

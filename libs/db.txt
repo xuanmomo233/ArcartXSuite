@@ -1,0 +1,29 @@
+﻿Compiled from "Database.kt"
+public abstract class ink.ptms.chemdah.core.database.Database {
+  public static final ink.ptms.chemdah.core.database.Database$Companion Companion;
+  public static ink.ptms.chemdah.core.database.Database INSTANCE;
+  private static boolean isDisableAutoSave;
+  private static boolean isDisableAutoCreateTable;
+  private static boolean isLoadInJoinEvent;
+  private static boolean isReleaseInQuitEvent;
+  public ink.ptms.chemdah.core.database.Database();
+  public abstract ink.ptms.chemdah.core.PlayerProfile select(org.bukkit.entity.Player);
+  public abstract void update(org.bukkit.entity.Player, ink.ptms.chemdah.core.PlayerProfile);
+  public abstract void releaseQuest(org.bukkit.entity.Player, ink.ptms.chemdah.core.PlayerProfile, ink.ptms.chemdah.core.quest.Quest);
+  public final java.lang.String selectVariable(java.lang.String);
+  public final void updateVariable(java.lang.String, java.lang.String);
+  public final void releaseVariable(java.lang.String);
+  public abstract java.util.List<java.lang.String> variables();
+  protected abstract java.lang.String selectVariable0(java.lang.String);
+  protected abstract void updateVariable0(java.lang.String, java.lang.String);
+  protected abstract void releaseVariable0(java.lang.String);
+  public static final boolean access$isDisableAutoSave$cp();
+  public static final void access$setDisableAutoSave$cp(boolean);
+  public static final boolean access$isDisableAutoCreateTable$cp();
+  public static final void access$setDisableAutoCreateTable$cp(boolean);
+  public static final boolean access$isLoadInJoinEvent$cp();
+  public static final void access$setLoadInJoinEvent$cp(boolean);
+  public static final boolean access$isReleaseInQuitEvent$cp();
+  public static final void access$setReleaseInQuitEvent$cp(boolean);
+  static {};
+}

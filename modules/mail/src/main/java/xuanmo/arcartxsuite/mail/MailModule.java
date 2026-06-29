@@ -137,12 +137,8 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             }
         };
 
-        // 一次性迁移老的 plugins/ArcartXSuite/mail/ 目录到 data/mail/mail/
-        // （configuration.presetsDirectory() 默认 "mail/presets"，整体迁移 "mail" 一次到位）
-        context.migrateLegacyDirectory("mail");
-
         JdbcMailRepository mailRepo = new JdbcMailRepository(
-            context.migrateLegacyDataFile(configuration.storage().sqliteFileName()),
+            context.dataFolder(),
             configuration.storage(), context.logger());
         service = new MailService(
             context.plugin(), context.dataFolder(), configuration,

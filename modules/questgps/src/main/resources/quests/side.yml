@@ -1,17 +1,46 @@
-# QuestGPS 支线任务定义
+# =============================================================================
+# QuestGPS 支线 overlay 示例
+# -----------------------------------------------------------------------------
+# 配置字段说明见 mainline.yml
+# 本示例对应分类 Tab「支线」：Chemdah 里应写 meta.type: side
+# 默认 enabled: false；改为 true 且 Chemdah 有 example_side_quest 模板后可测试
+# =============================================================================
 
-"side/example_side":
+example_side_quest:
   enabled: false
-  category: side
-  display-name-override: "示例支线"
-  description:
-    - "&7把 enabled 改为 true 后显示。"
   sort-order: 100
   allow-abandon: true
-  required-mainline:
-    - "main/example_quest"
-  rewards:
-    - type: mythicitems
-      mythic-item-id: "side_token"
-      amount: 1
-      fallback-material: "EMERALD"
+  # category 仅 category.source=overlay 时必填
+  # category: side
+  required-mainline:                    # 须先完成的主线 Chemdah ID
+    - "example_mainline_quest"
+  hooks:
+    triggered:
+      - "questgps_side_triggered"
+    accepted:
+      - "questgps_side_accepted"
+    completed:
+      - "questgps_side_completed"
+    track-changed:
+      - "questgps_side_track_changed"
+  navigation:
+    enabled: true
+    point:
+      world: "world"
+      x: 50
+      y: 70
+      z: 30
+      title: "商队驻地"
+      style-id: "default"
+      map-label: "支线目标"
+  tasks:
+    "0":
+      sort-order: 10
+      navigation:
+        world: "world"
+        x: 55
+        y: 70
+        z: 32
+        title: "与商人对话"
+        style-id: "default"
+        map-label: "支线目标"

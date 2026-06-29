@@ -1,17 +1,69 @@
-# QuestGPS 自定义分类任务示例
-# 使用前需在 ArcartXQuestGPS.yml 的 categories 段定义分类 ID。
-# 同一分类的任务可以分散在 quests/ 目录下的多个 yml 文件中。
+# =============================================================================
+# QuestGPS 自定义分类 + overlay 展示 + 奖励预览 示例（默认全部注释）
+# -----------------------------------------------------------------------------
+# 演示：新增「日常」分类 Tab，UI 文字与奖励预览均从 overlay 读取
+#
+# 启用步骤：
+#   1. config.yml categories 增加 daily（见主配置末尾注释示例）
+#   2. Chemdah 创建任务模板 example_daily_quest，meta.type: daily
+#   3. 取消下方注释，enabled: true
+#   4. discovery.mode: overlay 时，overlay 登记才会进菜单
+#
+# category.source=chemdah 时：分类由 meta.type 决定，可不写 category
+# category.source=overlay 时：须在 overlay 写 category: daily
+# =============================================================================
 
-# 示例: 日常任务（需要先在 categories 中定义 daily 分类）
-# "daily/gather_herbs":
+# example_daily_quest:
 #   enabled: true
-#   category: daily
-#   display-name-override: "采集药草"
-#   description:
-#     - "&7在野外采集 10 株药草。"
 #   sort-order: 10
 #   allow-abandon: true
 #   required-mainline: []
+#   category: daily                     # category.source=overlay 时必填
+#   display-name-override: "采集药草"   # presentation.source=overlay 时生效
+#   description:
+#     - "&7在野外采集 10 株药草。"
+#   presentation:
+#     source: overlay                   # 本任务 UI 全部读 overlay（名称/描述/奖励预览等）
+#   hooks:
+#     triggered:
+#       - "questgps_daily_triggered"
+#     accepted:
+#       - "questgps_daily_accepted"
+#     completed:
+#       - "questgps_daily_completed"
+#   # 奖励预览（仅 UI 展示，不发奖；发奖仍由 Chemdah agent 执行）
+#   # type: neigeitems | mythicmobs/mythicitems | overture | mmoitems
+#   #       material/itemstack | title | text
+#   rewards:
+#     - type: neigeitems
+#       neige-item-id: "herb_bundle"
+#       amount: 10
+#       display-name: "&a药草捆"
+#       fallback-material: "WHEAT"
+#     - type: mythicmobs
+#       mythic-item-id: "rare_herb"
+#       amount: 1
+#       fallback-material: "EMERALD"
+#     - type: overture
+#       overture-item-id: "daily_token"
+#       amount: 1
+#       fallback-material: "PAPER"
+#     - type: mmoitems
+#       type-id: "MATERIAL"
+#       id: "HERB_ESSENCE"
+#       amount: 5
+#       fallback-material: "GREEN_DYE"
+#     - type: material
+#       material: "GOLD_INGOT"
+#       amount: 3
+#       display-name: "&e金币"
+#     - type: title
+#       title-id: "herbalist"
+#       duration: "permanent"
+#       display-name: "&e称号: 采药人"
+#     - type: text
+#       display-name: "&a经验"
+#       text: "&7实际由 Chemdah agent 发放"
 #   navigation:
 #     enabled: true
 #     point:
@@ -23,6 +75,13 @@
 #       style-id: "default"
 #       map-label: "日常目标"
 #   tasks:
-#     "collect_herbs":
-#       display-text: "采集药草 0/10"
+#     "0":
 #       sort-order: 10
+#       navigation:
+#         world: "world"
+#         x: 105
+#         y: 70
+#         z: -48
+#         title: "药草采集点"
+#         style-id: "default"
+#         map-label: "日常目标"

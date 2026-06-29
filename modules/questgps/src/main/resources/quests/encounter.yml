@@ -1,14 +1,45 @@
-# QuestGPS 奇遇任务定义
+# =============================================================================
+# QuestGPS 奇遇 overlay 示例
+# -----------------------------------------------------------------------------
+# 配置字段说明见 mainline.yml
+# 本示例对应分类 Tab「奇遇」：Chemdah 里应写 meta.type: encounter
+# 默认 enabled: false
+# =============================================================================
 
-"encounter/example_rare":
+example_encounter_quest:
   enabled: false
-  category: encounter
-  display-name-override: "示例奇遇"
-  description:
-    - "&7可由 EventPacket 的 mob-kill-count 或 placeholder-threshold 触发。"
   sort-order: 200
   allow-abandon: true
-  rewards:
-    - type: text
-      display-name: "&d奇遇奖励"
-      text: "&7按服务器实际奖励填写。"
+  # category 仅 category.source=overlay 时必填
+  # category: encounter
+  required-mainline: []
+  hooks:
+    triggered:
+      - "questgps_encounter_triggered"
+    accepted:
+      - "questgps_encounter_accepted"
+    completed:
+      - "questgps_encounter_completed"
+    track-changed:
+      - "questgps_encounter_track_changed"
+  navigation:
+    enabled: true
+    point:
+      world: "world"
+      x: -80
+      y: 65
+      z: 120
+      title: "神秘遗迹"
+      style-id: "default"
+      map-label: "奇遇目标"
+  tasks:
+    "0":
+      sort-order: 10
+      navigation:
+        world: "world"
+        x: -78
+        y: 65
+        z: 118
+        title: "探索遗迹入口"
+        style-id: "default"
+        map-label: "奇遇目标"

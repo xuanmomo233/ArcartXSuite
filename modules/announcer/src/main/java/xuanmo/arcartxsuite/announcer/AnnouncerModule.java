@@ -175,10 +175,6 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
 
         // Subtitle Service
         if (!subtitleRuntimeUiIds.isEmpty()) {
-            // 一次性迁移老路径 plugins/ArcartXSuite/subtitle/ -> data/announcer/subtitle/
-            // （subtitleCfg.groupsDirectory() 默认 "subtitle/groups"，整体迁移 "subtitle" 一次到位）
-            context.migrateLegacyDirectory("subtitle");
-
             // 导出内置默认字幕组（首次启动时）
             File groupsDir = new File(context.dataFolder(), subtitleCfg.groupsDirectory());
             if (!groupsDir.exists()) {

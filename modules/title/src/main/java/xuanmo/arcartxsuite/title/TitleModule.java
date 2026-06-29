@@ -144,7 +144,7 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
             context.exportUiResource(resourcePath, relativeUiPath, overwrite, moduleClassLoader());
 
         JdbcTitleRepository titleRepo = new JdbcTitleRepository(
-            context.migrateLegacyDataFile(configuration.storage().sqliteFileName()),
+            context.dataFolder(),
             configuration.storage(), context.logger());
         service = new TitleService(
             context.plugin(), configuration,

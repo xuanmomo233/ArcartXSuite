@@ -1,0 +1,75 @@
+Summary for D:\IDEA\project\ArcartXSuite\libs\Chemdah-1.1.33-FREE.jar
+Decompiled with CFR 0.152
+
+
+ink.ptms.chemdah.core.PlayerProfile
+----------------------------
+
+tasksByObjective(ink.ptms.chemdah.core.PlayerProfile ink.ptms.chemdah.core.quest.objective.Objective<?> java.util.function.Consumer<ink.ptms.chemdah.util.Couple<ink.ptms.chemdah.core.quest.Quest, ink.ptms.chemdah.core.quest.Task>> )
+  Unable to fully structure code
+
+
+ink.ptms.chemdah.core.SimpleDataContainer
+----------------------------
+
+isChanged()
+  Unable to fully structure code
+
+
+ink.ptms.chemdah.core.conversation.theme.Theme
+----------------------------
+
+invoke(java.util.List<? extends ink.ptms.chemdah.core.conversation.PlayerReply> )
+  Unable to fully structure code
+
+
+ink.ptms.chemdah.core.quest.selector.InferItem
+----------------------------
+
+matchMetaData(org.bukkit.inventory.ItemStack )
+  Unable to fully structure code
+  Could not resolve type clashes
+
+
+ink.ptms.chemdah.module.kether.ActionInventory
+----------------------------
+
+invoke(int )
+  Unable to fully structure code
+
+
+ink.ptms.chemdah.module.kether.ActionLocation
+----------------------------
+
+buildAction(ink.ptms.chemdah.taboolib.library.kether.QuestReader kotlin1822.jvm.functions.Function1<? super org.bukkit.Location, ? extends java.lang.Object> kotlin1822.jvm.functions.Function2<? super org.bukkit.Location, ? super java.lang.Double, kotlin1822.Unit> kotlin1822.jvm.functions.Function2<? super org.bukkit.Location, ? super java.lang.Double, kotlin1822.Unit> )
+  Unable to fully structure code
+
+
+ink.ptms.chemdah.module.kether.ui.UI
+----------------------------
+
+run(ink.ptms.chemdah.taboolib.library.kether.QuestContext$Frame )
+  Unable to fully structure code
+run(ink.ptms.chemdah.taboolib.library.kether.QuestContext$Frame )
+  Unable to fully structure code
+
+
+ink.ptms.chemdah.module.papi.impl.PlayerQuestKt
+----------------------------
+
+onPlaceholderData(ink.ptms.chemdah.api.event.PlaceholderHookEvent )
+  Unable to fully structure code
+
+
+ink.ptms.chemdah.module.ui.ItemQuestNoIcon
+----------------------------
+
+invoke(org.bukkit.inventory.meta.ItemMeta )
+  Unable to fully structure code
+
+
+ink.ptms.chemdah.module.ui.UI
+----------------------------
+
+collectQuests(ink.ptms.chemdah.core.PlayerProfile )
+  Unable to fully structure code

@@ -1,0 +1,11 @@
+﻿Compiled from "QuestTable.kt"
+public abstract class ink.ptms.chemdah.core.database.QuestTable<T extends ink.ptms.chemdah.taboolib.module.database.ColumnBuilder> {
+  public ink.ptms.chemdah.core.database.QuestTable(ink.ptms.chemdah.taboolib.module.database.Host<T>, java.lang.String, java.lang.String);
+  public final ink.ptms.chemdah.taboolib.module.database.Host<T> getHost();
+  public final java.lang.String getPrefix();
+  public final java.lang.String getSuffix();
+  public abstract ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<T>, T> getQuest();
+  public abstract ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<T>, T> getQuestData();
+  public final ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<T>, T> component1();
+  public final ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<T>, T> component2();
+}

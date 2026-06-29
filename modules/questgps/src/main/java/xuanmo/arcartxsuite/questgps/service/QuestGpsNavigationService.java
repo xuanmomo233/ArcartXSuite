@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI;
+import xuanmo.arcartxsuite.questgps.chemdah.ChemdahTrackerBridge;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 
 public final class QuestGpsNavigationService {
@@ -21,24 +22,28 @@ public final class QuestGpsNavigationService {
     private final Logger logger;
     private final JavaPlugin plugin;
     private final AdyeshachNpcBridgeAPI npcBridge;
+    private final ChemdahTrackerBridge trackerBridge;
     private final ConcurrentMap<java.util.UUID, TrackingState> trackingStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<java.util.UUID, NavigationPoint> trackingPoints = new ConcurrentHashMap<>();
 
     private boolean runtimeReady;
     private QuestGpsMarkerService markerService;
+    private int chemdahRefreshTaskId = -1;
 
     public QuestGpsNavigationService(
         JavaPlugin plugin,
         QuestGpsModuleConfiguration configuration,
         WaypointBridgeAPI waypointBridge,
-        AdyeshachNpcBridgeAPI npcBridge
+        AdyeshachNpcBridgeAPI npcBridge,
+        ChemdahTrackerBridge trackerBridge
     ) {
         this(
             plugin,
             configuration,
             new BridgeWaypointRuntime(waypointBridge),
             plugin.getLogger(),
-            npcBridge
+            npcBridge,
+            trackerBridge
         );
     }
 
@@ -47,13 +52,15 @@ public final class QuestGpsNavigationService {
         QuestGpsModuleConfiguration configuration,
         WaypointRuntime waypointRuntime,
         Logger logger,
-        AdyeshachNpcBridgeAPI npcBridge
+        AdyeshachNpcBridgeAPI npcBridge,
+        ChemdahTrackerBridge trackerBridge
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
         this.waypointRuntime = waypointRuntime;
         this.logger = logger;
         this.npcBridge = npcBridge;
+        this.trackerBridge = trackerBridge;
     }
 
     public void start() {
@@ -70,9 +77,17 @@ public final class QuestGpsNavigationService {
         } else {
             logger.info("QuestGPS: 导航标记已在配置中禁用 (navigation.marker.enabled=false)");
         }
+        if (chemdahNavigationEnabled()) {
+            int interval = Math.max(5, configuration.navigation().marker().pathUpdateTicks());
+            chemdahRefreshTaskId = Bukkit.getScheduler().runTaskTimer(plugin, this::refreshChemdahTrackingPositions, interval, interval).getTaskId();
+        }
     }
 
     public void shutdown() {
+        if (chemdahRefreshTaskId >= 0) {
+            Bukkit.getScheduler().cancelTask(chemdahRefreshTaskId);
+            chemdahRefreshTaskId = -1;
+        }
         if (markerService != null) {
             markerService.shutdown();
             markerService = null;
@@ -108,33 +123,110 @@ public final class QuestGpsNavigationService {
         return Optional.ofNullable(trackingPoints.get(player.getUniqueId()));
     }
 
+    public boolean hasQuestPoint(Player player, String questId, List<String> prioritizedTaskIds) {
+        if (!runtimeReady()) {
+            return false;
+        }
+        boolean overlay = overlayNavigationEnabled() && hasOverlayQuestPoint(questId, prioritizedTaskIds);
+        if (!chemdahNavigationEnabled()) {
+            return overlay;
+        }
+        if (player == null || !player.isOnline()) {
+            return overlay;
+        }
+        if (chemdahOnlyNavigation()) {
+            return true;
+        }
+        return overlay || trackerBridge.resolveTrackingLocation(player, questId).isPresent();
+    }
+
+    public boolean hasTaskPoint(Player player, String questId, String taskId) {
+        if (!runtimeReady()) {
+            return false;
+        }
+        boolean overlay = overlayNavigationEnabled() && hasOverlayTaskPoint(questId, taskId);
+        if (!chemdahNavigationEnabled()) {
+            return overlay;
+        }
+        if (player == null || !player.isOnline()) {
+            return overlay;
+        }
+        if (chemdahOnlyNavigation()) {
+            return true;
+        }
+        return overlay || trackerBridge.resolveTrackingLocation(player, questId).isPresent();
+    }
+
     public boolean hasQuestPoint(String questId, List<String> prioritizedTaskIds) {
-        return runtimeReady() && resolveQuestPoint(questId, prioritizedTaskIds, "").isPresent();
+        return hasQuestPoint(null, questId, prioritizedTaskIds);
     }
 
     public boolean hasTaskPoint(String questId, String taskId) {
-        return runtimeReady() && resolveTaskPoint(questId, taskId, "").isPresent();
+        return hasTaskPoint(null, questId, taskId);
     }
 
     public boolean trackQuest(Player player, String questId, String questName, List<String> prioritizedTaskIds) {
         if (player == null || !player.isOnline()) {
             return false;
         }
-        Optional<NavigationPoint> point = resolveQuestPoint(questId, prioritizedTaskIds, questName);
-        return point.filter(navigationPoint -> activateWaypoint(player, TrackingMode.QUEST, questId, "", navigationPoint)).isPresent();
+        if (chemdahNavigationEnabled()) {
+            trackerBridge.startQuestTracking(player);
+        }
+        Optional<NavigationPoint> point = resolveQuestPoint(player, questId, prioritizedTaskIds, questName);
+        if (point.isPresent()) {
+            return activateWaypoint(player, TrackingMode.QUEST, questId, "", point.get());
+        }
+        if (chemdahNavigationEnabled()) {
+            trackingStates.put(
+                player.getUniqueId(),
+                new TrackingState(
+                    true,
+                    TrackingMode.QUEST,
+                    safe(questId),
+                    "",
+                    buildWaypointId(questId, ""),
+                    effectiveTitle("", questName)
+                )
+            );
+            return true;
+        }
+        return false;
     }
 
     public boolean trackTask(Player player, String questId, String taskId, String taskName) {
         if (player == null || !player.isOnline()) {
             return false;
         }
-        Optional<NavigationPoint> point = resolveTaskPoint(questId, taskId, taskName);
-        return point.filter(navigationPoint -> activateWaypoint(player, TrackingMode.TASK, questId, taskId, navigationPoint)).isPresent();
+        if (chemdahNavigationEnabled()) {
+            trackerBridge.startQuestTracking(player);
+        }
+        Optional<NavigationPoint> point = resolveTaskPoint(player, questId, taskId, taskName);
+        if (point.isPresent()) {
+            return activateWaypoint(player, TrackingMode.TASK, questId, taskId, point.get());
+        }
+        if (chemdahNavigationEnabled()) {
+            trackingStates.put(
+                player.getUniqueId(),
+                new TrackingState(
+                    true,
+                    TrackingMode.TASK,
+                    safe(questId),
+                    safe(taskId),
+                    buildWaypointId(questId, taskId),
+                    effectiveTitle("", taskName)
+                )
+            );
+            return true;
+        }
+        return false;
     }
 
     public void clearTracking(Player player, boolean silent) {
         if (player == null) {
             return;
+        }
+        if (chemdahNavigationEnabled()) {
+            trackerBridge.stopAll(player);
         }
         TrackingState state = trackingStates.remove(player.getUniqueId());
         trackingPoints.remove(player.getUniqueId());
@@ -158,6 +250,7 @@ public final class QuestGpsNavigationService {
     }
 
     private Optional<NavigationPoint> resolveQuestPoint(
+        Player player,
         String questId,
         List<String> prioritizedTaskIds,
         String fallbackTitle
@@ -165,13 +258,50 @@ public final class QuestGpsNavigationService {
         if (!runtimeReady()) {
             return Optional.empty();
         }
+        Optional<NavigationPoint> chemdahPoint = resolveChemdahPoint(player, questId, "", fallbackTitle);
+        if (chemdahPoint.isPresent()) {
+            return chemdahPoint;
+        }
+        if (!overlayNavigationEnabled()) {
+            return Optional.empty();
+        }
+        return resolveOverlayQuestPoint(questId, prioritizedTaskIds, fallbackTitle);
+    }
+
+    private Optional<NavigationPoint> resolveTaskPoint(Player player, String questId, String taskId, String fallbackTitle) {
+        if (!runtimeReady()) {
+            return Optional.empty();
+        }
+        Optional<NavigationPoint> chemdahPoint = resolveChemdahPoint(player, questId, taskId, fallbackTitle);
+        if (chemdahPoint.isPresent()) {
+            return chemdahPoint;
+        }
+        if (!overlayNavigationEnabled()) {
+            return Optional.empty();
+        }
+        return resolveOverlayTaskPoint(questId, taskId, fallbackTitle);
+    }
+
+    private boolean hasOverlayQuestPoint(String questId, List<String> prioritizedTaskIds) {
+        return resolveOverlayQuestPoint(questId, prioritizedTaskIds, "").isPresent();
+    }
+
+    private boolean hasOverlayTaskPoint(String questId, String taskId) {
+        return resolveOverlayTaskPoint(questId, taskId, "").isPresent();
+    }
+
+    private Optional<NavigationPoint> resolveOverlayQuestPoint(
+        String questId,
+        List<String> prioritizedTaskIds,
+        String fallbackTitle
+    ) {
         QuestGpsModuleConfiguration.QuestDefinition quest = configuration.quest(questId);
         if (quest == null || !quest.navigation().enabled()) {
             return Optional.empty();
         }
         if (prioritizedTaskIds != null) {
             for (String taskId : prioritizedTaskIds) {
-                Optional<NavigationPoint> taskPoint = resolveTaskPoint(questId, taskId, fallbackTitle);
+                Optional<NavigationPoint> taskPoint = resolveOverlayTaskPoint(questId, taskId, fallbackTitle);
                 if (taskPoint.isPresent()) {
                     return taskPoint;
                 }
@@ -181,15 +311,122 @@ public final class QuestGpsNavigationService {
         return point == null ? Optional.empty() : Optional.of(toNavigationPoint(questId, "", point, fallbackTitle));
     }
 
-    private Optional<NavigationPoint> resolveTaskPoint(String questId, String taskId, String fallbackTitle) {
-        if (!runtimeReady()) {
-            return Optional.empty();
-        }
+    private Optional<NavigationPoint> resolveOverlayTaskPoint(String questId, String taskId, String fallbackTitle) {
         QuestGpsModuleConfiguration.TaskDefinition task = configuration.task(questId, taskId);
         if (task == null || task.navigation() == null) {
             return Optional.empty();
         }
         return Optional.of(toNavigationPoint(questId, taskId, task.navigation(), fallbackTitle));
+    }
+
+    private Optional<NavigationPoint> resolveChemdahPoint(
+        Player player,
+        String questId,
+        String taskId,
+        String fallbackTitle
+    ) {
+        if (!chemdahNavigationEnabled() || player == null || !player.isOnline()) {
+            return Optional.empty();
+        }
+        return trackerBridge.resolveTrackingLocation(player, questId)
+            .map(location -> new NavigationPoint(
+                buildWaypointId(questId, taskId),
+                effectiveTitle("", fallbackTitle),
+                effectiveStyle(""),
+                location.getWorld() == null ? "" : location.getWorld().getName(),
+                location.getX(),
+                location.getY(),
+                location.getZ(),
+                effectiveTitle("", fallbackTitle)
+            ));
+    }
+
+    private void refreshChemdahTrackingPositions() {
+        if (!chemdahNavigationEnabled() || !runtimeReady()) {
+            return;
+        }
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            TrackingState state = trackingStates.get(player.getUniqueId());
+            if (state == null || !state.active()) {
+                continue;
+            }
+            Optional<NavigationPoint> point = resolveChemdahPoint(player, state.questId(), state.taskId(), state.label());
+            if (point.isEmpty()) {
+                continue;
+            }
+            NavigationPoint current = trackingPoints.get(player.getUniqueId());
+            NavigationPoint next = point.get();
+            if (current != null && samePosition(current, next)) {
+                continue;
+            }
+            if (current == null) {
+                activateWaypoint(player, state.mode(), state.questId(), state.taskId(), next);
+            } else {
+                refreshWaypointPosition(player, state, next);
+            }
+        }
+    }
+
+    private void refreshWaypointPosition(Player player, TrackingState state, NavigationPoint point) {
+        if (!runtimeReady()) {
+            return;
+        }
+        waypointRuntime.removeWaypoint(player, state.waypointId(), false);
+        boolean success = waypointRuntime.addWaypoint(
+            player,
+            point.waypointId(),
+            point.title(),
+            point.styleId(),
+            point.x(),
+            point.y(),
+            point.z()
+        );
+        if (!success) {
+            return;
+        }
+        trackingPoints.put(player.getUniqueId(), point);
+        if (markerService != null) {
+            markerService.showMarker(player, point);
+        }
+    }
+
+    private static boolean samePosition(NavigationPoint current, NavigationPoint next) {
+        return current.world().equalsIgnoreCase(next.world())
+            && Math.abs(current.x() - next.x()) < 0.5
+            && Math.abs(current.y() - next.y()) < 0.5
+            && Math.abs(current.z() - next.z()) < 0.5;
+    }
+
+    private String navigationMode() {
+        String mode = configuration.navigation().mode();
+        if (mode == null || mode.isBlank()) {
+            return "hybrid";
+        }
+        return mode.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean chemdahNavigationEnabled() {
+        return trackerBridge != null && trackerBridge.available() && !navigationMode().equals("overlay");
+    }
+
+    private boolean overlayNavigationEnabled() {
+        return navigationMode().equals("overlay") || navigationMode().equals("hybrid");
+    }
+
+    private boolean chemdahOnlyNavigation() {
+        return navigationMode().equals("chemdah") && chemdahNavigationEnabled();
+    }
+
+    private Optional<NavigationPoint> resolveQuestPoint(
+        String questId,
+        List<String> prioritizedTaskIds,
+        String fallbackTitle
+    ) {
+        return resolveQuestPoint(null, questId, prioritizedTaskIds, fallbackTitle);
+    }
+
+    private Optional<NavigationPoint> resolveTaskPoint(String questId, String taskId, String fallbackTitle) {
+        return resolveTaskPoint(null, questId, taskId, fallbackTitle);
     }
 
     private NavigationPoint toNavigationPoint(

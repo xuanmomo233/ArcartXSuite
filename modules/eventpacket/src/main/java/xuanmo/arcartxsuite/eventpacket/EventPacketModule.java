@@ -132,7 +132,7 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         PacketBridgeAPI packetBridge = context.packetBridge();
 
         repository = new JdbcEventPacketRepository(
-            context.migrateLegacyDataFile(configuration.storage().sqliteFileName()),
+            context.dataFolder(),
             configuration.storage(), context.logger()
         );
         repository.initialize();

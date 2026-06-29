@@ -178,7 +178,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
         xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI itemStackBridge =
             context.itemStackBridge();
         JdbcWarehouseRepository warehouseRepo = new JdbcWarehouseRepository(
-            context.migrateLegacyDataFile(configuration.storage().sqliteFileName()),
+            context.dataFolder(),
             configuration.storage(), context.logger());
         service = new WarehouseService(
             context.plugin(), packetBridge, itemStackBridge, packetGuard, uiExporter, configuration,

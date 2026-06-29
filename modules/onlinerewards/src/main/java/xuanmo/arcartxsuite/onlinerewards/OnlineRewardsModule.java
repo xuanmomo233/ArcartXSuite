@@ -147,7 +147,7 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
         }
 
         JdbcOnlineRewardsRepository rewardsRepo = new JdbcOnlineRewardsRepository(
-            context.migrateLegacyDataFile(configuration.storage().sqliteFileName()),
+            context.dataFolder(),
             configuration.storage(), context.logger());
         service = new OnlineRewardsService(
             context.plugin(), configuration,

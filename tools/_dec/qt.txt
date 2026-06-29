@@ -1,0 +1,32 @@
+﻿Compiled from "QuestTable.kt"
+public abstract class ink.ptms.chemdah.core.database.QuestTable<T extends ink.ptms.chemdah.taboolib.module.database.ColumnBuilder> {
+  public ink.ptms.chemdah.core.database.QuestTable(ink.ptms.chemdah.taboolib.module.database.Host<T>, java.lang.String, java.lang.String);
+  public final ink.ptms.chemdah.taboolib.module.database.Host<T> getHost();
+  public final java.lang.String getPrefix();
+  public final java.lang.String getSuffix();
+  public abstract ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<T>, T> getQuest();
+  public abstract ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<T>, T> getQuestData();
+  public final ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<T>, T> component1();
+  public final ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<T>, T> component2();
+}
+Compiled from "Database.kt"
+public abstract class ink.ptms.chemdah.core.database.Database {
+  public static final ink.ptms.chemdah.core.database.Database$Companion Companion;
+  public static ink.ptms.chemdah.core.database.Database INSTANCE;
+  public ink.ptms.chemdah.core.database.Database();
+  public abstract ink.ptms.chemdah.core.PlayerProfile select(org.bukkit.entity.Player);
+  public abstract void update(org.bukkit.entity.Player, ink.ptms.chemdah.core.PlayerProfile);
+  public abstract void releaseQuest(org.bukkit.entity.Player, ink.ptms.chemdah.core.PlayerProfile, ink.ptms.chemdah.core.quest.Quest);
+  public final java.lang.String selectVariable(java.lang.String);
+  public final void updateVariable(java.lang.String, java.lang.String);
+  public final void releaseVariable(java.lang.String);
+  public abstract java.util.List<java.lang.String> variables();
+  public static final boolean access$isDisableAutoSave$cp();
+  public static final void access$setDisableAutoSave$cp(boolean);
+  public static final boolean access$isDisableAutoCreateTable$cp();
+  public static final void access$setDisableAutoCreateTable$cp(boolean);
+  public static final boolean access$isLoadInJoinEvent$cp();
+  public static final void access$setLoadInJoinEvent$cp(boolean);
+  public static final boolean access$isReleaseInQuitEvent$cp();
+  public static final void access$setReleaseInQuitEvent$cp(boolean);
+}

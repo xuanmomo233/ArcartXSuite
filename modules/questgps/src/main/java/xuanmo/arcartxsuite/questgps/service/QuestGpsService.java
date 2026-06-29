@@ -4,13 +4,9 @@ import ink.ptms.chemdah.api.ChemdahAPI;
 import ink.ptms.chemdah.core.PlayerProfile;
 import ink.ptms.chemdah.core.quest.AcceptResult;
 import ink.ptms.chemdah.core.quest.Quest;
-import ink.ptms.chemdah.core.quest.Task;
 import ink.ptms.chemdah.core.quest.Template;
-import java.lang.reflect.Array;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -27,7 +23,6 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
@@ -38,6 +33,13 @@ import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
 import xuanmo.arcartxsuite.questgps.QuestGpsPage;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
+import xuanmo.arcartxsuite.questgps.chemdah.ChemdahCategoryResolver;
+import xuanmo.arcartxsuite.questgps.chemdah.ChemdahIntegrationBootstrap;
+import xuanmo.arcartxsuite.questgps.chemdah.ChemdahMetadataReader;
+import xuanmo.arcartxsuite.questgps.chemdah.ChemdahQuestDiscovery;
+import xuanmo.arcartxsuite.questgps.chemdah.ChemdahRewardReader;
+import xuanmo.arcartxsuite.questgps.chemdah.ChemdahTrackerBridge;
+import xuanmo.arcartxsuite.questgps.chemdah.QuestGpsOverlayValidator;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
 
@@ -56,12 +58,17 @@ public final class QuestGpsService implements Listener {
     private final Supplier<MapNavigable> mapNavigableProvider;
     private final Supplier<SubtitlePlayable> subtitlePlayableProvider;
     private final Supplier<ChatCardSendable> chatCardSendableProvider;
-    private final BiConsumer<String, Player> signalDispatcher;
+    private final HookDispatcher hookDispatcher;
     private final QuestGpsModuleConfiguration configuration;
     private final PacketBridgeAPI bridge;
     private final java.util.List<String> menuUiIds;
     private final java.util.List<String> guideUiIds;
     private final QuestGpsRewardPreviewResolver rewardResolver;
+    private final ChemdahIntegrationBootstrap chemdahBootstrap;
+    private final ChemdahCategoryResolver categoryResolver;
+    private final ChemdahQuestDiscovery questDiscovery;
+    private final QuestGpsPresentationService presentationService;
+    private final QuestGpsOverlayValidator overlayValidator;
     private final QuestGpsNavigationService navigationService;
     private final QuestGpsSnapshotBuilder snapshotBuilder = new QuestGpsSnapshotBuilder();
     private final QuestGpsUiPacketHandler uiPacketHandler;
@@ -78,7 +85,7 @@ public final class QuestGpsService implements Listener {
         Supplier<MapNavigable> mapNavigableProvider,
         Supplier<SubtitlePlayable> subtitlePlayableProvider,
         Supplier<ChatCardSendable> chatCardSendableProvider,
-        BiConsumer<String, Player> signalDispatcher,
+        HookDispatcher hookDispatcher,
         java.util.List<String> menuUiIds,
         java.util.List<String> guideUiIds,
         xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry,
@@ -90,7 +97,7 @@ public final class QuestGpsService implements Listener {
         this.mapNavigableProvider = mapNavigableProvider == null ? () -> null : mapNavigableProvider;
         this.subtitlePlayableProvider = subtitlePlayableProvider == null ? () -> null : subtitlePlayableProvider;
         this.chatCardSendableProvider = chatCardSendableProvider == null ? () -> null : chatCardSendableProvider;
-        this.signalDispatcher = signalDispatcher;
+        this.hookDispatcher = hookDispatcher;
         this.configuration = configuration;
         this.bridge = bridge;
         this.menuUiIds = menuUiIds;
@@ -101,11 +108,38 @@ public final class QuestGpsService implements Listener {
             itemStack -> itemStackBridge == null ? java.util.Optional.empty() : itemStackBridge.itemToJson(itemStack),
             itemSourceRegistry
         );
-        this.navigationService = new QuestGpsNavigationService(plugin, configuration, waypointBridge, npcBridge);
+        ChemdahMetadataReader metadataReader = new ChemdahMetadataReader(plugin.getLogger());
+        ChemdahRewardReader rewardReader = new ChemdahRewardReader(plugin.getLogger(), rewardResolver);
+        ChemdahTrackerBridge trackerBridge = new ChemdahTrackerBridge(plugin.getLogger());
+        this.chemdahBootstrap = new ChemdahIntegrationBootstrap(
+            plugin.getLogger(),
+            configuration,
+            metadataReader,
+            rewardReader,
+            trackerBridge
+        );
+        this.navigationService = new QuestGpsNavigationService(plugin, configuration, waypointBridge, npcBridge, trackerBridge);
+        this.categoryResolver = new ChemdahCategoryResolver(
+            plugin.getLogger(),
+            configuration.categoryDefaults(),
+            configuration.categoryRegistry()
+        );
+        this.questDiscovery = new ChemdahQuestDiscovery(plugin.getLogger(), categoryResolver);
+        this.presentationService = new QuestGpsPresentationService(
+            configuration,
+            questDiscovery,
+            categoryResolver,
+            metadataReader,
+            rewardReader,
+            navigationService
+        );
+        this.overlayValidator = new QuestGpsOverlayValidator(plugin.getLogger(), configuration, categoryResolver);
         this.uiPacketHandler = new QuestGpsUiPacketHandler(this, configuration.client().packetId());
     }
 
     public void start() {
+        chemdahBootstrap.initialize();
+        overlayValidator.validate();
         navigationService.start();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         registerChemdahEventListeners();
@@ -224,13 +258,18 @@ public final class QuestGpsService implements Listener {
             player.sendMessage(PREFIX + ChatColor.RED + "该任务未配置到 QuestGPS: " + targetQuestId);
             return;
         }
-        if (isCategoryLocked(player, definition.category()) || !hasCompletedRequiredMainline(profile, definition.requiredMainline())) {
-            denyGate(player);
-            return;
-        }
         Template template = ChemdahAPI.INSTANCE.getQuestTemplate(definition.id());
         if (template == null) {
             player.sendMessage(PREFIX + ChatColor.RED + "未找到 Chemdah 任务: " + definition.id());
+            return;
+        }
+        QuestGpsCategory effectiveCategory = presentationService.effectiveCategory(template, definition);
+        if (effectiveCategory == null) {
+            player.sendMessage(PREFIX + ChatColor.RED + "任务分类未在 categories 注册，无法接取: " + definition.id());
+            return;
+        }
+        if (isCategoryLocked(player, effectiveCategory) || !presentationService.hasCompletedRequiredMainline(profile, definition.requiredMainline())) {
+            denyGate(player);
             return;
         }
 
@@ -245,7 +284,7 @@ public final class QuestGpsService implements Listener {
                 QuestGpsViewState state = viewStates.computeIfAbsent(player.getUniqueId(), ignored -> new QuestGpsViewState());
                 state.setPage(QuestGpsPage.ACTIVE);
                 state.setSelectedQuestId(definition.id());
-                player.sendMessage(PREFIX + ChatColor.GREEN + "已接取任务: " + displayQuestName(template, definition));
+                player.sendMessage(PREFIX + ChatColor.GREEN + "已接取任务: " + chemdahBootstrap.metadataReader().questDisplayName(template, definition, configuration.presentation()));
             } else {
                 String reason = result == null ? "未知原因" : safe(result.getReason());
                 player.sendMessage(PREFIX + ChatColor.RED + "接取失败: " + blankTo(reason, result == null ? "未知错误" : result.getType().name()));
@@ -285,7 +324,7 @@ public final class QuestGpsService implements Listener {
             QuestGpsViewState state = viewStates.computeIfAbsent(player.getUniqueId(), ignored -> new QuestGpsViewState());
             state.setPage(QuestGpsPage.AVAILABLE);
             state.setSelectedQuestId(definition.id());
-            player.sendMessage(PREFIX + ChatColor.YELLOW + "已放弃任务: " + displayQuestName(template, definition));
+            player.sendMessage(PREFIX + ChatColor.YELLOW + "已放弃任务: " + chemdahBootstrap.metadataReader().questDisplayName(template, definition, configuration.presentation()));
             refreshViewer(player);
         }));
     }
@@ -296,13 +335,13 @@ public final class QuestGpsService implements Listener {
             return;
         }
         String targetQuestId = resolveQuestId(player, questId);
-        List<QuestGpsSnapshotBuilder.QuestDescriptor> descriptors = collectDescriptors(profile);
-        QuestGpsSnapshotBuilder.QuestDescriptor descriptor = findDescriptor(descriptors, targetQuestId);
+        List<QuestGpsSnapshotBuilder.QuestDescriptor> descriptors = presentationService.collectDescriptors(profile, this::isCategoryLocked);
+        QuestGpsSnapshotBuilder.QuestDescriptor descriptor = presentationService.findDescriptor(descriptors, targetQuestId);
         if (descriptor == null || !descriptor.questTrackAvailable()) {
             player.sendMessage(PREFIX + ChatColor.RED + "该任务当前没有可用导航点。");
             return;
         }
-        boolean success = navigationService.trackQuest(player, descriptor.questId(), descriptor.displayName(), prioritizedTaskIds(descriptor.tasks()));
+        boolean success = navigationService.trackQuest(player, descriptor.questId(), descriptor.displayName(), presentationService.prioritizedTaskIds(descriptor.tasks()));
         if (!success) {
             player.sendMessage(PREFIX + ChatColor.RED + "任务导航创建失败。");
             return;
@@ -318,13 +357,13 @@ public final class QuestGpsService implements Listener {
             return;
         }
         String targetQuestId = resolveQuestId(player, questId);
-        List<QuestGpsSnapshotBuilder.QuestDescriptor> descriptors = collectDescriptors(profile);
-        QuestGpsSnapshotBuilder.QuestDescriptor descriptor = findDescriptor(descriptors, targetQuestId);
+        List<QuestGpsSnapshotBuilder.QuestDescriptor> descriptors = presentationService.collectDescriptors(profile, this::isCategoryLocked);
+        QuestGpsSnapshotBuilder.QuestDescriptor descriptor = presentationService.findDescriptor(descriptors, targetQuestId);
         if (descriptor == null) {
             player.sendMessage(PREFIX + ChatColor.RED + "未找到任务。");
             return;
         }
-        QuestGpsSnapshotBuilder.TaskDescriptor taskDescriptor = findTask(descriptor.tasks(), taskId);
+        QuestGpsSnapshotBuilder.TaskDescriptor taskDescriptor = presentationService.findTask(descriptor.tasks(), taskId);
         if (taskDescriptor == null || !taskDescriptor.trackAvailable()) {
             player.sendMessage(PREFIX + ChatColor.RED + "该任务目标当前没有可用导航点。");
             return;
@@ -350,7 +389,8 @@ public final class QuestGpsService implements Listener {
             return;
         }
         QuestGpsViewState state = viewStates.computeIfAbsent(player.getUniqueId(), ignored -> new QuestGpsViewState());
-        state.setCategory(definition.category());
+        Template template = ChemdahAPI.INSTANCE.getQuestTemplate(definition.id());
+        state.setCategory(presentationService.effectiveCategory(template, definition));
         state.setPage(QuestGpsPage.AVAILABLE);
         state.setSelectedQuestId(definition.id());
         fireQuestHooks(player, definition, Lifecycle.TRIGGERED);
@@ -501,7 +541,7 @@ public final class QuestGpsService implements Listener {
                 return;
             }
             Player player = profile.getPlayer();
-            if (player != null && clearTracking) {
+            if (player != null && clearTracking && navigationService.removeOnFinish()) {
                 clearTrackForQuest(player, questId);
             }
             QuestGpsModuleConfiguration.QuestDefinition definition = configuration.quest(questId);
@@ -626,7 +666,13 @@ public final class QuestGpsService implements Listener {
         if (initPacket) {
             bridge.openUiAll(player, guideUiIds);
         }
-        bridge.sendPacketToAll(player, guideUiIds, initPacket ? "init" : "update", buildGuidePayload(player, trackState));
+        bridge.sendPacketToAll(player, guideUiIds, initPacket ? "init" : "update", QuestGpsGuidePacketFactory.build(
+            configuration,
+            player,
+            trackState,
+            presentationService,
+            navigationService
+        ));
     }
 
     private void closeGuide(Player player) {
@@ -636,68 +682,13 @@ public final class QuestGpsService implements Listener {
         bridge.closeUiAll(player, guideUiIds);
     }
 
-    private Map<String, Object> buildGuidePayload(Player player, QuestGpsNavigationService.TrackingState trackState) {
-        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
-        payload.put("packetId", configuration.client().packetId());
-        payload.put("active", trackState.active());
-        payload.put("questName", trackState.label());
-
-        // 收集任务目标
-        PlayerProfile profile = loadProfile(player, false);
-        List<Map<String, Object>> taskRows = new ArrayList<>();
-        int completedCount = 0;
-        int totalCount = 0;
-        if (profile != null) {
-            QuestGpsModuleConfiguration.QuestDefinition definition = configuration.quest(trackState.questId());
-            if (definition != null) {
-                Template template = ChemdahAPI.INSTANCE.getQuestTemplate(definition.id());
-                if (template != null) {
-                    QuestGpsPage page = QuestGpsPage.ACTIVE;
-                    List<QuestGpsSnapshotBuilder.TaskDescriptor> tasks = buildTaskDescriptors(profile, template, definition, page);
-                    totalCount = tasks.size();
-                    int displayLimit = 3;
-                    int shown = 0;
-                    for (QuestGpsSnapshotBuilder.TaskDescriptor task : tasks) {
-                        if (task.completed()) {
-                            completedCount++;
-                        }
-                        if (shown < displayLimit) {
-                            LinkedHashMap<String, Object> row = new LinkedHashMap<>();
-                            row.put("id", task.taskId());
-                            row.put("text", task.text());
-                            row.put("completed", task.completed());
-                            row.put("status", task.statusText());
-                            taskRows.add(row);
-                            shown++;
-                        }
-                    }
-                }
-            }
-        }
-        payload.put("completedCount", completedCount);
-        payload.put("totalCount", totalCount);
-        payload.put("progressText", completedCount + "/" + totalCount);
-        payload.put("tasks", taskRows);
-        payload.put("taskCount", taskRows.size());
-
-        // 导航坐标
-        QuestGpsNavigationService.NavigationPoint point = navigationService.trackingPoint(player).orElse(null);
-        payload.put("hasNav", point != null);
-        payload.put("navWorld", point != null ? point.world() : "");
-        payload.put("navX", point != null ? (int) point.x() : 0);
-        payload.put("navY", point != null ? (int) point.y() : 0);
-        payload.put("navZ", point != null ? (int) point.z() : 0);
-        return payload;
-    }
-
     private void syncMenu(Player player, PlayerProfile profile, QuestGpsViewState state, boolean initPacket) {
-        List<QuestGpsSnapshotBuilder.QuestDescriptor> descriptors = collectDescriptors(profile);
-        if (isCategoryLocked(player, state.category())) {
-            state.setCategory(QuestGpsCategory.MAINLINE);
-        }
+        List<QuestGpsSnapshotBuilder.QuestDescriptor> descriptors = presentationService.collectDescriptors(profile, this::isCategoryLocked);
+        QuestGpsCategory viewCategory = resolveViewCategory(player, state.category());
+        state.setCategory(viewCategory);
         QuestGpsSnapshotBuilder.BuildResult snapshot = snapshotBuilder.build(
             descriptors,
-            state.category(),
+            viewCategory,
             state.page(),
             state.selectedQuestId(),
             navigationService.trackingState(player)
@@ -705,212 +696,44 @@ public final class QuestGpsService implements Listener {
         state.setCategory(snapshot.category());
         state.setPage(snapshot.page());
         state.setSelectedQuestId(snapshot.detail().questId());
-        bridge.sendPacketToAll(player, menuUiIds, initPacket ? "init" : "update", buildMenuPayload(snapshot));
-    }
-
-    private Map<String, Object> buildMenuPayload(QuestGpsSnapshotBuilder.BuildResult snapshot) {
-        LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
-        payload.put("packetId", configuration.client().packetId());
-        payload.put("categoryId", snapshot.category().id());
-        payload.put("pageId", snapshot.page().id());
-        payload.put("categoryName", snapshot.category().displayName());
-        payload.put("pageName", snapshot.page().displayName());
-        payload.put("availableCount", snapshot.counts().getOrDefault(QuestGpsPage.AVAILABLE, 0));
-        payload.put("activeCount", snapshot.counts().getOrDefault(QuestGpsPage.ACTIVE, 0));
-        payload.put("completedCount", snapshot.counts().getOrDefault(QuestGpsPage.COMPLETED, 0));
-        payload.put("questCount", snapshot.questRows().size());
-        payload.put("navigationReady", navigationService.runtimeReady());
-
-        List<QuestGpsCategory> sortedCategories = QuestGpsCategory.sorted(configuration.categoryRegistry());
-        LinkedHashMap<String, Object> categoryRows = new LinkedHashMap<>();
-        for (int index = 0; index < sortedCategories.size(); index++) {
-            QuestGpsCategory cat = sortedCategories.get(index);
-            categoryRows.put(
-                QuestGpsPayloadSupport.rowKey(index),
-                QuestGpsPayloadSupport.flatRow(
-                    "id", cat.id(),
-                    "name", cat.displayName(),
-                    "selected", cat.equals(snapshot.category())
-                )
-            );
-        }
-        payload.put("categories", categoryRows);
-        payload.put("categoryCount", sortedCategories.size());
-
-        LinkedHashMap<String, Object> questRows = new LinkedHashMap<>();
-        for (int index = 0; index < snapshot.questRows().size(); index++) {
-            QuestGpsSnapshotBuilder.ListRow row = snapshot.questRows().get(index);
-            questRows.put(
-                QuestGpsPayloadSupport.rowKey(index),
-                QuestGpsPayloadSupport.flatRow(
-                    "id", row.questId(),
-                    "name", row.displayName(),
-                    "summary", row.summaryText(),
-                    "state", row.stateText(),
-                    "trackable", row.trackAvailable(),
-                    "selected", row.selected()
-                )
-            );
-        }
-        payload.put("questRows", questRows);
-
-        QuestGpsSnapshotBuilder.DetailSnapshot detail = snapshot.detail();
-        payload.put("selectedQuestId", detail.questId());
-        payload.put("selectedQuestName", detail.displayName());
-        payload.put("selectedQuestState", detail.stateText());
-        payload.put("selectedQuestPath", detail.path());
-        LinkedHashMap<String, Object> descRows = new LinkedHashMap<>();
-        for (int index = 0; index < detail.descriptionLines().size(); index++) {
-            descRows.put(
-                QuestGpsPayloadSupport.rowKey(index),
-                QuestGpsPayloadSupport.flatRow("text", detail.descriptionLines().get(index))
-            );
-        }
-        payload.put("selectedQuestDescription", descRows);
-        payload.put("selectedQuestDescriptionCount", detail.descriptionLines().size());
-        payload.put("selectedQuestDescriptionText", String.join("\n", detail.descriptionLines()));
-        payload.put("trackSummary", detail.trackingText());
-        payload.put("canAccept", detail.canAccept());
-        payload.put("canAbandon", detail.canAbandon());
-        payload.put("canTrackQuest", detail.canTrackQuest());
-        payload.put("canTrackTask", detail.canTrackTask());
-        payload.put("canClearTrack", detail.canClearTrack());
-        payload.put("questTracked", detail.questTracked());
-
-        LinkedHashMap<String, Object> taskRows = new LinkedHashMap<>();
-        for (int index = 0; index < detail.taskRows().size(); index++) {
-            QuestGpsSnapshotBuilder.TaskRow row = detail.taskRows().get(index);
-            taskRows.put(
-                QuestGpsPayloadSupport.rowKey(index),
-                QuestGpsPayloadSupport.flatRow(
-                    "id", row.taskId(),
-                    "text", row.text(),
-                    "status", row.statusText(),
-                    "completed", row.completed(),
-                    "trackable", row.trackAvailable(),
-                    "tracked", row.tracked()
-                )
-            );
-        }
-        payload.put("taskRows", taskRows);
-        payload.put("taskCount", detail.taskRows().size());
-
-        LinkedHashMap<String, Object> rewardRows = new LinkedHashMap<>();
-        for (int index = 0; index < detail.rewardRows().size(); index++) {
-            QuestGpsSnapshotBuilder.RewardRow row = detail.rewardRows().get(index);
-            rewardRows.put(
-                QuestGpsPayloadSupport.rowKey(index),
-                QuestGpsPayloadSupport.flatRow(
-                    "id", row.rewardId(),
-                    "title", row.title(),
-                    "description", row.description(),
-                    "type", row.type(),
-                    "amount", row.amount(),
-                    "itemJson", row.itemJson(),
-                    "material", row.materialId()
-                )
-            );
-        }
-        payload.put("rewardRows", rewardRows);
-        payload.put("rewardCount", detail.rewardRows().size());
-        return payload;
-    }
-
-    private List<QuestGpsSnapshotBuilder.QuestDescriptor> collectDescriptors(PlayerProfile profile) {
-        List<QuestGpsSnapshotBuilder.QuestDescriptor> descriptors = new ArrayList<>();
-        for (QuestGpsModuleConfiguration.QuestDefinition definition : configuration.orderedQuests()) {
-            Template template = ChemdahAPI.INSTANCE.getQuestTemplate(definition.id());
-            if (template == null) {
-                continue;
-            }
-            Quest activeQuest = profile.getQuestById(template.getId(), false);
-            boolean active = activeQuest != null && !activeQuest.isCompleted();
-            boolean completed = !active && profile.isQuestCompleted(template);
-            QuestGpsPage page = active ? QuestGpsPage.ACTIVE : (completed ? QuestGpsPage.COMPLETED : QuestGpsPage.AVAILABLE);
-            List<QuestGpsSnapshotBuilder.TaskDescriptor> taskDescriptors = buildTaskDescriptors(profile, template, definition, page);
-            boolean canAccept = page == QuestGpsPage.AVAILABLE
-                && hasCompletedRequiredMainline(profile, definition.requiredMainline())
-                && !isCategoryLocked(profile.getPlayer(), definition.category());
-            descriptors.add(
-                new QuestGpsSnapshotBuilder.QuestDescriptor(
-                    template.getId(),
-                    definition.category(),
-                    page,
-                    displayQuestName(template, definition),
-                    buildQuestSummary(page, taskDescriptors),
-                    page.displayName(),
-                    safe(template.getPath()),
-                    descriptionLines(definition),
-                    taskDescriptors,
-                    rewardResolver.resolve(configuration, definition.category(), template.getId()),
-                    canAccept,
-                    page == QuestGpsPage.ACTIVE && definition.allowAbandon(),
-                    page == QuestGpsPage.ACTIVE && navigationService.hasQuestPoint(template.getId(), prioritizedTaskIds(taskDescriptors)),
-                    definition.sortOrder()
-                )
-            );
-        }
-        return List.copyOf(descriptors);
-    }
-
-    private List<QuestGpsSnapshotBuilder.TaskDescriptor> buildTaskDescriptors(
-        PlayerProfile profile,
-        Template template,
-        QuestGpsModuleConfiguration.QuestDefinition definition,
-        QuestGpsPage page
-    ) {
-        List<Task> tasks = new ArrayList<>(template.getTaskMap().values());
-        tasks.sort(
-            Comparator
-                .comparingInt((Task task) -> taskSortOrder(definition, task.getId()))
-                .thenComparing(Task::getId, String.CASE_INSENSITIVE_ORDER)
+        bridge.sendPacketToAll(
+            player,
+            menuUiIds,
+            initPacket ? "init" : "update",
+            QuestGpsMenuPacketFactory.build(configuration, snapshot, navigationService.runtimeReady())
         );
-
-        List<QuestGpsSnapshotBuilder.TaskDescriptor> descriptors = new ArrayList<>(tasks.size());
-        for (Task task : tasks) {
-            boolean completed = switch (page) {
-                case ACTIVE -> task.isCompleted(profile);
-                case COMPLETED -> profile.getQuestTaskCompleteDate(template.getId(), task.getId()) > 0L || task.isCompleted(profile);
-                case AVAILABLE -> false;
-            };
-            descriptors.add(
-                new QuestGpsSnapshotBuilder.TaskDescriptor(
-                    task.getId(),
-                    taskDisplayText(definition, task),
-                    completed ? "已完成" : (page == QuestGpsPage.AVAILABLE ? "未开始" : "进行中"),
-                    completed,
-                    page == QuestGpsPage.ACTIVE && navigationService.hasTaskPoint(template.getId(), task.getId()),
-                    taskSortOrder(definition, task.getId())
-                )
-            );
-        }
-        return List.copyOf(descriptors);
-    }
-
-    private boolean hasCompletedRequiredMainline(PlayerProfile profile, List<String> questIds) {
-        if (profile == null || questIds == null || questIds.isEmpty()) {
-            return true;
-        }
-        for (String questId : questIds) {
-            Template required = ChemdahAPI.INSTANCE.getQuestTemplate(questId);
-            if (required == null || !profile.isQuestCompleted(required)) {
-                return false;
-            }
-        }
-        return true;
     }
 
     public boolean mainlineGateSatisfied(Player player) {
         PlayerProfile profile = loadProfile(player, false);
-        return profile != null && hasCompletedRequiredMainline(profile, configuration.gate().requiredMainlineQuestIds());
+        return profile != null && presentationService.hasCompletedRequiredMainline(profile, configuration.gate().requiredMainlineQuestIds());
     }
 
     public boolean eventRuleLocked(Player player, String ruleId) {
         return configuration.gate().blockedEventRuleIds().contains(safe(ruleId)) && !mainlineGateSatisfied(player);
     }
 
+    /** 检查指定模块入口是否被主线门禁锁定（供其他模块 capability 查询）。 */
     public boolean moduleEntryLocked(Player player, String moduleEntryId) {
         return configuration.gate().blockedModuleEntries().contains(safe(moduleEntryId)) && !mainlineGateSatisfied(player);
+    }
+
+    private QuestGpsCategory resolveViewCategory(Player player, QuestGpsCategory preferred) {
+        Map<String, QuestGpsCategory> registry = configuration.categoryRegistry();
+        if (registry.isEmpty()) {
+            return null;
+        }
+        if (preferred != null
+            && registry.containsKey(preferred.id())
+            && !isCategoryLocked(player, preferred)) {
+            return preferred;
+        }
+        for (QuestGpsCategory category : QuestGpsCategory.sorted(registry)) {
+            if (!isCategoryLocked(player, category)) {
+                return category;
+            }
+        }
+        return QuestGpsCategory.firstOrNull(registry);
     }
 
     private boolean isCategoryLocked(Player player, QuestGpsCategory category) {
@@ -935,48 +758,6 @@ public final class QuestGpsService implements Listener {
         }
     }
 
-    private String displayQuestName(Template template, QuestGpsModuleConfiguration.QuestDefinition definition) {
-        if (!definition.displayNameOverride().isBlank()) {
-            return definition.displayNameOverride();
-        }
-        String configured = readConfigString(template, "name", "");
-        return configured.isBlank() ? template.getId() : configured;
-    }
-
-    private List<String> descriptionLines(QuestGpsModuleConfiguration.QuestDefinition definition) {
-        return definition.description().isEmpty() ? List.of("该任务未配置 QuestGPS 描述。") : definition.description();
-    }
-
-    private String taskDisplayText(QuestGpsModuleConfiguration.QuestDefinition definition, Task task) {
-        QuestGpsModuleConfiguration.TaskDefinition taskDefinition = definition.task(task.getId());
-        if (taskDefinition != null && !taskDefinition.displayText().isBlank()) {
-            return taskDefinition.displayText();
-        }
-        String configured = readConfigString(task, "name", "");
-        return configured.isBlank() ? task.getId() : configured;
-    }
-
-    private int taskSortOrder(QuestGpsModuleConfiguration.QuestDefinition definition, String taskId) {
-        QuestGpsModuleConfiguration.TaskDefinition taskDefinition = definition.task(taskId);
-        return taskDefinition == null ? 0 : taskDefinition.sortOrder();
-    }
-
-    private String buildQuestSummary(QuestGpsPage page, List<QuestGpsSnapshotBuilder.TaskDescriptor> tasks) {
-        if (page == QuestGpsPage.COMPLETED) {
-            return "任务已完成";
-        }
-        if (page == QuestGpsPage.AVAILABLE) {
-            return "等待接取";
-        }
-        int completedCount = 0;
-        for (QuestGpsSnapshotBuilder.TaskDescriptor task : tasks) {
-            if (task.completed()) {
-                completedCount++;
-            }
-        }
-        return completedCount + "/" + tasks.size() + " 目标完成";
-    }
-
     private String resolveQuestId(Player player, String questId) {
         String normalized = safe(questId);
         if (!normalized.isBlank()) {
@@ -987,54 +768,6 @@ public final class QuestGpsService implements Listener {
         }
         QuestGpsViewState state = viewStates.get(player.getUniqueId());
         return state == null ? "" : safe(state.selectedQuestId());
-    }
-
-    private List<String> prioritizedTaskIds(List<QuestGpsSnapshotBuilder.TaskDescriptor> tasks) {
-        if (tasks == null || tasks.isEmpty()) {
-            return List.of();
-        }
-        List<String> prioritized = new ArrayList<>(tasks.size());
-        for (QuestGpsSnapshotBuilder.TaskDescriptor task : tasks) {
-            if (!task.completed()) {
-                prioritized.add(task.taskId());
-            }
-        }
-        for (QuestGpsSnapshotBuilder.TaskDescriptor task : tasks) {
-            if (task.completed()) {
-                prioritized.add(task.taskId());
-            }
-        }
-        return List.copyOf(prioritized);
-    }
-
-    private QuestGpsSnapshotBuilder.QuestDescriptor findDescriptor(
-        List<QuestGpsSnapshotBuilder.QuestDescriptor> descriptors,
-        String questId
-    ) {
-        if (descriptors == null || questId == null || questId.isBlank()) {
-            return null;
-        }
-        for (QuestGpsSnapshotBuilder.QuestDescriptor descriptor : descriptors) {
-            if (descriptor.questId().equalsIgnoreCase(questId.trim())) {
-                return descriptor;
-            }
-        }
-        return null;
-    }
-
-    private QuestGpsSnapshotBuilder.TaskDescriptor findTask(
-        List<QuestGpsSnapshotBuilder.TaskDescriptor> tasks,
-        String taskId
-    ) {
-        if (tasks == null || taskId == null || taskId.isBlank()) {
-            return null;
-        }
-        for (QuestGpsSnapshotBuilder.TaskDescriptor task : tasks) {
-            if (task.taskId().equalsIgnoreCase(taskId.trim())) {
-                return task;
-            }
-        }
-        return null;
     }
 
     private PlayerProfile loadProfile(Player player, boolean notify) {
@@ -1063,89 +796,14 @@ public final class QuestGpsService implements Listener {
             case TRACK_CHANGED -> definition.hooks().trackChanged();
         };
         for (String signal : signals) {
-            if (signalDispatcher != null) {
-                signalDispatcher.accept(signal, player);
+            if (hookDispatcher != null) {
+                hookDispatcher.dispatch(signal, player, definition.id());
             }
         }
     }
 
-    private String readConfigString(Object holder, String path, String fallback) {
-        Object value = readConfigValue(holder, path);
-        if (value == null) {
-            return fallback;
-        }
-        String normalized = String.valueOf(value).trim();
-        return normalized.isEmpty() ? fallback : normalized;
-    }
-
-    private Object readConfigValue(Object holder, String path) {
-        if (path == null || path.isBlank()) {
-            return null;
-        }
-        Object config = getConfigObject(holder);
-        if (config == null) {
-            return null;
-        }
-
-        Object value = invokeConfigMethod(config, "get", path);
-        if (value != null) {
-            return value;
-        }
-        value = invokeConfigMethod(config, "getString", path);
-        if (value instanceof String stringValue && !stringValue.isBlank()) {
-            return stringValue;
-        }
-        return value;
-    }
-
-    private Object getConfigObject(Object holder) {
-        if (holder == null) {
-            return null;
-        }
-        try {
-            Method method = holder.getClass().getMethod("getConfig");
-            return method.invoke(holder);
-        } catch (ReflectiveOperationException ignored) {
-            return null;
-        }
-    }
-
-    private Object invokeConfigMethod(Object config, String methodName, String path) {
-        try {
-            Method method = config.getClass().getMethod(methodName, String.class);
-            return method.invoke(config, path);
-        } catch (ReflectiveOperationException ignored) {
-            return null;
-        }
-    }
-
-    @SuppressWarnings("unused")
-    private List<String> normalizeLines(Object value) {
-        if (value == null) {
-            return List.of();
-        }
-        List<String> lines = new ArrayList<>();
-        if (value instanceof Iterable<?> iterable) {
-            for (Object entry : iterable) {
-                lines.addAll(normalizeLines(entry));
-            }
-            return List.copyOf(lines);
-        }
-        if (value.getClass().isArray()) {
-            int length = Array.getLength(value);
-            for (int index = 0; index < length; index++) {
-                lines.addAll(normalizeLines(Array.get(value, index)));
-            }
-            return List.copyOf(lines);
-        }
-        String raw = String.valueOf(value);
-        for (String line : raw.split("\\R")) {
-            String normalized = line.trim();
-            if (!normalized.isEmpty()) {
-                lines.add(normalized);
-            }
-        }
-        return List.copyOf(lines);
+    public interface HookDispatcher {
+        void dispatch(String signal, Player player, String questId);
     }
 
     private static String blankTo(String value, String fallback) {

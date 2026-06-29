@@ -1,0 +1,160 @@
+﻿Compiled from "Relational.kt"
+public abstract class ink.ptms.chemdah.core.database.Relational<Type extends ink.ptms.chemdah.taboolib.module.database.ColumnBuilder, UserId, QuestId> extends ink.ptms.chemdah.core.database.Database {
+  public ink.ptms.chemdah.core.database.Relational();
+  public final java.util.concurrent.ConcurrentHashMap<java.lang.String, ink.ptms.chemdah.core.database.QuestTable<Type>> getTableQuest();
+  public final java.lang.String getTablePrefix();
+  public final javax.sql.DataSource getDataSource();
+  public final java.util.concurrent.locks.StampedLock getQuestLock();
+  public abstract ink.ptms.chemdah.taboolib.module.database.Host<Type> getHost();
+  public abstract ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<Type>, Type> getTableUserData();
+  public abstract ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<Type>, Type> getTableVariables();
+  public abstract java.lang.String getQuestKey();
+  public abstract boolean isDuplicateKeyUpdateSupported();
+  public ink.ptms.chemdah.core.database.Relational<Type, UserId, QuestId> setup();
+  public ink.ptms.chemdah.core.database.QuestTable<Type> table(java.lang.String);
+  public static ink.ptms.chemdah.core.database.QuestTable table$default(ink.ptms.chemdah.core.database.Relational, java.lang.String, int, java.lang.Object);
+  public void update(ink.ptms.chemdah.core.PlayerProfile, org.bukkit.entity.Player);
+  public void updateQuest(ink.ptms.chemdah.core.PlayerProfile, org.bukkit.entity.Player);
+  public abstract ink.ptms.chemdah.core.database.QuestTable<Type> newQuestTable(java.lang.String);
+  public abstract UserId getUserId(org.bukkit.entity.Player);
+  public abstract QuestId getQuestId(org.bukkit.entity.Player, ink.ptms.chemdah.core.quest.Quest);
+  public abstract java.util.concurrent.CompletableFuture<UserId> createUser(ink.ptms.chemdah.core.PlayerProfile, org.bukkit.entity.Player);
+  public abstract void createQuest(ink.ptms.chemdah.core.PlayerProfile, UserId, ink.ptms.chemdah.core.quest.Quest);
+  public void releaseQuest(org.bukkit.entity.Player, ink.ptms.chemdah.core.PlayerProfile, ink.ptms.chemdah.core.quest.Quest);
+  protected java.lang.String selectVariable0(java.lang.String);
+  protected void updateVariable0(java.lang.String, java.lang.String);
+  protected void releaseVariable0(java.lang.String);
+  public java.util.List<java.lang.String> variables();
+}
+Compiled from "QuestTable.kt"
+public abstract class ink.ptms.chemdah.core.database.QuestTable<T extends ink.ptms.chemdah.taboolib.module.database.ColumnBuilder> {
+  public ink.ptms.chemdah.core.database.QuestTable(ink.ptms.chemdah.taboolib.module.database.Host<T>, java.lang.String, java.lang.String);
+  public final ink.ptms.chemdah.taboolib.module.database.Host<T> getHost();
+  public final java.lang.String getPrefix();
+  public final java.lang.String getSuffix();
+  public abstract ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<T>, T> getQuest();
+  public abstract ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<T>, T> getQuestData();
+  public final ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<T>, T> component1();
+  public final ink.ptms.chemdah.taboolib.module.database.Table<ink.ptms.chemdah.taboolib.module.database.Host<T>, T> component2();
+}
+Compiled from "Database.kt"
+public abstract class ink.ptms.chemdah.core.database.Database {
+  public static final ink.ptms.chemdah.core.database.Database$Companion Companion;
+  public static ink.ptms.chemdah.core.database.Database INSTANCE;
+  public ink.ptms.chemdah.core.database.Database();
+  public abstract ink.ptms.chemdah.core.PlayerProfile select(org.bukkit.entity.Player);
+  public abstract void update(org.bukkit.entity.Player, ink.ptms.chemdah.core.PlayerProfile);
+  public abstract void releaseQuest(org.bukkit.entity.Player, ink.ptms.chemdah.core.PlayerProfile, ink.ptms.chemdah.core.quest.Quest);
+  public final java.lang.String selectVariable(java.lang.String);
+  public final void updateVariable(java.lang.String, java.lang.String);
+  public final void releaseVariable(java.lang.String);
+  public abstract java.util.List<java.lang.String> variables();
+  protected abstract java.lang.String selectVariable0(java.lang.String);
+  protected abstract void updateVariable0(java.lang.String, java.lang.String);
+  protected abstract void releaseVariable0(java.lang.String);
+  public static final boolean access$isDisableAutoSave$cp();
+  public static final void access$setDisableAutoSave$cp(boolean);
+  public static final boolean access$isDisableAutoCreateTable$cp();
+  public static final void access$setDisableAutoCreateTable$cp(boolean);
+  public static final boolean access$isLoadInJoinEvent$cp();
+  public static final void access$setLoadInJoinEvent$cp(boolean);
+  public static final boolean access$isReleaseInQuitEvent$cp();
+  public static final void access$setReleaseInQuitEvent$cp(boolean);
+  static {};
+}
+Compiled from "DataContainer.kt"
+public abstract class ink.ptms.chemdah.core.DataContainer {
+  public ink.ptms.chemdah.core.DataContainer(ink.ptms.chemdah.core.DataContainerEventFactory);
+  public final ink.ptms.chemdah.core.DataContainerEventFactory getEventFactory();
+  public final void setEventFactory(ink.ptms.chemdah.core.DataContainerEventFactory);
+  public final io.netty.util.internal.ConcurrentSet<java.lang.String> getDrops();
+  public final boolean isSilence();
+  protected final void setSilence(boolean);
+  public abstract boolean isChanged();
+  public abstract ink.ptms.chemdah.core.Data get(java.lang.String);
+  public abstract ink.ptms.chemdah.core.Data get(java.lang.String, java.lang.Object);
+  public abstract void set(java.lang.String, java.lang.Object);
+  public abstract void remove(java.lang.String);
+  public abstract void clear();
+  public abstract boolean containsKey(java.lang.String);
+  public abstract boolean containsValue(java.lang.Object);
+  public abstract java.util.Set<java.util.Map$Entry<java.lang.String, ink.ptms.chemdah.core.Data>> entries();
+  public abstract java.util.List<java.lang.String> keys();
+  public abstract ink.ptms.chemdah.core.DataContainer copy();
+  public abstract ink.ptms.chemdah.core.database.ChangeTracker flush();
+  public abstract void removeIf(java.util.function.Function<java.util.Map$Entry<java.lang.String, ink.ptms.chemdah.core.Data>, java.lang.Boolean>);
+  public abstract void forEach(java.util.function.Consumer<java.util.Map$Entry<java.lang.String, ink.ptms.chemdah.core.Data>>);
+  public abstract java.util.Map<java.lang.String, java.lang.Object> toMap();
+  public abstract ink.ptms.chemdah.taboolib.module.nms.ItemTag toNBT();
+  public abstract java.lang.String toJson();
+  public abstract boolean isEmpty();
+  public abstract boolean isNotEmpty();
+  public final void merge(ink.ptms.chemdah.core.DataContainer);
+  public final void unchanged(java.util.function.Consumer<ink.ptms.chemdah.core.DataContainer>);
+}
+Compiled from "PlayerProfile.kt"
+public class ink.ptms.chemdah.core.PlayerProfile implements org.bukkit.metadata.Metadatable {
+  public ink.ptms.chemdah.core.DataContainer persistentDataContainer;
+  public ink.ptms.chemdah.core.PlayerProfile(java.util.UUID);
+  public final java.util.UUID getUniqueId();
+  public org.bukkit.entity.Player getPlayer();
+  public boolean isPlayerOnline();
+  public boolean isDataChanged();
+  public final boolean getUpdaterLock();
+  public final void setUpdaterLock(boolean);
+  public final boolean isReleased();
+  public final void setReleased(boolean);
+  public final java.util.concurrent.ConcurrentHashMap<java.lang.String, ink.ptms.chemdah.core.quest.Quest> getQuestMap();
+  public final java.util.concurrent.CopyOnWriteArraySet<ink.ptms.chemdah.core.quest.Quest> getReleaseQuests();
+  public final ink.ptms.chemdah.core.DataContainer getPersistentDataContainer();
+  public final void setPersistentDataContainer(ink.ptms.chemdah.core.DataContainer);
+  public void setup();
+  public void registerQuest(ink.ptms.chemdah.core.quest.Quest, boolean);
+  public static void registerQuest$default(ink.ptms.chemdah.core.PlayerProfile, ink.ptms.chemdah.core.quest.Quest, boolean, int, java.lang.Object);
+  public void unregisterQuest(ink.ptms.chemdah.core.quest.Quest, boolean);
+  public static void unregisterQuest$default(ink.ptms.chemdah.core.PlayerProfile, ink.ptms.chemdah.core.quest.Quest, boolean, int, java.lang.Object);
+  public ink.ptms.chemdah.core.quest.Quest getQuestById(java.lang.String, boolean);
+  public static ink.ptms.chemdah.core.quest.Quest getQuestById$default(ink.ptms.chemdah.core.PlayerProfile, java.lang.String, boolean, int, java.lang.Object);
+  public java.util.List<ink.ptms.chemdah.core.quest.Quest> getQuests(boolean);
+  public static java.util.List getQuests$default(ink.ptms.chemdah.core.PlayerProfile, boolean, int, java.lang.Object);
+  public boolean isQuestCompleted(java.lang.String);
+  public boolean isQuestCompleted(ink.ptms.chemdah.core.quest.Template);
+  public long getQuestCompletedDate(java.lang.String);
+  public long getQuestCompletedDate(ink.ptms.chemdah.core.quest.Template);
+  public long getQuestTaskCompleteDate(java.lang.String, java.lang.String);
+  public java.util.concurrent.CompletableFuture<java.lang.Boolean> checkAgent(java.lang.Object, ink.ptms.chemdah.core.quest.Quest, java.util.Map<java.lang.String, ? extends java.lang.Object>);
+  public static java.util.concurrent.CompletableFuture checkAgent$default(ink.ptms.chemdah.core.PlayerProfile, java.lang.Object, ink.ptms.chemdah.core.quest.Quest, java.util.Map, int, java.lang.Object);
+  public void tasksByEvent(java.lang.Object, java.util.function.Consumer<ink.ptms.chemdah.util.Couple<ink.ptms.chemdah.core.quest.Quest, ink.ptms.chemdah.core.quest.Task>>);
+  public void tasksByObjective(ink.ptms.chemdah.core.PlayerProfile, ink.ptms.chemdah.core.quest.objective.Objective<?>, java.util.function.Consumer<ink.ptms.chemdah.util.Couple<ink.ptms.chemdah.core.quest.Quest, ink.ptms.chemdah.core.quest.Task>>);
+  public void push();
+  public void push(org.bukkit.entity.Player);
+  public final ink.ptms.chemdah.core.quest.QuestDataOperator dataOperator(ink.ptms.chemdah.core.quest.Task);
+  public final <T> T dataOperator(ink.ptms.chemdah.core.quest.Task, java.util.function.Function<ink.ptms.chemdah.core.quest.QuestDataOperator, T>);
+  public final void validation();
+  public final java.util.concurrent.ConcurrentHashMap<java.lang.String, org.bukkit.metadata.MetadataValue> getMetadataMap();
+  public void setMetadata(java.lang.String, org.bukkit.metadata.MetadataValue);
+  public java.util.List<org.bukkit.metadata.MetadataValue> getMetadata(java.lang.String);
+  public boolean hasMetadata(java.lang.String);
+  public void removeMetadata(java.lang.String, org.bukkit.plugin.Plugin);
+}
+Compiled from "Template.kt"
+public class ink.ptms.chemdah.core.quest.Template extends ink.ptms.chemdah.core.quest.QuestContainer {
+  public static final ink.ptms.chemdah.core.quest.Template$Companion Companion;
+  public ink.ptms.chemdah.core.quest.Template(java.lang.String, ink.ptms.chemdah.taboolib.library.configuration.ConfigurationSection, java.io.File, ink.ptms.chemdah.taboolib.library.configuration.ConfigurationSection);
+  public final java.io.File getFile();
+  public final ink.ptms.chemdah.taboolib.library.configuration.ConfigurationSection getFileOption();
+  public final java.lang.String getDataIsolation();
+  public final boolean getRecordQuestCompleted();
+  public final boolean getRecordTaskCompleted();
+  public final java.util.HashMap<java.lang.String, ink.ptms.chemdah.core.quest.Task> getTaskMap();
+  public final java.util.List<java.lang.String> getMetaImport();
+  public final void setMetaImport(java.util.List<java.lang.String>);
+  public void addTask(java.lang.String, java.lang.String);
+  public static void addTask$default(ink.ptms.chemdah.core.quest.Template, java.lang.String, java.lang.String, int, java.lang.Object);
+  public ink.ptms.chemdah.core.quest.Quest newQuest(java.lang.String, ink.ptms.chemdah.core.PlayerProfile);
+  public java.util.concurrent.CompletableFuture<ink.ptms.chemdah.core.quest.AcceptResult> acceptTo(ink.ptms.chemdah.core.PlayerProfile);
+  public java.util.concurrent.CompletableFuture<ink.ptms.chemdah.core.quest.AcceptResult> checkAccept(ink.ptms.chemdah.core.PlayerProfile);
+  public java.util.Map<java.lang.String, ink.ptms.chemdah.core.quest.meta.Meta<?>> metaAll();
+  public static final java.util.concurrent.ConcurrentHashMap access$getAcceptLocks$cp();
+  static {};
+}

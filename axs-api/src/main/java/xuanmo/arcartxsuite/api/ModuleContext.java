@@ -45,31 +45,6 @@ public interface ModuleContext {
     /** 模块私有数据目录（plugins/ArcartXSuite/data/<moduleId>/） */
     File dataFolder();
 
-    /**
-     * 把宿主根目录下的 legacy 文件（含同名 -shm / -wal 后缀）一次性搬迁到 {@link #dataFolder()}，
-     * 并返回 {@code dataFolder()}。用于将 1.0.x 时代散落在 {@code plugins/ArcartXSuite/} 根目录
-     * 的模块数据（如 {@code chat.db}、{@code chat.db-shm}、{@code chat.db-wal}）归位到
-     * {@code plugins/ArcartXSuite/data/<moduleId>/} 子目录。
-     * <p>
-     * 若根目录无对应文件、或目标文件已存在，则不做任何动作。仅记录 {@code INFO} 级日志。
-     *
-     * @param baseFileName 例如 {@code "chat.db"}，会同时尝试迁移 {@code chat.db-shm}/{@code chat.db-wal}
-     * @return 当前模块的 {@link #dataFolder()}
-     */
-    File migrateLegacyDataFile(String baseFileName);
-
-    /**
-     * 把宿主根目录下的 legacy 子目录一次性整体搬迁到 {@link #dataFolder()} 下的同名相对路径。
-     * 用于把 1.0.x 时代散落的 {@code chat/}、{@code mail/}、{@code prop/}、{@code subtitle/}
-     * 等模块产物目录归位到 {@code plugins/ArcartXSuite/data/<moduleId>/<relativePath>/}。
-     * <p>
-     * 若根目录无对应目录、或目标目录已存在，则不做任何动作。仅记录 {@code INFO} 级日志。
-     *
-     * @param relativePath 相对路径，例如 {@code "chat/channels"}、{@code "subtitle/groups"}
-     * @return {@code new File(dataFolder(), relativePath)}
-     */
-    File migrateLegacyDirectory(String relativePath);
-
     /** UI 文件输出目录（plugins/ArcartXSuite/ui/） */
     File uiFolder();
 

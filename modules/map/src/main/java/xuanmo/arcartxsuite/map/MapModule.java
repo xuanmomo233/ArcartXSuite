@@ -137,7 +137,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
         recordUiBinding(MapService.HUD_UI_FILE_PATH, hudBinding);
 
         JdbcMapRepository mapRepo = new JdbcMapRepository(
-            context.migrateLegacyDataFile(configuration.storage().sqliteFileName()),
+            context.dataFolder(),
             configuration.storage(), context.logger());
         service = new MapService(
             context.plugin(), packetGuard, configuration,

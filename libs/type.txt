@@ -1,0 +1,11 @@
+﻿Compiled from "Type.kt"
+public final class ink.ptms.chemdah.core.database.Type extends java.lang.Enum<ink.ptms.chemdah.core.database.Type> {
+  public static final ink.ptms.chemdah.core.database.Type$Companion Companion;
+  public static final ink.ptms.chemdah.core.database.Type LOCAL;
+  public static final ink.ptms.chemdah.core.database.Type SQL;
+  public static final ink.ptms.chemdah.core.database.Type CUSTOM;
+  public static ink.ptms.chemdah.core.database.Type[] values();
+  public static ink.ptms.chemdah.core.database.Type valueOf(java.lang.String);
+  public static final kotlin1822.Lazy access$getINSTANCE$delegate$cp();
+  static {};
+}

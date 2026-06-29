@@ -1,0 +1,35 @@
+###### ink.ptms.chemdah.core.database.DatabaseSQL$getUserId$userId$2
+       2: invokespecial #37                 // Method kotlin1822/jvm/internal/Lambda."<init>":(I)V
+  public final java.lang.Long invoke(java.sql.ResultSet);
+       1: ldc           #41                 // String $this$firstOrNull
+       3: invokestatic  #47                 // Method kotlin1822/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       7: ldc           #49                 // String id
+       9: invokeinterface #55,  2           // InterfaceMethod java/sql/ResultSet.getLong:(Ljava/lang/String;)J
+      14: invokestatic  #61                 // Method java/lang/Long.valueOf:(J)Ljava/lang/Long;
+  public java.lang.Object invoke(java.lang.Object);
+       5: invokevirtual #64                 // Method invoke:(Ljava/sql/ResultSet;)Ljava/lang/Long;
+       4: invokespecial #69                 // Method "<init>":()V
+###### ink.ptms.chemdah.core.database.DatabaseSQL$getQuestId$questId$2
+       2: invokespecial #37                 // Method kotlin1822/jvm/internal/Lambda."<init>":(I)V
+  public final java.lang.Long invoke(java.sql.ResultSet);
+       1: ldc           #41                 // String $this$firstOrNull
+       3: invokestatic  #47                 // Method kotlin1822/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       7: ldc           #49                 // String id
+       9: invokeinterface #55,  2           // InterfaceMethod java/sql/ResultSet.getLong:(Ljava/lang/String;)J
+      14: invokestatic  #61                 // Method java/lang/Long.valueOf:(J)Ljava/lang/Long;
+  public java.lang.Object invoke(java.lang.Object);
+       5: invokevirtual #64                 // Method invoke:(Ljava/sql/ResultSet;)Ljava/lang/Long;
+       4: invokespecial #69                 // Method "<init>":()V
+###### ink.ptms.chemdah.core.database.DatabaseSQL$init$2
+       2: invokespecial #38                 // Method kotlin1822/jvm/internal/Lambda."<init>":(I)V
+  public final kotlin1822.Pair<java.lang.String, java.lang.String> invoke(java.sql.ResultSet);
+       1: ldc           #44                 // String $this$map
+       3: invokestatic  #50                 // Method kotlin1822/jvm/internal/Intrinsics.checkNotNullParameter:(Ljava/lang/Object;Ljava/lang/String;)V
+       7: ldc           #52                 // String key
+       9: invokeinterface #58,  2           // InterfaceMethod java/sql/ResultSet.getString:(Ljava/lang/String;)Ljava/lang/String;
+      15: ldc           #60                 // String value
+      17: invokeinterface #58,  2           // InterfaceMethod java/sql/ResultSet.getString:(Ljava/lang/String;)Ljava/lang/String;
+      22: invokestatic  #66                 // Method kotlin1822/TuplesKt.to:(Ljava/lang/Object;Ljava/lang/Object;)Lkotlin1822/Pair;
+  public java.lang.Object invoke(java.lang.Object);
+       5: invokevirtual #69                 // Method invoke:(Ljava/sql/ResultSet;)Lkotlin1822/Pair;
+       4: invokespecial #74                 // Method "<init>":()V

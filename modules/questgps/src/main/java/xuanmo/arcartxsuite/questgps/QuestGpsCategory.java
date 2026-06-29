@@ -9,26 +9,10 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * 任务分类 — 支持内置分类和用户自定义分类。
- * <p>
- * 内置分类: {@link #MAINLINE}、{@link #SIDE}、{@link #ENCOUNTER}。
- * 用户可在配置的 {@code categories} 段中定义更多分类，使用任意 ID 和显示名。
- * 同一分类的任务可以分布在不同的 yml 文件中。
+ * 任务分类 Tab。仅在 {@code ArcartXQuestGPS.yml} 的 {@code categories} 段注册后生效；
+ * 无内置分类，删除该段即可关闭分类 Tab 功能。
  */
 public final class QuestGpsCategory {
-
-    public static final QuestGpsCategory MAINLINE = new QuestGpsCategory("mainline", "主线", 0);
-    public static final QuestGpsCategory SIDE = new QuestGpsCategory("side", "支线", 100);
-    public static final QuestGpsCategory ENCOUNTER = new QuestGpsCategory("encounter", "奇遇", 200);
-
-    private static final Map<String, QuestGpsCategory> BUILTINS;
-    static {
-        Map<String, QuestGpsCategory> map = new LinkedHashMap<>();
-        map.put(MAINLINE.id, MAINLINE);
-        map.put(SIDE.id, SIDE);
-        map.put(ENCOUNTER.id, ENCOUNTER);
-        BUILTINS = Collections.unmodifiableMap(map);
-    }
 
     private final String id;
     private final String displayName;
@@ -53,55 +37,48 @@ public final class QuestGpsCategory {
     }
 
     /**
-     * 从注册表中按 ID 查找分类；如果注册表中不存在，回退到内置分类。
-     * 未找到返回 null。
+     * 从注册表按 ID 查找；未注册返回 null。
      */
     public static QuestGpsCategory parse(String rawValue, Map<String, QuestGpsCategory> registry) {
-        if (rawValue == null) {
+        if (rawValue == null || registry == null || registry.isEmpty()) {
             return null;
         }
         String normalized = rawValue.trim().toLowerCase(Locale.ROOT);
-        if (registry != null) {
-            QuestGpsCategory fromRegistry = registry.get(normalized);
-            if (fromRegistry != null) {
-                return fromRegistry;
-            }
+        if (normalized.isEmpty()) {
+            return null;
         }
-        return BUILTINS.get(normalized);
+        return registry.get(normalized);
     }
 
     /**
-     * 仅从内置分类中查找（向后兼容）。
+     * 由配置 {@code categories} 段构建注册表；空列表表示未启用分类 Tab。
      */
-    public static QuestGpsCategory parse(String rawValue) {
-        return parse(rawValue, null);
-    }
-
-    /**
-     * 返回内置分类列表。
-     */
-    public static List<QuestGpsCategory> builtins() {
-        return List.copyOf(BUILTINS.values());
-    }
-
-    /**
-     * 构建包含内置分类 + 自定义分类的完整注册表。
-     * 自定义分类的 ID 如果与内置 ID 冲突，自定义定义会覆盖内置定义（允许用户重命名内置分类的显示名）。
-     */
-    public static Map<String, QuestGpsCategory> buildRegistry(List<QuestGpsCategory> customCategories) {
-        Map<String, QuestGpsCategory> registry = new LinkedHashMap<>(BUILTINS);
-        if (customCategories != null) {
-            for (QuestGpsCategory custom : customCategories) {
-                registry.put(custom.id(), custom);
-            }
+    public static Map<String, QuestGpsCategory> buildRegistry(List<QuestGpsCategory> configuredCategories) {
+        if (configuredCategories == null || configuredCategories.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, QuestGpsCategory> registry = new LinkedHashMap<>();
+        for (QuestGpsCategory category : configuredCategories) {
+            registry.put(category.id(), category);
         }
         return Collections.unmodifiableMap(registry);
+    }
+
+    /**
+     * 注册表中第一个分类（按 sortOrder），无则 null。
+     */
+    public static QuestGpsCategory firstOrNull(Map<String, QuestGpsCategory> registry) {
+        List<QuestGpsCategory> sorted = sorted(registry);
+        return sorted.isEmpty() ? null : sorted.get(0);
     }
 
     /**
      * 返回注册表中所有分类，按 sortOrder 升序排列。
      */
     public static List<QuestGpsCategory> sorted(Map<String, QuestGpsCategory> registry) {
+        if (registry == null || registry.isEmpty()) {
+            return List.of();
+        }
         List<QuestGpsCategory> list = new ArrayList<>(registry.values());
         list.sort((a, b) -> {
             int cmp = Integer.compare(a.sortOrder, b.sortOrder);

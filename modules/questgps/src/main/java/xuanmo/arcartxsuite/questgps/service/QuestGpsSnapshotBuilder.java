@@ -20,7 +20,7 @@ public final class QuestGpsSnapshotBuilder {
         QuestGpsNavigationService.TrackingState trackingState
     ) {
         Objects.requireNonNull(descriptors, "descriptors");
-        QuestGpsCategory category = requestedCategory == null ? QuestGpsCategory.MAINLINE : requestedCategory;
+        QuestGpsCategory category = requestedCategory;
         QuestGpsPage page = requestedPage == null ? QuestGpsPage.AVAILABLE : requestedPage;
         QuestGpsNavigationService.TrackingState safeTracking = trackingState == null
             ? QuestGpsNavigationService.TrackingState.none()
@@ -34,7 +34,7 @@ public final class QuestGpsSnapshotBuilder {
         }
 
         for (QuestDescriptor descriptor : descriptors) {
-            if (!descriptor.category().equals(category)) {
+            if (category == null || descriptor.category() == null || !descriptor.category().equals(category)) {
                 continue;
             }
             buckets.get(descriptor.page()).add(descriptor);
@@ -78,6 +78,7 @@ public final class QuestGpsSnapshotBuilder {
                 new TaskRow(
                     task.taskId(),
                     task.text(),
+                    task.descriptionText(),
                     task.statusText(),
                     task.completed(),
                     task.trackAvailable(),
@@ -184,6 +185,7 @@ public final class QuestGpsSnapshotBuilder {
     public record TaskDescriptor(
         String taskId,
         String text,
+        String descriptionText,
         String statusText,
         boolean completed,
         boolean trackAvailable,
@@ -241,6 +243,7 @@ public final class QuestGpsSnapshotBuilder {
     public record TaskRow(
         String taskId,
         String text,
+        String descriptionText,
         String statusText,
         boolean completed,
         boolean trackAvailable,

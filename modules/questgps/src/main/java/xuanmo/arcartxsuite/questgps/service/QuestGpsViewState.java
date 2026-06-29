@@ -5,7 +5,7 @@ import xuanmo.arcartxsuite.questgps.QuestGpsPage;
 
 final class QuestGpsViewState {
 
-    private QuestGpsCategory category = QuestGpsCategory.MAINLINE;
+    private QuestGpsCategory category;
     private QuestGpsPage page = QuestGpsPage.AVAILABLE;
     private String selectedQuestId = "";
 
@@ -14,7 +14,7 @@ final class QuestGpsViewState {
     }
 
     void setCategory(QuestGpsCategory category) {
-        this.category = category == null ? QuestGpsCategory.MAINLINE : category;
+        this.category = category;
     }
 
     QuestGpsPage page() {

@@ -20,12 +20,14 @@ import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
 import xuanmo.arcartxsuite.api.capability.MapNavigable;
 import xuanmo.arcartxsuite.api.capability.QuestGpsNavigable;
+import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.questgps.command.QuestGpsAdminCommand;
 import xuanmo.arcartxsuite.questgps.command.QuestGpsPlayerCommand;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
+import xuanmo.arcartxsuite.questgps.chemdah.database.QuestGpsMysqlDatabase;
 import xuanmo.arcartxsuite.questgps.service.QuestGpsService;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
@@ -69,6 +71,9 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         return List.of(
             ValidationRule.required("client.packet-id", ValueType.STRING),
             ValidationRule.of("navigation.enabled", ValueType.BOOLEAN),
+            ValidationRule.of("navigation.mode", ValueType.STRING),
+            ValidationRule.of("database.enabled", ValueType.BOOLEAN),
+            ValidationRule.of("discovery.mode", ValueType.STRING),
             ValidationRule.of("navigation.path-max-iterations", ValueType.INT).withRange(100, 50000),
             ValidationRule.of("debug.enabled", ValueType.BOOLEAN)
         );
@@ -100,6 +105,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         }
         ensureQuestDefaults(questsDirectory);
         configuration = QuestGpsModuleConfiguration.load(yaml, context.logger(), questsDirectory);
+        QuestGpsMysqlDatabase.registerIfNeeded(context.logger(), configuration.database());
     }
 
     private void ensureQuestDefaults(File questsDirectory) {
@@ -158,7 +164,14 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
             () -> context.getCapability(MapNavigable.class),
             () -> context.getCapability(SubtitlePlayable.class),
             () -> context.getCapability(ChatCardSendable.class),
-            (signal, player) -> context.logger().fine("QuestGPS hook signal: " + signal + " -> " + player.getName()),
+            (signal, player, questId) -> {
+                SignalDispatchable dispatcher = context.getCapability(SignalDispatchable.class);
+                if (dispatcher != null) {
+                    dispatcher.dispatchSignal(signal, player, Map.of("quest_id", questId == null ? "" : questId));
+                } else if (context.logger().isLoggable(java.util.logging.Level.FINE)) {
+                    context.logger().fine("QuestGPS hook signal: " + signal + " -> " + player.getName());
+                }
+            },
             java.util.List.copyOf(menuRuntimeUiIds),
             java.util.List.copyOf(guideRuntimeUiIds),
             context.itemSourceRegistry(),
@@ -197,6 +210,11 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
             @Override
             public boolean eventRuleLocked(@NotNull org.bukkit.entity.Player player, @NotNull String ruleId) {
                 return service.eventRuleLocked(player, ruleId);
+            }
+
+            @Override
+            public boolean moduleEntryLocked(@NotNull org.bukkit.entity.Player player, @NotNull String moduleEntryId) {
+                return service.moduleEntryLocked(player, moduleEntryId);
             }
         });
         adminCommand = new QuestGpsAdminCommand(() -> service, messages());
