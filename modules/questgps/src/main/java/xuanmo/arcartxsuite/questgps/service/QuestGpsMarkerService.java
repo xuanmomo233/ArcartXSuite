@@ -55,17 +55,17 @@ public final class QuestGpsMarkerService {
 
     public void start() {
         if (!config.enabled()) {
-            logger.info("QuestGPS 导航标记: 已在配置中禁用 (marker.enabled=false)。");
+            logger.info("QuestGPS: 导航标记: 已在配置中禁用 (marker.enabled=false)。");
             available = false;
             return;
         }
         if (npcBridge == null) {
-            logger.warning("QuestGPS 导航标记: npcBridge 为 null，标记功能将跳过。");
+            logger.warning("QuestGPS: 导航标记: npcBridge 为 null，标记功能将跳过。");
             available = false;
             return;
         }
         if (!npcBridge.isAvailable()) {
-            logger.warning("QuestGPS 导航标记: Adyeshach 不可用 (npcBridge.isAvailable()=false)，标记功能将跳过。");
+            logger.warning("QuestGPS: 导航标记: Adyeshach 不可用 (npcBridge.isAvailable()=false)，标记功能将跳过。");
             available = false;
             return;
         }
@@ -76,7 +76,7 @@ public final class QuestGpsMarkerService {
         int ticks = Math.max(1, config.pathUpdateTicks());
         updateTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickUpdate, ticks, ticks);
 
-        logger.info("QuestGPS 导航标记已启动: model=" + config.modelId() + " scale=" + config.scale()
+        logger.info("QuestGPS: 导航标记已启动: model=" + config.modelId() + " scale=" + config.scale()
             + " interval=" + config.pathInterval() + " maxMarkers=" + config.pathMaxMarkers()
             + " updateTicks=" + ticks);
     }
@@ -113,7 +113,7 @@ public final class QuestGpsMarkerService {
         playerPaths.put(player.getUniqueId(), state);
 
         if (debug) {
-            logger.info("QuestGPS 路径标记: 开始追踪 player=" + player.getName()
+            logger.info("QuestGPS: 路径标记: 开始追踪 player=" + player.getName()
                 + " goal=(" + point.x() + "," + point.y() + "," + point.z() + ")");
         }
 
@@ -178,7 +178,7 @@ public final class QuestGpsMarkerService {
             computeAndApplyPathInternal(player, state);
         } catch (Exception ex) {
             if (debug) {
-                logger.warning("QuestGPS 路径计算异常: " + ex.getClass().getSimpleName() + " - " + ex.getMessage());
+                logger.warning("QuestGPS: 路径计算异常: " + ex.getClass().getSimpleName() + " - " + ex.getMessage());
             }
         }
     }

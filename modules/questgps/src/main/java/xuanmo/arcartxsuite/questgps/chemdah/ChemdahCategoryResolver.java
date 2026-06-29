@@ -50,7 +50,7 @@ public final class ChemdahCategoryResolver {
             return overlay.categoryOverride();
         }
         String questId = overlay == null ? "unknown" : overlay.id();
-        logger.warning("QuestGPS category.source=overlay 但任务未配置 category: " + questId);
+        logger.warning("QuestGPS: category.source=overlay 但任务未配置 category: " + questId);
         return null;
     }
 
@@ -63,7 +63,7 @@ public final class ChemdahCategoryResolver {
             ? questIdForLog
             : (template == null ? "unknown" : template.getId());
         logger.warning(
-            "QuestGPS Chemdah meta.type 未在 categories 注册，任务不会进入菜单: " + questId
+            "QuestGPS: Chemdah meta.type 未在 categories 注册，任务不会进入菜单: " + questId
         );
         return null;
     }

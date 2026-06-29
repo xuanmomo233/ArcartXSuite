@@ -33,7 +33,7 @@ public final class ChemdahIntegrationBootstrap {
     public void initialize() {
         registerDatabaseIfNeeded();
         logger.fine(
-            "QuestGPS Chemdah 整合: navigation.mode="
+            "QuestGPS: Chemdah 整合: navigation.mode="
                 + configuration.navigation().mode()
                 + ", tracker="
                 + trackerBridge.available()

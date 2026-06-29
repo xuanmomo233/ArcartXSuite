@@ -32,7 +32,7 @@ public final class ChemdahQuestDiscovery {
         }
         Map<String, Template> templates = loadAllTemplates();
         if (templates.isEmpty()) {
-            logger.warning("QuestGPS discovery.mode=auto 但未从 Chemdah 加载到任何任务模板，已回退 overlay 白名单。");
+            logger.warning("QuestGPS: discovery.mode=auto 但未从 Chemdah 加载到任何任务模板，已回退 overlay 白名单。");
             return configuration.orderedQuests();
         }
         LinkedHashMap<String, QuestGpsModuleConfiguration.QuestDefinition> merged = new LinkedHashMap<>();
@@ -84,7 +84,7 @@ public final class ChemdahQuestDiscovery {
             }
             return Map.copyOf(templates);
         } catch (Exception ex) {
-            logger.warning("QuestGPS 扫描 Chemdah 任务模板失败: " + ex.getMessage());
+            logger.warning("QuestGPS: 扫描 Chemdah 任务模板失败: " + ex.getMessage());
         }
         return Map.of();
     }

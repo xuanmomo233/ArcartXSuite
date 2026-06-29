@@ -276,7 +276,7 @@ public final class QuestGpsService implements Listener {
         template.acceptTo(profile).whenComplete((result, throwable) -> Bukkit.getScheduler().runTask(plugin, () -> {
             if (throwable != null) {
                 player.sendMessage(PREFIX + ChatColor.RED + "接取任务失败，请检查控制台。");
-                plugin.getLogger().log(Level.WARNING, "QuestGPS 接取任务失败: " + definition.id(), throwable);
+                plugin.getLogger().log(Level.WARNING, "QuestGPS: 接取任务失败: " + definition.id(), throwable);
                 refreshViewer(player);
                 return;
             }
@@ -465,7 +465,7 @@ public final class QuestGpsService implements Listener {
             );
             chemdahEventListeners.add(listener);
         } catch (ReflectiveOperationException exception) {
-            plugin.getLogger().warning("QuestGPS 注册 Chemdah 重载事件失败: " + exception.getMessage());
+            plugin.getLogger().warning("QuestGPS: 注册 Chemdah 重载事件失败: " + exception.getMessage());
         }
     }
 
@@ -505,7 +505,7 @@ public final class QuestGpsService implements Listener {
             );
             chemdahEventListeners.add(listener);
         } catch (ReflectiveOperationException exception) {
-            plugin.getLogger().warning("QuestGPS 注册 Chemdah 任务事件失败(" + className + "): " + exception.getMessage());
+            plugin.getLogger().warning("QuestGPS: 注册 Chemdah 任务事件失败(" + className + "): " + exception.getMessage());
         }
     }
 
@@ -521,7 +521,7 @@ public final class QuestGpsService implements Listener {
         if (!expectedEventClass.isInstance(event)) {
             if (configuration.debug()) {
                 plugin.getLogger().fine(
-                    "QuestGPS 忽略非匹配 Chemdah 任务事件: expected="
+                    "QuestGPS: 忽略非匹配 Chemdah 任务事件: expected="
                         + expectedEventClass.getName()
                         + ", actual="
                         + event.getClass().getName()
@@ -550,7 +550,7 @@ public final class QuestGpsService implements Listener {
             }
             refreshByProfile(profile);
         } catch (ReflectiveOperationException | RuntimeException exception) {
-            plugin.getLogger().warning("QuestGPS 处理 Chemdah 任务事件失败: " + exception.getMessage());
+            plugin.getLogger().warning("QuestGPS: 处理 Chemdah 任务事件失败: " + exception.getMessage());
         }
     }
 

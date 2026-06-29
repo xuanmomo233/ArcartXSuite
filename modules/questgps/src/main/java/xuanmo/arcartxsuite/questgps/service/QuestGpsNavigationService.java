@@ -238,7 +238,7 @@ public final class QuestGpsNavigationService {
             return;
         }
         if (!waypointRuntime.removeWaypoint(player, state.waypointId(), false) && !silent) {
-            logger.warning("QuestGPS 删除导航失败: " + state.waypointId());
+            logger.warning("QuestGPS: 删除导航失败: " + state.waypointId());
         }
     }
 

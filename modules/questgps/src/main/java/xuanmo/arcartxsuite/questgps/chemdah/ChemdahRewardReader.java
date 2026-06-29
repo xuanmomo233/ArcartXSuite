@@ -73,7 +73,7 @@ public final class ChemdahRewardReader {
             }
         }
         if (rewards.isEmpty()) {
-            logger.fine("QuestGPS 未从 Chemdah 模板解析到奖励预览: " + template.getId());
+            logger.fine("QuestGPS: 未从 Chemdah 模板解析到奖励预览: " + template.getId());
         }
         return List.copyOf(rewards);
     }

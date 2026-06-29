@@ -37,24 +37,24 @@ public final class QuestGpsOverlayValidator {
             }
             Template template = ChemdahAPI.INSTANCE.getQuestTemplate(quest.id());
             if (template == null) {
-                logger.warning("QuestGPS overlay 任务未找到 Chemdah 模板: " + quest.id());
+                logger.warning("QuestGPS: overlay 任务未找到 Chemdah 模板: " + quest.id());
                 continue;
             }
             if (source == CategorySource.OVERLAY) {
                 if (quest.categoryOverride() == null) {
-                    logger.warning("QuestGPS category.source=overlay 但任务未配置 category: " + quest.id());
+                    logger.warning("QuestGPS: category.source=overlay 但任务未配置 category: " + quest.id());
                 }
                 continue;
             }
             QuestGpsCategory fromMeta = categoryResolver.resolveFromChemdah(template);
             if (fromMeta == null) {
                 logger.warning(
-                    "QuestGPS Chemdah 任务 meta.type 未在 categories 注册，任务不会进入菜单: " + quest.id()
+                    "QuestGPS: Chemdah 任务 meta.type 未在 categories 注册，任务不会进入菜单: " + quest.id()
                 );
             }
             if (quest.categoryOverride() != null) {
                 logger.warning(
-                    "QuestGPS category.source=chemdah 时 overlay category 不会生效，请删除或改 source: overlay — "
+                    "QuestGPS: category.source=chemdah 时 overlay category 不会生效，请删除或改 source: overlay — "
                         + quest.id()
                 );
             }

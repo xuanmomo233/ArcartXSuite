@@ -155,7 +155,7 @@ public final class ChemdahMetadataReader {
             }
             return " (" + value + "/" + target + ")";
         } catch (Exception ex) {
-            logger.fine("QuestGPS 读取 Chemdah 进度失败: " + template.getId() + "/" + task.getId() + " -> " + ex.getMessage());
+            logger.fine("QuestGPS: 读取 Chemdah 进度失败: " + template.getId() + "/" + task.getId() + " -> " + ex.getMessage());
             return "";
         }
     }

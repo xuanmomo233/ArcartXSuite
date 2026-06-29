@@ -124,7 +124,7 @@ public final class QuestGpsRewardPreviewResolver {
         if (resolved != null && !resolved.getType().isAir()) {
             return fromItemStack(rewardId, type, resolved, definition.displayName(), definition.text());
         }
-        logger.fine("QuestGPS 奖励预览未能解析: " + type + " -> " + configuredId);
+        logger.fine("QuestGPS: 奖励预览未能解析: " + type + " -> " + configuredId);
         return new ResolvedRewardPreview(
             rewardId,
             type,

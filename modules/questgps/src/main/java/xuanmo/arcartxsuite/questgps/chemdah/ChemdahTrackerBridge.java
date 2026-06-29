@@ -44,7 +44,7 @@ public final class ChemdahTrackerBridge {
       ChemdahTrackAPI.INSTANCE.startTracking(player, session);
       return true;
     } catch (Exception ex) {
-      logger.warning("QuestGPS 启动 Chemdah 追踪失败: " + ex.getMessage());
+      logger.warning("QuestGPS: 启动 Chemdah 追踪失败: " + ex.getMessage());
       return false;
     }
   }
@@ -57,7 +57,7 @@ public final class ChemdahTrackerBridge {
       ChemdahTrackAPI.INSTANCE.stopTracking(player, questId);
       QuestTrackHandler.INSTANCE.unregisterQuestSession(player);
     } catch (Exception ex) {
-      logger.fine("QuestGPS 停止 Chemdah 追踪: " + ex.getMessage());
+      logger.fine("QuestGPS: 停止 Chemdah 追踪: " + ex.getMessage());
     }
   }
 
@@ -69,7 +69,7 @@ public final class ChemdahTrackerBridge {
       ChemdahTrackAPI.INSTANCE.stopTracking(player, QuestTrackingSession.SOURCE);
       QuestTrackHandler.INSTANCE.unregisterQuestSession(player);
     } catch (Exception ex) {
-      logger.fine("QuestGPS 清除 Chemdah 追踪: " + ex.getMessage());
+      logger.fine("QuestGPS: 清除 Chemdah 追踪: " + ex.getMessage());
     }
   }
 
@@ -111,7 +111,7 @@ public final class ChemdahTrackerBridge {
         }
       }
     } catch (Exception ex) {
-      logger.fine("QuestGPS 解析 Chemdah 追踪坐标失败: " + ex.getMessage());
+      logger.fine("QuestGPS: 解析 Chemdah 追踪坐标失败: " + ex.getMessage());
     }
     return Optional.empty();
   }

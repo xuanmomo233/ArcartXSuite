@@ -169,7 +169,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
                 if (dispatcher != null) {
                     dispatcher.dispatchSignal(signal, player, Map.of("quest_id", questId == null ? "" : questId));
                 } else if (context.logger().isLoggable(java.util.logging.Level.FINE)) {
-                    context.logger().fine("QuestGPS hook signal: " + signal + " -> " + player.getName());
+                    context.logger().fine("QuestGPS: hook signal: " + signal + " -> " + player.getName());
                 }
             },
             java.util.List.copyOf(menuRuntimeUiIds),
@@ -220,7 +220,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         adminCommand = new QuestGpsAdminCommand(() -> service, messages());
 
         context.logger().fine(
-            "QuestGPS 模块已载入，packet-id=" + configuration.client().packetId()
+            "QuestGPS: 模块已载入，packet-id=" + configuration.client().packetId()
                 + " | menu-ui=" + menuRuntimeUiIds
                 + " | guide-ui=" + guideRuntimeUiIds
                 + " | quests=" + configuration.configuredQuestCount()

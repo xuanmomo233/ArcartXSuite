@@ -153,13 +153,13 @@ public record QuestGpsModuleConfiguration(
         CategorySource source = CategorySource.parse(section.getString("source"), CategorySource.CHEMDAH);
         if (section.contains("id-prefix-rules")) {
             logger.warning(
-                "QuestGPS category.id-prefix-rules 已废弃，分类仅由 category.source 指定的一种数据源决定"
+                "QuestGPS: category.id-prefix-rules 已废弃，分类仅由 category.source 指定的一种数据源决定"
                     + "（chemdah=meta.type，overlay=quests/*.yml 的 category）"
             );
         }
         if ("merge".equalsIgnoreCase(section.getString("source"))) {
             logger.warning(
-                "QuestGPS category.source=merge 已废弃，请改为 chemdah 或 overlay，当前按 chemdah 处理"
+                "QuestGPS: category.source=merge 已废弃，请改为 chemdah 或 overlay，当前按 chemdah 处理"
             );
             source = CategorySource.CHEMDAH;
         }
@@ -181,7 +181,7 @@ public record QuestGpsModuleConfiguration(
         }
         QuestGpsCategory parsed = QuestGpsCategory.parse(questSection.getString("category"), categoryRegistry);
         if (parsed == null) {
-            logger.warning("QuestGPS overlay category 无效，已忽略: " + questId);
+            logger.warning("QuestGPS: overlay category 无效，已忽略: " + questId);
             return null;
         }
         return parsed;
@@ -195,7 +195,7 @@ public record QuestGpsModuleConfiguration(
         PresentationSource source = PresentationSource.parseGlobal(section.getString("source"), PresentationSource.CHEMDAH);
         if ("merge".equalsIgnoreCase(section.getString("source"))) {
             logger.warning(
-                "QuestGPS presentation.source=merge 已废弃，请改为 chemdah 或 overlay，当前按 chemdah 处理"
+                "QuestGPS: presentation.source=merge 已废弃，请改为 chemdah 或 overlay，当前按 chemdah 处理"
             );
             source = PresentationSource.CHEMDAH;
         }
@@ -216,11 +216,11 @@ public record QuestGpsModuleConfiguration(
             String value = section.getString(key);
             if ("merge".equalsIgnoreCase(value)) {
                 logger.warning(
-                    "QuestGPS presentation." + key + "=merge 已废弃，请改用 presentation.source（chemdah | overlay）"
+                    "QuestGPS: presentation." + key + "=merge 已废弃，请改用 presentation.source（chemdah | overlay）"
                 );
             } else {
                 logger.warning(
-                    "QuestGPS presentation." + key + " 已废弃，请改用 presentation.source（chemdah | overlay）"
+                    "QuestGPS: presentation." + key + " 已废弃，请改用 presentation.source（chemdah | overlay）"
                 );
             }
         }
@@ -273,7 +273,7 @@ public record QuestGpsModuleConfiguration(
         List<QuestGpsCategory> categories = new ArrayList<>();
         if (section == null || section.getKeys(false).isEmpty()) {
             logger.warning(
-                "QuestGPS categories 段为空：无分类 Tab，且 Chemdah meta.type / overlay category 须在 categories 注册后任务才会显示"
+                "QuestGPS: categories 段为空：无分类 Tab，且 Chemdah meta.type / overlay category 须在 categories 注册后任务才会显示"
             );
             return categories;
         }
@@ -285,7 +285,7 @@ public record QuestGpsModuleConfiguration(
             String displayName = string(catSection.getString("display-name"), categoryId);
             int sortOrder = catSection.getInt("sort-order", 300);
             categories.add(new QuestGpsCategory(categoryId, displayName, sortOrder));
-            logger.fine("QuestGPS 加载分类: " + categoryId + " (" + displayName + ", sort=" + sortOrder + ")");
+            logger.fine("QuestGPS: 加载分类: " + categoryId + " (" + displayName + ", sort=" + sortOrder + ")");
         }
         return categories;
     }
@@ -311,7 +311,7 @@ public record QuestGpsModuleConfiguration(
         for (String questId : section.getKeys(false)) {
             ConfigurationSection questSection = section.getConfigurationSection(questId);
             if (questSection == null) {
-                logger.warning("QuestGPS 任务配置格式无效，已跳过: " + questId);
+                logger.warning("QuestGPS: 任务配置格式无效，已跳过: " + questId);
                 continue;
             }
             boolean enabled = questSection.getBoolean("enabled", true);
@@ -387,7 +387,7 @@ public record QuestGpsModuleConfiguration(
         for (String taskId : section.getKeys(false)) {
             ConfigurationSection taskSection = section.getConfigurationSection(taskId);
             if (taskSection == null) {
-                logger.warning("QuestGPS 任务目标配置格式无效，已跳过: " + questId + "/" + taskId);
+                logger.warning("QuestGPS: 任务目标配置格式无效，已跳过: " + questId + "/" + taskId);
                 continue;
             }
             TaskDefinition definition = new TaskDefinition(
@@ -435,7 +435,7 @@ public record QuestGpsModuleConfiguration(
             Map<?, ?> raw = rawRewards.get(index);
             String type = string(raw.get("type"), "text").toLowerCase(Locale.ROOT);
             if (!Set.of("neigeitems", "mythicmobs", "mythicitems", "mmoitems", "overture", "material", "itemstack", "title", "text").contains(type)) {
-                logger.warning("QuestGPS 奖励类型未识别，将按 text 处理: " + questId + "[" + index + "] -> " + type);
+                logger.warning("QuestGPS: 奖励类型未识别，将按 text 处理: " + questId + "[" + index + "] -> " + type);
                 type = "text";
             }
             rewards.add(
