@@ -29,6 +29,16 @@ ui:
       var.buttonCount = packet['buttonCount']
       var.footerRows = packet['footerRows']
       var.footerCount = packet['footerCount']
+      for(i in range(0, var.buttonCount)){
+        key = i.round
+        mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
+        mb.entryKey = key
+      }
+      for(i in range(0, var.maxFooterCount)){
+        key = i.round
+        fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + key)
+        fb.entryKey = key
+      }
     update: |-
       var.packetId = packet['packetId']
       var.menuId = packet['menuId']
@@ -40,6 +50,22 @@ ui:
       var.buttonCount = packet['buttonCount']
       var.footerRows = packet['footerRows']
       var.footerCount = packet['footerCount']
+      while(val.button_rows.childrenCount() > 1){
+        val.button_rows.get(1).remove()
+      }
+      while(val.footer_rows.childrenCount() > 1){
+        val.footer_rows.get(1).remove()
+      }
+      for(i in range(0, var.buttonCount)){
+        key = i.round
+        mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
+        mb.entryKey = key
+      }
+      for(i in range(0, var.maxFooterCount)){
+        key = i.round
+        fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + key)
+        fb.entryKey = key
+      }
     close: |-
       var.buttonRows = {}
       var.footerRows = {}
@@ -159,7 +185,7 @@ controls:
             type: Scroll
             attribute:
               width: 560
-              x: 30
+              x: 67
               y: -15
               height: 960 - 200
               point: ~horizontal_stretch_middle
@@ -179,17 +205,9 @@ controls:
                 attribute:
                   spaceBetweenX: 50
                   spaceBetweenY: 50
-                  x: 77
+                  x: 0
                   column: 2
                   y: 0
-                  point: ~top_center
-                action:
-                  create: |-
-                    for(i in range(0, var.maxButtonCount)){
-                      key = i.round
-                      mb = self['菜单按钮'].copy('菜单按钮' + key)
-                      mb.entryKey = key
-                    }
                 children:
                   菜单按钮:
                     type: Texture
@@ -258,16 +276,9 @@ controls:
               spaceBetweenX: 50
               spaceBetweenY: 50
               column: 2
-              x: 77
+              x: 67
               y: 460
               point: ~horizontal_stretch_middle
-            action:
-              create: |-
-                for(i in range(0, var.maxFooterCount)){
-                  key = i.round
-                  fb = self['页脚按钮'].copy('页脚按钮' + key)
-                  fb.entryKey = key
-                }
             children:
               页脚按钮:
                 type: Texture

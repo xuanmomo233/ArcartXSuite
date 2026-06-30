@@ -27,6 +27,16 @@ ui:
       var.buttonCount = packet['buttonCount']
       var.footerRows = packet['footerRows']
       var.footerCount = packet['footerCount']
+      for(i in range(0, var.buttonCount)){
+        key = i.round
+        mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
+        mb.entryKey = key
+      }
+      for(i in range(0, var.maxFooterCount)){
+        key = i.round
+        fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + key)
+        fb.entryKey = key
+      }
     update: |-
       var.packetId = packet['packetId']
       var.menuId = packet['menuId']
@@ -43,6 +53,22 @@ ui:
       var.buttonCount = packet['buttonCount']
       var.footerRows = packet['footerRows']
       var.footerCount = packet['footerCount']
+      while(val.button_rows.childrenCount() > 1){
+        val.button_rows.get(1).remove()
+      }
+      while(val.footer_rows.childrenCount() > 1){
+        val.footer_rows.get(1).remove()
+      }
+      for(i in range(0, var.buttonCount)){
+        key = i.round
+        mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
+        mb.entryKey = key
+      }
+      for(i in range(0, var.maxFooterCount)){
+        key = i.round
+        fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + key)
+        fb.entryKey = key
+      }
     close: |-
       var.buttonRows = {}
       var.footerRows = {}
@@ -56,7 +82,7 @@ ui:
       var.pageTitle = '菜单'
       var.pageIndex = 0
       var.pageCount = 1
-      var.columns = 2
+      var.columns = 4
       var.hasPrev = false
       var.hasNext = false
       var.buttonRows = {}
@@ -83,7 +109,7 @@ controls:
         type: Canvas
         attribute:
           point: ~middle_center
-          width: 980
+          width: 1032
           height: 760
         children:
           外壳:
@@ -118,7 +144,7 @@ controls:
             attribute:
               x: 36
               y: 82
-              texts: "var.pageTitle + '  &7(' + (var.pageIndex + 1) + '/' + var.pageCount + ')'"
+              texts: "var.pageTitle + '  &7(' + (var.pageIndex + 1).round() + '/' + var.pageCount.round() + ')'"
               fontSize: 42
           分隔线:
             type: Texture
@@ -150,10 +176,10 @@ controls:
           按钮滚动区:
             type: Scroll
             attribute:
-              x: 24
-              y: 140
-              width: 932
-              height: 520
+              x: 44
+              y: 150
+              width: 968
+              height: 500
               point: ~top_left
               moveY: "self.parent['按钮滑块'].getDragYRatio()"
             action:
@@ -169,19 +195,12 @@ controls:
                 type: HGrid
                 val: button_rows
                 attribute:
-                  x: 20
-                  y: 10
+                  x: 0
+                  y: 0
                   column: "var.columns"
                   spaceBetweenX: 24
                   spaceBetweenY: 24
                   point: ~top_center
-                action:
-                  create: |-
-                    for(i in range(0, var.maxButtonCount)){
-                      key = i.round
-                      mb = self['菜单按钮'].copy('菜单按钮' + key)
-                      mb.entryKey = key
-                    }
                 children:
                   菜单按钮:
                     type: Texture
@@ -293,13 +312,6 @@ controls:
               页脚行:
                 type: Canvas
                 val: footer_rows
-                action:
-                  create: |-
-                    for(i in range(0, var.maxFooterCount)){
-                      key = i.round
-                      fb = self['页脚按钮'].copy('页脚按钮' + key)
-                      fb.entryKey = key
-                    }
                 children:
                   页脚按钮:
                     type: Texture
