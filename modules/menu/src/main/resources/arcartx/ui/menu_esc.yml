@@ -1,4 +1,4 @@
-# AXS Menu ESC UI — 替换暂停界面，参考纯色块 ESC 菜单布局
+﻿# AXS Menu ESC UI — 替换暂停界面，参考纯色块 ESC 菜单布局
 ui:
   isHud: false
   match:
@@ -82,7 +82,6 @@ ui:
       var.footerCount = 0
       var.maxButtonCount = 128
       var.maxFooterCount = 8
-
 controls:
   自适应全局布局:
     type: Adaptive
@@ -291,7 +290,7 @@ controls:
                     if(self.entry != null && self.entry['enabled']){
                       if(self.entry['clientAction'] == 'options'){
                         Game.options()
-                      } elif(self.entry['clientAction'] == 'quit'){
+                      }elif(self.entry['clientAction'] == 'quit'){
                         Game.quit()
                       } else {
                         Packet.send(var.packetId, 'footer', self.entry['id'])

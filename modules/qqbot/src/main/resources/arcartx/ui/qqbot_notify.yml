@@ -32,7 +32,7 @@ ui:
           var.elapsed = var.now - var.item['born']
           if(var.elapsed > var.displayDuration){
             var.toRemove.add(i)
-          } else if(var.elapsed > var.displayDuration - 1000){
+          }elif(var.elapsed > var.displayDuration - 1000){
             var.item['alpha'] = (var.displayDuration - var.elapsed) / 1000.0
           }
         }

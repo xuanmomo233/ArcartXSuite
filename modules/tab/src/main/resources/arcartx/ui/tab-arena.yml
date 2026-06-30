@@ -100,7 +100,7 @@ ui:
 
             ROW.visible = true
 
-          } else if(packet.get(i).team == "blue"){
+          }elif(packet.get(i).team == "blue"){
 
             ROW = val.blue_player_row.copy('blue_' + var.ArenaTAB刷新轮次 + '_' + i)
 

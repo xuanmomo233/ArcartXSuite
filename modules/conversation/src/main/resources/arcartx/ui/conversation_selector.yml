@@ -187,7 +187,7 @@ controls:
                       clickLeft: |-
                         if(self.entry != null && self.entry['selected']){
                           Packet.send(var.packetId, 'confirm_npc', var.token, self.entry['id'])
-                        }else if(self.entry != null){
+                        }elif(self.entry != null){
                           Packet.send(var.packetId, 'select_npc', var.token, self.entry['id'])
                         }
                     children:
