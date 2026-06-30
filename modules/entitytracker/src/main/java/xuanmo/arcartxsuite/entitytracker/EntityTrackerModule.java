@@ -179,7 +179,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             for (String candidateUiId : bossUiIdCandidates) {
                 UiBinding bossBinding = registerModuleUi(
                     BOSS_UI_RESOURCE_PATH,
-                    BOSS_UI_FILE_PATH + "#" + candidateUiId,
+                    BOSS_UI_FILE_PATH,
                     candidateUiId,
                     configuration.registerUiOnEnable()
                 );
@@ -212,7 +212,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         for (String candidateUiId : targetUiIdCandidates) {
             UiBinding targetBinding = registerModuleUi(
                 TARGET_UI_RESOURCE_PATH,
-                TARGET_UI_FILE_PATH + "#" + candidateUiId,
+                TARGET_UI_FILE_PATH,
                 candidateUiId,
                 targetConfiguration.registerUiOnEnable()
             );

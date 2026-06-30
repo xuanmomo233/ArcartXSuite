@@ -91,7 +91,7 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         for (String candidateUiId : configuration.clientConfig().dialogUiIds()) {
             UiBinding dialogBinding = registerModuleUi(
                 "arcartx/ui/conversation_dialog.yml",
-                DIALOG_UI_FILE_PATH + "#" + candidateUiId,
+                DIALOG_UI_FILE_PATH,
                 candidateUiId,
                 configuration.registerUiOnEnable()
             );
@@ -103,7 +103,7 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         for (String candidateUiId : configuration.clientConfig().selectorUiIds()) {
             UiBinding selectorBinding = registerModuleUi(
                 "arcartx/ui/conversation_selector.yml",
-                SELECTOR_UI_FILE_PATH + "#" + candidateUiId,
+                SELECTOR_UI_FILE_PATH,
                 candidateUiId,
                 configuration.registerUiOnEnable()
             );

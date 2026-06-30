@@ -133,7 +133,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         for (String candidateUiId : configuration.client().menuUiIds()) {
             UiBinding menuBinding = registerModuleUi(
                 QuestGpsService.MENU_UI_RESOURCE_PATH,
-                QuestGpsService.MENU_UI_FILE_PATH + "#" + candidateUiId,
+                QuestGpsService.MENU_UI_FILE_PATH,
                 candidateUiId,
                 configuration.client().registerUiOnEnable()
             );
@@ -145,7 +145,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         for (String candidateUiId : configuration.client().guideUiIds()) {
             UiBinding guideBinding = registerModuleUi(
                 QuestGpsService.GUIDE_UI_RESOURCE_PATH,
-                QuestGpsService.GUIDE_UI_FILE_PATH + "#" + candidateUiId,
+                QuestGpsService.GUIDE_UI_FILE_PATH,
                 candidateUiId,
                 configuration.client().registerUiOnEnable()
             );

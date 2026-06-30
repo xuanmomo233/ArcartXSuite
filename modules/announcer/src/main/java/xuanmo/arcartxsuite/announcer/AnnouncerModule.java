@@ -132,7 +132,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         for (String candidateUiId : configuration.uiIds()) {
             UiBinding uiBinding = registerModuleUi(
                 "arcartx/ui/announcer_hud.yml",
-                "ui/announcer_hud.yml#" + candidateUiId,
+                "ui/announcer_hud.yml",
                 candidateUiId,
                 configuration.registerUiOnEnable()
             );
@@ -150,7 +150,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         for (String candidateUiId : subtitleCfg.uiIds()) {
             UiBinding subtitleUiBinding = registerModuleUi(
                 "arcartx/ui/subtitle_hud.yml",
-                "ui/subtitle_hud.yml#" + candidateUiId,
+                "ui/subtitle_hud.yml",
                 candidateUiId,
                 subtitleCfg.registerUiOnEnable()
             );
