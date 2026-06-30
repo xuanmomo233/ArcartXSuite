@@ -676,6 +676,10 @@ public final class EssentialsCommandDelegate {
         return filter(names, prefix);
     }
 
+    private MessageProvider messages() {
+        return messagesSupplier.get();
+    }
+
     private String prefix() {
         var mp = messagesSupplier.get();
         if (mp != null) return mp.get("prefix");

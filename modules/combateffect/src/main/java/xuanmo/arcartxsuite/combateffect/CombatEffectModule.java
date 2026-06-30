@@ -361,7 +361,7 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
             return;
         }
         Map<String, String> variables = parseKeyValues(args, 4);
-        boolean success = triggerPacket(packetId, target, variables.isEmpty() ? null : variables);
+        boolean success = packetService != null && packetService.triggerPacketById(packetId, target, variables.isEmpty() ? null : variables);
         sender.sendMessage(success
             ? msg("send.success", packetId, target.getName())
             : msg("send.fail"));
@@ -382,7 +382,7 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
         }
         Map<String, String> variables = parseKeyValues(args, 5);
         Object payload = variables.isEmpty() ? Map.of() : variables;
-        boolean success = triggerDirect(uiId, handler, target, payload);
+        boolean success = packetService != null && packetService.triggerDirect(uiId, handler, target, payload);
         sender.sendMessage(success
             ? msg("direct.success", uiId, handler, target.getName())
             : msg("direct.fail"));
