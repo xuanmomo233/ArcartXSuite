@@ -491,6 +491,8 @@ public class MarketService {
         }
         packet.put("listings", listingsMap);
         packet.put("listingTexts", listingTexts);
+        packet.put("maxCategoryCount", categories.size());
+        packet.put("maxListingCount", listingsMap.size());
         return packet;
     }
 
@@ -543,6 +545,8 @@ public class MarketService {
             }
         }
         packet.put("items", items);
+        packet.put("maxShopCount", shops.size());
+        packet.put("maxItemCount", items.size());
         return packet;
     }
 
@@ -582,6 +586,7 @@ public class MarketService {
         packet.put("totalValue", formatPrice(totalValue));
         packet.put("currency", currency);
         packet.put("multiplier", String.format("%.1f", multiplier));
+        packet.put("maxRecycleCount", recyclables.size());
         return packet;
     }
 
@@ -646,6 +651,7 @@ public class MarketService {
             packet.put("historyItemJson" + i, historyItemJson(h));
         }
         packet.put("records", records);
+        packet.put("maxRecordCount", records.size());
         return packet;
     }
 

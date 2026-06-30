@@ -32,7 +32,7 @@ ui:
       var.selectedAttachmentSummary = '无附件'
       var.selectedClaimable = false
       var.cdkCode = ''
-      var.maxMailCount = 10
+      var.maxMailCount = 0
   # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
   packetHandler:
     init: |-
@@ -51,6 +51,7 @@ ui:
       var.selectedBody = packet['selected_body']
       var.selectedAttachmentSummary = packet['selected_attachment_summary']
       var.selectedClaimable = packet['selected_claimable']
+      var.maxMailCount = packet['maxMailCount']
     update: |-
       var.messages = packet['messages']
       var.totalCount = packet['total_count']
@@ -66,6 +67,7 @@ ui:
       var.selectedBody = packet['selected_body']
       var.selectedAttachmentSummary = packet['selected_attachment_summary']
       var.selectedClaimable = packet['selected_claimable']
+      var.maxMailCount = packet['maxMailCount']
 
 # controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
 

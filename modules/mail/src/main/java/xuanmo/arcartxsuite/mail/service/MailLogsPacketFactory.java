@@ -33,6 +33,7 @@ public final class MailLogsPacketFactory {
         packet.put("page_size", page.pageSize());
         packet.put("max_page", page.totalPages());
         packet.put("total_count", page.totalItems());
+        packet.put("maxLogCount", page.pageSize());
         return packet;
     }
 

@@ -1019,6 +1019,9 @@ public final class WarehouseService implements Listener {
         packet.put("sharedEditMode", OWNER_SHARED.equals(state.ownerType()) && state.sharedEditMode());
         packet.put("sharedCanEdit", sharedCanEdit(player, state));
         packet.put("lockOwner", lockOwnerName(state));
+        packet.put("maxPersonalCount", ((java.util.Map<?,?>) packet.getOrDefault("personalWarehouses", java.util.Map.of())).size());
+        packet.put("maxSharedCount", ((java.util.Map<?,?>) packet.getOrDefault("sharedWarehouses", java.util.Map.of())).size());
+        packet.put("maxCategoryCount", ((java.util.Map<?,?>) packet.getOrDefault("categories", java.util.Map.of())).size());
         return packet;
     }
 
@@ -1084,6 +1087,8 @@ public final class WarehouseService implements Listener {
         packet.put("autoPickupMythic", state.autoPickupMythic());
         packet.put("autoPickupNotify", state.autoPickupNotify());
         packet.put("showcaseEnabled", currentShowcaseEnabled(player, state));
+        packet.put("maxManageCount", ((java.util.Map<?,?>) packet.getOrDefault("manageWarehouses", java.util.Map.of())).size());
+        packet.put("maxMemberCount", sharedMembers.size());
         return packet;
     }
 
@@ -1102,6 +1107,9 @@ public final class WarehouseService implements Listener {
         packet.put("productTexts", fieldMap(products, "text"));
         packet.put("fixedDeposits", fixedDeposits);
         packet.put("fixedDepositTexts", fieldMap(fixedDeposits, "text"));
+        packet.put("maxBalanceCount", balances.size());
+        packet.put("maxProductCount", products.size());
+        packet.put("maxFixedCount", fixedDeposits.size());
         return packet;
     }
 

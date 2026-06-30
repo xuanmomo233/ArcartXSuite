@@ -58,6 +58,9 @@ ui:
       if(var.slots != null){
         for(key in var.slots.keys()){
           json = packet['slotItemJson' + key]
+      var.maxPersonalCount = packet['maxPersonalCount']
+      var.maxSharedCount = packet['maxSharedCount']
+      var.maxCategoryCount = packet['maxCategoryCount']
           if(json != null && json != ''){
             var.itemJsons[key] = json
           } else {
@@ -111,6 +114,9 @@ ui:
       if(var.slots != null){
         for(key in var.slots.keys()){
           json = packet['slotItemJson' + key]
+      var.maxPersonalCount = packet['maxPersonalCount']
+      var.maxSharedCount = packet['maxSharedCount']
+      var.maxCategoryCount = packet['maxCategoryCount']
           if(json != null && json != ''){
             var.itemJsons[key] = json
           } else {
@@ -172,9 +178,9 @@ ui:
       var.lastSlotClickSlot = null
       var.lastSlotClickTime = 0
       var.emptyItemJson = '{"id": "minecraft:air","Count":1b}'
-      var.maxPersonalCount = 16
-      var.maxSharedCount = 32
-      var.maxCategoryCount = 32
+      var.maxPersonalCount = 0
+      var.maxSharedCount = 0
+      var.maxCategoryCount = 0
       var.renderBackpackAmounts = -> {
         if(val.背包网格 != null){
           for(raw in range(9,44)){

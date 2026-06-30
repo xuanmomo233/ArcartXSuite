@@ -20,11 +20,12 @@ ui:
       var.view = 'list'
       var.resultMsg = ''
       var.editItemCount = 0
-      var.maxPresetCount = 100
+      var.maxPresetCount = 0
   packetHandler:
     preset-list: |-
       var.presets = packet['presets']
       var.total = packet['total']
+      var.maxPresetCount = packet['maxPresetCount']
     preset-detail: |-
       var.editId = packet['id']
       var.editEnabled = packet['enabled']

@@ -71,6 +71,8 @@ public final class MenuPacketFactory {
         }
         payload.put("footerRows", footerRows);
         payload.put("footerCount", footerRows.size());
+        payload.put("maxButtonCount", definition.buttonsPerPage());
+        payload.put("maxFooterCount", definition.footerButtons().size());
         return payload;
     }
 

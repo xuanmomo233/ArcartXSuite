@@ -20,7 +20,7 @@ ui:
       var.page = 1
       var.maxPage = 1
       var.totalCount = 0
-      var.maxLogCount = 20
+      var.maxLogCount = 0
   # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
   packetHandler:
     init: |-
@@ -28,11 +28,13 @@ ui:
       var.page = packet['page']
       var.maxPage = packet['max_page']
       var.totalCount = packet['total_count']
+      var.maxLogCount = packet['maxLogCount']
     update: |-
       var.logs = packet['logs']
       var.page = packet['page']
       var.maxPage = packet['max_page']
       var.totalCount = packet['total_count']
+      var.maxLogCount = packet['maxLogCount']
 
 # controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
 

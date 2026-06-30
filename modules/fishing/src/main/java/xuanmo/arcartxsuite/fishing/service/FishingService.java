@@ -626,6 +626,7 @@ public final class FishingService {
             idx++;
         }
         payload.put("fishList", fishDict);
+        payload.put("maxFishCount", configuration.fishes().size());
 
         packetBridge.sendPacket(player, uiId, "init", payload);
     }

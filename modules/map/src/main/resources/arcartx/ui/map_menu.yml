@@ -44,6 +44,10 @@ ui:
       var.detailCanCreateWaypoint = packet['detailCanCreateWaypoint']
       var.detailClearTrackVisible = packet['detailClearTrackVisible']
       var.detailTrackingText = packet['detailTrackingText']
+      var.maxWorldCount = packet['maxWorldCount']
+      var.maxAnchorCount = packet['maxAnchorCount']
+      var.maxWaypointCount = packet['maxWaypointCount']
+      var.maxExternalCount = packet['maxExternalCount']
     update: |-
       var.packetId = packet['packetId']
       var.selectedWorldId = packet['selectedWorldId']
@@ -74,6 +78,10 @@ ui:
       var.detailCanCreateWaypoint = packet['detailCanCreateWaypoint']
       var.detailClearTrackVisible = packet['detailClearTrackVisible']
       var.detailTrackingText = packet['detailTrackingText']
+      var.maxWorldCount = packet['maxWorldCount']
+      var.maxAnchorCount = packet['maxAnchorCount']
+      var.maxWaypointCount = packet['maxWaypointCount']
+      var.maxExternalCount = packet['maxExternalCount']
   action:
     open: |-
       var.packetId = 'AXS_MAP'
@@ -105,10 +113,10 @@ ui:
       var.detailCanCreateWaypoint = false
       var.detailClearTrackVisible = false
       var.detailTrackingText = '当前未导航'
-      var.maxWorldCount = 16
-      var.maxAnchorCount = 128
-      var.maxWaypointCount = 128
-      var.maxExternalCount = 128
+      var.maxWorldCount = 0
+      var.maxAnchorCount = 0
+      var.maxWaypointCount = 0
+      var.maxExternalCount = 0
 
 controls:
   自适应全局布局:

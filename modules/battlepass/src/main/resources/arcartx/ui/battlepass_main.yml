@@ -42,7 +42,7 @@ ui:
       var.packetId = 'AXS_BATTLEPASS'
       var.seasonName = '等待同步'
       var.currentLevel = 0
-      var.maxLevel = 100
+      var.maxLevel = 0
       var.currentXp = 0
       var.xpPerLevel = 1000
       var.xpNeeded = 1000

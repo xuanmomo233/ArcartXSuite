@@ -26,6 +26,7 @@ ui:
       var.itemJsons = {}
       for(key in var.recyclables.keys()){
         json = packet['recycleItemJson' + key]
+      var.maxRecycleCount = packet['maxRecycleCount']
         if(json != null && json != ''){
           var.itemJsons[key] = json
         } else {
@@ -51,6 +52,7 @@ ui:
       var.itemJsons = {}
       for(key in var.recyclables.keys()){
         json = packet['recycleItemJson' + key]
+      var.maxRecycleCount = packet['maxRecycleCount']
         if(json != null && json != ''){
           var.itemJsons[key] = json
         } else {
@@ -77,7 +79,7 @@ ui:
       var.itemJsons = {}
       var.scrollRatio = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-      var.maxRecycleCount = 36
+      var.maxRecycleCount = 0
       Packet.send(var.packetId, 'recycle_preview')
 
 controls:

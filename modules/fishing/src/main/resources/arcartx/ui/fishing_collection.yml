@@ -20,6 +20,7 @@ ui:
       var.totalFishTypes = packet['totalFishTypes']
       var.collectionPercent = packet['collectionPercent']
       var.fishList = packet['fishList']
+      var.maxFishCount = packet['maxFishCount']
       for(i in range(0, var.maxFishCount)){
         key = i.round
         item = val.鱼类列表['鱼条目' + key]
@@ -36,6 +37,7 @@ ui:
       var.totalFishTypes = packet['totalFishTypes']
       var.collectionPercent = packet['collectionPercent']
       var.fishList = packet['fishList']
+      var.maxFishCount = packet['maxFishCount']
   action:
     open: |-
       var.packetId = 'AXS_FISHING'
@@ -46,7 +48,7 @@ ui:
       var.totalFishTypes = 0
       var.collectionPercent = 0
       var.fishList = {}
-      var.maxFishCount = 30
+      var.maxFishCount = 0
 
 controls:
   根:

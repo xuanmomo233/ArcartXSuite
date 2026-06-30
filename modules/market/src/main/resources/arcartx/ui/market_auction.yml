@@ -30,6 +30,8 @@ ui:
       var.itemJsons = {}
       for(key in var.listings.keys()){
         json = packet['itemJson' + key]
+      var.maxCategoryCount = packet['maxCategoryCount']
+      var.maxListingCount = packet['maxListingCount']
         if(json != null && json != ''){
           var.itemJsons[key] = json
         } else {
@@ -59,6 +61,8 @@ ui:
       var.itemJsons = {}
       for(key in var.listings.keys()){
         json = packet['itemJson' + key]
+      var.maxCategoryCount = packet['maxCategoryCount']
+      var.maxListingCount = packet['maxListingCount']
         if(json != null && json != ''){
           var.itemJsons[key] = json
         } else {
@@ -91,8 +95,8 @@ ui:
       var.categoryScrollRatio = 0
       var.listingScrollRatio = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-      var.maxCategoryCount = 32
-      var.maxListingCount = 20
+      var.maxCategoryCount = 0
+      var.maxListingCount = 0
     open: |-
       Packet.send(var.packetId, 'auction_list', '0', '', '')
 

@@ -306,7 +306,7 @@ ui:
       var.isVisible = false
       var.bossCount = 0
       var.totalBossCount = 0
-      var.maxVisibleBars = 5
+      var.maxVisibleBars = 0
       var.slot1Visible = false
       var.slot1Used = false
       var.slot1Progress = 0
@@ -338,7 +338,7 @@ controls:
         var.isVisible = false
         var.bossCount = 0
         var.totalBossCount = 0
-        var.maxVisibleBars = 5
+        var.maxVisibleBars = 0
         // 第1条 Boss 血条槽位默认值。
         // 这些变量对应下面同序号控件的显示内容。
         var.slot1Visible = false

@@ -1,39 +1,146 @@
+# ============================================================
 # 示例功能菜单 — 居中面板布局
+# 本文件演示 ArcartXSuite Menu 模块的完整配置语法
+# 一个 .yml 文件可包含多个菜单（用 --- 分隔），第一个为主菜单
+# ============================================================
+
+# ─── 基础属性 ───────────────────────────────────────────────
+
+# 菜单唯一标识（必填）
+# 用于：open: 动作引用、命令注册、内部索引
+# 命名规范：小写英文 + 下划线，不可重复
 id: example
+
+# 菜单标题（必填）
+# 显示在菜单顶部，支持 Minecraft 颜色/格式代码：
+#   &0-&9, &a-&f = 颜色    &l = 粗体    &o = 斜体
+#   &n = 下划线    &m = 删除线    &k = 混淆    &r = 重置
+# 也支持 MiniMessage 格式：<green>, <bold>, <gradient:red:blue> 等
 title: "&f&l服务器菜单"
+
+# 布局模式（必填）
+# 可选值：
+#   panel  — 居中弹出面板（适合功能菜单、商店）
+#   esc    — 左侧滑出面板（专用于替代 ESC 暂停界面）
+#   full   — 全屏布局（适合大型导航）
 layout: panel
-columns: 2
-buttons-per-page: 8
+
+# 每行按钮列数（必填）
+# 取值范围：1-8，推荐 2-4
+# 列数越多，按钮越小；列数越少，按钮越大
+columns: 4
+
+# 每页最大按钮数量（必填）
+# 超出此数量的按钮会自动分页（若未手动配置多页）
+# 推荐值：columns × 期望行数（如 4列 × 4行 = 16）
+buttons-per-page: 64
+
+# ─── 权限与条件 ─────────────────────────────────────────────
+
+# 打开菜单所需权限节点（可选，留空 = 无限制）
+# 格式为插件权限字符串，如 "arcartxsuite.menu.example"
+# 玩家无此权限时无法通过任何方式打开此菜单
 permission: ""
+
+# 打开菜单的前置条件列表（可选）
+# 支持 PlaceholderAPI 变量表达式，所有条件必须同时满足
+# 示例：
+#   - "%player_level% >= 10"          — 等级 ≥ 10
+#   - "%player_world% == world_hub"   — 在主城世界
+#   - "%vault_eco_balance% >= 100"    — 余额 ≥ 100
+# 也支持 Aria 脚本条件（需 Blink 系插件）：
+#   - "aria: return player.getLevel() >= 10"
 open-requirements: []
+# ─── 生命周期动作 ───────────────────────────────────────────
+
+# 打开菜单时执行的动作列表（可选）
+# 在菜单显示给玩家之前执行，适合：欢迎消息、音效、统计记录
+# 完整动作类型列表见下方按钮 actions 的说明
 open-actions:
   - "message: &a欢迎打开示例菜单！"
+  # 更多示例：
+  # - "sound: ENTITY_EXPERIENCE_ORB_PICKUP 1.0 1.0"   — 播放音效（音效名 音量 音调）
+  # - "command: /log menu_open %player_name%"          — 执行后台命令
+  # - "console: say %player_name% 打开了菜单"          — 以控制台身份执行命令
+
+# 关闭菜单时执行的动作列表（可选）
+# 在菜单关闭后执行，适合：保存状态、音效反馈
 close-actions: []
+  # 示例：
+  # - "sound: UI_BUTTON_CLICK 0.5 1.2"
+  # - "message: &7已关闭菜单"
+
+# ─── 命令绑定 ───────────────────────────────────────────────
+
+# 注册为游戏命令（可选）
+# 玩家输入 /examplemenu 即可打开此菜单
+# 可注册多个命令别名
 commands:
   - "examplemenu"
+  # - "emenu"
+  # - "功能菜单"    — 也支持中文命令
+
+# 命令正则匹配（可选）
+# 使用正则表达式匹配更灵活的命令输入
+# 下面匹配 /example 或 /examplemenu
 command-regex:
   - "example(?:menu)?"
 
+# ─── 物品绑定 ───────────────────────────────────────────────
+
+# 将菜单绑定到背包中的特定物品（可选）
+# 玩家对匹配的物品执行指定动作时打开菜单
 item-binds:
-  - material: COMPASS
-    name-contains: "功能菜单"
-    action: RIGHT_CLICK
+  - material: COMPASS            # 物品材质（Minecraft 物品 ID，大写）
+    name-contains: "功能菜单"     # 物品名称包含的文字（模糊匹配）
+    action: RIGHT_CLICK          # 触发动作：RIGHT_CLICK / LEFT_CLICK / SHIFT_RIGHT_CLICK / SHIFT_LEFT_CLICK
+  # 更多绑定示例：
+  # - material: CLOCK
+  #   name-contains: "时钟菜单"
+  #   action: RIGHT_CLICK
+  #   permission: "menu.clock"    — 可选：额外权限要求
+  # - material: NETHER_STAR
+  #   lore-contains: "右键打开"   — 按 lore 匹配（代替 name-contains）
+  #   action: RIGHT_CLICK
+# ─── 页面定义 ───────────────────────────────────────────────
+# 一个菜单可包含多个页面，通过 "page:" 动作切换
+# 每个页面有独立的 id、标题和按钮集合
 
 pages:
+  # ═══════════════════════════════════════════════════════════
+  # 第一页：主功能列表
+  # ═══════════════════════════════════════════════════════════
   - id: main
     title: "&f功能"
     buttons:
+
+      # ─── 仓库系统（演示：权限 + 图标配置） ───
       warehouse:
+        # 按钮显示文字
         text: "&f仓库系统"
+        # 排列顺序（从 0 开始，数字越小越靠前/靠左上）
         order: 0
+        # 按钮级权限（可选），无权限的玩家看不到此按钮
         permission: "arcartxsuite.warehouse.use"
+        # 按钮图标配置（可选，仅 panel/full 布局有效）
         icon:
-          material: CHEST
-          name: "&f仓库"
-          custom-model-data: 0
+          material: CHEST                # 材质（Minecraft 物品 ID）
+          name: "&f仓库"                 # 图标悬浮名称
+          custom-model-data: 0           # 自定义模型数据（用于资源包自定义贴图）
+          # 更多 icon 可选字段：
+          # amount: 1                    — 物品数量（显示为堆叠数）
+          # lore:                        — 物品描述（列表）
+          #   - "&7点击打开仓库"
+          #   - "&7存取你的物品"
+          # glow: true                   — 附魔光效
+          # skull-texture: "base64..."   — 自定义头颅材质（material 为 PLAYER_HEAD 时）
+          # color: "#FF5555"             — 皮革盔甲颜色（material 为 LEATHER_* 时）
+        # 动作列表（按顺序执行）
         actions:
           - "command: /warehouse open"
           - "close"
+
+      # ─── 邮件系统（演示：基础图标） ───
       mail:
         text: "&f邮件系统"
         order: 1
@@ -43,47 +150,78 @@ pages:
         actions:
           - "command: /mail open"
           - "close"
+
+      # ─── 在线奖励（演示：条件判断 + 拒绝消息） ───
       rewards:
         text: "&f在线奖励"
         order: 2
+        # 按钮显示条件（可选）
+        # 条件满足时按钮正常显示，不满足时：
+        #   - 若配置了 deny-message：按钮仍显示但点击后提示消息
+        #   - 若未配置 deny-message：按钮完全隐藏
         condition:
           - "%player_level% >= 5"
           # Aria 脚本条件（需 Blink 系插件注入 BlinkAriaHost）:
           # - "aria: return player.getLevel() >= 5"
+        # 条件不满足时的提示消息
         deny-message: "&c需要达到 5 级才能领取在线奖励"
+        # deny-actions: 条件不满足时执行的动作（可选）
+        # deny-actions:
+        #   - "sound: ENTITY_VILLAGER_NO 1.0 1.0"
+        #   - "close"
         actions:
           - "command: /onlinerewards open"
           - "close"
+
+      # ─── 任务导航（演示：基础按钮） ───
       quest:
         text: "&f任务导航"
         order: 3
         actions:
           - "command: /questgps open"
           - "close"
+
+      # ─── 世界地图（演示：requirements 前置条件） ───
       map:
         text: "&f世界地图"
         order: 4
+        # requirements 与 condition 的区别：
+        #   requirements — 不满足时按钮完全不显示（硬性隐藏）
+        #   condition    — 不满足时可显示 deny-message 或执行 deny-actions
         requirements:
           - "%player_level% >= 1"
         actions:
           - "command: /map open"
           - "close"
+
+      # ─── 传送菜单（演示：打开子菜单） ───
       teleport:
         text: "&f传送菜单"
         order: 5
+        # "open: <菜单id>" — 打开同文件或其他文件中定义的菜单
+        # 目标菜单可在同一 .yml 文件中（用 --- 分隔），也可在其他 .yml 文件中
         actions:
           - "open: teleport"
+
+      # ─── 帮助（演示：不关闭菜单的命令） ───
       help:
         text: "&f帮助"
         order: 6
+        # 未加 "close" 时，执行命令后菜单保持打开
         actions:
           - "command: /help"
+
+      # ─── 下一页（演示：页面切换） ───
       next_page:
         text: "&f更多功能 »"
         order: 7
+        # "page: <页面id>" — 在同一菜单内切换页面
         actions:
           - "page: page2"
 
+  # ═══════════════════════════════════════════════════════════
+  # 第二页：更多功能
+  # ═══════════════════════════════════════════════════════════
   - id: page2
     title: "&f更多"
     buttons:
@@ -104,14 +242,47 @@ pages:
         order: 2
         actions:
           - "page: main"
+# ============================================================
+# 动作类型完整参考
+# ============================================================
+# 按钮/生命周期中可用的动作（actions）类型：
+#
+#   "command: /xxx"          — 以玩家身份执行命令
+#   "console: xxx"           — 以控制台（服务器）身份执行命令
+#   "close"                  — 关闭当前菜单
+#   "open: <菜单id>"         — 打开另一个菜单
+#   "page: <页面id>"         — 切换到同菜单内的另一页
+#   "message: <消息>"        — 向玩家发送聊天消息（支持颜色代码）
+#   "sound: <音效> <音量> <音调>"  — 播放音效
+#   "title: <主标题>"        — 显示大标题（屏幕中央）
+#   "subtitle: <副标题>"     — 显示副标题
+#   "actionbar: <消息>"      — 显示动作栏消息（屏幕底部）
+#   "delay: <tick数>"        — 延迟执行后续动作（20 tick = 1 秒）
+#   "back"                   — 返回上一个打开的菜单（历史栈）
+#   "refresh"                — 刷新当前菜单（重新加载数据）
+#
+# 所有动作中均可使用 PlaceholderAPI 变量：
+#   %player_name%    — 玩家名
+#   %player_level%   — 玩家等级
+#   %player_world%   — 当前世界名
+#   %vault_eco_balance% — 经济余额
+#   等等...
+# ============================================================
 
-# 二级菜单示例
+# ────────────────────────────────────────────────────────────
+# 二级菜单示例 — 传送点
+# 同一文件中用 --- 分隔多个菜单定义
+# ────────────────────────────────────────────────────────────
 ---
 id: teleport
 title: "&f&l传送"
 layout: panel
 columns: 2
 buttons-per-page: 6
+# 二级菜单通常不注册命令，仅通过 open: 动作从主菜单跳转
+# 但也可以配置命令使其独立可用：
+# commands:
+#   - "tp-menu"
 pages:
   - id: main
     title: "&f传送点"
@@ -119,17 +290,51 @@ pages:
       spawn:
         text: "&f出生点"
         order: 0
+        icon:
+          material: COMPASS
+          name: "&a出生点"
+          lore:
+            - "&7传送到服务器出生点"
+            - ""
+            - "&e点击传送"
         actions:
           - "command: /spawn"
           - "close"
       home:
         text: "&f回家"
         order: 1
+        icon:
+          material: RED_BED
+          name: "&a我的家"
+          lore:
+            - "&7传送到你设置的家"
         actions:
           - "command: /home"
           - "close"
+      # warp:
+      #   text: "&f传送点列表"
+      #   order: 2
+      #   icon:
+      #     material: ENDER_PEARL
+      #     name: "&a传送点"
+      #   actions:
+      #     - "command: /warps"
+      #     - "close"
+      # tpa:
+      #   text: "&f请求传送"
+      #   order: 3
+      #   icon:
+      #     material: ENDER_EYE
+      #     name: "&a传送到玩家"
+      #     lore:
+      #       - "&7向其他玩家发送传送请求"
+      #   actions:
+      #     - "close"
+      #     - "command: /tpa"
       back:
         text: "&7« 返回主菜单"
         order: 2
+        # "open: <主菜单id>" — 返回主菜单（跨菜单跳转）
+        # 也可用 "back" 动作返回上一个菜单（自动历史栈）
         actions:
           - "open: example"

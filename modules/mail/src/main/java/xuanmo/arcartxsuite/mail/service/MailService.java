@@ -1034,6 +1034,7 @@ public final class MailService implements Listener {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("presets", list);
         payload.put("total", definitions.size());
+        payload.put("maxPresetCount", definitions.size());
         bridge.sendPacket(player, adminUiId, "preset-list", payload);
     }
 

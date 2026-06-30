@@ -25,6 +25,7 @@ ui:
       var.itemJsons = {}
       for(key in var.records.keys()){
         json = packet['historyItemJson' + key]
+      var.maxRecordCount = packet['maxRecordCount']
         if(json != null && json != ''){
           var.itemJsons[key] = json
         } else {
@@ -49,6 +50,7 @@ ui:
       var.itemJsons = {}
       for(key in var.records.keys()){
         json = packet['historyItemJson' + key]
+      var.maxRecordCount = packet['maxRecordCount']
         if(json != null && json != ''){
           var.itemJsons[key] = json
         } else {
@@ -74,7 +76,7 @@ ui:
       var.itemJsons = {}
       var.scrollRatio = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-      var.maxRecordCount = 20
+      var.maxRecordCount = 0
       Packet.send(var.packetId, 'history_list', '0')
 
 controls:

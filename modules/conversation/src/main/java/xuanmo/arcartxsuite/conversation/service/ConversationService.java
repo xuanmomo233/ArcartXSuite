@@ -841,6 +841,7 @@ public final class ConversationService implements Listener {
             ConversationInteractionStateSupport.computeScrollRatio(state.candidates().size(), state.selectedIndex(), SELECTOR_VISIBLE_ROWS)
         );
         payload.put("npcRows", buildNpcRows(state));
+        payload.put("maxNpcCount", state.candidates().size());
         return payload;
     }
 

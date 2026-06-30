@@ -79,6 +79,7 @@ public final class MailInboxPacketFactory {
         packet.put("selected_body", bodyLines(selected == null ? "" : selected.body()));
         packet.put("selected_attachment_summary", selected == null ? "无附件" : attachmentSummary(selected.attachments()));
         packet.put("selected_claimable", selected != null && selected.claimable());
+        packet.put("maxMailCount", mailPage.pageSize());
         return packet;
     }
 

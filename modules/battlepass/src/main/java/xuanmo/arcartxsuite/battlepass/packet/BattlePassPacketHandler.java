@@ -137,6 +137,9 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         payload.put("dailyTaskCount", String.valueOf(dailyMap.size()));
         payload.put("weeklyTaskCount", String.valueOf(weeklyMap.size()));
         payload.put("seasonTaskCount", String.valueOf(seasonMap.size()));
+        payload.put("maxDailyCount", String.valueOf(dailyMap.size()));
+        payload.put("maxWeeklyCount", String.valueOf(weeklyMap.size()));
+        payload.put("maxSeasonCount", String.valueOf(seasonMap.size()));
 
         packetBridge.sendPacket(player, tasksUiId, "init", payload);
     }

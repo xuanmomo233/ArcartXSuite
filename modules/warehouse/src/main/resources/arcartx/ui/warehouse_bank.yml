@@ -31,6 +31,24 @@ ui:
       var.fixedDepositTexts = packet['fixedDepositTexts']
       var.unlocked = packet['unlocked']
       var.hasPassword = packet['hasPassword']
+      var.maxBalanceCount = packet['maxBalanceCount']
+      var.maxProductCount = packet['maxProductCount']
+      var.maxFixedCount = packet['maxFixedCount']
+      for(i in range(0, var.maxBalanceCount)){
+        key = i.round
+        bal = val.余额列表['项'].copy('项' + key)
+        bal.entryKey = key
+      }
+      for(i in range(0, var.maxProductCount)){
+        key = i.round
+        prod = val.产品列表['项'].copy('项' + key)
+        prod.entryKey = key
+      }
+      for(i in range(0, var.maxFixedCount)){
+        key = i.round
+        fd = val.定期列表['项'].copy('项' + key)
+        fd.entryKey = key
+      }
     update: |-
       var.packetId = packet['packetId']
       var.warehouseName = packet['warehouseName']
@@ -42,6 +60,33 @@ ui:
       var.fixedDepositTexts = packet['fixedDepositTexts']
       var.unlocked = packet['unlocked']
       var.hasPassword = packet['hasPassword']
+      var.maxBalanceCount = packet['maxBalanceCount']
+      var.maxProductCount = packet['maxProductCount']
+      var.maxFixedCount = packet['maxFixedCount']
+      while(val.余额列表.childrenCount() > 1){
+        val.余额列表.get(1).remove()
+      }
+      while(val.产品列表.childrenCount() > 1){
+        val.产品列表.get(1).remove()
+      }
+      while(val.定期列表.childrenCount() > 1){
+        val.定期列表.get(1).remove()
+      }
+      for(i in range(0, var.maxBalanceCount)){
+        key = i.round
+        bal = val.余额列表['项'].copy('项' + key)
+        bal.entryKey = key
+      }
+      for(i in range(0, var.maxProductCount)){
+        key = i.round
+        prod = val.产品列表['项'].copy('项' + key)
+        prod.entryKey = key
+      }
+      for(i in range(0, var.maxFixedCount)){
+        key = i.round
+        fd = val.定期列表['项'].copy('项' + key)
+        fd.entryKey = key
+      }
   action:
     load: |-
       var.packetId = 'AXS_WAREHOUSE'
@@ -58,24 +103,9 @@ ui:
       var.selectedCurrency = 'money'
       var.selectedProduct = ''
       var.bankAmount = ''
-      var.maxBalanceCount = 16
-      for(i in range(0, var.maxBalanceCount)){
-        key = i.round
-        bal = val.余额列表['项'].copy('项' + key)
-        bal.entryKey = key
-      }
-      var.maxProductCount = 32
-      for(i in range(0, var.maxProductCount)){
-        key = i.round
-        prod = val.产品列表['项'].copy('项' + key)
-        prod.entryKey = key
-      }
-      var.maxFixedCount = 64
-      for(i in range(0, var.maxFixedCount)){
-        key = i.round
-        fd = val.定期列表['项'].copy('项' + key)
-        fd.entryKey = key
-      }
+      var.maxBalanceCount = 0
+      var.maxProductCount = 0
+      var.maxFixedCount = 0
     open: |-
       Packet.send(var.packetId, 'refresh')
 

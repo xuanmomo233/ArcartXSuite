@@ -27,6 +27,8 @@ ui:
       var.itemJsons = {}
       for(key in var.items.keys()){
         json = packet['shopItemJson' + key]
+      var.maxShopCount = packet['maxShopCount']
+      var.maxItemCount = packet['maxItemCount']
         if(json != null && json != ''){
           var.itemJsons[key] = json
         } else {
@@ -53,6 +55,8 @@ ui:
       var.itemJsons = {}
       for(key in var.items.keys()){
         json = packet['shopItemJson' + key]
+      var.maxShopCount = packet['maxShopCount']
+      var.maxItemCount = packet['maxItemCount']
         if(json != null && json != ''){
           var.itemJsons[key] = json
         } else {
@@ -81,8 +85,8 @@ ui:
       var.shopScrollRatio = 0
       var.itemScrollRatio = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-      var.maxShopCount = 32
-      var.maxItemCount = 100
+      var.maxShopCount = 0
+      var.maxItemCount = 0
       Packet.send(var.packetId, 'shop_list', '')
 
 controls:

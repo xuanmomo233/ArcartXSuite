@@ -141,6 +141,7 @@ public final class QQBotUiService {
         payload.put("nick", nick);
         payload.put("msg", truncate(message, 60));
         payload.put("time", TIME_FMT.format(Instant.now()));
+        payload.put("maxDisplay", 4);
         packetBridge.sendPacket(player, notifyUiId, "notify", payload);
     }
 

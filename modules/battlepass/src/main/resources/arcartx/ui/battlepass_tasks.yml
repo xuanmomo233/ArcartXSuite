@@ -19,6 +19,9 @@ ui:
       var.dailyTaskCount = packet['dailyTaskCount']
       var.weeklyTaskCount = packet['weeklyTaskCount']
       var.seasonTaskCount = packet['seasonTaskCount']
+      var.maxDailyCount = packet['maxDailyCount']
+      var.maxWeeklyCount = packet['maxWeeklyCount']
+      var.maxSeasonCount = packet['maxSeasonCount']
       for(i in range(0, var.maxDailyCount)){
         key = i.round
         item = val.每日任务列表['任务项' + key]
@@ -48,6 +51,9 @@ ui:
       var.dailyTaskCount = packet['dailyTaskCount']
       var.weeklyTaskCount = packet['weeklyTaskCount']
       var.seasonTaskCount = packet['seasonTaskCount']
+      var.maxDailyCount = packet['maxDailyCount']
+      var.maxWeeklyCount = packet['maxWeeklyCount']
+      var.maxSeasonCount = packet['maxSeasonCount']
   action:
     open: |-
       var.packetId = 'AXS_BATTLEPASS'
@@ -57,9 +63,9 @@ ui:
       var.dailyTaskCount = 0
       var.weeklyTaskCount = 0
       var.seasonTaskCount = 0
-      var.maxDailyCount = 10
-      var.maxWeeklyCount = 10
-      var.maxSeasonCount = 10
+      var.maxDailyCount = 0
+      var.maxWeeklyCount = 0
+      var.maxSeasonCount = 0
 
 controls:
   根:

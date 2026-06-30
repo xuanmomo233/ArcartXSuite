@@ -55,6 +55,8 @@ ui:
       var.autoPickupMythic = packet['autoPickupMythic']
       var.autoPickupNotify = packet['autoPickupNotify']
       var.showcaseEnabled = packet['showcaseEnabled']
+      var.maxManageCount = packet['maxManageCount']
+      var.maxMemberCount = packet['maxMemberCount']
     update: |-
       var.packetId = packet['packetId']
       var.ownerType = packet['ownerType']
@@ -90,6 +92,8 @@ ui:
       var.autoPickupMythic = packet['autoPickupMythic']
       var.autoPickupNotify = packet['autoPickupNotify']
       var.showcaseEnabled = packet['showcaseEnabled']
+      var.maxManageCount = packet['maxManageCount']
+      var.maxMemberCount = packet['maxMemberCount']
   action:
     open: |-
       var.packetId = 'AXS_WAREHOUSE'
@@ -134,8 +138,8 @@ ui:
       var.autoPickup = true
       var.autoPickupMythic = true
       var.autoPickupNotify = true
-      var.maxManageCount = 32
-      var.maxMemberCount = 32
+      var.maxManageCount = 0
+      var.maxMemberCount = 0
       Packet.send(var.packetId, 'refresh')
 
 controls:

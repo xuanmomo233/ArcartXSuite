@@ -1,74 +1,134 @@
 # ESC 暂停界面菜单 — 左侧滑出布局，替换原版暂停界面
+# 当玩家按 ESC 键时弹出此菜单，覆盖原版暂停界面
+
+# 菜单唯一标识，用于内部引用和 open: 动作跳转
 id: esc_main
+
+# 菜单标题，支持 & 颜色代码（&f = 白色，&l = 粗体）
 title: "&f&l菜单"
+
+# 布局模式：esc = 左侧滑出式（专用于 ESC 界面），其他可选：panel（居中面板）
 layout: esc
+
+# 每行按钮列数
 columns: 2
-buttons-per-page: 14
+
+# 每页最大按钮数量
+buttons-per-page: 64
+
+# 打开菜单所需权限，为空表示无权限要求
 permission: ""
+
+# 是否拦截 ESC 键并显示此菜单（true = 替代原版暂停界面）
 match-esc: true
+
+# 打开菜单的前置条件列表（支持 PlaceholderAPI 变量），为空表示无条件
 open-requirements: []
+
+# 打开菜单时执行的动作（如发送消息、播放音效等），此处省略
+# open-actions:
+#   - "message: &a欢迎！"
+
+# 关闭菜单时执行的动作，此处省略
+# close-actions: []
+
+# 注册为命令打开菜单（可选），此处省略因为通过 ESC 键触发
+# commands:
+#   - "escmenu"
+
+# 页面列表，每个页面包含一组按钮
 pages:
   - id: main
     title: "&f菜单"
     buttons:
+      # ——— 商城按钮 ———
       shop:
         text: "&f商城"
+        # 按钮排列顺序，数字越小越靠前
         order: 0
+        # 按钮动作列表：
+        #   command: 执行指令 | close: 关闭菜单 | open: 打开其他菜单
+        #   page: 跳转页面 | message: 发送消息
         actions:
           - "command: /market shop"
           - "close"
+
+      # ——— 仓库系统按钮 ———
       warehouse:
         text: "&f仓库系统"
         order: 1
         actions:
           - "command: /warehouse open"
           - "close"
+
+      # ——— 邮件按钮 ———
       mail:
         text: "&f邮件"
         order: 2
         actions:
           - "command: /mail open"
           - "close"
+
+      # ——— 在线奖励按钮 ———
       rewards:
         text: "&f在线奖励"
         order: 3
+        # 可选：添加条件限制（需 PlaceholderAPI）
+        # condition:
+        #   - "%player_level% >= 5"
+        # deny-message: "&c需要达到 5 级才能领取在线奖励"
         actions:
           - "command: /onlinerewards open"
           - "close"
+
+      # ——— 任务导航按钮 ———
       quest:
         text: "&f任务"
         order: 4
         actions:
           - "command: /questgps open"
           - "close"
+
+      # ——— 地图按钮 ———
       map:
         text: "&f地图"
         order: 5
         actions:
           - "command: /map open"
           - "close"
+
+      # ——— 称号按钮 ———
       title:
         text: "&f称号"
         order: 6
         actions:
           - "command: /title open"
           - "close"
+
+      # ——— 功能菜单（跳转到 example 子菜单） ———
       example:
         text: "&f功能菜单"
         order: 7
+        # open: 打开另一个菜单文件（通过目标菜单的 id 引用）
         actions:
           - "open: example"
           - "close"
+
+      # ——— 帮助按钮 ———
       help:
         text: "&f帮助"
         order: 8
         actions:
           - "command: /help"
 
+# 底部固定按钮（ESC 布局专属），始终显示在菜单底部
 footer-buttons:
+  # 游戏选项 — 打开 Minecraft 原版设置界面
   options:
     text: "&f游戏选项"
+    # client-action: 触发客户端原生动作（options = 设置界面，quit = 退出游戏）
     client-action: "options"
+  # 退出游戏
   quit:
     text: "&f退出游戏"
     client-action: "quit"

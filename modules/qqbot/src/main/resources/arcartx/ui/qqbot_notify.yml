@@ -13,6 +13,7 @@ ui:
   packetHandler:
     notify: |-
       var.notifications.add({'nick': packet['nick'], 'msg': packet['msg'], 'time': packet['time'], 'alpha': 1.0, 'born': Time.now()})
+      var.maxDisplay = packet['maxDisplay']
       var.showCount = var.notifications.size()
     clear: |-
       var.notifications = []
@@ -21,7 +22,7 @@ ui:
     load: |-
       var.notifications = []
       var.showCount = 0
-      var.maxDisplay = 4
+      var.maxDisplay = 0
       var.displayDuration = 8000
     tick: |-
       if(var.notifications.size() > 0){

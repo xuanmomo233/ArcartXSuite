@@ -48,6 +48,10 @@ ui:
       var.serverSignInGoalEnabled = packet['serverSignInGoalEnabled']
       var.serverSignInGoalCurrent = packet['serverSignInGoalCurrent']
       var.serverSignInGoalNext = packet['serverSignInGoalNext']
+      var.maxRewardCount = packet['maxRewardCount']
+      var.maxPeriodicCount = packet['maxPeriodicCount']
+      var.maxSigninRewardCount = packet['maxSigninRewardCount']
+      var.maxSelectedRewardCount = packet['maxSelectedRewardCount']
       var.calendarSignedCount = 0
       if(var.calendarRows != null){
         for(k in var.calendarRows.keys()){
@@ -94,6 +98,10 @@ ui:
       var.serverSignInGoalEnabled = packet['serverSignInGoalEnabled']
       var.serverSignInGoalCurrent = packet['serverSignInGoalCurrent']
       var.serverSignInGoalNext = packet['serverSignInGoalNext']
+      var.maxRewardCount = packet['maxRewardCount']
+      var.maxPeriodicCount = packet['maxPeriodicCount']
+      var.maxSigninRewardCount = packet['maxSigninRewardCount']
+      var.maxSelectedRewardCount = packet['maxSelectedRewardCount']
       var.calendarSignedCount = 0
       if(var.calendarRows != null){
         for(k in var.calendarRows.keys()){
@@ -106,10 +114,10 @@ ui:
       var.calendarRate = var.calendarCount > 0 ? (var.calendarSignedCount / var.calendarCount * 100).round(0) : 0
   action:
     load: |-
-      var.maxRewardCount = 32
-      var.maxPeriodicCount = 16
-      var.maxSigninRewardCount = 16
-      var.maxSelectedRewardCount = 16
+      var.maxRewardCount = 0
+      var.maxPeriodicCount = 0
+      var.maxSigninRewardCount = 0
+      var.maxSelectedRewardCount = 0
       var.calendarCount = 31
     open: |-
       var.packetId = 'AXS_ONLINE_REWARDS'

@@ -33,6 +33,7 @@ ui:
       var.npcCount = packet['npcCount']
       var.npcScrollRatio = packet['npcScrollRatio']
       var.npcRows = packet['npcRows']
+      var.maxNpcCount = packet['maxNpcCount']
     close: |-
       var.token = ''
       var.packetId = packet['packetId'] == null ? '' : packet['packetId']
@@ -54,7 +55,7 @@ ui:
       var.npcCount = 0
       var.npcScrollRatio = 0
       var.npcRows = {}
-      var.maxNpcCount = 128
+      var.maxNpcCount = 0
       var.interactKey = Keyboard.getKeyBindingKeyName("AXS_INTERACT")
       var.navPrevKey = Keyboard.getKeyBindingKeyName("AXS_NAVIGATE_PREV")
       var.navNextKey = Keyboard.getKeyBindingKeyName("AXS_NAVIGATE_NEXT")

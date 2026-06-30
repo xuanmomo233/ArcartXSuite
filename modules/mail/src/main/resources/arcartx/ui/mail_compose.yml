@@ -25,7 +25,7 @@ ui:
       var.quoteMessage = ''
       var.itemFee = '0'
       var.totalFee = '0'
-      var.maxAttachments = 6
+      var.maxAttachments = 0
       var.attachmentCount = 0
       var.subjectMax = 48
       var.bodyMax = 400

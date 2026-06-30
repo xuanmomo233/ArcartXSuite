@@ -1006,6 +1006,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         payload.put("detailCanCreateWaypoint", snapshot.detail().canCreateWaypoint());
         payload.put("detailClearTrackVisible", snapshot.detail().clearTrackVisible());
         payload.put("detailTrackingText", snapshot.detail().trackingText());
+        payload.put("maxWorldCount", worldRows.size());
+        payload.put("maxAnchorCount", anchorRows.size());
+        payload.put("maxWaypointCount", waypointRows.size());
+        payload.put("maxExternalCount", externalRows.size());
         return payload;
     }
 

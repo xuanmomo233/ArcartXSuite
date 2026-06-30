@@ -72,6 +72,10 @@ public final class OnlineRewardsMenuPacketFactory {
         payload.put("calendarCount", calendarView.month().lengthOfMonth());
         payload.put("calendarRows", buildCalendarRows(calendarView));
         payload.put("selectedRewardRows", buildSelectedRewardRows(calendarView));
+        payload.put("maxRewardCount", configuration.rewards().size());
+        payload.put("maxPeriodicCount", periodicRows.size());
+        payload.put("maxSigninRewardCount", ((java.util.Map<?,?>) payload.getOrDefault("signInRewardRows", java.util.Map.of())).size());
+        payload.put("maxSelectedRewardCount", ((java.util.Map<?,?>) payload.getOrDefault("selectedRewardRows", java.util.Map.of())).size());
         return payload;
     }
 
