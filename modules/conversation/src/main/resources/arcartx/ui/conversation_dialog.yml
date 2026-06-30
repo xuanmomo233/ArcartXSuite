@@ -46,6 +46,16 @@ ui:
           }
         }
       }
+
+      while(val.reply_list.childrenCount() > 1){
+        val.reply_list.get(1).remove()
+      }
+
+      for(i in range(0, var.replyCount)){
+        key = i.round
+        ri = val.reply_list['回复模板'].copy('reply_' + i.round)
+        ri.entryKey = key
+      }
     close: |-
       var.token = ''
       var.packetId = packet['packetId'] == null ? '' : packet['packetId']
@@ -77,7 +87,7 @@ ui:
     keyPress: |-
       var.k = self.currentKeyPress
       if(var.k >= "1" && var.k <= "9"){
-        var.rowKey = "r000" + (var.k - 1)
+        var.rowKey = (var.k - 1).round
         if(var.replyRows[var.rowKey] != null){
           Chat.say("/session reply " + var.replyRows[var.rowKey]['id'])
         }
@@ -234,13 +244,6 @@ controls:
                 attribute:
                   width: 394
                   spaceBetween: 8
-                action:
-                  create: |-
-                    for(i in range(0, var.replyCount)){
-                      key = i.round
-                      ri = self['回复模板'].copy('reply_' + i.round)
-                      ri.entryKey = key
-                    }
                 children:
                   回复模板:
                     type: Texture

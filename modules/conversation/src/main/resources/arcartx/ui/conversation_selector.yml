@@ -34,6 +34,16 @@ ui:
       var.npcScrollRatio = packet['npcScrollRatio']
       var.npcRows = packet['npcRows']
       var.maxNpcCount = packet['maxNpcCount']
+
+      while(val.selector_list.childrenCount() > 1){
+        val.selector_list.get(1).remove()
+      }
+
+      for(i in range(0, var.maxNpcCount)){
+        key = i.round
+        ni = val.selector_list['选择器项'].copy('选择器项' + key)
+        ni.entryKey = key
+      }
     close: |-
       var.token = ''
       var.packetId = packet['packetId'] == null ? '' : packet['packetId']
@@ -161,13 +171,6 @@ controls:
                 attribute:
                   width: 392
                   spaceBetween: 8
-                action:
-                  create: |-
-                    for(i in range(0, var.maxNpcCount)){
-                      key = i.round
-                      ni = self['选择器项'].copy('选择器项' + key)
-                      ni.entryKey = key
-                    }
                 children:
                   选择器项:
                     type: Texture
