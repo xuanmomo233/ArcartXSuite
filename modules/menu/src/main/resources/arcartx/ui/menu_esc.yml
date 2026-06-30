@@ -239,7 +239,7 @@ controls:
                           y: 18
                           texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
                           center: true
-                          fontSize: 36
+                          fontSize: 48
           纵向滑块:
             type: Texture
             val: drag_bar
@@ -305,4 +305,4 @@ controls:
                       y: 18
                       texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
                       center: true
-                      fontSize: 36
+                      fontSize: 48

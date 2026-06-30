@@ -229,7 +229,7 @@ controls:
                           y: 18
                           texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
                           center: true
-                          fontSize: 36
+                          fontSize: 48
           导航栏:
             type: HStack
             attribute:
@@ -259,7 +259,7 @@ controls:
                       y: 12
                       texts: "~&7上一页"
                       center: true
-                      fontSize: 36
+                      fontSize: 48
               下一页按钮:
                 type: Texture
                 attribute:
@@ -282,7 +282,7 @@ controls:
                       y: 12
                       texts: "~&7下一页"
                       center: true
-                      fontSize: 36
+                      fontSize: 48
           页脚栏:
             type: HStack
             attribute:
@@ -337,4 +337,4 @@ controls:
                           y: 12
                           texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
                           center: true
-                          fontSize: 36
+                          fontSize: 48
