@@ -19,6 +19,7 @@ import xuanmo.arcartxsuite.entitytracker.config.DropAllocationSettings;
 import xuanmo.arcartxsuite.entitytracker.dao.DropAllocationRecordDao;
 import xuanmo.arcartxsuite.entitytracker.dao.PlayerDkpDao;
 import xuanmo.arcartxsuite.entitytracker.entity.BossKillRecord;
+import xuanmo.arcartxsuite.module.AxsLog;
 
 /**
  * Boss 掉落分配：支持 roll / dkp / priority / manual 四种模式。
@@ -68,7 +69,7 @@ public final class DropAllocationService {
                     default -> allocateByRoll(killRecord.getId(), drop, participants, serverName);
                 }
             } catch (SQLException exception) {
-                plugin.getLogger().warning("[EntityTracker] 掉落分配失败: " + exception.getMessage());
+                AxsLog.logger().warning("[EntityTracker] 掉落分配失败: " + exception.getMessage());
             }
         }
     }
@@ -96,7 +97,7 @@ public final class DropAllocationService {
                     "Boss击杀: " + bossName + " (排名#" + participant.rank() + ")"
                 );
             } catch (SQLException exception) {
-                plugin.getLogger().warning("[EntityTracker] DKP 发放失败: " + exception.getMessage());
+                AxsLog.logger().warning("[EntityTracker] DKP 发放失败: " + exception.getMessage());
             }
         }
     }

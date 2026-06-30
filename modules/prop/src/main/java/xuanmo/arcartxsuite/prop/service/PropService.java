@@ -36,6 +36,7 @@ import xuanmo.arcartxsuite.prop.config.PropKeyBindingDefinition;
 import xuanmo.arcartxsuite.prop.config.PropKeyMappingConfiguration;
 import xuanmo.arcartxsuite.prop.config.PropLanguageConfiguration;
 import xuanmo.arcartxsuite.prop.config.PropModuleConfiguration;
+import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class PropService implements Listener {
 
@@ -204,7 +205,7 @@ public final class PropService implements Listener {
             if (success) {
                 registeredBindingIds.add(definition.bindingId());
                 if (configuration.debug()) {
-                    plugin.getLogger().info(
+                    AxsLog.logger().info(
                         "ArcartXProp 注册按键 -> id="
                             + definition.bindingId()
                             + " | key="
@@ -321,7 +322,7 @@ public final class PropService implements Listener {
         publishPropUsedEvent(player, definition.id());
 
         if (configuration.debug()) {
-            plugin.getLogger().info(
+            AxsLog.logger().info(
                 "ArcartXProp 使用成功 -> player="
                     + player.getName()
                     + " | prop="
@@ -404,35 +405,35 @@ public final class PropService implements Listener {
                 case "ml", "mythiclib" -> PropMythicLibEffectParser.parse(type + "|" + payload)
                     .ifPresentOrElse(
                         mythicLibEffects::add,
-                        () -> plugin.getLogger().warning("Prop MythicLib 效果格式无效，已跳过: " + effectLine)
+                        () -> AxsLog.logger().warning("Prop MythicLib 效果格式无效，已跳过: " + effectLine)
                     );
                 case "sy", "symphony" -> parseSymphonyEffect(payload)
                     .ifPresentOrElse(
                         symphonyEffects::add,
-                        () -> plugin.getLogger().warning("Prop Symphony 效果格式无效，已跳过: " + effectLine)
+                        () -> AxsLog.logger().warning("Prop Symphony 效果格式无效，已跳过: " + effectLine)
                     );
                 default -> {
                     if (configuration.debug()) {
-                        plugin.getLogger().warning("ArcartXProp 检测到未知效果类型: " + effectLine);
+                        AxsLog.logger().warning("ArcartXProp 检测到未知效果类型: " + effectLine);
                     }
                 }
             }
         }
 
         if (!attributeLines.isEmpty() && !attributePlusService.apply(player, definition.displayName(), attributeLines, definition.durationSeconds()) && configuration.debug()) {
-            plugin.getLogger().info("ArcartXProp AP 效果已跳过 -> hooked=" + attributePlusService.hooked());
+            AxsLog.logger().info("ArcartXProp AP 效果已跳过 -> hooked=" + attributePlusService.hooked());
         }
         if (!mythicLibEffects.isEmpty()
             && !mythicLibService.apply(player, definition.id(), mythicLibEffects, definition.durationSeconds())
             && configuration.debug()
         ) {
-            plugin.getLogger().info("ArcartXProp MythicLib 效果已跳过 -> hooked=" + mythicLibService.hooked());
+            AxsLog.logger().info("ArcartXProp MythicLib 效果已跳过 -> hooked=" + mythicLibService.hooked());
         }
         if (!symphonyEffects.isEmpty()
             && !symphonyService.apply(player, definition.id(), symphonyEffects, definition.durationSeconds())
             && configuration.debug()
         ) {
-            plugin.getLogger().info("ArcartXProp Symphony 效果已跳过 -> hooked=" + symphonyService.hooked());
+            AxsLog.logger().info("ArcartXProp Symphony 效果已跳过 -> hooked=" + symphonyService.hooked());
         }
     }
 

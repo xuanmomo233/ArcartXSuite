@@ -83,6 +83,7 @@ import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.SharedMemberRec
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.SharedWarehouseRecord;
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.SlotItemRecord;
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.WarehouseRecord;
+import xuanmo.arcartxsuite.module.AxsLog;
 
 /**
  * Warehouse 核心业务服务，统筹个人仓库、共享仓库、多货币银行、二级密码与自动拾取逻辑。
@@ -316,7 +317,7 @@ public final class WarehouseService implements Listener {
             );
         } catch (Exception exception) {
             if (configuration.debug()) {
-                plugin.getLogger().warning("外部自动入库失败: " + exception.getMessage());
+                AxsLog.logger().warning("外部自动入库失败: " + exception.getMessage());
             }
             return new WarehouseAutoDepositable.DepositResult(false, 0L, stack.getAmount(), "自动入库失败。");
         }
@@ -353,7 +354,7 @@ public final class WarehouseService implements Listener {
             openStorage(player, "init");
             return ActionResult.success("已打开仓库。");
         } catch (Exception exception) {
-            plugin.getLogger().warning("打开仓库失败: " + exception.getMessage());
+            AxsLog.logger().warning("打开仓库失败: " + exception.getMessage());
             return ActionResult.failure("打开仓库失败，请查看控制台。");
         }
     }
@@ -387,7 +388,7 @@ public final class WarehouseService implements Listener {
             openStorage(viewer, "init");
             return ActionResult.success("已打开仓库预览。");
         } catch (Exception exception) {
-            plugin.getLogger().warning("打开仓库预览失败: " + exception.getMessage());
+            AxsLog.logger().warning("打开仓库预览失败: " + exception.getMessage());
             return ActionResult.failure("打开仓库预览失败，请查看控制台。");
         }
     }
@@ -569,13 +570,13 @@ public final class WarehouseService implements Listener {
                 default -> refreshBoth(player);
             }
         } catch (Exception exception) {
-            plugin.getLogger().warning("处理仓库客户端包失败: " + exception.getMessage());
+            AxsLog.logger().warning("处理仓库客户端包失败: " + exception.getMessage());
             debug("IN-ERROR player=" + player.getName() + " action=" + action + " error=" + exception.getClass().getSimpleName() + ": " + exception.getMessage());
             sendMessage(player, false, "操作失败，请查看控制台。");
             try {
                 refreshBoth(player);
             } catch (Exception refreshException) {
-                plugin.getLogger().warning("刷新仓库 UI 失败: " + refreshException.getMessage());
+                AxsLog.logger().warning("刷新仓库 UI 失败: " + refreshException.getMessage());
             }
         }
         return true;
@@ -789,7 +790,7 @@ public final class WarehouseService implements Listener {
             }
         } catch (Exception exception) {
             if (configuration.debug()) {
-                plugin.getLogger().warning("自动入库失败: " + exception.getMessage());
+                AxsLog.logger().warning("自动入库失败: " + exception.getMessage());
             }
         }
     }
@@ -838,7 +839,7 @@ public final class WarehouseService implements Listener {
         if (bridge == null || !configuration.ui().registerUiOnEnable()) {
             String runtime = xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.normalizeUiId(configuredId, uiFile);
             if (bridge != null) {
-                plugin.getLogger().fine("Warehouse UI 自动注册已关闭，将直接使用 UI 标识: " + runtime);
+                AxsLog.logger().fine("Warehouse UI 自动注册已关闭，将直接使用 UI 标识: " + runtime);
             }
             return runtime;
         }
@@ -872,7 +873,7 @@ public final class WarehouseService implements Listener {
                     sendStorage(player, handler);
                 }
             } catch (Exception exception) {
-                plugin.getLogger().warning("延迟发送仓库数据包失败: " + exception.getMessage());
+                AxsLog.logger().warning("延迟发送仓库数据包失败: " + exception.getMessage());
             }
         }, 2L);
     }
@@ -891,7 +892,7 @@ public final class WarehouseService implements Listener {
                     sendManage(player, handler);
                 }
             } catch (Exception exception) {
-                plugin.getLogger().warning("延迟发送管理数据包失败: " + exception.getMessage());
+                AxsLog.logger().warning("延迟发送管理数据包失败: " + exception.getMessage());
             }
         }, 2L);
     }
@@ -910,7 +911,7 @@ public final class WarehouseService implements Listener {
                     sendBank(player, handler);
                 }
             } catch (Exception exception) {
-                plugin.getLogger().warning("延迟发送银行数据包失败: " + exception.getMessage());
+                AxsLog.logger().warning("延迟发送银行数据包失败: " + exception.getMessage());
             }
         }, 2L);
     }
@@ -2123,7 +2124,7 @@ public final class WarehouseService implements Listener {
             return repository.loadSlots(ownerType, ownerId, warehouseId);
         } catch (Exception exception) {
             if (configuration.debug()) {
-                plugin.getLogger().warning("读取仓库槽位失败: " + exception.getMessage());
+                AxsLog.logger().warning("读取仓库槽位失败: " + exception.getMessage());
             }
             return List.of();
         }
@@ -2282,7 +2283,7 @@ public final class WarehouseService implements Listener {
             try {
                 refreshBoth(online);
             } catch (Exception exception) {
-                plugin.getLogger().warning("[Warehouse] 刷新共享仓库 UI 失败: " + exception.getMessage());
+                AxsLog.logger().warning("[Warehouse] 刷新共享仓库 UI 失败: " + exception.getMessage());
             }
         }
     }
@@ -3138,7 +3139,7 @@ public final class WarehouseService implements Listener {
 
     private void debug(String message) {
         if (configuration.debug()) {
-            plugin.getLogger().info("[WarehouseDebug] " + message);
+            AxsLog.logger().info("[WarehouseDebug] " + message);
         }
     }
 

@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import xuanmo.arcartxsuite.module.AxsLog;
 
 /**
  * 排行榜奖励命令处理器
@@ -27,7 +28,7 @@ public class RankingRewardCommand {
                                RankingRewardScheduler scheduler, 
                                JavaPlugin plugin,
                                MessageProvider messages) {
-        this.logger = plugin.getLogger();
+        this.logger = AxsLog.logger();
         this.rewardService = rewardService;
         this.scheduler = scheduler;
         this.plugin = plugin;

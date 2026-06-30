@@ -7,6 +7,7 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
+import xuanmo.arcartxsuite.module.AxsLog;
 
 /**
  * 共享仓库编辑锁跨服广播：获取/释放时通知其他子服更新锁视图。
@@ -45,7 +46,7 @@ public final class WarehouseCrossServerLockService {
             delivery -> handlePayload(delivery.payload())
         );
         if (channel.isActive()) {
-            plugin.getLogger().info("[Warehouse] 跨服共享仓库编辑锁已启用");
+            AxsLog.logger().info("[Warehouse] 跨服共享仓库编辑锁已启用");
         }
     }
 

@@ -25,6 +25,7 @@ import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardInventoryFu
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardMessageTarget;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
+import xuanmo.arcartxsuite.module.AxsLog;
 
 final class BossDamageSettlementService {
 
@@ -229,7 +230,7 @@ final class BossDamageSettlementService {
                     failures.add(result.message());
                 }
                 if (logFailures) {
-                    plugin.getLogger().warning(
+                    AxsLog.logger().warning(
                         "EntityTracker 伤害排行奖励执行失败"
                             + " | settlement=" + record.settlementId()
                             + " | boss=" + record.mythicMobId()

@@ -25,6 +25,7 @@ import xuanmo.arcartxsuite.entitytracker.boss.config.BossDefinition;
 import xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration;
 import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
 import xuanmo.arcartxsuite.api.combat.EntityCombatMetadata;
+import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class EntityTargetHudService implements Listener {
 
@@ -211,7 +212,7 @@ public final class EntityTargetHudService implements Listener {
         if (!configuration.debug()) {
             return;
         }
-        plugin.getLogger().info(
+        AxsLog.logger().info(
             "EntityTracker target-hud 发包 -> player="
                 + player.getName()
                 + " | handler="

@@ -21,6 +21,7 @@ import xuanmo.arcartxsuite.api.attribute.AttributeDamageEvent;
 import xuanmo.arcartxsuite.api.attribute.AttributeHealEvent;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.combateffect.display.config.CombatDisplayConfiguration;
+import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class CombatDisplayService {
 
@@ -104,7 +105,7 @@ public final class CombatDisplayService {
         if (attributeBridge != null && attributeBridge.hasHealSource()) {
             attributeHealListener = event -> handleAttributeHeal(event);
             attributeBridge.registerHealListener(attributeHealListener);
-            plugin.getLogger().fine("CombatDisplay 已注册统一属性治疗监听");
+            AxsLog.logger().fine("CombatDisplay 已注册统一属性治疗监听");
         }
     }
 
@@ -348,7 +349,7 @@ public final class CombatDisplayService {
             registerListener(listener);
             mythicHealHooked = true;
         } catch (NoClassDefFoundError error) {
-            plugin.getLogger().warning("CombatDisplay 检测到 MythicMobs，但当前服务端未提供 Mythic 治疗事件类: " + error.getMessage());
+            AxsLog.logger().warning("CombatDisplay 检测到 MythicMobs，但当前服务端未提供 Mythic 治疗事件类: " + error.getMessage());
         }
     }
 
@@ -358,7 +359,7 @@ public final class CombatDisplayService {
 
     private void debugDamageSource(String message) {
         if (configuration.damageSourceDebug()) {
-            plugin.getLogger().info(
+            AxsLog.logger().info(
                 "CombatDisplay 伤害来源调试: "
                     + message
                     + " | fallback="

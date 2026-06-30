@@ -27,6 +27,7 @@ import xuanmo.arcartxsuite.eventpacket.config.EventPacketRule;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketTrigger;
 import xuanmo.arcartxsuite.eventpacket.config.PluginConfiguration;
 import xuanmo.arcartxsuite.eventpacket.storage.EventPacketRepository;
+import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class PapiWatcherService {
 
@@ -114,7 +115,7 @@ public final class PapiWatcherService {
                 try {
                     cachedCount = repository.getKillCount(player.getUniqueId(), rule.id());
                 } catch (SQLException exception) {
-                    plugin.getLogger().warning("EventPacket 读取击杀进度失败: " + exception.getMessage());
+                    AxsLog.logger().warning("EventPacket 读取击杀进度失败: " + exception.getMessage());
                     cachedCount = 0;
                 }
             }
@@ -124,7 +125,7 @@ public final class PapiWatcherService {
             try {
                 repository.setKillCount(player.getUniqueId(), rule.id(), newCount);
             } catch (SQLException exception) {
-                plugin.getLogger().warning("EventPacket 保存击杀进度失败: " + exception.getMessage());
+                AxsLog.logger().warning("EventPacket 保存击杀进度失败: " + exception.getMessage());
             }
 
             if (newCount < rule.requiredCount()) {
@@ -149,7 +150,7 @@ public final class PapiWatcherService {
                 try {
                     repository.setKillCount(player.getUniqueId(), rule.id(), 0);
                 } catch (SQLException exception) {
-                    plugin.getLogger().warning("EventPacket 重置击杀进度失败: " + exception.getMessage());
+                    AxsLog.logger().warning("EventPacket 重置击杀进度失败: " + exception.getMessage());
                 }
             }
         }
@@ -192,7 +193,7 @@ public final class PapiWatcherService {
                 BigDecimal newNumber = parseNumericValue(currentValue);
                 if (oldNumber == null || newNumber == null) {
                     if (configuration.debug()) {
-                        plugin.getLogger().info(
+                        AxsLog.logger().info(
                             "EventPacket 规则[" + rule.id() + "] 的 placeholder 无法解析为数字: old="
                                 + previousValue
                                 + " | new="
@@ -261,7 +262,7 @@ public final class PapiWatcherService {
                     current = scriptConditionEvaluator.passes(player, conditions);
                 } catch (Exception exception) {
                     if (configuration.debug()) {
-                        plugin.getLogger().fine(
+                        AxsLog.logger().fine(
                             "EventPacket 脚本触发器["
                                 + rule.id()
                                 + "] 评估失败: "

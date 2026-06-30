@@ -22,6 +22,7 @@ import xuanmo.arcartxsuite.menu.config.MenuLayoutType;
 import xuanmo.arcartxsuite.menu.config.MenuMessagesConfiguration;
 import xuanmo.arcartxsuite.menu.config.MenuModuleConfiguration;
 import xuanmo.arcartxsuite.menu.config.MenuPageDefinition;
+import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class MenuService {
 
@@ -75,12 +76,12 @@ public final class MenuService {
             configuration.settings().defaultLayout(),
             configuration.settings().columns(),
             configuration.settings().buttonsPerPage(),
-            plugin.getLogger()
+            AxsLog.logger()
         ));
         bindingRegistry.rebuild(
             menus.values(),
             configuration.settings().globalItemBinds(),
-            plugin.getLogger()
+            AxsLog.logger()
         );
     }
 

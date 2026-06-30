@@ -1,7 +1,9 @@
 package xuanmo.arcartxsuite.questgps.chemdah;
 
 import ink.ptms.chemdah.core.quest.Template;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
@@ -17,6 +19,8 @@ public final class ChemdahCategoryResolver {
     private final Logger logger;
     private final CategoryDefaults categoryDefaults;
     private final Map<String, QuestGpsCategory> categoryRegistry;
+    private final Set<String> warnedMetaTypeQuestIds = new HashSet<>();
+    private final Set<String> warnedOverlayQuestIds = new HashSet<>();
 
     public ChemdahCategoryResolver(
         Logger logger,
@@ -45,12 +49,22 @@ public final class ChemdahCategoryResolver {
         return resolveMetaType(template);
     }
 
+    /**
+     * 重置警告记录，允许下次 resolve 周期再次输出（每次 reload 调用一次）。
+     */
+    public void resetWarnings() {
+        warnedMetaTypeQuestIds.clear();
+        warnedOverlayQuestIds.clear();
+    }
+
     private QuestGpsCategory resolveFromOverlay(QuestGpsModuleConfiguration.QuestDefinition overlay) {
         if (overlay != null && overlay.categoryOverride() != null) {
             return overlay.categoryOverride();
         }
         String questId = overlay == null ? "unknown" : overlay.id();
-        logger.warning("QuestGPS: category.source=overlay 但任务未配置 category: " + questId);
+        if (warnedOverlayQuestIds.add(questId)) {
+            logger.warning("QuestGPS: category.source=overlay 但任务未配置 category: " + questId);
+        }
         return null;
     }
 
@@ -62,9 +76,11 @@ public final class ChemdahCategoryResolver {
         String questId = questIdForLog != null && !questIdForLog.isBlank()
             ? questIdForLog
             : (template == null ? "unknown" : template.getId());
-        logger.warning(
-            "QuestGPS: Chemdah meta.type 未在 categories 注册，任务不会进入菜单: " + questId
-        );
+        if (warnedMetaTypeQuestIds.add(questId)) {
+            logger.warning(
+                "QuestGPS: Chemdah meta.type 未在 categories 注册，任务不会进入菜单: " + questId
+            );
+        }
         return null;
     }
 

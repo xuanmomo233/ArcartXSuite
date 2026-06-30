@@ -6,6 +6,7 @@ import javax.sql.DataSource;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.util.logging.Logger;
+import xuanmo.arcartxsuite.module.AxsLog;
 
 /**
  * 玩家DKP积分DAO
@@ -16,7 +17,7 @@ public class PlayerDkpDao {
 
     public PlayerDkpDao(DataSource dataSource, JavaPlugin plugin) {
         this.dataSource = dataSource;
-        this.logger = plugin.getLogger();
+        this.logger = AxsLog.logger();
     }
 
     /**

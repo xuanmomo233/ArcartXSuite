@@ -14,6 +14,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
+import xuanmo.arcartxsuite.module.AxsLog;
 
 /**
  * 排行榜奖励定时任务调度器
@@ -40,7 +41,7 @@ public class RankingRewardScheduler {
     private int monthlyMinute;
 
     public RankingRewardScheduler(RankingRewardService rewardService, JavaPlugin plugin) {
-        this.logger = plugin.getLogger();
+        this.logger = AxsLog.logger();
         this.rewardService = rewardService;
         this.scheduler = Executors.newScheduledThreadPool(2);
         this.plugin = plugin;

@@ -33,6 +33,7 @@ import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration.ScannerConfig;
 import xuanmo.arcartxsuite.pickup.filter.LootFilterEngine;
+import xuanmo.arcartxsuite.module.AxsLog;
 
 /**
  * 掉落物扫描服务（扫描模式核心）。
@@ -562,7 +563,7 @@ public final class LootScannerService implements Listener {
 
     private void debug(String message) {
         if (configuration.debug()) {
-            plugin.getLogger().info("[LootScanner] " + message);
+            AxsLog.logger().info("[LootScanner] " + message);
         }
     }
 

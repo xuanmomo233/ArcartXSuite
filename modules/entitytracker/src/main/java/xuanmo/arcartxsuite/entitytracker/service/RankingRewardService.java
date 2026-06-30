@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Logger;
+import xuanmo.arcartxsuite.module.AxsLog;
 
 /**
  * 排行榜定时奖励服务。
@@ -49,7 +50,7 @@ public class RankingRewardService {
         JavaPlugin plugin,
         java.util.function.Supplier<PluginConfiguration> configurationSupplier
     ) {
-        this.logger = plugin.getLogger();
+        this.logger = AxsLog.logger();
         this.recordDao = new RankingRewardRecordDao(dataSource, plugin);
         this.bestDamageDao = new PlayerBossBestDamageDao(dataSource, plugin);
         this.actionExecutor = actionExecutor;

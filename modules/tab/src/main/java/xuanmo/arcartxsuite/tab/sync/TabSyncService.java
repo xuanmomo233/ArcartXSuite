@@ -39,6 +39,7 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.tab.transport.TabRemoteEntry;
 import xuanmo.arcartxsuite.tab.transport.TabServerSnapshot;
 import xuanmo.arcartxsuite.tab.transport.TabSnapshotCodec;
+import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class TabSyncService implements Listener, TabRefreshRequester, xuanmo.arcartxsuite.api.capability.TabRefreshable {
 
@@ -90,7 +91,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
         this.packetGuard = packetGuard;
         this.crossServer = crossServer;
         this.placeholderResolver = placeholderResolver;
-        this.clientRefreshGuard = new TabClientRefreshGuard(plugin.getLogger());
+        this.clientRefreshGuard = new TabClientRefreshGuard(AxsLog.logger());
         for (TabDefinition definition : configuration.definitions()) {
             definitionsById.put(definition.id(), definition);
         }
@@ -121,7 +122,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
             delivery -> handleRemoteSnapshotPayload(delivery.payload(), delivery.nodeId())
         );
         if (crossServerChannel.isActive()) {
-            plugin.getLogger().fine("ArcartXTab 跨服通道已启用");
+            AxsLog.logger().fine("ArcartXTab 跨服通道已启用");
         }
         Bukkit.getPluginManager().registerEvents(this, plugin);
         refreshTask = Bukkit.getScheduler().runTaskTimer(
@@ -470,7 +471,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
                 if (configuration.dryRun()) {
                     // dry-run：不发送、不更新缓存，仅记日志（每个 viewer / definition 一次）
                     if (configuration.debug()) {
-                        plugin.getLogger().info(
+                        AxsLog.logger().info(
                             "ArcartXTab[dry-run] skip send def=" + definition.id()
                                 + " viewer=" + viewer.getName()
                                 + " | reason=" + reason
@@ -490,7 +491,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
             }
 
             if ((configuration.debug() || configuration.dryRun()) && deliveredCount > 0) {
-                plugin.getLogger().info(
+                AxsLog.logger().info(
                     "ArcartXTab 发包[" + definition.id() + "] -> viewers="
                         + deliveredCount
                         + "/"
@@ -604,7 +605,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
             // map pack 不支持分组，退化
             if (packTemplate instanceof Map<?, ?>) {
                 if (configuration.debug()) {
-                    plugin.getLogger().fine("ArcartXTab 分组在 map pack 模式下不生效，已退化为不分组");
+                    AxsLog.logger().fine("ArcartXTab 分组在 map pack 模式下不生效，已退化为不分组");
                 }
             } else {
                 appendGroupedEntries(payload, packTemplate, onlinePlayers, definition, grouping);
@@ -786,7 +787,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
             TabServerSnapshot snapshot = TabSnapshotCodec.decode(payload);
             handleRemoteSnapshot(snapshot);
         } catch (Exception exception) {
-            plugin.getLogger().warning("ArcartXTab 解析跨服快照失败: " + exception.getMessage());
+            AxsLog.logger().warning("ArcartXTab 解析跨服快照失败: " + exception.getMessage());
         }
     }
 
@@ -802,7 +803,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
             .put(snapshot.definitionId(), snapshot.entries());
         remoteSnapshotTimestamps.put(snapshot.nodeId(), System.currentTimeMillis());
         if (configuration.debug()) {
-            plugin.getLogger().info(
+            AxsLog.logger().info(
                 "ArcartXTab 收到跨服快照 node=" + snapshot.nodeId()
                     + " | def=" + snapshot.definitionId()
                     + " | entries=" + snapshot.entries().size()
@@ -1165,7 +1166,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
             crossServerChannel.publish(TabSnapshotCodec.encode(snapshot));
             lastBroadcastTimestamps.put(definition.id(), now);
             if (configuration.debug()) {
-                plugin.getLogger().info(
+                AxsLog.logger().info(
                     "ArcartXTab 广播跨服快照 def=" + definition.id()
                         + " | entries=" + entries.size()
                         + " | grace=" + leaveGraceCache.size()
@@ -1303,7 +1304,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
             if (now - entry.getValue() > ttl) {
                 remoteSnapshots.remove(entry.getKey());
                 if (configuration.debug()) {
-                    plugin.getLogger().info("ArcartXTab 清理过期跨服快照 node=" + entry.getKey());
+                    AxsLog.logger().info("ArcartXTab 清理过期跨服快照 node=" + entry.getKey());
                 }
                 return true;
             }

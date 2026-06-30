@@ -33,6 +33,7 @@ import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.entitytracker.dao.BossDropStatisticsDao;
 import xuanmo.arcartxsuite.entitytracker.dao.BossKillRecordDao;
 import xuanmo.arcartxsuite.entitytracker.entity.BossKillRecord;
+import xuanmo.arcartxsuite.module.AxsLog;
 
 /**
  * Boss 击杀落库、掉落统计与跨服击杀同步。
@@ -122,7 +123,7 @@ public final class BossKillRecordingService implements Listener {
             try {
                 persistRecord(session, settlement, location, List.of());
             } catch (Exception exception) {
-                plugin.getLogger().warning("[EntityTracker] Boss 击杀记录失败: " + exception.getMessage());
+                AxsLog.logger().warning("[EntityTracker] Boss 击杀记录失败: " + exception.getMessage());
             }
         });
     }
@@ -138,7 +139,7 @@ public final class BossKillRecordingService implements Listener {
         try {
             persistRecord(session, settlement, location, drops);
         } catch (Exception exception) {
-            plugin.getLogger().warning("[EntityTracker] Boss 击杀记录失败: " + exception.getMessage());
+            AxsLog.logger().warning("[EntityTracker] Boss 击杀记录失败: " + exception.getMessage());
         }
     }
 
@@ -276,10 +277,10 @@ public final class BossKillRecordingService implements Listener {
             try {
                 int removed = killRecordDao.deleteOlderThanDays(recording.retentionDays());
                 if (removed > 0) {
-                    plugin.getLogger().fine("[EntityTracker] 已清理 " + removed + " 条过期击杀记录");
+                    AxsLog.logger().fine("[EntityTracker] 已清理 " + removed + " 条过期击杀记录");
                 }
             } catch (SQLException exception) {
-                plugin.getLogger().warning("[EntityTracker] 清理击杀记录失败: " + exception.getMessage());
+                AxsLog.logger().warning("[EntityTracker] 清理击杀记录失败: " + exception.getMessage());
             }
         });
     }
