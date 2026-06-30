@@ -113,6 +113,29 @@ controls:
                 duration: 1200
                 color: ~255,255,255,100
                 width: 0.05
+          菜单贴图:
+            type: HGrid
+            attribute:
+              visible: true
+              spaceBetweenX: 5
+              spaceBetweenY: 5
+              column: 3
+              x: 50
+              y: 35
+            action:
+              create: |-
+                for(i in range(2,9)){
+                  A = self['贴图'].copy('贴图' + i)
+                }
+            children:
+              贴图:
+                type: Texture
+                attribute:
+                  normal: ~255,255,255,255
+                  shape: ~round_rect
+                  radius: 2
+                  width: 10
+                  height: 10
           标题:
             type: Text
             attribute:
@@ -268,7 +291,7 @@ controls:
                     if(self.entry != null && self.entry['enabled']){
                       if(self.entry['clientAction'] == 'options'){
                         Game.options()
-                      } else if(self.entry['clientAction'] == 'quit'){
+                      } elif(self.entry['clientAction'] == 'quit'){
                         Game.quit()
                       } else {
                         Packet.send(var.packetId, 'footer', self.entry['id'])
