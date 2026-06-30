@@ -337,7 +337,7 @@ public final class MenuService {
         // 临时调试：确认ESC菜单发包内容
         Object buttonRows = payload.get("buttonRows");
         Object footerRows = payload.get("footerRows");
-        plugin.getLogger().info("[MenuDebug] layout=" + definition.layout()
+        plugin.getLogger().fine("[MenuDebug] layout=" + definition.layout()
             + " init=" + initPacket
             + " buttonCount=" + payload.get("buttonCount")
             + " buttonKeys=" + (buttonRows instanceof Map ? ((Map<?, ?>) buttonRows).keySet() : "N/A")

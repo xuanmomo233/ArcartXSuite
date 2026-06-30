@@ -22,6 +22,7 @@ import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
 import xuanmo.arcartxsuite.entitytracker.command.EntityTrackerAdminCommand;
+import xuanmo.arcartxsuite.entitytracker.storage.JdbcEntityTrackerRepository;
 import xuanmo.arcartxsuite.entitytracker.service.BossKillRecordingService;
 import xuanmo.arcartxsuite.entitytracker.service.CrossServerRankingCacheService;
 import xuanmo.arcartxsuite.entitytracker.service.DropAllocationService;
@@ -69,7 +70,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     private BossKillRecordingService killRecordingService;
     private DropAllocationService dropAllocationService;
     private CrossServerRankingCacheService rankingCacheService;
-    private javax.sql.DataSource moduleDataSource;
+    private JdbcEntityTrackerRepository repository;
     private List<String> bossRuntimeUiIds = List.of();
     private List<String> targetRuntimeUiIds = List.of();
 
@@ -167,7 +168,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     protected void startService() throws Exception {
         PacketBridgeAPI packetBridge = context.packetBridge();
 
-        moduleDataSource = initializeModuleDatabaseIfNeeded();
+        initializeRepositoryIfNeeded();
         initializePersistenceServices();
 
         // Boss tracker depends on MythicMobs/MythicBukkit. If it is absent, keep the module alive
@@ -232,6 +233,33 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         // 初始化排行榜奖励系统
         initializeRewardSystem();
 
+        // 注册标准 capability
+        if (repository != null) {
+            context.registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
+                new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
+                    @Override public @NotNull String moduleId() { return "entitytracker"; }
+                    @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
+                        try { return repository.deletePlayerData(playerUuid); }
+                        catch (Exception e) { context.logger().warning("EntityTracker purge 失败: " + e.getMessage()); return -1; }
+                    }
+                    @Override public int purgeAllPlayerData() {
+                        try { return repository.deleteAllPlayerData(); }
+                        catch (Exception e) { context.logger().warning("EntityTracker purgeAll 失败: " + e.getMessage()); return -1; }
+                    }
+                });
+            context.registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
+                new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
+                    @Override public @NotNull String moduleId() { return "entitytracker"; }
+                    @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
+                            @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
+                        return repository.migrateTo(target, overwrite);
+                    }
+                    @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
+                        return repository.getDescriptor();
+                    }
+                });
+        }
+
         context.logger().fine(
             "EntityTracker 模块已载入，bosses=" + configuration.getTrackedBossCount()
                 + " | boss-ui=" + bossRuntimeUiIds
@@ -244,24 +272,25 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     }
 
     private void initializePersistenceServices() {
-        if (moduleDataSource == null) {
+        javax.sql.DataSource ds = dataSource();
+        if (ds == null) {
             return;
         }
         if (newFeaturesSettings.dropAllocation().enabled()) {
             dropAllocationService = new DropAllocationService(
-                context.plugin(), newFeaturesSettings.dropAllocation(), moduleDataSource
+                context.plugin(), newFeaturesSettings.dropAllocation(), ds
             );
         }
         boolean crossServerRanking = newFeaturesSettings.crossServerRanking().enabled()
             && crossServerChannelConfig.enabled();
         if (crossServerRanking) {
             crossServerService = new EntityTrackerCrossServerService(
-                context.plugin(), context.crossServer(), crossServerChannelConfig, moduleDataSource
+                context.plugin(), context.crossServer(), crossServerChannelConfig, ds
             );
             rankingCacheService = new CrossServerRankingCacheService(
                 context.plugin(),
                 newFeaturesSettings.crossServerRanking(),
-                moduleDataSource,
+                ds,
                 () -> configuration,
                 () -> context.crossServer().nodeId()
             );
@@ -274,7 +303,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             killRecordingService = new BossKillRecordingService(
                 context.plugin(),
                 newFeaturesSettings,
-                moduleDataSource,
+                ds,
                 dropAllocationService,
                 crossServerService,
                 rankingCacheService,
@@ -322,7 +351,10 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             crossServerService.shutdown();
             crossServerService = null;
         }
-        moduleDataSource = null;
+        if (repository != null) {
+            repository.shutdown();
+            repository = null;
+        }
         moduleYaml = null;
         configuration = null;
         targetConfiguration = null;
@@ -363,10 +395,8 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                 return;
             }
 
-            if (moduleDataSource == null) {
-                moduleDataSource = initializeDatabase(moduleYaml);
-            }
-            if (moduleDataSource == null) {
+            javax.sql.DataSource ds = dataSource();
+            if (ds == null) {
                 context.logger().severe("排行榜奖励系统数据库初始化失败");
                 return;
             }
@@ -382,7 +412,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
 
             // 创建服务实例
             rewardService = new RankingRewardService(
-                moduleDataSource, actionExecutor, context.plugin(), () -> configuration
+                ds, actionExecutor, context.plugin(), () -> configuration
             );
             rewardScheduler = new RankingRewardScheduler(rewardService, context.plugin());
             rewardCommand = new RankingRewardCommand(rewardService, rewardScheduler, context.plugin(), messages());
@@ -398,89 +428,26 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         }
     }
 
-    private javax.sql.DataSource initializeModuleDatabaseIfNeeded() {
-        if (!newFeaturesSettings.needsDatabase() && !hasRankingRewardsSection()) {
-            return null;
-        }
-        try {
-            FileConfiguration config = moduleYaml != null ? moduleYaml : new YamlConfiguration();
-            return initializeDatabase(config);
-        } catch (Exception exception) {
-            context.logger().severe("EntityTracker 数据库初始化失败: " + exception.getMessage());
-            return null;
-        }
-    }
-
     private boolean hasRankingRewardsSection() {
         return moduleYaml != null
             && moduleYaml.getConfigurationSection("new-features.ranking-rewards") != null;
     }
 
-    private javax.sql.DataSource initializeSharedDatabaseIfNeeded() {
-        return initializeModuleDatabaseIfNeeded();
+    private void initializeRepositoryIfNeeded() {
+        if (!newFeaturesSettings.needsDatabase() && !hasRankingRewardsSection()) {
+            return;
+        }
+        try {
+            repository = new JdbcEntityTrackerRepository(
+                context.dataFolder(), moduleYaml, context.logger());
+            repository.initialize();
+        } catch (Exception e) {
+            context.logger().severe("EntityTracker 数据库初始化失败: " + e.getMessage());
+        }
     }
 
-    /**
-     * 初始化数据库，返回DataSource
-     */
-    private javax.sql.DataSource initializeDatabase(FileConfiguration config) {
-        try {
-            // 读取数据库配置
-            ConfigurationSection dbSection = config.getConfigurationSection("database");
-            String dbType = dbSection != null ? dbSection.getString("type", "sqlite") : "sqlite";
-            
-            // 创建SQLite数据源
-            File dbFile = new File(context.dataFolder(), "entitytracker.db");
-            if (!dbFile.getParentFile().exists()) {
-                dbFile.getParentFile().mkdirs();
-            }
-            
-            org.sqlite.SQLiteDataSource sqliteDs = new org.sqlite.SQLiteDataSource();
-            sqliteDs.setUrl("jdbc:sqlite:" + dbFile.getAbsolutePath());
-            
-            // 执行初始化SQL
-            try (java.sql.Connection conn = sqliteDs.getConnection();
-                 java.sql.Statement stmt = conn.createStatement()) {
-                
-                // 逐条执行建表语句（SQLite不支持一次执行多条）
-                java.io.InputStream is = getClass().getClassLoader().getResourceAsStream("sql/init_tables.sql");
-                if (is != null) {
-                    String initSql = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-                    // 按分号分割并逐条执行
-                    String[] statements = initSql.split(";");
-                    for (String sql : statements) {
-                        // 去除前导注释行，保留实际 SQL
-                        String[] lines = sql.split("\n");
-                        StringBuilder sb = new StringBuilder();
-                        for (String line : lines) {
-                            String l = line.trim();
-                            if (!l.isEmpty() && !l.startsWith("--")) {
-                                sb.append(line).append('\n');
-                            }
-                        }
-                        String trimmed = sb.toString().trim();
-                        if (!trimmed.isEmpty()) {
-                            try {
-                                stmt.execute(trimmed);
-                            } catch (java.sql.SQLException e) {
-                                // 忽略已存在的表错误
-                                if (!e.getMessage().contains("already exists")) {
-                                    context.logger().warning("SQL执行警告: " + e.getMessage());
-                                }
-                            }
-                        }
-                    }
-                    is.close();
-                }
-                context.logger().info("数据库表初始化完成");
-            }
-            
-            return sqliteDs;
-            
-        } catch (Exception e) {
-            context.logger().severe("数据库初始化失败: " + e.getMessage());
-            return null;
-        }
+    private javax.sql.DataSource dataSource() {
+        return repository != null ? repository.dataSource() : null;
     }
 
     // ─── ModuleCommandHandler ───────────────────────────────

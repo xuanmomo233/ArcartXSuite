@@ -71,6 +71,13 @@ public record AfkRewardConfiguration(
         List<String> endMailPresets
     ) {}
 
+    public AfkRewardConfiguration withAreas(Map<String, AfkArea> newAreas) {
+        return new AfkRewardConfiguration(
+            debug, areasDirectory, reward, types,
+            Collections.unmodifiableMap(newAreas), storage, ui, manual
+        );
+    }
+
     public static AfkRewardConfiguration load(YamlConfiguration yaml, Logger logger) {
         boolean debug = yaml.getBoolean("debug", false);
 

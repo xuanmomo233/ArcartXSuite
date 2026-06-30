@@ -32,9 +32,13 @@ ui:
       val.交互按键.visible = false
       async {
         Thread.sleep(10000)
-        val.Scroll.moveX = 0
-        val.开箱动画.visible = false
-        val.奖品展示单抽.visible = true
+        if(val.开箱动画 != null && val.Scroll != null){
+          val.Scroll.moveX = 0
+          val.开箱动画.visible = false
+        }
+        if(val.奖品展示单抽 != null){
+          val.奖品展示单抽.visible = true
+        }
       }
     tick: |-
       if(var.V < 1 && val.Scroll.moveX < 0.8){

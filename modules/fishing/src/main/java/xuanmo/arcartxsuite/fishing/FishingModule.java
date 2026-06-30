@@ -16,6 +16,7 @@ import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.capability.DatabaseMigratable;
+import xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
@@ -54,7 +55,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     protected int currentConfigVersion() {
-        return 2;
+        return 1;
     }
 
     @Override
@@ -72,7 +73,6 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         return SyncPolicy.builder()
             .dynamicSection("fishes")
             .dynamicSection("treasures")
-            .dynamicSection("messages")
             .build();
     }
 
@@ -163,6 +163,18 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             }
             @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
                 return repo.getDescriptor();
+            }
+        });
+
+        context.registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
+            @Override public @NotNull String moduleId() { return "fishing"; }
+            @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
+                try { return repo.deletePlayerData(playerUuid); }
+                catch (Exception e) { context.logger().warning("Fishing purge 失败: " + e.getMessage()); return -1; }
+            }
+            @Override public int purgeAllPlayerData() {
+                try { return repo.deleteAllPlayerData(); }
+                catch (Exception e) { context.logger().warning("Fishing purgeAll 失败: " + e.getMessage()); return -1; }
             }
         });
 

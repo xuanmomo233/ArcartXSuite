@@ -16,6 +16,8 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionsLoader;
+import xuanmo.arcartxsuite.eventpacket.service.EntityCleanupService;
+import xuanmo.arcartxsuite.eventpacket.service.ScheduledCommandService;
 
 public record PluginConfiguration(
     boolean debug,
@@ -23,7 +25,9 @@ public record PluginConfiguration(
     EventPacketStorageConfiguration storage,
     List<EventPacketRule> rules,
     String clientPacketId,
-    int clientPacketPresetCount
+    int clientPacketPresetCount,
+    EntityCleanupService.CleanupConfiguration entityCleanup,
+    List<ScheduledCommandService.ScheduledTask> scheduledCommands
 ) {
 
     public static PluginConfiguration load(FileConfiguration configuration, Logger logger) {
@@ -82,9 +86,23 @@ public record PluginConfiguration(
         if (rules.isEmpty()) {
             logger.warning("ArcartXEventPacket 未找到任何规则定义（rules 段和目录均为空）。");
         }
+
+        EntityCleanupService.CleanupConfiguration entityCleanup =
+            EntityCleanupService.CleanupConfiguration.fromSection(
+                configuration.getConfigurationSection("entity-cleanup"));
+
+        List<ScheduledCommandService.ScheduledTask> scheduledTasks = new ArrayList<>();
+        ConfigurationSection schedSection = configuration.getConfigurationSection("scheduled-commands");
+        if (schedSection != null) {
+            for (String key : schedSection.getKeys(false)) {
+                scheduledTasks.add(ScheduledCommandService.ScheduledTask.fromSection(
+                    key, schedSection.getConfigurationSection(key)));
+            }
+        }
+
         return new PluginConfiguration(
             debug, refreshIntervalTicks, storage, List.copyOf(rules),
-            clientPacketId, clientPacketPresetCount
+            clientPacketId, clientPacketPresetCount, entityCleanup, List.copyOf(scheduledTasks)
         );
     }
 

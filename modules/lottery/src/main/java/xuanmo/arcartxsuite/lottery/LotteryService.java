@@ -139,7 +139,7 @@ public class LotteryService {
         }
 
         if (!deductCost(player, poolDef.cost(), 1)) {
-            return null;
+            throw new IllegalStateException("扣除开箱费用失败: " + poolId);
         }
 
         CaseResult result = caseEngine.openCase(poolDef.caseConfig());

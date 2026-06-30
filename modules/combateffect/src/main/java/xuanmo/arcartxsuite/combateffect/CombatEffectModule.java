@@ -1,15 +1,14 @@
 package xuanmo.arcartxsuite.combateffect;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -17,15 +16,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import xuanmo.arcartxsuite.api.AXSModule;
+import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
-import xuanmo.arcartxsuite.api.ModuleContext;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
-import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.capability.CombatEffectTriggerable;
-import xuanmo.arcartxsuite.api.message.MessageProvider;
-import xuanmo.arcartxsuite.api.config.ConfigSyncSpec;
-import xuanmo.arcartxsuite.api.config.ModuleConfigSpec;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
@@ -46,13 +40,12 @@ import xuanmo.arcartxsuite.combateffect.trigger.StateTriggerService;
  * 监听击杀 / 攻击事件并向客户端发送自定义 UI 包；
  * 同时管理伤害 / 治疗显示子模块。
  */
-public final class CombatEffectModule implements AXSModule, ModuleCommandHandler, CombatEffectTriggerable {
+public final class CombatEffectModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private static final String CONFIG_FILE_NAME = "ArcartXCombatEffect.yml";
     private static final String MESSAGES_FILE_NAME = "messages.yml";
 
-    private ModuleContext context;
-    private MessageProvider messages;
+    private FileConfiguration rawConfiguration;
     private CombatEffectPacketConfiguration packetConfiguration;
     private CombatEffectPacketService packetService;
     private CombatDisplayConfiguration displayConfiguration;
@@ -63,8 +56,6 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
     private ComboTrackerService comboTrackerService;
     private KeybindTriggerService keybindTriggerService;
     private StateTriggerService stateTriggerService;
-    private final List<String> registeredUiIds = new ArrayList<>();
-    private boolean ready;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -76,9 +67,23 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
     }
 
     @Override
-    public List<ModuleConfigSpec> configSpecs() {
-        // kill-effect、combo-tracker、death-buffer、digis-display 包含用户自定义条目
-        SyncPolicy policy = SyncPolicy.builder()
+    protected String configFileName() {
+        return CONFIG_FILE_NAME;
+    }
+
+    @Override
+    protected String messagesFileName() {
+        return MESSAGES_FILE_NAME;
+    }
+
+    @Override
+    protected int currentConfigVersion() {
+        return 1;
+    }
+
+    @Override
+    protected @NotNull SyncPolicy defaultSyncPolicy() {
+        return SyncPolicy.builder()
             .dynamicSection("kill-effect")
             .dynamicSection("combo-tracker")
             .dynamicSection("death-buffer")
@@ -86,25 +91,47 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
             .dynamicSection("state-trigger")
             .dynamicSection("digis-display")
             .build();
-        return List.of(new ModuleConfigSpec(
-            "combateffect",
-            new ConfigSyncSpec(CONFIG_FILE_NAME, "data/combateffect/config.yml", policy),
-            1,
-            "config-version",
-            "migrations",
-            List.of()
-        ));
     }
 
     @Override
-    public boolean onEnable(ModuleContext context) throws Exception {
-        this.context = context;
-        Logger logger = context.logger();
+    protected @NotNull Map<String, String> uiResourceMappings() {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put("arcartx/ui/combat_kill_effect.yml", "ui/combat_kill_effect.yml");
+        mappings.put("arcartx/ui/combo_effect.yml", "ui/combo_effect.yml");
+        mappings.put("arcartx/ui/death_buffer.yml", "ui/death_buffer.yml");
+        return mappings;
+    }
 
-        File configFile = ensureConfigExists();
-        initMessages();
-        FileConfiguration yaml = YamlConfiguration.loadConfiguration(configFile);
-        ConfigurationSection killEffectSection = yaml.getConfigurationSection("kill-effect");
+    @Override
+    protected boolean overwriteUiFiles() {
+        return false;
+    }
+
+    @Override
+    protected void loadConfiguration(@Nullable File configFile) throws Exception {
+        if (configFile == null) {
+            throw new IllegalStateException("ArcartXCombatEffect.yml 配置文件缺失");
+        }
+        // 一次性迁移：旧路径 data/combateffect/config.yml -> ArcartXCombatEffect.yml
+        File oldConfigFile = new File(context.dataFolder(), "config.yml");
+        if (oldConfigFile.isFile() && !configFile.exists()) {
+            try {
+                java.nio.file.Files.move(
+                    oldConfigFile.toPath(),
+                    configFile.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                );
+                context.logger().info(org.bukkit.ChatColor.GOLD + "→ 已迁移旧配置文件: "
+                    + org.bukkit.ChatColor.YELLOW + "config.yml"
+                    + org.bukkit.ChatColor.GRAY + "  ➜  "
+                    + org.bukkit.ChatColor.AQUA + CONFIG_FILE_NAME);
+            } catch (java.io.IOException exception) {
+                context.logger().warning("迁移配置文件失败: " + exception.getMessage());
+            }
+        }
+
+        rawConfiguration = YamlConfiguration.loadConfiguration(configFile);
+        ConfigurationSection killEffectSection = rawConfiguration.getConfigurationSection("kill-effect");
         String packetsDirRelative = killEffectSection != null
             ? killEffectSection.getString("packets-directory", "packets") : "packets";
         File packetsDirectory = new File(context.dataFolder(), packetsDirRelative);
@@ -118,19 +145,27 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
                 context.exportResource("packets/default.yml", defaultPackets, false);
             }
         }
-        packetConfiguration = CombatEffectPacketConfiguration.load(killEffectSection, logger, packetsDirectory);
-        displayConfiguration = CombatDisplayConfiguration.load(yaml.getConfigurationSection("digis-display"));
+        packetConfiguration = CombatEffectPacketConfiguration.load(killEffectSection, context.logger(), packetsDirectory);
+        displayConfiguration = CombatDisplayConfiguration.load(rawConfiguration.getConfigurationSection("digis-display"));
+        deathBufferConfiguration = DeathBufferConfiguration.load(rawConfiguration.getConfigurationSection("death-buffer"));
+        comboTrackerConfiguration = ComboTrackerConfiguration.load(rawConfiguration.getConfigurationSection("combo-tracker"));
+    }
 
+    @Override
+    protected void startService() throws Exception {
         PacketBridgeAPI packetBridge = context.packetBridge();
         ClientBridgeAPI clientBridge = context.clientBridge();
         JavaPlugin plugin = (JavaPlugin) context.plugin();
 
-        // 导出 UI 资源到 ArcartX ui/ 目录
-        exportUiResources(context);
-        // 导出 damage_display 资源到 ArcartX damage_display/ 目录
-        exportDamageDisplayResources(context);
+        // 注册 UI（由基类根据 uiResourceMappings() 自动导出并注册）
+        registerModuleUi("ui/combat_kill_effect.yml", "combat_kill_effect", true);
+        registerModuleUi("ui/combo_effect.yml", "combo_effect", true);
+        registerModuleUi("ui/death_buffer.yml", "death_buffer", true);
 
-        packetService = new CombatEffectPacketService(plugin, packetConfiguration, packetBridge, logger);
+        // 导出 damage_display 资源到 ArcartX damage_display/ 目录
+        exportDamageDisplayResources();
+
+        packetService = new CombatEffectPacketService(plugin, packetConfiguration, packetBridge, context.logger());
         packetService.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         packetService.start();
 
@@ -139,53 +174,64 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
             displayService.start();
         }
 
-        deathBufferConfiguration = DeathBufferConfiguration.load(yaml.getConfigurationSection("death-buffer"));
         if (deathBufferConfiguration.enabled()) {
             deathBufferService = new DeathBufferService(
-                plugin, deathBufferConfiguration, packetConfiguration, packetBridge, logger
+                plugin, deathBufferConfiguration, packetConfiguration, packetBridge, context.logger()
             );
             deathBufferService.start();
         }
 
-        comboTrackerConfiguration = ComboTrackerConfiguration.load(yaml.getConfigurationSection("combo-tracker"));
         if (comboTrackerConfiguration.enabled()) {
             comboTrackerService = new ComboTrackerService(
-                plugin, comboTrackerConfiguration, packetConfiguration, packetBridge, clientBridge, logger
+                plugin, comboTrackerConfiguration, packetConfiguration, packetBridge, clientBridge, context.logger()
             );
             comboTrackerService.start();
         }
 
         // 按键触发器
-        boolean keybindEnabled = yaml.getBoolean("keybind-trigger.enabled", false);
+        boolean keybindEnabled = rawConfiguration != null
+            ? rawConfiguration.getBoolean("keybind-trigger.enabled", false)
+            : false;
         if (keybindEnabled) {
-            keybindTriggerService = new KeybindTriggerService(plugin, packetConfiguration, packetBridge, logger);
+            keybindTriggerService = new KeybindTriggerService(plugin, packetConfiguration, packetBridge, context.logger());
             keybindTriggerService.start();
         }
 
         // 状态/控制器触发器
-        boolean stateEnabled = yaml.getBoolean("state-trigger.enabled", false);
+        boolean stateEnabled = rawConfiguration != null
+            ? rawConfiguration.getBoolean("state-trigger.enabled", false)
+            : false;
         if (stateEnabled) {
-            stateTriggerService = new StateTriggerService(plugin, packetConfiguration, packetBridge, logger);
+            stateTriggerService = new StateTriggerService(plugin, packetConfiguration, packetBridge, context.logger());
             stateTriggerService.start();
         }
 
         // 注册跨模块 capability
-        context.registerCapability(CombatEffectTriggerable.class, this);
+        context.registerCapability(CombatEffectTriggerable.class, new CombatEffectTriggerable() {
+            @Override
+            public boolean triggerPacket(@NotNull String packetId, @NotNull Player recipient, @Nullable Map<String, String> variables) {
+                if (packetService == null) return false;
+                return packetService.triggerPacketById(packetId, recipient, variables);
+            }
 
-        logger.fine(
-            "CombatEffect 模块已载入，已启用包: "
+            @Override
+            public boolean triggerDirect(@NotNull String uiId, @NotNull String packetHandler, @NotNull Player recipient, @Nullable Object payload) {
+                if (packetService == null) return false;
+                return packetService.triggerDirect(uiId, packetHandler, recipient, payload);
+            }
+        });
+
+        context.logger().fine(
+            "CombatEffect 模块已启动，已启用包: "
                 + packetConfiguration.enabledPacketCount() + "/" + packetConfiguration.packetDefinitions().size()
                 + (displayService != null ? " | 战斗显示: 已启用" : " | 战斗显示: 未启用")
                 + (deathBufferService != null ? " | 死亡缓冲: 已启用" : " | 死亡缓冲: 未启用")
                 + (comboTrackerService != null ? " | 连击追踪: 已启用" : " | 连击追踪: 未启用")
         );
-        ready = true;
-        return true;
     }
 
     @Override
-    public void onDisable() {
-        ready = false;
+    protected void stopService() {
         if (stateTriggerService != null) {
             stateTriggerService.shutdown();
             stateTriggerService = null;
@@ -210,30 +256,11 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
             packetService.shutdown();
             packetService = null;
         }
-        // 注销已注册的 UI
-        if (context != null) {
-            for (String uiId : registeredUiIds) {
-                context.unregisterUi(uiId);
-            }
-        }
-        registeredUiIds.clear();
+        rawConfiguration = null;
         comboTrackerConfiguration = null;
         deathBufferConfiguration = null;
         displayConfiguration = null;
         packetConfiguration = null;
-    }
-
-    @Override
-    public void onReload() throws Exception {
-        onDisable();
-        if (context != null) {
-            onEnable(context);
-        }
-    }
-
-    @Override
-    public boolean isReady() {
-        return ready;
     }
 
     public CombatEffectPacketConfiguration getPacketConfiguration() {
@@ -242,20 +269,6 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
 
     public CombatDisplayConfiguration getDisplayConfiguration() {
         return displayConfiguration;
-    }
-
-    // ─── CombatEffectTriggerable ─────────────────────────────
-
-    @Override
-    public boolean triggerPacket(@NotNull String packetId, @NotNull Player recipient, @Nullable Map<String, String> variables) {
-        if (packetService == null) return false;
-        return packetService.triggerPacketById(packetId, recipient, variables);
-    }
-
-    @Override
-    public boolean triggerDirect(@NotNull String uiId, @NotNull String packetHandler, @NotNull Player recipient, @Nullable Object payload) {
-        if (packetService == null) return false;
-        return packetService.triggerDirect(uiId, packetHandler, recipient, payload);
     }
 
     // ─── ModuleCommandHandler ────────────────────────────────
@@ -316,15 +329,18 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
     }
 
     private String enabledLabel(boolean enabled) {
-        return messages.get(enabled ? "common.enabled" : "common.disabled");
+        var mp = messages();
+        if (mp == null) return enabled ? "已启用" : "已禁用";
+        return mp.get(enabled ? "common.enabled" : "common.disabled");
     }
 
     private void sendStatus(CommandSender sender) {
+        var mp = messages();
         sender.sendMessage(msg("status.title", descriptor().version()));
         sender.sendMessage(msg("status.packets",
             packetConfiguration != null
                 ? packetConfiguration.enabledPacketCount() + "/" + packetConfiguration.packetDefinitions().size()
-                : messages.get("status.packets-none")));
+                : (mp != null ? mp.get("status.packets-none") : "N/A")));
         sender.sendMessage(msg("status.display", enabledLabel(displayService != null)));
         sender.sendMessage(msg("status.death-buffer", enabledLabel(deathBufferService != null)));
         sender.sendMessage(msg("status.combo", enabledLabel(comboTrackerService != null)));
@@ -394,14 +410,7 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
         return result;
     }
 
-    // ─── UI 资源导出 ─────────────────────────────────────────
-
-    private static final Map<String, String> UI_RESOURCE_MAPPINGS = new LinkedHashMap<>();
-    static {
-        UI_RESOURCE_MAPPINGS.put("arcartx/ui/combat_kill_effect.yml", "ui/combat_kill_effect.yml");
-        UI_RESOURCE_MAPPINGS.put("arcartx/ui/combo_effect.yml", "ui/combo_effect.yml");
-        UI_RESOURCE_MAPPINGS.put("arcartx/ui/death_buffer.yml", "ui/death_buffer.yml");
-    }
+    // ─── damage_display 资源导出（特殊路径，不走标准 UI 注册） ───
 
     private static final Map<String, String> DAMAGE_DISPLAY_MAPPINGS = new LinkedHashMap<>();
     static {
@@ -409,31 +418,10 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
         DAMAGE_DISPLAY_MAPPINGS.put("arcartx/damage_display/ArcartXSuite-heal.yml", "ArcartXSuite-heal.yml");
     }
 
-    private void exportUiResources(ModuleContext ctx) {
-        ClassLoader loader = getClass().getClassLoader();
-        for (Map.Entry<String, String> entry : UI_RESOURCE_MAPPINGS.entrySet()) {
-            try {
-                File uiFile = ctx.exportUiResource(entry.getKey(), entry.getValue(), false, loader);
-                // 导出后必须向 ArcartX 注册，否则 sendPacket 找不到目标 UI
-                String uiId = uiFile.getName().replace(".yml", "");
-                UiBinding binding = ctx.prepareUiBinding("CombatEffect", uiId, true, uiFile);
-                if (binding != null) {
-                    if (binding.registeredUiId() != null) {
-                        registeredUiIds.add(binding.registeredUiId());
-                    }
-                } else {
-                    ctx.logger().warning("CombatEffect UI 注册失败: " + uiId);
-                }
-            } catch (IOException exception) {
-                ctx.logger().warning("UI 资源导出失败: " + entry.getKey() + " | " + exception.getMessage());
-            }
-        }
-    }
-
-    private void exportDamageDisplayResources(ModuleContext ctx) {
+    private void exportDamageDisplayResources() {
         org.bukkit.plugin.Plugin arcartX = org.bukkit.Bukkit.getPluginManager().getPlugin("ArcartX");
         if (arcartX == null) {
-            ctx.logger().fine("ArcartX 未安装，跳过 damage_display 资源导出");
+            context.logger().fine("ArcartX 未安装，跳过 damage_display 资源导出");
             return;
         }
         File damageDisplayDir = new File(arcartX.getDataFolder(), "damage_display");
@@ -445,52 +433,15 @@ public final class CombatEffectModule implements AXSModule, ModuleCommandHandler
             if (target.exists()) {
                 continue;
             }
-            ctx.exportResource(entry.getKey(), target, false);
-            ctx.logger().fine("已导出 damage_display 资源: " + entry.getValue());
+            context.exportResource(entry.getKey(), target, false);
+            context.logger().fine("已导出 damage_display 资源: " + entry.getValue());
         }
-    }
-
-    private void initMessages() {
-        File messagesFile = new File(context.dataFolder(), MESSAGES_FILE_NAME);
-        if (!messagesFile.exists()) {
-            context.exportResource(MESSAGES_FILE_NAME, messagesFile, false);
-        }
-        messages = new MessageProvider(context.dataFolder(), MESSAGES_FILE_NAME, getClass().getClassLoader(), context.logger());
-        messages.load();
     }
 
     private String msg(String key, Object... args) {
-        return messages.get("prefix") + messages.get(key, args);
-    }
-
-    private File ensureConfigExists() {
-        File moduleDataFolder = context.dataFolder();
-        File newConfigFile = new File(moduleDataFolder, "config.yml");
-
-        // 一次性迁移：plugins/ArcartXSuite/ArcartXCombatEffect.yml -> data/combateffect/config.yml
-        File legacyFile = new File(context.pluginDataFolder(), CONFIG_FILE_NAME);
-        if (legacyFile.isFile() && !newConfigFile.exists()) {
-            try {
-                java.nio.file.Files.createDirectories(moduleDataFolder.toPath());
-                java.nio.file.Files.move(
-                    legacyFile.toPath(),
-                    newConfigFile.toPath(),
-                    java.nio.file.StandardCopyOption.ATOMIC_MOVE
-                );
-                context.logger().info(org.bukkit.ChatColor.GOLD + "→ 已归位配置文件: "
-                    + org.bukkit.ChatColor.YELLOW + CONFIG_FILE_NAME
-                    + org.bukkit.ChatColor.GRAY + "  ➜  "
-                    + org.bukkit.ChatColor.AQUA + "data/combateffect/config.yml");
-            } catch (java.io.IOException exception) {
-                context.logger().warning("迁移配置文件失败: " + CONFIG_FILE_NAME
-                    + " | " + exception.getMessage());
-            }
-        }
-
-        if (!newConfigFile.exists()) {
-            context.exportResource(CONFIG_FILE_NAME, newConfigFile, false);
-        }
-        return newConfigFile;
+        var mp = messages();
+        if (mp == null) return key;
+        return mp.get("prefix") + mp.get(key, args);
     }
 }
 

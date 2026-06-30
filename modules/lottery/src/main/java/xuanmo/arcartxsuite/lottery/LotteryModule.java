@@ -14,16 +14,20 @@ import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.DatabaseMigratable;
+import xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
+import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.lottery.command.LotteryAdminCommand;
 import xuanmo.arcartxsuite.lottery.command.LotteryPlayerCommand;
 import xuanmo.arcartxsuite.lottery.config.LotteryModuleConfiguration;
+import xuanmo.arcartxsuite.lottery.packet.LotteryPacketHandler;
 import xuanmo.arcartxsuite.lottery.storage.JdbcLotteryRepository;
 
 public final class LotteryModule extends AbstractAXSModule implements ModuleCommandHandler {
@@ -65,6 +69,7 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
     protected @NotNull SyncPolicy defaultSyncPolicy() {
         return SyncPolicy.builder()
             .dynamicSection("messages")
+            .dynamicSection("shared-pity-groups")
             .build();
     }
 
@@ -139,6 +144,10 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         service.setMessageProvider(messages());
         service.start();
 
+        // UI 注册
+        registerModuleUi(GACHA_UI_FILE, "AXS:lottery_gacha", true);
+        registerModuleUi(CASE_UI_FILE, "AXS:lottery_case", true);
+
         context.registerCapability(DatabaseMigratable.class, new DatabaseMigratable() {
             @Override public @NotNull String moduleId() { return "lottery"; }
             @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
@@ -147,6 +156,18 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
             }
             @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
                 return repo.getDescriptor();
+            }
+        });
+
+        context.registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
+            @Override public @NotNull String moduleId() { return "lottery"; }
+            @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
+                try { return repo.deletePlayerData(playerUuid); }
+                catch (Exception e) { context.logger().warning("Lottery purge 失败: " + e.getMessage()); return -1; }
+            }
+            @Override public int purgeAllPlayerData() {
+                try { return repo.deleteAllPlayerData(); }
+                catch (Exception e) { context.logger().warning("Lottery purgeAll 失败: " + e.getMessage()); return -1; }
             }
         });
 
@@ -175,7 +196,11 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     protected @Nullable ClientPacketHandler createPacketHandler() {
-        return null;
+        PacketBridgeAPI packetBridge = context.packetBridge();
+        if (service == null || packetBridge == null || !packetBridge.isAvailable()) {
+            return null;
+        }
+        return new LotteryPacketHandler(service, packetBridge);
     }
 
     // ─── ModuleCommandHandler (/axs lottery) ──────────────────

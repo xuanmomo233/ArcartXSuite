@@ -14,6 +14,7 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
+import xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
 import java.util.Set;
@@ -192,6 +193,18 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
                     return lvRepo.getDescriptor();
                 }
             });
+
+        context.registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
+            @Override public @NotNull String moduleId() { return "loginview"; }
+            @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
+                try { return lvRepo.deletePlayerData(playerUuid); }
+                catch (Exception e) { context.logger().warning("LoginView purge 失败: " + e.getMessage()); return -1; }
+            }
+            @Override public int purgeAllPlayerData() {
+                try { return lvRepo.deleteAllPlayerData(); }
+                catch (Exception e) { context.logger().warning("LoginView purgeAll 失败: " + e.getMessage()); return -1; }
+            }
+        });
 
         context.logger().fine("LoginView 模块已载入，UI: " + uiBinding.runtimeUiId());
     }

@@ -224,9 +224,6 @@ controls:
                               radius: 8
                               through: true
                               seticon: "self.parent.entry != null ? self.setItemIcon(self.parent.entry['itemJson']) : null"
-                            action:
-                              create: |-
-                                self.seticon()
                           标签:
                             type: Text
                             attribute:

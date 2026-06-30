@@ -17,6 +17,7 @@ import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.capability.DatabaseMigratable;
+import xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
@@ -157,6 +158,18 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             }
             @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
                 return repo.getDescriptor();
+            }
+        });
+
+        context.registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
+            @Override public @NotNull String moduleId() { return "battlepass"; }
+            @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
+                try { return repo.deletePlayerData(playerUuid); }
+                catch (Exception e) { context.logger().warning("BattlePass purge 失败: " + e.getMessage()); return -1; }
+            }
+            @Override public int purgeAllPlayerData() {
+                try { return repo.deleteAllPlayerData(); }
+                catch (Exception e) { context.logger().warning("BattlePass purgeAll 失败: " + e.getMessage()); return -1; }
             }
         });
 

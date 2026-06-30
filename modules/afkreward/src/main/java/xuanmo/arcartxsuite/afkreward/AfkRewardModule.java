@@ -124,12 +124,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         String effectiveAreasDir = effectiveAreasDirectory(configuration.areasDirectory());
         java.util.Map<String, xuanmo.arcartxsuite.afkreward.model.AfkArea> loadedAreas =
             AreaConfiguration.loadAreas(context.dataFolder(), effectiveAreasDir, context.logger());
-        // 通过反射/构造将 areas 合并到 configuration（记录不可变，需重建）
-        configuration = new AfkRewardConfiguration(
-            configuration.debug(), configuration.areasDirectory(),
-            configuration.reward(), configuration.types(), loadedAreas,
-            configuration.storage(), configuration.ui(), configuration.manual()
-        );
+        configuration = configuration.withAreas(loadedAreas);
 
         repository = new AfkRewardRepository(
             context.dataFolder(), configuration.storage(), context.logger()

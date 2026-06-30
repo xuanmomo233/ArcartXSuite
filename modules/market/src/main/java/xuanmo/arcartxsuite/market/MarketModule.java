@@ -17,6 +17,7 @@ import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
@@ -185,6 +186,18 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
                     return marketRepo.getDescriptor();
                 }
             });
+
+        context.registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
+            @Override public @NotNull String moduleId() { return "market"; }
+            @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
+                try { return marketRepo.deletePlayerData(playerUuid); }
+                catch (Exception e) { context.logger().warning("Market purge 失败: " + e.getMessage()); return -1; }
+            }
+            @Override public int purgeAllPlayerData() {
+                try { return marketRepo.deleteAllPlayerData(); }
+                catch (Exception e) { context.logger().warning("Market purgeAll 失败: " + e.getMessage()); return -1; }
+            }
+        });
 
         adminCommand = new MarketAdminCommand(() -> service, messages());
 

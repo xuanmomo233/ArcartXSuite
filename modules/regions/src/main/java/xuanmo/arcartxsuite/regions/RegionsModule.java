@@ -13,6 +13,7 @@ import org.bukkit.event.HandlerList;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
+import xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
@@ -178,6 +179,18 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
                     return repository.getDescriptor();
                 }
             });
+
+        context.registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
+            @Override public @NotNull String moduleId() { return "regions"; }
+            @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
+                try { return repository.deletePlayerData(playerUuid); }
+                catch (Exception e) { context.logger().warning("Regions purge 失败: " + e.getMessage()); return -1; }
+            }
+            @Override public int purgeAllPlayerData() {
+                try { return repository.deleteAllPlayerData(); }
+                catch (Exception e) { context.logger().warning("Regions purgeAll 失败: " + e.getMessage()); return -1; }
+            }
+        });
 
         context.logger().info("Regions 模块已启动 (已加载 " + regionManager.getAllRegions().size() + " 个区域)。");
     }

@@ -196,24 +196,13 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         Bukkit.getPluginManager().registerEvents(listener, context.plugin());
 
         // 启动实体清理服务
-        var cleanupConfig = EntityCleanupService.CleanupConfiguration.fromSection(
-            org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
-                new File(context.dataFolder(), "config.yml")).getConfigurationSection("entity-cleanup"));
-        cleanupService = new EntityCleanupService(context.plugin(), context.logger(), cleanupConfig);
+        cleanupService = new EntityCleanupService(
+            context.plugin(), context.logger(), configuration.entityCleanup());
         cleanupService.start();
 
         // 启动定时命令服务
-        var schedYaml = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
-            new File(context.dataFolder(), "config.yml"));
-        var schedSection = schedYaml.getConfigurationSection("scheduled-commands");
-        java.util.List<ScheduledCommandService.ScheduledTask> schedTasks = new java.util.ArrayList<>();
-        if (schedSection != null) {
-            for (String key : schedSection.getKeys(false)) {
-                schedTasks.add(ScheduledCommandService.ScheduledTask.fromSection(
-                    key, schedSection.getConfigurationSection(key)));
-            }
-        }
-        scheduledCommandService = new ScheduledCommandService(context.plugin(), context.logger(), schedTasks);
+        scheduledCommandService = new ScheduledCommandService(
+            context.plugin(), context.logger(), configuration.scheduledCommands());
         scheduledCommandService.start();
 
         JdbcEventPacketRepository epRepo = (JdbcEventPacketRepository) repository;

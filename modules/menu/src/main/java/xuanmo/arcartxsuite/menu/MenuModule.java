@@ -53,8 +53,20 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
     }
 
     @Override
+    protected int currentConfigVersion() {
+        return 1;
+    }
+
+    @Override
     protected String messagesFileName() {
         return "messages.yml";
+    }
+
+    @Override
+    protected @NotNull SyncPolicy defaultSyncPolicy() {
+        return SyncPolicy.builder()
+            .dynamicSection("messages")
+            .build();
     }
 
     @Override
