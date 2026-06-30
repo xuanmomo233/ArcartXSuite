@@ -103,12 +103,17 @@ public final class MenuAdminCommand {
 
     private void sendHelp(CommandSender sender, String label, String alias) {
         sender.sendMessage(msg("admin.usage"));
+        sender.sendMessage(msg("admin.help-header"));
+        sender.sendMessage(msg("admin.help-status"));
+        sender.sendMessage(msg("admin.help-reload"));
+        sender.sendMessage(msg("admin.help-list"));
+        sender.sendMessage(msg("admin.help-open"));
     }
 
     private void sendStatus(CommandSender sender) {
         sender.sendMessage(msg("admin.status-title"));
         sender.sendMessage(msg("admin.status-menus", service.menus().size()));
-        sender.sendMessage(messages.get("prefix") + messages.get("admin.status-bindings",
+        sender.sendMessage(msg("admin.status-bindings",
             service.bindingRegistry().commandBindingCount(),
             service.bindingRegistry().itemBindings().size()
         ));

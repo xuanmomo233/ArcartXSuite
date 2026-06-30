@@ -167,7 +167,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected @NotNull Map<String, TabExecutor> commandBindings() {
-        MenuPlayerCommand playerCommand = new MenuPlayerCommand(service, messages());
+        MenuPlayerCommand playerCommand = new MenuPlayerCommand(() -> this.service, messages());
         return Map.of("menu", playerCommand);
     }
 
