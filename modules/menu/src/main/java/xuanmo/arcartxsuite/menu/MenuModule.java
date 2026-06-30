@@ -115,26 +115,19 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
             throw new IllegalStateException("Menu 模块需要 ArcartX PacketBridge");
         }
 
-        File panelFile = new File(context.pluginDataFolder(), MenuService.PANEL_UI_FILE_PATH);
-        File escFile = new File(context.pluginDataFolder(), MenuService.ESC_UI_FILE_PATH);
-
-        UiBinding panelBinding = context.prepareUiBinding(
-            "Menu Panel",
+        UiBinding panelBinding = registerModuleUi(
+            MenuService.PANEL_UI_FILE_PATH,
             configuration.client().panelUiId(),
-            configuration.client().registerUiOnEnable(),
-            panelFile
+            configuration.client().registerUiOnEnable()
         );
-        UiBinding escBinding = context.prepareUiBinding(
-            "Menu ESC",
+        UiBinding escBinding = registerModuleUi(
+            MenuService.ESC_UI_FILE_PATH,
             configuration.client().escUiId(),
-            configuration.client().registerUiOnEnable(),
-            escFile
+            configuration.client().registerUiOnEnable()
         );
-        if (panelBinding == null || escBinding == null) {
+        if (panelBinding.registeredUiId() == null || escBinding.registeredUiId() == null) {
             throw new IllegalStateException("Menu UI 注册失败");
         }
-        recordUiBinding(MenuService.PANEL_UI_FILE_PATH, panelBinding);
-        recordUiBinding(MenuService.ESC_UI_FILE_PATH, escBinding);
 
         service = new MenuService(
             context.plugin(),
@@ -195,41 +188,6 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
                 }
             }
         });
-    }
-
-    @Override
-    public void onReload() throws Exception {
-        File configFile = new File(context.dataFolder(), configFileName());
-        loadConfiguration(configFile);
-
-        File panelFile = new File(context.pluginDataFolder(), MenuService.PANEL_UI_FILE_PATH);
-        File escFile = new File(context.pluginDataFolder(), MenuService.ESC_UI_FILE_PATH);
-
-        UiBinding panelBinding = context.prepareUiBinding(
-            "Menu Panel",
-            configuration.client().panelUiId(),
-            configuration.client().registerUiOnEnable(),
-            panelFile
-        );
-        UiBinding escBinding = context.prepareUiBinding(
-            "Menu ESC",
-            configuration.client().escUiId(),
-            configuration.client().registerUiOnEnable(),
-            escFile
-        );
-        if (panelBinding != null) {
-            recordUiBinding(MenuService.PANEL_UI_FILE_PATH, panelBinding);
-        }
-        if (escBinding != null) {
-            recordUiBinding(MenuService.ESC_UI_FILE_PATH, escBinding);
-        }
-        if (service != null) {
-            service.updateConfiguration(configuration);
-            service.reload(context.dataFolder());
-            if (panelBinding != null && escBinding != null) {
-                service.setRuntimeUiIds(panelBinding.runtimeUiId(), escBinding.runtimeUiId());
-            }
-        }
     }
 
     @Override

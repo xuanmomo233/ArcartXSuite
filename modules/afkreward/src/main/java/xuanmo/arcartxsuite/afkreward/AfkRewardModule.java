@@ -150,15 +150,8 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         adminCommand = new AfkRewardAdminCommand(() -> service, messages());
 
         // UI 绑定
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        if (packetBridge != null && packetBridge.isAvailable() && configuration.ui().registerOnEnable()) {
-            File uiFile = new File(context.pluginDataFolder(), HUD_UI_FILE_PATH);
-            UiBinding binding = context.prepareUiBinding(
-                "AfkRewardHUD", configuration.ui().hudId(), true, uiFile
-            );
-            if (binding != null) {
-                recordUiBinding(HUD_UI_FILE_PATH, binding);
-            }
+        if (configuration.ui().registerOnEnable()) {
+            registerModuleUi(HUD_UI_FILE_PATH, configuration.ui().hudId(), true);
         }
 
         // 注册跨服/迁移能力

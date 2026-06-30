@@ -177,13 +177,13 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             List<String> bossUiIdCandidates = configuration.uiIds();
             List<String> resolvedBossUiIds = new java.util.ArrayList<>();
             for (String candidateUiId : bossUiIdCandidates) {
-                File bossUiFile = new File(context.pluginDataFolder(), BOSS_UI_FILE_PATH);
-                UiBinding bossBinding = context.prepareUiBinding(
-                    "EntityTracker Boss", candidateUiId,
-                    configuration.registerUiOnEnable(), bossUiFile
+                UiBinding bossBinding = registerModuleUi(
+                    BOSS_UI_RESOURCE_PATH,
+                    BOSS_UI_FILE_PATH + "#" + candidateUiId,
+                    candidateUiId,
+                    configuration.registerUiOnEnable()
                 );
-                if (bossBinding != null) {
-                    recordUiBinding(BOSS_UI_FILE_PATH + "#" + candidateUiId, bossBinding);
+                if (bossBinding.registeredUiId() != null) {
                     resolvedBossUiIds.add(bossBinding.runtimeUiId());
                 }
             }
@@ -210,13 +210,13 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         List<String> targetUiIdCandidates = targetConfiguration.uiIds();
         List<String> resolvedTargetUiIds = new java.util.ArrayList<>();
         for (String candidateUiId : targetUiIdCandidates) {
-            File targetUiFile = new File(context.pluginDataFolder(), TARGET_UI_FILE_PATH);
-            UiBinding targetBinding = context.prepareUiBinding(
-                "EntityTracker Target", candidateUiId,
-                targetConfiguration.registerUiOnEnable(), targetUiFile
+            UiBinding targetBinding = registerModuleUi(
+                TARGET_UI_RESOURCE_PATH,
+                TARGET_UI_FILE_PATH + "#" + candidateUiId,
+                candidateUiId,
+                targetConfiguration.registerUiOnEnable()
             );
-            if (targetBinding != null) {
-                recordUiBinding(TARGET_UI_FILE_PATH + "#" + candidateUiId, targetBinding);
+            if (targetBinding.registeredUiId() != null) {
                 resolvedTargetUiIds.add(targetBinding.runtimeUiId());
             }
         }

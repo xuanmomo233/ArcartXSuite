@@ -183,21 +183,20 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         PacketBridgeAPI packetBridge = context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
         if (packetBridge != null && packetBridge.isAvailable()) {
-            File menuFile = new File(context.pluginDataFolder(), EssentialsMenuPacketHandler.UI_FILE_PATH);
-            File adminFile = new File(context.pluginDataFolder(), EssentialsAdminPacketHandler.UI_FILE_PATH);
+            UiBinding menuBinding = registerModuleUi(
+                EssentialsMenuPacketHandler.UI_FILE_PATH, null, true
+            );
+            UiBinding adminBinding = registerModuleUi(
+                EssentialsAdminPacketHandler.UI_FILE_PATH, null, true
+            );
 
-            UiBinding menuBinding = context.prepareUiBinding("Essentials Menu", null, true, menuFile);
-            UiBinding adminBinding = context.prepareUiBinding("Essentials Admin", null, true, adminFile);
-
-            if (menuBinding != null) {
-                recordUiBinding(EssentialsMenuPacketHandler.UI_FILE_PATH, menuBinding);
+            if (menuBinding.registeredUiId() != null) {
                 menuPacketHandler = new EssentialsMenuPacketHandler(
                     context.plugin(), packetBridge, packetGuard,
                     playerService, teleportService, repository,
                     inventoryActionsService, menuBinding.runtimeUiId());
             }
-            if (adminBinding != null) {
-                recordUiBinding(EssentialsAdminPacketHandler.UI_FILE_PATH, adminBinding);
+            if (adminBinding.registeredUiId() != null) {
                 adminPacketHandler = new EssentialsAdminPacketHandler(
                     context.plugin(), packetBridge, packetGuard,
                     playerService, teleportService, repository,

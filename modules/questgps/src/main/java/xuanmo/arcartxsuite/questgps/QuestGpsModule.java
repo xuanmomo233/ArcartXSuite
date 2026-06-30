@@ -129,28 +129,27 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         PacketGuardAPI packetGuard = context.packetGuard();
         ItemBridgeAPI itemStackBridge = context.itemStackBridge();
 
-        File menuFile = new File(context.pluginDataFolder(), QuestGpsService.MENU_UI_FILE_PATH);
-        File guideFile = new File(context.pluginDataFolder(), QuestGpsService.GUIDE_UI_FILE_PATH);
-
         java.util.List<String> menuRuntimeUiIds = new java.util.ArrayList<>();
         for (String candidateUiId : configuration.client().menuUiIds()) {
-            UiBinding menuBinding = context.prepareUiBinding(
-                "QuestGPS Menu", candidateUiId,
-                configuration.client().registerUiOnEnable(), menuFile
+            UiBinding menuBinding = registerModuleUi(
+                QuestGpsService.MENU_UI_RESOURCE_PATH,
+                QuestGpsService.MENU_UI_FILE_PATH + "#" + candidateUiId,
+                candidateUiId,
+                configuration.client().registerUiOnEnable()
             );
-            if (menuBinding != null) {
-                recordUiBinding(QuestGpsService.MENU_UI_FILE_PATH + "#" + candidateUiId, menuBinding);
+            if (menuBinding.registeredUiId() != null) {
                 menuRuntimeUiIds.add(menuBinding.runtimeUiId());
             }
         }
         java.util.List<String> guideRuntimeUiIds = new java.util.ArrayList<>();
         for (String candidateUiId : configuration.client().guideUiIds()) {
-            UiBinding guideBinding = context.prepareUiBinding(
-                "QuestGPS Guide", candidateUiId,
-                configuration.client().registerUiOnEnable(), guideFile
+            UiBinding guideBinding = registerModuleUi(
+                QuestGpsService.GUIDE_UI_RESOURCE_PATH,
+                QuestGpsService.GUIDE_UI_FILE_PATH + "#" + candidateUiId,
+                candidateUiId,
+                configuration.client().registerUiOnEnable()
             );
-            if (guideBinding != null) {
-                recordUiBinding(QuestGpsService.GUIDE_UI_FILE_PATH + "#" + candidateUiId, guideBinding);
+            if (guideBinding.registeredUiId() != null) {
                 guideRuntimeUiIds.add(guideBinding.runtimeUiId());
             }
         }

@@ -316,24 +316,18 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         });
 
         // 注册 UI 绑定
-        File bindUiFile = new File(context.pluginDataFolder(), QQBotUiService.BIND_UI_FILE);
-        UiBinding bindUi = context.prepareUiBinding("QQBot-Bind", "AXS:QQBot_Bind", true, bindUiFile);
-        if (bindUi != null) {
-            recordUiBinding(QQBotUiService.BIND_UI_FILE, bindUi);
+        UiBinding bindUi = registerModuleUi(QQBotUiService.BIND_UI_FILE, "AXS:QQBot_Bind", true);
+        if (bindUi.registeredUiId() != null) {
             uiService.setBindUiId(bindUi.runtimeUiId());
         }
 
-        File notifyUiFile = new File(context.pluginDataFolder(), QQBotUiService.NOTIFY_UI_FILE);
-        UiBinding notifyUi = context.prepareUiBinding("QQBot-Notify", "AXS:QQBot_Notify", true, notifyUiFile);
-        if (notifyUi != null) {
-            recordUiBinding(QQBotUiService.NOTIFY_UI_FILE, notifyUi);
+        UiBinding notifyUi = registerModuleUi(QQBotUiService.NOTIFY_UI_FILE, "AXS:QQBot_Notify", true);
+        if (notifyUi.registeredUiId() != null) {
             uiService.setNotifyUiId(notifyUi.runtimeUiId());
         }
 
-        File adminUiFile = new File(context.pluginDataFolder(), QQBotUiService.ADMIN_UI_FILE);
-        UiBinding adminUi = context.prepareUiBinding("QQBot-Admin", "AXS:QQBot_Admin", true, adminUiFile);
-        if (adminUi != null) {
-            recordUiBinding(QQBotUiService.ADMIN_UI_FILE, adminUi);
+        UiBinding adminUi = registerModuleUi(QQBotUiService.ADMIN_UI_FILE, "AXS:QQBot_Admin", true);
+        if (adminUi.registeredUiId() != null) {
             uiService.setAdminUiId(adminUi.runtimeUiId());
         }
 
@@ -342,7 +336,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             + " | 存储=" + configuration.storage().mode()
             + " | 绑定=" + (configuration.binding().enabled() ? "启用" : "禁用")
             + " | 白名单=" + (configuration.whitelist().enabled() ? "启用" : "禁用")
-            + " | UI=" + (bindUi != null ? "启用" : "禁用")
+            + " | UI=" + (bindUi.registeredUiId() != null ? "启用" : "禁用")
         );
 
         // 16. 订阅 EventBus 事件（解耦播报）

@@ -167,11 +167,11 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         context.registerListener(new PendingDeliveryService(
             context.plugin(), service.getRepository(), currencyManager, itemSerializer, context.logger()));
 
-        // 注册 UI 到 ArcartX 桥接层（必须在 exportAndBindUi 之后）
-        bindMarketUi("Market Shop", configuration.ui().shopId(), SHOP_UI_FILE_PATH);
-        bindMarketUi("Market Auction", configuration.ui().auctionId(), AUCTION_UI_FILE_PATH);
-        bindMarketUi("Market Recycle", configuration.ui().recycleId(), RECYCLE_UI_FILE_PATH);
-        bindMarketUi("Market History", configuration.ui().historyId(), HISTORY_UI_FILE_PATH);
+        // 注册 UI 到 ArcartX 桥接层
+        bindMarketUi(configuration.ui().shopId(), SHOP_UI_FILE_PATH);
+        bindMarketUi(configuration.ui().auctionId(), AUCTION_UI_FILE_PATH);
+        bindMarketUi(configuration.ui().recycleId(), RECYCLE_UI_FILE_PATH);
+        bindMarketUi(configuration.ui().historyId(), HISTORY_UI_FILE_PATH);
 
         JdbcMarketRepository marketRepo = (JdbcMarketRepository) service.getRepository();
         context.registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
@@ -201,13 +201,9 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             + " | 跨服=" + (service != null && service.crossServerActive() ? "ON" : "OFF"));
     }
 
-    private void bindMarketUi(String name, String configuredId, String relativeUiPath) {
+    private void bindMarketUi(String configuredId, String relativeUiPath) {
         if (!configuration.ui().registerOnEnable()) return;
-        File uiFile = new File(context.pluginDataFolder(), relativeUiPath);
-        xuanmo.arcartxsuite.api.UiBinding binding = context.prepareUiBinding(name, configuredId, true, uiFile);
-        if (binding != null) {
-            recordUiBinding(relativeUiPath, binding);
-        }
+        registerModuleUi(relativeUiPath, configuredId, true);
     }
 
     private void ensureExampleShopExported() {

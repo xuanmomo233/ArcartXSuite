@@ -87,28 +87,27 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         PacketBridgeAPI packetBridge = context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
 
-        File dialogFile = new File(context.pluginDataFolder(), DIALOG_UI_FILE_PATH);
-        File selectorFile = new File(context.pluginDataFolder(), SELECTOR_UI_FILE_PATH);
-
         java.util.List<String> dialogRuntimeUiIds = new java.util.ArrayList<>();
         for (String candidateUiId : configuration.clientConfig().dialogUiIds()) {
-            UiBinding dialogBinding = context.prepareUiBinding(
-                "Conversation Dialog", candidateUiId,
-                configuration.registerUiOnEnable(), dialogFile
+            UiBinding dialogBinding = registerModuleUi(
+                "arcartx/ui/conversation_dialog.yml",
+                DIALOG_UI_FILE_PATH + "#" + candidateUiId,
+                candidateUiId,
+                configuration.registerUiOnEnable()
             );
-            if (dialogBinding != null) {
-                recordUiBinding(DIALOG_UI_FILE_PATH + "#" + candidateUiId, dialogBinding);
+            if (dialogBinding.registeredUiId() != null) {
                 dialogRuntimeUiIds.add(dialogBinding.runtimeUiId());
             }
         }
         java.util.List<String> selectorRuntimeUiIds = new java.util.ArrayList<>();
         for (String candidateUiId : configuration.clientConfig().selectorUiIds()) {
-            UiBinding selectorBinding = context.prepareUiBinding(
-                "Conversation Selector", candidateUiId,
-                configuration.registerUiOnEnable(), selectorFile
+            UiBinding selectorBinding = registerModuleUi(
+                "arcartx/ui/conversation_selector.yml",
+                SELECTOR_UI_FILE_PATH + "#" + candidateUiId,
+                candidateUiId,
+                configuration.registerUiOnEnable()
             );
-            if (selectorBinding != null) {
-                recordUiBinding(SELECTOR_UI_FILE_PATH + "#" + candidateUiId, selectorBinding);
+            if (selectorBinding.registeredUiId() != null) {
                 selectorRuntimeUiIds.add(selectorBinding.runtimeUiId());
             }
         }

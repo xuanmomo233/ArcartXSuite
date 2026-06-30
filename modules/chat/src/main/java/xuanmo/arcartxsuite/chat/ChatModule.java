@@ -109,13 +109,11 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         // 绑定 @补全 overlay UI
         completionUiId = null;
         if (configuration.functions().mentionEnabled()) {
-            File completionUiFile = new File(context.pluginDataFolder(), COMPLETION_UI_FILE_PATH);
-            UiBinding completionBinding = context.prepareUiBinding(
-                "ChatCompletion", "axs_chat_completion", true, completionUiFile
+            UiBinding completionBinding = registerModuleUi(
+                COMPLETION_UI_FILE_PATH, "axs_chat_completion", true
             );
-            if (completionBinding != null && completionBinding.registeredUiId() != null) {
+            if (completionBinding.registeredUiId() != null) {
                 completionUiId = completionBinding.registeredUiId();
-                recordUiBinding(COMPLETION_UI_FILE_PATH, completionBinding);
                 context.logger().fine("Chat @补全 UI 已注册: " + completionUiId);
             }
         }

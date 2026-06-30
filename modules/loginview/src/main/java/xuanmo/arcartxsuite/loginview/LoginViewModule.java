@@ -156,14 +156,14 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
     @Override
     protected void startService() throws Exception {
         String selectedUiPath = configuration.ui().relativeUiPath();
-        File uiFile = new File(context.pluginDataFolder(), selectedUiPath);
-        UiBinding uiBinding = context.prepareUiBinding(
-            "LoginView", configuration.ui().uiId(), configuration.ui().registerUiOnEnable(), uiFile
+        UiBinding uiBinding = registerModuleUi(
+            selectedUiPath,
+            configuration.ui().uiId(),
+            configuration.ui().registerUiOnEnable()
         );
-        if (uiBinding == null) {
+        if (uiBinding.registeredUiId() == null) {
             throw new IllegalStateException("LoginView UI 注册失败");
         }
-        recordUiBinding(selectedUiPath, uiBinding);
 
         PacketBridgeAPI packetBridge = context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();

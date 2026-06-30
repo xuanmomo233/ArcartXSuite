@@ -19,6 +19,7 @@ import xuanmo.arcartxsuite.api.config.ConfigSyncSpec;
 import xuanmo.arcartxsuite.api.config.ModuleConfigSpec;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 
 /**
@@ -344,12 +345,10 @@ public abstract class AbstractAXSModule implements AXSModule {
                 context.logger().warning(descriptor().name() + " 模块关闭异常: " + exception.getMessage());
             }
         }
-        // 注销 UI（reload 期间跳过 unregisterUi，避免客户端丢失已打开的 HUD）
-        if (!reloading) {
-            for (UiBinding binding : uiBindings.values()) {
-                if (binding.registeredUiId() != null && context != null) {
-                    context.unregisterUi(binding.registeredUiId());
-                }
+        // 注销 UI（registerOrReloadUi 在 re-enable 时会自动重新注册）
+        for (UiBinding binding : uiBindings.values()) {
+            if (binding.registeredUiId() != null && context != null) {
+                context.unregisterUi(binding.registeredUiId());
             }
         }
         uiBindings.clear();
@@ -535,5 +534,101 @@ public abstract class AbstractAXSModule implements AXSModule {
      */
     protected void recordUiBinding(String relativeUiPath, UiBinding binding) {
         uiBindings.put(relativeUiPath, binding);
+    }
+
+    // ── 统一 UI 注册 API（供子类与第三方模块使用）────────────────────
+
+    /**
+     * 注册模块 UI（基于 {@link #uiResourceMappings()} 中的映射）。
+     * <p>
+     * 自动导出资源文件并使用 {@link PacketBridgeAPI#registerOrReloadUi} 注册/热重载，
+     * 解决 reload 时手动修改的 UI 文件不生效的问题。
+     *
+     * @param relativeUiPath   UI 文件相对路径（如 {@code "ui/menu_panel.yml"}）
+     * @param configuredUiId   配置中的 UI ID（可为 null，自动从文件名推导）
+     * @param registerOnEnable 是否注册到 ArcartX 引擎
+     * @return UI 绑定结果
+     * @throws IllegalStateException 若 relativeUiPath 未在 uiResourceMappings() 中声明
+     */
+    @NotNull
+    protected final UiBinding registerModuleUi(@NotNull String relativeUiPath,
+                                                @Nullable String configuredUiId,
+                                                boolean registerOnEnable) {
+        String resourcePath = resolveUiResourcePath(relativeUiPath);
+        if (resourcePath == null) {
+            throw new IllegalStateException(
+                "relativeUiPath '" + relativeUiPath + "' 未在 uiResourceMappings() 中声明"
+            );
+        }
+        return doRegisterModuleUi(resourcePath, relativeUiPath, configuredUiId, registerOnEnable);
+    }
+
+    /**
+     * 注册模块 UI（显式指定 jar 内资源路径）。
+     * <p>
+     * 适用于动态生成的 UI 文件（如运行时通过模板写入的文件），
+     * 这些文件不需要在 {@link #uiResourceMappings()} 中声明。
+     *
+     * @param resourcePath     jar 内资源路径（如 {@code "arcartx/ui/custom.yml"}）
+     * @param relativeUiPath   导出到数据目录的相对路径
+     * @param configuredUiId   配置中的 UI ID
+     * @param registerOnEnable 是否注册
+     * @return UI 绑定结果
+     */
+    @NotNull
+    protected final UiBinding registerModuleUi(@NotNull String resourcePath,
+                                                @NotNull String relativeUiPath,
+                                                @Nullable String configuredUiId,
+                                                boolean registerOnEnable) {
+        return doRegisterModuleUi(resourcePath, relativeUiPath, configuredUiId, registerOnEnable);
+    }
+
+    /**
+     * 获取已注册 UI 的 runtime ID。
+     *
+     * @param relativeUiPath {@link #uiResourceMappings()} 中声明的相对路径
+     * @return runtime UI ID，未注册时返回 null
+     */
+    @Nullable
+    protected final String getModuleUiId(@NotNull String relativeUiPath) {
+        UiBinding binding = uiBindings.get(relativeUiPath);
+        return binding != null ? binding.runtimeUiId() : null;
+    }
+
+    private UiBinding doRegisterModuleUi(String resourcePath, String relativeUiPath,
+                                          String configuredUiId, boolean registerOnEnable) {
+        boolean overwrite = overwriteUiFiles();
+        File uiFile;
+        try {
+            uiFile = context.exportUiResource(resourcePath, relativeUiPath, overwrite, moduleClassLoader());
+        } catch (IOException e) {
+            throw new RuntimeException("导出 UI 资源失败: " + resourcePath, e);
+        }
+        if (!registerOnEnable) {
+            String runtime = PacketBridgeAPI.normalizeUiId(configuredUiId, uiFile);
+            UiBinding binding = new UiBinding(runtime, null);
+            recordUiBinding(relativeUiPath, binding);
+            return binding;
+        }
+        PacketBridgeAPI bridge = context.packetBridge();
+        if (bridge == null || !bridge.isAvailable()) {
+            String runtime = PacketBridgeAPI.normalizeUiId(configuredUiId, uiFile);
+            return new UiBinding(runtime, null);
+        }
+        PacketBridgeAPI.UiRegistrationResult reg =
+            bridge.registerOrReloadUi(configuredUiId, uiFile);
+        UiBinding binding = new UiBinding(reg.runtimeUiId(), reg.registeredUiId());
+        recordUiBinding(relativeUiPath, binding);
+        return binding;
+    }
+
+    @Nullable
+    private String resolveUiResourcePath(String relativeUiPath) {
+        for (Map.Entry<String, String> entry : uiResourceMappings().entrySet()) {
+            if (entry.getValue().equals(relativeUiPath)) {
+                return entry.getKey();
+            }
+        }
+        return null;
     }
 }

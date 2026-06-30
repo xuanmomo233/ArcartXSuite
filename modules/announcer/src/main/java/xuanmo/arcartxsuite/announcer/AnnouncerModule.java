@@ -130,12 +130,13 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         // Announcer UI（支持多 UI）
         java.util.List<String> announcerRuntimeUiIds = new java.util.ArrayList<>();
         for (String candidateUiId : configuration.uiIds()) {
-            File uiFile = new File(context.pluginDataFolder(), "ui/announcer_hud.yml");
-            UiBinding uiBinding = context.prepareUiBinding(
-                "Announcer", candidateUiId, configuration.registerUiOnEnable(), uiFile
+            UiBinding uiBinding = registerModuleUi(
+                "arcartx/ui/announcer_hud.yml",
+                "ui/announcer_hud.yml#" + candidateUiId,
+                candidateUiId,
+                configuration.registerUiOnEnable()
             );
-            if (uiBinding != null) {
-                recordUiBinding("ui/announcer_hud.yml#" + candidateUiId, uiBinding);
+            if (uiBinding.registeredUiId() != null) {
                 announcerRuntimeUiIds.add(uiBinding.runtimeUiId());
             }
         }
@@ -147,12 +148,13 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         AnnouncerModuleConfiguration.SubtitleSettings subtitleCfg = configuration.subtitle();
         java.util.List<String> subtitleRuntimeUiIds = new java.util.ArrayList<>();
         for (String candidateUiId : subtitleCfg.uiIds()) {
-            File subtitleUiFile = new File(context.pluginDataFolder(), "ui/subtitle_hud.yml");
-            UiBinding subtitleUiBinding = context.prepareUiBinding(
-                "Subtitle", candidateUiId, subtitleCfg.registerUiOnEnable(), subtitleUiFile
+            UiBinding subtitleUiBinding = registerModuleUi(
+                "arcartx/ui/subtitle_hud.yml",
+                "ui/subtitle_hud.yml#" + candidateUiId,
+                candidateUiId,
+                subtitleCfg.registerUiOnEnable()
             );
-            if (subtitleUiBinding != null) {
-                recordUiBinding("ui/subtitle_hud.yml#" + candidateUiId, subtitleUiBinding);
+            if (subtitleUiBinding.registeredUiId() != null) {
                 subtitleRuntimeUiIds.add(subtitleUiBinding.runtimeUiId());
             }
         }

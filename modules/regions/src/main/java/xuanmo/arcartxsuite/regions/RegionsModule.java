@@ -125,20 +125,19 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         PacketBridgeAPI packetBridge = context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
         if (packetBridge != null && packetBridge.isAvailable()) {
-            File menuFile = new File(context.pluginDataFolder(), RegionsMenuPacketHandler.UI_FILE_PATH);
-            File adminFile = new File(context.pluginDataFolder(), RegionsAdminPacketHandler.UI_FILE_PATH);
+            UiBinding menuBinding = registerModuleUi(
+                RegionsMenuPacketHandler.UI_FILE_PATH, null, true
+            );
+            UiBinding adminBinding = registerModuleUi(
+                RegionsAdminPacketHandler.UI_FILE_PATH, null, true
+            );
 
-            UiBinding menuBinding = context.prepareUiBinding("Regions Menu", null, true, menuFile);
-            UiBinding adminBinding = context.prepareUiBinding("Regions Admin", null, true, adminFile);
-
-            if (menuBinding != null) {
-                recordUiBinding(RegionsMenuPacketHandler.UI_FILE_PATH, menuBinding);
+            if (menuBinding.registeredUiId() != null) {
                 menuPacketHandler = new RegionsMenuPacketHandler(
                     context.plugin(), packetBridge, packetGuard,
                     regionManager, menuBinding.runtimeUiId());
             }
-            if (adminBinding != null) {
-                recordUiBinding(RegionsAdminPacketHandler.UI_FILE_PATH, adminBinding);
+            if (adminBinding.registeredUiId() != null) {
                 adminPacketHandler = new RegionsAdminPacketHandler(
                     context.plugin(), packetBridge, packetGuard,
                     regionManager, adminBinding.runtimeUiId());

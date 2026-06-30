@@ -119,22 +119,19 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
         PacketBridgeAPI packetBridge = context.packetBridge();
         PacketGuardAPI packetGuard = context.packetGuard();
 
-        File menuFile = new File(context.pluginDataFolder(), MapService.MENU_UI_FILE_PATH);
-        File hudFile = new File(context.pluginDataFolder(), MapService.HUD_UI_FILE_PATH);
-
-        UiBinding menuBinding = context.prepareUiBinding(
-            "Map Menu", configuration.client().menuUiId(),
-            configuration.client().registerUiOnEnable(), menuFile
+        UiBinding menuBinding = registerModuleUi(
+            MapService.MENU_UI_FILE_PATH,
+            configuration.client().menuUiId(),
+            configuration.client().registerUiOnEnable()
         );
-        UiBinding hudBinding = context.prepareUiBinding(
-            "Map HUD", configuration.client().hudUiId(),
-            configuration.client().registerUiOnEnable(), hudFile
+        UiBinding hudBinding = registerModuleUi(
+            MapService.HUD_UI_FILE_PATH,
+            configuration.client().hudUiId(),
+            configuration.client().registerUiOnEnable()
         );
-        if (menuBinding == null || hudBinding == null) {
+        if (menuBinding.registeredUiId() == null || hudBinding.registeredUiId() == null) {
             throw new IllegalStateException("Map UI 注册失败");
         }
-        recordUiBinding(MapService.MENU_UI_FILE_PATH, menuBinding);
-        recordUiBinding(MapService.HUD_UI_FILE_PATH, hudBinding);
 
         JdbcMapRepository mapRepo = new JdbcMapRepository(
             context.dataFolder(),

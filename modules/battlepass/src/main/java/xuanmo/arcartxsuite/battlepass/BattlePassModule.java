@@ -15,6 +15,7 @@ import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
+import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.capability.DatabaseMigratable;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
@@ -137,6 +138,12 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         JdbcBattlePassRepository repo = new JdbcBattlePassRepository(
             moduleDataFolder, configuration.storage(), context.logger());
 
+        UiBinding mainBinding = registerModuleUi(MAIN_UI_FILE_PATH, configuration.ui().mainId(), true);
+        UiBinding tasksBinding = registerModuleUi(TASKS_UI_FILE_PATH, configuration.ui().tasksId(), true);
+        if (mainBinding.registeredUiId() == null || tasksBinding.registeredUiId() == null) {
+            throw new IllegalStateException("BattlePass UI 注册失败");
+        }
+
         service = new BattlePassService(context.plugin(), configuration, repo, context.logger());
         service.setEventBusProvider(() -> context.getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
@@ -187,13 +194,15 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         if (service == null) return null;
         var packetBridge = context.packetBridge();
         var packetGuard = context.packetGuard();
+        String mainUiId = getModuleUiId(MAIN_UI_FILE_PATH);
+        String tasksUiId = getModuleUiId(TASKS_UI_FILE_PATH);
         packetHandler = new BattlePassPacketHandler(
             context.plugin(),
             packetBridge,
             packetGuard,
             service,
-            configuration.ui().mainId(),
-            configuration.ui().tasksId()
+            mainUiId != null ? mainUiId : configuration.ui().mainId(),
+            tasksUiId != null ? tasksUiId : configuration.ui().tasksId()
         );
         return packetHandler;
     }

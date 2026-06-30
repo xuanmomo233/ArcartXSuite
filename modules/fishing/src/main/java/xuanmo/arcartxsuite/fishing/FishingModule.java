@@ -14,6 +14,7 @@ import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
+import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.capability.DatabaseMigratable;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
@@ -117,21 +118,23 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             moduleDataFolder, configuration.storage(), context.logger());
 
         // 注册 UI 并获取 UI ID
-        var binding1 = context.prepareUiBinding(
-            descriptor().name(), configuration.ui().minigameId(), configuration.ui().registerOnEnable(),
-            new File(moduleDataFolder, MINIGAME_UI_FILE));
-        if (binding1 != null && binding1.registeredUiId() != null) {
-            recordUiBinding(MINIGAME_UI_FILE, binding1);
+        UiBinding binding1 = registerModuleUi(
+            MINIGAME_UI_FILE,
+            configuration.ui().minigameId(),
+            configuration.ui().registerOnEnable()
+        );
+        if (binding1.registeredUiId() != null) {
             minigameUiId = binding1.registeredUiId();
         } else {
             minigameUiId = configuration.ui().minigameId();
         }
 
-        var binding2 = context.prepareUiBinding(
-            descriptor().name(), configuration.ui().collectionId(), configuration.ui().registerOnEnable(),
-            new File(moduleDataFolder, COLLECTION_UI_FILE));
-        if (binding2 != null && binding2.registeredUiId() != null) {
-            recordUiBinding(COLLECTION_UI_FILE, binding2);
+        UiBinding binding2 = registerModuleUi(
+            COLLECTION_UI_FILE,
+            configuration.ui().collectionId(),
+            configuration.ui().registerOnEnable()
+        );
+        if (binding2.registeredUiId() != null) {
             collectionUiId = binding2.registeredUiId();
         } else {
             collectionUiId = configuration.ui().collectionId();

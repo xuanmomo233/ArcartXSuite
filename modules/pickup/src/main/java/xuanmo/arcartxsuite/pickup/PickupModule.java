@@ -115,12 +115,12 @@ public final class PickupModule extends AbstractAXSModule {
 
     private void startNotificationMode(PacketBridgeAPI packetBridge, ItemBridgeAPI itemStackBridge) throws IOException {
         File uiFile = exportPickupUiFile(configuration);
-        UiBinding uiBinding = context.prepareUiBinding(
-            "Pickup", configuration.uiId(), configuration.registerUiOnEnable(), uiFile
-        );
-        if (uiBinding == null) {
-            throw new IOException("Pickup 通知模式 UI 注册失败");
+        xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.UiRegistrationResult reg =
+            packetBridge.registerOrReloadUi(configuration.uiId(), uiFile);
+        if (!reg.success()) {
+            throw new IOException("Pickup 通知模式 UI 注册失败: " + reg.message());
         }
+        UiBinding uiBinding = new UiBinding(reg.runtimeUiId(), reg.registeredUiId());
         recordUiBinding("ui/pickup_hud.yml", uiBinding);
 
         notificationService = new PickupService(
@@ -142,34 +142,25 @@ public final class PickupModule extends AbstractAXSModule {
     }
 
     private void startScannerMode(PacketBridgeAPI packetBridge, ItemBridgeAPI itemStackBridge) throws IOException {
-        boolean overwrite = configuration.scanner().overwriteUiFile();
         // HUD（被动显示）
-        File uiFile = context.exportUiResource(
-            LOOT_PANEL_RESOURCE_PATH, LOOT_PANEL_FILE_PATH,
-            overwrite, moduleClassLoader()
+        UiBinding uiBinding = registerModuleUi(
+            LOOT_PANEL_FILE_PATH,
+            configuration.scanner().uiId(),
+            configuration.scanner().registerUiOnEnable()
         );
-        UiBinding uiBinding = context.prepareUiBinding(
-            "LootPanel", configuration.scanner().uiId(),
-            configuration.scanner().registerUiOnEnable(), uiFile
-        );
-        if (uiBinding == null) {
+        if (uiBinding.registeredUiId() == null) {
             throw new IOException("Pickup 扫描模式 HUD UI 注册失败");
         }
-        recordUiBinding(LOOT_PANEL_FILE_PATH, uiBinding);
 
         // Menu（交互捕获）
-        File interactFile = context.exportUiResource(
-            LOOT_INTERACT_RESOURCE_PATH, LOOT_INTERACT_FILE_PATH,
-            overwrite, moduleClassLoader()
+        UiBinding interactBinding = registerModuleUi(
+            LOOT_INTERACT_FILE_PATH,
+            configuration.scanner().interactUiId(),
+            configuration.scanner().registerUiOnEnable()
         );
-        UiBinding interactBinding = context.prepareUiBinding(
-            "LootInteract", configuration.scanner().interactUiId(),
-            configuration.scanner().registerUiOnEnable(), interactFile
-        );
-        if (interactBinding == null) {
+        if (interactBinding.registeredUiId() == null) {
             throw new IOException("Pickup 扫描模式 Interact Menu UI 注册失败");
         }
-        recordUiBinding(LOOT_INTERACT_FILE_PATH, interactBinding);
 
         scannerService = new LootScannerService(
             context.plugin(), configuration, context.packetGuard(), packetBridge, itemStackBridge,

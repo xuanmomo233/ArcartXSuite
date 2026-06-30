@@ -291,6 +291,7 @@ public final class TabModule extends AbstractAXSModule {
 
     private Map<String, UiBinding> registerTabUis() {
         Map<String, UiBinding> bindings = new LinkedHashMap<>();
+        xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI bridge = context.packetBridge();
         for (TabDefinition definition : configuration.definitions()) {
             if (!definition.enabled()) {
                 continue;
@@ -303,14 +304,14 @@ public final class TabModule extends AbstractAXSModule {
                 }
                 String fileRelative = "ui/" + uiId + ".yml";
                 File uiFile = new File(context.pluginDataFolder(), fileRelative);
-                UiBinding binding = context.prepareUiBinding(
-                    "Tab", uiId, configuration.registerUiOnEnable(), uiFile
-                );
-                if (binding == null) {
-                    throw new IllegalStateException("Tab UI 注册失败: " + uiId + " (file=" + fileRelative + ")");
+                xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.UiRegistrationResult reg =
+                    bridge.registerOrReloadUi(uiId, uiFile);
+                if (!reg.success()) {
+                    throw new IllegalStateException("Tab UI 注册失败: " + uiId + " (file=" + fileRelative + "): " + reg.message());
                 }
-                bindings.put(uiId, binding);
+                UiBinding binding = new UiBinding(reg.runtimeUiId(), reg.registeredUiId());
                 recordUiBinding(fileRelative + "#" + uiId, binding);
+                bindings.put(uiId, binding);
             }
         }
         return bindings;
