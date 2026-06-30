@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Supplier;
+import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -89,12 +90,15 @@ public final class MenuPlayerCommand implements org.bukkit.command.TabExecutor {
             return;
         }
         List<MenuDefinition> menus = new ArrayList<>(service.menus());
+        if (menus.isEmpty()) {
+            player.sendMessage(msg("player.list-empty"));
+            return;
+        }
         player.sendMessage(msg("player.list-header", menus.size()));
         for (MenuDefinition definition : menus) {
             player.sendMessage(messages.get("player.list-entry",
                 definition.id(),
-                definition.layout().configKey(),
-                definition.title()
+                ChatColor.translateAlternateColorCodes('&', definition.title())
             ));
         }
     }

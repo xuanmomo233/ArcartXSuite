@@ -7,8 +7,8 @@ common:
 
 player:
   usage: "&7用法: &f/{0} open <菜单ID> &7| &f/{0} list"
-  list-header: "&6已注册菜单 (&f{0}&6):"
-  list-entry: "&7- &f{0} &8(&7{1}&8) &7{2}"
+  list-header: "&3◆ &6已注册菜单 (&f{0}&6):"
+  list-entry: "&8  ▸ &f{0} &7- &r{2}"
 
 admin:
   usage: "&7用法: &f/axs menu <help|status|reload|list|open <菜单ID> [玩家]>"
@@ -24,4 +24,5 @@ admin:
   status-bindings: "&7命令绑定: &f{0} &7| 物品绑定: &f{1}"
   reload-success: "&aMenu 模块配置已重载。"
   reload-failed: "&cMenu 模块重载失败: &7{0}"
+  list-entry: "&8  ▸ &f{0} &8[{1}] &r{2}"
   open-other: "&a已为 &f{0} &a打开菜单 &f{1}"

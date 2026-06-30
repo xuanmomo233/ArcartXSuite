@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
@@ -120,11 +121,17 @@ public final class MenuAdminCommand {
     }
 
     private void sendList(Player player) {
-        for (MenuDefinition definition : service.menus()) {
-            player.sendMessage(messages.get("player.list-entry",
+        List<MenuDefinition> menus = new ArrayList<>(service.menus());
+        if (menus.isEmpty()) {
+            player.sendMessage(msg("player.list-empty"));
+            return;
+        }
+        player.sendMessage(msg("player.list-header", menus.size()));
+        for (MenuDefinition definition : menus) {
+            player.sendMessage(messages.get("admin.list-entry",
                 definition.id(),
                 definition.layout().configKey(),
-                definition.title()
+                ChatColor.translateAlternateColorCodes('&', definition.title())
             ));
         }
     }

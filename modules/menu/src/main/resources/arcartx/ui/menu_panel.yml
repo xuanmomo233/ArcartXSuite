@@ -338,6 +338,6 @@ controls:
                           through: true
                           x: 90
                           y: 12
-                          texts: "self.entry != null ? self.entry['text'] : ''"
+                          texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
                           center: true
                           fontSize: 36
