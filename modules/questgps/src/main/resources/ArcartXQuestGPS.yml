@@ -100,10 +100,10 @@ navigation:
     # A* 寻路最大迭代次数（防止服务端卡顿，越大路径越精确但越耗时）。
     path-max-iterations: 2000
 
-# Chemdah 玩家任务进度怎么存（与任务菜单 UI 无关）
+# 提供 MySQL数据库 给 Chemdah免费版 （此为补充付费版独有功能，与任务菜单 UI 无关）
 # · 大多数服：Chemdah config.yml 用 database.use=LOCAL → 保持 enabled: false
 # · 要用 MySQL：Chemdah 设 database.use=SQL，此处 enabled: true
-#   且 Chemdah JAR 须包含 DatabaseSQL（付费版，或带该类的 patched 免费 JAR）
+#   QuestGPS 会优先使用内置 DatabaseMySQL（基于 Chemdah 免费版 Relational），
 database:
   enabled: false                      # true = 由 QuestGPS 为 Chemdah 注册 MySQL 存储
   load-in-join-event: true            # 玩家进服时加载 Chemdah 档案
@@ -140,7 +140,7 @@ gate:
   # 被拦截时发给玩家的提示
   deny-message: "&c你需要先完成必要主线任务。"
   deny-chat-card: ""                  # 可选，ArcartX 聊天卡片 ID
-  deny-subtitle: ""                   # 可选，ArcartX 字幕组 ID
+  deny-subtitle: ""                   # 可选，ArcartX-Suite 模块 announcer 字幕组 ID
 
 # 任务定义目录，路径相对模块数据目录。
 # 目录下每个 *.yml 文件可包含多个任务，根键即为任务 ID。
