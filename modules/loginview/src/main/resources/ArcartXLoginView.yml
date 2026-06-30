@@ -45,6 +45,16 @@ terms-of-service:
   #是否开启玩家必须查阅服务器服规才能登录
   enabled: true
 
+# 登录成功后是否将玩家传送到指定出生点（主城）
+spawn-on-login:
+  enabled: false
+  world: world
+  x: 0.0
+  y: 64.0
+  z: 0.0
+  yaw: 0.0
+  pitch: 0.0
+
 security:
   min-password-length: 6
   max-password-length: 64

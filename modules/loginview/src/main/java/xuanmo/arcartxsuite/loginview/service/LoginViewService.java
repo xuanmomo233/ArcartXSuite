@@ -14,8 +14,10 @@ import java.util.Set;
 import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.Server;
+import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -59,7 +61,7 @@ public final class LoginViewService implements Listener {
         .withZone(ZoneId.systemDefault());
 
     private final JavaPlugin plugin;
-    private final LoginViewModuleConfiguration configuration;
+    private LoginViewModuleConfiguration configuration;
     private final LoginViewRepository repository;
     private final PacketBridgeAPI packetBridge;
     private final PacketGuardAPI packetGuard;
@@ -106,6 +108,10 @@ public final class LoginViewService implements Listener {
 
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
         this.eventBusProvider = eventBusProvider;
+    }
+
+    public void setConfiguration(LoginViewModuleConfiguration configuration) {
+        this.configuration = configuration;
     }
 
     public void start() throws SQLException {
@@ -486,6 +492,7 @@ public final class LoginViewService implements Listener {
         }
         sendResult(player, message, true);
         publishLoginEvent(player);
+        teleportToSpawnIfEnabled(player);
         if (configuration.ui().closeOnLogin()) {
             packetBridge.sendPacket(player, uiId, "close", Map.of("message", message));
             Bukkit.getScheduler().runTaskLater(plugin, () -> packetBridge.closeUiUnsafe(player, uiId), 2L);
@@ -499,6 +506,29 @@ public final class LoginViewService implements Listener {
             } catch (SQLException e) {
                 plugin.getLogger().warning("LoginView session 写入失败: " + e.getMessage());
             }
+        }
+    }
+
+    private void teleportToSpawnIfEnabled(Player player) {
+        if (!configuration.spawnOnLogin().enabled()) {
+            return;
+        }
+        String worldName = configuration.spawnOnLogin().world();
+        World targetWorld = Bukkit.getWorld(worldName);
+        if (targetWorld == null) {
+            plugin.getLogger().warning("LoginView spawn-on-login 配置的世界 '" + worldName + "' 不存在，传送失败。");
+            return;
+        }
+        Location location = new Location(
+            targetWorld,
+            configuration.spawnOnLogin().x(),
+            configuration.spawnOnLogin().y(),
+            configuration.spawnOnLogin().z(),
+            configuration.spawnOnLogin().yaw(),
+            configuration.spawnOnLogin().pitch()
+        );
+        if (!player.teleport(location)) {
+            plugin.getLogger().warning("LoginView 传送玩家 " + player.getName() + " 到出生点失败。");
         }
     }
 

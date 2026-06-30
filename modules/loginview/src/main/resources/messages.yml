@@ -11,6 +11,7 @@ prefix: "&3◆ &6ArcartXSuite &7| &r"
 common:
   service-down: "&cLoginView 服务未启动。"
   unknown-command: "&e未知 LoginView 命令: {0}"
+  player-only: "&c该命令只能由玩家执行。"
 
 # ── help ──────────────────────────────────────────────
 help:
@@ -20,6 +21,7 @@ help:
   open: "&7{0} open <玩家>&f - 强制为在线玩家打开登录界面。"
   migrate: "&7{0} migrate-authme [dry-run]&f - 从 AuthMe 迁移账户 hash。"
   migration-commands: "&7{0} migration-commands&f - 查看迁移后的安全操作提示。"
+  set-spawn: "&7{0} set-spawn&f - 将当前位置设为登录后传送点。"
   setup-authlib: "&7{0} setup-authlib&f - 自动下载 authlib-injector 并生成启动脚本。"
 
 # ── status ────────────────────────────────────────────
@@ -57,6 +59,10 @@ migrate:
 setup:
   start: "&6正在配置 authlib-injector..."
   already: "&aauthlib-injector 已在运行中，无需额外配置。"
+
+# ── set-spawn ───────────────────────────────────────
+set-spawn:
+  success: "&a登录传送点已设置: 世界={0}, X={1}, Y={2}, Z={3}, Yaw={4}, Pitch={5}"
 
 # ── migration-commands ────────────────────────────────
 migration:

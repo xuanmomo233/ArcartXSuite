@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -33,10 +34,11 @@ import xuanmo.arcartxsuite.loginview.storage.LoginViewRepository;
 
 public final class LoginViewModule extends AbstractAXSModule implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "reload", "open", "migrate-authme", "migration-commands");
+    private static final List<String> ACTIONS = List.of("help", "status", "reload", "open", "migrate-authme", "migration-commands", "set-spawn");
     private LoginViewModuleConfiguration configuration;
     private LoginViewService service;
     private LoginViewRepository repository;
+    private File configFile;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -76,6 +78,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
             case "open" -> open(sender, args);
             case "migrate-authme" -> migrateAuthMe(sender, args);
             case "migration-commands" -> sendMigrationCommands(sender);
+            case "set-spawn" -> setSpawn(sender);
             default -> {
                 sender.sendMessage(msg("common.unknown-command", action));
                 sendHelp(sender, label, args[0]);
@@ -145,6 +148,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         if (configFile == null) {
             throw new IllegalStateException("ArcartXLoginView.yml 配置文件缺失");
         }
+        this.configFile = configFile;
         configuration = LoginViewModuleConfiguration.load(
             YamlConfiguration.loadConfiguration(configFile), context.logger());
     }
@@ -237,6 +241,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         sender.sendMessage(msg("help.open", commandPrefix));
         sender.sendMessage(msg("help.migrate", commandPrefix));
         sender.sendMessage(msg("help.migration-commands", commandPrefix));
+        sender.sendMessage(msg("help.set-spawn", commandPrefix));
         sender.sendMessage(msg("help.setup-authlib", commandPrefix));
     }
 
@@ -308,6 +313,41 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         sender.sendMessage(msg("migration.step2"));
         sender.sendMessage(msg("migration.step3"));
         sender.sendMessage(msg("migration.step4"));
+    }
+
+    private void setSpawn(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(msg("common.player-only"));
+            return;
+        }
+        if (configFile == null) {
+            sender.sendMessage(msg("reload.failed", "配置文件未加载"));
+            return;
+        }
+        Location loc = player.getLocation();
+        YamlConfiguration yaml = YamlConfiguration.loadConfiguration(configFile);
+        yaml.set("spawn-on-login.enabled", true);
+        yaml.set("spawn-on-login.world", loc.getWorld().getName());
+        yaml.set("spawn-on-login.x", loc.getX());
+        yaml.set("spawn-on-login.y", loc.getY());
+        yaml.set("spawn-on-login.z", loc.getZ());
+        yaml.set("spawn-on-login.yaw", loc.getYaw());
+        yaml.set("spawn-on-login.pitch", loc.getPitch());
+        try {
+            yaml.save(configFile);
+            if (configFile != null) {
+                configuration = LoginViewModuleConfiguration.load(
+                    YamlConfiguration.loadConfiguration(configFile), context.logger());
+                if (service != null) {
+                    service.setConfiguration(configuration);
+                }
+            }
+            sender.sendMessage(msg("set-spawn.success",
+                loc.getWorld().getName(), loc.getBlockX(), loc.getBlockY(), loc.getBlockZ(),
+                String.format("%.2f", loc.getYaw()), String.format("%.2f", loc.getPitch())));
+        } catch (Exception e) {
+            sender.sendMessage(msg("reload.failed", e.getMessage()));
+        }
     }
 
     private List<String> filter(List<String> candidates, String input) {

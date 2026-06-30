@@ -201,9 +201,34 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
     public void onReload() throws Exception {
         File configFile = new File(context.dataFolder(), configFileName());
         loadConfiguration(configFile);
+
+        File panelFile = new File(context.pluginDataFolder(), MenuService.PANEL_UI_FILE_PATH);
+        File escFile = new File(context.pluginDataFolder(), MenuService.ESC_UI_FILE_PATH);
+
+        UiBinding panelBinding = context.prepareUiBinding(
+            "Menu Panel",
+            configuration.client().panelUiId(),
+            configuration.client().registerUiOnEnable(),
+            panelFile
+        );
+        UiBinding escBinding = context.prepareUiBinding(
+            "Menu ESC",
+            configuration.client().escUiId(),
+            configuration.client().registerUiOnEnable(),
+            escFile
+        );
+        if (panelBinding != null) {
+            recordUiBinding(MenuService.PANEL_UI_FILE_PATH, panelBinding);
+        }
+        if (escBinding != null) {
+            recordUiBinding(MenuService.ESC_UI_FILE_PATH, escBinding);
+        }
         if (service != null) {
             service.updateConfiguration(configuration);
             service.reload(context.dataFolder());
+            if (panelBinding != null && escBinding != null) {
+                service.setRuntimeUiIds(panelBinding.runtimeUiId(), escBinding.runtimeUiId());
+            }
         }
     }
 

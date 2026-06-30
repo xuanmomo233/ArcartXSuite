@@ -195,8 +195,8 @@ controls:
                           visible: self.entry != null
                           width: 218
                           height: 60
-                          normal: "self.entry != null && self.entry['enabled'] ? '~Frosted:0;95,95,95,255' : '~Frosted:0;55,55,55,200'"
-                          hover: "self.entry != null && self.entry['enabled'] ? '~Frosted:0;255,255,255,255' : '~Frosted:0;55,55,55,200'"
+                          normal: "self.entry != null && self.entry['enabled'] ? '95,95,95,255' : '55,55,55,200'"
+                          hover: "self.entry != null && self.entry['enabled'] ? '255,255,255,255' : '55,55,55,200'"
                           shape: ~round_rect
                           radius: 10
                         effect:
@@ -315,8 +315,8 @@ controls:
                       visible: self.entry != null
                       width: 180
                       height: 48
-                      normal: "self.entry != null && self.entry['enabled'] ? '~47,47,47,255' : '~35,35,35,200'"
-                      hover: "self.entry != null && self.entry['enabled'] ? '~255,255,255,255' : '~35,35,35,200'"
+                      normal: "self.entry != null && self.entry['enabled'] ? '47,47,47,255' : '35,35,35,200'"
+                      hover: "self.entry != null && self.entry['enabled'] ? '255,255,255,255' : '35,35,35,200'"
                       shape: ~round_rect
                       radius: 10
                     effect:

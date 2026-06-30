@@ -108,7 +108,7 @@ controls:
             effect:
               stroke:
                 width: 2
-                color: ~0,0,0
+                color: ~0,0,0,255
               ripple:
                 duration: 1200
                 color: ~255,255,255,100
@@ -136,8 +136,8 @@ controls:
           滚动区:
             type: Scroll
             attribute:
-              width: 0
-              x: 0
+              width: 560
+              x: 30
               y: -15
               height: 960 - 200
               point: ~horizontal_stretch_middle
@@ -153,6 +153,7 @@ controls:
             children:
               按钮网格:
                 type: HGrid
+                val: button_rows
                 attribute:
                   spaceBetweenX: 50
                   spaceBetweenY: 50
@@ -160,67 +161,63 @@ controls:
                   column: 2
                   y: 0
                   point: ~top_center
+                action:
+                  create: |-
+                    for(i in range(0, var.maxButtonCount)){
+                      key = i.round
+                      mb = self['菜单按钮'].copy('菜单按钮' + key)
+                      mb.entryKey = key
+                    }
                 children:
-                  按钮行:
-                    type: Canvas
-                    val: button_rows
+                  菜单按钮:
+                    type: Texture
+                    attribute:
+                      entryKey: 0
+                      entry: var.buttonRows[self.entryKey]
+                      visible: self.entry != null
+                      width: 218
+                      height: 60
+                      normal: "self.entry != null && self.entry['enabled'] ? '95,95,95,255' : '55,55,55,200'"
+                      hover: "self.entry != null && self.entry['enabled'] ? '255,255,255,255' : '55,55,55,200'"
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 2
+                        color: "self.entry != null && self.entry['enabled'] ? '255,255,255,255' : '120,120,120,255'"
                     action:
-                      create: |-
-                        for(i in range(0, var.maxButtonCount)){
-                          key = i.round
-                          mb = self['菜单按钮'].copy('菜单按钮' + key)
-                          mb.entryKey = key
+                      clickLeft: |-
+                        if(self.entry != null && self.entry['enabled']){
+                          Packet.send(var.packetId, 'click', self.entry['id'])
                         }
                     children:
-                      菜单按钮:
-                        type: Texture
+                      图标:
+                        type: Slot
                         attribute:
-                          entryKey: 0
-                          entry: var.buttonRows[self.entryKey]
-                          visible: self.entry != null
-                          width: 218
-                          height: 60
-                          normal: "self.entry != null && self.entry['enabled'] ? '~Frosted:0;95,95,95,255' : '~Frosted:0;55,55,55,200'"
-                          hover: "self.entry != null && self.entry['enabled'] ? '~Frosted:0;255,255,255,255' : '~Frosted:0;55,55,55,200'"
+                          slotType: ~Icon
+                          visible: "self.parent.entry != null && self.parent.entry['hasIcon']"
+                          itemScale: 0.72
+                          x: 8
+                          y: 6
+                          width: 48
+                          height: 48
+                          normal: ~45,45,55,180
                           shape: ~round_rect
-                          radius: 10
-                        effect:
-                          stroke:
-                            width: 3
-                            color: "self.entry != null && self.entry['enabled'] ? '~255,255,255,255' : '~120,120,120,255'"
+                          radius: 8
+                          through: true
+                          seticon: "self.parent.entry != null ? self.setItemIcon(self.parent.entry['itemJson']) : null"
                         action:
-                          clickLeft: |-
-                            if(self.entry != null && self.entry['enabled']){
-                              Packet.send(var.packetId, 'click', self.entry['id'])
-                            }
-                        children:
-                          图标:
-                            type: Slot
-                            attribute:
-                              slotType: ~Icon
-                              visible: "self.parent.entry != null && self.parent.entry['hasIcon']"
-                              itemScale: 0.72
-                              x: 8
-                              y: 6
-                              width: 48
-                              height: 48
-                              normal: ~45,45,55,180
-                              shape: ~round_rect
-                              radius: 8
-                              through: true
-                              seticon: "self.parent.entry != null ? self.setItemIcon(self.parent.entry['itemJson']) : null"
-                            action:
-                              create: |-
-                                self.seticon()
-                          标签:
-                            type: Text
-                            attribute:
-                              through: true
-                              x: "self.parent.entry != null && self.parent.entry['hasIcon'] ? 138 : 109"
-                              y: 18
-                              texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
-                              center: true
-                              fontSize: 36
+                          create: |-
+                            self.seticon()
+                      标签:
+                        type: Text
+                        attribute:
+                          through: true
+                          x: "self.parent.entry != null && self.parent.entry['hasIcon'] ? 138 : 109"
+                          y: 18
+                          texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
+                          center: true
+                          fontSize: 36
           纵向滑块:
             type: Texture
             val: drag_bar
@@ -234,6 +231,7 @@ controls:
               maxDragY: 960 - 200 - 50
           页脚网格:
             type: HGrid
+            val: footer_rows
             attribute:
               spaceBetweenX: 50
               spaceBetweenY: 50
@@ -241,52 +239,48 @@ controls:
               x: 77
               y: 460
               point: ~horizontal_stretch_middle
+            action:
+              create: |-
+                for(i in range(0, var.maxFooterCount)){
+                  key = i.round
+                  fb = self['页脚按钮'].copy('页脚按钮' + key)
+                  fb.entryKey = key
+                }
             children:
-              页脚行:
-                type: Canvas
-                val: footer_rows
+              页脚按钮:
+                type: Texture
+                attribute:
+                  entryKey: 0
+                  entry: var.footerRows[self.entryKey]
+                  visible: self.entry != null
+                  width: 218
+                  height: 60
+                  normal: "self.entry != null && self.entry['enabled'] ? '95,95,95,255' : '55,55,55,200'"
+                  hover: "self.entry != null && self.entry['enabled'] ? '255,255,255,255' : '55,55,55,200'"
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 2
+                    color: "self.entry != null && self.entry['enabled'] ? '255,255,255,255' : '120,120,120,255'"
                 action:
-                  create: |-
-                    for(i in range(0, var.maxFooterCount)){
-                      key = i.round
-                      fb = self['页脚按钮'].copy('页脚按钮' + key)
-                      fb.entryKey = key
+                  clickLeft: |-
+                    if(self.entry != null && self.entry['enabled']){
+                      if(self.entry['clientAction'] == 'options'){
+                        Game.options()
+                      } else if(self.entry['clientAction'] == 'quit'){
+                        Game.quit()
+                      } else {
+                        Packet.send(var.packetId, 'footer', self.entry['id'])
+                      }
                     }
                 children:
-                  页脚按钮:
-                    type: Texture
+                  页脚文字:
+                    type: Text
                     attribute:
-                      entryKey: 0
-                      entry: var.footerRows[self.entryKey]
-                      visible: self.entry != null
-                      width: 218
-                      height: 60
-                      normal: "self.entry != null && self.entry['enabled'] ? '~Frosted:0;95,95,95,255' : '~Frosted:0;55,55,55,200'"
-                      hover: "self.entry != null && self.entry['enabled'] ? '~Frosted:0;255,255,255,255' : '~Frosted:0;55,55,55,200'"
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 3
-                        color: "self.entry != null && self.entry['enabled'] ? '~255,255,255,255' : '~120,120,120,255'"
-                    action:
-                      clickLeft: |-
-                        if(self.entry != null && self.entry['enabled']){
-                          if(self.entry['clientAction'] == 'options'){
-                            Game.options()
-                          } else if(self.entry['clientAction'] == 'quit'){
-                            Game.quit()
-                          } else {
-                            Packet.send(var.packetId, 'footer', self.entry['id'])
-                          }
-                        }
-                    children:
-                      页脚文字:
-                        type: Text
-                        attribute:
-                          through: true
-                          x: 109
-                          y: 18
-                          texts: "self.entry != null ? self.entry['text'] : ''"
-                          center: true
-                          fontSize: 36
+                      through: true
+                      x: 109
+                      y: 18
+                      texts: "self.entry != null ? self.entry['text'] : ''"
+                      center: true
+                      fontSize: 36

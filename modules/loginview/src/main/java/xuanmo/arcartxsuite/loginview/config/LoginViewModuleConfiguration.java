@@ -16,7 +16,8 @@ public record LoginViewModuleConfiguration(
     SecurityConfiguration security,
     StorageConfiguration storage,
     MigrationConfiguration migration,
-    Messages messages
+    Messages messages,
+    SpawnOnLoginConfiguration spawnOnLogin
 ) {
 
     public static LoginViewModuleConfiguration load(FileConfiguration configuration, Logger logger) {
@@ -27,6 +28,7 @@ public record LoginViewModuleConfiguration(
         ConfigurationSection messagesSection = configuration.getConfigurationSection("messages");
         ConfigurationSection bypassWelcomeSection = configuration.getConfigurationSection("auth.bypass-welcome");
         ConfigurationSection qqBindingSection = configuration.getConfigurationSection("qq-binding");
+        ConfigurationSection spawnOnLoginSection = configuration.getConfigurationSection("spawn-on-login");
         ConfigurationSection termsOfServiceSection = configuration.getConfigurationSection("terms-of-service");
 
         return new LoginViewModuleConfiguration(
@@ -39,7 +41,8 @@ public record LoginViewModuleConfiguration(
             SecurityConfiguration.load(securitySection),
             StorageConfiguration.load(storageSection),
             MigrationConfiguration.load(migrationSection),
-            Messages.load(messagesSection)
+            Messages.load(messagesSection),
+            SpawnOnLoginConfiguration.load(spawnOnLoginSection)
         );
     }
 
@@ -76,6 +79,10 @@ public record LoginViewModuleConfiguration(
 
     private static long longValue(ConfigurationSection section, String path, long fallback, long min) {
         return Math.max(min, section == null ? fallback : section.getLong(path, fallback));
+    }
+
+    private static double doubleValue(ConfigurationSection section, String path, double fallback) {
+        return section == null ? fallback : section.getDouble(path, fallback);
     }
 
     public record BypassWelcomeConfiguration(
@@ -287,6 +294,28 @@ public record LoginViewModuleConfiguration(
         private static TermsOfServiceConfiguration load(ConfigurationSection section) {
             return new TermsOfServiceConfiguration(
                 bool(section, "enabled", true)
+            );
+        }
+    }
+
+    public record SpawnOnLoginConfiguration(
+        boolean enabled,
+        String world,
+        double x,
+        double y,
+        double z,
+        float yaw,
+        float pitch
+    ) {
+        private static SpawnOnLoginConfiguration load(ConfigurationSection section) {
+            return new SpawnOnLoginConfiguration(
+                bool(section, "enabled", false),
+                string(section, "world", "world"),
+                doubleValue(section, "x", 0.0),
+                doubleValue(section, "y", 64.0),
+                doubleValue(section, "z", 0.0),
+                (float) doubleValue(section, "yaw", 0.0),
+                (float) doubleValue(section, "pitch", 0.0)
             );
         }
     }
