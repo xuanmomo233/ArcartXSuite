@@ -69,30 +69,26 @@ public record MenuDefinition(
             }
         }
         List<MenuPageDefinition> pages = new ArrayList<>();
-        List<Map<?, ?>> rawPages = yaml.getMapList("pages");
-        // DEBUG
-        System.out.println("[MenuDebug] load id=" + id + " rawPages.size=" + rawPages.size());
-        if (rawPages.isEmpty()) {
-            ConfigurationSection pagesSection = yaml.getConfigurationSection("pages");
-            if (pagesSection != null) {
-                for (String pageKey : pagesSection.getKeys(false)) {
-                    ConfigurationSection pageSection = pagesSection.getConfigurationSection(pageKey);
-                    if (pageSection != null) {
-                        if (!pageSection.isSet("id")) {
-                            pageSection.set("id", pageKey);
-                        }
-                        pages.add(MenuPageDefinition.load(pageSection));
+        ConfigurationSection pagesSection = yaml.getConfigurationSection("pages");
+        if (pagesSection != null) {
+            for (String pageKey : pagesSection.getKeys(false)) {
+                ConfigurationSection pageSection = pagesSection.getConfigurationSection(pageKey);
+                if (pageSection != null) {
+                    if (!pageSection.isSet("id")) {
+                        pageSection.set("id", pageKey);
                     }
+                    pages.add(MenuPageDefinition.load(pageSection));
                 }
             }
-        } else {
-            pages.addAll(MenuPageDefinition.loadList(rawPages));
+        }
+        if (pages.isEmpty()) {
+            List<Map<?, ?>> rawPages = yaml.getMapList("pages");
+            if (!rawPages.isEmpty()) {
+                pages.addAll(MenuPageDefinition.loadList(rawPages));
+            }
         }
         if (pages.isEmpty()) {
             pages.add(new MenuPageDefinition("main", yaml.getString("title", id), Map.of()));
-        }
-        for (MenuPageDefinition p : pages) {
-            System.out.println("[MenuDebug] page=" + p.id() + " buttons=" + p.buttons().size() + " keys=" + p.buttons().keySet());
         }
         List<MenuItemBinding> itemBinds = MenuItemBinding.loadList(yaml.getMapList("item-binds"), id);
         if (itemBinds.isEmpty()) {

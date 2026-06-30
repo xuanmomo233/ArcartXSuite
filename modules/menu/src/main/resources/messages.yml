@@ -8,7 +8,7 @@ common:
 player:
   usage: "&7用法: &f/{0} open <菜单ID> &7| &f/{0} list"
   list-header: "&3◆ &6已注册菜单 (&f{0}&6):"
-  list-entry: "&8  ▸ &f{0} &7- &r{2}"
+  list-entry: "&8  ▸ &f{0} &7- &r{1}"
 
 admin:
   usage: "&7用法: &f/axs menu <help|status|reload|list|open <菜单ID> [玩家]>"

@@ -33,17 +33,19 @@ public record MenuPageDefinition(
             return List.of(new MenuPageDefinition("main", "Menu", Map.of()));
         }
         List<MenuPageDefinition> pages = new ArrayList<>();
+        org.yaml.snakeyaml.Yaml yamlDumper = new org.yaml.snakeyaml.Yaml();
         for (Map<?, ?> rawPage : rawPages) {
             if (rawPage == null) {
                 continue;
             }
-            org.bukkit.configuration.MemoryConfiguration memory = new org.bukkit.configuration.MemoryConfiguration();
-            for (Map.Entry<?, ?> entry : rawPage.entrySet()) {
-                if (entry.getKey() != null) {
-                    memory.set(String.valueOf(entry.getKey()), entry.getValue());
-                }
+            String dump = yamlDumper.dump(rawPage);
+            org.bukkit.configuration.file.YamlConfiguration config = new org.bukkit.configuration.file.YamlConfiguration();
+            try {
+                config.loadFromString(dump);
+                pages.add(load(config));
+            } catch (Exception ignored) {
+                // 跳过格式错误的 page
             }
-            pages.add(load(memory));
         }
         return List.copyOf(pages);
     }

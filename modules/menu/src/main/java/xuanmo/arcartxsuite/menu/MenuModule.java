@@ -192,7 +192,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected List<Listener> createListeners() {
-        MenuBindingListener bindingListener = new MenuBindingListener(service, service.bindingRegistry());
+        MenuBindingListener bindingListener = new MenuBindingListener(() -> this.service);
         return List.of(bindingListener, new Listener() {
             @EventHandler
             public void onPlayerQuit(PlayerQuitEvent event) {

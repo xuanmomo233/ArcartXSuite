@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.menu.listener;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -17,27 +18,28 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import xuanmo.arcartxsuite.menu.config.MenuCommandBinding;
 import xuanmo.arcartxsuite.menu.config.MenuItemBinding;
-import xuanmo.arcartxsuite.menu.service.MenuBindingRegistry;
 import xuanmo.arcartxsuite.menu.service.MenuConditionEvaluator;
 import xuanmo.arcartxsuite.menu.service.MenuService;
 
 public final class MenuBindingListener implements Listener {
 
-    private final MenuService service;
-    private final MenuBindingRegistry bindingRegistry;
+    private final Supplier<MenuService> serviceSupplier;
 
-    public MenuBindingListener(MenuService service, MenuBindingRegistry bindingRegistry) {
-        this.service = service;
-        this.bindingRegistry = bindingRegistry;
+    public MenuBindingListener(Supplier<MenuService> serviceSupplier) {
+        this.serviceSupplier = serviceSupplier;
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onCommand(PlayerCommandPreprocessEvent event) {
+        MenuService service = serviceSupplier.get();
+        if (service == null) {
+            return;
+        }
         String message = event.getMessage();
         if (message == null || message.isBlank()) {
             return;
         }
-        MenuCommandBinding binding = bindingRegistry.matchCommand(message);
+        MenuCommandBinding binding = service.bindingRegistry().matchCommand(message);
         if (binding == null) {
             return;
         }
@@ -51,6 +53,10 @@ public final class MenuBindingListener implements Listener {
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onItemInteract(PlayerInteractEvent event) {
+        MenuService service = serviceSupplier.get();
+        if (service == null) {
+            return;
+        }
         Action action = event.getAction();
         if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK
             && action != Action.LEFT_CLICK_AIR && action != Action.LEFT_CLICK_BLOCK) {
@@ -62,7 +68,7 @@ public final class MenuBindingListener implements Listener {
             return;
         }
         boolean mainHand = event.getHand() == EquipmentSlot.HAND;
-        for (MenuItemBinding binding : bindingRegistry.itemBindings()) {
+        for (MenuItemBinding binding : service.bindingRegistry().itemBindings()) {
             if (!matchesHand(binding, mainHand)) {
                 continue;
             }

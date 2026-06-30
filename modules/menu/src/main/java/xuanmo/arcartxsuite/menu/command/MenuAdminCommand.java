@@ -114,6 +114,8 @@ public final class MenuAdminCommand {
     private void sendStatus(CommandSender sender) {
         sender.sendMessage(msg("admin.status-title"));
         sender.sendMessage(msg("admin.status-menus", service.menus().size()));
+        sender.sendMessage(msg("admin.status-panel-ui", service.configuration().client().panelUiId()));
+        sender.sendMessage(msg("admin.status-esc-ui", service.configuration().client().escUiId()));
         sender.sendMessage(msg("admin.status-bindings",
             service.bindingRegistry().commandBindingCount(),
             service.bindingRegistry().itemBindings().size()
