@@ -34,6 +34,17 @@ ui:
       var.maxBalanceCount = packet['maxBalanceCount']
       var.maxProductCount = packet['maxProductCount']
       var.maxFixedCount = packet['maxFixedCount']
+
+      while(val.余额列表.childrenCount() > 1){
+        val.余额列表.get(1).remove()
+      }
+      while(val.产品列表.childrenCount() > 1){
+        val.产品列表.get(1).remove()
+      }
+      while(val.定期列表.childrenCount() > 1){
+        val.定期列表.get(1).remove()
+      }
+
       for(i in range(0, var.maxBalanceCount)){
         key = i.round
         bal = val.余额列表['项'].copy('项' + key)
@@ -63,6 +74,7 @@ ui:
       var.maxBalanceCount = packet['maxBalanceCount']
       var.maxProductCount = packet['maxProductCount']
       var.maxFixedCount = packet['maxFixedCount']
+
       while(val.余额列表.childrenCount() > 1){
         val.余额列表.get(1).remove()
       }
@@ -72,6 +84,7 @@ ui:
       while(val.定期列表.childrenCount() > 1){
         val.定期列表.get(1).remove()
       }
+      
       for(i in range(0, var.maxBalanceCount)){
         key = i.round
         bal = val.余额列表['项'].copy('项' + key)

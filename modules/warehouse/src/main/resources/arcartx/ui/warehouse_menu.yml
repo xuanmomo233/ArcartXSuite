@@ -53,17 +53,37 @@ ui:
       var.level = packet['level']
       var.canUpgrade = packet['canUpgrade']
       var.nextUpgradeText = packet['nextUpgradeText']
-      var.renderBackpackAmounts()
-      var.itemJsons = {}
-      if(var.slots != null){
-        for(key in var.slots.keys()){
-          json = packet['slotItemJson' + key]
       var.maxPersonalCount = packet['maxPersonalCount']
       var.maxSharedCount = packet['maxSharedCount']
       var.maxCategoryCount = packet['maxCategoryCount']
+      var.renderBackpackAmounts()
+      var.itemJsons = {}
+      for(i in range(0, 54)){
+        key = i.round
+        slot = val.仓库网格['物品图标'].copy('物品图标' + key)
+        slot.entryKey = key
+      }
+      for(i in range(0, var.maxPersonalCount)){
+        key = i.round
+        pw = val.个人仓库列表['项'].copy('项' + key)
+        pw.entryKey = key
+      }
+      for(i in range(0, var.maxCategoryCount)){
+        key = i.round
+        cat = val.分类列表['项'].copy('项' + key)
+        cat.entryKey = key
+      }
+      for(i in range(0, var.maxSharedCount)){
+        key = i.round
+        sw = val.共享仓库列表['项'].copy('项' + key)
+        sw.entryKey = key
+      }
+      if(var.slots != null){
+        for(key in var.slots.keys()){
+          json = packet['slotItemJson' + key]
           if(json != null && json != ''){
             var.itemJsons[key] = json
-          } else {
+          }else{
             var.itemJsons[key] = var.air
           }
         }
@@ -109,14 +129,14 @@ ui:
       var.level = packet['level']
       var.canUpgrade = packet['canUpgrade']
       var.nextUpgradeText = packet['nextUpgradeText']
+      var.maxPersonalCount = packet['maxPersonalCount']
+      var.maxSharedCount = packet['maxSharedCount']
+      var.maxCategoryCount = packet['maxCategoryCount']
       var.renderBackpackAmounts()
       var.itemJsons = {}
       if(var.slots != null){
         for(key in var.slots.keys()){
           json = packet['slotItemJson' + key]
-      var.maxPersonalCount = packet['maxPersonalCount']
-      var.maxSharedCount = packet['maxSharedCount']
-      var.maxCategoryCount = packet['maxCategoryCount']
           if(json != null && json != ''){
             var.itemJsons[key] = json
           } else {
@@ -437,13 +457,6 @@ controls:
                         attribute:
                           height: 48
                           spaceBetween: 10
-                        action:
-                          create: |-
-                            for(i in range(0, var.maxPersonalCount)){
-                              key = i.round
-                              pw = self['项'].copy('项' + key)
-                              pw.entryKey = key
-                            }
                         children:
                           项:
                             type: Texture
@@ -473,13 +486,6 @@ controls:
                         attribute:
                           height: 48
                           spaceBetween: 10
-                        action:
-                          create: |-
-                            for(i in range(0, var.maxSharedCount)){
-                              key = i.round
-                              sw = self['项'].copy('项' + key)
-                              sw.entryKey = key
-                            }
                         children:
                           项:
                             type: Texture
@@ -618,13 +624,6 @@ controls:
                     attribute:
                       width: 180
                       spaceBetween: 10
-                    action:
-                      create: |-
-                        for(i in range(0, var.maxCategoryCount)){
-                          key = i.round
-                          cat = self['项'].copy('项' + key)
-                          cat.entryKey = key
-                        }
                     children:
                       项:
                         type: Texture
@@ -675,13 +674,6 @@ controls:
                   column: 9
                   spaceBetweenX: 14
                   spaceBetweenY: 14
-                action:
-                  create: |-
-                    for(i in range(0, 54)){
-                      key = i.round
-                      slot = self['物品图标'].copy('物品图标' + key)
-                      slot.entryKey = key
-                    }
                 children:
                   物品图标:
                     type: Slot

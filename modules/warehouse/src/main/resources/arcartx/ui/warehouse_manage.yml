@@ -57,6 +57,22 @@ ui:
       var.showcaseEnabled = packet['showcaseEnabled']
       var.maxManageCount = packet['maxManageCount']
       var.maxMemberCount = packet['maxMemberCount']
+      while(val.共享列表.childrenCount() > 1){
+        val.共享列表.get(1).remove()
+      }
+      while(val.成员列表.childrenCount() > 1){
+        val.成员列表.get(1).remove()
+      }
+      for(i in range(0, var.maxManageCount)){
+        key = i.round
+        item = val.共享列表['项'].copy('项' + key)
+        item.entryKey = key
+      }
+      for(i in range(0, var.maxMemberCount)){
+        key = i.round
+        member = val.成员列表['项'].copy('项' + key)
+        member.entryKey = key
+      }
     update: |-
       var.packetId = packet['packetId']
       var.ownerType = packet['ownerType']
@@ -94,6 +110,22 @@ ui:
       var.showcaseEnabled = packet['showcaseEnabled']
       var.maxManageCount = packet['maxManageCount']
       var.maxMemberCount = packet['maxMemberCount']
+      while(val.共享列表.childrenCount() > 1){
+        val.共享列表.get(1).remove()
+      }
+      while(val.成员列表.childrenCount() > 1){
+        val.成员列表.get(1).remove()
+      }
+      for(i in range(0, var.maxManageCount)){
+        key = i.round
+        item = val.共享列表['项'].copy('项' + key)
+        item.entryKey = key
+      }
+      for(i in range(0, var.maxMemberCount)){
+        key = i.round
+        member = val.成员列表['项'].copy('项' + key)
+        member.entryKey = key
+      }
   action:
     open: |-
       var.packetId = 'AXS_WAREHOUSE'
@@ -427,13 +459,6 @@ controls:
                     attribute:
                       width: 370
                       spaceBetween: 10
-                    action:
-                      create: |-
-                        for(i in range(0, var.maxManageCount)){
-                          key = i.round
-                          item = self['项'].copy('项' + key)
-                          item.entryKey = key
-                        }
                     children:
                       项:
                         type: Texture
@@ -957,18 +982,11 @@ controls:
                     }
                 children:
                   成员列表:
-                    val: 成员列表
                     type: VStack
+                    val: 成员列表
                     attribute:
                       width: 510
                       spaceBetween: 10
-                    action:
-                      create: |-
-                        for(i in range(0, var.maxMemberCount)){
-                          key = i.round
-                          member = self['项'].copy('项' + key)
-                          member.entryKey = key
-                        }
                     children:
                       项:
                         type: Texture

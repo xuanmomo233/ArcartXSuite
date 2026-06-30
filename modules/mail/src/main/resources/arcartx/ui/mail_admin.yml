@@ -262,7 +262,7 @@ controls:
                   spaceBetween: 4
                 action:
                   create: |-
-                    for(i in range(0, var.maxPresetCount)){
+                    for(i in range(1, var.maxPresetCount)){
                       key = i.round
                       row = self['preset_row'].copy('preset_row' + key)
                       row.entryKey = key
