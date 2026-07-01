@@ -152,7 +152,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         ensureExampleShopExported();
         ensureDefaultRecycleExported();
 
-        service = new MarketService(plugin, logger, configuration, packetBridge,
+        service = new MarketService(plugin, configuration, packetBridge,
             currencyManager, itemSourceRegistry, itemSerializer,
             itemStackBridge, mailSupplier, logger, crossServer);
         service.setSignalProvider(() -> getCapability(
@@ -166,7 +166,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
         // 注册待发放队列消费者（玩家上线补发离线期间累积的物品/货币）
         registerListener(new PendingDeliveryService(
-            plugin, logger, service.getRepository(), currencyManager, itemSerializer, logger));
+            plugin, service.getRepository(), currencyManager, itemSerializer, logger));
 
         // 注册 UI 到 ArcartX 桥接层
         bindMarketUi(configuration.ui().shopId(), SHOP_UI_FILE_PATH);
@@ -304,5 +304,6 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
 
 
