@@ -49,7 +49,6 @@ import xuanmo.arcartxsuite.loginview.security.LoginViewPasswordHasher;
 import xuanmo.arcartxsuite.loginview.storage.LoginViewAccount;
 import xuanmo.arcartxsuite.loginview.storage.LoginViewRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class LoginViewService implements Listener {
 
@@ -118,13 +117,13 @@ public final class LoginViewService implements Listener {
     public void start() throws SQLException {
         repository.initialize();
         if (configuration.authMode() == AuthMode.AUTHME && !authMeBridge.initialize()) {
-            AxsLog.logger().warning("LoginView 配置为 AuthMe 兼容模式，但未检测到可用 AuthMe 插件，模块不加载。");
+            plugin.getLogger().warning("LoginView 配置为 AuthMe 兼容模式，但未检测到可用 AuthMe 插件，模块不加载。");
             repository.close();
             return;
         }
         boolean authlibAgentLoaded = accountTypeService.isAuthlibInjectorLoaded();
         if (authlibAgentLoaded) {
-            AxsLog.logger().info("LoginView: authlib-injector 已检测到，正版/LittleSkin 免登录由 AccountTypeService 管理。");
+            plugin.getLogger().info("LoginView: authlib-injector 已检测到，正版/LittleSkin 免登录由 AccountTypeService 管理。");
         }
         Bukkit.getPluginManager().registerEvents(this, plugin);
         started = true;
@@ -137,7 +136,7 @@ public final class LoginViewService implements Listener {
             try {
                 repository.deleteExpiredSessions();
             } catch (SQLException e) {
-                AxsLog.logger().warning("LoginView session 清理失败: " + e.getMessage());
+                plugin.getLogger().warning("LoginView session 清理失败: " + e.getMessage());
             }
         }, cleanupInterval, cleanupInterval);
     }
@@ -481,7 +480,7 @@ public final class LoginViewService implements Listener {
                 repository.deleteSession(uuid);
             }
         } catch (SQLException e) {
-            AxsLog.logger().warning("LoginView session 查询失败: " + e.getMessage());
+            plugin.getLogger().warning("LoginView session 查询失败: " + e.getMessage());
         }
         return false;
     }
@@ -505,7 +504,7 @@ public final class LoginViewService implements Listener {
             try {
                 repository.createOrUpdateSession(player.getUniqueId(), player.getName(), playerAddress(player), expiresAt);
             } catch (SQLException e) {
-                AxsLog.logger().warning("LoginView session 写入失败: " + e.getMessage());
+                plugin.getLogger().warning("LoginView session 写入失败: " + e.getMessage());
             }
         }
     }
@@ -517,7 +516,7 @@ public final class LoginViewService implements Listener {
         String worldName = configuration.spawnOnLogin().world();
         World targetWorld = Bukkit.getWorld(worldName);
         if (targetWorld == null) {
-            AxsLog.logger().warning("LoginView spawn-on-login 配置的世界 '" + worldName + "' 不存在，传送失败。");
+            plugin.getLogger().warning("LoginView spawn-on-login 配置的世界 '" + worldName + "' 不存在，传送失败。");
             return;
         }
         Location location = new Location(
@@ -529,7 +528,7 @@ public final class LoginViewService implements Listener {
             configuration.spawnOnLogin().pitch()
         );
         if (!player.teleport(location)) {
-            AxsLog.logger().warning("LoginView 传送玩家 " + player.getName() + " 到出生点失败。");
+            plugin.getLogger().warning("LoginView 传送玩家 " + player.getName() + " 到出生点失败。");
         }
     }
 
@@ -745,3 +744,4 @@ public final class LoginViewService implements Listener {
         return player.getAddress().getAddress().getHostAddress();
     }
 }
+

@@ -11,7 +11,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.attribute.MythicLibBridge;
 import xuanmo.arcartxsuite.prop.config.PropMythicLibConfiguration;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class PropMythicLibService {
 
@@ -145,6 +144,7 @@ public final class PropMythicLibService {
         if (!warnedUnknownStats.add(statId)) {
             return;
         }
-        AxsLog.logger().warning("Prop MythicLib 属性未注册，已跳过: " + statId);
+        plugin.getLogger().warning("Prop MythicLib 属性未注册，已跳过: " + statId);
     }
 }
+

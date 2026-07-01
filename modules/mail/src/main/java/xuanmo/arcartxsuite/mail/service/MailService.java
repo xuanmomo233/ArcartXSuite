@@ -77,7 +77,6 @@ import xuanmo.arcartxsuite.mail.util.MailItemSerializer;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class MailService implements Listener {
 
@@ -201,7 +200,7 @@ public final class MailService implements Listener {
         bindUiResources();
         adminTemplateKey = new NamespacedKey(plugin, "admin_template");
         if (!"AXS Mail Compose".equals(configuration.ui().composeInventoryTitle())) {
-            AxsLog.logger()
+            plugin.getLogger()
                 .warning(
                     "ArcartXMail 的 compose-inventory-title 当前不是默认值。mail_compose.yml 的 match 仍默认匹配 'AXS Mail Compose'，如需修改标题，请同步调整 ArcartX UI 文件。"
                 );
@@ -317,7 +316,7 @@ public final class MailService implements Listener {
             presets.put(preset.id().trim().toLowerCase(Locale.ROOT), preset);
             return MailOperationResult.success("预设已保存: " + preset.id());
         } catch (Exception exception) {
-            AxsLog.logger().warning("保存预设失败: " + exception.getMessage());
+            plugin.getLogger().warning("保存预设失败: " + exception.getMessage());
             return MailOperationResult.failure("保存预设失败: " + exception.getMessage());
         }
     }
@@ -339,7 +338,7 @@ public final class MailService implements Listener {
             MailPresetLoader.deletePresetFile(directory, normalized);
             return MailOperationResult.success("预设已删除: " + presetId);
         } catch (Exception exception) {
-            AxsLog.logger().warning("删除预设文件失败: " + exception.getMessage());
+            plugin.getLogger().warning("删除预设文件失败: " + exception.getMessage());
             return MailOperationResult.success("预设已从内存移除，但文件删除失败: " + exception.getMessage());
         }
     }
@@ -352,7 +351,7 @@ public final class MailService implements Listener {
             loadPresets();
             return MailOperationResult.success("已重新加载 " + presets.size() + " 个预设。");
         } catch (Exception exception) {
-            AxsLog.logger().warning("重新加载预设失败: " + exception.getMessage());
+            plugin.getLogger().warning("重新加载预设失败: " + exception.getMessage());
             return MailOperationResult.failure("重新加载预设失败: " + exception.getMessage());
         }
     }
@@ -406,7 +405,7 @@ public final class MailService implements Listener {
         try {
             return repository.loadStats(playerUuid);
         } catch (Exception exception) {
-            AxsLog.logger().warning("读取邮箱统计失败: " + exception.getMessage());
+            plugin.getLogger().warning("读取邮箱统计失败: " + exception.getMessage());
             return MailMailboxStats.empty();
         }
     }
@@ -470,7 +469,7 @@ public final class MailService implements Listener {
             refreshInbox(player, true);
             return MailOperationResult.success("已打开邮箱。");
         } catch (Exception exception) {
-            AxsLog.logger().warning("打开邮箱失败: " + exception.getMessage());
+            plugin.getLogger().warning("打开邮箱失败: " + exception.getMessage());
             return MailOperationResult.failure("打开邮箱失败，请查看控制台。");
         }
     }
@@ -532,7 +531,7 @@ public final class MailService implements Listener {
                 ? MailOperationResult.success("已批量领取 " + claimed + " 封邮件。")
                 : MailOperationResult.failure("当前没有可领取的邮件。");
         } catch (Exception exception) {
-            AxsLog.logger().warning("批量领取邮件失败: " + exception.getMessage());
+            plugin.getLogger().warning("批量领取邮件失败: " + exception.getMessage());
             return MailOperationResult.failure("批量领取失败。");
         }
     }
@@ -554,7 +553,7 @@ public final class MailService implements Listener {
                 ? MailOperationResult.success("已批量删除 " + deleted + " 封邮件。")
                 : MailOperationResult.failure("没有可删除的邮件。");
         } catch (Exception exception) {
-            AxsLog.logger().warning("批量删除邮件失败: " + exception.getMessage());
+            plugin.getLogger().warning("批量删除邮件失败: " + exception.getMessage());
             return MailOperationResult.failure("批量删除失败。");
         }
     }
@@ -608,7 +607,7 @@ public final class MailService implements Listener {
             dispatchCdkRedeemedSignal(player, code, preset);
             return MailOperationResult.success("CDK 兑换成功，奖励已发送到邮箱。");
         } catch (Exception exception) {
-            AxsLog.logger().warning("兑换 CDK 失败: " + exception.getMessage());
+            plugin.getLogger().warning("兑换 CDK 失败: " + exception.getMessage());
             return MailOperationResult.failure("兑换 CDK 失败。");
         }
     }
@@ -643,7 +642,7 @@ public final class MailService implements Listener {
             }
             return MailOperationResult.success("预设邮件已派发给 " + successCount + " 名玩家。");
         } catch (Exception exception) {
-            AxsLog.logger().warning("派发预设邮件失败: " + exception.getMessage());
+            plugin.getLogger().warning("派发预设邮件失败: " + exception.getMessage());
             return MailOperationResult.failure("预设邮件派发失败。");
         }
     }
@@ -672,7 +671,7 @@ public final class MailService implements Listener {
                 true
             );
         } catch (Exception exception) {
-            AxsLog.logger().warning("派发预设邮件失败: " + exception.getMessage());
+            plugin.getLogger().warning("派发预设邮件失败: " + exception.getMessage());
             return MailOperationResult.failure("预设邮件派发失败。");
         }
     }
@@ -704,7 +703,7 @@ public final class MailService implements Listener {
             repository.saveCdk(new MailCdkDefinition(code, preset.id(), maxClaims, 0, expiresAt, true, safe(createdBy), now, now));
             return MailOperationResult.success("CDK 创建成功: " + code);
         } catch (Exception exception) {
-            AxsLog.logger().warning("创建 CDK 失败: " + exception.getMessage());
+            plugin.getLogger().warning("创建 CDK 失败: " + exception.getMessage());
             return MailOperationResult.failure("创建 CDK 失败。");
         }
     }
@@ -717,7 +716,7 @@ public final class MailService implements Listener {
         try {
             return repository.loadCdk(code);
         } catch (Exception exception) {
-            AxsLog.logger().warning("读取 CDK 失败: " + exception.getMessage());
+            plugin.getLogger().warning("读取 CDK 失败: " + exception.getMessage());
             return Optional.empty();
         }
     }
@@ -726,7 +725,7 @@ public final class MailService implements Listener {
         try {
             return repository.loadCdks(page, pageSize);
         } catch (Exception exception) {
-            AxsLog.logger().warning("读取 CDK 列表失败: " + exception.getMessage());
+            plugin.getLogger().warning("读取 CDK 列表失败: " + exception.getMessage());
             return List.of();
         }
     }
@@ -741,7 +740,7 @@ public final class MailService implements Listener {
                 ? MailOperationResult.success("已删除 CDK: " + code)
                 : MailOperationResult.failure("CDK 不存在。");
         } catch (Exception exception) {
-            AxsLog.logger().warning("删除 CDK 失败: " + exception.getMessage());
+            plugin.getLogger().warning("删除 CDK 失败: " + exception.getMessage());
             return MailOperationResult.failure("删除 CDK 失败。");
         }
     }
@@ -1157,7 +1156,7 @@ public final class MailService implements Listener {
                 sendAdminPresetList(player);
             }
         } catch (Exception exception) {
-            AxsLog.logger().warning("Admin 预设保存处理异常: " + exception.getMessage());
+            plugin.getLogger().warning("Admin 预设保存处理异常: " + exception.getMessage());
             sendAdminResult(player, MailOperationResult.failure("保存处理异常: " + exception.getMessage()));
         }
     }
@@ -1233,7 +1232,7 @@ public final class MailService implements Listener {
             throw new IOException("无法创建邮件预设目录: " + directory.getAbsolutePath());
         }
         exportBundledPresetIfMissing(directory);
-        presets.putAll(MailPresetLoader.loadPresets(directory, AxsLog.logger(), configuration.playerSend().maxAttachments()));
+        presets.putAll(MailPresetLoader.loadPresets(directory, plugin.getLogger(), configuration.playerSend().maxAttachments()));
     }
 
     private void syncPresetCdks() throws Exception {
@@ -1246,7 +1245,7 @@ public final class MailService implements Listener {
             }
             for (MailPresetCdkDefinition cdk : preset.cdks()) {
                 if (!seenCodes.add(cdk.code())) {
-                    AxsLog.logger().warning("邮件预设 CDK 重复定义，后续重复项已跳过: " + cdk.code());
+                    plugin.getLogger().warning("邮件预设 CDK 重复定义，后续重复项已跳过: " + cdk.code());
                     continue;
                 }
                 Optional<MailCdkDefinition> existing = repository.loadCdk(cdk.code());
@@ -1271,7 +1270,7 @@ public final class MailService implements Listener {
             }
         }
         if (synced > 0) {
-            AxsLog.logger().info("已同步邮件预设 CDK: " + synced + " 个。");
+            plugin.getLogger().info("已同步邮件预设 CDK: " + synced + " 个。");
         }
     }
 
@@ -1290,7 +1289,7 @@ public final class MailService implements Listener {
         for (CurrencyDefinition definition : currencyBridgeManager.definitions()) {
             CurrencyBridge currencyBridge = currencyBridgeManager.bridge(definition.id());
             if (currencyBridge != null && !currencyBridge.available()) {
-                AxsLog.logger().warning("邮件货币桥接不可用: " + definition.id() + " -> " + currencyBridge.unavailableReason());
+                plugin.getLogger().warning("邮件货币桥接不可用: " + definition.id() + " -> " + currencyBridge.unavailableReason());
             }
         }
     }
@@ -1309,7 +1308,7 @@ public final class MailService implements Listener {
                 new MailPlayerProfile(player.getUniqueId(), player.getName(), lastSendAt, now, Bukkit.getServer().getName())
             );
         } catch (Exception exception) {
-            AxsLog.logger().warning("更新邮箱玩家档案失败: " + exception.getMessage());
+            plugin.getLogger().warning("更新邮箱玩家档案失败: " + exception.getMessage());
         }
     }
 
@@ -1324,13 +1323,13 @@ public final class MailService implements Listener {
             repository.cleanupCdks(now);
             refreshAllViewerStates();
         } catch (Exception exception) {
-            AxsLog.logger().warning("执行邮件清理失败: " + exception.getMessage());
+            plugin.getLogger().warning("执行邮件清理失败: " + exception.getMessage());
         }
     }
 
     private void handleCrossServerMessage(String message) {
         if (configuration.debug()) {
-            AxsLog.logger().info("收到邮件跨服消息: " + message);
+            plugin.getLogger().info("收到邮件跨服消息: " + message);
         }
         if (message == null || message.isBlank() || !message.startsWith("refresh:")) {
             return;
@@ -1389,9 +1388,9 @@ public final class MailService implements Listener {
             }
             return MailOperationResult.success("邮件发送成功。");
         } catch (Exception exception) {
-            AxsLog.logger().warning("发送邮件失败: " + exception.getMessage());
+            plugin.getLogger().warning("发送邮件失败: " + exception.getMessage());
             if (configuration.debug() && logContent != null && !logContent.isBlank()) {
-                AxsLog.logger().warning("发送邮件失败的上下文: " + logContent);
+                plugin.getLogger().warning("发送邮件失败的上下文: " + logContent);
             }
             return MailOperationResult.failure("邮件发送失败。");
         }
@@ -1433,7 +1432,7 @@ public final class MailService implements Listener {
             bridge.sendChatCard(recipient, cardId, payload);
         } catch (Exception exception) {
             if (configuration.debug()) {
-                AxsLog.logger().warning("发送邮件通知卡片失败: " + exception.getMessage());
+                plugin.getLogger().warning("发送邮件通知卡片失败: " + exception.getMessage());
             }
         }
     }
@@ -1507,7 +1506,7 @@ public final class MailService implements Listener {
                 MailInboxPacketFactory.build(page, selectedMailId, stats, query.filter(), claimableCount)
             );
         } catch (Exception exception) {
-            AxsLog.logger().warning("刷新邮箱界面失败: " + exception.getMessage());
+            plugin.getLogger().warning("刷新邮箱界面失败: " + exception.getMessage());
         }
     }
 
@@ -1522,7 +1521,7 @@ public final class MailService implements Listener {
             logPages.put(player.getUniqueId(), page.page());
             bridge.sendPacket(player, logsUiId, initPacket ? "init" : "update", MailLogsPacketFactory.build(page));
         } catch (Exception exception) {
-            AxsLog.logger().warning("刷新日志界面失败: " + exception.getMessage());
+            plugin.getLogger().warning("刷新日志界面失败: " + exception.getMessage());
         }
     }
 
@@ -1539,7 +1538,7 @@ public final class MailService implements Listener {
             refreshLogs(player, true);
             return MailOperationResult.success("已打开邮件日志。");
         } catch (Exception exception) {
-            AxsLog.logger().warning("打开邮件日志失败: " + exception.getMessage());
+            plugin.getLogger().warning("打开邮件日志失败: " + exception.getMessage());
             return MailOperationResult.failure("打开邮件日志失败。");
         }
     }
@@ -1587,7 +1586,7 @@ public final class MailService implements Listener {
                 );
             }
         } catch (Exception exception) {
-            AxsLog.logger().warning("读取邮件详情失败: " + exception.getMessage());
+            plugin.getLogger().warning("读取邮件详情失败: " + exception.getMessage());
         }
         refreshInbox(player, false);
     }
@@ -1705,7 +1704,7 @@ public final class MailService implements Listener {
             try {
                 attachments = buildComposeAttachments(attachmentItems, attachmentAmounts);
             } catch (IOException exception) {
-                AxsLog.logger().warning("序列化玩家邮件附件失败: " + exception.getMessage());
+                plugin.getLogger().warning("序列化玩家邮件附件失败: " + exception.getMessage());
                 MailOperationResult result = MailOperationResult.failure("附件物品保存失败，请取回后重试。");
                 pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
                 return result;
@@ -1759,7 +1758,7 @@ public final class MailService implements Listener {
             });
             return MailOperationResult.success("邮件已发送给 " + recipient.lastKnownName() + "。");
         } catch (Exception exception) {
-            AxsLog.logger().warning("发送玩家邮件失败: " + exception.getMessage());
+            plugin.getLogger().warning("发送玩家邮件失败: " + exception.getMessage());
             MailOperationResult result = MailOperationResult.failure("发送邮件失败。");
             pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
             return result;
@@ -1785,7 +1784,7 @@ public final class MailService implements Listener {
             try {
                 itemRewards = deserializeItemRewards(mail.attachments());
             } catch (IOException exception) {
-                AxsLog.logger().warning("读取邮件物品附件失败: " + exception.getMessage());
+                plugin.getLogger().warning("读取邮件物品附件失败: " + exception.getMessage());
                 return MailOperationResult.failure("附件物品读取失败，请联系管理员。");
             }
             MailOperationResult currencyValidation = validateClaimCurrencies(mail.attachments());
@@ -1816,7 +1815,7 @@ public final class MailService implements Listener {
             }
             return MailOperationResult.success("邮件已领取。");
         } catch (Exception exception) {
-            AxsLog.logger().warning("领取邮件失败: " + exception.getMessage());
+            plugin.getLogger().warning("领取邮件失败: " + exception.getMessage());
             return MailOperationResult.failure("领取邮件失败。");
         }
     }
@@ -1847,7 +1846,7 @@ public final class MailService implements Listener {
                 )
             );
         } catch (SQLException exception) {
-            AxsLog.logger().warning("回滚邮件领取状态失败: mailId=" + mail.id() + " | " + exception.getMessage());
+            plugin.getLogger().warning("回滚邮件领取状态失败: mailId=" + mail.id() + " | " + exception.getMessage());
         }
     }
 
@@ -1893,7 +1892,7 @@ public final class MailService implements Listener {
             }
             return MailOperationResult.success("邮件已删除。");
         } catch (Exception exception) {
-            AxsLog.logger().warning("删除邮件失败: " + exception.getMessage());
+            plugin.getLogger().warning("删除邮件失败: " + exception.getMessage());
             return MailOperationResult.failure("删除邮件失败。");
         }
     }
@@ -1910,7 +1909,7 @@ public final class MailService implements Listener {
 
         UiRegistrationResult result = bridge.registerOrReloadUi(configuredUiId, uiFile);
         if (!result.success()) {
-            AxsLog.logger().warning("注册邮件 UI 失败: " + result.message());
+            plugin.getLogger().warning("注册邮件 UI 失败: " + result.message());
             return runtimeUiId;
         }
 
@@ -2348,7 +2347,7 @@ public final class MailService implements Listener {
                 refreshLogs(player, false);
             }
         } catch (Exception exception) {
-            AxsLog.logger().warning("写入邮件日志失败: " + exception.getMessage());
+            plugin.getLogger().warning("写入邮件日志失败: " + exception.getMessage());
         }
     }
 
@@ -2598,7 +2597,7 @@ public final class MailService implements Listener {
                     session.inventory.setItem(slot++, item);
                 }
             } catch (Exception exception) {
-                AxsLog.logger().warning("Admin UI 反序列化物品附件失败: " + exception.getMessage());
+                plugin.getLogger().warning("Admin UI 反序列化物品附件失败: " + exception.getMessage());
             }
         }
 
@@ -2698,3 +2697,4 @@ public final class MailService implements Listener {
     }
 
 }
+

@@ -19,7 +19,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.conversation.config.ConversationModuleConfiguration;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 final class ChemdahAxRenderer {
 
@@ -123,7 +122,7 @@ final class ChemdahAxRenderer {
             return;
         }
         state.session().close(true).exceptionally(throwable -> {
-            AxsLog.logger().warning("ArcartXConversation 关闭会话失败: " + ConversationService.describeThrowable(throwable));
+            plugin.getLogger().warning("ArcartXConversation 关闭会话失败: " + ConversationService.describeThrowable(throwable));
             return null;
         });
     }
@@ -141,7 +140,7 @@ final class ChemdahAxRenderer {
         }
         uiClosedSessions.put(playerId, state.session());
         state.session().close(true).exceptionally(throwable -> {
-            AxsLog.logger().warning("ArcartXConversation 关闭会话失败: " + ConversationService.describeThrowable(throwable));
+            plugin.getLogger().warning("ArcartXConversation 关闭会话失败: " + ConversationService.describeThrowable(throwable));
             return null;
         });
     }
@@ -232,7 +231,7 @@ final class ChemdahAxRenderer {
             }
             return future.handle((replies, throwable) -> {
                 if (throwable != null) {
-                    AxsLog.logger().warning(
+                    plugin.getLogger().warning(
                         "ArcartXConversation 计算回复列表失败，已按无回复继续显示正文: "
                             + ConversationService.describeThrowable(throwable)
                     );
@@ -241,7 +240,7 @@ final class ChemdahAxRenderer {
                 return replies == null ? List.of() : replies;
             });
         } catch (RuntimeException exception) {
-            AxsLog.logger().warning(
+            plugin.getLogger().warning(
                 "ArcartXConversation 启动回复计算失败，已按无回复继续显示正文: "
                     + ConversationService.describeThrowable(exception)
             );
@@ -332,11 +331,11 @@ final class ChemdahAxRenderer {
         }
         try {
             selectedReply.select(state.session()).exceptionally(throwable -> {
-                AxsLog.logger().warning("ArcartXConversation 选择回复失败: " + ConversationService.describeThrowable(throwable));
+                plugin.getLogger().warning("ArcartXConversation 选择回复失败: " + ConversationService.describeThrowable(throwable));
                 return null;
             });
         } catch (RuntimeException exception) {
-            AxsLog.logger().warning("ArcartXConversation 选择回复失败: " + ConversationService.describeThrowable(exception));
+            plugin.getLogger().warning("ArcartXConversation 选择回复失败: " + ConversationService.describeThrowable(exception));
         }
     }
 
@@ -389,7 +388,7 @@ final class ChemdahAxRenderer {
                 dialogOpenedPlayers.remove(playerId);
                 dialogStates.remove(playerId);
             }
-            AxsLog.logger().warning(
+            plugin.getLogger().warning(
                 "ArcartXConversation 延迟同步对话 Menu 失败: " + ConversationService.describeThrowable(exception)
             );
         }
@@ -416,7 +415,7 @@ final class ChemdahAxRenderer {
         if (!configuration.debug()) {
             return;
         }
-        AxsLog.logger().info(
+        plugin.getLogger().info(
             "ArcartXConversation 请求打开对话 Menu\n"
                 + "  player: " + player.getName() + "\n"
                 + "  ui: " + dialogUiIds + "\n"
@@ -667,3 +666,4 @@ final class ChemdahAxRenderer {
         }
     }
 }
+

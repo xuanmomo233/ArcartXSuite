@@ -24,7 +24,6 @@ import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class PickupService implements Listener {
 
@@ -248,13 +247,13 @@ public final class PickupService implements Listener {
 
     private void logOpenMode(Player player, String mode) {
         if (configuration.debug()) {
-            AxsLog.logger().info("ArcartXPickup 打开 HUD -> player=" + player.getName() + " | mode=" + mode);
+            plugin.getLogger().info("ArcartXPickup 打开 HUD -> player=" + player.getName() + " | mode=" + mode);
         }
     }
 
     private void logPickupPacket(Player player, Map<String, Object> payload, boolean success) {
         if (configuration.debug()) {
-            AxsLog.logger().info(
+            plugin.getLogger().info(
                 "ArcartXPickup 发包 -> player="
                     + player.getName()
                     + " | success="
@@ -266,3 +265,4 @@ public final class PickupService implements Listener {
     }
 
 }
+

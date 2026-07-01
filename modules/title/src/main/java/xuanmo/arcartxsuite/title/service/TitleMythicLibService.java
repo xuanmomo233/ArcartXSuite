@@ -11,7 +11,6 @@ import xuanmo.arcartxsuite.api.attribute.MythicLibBridge;
 import xuanmo.arcartxsuite.api.mythiclib.MythicLibStatKeyNormalizer;
 import xuanmo.arcartxsuite.title.config.TitleMythicLibConfiguration;
 import xuanmo.arcartxsuite.title.model.ResolvedTitleState;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class TitleMythicLibService {
 
@@ -142,11 +141,12 @@ public final class TitleMythicLibService {
         if (!warnedUnknownStats.add(statId)) {
             return;
         }
-        AxsLog.logger().warning("Title MythicLib 属性未注册，已跳过: " + rawKey + " -> " + statId);
+        plugin.getLogger().warning("Title MythicLib 属性未注册，已跳过: " + rawKey + " -> " + statId);
     }
 
     private record SyncedState(Set<String> displayStats, Set<String> collectionStats) {
         private static final SyncedState EMPTY = new SyncedState(Set.of(), Set.of());
     }
 }
+
 

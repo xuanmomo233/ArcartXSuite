@@ -38,7 +38,6 @@ import xuanmo.arcartxsuite.title.model.PlayerOwnedTitle;
 import xuanmo.arcartxsuite.title.model.PlayerTitleState;
 import xuanmo.arcartxsuite.title.model.ResolvedTitleState;
 import xuanmo.arcartxsuite.title.storage.TitleRepository;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 public class TitleService {
 
@@ -113,7 +112,7 @@ public class TitleService {
         this.tabRefreshableProvider = tabRefreshableProvider;
         this.uiResourceExporter = uiResourceExporter;
         this.clock = clock;
-        this.logger = AxsLog.logger();
+        this.logger = plugin.getLogger();
         this.attributePlusService = new TitleAttributePlusService(plugin, configuration.attributePlus(), attributeBridge.attributePlus());
         this.mythicLibService = new TitleMythicLibService(plugin, configuration.mythicLib(), attributeBridge.mythicLib());
         this.craneAttributeService = new TitleCraneAttributeService(plugin, configuration.craneAttribute(), attributeBridge.craneAttribute());
@@ -883,3 +882,4 @@ public class TitleService {
         }
     }
 }
+

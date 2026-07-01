@@ -16,7 +16,6 @@ import xuanmo.arcartxsuite.entitytracker.entity.BossKillRecord;
 import xuanmo.arcartxsuite.entitytracker.entity.PlayerBossBestDamage;
 import xuanmo.arcartxsuite.entitytracker.service.BossKillRecordingService;
 import xuanmo.arcartxsuite.entitytracker.service.CrossServerRankingCacheService;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 /**
  * Boss 跨服同步：最高伤害、击杀记录广播与入站合并。
@@ -59,7 +58,7 @@ public final class EntityTrackerCrossServerService {
             delivery -> handlePayload(delivery.payload())
         );
         if (channel.isActive()) {
-            AxsLog.logger().info("[EntityTracker] 跨服 Boss 排行通道已启用");
+            plugin.getLogger().info("[EntityTracker] 跨服 Boss 排行通道已启用");
         }
     }
 
@@ -107,7 +106,7 @@ public final class EntityTrackerCrossServerService {
                     channel.publish(EntityTrackerCrossServerPayloadCodec.encodeBestDamage(candidate));
                 }
             } catch (SQLException exception) {
-                AxsLog.logger().warning("[EntityTracker] 写入 Boss 最高伤害失败: " + exception.getMessage());
+                plugin.getLogger().warning("[EntityTracker] 写入 Boss 最高伤害失败: " + exception.getMessage());
             }
         }
     }
@@ -133,7 +132,7 @@ public final class EntityTrackerCrossServerService {
             }
         } catch (IllegalArgumentException ignored) {
         } catch (SQLException exception) {
-            AxsLog.logger().warning("[EntityTracker] 合并跨服 Boss 数据失败: " + exception.getMessage());
+            plugin.getLogger().warning("[EntityTracker] 合并跨服 Boss 数据失败: " + exception.getMessage());
         }
     }
 
@@ -160,3 +159,4 @@ public final class EntityTrackerCrossServerService {
         }
     }
 }
+

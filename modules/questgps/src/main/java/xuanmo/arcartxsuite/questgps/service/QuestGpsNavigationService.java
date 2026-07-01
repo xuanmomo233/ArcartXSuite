@@ -14,7 +14,6 @@ import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI;
 import xuanmo.arcartxsuite.questgps.chemdah.ChemdahTrackerBridge;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class QuestGpsNavigationService {
 
@@ -42,7 +41,7 @@ public final class QuestGpsNavigationService {
             plugin,
             configuration,
             new BridgeWaypointRuntime(waypointBridge),
-            AxsLog.logger(),
+            plugin.getLogger(),
             npcBridge,
             trackerBridge
         );
@@ -609,3 +608,4 @@ public final class QuestGpsNavigationService {
         }
     }
 }
+

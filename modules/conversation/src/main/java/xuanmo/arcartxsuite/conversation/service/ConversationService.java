@@ -39,7 +39,6 @@ import xuanmo.arcartxsuite.conversation.config.ConversationModuleConfiguration;
 import xuanmo.arcartxsuite.conversation.config.NpcAppearanceEntry;
 import xuanmo.arcartxsuite.conversation.theme.ArcartXConversationTheme;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class ConversationService implements Listener {
 
@@ -222,7 +221,7 @@ public final class ConversationService implements Listener {
             registered |= bridge.registerUiCloseCallback(id, dialogRenderer::handleUiClosed);
         }
         if (!registered) {
-            AxsLog.logger().warning(
+            plugin.getLogger().warning(
                 "ArcartXConversation 未能注册对话 Menu 关闭回调，关闭按钮/ESC 可能无法同步关闭 Chemdah 会话。"
             );
         }
@@ -364,7 +363,7 @@ public final class ConversationService implements Listener {
         }
         if (!selectorUiReady) {
             interactionDisabledReason = "selector UI 未就绪";
-            AxsLog.logger().warning("ArcartXConversation selector HUD 未就绪，已禁用按键增强。");
+            plugin.getLogger().warning("ArcartXConversation selector HUD 未就绪，已禁用按键增强。");
             return;
         }
 
@@ -373,7 +372,7 @@ public final class ConversationService implements Listener {
 
         if (!npcBridgeReady || !conversationOpenerReady) {
             interactionDisabledReason = buildInteractionDisabledReason();
-            AxsLog.logger().warning("ArcartXConversation 按键增强已降级: " + interactionDisabledReason);
+            plugin.getLogger().warning("ArcartXConversation 按键增强已降级: " + interactionDisabledReason);
             npcBridge.shutdown();
             npcBridgeReady = false;
             conversationOpenerReady = false;
@@ -391,7 +390,7 @@ public final class ConversationService implements Listener {
             configuration.interaction().scanPeriodTicks()
         );
         interactionReady = true;
-        AxsLog.logger().info(
+        plugin.getLogger().info(
             "ArcartXConversation 按键增强已启用 | selectorUI=" + selectorUiIds
         );
         applyNpcAppearances();
@@ -431,7 +430,7 @@ public final class ConversationService implements Listener {
                 classLoader
             );
             if (!Event.class.isAssignableFrom(rawEventClass)) {
-                AxsLog.logger().warning("Chemdah PlayerEvents.Released 不是 Bukkit Event，已跳过对话释放清理监听。");
+                plugin.getLogger().warning("Chemdah PlayerEvents.Released 不是 Bukkit Event，已跳过对话释放清理监听。");
                 return false;
             }
 
@@ -449,7 +448,7 @@ public final class ConversationService implements Listener {
             );
             return true;
         } catch (ReflectiveOperationException | RuntimeException exception) {
-            AxsLog.logger().warning("注册 Chemdah PlayerEvents.Released 监听失败: " + describeThrowable(exception));
+            plugin.getLogger().warning("注册 Chemdah PlayerEvents.Released 监听失败: " + describeThrowable(exception));
             return false;
         }
     }
@@ -472,14 +471,14 @@ public final class ConversationService implements Listener {
                 cleanupPlayerState(player, "chemdah-released");
             }
         } catch (ReflectiveOperationException | RuntimeException exception) {
-            AxsLog.logger().warning("处理 Chemdah PlayerEvents.Released 失败: " + describeThrowable(exception));
+            plugin.getLogger().warning("处理 Chemdah PlayerEvents.Released 失败: " + describeThrowable(exception));
         }
     }
 
     private void registerTheme() {
         theme.register(configuration.themeName());
         if (configuration.debug()) {
-            AxsLog.logger().info("ArcartXConversation 已注册 Chemdah 主题: " + configuration.themeName());
+            plugin.getLogger().info("ArcartXConversation 已注册 Chemdah 主题: " + configuration.themeName());
         }
     }
 
@@ -518,7 +517,7 @@ public final class ConversationService implements Listener {
             });
         } catch (RuntimeException exception) {
             if (configuration.debug()) {
-                AxsLog.logger().warning("ArcartXConversation 主线程调度已跳过(" + reason + "): " + describeThrowable(exception));
+                plugin.getLogger().warning("ArcartXConversation 主线程调度已跳过(" + reason + "): " + describeThrowable(exception));
             }
         }
     }
@@ -633,7 +632,7 @@ public final class ConversationService implements Listener {
         future.whenComplete((result, throwable) ->
             runSyncIfEnabled(source + "-open-complete", () -> {
                 if (throwable != null) {
-                    AxsLog.logger().warning("ArcartXConversation 打开 NPC 对话失败: " + describeThrowable(throwable));
+                    plugin.getLogger().warning("ArcartXConversation 打开 NPC 对话失败: " + describeThrowable(throwable));
                     restoreSelectorIfEligible(player, source + "-failed");
                     return;
                 }
@@ -676,7 +675,7 @@ public final class ConversationService implements Listener {
                     syncSelectorView(player, state, changed ? "scan-refresh" : "scan-open");
                 }
             } catch (RuntimeException exception) {
-                AxsLog.logger().warning(
+                plugin.getLogger().warning(
                     "ArcartXConversation 扫描玩家附近 NPC 失败，已跳过本轮: player="
                         + player.getName()
                         + " | "
@@ -709,7 +708,7 @@ public final class ConversationService implements Listener {
                     )
                 );
             } catch (RuntimeException exception) {
-                AxsLog.logger().warning(
+                plugin.getLogger().warning(
                     "ArcartXConversation 处理 NPC 候选失败，已跳过: npc="
                         + npc.npcId()
                         + " | "
@@ -893,10 +892,10 @@ public final class ConversationService implements Listener {
                     return true;
                 }
             }
-            AxsLog.logger().warning("未找到 Chemdah TriggerAdyeshachKt.openConversation，已禁用按键增强。");
+            plugin.getLogger().warning("未找到 Chemdah TriggerAdyeshachKt.openConversation，已禁用按键增强。");
             return false;
         } catch (ReflectiveOperationException exception) {
-            AxsLog.logger().warning("初始化 Chemdah Adyeshach 对话打开器失败: " + exception.getMessage());
+            plugin.getLogger().warning("初始化 Chemdah Adyeshach 对话打开器失败: " + exception.getMessage());
             return false;
         }
     }
@@ -909,7 +908,7 @@ public final class ConversationService implements Listener {
             Object result = openConversationMethod.invoke(null, conversationEntity, player, Boolean.FALSE);
             return result instanceof CompletableFuture<?> future ? future : null;
         } catch (IllegalArgumentException | ReflectiveOperationException exception) {
-            AxsLog.logger().warning("调用 Chemdah Adyeshach 对话打开器失败: " + describeThrowable(exception));
+            plugin.getLogger().warning("调用 Chemdah Adyeshach 对话打开器失败: " + describeThrowable(exception));
             return null;
         }
     }
@@ -1007,7 +1006,7 @@ public final class ConversationService implements Listener {
     }
 
     private void emitDebugBlock(List<String> lines) {
-        AxsLog.logger().info(String.join("\n", lines));
+        plugin.getLogger().info(String.join("\n", lines));
     }
 
     private void updateDebugSnapshot(
@@ -1355,7 +1354,7 @@ public final class ConversationService implements Listener {
         }
         if (!npcBridge.isAvailable()) {
             if (configuration.debug()) {
-                AxsLog.logger().info("ArcartXConversation applyNpcAppearances: NPC 桥接不可用，跳过。");
+                plugin.getLogger().info("ArcartXConversation applyNpcAppearances: NPC 桥接不可用，跳过。");
             }
             return;
         }
@@ -1372,7 +1371,7 @@ public final class ConversationService implements Listener {
         // 注册 visible handler：玩家看见 NPC 时立即 per-player 发送模型包
         boolean registered = npcBridge.registerVisibleHandler(this::onAdyeshachEntityVisible);
         if (configuration.debug()) {
-            AxsLog.logger().info("ArcartXConversation npc-appearances: visible 监听器注册 "
+            plugin.getLogger().info("ArcartXConversation npc-appearances: visible 监听器注册 "
                 + (registered ? "成功" : "失败") + "，映射表大小=" + appearanceMapByLowerName.size());
         }
 
@@ -1413,7 +1412,7 @@ public final class ConversationService implements Listener {
             }
         }
         if (configuration.debug()) {
-            AxsLog.logger().info("ArcartXConversation npc-appearances: 玩家 " + player.getName()
+            plugin.getLogger().info("ArcartXConversation npc-appearances: 玩家 " + player.getName()
                 + " 客户端初始化完成，已补发 " + applied + " 个 NPC 模型包。");
         }
     }
@@ -1451,7 +1450,7 @@ public final class ConversationService implements Listener {
             npcBridge.applyDefaultStateForPlayer(viewer, adyeshachEntity, matched.state(), matched.animName());
         }
         if (configuration.debug()) {
-            AxsLog.logger().info("ArcartXConversation npc-appearances: visible -> " + viewer.getName()
+            plugin.getLogger().info("ArcartXConversation npc-appearances: visible -> " + viewer.getName()
                 + " 看见 NPC \"" + matched.npcName() + "\"，已发送模型包 model=" + matched.modelId());
         }
     }
@@ -1477,7 +1476,7 @@ public final class ConversationService implements Listener {
             if (ok) {
                 applied++;
             } else {
-                AxsLog.logger().warning(
+                plugin.getLogger().warning(
                     "ArcartXConversation npc-appearances: NPC \"" + entry.npcName() + "\" 应用失败。"
                 );
             }
@@ -1486,7 +1485,7 @@ public final class ConversationService implements Listener {
         if (stillPending.isEmpty()) {
             // 所有实体都已处理完毕（成功或明确失败）
             if (configuration.debug() && applied > 0) {
-                AxsLog.logger().info("ArcartXConversation npc-appearances: 已应用 " + applied
+                plugin.getLogger().info("ArcartXConversation npc-appearances: 已应用 " + applied
                     + " 个 NPC（第 " + (attempt + 1) + " 次尝试）。");
             }
             return;
@@ -1495,7 +1494,7 @@ public final class ConversationService implements Listener {
         if (attempt + 1 >= NPC_APPEARANCE_MAX_ATTEMPTS) {
             // 达到最大重试次数，输出最终警告
             for (NpcAppearanceEntry entry : stillPending) {
-                AxsLog.logger().warning(
+                plugin.getLogger().warning(
                     "ArcartXConversation npc-appearances: 经过 " + NPC_APPEARANCE_MAX_ATTEMPTS
                         + " 次重试仍未找到 NPC \"" + entry.npcName()
                         + "\"，跳过。请确认 Adyeshach 中存在该 NPC。"
@@ -1506,7 +1505,7 @@ public final class ConversationService implements Listener {
 
         // 调度延迟重试：Adyeshach 可能尚未加载完全部 NPC json
         if (configuration.debug()) {
-            AxsLog.logger().info("ArcartXConversation npc-appearances: 第 " + (attempt + 1)
+            plugin.getLogger().info("ArcartXConversation npc-appearances: 第 " + (attempt + 1)
                 + " 次尝试后仍有 " + stillPending.size() + " 个 NPC 未找到，将在 "
                 + NPC_APPEARANCE_RETRY_INTERVAL_TICKS + " tick 后重试。");
         }
@@ -1524,3 +1523,4 @@ public final class ConversationService implements Listener {
         }
     }
 }
+

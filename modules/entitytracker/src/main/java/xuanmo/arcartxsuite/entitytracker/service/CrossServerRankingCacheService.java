@@ -18,7 +18,6 @@ import xuanmo.arcartxsuite.entitytracker.dao.BossKillRecordDao;
 import xuanmo.arcartxsuite.entitytracker.dao.CrossServerBossRankingDao;
 import xuanmo.arcartxsuite.entitytracker.dao.PlayerBossBestDamageDao;
 import xuanmo.arcartxsuite.entitytracker.entity.PlayerBossBestDamage;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 /**
  * 定时聚合排行并写入 {@code cross_server_boss_rankings} 缓存表。
@@ -120,7 +119,7 @@ public final class CrossServerRankingCacheService {
                 }
             }
         } catch (SQLException exception) {
-            AxsLog.logger().warning("[EntityTracker] 排行缓存刷新失败: " + exception.getMessage());
+            plugin.getLogger().warning("[EntityTracker] 排行缓存刷新失败: " + exception.getMessage());
         }
     }
 
@@ -163,3 +162,4 @@ public final class CrossServerRankingCacheService {
         rankingDao.upsert(rankingType, bossId, GSON.toJson(array), expire);
     }
 }
+

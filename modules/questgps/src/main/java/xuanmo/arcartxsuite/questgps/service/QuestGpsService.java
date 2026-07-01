@@ -42,7 +42,6 @@ import xuanmo.arcartxsuite.questgps.chemdah.ChemdahTrackerBridge;
 import xuanmo.arcartxsuite.questgps.chemdah.QuestGpsOverlayValidator;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class QuestGpsService implements Listener {
 
@@ -109,11 +108,11 @@ public final class QuestGpsService implements Listener {
             itemStack -> itemStackBridge == null ? java.util.Optional.empty() : itemStackBridge.itemToJson(itemStack),
             itemSourceRegistry
         );
-        ChemdahMetadataReader metadataReader = new ChemdahMetadataReader(AxsLog.logger());
-        ChemdahRewardReader rewardReader = new ChemdahRewardReader(AxsLog.logger(), rewardResolver);
-        ChemdahTrackerBridge trackerBridge = new ChemdahTrackerBridge(AxsLog.logger());
+        ChemdahMetadataReader metadataReader = new ChemdahMetadataReader(plugin.getLogger());
+        ChemdahRewardReader rewardReader = new ChemdahRewardReader(plugin.getLogger(), rewardResolver);
+        ChemdahTrackerBridge trackerBridge = new ChemdahTrackerBridge(plugin.getLogger());
         this.chemdahBootstrap = new ChemdahIntegrationBootstrap(
-            AxsLog.logger(),
+            plugin.getLogger(),
             configuration,
             metadataReader,
             rewardReader,
@@ -121,11 +120,11 @@ public final class QuestGpsService implements Listener {
         );
         this.navigationService = new QuestGpsNavigationService(plugin, configuration, waypointBridge, npcBridge, trackerBridge);
         this.categoryResolver = new ChemdahCategoryResolver(
-            AxsLog.logger(),
+            plugin.getLogger(),
             configuration.categoryDefaults(),
             configuration.categoryRegistry()
         );
-        this.questDiscovery = new ChemdahQuestDiscovery(AxsLog.logger(), categoryResolver);
+        this.questDiscovery = new ChemdahQuestDiscovery(plugin.getLogger(), categoryResolver);
         this.presentationService = new QuestGpsPresentationService(
             configuration,
             questDiscovery,
@@ -134,7 +133,7 @@ public final class QuestGpsService implements Listener {
             rewardReader,
             navigationService
         );
-        this.overlayValidator = new QuestGpsOverlayValidator(AxsLog.logger(), configuration, categoryResolver);
+        this.overlayValidator = new QuestGpsOverlayValidator(plugin.getLogger(), configuration, categoryResolver);
         this.uiPacketHandler = new QuestGpsUiPacketHandler(this, configuration.client().packetId());
     }
 
@@ -277,7 +276,7 @@ public final class QuestGpsService implements Listener {
         template.acceptTo(profile).whenComplete((result, throwable) -> Bukkit.getScheduler().runTask(plugin, () -> {
             if (throwable != null) {
                 player.sendMessage(PREFIX + ChatColor.RED + "接取任务失败，请检查控制台。");
-                AxsLog.logger().log(Level.WARNING, "QuestGPS: 接取任务失败: " + definition.id(), throwable);
+                plugin.getLogger().log(Level.WARNING, "QuestGPS: 接取任务失败: " + definition.id(), throwable);
                 refreshViewer(player);
                 return;
             }
@@ -316,7 +315,7 @@ public final class QuestGpsService implements Listener {
             if (throwable != null || success == null || !success) {
                 player.sendMessage(PREFIX + ChatColor.RED + "放弃任务失败。");
                 if (throwable != null) {
-                    AxsLog.logger().log(Level.WARNING, "QuestGPS 放弃任务失败: " + definition.id(), throwable);
+                    plugin.getLogger().log(Level.WARNING, "QuestGPS 放弃任务失败: " + definition.id(), throwable);
                 }
                 refreshViewer(player);
                 return;
@@ -466,7 +465,7 @@ public final class QuestGpsService implements Listener {
             );
             chemdahEventListeners.add(listener);
         } catch (ReflectiveOperationException exception) {
-            AxsLog.logger().warning("QuestGPS: 注册 Chemdah 重载事件失败: " + exception.getMessage());
+            plugin.getLogger().warning("QuestGPS: 注册 Chemdah 重载事件失败: " + exception.getMessage());
         }
     }
 
@@ -506,7 +505,7 @@ public final class QuestGpsService implements Listener {
             );
             chemdahEventListeners.add(listener);
         } catch (ReflectiveOperationException exception) {
-            AxsLog.logger().warning("QuestGPS: 注册 Chemdah 任务事件失败(" + className + "): " + exception.getMessage());
+            plugin.getLogger().warning("QuestGPS: 注册 Chemdah 任务事件失败(" + className + "): " + exception.getMessage());
         }
     }
 
@@ -521,7 +520,7 @@ public final class QuestGpsService implements Listener {
     ) {
         if (!expectedEventClass.isInstance(event)) {
             if (configuration.debug()) {
-                AxsLog.logger().fine(
+                plugin.getLogger().fine(
                     "QuestGPS: 忽略非匹配 Chemdah 任务事件: expected="
                         + expectedEventClass.getName()
                         + ", actual="
@@ -551,7 +550,7 @@ public final class QuestGpsService implements Listener {
             }
             refreshByProfile(profile);
         } catch (ReflectiveOperationException | RuntimeException exception) {
-            AxsLog.logger().warning("QuestGPS: 处理 Chemdah 任务事件失败: " + exception.getMessage());
+            plugin.getLogger().warning("QuestGPS: 处理 Chemdah 任务事件失败: " + exception.getMessage());
         }
     }
 
@@ -829,3 +828,4 @@ public final class QuestGpsService implements Listener {
         }
     }
 }
+

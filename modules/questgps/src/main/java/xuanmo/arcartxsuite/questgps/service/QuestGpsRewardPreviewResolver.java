@@ -15,7 +15,6 @@ import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class QuestGpsRewardPreviewResolver {
 
@@ -33,7 +32,7 @@ public final class QuestGpsRewardPreviewResolver {
     ) {
         this.plugin = plugin;
         this.titleConfigurationProvider = titleConfigurationProvider == null ? () -> null : titleConfigurationProvider;
-        this.logger = AxsLog.logger();
+        this.logger = plugin.getLogger();
         this.itemJsonSerializer = itemJsonSerializer == null ? item -> Optional.empty() : itemJsonSerializer;
         this.itemSourceRegistry = itemSourceRegistry;
     }
@@ -248,3 +247,4 @@ public final class QuestGpsRewardPreviewResolver {
     ) {
     }
 }
+

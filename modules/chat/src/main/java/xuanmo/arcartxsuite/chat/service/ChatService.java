@@ -60,7 +60,6 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.chat.service.ChatEnvelopeCodec;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class ChatService implements Listener {
 
@@ -879,7 +878,7 @@ public final class ChatService implements Listener {
         try {
             handleRemoteEnvelope(ChatEnvelopeCodec.decode(payload));
         } catch (Exception exception) {
-            AxsLog.logger().warning("解析跨服聊天消息失败: " + exception.getMessage());
+            plugin.getLogger().warning("解析跨服聊天消息失败: " + exception.getMessage());
         }
     }
 
@@ -959,7 +958,7 @@ public final class ChatService implements Listener {
             paperChatEventRegistered = false;
         } catch (ReflectiveOperationException exception) {
             paperChatEventRegistered = false;
-            AxsLog.logger().warning("注册 Paper AsyncChatEvent 监听失败，已回退到 Bukkit 旧聊天事件: " + exception.getMessage());
+            plugin.getLogger().warning("注册 Paper AsyncChatEvent 监听失败，已回退到 Bukkit 旧聊天事件: " + exception.getMessage());
         }
     }
 
@@ -986,7 +985,7 @@ public final class ChatService implements Listener {
             paperChatEventObserved = true;
             scheduleChatMessage(player, message);
         } catch (ReflectiveOperationException exception) {
-            AxsLog.logger().warning("处理 Paper AsyncChatEvent 失败: " + exception.getMessage());
+            plugin.getLogger().warning("处理 Paper AsyncChatEvent 失败: " + exception.getMessage());
         }
     }
 
@@ -1001,7 +1000,7 @@ public final class ChatService implements Listener {
         try {
             setCancelledMethod.invoke(event, true);
         } catch (ReflectiveOperationException exception) {
-            AxsLog.logger().warning("强制取消 Paper AsyncChatEvent 失败: " + exception.getMessage());
+            plugin.getLogger().warning("强制取消 Paper AsyncChatEvent 失败: " + exception.getMessage());
         }
     }
 
@@ -1012,7 +1011,7 @@ public final class ChatService implements Listener {
         } catch (UnsupportedOperationException ignored) {
         } catch (Exception exception) {
             if (configuration.debug()) {
-                AxsLog.logger().warning("清空 Bukkit 聊天接收者失败: " + exception.getMessage());
+                plugin.getLogger().warning("清空 Bukkit 聊天接收者失败: " + exception.getMessage());
             }
         }
     }
@@ -1027,7 +1026,7 @@ public final class ChatService implements Listener {
             java.lang.reflect.Method removeMethod = Player.class.getMethod("removeCustomChatCompletions", Collection.class);
             completionAdder = (p, entries) -> { try { addMethod.invoke(p, entries); } catch (Exception ignored) {} };
             completionRemover = (p, entries) -> { try { removeMethod.invoke(p, entries); } catch (Exception ignored) {} };
-            AxsLog.logger().info("[Chat] @补全: 已启用 (Paper API)");
+            plugin.getLogger().info("[Chat] @补全: 已启用 (Paper API)");
             return;
         } catch (NoSuchMethodException ignored) {}
 
@@ -1056,9 +1055,9 @@ public final class ChatService implements Listener {
             completionRemover = (p, entries) -> {
                 try { sender.send(p, packetCtor.newInstance(removeAction, List.copyOf(entries))); } catch (Exception ignored) {}
             };
-            AxsLog.logger().info("[Chat] @补全: 已启用 (NMS 发包)");
+            plugin.getLogger().info("[Chat] @补全: 已启用 (NMS 发包)");
         } catch (Exception ex) {
-            AxsLog.logger().warning("[Chat] @补全: 不可用 (" + ex.getClass().getSimpleName() + ": " + ex.getMessage() + ")");
+            plugin.getLogger().warning("[Chat] @补全: 不可用 (" + ex.getClass().getSimpleName() + ": " + ex.getMessage() + ")");
         }
     }
 
@@ -1168,7 +1167,7 @@ public final class ChatService implements Listener {
                 }
             } catch (Exception ex) {
                 if (configuration.debug()) {
-                    AxsLog.logger().warning("[Chat] @补全更新失败: " + ex.getMessage());
+                    plugin.getLogger().warning("[Chat] @补全更新失败: " + ex.getMessage());
                 }
             }
         }, 5L);
@@ -1192,7 +1191,7 @@ public final class ChatService implements Listener {
                 }
             } catch (Exception ex) {
                 if (configuration.debug()) {
-                    AxsLog.logger().warning("[Chat] @补全玩家列表广播失败: " + ex.getMessage());
+                    plugin.getLogger().warning("[Chat] @补全玩家列表广播失败: " + ex.getMessage());
                 }
             }
         }, 5L);
@@ -1377,7 +1376,7 @@ public final class ChatService implements Listener {
             states.put(playerUuid, loaded);
             return loaded;
         } catch (SQLException exception) {
-            AxsLog.logger().warning("读取聊天状态失败: " + exception.getMessage());
+            plugin.getLogger().warning("读取聊天状态失败: " + exception.getMessage());
             ChatPlayerState fallback = ChatPlayerState.createDefault(playerUuid, configuration.defaultChannelId());
             states.put(playerUuid, fallback);
             return fallback;
@@ -1410,7 +1409,7 @@ public final class ChatService implements Listener {
             mutes.put(playerUuid, record);
             return record;
         } catch (SQLException exception) {
-            AxsLog.logger().warning("读取聊天禁言状态失败: " + exception.getMessage());
+            plugin.getLogger().warning("读取聊天禁言状态失败: " + exception.getMessage());
             return null;
         }
     }
@@ -1434,7 +1433,7 @@ public final class ChatService implements Listener {
             loaded.ifPresent(value -> profiles.put(playerUuid, value));
             return loaded.orElse(null);
         } catch (SQLException exception) {
-            AxsLog.logger().warning("读取聊天玩家档案失败: " + exception.getMessage());
+            plugin.getLogger().warning("读取聊天玩家档案失败: " + exception.getMessage());
             return null;
         }
     }
@@ -1466,7 +1465,7 @@ public final class ChatService implements Listener {
                 return loaded.get();
             }
         } catch (SQLException exception) {
-            AxsLog.logger().warning("按名称查找聊天玩家档案失败: " + exception.getMessage());
+            plugin.getLogger().warning("按名称查找聊天玩家档案失败: " + exception.getMessage());
         }
         for (org.bukkit.OfflinePlayer offlinePlayer : Bukkit.getOfflinePlayers()) {
             if (offlinePlayer == null || offlinePlayer.getUniqueId() == null || offlinePlayer.getName() == null) {
@@ -1556,10 +1555,10 @@ public final class ChatService implements Listener {
             cloudWords.clear();
             cloudWords.addAll(loaded);
             if (configuration.debug()) {
-                AxsLog.logger().info("ArcartXChat 已刷新云敏感词，共 " + loaded.size() + " 条。");
+                plugin.getLogger().info("ArcartXChat 已刷新云敏感词，共 " + loaded.size() + " 条。");
             }
         } catch (Exception exception) {
-            AxsLog.logger().warning("刷新聊天云敏感词失败: " + exception.getMessage());
+            plugin.getLogger().warning("刷新聊天云敏感词失败: " + exception.getMessage());
         }
     }
 
@@ -1568,7 +1567,7 @@ public final class ChatService implements Listener {
             try {
                 repository.saveState(state);
             } catch (SQLException exception) {
-                AxsLog.logger().warning("保存聊天状态失败: " + exception.getMessage());
+                plugin.getLogger().warning("保存聊天状态失败: " + exception.getMessage());
             }
         });
     }
@@ -1578,7 +1577,7 @@ public final class ChatService implements Listener {
             try {
                 repository.saveIgnoredPlayers(playerUuid, ignoredPlayers);
             } catch (SQLException exception) {
-                AxsLog.logger().warning("保存聊天忽略列表失败: " + exception.getMessage());
+                plugin.getLogger().warning("保存聊天忽略列表失败: " + exception.getMessage());
             }
         });
     }
@@ -1588,7 +1587,7 @@ public final class ChatService implements Listener {
             try {
                 repository.saveMute(muteRecord);
             } catch (SQLException exception) {
-                AxsLog.logger().warning("保存聊天禁言状态失败: " + exception.getMessage());
+                plugin.getLogger().warning("保存聊天禁言状态失败: " + exception.getMessage());
             }
         });
     }
@@ -1598,7 +1597,7 @@ public final class ChatService implements Listener {
             try {
                 repository.deleteMute(playerUuid);
             } catch (SQLException exception) {
-                AxsLog.logger().warning("删除聊天禁言状态失败: " + exception.getMessage());
+                plugin.getLogger().warning("删除聊天禁言状态失败: " + exception.getMessage());
             }
         });
     }
@@ -1608,7 +1607,7 @@ public final class ChatService implements Listener {
             try {
                 repository.upsertProfile(profile);
             } catch (SQLException exception) {
-                AxsLog.logger().warning("保存聊天玩家档案失败: " + exception.getMessage());
+                plugin.getLogger().warning("保存聊天玩家档案失败: " + exception.getMessage());
             }
         });
     }
@@ -1749,3 +1748,4 @@ public final class ChatService implements Listener {
         return c >= '\u2E80';
     }
 }
+

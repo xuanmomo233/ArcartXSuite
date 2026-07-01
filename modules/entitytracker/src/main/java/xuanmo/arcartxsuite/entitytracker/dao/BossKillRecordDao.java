@@ -12,7 +12,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 /**
  * Boss击杀记录DAO - 用于击杀排行和参与排行统计
@@ -23,7 +22,7 @@ public class BossKillRecordDao {
 
     public BossKillRecordDao(DataSource dataSource, JavaPlugin plugin) {
         this.dataSource = dataSource;
-        this.logger = AxsLog.logger();
+        this.logger = plugin.getLogger();
     }
 
     /**
@@ -267,3 +266,4 @@ public class BossKillRecordDao {
         int bossCount() { return bossIds.size(); }
     }
 }
+

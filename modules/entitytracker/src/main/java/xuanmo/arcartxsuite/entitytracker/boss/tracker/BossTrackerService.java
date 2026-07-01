@@ -42,7 +42,6 @@ import xuanmo.arcartxsuite.entitytracker.service.BossKillRecordingService;
 import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
 import xuanmo.arcartxsuite.api.event.TaczGunDamageEvent;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class BossTrackerService implements Listener {
 
@@ -485,7 +484,7 @@ public final class BossTrackerService implements Listener {
                 hybridWarmupRescanAttempts++;
                 int restoredCount = restoreTrackedBosses("Mohist 启动补扫", false);
                 if (restoredCount > 0) {
-                    AxsLog.logger().info("Mohist 启动补扫恢复了 " + restoredCount + " 个遗漏的 MythicMobs Boss。");
+                    plugin.getLogger().info("Mohist 启动补扫恢复了 " + restoredCount + " 个遗漏的 MythicMobs Boss。");
                     requestRefresh();
                 }
                 if (hybridWarmupRescanAttempts >= HYBRID_WARMUP_RESCAN_ATTEMPTS) {
@@ -502,7 +501,7 @@ public final class BossTrackerService implements Listener {
             () -> {
                 int restoredCount = restoreTrackedBosses("Mohist 持续补扫", false);
                 if (restoredCount > 0) {
-                    AxsLog.logger().info("Mohist 持续补扫恢复了 " + restoredCount + " 个遗漏的 MythicMobs Boss。");
+                    plugin.getLogger().info("Mohist 持续补扫恢复了 " + restoredCount + " 个遗漏的 MythicMobs Boss。");
                     requestRefresh();
                 }
             },
@@ -535,14 +534,14 @@ public final class BossTrackerService implements Listener {
                 }
             }
         } catch (Exception | LinkageError exception) {
-            AxsLog.logger().warning(reason + "已存在 MythicMobs Boss 失败: " + exception.getMessage());
+            plugin.getLogger().warning(reason + "已存在 MythicMobs Boss 失败: " + exception.getMessage());
             return 0;
         }
 
         if (restoredCount > 0) {
-            AxsLog.logger().info(reason + "已恢复跟踪 " + restoredCount + " 个已存在的 MythicMobs Boss。");
+            plugin.getLogger().info(reason + "已恢复跟踪 " + restoredCount + " 个已存在的 MythicMobs Boss。");
         } else if (logWhenEmpty) {
-            AxsLog.logger().fine(reason + "未发现需要恢复的已存在 MythicMobs Boss。");
+            plugin.getLogger().fine(reason + "未发现需要恢复的已存在 MythicMobs Boss。");
         }
         return restoredCount;
     }
@@ -999,3 +998,4 @@ public final class BossTrackerService implements Listener {
         }
     }
 }
+

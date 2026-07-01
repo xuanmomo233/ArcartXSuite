@@ -32,7 +32,6 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 public final class AnnouncerService implements Listener {
 
@@ -176,7 +175,7 @@ public final class AnnouncerService implements Listener {
         ConsoleCommandSender console = Bukkit.getConsoleSender();
         boolean dispatched = Bukkit.dispatchCommand(console, command);
         if (configuration.debug()) {
-            AxsLog.logger().info(
+            plugin.getLogger().info(
                 "ArcartXAnnouncer 点击回包 -> player="
                     + player.getName()
                     + " | entry="
@@ -316,7 +315,7 @@ public final class AnnouncerService implements Listener {
         try {
             handleRemoteEnvelope(AnnouncerEnvelopeCodec.decode(payload));
         } catch (Exception exception) {
-            AxsLog.logger().warning("Announcer 跨服消息解码失败: " + exception.getMessage());
+            plugin.getLogger().warning("Announcer 跨服消息解码失败: " + exception.getMessage());
         }
     }
 
@@ -436,7 +435,7 @@ public final class AnnouncerService implements Listener {
         AnnouncerDisplay display
     ) {
         if (configuration.debug()) {
-            AxsLog.logger().info(
+            plugin.getLogger().info(
                 "ArcartXAnnouncer 播放同步 -> player="
                     + player.getName()
                     + " | reason="
@@ -588,3 +587,4 @@ public final class AnnouncerService implements Listener {
         return c >= '\u2E80';
     }
 }
+

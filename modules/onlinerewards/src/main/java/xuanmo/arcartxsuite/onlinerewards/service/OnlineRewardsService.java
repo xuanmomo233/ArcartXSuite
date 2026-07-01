@@ -57,7 +57,6 @@ import xuanmo.arcartxsuite.onlinerewards.storage.OnlineRewardsRepository;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
-import xuanmo.arcartxsuite.module.AxsLog;
 
 public class OnlineRewardsService implements Listener {
 
@@ -174,7 +173,7 @@ public class OnlineRewardsService implements Listener {
             delivery -> handleCrossServerMessage(delivery.payload())
         );
         if (crossServerChannel.isActive()) {
-            AxsLog.logger().fine("OnlineRewards 跨服通知已启用。");
+            plugin.getLogger().fine("OnlineRewards 跨服通知已启用。");
         }
     }
 
@@ -336,7 +335,7 @@ public class OnlineRewardsService implements Listener {
             int safePageSize = Math.max(1, pageSize);
             return repository.loadLeaderboard(scope, currentPeriodKey(scope), (safePage - 1) * safePageSize, safePageSize);
         } catch (SQLException exception) {
-            AxsLog.logger().log(Level.WARNING, "加载在线奖励排行榜失败: " + scope.key(), exception);
+            plugin.getLogger().log(Level.WARNING, "加载在线奖励排行榜失败: " + scope.key(), exception);
             return List.of();
         }
     }
@@ -379,7 +378,7 @@ public class OnlineRewardsService implements Listener {
         try {
             return repository.countSignInRecords(currentPeriodContext().rewardDate());
         } catch (SQLException exception) {
-            AxsLog.logger().log(Level.WARNING, "统计今日签到人数失败", exception);
+            plugin.getLogger().log(Level.WARNING, "统计今日签到人数失败", exception);
             return 0;
         }
     }
@@ -553,7 +552,7 @@ public class OnlineRewardsService implements Listener {
             state.setOfflineSavingsMinutes(Math.min(savings.maxMinutes(), state.offlineSavingsMinutes() + capped));
             dirtyStates.put(player.getUniqueId(), state.copy());
             if (configuration.debug()) {
-                AxsLog.logger().info(
+                plugin.getLogger().info(
                     "OfflineRewards 储蓄 -> player=" + player.getName()
                         + " | available=" + available
                         + " | stored=" + capped
@@ -611,7 +610,7 @@ public class OnlineRewardsService implements Listener {
             pushSnapshot(player, result.snapshot());
             refreshMenu(player);
             if (configuration.debug()) {
-                AxsLog.logger().info(
+                plugin.getLogger().info(
                     "OnlineRewards tick -> player="
                         + player.getName()
                         + " | minutes="
@@ -657,7 +656,7 @@ public class OnlineRewardsService implements Listener {
                 normalized.add(xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.normalizeUiId(candidateUiId, uiFile));
             }
             runtimeMenuUiIds = java.util.List.copyOf(normalized);
-            AxsLog.logger().fine("ArcartX OnlineRewards UI 自动注册已关闭，将直接使用 UI 标识: " + runtimeMenuUiIds);
+            plugin.getLogger().fine("ArcartX OnlineRewards UI 自动注册已关闭，将直接使用 UI 标识: " + runtimeMenuUiIds);
             return;
         }
 
@@ -707,7 +706,7 @@ public class OnlineRewardsService implements Listener {
             )));
         }
         if (configuration.debug()) {
-            AxsLog.logger().info(
+            plugin.getLogger().info(
                 "OnlineRewards sync -> player="
                     + player.getName()
                     + " | minutes="
@@ -754,7 +753,7 @@ public class OnlineRewardsService implements Listener {
         try {
             return repository.loadState(playerUuid);
         } catch (SQLException exception) {
-            AxsLog.logger().log(Level.WARNING, "加载在线奖励数据失败: " + playerUuid, exception);
+            plugin.getLogger().log(Level.WARNING, "加载在线奖励数据失败: " + playerUuid, exception);
             return new OnlineRewardsPlayerState();
         }
     }
@@ -789,7 +788,7 @@ public class OnlineRewardsService implements Listener {
         state.setOnlineMinutes(state.onlineMinutes() + bonus);
         state.setOfflineSavingsMinutes(0);
         if (configuration.debug()) {
-            AxsLog.logger().info(
+            plugin.getLogger().info(
                 "OfflineRewards 次日应用 -> player=" + player.getName()
                     + " | bonus=" + bonus
                     + " | onlineMinutes=" + state.onlineMinutes()
@@ -810,7 +809,7 @@ public class OnlineRewardsService implements Listener {
             ));
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
             if (configuration.debug()) {
-                AxsLog.logger().info(
+                plugin.getLogger().info(
                     "OnlineRewards 发放奖励 -> player="
                         + player.getName()
                         + " | reward="
@@ -835,7 +834,7 @@ public class OnlineRewardsService implements Listener {
             ));
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
             if (configuration.debug()) {
-                AxsLog.logger().info(
+                plugin.getLogger().info(
                     "OnlineRewards 发放" + periodLabel + "奖励 -> player="
                         + player.getName()
                         + " | reward="
@@ -859,7 +858,7 @@ public class OnlineRewardsService implements Listener {
 
         MailDispatchable mailService = mailProvider == null ? null : mailProvider.get();
         if (mailService == null) {
-            AxsLog.logger().warning(
+            plugin.getLogger().warning(
                 "OnlineRewards " + sourceLabel + " 配置了邮件预设，但 Mail 模块当前不可用。"
             );
             return;
@@ -871,7 +870,7 @@ public class OnlineRewardsService implements Listener {
             }
             boolean success = mailService.dispatchPreset(presetId, player.getName(), actorName);
             if (configuration.debug()) {
-                AxsLog.logger().info(
+                plugin.getLogger().info(
                     "OnlineRewards 邮件奖励 -> player="
                         + player.getName()
                         + " | source="
@@ -882,7 +881,7 @@ public class OnlineRewardsService implements Listener {
                         + success
                 );
             } else if (!success) {
-                AxsLog.logger().warning(
+                plugin.getLogger().warning(
                     "OnlineRewards 邮件奖励派发失败 -> player="
                         + player.getName()
                         + " | source="
@@ -899,7 +898,7 @@ public class OnlineRewardsService implements Listener {
             String command = renderCommand(rawCommand, player, result);
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
             if (configuration.debug()) {
-                AxsLog.logger().info(
+                plugin.getLogger().info(
                     "OnlineRewards 签到奖励 -> player="
                         + player.getName()
                         + " | command="
@@ -925,7 +924,7 @@ public class OnlineRewardsService implements Listener {
 
     private void handleCrossServerMessage(String message) {
         if (configuration.debug()) {
-            AxsLog.logger().info("收到 OnlineRewards 跨服消息: " + message);
+            plugin.getLogger().info("收到 OnlineRewards 跨服消息: " + message);
         }
         if (message == null || message.isBlank() || !message.startsWith("refresh:")) {
             return;
@@ -967,7 +966,7 @@ public class OnlineRewardsService implements Listener {
         try {
             repository.saveState(playerUuid, state);
         } catch (SQLException exception) {
-            AxsLog.logger().log(Level.WARNING, "保存在线奖励数据失败: " + playerUuid, exception);
+            plugin.getLogger().log(Level.WARNING, "保存在线奖励数据失败: " + playerUuid, exception);
         }
     }
 
@@ -1127,7 +1126,7 @@ public class OnlineRewardsService implements Listener {
                 );
             }
         } catch (SQLException exception) {
-            AxsLog.logger().log(Level.WARNING, "保存签到记录失败: " + player.getUniqueId() + " " + dateText, exception);
+            plugin.getLogger().log(Level.WARNING, "保存签到记录失败: " + player.getUniqueId() + " " + dateText, exception);
             return new OnlineRewardsSignInResult(false, false, state.signInStreak(), state.signInTotal(), dateText, date.getDayOfMonth());
         }
         Set<String> dates = loadAllSignInDates(player.getUniqueId());
@@ -1152,7 +1151,7 @@ public class OnlineRewardsService implements Listener {
         try {
             return repository.hasSignInRecord(playerUuid, date);
         } catch (SQLException exception) {
-            AxsLog.logger().log(Level.WARNING, "检查签到记录失败: " + playerUuid + " " + date, exception);
+            plugin.getLogger().log(Level.WARNING, "检查签到记录失败: " + playerUuid + " " + date, exception);
             return false;
         }
     }
@@ -1161,7 +1160,7 @@ public class OnlineRewardsService implements Listener {
         try {
             return repository.loadAllSignInDates(playerUuid);
         } catch (SQLException exception) {
-            AxsLog.logger().log(Level.WARNING, "加载签到历史失败: " + playerUuid, exception);
+            plugin.getLogger().log(Level.WARNING, "加载签到历史失败: " + playerUuid, exception);
             return Set.of();
         }
     }
@@ -1170,7 +1169,7 @@ public class OnlineRewardsService implements Listener {
         try {
             return repository.loadSignInDates(playerUuid, fromDate.format(DATE_FORMATTER), toDate.format(DATE_FORMATTER));
         } catch (SQLException exception) {
-            AxsLog.logger().log(Level.WARNING, "加载签到日历失败: " + playerUuid, exception);
+            plugin.getLogger().log(Level.WARNING, "加载签到日历失败: " + playerUuid, exception);
             return Set.of();
         }
     }
@@ -1241,7 +1240,7 @@ public class OnlineRewardsService implements Listener {
             try {
                 leaderboardCache.put(scope, repository.loadLeaderboard(scope, currentPeriodKey(scope), 0, LEADERBOARD_CACHE_SIZE));
             } catch (SQLException exception) {
-                AxsLog.logger().log(Level.WARNING, "刷新在线奖励排行榜缓存失败: " + scope.key(), exception);
+                plugin.getLogger().log(Level.WARNING, "刷新在线奖励排行榜缓存失败: " + scope.key(), exception);
                 leaderboardCache.put(scope, List.of());
             }
         }
@@ -1452,7 +1451,7 @@ public class OnlineRewardsService implements Listener {
         try {
             signedCount = repository.countSignInRecords(today);
         } catch (SQLException exception) {
-            AxsLog.logger().log(Level.WARNING, "统计今日签到人数失败", exception);
+            plugin.getLogger().log(Level.WARNING, "统计今日签到人数失败", exception);
             return;
         }
         for (OnlineRewardsServerSignInGoalTarget target : goalConfig.targets()) {
@@ -1465,7 +1464,7 @@ public class OnlineRewardsService implements Listener {
                 }
                 repository.saveServerGoalTriggered(today, target.id());
             } catch (SQLException exception) {
-                AxsLog.logger().log(Level.WARNING, "保存全服签到目标状态失败: " + target.id(), exception);
+                plugin.getLogger().log(Level.WARNING, "保存全服签到目标状态失败: " + target.id(), exception);
                 continue;
             }
             broadcastServerGoal(triggerPlayer, target, signedCount);
@@ -1531,3 +1530,4 @@ public class OnlineRewardsService implements Listener {
         }
     }
 }
+
