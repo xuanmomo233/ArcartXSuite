@@ -18,6 +18,7 @@ import xuanmo.arcartxsuite.entitytracker.dao.BossKillRecordDao;
 import xuanmo.arcartxsuite.entitytracker.dao.CrossServerBossRankingDao;
 import xuanmo.arcartxsuite.entitytracker.dao.PlayerBossBestDamageDao;
 import xuanmo.arcartxsuite.entitytracker.entity.PlayerBossBestDamage;
+import java.util.logging.Logger;
 
 /**
  * 定时聚合排行并写入 {@code cross_server_boss_rankings} 缓存表。
@@ -27,6 +28,7 @@ public final class CrossServerRankingCacheService {
     private static final Gson GSON = new Gson();
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final CrossServerRankingSettings settings;
     private final CrossServerBossRankingDao rankingDao;
     private final PlayerBossBestDamageDao bestDamageDao;
@@ -39,16 +41,18 @@ public final class CrossServerRankingCacheService {
 
     public CrossServerRankingCacheService(
         JavaPlugin plugin,
+        Logger logger,
         CrossServerRankingSettings settings,
         DataSource dataSource,
         java.util.function.Supplier<PluginConfiguration> configurationSupplier,
         java.util.function.Supplier<String> nodeIdSupplier
     ) {
         this.plugin = plugin;
+        this.logger = logger;
         this.settings = settings;
         this.rankingDao = new CrossServerBossRankingDao(dataSource, plugin);
         this.bestDamageDao = new PlayerBossBestDamageDao(dataSource, plugin);
-        this.killRecordDao = new BossKillRecordDao(dataSource, plugin);
+        this.killRecordDao = new BossKillRecordDao(dataSource, this.logger);
         this.configurationSupplier = configurationSupplier;
         this.nodeIdSupplier = nodeIdSupplier;
     }
@@ -119,7 +123,7 @@ public final class CrossServerRankingCacheService {
                 }
             }
         } catch (SQLException exception) {
-            plugin.getLogger().warning("[EntityTracker] 排行缓存刷新失败: " + exception.getMessage());
+            this.logger.warning("[EntityTracker] 排行缓存刷新失败: " + exception.getMessage());
         }
     }
 
@@ -162,4 +166,6 @@ public final class CrossServerRankingCacheService {
         rankingDao.upsert(rankingType, bossId, GSON.toJson(array), expire);
     }
 }
+
+
 

@@ -29,10 +29,12 @@ import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
 import xuanmo.arcartxsuite.essentials.config.EssentialsConfiguration;
+import java.util.logging.Logger;
 
 public final class PlayerManagementService implements Listener {
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final EssentialsConfiguration config;
     private final java.util.function.Supplier<TabRefreshable> tabRefreshProvider;
 
@@ -45,9 +47,11 @@ public final class PlayerManagementService implements Listener {
 
     private int afkTaskId = -1;
 
-    public PlayerManagementService(JavaPlugin plugin, EssentialsConfiguration config,
+    public PlayerManagementService(JavaPlugin plugin,
+        Logger logger, EssentialsConfiguration config,
                                    java.util.function.Supplier<TabRefreshable> tabRefreshProvider) {
         this.plugin = plugin;
+        this.logger = logger;
         this.config = config;
         this.tabRefreshProvider = tabRefreshProvider;
     }
@@ -352,3 +356,4 @@ public final class PlayerManagementService implements Listener {
         return ChatColor.GRAY + "[" + ChatColor.GREEN + "Essentials" + ChatColor.GRAY + "] " + ChatColor.RESET;
     }
 }
+

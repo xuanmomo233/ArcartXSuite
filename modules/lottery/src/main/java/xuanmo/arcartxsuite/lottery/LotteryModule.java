@@ -104,13 +104,13 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         }
         var yaml = YamlConfiguration.loadConfiguration(configFile);
         String poolsDir = yaml.getString("pools-directory", "lottery/pools");
-        File poolsDirectory = new File(context.dataFolder(), poolsDir);
+        File poolsDirectory = new File(dataFolder, poolsDir);
         ensurePoolDefaults(poolsDir);
-        configuration = LotteryModuleConfiguration.load(yaml, context.dataFolder(), context.logger());
+        configuration = LotteryModuleConfiguration.load(yaml, dataFolder, logger);
     }
 
     private void ensurePoolDefaults(String poolsRelative) {
-        File poolsDir = new File(context.dataFolder(), poolsRelative);
+        File poolsDir = new File(dataFolder, poolsRelative);
         if (!poolsDir.exists()) {
             poolsDir.mkdirs();
         }
@@ -121,26 +121,26 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         for (String poolFile : new String[]{"character_event_1.yml", "weapon_event_1.yml", "default_weapon_case.yml"}) {
             File target = new File(poolsDir, poolFile);
             if (!target.exists()) {
-                context.exportResource("lottery/pools/" + poolFile, target, false);
+                exportResource("lottery/pools/" + poolFile, target, false);
             }
         }
     }
 
     @Override
     protected void startService() throws Exception {
-        File moduleDataFolder = context.dataFolder();
+        File moduleDataFolder = dataFolder;
         JdbcLotteryRepository repo = new JdbcLotteryRepository(
-            moduleDataFolder, configuration.storage(), context.logger());
+            moduleDataFolder, configuration.storage(), logger);
 
-        CurrencyBridgeAPI currencyManager = context.currencyManager();
-        ItemSourceRegistry itemSourceRegistry = context.itemSourceRegistry();
+        CurrencyBridgeAPI currencyManager = currencyManager;
+        ItemSourceRegistry itemSourceRegistry = itemSourceRegistry;
 
         java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailSupplier
-            = () -> context.getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class);
+            = () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class);
 
         service = new LotteryService(
-            context.plugin(), configuration, repo,
-            currencyManager, itemSourceRegistry, mailSupplier, context.logger());
+            plugin, logger, configuration, repo,
+            currencyManager, itemSourceRegistry, mailSupplier, logger);
         service.setMessageProvider(messages());
         service.start();
 
@@ -148,7 +148,7 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         registerModuleUi(GACHA_UI_FILE, "AXS:lottery_gacha", true);
         registerModuleUi(CASE_UI_FILE, "AXS:lottery_case", true);
 
-        context.registerCapability(DatabaseMigratable.class, new DatabaseMigratable() {
+        registerCapability(DatabaseMigratable.class, new DatabaseMigratable() {
             @Override public @NotNull String moduleId() { return "lottery"; }
             @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
                     @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
@@ -159,20 +159,20 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
             }
         });
 
-        context.registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
+        registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
             @Override public @NotNull String moduleId() { return "lottery"; }
             @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
                 try { return repo.deletePlayerData(playerUuid); }
-                catch (Exception e) { context.logger().warning("Lottery purge 失败: " + e.getMessage()); return -1; }
+                catch (Exception e) { logger.warning("Lottery purge 失败: " + e.getMessage()); return -1; }
             }
             @Override public int purgeAllPlayerData() {
                 try { return repo.deleteAllPlayerData(); }
-                catch (Exception e) { context.logger().warning("Lottery purgeAll 失败: " + e.getMessage()); return -1; }
+                catch (Exception e) { logger.warning("Lottery purgeAll 失败: " + e.getMessage()); return -1; }
             }
         });
 
         adminCommand = new LotteryAdminCommand(() -> service, messages());
-        context.logger().fine("Lottery 模块已载入 | 奖池=" + configuration.pools().size());
+        logger.fine("Lottery 模块已载入 | 奖池=" + configuration.pools().size());
     }
 
     @Override
@@ -191,12 +191,12 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
-        return new LotteryPlaceholderExpansion(context.plugin(), () -> service);
+        return new LotteryPlaceholderExpansion(plugin, () -> service);
     }
 
     @Override
     protected @Nullable ClientPacketHandler createPacketHandler() {
-        PacketBridgeAPI packetBridge = context.packetBridge();
+        PacketBridgeAPI packetBridge = packetBridge;
         if (service == null || packetBridge == null || !packetBridge.isAvailable()) {
             return null;
         }
@@ -228,3 +228,5 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         return prefix + mp.get(key, args);
     }
 }
+
+

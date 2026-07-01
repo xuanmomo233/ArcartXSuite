@@ -32,6 +32,7 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import java.util.logging.Logger;
 
 public final class AnnouncerService implements Listener {
 
@@ -44,6 +45,7 @@ public final class AnnouncerService implements Listener {
     private static final int DEDUPE_MAX_SIZE = 128;
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final AnnouncerModuleConfiguration configuration;
     private final PacketBridgeAPI bridge;
     private final ClientBridgeAPI clientBridge;
@@ -77,6 +79,7 @@ public final class AnnouncerService implements Listener {
 
     public AnnouncerService(
         JavaPlugin plugin,
+        Logger logger,
         AnnouncerModuleConfiguration configuration,
         PacketBridgeAPI bridge,
         ClientBridgeAPI clientBridge,
@@ -86,6 +89,7 @@ public final class AnnouncerService implements Listener {
         PlaceholderResolverAPI placeholderResolver
     ) {
         this.plugin = plugin;
+        this.logger = logger;
         this.configuration = configuration;
         this.bridge = bridge;
         this.clientBridge = clientBridge;
@@ -175,7 +179,7 @@ public final class AnnouncerService implements Listener {
         ConsoleCommandSender console = Bukkit.getConsoleSender();
         boolean dispatched = Bukkit.dispatchCommand(console, command);
         if (configuration.debug()) {
-            plugin.getLogger().info(
+            this.logger.info(
                 "ArcartXAnnouncer 点击回包 -> player="
                     + player.getName()
                     + " | entry="
@@ -315,7 +319,7 @@ public final class AnnouncerService implements Listener {
         try {
             handleRemoteEnvelope(AnnouncerEnvelopeCodec.decode(payload));
         } catch (Exception exception) {
-            plugin.getLogger().warning("Announcer 跨服消息解码失败: " + exception.getMessage());
+            this.logger.warning("Announcer 跨服消息解码失败: " + exception.getMessage());
         }
     }
 
@@ -435,7 +439,7 @@ public final class AnnouncerService implements Listener {
         AnnouncerDisplay display
     ) {
         if (configuration.debug()) {
-            plugin.getLogger().info(
+            this.logger.info(
                 "ArcartXAnnouncer 播放同步 -> player="
                     + player.getName()
                     + " | reason="
@@ -587,4 +591,5 @@ public final class AnnouncerService implements Listener {
         return c >= '\u2E80';
     }
 }
+
 

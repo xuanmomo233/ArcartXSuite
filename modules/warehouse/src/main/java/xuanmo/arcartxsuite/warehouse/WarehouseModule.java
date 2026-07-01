@@ -148,7 +148,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
             throw new IllegalStateException("ArcartXWarehouse.yml 配置文件缺失");
         }
         FileConfiguration yaml = YamlConfiguration.loadConfiguration(configFile);
-        configuration = WarehouseModuleConfiguration.load(yaml, context.logger());
+        configuration = WarehouseModuleConfiguration.load(yaml, logger);
         crossServerChannelConfig = CrossServerChannelConfigs.fromSection(yaml.getConfigurationSection("cross-server"));
     }
 
@@ -164,50 +164,50 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
      */
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        PacketGuardAPI packetGuard = context.packetGuard();
+        PacketBridgeAPI packetBridge = packetBridge;
+        PacketGuardAPI packetGuard = packetGuard;
 
         WarehouseService.UiResourceExporter uiExporter = (resourcePath, relativeUiPath, overwrite) -> {
             try {
-                return context.exportUiResource(resourcePath, relativeUiPath, overwrite, moduleClassLoader());
+                return exportUiResource(resourcePath, relativeUiPath, overwrite, moduleClassLoader());
             } catch (IOException ex) {
                 throw ex;
             }
         };
 
         xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI itemStackBridge =
-            context.itemStackBridge();
+            itemStackBridge;
         JdbcWarehouseRepository warehouseRepo = new JdbcWarehouseRepository(
-            context.dataFolder(),
-            configuration.storage(), context.logger());
+            dataFolder,
+            configuration.storage(), logger);
         service = new WarehouseService(
-            context.plugin(), packetBridge, itemStackBridge, packetGuard, uiExporter, configuration,
+            plugin, logger, packetBridge, itemStackBridge, packetGuard, uiExporter, configuration,
             warehouseRepo,
-            context.itemSourceRegistry(), context.itemMatcher(), context.currencyManager(),
-            () -> context.getCapability(PickupNotifiable.class),
-            context.crossServer(), crossServerChannelConfig
+            itemSourceRegistry, itemMatcher, currencyManager,
+            () -> getCapability(PickupNotifiable.class),
+            crossServer, crossServerChannelConfig
         );
-        service.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+        service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
         adminCommand = new WarehouseAdminCommand(() -> service, messages());
 
-        context.registerCapability(WarehouseAutoDepositable.class,
+        registerCapability(WarehouseAutoDepositable.class,
             (player, itemStack) -> service.depositToPersonalWarehouse(player, itemStack));
 
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "warehouse"; }
                 @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
                     try { return warehouseRepo.deletePlayerData(playerUuid); }
-                    catch (Exception e) { context.logger().warning("Warehouse purge 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("Warehouse purge 失败: " + e.getMessage()); return -1; }
                 }
                 @Override public int purgeAllPlayerData() {
                     try { return warehouseRepo.deleteAllPlayerData(); }
-                    catch (Exception e) { context.logger().warning("Warehouse purgeAll 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("Warehouse purgeAll 失败: " + e.getMessage()); return -1; }
                 }
             });
 
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
             new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
                 @Override public @NotNull String moduleId() { return "warehouse"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
@@ -219,7 +219,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
                 }
             });
 
-        context.logger().fine(
+        logger.fine(
             "Warehouse 模块已载入，UI=" + configuration.ui().uiId()
                 + " | 存储=" + configuration.storage().dialect().configKey()
                 + " | 跨服编辑锁=" + (service.crossServerActive() ? "ON" : "OFF")
@@ -252,7 +252,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
      */
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
-        return new WarehousePlaceholderExpansion(context.plugin(), () -> service);
+        return new WarehousePlaceholderExpansion(plugin, () -> service);
     }
 
     /**
@@ -281,3 +281,5 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
+

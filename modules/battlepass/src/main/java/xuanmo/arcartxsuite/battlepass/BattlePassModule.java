@@ -113,7 +113,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         // 首次安装时导出默认任务文件
         ensureTaskDefaults(dataFolder);
         configuration = BattlePassModuleConfiguration.load(
-            YamlConfiguration.loadConfiguration(configFile), dataFolder, context.logger());
+            YamlConfiguration.loadConfiguration(configFile), dataFolder, logger);
     }
 
     private void ensureTaskDefaults(File dataFolder) {
@@ -128,16 +128,16 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         for (String taskFile : new String[]{"daily.yml", "weekly.yml", "season.yml"}) {
             File target = new File(tasksDir, taskFile);
             if (!target.exists()) {
-                context.exportResource("tasks/" + taskFile, target, false);
+                exportResource("tasks/" + taskFile, target, false);
             }
         }
     }
 
     @Override
     protected void startService() throws Exception {
-        File moduleDataFolder = context.dataFolder();
+        File moduleDataFolder = dataFolder;
         JdbcBattlePassRepository repo = new JdbcBattlePassRepository(
-            moduleDataFolder, configuration.storage(), context.logger());
+            moduleDataFolder, configuration.storage(), logger);
 
         UiBinding mainBinding = registerModuleUi(MAIN_UI_FILE_PATH, configuration.ui().mainId(), true);
         UiBinding tasksBinding = registerModuleUi(TASKS_UI_FILE_PATH, configuration.ui().tasksId(), true);
@@ -145,12 +145,12 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             throw new IllegalStateException("BattlePass UI 注册失败");
         }
 
-        service = new BattlePassService(context.plugin(), configuration, repo, context.logger());
-        service.setEventBusProvider(() -> context.getCapability(
+        service = new BattlePassService(plugin, logger, configuration, repo, logger);
+        service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
 
-        context.registerCapability(DatabaseMigratable.class, new DatabaseMigratable() {
+        registerCapability(DatabaseMigratable.class, new DatabaseMigratable() {
             @Override public @NotNull String moduleId() { return "battlepass"; }
             @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
                     @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
@@ -161,20 +161,20 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             }
         });
 
-        context.registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
+        registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
             @Override public @NotNull String moduleId() { return "battlepass"; }
             @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
                 try { return repo.deletePlayerData(playerUuid); }
-                catch (Exception e) { context.logger().warning("BattlePass purge 失败: " + e.getMessage()); return -1; }
+                catch (Exception e) { logger.warning("BattlePass purge 失败: " + e.getMessage()); return -1; }
             }
             @Override public int purgeAllPlayerData() {
                 try { return repo.deleteAllPlayerData(); }
-                catch (Exception e) { context.logger().warning("BattlePass purgeAll 失败: " + e.getMessage()); return -1; }
+                catch (Exception e) { logger.warning("BattlePass purgeAll 失败: " + e.getMessage()); return -1; }
             }
         });
 
         adminCommand = new BattlePassAdminCommand(() -> service, this::msg);
-        context.logger().fine("BattlePass 模块已载入 | 赛季=" + configuration.season().seasonId()
+        logger.fine("BattlePass 模块已载入 | 赛季=" + configuration.season().seasonId()
             + " | 跨服=" + (configuration.crossServer().enabled() ? "ON" : "OFF"));
     }
 
@@ -199,18 +199,18 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
-        return new BattlePassPlaceholderExpansion(context.plugin(), () -> service);
+        return new BattlePassPlaceholderExpansion(plugin, () -> service);
     }
 
     @Override
     protected @Nullable ClientPacketHandler createPacketHandler() {
         if (service == null) return null;
-        var packetBridge = context.packetBridge();
-        var packetGuard = context.packetGuard();
+        var packetBridge = packetBridge;
+        var packetGuard = packetGuard;
         String mainUiId = getModuleUiId(MAIN_UI_FILE_PATH);
         String tasksUiId = getModuleUiId(TASKS_UI_FILE_PATH);
         packetHandler = new BattlePassPacketHandler(
-            context.plugin(),
+            plugin,
             packetBridge,
             packetGuard,
             service,
@@ -247,3 +247,5 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         return prefix + mp.get(key, args);
     }
 }
+
+

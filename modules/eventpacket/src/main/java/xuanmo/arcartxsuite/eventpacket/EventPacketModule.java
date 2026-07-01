@@ -106,14 +106,14 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         }
         var yaml = YamlConfiguration.loadConfiguration(configFile);
         String rulesDirRelative = yaml.getString("rules-directory", "rules");
-        File rulesDirectory = new File(context.dataFolder(), rulesDirRelative);
+        File rulesDirectory = new File(dataFolder, rulesDirRelative);
         ensureRuleDefaults(rulesDirRelative);
-        File presetsDir = new File(context.pluginDataFolder(), "eventpacket/packet-command-presets");
-        configuration = PluginConfiguration.load(yaml, context.logger(), presetsDir, rulesDirectory);
+        File presetsDir = new File(pluginDataFolder, "eventpacket/packet-command-presets");
+        configuration = PluginConfiguration.load(yaml, logger, presetsDir, rulesDirectory);
     }
 
     private void ensureRuleDefaults(String rulesRelative) {
-        File rulesDir = new File(context.dataFolder(), rulesRelative);
+        File rulesDir = new File(dataFolder, rulesRelative);
         if (!rulesDir.exists()) {
             rulesDir.mkdirs();
         }
@@ -123,37 +123,37 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         }
         File target = new File(rulesDir, "examples.yml");
         if (!target.exists()) {
-            context.exportResource("rules/examples.yml", target, false);
+            exportResource("rules/examples.yml", target, false);
         }
     }
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = context.packetBridge();
+        PacketBridgeAPI packetBridge = packetBridge;
 
         repository = new JdbcEventPacketRepository(
-            context.dataFolder(),
-            configuration.storage(), context.logger()
+            dataFolder,
+            configuration.storage(), logger
         );
         repository.initialize();
 
         dispatchService = new EventPacketDispatchService(
-            context.logger(),
-            context.packetGuard(),
+            logger,
+            packetGuard,
             packetBridge,
             () -> configuration,
-            () -> context.getCapability(QuestGpsNavigable.class),
-            () -> context.getCapability(TitleGrantable.class),
-            () -> context.getCapability(SubtitlePlayable.class),
-            () -> context.getCapability(ChatCardSendable.class),
-            () -> context.getCapability(MailDispatchable.class),
-            () -> context.getCapability(QQBotBroadcastable.class),
+            () -> getCapability(QuestGpsNavigable.class),
+            () -> getCapability(TitleGrantable.class),
+            () -> getCapability(SubtitlePlayable.class),
+            () -> getCapability(ChatCardSendable.class),
+            () -> getCapability(MailDispatchable.class),
+            () -> getCapability(QQBotBroadcastable.class),
             () -> "",
             () -> repository
         );
 
         // 注入账号类型解析器，使规则可使用 {account_type} / {account_type_display} / {account_premium}
-        AccountTypeService accountTypeService = context.accountTypeService();
+        AccountTypeService accountTypeService = accountTypeService;
         EventPacketContext.setAccountInfoResolver((uuidStr, name) -> {
             UUID uuid = null;
             if (uuidStr != null && !uuidStr.isBlank()) {
@@ -175,51 +175,51 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
             .anyMatch(rule -> rule.enabled() && rule.isScriptTrigger());
         int papiPacketCount = configuration.papiPacketCount();
         if (papiPacketCount > 0 && !placeholderApiAvailable) {
-            context.logger().warning(
+            logger.warning(
                 "EventPacket 模块检测到 " + papiPacketCount
                     + " 个 PAPI 触发配置，但当前未安装 PlaceholderAPI，这部分触发器不会生效。"
             );
         }
         if ((papiPacketCount > 0 && placeholderApiAvailable) || hasMobKillRules || hasScriptTriggers) {
             watcherService = new PapiWatcherService(
-                context.plugin(), dispatchService, configuration, packetBridge, repository,
-                context.placeholderResolver(), context.scriptConditionEvaluator()
+                plugin, logger, dispatchService, configuration, packetBridge, repository,
+                placeholderResolver, scriptConditionEvaluator
             );
             watcherService.start();
         }
 
-        context.registerCapability(SignalDispatchable.class, (signal, subject, variables) ->
+        registerCapability(SignalDispatchable.class, (signal, subject, variables) ->
             dispatchService.dispatchSignal(signal, subject, variables));
 
         adminCommand = new EventPacketAdminCommand(() -> dispatchService, () -> cleanupService, messages());
         listener = new PlayerEventPacketListener(dispatchService, watcherService);
-        Bukkit.getPluginManager().registerEvents(listener, context.plugin());
+        Bukkit.getPluginManager().registerEvents(listener, plugin);
 
         // 启动实体清理服务
         cleanupService = new EntityCleanupService(
-            context.plugin(), context.logger(), configuration.entityCleanup());
+            plugin, logger, logger, configuration.entityCleanup());
         cleanupService.start();
 
         // 启动定时命令服务
         scheduledCommandService = new ScheduledCommandService(
-            context.plugin(), context.logger(), configuration.scheduledCommands());
+            plugin, logger, logger, configuration.scheduledCommands());
         scheduledCommandService.start();
 
         JdbcEventPacketRepository epRepo = (JdbcEventPacketRepository) repository;
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "eventpacket"; }
                 @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
                     try { return epRepo.deletePlayerData(playerUuid); }
-                    catch (Exception e) { context.logger().warning("EventPacket purge 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("EventPacket purge 失败: " + e.getMessage()); return -1; }
                 }
                 @Override public int purgeAllPlayerData() {
                     try { return epRepo.deleteAllPlayerData(); }
-                    catch (Exception e) { context.logger().warning("EventPacket purgeAll 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("EventPacket purgeAll 失败: " + e.getMessage()); return -1; }
                 }
             });
 
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
             new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
                 @Override public @NotNull String moduleId() { return "eventpacket"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
@@ -237,19 +237,19 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
             .anyMatch(rule -> rule.enabled() && rule.trigger() != null && rule.trigger().chemdahTrigger());
         if (chemdahAvailable && hasChemdahRules) {
             try {
-                chemdahBridge = new ChemdahEventBridge(context.plugin(), context.logger(), dispatchService);
+                chemdahBridge = new ChemdahEventBridge(plugin, logger, dispatchService);
                 chemdahBridge.register();
             } catch (Exception e) {
-                context.logger().warning("EventPacket Chemdah 桥接初始化失败: " + e.getMessage());
+                logger.warning("EventPacket Chemdah 桥接初始化失败: " + e.getMessage());
                 chemdahBridge = null;
             }
         } else if (hasChemdahRules && !chemdahAvailable) {
-            context.logger().warning(
+            logger.warning(
                 "EventPacket 模块检测到 Chemdah 触发配置，但当前未安装 Chemdah，这部分触发器不会生效。"
             );
         }
 
-        context.logger().fine(
+        logger.fine(
             "EventPacket 模块已载入，rules=" + configuration.enabledRuleCount()
                 + "/" + configuration.rules().size()
                 + " | client-presets=" + configuration.clientPacketPresetCount()
@@ -331,3 +331,5 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
+

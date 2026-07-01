@@ -19,6 +19,7 @@ import xuanmo.arcartxsuite.entitytracker.config.DropAllocationSettings;
 import xuanmo.arcartxsuite.entitytracker.dao.DropAllocationRecordDao;
 import xuanmo.arcartxsuite.entitytracker.dao.PlayerDkpDao;
 import xuanmo.arcartxsuite.entitytracker.entity.BossKillRecord;
+import java.util.logging.Logger;
 
 /**
  * Boss 掉落分配：支持 roll / dkp / priority / manual 四种模式。
@@ -26,16 +27,19 @@ import xuanmo.arcartxsuite.entitytracker.entity.BossKillRecord;
 public final class DropAllocationService {
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final DropAllocationSettings settings;
     private final DropAllocationRecordDao allocationDao;
     private final PlayerDkpDao dkpDao;
     private final Random random = new Random();
 
-    public DropAllocationService(JavaPlugin plugin, DropAllocationSettings settings, DataSource dataSource) {
+    public DropAllocationService(JavaPlugin plugin,
+        Logger logger, DropAllocationSettings settings, DataSource dataSource) {
         this.plugin = plugin;
+        this.logger = logger;
         this.settings = settings;
         this.allocationDao = new DropAllocationRecordDao(dataSource, plugin);
-        this.dkpDao = new PlayerDkpDao(dataSource, plugin);
+        this.dkpDao = new PlayerDkpDao(dataSource, this.logger);
     }
 
     public void allocateAfterKill(
@@ -68,7 +72,7 @@ public final class DropAllocationService {
                     default -> allocateByRoll(killRecord.getId(), drop, participants, serverName);
                 }
             } catch (SQLException exception) {
-                plugin.getLogger().warning("[EntityTracker] 掉落分配失败: " + exception.getMessage());
+                this.logger.warning("[EntityTracker] 掉落分配失败: " + exception.getMessage());
             }
         }
     }
@@ -96,7 +100,7 @@ public final class DropAllocationService {
                     "Boss击杀: " + bossName + " (排名#" + participant.rank() + ")"
                 );
             } catch (SQLException exception) {
-                plugin.getLogger().warning("[EntityTracker] DKP 发放失败: " + exception.getMessage());
+                this.logger.warning("[EntityTracker] DKP 发放失败: " + exception.getMessage());
             }
         }
     }
@@ -231,4 +235,6 @@ public final class DropAllocationService {
     private record Participant(UUID uuid, String name, int rank) {
     }
 }
+
+
 

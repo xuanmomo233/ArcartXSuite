@@ -11,17 +11,21 @@ import xuanmo.arcartxsuite.api.attribute.MythicLibBridge;
 import xuanmo.arcartxsuite.api.mythiclib.MythicLibStatKeyNormalizer;
 import xuanmo.arcartxsuite.title.config.TitleMythicLibConfiguration;
 import xuanmo.arcartxsuite.title.model.ResolvedTitleState;
+import java.util.logging.Logger;
 
 public final class TitleMythicLibService {
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final TitleMythicLibConfiguration configuration;
     private final MythicLibBridge bridge;
     private final Set<String> warnedUnknownStats = ConcurrentHashMap.newKeySet();
     private final Map<UUID, SyncedState> syncedStates = new ConcurrentHashMap<>();
 
-    public TitleMythicLibService(JavaPlugin plugin, TitleMythicLibConfiguration configuration, MythicLibBridge bridge) {
+    public TitleMythicLibService(JavaPlugin plugin,
+        Logger logger, TitleMythicLibConfiguration configuration, MythicLibBridge bridge) {
         this.plugin = plugin;
+        this.logger = logger;
         this.configuration = configuration;
         this.bridge = bridge;
     }
@@ -141,12 +145,13 @@ public final class TitleMythicLibService {
         if (!warnedUnknownStats.add(statId)) {
             return;
         }
-        plugin.getLogger().warning("Title MythicLib 属性未注册，已跳过: " + rawKey + " -> " + statId);
+        this.logger.warning("Title MythicLib 属性未注册，已跳过: " + rawKey + " -> " + statId);
     }
 
     private record SyncedState(Set<String> displayStats, Set<String> collectionStats) {
         private static final SyncedState EMPTY = new SyncedState(Set.of(), Set.of());
     }
 }
+
 
 

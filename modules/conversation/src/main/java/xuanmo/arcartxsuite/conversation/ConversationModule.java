@@ -84,8 +84,8 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        PacketGuardAPI packetGuard = context.packetGuard();
+        PacketBridgeAPI packetBridge = packetBridge;
+        PacketGuardAPI packetGuard = packetGuard;
 
         java.util.List<String> dialogRuntimeUiIds = new java.util.ArrayList<>();
         for (String candidateUiId : configuration.clientConfig().dialogUiIds()) {
@@ -116,30 +116,30 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         }
 
         service = new ConversationService(
-            context.plugin(), packetGuard, configuration, packetBridge,
+            plugin, logger, packetGuard, configuration, packetBridge,
             java.util.List.copyOf(dialogRuntimeUiIds), java.util.List.copyOf(selectorRuntimeUiIds),
-            context.createAdyeshachNpcBridge()
+            createAdyeshachNpcBridge()
         );
         service.start();
         adminCommand = new ConversationAdminCommand(() -> service, () -> service == null ? null : service.npcBridge(), messages());
 
-        context.registerCapability(InteractionState.class, player -> service != null && service.isPlayerInteracting(player));
+        registerCapability(InteractionState.class, player -> service != null && service.isPlayerInteracting(player));
 
         // 注册宿主全局按键回调（优先级 50，拾取优先于对话）
-        context.registerKeybindHandler("AXS_INTERACT", 50, (player, keyName) -> {
+        registerKeybindHandler("AXS_INTERACT", 50, (player, keyName) -> {
             if (service == null || !service.interactionReady()) return false;
             return service.handleConfirmKeyFromHost(player);
         });
-        context.registerKeybindHandler("AXS_NAVIGATE_PREV", 10, (player, keyName) -> {
+        registerKeybindHandler("AXS_NAVIGATE_PREV", 10, (player, keyName) -> {
             if (service == null || !service.interactionReady()) return false;
             return service.handleNavigationKeyFromHost(player, -1);
         });
-        context.registerKeybindHandler("AXS_NAVIGATE_NEXT", 10, (player, keyName) -> {
+        registerKeybindHandler("AXS_NAVIGATE_NEXT", 10, (player, keyName) -> {
             if (service == null || !service.interactionReady()) return false;
             return service.handleNavigationKeyFromHost(player, 1);
         });
 
-        context.logger().fine(
+        logger.fine(
             "Conversation 模块已载入 | dialogUI: " + dialogRuntimeUiIds
                 + " | selectorUI: " + selectorRuntimeUiIds
         );
@@ -200,3 +200,5 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
+

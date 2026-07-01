@@ -44,6 +44,7 @@ import xuanmo.arcartxsuite.map.model.MapPlayerViewState;
 import xuanmo.arcartxsuite.map.model.MapWaypoint;
 import xuanmo.arcartxsuite.map.storage.MapRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import java.util.logging.Logger;
 
 public final class MapService implements Listener, MapUiPacketHandler.ActionTarget {
 
@@ -55,6 +56,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private static final String PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final PacketGuardAPI packetGuard;
     private final MapModuleConfiguration configuration;
     private final MapRepository repository;
@@ -79,6 +81,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
 
     public MapService(
         JavaPlugin plugin,
+        Logger logger,
         PacketGuardAPI packetGuard,
         MapModuleConfiguration configuration,
         MapRepository repository,
@@ -91,6 +94,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         WaypointBridgeAPI waypointBridge
     ) {
         this.plugin = plugin;
+        this.logger = logger;
         this.packetGuard = packetGuard;
         this.configuration = configuration;
         this.repository = repository;
@@ -1265,3 +1269,4 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
     }
 }
+

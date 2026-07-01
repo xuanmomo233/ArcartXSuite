@@ -33,6 +33,7 @@ import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration.ScannerConfig;
 import xuanmo.arcartxsuite.pickup.filter.LootFilterEngine;
+import java.util.logging.Logger;
 
 /**
  * 掉落物扫描服务（扫描模式核心）。
@@ -48,6 +49,7 @@ public final class LootScannerService implements Listener {
     private static final long PREOPEN_DELAY_TICKS = 5L;
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final PickupModuleConfiguration configuration;
     private final PacketGuardAPI packetGuard;
     private final PacketBridgeAPI packetBridge;
@@ -76,6 +78,7 @@ public final class LootScannerService implements Listener {
 
     public LootScannerService(
         JavaPlugin plugin,
+        Logger logger,
         PickupModuleConfiguration configuration,
         PacketGuardAPI packetGuard,
         PacketBridgeAPI packetBridge,
@@ -85,6 +88,7 @@ public final class LootScannerService implements Listener {
         Supplier<WarehouseAutoDepositable> warehouseAutoDepositableSupplier
     ) {
         this.plugin = plugin;
+        this.logger = logger;
         this.configuration = configuration;
         this.packetGuard = packetGuard;
         this.packetBridge = packetBridge;
@@ -562,7 +566,7 @@ public final class LootScannerService implements Listener {
 
     private void debug(String message) {
         if (configuration.debug()) {
-            plugin.getLogger().info("[LootScanner] " + message);
+            this.logger.info("[LootScanner] " + message);
         }
     }
 
@@ -614,4 +618,5 @@ public final class LootScannerService implements Listener {
     ) {
     }
 }
+
 

@@ -107,7 +107,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
             throw new IllegalStateException("ArcartXAfkReward.yml 配置文件缺失");
         }
         configuration = AfkRewardConfiguration.load(
-            YamlConfiguration.loadConfiguration(configFile), context.logger()
+            YamlConfiguration.loadConfiguration(configFile), logger
         );
 
         // 区域目录应位于模块 data 目录下，而非插件根目录
@@ -115,7 +115,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
 
         // 导出默认区域文件（若目录为空）
         AreaConfiguration.exportDefaultArea(moduleClassLoader(),
-            context.dataFolder(), effectiveAreasDir);
+            dataFolder, effectiveAreasDir);
     }
 
     @Override
@@ -123,22 +123,22 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         // 加载区域独立配置文件
         String effectiveAreasDir = effectiveAreasDirectory(configuration.areasDirectory());
         java.util.Map<String, xuanmo.arcartxsuite.afkreward.model.AfkArea> loadedAreas =
-            AreaConfiguration.loadAreas(context.dataFolder(), effectiveAreasDir, context.logger());
+            AreaConfiguration.loadAreas(dataFolder, effectiveAreasDir, logger);
         configuration = configuration.withAreas(loadedAreas);
 
         repository = new AfkRewardRepository(
-            context.dataFolder(), configuration.storage(), context.logger()
+            dataFolder, configuration.storage(), logger
         );
         repository.initialize();
 
         service = new AfkRewardService(
-            context.plugin(), configuration, repository, context.logger(), messages(),
-            () -> context.getCapability(MailDispatchable.class),
-            () -> context.getCapability(SignalDispatchable.class),
-            () -> context.getCapability(SubtitlePlayable.class),
-            () -> context.getCapability(EssentialsQueryable.class)
+            plugin, logger, configuration, repository, logger, messages(),
+            () -> getCapability(MailDispatchable.class),
+            () -> getCapability(SignalDispatchable.class),
+            () -> getCapability(SubtitlePlayable.class),
+            () -> getCapability(EssentialsQueryable.class)
         );
-        service.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+        service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
 
         listener = new AfkRewardListener(() -> service);
@@ -150,7 +150,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         }
 
         // 注册跨服/迁移能力
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
             new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
                 @Override public @NotNull String moduleId() { return "afkreward"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
@@ -162,22 +162,22 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
                 }
             });
 
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "afkreward"; }
                 @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
                     try { return repository.deletePlayerData(playerUuid); }
-                    catch (Exception e) { context.logger().warning("AfkReward purge 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("AfkReward purge 失败: " + e.getMessage()); return -1; }
                 }
                 @Override public int purgeAllPlayerData() {
                     try { return repository.deleteAllPlayerData(); }
-                    catch (Exception e) { context.logger().warning("AfkReward purgeAll 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("AfkReward purgeAll 失败: " + e.getMessage()); return -1; }
                 }
             });
 
         // 注册 AfkRewardDispatchable capability
         AfkRewardService svc = service;
-        context.registerCapability(AfkRewardDispatchable.class, new AfkRewardDispatchable() {
+        registerCapability(AfkRewardDispatchable.class, new AfkRewardDispatchable() {
             @Override public boolean isAfk(@NotNull java.util.UUID playerUuid) {
                 return svc != null && svc.isInManualAfk(playerUuid);
             }
@@ -201,7 +201,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
             }
         });
 
-        context.logger().info(
+        logger.info(
             ChatColor.GOLD + "AfkReward 模块已启动 (区域=" + configuration.areas().size()
                 + " | 类型=" + configuration.types().size() + ")"
         );
@@ -237,7 +237,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
 
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
-        return new AfkRewardPlaceholderExpansion(context.plugin(), () -> service);
+        return new AfkRewardPlaceholderExpansion(plugin, () -> service);
     }
 
     @Override
@@ -272,3 +272,5 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         return "afkreward/areas".equals(configured) ? "areas" : configured;
     }
 }
+
+

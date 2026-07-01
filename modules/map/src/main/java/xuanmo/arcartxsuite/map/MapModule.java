@@ -100,7 +100,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
         }
         var yaml = YamlConfiguration.loadConfiguration(configFile);
         String anchorsDirRelative = yaml.getString("anchors-directory", "anchors");
-        File anchorsDirectory = new File(context.dataFolder(), anchorsDirRelative);
+        File anchorsDirectory = new File(dataFolder, anchorsDirRelative);
         if (!anchorsDirectory.exists()) {
             anchorsDirectory.mkdirs();
         }
@@ -108,16 +108,16 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
         if (existing == null || existing.length == 0) {
             File defaultAnchors = new File(anchorsDirectory, "default.yml");
             if (!defaultAnchors.exists()) {
-                context.exportResource("anchors/default.yml", defaultAnchors, false);
+                exportResource("anchors/default.yml", defaultAnchors, false);
             }
         }
-        configuration = MapModuleConfiguration.load(yaml, context.logger(), anchorsDirectory);
+        configuration = MapModuleConfiguration.load(yaml, logger, anchorsDirectory);
     }
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        PacketGuardAPI packetGuard = context.packetGuard();
+        PacketBridgeAPI packetBridge = packetBridge;
+        PacketGuardAPI packetGuard = packetGuard;
 
         UiBinding menuBinding = registerModuleUi(
             MapService.MENU_UI_FILE_PATH,
@@ -134,19 +134,19 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
         }
 
         JdbcMapRepository mapRepo = new JdbcMapRepository(
-            context.dataFolder(),
-            configuration.storage(), context.logger());
+            dataFolder,
+            configuration.storage(), logger);
         service = new MapService(
-            context.plugin(), packetGuard, configuration,
+            plugin, logger, packetGuard, configuration,
             mapRepo,
             packetBridge, menuBinding.runtimeUiId(), hudBinding.runtimeUiId(),
-            context.itemSourceRegistry(), context.itemMatcher(), context.currencyManager(),
-            context.createWaypointBridge()
+            itemSourceRegistry, itemMatcher, currencyManager,
+            createWaypointBridge()
         );
         service.start();
 
         // 注册 MapNavigable capability，供 QuestGps 等模块调用
-        context.registerCapability(MapNavigable.class, new MapNavigable() {
+        registerCapability(MapNavigable.class, new MapNavigable() {
             @Override
             public void upsertExternalTarget(
                 @NotNull Player player, @NotNull String targetId, @NotNull String source,
@@ -172,20 +172,20 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
 
         adminCommand = new MapAdminCommand(() -> service, messages());
 
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "map"; }
                 @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
                     try { return mapRepo.deletePlayerData(playerUuid); }
-                    catch (Exception e) { context.logger().warning("Map purge 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("Map purge 失败: " + e.getMessage()); return -1; }
                 }
                 @Override public int purgeAllPlayerData() {
                     try { return mapRepo.deleteAllPlayerData(); }
-                    catch (Exception e) { context.logger().warning("Map purgeAll 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("Map purgeAll 失败: " + e.getMessage()); return -1; }
                 }
             });
 
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
             new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
                 @Override public @NotNull String moduleId() { return "map"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
@@ -197,7 +197,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
                 }
             });
 
-        context.logger().fine(
+        logger.fine(
             "Map 模块已载入，packet-id=" + configuration.client().packetId()
                 + " | menu-ui=" + menuBinding.runtimeUiId()
                 + " | hud-ui=" + hudBinding.runtimeUiId()
@@ -249,3 +249,5 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
+

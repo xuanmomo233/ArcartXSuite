@@ -46,8 +46,31 @@ import xuanmo.arcartxsuite.api.message.MessageProvider;
  */
 public abstract class AbstractAXSModule implements AXSModule {
 
-    /** 模块上下文，在 {@link #onEnable} 时注入 */
-    protected ModuleContext context;
+    /** 模块上下文，在 {@link #onEnable} 时注入（私有，子类通过 protected 字段访问具体 API） */
+    private ModuleContext context;
+
+    // ── 注入的 API 字段（子类直接使用，无需通过 context 获取） ──────
+    protected JavaPlugin plugin;
+    protected Logger logger;
+    protected File dataFolder;
+    protected @Nullable xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI packetBridge;
+    protected @Nullable xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI clientBridge;
+    protected @Nullable xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI itemStackBridge;
+    protected xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry;
+    protected xuanmo.arcartxsuite.api.item.ItemMatcherAPI itemMatcher;
+    protected xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI currencyManager;
+    protected xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge;
+    protected @NotNull xuanmo.arcartxsuite.api.script.AriaBridge ariaBridge;
+    protected @NotNull xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator scriptConditionEvaluator;
+    protected @Nullable xuanmo.arcartxsuite.api.security.PacketGuardAPI packetGuard;
+    protected @NotNull xuanmo.arcartxsuite.api.account.AccountTypeService accountTypeService;
+    protected @NotNull xuanmo.arcartxsuite.api.crossserver.CrossServerAPI crossServer;
+    protected @Nullable xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI worldTextureBridge;
+    protected @NotNull xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI placeholderResolver;
+    protected @NotNull xuanmo.arcartxsuite.api.placeholder.PlaceholderExpansionRegistry expansionRegistry;
+    protected @Nullable xuanmo.arcartxsuite.api.bridge.PropBridgeAPI propBridge;
+    protected File pluginDataFolder;
+
 
     private boolean ready;
     private boolean reloading; // reload 期间跳过 UI 注销，避免客户端丢失 HUD
@@ -264,6 +287,29 @@ public abstract class AbstractAXSModule implements AXSModule {
     @Override
     public final boolean onEnable(ModuleContext context) throws Exception {
         this.context = context;
+
+        // 注入 API 字段（子类通过 protected 字段直接访问，无需 context）
+        this.plugin = context.plugin();
+        this.logger = context.logger();
+        this.dataFolder = context.dataFolder();
+        this.pluginDataFolder = context.pluginDataFolder();
+        this.packetBridge = context.packetBridge();
+        this.clientBridge = context.clientBridge();
+        this.itemStackBridge = context.itemStackBridge();
+        this.itemSourceRegistry = context.itemSourceRegistry();
+        this.itemMatcher = context.itemMatcher();
+        this.currencyManager = context.currencyManager();
+        this.attributeBridge = context.attributeBridge();
+        this.ariaBridge = context.ariaBridge();
+        this.scriptConditionEvaluator = context.scriptConditionEvaluator();
+        this.packetGuard = context.packetGuard();
+        this.accountTypeService = context.accountTypeService();
+        this.crossServer = context.crossServer();
+        this.worldTextureBridge = context.worldTextureBridge();
+        this.placeholderResolver = context.placeholderResolver();
+        this.expansionRegistry = context.expansionRegistry();
+        this.propBridge = context.propBridge();
+
         Logger logger = context.logger();
 
         try {
@@ -405,6 +451,98 @@ public abstract class AbstractAXSModule implements AXSModule {
     @Nullable
     protected MessageProvider messages() {
         return messages;
+    }
+
+
+    // ── 注入的 API 委托方法（子类直接调用，无需通过 context） ──────
+
+    /** 按类型查找已加载的模块实例 */
+    protected <T extends AXSModule> java.util.Optional<T> getModule(Class<T> moduleClass) {
+        return context.getModule(moduleClass);
+    }
+
+    /** 按 id 查找已加载的模块实例 */
+    protected java.util.Optional<AXSModule> getModule(String moduleId) {
+        return context.getModule(moduleId);
+    }
+
+    /** 注册当前模块提供的能力接口 */
+    protected <T> void registerCapability(Class<T> capabilityType, T implementation) {
+        context.registerCapability(capabilityType, implementation);
+    }
+
+    /** 按类型查找其他模块注册的能力接口 */
+    @Nullable
+    protected <T> T getCapability(Class<T> capabilityType) {
+        return context.getCapability(capabilityType);
+    }
+
+    /** 创建新的路标桥接实例 */
+    @NotNull
+    protected xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI createWaypointBridge() {
+        return context.createWaypointBridge();
+    }
+
+    /** 创建新的 Adyeshach NPC 桥接实例 */
+    @NotNull
+    protected xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI createAdyeshachNpcBridge() {
+        return context.createAdyeshachNpcBridge();
+    }
+
+    /** 导出模块内置资源到目标文件 */
+    protected void exportResource(String resourcePath, File target, boolean overwrite) {
+        context.exportResource(resourcePath, target, overwrite);
+    }
+
+    /** 从模块 Jar 中读取受保护的资源 */
+    protected InputStream openProtectedResource(String resourcePath, ClassLoader loader) {
+        return context.openProtectedResource(resourcePath, loader);
+    }
+
+    /** 从模块 Jar 导出配置文件到宿主数据目录 */
+    protected File exportConfigResource(String resourcePath, String targetRelativePath, boolean overwrite, ClassLoader loader) {
+        return context.exportConfigResource(resourcePath, targetRelativePath, overwrite, loader);
+    }
+
+    /** 从模块 Jar 导出 UI 资源到宿主 ui/ 目录 */
+    protected File exportUiResource(String resourcePath, String relativeUiPath, boolean overwrite, ClassLoader loader) throws IOException {
+        return context.exportUiResource(resourcePath, relativeUiPath, overwrite, loader);
+    }
+
+    /** 检查指定的外部 Bukkit 插件是否已安装 */
+    protected boolean hasPlugin(String pluginName) {
+        return context.hasPlugin(pluginName);
+    }
+
+    /** 注册 Bukkit 事件监听器 */
+    protected void registerListener(Listener listener) {
+        context.registerListener(listener);
+    }
+
+    /** 延迟绑定玩家命令 */
+    protected void registerCommand(String commandName, TabExecutor executor) {
+        context.registerCommand(commandName, executor);
+    }
+
+    /** 注册按键事件处理器 */
+    protected void registerKeybindHandler(String keyName, int priority, KeybindHandler handler) {
+        context.registerKeybindHandler(keyName, priority, handler);
+    }
+
+    /** 准备 ArcartX UI 绑定 */
+    @Nullable
+    protected UiBinding prepareUiBinding(String moduleName, String configuredUiId, boolean registerOnEnable, File uiFile) {
+        return context.prepareUiBinding(moduleName, configuredUiId, registerOnEnable, uiFile);
+    }
+
+    /** 注销指定的 ArcartX UI */
+    protected void unregisterUi(@Nullable String registeredUiId) {
+        context.unregisterUi(registeredUiId);
+    }
+
+    /** TACZ 兼容桥接是否已激活 */
+    protected boolean taczActive() {
+        return context.taczActive();
     }
 
     // ── 内部方法 ──────────────────────────────────────────────
@@ -632,3 +770,5 @@ public abstract class AbstractAXSModule implements AXSModule {
         return null;
     }
 }
+
+

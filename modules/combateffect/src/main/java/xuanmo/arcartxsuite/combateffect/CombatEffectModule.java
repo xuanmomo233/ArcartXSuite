@@ -113,7 +113,7 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
             throw new IllegalStateException("ArcartXCombatEffect.yml 配置文件缺失");
         }
         // 一次性迁移：旧路径 data/combateffect/config.yml -> ArcartXCombatEffect.yml
-        File oldConfigFile = new File(context.dataFolder(), "config.yml");
+        File oldConfigFile = new File(dataFolder, "config.yml");
         if (oldConfigFile.isFile() && !configFile.exists()) {
             try {
                 java.nio.file.Files.move(
@@ -121,12 +121,12 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
                     configFile.toPath(),
                     java.nio.file.StandardCopyOption.REPLACE_EXISTING
                 );
-                context.logger().info(org.bukkit.ChatColor.GOLD + "→ 已迁移旧配置文件: "
+                logger.info(org.bukkit.ChatColor.GOLD + "→ 已迁移旧配置文件: "
                     + org.bukkit.ChatColor.YELLOW + "config.yml"
                     + org.bukkit.ChatColor.GRAY + "  ➜  "
                     + org.bukkit.ChatColor.AQUA + CONFIG_FILE_NAME);
             } catch (java.io.IOException exception) {
-                context.logger().warning("迁移配置文件失败: " + exception.getMessage());
+                logger.warning("迁移配置文件失败: " + exception.getMessage());
             }
         }
 
@@ -134,7 +134,7 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
         ConfigurationSection killEffectSection = rawConfiguration.getConfigurationSection("kill-effect");
         String packetsDirRelative = killEffectSection != null
             ? killEffectSection.getString("packets-directory", "packets") : "packets";
-        File packetsDirectory = new File(context.dataFolder(), packetsDirRelative);
+        File packetsDirectory = new File(dataFolder, packetsDirRelative);
         if (!packetsDirectory.exists()) {
             packetsDirectory.mkdirs();
         }
@@ -142,10 +142,10 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
         if (existingPackets == null || existingPackets.length == 0) {
             File defaultPackets = new File(packetsDirectory, "default.yml");
             if (!defaultPackets.exists()) {
-                context.exportResource("packets/default.yml", defaultPackets, false);
+                exportResource("packets/default.yml", defaultPackets, false);
             }
         }
-        packetConfiguration = CombatEffectPacketConfiguration.load(killEffectSection, context.logger(), packetsDirectory);
+        packetConfiguration = CombatEffectPacketConfiguration.load(killEffectSection, logger, packetsDirectory);
         displayConfiguration = CombatDisplayConfiguration.load(rawConfiguration.getConfigurationSection("digis-display"));
         deathBufferConfiguration = DeathBufferConfiguration.load(rawConfiguration.getConfigurationSection("death-buffer"));
         comboTrackerConfiguration = ComboTrackerConfiguration.load(rawConfiguration.getConfigurationSection("combo-tracker"));
@@ -153,9 +153,9 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        ClientBridgeAPI clientBridge = context.clientBridge();
-        JavaPlugin plugin = (JavaPlugin) context.plugin();
+        PacketBridgeAPI packetBridge = packetBridge;
+        ClientBridgeAPI clientBridge = clientBridge;
+        JavaPlugin plugin = (JavaPlugin) plugin;
 
         // 注册 UI（由基类根据 uiResourceMappings() 自动导出并注册）
         registerModuleUi("ui/combat_kill_effect.yml", "combat_kill_effect", true);
@@ -165,25 +165,25 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
         // 导出 damage_display 资源到 ArcartX damage_display/ 目录
         exportDamageDisplayResources();
 
-        packetService = new CombatEffectPacketService(plugin, packetConfiguration, packetBridge, context.logger());
-        packetService.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+        packetService = new CombatEffectPacketService(plugin, packetConfiguration, packetBridge, logger);
+        packetService.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         packetService.start();
 
         if (clientBridge != null && clientBridge.isAvailable()) {
-            displayService = new CombatDisplayService(plugin, displayConfiguration, clientBridge, context.attributeBridge());
+            displayService = new CombatDisplayService(plugin, logger, displayConfiguration, clientBridge, attributeBridge);
             displayService.start();
         }
 
         if (deathBufferConfiguration.enabled()) {
             deathBufferService = new DeathBufferService(
-                plugin, deathBufferConfiguration, packetConfiguration, packetBridge, context.logger()
+                plugin, deathBufferConfiguration, packetConfiguration, packetBridge, logger
             );
             deathBufferService.start();
         }
 
         if (comboTrackerConfiguration.enabled()) {
             comboTrackerService = new ComboTrackerService(
-                plugin, comboTrackerConfiguration, packetConfiguration, packetBridge, clientBridge, context.logger()
+                plugin, comboTrackerConfiguration, packetConfiguration, packetBridge, clientBridge, logger
             );
             comboTrackerService.start();
         }
@@ -193,7 +193,7 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
             ? rawConfiguration.getBoolean("keybind-trigger.enabled", false)
             : false;
         if (keybindEnabled) {
-            keybindTriggerService = new KeybindTriggerService(plugin, packetConfiguration, packetBridge, context.logger());
+            keybindTriggerService = new KeybindTriggerService(plugin, packetConfiguration, packetBridge, logger);
             keybindTriggerService.start();
         }
 
@@ -202,12 +202,12 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
             ? rawConfiguration.getBoolean("state-trigger.enabled", false)
             : false;
         if (stateEnabled) {
-            stateTriggerService = new StateTriggerService(plugin, packetConfiguration, packetBridge, context.logger());
+            stateTriggerService = new StateTriggerService(plugin, packetConfiguration, packetBridge, logger);
             stateTriggerService.start();
         }
 
         // 注册跨模块 capability
-        context.registerCapability(CombatEffectTriggerable.class, new CombatEffectTriggerable() {
+        registerCapability(CombatEffectTriggerable.class, new CombatEffectTriggerable() {
             @Override
             public boolean triggerPacket(@NotNull String packetId, @NotNull Player recipient, @Nullable Map<String, String> variables) {
                 if (packetService == null) return false;
@@ -221,7 +221,7 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
             }
         });
 
-        context.logger().fine(
+        logger.fine(
             "CombatEffect 模块已启动，已启用包: "
                 + packetConfiguration.enabledPacketCount() + "/" + packetConfiguration.packetDefinitions().size()
                 + (displayService != null ? " | 战斗显示: 已启用" : " | 战斗显示: 未启用")
@@ -421,7 +421,7 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
     private void exportDamageDisplayResources() {
         org.bukkit.plugin.Plugin arcartX = org.bukkit.Bukkit.getPluginManager().getPlugin("ArcartX");
         if (arcartX == null) {
-            context.logger().fine("ArcartX 未安装，跳过 damage_display 资源导出");
+            logger.fine("ArcartX 未安装，跳过 damage_display 资源导出");
             return;
         }
         File damageDisplayDir = new File(arcartX.getDataFolder(), "damage_display");
@@ -433,8 +433,8 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
             if (target.exists()) {
                 continue;
             }
-            context.exportResource(entry.getKey(), target, false);
-            context.logger().fine("已导出 damage_display 资源: " + entry.getValue());
+            exportResource(entry.getKey(), target, false);
+            logger.fine("已导出 damage_display 资源: " + entry.getValue());
         }
     }
 
@@ -444,6 +444,8 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
         return mp.get("prefix") + mp.get(key, args);
     }
 }
+
+
 
 
 

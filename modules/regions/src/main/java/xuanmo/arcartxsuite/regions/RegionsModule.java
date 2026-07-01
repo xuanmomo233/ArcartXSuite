@@ -97,34 +97,34 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
             throw new IllegalStateException("ArcartXRegions.yml 配置文件缺失");
         }
         rawYaml = YamlConfiguration.loadConfiguration(configFile);
-        configuration = RegionsConfiguration.load(rawYaml, context.logger());
+        configuration = RegionsConfiguration.load(rawYaml, logger);
     }
 
     @Override
     protected void startService() throws Exception {
-        repository = new RegionsRepository(context.dataFolder(), configuration.storage(), context.logger());
+        repository = new RegionsRepository(dataFolder, configuration.storage(), logger);
         repository.initialize();
-        regionManager = new RegionManager(repository, configuration, context.logger());
+        regionManager = new RegionManager(repository, configuration, logger);
         regionManager.loadAll();
 
         protectionListener = new RegionProtectionListener(regionManager, configuration);
-        protectionListener.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+        protectionListener.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         selectionListener = new SelectionListener(regionManager, configuration);
-        Bukkit.getPluginManager().registerEvents(protectionListener, context.plugin());
-        Bukkit.getPluginManager().registerEvents(selectionListener, context.plugin());
+        Bukkit.getPluginManager().registerEvents(protectionListener, plugin);
+        Bukkit.getPluginManager().registerEvents(selectionListener, plugin);
 
         commandHandler = new RegionCommandHandler(regionManager, configuration, messages());
 
         // 世界规则服务
         var worldRulesSection = rawYaml.getConfigurationSection("world-rules");
         if (worldRulesSection != null) {
-            worldRulesService = new WorldRulesService(context.plugin(), worldRulesSection);
+            worldRulesService = new WorldRulesService(plugin, logger, worldRulesSection);
             worldRulesService.start();
         }
 
         // UI 绑定与 Packet Handler 初始化
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        PacketGuardAPI packetGuard = context.packetGuard();
+        PacketBridgeAPI packetBridge = packetBridge;
+        PacketGuardAPI packetGuard = packetGuard;
         if (packetBridge != null && packetBridge.isAvailable()) {
             UiBinding menuBinding = registerModuleUi(
                 RegionsMenuPacketHandler.UI_FILE_PATH, null, true
@@ -135,18 +135,18 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
 
             if (menuBinding.registeredUiId() != null) {
                 menuPacketHandler = new RegionsMenuPacketHandler(
-                    context.plugin(), packetBridge, packetGuard,
+                    plugin, packetBridge, packetGuard,
                     regionManager, menuBinding.runtimeUiId());
             }
             if (adminBinding.registeredUiId() != null) {
                 adminPacketHandler = new RegionsAdminPacketHandler(
-                    context.plugin(), packetBridge, packetGuard,
+                    plugin, packetBridge, packetGuard,
                     regionManager, adminBinding.runtimeUiId());
             }
         }
 
         // 注册 /rg 独立缩写命令，转发给 regions 子命令处理
-        context.registerCommand("rg", new org.bukkit.command.TabExecutor() {
+        registerCommand("rg", new org.bukkit.command.TabExecutor() {
             @Override
             public boolean onCommand(@NotNull CommandSender sender,
                     @NotNull org.bukkit.command.Command command,
@@ -168,7 +168,7 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
             }
         });
 
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
             new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
                 @Override public @NotNull String moduleId() { return "regions"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
@@ -180,19 +180,19 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
                 }
             });
 
-        context.registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
+        registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
             @Override public @NotNull String moduleId() { return "regions"; }
             @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
                 try { return repository.deletePlayerData(playerUuid); }
-                catch (Exception e) { context.logger().warning("Regions purge 失败: " + e.getMessage()); return -1; }
+                catch (Exception e) { logger.warning("Regions purge 失败: " + e.getMessage()); return -1; }
             }
             @Override public int purgeAllPlayerData() {
                 try { return repository.deleteAllPlayerData(); }
-                catch (Exception e) { context.logger().warning("Regions purgeAll 失败: " + e.getMessage()); return -1; }
+                catch (Exception e) { logger.warning("Regions purgeAll 失败: " + e.getMessage()); return -1; }
             }
         });
 
-        context.logger().info("Regions 模块已启动 (已加载 " + regionManager.getAllRegions().size() + " 个区域)。");
+        logger.info("Regions 模块已启动 (已加载 " + regionManager.getAllRegions().size() + " 个区域)。");
     }
 
     @Override
@@ -269,3 +269,5 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         return regionManager;
     }
 }
+
+

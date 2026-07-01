@@ -25,6 +25,7 @@ import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardInventoryFu
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardMessageTarget;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
+import java.util.logging.Logger;
 
 final class BossDamageSettlementService {
 
@@ -33,6 +34,7 @@ final class BossDamageSettlementService {
     private static final DecimalFormat NUMBER_FORMAT = new DecimalFormat("0.##");
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider;
     private final java.util.function.BiConsumer<String, org.bukkit.entity.Player> signalDispatcher;
     private final ItemSourceRegistry itemSourceRegistry;
@@ -42,7 +44,8 @@ final class BossDamageSettlementService {
     private final PlaceholderResolverAPI placeholderResolver;
     private long nextSettlementId;
 
-    public BossDamageSettlementService(JavaPlugin plugin, ItemSourceRegistry itemSourceRegistry, PlaceholderResolverAPI placeholderResolver) {
+    public BossDamageSettlementService(JavaPlugin plugin,
+        Logger logger, ItemSourceRegistry itemSourceRegistry, PlaceholderResolverAPI placeholderResolver) {
         this(plugin, () -> null, null, itemSourceRegistry, placeholderResolver);
     }
 
@@ -54,6 +57,7 @@ final class BossDamageSettlementService {
         PlaceholderResolverAPI placeholderResolver
     ) {
         this.plugin = plugin;
+        this.logger = logger;
         this.mailDispatchableProvider = mailDispatchableProvider == null ? () -> null : mailDispatchableProvider;
         this.signalDispatcher = signalDispatcher;
         this.itemSourceRegistry = itemSourceRegistry;
@@ -229,7 +233,7 @@ final class BossDamageSettlementService {
                     failures.add(result.message());
                 }
                 if (logFailures) {
-                    plugin.getLogger().warning(
+                    this.logger.warning(
                         "EntityTracker 伤害排行奖励执行失败"
                             + " | settlement=" + record.settlementId()
                             + " | boss=" + record.mythicMobId()
@@ -576,6 +580,7 @@ final class BossDamageSettlementService {
         return new BossDamageSettlementActionResult("signal", true, "信号 " + action.signal() + " 已发送");
     }
 }
+
 
 
 

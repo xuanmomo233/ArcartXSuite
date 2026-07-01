@@ -151,7 +151,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         }
         this.configFile = configFile;
         configuration = LoginViewModuleConfiguration.load(
-            YamlConfiguration.loadConfiguration(configFile), context.logger());
+            YamlConfiguration.loadConfiguration(configFile), logger);
     }
 
     @Override
@@ -166,23 +166,23 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
             throw new IllegalStateException("LoginView UI 注册失败");
         }
 
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        PacketGuardAPI packetGuard = context.packetGuard();
+        PacketBridgeAPI packetBridge = packetBridge;
+        PacketGuardAPI packetGuard = packetGuard;
 
         repository = new JdbcLoginViewRepository(
-            context.dataFolder(),
-            configuration.storage(), context.logger());
+            dataFolder,
+            configuration.storage(), logger);
         service = new LoginViewService(
-            context.plugin(), configuration, repository, packetBridge, packetGuard,
-            () -> context.getCapability(SignalDispatchable.class), context.accountTypeService(),
-            () -> context.getCapability(xuanmo.arcartxsuite.api.capability.QqBindCapable.class),
+            plugin, logger, configuration, repository, packetBridge, packetGuard,
+            () -> getCapability(SignalDispatchable.class), accountTypeService,
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.QqBindCapable.class),
             uiBinding.runtimeUiId()
         );
-        service.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+        service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
 
         JdbcLoginViewRepository lvRepo = (JdbcLoginViewRepository) repository;
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
             new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
                 @Override public @NotNull String moduleId() { return "loginview"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
@@ -194,19 +194,19 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
                 }
             });
 
-        context.registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
+        registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
             @Override public @NotNull String moduleId() { return "loginview"; }
             @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
                 try { return lvRepo.deletePlayerData(playerUuid); }
-                catch (Exception e) { context.logger().warning("LoginView purge 失败: " + e.getMessage()); return -1; }
+                catch (Exception e) { logger.warning("LoginView purge 失败: " + e.getMessage()); return -1; }
             }
             @Override public int purgeAllPlayerData() {
                 try { return lvRepo.deleteAllPlayerData(); }
-                catch (Exception e) { context.logger().warning("LoginView purgeAll 失败: " + e.getMessage()); return -1; }
+                catch (Exception e) { logger.warning("LoginView purgeAll 失败: " + e.getMessage()); return -1; }
             }
         });
 
-        context.logger().fine("LoginView 模块已载入，UI: " + uiBinding.runtimeUiId());
+        logger.fine("LoginView 模块已载入，UI: " + uiBinding.runtimeUiId());
     }
 
     @Override
@@ -243,7 +243,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
 
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
-        return new LoginViewPlaceholderExpansion(context.plugin(), () -> service);
+        return new LoginViewPlaceholderExpansion(plugin, () -> service);
     }
 
     private void sendHelp(CommandSender sender, String label, String commandAlias) {
@@ -350,7 +350,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
             yaml.save(configFile);
             if (configFile != null) {
                 configuration = LoginViewModuleConfiguration.load(
-                    YamlConfiguration.loadConfiguration(configFile), context.logger());
+                    YamlConfiguration.loadConfiguration(configFile), logger);
                 if (service != null) {
                     service.setConfiguration(configuration);
                 }
@@ -374,3 +374,5 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         return result;
     }
 }
+
+

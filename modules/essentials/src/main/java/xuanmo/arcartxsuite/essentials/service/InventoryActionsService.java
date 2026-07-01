@@ -27,6 +27,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.java.JavaPlugin;
+import java.util.logging.Logger;
 
 /**
  * 背包操作服务 — 自动补种、背包整理、自动工具切换。
@@ -34,6 +35,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class InventoryActionsService implements Listener {
 
     private final JavaPlugin plugin;
+    private final Logger logger;
 
     // 补种
     private final boolean replantEnabled;
@@ -64,8 +66,10 @@ public final class InventoryActionsService implements Listener {
         CROP_SEED_MAP.put(Material.NETHER_WART, Material.NETHER_WART);
     }
 
-    public InventoryActionsService(JavaPlugin plugin, ConfigurationSection section) {
+    public InventoryActionsService(JavaPlugin plugin,
+        Logger logger, ConfigurationSection section) {
         this.plugin = plugin;
+        this.logger = logger;
 
         ConfigurationSection replant = section.getConfigurationSection("auto-replant");
         this.replantEnabled = replant != null && replant.getBoolean("enabled", true);
@@ -284,3 +288,4 @@ public final class InventoryActionsService implements Listener {
         return perm == null || perm.isEmpty() || player.hasPermission(perm);
     }
 }
+

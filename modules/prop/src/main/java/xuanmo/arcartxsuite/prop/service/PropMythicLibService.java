@@ -11,17 +11,21 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.attribute.MythicLibBridge;
 import xuanmo.arcartxsuite.prop.config.PropMythicLibConfiguration;
+import java.util.logging.Logger;
 
 public final class PropMythicLibService {
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final PropMythicLibConfiguration configuration;
     private final MythicLibBridge bridge;
     private final Set<String> warnedUnknownStats = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Map<String, Object>> activeModifiers = new ConcurrentHashMap<>();
 
-    public PropMythicLibService(JavaPlugin plugin, PropMythicLibConfiguration configuration, MythicLibBridge bridge) {
+    public PropMythicLibService(JavaPlugin plugin,
+        Logger logger, PropMythicLibConfiguration configuration, MythicLibBridge bridge) {
         this.plugin = plugin;
+        this.logger = logger;
         this.configuration = configuration;
         this.bridge = bridge;
     }
@@ -144,7 +148,8 @@ public final class PropMythicLibService {
         if (!warnedUnknownStats.add(statId)) {
             return;
         }
-        plugin.getLogger().warning("Prop MythicLib 属性未注册，已跳过: " + statId);
+        this.logger.warning("Prop MythicLib 属性未注册，已跳过: " + statId);
     }
 }
+
 

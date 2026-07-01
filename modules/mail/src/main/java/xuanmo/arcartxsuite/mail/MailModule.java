@@ -105,23 +105,23 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             throw new IllegalStateException("ArcartXMail.yml 配置文件缺失");
         }
         configuration = MailModuleConfiguration.load(
-            YamlConfiguration.loadConfiguration(configFile), context.logger());
+            YamlConfiguration.loadConfiguration(configFile), logger);
     }
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        PacketGuardAPI packetGuard = context.packetGuard();
+        PacketBridgeAPI packetBridge = packetBridge;
+        PacketGuardAPI packetGuard = packetGuard;
 
         MailService.UiResourceExporter uiExporter = (resourcePath, relativeUiPath, overwrite) -> {
             try {
-                return context.exportUiResource(resourcePath, relativeUiPath, overwrite, moduleClassLoader());
+                return exportUiResource(resourcePath, relativeUiPath, overwrite, moduleClassLoader());
             } catch (IOException ex) {
                 throw ex;
             }
         };
         MailService.BundledResourceWriter presetWriter = (resourcePath, target) -> {
-            try (java.io.InputStream input = context.openProtectedResource(resourcePath, moduleClassLoader())) {
+            try (java.io.InputStream input = openProtectedResource(resourcePath, moduleClassLoader())) {
                 if (input == null) {
                     throw new IOException("Bundled resource not found: " + resourcePath);
                 }
@@ -138,19 +138,19 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
         };
 
         JdbcMailRepository mailRepo = new JdbcMailRepository(
-            context.dataFolder(),
-            configuration.storage(), context.logger());
+            dataFolder,
+            configuration.storage(), logger);
         service = new MailService(
-            context.plugin(), context.dataFolder(), configuration,
+            plugin, logger, dataFolder, configuration,
             mailRepo,
             packetBridge, packetGuard, uiExporter, presetWriter, null,
-            context.currencyManager(), context.crossServer()
+            currencyManager, crossServer
         );
         service.start();
         adminCommand = new MailAdminCommand(() -> service, messages());
 
         // 注册 MailDispatchable capability，供其他模块调用
-        context.registerCapability(MailDispatchable.class, (presetId, playerName, source) -> {
+        registerCapability(MailDispatchable.class, (presetId, playerName, source) -> {
             Player player = Bukkit.getPlayerExact(playerName);
             if (player != null && player.isOnline()) {
                 return service.dispatchPresetToPlayer(presetId, player, source).success();
@@ -160,20 +160,20 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
 
         ensureMailNotifyCardDefaults();
 
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "mail"; }
                 @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
                     try { return mailRepo.deletePlayerData(playerUuid); }
-                    catch (Exception e) { context.logger().warning("Mail purge 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("Mail purge 失败: " + e.getMessage()); return -1; }
                 }
                 @Override public int purgeAllPlayerData() {
                     try { return mailRepo.deleteAllPlayerData(); }
-                    catch (Exception e) { context.logger().warning("Mail purgeAll 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("Mail purgeAll 失败: " + e.getMessage()); return -1; }
                 }
             });
 
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
             new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
                 @Override public @NotNull String moduleId() { return "mail"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
@@ -185,7 +185,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
                 }
             });
 
-        context.logger().fine(
+        logger.fine(
             "Mail 模块已载入，预设=" + service.presetCount()
                 + " | 存储=" + configuration.storage().dialect().configKey()
                 + " | InboxUI=" + service.inboxUiId()
@@ -210,7 +210,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
-        return new MailPlaceholderExpansion(context.plugin(), () -> service);
+        return new MailPlaceholderExpansion(plugin, () -> service);
     }
 
     @Override
@@ -240,9 +240,9 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
         if (target.exists()) {
             return;
         }
-        context.exportResource("mail/card/axs_mail_notify.yml", target, false);
+        exportResource("mail/card/axs_mail_notify.yml", target, false);
         if (target.exists()) {
-            context.logger().info("已导出邮件通知卡片模板到 ArcartX/chat_card/axs_mail_notify.yml");
+            logger.info("已导出邮件通知卡片模板到 ArcartX/chat_card/axs_mail_notify.yml");
         }
     }
 
@@ -255,3 +255,5 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
+

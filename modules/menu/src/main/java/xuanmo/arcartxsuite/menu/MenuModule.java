@@ -101,7 +101,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
     }
 
     private void ensureDefaultMenus() {
-        File menusDirectory = configuration.menusDirectory(context.dataFolder());
+        File menusDirectory = configuration.menusDirectory(dataFolder);
         if (!menusDirectory.exists()) {
             menusDirectory.mkdirs();
         }
@@ -116,14 +116,14 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
     private void exportMenuIfMissing(File menusDirectory, String fileName) {
         File target = new File(menusDirectory, fileName);
         if (!target.exists()) {
-            context.exportResource("menus/" + fileName, target, false);
+            exportResource("menus/" + fileName, target, false);
         }
     }
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        PacketGuardAPI packetGuard = context.packetGuard();
+        PacketBridgeAPI packetBridge = packetBridge;
+        PacketGuardAPI packetGuard = packetGuard;
         if (packetBridge == null || !packetBridge.isAvailable()) {
             throw new IllegalStateException("Menu 模块需要 ArcartX PacketBridge");
         }
@@ -143,19 +143,19 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         }
 
         service = new MenuService(
-            context.plugin(),
+            plugin, logger,
             packetBridge,
             packetGuard,
             configuration,
-            context.itemStackBridge(),
-            context.itemSourceRegistry()
+            itemStackBridge,
+            itemSourceRegistry
         );
         service.setRuntimeUiIds(panelBinding.runtimeUiId(), escBinding.runtimeUiId());
-        service.reload(context.dataFolder());
+        service.reload(dataFolder);
         packetHandler = new MenuUiPacketHandler(service, configuration.client().packetId());
         adminCommand = new MenuAdminCommand(service, messages());
 
-        context.registerCapability(MenuOpenable.class, new MenuOpenable() {
+        registerCapability(MenuOpenable.class, new MenuOpenable() {
             @Override
             public boolean openMenu(@NotNull org.bukkit.entity.Player player, @NotNull String menuId) {
                 return service.openMenu(player, menuId);
@@ -167,7 +167,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
             }
         });
 
-        context.logger().info("Menu 模块已启动，菜单数量=" + service.menus().size());
+        logger.info("Menu 模块已启动，菜单数量=" + service.menus().size());
     }
 
     @Override
@@ -240,3 +240,5 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
+

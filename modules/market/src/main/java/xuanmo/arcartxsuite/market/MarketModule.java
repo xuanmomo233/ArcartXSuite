@@ -120,14 +120,14 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             throw new IllegalStateException("ArcartXMarket.yml 配置文件缺失");
         }
         configuration = MarketModuleConfiguration.load(
-            YamlConfiguration.loadConfiguration(configFile), context.logger());
+            YamlConfiguration.loadConfiguration(configFile), logger);
     }
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        CurrencyBridgeAPI currencyManager = context.currencyManager();
-        ItemSourceRegistry itemSourceRegistry = context.itemSourceRegistry();
+        PacketBridgeAPI packetBridge = packetBridge;
+        CurrencyBridgeAPI currencyManager = currencyManager;
+        ItemSourceRegistry itemSourceRegistry = itemSourceRegistry;
 
         // 构造物品序列化器（使用 ItemSerializer byte[] + Base64）
         AuctionItemSerializer itemSerializer = new AuctionItemSerializer() {
@@ -146,27 +146,27 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         };
 
         // MailDispatchable supplier（延迟查找）
-        java.util.function.Supplier<MailDispatchable> mailSupplier = () -> context.getCapability(MailDispatchable.class);
+        java.util.function.Supplier<MailDispatchable> mailSupplier = () -> getCapability(MailDispatchable.class);
 
         // 首次启动时自动导出示例商店和回收表
         ensureExampleShopExported();
         ensureDefaultRecycleExported();
 
-        service = new MarketService(context.plugin(), configuration, packetBridge,
+        service = new MarketService(plugin, logger, configuration, packetBridge,
             currencyManager, itemSourceRegistry, itemSerializer,
-            context.itemStackBridge(), mailSupplier, context.logger(), context.crossServer());
-        service.setSignalProvider(() -> context.getCapability(
+            itemStackBridge, mailSupplier, logger, crossServer);
+        service.setSignalProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.SignalDispatchable.class));
         service.setQQBotProvider(
-            () -> context.getCapability(xuanmo.arcartxsuite.api.capability.QQBotBroadcastable.class),
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.QQBotBroadcastable.class),
             configuration.auction().qqBroadcastThreshold());
-        service.setEventBusProvider(() -> context.getCapability(
+        service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
-        service.start(context.dataFolder());
+        service.start(dataFolder);
 
         // 注册待发放队列消费者（玩家上线补发离线期间累积的物品/货币）
-        context.registerListener(new PendingDeliveryService(
-            context.plugin(), service.getRepository(), currencyManager, itemSerializer, context.logger()));
+        registerListener(new PendingDeliveryService(
+            plugin, logger, service.getRepository(), currencyManager, itemSerializer, logger));
 
         // 注册 UI 到 ArcartX 桥接层
         bindMarketUi(configuration.ui().shopId(), SHOP_UI_FILE_PATH);
@@ -175,7 +175,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         bindMarketUi(configuration.ui().historyId(), HISTORY_UI_FILE_PATH);
 
         JdbcMarketRepository marketRepo = (JdbcMarketRepository) service.getRepository();
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
             new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
                 @Override public @NotNull String moduleId() { return "market"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
@@ -187,15 +187,15 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
                 }
             });
 
-        context.registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
+        registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
             @Override public @NotNull String moduleId() { return "market"; }
             @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
                 try { return marketRepo.deletePlayerData(playerUuid); }
-                catch (Exception e) { context.logger().warning("Market purge 失败: " + e.getMessage()); return -1; }
+                catch (Exception e) { logger.warning("Market purge 失败: " + e.getMessage()); return -1; }
             }
             @Override public int purgeAllPlayerData() {
                 try { return marketRepo.deleteAllPlayerData(); }
-                catch (Exception e) { context.logger().warning("Market purgeAll 失败: " + e.getMessage()); return -1; }
+                catch (Exception e) { logger.warning("Market purgeAll 失败: " + e.getMessage()); return -1; }
             }
         });
 
@@ -203,13 +203,13 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
         // 注册自动回收监听器
         if (configuration.recycle().enabled() && configuration.recycle().allowAutoRecycle()) {
-            context.registerListener(new MarketEventListener(
+            registerListener(new MarketEventListener(
                 () -> service != null ? service.getRecycleService() : null,
                 true
             ));
         }
 
-        context.logger().fine("Market 模块已载入 | 存储=" + configuration.storage().mode().toUpperCase()
+        logger.fine("Market 模块已载入 | 存储=" + configuration.storage().mode().toUpperCase()
             + " | 列表缓存=" + (configuration.redis().enabled() ? "启用" : "禁用")
             + " | 跨服=" + (service != null && service.crossServerActive() ? "ON" : "OFF"));
     }
@@ -220,28 +220,28 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
     }
 
     private void ensureExampleShopExported() {
-        File shopDir = new File(context.dataFolder(), configuration.shop().shopsDirectory());
+        File shopDir = new File(dataFolder, configuration.shop().shopsDirectory());
         if (!shopDir.exists()) {
             shopDir.mkdirs();
         }
         File[] files = shopDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
         if (files == null || files.length == 0) {
             File target = new File(shopDir, "example_shop.yml");
-            context.exportResource("shops/example_shop.yml", target, false);
-            context.logger().info("[Market] 已导出示例商店到 " + target.getPath());
+            exportResource("shops/example_shop.yml", target, false);
+            logger.info("[Market] 已导出示例商店到 " + target.getPath());
         }
     }
 
     private void ensureDefaultRecycleExported() {
-        File recycleDir = new File(context.dataFolder(), configuration.recycle().recycleDirectory());
+        File recycleDir = new File(dataFolder, configuration.recycle().recycleDirectory());
         if (!recycleDir.exists()) {
             recycleDir.mkdirs();
         }
         File[] files = recycleDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
         if (files == null || files.length == 0) {
             File target = new File(recycleDir, "default_recycle.yml");
-            context.exportResource("recycle/default_recycle.yml", target, false);
-            context.logger().info("[Market] 已导出默认回收表到 " + target.getPath());
+            exportResource("recycle/default_recycle.yml", target, false);
+            logger.info("[Market] 已导出默认回收表到 " + target.getPath());
         }
     }
 
@@ -262,7 +262,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
-        return new MarketPlaceholderExpansion(context.plugin(), () -> service);
+        return new MarketPlaceholderExpansion(plugin, () -> service);
     }
 
     @Override
@@ -277,7 +277,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             if (org.bukkit.Bukkit.isPrimaryThread()) {
                 current.handleClientPacket(player, packetId, data);
             } else {
-                org.bukkit.Bukkit.getScheduler().runTask(context.plugin(),
+                org.bukkit.Bukkit.getScheduler().runTask(plugin,
                     () -> current.handleClientPacket(player, packetId, data));
             }
             return true;
@@ -304,3 +304,5 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
+

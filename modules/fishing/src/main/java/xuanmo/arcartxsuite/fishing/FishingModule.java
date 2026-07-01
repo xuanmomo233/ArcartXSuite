@@ -108,14 +108,14 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             throw new IllegalStateException("ArcartXFishing.yml 配置文件缺失");
         }
         configuration = FishingModuleConfiguration.load(
-            YamlConfiguration.loadConfiguration(configFile), context.dataFolder(), context.logger());
+            YamlConfiguration.loadConfiguration(configFile), dataFolder, logger);
     }
 
     @Override
     protected void startService() throws Exception {
-        File moduleDataFolder = context.dataFolder();
+        File moduleDataFolder = dataFolder;
         JdbcFishingRepository repo = new JdbcFishingRepository(
-            moduleDataFolder, configuration.storage(), context.logger());
+            moduleDataFolder, configuration.storage(), logger);
 
         // 注册 UI 并获取 UI ID
         UiBinding binding1 = registerModuleUi(
@@ -141,21 +141,21 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         }
 
         service = new FishingService(
-            context.plugin(), configuration, repo,
-            context.packetBridge(), context.logger(), minigameUiId);
+            plugin, logger, configuration, repo,
+            packetBridge, logger, minigameUiId);
         service.setMessageProvider(messages());
-        service.setEventBusProvider(() -> context.getCapability(
+        service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
-        service.setSignalProvider(() -> context.getCapability(
+        service.setSignalProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.SignalDispatchable.class));
-        service.setCurrencyProvider(() -> context.currencyManager());
-        service.setTitleProvider(() -> context.getCapability(
+        service.setCurrencyProvider(() -> currencyManager);
+        service.setTitleProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.TitleGrantable.class));
-        service.setMailProvider(() -> context.getCapability(
+        service.setMailProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.MailDispatchable.class));
         service.start();
 
-        context.registerCapability(DatabaseMigratable.class, new DatabaseMigratable() {
+        registerCapability(DatabaseMigratable.class, new DatabaseMigratable() {
             @Override public @NotNull String moduleId() { return "fishing"; }
             @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
                     @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
@@ -166,20 +166,20 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             }
         });
 
-        context.registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
+        registerCapability(PlayerDataPurgeable.class, new PlayerDataPurgeable() {
             @Override public @NotNull String moduleId() { return "fishing"; }
             @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
                 try { return repo.deletePlayerData(playerUuid); }
-                catch (Exception e) { context.logger().warning("Fishing purge 失败: " + e.getMessage()); return -1; }
+                catch (Exception e) { logger.warning("Fishing purge 失败: " + e.getMessage()); return -1; }
             }
             @Override public int purgeAllPlayerData() {
                 try { return repo.deleteAllPlayerData(); }
-                catch (Exception e) { context.logger().warning("Fishing purgeAll 失败: " + e.getMessage()); return -1; }
+                catch (Exception e) { logger.warning("Fishing purgeAll 失败: " + e.getMessage()); return -1; }
             }
         });
 
         adminCommand = new FishingAdminCommand(() -> service, this::msg);
-        context.logger().fine("Fishing 模块已载入 | 鱼种=" + configuration.fishes().size()
+        logger.fine("Fishing 模块已载入 | 鱼种=" + configuration.fishes().size()
             + " | 替换原版=" + configuration.fishing().replaceVanilla());
     }
 
@@ -200,7 +200,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     @Override
     protected @NotNull Map<String, TabExecutor> commandBindings() {
         return Map.of("fishing", new FishingPlayerCommand(
-            () -> context.packetBridge(),
+            () -> packetBridge,
             () -> collectionUiId,
             () -> service
         ));
@@ -208,7 +208,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
-        return new FishingPlaceholderExpansion(context.plugin(), () -> service);
+        return new FishingPlaceholderExpansion(plugin, () -> service);
     }
 
     @Override
@@ -245,3 +245,5 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         return prefix + mp.get(key, args);
     }
 }
+
+

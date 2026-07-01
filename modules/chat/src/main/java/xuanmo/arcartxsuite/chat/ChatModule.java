@@ -89,9 +89,9 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         }
         var yaml = YamlConfiguration.loadConfiguration(configFile);
         String channelsRelative = yaml.getString("channels-directory", "chat/channels");
-        File channelsDirectory = new File(context.dataFolder(), channelsRelative);
+        File channelsDirectory = new File(dataFolder, channelsRelative);
         ensureChannelDefaults(channelsRelative);
-        configuration = ChatModuleConfiguration.load(yaml, channelsDirectory, context.logger());
+        configuration = ChatModuleConfiguration.load(yaml, channelsDirectory, logger);
     }
 
     @Override
@@ -103,8 +103,8 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        ItemBridgeAPI itemStackBridge = context.itemStackBridge();
+        PacketBridgeAPI packetBridge = packetBridge;
+        ItemBridgeAPI itemStackBridge = itemStackBridge;
 
         // 绑定 @补全 overlay UI
         completionUiId = null;
@@ -114,35 +114,35 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
             );
             if (completionBinding.registeredUiId() != null) {
                 completionUiId = completionBinding.registeredUiId();
-                context.logger().fine("Chat @补全 UI 已注册: " + completionUiId);
+                logger.fine("Chat @补全 UI 已注册: " + completionUiId);
             }
         }
 
         JdbcChatRepository chatRepo = new JdbcChatRepository(
-            context.dataFolder(),
-            configuration.storage(), context.logger());
+            dataFolder,
+            configuration.storage(), logger);
         service = new ChatService(
-            context.plugin(),
-            () -> context.getCapability(TabRefreshable.class),
+            plugin, logger,
+            () -> getCapability(TabRefreshable.class),
             configuration,
             chatRepo,
             packetBridge, itemStackBridge,
             completionUiId,
-            context.crossServer(),
-            context.placeholderResolver()
+            crossServer,
+            placeholderResolver
         );
-        service.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+        service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
         adminCommand = new ChatAdminCommand(() -> service, messages());
 
         // 注册 ChatCardSendable capability，通过 packetBridge 转发
         PacketBridgeAPI cardBridge = packetBridge;
-        context.registerCapability(ChatCardSendable.class, (player, cardId, data) ->
+        registerCapability(ChatCardSendable.class, (player, cardId, data) ->
             cardBridge.sendChatCard(player, cardId, data));
 
         // 注册 ChatMutable capability，供 Essentials 等模块委托禁言操作
         ChatService muteService = service;
-        context.registerCapability(ChatMutable.class, new ChatMutable() {
+        registerCapability(ChatMutable.class, new ChatMutable() {
             @Override
             public @NotNull String mutePlayer(@NotNull String playerName, @Nullable java.time.Instant expiresAt, @Nullable String reason, @Nullable String mutedBy) {
                 return muteService.mutePlayer(playerName, expiresAt, reason, mutedBy).message();
@@ -162,20 +162,20 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
 
         ensureChatCardDefaults();
 
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "chat"; }
                 @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
                     try { return chatRepo.deletePlayerData(playerUuid); }
-                    catch (Exception e) { context.logger().warning("Chat purge 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("Chat purge 失败: " + e.getMessage()); return -1; }
                 }
                 @Override public int purgeAllPlayerData() {
                     try { return chatRepo.deleteAllPlayerData(); }
-                    catch (Exception e) { context.logger().warning("Chat purgeAll 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("Chat purgeAll 失败: " + e.getMessage()); return -1; }
                 }
             });
 
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
             new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
                 @Override public @NotNull String moduleId() { return "chat"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
@@ -187,7 +187,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
                 }
             });
 
-        context.logger().fine(
+        logger.fine(
             "Chat 模块已载入，频道=" + service.channelCount()
                 + " | 存储=" + configuration.storage().dialect().configKey()
                 + " | 跨服=" + (service.crossServerActive() ? "ON" : "OFF")
@@ -218,7 +218,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
-        return new ChatPlaceholderExpansion(context.plugin(), () -> service);
+        return new ChatPlaceholderExpansion(plugin, () -> service);
     }
 
     public ChatService getService() {
@@ -260,13 +260,13 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         for (String card : cards) {
             File target = new File(chatCardDir, card + ".yml");
             if (!target.exists()) {
-                context.exportResource("chat/card/" + card + ".yml", target, false);
+                exportResource("chat/card/" + card + ".yml", target, false);
             }
         }
     }
 
     private void ensureChannelDefaults(String channelsRelative) {
-        File channelsDir = new File(context.dataFolder(), channelsRelative);
+        File channelsDir = new File(dataFolder, channelsRelative);
         if (!channelsDir.exists()) {
             channelsDir.mkdirs();
         }
@@ -277,8 +277,10 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         for (String channel : new String[]{"Normal.yml", "Global.yml", "Private.yml", "Staff.yml"}) {
             File target = new File(channelsDir, channel);
             if (!target.exists()) {
-                context.exportResource("chat/channels/" + channel, target, false);
+                exportResource("chat/channels/" + channel, target, false);
             }
         }
     }
 }
+
+

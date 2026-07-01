@@ -22,6 +22,7 @@ import xuanmo.arcartxsuite.menu.config.MenuLayoutType;
 import xuanmo.arcartxsuite.menu.config.MenuMessagesConfiguration;
 import xuanmo.arcartxsuite.menu.config.MenuModuleConfiguration;
 import xuanmo.arcartxsuite.menu.config.MenuPageDefinition;
+import java.util.logging.Logger;
 
 public final class MenuService {
 
@@ -31,6 +32,7 @@ public final class MenuService {
     public static final String ESC_UI_FILE_PATH = "ui/menu_esc.yml";
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final PacketBridgeAPI packetBridge;
     private final PacketGuardAPI packetGuard;
     private MenuModuleConfiguration configuration;
@@ -44,6 +46,7 @@ public final class MenuService {
 
     public MenuService(
         JavaPlugin plugin,
+        Logger logger,
         PacketBridgeAPI packetBridge,
         PacketGuardAPI packetGuard,
         MenuModuleConfiguration configuration,
@@ -51,6 +54,7 @@ public final class MenuService {
         ItemSourceRegistry itemSourceRegistry
     ) {
         this.plugin = plugin;
+        this.logger = logger;
         this.packetBridge = packetBridge;
         this.packetGuard = packetGuard;
         this.configuration = configuration;
@@ -75,12 +79,12 @@ public final class MenuService {
             configuration.settings().defaultLayout(),
             configuration.settings().columns(),
             configuration.settings().buttonsPerPage(),
-            plugin.getLogger()
+            this.logger
         ));
         bindingRegistry.rebuild(
             menus.values(),
             configuration.settings().globalItemBinds(),
-            plugin.getLogger()
+            this.logger
         );
     }
 
@@ -356,4 +360,5 @@ public final class MenuService {
         ));
     }
 }
+
 

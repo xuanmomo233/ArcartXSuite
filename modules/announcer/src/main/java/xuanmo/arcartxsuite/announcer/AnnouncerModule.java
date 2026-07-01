@@ -102,13 +102,13 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         }
         var yaml = YamlConfiguration.loadConfiguration(configFile);
         String entriesDirRelative = yaml.getString("entries-directory", "announcer");
-        File entriesDirectory = new File(context.dataFolder(), entriesDirRelative);
+        File entriesDirectory = new File(dataFolder, entriesDirRelative);
         // 旧版 entries/ → 新版 announcer/：如果旧目录存在而新目录不存在，自动重命名
         if ("announcer".equals(entriesDirRelative)) {
-            File legacyEntries = new File(context.dataFolder(), "entries");
+            File legacyEntries = new File(dataFolder, "entries");
             if (legacyEntries.isDirectory() && !entriesDirectory.exists()) {
                 if (legacyEntries.renameTo(entriesDirectory)) {
-                    context.logger().info("已将旧公告目录 entries/ 迁移至 announcer/");
+                    logger.info("已将旧公告目录 entries/ 迁移至 announcer/");
                 }
             }
         }
@@ -119,10 +119,10 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         if (existing == null || existing.length == 0) {
             File defaultEntries = new File(entriesDirectory, "default.yml");
             if (!defaultEntries.exists()) {
-                context.exportResource("announcer/default.yml", defaultEntries, false);
+                exportResource("announcer/default.yml", defaultEntries, false);
             }
         }
-        configuration = AnnouncerModuleConfiguration.load(yaml, context.logger(), entriesDirectory);
+        configuration = AnnouncerModuleConfiguration.load(yaml, logger, entriesDirectory);
     }
 
     @Override
@@ -159,18 +159,18 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
             }
         }
 
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        ClientBridgeAPI clientBridge = context.clientBridge();
-        PacketGuardAPI packetGuard = context.packetGuard();
+        PacketBridgeAPI packetBridge = packetBridge;
+        ClientBridgeAPI clientBridge = clientBridge;
+        PacketGuardAPI packetGuard = packetGuard;
 
         // 跨服广播
         service = new AnnouncerService(
-            context.plugin(), configuration, packetBridge, clientBridge, packetGuard,
+            plugin, logger, configuration, packetBridge, clientBridge, packetGuard,
             java.util.List.copyOf(announcerRuntimeUiIds),
-            context.crossServer(),
-            context.placeholderResolver()
+            crossServer,
+            placeholderResolver
         );
-        service.setQQBotProvider(() -> context.getCapability(
+        service.setQQBotProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.QQBotBroadcastable.class));
         service.start();
         service.syncAfterReload();
@@ -178,31 +178,31 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         // Subtitle Service
         if (!subtitleRuntimeUiIds.isEmpty()) {
             // 导出内置默认字幕组（首次启动时）
-            File groupsDir = new File(context.dataFolder(), subtitleCfg.groupsDirectory());
+            File groupsDir = new File(dataFolder, subtitleCfg.groupsDirectory());
             if (!groupsDir.exists()) {
                 groupsDir.mkdirs();
                 try {
-                    context.exportConfigResource(
+                    exportConfigResource(
                         "subtitle/groups/default.yml",
-                        "data/" + context.dataFolder().getName() + "/" + subtitleCfg.groupsDirectory() + "/default.yml",
+                        "data/" + dataFolder.getName() + "/" + subtitleCfg.groupsDirectory() + "/default.yml",
                         false, moduleClassLoader()
                     );
                 } catch (Exception ex) {
-                    context.logger().warning("导出默认字幕组失败: " + ex.getMessage());
+                    logger.warning("导出默认字幕组失败: " + ex.getMessage());
                 }
             }
 
             subtitleService = new SubtitleService(
-                context.plugin(), context.logger(), packetBridge,
-                subtitleCfg, java.util.List.copyOf(subtitleRuntimeUiIds), context.dataFolder(),
-                context.placeholderResolver()
+                plugin, logger, logger, packetBridge,
+                subtitleCfg, java.util.List.copyOf(subtitleRuntimeUiIds), dataFolder,
+                placeholderResolver
             );
             subtitleService.loadGroups();
-            context.registerCapability(SubtitlePlayable.class,
+            registerCapability(SubtitlePlayable.class,
                 (player, groupId) -> subtitleService != null && subtitleService.playGroup(player, groupId));
         }
 
-        context.logger().fine(
+        logger.fine(
             "Announcer 模块已载入，启用公告数: "
                 + service.activeEntryCount()
                 + "/" + configuration.entries().size()
@@ -405,3 +405,5 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         return r;
     }
 }
+
+

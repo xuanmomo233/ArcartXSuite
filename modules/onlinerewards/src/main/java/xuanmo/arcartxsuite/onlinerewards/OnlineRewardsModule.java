@@ -119,8 +119,8 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
         var yaml = YamlConfiguration.loadConfiguration(configFile);
         String signInRelative = yaml.getString("sign-in-file", "sign-in.yml");
         String rewardsRelative = yaml.getString("rewards-file", "rewards.yml");
-        File signInFile = new File(context.dataFolder(), signInRelative);
-        File rewardsFile = new File(context.dataFolder(), rewardsRelative);
+        File signInFile = new File(dataFolder, signInRelative);
+        File rewardsFile = new File(dataFolder, rewardsRelative);
         ensureOnlineRewardsDefaults(signInFile, rewardsFile);
         configuration = OnlineRewardsModuleConfiguration.load(yaml, signInFile, rewardsFile);
     }
@@ -128,41 +128,41 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
     private void ensureOnlineRewardsDefaults(File signInFile, File rewardsFile) {
         if (!signInFile.exists()) {
             signInFile.getParentFile().mkdirs();
-            context.exportResource("sign-in.yml", signInFile, false);
+            exportResource("sign-in.yml", signInFile, false);
         }
         if (!rewardsFile.exists()) {
             rewardsFile.getParentFile().mkdirs();
-            context.exportResource("rewards.yml", rewardsFile, false);
+            exportResource("rewards.yml", rewardsFile, false);
         }
     }
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        ClientBridgeAPI clientBridge = context.clientBridge();
-        PacketGuardAPI packetGuard = context.packetGuard();
+        PacketBridgeAPI packetBridge = packetBridge;
+        ClientBridgeAPI clientBridge = clientBridge;
+        PacketGuardAPI packetGuard = packetGuard;
 
         if (clientBridge == null || !clientBridge.isAvailable()) {
             throw new IllegalStateException("OnlineRewards 模块需要 ArcartX 客户端桥接");
         }
 
         JdbcOnlineRewardsRepository rewardsRepo = new JdbcOnlineRewardsRepository(
-            context.dataFolder(),
-            configuration.storage(), context.logger());
+            dataFolder,
+            configuration.storage(), logger);
         service = new OnlineRewardsService(
-            context.plugin(), configuration,
+            plugin, logger, configuration,
             rewardsRepo,
             clientBridge, packetBridge, packetGuard,
-            () -> context.getCapability(MailDispatchable.class),
-            () -> context.getCapability(SignalDispatchable.class),
-            () -> context.getCapability(ChatCardSendable.class),
-            () -> context.getCapability(TitleGrantable.class),
-            () -> context.getCapability(SubtitlePlayable.class),
-            () -> context.getCapability(QQBotBroadcastable.class),
-            () -> context.getCapability(EventBusCapability.class),
+            () -> getCapability(MailDispatchable.class),
+            () -> getCapability(SignalDispatchable.class),
+            () -> getCapability(ChatCardSendable.class),
+            () -> getCapability(TitleGrantable.class),
+            () -> getCapability(SubtitlePlayable.class),
+            () -> getCapability(QQBotBroadcastable.class),
+            () -> getCapability(EventBusCapability.class),
             overwrite -> {
                 try {
-                    return context.exportUiResource(
+                    return exportUiResource(
                         OnlineRewardsService.MENU_UI_RESOURCE_PATH,
                         OnlineRewardsService.MENU_UI_FILE_PATH,
                         overwrite, moduleClassLoader());
@@ -170,11 +170,11 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
                     throw new RuntimeException(ex);
                 }
             },
-            context.crossServer()
+            crossServer
         );
         service.start();
 
-        context.registerCapability(OnlineRewardsQueryable.class, new OnlineRewardsQueryable() {
+        registerCapability(OnlineRewardsQueryable.class, new OnlineRewardsQueryable() {
             @Override public boolean hasSignedToday(@NotNull java.util.UUID playerUuid) { return service.hasSignedTodayPublic(playerUuid); }
             @Override public int todayOnlineMinutes(@NotNull java.util.UUID playerUuid) { return service.todayOnlineMinutesPublic(playerUuid); }
             @Override public int weeklyOnlineMinutes(@NotNull java.util.UUID playerUuid) { return service.weeklyOnlineMinutesPublic(playerUuid); }
@@ -187,20 +187,20 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
         });
         adminCommand = new OnlineRewardsAdminCommand(() -> service, messages());
 
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "onlinerewards"; }
                 @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
                     try { return rewardsRepo.deletePlayerData(playerUuid); }
-                    catch (Exception e) { context.logger().warning("OnlineRewards purge 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("OnlineRewards purge 失败: " + e.getMessage()); return -1; }
                 }
                 @Override public int purgeAllPlayerData() {
                     try { return rewardsRepo.deleteAllPlayerData(); }
-                    catch (Exception e) { context.logger().warning("OnlineRewards purgeAll 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("OnlineRewards purgeAll 失败: " + e.getMessage()); return -1; }
                 }
             });
 
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
             new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
                 @Override public @NotNull String moduleId() { return "onlinerewards"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
@@ -212,7 +212,7 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
                 }
             });
 
-        context.logger().fine(
+        logger.fine(
             "OnlineRewards 模块已载入，rewards=" + configuration.rewards().size()
                 + " | storage=" + configuration.storage().dialect().configKey()
                 + " | menu-ui=" + service.runtimeMenuUiId()
@@ -239,7 +239,7 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
 
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
-        return new OnlineRewardsPlaceholderExpansion(context.plugin(), () -> service);
+        return new OnlineRewardsPlaceholderExpansion(plugin, () -> service);
     }
 
     @Override
@@ -274,3 +274,5 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
+

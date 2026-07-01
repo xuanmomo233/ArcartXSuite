@@ -39,11 +39,11 @@ public class RankingRewardScheduler {
     private int monthlyHour;
     private int monthlyMinute;
 
-    public RankingRewardScheduler(RankingRewardService rewardService, JavaPlugin plugin) {
-        this.logger = plugin.getLogger();
+    public RankingRewardScheduler(RankingRewardService rewardService, JavaPlugin plugin, Logger logger) {
         this.rewardService = rewardService;
         this.scheduler = Executors.newScheduledThreadPool(2);
         this.plugin = plugin;
+        this.logger = logger;
     }
 
     /**
@@ -425,4 +425,6 @@ public class RankingRewardScheduler {
         logger.info("排行榜奖励调度器已关闭");
     }
 }
+
+
 

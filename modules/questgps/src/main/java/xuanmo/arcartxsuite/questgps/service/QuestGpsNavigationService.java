@@ -32,6 +32,7 @@ public final class QuestGpsNavigationService {
 
     public QuestGpsNavigationService(
         JavaPlugin plugin,
+        Logger logger,
         QuestGpsModuleConfiguration configuration,
         WaypointBridgeAPI waypointBridge,
         AdyeshachNpcBridgeAPI npcBridge,
@@ -41,7 +42,7 @@ public final class QuestGpsNavigationService {
             plugin,
             configuration,
             new BridgeWaypointRuntime(waypointBridge),
-            plugin.getLogger(),
+            this.logger,
             npcBridge,
             trackerBridge
         );
@@ -608,4 +609,5 @@ public final class QuestGpsNavigationService {
         }
     }
 }
+
 

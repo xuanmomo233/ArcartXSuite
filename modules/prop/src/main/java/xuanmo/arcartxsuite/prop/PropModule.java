@@ -60,26 +60,26 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected void startService() throws Exception {
-        PropBridgeAPI propBridge = context.propBridge();
+        PropBridgeAPI propBridge = propBridge;
         if (propBridge == null || !propBridge.isAvailable()) {
             throw new IllegalStateException("Prop 模块需要 ArcartX API 桥接，当前不可用");
         }
 
         ensureDefaults();
-        File dataDir = new File(context.dataFolder(), PROP_DATA_DIRECTORY);
+        File dataDir = new File(dataFolder, PROP_DATA_DIRECTORY);
         PropKeyMappingConfiguration keyMapping = PropKeyMappingConfiguration.load(
             YamlConfiguration.loadConfiguration(new File(dataDir, "key.yml")));
         PropLanguageConfiguration language = PropLanguageConfiguration.load(
             YamlConfiguration.loadConfiguration(new File(dataDir, "language.yml")));
         Map<String, PropDefinition> definitions = PropDefinitionLoader.load(
-            new File(dataDir, "props"), context.logger());
+            new File(dataDir, "props"), logger);
 
-        service = new PropService(context.plugin(), configuration, propBridge, keyMapping, language, definitions, context.attributeBridge());
-        service.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+        service = new PropService(plugin, logger, configuration, propBridge, keyMapping, language, definitions, attributeBridge);
+        service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
         adminCommand = new PropAdminCommand(() -> service, messages());
 
-        context.logger().fine(
+        logger.fine(
             "Prop 模块已载入，props=" + service.propCount()
                 + " | keys=" + service.registeredKeyCount()
                 + " | category=" + service.keyCategory()
@@ -115,11 +115,11 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
     }
 
     private void ensureDefaults() throws IOException {
-        File dataDir = new File(context.dataFolder(), PROP_DATA_DIRECTORY);
+        File dataDir = new File(dataFolder, PROP_DATA_DIRECTORY);
         if (!dataDir.exists() && !dataDir.mkdirs()) {
             throw new IOException("无法创建 Prop 数据目录: " + dataDir.getAbsolutePath());
         }
-        File propsDir = new File(context.dataFolder(), PROP_DEFINITIONS_DIRECTORY);
+        File propsDir = new File(dataFolder, PROP_DEFINITIONS_DIRECTORY);
         if (!propsDir.exists() && !propsDir.mkdirs()) {
             throw new IOException("无法创建 Prop 道具目录: " + propsDir.getAbsolutePath());
         }
@@ -133,11 +133,11 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
     }
 
     private void exportIfMissing(String relativePath) {
-        File target = new File(context.dataFolder(), relativePath);
+        File target = new File(dataFolder, relativePath);
         if (target.exists()) {
             return;
         }
-        context.exportResource(relativePath, target, false);
+        exportResource(relativePath, target, false);
     }
 
     @Override public String commandId() { return "prop"; }
@@ -149,3 +149,5 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
+

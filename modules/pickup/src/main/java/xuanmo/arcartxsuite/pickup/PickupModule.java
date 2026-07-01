@@ -103,8 +103,8 @@ public final class PickupModule extends AbstractAXSModule {
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        ItemBridgeAPI itemStackBridge = context.itemStackBridge();
+        PacketBridgeAPI packetBridge = packetBridge;
+        ItemBridgeAPI itemStackBridge = itemStackBridge;
 
         if (configuration.mode() == PickupMode.SCANNER) {
             startScannerMode(packetBridge, itemStackBridge);
@@ -124,17 +124,17 @@ public final class PickupModule extends AbstractAXSModule {
         recordUiBinding("ui/pickup_hud.yml", uiBinding);
 
         notificationService = new PickupService(
-            context.plugin(), configuration, packetBridge, itemStackBridge,
+            plugin, logger, configuration, packetBridge, itemStackBridge,
             uiBinding.runtimeUiId()
         );
-        notificationService.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+        notificationService.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         notificationService.start();
 
         // 注册通知能力，让 warehouse 等模块知道该玩家已有 HUD 拾取通知
-        context.registerCapability(PickupNotifiable.class,
+        registerCapability(PickupNotifiable.class,
             playerId -> notificationService != null && notificationService.isEnabled(playerId));
 
-        context.logger().fine(
+        logger.fine(
             "Pickup 通知模式已载入，max-visible=" + configuration.maxVisible()
                 + " | ttl=" + configuration.entryTtlMs()
                 + "ms | UI=" + uiBinding.runtimeUiId()
@@ -163,18 +163,18 @@ public final class PickupModule extends AbstractAXSModule {
         }
 
         scannerService = new LootScannerService(
-            context.plugin(), configuration, context.packetGuard(), packetBridge, itemStackBridge,
+            plugin, logger, configuration, packetGuard, packetBridge, itemStackBridge,
             uiBinding.runtimeUiId(), interactBinding.runtimeUiId(),
-            () -> context.getCapability(WarehouseAutoDepositable.class)
+            () -> getCapability(WarehouseAutoDepositable.class)
         );
         scannerService.start();
 
         // 注册宿主全局按键回调（优先级 10，拾取优先于对话）
-        context.registerKeybindHandler("AXS_INTERACT", 10, (player, keyName) ->
+        registerKeybindHandler("AXS_INTERACT", 10, (player, keyName) ->
             scannerService != null && scannerService.handleInteractKeyFromHost(player)
         );
 
-        context.logger().fine(
+        logger.fine(
             "Pickup 扫描模式已载入，radius=" + configuration.scanner().scanRadius()
                 + " | maxDisplay=" + configuration.scanner().maxDisplay()
                 + " | HUD=" + uiBinding.runtimeUiId()
@@ -235,7 +235,7 @@ public final class PickupModule extends AbstractAXSModule {
     }
 
     private File exportPickupUiFile(PickupModuleConfiguration config) throws IOException {
-        File target = new File(context.pluginDataFolder(), "ui/pickup_hud.yml");
+        File target = new File(pluginDataFolder, "ui/pickup_hud.yml");
         File parent = target.getParentFile();
         if (parent != null && !parent.exists()) {
             parent.mkdirs();
@@ -246,4 +246,6 @@ public final class PickupModule extends AbstractAXSModule {
         return target;
     }
 }
+
+
 

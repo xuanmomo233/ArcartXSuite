@@ -99,13 +99,13 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         }
         var yaml = YamlConfiguration.loadConfiguration(configFile);
         String questsDirRelative = yaml.getString("quests-directory", "quests");
-        File questsDirectory = new File(context.dataFolder(), questsDirRelative);
+        File questsDirectory = new File(dataFolder, questsDirRelative);
         if (!questsDirectory.exists()) {
             questsDirectory.mkdirs();
         }
         ensureQuestDefaults(questsDirectory);
-        configuration = QuestGpsModuleConfiguration.load(yaml, context.logger(), questsDirectory);
-        QuestGpsMysqlDatabase.registerIfNeeded(context.logger(), configuration.database());
+        configuration = QuestGpsModuleConfiguration.load(yaml, logger, questsDirectory);
+        QuestGpsMysqlDatabase.registerIfNeeded(logger, configuration.database());
     }
 
     private void ensureQuestDefaults(File questsDirectory) {
@@ -118,16 +118,16 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
             String fileName = res.substring(res.lastIndexOf('/') + 1);
             File target = new File(questsDirectory, fileName);
             if (!target.exists()) {
-                context.exportResource(res, target, false);
+                exportResource(res, target, false);
             }
         }
     }
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        PacketGuardAPI packetGuard = context.packetGuard();
-        ItemBridgeAPI itemStackBridge = context.itemStackBridge();
+        PacketBridgeAPI packetBridge = packetBridge;
+        PacketGuardAPI packetGuard = packetGuard;
+        ItemBridgeAPI itemStackBridge = itemStackBridge;
 
         java.util.List<String> menuRuntimeUiIds = new java.util.ArrayList<>();
         for (String candidateUiId : configuration.client().menuUiIds()) {
@@ -158,29 +158,29 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         }
 
         service = new QuestGpsService(
-            context.plugin(), packetGuard, configuration, packetBridge, itemStackBridge,
-            () -> context.getCapability(TitleConfigQueryable.class),
-            () -> context.getCapability(MapNavigable.class),
-            () -> context.getCapability(SubtitlePlayable.class),
-            () -> context.getCapability(ChatCardSendable.class),
+            plugin, logger, packetGuard, configuration, packetBridge, itemStackBridge,
+            () -> getCapability(TitleConfigQueryable.class),
+            () -> getCapability(MapNavigable.class),
+            () -> getCapability(SubtitlePlayable.class),
+            () -> getCapability(ChatCardSendable.class),
             (signal, player, questId) -> {
-                SignalDispatchable dispatcher = context.getCapability(SignalDispatchable.class);
+                SignalDispatchable dispatcher = getCapability(SignalDispatchable.class);
                 if (dispatcher != null) {
                     dispatcher.dispatchSignal(signal, player, Map.of("quest_id", questId == null ? "" : questId));
-                } else if (context.logger().isLoggable(java.util.logging.Level.FINE)) {
-                    context.logger().fine("QuestGPS: hook signal: " + signal + " -> " + player.getName());
+                } else if (logger.isLoggable(java.util.logging.Level.FINE)) {
+                    logger.fine("QuestGPS: hook signal: " + signal + " -> " + player.getName());
                 }
             },
             java.util.List.copyOf(menuRuntimeUiIds),
             java.util.List.copyOf(guideRuntimeUiIds),
-            context.itemSourceRegistry(),
-            context.createWaypointBridge(),
-            context.createAdyeshachNpcBridge()
+            itemSourceRegistry,
+            createWaypointBridge(),
+            createAdyeshachNpcBridge()
         );
         service.start();
 
         // 注册 QuestGpsNavigable capability
-        context.registerCapability(QuestGpsNavigable.class, new QuestGpsNavigable() {
+        registerCapability(QuestGpsNavigable.class, new QuestGpsNavigable() {
             @Override
             public void offerQuest(@NotNull org.bukkit.entity.Player player, @NotNull String questId, boolean openMenu) {
                 service.offerQuest(player, questId, openMenu);
@@ -218,7 +218,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         });
         adminCommand = new QuestGpsAdminCommand(() -> service, messages());
 
-        context.logger().fine(
+        logger.fine(
             "QuestGPS: 模块已载入，packet-id=" + configuration.client().packetId()
                 + " | menu-ui=" + menuRuntimeUiIds
                 + " | guide-ui=" + guideRuntimeUiIds
@@ -260,4 +260,6 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
+
 

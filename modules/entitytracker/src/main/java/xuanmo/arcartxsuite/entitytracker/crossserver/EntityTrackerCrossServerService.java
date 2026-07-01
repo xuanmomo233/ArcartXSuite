@@ -16,6 +16,7 @@ import xuanmo.arcartxsuite.entitytracker.entity.BossKillRecord;
 import xuanmo.arcartxsuite.entitytracker.entity.PlayerBossBestDamage;
 import xuanmo.arcartxsuite.entitytracker.service.BossKillRecordingService;
 import xuanmo.arcartxsuite.entitytracker.service.CrossServerRankingCacheService;
+import java.util.logging.Logger;
 
 /**
  * Boss 跨服同步：最高伤害、击杀记录广播与入站合并。
@@ -23,6 +24,7 @@ import xuanmo.arcartxsuite.entitytracker.service.CrossServerRankingCacheService;
 public final class EntityTrackerCrossServerService {
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final CrossServerAPI crossServer;
     private final CrossServerChannelConfig channelConfig;
     private final PlayerBossBestDamageDao damageDao;
@@ -33,11 +35,13 @@ public final class EntityTrackerCrossServerService {
 
     public EntityTrackerCrossServerService(
         JavaPlugin plugin,
+        Logger logger,
         CrossServerAPI crossServer,
         CrossServerChannelConfig channelConfig,
         DataSource dataSource
     ) {
         this.plugin = plugin;
+        this.logger = logger;
         this.crossServer = crossServer;
         this.channelConfig = channelConfig == null ? CrossServerChannelConfig.disabled() : channelConfig;
         this.damageDao = new PlayerBossBestDamageDao(dataSource, plugin);
@@ -58,7 +62,7 @@ public final class EntityTrackerCrossServerService {
             delivery -> handlePayload(delivery.payload())
         );
         if (channel.isActive()) {
-            plugin.getLogger().info("[EntityTracker] 跨服 Boss 排行通道已启用");
+            this.logger.info("[EntityTracker] 跨服 Boss 排行通道已启用");
         }
     }
 
@@ -106,7 +110,7 @@ public final class EntityTrackerCrossServerService {
                     channel.publish(EntityTrackerCrossServerPayloadCodec.encodeBestDamage(candidate));
                 }
             } catch (SQLException exception) {
-                plugin.getLogger().warning("[EntityTracker] 写入 Boss 最高伤害失败: " + exception.getMessage());
+                this.logger.warning("[EntityTracker] 写入 Boss 最高伤害失败: " + exception.getMessage());
             }
         }
     }
@@ -132,7 +136,7 @@ public final class EntityTrackerCrossServerService {
             }
         } catch (IllegalArgumentException ignored) {
         } catch (SQLException exception) {
-            plugin.getLogger().warning("[EntityTracker] 合并跨服 Boss 数据失败: " + exception.getMessage());
+            this.logger.warning("[EntityTracker] 合并跨服 Boss 数据失败: " + exception.getMessage());
         }
     }
 
@@ -159,4 +163,5 @@ public final class EntityTrackerCrossServerService {
         }
     }
 }
+
 

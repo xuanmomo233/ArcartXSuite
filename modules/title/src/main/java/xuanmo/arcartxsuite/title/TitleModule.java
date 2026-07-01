@@ -99,12 +99,12 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
         }
         var yaml = YamlConfiguration.loadConfiguration(configFile);
         String titlesDirRelative = yaml.getString("titles-directory", "titles");
-        File titlesDirectory = new File(context.dataFolder(), titlesDirRelative);
+        File titlesDirectory = new File(dataFolder, titlesDirRelative);
         if (!titlesDirectory.exists()) {
             titlesDirectory.mkdirs();
         }
         ensureTitleDefaults(titlesDirectory);
-        configuration = TitleModuleConfiguration.load(yaml, context.logger(), titlesDirectory);
+        configuration = TitleModuleConfiguration.load(yaml, logger, titlesDirectory);
     }
 
     private void ensureTitleDefaults(File titlesDirectory) {
@@ -118,7 +118,7 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
             String fileName = res.substring(res.lastIndexOf('/') + 1);
             File target = new File(titlesDirectory, fileName);
             if (!target.exists()) {
-                context.exportResource(res, target, false);
+                exportResource(res, target, false);
             }
         }
     }
@@ -137,40 +137,40 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
      */
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        PacketGuardAPI packetGuard = context.packetGuard();
+        PacketBridgeAPI packetBridge = packetBridge;
+        PacketGuardAPI packetGuard = packetGuard;
 
         TitleService.UiResourceExporter uiExporter = (resourcePath, relativeUiPath, overwrite) ->
-            context.exportUiResource(resourcePath, relativeUiPath, overwrite, moduleClassLoader());
+            exportUiResource(resourcePath, relativeUiPath, overwrite, moduleClassLoader());
 
         JdbcTitleRepository titleRepo = new JdbcTitleRepository(
-            context.dataFolder(),
-            configuration.storage(), context.logger());
+            dataFolder,
+            configuration.storage(), logger);
         service = new TitleService(
-            context.plugin(), configuration,
+            plugin, logger, configuration,
             titleRepo,
             packetBridge, packetGuard,
-            () -> context.getCapability(TabRefreshable.class),
+            () -> getCapability(TabRefreshable.class),
             uiExporter,
-            context.attributeBridge(),
-            context.worldTextureBridge()
+            attributeBridge,
+            worldTextureBridge
         );
         service.start();
         adminCommand = new TitleAdminCommand(() -> service, messages());
 
         // 注册跨模块称号授予能力（EventPacket 等模块通过 capability 调用）
-        context.registerCapability(TitleGrantable.class,
+        registerCapability(TitleGrantable.class,
             (playerId, titleId, duration, source) -> {
                 var specOpt = xuanmo.arcartxsuite.title.TitleDurationParser.parse(duration);
                 if (specOpt.isEmpty()) {
-                    context.logger().warning("TitleGrantable 收到无效的 duration 格式: " + duration);
+                    logger.warning("TitleGrantable 收到无效的 duration 格式: " + duration);
                     return false;
                 }
                 TitleOperationResult result = service.giveTitle(playerId, titleId, specOpt.get(), source);
                 return result.success();
             });
 
-        context.registerCapability(TitleConfigQueryable.class, titleId -> {
+        registerCapability(TitleConfigQueryable.class, titleId -> {
             if (configuration == null) return null;
             TitleDefinition def = configuration.title(titleId);
             if (def == null) return null;
@@ -180,20 +180,20 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
             return new TitleConfigQueryable.TitleInfo(def.displayName(), qualityName, def.description());
         });
 
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "title"; }
                 @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
                     try { return titleRepo.deletePlayerData(playerUuid); }
-                    catch (Exception e) { context.logger().warning("Title purge 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("Title purge 失败: " + e.getMessage()); return -1; }
                 }
                 @Override public int purgeAllPlayerData() {
                     try { return titleRepo.deleteAllPlayerData(); }
-                    catch (Exception e) { context.logger().warning("Title purgeAll 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("Title purgeAll 失败: " + e.getMessage()); return -1; }
                 }
             });
 
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
             new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
                 @Override public @NotNull String moduleId() { return "title"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
@@ -205,7 +205,7 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
                 }
             });
 
-        context.logger().fine(
+        logger.fine(
             "Title 模块已载入，称号数: " + configuration.titles().size()
                 + " | 分组数: " + configuration.groups().size()
         );
@@ -228,7 +228,7 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
 
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
-        return new TitlePlaceholderExpansion(context.plugin(), () -> service, () -> configuration);
+        return new TitlePlaceholderExpansion(plugin, () -> service, () -> configuration);
     }
 
     @Override
@@ -254,3 +254,5 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
+

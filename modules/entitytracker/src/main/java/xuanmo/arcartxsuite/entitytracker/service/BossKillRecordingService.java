@@ -33,6 +33,7 @@ import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.entitytracker.dao.BossDropStatisticsDao;
 import xuanmo.arcartxsuite.entitytracker.dao.BossKillRecordDao;
 import xuanmo.arcartxsuite.entitytracker.entity.BossKillRecord;
+import java.util.logging.Logger;
 
 /**
  * Boss 击杀落库、掉落统计与跨服击杀同步。
@@ -42,6 +43,7 @@ public final class BossKillRecordingService implements Listener {
     private static final Gson GSON = new Gson();
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final EntityTrackerNewFeaturesSettings settings;
     private final BossKillRecordDao killRecordDao;
     private final BossDropStatisticsDao dropStatisticsDao;
@@ -54,6 +56,7 @@ public final class BossKillRecordingService implements Listener {
 
     public BossKillRecordingService(
         JavaPlugin plugin,
+        Logger logger,
         EntityTrackerNewFeaturesSettings settings,
         DataSource dataSource,
         DropAllocationService dropAllocationService,
@@ -62,8 +65,9 @@ public final class BossKillRecordingService implements Listener {
         java.util.function.Supplier<String> nodeIdSupplier
     ) {
         this.plugin = plugin;
+        this.logger = logger;
         this.settings = settings;
-        this.killRecordDao = new BossKillRecordDao(dataSource, plugin);
+        this.killRecordDao = new BossKillRecordDao(dataSource, this.logger);
         this.dropStatisticsDao = new BossDropStatisticsDao(dataSource, plugin);
         this.dropAllocationService = dropAllocationService;
         this.crossServerService = crossServerService;
@@ -122,7 +126,7 @@ public final class BossKillRecordingService implements Listener {
             try {
                 persistRecord(session, settlement, location, List.of());
             } catch (Exception exception) {
-                plugin.getLogger().warning("[EntityTracker] Boss 击杀记录失败: " + exception.getMessage());
+                this.logger.warning("[EntityTracker] Boss 击杀记录失败: " + exception.getMessage());
             }
         });
     }
@@ -138,7 +142,7 @@ public final class BossKillRecordingService implements Listener {
         try {
             persistRecord(session, settlement, location, drops);
         } catch (Exception exception) {
-            plugin.getLogger().warning("[EntityTracker] Boss 击杀记录失败: " + exception.getMessage());
+            this.logger.warning("[EntityTracker] Boss 击杀记录失败: " + exception.getMessage());
         }
     }
 
@@ -276,10 +280,10 @@ public final class BossKillRecordingService implements Listener {
             try {
                 int removed = killRecordDao.deleteOlderThanDays(recording.retentionDays());
                 if (removed > 0) {
-                    plugin.getLogger().fine("[EntityTracker] 已清理 " + removed + " 条过期击杀记录");
+                    this.logger.fine("[EntityTracker] 已清理 " + removed + " 条过期击杀记录");
                 }
             } catch (SQLException exception) {
-                plugin.getLogger().warning("[EntityTracker] 清理击杀记录失败: " + exception.getMessage());
+                this.logger.warning("[EntityTracker] 清理击杀记录失败: " + exception.getMessage());
             }
         });
     }
@@ -317,4 +321,6 @@ public final class BossKillRecordingService implements Listener {
         }
     }
 }
+
+
 

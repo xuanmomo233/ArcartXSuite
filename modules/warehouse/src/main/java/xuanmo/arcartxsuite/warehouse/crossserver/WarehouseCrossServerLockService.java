@@ -7,6 +7,7 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
+import java.util.logging.Logger;
 
 /**
  * 共享仓库编辑锁跨服广播：获取/释放时通知其他子服更新锁视图。
@@ -14,6 +15,7 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 public final class WarehouseCrossServerLockService {
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final CrossServerAPI crossServer;
     private final CrossServerChannelConfig channelConfig;
     private final BiConsumer<String, SharedEditLock> remoteLockHandler;
@@ -23,12 +25,14 @@ public final class WarehouseCrossServerLockService {
 
     public WarehouseCrossServerLockService(
         JavaPlugin plugin,
+        Logger logger,
         CrossServerAPI crossServer,
         CrossServerChannelConfig channelConfig,
         BiConsumer<String, SharedEditLock> remoteLockHandler,
         BiConsumer<WarehouseCrossServerPayloadCodec.UnlockPayload, Void> remoteUnlockHandler
     ) {
         this.plugin = plugin;
+        this.logger = logger;
         this.crossServer = crossServer;
         this.channelConfig = channelConfig == null ? CrossServerChannelConfig.disabled() : channelConfig;
         this.remoteLockHandler = remoteLockHandler;
@@ -45,7 +49,7 @@ public final class WarehouseCrossServerLockService {
             delivery -> handlePayload(delivery.payload())
         );
         if (channel.isActive()) {
-            plugin.getLogger().info("[Warehouse] 跨服共享仓库编辑锁已启用");
+            this.logger.info("[Warehouse] 跨服共享仓库编辑锁已启用");
         }
     }
 
@@ -96,4 +100,5 @@ public final class WarehouseCrossServerLockService {
         }
     }
 }
+
 

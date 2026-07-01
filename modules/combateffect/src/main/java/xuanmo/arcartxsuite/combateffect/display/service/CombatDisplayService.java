@@ -21,10 +21,12 @@ import xuanmo.arcartxsuite.api.attribute.AttributeDamageEvent;
 import xuanmo.arcartxsuite.api.attribute.AttributeHealEvent;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.combateffect.display.config.CombatDisplayConfiguration;
+import java.util.logging.Logger;
 
 public final class CombatDisplayService {
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final CombatDisplayConfiguration configuration;
     private final ClientBridgeAPI clientBridge;
     private final AttributeBridgeRegistry attributeBridge;
@@ -72,11 +74,13 @@ public final class CombatDisplayService {
 
     public CombatDisplayService(
         JavaPlugin plugin,
+        Logger logger,
         CombatDisplayConfiguration configuration,
         ClientBridgeAPI clientBridge,
         AttributeBridgeRegistry attributeBridge
     ) {
         this.plugin = plugin;
+        this.logger = logger;
         this.configuration = configuration;
         this.clientBridge = clientBridge;
         this.attributeBridge = attributeBridge;
@@ -104,7 +108,7 @@ public final class CombatDisplayService {
         if (attributeBridge != null && attributeBridge.hasHealSource()) {
             attributeHealListener = event -> handleAttributeHeal(event);
             attributeBridge.registerHealListener(attributeHealListener);
-            plugin.getLogger().fine("CombatDisplay 已注册统一属性治疗监听");
+            this.logger.fine("CombatDisplay 已注册统一属性治疗监听");
         }
     }
 
@@ -348,7 +352,7 @@ public final class CombatDisplayService {
             registerListener(listener);
             mythicHealHooked = true;
         } catch (NoClassDefFoundError error) {
-            plugin.getLogger().warning("CombatDisplay 检测到 MythicMobs，但当前服务端未提供 Mythic 治疗事件类: " + error.getMessage());
+            this.logger.warning("CombatDisplay 检测到 MythicMobs，但当前服务端未提供 Mythic 治疗事件类: " + error.getMessage());
         }
     }
 
@@ -358,7 +362,7 @@ public final class CombatDisplayService {
 
     private void debugDamageSource(String message) {
         if (configuration.damageSourceDebug()) {
-            plugin.getLogger().info(
+            this.logger.info(
                 "CombatDisplay 伤害来源调试: "
                     + message
                     + " | fallback="
@@ -456,6 +460,7 @@ public final class CombatDisplayService {
         clientBridge.forEachSeenPlayer(target, viewer -> clientBridge.sendDamageDisplay(viewer, configId, amount, target));
     }
 }
+
 
 
 

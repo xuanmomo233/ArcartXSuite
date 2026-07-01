@@ -25,10 +25,12 @@ import xuanmo.arcartxsuite.entitytracker.boss.config.BossDefinition;
 import xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration;
 import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
 import xuanmo.arcartxsuite.api.combat.EntityCombatMetadata;
+import java.util.logging.Logger;
 
 public final class EntityTargetHudService implements Listener {
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final EntityTargetHudConfiguration configuration;
     private final PacketBridgeAPI bridge;
     private final List<String> uiIds;
@@ -40,12 +42,14 @@ public final class EntityTargetHudService implements Listener {
 
     public EntityTargetHudService(
         JavaPlugin plugin,
+        Logger logger,
         java.util.function.Supplier<xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration> bossConfigurationProvider,
         EntityTargetHudConfiguration configuration,
         PacketBridgeAPI bridge,
         List<String> uiIds
     ) {
         this.plugin = plugin;
+        this.logger = logger;
         this.bossConfigurationProvider = bossConfigurationProvider;
         this.configuration = configuration;
         this.bridge = bridge;
@@ -211,7 +215,7 @@ public final class EntityTargetHudService implements Listener {
         if (!configuration.debug()) {
             return;
         }
-        plugin.getLogger().info(
+        this.logger.info(
             "EntityTracker target-hud 发包 -> player="
                 + player.getName()
                 + " | handler="
@@ -249,6 +253,7 @@ public final class EntityTargetHudService implements Listener {
     private record TrackedTarget(UUID targetUuid, long lastHitAtMillis) {
     }
 }
+
 
 
 

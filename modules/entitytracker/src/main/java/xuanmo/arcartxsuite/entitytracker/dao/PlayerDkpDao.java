@@ -1,6 +1,5 @@
 package xuanmo.arcartxsuite.entitytracker.dao;
 
-import org.bukkit.plugin.java.JavaPlugin;
 
 import javax.sql.DataSource;
 import java.sql.*;
@@ -14,9 +13,9 @@ public class PlayerDkpDao {
     private final DataSource dataSource;
     private final Logger logger;
 
-    public PlayerDkpDao(DataSource dataSource, JavaPlugin plugin) {
+    public PlayerDkpDao(DataSource dataSource, Logger logger) {
         this.dataSource = dataSource;
-        this.logger = plugin.getLogger();
+        this.logger = logger;
     }
 
     /**
@@ -163,4 +162,6 @@ public class PlayerDkpDao {
         return 0;
     }
 }
+
+
 

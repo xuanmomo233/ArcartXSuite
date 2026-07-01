@@ -26,11 +26,12 @@ public class RankingRewardCommand {
     public RankingRewardCommand(RankingRewardService rewardService, 
                                RankingRewardScheduler scheduler, 
                                JavaPlugin plugin,
-                               MessageProvider messages) {
-        this.logger = plugin.getLogger();
+                               Logger logger,
+                                MessageProvider messages) {
         this.rewardService = rewardService;
         this.scheduler = scheduler;
         this.plugin = plugin;
+        this.logger = logger;
         this.messages = messages;
     }
 
@@ -203,4 +204,6 @@ public class RankingRewardCommand {
         }
     }
 }
+
+
 

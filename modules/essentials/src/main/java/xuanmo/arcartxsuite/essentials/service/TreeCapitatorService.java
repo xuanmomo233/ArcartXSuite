@@ -22,6 +22,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.configuration.ConfigurationSection;
+import java.util.logging.Logger;
 
 /**
  * 一键砍树服务 (TreeCapitator)。
@@ -35,6 +36,7 @@ public final class TreeCapitatorService implements Listener {
     };
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final boolean enabled;
     private final String permission;
     private final int maxBlocks;
@@ -46,8 +48,10 @@ public final class TreeCapitatorService implements Listener {
     private final int leafRadius;
     private final String treeFelledMsg;
 
-    public TreeCapitatorService(JavaPlugin plugin, ConfigurationSection section, String treeFelledMsg) {
+    public TreeCapitatorService(JavaPlugin plugin,
+        Logger logger, ConfigurationSection section, String treeFelledMsg) {
         this.plugin = plugin;
+        this.logger = logger;
         this.treeFelledMsg = treeFelledMsg;
 
         this.enabled = section.getBoolean("enabled", true);
@@ -192,3 +196,4 @@ public final class TreeCapitatorService implements Listener {
             || material == Material.DIAMOND_AXE || material == Material.NETHERITE_AXE;
     }
 }
+

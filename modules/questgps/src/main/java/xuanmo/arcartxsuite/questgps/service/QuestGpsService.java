@@ -42,6 +42,7 @@ import xuanmo.arcartxsuite.questgps.chemdah.ChemdahTrackerBridge;
 import xuanmo.arcartxsuite.questgps.chemdah.QuestGpsOverlayValidator;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
+import java.util.logging.Logger;
 
 public final class QuestGpsService implements Listener {
 
@@ -54,6 +55,7 @@ public final class QuestGpsService implements Listener {
     private static final String MAP_SOURCE = "questgps";
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final PacketGuardAPI packetGuard;
     private final Supplier<MapNavigable> mapNavigableProvider;
     private final Supplier<SubtitlePlayable> subtitlePlayableProvider;
@@ -77,6 +79,7 @@ public final class QuestGpsService implements Listener {
 
     public QuestGpsService(
         JavaPlugin plugin,
+        Logger logger,
         PacketGuardAPI packetGuard,
         QuestGpsModuleConfiguration configuration,
         PacketBridgeAPI bridge,
@@ -93,6 +96,7 @@ public final class QuestGpsService implements Listener {
         xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI npcBridge
     ) {
         this.plugin = plugin;
+        this.logger = logger;
         this.packetGuard = packetGuard;
         this.mapNavigableProvider = mapNavigableProvider == null ? () -> null : mapNavigableProvider;
         this.subtitlePlayableProvider = subtitlePlayableProvider == null ? () -> null : subtitlePlayableProvider;
@@ -104,15 +108,16 @@ public final class QuestGpsService implements Listener {
         this.guideUiIds = guideUiIds;
         this.rewardResolver = new QuestGpsRewardPreviewResolver(
             plugin,
+            this.logger,
             titleConfigurationProvider,
             itemStack -> itemStackBridge == null ? java.util.Optional.empty() : itemStackBridge.itemToJson(itemStack),
             itemSourceRegistry
         );
-        ChemdahMetadataReader metadataReader = new ChemdahMetadataReader(plugin.getLogger());
-        ChemdahRewardReader rewardReader = new ChemdahRewardReader(plugin.getLogger(), rewardResolver);
-        ChemdahTrackerBridge trackerBridge = new ChemdahTrackerBridge(plugin.getLogger());
+        ChemdahMetadataReader metadataReader = new ChemdahMetadataReader(this.logger);
+        ChemdahRewardReader rewardReader = new ChemdahRewardReader(this.logger, rewardResolver);
+        ChemdahTrackerBridge trackerBridge = new ChemdahTrackerBridge(this.logger);
         this.chemdahBootstrap = new ChemdahIntegrationBootstrap(
-            plugin.getLogger(),
+            this.logger,
             configuration,
             metadataReader,
             rewardReader,
@@ -120,11 +125,11 @@ public final class QuestGpsService implements Listener {
         );
         this.navigationService = new QuestGpsNavigationService(plugin, configuration, waypointBridge, npcBridge, trackerBridge);
         this.categoryResolver = new ChemdahCategoryResolver(
-            plugin.getLogger(),
+            this.logger,
             configuration.categoryDefaults(),
             configuration.categoryRegistry()
         );
-        this.questDiscovery = new ChemdahQuestDiscovery(plugin.getLogger(), categoryResolver);
+        this.questDiscovery = new ChemdahQuestDiscovery(this.logger, categoryResolver);
         this.presentationService = new QuestGpsPresentationService(
             configuration,
             questDiscovery,
@@ -133,7 +138,7 @@ public final class QuestGpsService implements Listener {
             rewardReader,
             navigationService
         );
-        this.overlayValidator = new QuestGpsOverlayValidator(plugin.getLogger(), configuration, categoryResolver);
+        this.overlayValidator = new QuestGpsOverlayValidator(this.logger, configuration, categoryResolver);
         this.uiPacketHandler = new QuestGpsUiPacketHandler(this, configuration.client().packetId());
     }
 
@@ -276,7 +281,7 @@ public final class QuestGpsService implements Listener {
         template.acceptTo(profile).whenComplete((result, throwable) -> Bukkit.getScheduler().runTask(plugin, () -> {
             if (throwable != null) {
                 player.sendMessage(PREFIX + ChatColor.RED + "接取任务失败，请检查控制台。");
-                plugin.getLogger().log(Level.WARNING, "QuestGPS: 接取任务失败: " + definition.id(), throwable);
+                this.logger.log(Level.WARNING, "QuestGPS: 接取任务失败: " + definition.id(), throwable);
                 refreshViewer(player);
                 return;
             }
@@ -315,7 +320,7 @@ public final class QuestGpsService implements Listener {
             if (throwable != null || success == null || !success) {
                 player.sendMessage(PREFIX + ChatColor.RED + "放弃任务失败。");
                 if (throwable != null) {
-                    plugin.getLogger().log(Level.WARNING, "QuestGPS 放弃任务失败: " + definition.id(), throwable);
+                    this.logger.log(Level.WARNING, "QuestGPS 放弃任务失败: " + definition.id(), throwable);
                 }
                 refreshViewer(player);
                 return;
@@ -465,7 +470,7 @@ public final class QuestGpsService implements Listener {
             );
             chemdahEventListeners.add(listener);
         } catch (ReflectiveOperationException exception) {
-            plugin.getLogger().warning("QuestGPS: 注册 Chemdah 重载事件失败: " + exception.getMessage());
+            this.logger.warning("QuestGPS: 注册 Chemdah 重载事件失败: " + exception.getMessage());
         }
     }
 
@@ -505,7 +510,7 @@ public final class QuestGpsService implements Listener {
             );
             chemdahEventListeners.add(listener);
         } catch (ReflectiveOperationException exception) {
-            plugin.getLogger().warning("QuestGPS: 注册 Chemdah 任务事件失败(" + className + "): " + exception.getMessage());
+            this.logger.warning("QuestGPS: 注册 Chemdah 任务事件失败(" + className + "): " + exception.getMessage());
         }
     }
 
@@ -520,7 +525,7 @@ public final class QuestGpsService implements Listener {
     ) {
         if (!expectedEventClass.isInstance(event)) {
             if (configuration.debug()) {
-                plugin.getLogger().fine(
+                this.logger.fine(
                     "QuestGPS: 忽略非匹配 Chemdah 任务事件: expected="
                         + expectedEventClass.getName()
                         + ", actual="
@@ -550,7 +555,7 @@ public final class QuestGpsService implements Listener {
             }
             refreshByProfile(profile);
         } catch (ReflectiveOperationException | RuntimeException exception) {
-            plugin.getLogger().warning("QuestGPS: 处理 Chemdah 任务事件失败: " + exception.getMessage());
+            this.logger.warning("QuestGPS: 处理 Chemdah 任务事件失败: " + exception.getMessage());
         }
     }
 
@@ -828,4 +833,6 @@ public final class QuestGpsService implements Listener {
         }
     }
 }
+
+
 

@@ -52,7 +52,7 @@ public final class RgbModule extends AbstractAXSModule {
         }
         var yaml = YamlConfiguration.loadConfiguration(configFile);
         String entriesDirRelative = yaml.getString("entries-directory", "entries");
-        File entriesDirectory = new File(context.dataFolder(), entriesDirRelative);
+        File entriesDirectory = new File(dataFolder, entriesDirRelative);
         if (!entriesDirectory.exists()) {
             entriesDirectory.mkdirs();
         }
@@ -60,18 +60,18 @@ public final class RgbModule extends AbstractAXSModule {
         if (existing == null || existing.length == 0) {
             File defaultEntries = new File(entriesDirectory, "default.yml");
             if (!defaultEntries.exists()) {
-                context.exportResource("entries/default.yml", defaultEntries, false);
+                exportResource("entries/default.yml", defaultEntries, false);
             }
         }
-        configuration = ArcartRgbModuleConfiguration.load(yaml, context.logger(), entriesDirectory);
+        configuration = ArcartRgbModuleConfiguration.load(yaml, logger, entriesDirectory);
     }
 
     @Override
     protected void startService() throws Exception {
-        service = new ArcartRgbService(configuration, context.logger(), (player, text) ->
-            context.placeholderResolver().applyPlaceholders(player, text));
+        service = new ArcartRgbService(configuration, logger, (player, text) ->
+            placeholderResolver.applyPlaceholders(player, text));
 
-        context.logger().fine(
+        logger.fine(
             "ArcartRGB 模块已载入，条目数: "
                 + service.activeEntryCount() + "/" + service.entryCount()
         );
@@ -91,7 +91,7 @@ public final class RgbModule extends AbstractAXSModule {
         if (service == null) {
             return null;
         }
-        return new ArcartRgbPlaceholderExpansion(context.plugin(), service);
+        return new ArcartRgbPlaceholderExpansion(plugin, service);
     }
 
     public ArcartRgbService getService() {
@@ -102,4 +102,5 @@ public final class RgbModule extends AbstractAXSModule {
         return configuration;
     }
 }
+
 

@@ -49,6 +49,7 @@ import xuanmo.arcartxsuite.loginview.security.LoginViewPasswordHasher;
 import xuanmo.arcartxsuite.loginview.storage.LoginViewAccount;
 import xuanmo.arcartxsuite.loginview.storage.LoginViewRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import java.util.logging.Logger;
 
 public final class LoginViewService implements Listener {
 
@@ -61,6 +62,7 @@ public final class LoginViewService implements Listener {
         .withZone(ZoneId.systemDefault());
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private LoginViewModuleConfiguration configuration;
     private final LoginViewRepository repository;
     private final PacketBridgeAPI packetBridge;
@@ -80,6 +82,7 @@ public final class LoginViewService implements Listener {
 
     public LoginViewService(
         JavaPlugin plugin,
+        Logger logger,
         LoginViewModuleConfiguration configuration,
         LoginViewRepository repository,
         PacketBridgeAPI packetBridge,
@@ -90,6 +93,7 @@ public final class LoginViewService implements Listener {
         String uiId
     ) {
         this.plugin = plugin;
+        this.logger = logger;
         this.configuration = configuration;
         this.repository = repository;
         this.packetBridge = packetBridge;
@@ -117,13 +121,13 @@ public final class LoginViewService implements Listener {
     public void start() throws SQLException {
         repository.initialize();
         if (configuration.authMode() == AuthMode.AUTHME && !authMeBridge.initialize()) {
-            plugin.getLogger().warning("LoginView 配置为 AuthMe 兼容模式，但未检测到可用 AuthMe 插件，模块不加载。");
+            this.logger.warning("LoginView 配置为 AuthMe 兼容模式，但未检测到可用 AuthMe 插件，模块不加载。");
             repository.close();
             return;
         }
         boolean authlibAgentLoaded = accountTypeService.isAuthlibInjectorLoaded();
         if (authlibAgentLoaded) {
-            plugin.getLogger().info("LoginView: authlib-injector 已检测到，正版/LittleSkin 免登录由 AccountTypeService 管理。");
+            this.logger.info("LoginView: authlib-injector 已检测到，正版/LittleSkin 免登录由 AccountTypeService 管理。");
         }
         Bukkit.getPluginManager().registerEvents(this, plugin);
         started = true;
@@ -136,7 +140,7 @@ public final class LoginViewService implements Listener {
             try {
                 repository.deleteExpiredSessions();
             } catch (SQLException e) {
-                plugin.getLogger().warning("LoginView session 清理失败: " + e.getMessage());
+                this.logger.warning("LoginView session 清理失败: " + e.getMessage());
             }
         }, cleanupInterval, cleanupInterval);
     }
@@ -480,7 +484,7 @@ public final class LoginViewService implements Listener {
                 repository.deleteSession(uuid);
             }
         } catch (SQLException e) {
-            plugin.getLogger().warning("LoginView session 查询失败: " + e.getMessage());
+            this.logger.warning("LoginView session 查询失败: " + e.getMessage());
         }
         return false;
     }
@@ -504,7 +508,7 @@ public final class LoginViewService implements Listener {
             try {
                 repository.createOrUpdateSession(player.getUniqueId(), player.getName(), playerAddress(player), expiresAt);
             } catch (SQLException e) {
-                plugin.getLogger().warning("LoginView session 写入失败: " + e.getMessage());
+                this.logger.warning("LoginView session 写入失败: " + e.getMessage());
             }
         }
     }
@@ -516,7 +520,7 @@ public final class LoginViewService implements Listener {
         String worldName = configuration.spawnOnLogin().world();
         World targetWorld = Bukkit.getWorld(worldName);
         if (targetWorld == null) {
-            plugin.getLogger().warning("LoginView spawn-on-login 配置的世界 '" + worldName + "' 不存在，传送失败。");
+            this.logger.warning("LoginView spawn-on-login 配置的世界 '" + worldName + "' 不存在，传送失败。");
             return;
         }
         Location location = new Location(
@@ -528,7 +532,7 @@ public final class LoginViewService implements Listener {
             configuration.spawnOnLogin().pitch()
         );
         if (!player.teleport(location)) {
-            plugin.getLogger().warning("LoginView 传送玩家 " + player.getName() + " 到出生点失败。");
+            this.logger.warning("LoginView 传送玩家 " + player.getName() + " 到出生点失败。");
         }
     }
 
@@ -744,4 +748,5 @@ public final class LoginViewService implements Listener {
         return player.getAddress().getAddress().getHostAddress();
     }
 }
+
 

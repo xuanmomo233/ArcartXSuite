@@ -26,13 +26,14 @@ public final class QuestGpsRewardPreviewResolver {
 
     public QuestGpsRewardPreviewResolver(
         JavaPlugin plugin,
+        Logger logger,
         Supplier<TitleConfigQueryable> titleConfigurationProvider,
         Function<ItemStack, Optional<String>> itemJsonSerializer,
         ItemSourceRegistry itemSourceRegistry
     ) {
         this.plugin = plugin;
         this.titleConfigurationProvider = titleConfigurationProvider == null ? () -> null : titleConfigurationProvider;
-        this.logger = plugin.getLogger();
+        this.logger = logger;
         this.itemJsonSerializer = itemJsonSerializer == null ? item -> Optional.empty() : itemJsonSerializer;
         this.itemSourceRegistry = itemSourceRegistry;
     }
@@ -247,4 +248,6 @@ public final class QuestGpsRewardPreviewResolver {
     ) {
     }
 }
+
+
 

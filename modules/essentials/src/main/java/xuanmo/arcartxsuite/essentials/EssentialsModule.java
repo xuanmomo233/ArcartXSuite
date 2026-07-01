@@ -135,28 +135,28 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
             throw new IllegalStateException("ArcartXEssentials.yml 配置文件缺失");
         }
         rawYaml = YamlConfiguration.loadConfiguration(configFile);
-        configuration = EssentialsConfiguration.load(rawYaml, context.logger());
+        configuration = EssentialsConfiguration.load(rawYaml, logger);
     }
 
     @Override
     protected void startService() throws Exception {
         repository = new EssentialsRepository(
-            context.dataFolder(),
-            configuration.storage(), context.logger());
+            dataFolder,
+            configuration.storage(), logger);
         repository.initialize();
 
-        playerService = new PlayerManagementService(context.plugin(), configuration,
-            () -> context.getCapability(TabRefreshable.class));
+        playerService = new PlayerManagementService(plugin, logger, configuration,
+            () -> getCapability(TabRefreshable.class));
         playerService.start();
 
         teleportService = new TeleportService(
-            context.plugin(), configuration, repository, playerService, context.logger());
+            plugin, logger, configuration, repository, playerService, logger);
         teleportService.start();
 
         // 一键砍树服务
         var treeSection = rawYaml.getConfigurationSection("tree-capitator");
         if (treeSection != null) {
-            treeCapitatorService = new TreeCapitatorService(context.plugin(), treeSection,
+            treeCapitatorService = new TreeCapitatorService(plugin, logger, treeSection,
                 configuration.messages().treeFelled());
             treeCapitatorService.start();
         }
@@ -164,19 +164,19 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         // 背包操作服务
         var invSection = rawYaml.getConfigurationSection("inv-actions");
         if (invSection != null) {
-            inventoryActionsService = new InventoryActionsService(context.plugin(), invSection);
+            inventoryActionsService = new InventoryActionsService(plugin, logger, invSection);
             inventoryActionsService.start();
         }
 
         // 延迟获取 ChatMutable capability（Chat 模块可能后加载）
-        chatMutableSupplier = () -> context.getCapability(ChatMutable.class);
+        chatMutableSupplier = () -> getCapability(ChatMutable.class);
 
         // 注册 EssentialsQueryable capability 供 Tab/Chat 等模块查询
-        context.registerCapability(EssentialsQueryable.class, new EssentialsQueryableImpl());
+        registerCapability(EssentialsQueryable.class, new EssentialsQueryableImpl());
 
         // UI 绑定与 Packet Handler 初始化
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        PacketGuardAPI packetGuard = context.packetGuard();
+        PacketBridgeAPI packetBridge = packetBridge;
+        PacketGuardAPI packetGuard = packetGuard;
         if (packetBridge != null && packetBridge.isAvailable()) {
             UiBinding menuBinding = registerModuleUi(
                 EssentialsMenuPacketHandler.UI_FILE_PATH, null, true
@@ -187,20 +187,20 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
 
             if (menuBinding.registeredUiId() != null) {
                 menuPacketHandler = new EssentialsMenuPacketHandler(
-                    context.plugin(), packetBridge, packetGuard,
+                    plugin, packetBridge, packetGuard,
                     playerService, teleportService, repository,
                     inventoryActionsService, menuBinding.runtimeUiId());
             }
             if (adminBinding.registeredUiId() != null) {
                 adminPacketHandler = new EssentialsAdminPacketHandler(
-                    context.plugin(), packetBridge, packetGuard,
+                    plugin, packetBridge, packetGuard,
                     playerService, teleportService, repository,
                     adminBinding.runtimeUiId());
             }
         }
 
         // 注册 /ess 独立缩写命令，转发给 essentials 子命令处理
-        context.registerCommand("ess", new org.bukkit.command.TabExecutor() {
+        registerCommand("ess", new org.bukkit.command.TabExecutor() {
             @Override
             public boolean onCommand(@NotNull org.bukkit.command.CommandSender sender,
                     @NotNull org.bukkit.command.Command command,
@@ -223,20 +223,20 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         });
 
         EssentialsRepository essRepo = repository;
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "essentials"; }
                 @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
                     try { return essRepo.deletePlayerData(playerUuid); }
-                    catch (Exception e) { context.logger().warning("Essentials purge 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("Essentials purge 失败: " + e.getMessage()); return -1; }
                 }
                 @Override public int purgeAllPlayerData() {
                     try { return essRepo.deleteAllPlayerData(); }
-                    catch (Exception e) { context.logger().warning("Essentials purgeAll 失败: " + e.getMessage()); return -1; }
+                    catch (Exception e) { logger.warning("Essentials purgeAll 失败: " + e.getMessage()); return -1; }
                 }
             });
 
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
+        registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
             new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
                 @Override public @NotNull String moduleId() { return "essentials"; }
                 @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
@@ -252,10 +252,10 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
             configuration, playerService, teleportService, repository,
             inventoryActionsService, chatMutableSupplier,
             menuPacketHandler, adminPacketHandler,
-            context.plugin(), this::messages, poseMonitorTasks
+            plugin, this::messages, poseMonitorTasks
         );
 
-        context.logger().info("Essentials 模块已启动。");
+        logger.info("Essentials 模块已启动。");
     }
 
     @Override
@@ -329,7 +329,7 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
 
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
-        return new EssentialsPlaceholderExpansion(context.plugin(), () -> playerService);
+        return new EssentialsPlaceholderExpansion(plugin, () -> playerService);
     }
 
     // ─── EssentialsQueryable 实现 ───
@@ -378,3 +378,5 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         }
     }
 }
+
+

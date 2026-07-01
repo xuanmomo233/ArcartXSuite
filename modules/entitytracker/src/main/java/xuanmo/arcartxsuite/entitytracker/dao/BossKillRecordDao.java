@@ -2,7 +2,6 @@ package xuanmo.arcartxsuite.entitytracker.dao;
 
 import xuanmo.arcartxsuite.entitytracker.entity.BossKillRecord;
 import xuanmo.arcartxsuite.entitytracker.entity.PlayerBossBestDamage;
-import org.bukkit.plugin.java.JavaPlugin;
 
 import javax.sql.DataSource;
 import java.sql.*;
@@ -20,9 +19,9 @@ public class BossKillRecordDao {
     private final DataSource dataSource;
     private final Logger logger;
 
-    public BossKillRecordDao(DataSource dataSource, JavaPlugin plugin) {
+    public BossKillRecordDao(DataSource dataSource, Logger logger) {
         this.dataSource = dataSource;
-        this.logger = plugin.getLogger();
+        this.logger = logger;
     }
 
     /**
@@ -266,4 +265,6 @@ public class BossKillRecordDao {
         int bossCount() { return bossIds.size(); }
     }
 }
+
+
 

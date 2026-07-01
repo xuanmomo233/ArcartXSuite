@@ -80,6 +80,7 @@ public class TitleService {
 
     public TitleService(
         JavaPlugin plugin,
+        Logger logger,
         TitleModuleConfiguration configuration,
         TitleRepository repository,
         PacketBridgeAPI bridge,
@@ -89,11 +90,12 @@ public class TitleService {
         xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge,
         WorldTextureBridgeAPI worldTextureBridge
     ) {
-        this(plugin, configuration, repository, bridge, packetGuard, tabRefreshableProvider, uiResourceExporter, Clock.systemUTC(), attributeBridge, worldTextureBridge);
+        this(plugin, logger, configuration, repository, bridge, packetGuard, tabRefreshableProvider, uiResourceExporter, Clock.systemUTC(), attributeBridge, worldTextureBridge);
     }
 
     public TitleService(
         JavaPlugin plugin,
+        Logger logger,
         TitleModuleConfiguration configuration,
         TitleRepository repository,
         PacketBridgeAPI bridge,
@@ -112,7 +114,7 @@ public class TitleService {
         this.tabRefreshableProvider = tabRefreshableProvider;
         this.uiResourceExporter = uiResourceExporter;
         this.clock = clock;
-        this.logger = plugin.getLogger();
+        this.logger = logger;
         this.attributePlusService = new TitleAttributePlusService(plugin, configuration.attributePlus(), attributeBridge.attributePlus());
         this.mythicLibService = new TitleMythicLibService(plugin, configuration.mythicLib(), attributeBridge.mythicLib());
         this.craneAttributeService = new TitleCraneAttributeService(plugin, configuration.craneAttribute(), attributeBridge.craneAttribute());
@@ -882,4 +884,7 @@ public class TitleService {
         }
     }
 }
+
+
+
 

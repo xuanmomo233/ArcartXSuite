@@ -22,6 +22,7 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerToggleFlightEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import java.util.logging.Logger;
 
 /**
  * 世界规则服务 — 按世界限制飞行、活塞、交互。
@@ -29,14 +30,17 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class WorldRulesService implements Listener {
 
     private final JavaPlugin plugin;
+    private final Logger logger;
     private final Set<String> noFlyWorlds;
     private final String noFlyAction;
     private final Set<String> noPistonWorlds;
     private final Map<String, Set<Material>> disabledInteractions;
     private final String flyDeniedMessage;
 
-    public WorldRulesService(JavaPlugin plugin, ConfigurationSection section) {
+    public WorldRulesService(JavaPlugin plugin,
+        Logger logger, ConfigurationSection section) {
         this.plugin = plugin;
+        this.logger = logger;
         this.flyDeniedMessage = section.getString("no-fly-message", "&c此世界禁止飞行。");
 
         this.noFlyWorlds = new HashSet<>(section.getStringList("no-fly-worlds"));
@@ -138,3 +142,4 @@ public final class WorldRulesService implements Listener {
         }
     }
 }
+

@@ -47,13 +47,14 @@ public class RankingRewardService {
         DataSource dataSource,
         RewardActionExecutor actionExecutor,
         JavaPlugin plugin,
+        Logger logger,
         java.util.function.Supplier<PluginConfiguration> configurationSupplier
     ) {
-        this.logger = plugin.getLogger();
         this.recordDao = new RankingRewardRecordDao(dataSource, plugin);
         this.bestDamageDao = new PlayerBossBestDamageDao(dataSource, plugin);
         this.actionExecutor = actionExecutor;
         this.plugin = plugin;
+        this.logger = logger;
         this.configurationSupplier = configurationSupplier;
     }
 
@@ -325,4 +326,6 @@ public class RankingRewardService {
         });
     }
 }
+
+
 

@@ -141,7 +141,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         ConfigurationSection bossSection = yaml.getConfigurationSection("boss");
         String bossesDirRelative = bossSection != null
             ? bossSection.getString("bosses-directory", "bosses") : "bosses";
-        File bossesDirectory = new File(context.dataFolder(), bossesDirRelative);
+        File bossesDirectory = new File(dataFolder, bossesDirRelative);
         ensureBossDefaults(bossesDirRelative);
         configuration = PluginConfiguration.from(bossSection, bossesDirectory);
         targetConfiguration = EntityTargetHudConfiguration.load(yaml.getConfigurationSection("attack-target"));
@@ -150,7 +150,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     }
 
     private void ensureBossDefaults(String bossesRelative) {
-        File bossesDir = new File(context.dataFolder(), bossesRelative);
+        File bossesDir = new File(dataFolder, bossesRelative);
         if (!bossesDir.exists()) {
             bossesDir.mkdirs();
         }
@@ -160,20 +160,20 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         }
         File target = new File(bossesDir, "ExampleBoss.yml");
         if (!target.exists()) {
-            context.exportResource("bosses/ExampleBoss.yml", target, false);
+            exportResource("bosses/ExampleBoss.yml", target, false);
         }
     }
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = context.packetBridge();
+        PacketBridgeAPI packetBridge = packetBridge;
 
         initializeRepositoryIfNeeded();
         initializePersistenceServices();
 
         // Boss tracker depends on MythicMobs/MythicBukkit. If it is absent, keep the module alive
         // and only run the generic attack-target HUD below.
-        boolean mythicAvailable = context.hasPlugin("MythicMobs") || context.hasPlugin("MythicBukkit");
+        boolean mythicAvailable = hasPlugin("MythicMobs") || hasPlugin("MythicBukkit");
         if (mythicAvailable) {
             List<String> bossUiIdCandidates = configuration.uiIds();
             List<String> resolvedBossUiIds = new java.util.ArrayList<>();
@@ -193,18 +193,18 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             }
             bossRuntimeUiIds = List.copyOf(resolvedBossUiIds);
 
-            ServerPlatform platform = ServerPlatform.detect(context.plugin().getServer());
+            ServerPlatform platform = ServerPlatform.detect(plugin.getServer());
             bossService = new BossTrackerService(
-                context.plugin(), configuration, packetBridge, bossRuntimeUiIds,
-                platform, null, () -> context.getCapability(MailDispatchable.class),
-                context.itemSourceRegistry(), context.attributeBridge(),
-                crossServerService, killRecordingService, context.placeholderResolver()
+                plugin, logger, configuration, packetBridge, bossRuntimeUiIds,
+                platform, null, () -> getCapability(MailDispatchable.class),
+                itemSourceRegistry, attributeBridge,
+                crossServerService, killRecordingService, placeholderResolver
             );
             bossService.start();
             adminCommand = new EntityTrackerAdminCommand(() -> bossService, messages());
         } else {
             bossRuntimeUiIds = List.of();
-            context.logger().warning("未检测到 MythicMobs/MythicBukkit，EntityTracker Boss 追踪已跳过，普通攻击目标 HUD 仍可使用。");
+            logger.warning("未检测到 MythicMobs/MythicBukkit，EntityTracker Boss 追踪已跳过，普通攻击目标 HUD 仍可使用。");
         }
 
         // Target HUD
@@ -225,7 +225,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             targetRuntimeUiIds = List.copyOf(resolvedTargetUiIds);
             PluginConfiguration bossConf = configuration;
             targetService = new EntityTargetHudService(
-                context.plugin(), () -> bossConf, targetConfiguration, packetBridge, targetRuntimeUiIds
+                plugin, logger, () -> bossConf, targetConfiguration, packetBridge, targetRuntimeUiIds
             );
             targetService.start();
         }
@@ -235,19 +235,19 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
 
         // 注册标准 capability
         if (repository != null) {
-            context.registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
+            registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
                 new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                     @Override public @NotNull String moduleId() { return "entitytracker"; }
                     @Override public int purgePlayerData(@NotNull java.util.UUID playerUuid) {
                         try { return repository.deletePlayerData(playerUuid); }
-                        catch (Exception e) { context.logger().warning("EntityTracker purge 失败: " + e.getMessage()); return -1; }
+                        catch (Exception e) { logger.warning("EntityTracker purge 失败: " + e.getMessage()); return -1; }
                     }
                     @Override public int purgeAllPlayerData() {
                         try { return repository.deleteAllPlayerData(); }
-                        catch (Exception e) { context.logger().warning("EntityTracker purgeAll 失败: " + e.getMessage()); return -1; }
+                        catch (Exception e) { logger.warning("EntityTracker purgeAll 失败: " + e.getMessage()); return -1; }
                     }
                 });
-            context.registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
+            registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
                 new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
                     @Override public @NotNull String moduleId() { return "entitytracker"; }
                     @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
@@ -260,7 +260,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                 });
         }
 
-        context.logger().fine(
+        logger.fine(
             "EntityTracker 模块已载入，bosses=" + configuration.getTrackedBossCount()
                 + " | boss-ui=" + bossRuntimeUiIds
                 + " | target-ui=" + targetRuntimeUiIds
@@ -278,21 +278,21 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         }
         if (newFeaturesSettings.dropAllocation().enabled()) {
             dropAllocationService = new DropAllocationService(
-                context.plugin(), newFeaturesSettings.dropAllocation(), ds
+                plugin, logger, newFeaturesSettings.dropAllocation(), ds
             );
         }
         boolean crossServerRanking = newFeaturesSettings.crossServerRanking().enabled()
             && crossServerChannelConfig.enabled();
         if (crossServerRanking) {
             crossServerService = new EntityTrackerCrossServerService(
-                context.plugin(), context.crossServer(), crossServerChannelConfig, ds
+                plugin, logger, crossServer, crossServerChannelConfig, ds
             );
             rankingCacheService = new CrossServerRankingCacheService(
-                context.plugin(),
+                plugin, logger,
                 newFeaturesSettings.crossServerRanking(),
                 ds,
                 () -> configuration,
-                () -> context.crossServer().nodeId()
+                () -> crossServer.nodeId()
             );
             crossServerService.start();
             rankingCacheService.start();
@@ -301,15 +301,15 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             || newFeaturesSettings.dropAllocation().enabled()
             || crossServerRanking) {
             killRecordingService = new BossKillRecordingService(
-                context.plugin(),
+                plugin, logger,
                 newFeaturesSettings,
                 ds,
                 dropAllocationService,
                 crossServerService,
                 rankingCacheService,
-                () -> context.crossServer().nodeId()
+                () -> crossServer.nodeId()
             );
-            killRecordingService.setEventBusProvider(() -> context.getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+            killRecordingService.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
             killRecordingService.start();
             if (crossServerService != null) {
                 crossServerService.attachKillRecording(killRecordingService);
@@ -363,11 +363,11 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
         return new EntityTrackerPlaceholderExpansion(
-            context.plugin(),
+            plugin,
             () -> configuration,
             () -> bossService,
             () -> bossRuntimeUiIds.isEmpty() ? "" : bossRuntimeUiIds.get(0),
-            () -> context.packetBridge()
+            () -> packetBridge
         );
     }
 
@@ -385,45 +385,45 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     private void initializeRewardSystem() {
         try {
             if (moduleYaml == null) {
-                context.logger().info("排行榜奖励系统：模块配置尚未加载，跳过初始化");
+                logger.info("排行榜奖励系统：模块配置尚未加载，跳过初始化");
                 return;
             }
 
             ConfigurationSection rewardSection = moduleYaml.getConfigurationSection("new-features.ranking-rewards");
             if (rewardSection == null) {
-                context.logger().info("排行榜奖励系统未配置，跳过初始化");
+                logger.info("排行榜奖励系统未配置，跳过初始化");
                 return;
             }
 
             javax.sql.DataSource ds = dataSource();
             if (ds == null) {
-                context.logger().severe("排行榜奖励系统数据库初始化失败");
+                logger.severe("排行榜奖励系统数据库初始化失败");
                 return;
             }
 
             // 创建通用奖励执行器
             java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailSupplier =
-                () -> context.getCapability(MailDispatchable.class);
+                () -> getCapability(MailDispatchable.class);
             java.util.function.BiConsumer<String, org.bukkit.entity.Player> signalDispatcher =
                 (signal, player) -> {}; // 待接入实际信号派发器
             RewardActionExecutor actionExecutor = new RewardActionExecutor(
-                context.plugin(), mailSupplier, signalDispatcher, context.itemSourceRegistry(), context.placeholderResolver()
+                plugin, mailSupplier, signalDispatcher, itemSourceRegistry, placeholderResolver
             );
 
             // 创建服务实例
             rewardService = new RankingRewardService(
-                ds, actionExecutor, context.plugin(), () -> configuration
+                ds, actionExecutor, plugin, logger, () -> configuration
             );
-            rewardScheduler = new RankingRewardScheduler(rewardService, context.plugin());
-            rewardCommand = new RankingRewardCommand(rewardService, rewardScheduler, context.plugin(), messages());
+            rewardScheduler = new RankingRewardScheduler(rewardService, plugin, logger);
+            rewardCommand = new RankingRewardCommand(rewardService, rewardScheduler, plugin, logger, messages());
 
             // 初始化调度器（传入主配置）
             rewardScheduler.initialize(moduleYaml);
 
-            context.logger().info("排行榜奖励系统初始化完成");
+            logger.info("排行榜奖励系统初始化完成");
 
         } catch (Exception e) {
-            context.logger().severe("排行榜奖励系统初始化失败: " + e.getMessage());
+            logger.severe("排行榜奖励系统初始化失败: " + e.getMessage());
             // 不抛出异常，允许模块继续运行其他功能
         }
     }
@@ -439,10 +439,10 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         }
         try {
             repository = new JdbcEntityTrackerRepository(
-                context.dataFolder(), moduleYaml, context.logger());
+                dataFolder, moduleYaml, logger);
             repository.initialize();
         } catch (Exception e) {
-            context.logger().severe("EntityTracker 数据库初始化失败: " + e.getMessage());
+            logger.severe("EntityTracker 数据库初始化失败: " + e.getMessage());
         }
     }
 
@@ -519,4 +519,8 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
+
+
+
 

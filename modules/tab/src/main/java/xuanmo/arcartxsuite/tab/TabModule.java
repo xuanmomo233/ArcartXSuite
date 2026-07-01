@@ -103,13 +103,13 @@ public final class TabModule extends AbstractAXSModule {
         }
         var yaml = YamlConfiguration.loadConfiguration(configFile);
         String tabsDirRelative = yaml.getString("tabs-directory", "tabs");
-        File tabsDirectory = new File(context.dataFolder(), tabsDirRelative);
+        File tabsDirectory = new File(dataFolder, tabsDirRelative);
         ensureTabDefaults(tabsDirRelative);
-        configuration = TabModuleConfiguration.load(yaml, tabsDirectory, context.logger());
+        configuration = TabModuleConfiguration.load(yaml, tabsDirectory, logger);
     }
 
     private void ensureTabDefaults(String tabsRelative) {
-        File tabsDir = new File(context.dataFolder(), tabsRelative);
+        File tabsDir = new File(dataFolder, tabsRelative);
         if (!tabsDir.exists()) {
             tabsDir.mkdirs();
         }
@@ -120,7 +120,7 @@ public final class TabModule extends AbstractAXSModule {
         for (String tab : new String[]{"online-tab.yml", "demo.yml", "arena.yml"}) {
             File target = new File(tabsDir, tab);
             if (!target.exists()) {
-                context.exportResource("tabs/" + tab, target, false);
+                exportResource("tabs/" + tab, target, false);
             }
         }
     }
@@ -128,33 +128,33 @@ public final class TabModule extends AbstractAXSModule {
     @Override
     protected void startService() throws Exception {
         Map<String, UiBinding> tabUiBindings = registerTabUis();
-        PacketBridgeAPI packetBridge = context.packetBridge();
-        PacketGuardAPI packetGuard = context.packetGuard();
-        service = new TabSyncService(context.plugin(), configuration, packetBridge, packetGuard, context.crossServer(), context.placeholderResolver());
+        PacketBridgeAPI packetBridge = packetBridge;
+        PacketGuardAPI packetGuard = packetGuard;
+        service = new TabSyncService(plugin, logger, configuration, packetBridge, packetGuard, crossServer, placeholderResolver);
         service.start();
 
         // Snapshot 调试存储：plugins/ArcartXSuite/data/tab/snapshots/
         snapshotStore = new TabSnapshotStore(
-            new File(context.pluginDataFolder(), "data/tab/snapshots").toPath()
+            new File(pluginDataFolder, "data/tab/snapshots").toPath()
         );
 
         // 注册 PVP 监听器（始终注册，是否生效由 settings.style.pvp-highlight.enabled 控制）
-        context.plugin().getServer().getPluginManager()
-            .registerEvents(new TabPvpListener(service), context.plugin());
+        plugin.getServer().getPluginManager()
+            .registerEvents(new TabPvpListener(service), plugin);
 
         // 注册 TabRefreshable capability，供其他模块刷新 Tab
-        context.registerCapability(xuanmo.arcartxsuite.api.capability.TabRefreshable.class, service);
+        registerCapability(xuanmo.arcartxsuite.api.capability.TabRefreshable.class, service);
 
         // 检测 PAPI 扩展状态：如果已经加载完毕就直接检测，否则注册事件监听器等待
-        if (context.hasPlugin("PlaceholderAPI")) {
+        if (hasPlugin("PlaceholderAPI")) {
             boolean ready = tryDetectPapiExpansions();
             if (!ready) {
                 org.bukkit.Bukkit.getPluginManager().registerEvents(
-                    new PapiExpansionListener(), context.plugin());
+                    new PapiExpansionListener(), plugin);
             }
         }
 
-        context.logger().fine(
+        logger.fine(
             "Tab 模块已载入，定义数量: " + configuration.definitions().size()
                 + " | UI: " + tabUiBindings.keySet()
                 + " | 轮询间隔: " + configuration.refreshIntervalTicks() + " ticks"
@@ -188,7 +188,7 @@ public final class TabModule extends AbstractAXSModule {
             return null;
         }
         return new TabPlaceholderExpansion(
-            context.plugin(),
+            plugin,
             service,
             configuration.style(),
             configuration.privacy()
@@ -205,7 +205,7 @@ public final class TabModule extends AbstractAXSModule {
         @org.bukkit.event.EventHandler
         public void onExpansionsLoaded(me.clip.placeholderapi.events.ExpansionsLoadedEvent event) {
             if (papiDetected.get()) return;
-            context.logger().info("[tab] 监听到 PAPI 全部扩展加载完成，开始检测");
+            logger.info("[tab] 监听到 PAPI 全部扩展加载完成，开始检测");
             performFinalPapiDetection();
         }
     }
@@ -236,12 +236,12 @@ public final class TabModule extends AbstractAXSModule {
             }
 
             if (hasPlayer && hasServer) {
-                context.logger().info("[tab] PAPI 扩展状态 — player: 已安装，server: 已安装");
+                logger.info("[tab] PAPI 扩展状态 — player: 已安装，server: 已安装");
                 papiDetected.set(true);
                 return true;
             }
 
-            context.logger().info("[tab] PAPI 扩展尚未全部加载，等待加载完成事件");
+            logger.info("[tab] PAPI 扩展尚未全部加载，等待加载完成事件");
             return false;
         } catch (Exception e) {
             return false;
@@ -274,24 +274,24 @@ public final class TabModule extends AbstractAXSModule {
                     hasServer = true;
                 }
             }
-            context.logger().info("[tab] PAPI 扩展状态 — player: " + (hasPlayer ? "已安装" : "未安装") + "，server: " + (hasServer ? "已安装" : "未安装"));
+            logger.info("[tab] PAPI 扩展状态 — player: " + (hasPlayer ? "已安装" : "未安装") + "，server: " + (hasServer ? "已安装" : "未安装"));
 
             if (!hasPlayer) {
-                context.logger().info("[tab] PAPI player 扩展未安装，已注册内置 fallback");
-                context.expansionRegistry().register(new TabPlayerFallbackExpansion(context.plugin()));
+                logger.info("[tab] PAPI player 扩展未安装，已注册内置 fallback");
+                expansionRegistry.register(new TabPlayerFallbackExpansion(plugin));
             }
             if (!hasServer) {
-                context.logger().info("[tab] PAPI server 扩展未安装，已注册内置 fallback");
-                context.expansionRegistry().register(new TabServerFallbackExpansion(context.plugin()));
+                logger.info("[tab] PAPI server 扩展未安装，已注册内置 fallback");
+                expansionRegistry.register(new TabServerFallbackExpansion(plugin));
             }
         } catch (Exception e) {
-            context.logger().warning("[tab] PAPI 扩展检测失败: " + e.getMessage());
+            logger.warning("[tab] PAPI 扩展检测失败: " + e.getMessage());
         }
     }
 
     private Map<String, UiBinding> registerTabUis() {
         Map<String, UiBinding> bindings = new LinkedHashMap<>();
-        xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI bridge = context.packetBridge();
+        xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI bridge = packetBridge;
         for (TabDefinition definition : configuration.definitions()) {
             if (!definition.enabled()) {
                 continue;
@@ -303,7 +303,7 @@ public final class TabModule extends AbstractAXSModule {
                     continue;
                 }
                 String fileRelative = "ui/" + uiId + ".yml";
-                File uiFile = new File(context.pluginDataFolder(), fileRelative);
+                File uiFile = new File(pluginDataFolder, fileRelative);
                 xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.UiRegistrationResult reg =
                     bridge.registerOrReloadUi(uiId, uiFile);
                 if (!reg.success()) {
@@ -317,4 +317,6 @@ public final class TabModule extends AbstractAXSModule {
         return bindings;
     }
 }
+
+
 
