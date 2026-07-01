@@ -135,6 +135,12 @@ pages:
           # glow: true                   — 附魔光效
           # skull-texture: "base64..."   — 自定义头颅材质（material 为 PLAYER_HEAD 时）
           # color: "#FF5555"             — 皮革盔甲颜色（material 为 LEATHER_* 时）
+          # --- 物品库图标（支持直接调用物品库的物品 JSON） ---
+          # source: "neigeitems"         — 物品来源 (neigeitems/mythicmobs/overture/mmoitems)
+          # id: "herb_bundle"            — 物品来源 ID
+          # mmo-type: "MATERIAL"         — MMOItems 类型（source 为 mmoitems 时）
+          # mmo-id: "HERB_ESSENCE"       — MMOItems ID（source 为 mmoitems 时）
+          # json: '{"id":"minecraft:diamond_sword","Count":1b}' — 直接提供 NBT JSON
         # 动作列表（按顺序执行）
         actions:
           - "command: /warehouse open"

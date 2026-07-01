@@ -1,4 +1,4 @@
-﻿# AXS Menu 面板 UI — 通用配置驱动菜单
+# AXS Menu 面板 UI — 通用配置驱动菜单
 # 数据流: 服务端 sendPacket(init/update) -> packetHandler -> var.* -> Observer 渲染按钮
 # 客户端回包: Packet.send('AXS_MENU', 'click', buttonId) / page / refresh / close
 ui:
@@ -33,6 +33,9 @@ ui:
         key = i.round
         mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
         mb.entryKey = key
+        if(mb['图标'] != null){
+          mb['图标'].seticon()
+        }
       }
       for(i in range(0, var.maxFooterCount)){
         key = i.round
@@ -67,6 +70,9 @@ ui:
         key = i.round
         mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
         mb.entryKey = key
+        if(mb['图标'] != null){
+          mb['图标'].seticon()
+        }
       }
       for(i in range(0, var.maxFooterCount)){
         key = i.round
@@ -354,3 +360,4 @@ controls:
                           texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
                           center: true
                           fontSize: 48
+

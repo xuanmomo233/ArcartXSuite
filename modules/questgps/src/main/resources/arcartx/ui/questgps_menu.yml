@@ -52,19 +52,25 @@ ui:
       var.qIndex = 0
       for(key in var.qKeys){
         item = val.quest_list['任务项' + var.qIndex.round()]
-        if(item != null){ item.entryKey = key }
+        if(item != null){
+          item.entryKey = key
+        }
         var.qIndex = var.qIndex + 1
       }
       while(var.qIndex < 16){
         item = val.quest_list['任务项' + var.qIndex.round()]
-        if(item != null){ item.entryKey = '' }
+        if(item != null){
+          item.entryKey = ''
+        }
         var.qIndex = var.qIndex + 1
       }
       var.tKeys = var.tasks.keys()
       var.tIndex = 0
       for(key in var.tKeys){
         item = val.task_list['目标项' + var.tIndex.round()]
-        if(item != null){ item.entryKey = key }
+        if(item != null){
+          item.entryKey = key
+        }
         var.tIndex = var.tIndex + 1
       }
       while(var.tIndex < 8){
@@ -76,12 +82,16 @@ ui:
       var.rIndex = 0
       for(key in var.rKeys){
         item = val.reward_list['奖励项' + var.rIndex.round()]
-        if(item != null){ item.entryKey = key }
+        if(item != null){
+          item.entryKey = key; if(item['奖励图标'] != null){ item['奖励图标'].seticon() }
+        }
         var.rIndex = var.rIndex + 1
       }
       while(var.rIndex < 8){
         item = val.reward_list['奖励项' + var.rIndex.round()]
-        if(item != null){ item.entryKey = '' }
+        if(item != null){
+          item.entryKey = ''
+        }
         var.rIndex = var.rIndex + 1
       }
     update: |-
@@ -118,48 +128,67 @@ ui:
       var.catIndex = 0
       for(key in var.catKeys){
         item = val.cat_list['分类项' + var.catIndex.round()]
-        if(item != null){ item.entryKey = key }
+        if(item != null){
+          item.entryKey = key
+        }
         var.catIndex = var.catIndex + 1
       }
       while(var.catIndex < 8){
         item = val.cat_list['分类项' + var.catIndex.round()]
-        if(item != null){ item.entryKey = '' }
+        if(item != null){
+          item.entryKey = ''
+        }
         var.catIndex = var.catIndex + 1
       }
       var.qKeys = var.quests.keys()
       var.qIndex = 0
       for(key in var.qKeys){
         item = val.quest_list['任务项' + var.qIndex.round()]
-        if(item != null){ item.entryKey = key }
+        if(item != null){
+          item.entryKey = key
+        }
         var.qIndex = var.qIndex + 1
       }
       while(var.qIndex < 16){
         item = val.quest_list['任务项' + var.qIndex.round()]
-        if(item != null){ item.entryKey = '' }
+        if(item != null){
+          item.entryKey = ''
+        }
         var.qIndex = var.qIndex + 1
       }
       var.tKeys = var.tasks.keys()
       var.tIndex = 0
       for(key in var.tKeys){
         item = val.task_list['目标项' + var.tIndex.round()]
-        if(item != null){ item.entryKey = key }
+        if(item != null){
+          item.entryKey = key
+        }
         var.tIndex = var.tIndex + 1
       }
       while(var.tIndex < 8){
         item = val.task_list['目标项' + var.tIndex.round()]
-        if(item != null){ item.entryKey = '' }
+        if(item != null){
+          item.entryKey = ''
+        }
         var.tIndex = var.tIndex + 1
       }
       var.rKeys = var.rewards.keys()
       var.rIndex = 0
       for(key in var.rKeys){
         item = val.reward_list['奖励项' + var.rIndex.round()]
-        if(item != null){ item.entryKey = key }
+        if(item != null){
+          item.entryKey = key
+          if(item['奖励图标'] != null){
+            item['奖励图标'].seticon()
+          }
+        }
         var.rIndex = var.rIndex + 1
       }
       while(var.rIndex < 8){
         item = val.reward_list['奖励项' + var.rIndex.round()]
-        if(item != null){ item.entryKey = '' }
+        if(item != null){
+          item.entryKey = ''
+        }
         var.rIndex = var.rIndex + 1
       }
   action:
@@ -701,12 +730,26 @@ controls:
                         width: 2
                         color: ~0,0,0,255
                     children:
+                      奖励图标:
+                        type: Slot
+                        attribute:
+                          slotType: ~Icon
+                          visible: "self.parent.entry != null && self.parent.entry['itemJson'] != null && self.parent.entry['itemJson'] != ''"
+                          itemScale: 0.72
+                          x: 4
+                          y: 1
+                          width: 48
+                          height: 48
+                          normal: ~95,95,95,180
+                          shape: ~round_rect
+                          radius: 8
+                          through: true
+                          seticon: "self.parent.entry != null && self.parent.entry['itemJson'] != null ? self.setItemIcon(self.parent.entry['itemJson']) : null"
                       奖励名:
                         type: Text
                         attribute:
-                          x: 14
+                          x: 60
                           y: 10
-                          width: 400
                           fontSize: 36
                           texts: "self.parent.entry != null ? '&0' + self.parent.entry['title'] : ''"
                           through: true
@@ -821,3 +864,5 @@ controls:
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'open_map')
+
+
