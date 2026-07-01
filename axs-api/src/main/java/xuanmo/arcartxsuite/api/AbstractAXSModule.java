@@ -13,6 +13,7 @@ import java.util.logging.Logger;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.Listener;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.config.ConfigSyncSpec;
@@ -770,5 +771,6 @@ public abstract class AbstractAXSModule implements AXSModule {
         return null;
     }
 }
+
 
 
