@@ -122,8 +122,6 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = packetBridge;
-        PacketGuardAPI packetGuard = packetGuard;
         if (packetBridge == null || !packetBridge.isAvailable()) {
             throw new IllegalStateException("Menu 模块需要 ArcartX PacketBridge");
         }
@@ -240,5 +238,6 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
 
 

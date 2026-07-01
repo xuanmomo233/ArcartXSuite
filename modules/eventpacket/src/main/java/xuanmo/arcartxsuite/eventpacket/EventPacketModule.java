@@ -129,7 +129,6 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = packetBridge;
 
         repository = new JdbcEventPacketRepository(
             dataFolder,
@@ -153,7 +152,6 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         );
 
         // 注入账号类型解析器，使规则可使用 {account_type} / {account_type_display} / {account_premium}
-        AccountTypeService accountTypeService = accountTypeService;
         EventPacketContext.setAccountInfoResolver((uuidStr, name) -> {
             UUID uuid = null;
             if (uuidStr != null && !uuidStr.isBlank()) {
@@ -331,5 +329,6 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
 
 

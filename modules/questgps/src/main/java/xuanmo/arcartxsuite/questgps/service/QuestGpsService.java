@@ -123,7 +123,7 @@ public final class QuestGpsService implements Listener {
             rewardReader,
             trackerBridge
         );
-        this.navigationService = new QuestGpsNavigationService(plugin, configuration, waypointBridge, npcBridge, trackerBridge);
+        this.navigationService = new QuestGpsNavigationService(plugin, this.logger, configuration, waypointBridge, npcBridge, trackerBridge);
         this.categoryResolver = new ChemdahCategoryResolver(
             this.logger,
             configuration.categoryDefaults(),
@@ -833,6 +833,7 @@ public final class QuestGpsService implements Listener {
         }
     }
 }
+
 
 
 

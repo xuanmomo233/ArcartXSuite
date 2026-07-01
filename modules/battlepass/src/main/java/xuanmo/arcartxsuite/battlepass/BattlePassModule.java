@@ -205,8 +205,6 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
     @Override
     protected @Nullable ClientPacketHandler createPacketHandler() {
         if (service == null) return null;
-        var packetBridge = packetBridge;
-        var packetGuard = packetGuard;
         String mainUiId = getModuleUiId(MAIN_UI_FILE_PATH);
         String tasksUiId = getModuleUiId(TASKS_UI_FILE_PATH);
         packetHandler = new BattlePassPacketHandler(
@@ -247,5 +245,6 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         return prefix + mp.get(key, args);
     }
 }
+
 
 

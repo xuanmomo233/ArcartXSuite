@@ -166,8 +166,6 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
             throw new IllegalStateException("LoginView UI 注册失败");
         }
 
-        PacketBridgeAPI packetBridge = packetBridge;
-        PacketGuardAPI packetGuard = packetGuard;
 
         repository = new JdbcLoginViewRepository(
             dataFolder,
@@ -374,5 +372,6 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         return result;
     }
 }
+
 
 

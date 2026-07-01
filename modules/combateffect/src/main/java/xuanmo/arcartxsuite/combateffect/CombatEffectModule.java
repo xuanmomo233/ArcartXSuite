@@ -153,8 +153,6 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = packetBridge;
-        ClientBridgeAPI clientBridge = clientBridge;
         JavaPlugin plugin = (JavaPlugin) plugin;
 
         // 注册 UI（由基类根据 uiResourceMappings() 自动导出并注册）
@@ -444,6 +442,7 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
         return mp.get("prefix") + mp.get(key, args);
     }
 }
+
 
 
 

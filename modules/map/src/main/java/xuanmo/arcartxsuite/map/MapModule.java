@@ -116,8 +116,6 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = packetBridge;
-        PacketGuardAPI packetGuard = packetGuard;
 
         UiBinding menuBinding = registerModuleUi(
             MapService.MENU_UI_FILE_PATH,
@@ -249,5 +247,6 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
 
 

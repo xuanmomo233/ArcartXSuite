@@ -110,8 +110,6 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = packetBridge;
-        PacketGuardAPI packetGuard = packetGuard;
 
         MailService.UiResourceExporter uiExporter = (resourcePath, relativeUiPath, overwrite) -> {
             try {
@@ -141,7 +139,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             dataFolder,
             configuration.storage(), logger);
         service = new MailService(
-            plugin, logger, dataFolder, configuration,
+            plugin, logger, configuration,
             mailRepo,
             packetBridge, packetGuard, uiExporter, presetWriter, null,
             currencyManager, crossServer
@@ -255,5 +253,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
+
 
 

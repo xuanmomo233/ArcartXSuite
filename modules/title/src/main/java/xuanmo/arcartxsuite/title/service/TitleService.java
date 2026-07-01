@@ -116,7 +116,7 @@ public class TitleService {
         this.clock = clock;
         this.logger = logger;
         this.attributePlusService = new TitleAttributePlusService(plugin, configuration.attributePlus(), attributeBridge.attributePlus());
-        this.mythicLibService = new TitleMythicLibService(plugin, configuration.mythicLib(), attributeBridge.mythicLib());
+        this.mythicLibService = new TitleMythicLibService(plugin, this.logger, configuration.mythicLib(), attributeBridge.mythicLib());
         this.craneAttributeService = new TitleCraneAttributeService(plugin, configuration.craneAttribute(), attributeBridge.craneAttribute());
         this.symphonyService = new TitleSymphonyService(plugin, configuration.symphony(), attributeBridge.symphony());
         this.overheadService = new TitleOverheadService(worldTextureBridge, logger);
@@ -884,6 +884,7 @@ public class TitleService {
         }
     }
 }
+
 
 
 

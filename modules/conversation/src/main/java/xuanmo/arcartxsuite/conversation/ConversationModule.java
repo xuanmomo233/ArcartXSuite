@@ -84,8 +84,6 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = packetBridge;
-        PacketGuardAPI packetGuard = packetGuard;
 
         java.util.List<String> dialogRuntimeUiIds = new java.util.ArrayList<>();
         for (String candidateUiId : configuration.clientConfig().dialogUiIds()) {
@@ -200,5 +198,6 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
 
 

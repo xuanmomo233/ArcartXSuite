@@ -137,8 +137,6 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
      */
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = packetBridge;
-        PacketGuardAPI packetGuard = packetGuard;
 
         TitleService.UiResourceExporter uiExporter = (resourcePath, relativeUiPath, overwrite) ->
             exportUiResource(resourcePath, relativeUiPath, overwrite, moduleClassLoader());
@@ -254,5 +252,6 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
 
 

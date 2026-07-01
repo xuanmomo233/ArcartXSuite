@@ -132,14 +132,12 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         JdbcLotteryRepository repo = new JdbcLotteryRepository(
             moduleDataFolder, configuration.storage(), logger);
 
-        CurrencyBridgeAPI currencyManager = currencyManager;
-        ItemSourceRegistry itemSourceRegistry = itemSourceRegistry;
 
         java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailSupplier
             = () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class);
 
         service = new LotteryService(
-            plugin, logger, configuration, repo,
+            plugin, configuration, repo,
             currencyManager, itemSourceRegistry, mailSupplier, logger);
         service.setMessageProvider(messages());
         service.start();
@@ -196,7 +194,6 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     protected @Nullable ClientPacketHandler createPacketHandler() {
-        PacketBridgeAPI packetBridge = packetBridge;
         if (service == null || packetBridge == null || !packetBridge.isAvailable()) {
             return null;
         }
@@ -228,5 +225,7 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         return prefix + mp.get(key, args);
     }
 }
+
+
 
 

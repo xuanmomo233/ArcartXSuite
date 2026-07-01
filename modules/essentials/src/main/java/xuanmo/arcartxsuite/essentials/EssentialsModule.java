@@ -175,8 +175,6 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         registerCapability(EssentialsQueryable.class, new EssentialsQueryableImpl());
 
         // UI 绑定与 Packet Handler 初始化
-        PacketBridgeAPI packetBridge = packetBridge;
-        PacketGuardAPI packetGuard = packetGuard;
         if (packetBridge != null && packetBridge.isAvailable()) {
             UiBinding menuBinding = registerModuleUi(
                 EssentialsMenuPacketHandler.UI_FILE_PATH, null, true
@@ -378,5 +376,6 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         }
     }
 }
+
 
 

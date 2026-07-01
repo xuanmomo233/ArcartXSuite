@@ -159,9 +159,6 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
             }
         }
 
-        PacketBridgeAPI packetBridge = packetBridge;
-        ClientBridgeAPI clientBridge = clientBridge;
-        PacketGuardAPI packetGuard = packetGuard;
 
         // 跨服广播
         service = new AnnouncerService(
@@ -405,5 +402,6 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         return r;
     }
 }
+
 
 

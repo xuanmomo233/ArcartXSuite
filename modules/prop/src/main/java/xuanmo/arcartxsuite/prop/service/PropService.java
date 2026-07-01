@@ -71,7 +71,7 @@ public final class PropService implements Listener {
         this.languageConfiguration = languageConfiguration;
         this.definitionsByNormalizedId = definitionsByNormalizedId;
         this.attributePlusService = new PropAttributePlusService(plugin, attributeBridge.attributePlus());
-        this.mythicLibService = new PropMythicLibService(plugin, configuration.mythicLib(), attributeBridge.mythicLib());
+        this.mythicLibService = new PropMythicLibService(plugin, this.logger, configuration.mythicLib(), attributeBridge.mythicLib());
         this.symphonyService = new PropSymphonyService(plugin, attributeBridge.symphony());
     }
 
@@ -644,5 +644,6 @@ public final class PropService implements Listener {
         KEY
     }
 }
+
 
 

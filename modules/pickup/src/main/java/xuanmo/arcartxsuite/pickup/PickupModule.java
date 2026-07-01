@@ -103,8 +103,6 @@ public final class PickupModule extends AbstractAXSModule {
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = packetBridge;
-        ItemBridgeAPI itemStackBridge = itemStackBridge;
 
         if (configuration.mode() == PickupMode.SCANNER) {
             startScannerMode(packetBridge, itemStackBridge);
@@ -246,6 +244,7 @@ public final class PickupModule extends AbstractAXSModule {
         return target;
     }
 }
+
 
 
 

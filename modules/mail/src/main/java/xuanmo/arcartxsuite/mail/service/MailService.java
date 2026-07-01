@@ -162,12 +162,13 @@ public final class MailService implements Listener {
         CurrencyBridgeAPI currencyBridgeManager,
         CrossServerAPI crossServer
     ) {
-        this(plugin, plugin.getDataFolder(), configuration, repository, bridge, packetGuard,
+        this(plugin, logger, plugin.getDataFolder(), configuration, repository, bridge, packetGuard,
             uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer);
     }
 
     public MailService(
         JavaPlugin plugin,
+        Logger logger,
         File baseDataDir,
         MailModuleConfiguration configuration,
         MailRepository repository,
@@ -2701,5 +2702,6 @@ public final class MailService implements Listener {
     }
 
 }
+
 
 

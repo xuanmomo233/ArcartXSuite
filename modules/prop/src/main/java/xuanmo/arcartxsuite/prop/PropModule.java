@@ -60,7 +60,6 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected void startService() throws Exception {
-        PropBridgeAPI propBridge = propBridge;
         if (propBridge == null || !propBridge.isAvailable()) {
             throw new IllegalStateException("Prop 模块需要 ArcartX API 桥接，当前不可用");
         }
@@ -149,5 +148,6 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
 
 

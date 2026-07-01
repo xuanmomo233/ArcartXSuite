@@ -299,7 +299,6 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         loginGateListener.register();
 
         // 15. UI 服务
-        PacketBridgeAPI packetBridge = packetBridge;
         uiService = new QQBotUiService(
             plugin, logger, configuration, repository, bindService, packetBridge, logger
         );
@@ -510,5 +509,6 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         }
     }
 }
+
 
 

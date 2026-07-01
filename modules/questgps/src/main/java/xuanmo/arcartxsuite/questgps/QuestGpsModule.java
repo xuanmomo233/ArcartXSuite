@@ -125,9 +125,6 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = packetBridge;
-        PacketGuardAPI packetGuard = packetGuard;
-        ItemBridgeAPI itemStackBridge = itemStackBridge;
 
         java.util.List<String> menuRuntimeUiIds = new java.util.ArrayList<>();
         for (String candidateUiId : configuration.client().menuUiIds()) {
@@ -260,6 +257,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
 
 
 

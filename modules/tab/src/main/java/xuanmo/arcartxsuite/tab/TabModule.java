@@ -128,8 +128,6 @@ public final class TabModule extends AbstractAXSModule {
     @Override
     protected void startService() throws Exception {
         Map<String, UiBinding> tabUiBindings = registerTabUis();
-        PacketBridgeAPI packetBridge = packetBridge;
-        PacketGuardAPI packetGuard = packetGuard;
         service = new TabSyncService(plugin, logger, configuration, packetBridge, packetGuard, crossServer, placeholderResolver);
         service.start();
 
@@ -317,6 +315,7 @@ public final class TabModule extends AbstractAXSModule {
         return bindings;
     }
 }
+
 
 
 

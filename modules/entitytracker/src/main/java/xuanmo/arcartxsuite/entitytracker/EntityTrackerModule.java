@@ -166,7 +166,6 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = packetBridge;
 
         initializeRepositoryIfNeeded();
         initializePersistenceServices();
@@ -519,6 +518,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
 
 
 

@@ -103,8 +103,6 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = packetBridge;
-        ItemBridgeAPI itemStackBridge = itemStackBridge;
 
         // 绑定 @补全 overlay UI
         completionUiId = null;
@@ -282,5 +280,6 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         }
     }
 }
+
 
 

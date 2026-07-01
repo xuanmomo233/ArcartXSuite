@@ -125,9 +125,6 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = packetBridge;
-        CurrencyBridgeAPI currencyManager = currencyManager;
-        ItemSourceRegistry itemSourceRegistry = itemSourceRegistry;
 
         // 构造物品序列化器（使用 ItemSerializer byte[] + Base64）
         AuctionItemSerializer itemSerializer = new AuctionItemSerializer() {
@@ -304,6 +301,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
 
 
 

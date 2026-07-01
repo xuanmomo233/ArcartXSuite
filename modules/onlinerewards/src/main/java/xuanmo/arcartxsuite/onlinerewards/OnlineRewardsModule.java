@@ -138,9 +138,6 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
 
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = packetBridge;
-        ClientBridgeAPI clientBridge = clientBridge;
-        PacketGuardAPI packetGuard = packetGuard;
 
         if (clientBridge == null || !clientBridge.isAvailable()) {
             throw new IllegalStateException("OnlineRewards 模块需要 ArcartX 客户端桥接");
@@ -274,5 +271,6 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
 
 

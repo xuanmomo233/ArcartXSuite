@@ -164,8 +164,6 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
      */
     @Override
     protected void startService() throws Exception {
-        PacketBridgeAPI packetBridge = packetBridge;
-        PacketGuardAPI packetGuard = packetGuard;
 
         WarehouseService.UiResourceExporter uiExporter = (resourcePath, relativeUiPath, overwrite) -> {
             try {
@@ -175,9 +173,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
             }
         };
 
-        xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI itemStackBridge =
-            itemStackBridge;
-        JdbcWarehouseRepository warehouseRepo = new JdbcWarehouseRepository(
+                JdbcWarehouseRepository warehouseRepo = new JdbcWarehouseRepository(
             dataFolder,
             configuration.storage(), logger);
         service = new WarehouseService(
@@ -281,5 +277,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
+
 
 

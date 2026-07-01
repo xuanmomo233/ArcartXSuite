@@ -141,7 +141,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         }
 
         service = new FishingService(
-            plugin, logger, configuration, repo,
+            plugin, configuration, repo,
             packetBridge, logger, minigameUiId);
         service.setMessageProvider(messages());
         service.setEventBusProvider(() -> getCapability(
@@ -245,5 +245,6 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         return prefix + mp.get(key, args);
     }
 }
+
 
 
