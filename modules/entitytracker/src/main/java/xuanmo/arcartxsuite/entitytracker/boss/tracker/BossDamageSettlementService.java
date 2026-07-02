@@ -46,11 +46,12 @@ final class BossDamageSettlementService {
 
     public BossDamageSettlementService(JavaPlugin plugin,
         Logger logger, ItemSourceRegistry itemSourceRegistry, PlaceholderResolverAPI placeholderResolver) {
-        this(plugin, () -> null, null, itemSourceRegistry, placeholderResolver);
+        this(plugin, logger, () -> null, null, itemSourceRegistry, placeholderResolver);
     }
 
     public BossDamageSettlementService(
         JavaPlugin plugin,
+        Logger logger,
         java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider,
         java.util.function.BiConsumer<String, org.bukkit.entity.Player> signalDispatcher,
         ItemSourceRegistry itemSourceRegistry,

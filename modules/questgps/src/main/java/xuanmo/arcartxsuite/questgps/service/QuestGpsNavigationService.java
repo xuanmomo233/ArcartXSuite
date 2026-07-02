@@ -42,7 +42,7 @@ public final class QuestGpsNavigationService {
             plugin,
             configuration,
             new BridgeWaypointRuntime(waypointBridge),
-            this.logger,
+            logger,
             npcBridge,
             trackerBridge
         );

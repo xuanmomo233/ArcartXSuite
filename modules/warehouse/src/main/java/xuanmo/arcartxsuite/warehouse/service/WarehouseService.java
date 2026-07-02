@@ -189,6 +189,7 @@ public final class WarehouseService implements Listener {
 
     public WarehouseService(
         JavaPlugin plugin,
+        Logger logger,
         PacketBridgeAPI packetBridge,
         xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI itemStackBridge,
         PacketGuardAPI packetGuard,
@@ -200,7 +201,7 @@ public final class WarehouseService implements Listener {
         CurrencyBridgeAPI currencyBridgeManager,
         Supplier<PickupNotifiable> pickupNotifiableSupplier
     ) {
-        this(plugin, packetBridge, itemStackBridge, packetGuard, uiResourceExporter, configuration,
+        this(plugin, logger, packetBridge, itemStackBridge, packetGuard, uiResourceExporter, configuration,
             repository, itemSourceRegistry, itemMatcherSupport, currencyBridgeManager,
             pickupNotifiableSupplier, null, CrossServerChannelConfig.disabled());
     }
@@ -220,6 +221,7 @@ public final class WarehouseService implements Listener {
             && crossServerApi != null) {
             crossServerLockService = new WarehouseCrossServerLockService(
                 plugin,
+                logger,
                 crossServerApi,
                 crossServerChannelConfig,
                 this::applyRemoteSharedLock,

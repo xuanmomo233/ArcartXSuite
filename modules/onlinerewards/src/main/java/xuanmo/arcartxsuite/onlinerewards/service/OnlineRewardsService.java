@@ -117,7 +117,7 @@ public class OnlineRewardsService implements Listener {
         Function<Boolean, File> menuUiFileExporter,
         CrossServerAPI crossServer
     ) {
-        this(plugin, configuration, repository, clientBridge, packetBridge,
+        this(plugin, logger, configuration, repository, clientBridge, packetBridge,
             packetGuard, mailProvider, signalProvider, chatCardProvider, titleProvider,
             subtitleProvider, qqBotProvider, eventBusProvider, menuUiFileExporter,
             Clock.systemDefaultZone(), crossServer);
@@ -125,6 +125,7 @@ public class OnlineRewardsService implements Listener {
 
     OnlineRewardsService(
         JavaPlugin plugin,
+        Logger logger,
         OnlineRewardsModuleConfiguration configuration,
         OnlineRewardsRepository repository,
         ClientBridgeAPI clientBridge,
