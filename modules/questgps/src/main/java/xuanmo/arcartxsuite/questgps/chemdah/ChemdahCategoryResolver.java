@@ -1,11 +1,13 @@
 package xuanmo.arcartxsuite.questgps.chemdah;
 
 import ink.ptms.chemdah.core.quest.Template;
+import ink.ptms.chemdah.core.quest.meta.Meta;
+import ink.ptms.chemdah.core.quest.meta.MetaType;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
-import org.bukkit.configuration.ConfigurationSection;
 import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
 import xuanmo.arcartxsuite.questgps.config.CategoryDefaults;
 import xuanmo.arcartxsuite.questgps.config.CategorySource;
@@ -88,14 +90,20 @@ public final class ChemdahCategoryResolver {
         if (template == null) {
             return null;
         }
-        ConfigurationSection section = ChemdahConfigAccessor.section(template);
-        if (section == null) {
+        Meta<?> typeMeta = template.getMetaMap().get("type");
+        if (!(typeMeta instanceof MetaType metaType)) {
             return null;
         }
-        ConfigurationSection meta = section.getConfigurationSection("meta");
-        if (meta == null) {
+        List<String> types = metaType.getType();
+        if (types == null || types.isEmpty()) {
             return null;
         }
-        return QuestGpsCategory.parse(meta.getString("type"), categoryRegistry);
+        for (String raw : types) {
+            QuestGpsCategory category = QuestGpsCategory.parse(raw, categoryRegistry);
+            if (category != null) {
+                return category;
+            }
+        }
+        return null;
     }
 }

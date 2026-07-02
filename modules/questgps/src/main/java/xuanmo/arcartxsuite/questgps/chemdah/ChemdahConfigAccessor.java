@@ -3,7 +3,9 @@ package xuanmo.arcartxsuite.questgps.chemdah;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.MemoryConfiguration;
 
 /**
  * 统一读取 Chemdah Template / Task 的 ConfigurationSection。
@@ -23,10 +25,36 @@ public final class ChemdahConfigAccessor {
             if (config instanceof ConfigurationSection section) {
                 return section;
             }
+            if (config == null) {
+                return null;
+            }
+            Method valuesMethod = config.getClass().getMethod("getValues", boolean.class);
+            Object values = valuesMethod.invoke(config, true);
+            if (!(values instanceof Map<?, ?> map)) {
+                return null;
+            }
+            MemoryConfiguration memory = new MemoryConfiguration();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                Object key = entry.getKey();
+                Object value = entry.getValue();
+                if (!(key instanceof String path) || value == null) {
+                    continue;
+                }
+                Class<?> valueType = value.getClass();
+                if (ConfigurationSection.class.isAssignableFrom(valueType)) {
+                    continue;
+                }
+                try {
+                    valueType.getMethod("getValues", boolean.class);
+                    continue;
+                } catch (NoSuchMethodException ignored) {
+                }
+                memory.set(path, value);
+            }
+            return memory;
         } catch (ReflectiveOperationException ignored) {
             return null;
         }
-        return null;
     }
 
     public static String readString(Object holder, String path, String fallback) {
