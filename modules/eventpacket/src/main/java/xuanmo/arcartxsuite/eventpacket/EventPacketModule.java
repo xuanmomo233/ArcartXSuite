@@ -195,12 +195,12 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
 
         // 启动实体清理服务
         cleanupService = new EntityCleanupService(
-            plugin, logger, logger, configuration.entityCleanup());
+            plugin, logger, configuration.entityCleanup());
         cleanupService.start();
 
         // 启动定时命令服务
         scheduledCommandService = new ScheduledCommandService(
-            plugin, logger, logger, configuration.scheduledCommands());
+            plugin, logger, configuration.scheduledCommands());
         scheduledCommandService.start();
 
         JdbcEventPacketRepository epRepo = (JdbcEventPacketRepository) repository;
@@ -329,6 +329,7 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
+
 
 
 

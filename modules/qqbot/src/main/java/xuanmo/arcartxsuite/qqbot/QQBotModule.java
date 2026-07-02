@@ -128,8 +128,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
 
         // 3. 创建主服务
         service = new QQBotService(
-            plugin, logger,
-            configuration,
+            plugin, configuration,
             bindService,
             repository,
             logger,
@@ -300,7 +299,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
 
         // 15. UI 服务
         uiService = new QQBotUiService(
-            plugin, logger, configuration, repository, bindService, packetBridge, logger
+            plugin, configuration, repository, bindService, packetBridge, logger
         );
         uiService.setSendToGroupCallback(msg -> svc.sendToAllGroups(msg));
         uiService.setServiceConnectedSupplier(() -> svc.isConnected());
@@ -369,7 +368,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         // 19. 周结算排行榜
         if (configuration.signin().enabled()) {
             weeklyRankService = new QQBotWeeklyRankService(
-                plugin, logger, configuration, repository, bindService, svc::sendToAllGroups, logger
+                plugin, configuration, repository, bindService, svc::sendToAllGroups, logger
             );
             weeklyRankService.start();
         }
@@ -509,6 +508,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         }
     }
 }
+
 
 
 

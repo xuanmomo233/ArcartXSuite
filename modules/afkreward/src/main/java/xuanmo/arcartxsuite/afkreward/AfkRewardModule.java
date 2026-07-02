@@ -132,7 +132,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         repository.initialize();
 
         service = new AfkRewardService(
-            plugin, logger, configuration, repository, logger, messages(),
+            plugin, configuration, repository, logger, messages(),
             () -> getCapability(MailDispatchable.class),
             () -> getCapability(SignalDispatchable.class),
             () -> getCapability(SubtitlePlayable.class),
@@ -272,5 +272,6 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         return "afkreward/areas".equals(configured) ? "areas" : configured;
     }
 }
+
 
 

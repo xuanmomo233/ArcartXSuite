@@ -190,7 +190,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
             }
 
             subtitleService = new SubtitleService(
-                plugin, logger, logger, packetBridge,
+                plugin, logger, packetBridge,
                 subtitleCfg, java.util.List.copyOf(subtitleRuntimeUiIds), dataFolder,
                 placeholderResolver
             );
@@ -402,6 +402,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         return r;
     }
 }
+
 
 
 

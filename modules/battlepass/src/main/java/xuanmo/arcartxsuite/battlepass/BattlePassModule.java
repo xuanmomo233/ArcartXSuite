@@ -145,7 +145,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             throw new IllegalStateException("BattlePass UI 注册失败");
         }
 
-        service = new BattlePassService(plugin, logger, configuration, repo, logger);
+        service = new BattlePassService(plugin, configuration, repo, logger);
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
@@ -245,6 +245,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         return prefix + mp.get(key, args);
     }
 }
+
 
 
 

@@ -150,7 +150,7 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         playerService.start();
 
         teleportService = new TeleportService(
-            plugin, logger, configuration, repository, playerService, logger);
+            plugin, configuration, repository, playerService, logger);
         teleportService.start();
 
         // 一键砍树服务
@@ -376,6 +376,7 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         }
     }
 }
+
 
 
 
