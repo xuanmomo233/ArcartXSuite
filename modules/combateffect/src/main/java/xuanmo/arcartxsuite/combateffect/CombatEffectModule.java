@@ -153,7 +153,6 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
 
     @Override
     protected void startService() throws Exception {
-        JavaPlugin plugin = (JavaPlugin) plugin;
 
         // 注册 UI（由基类根据 uiResourceMappings() 自动导出并注册）
         registerModuleUi("ui/combat_kill_effect.yml", "combat_kill_effect", true);
