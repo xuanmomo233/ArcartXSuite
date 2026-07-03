@@ -170,29 +170,10 @@ public final class BattlePassService {
         if (!active || increment <= 0) return;
         // 优先更新 PlayerTaskInstance
         List<PlayerTaskInstance> activeInstances = getActiveTaskInstances(player);
-        boolean matched = false;
         for (PlayerTaskInstance instance : activeInstances) {
             if (instance.templateId().equals(taskId)) {
                 updateInstanceProgress(player, instance, increment);
-                matched = true;
             }
-        }
-        // 赛季任务直接写入旧进度表（兼容无实例的赛季任务）
-        if (!matched) {
-            BattlePassPlayerProgress progress = getProgress(player);
-            int current = progress.taskProgresses().getOrDefault(taskId, 0);
-            BattlePassTask task = findTask(taskId);
-            if (task == null) return;
-            int newCount = Math.min(current + increment, task.requiredCount());
-            if (newCount <= current) return;
-            BattlePassPlayerProgress updated = progress.withTaskProgress(taskId, newCount);
-            if (newCount >= task.requiredCount() && current < task.requiredCount()) {
-                int xp = Math.round(task.totalXpReward() * progress.xpMultiplier());
-                updated = addXp(updated, xp);
-                logger.fine("玩家 " + player.getName() + " 完成任务 " + taskId + " 获得 " + xp + " XP");
-            }
-            cachedProgress.put(player.getUniqueId(), updated);
-            dirtyPlayers.add(player.getUniqueId());
         }
     }
 

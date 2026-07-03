@@ -875,11 +875,6 @@ public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.
             // sendSetEntityAnimation(Player player, UUID entity, String animation, double speed, int transitionTime, long keepTime)
             networkSendSetEntityAnimationMethod = findMethod(senderClass, "sendSetEntityAnimation",
                 Player.class, UUID.class, String.class, double.class, int.class, long.class);
-            if (networkSendSetEntityAnimationMethod == null) {
-                // 尝试别名
-                networkSendSetEntityAnimationMethod = findMethod(senderClass, "sendPlayEntityAnimation",
-                    Player.class, UUID.class, String.class, double.class, int.class, long.class);
-            }
 
             if (networkSendSetEntityModelMethod != null) {
                 xuanmo.arcartxsuite.module.AxsLog.logger().fine("AdyeshachNpcBridge: NetworkSender bridge 已就绪 (sendSetEntityModel)");

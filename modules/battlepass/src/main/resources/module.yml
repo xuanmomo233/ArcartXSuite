@@ -1,6 +1,6 @@
 id: battlepass
 name: BattlePass
-version: 1.0.0
+version: 1.3.2
 main: xuanmo.arcartxsuite.battlepass.BattlePassModule
 api-version: 1.0
 

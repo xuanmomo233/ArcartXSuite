@@ -31,7 +31,6 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
         createTables(conn);
-        migrateActivatesAtColumn(conn);
     }
 
     @Override
@@ -372,38 +371,6 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
             """;
     }
 
-    private void migrateActivatesAtColumn(Connection connection) {
-        try (Statement statement = connection.createStatement()) {
-            if (configuration.dialect() == TitlePersistenceDialect.SQLITE) {
-                try (ResultSet resultSet = statement.executeQuery("PRAGMA table_info(title_player_titles)")) {
-                    boolean found = false;
-                    while (resultSet.next()) {
-                        if ("activates_at".equalsIgnoreCase(resultSet.getString("name"))) {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found) {
-                        statement.execute("ALTER TABLE title_player_titles ADD COLUMN activates_at INTEGER");
-                        logger.info("称号数据库迁移: 已添加 activates_at 列。");
-                    }
-                }
-            } else {
-                try (ResultSet resultSet = connection.getMetaData().getColumns(
-                    null, null, "title_player_titles", "activates_at"
-                )) {
-                    if (!resultSet.next()) {
-                        statement.execute(
-                            "ALTER TABLE title_player_titles ADD COLUMN activates_at BIGINT NULL AFTER granted_at"
-                        );
-                        logger.info("称号数据库迁移: 已添加 activates_at 列。");
-                    }
-                }
-            }
-        } catch (SQLException exception) {
-            logger.warning("称号数据库迁移 activates_at 列失败: " + exception.getMessage());
-        }
-    }
 
     private Connection connection() throws SQLException {
         return getConnection();

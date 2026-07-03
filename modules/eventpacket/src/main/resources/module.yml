@@ -1,6 +1,6 @@
 id: eventpacket
 name: EventPacket
-version: 1.0.2-beta
+version: 1.3.2
 main: xuanmo.arcartxsuite.eventpacket.EventPacketModule
 api-version: 1.0
 

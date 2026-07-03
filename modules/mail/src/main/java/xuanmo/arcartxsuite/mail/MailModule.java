@@ -139,7 +139,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             dataFolder,
             configuration.storage(), logger);
         service = new MailService(
-            plugin, logger, configuration,
+            plugin, logger, dataFolder, configuration,
             mailRepo,
             packetBridge, packetGuard, uiExporter, presetWriter, null,
             currencyManager, crossServer

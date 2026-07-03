@@ -75,7 +75,6 @@ public abstract class AbstractAXSModule implements AXSModule {
 
     private boolean ready;
     private boolean reloading; // reload 期间跳过 UI 注销，避免客户端丢失 HUD
-    private boolean configFileJustMigrated; // 标记配置文件是否刚从旧位置迁移
     private final Map<String, UiBinding> uiBindings = new LinkedHashMap<>();
     private MessageProvider messages; // 模块消息提供者，由 messagesFileName() 声明后自动加载
 
@@ -321,11 +320,6 @@ public abstract class AbstractAXSModule implements AXSModule {
             // 1b. 导出并加载外部化消息（若声明）
             initMessages();
 
-            // 若配置文件刚从旧位置迁移，提示使用智能配置体检
-            if (configFileJustMigrated) {
-                logger.info("配置文件已迁移至新位置，建议运行 '/arcartxsuite config preview " + descriptor().id() + "' 检查配置兼容性");
-            }
-
             // 2. 导出 UI 资源并绑定
             exportAndBindUi();
 
@@ -552,12 +546,10 @@ public abstract class AbstractAXSModule implements AXSModule {
      * 确保配置文件存在。
      * <p>
      * 新版本中模块配置统一落到 {@code plugins/ArcartXSuite/data/<moduleId>/config.yml}，
-     * 不再散落在宿主根目录。若检测到根目录存在旧版 yml（如 {@code ArcartXChat.yml}），
-     * 会一次性迁移到新位置；新装服务器则直接从模块 Jar 导出默认配置。
+     * 新装服务器则直接从模块 Jar 导出默认配置。
      */
     @Nullable
     private File ensureConfigExists() {
-        configFileJustMigrated = false;
         String fileName = configFileName();
         if (fileName == null || fileName.isBlank()) {
             return null;
@@ -565,27 +557,6 @@ public abstract class AbstractAXSModule implements AXSModule {
 
         File moduleDataFolder = context.dataFolder();
         File newConfigFile = new File(moduleDataFolder, "config.yml");
-
-        // 一次性迁移：plugins/ArcartXSuite/<fileName> -> data/<moduleId>/config.yml
-        File legacyFile = new File(context.pluginDataFolder(), fileName);
-        if (legacyFile.isFile() && !newConfigFile.exists()) {
-            try {
-                java.nio.file.Files.createDirectories(moduleDataFolder.toPath());
-                java.nio.file.Files.move(
-                    legacyFile.toPath(),
-                    newConfigFile.toPath(),
-                    java.nio.file.StandardCopyOption.ATOMIC_MOVE
-                );
-                configFileJustMigrated = true;
-                context.logger().info(org.bukkit.ChatColor.GOLD + "→ 已归位配置文件: "
-                    + org.bukkit.ChatColor.YELLOW + fileName
-                    + org.bukkit.ChatColor.GRAY + "  ➜  "
-                    + org.bukkit.ChatColor.AQUA + "data/" + moduleDataFolder.getName() + "/config.yml");
-            } catch (IOException exception) {
-                context.logger().warning("迁移配置文件失败: " + fileName
-                    + " | " + exception.getMessage());
-            }
-        }
 
         // 首次启动或仍缺失：从模块 Jar 导出默认配置到 data/<moduleId>/config.yml
         if (!newConfigFile.exists()) {
@@ -771,6 +742,5 @@ public abstract class AbstractAXSModule implements AXSModule {
         return null;
     }
 }
-
 
 

@@ -94,9 +94,6 @@ public final class ArcartXPropBridge implements xuanmo.arcartxsuite.api.bridge.P
                 keyCallbackType
             );
             unregisterClientKeyBindMethod = findMethod(keyBindRegistry.getClass(), "unregisterClientKeyBind", String.class);
-            if (unregisterClientKeyBindMethod == null) {
-                unregisterClientKeyBindMethod = keyBindRegistry.getClass().getMethod("unRegisterClientKeyBind", String.class);
-            }
 
             entityManager = apiClass.getMethod("getEntityManager").invoke(null);
             entityManagerGetPlayerMethod = entityManagerClass.getMethod("getPlayer", Player.class);

@@ -10,4 +10,4 @@ operations:
     path: areas
   - type: set-if-missing
     path: areas-directory
-    value: "afkreward/areas"
+    value: "areas"

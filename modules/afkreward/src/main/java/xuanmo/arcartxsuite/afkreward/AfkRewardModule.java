@@ -111,7 +111,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         );
 
         // 区域目录应位于模块 data 目录下，而非插件根目录
-        String effectiveAreasDir = effectiveAreasDirectory(configuration.areasDirectory());
+        String effectiveAreasDir = configuration.areasDirectory();
 
         // 导出默认区域文件（若目录为空）
         AreaConfiguration.exportDefaultArea(moduleClassLoader(),
@@ -121,7 +121,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
     @Override
     protected void startService() throws Exception {
         // 加载区域独立配置文件
-        String effectiveAreasDir = effectiveAreasDirectory(configuration.areasDirectory());
+        String effectiveAreasDir = configuration.areasDirectory();
         java.util.Map<String, xuanmo.arcartxsuite.afkreward.model.AfkArea> loadedAreas =
             AreaConfiguration.loadAreas(dataFolder, effectiveAreasDir, logger);
         configuration = configuration.withAreas(loadedAreas);
@@ -148,19 +148,6 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         if (configuration.ui().registerOnEnable()) {
             registerModuleUi(HUD_UI_FILE_PATH, configuration.ui().hudId(), true);
         }
-
-        // 注册跨服/迁移能力
-        registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
-            new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
-                @Override public @NotNull String moduleId() { return "afkreward"; }
-                @Override public @NotNull xuanmo.arcartxsuite.api.storage.MigrationResult migrateDatabase(
-                        @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor target, boolean overwrite) {
-                    return repository.migrateData(target, overwrite);
-                }
-                @Override public @NotNull xuanmo.arcartxsuite.api.storage.StorageDescriptor currentDescriptor() {
-                    return repository.getDescriptor();
-                }
-            });
 
         registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
@@ -264,14 +251,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         return service;
     }
 
-    /**
-     * 将旧版默认区域目录 {@code "afkreward/areas"} 映射为新默认 {@code "areas"}。
-     * 若用户已自定义其他路径，则保持原值不变。
-     */
-    private static String effectiveAreasDirectory(String configured) {
-        return "afkreward/areas".equals(configured) ? "areas" : configured;
-    }
-}
 
+}
 
 

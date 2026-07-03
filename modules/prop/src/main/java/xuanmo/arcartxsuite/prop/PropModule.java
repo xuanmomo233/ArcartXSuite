@@ -25,9 +25,6 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
 
     private PropAdminCommand adminCommand;
 
-    private static final String PROP_DATA_DIRECTORY = "prop";
-    private static final String PROP_DEFINITIONS_DIRECTORY = "prop/props";
-
     private PropModuleConfiguration configuration;
     private PropService service;
 
@@ -65,13 +62,12 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
         }
 
         ensureDefaults();
-        File dataDir = new File(dataFolder, PROP_DATA_DIRECTORY);
         PropKeyMappingConfiguration keyMapping = PropKeyMappingConfiguration.load(
-            YamlConfiguration.loadConfiguration(new File(dataDir, "key.yml")));
+            YamlConfiguration.loadConfiguration(new File(dataFolder, "key.yml")));
         PropLanguageConfiguration language = PropLanguageConfiguration.load(
-            YamlConfiguration.loadConfiguration(new File(dataDir, "language.yml")));
+            YamlConfiguration.loadConfiguration(new File(dataFolder, "language.yml")));
         Map<String, PropDefinition> definitions = PropDefinitionLoader.load(
-            new File(dataDir, "props"), logger);
+            new File(dataFolder, "props"), logger);
 
         service = new PropService(plugin, logger, configuration, propBridge, keyMapping, language, definitions, attributeBridge);
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
@@ -114,29 +110,27 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
     }
 
     private void ensureDefaults() throws IOException {
-        File dataDir = new File(dataFolder, PROP_DATA_DIRECTORY);
-        if (!dataDir.exists() && !dataDir.mkdirs()) {
-            throw new IOException("无法创建 Prop 数据目录: " + dataDir.getAbsolutePath());
+        if (!dataFolder.exists() && !dataFolder.mkdirs()) {
+            throw new IOException("无法创建 Prop 数据目录: " + dataFolder.getAbsolutePath());
         }
-        File propsDir = new File(dataFolder, PROP_DEFINITIONS_DIRECTORY);
+        File propsDir = new File(dataFolder, "props");
         if (!propsDir.exists() && !propsDir.mkdirs()) {
             throw new IOException("无法创建 Prop 道具目录: " + propsDir.getAbsolutePath());
         }
-        exportIfMissing("prop/key.yml");
-        exportIfMissing("prop/language.yml");
+        exportIfMissing("prop/key.yml", new File(dataFolder, "key.yml"));
+        exportIfMissing("prop/language.yml", new File(dataFolder, "language.yml"));
         // 若道具目录已有用户自定义内容，不再重复导出默认示例
         File[] existing = propsDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
         if (existing == null || existing.length == 0) {
-            exportIfMissing("prop/props/道具示例.yml");
+            exportIfMissing("prop/props/道具示例.yml", new File(dataFolder, "props/道具示例.yml"));
         }
     }
 
-    private void exportIfMissing(String relativePath) {
-        File target = new File(dataFolder, relativePath);
+    private void exportIfMissing(String resourcePath, File target) {
         if (target.exists()) {
             return;
         }
-        exportResource(relativePath, target, false);
+        exportResource(resourcePath, target, false);
     }
 
     @Override public String commandId() { return "prop"; }
@@ -148,6 +142,5 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 
 

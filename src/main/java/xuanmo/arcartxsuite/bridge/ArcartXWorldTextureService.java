@@ -80,9 +80,6 @@ public class ArcartXWorldTextureService implements xuanmo.arcartxsuite.api.bridg
                 Entity.class, String.class, builderClass, posClass);
             spawnAtLocationMethod = findSpawnAtLocationMethod(managerClass, builderClass, posClass);
             removeFromEntityMethod = findMethod(managerClass, "removeModelEffect", Entity.class, String.class);
-            if (removeFromEntityMethod == null) {
-                removeFromEntityMethod = managerClass.getMethod("removeWorldTextureEffect", Entity.class, String.class);
-            }
             removeFromWorldMethod = findMethod(managerClass, "removeModelEffect", World.class, String.class, Location.class);
 
             available = true;

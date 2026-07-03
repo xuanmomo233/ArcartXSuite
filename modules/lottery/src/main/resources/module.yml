@@ -1,6 +1,6 @@
 id: lottery
 name: Lottery
-version: 1.0.0
+version: 1.3.2
 main: xuanmo.arcartxsuite.lottery.LotteryModule
 api-version: 1.0
 

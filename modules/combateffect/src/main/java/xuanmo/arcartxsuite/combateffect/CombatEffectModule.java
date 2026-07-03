@@ -112,24 +112,6 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
         if (configFile == null) {
             throw new IllegalStateException("ArcartXCombatEffect.yml 配置文件缺失");
         }
-        // 一次性迁移：旧路径 data/combateffect/config.yml -> ArcartXCombatEffect.yml
-        File oldConfigFile = new File(dataFolder, "config.yml");
-        if (oldConfigFile.isFile() && !configFile.exists()) {
-            try {
-                java.nio.file.Files.move(
-                    oldConfigFile.toPath(),
-                    configFile.toPath(),
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
-                );
-                logger.info(org.bukkit.ChatColor.GOLD + "→ 已迁移旧配置文件: "
-                    + org.bukkit.ChatColor.YELLOW + "config.yml"
-                    + org.bukkit.ChatColor.GRAY + "  ➜  "
-                    + org.bukkit.ChatColor.AQUA + CONFIG_FILE_NAME);
-            } catch (java.io.IOException exception) {
-                logger.warning("迁移配置文件失败: " + exception.getMessage());
-            }
-        }
-
         rawConfiguration = YamlConfiguration.loadConfiguration(configFile);
         ConfigurationSection killEffectSection = rawConfiguration.getConfigurationSection("kill-effect");
         String packetsDirRelative = killEffectSection != null

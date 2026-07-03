@@ -108,7 +108,7 @@ public record MailModuleConfiguration(
         );
 
         ConfigurationSection presetsSection = configuration.getConfigurationSection("presets");
-        String presetsDirectory = presetsSection == null ? "mail/presets" : string(presetsSection.getString("directory", "mail/presets"));
+        String presetsDirectory = presetsSection == null ? "presets" : string(presetsSection.getString("directory", "presets"));
 
         return new MailModuleConfiguration(debug, storage, crossServer, ui, currencies, playerSend, moderation, retention, presetsDirectory);
     }

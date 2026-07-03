@@ -103,15 +103,6 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         var yaml = YamlConfiguration.loadConfiguration(configFile);
         String entriesDirRelative = yaml.getString("entries-directory", "announcer");
         File entriesDirectory = new File(dataFolder, entriesDirRelative);
-        // 旧版 entries/ → 新版 announcer/：如果旧目录存在而新目录不存在，自动重命名
-        if ("announcer".equals(entriesDirRelative)) {
-            File legacyEntries = new File(dataFolder, "entries");
-            if (legacyEntries.isDirectory() && !entriesDirectory.exists()) {
-                if (legacyEntries.renameTo(entriesDirectory)) {
-                    logger.info("已将旧公告目录 entries/ 迁移至 announcer/");
-                }
-            }
-        }
         if (!entriesDirectory.exists()) {
             entriesDirectory.mkdirs();
         }
@@ -402,7 +393,6 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         return r;
     }
 }
-
 
 
 

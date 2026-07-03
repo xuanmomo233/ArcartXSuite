@@ -1,6 +1,6 @@
 id: qqbot
 name: QQBot
-version: 1.0.0-beta
+version: 1.3.2
 main: xuanmo.arcartxsuite.qqbot.QQBotModule
 api-version: 1.0
 

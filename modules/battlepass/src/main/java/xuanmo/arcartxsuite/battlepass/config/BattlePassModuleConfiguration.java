@@ -159,12 +159,7 @@ public record BattlePassModuleConfiguration(
             BattlePassTask.TaskCategory category, String tasksDirectory,
             @Nullable File dataFolder, Logger logger
         ) {
-            // 优先读取主配置中的内联任务（兼容旧版）
-            ConfigurationSection inline = section.getConfigurationSection(key);
-            if (inline != null && !inline.getKeys(false).isEmpty()) {
-                return loadTaskList(inline, category);
-            }
-            // 无内联定义时，从外部文件读取
+            // 从外部任务文件读取
             if (dataFolder != null) {
                 File file = new File(dataFolder, tasksDirectory + "/" + key + ".yml");
                 if (file.exists()) {

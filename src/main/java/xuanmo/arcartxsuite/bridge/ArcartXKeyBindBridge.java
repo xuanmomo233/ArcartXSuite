@@ -45,16 +45,9 @@ public final class ArcartXKeyBindBridge {
             );
             unregisterMethod = findCompatibleMethod(
                 keyBindRegistry.getClass(),
-                "unRegisterClientKeyBind",
+                "unregisterClientKeyBind",
                 String.class
             );
-            if (unregisterMethod == null) {
-                unregisterMethod = findCompatibleMethod(
-                    keyBindRegistry.getClass(),
-                    "unregisterClientKeyBind",
-                    String.class
-                );
-            }
             if (registerMethod == null || unregisterMethod == null) {
                 throw new NoSuchMethodException("未找到兼容的 KeyBindRegistry 注册/注销方法。");
             }

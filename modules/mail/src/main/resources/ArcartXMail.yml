@@ -7,9 +7,9 @@ config-version: 1
 #   %axsmail_unread_count% 当前玩家未读邮件数。
 #   %axsmail_claimable_count% 当前玩家可领取邮件数。
 #   %axsmail_total_count% 当前玩家收件箱总邮件数。
-# 可消费的 PAPI: currencies.<id>.balance-placeholder 用于读取余额；mail/presets/*.yml 的 claim-conditions 会解析 PAPI 后判断领取条件。
+# 可消费的 PAPI: currencies.<id>.balance-placeholder 用于读取余额；data/mail/presets/*.yml 的 claim-conditions 会解析 PAPI 后判断领取条件。
 # 内置变量: claim-commands、withdraw-command、deposit-command 等命令支持玩家相关 token，例如 <player>。
-# 关联资源: mail/presets/*.yml、ui/mail_*.yml
+# 关联资源: data/mail/presets/*.yml、ui/mail_*.yml
 
 settings:
   # 是否输出 Mail 模块调试日志。
@@ -159,4 +159,4 @@ presets:
   # 预设目录，相对于插件数据目录。
   # 预设邮件可在 preset.cdks 中声明固定 CDK；执行 /axs mail reload 后同步到数据库。
   # CDK 可通过 /axs mail cdk list [page] 查看当前 code、预设、领取次数和过期时间。
-  directory: mail/presets
+  directory: presets

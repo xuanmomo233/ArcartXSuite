@@ -187,11 +187,6 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                         }
                     } catch (IllegalArgumentException ignored) {}
 
-                    // 兼容旧数据：unlocked_premium = 1 但未设置 pass_tier 时，推断为 PREMIUM
-                    if (tier == BattlePassPlayerProgress.PassTier.FREE && rs.getInt("unlocked_premium") == 1) {
-                        tier = BattlePassPlayerProgress.PassTier.PREMIUM;
-                    }
-
                     return new BattlePassPlayerProgress(
                         playerUuid,
                         seasonId,

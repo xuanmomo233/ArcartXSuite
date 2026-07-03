@@ -157,12 +157,6 @@ public record QuestGpsModuleConfiguration(
                     + "（chemdah=meta.type，overlay=quests/*.yml 的 category）"
             );
         }
-        if ("merge".equalsIgnoreCase(section.getString("source"))) {
-            logger.warning(
-                "QuestGPS: category.source=merge 已废弃，请改为 chemdah 或 overlay，当前按 chemdah 处理"
-            );
-            source = CategorySource.CHEMDAH;
-        }
         return new CategoryDefaults(source);
     }
 
@@ -193,12 +187,6 @@ public record QuestGpsModuleConfiguration(
         }
         warnDeprecatedPresentationFields(section, logger);
         PresentationSource source = PresentationSource.parseGlobal(section.getString("source"), PresentationSource.CHEMDAH);
-        if ("merge".equalsIgnoreCase(section.getString("source"))) {
-            logger.warning(
-                "QuestGPS: presentation.source=merge 已废弃，请改为 chemdah 或 overlay，当前按 chemdah 处理"
-            );
-            source = PresentationSource.CHEMDAH;
-        }
         return new PresentationDefaults(source);
     }
 
@@ -214,15 +202,9 @@ public record QuestGpsModuleConfiguration(
                 continue;
             }
             String value = section.getString(key);
-            if ("merge".equalsIgnoreCase(value)) {
-                logger.warning(
-                    "QuestGPS: presentation." + key + "=merge 已废弃，请改用 presentation.source（chemdah | overlay）"
-                );
-            } else {
-                logger.warning(
-                    "QuestGPS: presentation." + key + " 已废弃，请改用 presentation.source（chemdah | overlay）"
-                );
-            }
+            logger.warning(
+                "QuestGPS: presentation." + key + " 已废弃，请改用 presentation.source（chemdah | overlay）"
+            );
         }
     }
 

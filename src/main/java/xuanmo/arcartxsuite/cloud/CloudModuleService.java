@@ -831,8 +831,7 @@ public final class CloudModuleService {
     }
 
     /**
-     * 尝试加载持久化密钥对：优先按加密格式（AXSKP1）解密；
-     * 兼容旧版明文格式，成功后自动迁移为加密存储。
+     * 尝试加载持久化密钥对：优先按加密格式（AXSKP1）解密。
      */
     private KeyPair tryLoadKeyPair(File keyFile) {
         try {
@@ -848,17 +847,6 @@ public final class CloudModuleService {
                 KeyPair kp = rebuildKeyPair(publicEncoded, privateEncoded);
                 if (kp != null) {
                     debugLog("[Cloud] 已加载加密持久化 Ed25519 密钥对，裸公钥: " + encodeRawEd25519PublicKey(kp));
-                }
-                return kp;
-            }
-            // 兼容旧版明文格式：pub / priv
-            if (parts.length >= 2) {
-                byte[] publicEncoded = Base64.getDecoder().decode(parts[0].trim());
-                byte[] privateEncoded = Base64.getDecoder().decode(parts[1].trim());
-                KeyPair kp = rebuildKeyPair(publicEncoded, privateEncoded);
-                if (kp != null) {
-                    plugin.consoleWarn("[Cloud] 检测到旧版明文密钥对，正在迁移为加密存储...");
-                    saveKeyPair(kp, keyFile);
                 }
                 return kp;
             }

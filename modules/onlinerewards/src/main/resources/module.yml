@@ -1,6 +1,6 @@
 id: onlinerewards
 name: OnlineRewards
-version: 1.0.2-beta
+version: 1.3.2
 main: xuanmo.arcartxsuite.onlinerewards.OnlineRewardsModule
 api-version: 1.0
 
