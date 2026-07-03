@@ -13,7 +13,13 @@ public record MenuIconDefinition(
     String sourceId,
     String mmoType,
     String mmoId,
-    String json
+    String json,
+    String texture,
+    String textureUrl,
+    java.util.Map<String, String> nbt,
+    boolean glow,
+    String skullTexture,
+    String color
 ) {
 
     public boolean hasIcon() {
@@ -44,8 +50,29 @@ public record MenuIconDefinition(
             section.getString("id", section.getString("item-id", "")),
             section.getString("mmo-type", ""),
             section.getString("mmo-id", ""),
-            section.getString("json", "")
+            section.getString("json", ""),
+            section.getString("texture", ""),
+            section.getString("texture-url", section.getString("url", "")),
+            loadNbt(section),
+            section.getBoolean("glow", false),
+            section.getString("skull-texture", section.getString("skullTexture", "")),
+            section.getString("color", "")
         );
         return icon.hasIcon() ? icon : null;
+    }
+
+    private static java.util.Map<String, String> loadNbt(ConfigurationSection section) {
+        ConfigurationSection nbtSection = section.getConfigurationSection("nbt");
+        if (nbtSection == null) {
+            return java.util.Map.of();
+        }
+        java.util.Map<String, String> map = new java.util.LinkedHashMap<>();
+        for (String key : nbtSection.getKeys(false)) {
+            Object value = nbtSection.get(key);
+            if (value != null) {
+                map.put(key, String.valueOf(value));
+            }
+        }
+        return map;
     }
 }

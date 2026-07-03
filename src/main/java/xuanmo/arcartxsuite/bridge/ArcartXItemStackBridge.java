@@ -16,6 +16,7 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
     private boolean available;
     private Object itemStackNms;
     private Method item2jsonMethod;
+    private Method putDeepTagMethod;
     private boolean failureWarned;
 
     public ArcartXItemStackBridge(JavaPlugin plugin) {
@@ -26,6 +27,7 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
         available = false;
         itemStackNms = null;
         item2jsonMethod = null;
+        putDeepTagMethod = null;
         failureWarned = false;
 
         Plugin arcartX = plugin.getServer().getPluginManager().getPlugin("ArcartX");
@@ -53,6 +55,11 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
 
             itemStackNms = instance;
             item2jsonMethod = method;
+            Method putDeepTag = findMethod(itemStackNmsClass, "putDeepTag", ItemStack.class, String.class, Object.class);
+            if (putDeepTag == null && instance != null) {
+                putDeepTag = findMethod(instance.getClass(), "putDeepTag", ItemStack.class, String.class, Object.class);
+            }
+            putDeepTagMethod = putDeepTag;
             available = true;
             return true;
         } catch (ReflectiveOperationException exception) {
@@ -65,6 +72,7 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
         available = false;
         itemStackNms = null;
         item2jsonMethod = null;
+        putDeepTagMethod = null;
         failureWarned = false;
     }
 
@@ -98,6 +106,25 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
                 failureWarned = true;
             }
             return Optional.empty();
+        }
+    }
+
+    @Override
+    public ItemStack putStringTag(ItemStack itemStack, String key, String value) {
+        if (!available || putDeepTagMethod == null || itemStack == null || key == null || value == null) {
+            return itemStack;
+        }
+        try {
+            Object result = putDeepTagMethod.invoke(
+                Modifier.isStatic(putDeepTagMethod.getModifiers()) ? null : itemStackNms,
+                itemStack, key, value
+            );
+            if (result instanceof ItemStack stack) {
+                return stack;
+            }
+            return itemStack;
+        } catch (IllegalAccessException | InvocationTargetException | IllegalArgumentException exception) {
+            return itemStack;
         }
     }
 

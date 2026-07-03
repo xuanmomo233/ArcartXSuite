@@ -126,7 +126,7 @@ pages:
         icon:
           material: CHEST                # 材质（Minecraft 物品 ID）
           name: "&f仓库"                 # 图标悬浮名称
-          custom-model-data: 0           # 自定义模型数据（用于资源包自定义贴图）
+          custom-model-data: 0           # 自定义模型数据（用于资源包自定义贴图，配合ItemsAdder或CraftEngine使用）
           # 更多 icon 可选字段：
           # amount: 1                    — 物品数量（显示为堆叠数）
           # lore:                        — 物品描述（列表）
@@ -135,15 +135,41 @@ pages:
           # glow: true                   — 附魔光效
           # skull-texture: "base64..."   — 自定义头颅材质（material 为 PLAYER_HEAD 时）
           # color: "#FF5555"             — 皮革盔甲颜色（material 为 LEATHER_* 时）
-          # --- 物品库图标（支持直接调用物品库的物品 JSON） ---
-          # source: "neigeitems"         — 物品来源 (neigeitems/mythicmobs/overture/mmoitems)
-          # id: "herb_bundle"            — 物品来源 ID
-          # mmo-type: "MATERIAL"         — MMOItems 类型（source 为 mmoitems 时）
-          # mmo-id: "HERB_ESSENCE"       — MMOItems ID（source 为 mmoitems 时）
-          # json: '{"id":"minecraft:diamond_sword","Count":1b}' — 直接提供 NBT JSON
+          # --- 物品库图标（source + id 直接调用物品库的物品）---
+          # 各物品库来源的独立可用示例见本菜单「物品库图标」页（sources 页）
+          # source: "neigeitems"        — 物品来源 (neigeitems/mythicmobs/overture/mmoitems)
+          # id: "herb_bundle"           — 物品来源 ID（配合 source 使用）
+          # mmo-type: "MATERIAL"        — MMOItems 类型（source 为 mmoitems 时）
+          # mmo-id: "HERB_ESSENCE"      — MMOItems ID（source 为 mmoitems 时）
+          # --- 直接发送 json/NBT 给 slot 控件（完全自定义物品） ---
+          # json: '{"id":"minecraft:diamond_sword","Count":1b}' — 直接提供物品 NBT JSON（会忽略上面的 material 等字段）
+          # --- ArcartX 自定义贴图（在 material 物品上写入 NBT，无需资源包 CustomModelData） ---
+          # 原理：ArcartX 读取物品的 icon / url NBT 来渲染自定义贴图（详见ArcartX wiki：自定义物品贴图）
+          # texture: "item"              — 写入 icon NBT，渲染 resource/item_icon/ 下的贴图（手持 / AX-UI）；子目录用 "xxx/xxx"
+          # 或（写法三选一）
+          # texture-url: "menu/warehouse.png"  — 写入 url NBT，仅用于原版 GUI(箱子菜单)图标，支持文件路径 / 网络链接 / GIF
+          # 或（写法三选一）
+          # nbt:                         — 写入任意自定义字符串 NBT（键: 值）
+          #   icon: "item"               — 等同于上述texture: "item"
+          #   或（写法二选一即可）
+          #   url: "https://example.com/icon.gif"  — 等同于上述texture-url
         # 动作列表（按顺序执行）
         actions:
           - "command: /warehouse open"
+          - "close"
+
+      # ─── ArcartX 自定义贴图图标（演示：url NBT 渲染 GUI 图标） ───
+      custom_texture_demo:
+        text: "&b自定义贴图"
+        order: 8
+        icon:
+          material: PAPER              # 基础物品（NBT 会写在它上面）
+          name: "&b自定义贴图示例"
+          lore:
+            - "&7通过 ArcartX 的 url NBT"
+            - "&7在原版 GUI 中渲染自定义图标"
+          texture-url: "menu/demo_icon.png"   # 写入 url NBT → GUI 渲染该贴图（支持 GIF/网络链接）
+        actions:
           - "close"
 
       # ─── 邮件系统（演示：基础图标） ───
@@ -243,11 +269,91 @@ pages:
         actions:
           - "command: /axs essentials spawn"
           - "close"
-      back:
-        text: "&7« 返回"
+      # ─── 物品库图标示例入口 ───
+      item_sources:
+        text: "&f物品库图标示例 »"
         order: 2
         actions:
+          - "page: sources"
+      back:
+        text: "&7« 返回"
+        order: 3
+        actions:
           - "page: main"
+
+  # ═══════════════════════════════════════════════════════════
+  # 第三页：物品库图标示例
+  # 每个来源单独作为一个按钮，演示 source / id / mmo-type / mmo-id 的真实写法
+  # 注意：下面的 id 都是占位示例，请替换成你服务器对应物品库里真实存在的 ID
+  # ═══════════════════════════════════════════════════════════
+  - id: sources
+    title: "&f物品库图标"
+    buttons:
+
+      # ─── NeigeItems：单一 ID 定位 ───
+      neige_demo:
+        text: "&fNeigeItems 物品"
+        order: 0
+        icon:
+          source: neigeitems         # 也可写 neige
+          id: herb_bundle            # 替换为你 NeigeItems 里真实的物品 ID
+          name: "&aNeigeItems 示例"
+          lore:
+            - "&7source: neigeitems"
+            - "&7id: <物品ID>"
+        actions:
+          - "close"
+
+      # ─── MythicMobs：单一 ID 定位 ───
+      mythic_demo:
+        text: "&fMythicMobs 物品"
+        order: 1
+        icon:
+          source: mythicmobs         # 也可写 mythic
+          id: MagicSword             # 替换为你 MythicMobs 里真实的物品 ID
+          name: "&aMythicMobs 示例"
+          lore:
+            - "&7source: mythicmobs"
+            - "&7id: <物品ID>"
+        actions:
+          - "close"
+
+      # ─── Overture：单一 ID 定位（生成时携带玩家上下文） ───
+      overture_demo:
+        text: "&fOverture 物品"
+        order: 2
+        icon:
+          source: overture
+          id: sample_item            # 替换为你 Overture 里真实的物品 ID
+          name: "&aOverture 示例"
+          lore:
+            - "&7source: overture"
+            - "&7id: <物品ID>"
+        actions:
+          - "close"
+
+      # ─── MMOItems：需要 类型(type) + ID 两段定位 ───
+      mmoitems_demo:
+        text: "&fMMOItems 物品"
+        order: 3
+        icon:
+          source: mmoitems           # 也可写 mmo
+          mmo-type: SWORD            # MMOItems 类型
+          mmo-id: STEEL_SWORD        # MMOItems ID
+          # 或合并写：id: "SWORD:STEEL_SWORD"（用 : 或 ; 分隔，二选一）
+          name: "&aMMOItems 示例"
+          lore:
+            - "&7source: mmoitems"
+            - "&7mmo-type: SWORD"
+            - "&7mmo-id: STEEL_SWORD"
+        actions:
+          - "close"
+
+      back:
+        text: "&7« 返回"
+        order: 4
+        actions:
+          - "page: page2"
 # ============================================================
 # 动作类型完整参考
 # ============================================================
@@ -344,3 +450,4 @@ pages:
         # 也可用 "back" 动作返回上一个菜单（自动历史栈）
         actions:
           - "open: example"
+
