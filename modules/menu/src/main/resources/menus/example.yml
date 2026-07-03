@@ -60,7 +60,7 @@ open-actions:
   - "message: &a欢迎打开示例菜单！"
   # 更多示例：
   # - "sound: ENTITY_EXPERIENCE_ORB_PICKUP 1.0 1.0"   — 播放音效（音效名 音量 音调）
-  # - "command: /log menu_open %player_name%"          — 执行后台命令
+  # - "command: log menu_open %player_name%"          — 执行后台命令
   # - "console: say %player_name% 打开了菜单"          — 以控制台身份执行命令
 
 # 关闭菜单时执行的动作列表（可选）
@@ -155,7 +155,7 @@ pages:
           #   url: "https://example.com/icon.gif"  — 等同于上述texture-url
         # 动作列表（按顺序执行）
         actions:
-          - "command: /warehouse open"
+          - "command: warehouse open"
           - "close"
 
       # ─── ArcartX 自定义贴图图标（演示：url NBT 渲染 GUI 图标） ───
@@ -180,7 +180,7 @@ pages:
           material: PAPER
           name: "&f邮件"
         actions:
-          - "command: /mail open"
+          - "command: mail open"
           - "close"
 
       # ─── 在线奖励（演示：条件判断 + 拒绝消息） ───
@@ -202,7 +202,7 @@ pages:
         #   - "sound: ENTITY_VILLAGER_NO 1.0 1.0"
         #   - "close"
         actions:
-          - "command: /onlinerewards open"
+          - "command: onlinerewards open"
           - "close"
 
       # ─── 任务导航（演示：基础按钮） ───
@@ -210,7 +210,7 @@ pages:
         text: "&f任务导航"
         order: 3
         actions:
-          - "command: /questgps open"
+          - "command: questgps open"
           - "close"
 
       # ─── 世界地图（演示：requirements 前置条件） ───
@@ -223,7 +223,7 @@ pages:
         requirements:
           - "%player_level% >= 1"
         actions:
-          - "command: /map open"
+          - "command: map open"
           - "close"
 
       # ─── 传送菜单（演示：打开子菜单） ───
@@ -241,7 +241,7 @@ pages:
         order: 6
         # 未加 "close" 时，执行命令后菜单保持打开
         actions:
-          - "command: /help"
+          - "command: help"
 
       # ─── 下一页（演示：页面切换） ───
       next_page:
@@ -261,13 +261,13 @@ pages:
         text: "&f基础工具"
         order: 0
         actions:
-          - "command: /axs essentials menu"
+          - "command: axs essentials menu"
           - "close"
       spawn:
         text: "&f返回出生点"
         order: 1
         actions:
-          - "command: /axs essentials spawn"
+          - "command: axs essentials spawn"
           - "close"
       # ─── 物品库图标示例入口 ───
       item_sources:
@@ -359,7 +359,7 @@ pages:
 # ============================================================
 # 按钮/生命周期中可用的动作（actions）类型：
 #
-#   "command: /xxx"          — 以玩家身份执行命令
+#   "command: xxx"          — 以玩家身份执行命令
 #   "console: xxx"           — 以控制台（服务器）身份执行命令
 #   "close"                  — 关闭当前菜单
 #   "open: <菜单id>"         — 打开另一个菜单
@@ -410,7 +410,7 @@ pages:
             - ""
             - "&e点击传送"
         actions:
-          - "command: /spawn"
+          - "command: spawn"
           - "close"
       home:
         text: "&f回家"
@@ -421,7 +421,7 @@ pages:
           lore:
             - "&7传送到你设置的家"
         actions:
-          - "command: /home"
+          - "command: home"
           - "close"
       # warp:
       #   text: "&f传送点列表"
@@ -430,7 +430,7 @@ pages:
       #     material: ENDER_PEARL
       #     name: "&a传送点"
       #   actions:
-      #     - "command: /warps"
+      #     - "command: warps"
       #     - "close"
       # tpa:
       #   text: "&f请求传送"
@@ -442,7 +442,7 @@ pages:
       #       - "&7向其他玩家发送传送请求"
       #   actions:
       #     - "close"
-      #     - "command: /tpa"
+      #     - "command: tpa"
       back:
         text: "&7« 返回主菜单"
         order: 2

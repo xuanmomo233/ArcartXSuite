@@ -91,17 +91,6 @@ public record MenuDefinition(
             pages.add(new MenuPageDefinition("main", yaml.getString("title", id), Map.of()));
         }
         List<MenuItemBinding> itemBinds = MenuItemBinding.loadList(yaml.getMapList("item-binds"), id);
-        if (itemBinds.isEmpty()) {
-            itemBinds = MenuItemBinding.loadList(yaml.getMapList("item-bindings"), id);
-        }
-        ConfigurationSection itemBindSection = yaml.getConfigurationSection("item-binds");
-        if (itemBinds.isEmpty() && itemBindSection != null) {
-            List<MenuItemBinding> legacy = new ArrayList<>();
-            for (String key : itemBindSection.getKeys(false)) {
-                legacy.add(MenuItemBinding.load(itemBindSection.getConfigurationSection(key), id));
-            }
-            itemBinds = List.copyOf(legacy);
-        }
 
         return new MenuDefinition(
             id,
@@ -123,3 +112,4 @@ public record MenuDefinition(
         );
     }
 }
+

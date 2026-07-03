@@ -1,7 +1,0 @@
-﻿javap.exe : 错误: 找不到类: ink.ptms.chemdah.taboolib.module.database.HostSQL
-At line:1 char:286
-+ ... oding utf8; & $javap -classpath $free "ink.ptms.chemdah.taboolib.modu ...
-+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (错误: 找不到类: ink.p...atabase.HostSQL:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
