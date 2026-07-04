@@ -299,7 +299,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, var.maxMailCount)){
-                      key = i.round
+                      key = i.round()
                       mail = self['item'].copy('item' + key)
                       mail.entryKey = key
                     }

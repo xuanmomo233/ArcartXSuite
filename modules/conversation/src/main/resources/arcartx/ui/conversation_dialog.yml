@@ -52,8 +52,8 @@ ui:
       }
 
       for(i in range(0, var.replyCount)){
-        key = i.round
-        ri = val.reply_list['回复模板'].copy('reply_' + i.round)
+        key = i.round()
+        ri = val.reply_list['回复模板'].copy('reply_' + i.round())
         ri.entryKey = key
       }
     close: |-
@@ -87,7 +87,7 @@ ui:
     keyPress: |-
       var.k = self.currentKeyPress
       if(var.k >= "1" && var.k <= "9"){
-        var.rowKey = (var.k - 1).round
+        var.rowKey = (var.k - 1).round()
         if(var.replyRows[var.rowKey] != null){
           Chat.say("/session reply " + var.replyRows[var.rowKey]['id'])
         }

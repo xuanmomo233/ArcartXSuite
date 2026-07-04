@@ -32,12 +32,12 @@ ui:
       var.maxButtonCount = packet['maxButtonCount']
       var.maxFooterCount = packet['maxFooterCount']
       for(i in range(0, var.buttonCount)){
-        key = i.round
+        key = i.round()
         mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
         mb.entryKey = key
       }
       for(i in range(0, var.maxFooterCount)){
-        key = i.round
+        key = i.round()
         fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + key)
         fb.entryKey = key
       }
@@ -61,12 +61,12 @@ ui:
         val.footer_rows.get(1).remove()
       }
       for(i in range(0, var.buttonCount)){
-        key = i.round
+        key = i.round()
         mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
         mb.entryKey = key
       }
       for(i in range(0, var.maxFooterCount)){
-        key = i.round
+        key = i.round()
         fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + key)
         fb.entryKey = key
       }

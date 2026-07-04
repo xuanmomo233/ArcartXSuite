@@ -34,7 +34,7 @@ ui:
         }
       }
       for(i in range(0, var.maxRecycleCount)){
-        key = i.round
+        key = i.round()
         item = val.回收列表['回收项' + key]
         if(item != null){
           icon = item['物品图标']
@@ -60,7 +60,7 @@ ui:
         }
       }
       for(i in range(0, var.maxRecycleCount)){
-        key = i.round
+        key = i.round()
         item = val.回收列表['回收项' + key]
         if(item != null){
           icon = item['物品图标']
@@ -218,7 +218,7 @@ controls:
                     action:
                       create: |-
                         for(i in range(0, var.maxRecycleCount)){
-                          key = i.round
+                          key = i.round()
                           item = self['回收项'].copy('回收项' + key)
                           item.entryKey = key
                           icon = item['物品图标']

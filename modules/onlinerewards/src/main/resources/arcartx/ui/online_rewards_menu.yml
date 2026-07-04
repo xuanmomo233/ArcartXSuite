@@ -364,7 +364,7 @@ controls:
             action:
               create: |-
                 for(i in range(0, var.calendarCount)){
-                  key = i.round
+                  key = i.round()
                   di = self['日历模板'].copy('日历项_' + key)
                   di.entryKey = key
                 }
@@ -689,7 +689,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, var.maxRewardCount)){
-                      key = i.round
+                      key = i.round()
                       ri = self['阶段奖励项'].copy('阶段奖励项_' + key)
                       ri.entryKey = key
                     }
@@ -744,7 +744,7 @@ controls:
             attribute:
               x: 1120
               y: 486
-              visible: "var.periodicRewardRows.size == 0 || var.periodicRewardRows.size == null"
+              visible: "var.periodicRewardRows.size() == 0 || var.periodicRewardRows.size() == null"
               texts: "~&0暂无周期奖励"
               fontSize: 36
           周期滑块:
@@ -783,7 +783,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, var.maxPeriodicCount)){
-                      key = i.round
+                      key = i.round()
                       pi = self['周期奖励项'].copy('周期奖励项_' + key)
                       pi.entryKey = key
                     }
@@ -838,7 +838,7 @@ controls:
             attribute:
               x: 1120
               y: 726
-              visible: "var.signInRewardRows.size == 0 || var.signInRewardRows.size == null"
+              visible: "var.signInRewardRows.size() == 0 || var.signInRewardRows.size() == null"
               texts: "~&0暂无签到奖励"
               fontSize: 36
           签到滑块:
@@ -877,7 +877,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, var.maxSigninRewardCount)){
-                      key = i.round
+                      key = i.round()
                       si = self['签到奖励项'].copy('签到奖励项_' + key)
                       si.entryKey = key
                     }

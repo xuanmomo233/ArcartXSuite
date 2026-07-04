@@ -14,9 +14,9 @@ ui:
     #我在这里写了一个自定义准星的动画，就是教你如何自定义准星，你甚至可以联动ac，根据玩家状态来调整准星样式
     tick: |-
       var.t = Time.currentTime() / 1000.0
-      var.r = Cast.toInt(128 + 127 * Math.sin(var.t * 3)).round()
-      var.g = Cast.toInt(128 + 127 * Math.sin(var.t * 3 + 2.094)).round()
-      var.b = Cast.toInt(128 + 127 * Math.sin(var.t * 3 + 4.189)).round()
+      var.r = Cast.toInt(128 + 127 * math.sin(var.t * 3)).round()
+      var.g = Cast.toInt(128 + 127 * math.sin(var.t * 3 + 2.094)).round()
+      var.b = Cast.toInt(128 + 127 * math.sin(var.t * 3 + 4.189)).round()
       var.crosshairColor = var.r + ',' + var.g + ',' + var.b + ',200'
 
   packetHandler:

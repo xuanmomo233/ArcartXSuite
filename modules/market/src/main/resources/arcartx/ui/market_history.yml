@@ -33,7 +33,7 @@ ui:
         }
       }
       for(i in range(0, var.maxRecordCount)){
-        key = i.round
+        key = i.round()
         row = val.记录列表['记录行' + key]
         if(row != null){
           icon = row['物品图标']
@@ -58,7 +58,7 @@ ui:
         }
       }
       for(i in range(0, var.maxRecordCount)){
-        key = i.round
+        key = i.round()
         row = val.记录列表['记录行' + key]
         if(row != null){
           icon = row['物品图标']
@@ -208,7 +208,7 @@ controls:
                     action:
                       create: |-
                         for(i in range(0, var.maxRecordCount)){
-                          key = i.round
+                          key = i.round()
                           row = self['记录行'].copy('记录行' + key)
                           row.entryKey = key
                           icon = row['物品图标']

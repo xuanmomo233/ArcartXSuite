@@ -46,17 +46,17 @@ ui:
       }
 
       for(i in range(0, var.maxBalanceCount)){
-        key = i.round
+        key = i.round()
         bal = val.余额列表['项'].copy('项' + key)
         bal.entryKey = key
       }
       for(i in range(0, var.maxProductCount)){
-        key = i.round
+        key = i.round()
         prod = val.产品列表['项'].copy('项' + key)
         prod.entryKey = key
       }
       for(i in range(0, var.maxFixedCount)){
-        key = i.round
+        key = i.round()
         fd = val.定期列表['项'].copy('项' + key)
         fd.entryKey = key
       }
@@ -86,17 +86,17 @@ ui:
       }
       
       for(i in range(0, var.maxBalanceCount)){
-        key = i.round
+        key = i.round()
         bal = val.余额列表['项'].copy('项' + key)
         bal.entryKey = key
       }
       for(i in range(0, var.maxProductCount)){
-        key = i.round
+        key = i.round()
         prod = val.产品列表['项'].copy('项' + key)
         prod.entryKey = key
       }
       for(i in range(0, var.maxFixedCount)){
-        key = i.round
+        key = i.round()
         fd = val.定期列表['项'].copy('项' + key)
         fd.entryKey = key
       }

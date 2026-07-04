@@ -167,7 +167,7 @@ controls:
               point: ~top_left
               x: 310
               y: 16
-              width: "var.totalCount > 0 ? Math.max(12, 96 * var.completedCount / var.totalCount) : 12"
+              width: "var.totalCount > 0 ? math.max(12, 96 * var.completedCount / var.totalCount) : 12"
               height: 18
               normal: ~120,220,80,230
               shape: ~round_rect

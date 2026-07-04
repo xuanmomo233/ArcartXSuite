@@ -59,22 +59,22 @@ ui:
       var.renderBackpackAmounts()
       var.itemJsons = {}
       for(i in range(0, 54)){
-        key = i.round
+        key = i.round()
         slot = val.仓库网格['物品图标'].copy('物品图标' + key)
         slot.entryKey = key
       }
       for(i in range(0, var.maxPersonalCount)){
-        key = i.round
+        key = i.round()
         pw = val.个人仓库列表['项'].copy('项' + key)
         pw.entryKey = key
       }
       for(i in range(0, var.maxCategoryCount)){
-        key = i.round
+        key = i.round()
         cat = val.分类列表['项'].copy('项' + key)
         cat.entryKey = key
       }
       for(i in range(0, var.maxSharedCount)){
-        key = i.round
+        key = i.round()
         sw = val.共享仓库列表['项'].copy('项' + key)
         sw.entryKey = key
       }
@@ -89,8 +89,8 @@ ui:
         }
       }
       for(i in range(0, 54)){
-        if(val.仓库网格.get(i.round) != null){
-          icon = val.仓库网格.get(i.round)
+        if(val.仓库网格.get(i.round()) != null){
+          icon = val.仓库网格.get(i.round())
           if(icon != null){
             icon.seticon()
           }
@@ -145,8 +145,8 @@ ui:
         }
       }
       for(i in range(0, 54)){
-        if(val.仓库网格.get(i.round) != null){
-          icon = val.仓库网格.get(i.round)
+        if(val.仓库网格.get(i.round()) != null){
+          icon = val.仓库网格.get(i.round())
           if(icon != null){
             icon.seticon()
           }
@@ -205,7 +205,7 @@ ui:
         if(val.背包网格 != null){
           for(raw in range(9,44)){
             control = raw == 9 ? val.背包网格['背包槽'] : val.背包网格['背包槽' + (raw - 9)]
-            entry = var.backpack[raw.round]
+            entry = var.backpack[raw.round()]
             if(control != null){
               amountText = ''
               if(entry != null && !entry['empty']){
@@ -685,7 +685,7 @@ controls:
                       itemScale: 0.76
                       width: 72
                       height: 72
-                      normal: "self.entryKey == var.selectedSlot.round ? '120,190,255,255' : '95,95,95,255'"
+                      normal: "self.entryKey == var.selectedSlot.round() ? '120,190,255,255' : '95,95,95,255'"
                       hover: ~Frosted:0;255,255,255,255
                       shape: ~round_rect
                       radius: 16
@@ -823,7 +823,7 @@ controls:
                   create: |-
                     for(i in range(1,35)){
                       slot = self['背包槽'].copy('背包槽' + i)
-                      slot.entryKey = (9 + i).round
+                      slot.entryKey = (9 + i).round()
                       slot.id = 9 + i
                     }
                 children:
@@ -879,7 +879,7 @@ controls:
                   x: 26
                   y: 24
                   width: 230
-                  texts: "'&f已选槽位: ' + (var.selectedSlot + 1).round"
+                  texts: "'&f已选槽位: ' + (var.selectedSlot + 1).round()"
                   fontSize: 48
               数量输入:
                 type: TextBox

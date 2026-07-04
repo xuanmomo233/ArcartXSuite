@@ -26,9 +26,9 @@ ui:
     tick: |-
       if (var.buffer_active) {
         var.elapsed = Time.currentTime() - var.buffer_start
-        var.remaining = Math.max(0, 3000 - var.elapsed)
+        var.remaining = math.max(0, 3000 - var.elapsed)
         var.countdown = Cast.toInt(var.remaining / 1000) + 1
-        var.fade_alpha = Math.min(200, Cast.toInt(var.elapsed * 200 / 1500))
+        var.fade_alpha = math.min(200, Cast.toInt(var.elapsed * 200 / 1500))
         if (var.remaining <= 0) {
           var.buffer_active = false
         }

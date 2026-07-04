@@ -194,7 +194,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, var.maxLogCount)){
-                      key = i.round
+                      key = i.round()
                       log = self['item'].copy('item' + key)
                       log.entryKey = key
                     }

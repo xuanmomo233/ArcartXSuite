@@ -162,7 +162,7 @@ controls:
             attribute:
               x: 0
               y: 36
-              texts: "'&7剩余时间: &f' + Math.ceil(var.timeLeft / 20).round + ' 秒'"
+              texts: "'&7剩余时间: &f' + math.ceil(var.timeLeft / 20).round() + ' 秒'"
               fontSize: 28
 
           状态提示:

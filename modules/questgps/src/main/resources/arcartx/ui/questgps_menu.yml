@@ -346,7 +346,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, 8)){
-                      item = self['分类模板'].copy('分类项' + i.round)
+                      item = self['分类模板'].copy('分类项' + i.round())
                       item.entryKey = ''
                     }
                 children:
@@ -474,7 +474,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, 16)){
-                      item = self['任务模板'].copy('任务项' + i.round)
+                      item = self['任务模板'].copy('任务项' + i.round())
                       item.entryKey = ''
                     }
                 children:
@@ -626,7 +626,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, 8)){
-                      item = self['目标模板'].copy('目标项' + i.round)
+                      item = self['目标模板'].copy('目标项' + i.round())
                       item.entryKey = ''
                     }
                 children:
@@ -710,7 +710,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, 8)){
-                      item = self['奖励模板'].copy('奖励项' + i.round)
+                      item = self['奖励模板'].copy('奖励项' + i.round())
                       item.entryKey = ''
                     }
                 children:

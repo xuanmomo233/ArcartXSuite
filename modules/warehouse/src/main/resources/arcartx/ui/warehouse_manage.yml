@@ -64,12 +64,12 @@ ui:
         val.成员列表.get(1).remove()
       }
       for(i in range(0, var.maxManageCount)){
-        key = i.round
+        key = i.round()
         item = val.共享列表['项'].copy('项' + key)
         item.entryKey = key
       }
       for(i in range(0, var.maxMemberCount)){
-        key = i.round
+        key = i.round()
         member = val.成员列表['项'].copy('项' + key)
         member.entryKey = key
       }
@@ -117,12 +117,12 @@ ui:
         val.成员列表.get(1).remove()
       }
       for(i in range(0, var.maxManageCount)){
-        key = i.round
+        key = i.round()
         item = val.共享列表['项'].copy('项' + key)
         item.entryKey = key
       }
       for(i in range(0, var.maxMemberCount)){
-        key = i.round
+        key = i.round()
         member = val.成员列表['项'].copy('项' + key)
         member.entryKey = key
       }

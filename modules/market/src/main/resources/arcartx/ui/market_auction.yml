@@ -39,7 +39,7 @@ ui:
         }
       }
       for(i in range(0, var.maxListingCount)){
-        key = i.round
+        key = i.round()
         row = val.物品列表['物品行' + key]
         if(row != null){
           icon = row['物品图标']
@@ -70,7 +70,7 @@ ui:
         }
       }
       for(i in range(0, var.maxListingCount)){
-        key = i.round
+        key = i.round()
         row = val.物品列表['物品行' + key]
         if(row != null){
           icon = row['物品图标']
@@ -388,7 +388,7 @@ controls:
                     action:
                       create: |-
                         for(i in range(0, var.maxCategoryCount)){
-                          key = i.round
+                          key = i.round()
                           cat = self['分类项'].copy('分类项' + key)
                           cat.entryKey = key
                         }
@@ -469,7 +469,7 @@ controls:
                     action:
                       create: |-
                         for(i in range(0, var.maxListingCount)){
-                          key = i.round
+                          key = i.round()
                           row = self['物品行'].copy('物品行' + key)
                           row.entryKey = key
                           icon = row['物品图标']

@@ -22,7 +22,7 @@ ui:
       var.fishList = packet['fishList']
       var.maxFishCount = packet['maxFishCount']
       for(i in range(0, var.maxFishCount)){
-        key = i.round
+        key = i.round()
         item = val.鱼类列表['鱼条目' + key]
         if(item != null){
           item.entryKey = key
@@ -192,7 +192,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, var.maxFishCount)){
-                      key = i.round
+                      key = i.round()
                       item = self['鱼条目'].copy('鱼条目' + key)
                       item.entryKey = key
                     }

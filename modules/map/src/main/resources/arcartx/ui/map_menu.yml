@@ -223,7 +223,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, var.maxWorldCount)){
-                      key = i.round
+                      key = i.round()
                       wi = self['item'].copy('item' + key)
                       wi.entryKey = key
                     }
@@ -338,7 +338,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, var.maxAnchorCount)){
-                      key = i.round
+                      key = i.round()
                       ai = self['item'].copy('item' + key)
                       ai.entryKey = key
                     }
@@ -436,7 +436,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, var.maxWaypointCount)){
-                      key = i.round
+                      key = i.round()
                       wpi = self['item'].copy('item' + key)
                       wpi.entryKey = key
                     }
@@ -523,7 +523,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, var.maxExternalCount)){
-                      key = i.round
+                      key = i.round()
                       ei = self['item'].copy('item' + key)
                       ei.entryKey = key
                     }

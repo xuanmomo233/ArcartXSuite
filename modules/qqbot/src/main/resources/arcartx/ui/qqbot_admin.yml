@@ -450,7 +450,7 @@ controls:
                 attribute:
                   x: 422
                   y: 394
-                  texts: "'&7' + (var.bindPage + 1) + '/' + Math.max(1, Math.ceil(var.bindTotal / 10))'"
+                  texts: "'&7' + (var.bindPage + 1) + '/' + math.max(1, math.ceil(var.bindTotal / 10))'"
                   fontSize: 26
                   center: true
               下一页:

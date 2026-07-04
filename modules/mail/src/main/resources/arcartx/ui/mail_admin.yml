@@ -263,7 +263,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(1, var.maxPresetCount)){
-                      key = i.round
+                      key = i.round()
                       row = self['preset_row'].copy('preset_row' + key)
                       row.entryKey = key
                     }

@@ -501,7 +501,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, 64)){
-                      item = self['分组模板'].copy('分组项' + i.round)
+                      item = self['分组模板'].copy('分组项' + i.round())
                       item.entryKey = ''
                     }
                 children:
@@ -576,7 +576,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, 64)){
-                      item = self['品质模板'].copy('品质项' + i.round)
+                      item = self['品质模板'].copy('品质项' + i.round())
                       item.entryKey = ''
                     }
                 children:
@@ -651,7 +651,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, 200)){
-                      item = self['称号模板'].copy('称号项' + i.round)
+                      item = self['称号模板'].copy('称号项' + i.round())
                       item.entryKey = ''
                     }
                 children:
@@ -885,7 +885,7 @@ controls:
                     action:
                       create: |-
                         for(i in range(0, 64)){
-                          item = self['套装模板'].copy('套装项' + i.round)
+                          item = self['套装模板'].copy('套装项' + i.round())
                           item.entryKey = ''
                         }
                     children:
@@ -978,7 +978,7 @@ controls:
                     action:
                       create: |-
                         for(i in range(0, 64)){
-                          item = self['已装备模板'].copy('已装备项' + i.round)
+                          item = self['已装备模板'].copy('已装备项' + i.round())
                           item.entryKey = ''
                         }
                     children:

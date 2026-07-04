@@ -80,7 +80,7 @@ controls:
         attribute:
           point: ~top_center
           width: 720
-          height: 80 + 32 * Math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数)
+          height: 80 + 32 * math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数)
           y: 30
           normal: ~Frosted:30;0,0,0,200
           shape: ~round_rect
@@ -105,7 +105,7 @@ controls:
               x: 0
               y: 60
               width: 2
-              height: 28 * Math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数)
+              height: 28 * math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数)
               normal: ~255,255,255,80
           # ============ 红队（左侧）============
           RedGrid:

@@ -18,7 +18,7 @@ ui:
         }
       }
       for(i in range(0, var.maxBackpackCount)){
-        key = i.round
+        key = i.round()
         slot = val.背包网格['背包槽' + key]
         if(slot != null){
           slot.seticon()
@@ -43,7 +43,7 @@ ui:
         }
       }
       for(i in range(0, var.maxBackpackCount)){
-        key = i.round
+        key = i.round()
         slot = val.背包网格['背包槽' + key]
         if(slot != null){
           slot.seticon()
@@ -170,7 +170,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(0, var.maxBackpackCount)){
-                      key = i.round
+                      key = i.round()
                       slot = self['背包槽'].copy('背包槽' + key)
                       slot.entryKey = key
                       slot.id = key

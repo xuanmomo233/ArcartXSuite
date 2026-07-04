@@ -36,7 +36,7 @@ ui:
         }
       }
       for(i in range(0, var.maxItemCount)){
-        key = i.round
+        key = i.round()
         item = val.商品列表['商品项' + key]
         if(item != null){
           icon = item['物品图标']
@@ -64,7 +64,7 @@ ui:
         }
       }
       for(i in range(0, var.maxItemCount)){
-        key = i.round
+        key = i.round()
         item = val.商品列表['商品项' + key]
         if(item != null){
           icon = item['物品图标']
@@ -225,7 +225,7 @@ controls:
                     action:
                       create: |-
                         for(i in range(0, var.maxShopCount)){
-                          key = i.round
+                          key = i.round()
                           shop = self['商店项'].copy('商店项' + key)
                           shop.entryKey = key
                         }
@@ -306,7 +306,7 @@ controls:
                     action:
                       create: |-
                         for(i in range(0, var.maxItemCount)){
-                          key = i.round
+                          key = i.round()
                           item = self['商品项'].copy('商品项' + key)
                           item.entryKey = key
                           icon = item['物品图标']

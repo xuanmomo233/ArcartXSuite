@@ -24,7 +24,7 @@ ui:
       # 默认灰色兜底
       var.rarityColors[''] = '~128,128,128,255'
     open: |-
-      var.random = 0.8 + Math.random() * 0.01
+      var.random = 0.8 + math.random() * 0.01
       var.V = TwoLerp(1, 3, 0.5, 2000, 6000)
       val.Scroll.moveX = 0.0005
       val.开箱动画.visible = true
@@ -42,7 +42,7 @@ ui:
       }
     tick: |-
       if(var.V < 1 && val.Scroll.moveX < 0.8){
-        var.V = Math.max(var.V, 0.5)
+        var.V = math.max(var.V, 0.5)
       }
       if(val.Scroll.moveX < var.random){
         val.Scroll.moveX = val.Scroll.moveX + (0.0003 * var.V)
@@ -194,7 +194,7 @@ controls:
             action:
               create: |-
                 for(i in range(1,9)){
-                  key = i.round
+                  key = i.round()
                   十连抽 = self['十连单个布局'].copy('十连单个布局' + key)
                   十连抽['奖品槽位'].id = 8 + key
                 }
@@ -279,17 +279,17 @@ controls:
                 action:
                   create: |-
                     for(i in range(1,9)){
-                      key = i.round
+                      key = i.round()
                       抽奖布局 = self['抽奖布局'].copy('抽奖布局' + key)
                       抽奖布局['slot0'].id = key
                     }
                     for(i in range(1,9)){
-                      key = i.round
+                      key = i.round()
                       抽奖布局 = self['抽奖布局'].copy('抽奖布局' + 9 + key)
                       抽奖布局['slot0'].id = key
                     }
                     for(i in range(1,9)){
-                      key = i.round
+                      key = i.round()
                       抽奖布局 = self['抽奖布局'].copy('抽奖布局' + 18 + key)
                       抽奖布局['slot0'].id = key
                     }
@@ -477,7 +477,7 @@ controls:
                 action:
                   create: |-
                     for(i in range(1,44)){
-                      key = i.round
+                      key = i.round()
                       奖励布局 = self['奖励布局'].copy('奖励布局' + key)
                       奖励布局['slot0'].id = key
                     }

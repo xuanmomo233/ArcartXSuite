@@ -11,8 +11,8 @@ ui:
     keyPress: |-
       if(self.currentKeyPress() == "TAB"){
         Packet.send("TAB","update")
-        var.单列数量 = Math.ceil(server.server_online / val.TAB遍历.row)
-        var.第一列人数 = Math.min(server.server_online, 15)
+        var.单列数量 = math.ceil(server.server_online / val.TAB遍历.row)
+        var.第一列人数 = math.min(server.server_online, 15)
         var.TAB显示 = true
       }
     keyRelease: |-
@@ -35,8 +35,8 @@ ui:
           i++
         }
       }
-      var.单列数量 = Math.ceil(server.server_online / val.TAB遍历.row)
-      var.第一列人数 = Math.min(server.server_online, 15)
+      var.单列数量 = math.ceil(server.server_online / val.TAB遍历.row)
+      var.第一列人数 = math.min(server.server_online, 15)
 controls:
   自适应全局布局:
     type: adaptive

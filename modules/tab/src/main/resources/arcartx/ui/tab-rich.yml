@@ -11,8 +11,8 @@ ui:
     keyPress: |-
       if(self.currentKeyPress() == "TAB"){
         Packet.send("TAB","update")
-        var.RichTAB单列数量 = Math.ceil(server.server_online / val.RichTAB遍历.row)
-        var.RichTAB第一列人数 = Math.min(server.server_online, 15)
+        var.RichTAB单列数量 = math.ceil(server.server_online / val.RichTAB遍历.row)
+        var.RichTAB第一列人数 = math.min(server.server_online, 15)
         var.RichTAB显示 = true
       }
     keyRelease: |-
@@ -44,8 +44,8 @@ ui:
           i++
         }
       }
-      var.RichTAB单列数量 = Math.ceil(server.server_online / val.RichTAB遍历.row)
-      var.RichTAB第一列人数 = Math.min(server.server_online, 15)
+      var.RichTAB单列数量 = math.ceil(server.server_online / val.RichTAB遍历.row)
+      var.RichTAB第一列人数 = math.min(server.server_online, 15)
 controls:
   自适应全局布局:
     type: adaptive

@@ -23,21 +23,21 @@ ui:
       var.maxWeeklyCount = packet['maxWeeklyCount']
       var.maxSeasonCount = packet['maxSeasonCount']
       for(i in range(0, var.maxDailyCount)){
-        key = i.round
+        key = i.round()
         item = val.每日任务列表['任务项' + key]
         if(item != null){
           item.entryKey = key
         }
       }
       for(i in range(0, var.maxWeeklyCount)){
-        key = i.round
+        key = i.round()
         item = val.每周任务列表['任务项' + key]
         if(item != null){
           item.entryKey = key
         }
       }
       for(i in range(0, var.maxSeasonCount)){
-        key = i.round
+        key = i.round()
         item = val.赛季任务列表['任务项' + key]
         if(item != null){
           item.entryKey = key
@@ -195,7 +195,7 @@ controls:
                         action:
                           create: |-
                             for(i in range(0, var.maxDailyCount)){
-                              key = i.round
+                              key = i.round()
                               item = self['任务项'].copy('任务项' + key)
                               item.entryKey = key
                             }
@@ -290,7 +290,7 @@ controls:
                         action:
                           create: |-
                             for(i in range(0, var.maxWeeklyCount)){
-                              key = i.round
+                              key = i.round()
                               item = self['任务项'].copy('任务项' + key)
                               item.entryKey = key
                             }
@@ -385,7 +385,7 @@ controls:
                         action:
                           create: |-
                             for(i in range(0, var.maxSeasonCount)){
-                              key = i.round
+                              key = i.round()
                               item = self['任务项'].copy('任务项' + key)
                               item.entryKey = key
                             }
