@@ -86,16 +86,7 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
                 .withEnum(Set.of("sqlite", "mysql")),
             // pool-size 范围 1-100
             ValidationRule.required("storage.pool-size", ValueType.INT)
-                .withRange(1, 100),
-            // 包超时时间（毫秒）
-            ValidationRule.of("packet.timeout-ms", ValueType.INT)
-                .withRange(100, 30000),
-            // PAPI检测间隔（ticks）
-            ValidationRule.of("papi.watcher-interval-ticks", ValueType.INT)
-                .withRange(1, null),
-            // 事件优先级验证
-            ValidationRule.of("event.priority", ValueType.STRING)
-                .withEnum(Set.of("LOWEST", "LOW", "NORMAL", "HIGH", "HIGHEST", "MONITOR"))
+                .withRange(1, 100)
         );
     }
 

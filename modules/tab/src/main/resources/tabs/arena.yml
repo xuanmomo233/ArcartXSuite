@@ -7,7 +7,6 @@
 #   - 玩家头像（PlayerSkin）+ 名字颜色随 PVP / vanish 状态变化
 #   - 战斗状态图标（PVP 中 = ⚔，正常 = ·）
 # 启用前请确认：
-#   - settings.papi.enabled: true
 #   - settings.style.pvp-highlight.enabled: true
 #   - 玩家已分配到 scoreboard team "red" / "blue"（或替换下面的 team PAPI 来源）
 # 默认 enabled: false，避免与 online-tab / demo 同时推送时玩家看到多个 HUD。

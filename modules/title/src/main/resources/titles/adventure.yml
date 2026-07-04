@@ -2,27 +2,46 @@
 # 每个根键为称号 ID；group 必须已在主配置 groups: 中定义。
 
 adventurer:
+  # 是否启用该称号。
   enabled: true
+  # 所属分组 ID，必须已在 ArcartXTitle.yml 的 groups: 中定义。
   group: "adventure"
+  # 品质 ID，必须已在 ArcartXTitle.yml 的 qualities: 中定义。
   quality: "common"
+  # 称号类型，当前支持 text（纯文本）。
   kind: "text"
+  # 称号显示名称。
   display-name: "&0冒险者"
+  # 装备后附加在聊天消息前的文本。
   chat-prefix: "&7[冒险者]&r "
+  # 装备后附加在聊天消息后的文本。
   chat-suffix: ""
+  # 装备后附加在玩家列表名字前的文本。
   tab-prefix: "&7[冒险者]&r "
+  # 装备后附加在玩家列表名字后的文本。
   tab-suffix: ""
+  # 称号描述，常用于菜单提示。
   description: "完成新手冒险线后获得。"
+  # 称号来源说明。
   source: "新手任务"
+  # 展示属性：仅当该称号装备时生效的属性加成。
+  # key 为属性名，value 为数值；最终由 attribute-bridges 映射到对应属性插件。
   display-attributes:
     attack: 1
+  # 展示属性在菜单中的显示行列表。
   display-attribute-lines:
     - "&4暴击率: 5(%)"
+  # 收藏属性：只要拥有该称号（无需装备）即可生效的属性加成。
   collection-attributes:
     knowledge: 1
+  # 收藏属性在菜单中的显示行列表。
   collection-attribute-lines:
     - "&a生命力: 100"
+  # 同分组 / 同品质内的排序权重，越小越靠前。
   sort-order: 10
-  # 头顶显示：text 模式使用 Scoreboard Team 前后缀（纯服务端）。
+  # 头顶显示模式：text 使用 Scoreboard Team 前后缀（纯服务端）；none 表示不在头顶显示。
   overhead-mode: text
+  # 头顶前缀。
   overhead-prefix: "&7[冒险者] "
+  # 头顶后缀。
   overhead-suffix: ""

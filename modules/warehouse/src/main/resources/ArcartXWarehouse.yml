@@ -224,14 +224,40 @@ sort-profiles:
       - "amount:desc"
       - "updated:desc"
 
+# ─── 展示柜（Showcase）配置 ────────────────────────────────────────
+# 允许玩家将仓库中的物品展示到聊天卡片，供其他玩家查看。
+showcase:
+  # 是否启用展示柜功能。
+  enabled: true
+  # 每次发送展示卡片后的冷却时间（秒），最短 5 秒。
+  cooldown-seconds: 60
+  # 单次展示卡片中最多显示的物品数量，最少 1 个。
+  max-items: 9
+  # 展示卡片使用的 ArcartX 卡片 ID（EventPacket/Chat 卡片），留空则使用模块内置默认卡片。
+  card-id: ""
+  # 使用展示柜功能所需的权限节点。
+  permission: "arcartxsuite.warehouse.showcase"
+
+# ─── 黑名单 ────────────────────────────────────────
+# 匹配任意一条规则的物品将无法存入仓库。
 blacklist:
+  # 按原版 Material ID 拦截，例如 ["BEDROCK", "COMMAND_BLOCK"]。
   material-ids: []
+  # 按 MythicMobs 物品 ID 拦截。
   mythic-item-ids: []
+  # 按 NeigeItems 物品 ID 拦截。
   neige-item-ids: []
+  # 按 Overture 物品 ID 拦截。
+  overture-item-ids: []
+  # 按物品种类（kind）拦截，具体可用值取决于物品定义。
   kinds: []
+  # 物品显示名包含任意关键词即拦截。
   name-contains:
     - "绑定不可存"
+  # 物品 Lore 包含任意关键词即拦截。
   lore-contains:
     - "不可存入仓库"
+  # 物品显示名匹配任意正则即拦截。
   name-regex: []
+  # 物品 Lore 匹配任意正则即拦截。
   lore-regex: []

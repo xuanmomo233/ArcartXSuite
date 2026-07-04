@@ -3,7 +3,6 @@
 # （文件位于 plugins/ArcartXSuite/ui/tab-rich.yml，模块启用时自动复制）。
 # 该 UI 渲染玩家头像（PlayerSkin 纹理）+ 视觉风格 PAPI（PVP / vanish / ping）。
 # 启用前请确认：
-#   - settings.papi.enabled: true
 #   - settings.style.pvp-highlight / vanish-grey / ping-icon 按需打开
 # 默认 enabled: false，避免与 online-tab 同时推送时玩家看到双 HUD。
 

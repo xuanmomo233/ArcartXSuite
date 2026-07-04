@@ -1,27 +1,47 @@
 config-version: 1
 
+# ─── 数据存储 ────────────────────────────────────────
+# mode: sqlite 或 mysql。
 storage:
   mode: sqlite
+  # SQLite 数据库文件名（相对模块数据目录）。
   sqlite-file-name: fishing.db
+  # 连接池大小，SQLite 建议保持 1。
   pool-size: 1
+  # 以下仅在 mode: mysql 时生效。
   mysql-host: localhost
   mysql-port: 3306
   mysql-database: axs_fishing
   mysql-username: root
   mysql-password: ""
 
+# ─── 钓鱼小游戏核心参数 ────────────────────────────────────────
 fishing:
+  # 是否接管原版钓鱼事件，启用后玩家甩竿会进入 AXS 钓鱼小游戏。
   replace-vanilla: true
+  # 小游戏刷新间隔（ticks），20 ticks = 1 秒。值越小动画越平滑，CPU 占用越高。
   minigame-tick-interval: 1
+  # 进度条重力加速度（像素/tick²），影响绿色目标条下落速度。
   bar-gravity: 0.3
+  # 进度条碰撞阻尼（0-1），越接近 1 反弹越持久。
   bar-bounce-damping: 0.7
+  # 鼠标点击给进度条施加的瞬时速度（负数表示向上），绝对值越大越容易把条弹起。
   bar-click-force: -0.6
+  # 单次小游戏最长持续时间（ticks），超时视为失败。
   catch-duration-ticks: 600
+  # 未按住鼠标时进度下降速率。
   progress-drain-rate: 0.5
+  # 按住鼠标时进度上升速率。
   progress-gain-rate: 1.0
+  # 绿色目标条基础高度（像素），随鱼难度变化。
   base-green-bar-height: 96
+  # 鱼每提升 1 级难度，绿色条增加的高度（像素）。
   height-per-level: 4
+  # 钓起宝藏（treasures/ 目录定义）的基础概率，范围 0.0 ~ 1.0，最终概率受水域、饵料加成影响。
+  treasure-chance: 0.15
+  # 完美收竿（进度条始终覆盖目标区域）时的经验倍率。
   perfect-bonus-multiplier: 1.5
+  # 每提升 1 级钓鱼等级所需基础经验。
   base-xp-per-level: 100
 
 # ─── 水域定义 ────────────────────────────────────────
@@ -103,21 +123,24 @@ treasure-pools:
     - "lost_ring"
 
 # ─── 饵料定义 ────────────────────────────────────────
-# 详细定义在 baits/ 目录下，此处仅声明可用饵料列表
-baits:
-  enabled: true
-  default-bait: "worm"
-  # 玩家钓鱼时检测鱼竿的 NBT 或 lore 来识别饵料
-  # 示例: 鱼竿 lore 包含 "&7饵料: 蚯蚓" 则使用 worm
-  lore-pattern: "&7饵料: {bait_name}"
-  # 或使用 NBT 标签 (如 axs:bait)
-  nbt-tag: "axs_bait"
+# 饵料不通过本文件配置，请在 baits/ 目录下为每个饵料创建独立 YAML 文件。
+# 每个饵料文件支持的字段见 fishes/worm.yml 示例：
+#   id、display-name、item、default、fish-attract-modifiers、
+#   treasure-chance-boost、max-durability-bonus。
 
+# ─── UI 注册 ────────────────────────────────────────
+# 这些 UI 文件位于 arcartx/ui/ 目录，由模块在启动时注册到 ArcartX。
 ui:
+  # 是否在插件启用时自动注册本模块的 UI。
   register-on-enable: true
+  # 钓鱼小游戏 UI 的 ID。
   minigame-id: "fishing_minigame"
+  # 鱼类图鉴 UI 的 ID。
   collection-id: "fishing_collection"
 
+# ─── 命令配置 ────────────────────────────────────────
 commands:
+  # 是否注册 /fishing 命令。
   enabled: true
+  # 使用钓鱼命令所需的基础权限节点。
   base-permission: "axs.fishing.use"

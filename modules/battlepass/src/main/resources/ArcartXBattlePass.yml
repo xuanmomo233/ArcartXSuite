@@ -33,8 +33,12 @@ tasks:
   weekly-count: 2                 # 每周分配给玩家的每周任务数量
   tasks-directory: "tasks"        # 任务文件所在目录（相对模块数据目录）
 
+# 等级奖励定义。
+# 注意：本段必须为 Mapping（键值对）结构，顶层键为任意唯一标识，内部必须包含 level 与 free/premium/deluxe 奖励。
+# 代码使用 section.getKeys(false) 遍历，若写成 YAML 列表会导致奖励无法加载。
 rewards:
-  - level: 1
+  "1":
+    level: 1
     free:
       type: command
       data: "give {player} diamond 1"
@@ -44,7 +48,8 @@ rewards:
     deluxe:
       type: command
       data: "give {player} diamond 8"
-  - level: 2
+  "2":
+    level: 2
     free:
       type: command
       data: "give {player} iron_ingot 8"
@@ -54,7 +59,8 @@ rewards:
     deluxe:
       type: command
       data: "give {player} iron_ingot 48"
-  - level: 5
+  "5":
+    level: 5
     free:
       type: command
       data: "give {player} experience_bottle 4"
@@ -64,7 +70,8 @@ rewards:
     deluxe:
       type: command
       data: "give {player} experience_bottle 24"
-  - level: 10
+  "10":
+    level: 10
     free:
       type: command
       data: "give {player} emerald 2"

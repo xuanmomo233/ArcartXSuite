@@ -1,11 +1,18 @@
 config-version: 1
 
+# 奖池文件所在目录，路径相对模块数据目录。
+# 目录下每个 *.yml 文件对应一个抽奖池，支持 gacha（原神祈愿）与 case（CS 开箱）两种类型。
 pools-directory: "lottery/pools"
 
+# ─── 数据存储 ────────────────────────────────────────
 storage:
+  # 存储模式：sqlite 或 mysql。
   mode: sqlite
+  # SQLite 文件名（相对模块数据目录）。
   sqlite-file-name: "lottery.db"
+  # JDBC 连接池大小，SQLite 建议保持 1。
   pool-size: 1
+  # 以下仅在 mode: mysql 时生效。
   # mysql-host: "localhost"
   # mysql-port: 3306
   # mysql-database: "axs_lottery"
@@ -13,8 +20,9 @@ storage:
   # mysql-password: ""
   # table-prefix: "lottery_"
 
-# 原神跨池共享组定义
-# 同一组内的 Gacha 池子共享保底计数
+# ─── 原神跨池共享保底组 ────────────────────────────────────────
+# 同一组内的 Gacha 池子共享保底计数。
+# key 为分组 ID，value 为通配符表达式，用于匹配奖池文件中的 pool id。
 shared-pity-groups:
   character_events: "character_event_*"
   weapon_events: "weapon_event_*"

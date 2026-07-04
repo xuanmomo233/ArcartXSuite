@@ -86,12 +86,6 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
             // pool-size 范围 1-100
             ValidationRule.required("storage.pool-size", ValueType.INT)
                 .withRange(1, 100),
-            // 签到冷却时间（小时）
-            ValidationRule.of("settings.signin-cooldown-hours", ValueType.INT)
-                .withRange(0, 168),
-            // 最大连续签到天数
-            ValidationRule.of("settings.max-consecutive-days", ValueType.INT)
-                .withRange(1, 365),
             // 离线储蓄上限
             ValidationRule.of("offline-savings.max-minutes", ValueType.INT)
                 .withRange(0, 1440),

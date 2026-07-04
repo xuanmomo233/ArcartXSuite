@@ -7,16 +7,25 @@
 # text 字段支持 PlaceholderAPI 变量，如 %player_name%。
 
 welcome:
+  # 是否启用该 RGB 条目。
   enabled: true
+  # 原始文本，支持 PlaceholderAPI 变量（如 %player_name%）。
   text: "欢迎来到 ArcartX，%player_name%"
+  # 渐变色列表（HEX 颜色），按顺序从左到右渲染。
+  # 每条颜色必须用引号包裹，否则 YAML 会把 # 解析为注释。
   gradient-colors:
     - "#FF7A18"
     - "#FFD64D"
     - "#7FE7FF"
+  # 是否启用扫光效果。
   shine: true
+  # 颜色切换 / 扫光动画间隔（ticks），值越小动画越快。
   switch-interval-ticks: 2
+  # 扫光高亮区域的宽度（字符数）。
   shine-width: 2
+  # 扫光高亮颜色，必须用引号包裹。
   shine-color: "#FFFFFF"
+  # 扫光强度（0.0 ~ 1.0），越高高亮部分越明显。
   shine-strength: 0.55
 
 momo:
@@ -25,6 +34,7 @@ momo:
   gradient-colors:
     - "#6A5CFF"
     - "#FF6B9D"
+  # 关闭扫光时，仅显示静态渐变。
   shine: false
   switch-interval-ticks: 3
   shine-width: 2

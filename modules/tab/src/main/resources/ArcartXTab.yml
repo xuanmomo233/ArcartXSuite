@@ -34,13 +34,7 @@ settings:
   # 远程服务端快照过期时间（毫秒），超过此时间未收到新快照的远程节点条目将被移除。
   stale-snapshot-ms: 30000
 
-  # PAPI 输出：注册 PlaceholderExpansion，对外暴露 Tab 统计 / 玩家状态占位符。
-  # 见 docs/modules/tab.md "PAPI 输出" 章节。
-  papi:
-    enabled: false
-    expansion-id: "axstab"
-
-  # 视觉风格（由 PAPI 占位符执行，不修改 pack 渲染逻辑）：
+  # 视觉风格（不修改 pack 渲染逻辑，仅通过 PAPI 占位符暴露状态）：
   # - pvp-highlight: %axstab_pvp% / %axstab_pvp_color%；window-ms 内仍视为 PVP 状态
   # - vanish-grey:   %axstab_vanished% / %axstab_vanish_color%
   # - ping-icon:     %axstab_ping% / %axstab_ping_icon%；tiers 按 max-ms 升序匹配
