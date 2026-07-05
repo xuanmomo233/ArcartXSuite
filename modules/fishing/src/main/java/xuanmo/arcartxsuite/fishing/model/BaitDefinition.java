@@ -6,7 +6,7 @@ import org.jetbrains.annotations.NotNull;
 public record BaitDefinition(
     @NotNull String id,
     @NotNull String displayName,
-    @NotNull String item,
+    @NotNull FishingItemRef itemRef,
     boolean isDefault,
     @NotNull Map<String, Double> fishAttractModifiers,
     double treasureChanceBoost,

@@ -39,6 +39,7 @@ import xuanmo.arcartxsuite.fishing.model.FishCollectionEntry;
 import xuanmo.arcartxsuite.fishing.model.FishDefinition;
 import xuanmo.arcartxsuite.fishing.model.FishRarity;
 import xuanmo.arcartxsuite.fishing.model.FishingPlayerData;
+import xuanmo.arcartxsuite.fishing.model.RodDefinition;
 import xuanmo.arcartxsuite.fishing.model.TreasureDefinition;
 import xuanmo.arcartxsuite.fishing.model.WaterArea;
 import xuanmo.arcartxsuite.fishing.storage.FishingRepository;
@@ -49,6 +50,7 @@ public final class FishingService {
     private final FishingModuleConfiguration configuration;
     private final FishingRepository repository;
     private final PacketBridgeAPI packetBridge;
+    private final FishingItemGenerator itemGenerator;
     private final Logger logger;
     private final String minigameUiId;
     private final Map<UUID, FishingMinigame> activeMinigames = new HashMap<>();
@@ -64,14 +66,18 @@ public final class FishingService {
     private static final String PDC_FISH_ID = "axs_fishing_fish_id";
     private static final String PDC_FISH_SIZE = "axs_fishing_fish_size";
     private static final String PDC_IS_PERFECT = "axs_fishing_is_perfect";
+    private static final String PDC_BAIT_ID = "axs_fishing_bait_id";
+    private static final String PDC_ROD_ID = "axs_fishing_rod_id";
 
     public FishingService(@NotNull JavaPlugin plugin, @NotNull FishingModuleConfiguration configuration,
                           @NotNull FishingRepository repository, @Nullable PacketBridgeAPI packetBridge,
+                          @NotNull FishingItemGenerator itemGenerator,
                           @NotNull Logger logger, @NotNull String minigameUiId) {
         this.plugin = plugin;
         this.configuration = configuration;
         this.repository = repository;
         this.packetBridge = packetBridge;
+        this.itemGenerator = itemGenerator;
         this.logger = logger;
         this.minigameUiId = minigameUiId;
     }
@@ -147,6 +153,9 @@ public final class FishingService {
         BaitDefinition bait = detectBait(player);
         String baitId = bait != null ? bait.id() : null;
 
+        // 检测钓竿
+        RodDefinition rod = detectRod(player);
+
         // 获取该水域的鱼池
         List<FishDefinition> pool = getFishPool(water);
         if (pool.isEmpty()) {
@@ -168,7 +177,8 @@ public final class FishingService {
 
         FishingSession session = new FishingSession(
             player, fish, caughtSize, playerData.level(),
-            configuration.fishing().catchDurationTicks(), water, adjustedDifficulty, baitId
+            configuration.fishing().catchDurationTicks() + rod.catchDurationBonus(), water, adjustedDifficulty,
+            baitId, rod.greenBarHeightBonus(), rod.expMultiplier()
         );
 
         FishingMinigame minigame = new FishingMinigame(
@@ -203,8 +213,9 @@ public final class FishingService {
         int size = session.caughtSize();
         FishingPlayerData playerData = repository.loadPlayerData(player.getUniqueId());
 
-        // 计算经验
-        int xp = fish.calculateXp(size, perfect);
+        // 计算经验（应用钓竿经验倍率）
+        int xp = (int) (fish.calculateXp(size, perfect) * session.expMultiplier());
+        xp = Math.max(1, xp);
         FishingPlayerData updatedData = playerData.withXpAdded(xp).withCaught(perfect, false);
 
         // 检查升级
@@ -227,7 +238,22 @@ public final class FishingService {
         // 检查宝藏（从水域对应的宝藏池中选择）
         boolean gotTreasure = false;
         WaterArea water = session.water();
-        if (water != null && ThreadLocalRandom.current().nextDouble() < configuration.fishing().treasureChance()) {
+        double treasureChance = configuration.fishing().treasureChance();
+        // 应用饵料宝藏加成
+        if (session.baitId() != null) {
+            BaitDefinition bait = configuration.baits().stream()
+                .filter(b -> b.id().equals(session.baitId()))
+                .findFirst()
+                .orElse(null);
+            if (bait != null) {
+                treasureChance += bait.treasureChanceBoost();
+            }
+        }
+        // 应用钓竿宝藏加成
+        RodDefinition rod = detectRod(player);
+        treasureChance += rod.treasureChanceBonus();
+        treasureChance = Math.min(1.0, Math.max(0.0, treasureChance));
+        if (water != null && ThreadLocalRandom.current().nextDouble() < treasureChance) {
             TreasureDefinition treasure = selectTreasureFromPool(water);
             if (treasure != null) {
                 giveTreasureItem(player, treasure);
@@ -378,21 +404,13 @@ public final class FishingService {
             if (rod.getType() != Material.FISHING_ROD) return null;
         }
 
-        // 通过 NBT 标签检测
-        String nbtTag = "baits"; // 简化，实际应通过 itemBridge 或 NMS 读取
-        // 简化实现：通过 lore 检测
-        if (rod.hasItemMeta() && rod.getItemMeta() != null && rod.getItemMeta().hasLore()) {
-            java.util.List<String> lore = rod.getItemMeta().getLore();
-            if (lore != null) {
-                for (String line : lore) {
-                    for (BaitDefinition bait : configuration.baits()) {
-                        String display = bait.displayName();
-                        if (line.contains(display)) {
-                            return bait;
-                        }
-                    }
-                }
-            }
+        // 通过 PDC 标签检测饵料 ID
+        String baitId = getBaitIdFromRod(rod);
+        if (baitId != null) {
+            return configuration.baits().stream()
+                .filter(b -> b.id().equals(baitId))
+                .findFirst()
+                .orElse(null);
         }
 
         // 返回默认饵料
@@ -402,14 +420,50 @@ public final class FishingService {
             .orElse(null);
     }
 
+    @Nullable
+    private String getBaitIdFromRod(@NotNull ItemStack rod) {
+        if (!rod.hasItemMeta()) return null;
+        ItemMeta meta = rod.getItemMeta();
+        if (meta == null) return null;
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+        NamespacedKey key = new NamespacedKey(plugin, PDC_BAIT_ID);
+        return pdc.has(key, PersistentDataType.STRING) ? pdc.get(key, PersistentDataType.STRING) : null;
+    }
+
+    @Nullable
+    private String getRodIdFromRod(@NotNull ItemStack rod) {
+        if (!rod.hasItemMeta()) return null;
+        ItemMeta meta = rod.getItemMeta();
+        if (meta == null) return null;
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+        NamespacedKey key = new NamespacedKey(plugin, PDC_ROD_ID);
+        return pdc.has(key, PersistentDataType.STRING) ? pdc.get(key, PersistentDataType.STRING) : null;
+    }
+
+    /**
+     * 检测玩家手持的鱼竿对应的 RodDefinition。
+     */
+    public @NotNull RodDefinition detectRod(@NotNull Player player) {
+        ItemStack rod = player.getInventory().getItemInMainHand();
+        if (rod.getType() != Material.FISHING_ROD) {
+            rod = player.getInventory().getItemInOffHand();
+            if (rod.getType() != Material.FISHING_ROD) return RodDefinition.DEFAULT;
+        }
+        String rodId = getRodIdFromRod(rod);
+        if (rodId == null) return RodDefinition.DEFAULT;
+        return configuration.rods().stream()
+            .filter(r -> r.id().equals(rodId))
+            .findFirst()
+            .orElse(RodDefinition.DEFAULT);
+    }
+
     private void giveFishItem(@NotNull Player player, @NotNull FishDefinition fish, int size, boolean perfect) {
         try {
-            Material material = Material.matchMaterial(fish.item());
-            if (material == null) {
-                material = Material.COD;
+            ItemStack stack = itemGenerator.generate(fish.itemRef(), player);
+            if (stack == null) {
+                stack = new ItemStack(Material.COD);
             }
-            ItemStack item = new ItemStack(material, 1);
-            ItemMeta meta = item.getItemMeta();
+            ItemMeta meta = stack.getItemMeta();
             if (meta != null) {
                 // 设置显示名称和 lore
                 meta.setDisplayName(org.bukkit.ChatColor.translateAlternateColorCodes('&',
@@ -434,9 +488,9 @@ public final class FishingService {
                 pdc.set(keySize, PersistentDataType.INTEGER, size);
                 pdc.set(keyPerfect, PersistentDataType.BYTE, (byte) (perfect ? 1 : 0));
 
-                item.setItemMeta(meta);
+                stack.setItemMeta(meta);
             }
-            dropOrGive(player, item);
+            dropOrGive(player, stack);
         } catch (Exception e) {
             logger.warning("给予鱼物品失败: " + e.getMessage());
         }
@@ -452,12 +506,9 @@ public final class FishingService {
 
     private void giveTreasureItem(@NotNull Player player, @NotNull TreasureDefinition treasure) {
         try {
-            Material material = Material.matchMaterial(treasure.item());
-            if (material == null) return;
-            int amount = treasure.minAmount() + ThreadLocalRandom.current().nextInt(
-                Math.max(1, treasure.maxAmount() - treasure.minAmount() + 1));
-            ItemStack item = new ItemStack(material, amount);
-            dropOrGive(player, item);
+            ItemStack stack = itemGenerator.generate(treasure.itemRef(), player);
+            if (stack == null) return;
+            dropOrGive(player, stack);
         } catch (Exception e) {
             logger.warning("给予宝箱物品失败: " + e.getMessage());
         }
@@ -473,6 +524,74 @@ public final class FishingService {
                 player.sendMessage(msg);
             }
         }
+    }
+
+    // ─── 饵料装载 ────────────────────────────────────────────────
+
+    /**
+     * 将玩家主手中的饵料装载到鱼竿上。
+     * 饵料物品会被消耗，鱼竿会写入 PDC 标签。
+     *
+     * @return 装载成功返回对应 BaitDefinition，失败返回 null
+     */
+    public @Nullable BaitDefinition attachBait(@NotNull Player player) {
+        ItemStack rod = player.getInventory().getItemInMainHand();
+        if (rod.getType() != Material.FISHING_ROD) {
+            rod = player.getInventory().getItemInOffHand();
+            if (rod.getType() != Material.FISHING_ROD) return null;
+        }
+
+        // 查找玩家背包中的饵料物品
+        for (BaitDefinition bait : configuration.baits()) {
+            ItemStack baitItem = itemGenerator.generate(bait.itemRef(), player);
+            if (baitItem == null) continue;
+            int slot = findBaitInInventory(player, baitItem.getType());
+            if (slot < 0) continue;
+
+            // 消耗饵料
+            ItemStack invItem = player.getInventory().getItem(slot);
+            if (invItem != null && invItem.getAmount() > 0) {
+                invItem.setAmount(invItem.getAmount() - 1);
+                player.getInventory().setItem(slot, invItem.getAmount() == 0 ? null : invItem);
+            }
+
+            // 写入 PDC 标签
+            attachBaitToRod(rod, bait.id());
+            return bait;
+        }
+        return null;
+    }
+
+    private void attachBaitToRod(@NotNull ItemStack rod, @NotNull String baitId) {
+        ItemMeta meta = rod.getItemMeta();
+        if (meta == null) return;
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+        NamespacedKey key = new NamespacedKey(plugin, PDC_BAIT_ID);
+        pdc.set(key, PersistentDataType.STRING, baitId);
+        rod.setItemMeta(meta);
+    }
+
+    /**
+     * 获取鱼竿上挂载的饵料的耐久加成值。
+     */
+    public int getRodDurabilityBonus(@NotNull ItemStack rod) {
+        String baitId = getBaitIdFromRod(rod);
+        if (baitId == null) return 0;
+        return configuration.baits().stream()
+            .filter(b -> b.id().equals(baitId))
+            .findFirst()
+            .map(BaitDefinition::maxDurabilityBonus)
+            .orElse(0);
+    }
+
+    private int findBaitInInventory(@NotNull Player player, @NotNull Material baitMaterial) {
+        for (int i = 0; i < player.getInventory().getSize(); i++) {
+            ItemStack item = player.getInventory().getItem(i);
+            if (item != null && item.getType() == baitMaterial) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private String getCurrentSeason() {

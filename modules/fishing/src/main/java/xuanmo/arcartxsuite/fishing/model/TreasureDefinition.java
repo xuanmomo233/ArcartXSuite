@@ -1,11 +1,11 @@
 package xuanmo.arcartxsuite.fishing.model;
 
+import org.jetbrains.annotations.NotNull;
+
 public record TreasureDefinition(
-    String id,
-    String displayName,
-    String item,
-    double chance,
-    int minAmount,
-    int maxAmount
+    @NotNull String id,
+    @NotNull String displayName,
+    @NotNull FishingItemRef itemRef,
+    double chance
 ) {
 }

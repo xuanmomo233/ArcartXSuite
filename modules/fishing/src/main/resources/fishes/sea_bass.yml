@@ -11,7 +11,10 @@ water-types: [ocean, river]
 time-ranges:
   - start: "06:00"
     end: "20:00"
-item: "minecraft:cod"
+item:
+  source: "minecraft"
+  item-id: "cod"
+  amount: 1
 difficulty: 30
 behaviors:
   - type: smooth

@@ -1,6 +1,9 @@
 id: "worm"
 display-name: "蚯蚓"
-item: "minecraft:string"
+item:
+  source: "minecraft"
+  item-id: "string"
+  amount: 1
 default: true
 fish-attract-modifiers:
   catfish: 2.0

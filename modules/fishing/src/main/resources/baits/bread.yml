@@ -1,6 +1,9 @@
 id: "bread"
 display-name: "面包屑"
-item: "minecraft:bread"
+item:
+  source: "minecraft"
+  item-id: "bread"
+  amount: 1
 default: false
 fish-attract-modifiers:
   sea_bass: 1.3

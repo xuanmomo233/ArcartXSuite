@@ -152,7 +152,9 @@ public final class FishingMinigame {
     private double calculateBarHeightRatio() {
         // 将像素高度转换为 [0,1] 比例
         // 假设轨道总高度为 400 像素
-        int barHeightPx = settings.baseGreenBarHeight() + session.playerLevel() * settings.heightPerLevel();
+        int barHeightPx = settings.baseGreenBarHeight()
+            + session.playerLevel() * settings.heightPerLevel()
+            + session.greenBarHeightBonus();
         return Math.min(barHeightPx / 400.0, 0.9);
     }
 

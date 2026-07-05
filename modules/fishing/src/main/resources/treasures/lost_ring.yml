@@ -1,6 +1,7 @@
 id: "lost_ring"
-display-name: "遗失的戒指"
-item: "minecraft:gold_nugget"
+display-name: "失落戒指"
+item:
+  source: "minecraft"
+  item-id: "iron_ingot"
+  amount: 1
 chance: 0.2
-min-amount: 1
-max-amount: 3

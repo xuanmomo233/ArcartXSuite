@@ -20,6 +20,8 @@ import xuanmo.arcartxsuite.fishing.model.BaitDefinition;
 import xuanmo.arcartxsuite.fishing.model.FishBehaviorType;
 import xuanmo.arcartxsuite.fishing.model.FishDefinition;
 import xuanmo.arcartxsuite.fishing.model.FishRarity;
+import xuanmo.arcartxsuite.fishing.model.FishingItemRef;
+import xuanmo.arcartxsuite.fishing.model.RodDefinition;
 import xuanmo.arcartxsuite.fishing.model.TreasureDefinition;
 import xuanmo.arcartxsuite.fishing.model.WaterArea;
 import xuanmo.arcartxsuite.fishing.model.WaterArea.AreaType;
@@ -30,6 +32,7 @@ public record FishingModuleConfiguration(
     @NotNull List<FishDefinition> fishes,
     @NotNull List<TreasureDefinition> treasures,
     @NotNull List<BaitDefinition> baits,
+    @NotNull List<RodDefinition> rods,
     @NotNull List<WaterArea> specifiedWaters,
     @NotNull WaterArea defaultWater,
     @NotNull Map<String, List<String>> fishPools,
@@ -42,6 +45,7 @@ public record FishingModuleConfiguration(
         List<FishDefinition> fishes = loadFishesFromDir(new File(dataFolder, "fishes"), logger);
         List<TreasureDefinition> treasures = loadTreasuresFromDir(new File(dataFolder, "treasures"), logger);
         List<BaitDefinition> baits = loadBaitsFromDir(new File(dataFolder, "baits"), logger);
+        List<RodDefinition> rods = loadRodsFromDir(new File(dataFolder, "rods"), logger);
 
         ConfigurationSection watersSection = yaml.getConfigurationSection("waters");
         List<WaterArea> specified = loadSpecifiedWaters(watersSection);
@@ -56,6 +60,7 @@ public record FishingModuleConfiguration(
             Collections.unmodifiableList(fishes),
             Collections.unmodifiableList(treasures),
             Collections.unmodifiableList(baits),
+            Collections.unmodifiableList(rods),
             Collections.unmodifiableList(specified),
             defaultWater,
             Collections.unmodifiableMap(fishPools),
@@ -122,7 +127,7 @@ public record FishingModuleConfiguration(
             timeRanges.add(new FishDefinition.TimeRange("06:00", "20:00"));
         }
 
-        String item = section.getString("item", "minecraft:cod");
+        FishingItemRef itemRef = parseItemRef(section, "item", "minecraft:cod");
         int difficulty = section.getInt("difficulty", 30);
 
         List<FishDefinition.BehaviorEntry> behaviors = new ArrayList<>();
@@ -159,7 +164,7 @@ public record FishingModuleConfiguration(
             .id(id).displayName(displayName).rarity(rarity)
             .minSize(minSize).maxSize(maxSize).basePrice(basePrice).baseXp(baseXp)
             .seasons(seasons).weathers(weathers).waterTypes(waterTypes)
-            .timeRanges(timeRanges).item(item).difficulty(difficulty).behaviors(behaviors)
+            .timeRanges(timeRanges).itemRef(itemRef).difficulty(difficulty).behaviors(behaviors)
             .currencyReward(currencyReward)
             .build();
     }
@@ -176,10 +181,8 @@ public record FishingModuleConfiguration(
                     result.add(new TreasureDefinition(
                         section.getString("id", p.getFileName().toString().replace(".yml", "")),
                         section.getString("display-name", ""),
-                        section.getString("item", "minecraft:stick"),
-                        section.getDouble("chance", 0.1),
-                        section.getInt("min-amount", 1),
-                        section.getInt("max-amount", 1)
+                        parseItemRef(section, "item", "minecraft:stick"),
+                        section.getDouble("chance", 0.1)
                     ));
                 } catch (Exception e) {
                     logger.warning("加载宝藏文件失败: " + p + " — " + e.getMessage());
@@ -213,7 +216,7 @@ public record FishingModuleConfiguration(
                     result.add(new BaitDefinition(
                         id,
                         section.getString("display-name", id),
-                        section.getString("item", "minecraft:string"),
+                        parseItemRef(section, "item", "minecraft:string"),
                         section.getBoolean("default", false),
                         Collections.unmodifiableMap(modifiers),
                         section.getDouble("treasure-chance-boost", 0.0),
@@ -227,6 +230,62 @@ public record FishingModuleConfiguration(
             logger.warning("读取 baits 目录失败: " + e.getMessage());
         }
         return result;
+    }
+
+    // ─── 从 rods/ 目录加载 ─────────────────────────────────
+
+    private static List<RodDefinition> loadRodsFromDir(File dir, Logger logger) {
+        List<RodDefinition> result = new ArrayList<>();
+        if (dir == null || !dir.exists() || !dir.isDirectory()) return result;
+        try (Stream<Path> paths = Files.list(dir.toPath())) {
+            paths.filter(p -> p.toString().endsWith(".yml")).forEach(p -> {
+                try {
+                    ConfigurationSection section = YamlConfiguration.loadConfiguration(p.toFile());
+                    String id = section.getString("id", p.getFileName().toString().replace(".yml", ""));
+                    result.add(new RodDefinition(
+                        id,
+                        section.getString("display-name", id),
+                        parseItemRef(section, "item", "minecraft:fishing_rod"),
+                        section.getDouble("treasure-chance-bonus", 0.0),
+                        section.getInt("green-bar-height-bonus", 0),
+                        section.getInt("catch-duration-bonus", 0),
+                        section.getDouble("exp-multiplier", 1.0),
+                        section.getInt("min-player-level", 0)
+                    ));
+                } catch (Exception e) {
+                    logger.warning("加载钓竿文件失败: " + p + " — " + e.getMessage());
+                }
+            });
+        } catch (IOException e) {
+            logger.warning("读取 rods 目录失败: " + e.getMessage());
+        }
+        return result;
+    }
+
+    // ─── 通用物品引用解析 ──────────────────────────────────────
+
+    private static @NotNull FishingItemRef parseItemRef(@NotNull ConfigurationSection section,
+                                                         @NotNull String key,
+                                                         @NotNull String defaultMaterial) {
+        ConfigurationSection itemSection = section.getConfigurationSection(key);
+        if (itemSection == null) {
+            // 简单字符串格式: item: "minecraft:xxx"
+            String raw = section.getString(key, "");
+            if (!raw.isEmpty()) {
+                return FishingItemRef.fromMaterial(raw, 1);
+            }
+            return FishingItemRef.fromMaterial(defaultMaterial, 1);
+        }
+        return new FishingItemRef(
+            itemSection.getString("source", "minecraft"),
+            itemSection.getString("item-id", ""),
+            itemSection.getString("mmo-type", ""),
+            itemSection.getString("mmo-id", ""),
+            itemSection.getString("json", ""),
+            itemSection.getString("texture", ""),
+            itemSection.getString("texture-url", ""),
+            Math.max(1, itemSection.getInt("amount", 1))
+        );
     }
 
     // ─── 水域解析 ─────────────────────────────────────────────

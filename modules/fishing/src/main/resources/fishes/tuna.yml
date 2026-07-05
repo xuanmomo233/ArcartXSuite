@@ -11,7 +11,10 @@ water-types: [ocean]
 time-ranges:
   - start: "10:00"
     end: "18:00"
-item: "minecraft:tropical_fish"
+item:
+  source: "minecraft"
+  item-id: "tropical_fish"
+  amount: 1
 difficulty: 50
 behaviors:
   - type: dart

@@ -27,6 +27,7 @@ import xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration;
 import xuanmo.arcartxsuite.fishing.listener.FishingListener;
 import xuanmo.arcartxsuite.fishing.packet.FishingPacketHandler;
 import xuanmo.arcartxsuite.fishing.placeholder.FishingPlaceholderExpansion;
+import xuanmo.arcartxsuite.fishing.service.FishingItemGenerator;
 import xuanmo.arcartxsuite.fishing.service.FishingService;
 import xuanmo.arcartxsuite.fishing.storage.FishingRepository;
 import xuanmo.arcartxsuite.fishing.storage.JdbcFishingRepository;
@@ -142,7 +143,9 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
 
         service = new FishingService(
             plugin, configuration, repo,
-            packetBridge, logger, minigameUiId);
+            packetBridge,
+            new FishingItemGenerator(itemSourceRegistry, itemStackBridge),
+            logger, minigameUiId);
         service.setMessageProvider(messages());
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));

@@ -1,6 +1,7 @@
 id: "old_boot"
 display-name: "旧靴子"
-item: "minecraft:leather_boots"
+item:
+  source: "minecraft"
+  item-id: "leather_boots"
+  amount: 1
 chance: 0.3
-min-amount: 1
-max-amount: 1

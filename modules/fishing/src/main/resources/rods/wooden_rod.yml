@@ -1,0 +1,18 @@
+# 基础钓竿 — 示例配置
+# 鱼竿物品通过 PDC 标签 axs_fishing_rod_id 识别
+id: "wooden_rod"
+display-name: "木制钓竿"
+item:
+  source: "minecraft"
+  item-id: "fishing_rod"
+  amount: 1
+# 宝藏概率加成（加到基础概率上）
+treasure-chance-bonus: 0.05
+# 绿条高度加成（像素）
+green-bar-height-bonus: 8
+# 小游戏持续时间加成（ticks）
+catch-duration-bonus: 60
+# 经验倍率
+exp-multiplier: 1.1
+# 所需最低玩家钓鱼等级
+min-player-level: 0

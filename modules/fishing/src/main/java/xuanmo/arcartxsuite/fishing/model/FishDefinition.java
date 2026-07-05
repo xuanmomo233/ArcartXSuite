@@ -19,7 +19,7 @@ public record FishDefinition(
     @NotNull List<String> weathers,
     @NotNull List<String> waterTypes,
     @NotNull List<TimeRange> timeRanges,
-    @NotNull String item,
+    @NotNull FishingItemRef itemRef,
     int difficulty,
     @NotNull List<BehaviorEntry> behaviors,
     @Nullable CurrencyReward currencyReward
@@ -88,7 +88,7 @@ public record FishDefinition(
         private List<String> weathers = List.of();
         private List<String> waterTypes = List.of();
         private List<TimeRange> timeRanges = List.of();
-        private String item = "minecraft:cod";
+        private FishingItemRef itemRef = FishingItemRef.fromMaterial("minecraft:cod", 1);
         private int difficulty = 10;
         private List<BehaviorEntry> behaviors = List.of();
         private CurrencyReward currencyReward = null;
@@ -104,14 +104,14 @@ public record FishDefinition(
         public Builder weathers(List<String> weathers) { this.weathers = List.copyOf(weathers); return this; }
         public Builder waterTypes(List<String> waterTypes) { this.waterTypes = List.copyOf(waterTypes); return this; }
         public Builder timeRanges(List<TimeRange> timeRanges) { this.timeRanges = List.copyOf(timeRanges); return this; }
-        public Builder item(String item) { this.item = item; return this; }
+        public Builder itemRef(FishingItemRef itemRef) { this.itemRef = itemRef; return this; }
         public Builder difficulty(int difficulty) { this.difficulty = difficulty; return this; }
         public Builder behaviors(List<BehaviorEntry> behaviors) { this.behaviors = List.copyOf(behaviors); return this; }
         public Builder currencyReward(CurrencyReward currencyReward) { this.currencyReward = currencyReward; return this; }
 
         public FishDefinition build() {
             return new FishDefinition(id, displayName, rarity, minSize, maxSize, basePrice, baseXp,
-                seasons, weathers, waterTypes, timeRanges, item, difficulty, behaviors, currencyReward);
+                seasons, weathers, waterTypes, timeRanges, itemRef, difficulty, behaviors, currencyReward);
         }
     }
 }

@@ -1,6 +1,9 @@
 id: "corn"
 display-name: "玉米粒"
-item: "minecraft:wheat_seeds"
+item:
+  source: "minecraft"
+  item-id: "wheat_seeds"
+  amount: 1
 default: false
 fish-attract-modifiers:
   legendary_carp: 2.5

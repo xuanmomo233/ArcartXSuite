@@ -11,7 +11,10 @@ water-types: [river]
 time-ranges:
   - start: "06:00"
     end: "19:00"
-item: "minecraft:salmon"
+item:
+  source: "minecraft"
+  item-id: "salmon"
+  amount: 1
 difficulty: 35
 behaviors:
   - type: smooth

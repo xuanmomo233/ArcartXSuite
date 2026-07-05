@@ -11,7 +11,10 @@ water-types: [river, lake]
 time-ranges:
   - start: "18:00"
     end: "06:00"
-item: "minecraft:cooked_cod"
+item:
+  source: "minecraft"
+  item-id: "cooked_cod"
+  amount: 1
 difficulty: 70
 behaviors:
   - type: sinker

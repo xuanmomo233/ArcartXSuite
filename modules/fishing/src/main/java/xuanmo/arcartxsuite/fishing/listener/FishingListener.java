@@ -1,10 +1,12 @@
 package xuanmo.arcartxsuite.fishing.listener;
 
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerFishEvent;
+import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
@@ -67,6 +69,19 @@ public final class FishingListener implements Listener {
             if (minigame != null) {
                 minigame.cleanup();
             }
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onItemDamage(@NotNull PlayerItemDamageEvent event) {
+        if (event.getItem().getType() != Material.FISHING_ROD) return;
+        int bonus = service.getRodDurabilityBonus(event.getItem());
+        if (bonus <= 0) return;
+        int newDamage = Math.max(0, event.getDamage() - bonus);
+        if (newDamage == 0) {
+            event.setCancelled(true);
+        } else {
+            event.setDamage(newDamage);
         }
     }
 }

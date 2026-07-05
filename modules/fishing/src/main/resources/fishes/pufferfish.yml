@@ -11,7 +11,10 @@ water-types: [ocean]
 time-ranges:
   - start: "12:00"
     end: "16:00"
-item: "minecraft:pufferfish"
+item:
+  source: "minecraft"
+  item-id: "pufferfish"
+  amount: 1
 difficulty: 55
 behaviors:
   - type: dart

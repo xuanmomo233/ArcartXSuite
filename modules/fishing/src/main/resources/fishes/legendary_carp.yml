@@ -11,7 +11,10 @@ water-types: [lake]
 time-ranges:
   - start: "05:00"
     end: "07:00"
-item: "minecraft:enchanted_golden_apple"
+item:
+  source: "minecraft"
+  item-id: "enchanted_golden_apple"
+  amount: 1
 difficulty: 90
 behaviors:
   - type: dart
