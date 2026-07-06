@@ -408,6 +408,33 @@ public final class ModuleRegistry {
         }
     }
 
+    public boolean validateCloudModule(byte[] jarBytes, byte[] moduleSeed) {
+        initializeGlobalBridges();
+        try {
+            ModuleDescriptor descriptor = ModuleDescriptorParser.parse(jarBytes);
+            if (!isModuleEnabled(loadRootConfig(), descriptor.id())) {
+                LOGGER.fine("云端模块 " + descriptor.id() + " 已在 config.yml 中关闭，跳过加载。");
+                return false;
+            }
+            for (String externalPlugin : descriptor.externalDepends()) {
+                if (Bukkit.getPluginManager().getPlugin(externalPlugin) == null) {
+                    LOGGER.warning(descriptor.name() + " 模块需要 " + externalPlugin + " 插件，已跳过加载。");
+                    return false;
+                }
+            }
+            for (String depId : descriptor.depends()) {
+                if (!isModuleLoaded(depId)) {
+                    LOGGER.warning(descriptor.name() + " 模块依赖 " + depId + " 未就绪，已跳过加载。");
+                    return false;
+                }
+            }
+            return signatureVerifier.verify(descriptor);
+        } catch (Exception | LinkageError exception) {
+            LOGGER.log(Level.SEVERE, "校验云端模块失败", exception);
+            return false;
+        }
+    }
+
     /**
      * 热加载模块：从 {@code modules/} 目录扫描指定 id 的 jar 并加载启用。
      * 若该模块已加载，返回 false 并提示。
@@ -598,6 +625,14 @@ public final class ModuleRegistry {
         return ids;
     }
 
+    public java.util.Optional<CloudModuleSnapshot> getLoadedCloudModuleSnapshot(String moduleId) {
+        LoadedModule loaded = modules.get(moduleId);
+        if (loaded == null || loaded.jarBytes() == null) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(new CloudModuleSnapshot(loaded.jarBytes(), loaded.moduleSeed()));
+    }
+
     public Map<String, ModuleCommandHandler> commandHandlerMap() {
         return Collections.unmodifiableMap(commandHandlers);
     }
@@ -675,7 +710,7 @@ public final class ModuleRegistry {
         );
 
         LoadedModule loaded = jarBytes != null
-            ? new LoadedModule(descriptor, instance, classLoader, jarBytes)
+            ? new LoadedModule(descriptor, instance, classLoader, jarBytes, dm.moduleSeed())
             : new LoadedModule(descriptor, instance, classLoader, jarFile);
         loaded.setContext(context);
         modules.put(descriptor.id(), loaded);
@@ -1270,6 +1305,13 @@ public final class ModuleRegistry {
             enabledModules = List.copyOf(enabledModules);
             skippedModules = List.copyOf(skippedModules);
             failedModules = List.copyOf(failedModules);
+        }
+    }
+
+    public record CloudModuleSnapshot(byte[] jarBytes, byte[] moduleSeed) {
+        public CloudModuleSnapshot {
+            jarBytes = jarBytes == null ? null : jarBytes.clone();
+            moduleSeed = moduleSeed == null ? null : moduleSeed.clone();
         }
     }
 }

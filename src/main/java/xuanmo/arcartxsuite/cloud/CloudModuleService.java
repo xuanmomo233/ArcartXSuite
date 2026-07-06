@@ -49,8 +49,12 @@ public final class CloudModuleService {
         .connectTimeout(TIMEOUT)
         .build();
 
-    /** 云端平台地址：硬编码于宿主内，禁止通过 config.yml 篡改。 */
-    private static final String API_BASE_URL = "https://cloud.021209.xyz";
+    /** 云端平台地址：按优先级尝试。 */
+    private static final List<String> API_BASE_URLS = List.of(
+        "https://cloud.021209.xyz",
+        "https://cloud-backup.021209.xyz",
+        "https://cloud-mirror.021209.xyz"
+    );
 
     /** 加密密钥对文件格式版本标识。 */
     private static final String KEYPAIR_MAGIC = "AXSKP1";
@@ -63,7 +67,7 @@ public final class CloudModuleService {
     private final ModuleRegistry registry;
     /** 为 true 时输出签名、密钥 hash 等敏感诊断日志（见 config.yml cloud.debug）。 */
     private final boolean debugLogging;
-    private final String apiBaseUrl;
+    private volatile String apiBaseUrl;
     private final String qq;
     private final String apiKey;
     private final String serverName;
@@ -94,13 +98,145 @@ public final class CloudModuleService {
         this.registry = registry;
         org.bukkit.configuration.file.FileConfiguration config = plugin.getConfig();
         this.debugLogging = config.getBoolean("cloud.debug", false);
-        this.apiBaseUrl = API_BASE_URL;
         this.qq = config.getString("cloud.qq", "").trim();
         this.apiKey = config.getString("cloud.apiKey", "").trim();
         this.serverName = config.getString("cloud.server-name", plugin.getServer().getName());
         this.serverCode = config.getString("cloud.server-code", "").trim();
         this.keyPair = loadOrGenerateKeyPair();
         this.serverPublicKeyB64 = encodeRawEd25519PublicKey(keyPair);
+        this.apiBaseUrl = API_BASE_URLS.get(0);
+    }
+
+    private enum CloudStatus {
+        OK,
+        TRANSIENT,
+        REJECTED
+    }
+
+    private record CloudResponse<T>(CloudStatus status, T body, int httpStatus, String endpoint, String message, String rawBody) {
+        boolean isOk() {
+            return status == CloudStatus.OK;
+        }
+
+        boolean isTransient() {
+            return status == CloudStatus.TRANSIENT;
+        }
+
+        boolean isRejected() {
+            return status == CloudStatus.REJECTED;
+        }
+    }
+
+    private record PreparedModule(byte[] jarBytes, byte[] moduleSeed) {
+    }
+
+    private List<String> orderedApiBaseUrls() {
+        List<String> ordered = new ArrayList<>(API_BASE_URLS);
+        if (apiBaseUrl != null && !apiBaseUrl.isBlank() && ordered.remove(apiBaseUrl)) {
+            ordered.add(0, apiBaseUrl);
+        }
+        return ordered;
+    }
+
+    private void rememberSuccessfulEndpoint(String endpoint) {
+        if (endpoint != null && !endpoint.isBlank()) {
+            this.apiBaseUrl = endpoint;
+        }
+    }
+
+    private static Throwable unwrap(Throwable throwable) {
+        Throwable current = throwable;
+        while (current instanceof java.util.concurrent.CompletionException || current instanceof java.util.concurrent.ExecutionException) {
+            if (current.getCause() == null) {
+                break;
+            }
+            current = current.getCause();
+        }
+        return current;
+    }
+
+    private static boolean isTransientException(Throwable throwable) {
+        Throwable cause = unwrap(throwable);
+        return cause instanceof java.net.ConnectException
+            || cause instanceof java.net.UnknownHostException
+            || cause instanceof java.net.http.HttpTimeoutException
+            || cause instanceof java.net.SocketTimeoutException
+            || cause instanceof java.io.IOException;
+    }
+
+    private static boolean isTransientStatus(int statusCode) {
+        return statusCode == 429 || statusCode >= 500;
+    }
+
+    private static boolean isRejectedStatus(int statusCode) {
+        return statusCode == 401 || statusCode == 403 || statusCode == 410 || (statusCode >= 400 && statusCode < 500);
+    }
+
+    private static boolean bodyHasRejectMarker(String body) {
+        if (body == null) {
+            return false;
+        }
+        String lower = body.toLowerCase(java.util.Locale.ROOT);
+        return lower.contains("revoked") || lower.contains("unbind") || lower.contains("unbound") || lower.contains("disabled");
+    }
+
+    private <T> CloudResponse<T> classifyResponse(String endpoint, HttpResponse<T> response, Throwable throwable) {
+        if (throwable != null) {
+            Throwable cause = unwrap(throwable);
+            if (isTransientException(cause)) {
+                return new CloudResponse<>(CloudStatus.TRANSIENT, null, 0, endpoint, cause.getMessage(), null);
+            }
+            return new CloudResponse<>(CloudStatus.REJECTED, null, 0, endpoint, cause.getMessage(), null);
+        }
+        int statusCode = response.statusCode();
+        T body = response.body();
+        String rawBody = body instanceof String ? (String) body : null;
+        if (statusCode >= 200 && statusCode < 300) {
+            if (bodyHasRejectMarker(rawBody)) {
+                return new CloudResponse<>(CloudStatus.REJECTED, body, statusCode, endpoint, rawBody, rawBody);
+            }
+            return new CloudResponse<>(CloudStatus.OK, body, statusCode, endpoint, null, rawBody);
+        }
+        if (isTransientStatus(statusCode)) {
+            return new CloudResponse<>(CloudStatus.TRANSIENT, body, statusCode, endpoint, rawBody, rawBody);
+        }
+        if (isRejectedStatus(statusCode)) {
+            return new CloudResponse<>(CloudStatus.REJECTED, body, statusCode, endpoint, rawBody, rawBody);
+        }
+        return new CloudResponse<>(CloudStatus.REJECTED, body, statusCode, endpoint, rawBody, rawBody);
+    }
+
+    private <T> CompletableFuture<CloudResponse<T>> sendWithFailover(
+        String operation,
+        java.util.function.Function<String, HttpRequest> requestFactory,
+        HttpResponse.BodyHandler<T> bodyHandler
+    ) {
+        return sendWithFailover(operation, requestFactory, bodyHandler, orderedApiBaseUrls(), 0);
+    }
+
+    private <T> CompletableFuture<CloudResponse<T>> sendWithFailover(
+        String operation,
+        java.util.function.Function<String, HttpRequest> requestFactory,
+        HttpResponse.BodyHandler<T> bodyHandler,
+        List<String> endpoints,
+        int index
+    ) {
+        if (endpoints == null || index >= endpoints.size()) {
+            return CompletableFuture.completedFuture(new CloudResponse<>(CloudStatus.TRANSIENT, null, 0, null, operation + " exhausted", null));
+        }
+        String endpoint = endpoints.get(index);
+        HttpRequest request = requestFactory.apply(endpoint);
+        return HTTP.sendAsync(request, bodyHandler)
+            .handle((response, throwable) -> classifyResponse(endpoint, response, throwable))
+            .thenCompose((CloudResponse<T> result) -> {
+                if (result.isTransient() && index + 1 < endpoints.size()) {
+                    return sendWithFailover(operation, requestFactory, bodyHandler, endpoints, index + 1);
+                }
+                if ((result.isOk() || result.isRejected()) && result.endpoint() != null) {
+                    rememberSuccessfulEndpoint(result.endpoint());
+                }
+                return CompletableFuture.completedFuture(result);
+            });
     }
 
     private boolean hasServerCode() {
@@ -120,10 +256,10 @@ public final class CloudModuleService {
     /**
      * 用 QQ+apiKey 向云端换取服务器码。成功后写回 config.yml 的 cloud.server-code。
      */
-    public CompletableFuture<Boolean> bindServer() {
+    private CompletableFuture<CloudResponse<Void>> bindServerGate() {
         if (qq.isEmpty() || apiKey.isEmpty()) {
             plugin.consoleWarn("[Cloud] 未配置 cloud.qq / cloud.apiKey，无法绑定服务器。");
-            return CompletableFuture.completedFuture(false);
+            return CompletableFuture.completedFuture(new CloudResponse<>(CloudStatus.REJECTED, null, 0, null, "missing cloud config", null));
         }
         String fingerprint = generateFingerprint();
         String payload = "{"
@@ -134,47 +270,51 @@ public final class CloudModuleService {
             + "\"name\":\"" + escapeJson(serverName) + "\""
             + "}";
 
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(apiBaseUrl + "/v1/servers/bind"))
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(payload))
-            .build();
-
-        return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-            .thenApply(resp -> {
-                if (resp.statusCode() == 200) {
-                    String body = resp.body();
-                    String code = extractJsonField(body, "serverCode");
-                    String token = extractJsonField(body, "token");
-                    String responseApiKey = extractJsonField(body, "apiKey");
-                    if (code != null && !code.isEmpty()) {
-                        this.serverCode = code;
-                        this.allowedModules = extractStringArray(body, "allowedModules");
-                        if (token != null) {
-                            this.moduleToken = token;
-                            this.tokenExpiry = System.currentTimeMillis() + 23 * 3600 * 1000;
-                        }
-                        // 回写 server-code 和 apiKey 到配置（主线程保存）
-                        plugin.getServer().getScheduler().runTask(plugin.host(), () -> {
-                            plugin.getConfig().set("cloud.server-code", code);
-                            if (responseApiKey != null && !responseApiKey.isEmpty()) {
-                                plugin.getConfig().set("cloud.apiKey", responseApiKey);
-                            }
-                            plugin.saveConfig();
-                        });
-                        plugin.consoleInfo("[Cloud] 服务器绑定成功，服务器码: " + code);
-                        return true;
-                    }
-                    plugin.consoleWarn("[Cloud] 绑定响应缺少 serverCode: " + body);
-                    return false;
+        return sendWithFailover(
+            "bind",
+            endpoint -> HttpRequest.newBuilder()
+                .uri(URI.create(endpoint + "/v1/servers/bind"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(payload))
+                .build(),
+            HttpResponse.BodyHandlers.ofString()
+        ).thenApply(resp -> {
+            if (!resp.isOk()) {
+                if (resp.isTransient()) {
+                    plugin.consoleWarn("[Cloud] 服务器绑定暂时失败: " + resp.httpStatus() + " " + resp.message());
+                } else {
+                    plugin.consoleWarn("[Cloud] 服务器绑定失败: " + resp.httpStatus() + " " + resp.message());
                 }
-                plugin.consoleWarn("[Cloud] 服务器绑定失败: " + resp.statusCode() + " " + resp.body());
-                return false;
-            })
-            .exceptionally(ex -> {
-                plugin.consoleWarn("[Cloud] 服务器绑定异常: " + ex.getMessage());
-                return false;
-            });
+                return new CloudResponse<>(resp.status(), null, resp.httpStatus(), resp.endpoint(), resp.message(), resp.rawBody());
+            }
+            String body = resp.rawBody();
+            String code = extractJsonField(body, "serverCode");
+            String token = extractJsonField(body, "token");
+            String responseApiKey = extractJsonField(body, "apiKey");
+            if (code != null && !code.isEmpty()) {
+                this.serverCode = code;
+                this.allowedModules = extractStringArray(body, "allowedModules");
+                if (token != null) {
+                    this.moduleToken = token;
+                    this.tokenExpiry = System.currentTimeMillis() + 23 * 3600 * 1000;
+                }
+                plugin.getServer().getScheduler().runTask(plugin.host(), () -> {
+                    plugin.getConfig().set("cloud.server-code", code);
+                    if (responseApiKey != null && !responseApiKey.isEmpty()) {
+                        plugin.getConfig().set("cloud.apiKey", responseApiKey);
+                    }
+                    plugin.saveConfig();
+                });
+                plugin.consoleInfo("[Cloud] 服务器绑定成功，服务器码: " + code);
+                return new CloudResponse<>(CloudStatus.OK, null, resp.httpStatus(), resp.endpoint(), null, body);
+            }
+            plugin.consoleWarn("[Cloud] 绑定响应缺少 serverCode: " + body);
+            return new CloudResponse<>(CloudStatus.REJECTED, null, resp.httpStatus(), resp.endpoint(), "missing serverCode", body);
+        });
+    }
+
+    public CompletableFuture<Boolean> bindServer() {
+        return bindServerGate().thenApply(CloudResponse::isOk);
     }
 
     // -- 申请/刷新模块令牌 --------------------------------------
@@ -195,12 +335,16 @@ public final class CloudModuleService {
     }
 
     private CompletableFuture<Boolean> refreshToken(boolean isRebind) {
+        return refreshTokenGate(isRebind).thenApply(CloudResponse::isOk);
+    }
+
+    private CompletableFuture<CloudResponse<Void>> refreshTokenGate(boolean isRebind) {
         // 自动修复重新绑定后必须强制刷新，以获取正确的 allowedModules
         if (!isRebind && moduleToken != null && System.currentTimeMillis() < tokenExpiry - 300_000) {
-            return CompletableFuture.completedFuture(true);
+            return CompletableFuture.completedFuture(new CloudResponse<>(CloudStatus.OK, null, 200, apiBaseUrl, null, null));
         }
         if (!hasServerCode()) {
-            return CompletableFuture.completedFuture(false);
+            return CompletableFuture.completedFuture(new CloudResponse<>(CloudStatus.REJECTED, null, 0, null, "missing server code", null));
         }
 
         long timestamp = System.currentTimeMillis();
@@ -221,45 +365,55 @@ public final class CloudModuleService {
             .POST(HttpRequest.BodyPublishers.ofString(refreshPayload))
             .build();
 
-        return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-            .thenCompose(resp -> {
-                if (resp.statusCode() == 200) {
-                    String body = resp.body();
-                    debugLog("[Cloud] refresh 响应: " + body);
-                    String token = extractJsonField(body, "token");
-                    if (token != null) {
-                        this.moduleToken = token;
-                        this.tokenExpiry = System.currentTimeMillis() + 23 * 3600 * 1000;
-                        List<String> oldAllowed = this.allowedModules;
-                        this.allowedModules = extractStringArray(body, "allowedModules");
-                        plugin.consoleInfo("[Cloud] 模块令牌已刷新，授权模块: " + allowedModules.size() + " 列表: " + allowedModules);
-                        syncModuleChanges(oldAllowed);
-                        startHeartbeat();
-                        return CompletableFuture.completedFuture(true);
-                    }
-                }
-                String body = resp.body();
-                // 签名验证失败 → 自动重新绑定（仅一次，防止无限循环）
-                if (resp.statusCode() == 403 && !isRebind
-                    && (body.contains("SIGNATURE_VERIFICATION_ERROR") || body.contains("SIGNATURE_VERIFICATION_FAILED"))) {
+        return sendWithFailover(
+            "refresh",
+            endpoint -> HttpRequest.newBuilder()
+                .uri(URI.create(endpoint + "/v1/servers/refresh"))
+                .header("Content-Type", "application/json")
+                .header("X-Server-Code", serverCode)
+                .header("X-Timestamp", String.valueOf(timestamp))
+                .header("X-Signature", signature)
+                .POST(HttpRequest.BodyPublishers.ofString(refreshPayload))
+                .build(),
+            HttpResponse.BodyHandlers.ofString()
+        ).thenCompose(resp -> {
+            if (!resp.isOk()) {
+                String body = resp.rawBody();
+                if (resp.isRejected() && resp.httpStatus() == 403 && !isRebind
+                    && (body != null && (body.contains("SIGNATURE_VERIFICATION_ERROR") || body.contains("SIGNATURE_VERIFICATION_FAILED")))) {
                     plugin.consoleWarn("[Cloud] 签名验证失败，自动重新绑定服务器...");
                     clearServerCode();
-                    return bindServer().thenCompose(bound -> {
-                        if (bound) {
+                    return bindServerGate().thenCompose(bound -> {
+                        if (bound.isOk()) {
                             plugin.consoleInfo("[Cloud] 重新绑定成功，再次刷新令牌...");
-                            return refreshToken(true);
+                            return refreshTokenGate(true);
                         }
                         plugin.consoleWarn("[Cloud] 自动重新绑定失败，跳过云端模块同步。");
-                        return CompletableFuture.completedFuture(false);
+                        return CompletableFuture.completedFuture(bound);
                     });
                 }
-                plugin.consoleWarn("[Cloud] 刷新令牌失败: " + resp.statusCode() + " " + body);
-                return CompletableFuture.completedFuture(false);
-            })
-            .exceptionally(ex -> {
-                plugin.consoleWarn("[Cloud] 刷新令牌异常: " + ex.getMessage());
-                return false;
-            });
+                if (resp.isTransient()) {
+                    plugin.consoleWarn("[Cloud] 刷新令牌暂时失败: " + resp.httpStatus() + " " + body);
+                } else {
+                    plugin.consoleWarn("[Cloud] 刷新令牌失败: " + resp.httpStatus() + " " + body);
+                }
+                return CompletableFuture.completedFuture(new CloudResponse<>(resp.status(), null, resp.httpStatus(), resp.endpoint(), resp.message(), body));
+            }
+            String body = resp.rawBody();
+            debugLog("[Cloud] refresh 响应: " + body);
+            String token = extractJsonField(body, "token");
+            if (token != null) {
+                this.moduleToken = token;
+                this.tokenExpiry = System.currentTimeMillis() + 23 * 3600 * 1000;
+                List<String> oldAllowed = this.allowedModules;
+                this.allowedModules = extractStringArray(body, "allowedModules");
+                plugin.consoleInfo("[Cloud] 模块令牌已刷新，授权模块: " + allowedModules.size() + " 列表: " + allowedModules);
+                syncModuleChanges(oldAllowed);
+                startHeartbeat();
+                return CompletableFuture.completedFuture(new CloudResponse<>(CloudStatus.OK, null, resp.httpStatus(), resp.endpoint(), null, body));
+            }
+            return CompletableFuture.completedFuture(new CloudResponse<>(CloudStatus.REJECTED, null, resp.httpStatus(), resp.endpoint(), "missing token", body));
+        });
     }
 
     // -- 同步并加载云端模块 --------------------------------------
@@ -267,18 +421,26 @@ public final class CloudModuleService {
     public CompletableFuture<Void> syncModules() {
         // 1. 未绑定则先用 QQ+apiKey 绑定服务器
         plugin.consoleInfo("[Cloud] 开始云端模块同步...");
-        CompletableFuture<Boolean> ready = hasServerCode()
-            ? CompletableFuture.completedFuture(true)
-            : bindServer();
+        CompletableFuture<CloudResponse<Void>> ready = hasServerCode()
+            ? CompletableFuture.completedFuture(new CloudResponse<>(CloudStatus.OK, null, 200, apiBaseUrl, null, null))
+            : bindServerGate();
 
         return ready.thenCompose(bound -> {
-            if (!bound) {
+            if (bound.isTransient()) {
+                plugin.consoleWarn("[Cloud] 未能绑定服务器（暂时故障），保留现有云模块并等待下次同步。");
+                return CompletableFuture.<Void>completedFuture(null);
+            }
+            if (!bound.isOk()) {
                 plugin.consoleWarn("[Cloud] 未能绑定服务器，跳过云端模块同步。请检查 config.yml 中 cloud.qq 和 cloud.apiKey 是否正确。");
                 return CompletableFuture.<Void>completedFuture(null);
             }
             plugin.consoleInfo("[Cloud] 服务器已绑定: " + serverCode);
-            return refreshToken().thenCompose(ok -> {
-                if (!ok) {
+            return refreshTokenGate(false).thenCompose(refresh -> {
+                if (refresh.isTransient()) {
+                    plugin.consoleWarn("[Cloud] 刷新模块令牌暂时失败，保留现有云模块。");
+                    return CompletableFuture.<Void>completedFuture(null);
+                }
+                if (!refresh.isOk()) {
                     plugin.consoleWarn("[Cloud] 刷新模块令牌失败，跳过云端模块同步。");
                     return CompletableFuture.<Void>completedFuture(null);
                 }
@@ -331,35 +493,112 @@ public final class CloudModuleService {
                 return CompletableFuture.completedFuture(false);
             }
 
-            // 在主线程同步卸载（确保 unload 完成后再 download）
-            if (registry.isModuleLoaded(moduleId)) {
-                boolean unloaded = registry.unloadModule(moduleId);
-                if (!unloaded) {
-                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 卸载失败，取消更新。");
-                    return CompletableFuture.completedFuture(false);
-                }
-                plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 已卸载，开始下载新版本...");
-            } else {
-                plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 未加载，直接下载最新版本...");
+            if (!NativeBridge.isAvailable()) {
+                plugin.consoleWarn("[Cloud] Native 安全库未加载，跳过云端模块 " + moduleId + " 的更新。错误: " + NativeBridge.getLoadError());
+                return CompletableFuture.completedFuture(false);
             }
 
-            // 清除缓存，强制重新下载
             cachedAxb.remove(moduleId);
-
-            // 重新下载并加载；downloadAndLoad 内部的加载在主线程异步执行，
-            // 因此延迟 5 ticks 后检查是否真正加载成功
-            return downloadAndLoad(moduleId).thenCompose(v -> {
-                CompletableFuture<Boolean> result = new CompletableFuture<>();
-                plugin.getServer().getScheduler().runTaskLater(plugin.host(), () -> {
-                    boolean loaded = registry.isModuleLoaded(moduleId);
-                    if (loaded) {
-                        plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 更新成功并已加载");
-                    } else {
-                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新后未能成功加载");
+            return downloadAxb(moduleId).thenCompose(axb -> {
+                if (axb == null || axb.length == 0) {
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：axb 下载失败");
+                    return CompletableFuture.completedFuture(false);
+                }
+                if (axb.length < 32) {
+                    plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：axb 文件过小");
+                    return CompletableFuture.completedFuture(false);
+                }
+                return requestModuleKey(moduleId).thenCompose(keyResp -> {
+                    if (keyResp == null) {
+                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：无法获取解密密钥");
+                        return CompletableFuture.completedFuture(false);
                     }
-                    result.complete(loaded);
-                }, 5L);
-                return result;
+                    String keyB64 = extractJsonField(keyResp, "key");
+                    if (keyB64 == null || keyB64.isEmpty()) {
+                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：云端密钥响应缺少 key 字段");
+                        return CompletableFuture.completedFuture(false);
+                    }
+                    byte[] key;
+                    try {
+                        key = Base64.getDecoder().decode(keyB64);
+                    } catch (IllegalArgumentException e) {
+                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：密钥不是有效的 Base64 编码");
+                        return CompletableFuture.completedFuture(false);
+                    }
+                    if (key.length != 32) {
+                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：密钥长度错误 (" + key.length + " 字节)");
+                        return CompletableFuture.completedFuture(false);
+                    }
+                    String keyBind = extractJsonField(keyResp, "keyBind");
+                    if ("fp-hkdf-v1".equals(keyBind)) {
+                        String version = extractJsonField(keyResp, "version");
+                        String fph = sha256(generateFingerprint());
+                        byte[] pad = hkdfSha256(
+                            fph.getBytes(StandardCharsets.UTF_8),
+                            KEY_BIND_SALT.getBytes(StandardCharsets.UTF_8),
+                            ("axs-module-key|" + moduleId + "|" + (version == null ? "" : version)).getBytes(StandardCharsets.UTF_8),
+                            32);
+                        if (pad == null) {
+                            plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：指纹密钥派生失败");
+                            return CompletableFuture.completedFuture(false);
+                        }
+                        for (int i = 0; i < 32; i++) {
+                            key[i] ^= pad[i];
+                        }
+                    }
+                    byte[] sigBytes;
+                    try {
+                        String sigB64 = extractJsonField(keyResp, "signature");
+                        sigBytes = (sigB64 == null || sigB64.isEmpty())
+                            ? new byte[0]
+                            : Base64.getDecoder().decode(sigB64);
+                    } catch (IllegalArgumentException e) {
+                        sigBytes = new byte[0];
+                    }
+                    byte[] jarBytes;
+                    try {
+                        jarBytes = NativeBridge.n10(axb, key, sigBytes);
+                    } catch (Exception e) {
+                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " native 解密抛异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                        jarBytes = null;
+                    }
+                    if (jarBytes == null || jarBytes.length == 0) {
+                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：native 解密失败");
+                        return CompletableFuture.completedFuture(false);
+                    }
+                    final byte[] finalJarBytes = jarBytes;
+                    final byte[] moduleSeed = key.clone();
+                    if (!registry.validateCloudModule(finalJarBytes, moduleSeed)) {
+                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：新模块未通过本地校验");
+                        return CompletableFuture.completedFuture(false);
+                    }
+                    ModuleRegistry.CloudModuleSnapshot snapshot = registry.getLoadedCloudModuleSnapshot(moduleId).orElse(null);
+                    CompletableFuture<Boolean> result = new CompletableFuture<>();
+                    plugin.getServer().getScheduler().runTask(plugin.host(), () -> {
+                        boolean unloaded = true;
+                        if (registry.isModuleLoaded(moduleId)) {
+                            unloaded = registry.unloadModule(moduleId);
+                        }
+                        if (!unloaded) {
+                            plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 卸载失败，保留当前版本。");
+                            result.complete(false);
+                            return;
+                        }
+                        boolean loaded = registry.loadCloudModule(finalJarBytes, moduleSeed);
+                        if (loaded) {
+                            plugin.consoleInfo("[Cloud] 模块 " + moduleId + " 更新成功并已加载");
+                            result.complete(true);
+                            return;
+                        }
+                        if (snapshot != null && registry.loadCloudModule(snapshot.jarBytes(), snapshot.moduleSeed())) {
+                            plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败，已回滚旧版本");
+                        } else {
+                            plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败且旧版本回滚失败");
+                        }
+                        result.complete(false);
+                    });
+                    return result;
+                });
             });
         });
     }
@@ -607,69 +846,72 @@ public final class CloudModuleService {
             plugin.consoleInfo("[Cloud] 使用缓存 axb: " + moduleId + " (" + cached.data.length + " 字节)");
             return CompletableFuture.completedFuture(cached.data);
         }
-
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(apiBaseUrl + "/v1/modules/" + moduleId + "/download"))
-            .header("X-Module-Token", moduleToken)
-            .header("X-Server-Code", serverCode)
-            .header("X-Fingerprint", sha256(generateFingerprint()))
-            .GET()
-            .build();
-
-        return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
-            .thenApply(resp -> {
-                if (resp.statusCode() == 200) {
-                    byte[] data = resp.body();
-                    if (data == null || data.length == 0) {
-                        plugin.consoleWarn("[Cloud] 下载 " + moduleId + " 成功但响应体为空");
-                        return null;
-                    }
-                    plugin.consoleInfo("[Cloud] 下载 " + moduleId + " 成功: " + data.length + " 字节");
-                    cachedAxb.put(moduleId, new CachedAxb(data, System.currentTimeMillis() + AXB_CACHE_TTL_MS));
-                    return data;
+        return sendWithFailover(
+            "download",
+            endpoint -> HttpRequest.newBuilder()
+                .uri(URI.create(endpoint + "/v1/modules/" + moduleId + "/download"))
+                .header("X-Module-Token", moduleToken)
+                .header("X-Server-Code", serverCode)
+                .header("X-Fingerprint", sha256(generateFingerprint()))
+                .GET()
+                .build(),
+            HttpResponse.BodyHandlers.ofByteArray()
+        ).thenApply(resp -> {
+            if (!resp.isOk()) {
+                if (resp.isTransient()) {
+                    plugin.consoleWarn("[Cloud] 下载 " + moduleId + " 暂时不可达: " + resp.httpStatus() + " " + resp.message());
+                } else {
+                    plugin.consoleWarn("[Cloud] 下载 " + moduleId + " 被拒绝: " + resp.httpStatus() + " " + resp.message());
                 }
-                plugin.consoleWarn("[Cloud] 下载 " + moduleId + " 失败，HTTP 状态码: " + resp.statusCode());
                 return null;
-            })
-            .exceptionally(ex -> {
-                plugin.consoleWarn("[Cloud] 下载 " + moduleId + " 异常: " + ex.getMessage());
+            }
+            byte[] data = resp.body();
+            if (data == null || data.length == 0) {
+                plugin.consoleWarn("[Cloud] 下载 " + moduleId + " 成功但响应体为空");
                 return null;
-            });
+            }
+            plugin.consoleInfo("[Cloud] 下载 " + moduleId + " 成功: " + data.length + " 字节");
+            cachedAxb.put(moduleId, new CachedAxb(data, System.currentTimeMillis() + AXB_CACHE_TTL_MS));
+            rememberSuccessfulEndpoint(resp.endpoint());
+            return data;
+        });
     }
 
     private CompletableFuture<String> requestModuleKey(String moduleId) {
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(apiBaseUrl + "/v1/modules/" + moduleId + "/key"))
-            .header("Content-Type", "application/json")
-            .header("X-Module-Token", moduleToken)
-            .header("X-Server-Code", serverCode)
-            .header("X-Fingerprint", sha256(generateFingerprint()))
-            .POST(HttpRequest.BodyPublishers.ofString("{}"))
-            .build();
-
-        return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-            .thenApply(resp -> {
-                if (resp.statusCode() != 200) {
-                    plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥失败，HTTP 状态码: " + resp.statusCode());
-                    return null;
+        return sendWithFailover(
+            "key",
+            endpoint -> HttpRequest.newBuilder()
+                .uri(URI.create(endpoint + "/v1/modules/" + moduleId + "/key"))
+                .header("Content-Type", "application/json")
+                .header("X-Module-Token", moduleToken)
+                .header("X-Server-Code", serverCode)
+                .header("X-Fingerprint", sha256(generateFingerprint()))
+                .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                .build(),
+            HttpResponse.BodyHandlers.ofString()
+        ).thenApply(resp -> {
+            if (!resp.isOk()) {
+                if (resp.isTransient()) {
+                    plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥暂时失败: " + resp.httpStatus() + " " + resp.message());
+                } else {
+                    plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥被拒绝: " + resp.httpStatus() + " " + resp.message());
                 }
-                String body = resp.body();
-                if (body == null || body.isEmpty()) {
-                    plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥成功但响应体为空");
-                    return null;
-                }
-                String key = extractJsonField(body, "key");
-                if (key == null || key.isEmpty()) {
-                    plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥失败，响应中缺少 key 字段");
-                    return null;
-                }
-                plugin.consoleInfo("[Cloud] 获取模块 " + moduleId + " 密钥成功");
-                return body;
-            })
-            .exceptionally(ex -> {
-                plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥异常: " + ex.getMessage());
                 return null;
-            });
+            }
+            String body = resp.rawBody();
+            if (body == null || body.isEmpty()) {
+                plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥成功但响应体为空");
+                return null;
+            }
+            String key = extractJsonField(body, "key");
+            if (key == null || key.isEmpty()) {
+                plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥失败，响应中缺少 key 字段");
+                return null;
+            }
+            plugin.consoleInfo("[Cloud] 获取模块 " + moduleId + " 密钥成功");
+            rememberSuccessfulEndpoint(resp.endpoint());
+            return body;
+        });
     }
 
     // -- 心跳 ------------------------------------------------
@@ -728,32 +970,35 @@ public final class CloudModuleService {
         json.append("\"modules\":[]");
         json.append("}");
 
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(apiBaseUrl + "/v1/heartbeat"))
-            .header("Content-Type", "application/json")
-            .header("X-Module-Token", moduleToken)
-            .POST(HttpRequest.BodyPublishers.ofString(json.toString()))
-            .build();
-
-        HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-            .thenAccept(resp -> {
-                if (resp.statusCode() != 200) {
-                    plugin.consoleWarn("[Cloud] 心跳上报失败: " + resp.statusCode());
-                }
-            })
-            .thenRun(() -> {
-                if (shouldSync) {
-                    refreshToken().thenAccept(ok -> {
-                        if (ok) {
-                            plugin.consoleInfo("[Cloud] 定期同步完成");
-                        }
-                    });
-                }
-            })
-            .exceptionally(ex -> {
-                plugin.consoleWarn("[Cloud] 心跳上报异常: " + ex.getMessage());
-                return null;
-            });
+        sendWithFailover(
+            "heartbeat",
+            endpoint -> HttpRequest.newBuilder()
+                .uri(URI.create(endpoint + "/v1/heartbeat"))
+                .header("Content-Type", "application/json")
+                .header("X-Module-Token", moduleToken)
+                .POST(HttpRequest.BodyPublishers.ofString(json.toString()))
+                .build(),
+            HttpResponse.BodyHandlers.ofString()
+        ).thenAccept(resp -> {
+            if (resp.isOk()) {
+                debugLog("[Cloud] 心跳响应: " + resp.rawBody());
+            } else if (resp.isTransient()) {
+                plugin.consoleWarn("[Cloud] 心跳暂时失败: " + resp.httpStatus() + " " + resp.message());
+            } else {
+                plugin.consoleWarn("[Cloud] 心跳上报失败: " + resp.httpStatus() + " " + resp.message());
+            }
+        }).thenRun(() -> {
+            if (shouldSync) {
+                refreshToken().thenAccept(ok -> {
+                    if (ok) {
+                        plugin.consoleInfo("[Cloud] 定期同步完成");
+                    }
+                });
+            }
+        }).exceptionally(ex -> {
+            plugin.consoleWarn("[Cloud] 心跳上报异常: " + ex.getMessage());
+            return null;
+        });
     }
 
     // -- 模块授权变更同步 ------------------------------------------
