@@ -216,8 +216,13 @@ public final class ModuleRegistry {
             String id = entry.getKey();
             DiscoveredModule dm = entry.getValue();
 
+            String enabledPath = "modules." + id + ".enabled";
             if (!isModuleEnabled(rootConfig, id)) {
-                LOGGER.fine(dm.descriptor.name() + " 模块已在 config.yml 中关闭。");
+                if (!isModuleEnabledEntryPresent(rootConfig, id)) {
+                    LOGGER.warning("检测到模块 " + dm.descriptor.name() + " (id=" + id + ") 但未启用；如需启用，请在 plugins/ArcartXSuite/config.yml 的 " + enabledPath + " 设为 true 后重启。");
+                } else {
+                    LOGGER.fine(dm.descriptor.name() + " 模块已在 config.yml 中关闭。");
+                }
                 skippedModules.add(dm.descriptor.name());
                 continue;
             }
@@ -414,10 +419,36 @@ public final class ModuleRegistry {
             LOGGER.warning("模块已加载: " + moduleId + "，如需重启请使用 reload 或 unload + load。");
             return false;
         }
-        if (!isModuleEnabled(loadRootConfig(), moduleId)) {
-            LOGGER.warning("模块 " + moduleId + " 已在 config.yml 中关闭，无法热加载。");
+        YamlConfiguration rootConfig = loadRootConfig();
+        String enabledPath = "modules." + moduleId + ".enabled";
+        if (!isModuleEnabled(rootConfig, moduleId)) {
+            if (!isModuleEnabledEntryPresent(rootConfig, moduleId)) {
+                File[] jarFiles = modulesDir.listFiles((dir, name) -> name.endsWith(".jar"));
+                String moduleName = null;
+                if (jarFiles != null) {
+                    for (File jarFile : jarFiles) {
+                        try (JarFile jar = new JarFile(jarFile)) {
+                            ModuleDescriptor descriptor = ModuleDescriptorParser.parse(jar);
+                            if (moduleId.equals(descriptor.id())) {
+                                moduleName = descriptor.name();
+                                break;
+                            }
+                        } catch (IOException | ModuleLoadException exception) {
+                            LOGGER.warning("解析模块 Jar 失败: " + jarFile.getName() + " | " + exception.getMessage());
+                        }
+                    }
+                }
+                if (moduleName != null) {
+                    LOGGER.warning("检测到模块 " + moduleName + " (id=" + moduleId + ") 但未启用；如需启用，请在 plugins/ArcartXSuite/config.yml 的 " + enabledPath + " 设为 true 后重启。");
+                } else {
+                    LOGGER.warning("检测到模块 id=" + moduleId + " 但未启用；如需启用，请在 plugins/ArcartXSuite/config.yml 的 " + enabledPath + " 设为 true 后重启。");
+                }
+            } else {
+                LOGGER.fine("模块 " + moduleId + " 已在 config.yml 中关闭，无法热加载。");
+            }
             return false;
         }
+
         initializeGlobalBridges();
         if (!modulesDir.isDirectory()) {
             LOGGER.warning("模块目录不存在: " + modulesDir.getAbsolutePath());
@@ -967,6 +998,10 @@ public final class ModuleRegistry {
 
     private boolean isModuleEnabled(YamlConfiguration config, String moduleId) {
         return config.getBoolean("modules." + moduleId + ".enabled", false);
+    }
+
+    private boolean isModuleEnabledEntryPresent(YamlConfiguration config, String moduleId) {
+        return config.contains("modules." + moduleId + ".enabled");
     }
 
     public InputStream openProtectedResource(String moduleId, String resourcePath, ClassLoader loader) throws IOException {

@@ -39,26 +39,26 @@ ui:
         if(val.red_player_row.width == 320){
           if(packet.get(i).team == "red"){
             ROW = val.red_player_row.copy('red_' + var.ArenaTAB刷新轮次 + '_' + i)
-            ROW['head'].normal = 'PlayerSkin:' + packet.get(i).uuid
-            ROW['name_text'].texts = packet.get(i).name
+            ROW['头部'].normal = 'PlayerSkin:' + packet.get(i).uuid
+            ROW['名称文字'].texts = packet.get(i).name
             //status 字段服务端发的是 "1" / "0"；UI 端转图标
             if(packet.get(i).status == "1"){
-              ROW['status_text'].texts = "&c⚔"
+              ROW['状态文字'].texts = "&c⚔"
             } else {
-              ROW['status_text'].texts = "&7•"
+              ROW['状态文字'].texts = "&7•"
             }
-            ROW['health_text'].texts = "&c❤ " + packet.get(i).health
+            ROW['血量文字'].texts = "&c❤ " + packet.get(i).health
             ROW.visible = true
           }elif(packet.get(i).team == "blue"){
             ROW = val.blue_player_row.copy('blue_' + var.ArenaTAB刷新轮次 + '_' + i)
-            ROW['head'].normal = 'PlayerSkin:' + packet.get(i).uuid
-            ROW['name_text'].texts = packet.get(i).name
+            ROW['头部'].normal = 'PlayerSkin:' + packet.get(i).uuid
+            ROW['名称文字'].texts = packet.get(i).name
             if(packet.get(i).status == "1"){
-              ROW['status_text'].texts = "&9⚔"
+              ROW['状态文字'].texts = "&9⚔"
             } else {
-              ROW['status_text'].texts = "&7•"
+              ROW['状态文字'].texts = "&7•"
             }
-            ROW['health_text'].texts = "&c❤ " + packet.get(i).health
+            ROW['血量文字'].texts = "&c❤ " + packet.get(i).health
             ROW.visible = true
           }
           //其他 team（含空 / spectator）跳过不渲染
@@ -69,14 +69,14 @@ ui:
       var.ArenaTAB蓝队人数 = val.BlueList.childrenCount() - 1
 controls:
   自适应全局布局:
-    type: adaptive
+    type: Adaptive
     attribute:
       point: ~top_center
       width: 1920
       height: 1080
     children:
       ArenaTAB背景:
-        type: texture
+        type: Texture
         attribute:
           point: ~top_center
           width: 720
@@ -91,7 +91,7 @@ controls:
             color: ~0,0,0,255
         children:
           标题:
-            type: text
+            type: Text
             attribute:
               point: ~top_center
               y: 18
@@ -99,7 +99,7 @@ controls:
               texts: "'&c&lRED  &fvs  &9&lBLUE'"
               lineSpace: 6
           中线:
-            type: texture
+            type: Texture
             attribute:
               point: ~top_center
               x: 0
@@ -125,8 +125,8 @@ controls:
                   height: 30
                   visible: false
                 children:
-                  head:
-                    type: texture
+                  头部:
+                    type: Texture
                     attribute:
                       width: 28
                       height: 28
@@ -135,24 +135,24 @@ controls:
                       shape: ~round_rect
                       radius: 4
                       normal: "~120,120,120,255"
-                  name_text:
-                    type: text
+                  名称文字:
+                    type: Text
                     attribute:
                       x: 36
                       y: 0
                       fontSize: 26
                       texts: "~none"
                       lineSpace: 4
-                  status_text:
-                    type: text
+                  状态文字:
+                    type: Text
                     attribute:
                       x: 220
                       y: 0
                       fontSize: 26
                       texts: "~&7•"
                       lineSpace: 4
-                  health_text:
-                    type: text
+                  血量文字:
+                    type: Text
                     attribute:
                       x: 250
                       y: 0
@@ -178,8 +178,8 @@ controls:
                   height: 30
                   visible: false
                 children:
-                  head:
-                    type: texture
+                  头部:
+                    type: Texture
                     attribute:
                       width: 28
                       height: 28
@@ -188,24 +188,24 @@ controls:
                       shape: ~round_rect
                       radius: 4
                       normal: "~120,120,120,255"
-                  name_text:
-                    type: text
+                  名称文字:
+                    type: Text
                     attribute:
                       x: 36
                       y: 0
                       fontSize: 26
                       texts: "~none"
                       lineSpace: 4
-                  status_text:
-                    type: text
+                  状态文字:
+                    type: Text
                     attribute:
                       x: 220
                       y: 0
                       fontSize: 26
                       texts: "~&7•"
                       lineSpace: 4
-                  health_text:
-                    type: text
+                  血量文字:
+                    type: Text
                     attribute:
                       x: 250
                       y: 0

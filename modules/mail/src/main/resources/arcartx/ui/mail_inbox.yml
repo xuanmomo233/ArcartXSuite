@@ -79,7 +79,7 @@ controls:
       width: 1920
       height: 1080
     children:
-      root:
+      主面板:
         type: Texture
         attribute:
           point: ~middle_center
@@ -102,14 +102,14 @@ controls:
             color: ~255,255,255,110
             width: 0.05
         children:
-          title:
+          标题:
             type: Text
             attribute:
               x: 42
               y: 30
               fontSize: 42
               texts: "~&f&lAXS 邮箱"
-          summary:
+          摘要:
             type: Text
             attribute:
               x: 42

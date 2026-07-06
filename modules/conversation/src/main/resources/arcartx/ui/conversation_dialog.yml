@@ -109,7 +109,7 @@ controls:
           width: 1420
           height: 372
         children:
-          panel:
+          主面板:
             type: Texture
             attribute:
               point: ~stretch_all

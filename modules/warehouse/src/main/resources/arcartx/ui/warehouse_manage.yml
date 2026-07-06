@@ -175,7 +175,7 @@ ui:
       Packet.send(var.packetId, 'refresh')
 
 controls:
-  根:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all

@@ -37,8 +37,8 @@ ui:
       while(i <= packet.size()){
         if(val.player_row.width == 320){
           ROW = val.player_row.copy('rich_player_' + var.RichTAB刷新轮次 + '_' + i)
-          ROW['head'].normal = 'PlayerSkin:' + packet.get(i).uuid
-          ROW['name_text'].texts = packet.get(i).name
+          ROW['头部'].normal = 'PlayerSkin:' + packet.get(i).uuid
+          ROW['名称文字'].texts = packet.get(i).name
           ROW['ping_text'].texts = packet.get(i).ping
           ROW.visible = true
           i++
@@ -48,14 +48,14 @@ ui:
       var.RichTAB第一列人数 = math.min(server.server_online, 15)
 controls:
   自适应全局布局:
-    type: adaptive
+    type: Adaptive
     attribute:
       point: ~top_center
       width: 1920
       height: 1080
     children:
       RichTAB背景:
-        type: texture
+        type: Texture
         attribute:
           point: ~top_center
           width: 50 + 322 * var.RichTAB单列数量
@@ -71,7 +71,7 @@ controls:
             color: ~0,0,0,255
         children:
           标题:
-            type: text
+            type: Text
             attribute:
               y: 23
               x: 26
@@ -95,7 +95,7 @@ controls:
                 }
             children:
               ROW:
-                type: texture
+                type: Texture
                 val: ROW
                 attribute:
                   point: ~top_center
@@ -126,8 +126,8 @@ controls:
                   y: 4
                   visible: false
                 children:
-                  head:
-                    type: texture
+                  头部:
+                    type: Texture
                     attribute:
                       width: 28
                       height: 28
@@ -136,8 +136,8 @@ controls:
                       shape: ~round_rect
                       radius: 4
                       normal: "~120,120,120,255"
-                  name_text:
-                    type: text
+                  名称文字:
+                    type: Text
                     attribute:
                       x: 36
                       y: 0
@@ -145,7 +145,7 @@ controls:
                       texts: "~none"
                       lineSpace: 4
                   ping_text:
-                    type: text
+                    type: Text
                     attribute:
                       x: 250
                       y: 0

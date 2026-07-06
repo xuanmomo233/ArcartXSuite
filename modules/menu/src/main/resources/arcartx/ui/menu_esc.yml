@@ -1,4 +1,4 @@
-﻿# AXS Menu ESC UI — 替换暂停界面，参考纯色块 ESC 菜单布局
+# AXS Menu ESC UI — 替换暂停界面，参考纯色块 ESC 菜单布局
 ui:
   isHud: false
   match:
@@ -154,10 +154,10 @@ controls:
             action:
               create: |-
                 for(i in range(2,9)){
-                  A = self['贴图'].copy('贴图' + i)
+                  A = self['装饰贴图'].copy('装饰贴图' + i)
                 }
             children:
-              贴图:
+              装饰贴图:
                 type: Texture
                 attribute:
                   normal: ~255,255,255,255

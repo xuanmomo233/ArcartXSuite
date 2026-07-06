@@ -46,7 +46,7 @@ controls:
       width: 1920
       height: 1080
     children:
-      root:
+      主面板:
         type: Texture
         attribute:
           point: ~middle_center
@@ -69,21 +69,21 @@ controls:
             color: ~0,0,0,255
             width: 0.05
         children:
-          title:
+          标题:
             type: Text
             attribute:
               x: 42
               y: 30
               fontSize: 64
               texts: "~&f&l邮件日志"
-          summary:
+          摘要:
             type: Text
             attribute:
               x: 42
               y: 84
               fontSize: 49
               texts: "'&f总日志: ' + var.totalCount.round() + '   &f页码: ' + var.page.round() + '/' + var.maxPage.round()"
-          header_buttons:
+          标题按钮区:
             type: HStack
             attribute:
               x: 1005
@@ -144,7 +144,7 @@ controls:
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'logs-next')
-          panel:
+          主面板:
             type: Texture
             attribute:
               x: 42

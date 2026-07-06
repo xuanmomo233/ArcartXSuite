@@ -126,28 +126,28 @@ controls:
       width: 1920
       height: 1080
     children:
-      panel:
+      主面板:
         type: Canvas
         attribute:
           point: ~middle_center
           width: 1520
           height: 900
         children:
-          bg:
+          背景:
             type: Texture
             attribute:
               point: ~stretch_all
               normal: ~85,85,90,220
               shape: ~round_rect
               radius: 28
-          border:
+          边框:
             type: Texture
             attribute:
               point: ~stretch_all
               normal: ~255,255,255,18
               shape: ~round_rect
               radius: 28
-          title:
+          标题:
             type: Text
             attribute:
               point: ~top_left
@@ -243,7 +243,7 @@ controls:
                       clickLeft: |-
                         Packet.send(var.packetId, 'open_world', self.entry['id'])
                     children:
-                      text:
+                      文字:
                         type: Text
                         attribute:
                           point: ~middle_center
@@ -358,7 +358,7 @@ controls:
                       clickLeft: |-
                         Packet.send(var.packetId, 'select_anchor', self.entry['id'])
                     children:
-                      title:
+                      标题:
                         type: Text
                         attribute:
                           point: ~top_left
@@ -456,7 +456,7 @@ controls:
                       clickLeft: |-
                         Packet.send(var.packetId, 'select_waypoint', self.entry['id'])
                     children:
-                      text:
+                      文字:
                         type: Text
                         attribute:
                           point: ~middle_left
@@ -543,7 +543,7 @@ controls:
                       clickLeft: |-
                         Packet.send(var.packetId, 'select_external', self.entry['id'])
                     children:
-                      text:
+                      文字:
                         type: Text
                         attribute:
                           point: ~middle_left
@@ -563,7 +563,7 @@ controls:
               normal: ~255,255,255,120
               shape: ~round_rect
               radius: 18
-          detail_title:
+          详情标题:
             type: Text
             attribute:
               point: ~top_left
@@ -618,7 +618,7 @@ controls:
                   Packet.send(var.packetId, 'unlock_anchor', var.detailSelectedId)
                 }
             children:
-              text:
+              文字:
                 type: Text
                 attribute:
                   point: ~middle_center
@@ -643,7 +643,7 @@ controls:
                   Packet.send(var.packetId, 'teleport_anchor', var.detailSelectedId)
                 }
             children:
-              text:
+              文字:
                 type: Text
                 attribute:
                   point: ~middle_center
@@ -674,7 +674,7 @@ controls:
                   Packet.send(var.packetId, 'track_external', var.detailSelectedId)
                 }
             children:
-              text:
+              文字:
                 type: Text
                 attribute:
                   point: ~middle_center
@@ -682,7 +682,7 @@ controls:
                   fontSize: 16
                   shadow: false
                   through: true
-          btn_delete:
+          删除按钮:
             type: Texture
             attribute:
               point: ~top_left
@@ -699,7 +699,7 @@ controls:
                   Packet.send(var.packetId, 'delete_waypoint', var.detailSelectedId)
                 }
             children:
-              text:
+              文字:
                 type: Text
                 attribute:
                   point: ~middle_center
@@ -724,7 +724,7 @@ controls:
                   Packet.send(var.packetId, 'create_waypoint')
                 }
             children:
-              text:
+              文字:
                 type: Text
                 attribute:
                   point: ~middle_center
@@ -732,7 +732,7 @@ controls:
                   fontSize: 16
                   shadow: false
                   through: true
-          btn_clear:
+          清除按钮:
             type: Texture
             attribute:
               point: ~top_left
@@ -749,7 +749,7 @@ controls:
                   Packet.send(var.packetId, 'clear_track')
                 }
             children:
-              text:
+              文字:
                 type: Text
                 attribute:
                   point: ~middle_center

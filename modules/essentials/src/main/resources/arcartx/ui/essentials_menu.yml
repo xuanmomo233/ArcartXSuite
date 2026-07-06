@@ -38,7 +38,7 @@ controls:
       width: 1920
       height: 1080
     children:
-      root:
+      主面板:
         type: Texture
         attribute:
           point: ~middle_center
@@ -53,7 +53,7 @@ controls:
             color: ~80,180,255,180
         children:
           # ═══ 标题栏 ═══
-          header:
+          标题栏:
             type: Texture
             attribute:
               x: 0
@@ -64,7 +64,7 @@ controls:
               shape: ~round_rect
               radius: 14
             children:
-              title_text:
+              标题文字:
                 type: Text
                 attribute:
                   x: 24
@@ -80,7 +80,7 @@ controls:
                   texts: "~&7{var.playerName}"
 
           # ═══ 左侧导航栏 ═══
-          nav_bar:
+          导航栏:
             type: Texture
             attribute:
               x: 0
@@ -210,7 +210,7 @@ controls:
                       texts: '&f设置'
 
           # ═══ 右侧内容区 ═══
-          content_area:
+          内容区:
             type: Texture
             attribute:
               x: 160

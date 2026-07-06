@@ -35,7 +35,7 @@ controls:
       width: 1920
       height: 1080
     children:
-      root:
+      主面板:
         type: Texture
         attribute:
           point: ~middle_center
@@ -55,7 +55,7 @@ controls:
             color: ~0,0,0,100
         children:
           # ═══ 标题栏 ═══
-          header:
+          标题栏:
             type: Texture
             attribute:
               x: 0
@@ -66,7 +66,7 @@ controls:
               shape: ~round_rect
               radius: 14
             children:
-              title_text:
+              标题文字:
                 type: Text
                 attribute:
                   x: 24
@@ -82,7 +82,7 @@ controls:
                   texts: "~&7区域数: &f{var.regionCount}"
 
           # ═══ 左侧导航 ═══
-          nav_bar:
+          导航栏:
             type: Texture
             attribute:
               x: 0
@@ -137,7 +137,7 @@ controls:
                       texts: '&f编辑'
 
           # ═══ 内容区 ═══
-          content_area:
+          内容区:
             type: Texture
             attribute:
               x: 160
@@ -243,7 +243,7 @@ controls:
                                   through: true
                                   fontSize: 24
                                   texts: "~&7{self.parent.entry['volume']}格"
-                              btn_edit:
+                              编辑按钮:
                                 type: Texture
                                 attribute:
                                   x: 650
@@ -266,7 +266,7 @@ controls:
                                       center: true
                                       fontSize: 22
                                       texts: '&f编辑'
-                              btn_delete:
+                              删除按钮:
                                 type: Texture
                                 attribute:
                                   x: 730
@@ -301,7 +301,7 @@ controls:
                   visible: |-
                     var.page == 'edit'
                 children:
-                  edit_title:
+                  编辑标题:
                     type: Text
                     attribute:
                       x: 0
@@ -557,7 +557,7 @@ controls:
                                   click: |-
                                     Packet.send(var.packetId, 'remove_flag', var.selId, self.parent.entry['key'])
                                 children:
-                                  btn_clear_t:
+                                  清除按钮文字:
                                     type: Text
                                     attribute:
                                       x: 28
@@ -567,7 +567,7 @@ controls:
                                       fontSize: 20
                                       texts: '&7清除'
 
-                  btn_back:
+                  返回按钮:
                     type: Texture
                     attribute:
                       x: 720
@@ -581,7 +581,7 @@ controls:
                       click: |-
                         Packet.send(var.packetId, 'navigate', 'regions')
                     children:
-                      btn_back_text:
+                      返回按钮文字:
                         type: Text
                         attribute:
                           x: 50

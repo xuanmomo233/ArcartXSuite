@@ -56,7 +56,7 @@ controls:
       width: 1920
       height: 1080
     children:
-      root:
+      主面板:
         type: Texture
         attribute:
           point: ~middle_center
@@ -71,7 +71,7 @@ controls:
             color: ~80,180,255,180
         children:
           # 标题栏
-          header:
+          标题栏:
             type: Texture
             attribute:
               x: 0
@@ -86,14 +86,14 @@ controls:
                 width: 2
                 color: ~80,180,255,180
             children:
-              title_text:
+              标题文字:
                 type: Text
                 attribute:
                   x: 28
                   y: 24
                   fontSize: 49
                   texts: "~&b&lAXS Mail Admin &8- &7预设管理"
-              header_buttons:
+              标题按钮区:
                 type: HStack
                 attribute:
                   x: 1220
@@ -316,7 +316,7 @@ controls:
                           y: 16
                           fontSize: 36
                           texts: "~{self.parent.entry['enabled'] ? '&a✔' : '&c✖'}"
-                      btn_edit:
+                      编辑按钮:
                         type: Texture
                         attribute:
                           x: 1080
@@ -370,7 +370,7 @@ controls:
                               center: true
                               fontSize: 36
                               texts: "~&f派发"
-                      btn_delete:
+                      删除按钮:
                         type: Texture
                         attribute:
                           x: 1340
@@ -426,7 +426,7 @@ controls:
                 color: ~80,180,255,180
             children:
               # 顶部: 返回 + 标题
-              btn_back:
+              返回按钮:
                 type: Texture
                 attribute:
                   x: 0
@@ -446,7 +446,7 @@ controls:
                     Packet.send('AXS_MAIL', 'admin-preset-cancel')
                     Packet.send('AXS_MAIL', 'admin-preset-list')
                 children:
-                  btn_back_text:
+                  返回按钮文字:
                     type: Text
                     attribute:
                       x: 50
@@ -456,7 +456,7 @@ controls:
                       fontSize: 36
                       texts: "~&f返回"
 
-              edit_title:
+              编辑标题:
                 type: Text
                 attribute:
                   x: 120

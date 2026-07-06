@@ -46,7 +46,7 @@ ui:
       }
 
 controls:
-  自适应全局控件:
+  自适应全局布局:
     type: Adaptive
     attribute:
       width: 1920

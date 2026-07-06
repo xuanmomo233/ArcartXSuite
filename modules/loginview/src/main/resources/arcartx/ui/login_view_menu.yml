@@ -92,7 +92,7 @@ ui:
       var.showRules = false
 
 controls:
-  自适应:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all

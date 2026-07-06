@@ -32,7 +32,7 @@ controls:
       width: 1920
       height: 1080
     children:
-      root:
+      主面板:
         type: Texture
         attribute:
           point: ~middle_center
@@ -47,7 +47,7 @@ controls:
             color: ~220,120,60,180
         children:
           # ═══ 标题栏 ═══
-          header:
+          标题栏:
             type: Texture
             attribute:
               x: 0
@@ -58,7 +58,7 @@ controls:
               shape: ~round_rect
               radius: 14
             children:
-              title_text:
+              标题文字:
                 type: Text
                 attribute:
                   x: 24
@@ -74,7 +74,7 @@ controls:
                   texts: "~&7在线: &f{var.playerCount}"
 
           # ═══ 左侧导航 ═══
-          nav_bar:
+          导航栏:
             type: Texture
             attribute:
               x: 0
@@ -180,7 +180,7 @@ controls:
                       texts: '&f世界'
 
           # ═══ 内容区 ═══
-          content_area:
+          内容区:
             type: Texture
             attribute:
               x: 160
@@ -641,7 +641,7 @@ controls:
                       y: 200
                       fontSize: 36
                       texts: '&b天气设置:'
-                  btn_clear:
+                  清除按钮:
                     type: Texture
                     attribute:
                       x: 0
@@ -655,7 +655,7 @@ controls:
                       click: |-
                         Packet.send(var.packetId, 'set_weather', 'clear')
                     children:
-                      btn_clear_t:
+                      清除按钮文字:
                         type: Text
                         attribute:
                           x: 50

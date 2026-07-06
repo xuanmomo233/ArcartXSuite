@@ -56,7 +56,7 @@ ui:
       var.tab = 'dashboard'
 
 controls:
-  自适应:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~middle_center

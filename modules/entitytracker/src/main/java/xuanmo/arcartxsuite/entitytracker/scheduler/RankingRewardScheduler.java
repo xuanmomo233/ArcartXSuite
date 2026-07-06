@@ -41,7 +41,11 @@ public class RankingRewardScheduler {
 
     public RankingRewardScheduler(RankingRewardService rewardService, JavaPlugin plugin, Logger logger) {
         this.rewardService = rewardService;
-        this.scheduler = Executors.newScheduledThreadPool(2);
+        this.scheduler = Executors.newScheduledThreadPool(2, runnable -> {
+            Thread thread = new Thread(runnable, "AXS-EntityTracker-Reward");
+            thread.setDaemon(true);
+            return thread;
+        });
         this.plugin = plugin;
         this.logger = logger;
     }

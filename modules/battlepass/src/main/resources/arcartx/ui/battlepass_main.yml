@@ -53,7 +53,7 @@ ui:
       var.progressRatio = 0
 
 controls:
-  根:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
