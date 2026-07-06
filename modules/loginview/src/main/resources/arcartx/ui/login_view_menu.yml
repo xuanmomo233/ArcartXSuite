@@ -46,11 +46,11 @@ ui:
       var.qqBound = packet['qqBound']
       var.bindPrompt = packet['bindPrompt']
       var.result = packet['message']
-      var.password = ''
-      var.confirmPassword = ''
-      var.oldPassword = ''
-      var.newPassword = ''
-      var.changeConfirmPassword = ''
+      var.password = none
+      var.confirmPassword = none
+      var.oldPassword = none
+      var.newPassword = none
+      var.changeConfirmPassword = none
       var.agreed = false
       var.showRules = false
       var.requireTerms = packet['requireTerms']
@@ -60,9 +60,9 @@ ui:
       if (var.lastSuccess && var.type == 'change') {
         var.type = 'login'
         var.title = '登录服务器'
-        var.oldPassword = ''
-        var.newPassword = ''
-        var.changeConfirmPassword = ''
+        var.oldPassword = none
+        var.newPassword = none
+        var.changeConfirmPassword = none
       }
     close: |-
       var.result = packet['message']
@@ -75,19 +75,19 @@ ui:
       var.registered = true
       var.premiumBypass = false
       var.qqBound = false
-      var.bindPrompt = ''
-      var.playerName = ''
-      var.serverName = ''
+      var.bindPrompt = none
+      var.playerName = none
+      var.serverName = none
       var.online = 0
       var.maxPlayers = 0
-      var.address = ''
-      var.time = ''
-      var.result = ''
-      var.password = ''
-      var.confirmPassword = ''
-      var.oldPassword = ''
-      var.newPassword = ''
-      var.changeConfirmPassword = ''
+      var.address = none
+      var.time = none
+      var.result = none
+      var.password = none
+      var.confirmPassword = none
+      var.oldPassword = none
+      var.newPassword = none
+      var.changeConfirmPassword = none
       var.agreed = false
       var.showRules = false
 
@@ -272,11 +272,11 @@ controls:
               clickLeft: |-
                 var.type = 'change'
                 var.title = '修改密码'
-                var.result = ''
-                var.password = ''
-                var.oldPassword = ''
-                var.newPassword = ''
-                var.changeConfirmPassword = ''
+                var.result = none
+                var.password = none
+                var.oldPassword = none
+                var.newPassword = none
+                var.changeConfirmPassword = none
           退出游戏:
             type: Texture
             attribute:
@@ -612,10 +612,10 @@ controls:
               clickLeft: |-
                 var.type = 'login'
                 var.title = '登录服务器'
-                var.result = ''
-                var.oldPassword = ''
-                var.newPassword = ''
-                var.changeConfirmPassword = ''
+                var.result = none
+                var.oldPassword = none
+                var.newPassword = none
+                var.changeConfirmPassword = none
           # ── 底部状态 ──
           结果:
             type: Text

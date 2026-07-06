@@ -84,7 +84,7 @@ controls:
               x: 300
               y: 110
               point: ~top_left
-              visible: "var.killer_name != null && var.killer_name != ''"
+              visible: "var.killer_name != none && var.killer_name != none"
 
           环境死亡信息:
             type: Text
@@ -96,7 +96,7 @@ controls:
               x: 300
               y: 110
               point: ~top_left
-              visible: "var.killer_name == null || var.killer_name == ''"
+              visible: "var.killer_name == none || var.killer_name == none"
 
           倒计时文本:
             type: Text

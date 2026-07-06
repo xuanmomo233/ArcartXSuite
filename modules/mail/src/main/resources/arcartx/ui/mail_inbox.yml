@@ -21,17 +21,17 @@ ui:
       var.totalCount = 0
       var.unreadCount = 0
       var.claimableCount = 0
-      var.selectedId = ''
-      var.selectedSubject = ''
-      var.selectedSenderName = ''
-      var.selectedSourceText = ''
-      var.selectedStatusText = ''
-      var.selectedCreatedAt = ''
-      var.selectedExpiresAt = ''
+      var.selectedId = none
+      var.selectedSubject = none
+      var.selectedSenderName = none
+      var.selectedSourceText = none
+      var.selectedStatusText = none
+      var.selectedCreatedAt = none
+      var.selectedExpiresAt = none
       var.selectedBody = ['&8暂无正文']
       var.selectedAttachmentSummary = '无附件'
       var.selectedClaimable = false
-      var.cdkCode = ''
+      var.cdkCode = none
       var.maxMailCount = 0
   # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
   packetHandler:
@@ -314,7 +314,7 @@ controls:
                       normal: ~120,120,120,255
                       shape: ~round_rect
                       radius: 16
-                      visible: "self.entry != null && var.filterMode == 'all' || (var.filterMode == 'unread' && self.entry['unread']) || (var.filterMode == 'claimable' && self.entry['claimable']) || (var.filterMode == 'system' && self.entry['source_type'] == 'system') || (var.filterMode == 'player' && self.entry['source_type'] == 'player') || (var.filterMode == 'preset' && self.entry['source_type'] == 'preset') || (var.filterMode == 'cdk' && self.entry['source_type'] == 'cdk')"
+                      visible: "self.entry != none && var.filterMode == 'all' || (var.filterMode == 'unread' && self.entry['unread']) || (var.filterMode == 'claimable' && self.entry['claimable']) || (var.filterMode == 'system' && self.entry['source_type'] == 'system') || (var.filterMode == 'player' && self.entry['source_type'] == 'player') || (var.filterMode == 'preset' && self.entry['source_type'] == 'preset') || (var.filterMode == 'cdk' && self.entry['source_type'] == 'cdk')"
                     effect:
                       stroke:
                         width: 2
@@ -364,7 +364,7 @@ controls:
               x: 766
               y: 214
               fontSize: 49
-              texts: "var.selectedSubject == '' ? '&7未选择邮件' : '&0' + var.selectedSubject"
+              texts: "var.selectedSubject == none ? '&7未选择邮件' : '&0' + var.selectedSubject"
           selected_meta:
             type: Text
             attribute:
@@ -463,7 +463,7 @@ controls:
                     color: ~0,0,0,255
                 action:
                   clickLeft: |-
-                    if(var.selectedId != ''){
+                    if(var.selectedId != none){
                       Packet.send('AXS_MAIL', 'claim', var.selectedId)
                     }
               button_delete:
@@ -483,7 +483,7 @@ controls:
                     color: ~0,0,0,255
                 action:
                   clickLeft: |-
-                    if(var.selectedId != ''){
+                    if(var.selectedId != none){
                       Packet.send('AXS_MAIL', 'delete', var.selectedId)
                     }
               button_claim_all:
@@ -564,7 +564,7 @@ controls:
                     color: ~0,0,0,255
                 action:
                   clickLeft: |-
-                    if(var.cdkCode != ''){
+                    if(var.cdkCode != none){
                       Packet.send('AXS_MAIL', 'cdk', var.cdkCode)
                     }
               refresh_button:

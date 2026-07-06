@@ -53,10 +53,10 @@ ui:
       var.maxSigninRewardCount = packet['maxSigninRewardCount']
       var.maxSelectedRewardCount = packet['maxSelectedRewardCount']
       var.calendarSignedCount = 0
-      if(var.calendarRows != null){
+      if(var.calendarRows != none){
         for(k in var.calendarRows.keys()){
           row = var.calendarRows[k]
-          if(row != null && row['status'] == 'signed'){
+          if(row != none && row['status'] == 'signed'){
             var.calendarSignedCount = var.calendarSignedCount + 1
           }
         }
@@ -103,10 +103,10 @@ ui:
       var.maxSigninRewardCount = packet['maxSigninRewardCount']
       var.maxSelectedRewardCount = packet['maxSelectedRewardCount']
       var.calendarSignedCount = 0
-      if(var.calendarRows != null){
+      if(var.calendarRows != none){
         for(k in var.calendarRows.keys()){
           row = var.calendarRows[k]
-          if(row != null && row['status'] == 'signed'){
+          if(row != none && row['status'] == 'signed'){
             var.calendarSignedCount = var.calendarSignedCount + 1
           }
         }
@@ -139,9 +139,9 @@ ui:
       var.signInStreak = 0
       var.signInTotal = 0
       var.makeupCardCount = 0
-      var.calendarMonthText = ''
+      var.calendarMonthText = none
       var.calendarMonthOffset = 0
-      var.selectedDateText = ''
+      var.selectedDateText = none
       var.selectedCanMakeup = false
       var.selectedAction = 'none'
       var.selectedActionText = '等待同步'
@@ -376,13 +376,13 @@ controls:
                   entry: var.calendarRows[self.entryKey]
                   width: 52
                   height: 38
-                  normal: "self.entry == null ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '100,200,130,230' : (self.entry['status'] == 'expired' ? '210,120,120,230' : '145,145,145,255'))"
+                  normal: "self.entry == none ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '100,200,130,230' : (self.entry['status'] == 'expired' ? '210,120,120,230' : '145,145,145,255'))"
                   shape: ~round_rect
                   radius: 8
-                  texts: "self.entry == null ? '' : ('&0' + self.entry['label'])"
+                  texts: "self.entry == none ? none : ('&0' + self.entry['label'])"
                   center: true
                   fontSize: 36
-                  visible: self.entry != null
+                  visible: self.entry != none
                 effect:
                   stroke:
                     width: 2
@@ -397,13 +397,13 @@ controls:
                       through: true
                       width: 52
                       height: 38
-                      normal: "self.parent.entry == null ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '100,200,130,230' : (self.parent.entry['status'] == 'expired' ? '210,120,120,230' : '145,145,145,255'))"
+                      normal: "self.parent.entry == none ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '100,200,130,230' : (self.parent.entry['status'] == 'expired' ? '210,120,120,230' : '145,145,145,255'))"
                       shape: ~round_rect
                       radius: 8
-                      texts: "self.parent.entry == null ? '' : ('&0' + self.parent.entry['label'])"
+                      texts: "self.parent.entry == none ? none : ('&0' + self.parent.entry['label'])"
                       center: true
                       fontSize: 36
-                      visible: "self.parent.entry != null && self.parent.entry['date'] == var.selectedDateText"
+                      visible: "self.parent.entry != none && self.parent.entry['date'] == var.selectedDateText"
                     effect:
                       stroke:
                         width: 2
@@ -414,7 +414,7 @@ controls:
                       through: true
                       x: 38
                       y: 22
-                      visible: "self.parent.entry != null && self.parent.entry['today']"
+                      visible: "self.parent.entry != none && self.parent.entry['today']"
                       texts: "~&6今"
                       fontSize: 22
 
@@ -701,10 +701,10 @@ controls:
                       entry: var.rewardRows[self.entryKey]
                       width: 500
                       height: 64
-                      normal: "self.entry != null && self.entry['current'] ? '120,190,255,230' : (self.entry != null && self.entry['claimed'] ? '100,200,130,230' : '145,145,145,255')"
+                      normal: "self.entry != none && self.entry['current'] ? '120,190,255,230' : (self.entry != none && self.entry['claimed'] ? '100,200,130,230' : '145,145,145,255')"
                       shape: ~round_rect
                       radius: 14
-                      visible: self.entry != null
+                      visible: self.entry != none
                     effect:
                       stroke:
                         width: 2
@@ -715,21 +715,21 @@ controls:
                         attribute:
                           x: 14
                           y: 6
-                          texts: "self.parent.entry != null ? '&0' + self.parent.entry['name'] : ''"
+                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['name'] : none"
                           fontSize: 36
                       奖励项信息:
                         type: Text
                         attribute:
                           x: 14
                           y: 34
-                          texts: "self.parent.entry != null ? '&0' + self.parent.entry['thresholdText'] + '   &0' + self.parent.entry['rewardText'] : ''"
+                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['thresholdText'] + '   &0' + self.parent.entry['rewardText'] : none"
                           fontSize: 28
                       奖励项状态:
                         type: Text
                         attribute:
                           x: 380
                           y: 18
-                          texts: "self.parent.entry != null ? (self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['current'] ? '&e进行中' : '&7未达成')) : ''"
+                          texts: "self.parent.entry != none ? (self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['current'] ? '&e进行中' : '&7未达成')) : none"
                           fontSize: 36
 
           周期奖励标题:
@@ -744,7 +744,7 @@ controls:
             attribute:
               x: 1120
               y: 486
-              visible: "var.periodicRewardRows.size() == 0 || var.periodicRewardRows.size() == null"
+              visible: "var.periodicRewardRows.size() == 0 || var.periodicRewardRows.size() == none"
               texts: "~&0暂无周期奖励"
               fontSize: 36
           周期滑块:
@@ -795,10 +795,10 @@ controls:
                       entry: var.periodicRewardRows[self.entryKey]
                       width: 500
                       height: 52
-                      normal: "self.entry != null && self.entry['reached'] && !self.entry['claimed'] ? '120,190,255,230' : (self.entry != null && self.entry['claimed'] ? '100,200,130,230' : '145,145,145,255')"
+                      normal: "self.entry != none && self.entry['reached'] && !self.entry['claimed'] ? '120,190,255,230' : (self.entry != none && self.entry['claimed'] ? '100,200,130,230' : '145,145,145,255')"
                       shape: ~round_rect
                       radius: 12
-                      visible: self.entry != null
+                      visible: self.entry != none
                     effect:
                       stroke:
                         width: 2
@@ -809,21 +809,21 @@ controls:
                         attribute:
                           x: 12
                           y: 4
-                          texts: "self.parent.entry != null ? '&0' + self.parent.entry['name'] + ' &0(' + self.parent.entry['periodLabel'] + ')' : ''"
+                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['name'] + ' &0(' + self.parent.entry['periodLabel'] + ')' : none"
                           fontSize: 28
                       周期奖励信息:
                         type: Text
                         attribute:
                           x: 12
                           y: 26
-                          texts: "self.parent.entry != null ? '&0' + self.parent.entry['thresholdText'] + '   &0' + self.parent.entry['rewardText'] : ''"
+                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['thresholdText'] + '   &0' + self.parent.entry['rewardText'] : none"
                           fontSize: 24
                       周期奖励状态:
                         type: Text
                         attribute:
                           x: 420
                           y: 14
-                          texts: "self.parent.entry != null ? (self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['reached'] ? '&e待发放' : '&7未达成')) : ''"
+                          texts: "self.parent.entry != none ? (self.parent.entry['claimed'] ? '&a已领取' : (self.parent.entry['reached'] ? '&e待发放' : '&7未达成')) : none"
                           fontSize: 28
 
           签到奖励标题:
@@ -838,7 +838,7 @@ controls:
             attribute:
               x: 1120
               y: 726
-              visible: "var.signInRewardRows.size() == 0 || var.signInRewardRows.size() == null"
+              visible: "var.signInRewardRows.size() == 0 || var.signInRewardRows.size() == none"
               texts: "~&0暂无签到奖励"
               fontSize: 36
           签到滑块:
@@ -892,7 +892,7 @@ controls:
                       normal: ~145,145,145,255
                       shape: ~round_rect
                       radius: 10
-                      visible: self.entry != null
+                      visible: self.entry != none
                     effect:
                       stroke:
                         width: 2
@@ -903,12 +903,12 @@ controls:
                         attribute:
                           x: 12
                           y: 4
-                          texts: "self.parent.entry != null ? '&0' + self.parent.entry['title'] : ''"
+                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['title'] : none"
                           fontSize: 28
                       签到奖励条件:
                         type: Text
                         attribute:
                           x: 12
                           y: 26
-                          texts: "self.parent.entry != null ? '&0' + self.parent.entry['trigger'] + '   &0' + self.parent.entry['rewardText'] : ''"
+                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['trigger'] + '   &0' + self.parent.entry['rewardText'] : none"
                           fontSize: 24

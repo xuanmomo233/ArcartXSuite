@@ -204,7 +204,7 @@ controls:
                             type: Texture
                             attribute:
                               entry: var.regions[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 820
                               height: 50
                               normal: ~40,40,50,180
@@ -314,7 +314,7 @@ controls:
                       x: 0
                       y: 46
                       fontSize: 26
-                      texts: "~&7世界: &f{var.selWorld}  &7优先级: &f{var.selPriority}  &7父: &f{var.selParent != '' ? var.selParent : '无'}"
+                      texts: "~&7世界: &f{var.selWorld}  &7优先级: &f{var.selPriority}  &7父: &f{var.selParent != none ? var.selParent : '无'}"
                   edit_bounds:
                     type: Text
                     attribute:
@@ -371,7 +371,7 @@ controls:
                             type: Texture
                             attribute:
                               entry: var.selMembers[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 380
                               height: 34
                               normal: ~38,38,48,160
@@ -466,7 +466,7 @@ controls:
                             type: Texture
                             attribute:
                               entry: var.selFlags[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 820
                               height: 38
                               normal: ~38,38,48,160

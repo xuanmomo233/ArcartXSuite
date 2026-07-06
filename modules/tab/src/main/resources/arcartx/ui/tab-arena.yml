@@ -141,7 +141,7 @@ controls:
                       x: 36
                       y: 0
                       fontSize: 26
-                      texts: "~null"
+                      texts: "~none"
                       lineSpace: 4
                   status_text:
                     type: text
@@ -157,7 +157,7 @@ controls:
                       x: 250
                       y: 0
                       fontSize: 26
-                      texts: "~null"
+                      texts: "~none"
                       lineSpace: 4
                       visible: var.ArenaTAB详细
           # ============ 蓝队（右侧）============
@@ -194,7 +194,7 @@ controls:
                       x: 36
                       y: 0
                       fontSize: 26
-                      texts: "~null"
+                      texts: "~none"
                       lineSpace: 4
                   status_text:
                     type: text
@@ -210,7 +210,7 @@ controls:
                       x: 250
                       y: 0
                       fontSize: 26
-                      texts: "~null"
+                      texts: "~none"
                       lineSpace: 4
                       visible: var.ArenaTAB详细
 

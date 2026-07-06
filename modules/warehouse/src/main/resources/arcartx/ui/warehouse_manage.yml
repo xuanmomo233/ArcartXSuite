@@ -130,8 +130,8 @@ ui:
     open: |-
       var.packetId = 'AXS_WAREHOUSE'
       var.ownerType = 'personal'
-      var.ownerId = ''
-      var.warehouseId = ''
+      var.ownerId = none
+      var.warehouseId = none
       var.warehouseName = 'AXS 仓库'
       var.personalWarehouses = {}
       var.personalWarehouseTexts = {}
@@ -153,18 +153,18 @@ ui:
       var.unlocked = false
       var.hasPassword = false
       var.readOnly = false
-      var.lockOwner = ''
+      var.lockOwner = none
       var.capacityText = '0/0'
       var.level = 1
       var.canUpgrade = false
-      var.nextUpgradeText = ''
-      var.sharedName = ''
-      var.renameName = ''
-      var.memberName = ''
+      var.nextUpgradeText = none
+      var.sharedName = none
+      var.renameName = none
+      var.memberName = none
       var.memberRole = 'member'
-      var.passwordText = ''
+      var.passwordText = none
       var.deleteConfirm = false
-      var.deletePassword = ''
+      var.deletePassword = none
       var.sharedListScrollRatio = 0
       var.showcaseEnabled = true
       var.autoPickup = true
@@ -465,7 +465,7 @@ controls:
                         attribute:
                           entryKey: 0
                           entry: var.manageWarehouses[self.entryKey]
-                          visible: self.entry != null
+                          visible: self.entry != none
                           width: 370
                           height: 54
                           normal: "var.manageWarehouseSelected[self.entryKey] ? '110,170,230,255' : '255,255,255,150'"
@@ -482,7 +482,7 @@ controls:
                         action:
                           clickLeft: |-
                             var.deleteConfirm = false
-                            var.renameName = ''
+                            var.renameName = none
                             if(var.manageWarehouseTypes[self.entryKey] == 'shared'){
                               Packet.send(var.packetId, 'shared', var.manageWarehouseTargets[self.entryKey])
                             }else{
@@ -561,7 +561,7 @@ controls:
                       Packet.send(var.packetId, 'shared_delete', var.ownerId, var.deletePassword)
                     }else{
                       var.deleteConfirm = true
-                      var.deletePassword = ''
+                      var.deletePassword = none
                     }
                 effect:
                   stroke:
@@ -596,7 +596,7 @@ controls:
                   x: 24
                   y: 56
                   width: 450
-                  texts: "var.ownerType != '' ? ('&f当前: ' + var.warehouseName) : '&7请选择一个仓库'"
+                  texts: "var.ownerType != none ? ('&f当前: ' + var.warehouseName) : '&7请选择一个仓库'"
                   fontSize: 32
               展示按钮:
                 type: Texture
@@ -605,7 +605,7 @@ controls:
                   y: 84
                   width: 90
                   height: 34
-                  visible: var.ownerType != ''
+                  visible: var.ownerType != none
                   normal: "var.showcaseEnabled ? '110,170,230,255' : '190,190,195,255'"
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
@@ -651,7 +651,7 @@ controls:
                   y: 126
                   width: 90
                   height: 34
-                  visible: var.ownerType != ''
+                  visible: var.ownerType != none
                   normal: ~255,255,255,150
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
@@ -993,7 +993,7 @@ controls:
                         attribute:
                           entryKey: 0
                           entry: var.sharedMembers[self.entryKey]
-                          visible: self.entry != null
+                          visible: self.entry != none
                           width: 510
                           height: 56
                           normal: ~255,255,255,150

@@ -19,13 +19,13 @@ ui:
       var.__msg = Chat.getMessage()
       var.matches = []
       var.showDropdown = false
-      if(var.__msg != null && var.__msg.length() > 0){
+      if(var.__msg != none && var.__msg.length() > 0){
         var.__atIdx = var.__msg.lastIndexOf('@')
         if(var.__atIdx >= 0){
           var.__partial = var.__msg.substring(var.__atIdx + 1)
           if(!var.__partial.contains(' ')){
             var.__lp = var.__partial.toLowerCase()
-            if(var.players != null){
+            if(var.players != none){
               for(__n in var.players){
                 if(var.matches.size() >= 8){
                   break
@@ -88,7 +88,7 @@ controls:
                   x: 16
                   y: 7
                   fontSize: 64
-                  texts: "var.matches.size() > 0 ? '&e@ &f' + var.matches.get(0) : ''"
+                  texts: "var.matches.size() > 0 ? '&e@ &f' + var.matches.get(0) : none"
           ci_1:
             type: Texture
             attribute:
@@ -118,7 +118,7 @@ controls:
                   x: 16
                   y: 7
                   fontSize: 64
-                  texts: "var.matches.size() > 1 ? '&e@ &f' + var.matches.get(1) : ''"
+                  texts: "var.matches.size() > 1 ? '&e@ &f' + var.matches.get(1) : none"
           ci_2:
             type: Texture
             attribute:
@@ -148,7 +148,7 @@ controls:
                   x: 16
                   y: 7
                   fontSize: 64
-                  texts: "var.matches.size() > 2 ? '&e@ &f' + var.matches.get(2) : ''"
+                  texts: "var.matches.size() > 2 ? '&e@ &f' + var.matches.get(2) : none"
           ci_3:
             type: Texture
             attribute:
@@ -178,7 +178,7 @@ controls:
                   x: 16
                   y: 7
                   fontSize: 64
-                  texts: "var.matches.size() > 3 ? '&e@ &f' + var.matches.get(3) : ''"
+                  texts: "var.matches.size() > 3 ? '&e@ &f' + var.matches.get(3) : none"
           ci_4:
             type: Texture
             attribute:
@@ -208,7 +208,7 @@ controls:
                   x: 16
                   y: 7
                   fontSize: 64
-                  texts: "var.matches.size() > 4 ? '&e@ &f' + var.matches.get(4) : ''"
+                  texts: "var.matches.size() > 4 ? '&e@ &f' + var.matches.get(4) : none"
           ci_5:
             type: Texture
             attribute:
@@ -238,7 +238,7 @@ controls:
                   x: 16
                   y: 7
                   fontSize: 64
-                  texts: "var.matches.size() > 5 ? '&e@ &f' + var.matches.get(5) : ''"
+                  texts: "var.matches.size() > 5 ? '&e@ &f' + var.matches.get(5) : none"
           ci_6:
             type: Texture
             attribute:
@@ -268,7 +268,7 @@ controls:
                   x: 16
                   y: 7
                   fontSize: 64
-                  texts: "var.matches.size() > 6 ? '&e@ &f' + var.matches.get(6) : ''"
+                  texts: "var.matches.size() > 6 ? '&e@ &f' + var.matches.get(6) : none"
           ci_7:
             type: Texture
             attribute:
@@ -298,4 +298,4 @@ controls:
                   x: 16
                   y: 7
                   fontSize: 64
-                  texts: "var.matches.size() > 7 ? '&e@ &f' + var.matches.get(7) : ''"
+                  texts: "var.matches.size() > 7 ? '&e@ &f' + var.matches.get(7) : none"

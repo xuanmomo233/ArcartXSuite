@@ -78,10 +78,10 @@ ui:
         sw = val.共享仓库列表['项'].copy('项' + key)
         sw.entryKey = key
       }
-      if(var.slots != null){
+      if(var.slots != none){
         for(key in var.slots.keys()){
           json = packet['slotItemJson' + key]
-          if(json != null && json != ''){
+          if(json != none && json != none){
             var.itemJsons[key] = json
           }else{
             var.itemJsons[key] = var.air
@@ -89,9 +89,9 @@ ui:
         }
       }
       for(i in range(0, 54)){
-        if(val.仓库网格.get(i.round()) != null){
+        if(val.仓库网格.get(i.round()) != none){
           icon = val.仓库网格.get(i.round())
-          if(icon != null){
+          if(icon != none){
             icon.seticon()
           }
         }
@@ -134,10 +134,10 @@ ui:
       var.maxCategoryCount = packet['maxCategoryCount']
       var.renderBackpackAmounts()
       var.itemJsons = {}
-      if(var.slots != null){
+      if(var.slots != none){
         for(key in var.slots.keys()){
           json = packet['slotItemJson' + key]
-          if(json != null && json != ''){
+          if(json != none && json != none){
             var.itemJsons[key] = json
           } else {
             var.itemJsons[key] = var.air
@@ -145,9 +145,9 @@ ui:
         }
       }
       for(i in range(0, 54)){
-        if(val.仓库网格.get(i.round()) != null){
+        if(val.仓库网格.get(i.round()) != none){
           icon = val.仓库网格.get(i.round())
-          if(icon != null){
+          if(icon != none){
             icon.seticon()
           }
         }
@@ -156,11 +156,11 @@ ui:
     load: |-
       var.packetId = 'AXPM_WAREHOUSE'
       var.ownerType = 'personal'
-      var.ownerId = ''
-      var.warehouseId = ''
+      var.ownerId = none
+      var.warehouseId = none
       var.warehouseName = 'AXPM 仓库'
       var.categoryId = 'all'
-      var.search = ''
+      var.search = none
       var.categories = {}
       var.categoryTexts = {}
       var.personalWarehouses = {}
@@ -171,14 +171,14 @@ ui:
       var.itemJsons = {}
       var.air = '{"id": "minecraft:air","Count":1b}'
       var.selectedSlot = -1
-      var.selectedItem = null
+      var.selectedItem = none
       var.backpack = {}
       var.unlocked = false
       var.hasPassword = false
       var.readOnly = false
       var.sharedEditMode = false
       var.sharedCanEdit = false
-      var.lockOwner = ''
+      var.lockOwner = none
       var.page = 1
       var.pageTotal = 1
       var.pageText = '1/1'
@@ -187,32 +187,32 @@ ui:
       var.capacity = 0
       var.level = 1
       var.canUpgrade = false
-      var.nextUpgradeText = ''
+      var.nextUpgradeText = none
       var.amount = 1
-      var.passwordText = ''
+      var.passwordText = none
       var.categoryScrollRatio = 0
       var.switchScrollRatio = 0
       var.selectedBackpackSlot = -1
-      var.lastBackpackClickSlot = null
+      var.lastBackpackClickSlot = none
       var.lastBackpackClickTime = 0
-      var.lastSlotClickSlot = null
+      var.lastSlotClickSlot = none
       var.lastSlotClickTime = 0
       var.emptyItemJson = '{"id": "minecraft:air","Count":1b}'
       var.maxPersonalCount = 0
       var.maxSharedCount = 0
       var.maxCategoryCount = 0
       var.renderBackpackAmounts = -> {
-        if(val.背包网格 != null){
+        if(val.背包网格 != none){
           for(raw in range(9,44)){
             control = raw == 9 ? val.背包网格['背包槽'] : val.背包网格['背包槽' + (raw - 9)]
             entry = var.backpack[raw.round()]
-            if(control != null){
-              amountText = ''
-              if(entry != null && !entry['empty']){
+            if(control != none){
+              amountText = none
+              if(entry != none && !entry['empty']){
                 amountText = '&f' + entry['amount']
               }
               amountControl = control['数量']
-              if(amountControl != null){
+              if(amountControl != none){
                 amountControl.texts = amountText
               }
             }
@@ -463,10 +463,10 @@ controls:
                             attribute:
                               entryKey: 0
                               entry: var.personalWarehouses[self.entryKey]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 170
                               height: 48
-                              normal: "var.ownerType == 'personal' && self.entry != null && self.entry['id'] == var.warehouseId ? '120,190,255,230' : '255,255,255,145'"
+                              normal: "var.ownerType == 'personal' && self.entry != none && self.entry['id'] == var.warehouseId ? '120,190,255,230' : '255,255,255,145'"
                               hover: ~Frosted:0;255,255,255,240
                               shape: ~round_rect
                               radius: 14
@@ -492,10 +492,10 @@ controls:
                             attribute:
                               entryKey: 0
                               entry: var.sharedWarehouses[self.entryKey]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 190
                               height: 48
-                              normal: "var.ownerType == 'shared' && self.entry != null && self.entry['id'] == var.ownerId ? '120,190,255,230' : '255,255,255,145'"
+                              normal: "var.ownerType == 'shared' && self.entry != none && self.entry['id'] == var.ownerId ? '120,190,255,230' : '255,255,255,145'"
                               hover: ~Frosted:0;255,255,255,240
                               shape: ~round_rect
                               radius: 14
@@ -584,8 +584,8 @@ controls:
                   fontSize: 32
                 action:
                   clickLeft: |-
-                    var.search = ''
-                    Packet.send(var.packetId, 'search', '')
+                    var.search = none
+                    Packet.send(var.packetId, 'search', none)
                 effect:
                   stroke:
                     width: 2
@@ -630,10 +630,10 @@ controls:
                         attribute:
                           entryKey: 0
                           entry: var.categories[self.entryKey]
-                          visible: self.entry != null
+                          visible: self.entry != none
                           width: 180
                           height: 44
-                          normal: "self.entry != null && self.entry['id'] == var.categoryId ? '120,190,255,230' : '255,255,255,145'"
+                          normal: "self.entry != none && self.entry['id'] == var.categoryId ? '120,190,255,230' : '255,255,255,145'"
                           hover: ~Frosted:0;255,255,255,240
                           shape: ~round_rect
                           radius: 12
@@ -680,7 +680,7 @@ controls:
                     attribute:
                       entryKey: 0
                       entry: var.slots[self.entryKey]
-                      visible: self.entry != null
+                      visible: self.entry != none
                       slotType: ~Icon
                       itemScale: 0.76
                       width: 72
@@ -695,7 +695,7 @@ controls:
                         now = Time.currentTime()
                         if(var.lastSlotClickSlot == self.entryKey && now - var.lastSlotClickTime < 300){
                           Packet.send(var.packetId, 'withdraw_all', self.entryKey)
-                          var.lastSlotClickSlot = null
+                          var.lastSlotClickSlot = none
                         }else{
                           Packet.send(var.packetId, 'select', self.entryKey)
                           var.lastSlotClickSlot = self.entryKey
@@ -712,7 +712,7 @@ controls:
                           x: 8
                           y: 48
                           width: 56
-                          texts: "self.parent.entry != null && !self.parent.entry['empty'] ? '&f' + self.parent.entry['amount'].round() : ''"
+                          texts: "self.parent.entry != none && !self.parent.entry['empty'] ? '&f' + self.parent.entry['amount'].round() : none"
                           fontSize: 36
                           through: true
               上一页:
@@ -847,7 +847,7 @@ controls:
                         now = Time.currentTime()
                         if(var.lastBackpackClickSlot == self.entryKey && now - var.lastBackpackClickTime < 300){
                           Packet.send(var.packetId, 'deposit_slot', self.entryKey, 0)
-                          var.lastBackpackClickSlot = null
+                          var.lastBackpackClickSlot = none
                         }else{
                           var.selectedBackpackSlot = self.entryKey
                           var.lastBackpackClickSlot = self.entryKey

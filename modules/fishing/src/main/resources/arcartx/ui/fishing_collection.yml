@@ -24,7 +24,7 @@ ui:
       for(i in range(0, var.maxFishCount)){
         key = i.round()
         item = val.鱼类列表['鱼条目' + key]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
       }
@@ -202,10 +202,10 @@ controls:
                     attribute:
                       entryKey: 0
                       entry: var.fishList[self.entryKey]
-                      visible: self.entry != null
+                      visible: self.entry != none
                       width: 728
                       height: 50
-                      normal: "self.entry != null && self.entry['caught'] ? '60,80,60,200' : '60,60,70,200'"
+                      normal: "self.entry != none && self.entry['caught'] ? '60,80,60,200' : '60,60,70,200'"
                       shape: ~round_rect
                       radius: 8
                     effect:
@@ -218,7 +218,7 @@ controls:
                         attribute:
                           x: 12
                           y: 8
-                          texts: "self.parent.entry != null ? ('&f' + self.parent.entry['name'] + (self.parent.entry['caught'] ? ' &a✓' : ' &7?')) : ''"
+                          texts: "self.parent.entry != none ? ('&f' + self.parent.entry['name'] + (self.parent.entry['caught'] ? ' &a✓' : ' &7?')) : none"
                           fontSize: 28
                           through: true
                       稀有度:
@@ -226,7 +226,7 @@ controls:
                         attribute:
                           x: 12
                           y: 28
-                          texts: "self.parent.entry != null ? ('&7' + self.parent.entry['rarity']) : ''"
+                          texts: "self.parent.entry != none ? ('&7' + self.parent.entry['rarity']) : none"
                           fontSize: 22
                           through: true
                       最大尺寸:
@@ -234,6 +234,6 @@ controls:
                         attribute:
                           x: 500
                           y: 14
-                          texts: "self.parent.entry != null && self.parent.entry['caught'] ? ('&7最大: &f' + self.parent.entry['maxSize']) : '&7未捕获'"
+                          texts: "self.parent.entry != none && self.parent.entry['caught'] ? ('&7最大: &f' + self.parent.entry['maxSize']) : '&7未捕获'"
                           fontSize: 24
                           through: true

@@ -43,8 +43,8 @@ ui:
     load: |-
       var.packetId = 'AXS_MAP'
       var.visible = false
-      var.worldId = ''
-      var.texture = ''
+      var.worldId = none
+      var.texture = none
       var.imageWidth = 0
       var.imageHeight = 0
       var.hudZoom = 0.18

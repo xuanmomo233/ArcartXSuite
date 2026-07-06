@@ -142,7 +142,7 @@ controls:
                       x: 36
                       y: 0
                       fontSize: 28
-                      texts: "~null"
+                      texts: "~none"
                       lineSpace: 4
                   ping_text:
                     type: text
@@ -150,5 +150,5 @@ controls:
                       x: 250
                       y: 0
                       fontSize: 28
-                      texts: "~null"
+                      texts: "~none"
                       lineSpace: 4

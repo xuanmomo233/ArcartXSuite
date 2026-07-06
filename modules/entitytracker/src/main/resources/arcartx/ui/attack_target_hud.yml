@@ -61,8 +61,8 @@ ui:
       var.timeoutMs = packet['timeoutMs']
     close: |-
       var.isVisible = false
-      var.title = ''
-      var.subtitle = ''
+      var.title = none
+      var.subtitle = none
       var.health = 0
       var.maxHealth = 0
       var.healthText = '0'
@@ -72,23 +72,23 @@ ui:
       var.progress = 0
       var.distance = 0
       var.distanceText = '-'
-      var.displayName = ''
-      var.entityUuid = ''
-      var.world = ''
+      var.displayName = none
+      var.entityUuid = none
+      var.world = none
       var.x = 0
       var.y = 0
       var.z = 0
-      var.entityType = ''
-      var.entityTypeName = ''
-      var.mythicMobId = ''
+      var.entityType = none
+      var.entityTypeName = none
+      var.mythicMobId = none
       var.isPlayerTarget = false
       var.lastHitAgoMs = 0
       var.timeoutMs = 0
   action:
     load: |-
       var.isVisible = false
-      var.title = ''
-      var.subtitle = ''
+      var.title = none
+      var.subtitle = none
       var.health = 0
       var.maxHealth = 0
       var.healthText = '0'
@@ -98,15 +98,15 @@ ui:
       var.progress = 0
       var.distance = 0
       var.distanceText = '-'
-      var.displayName = ''
-      var.entityUuid = ''
-      var.world = ''
+      var.displayName = none
+      var.entityUuid = none
+      var.world = none
       var.x = 0
       var.y = 0
       var.z = 0
-      var.entityType = ''
-      var.entityTypeName = ''
-      var.mythicMobId = ''
+      var.entityType = none
+      var.entityTypeName = none
+      var.mythicMobId = none
       var.isPlayerTarget = false
       var.lastHitAgoMs = 0
       var.timeoutMs = 0

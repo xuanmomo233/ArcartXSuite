@@ -28,7 +28,7 @@ ui:
       var.rewardItemsPreview = packet['rewardItemsPreview']
       var.rewardCommandsPreview = packet['rewardCommandsPreview']
       var.enabled = packet['enabled']
-      var.resultMsg = ''
+      var.resultMsg = none
     boss-list: |-
       var.bossList = packet['bosses']
     result: |-
@@ -200,7 +200,7 @@ controls:
                   x: 200
                   y: 148
                   fontSize: 28
-                  texts: "~&f{var.bossId != '' ? var.bossId : '(全部)'}"
+                  texts: "~&f{var.bossId != none ? var.bossId : '(全部)'}"
                   visible: |-
                     var.rankingType == 'boss_damage'
 

@@ -72,13 +72,13 @@ controls:
                 type: Texture
                 attribute:
                   entry: var.notifications[self.key]
-                  visible: self.entry != null
+                  visible: self.entry != none
                   width: 340
                   height: 58
                   normal: ~20,26,36,200
                   shape: ~round_rect
                   radius: 10
-                  alpha: "self.entry != null ? self.entry['alpha'] : 0"
+                  alpha: "self.entry != none ? self.entry['alpha'] : 0"
                 effect:
                   stroke:
                     width: 1

@@ -27,7 +27,7 @@ ui:
       for(key in var.recyclables.keys()){
         json = packet['recycleItemJson' + key]
       var.maxRecycleCount = packet['maxRecycleCount']
-        if(json != null && json != ''){
+        if(json != none && json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
@@ -36,9 +36,9 @@ ui:
       for(i in range(0, var.maxRecycleCount)){
         key = i.round()
         item = val.回收列表['回收项' + key]
-        if(item != null){
+        if(item != none){
           icon = item['物品图标']
-          if(icon != null){
+          if(icon != none){
             icon.seticon()
           }
         }
@@ -53,7 +53,7 @@ ui:
       for(key in var.recyclables.keys()){
         json = packet['recycleItemJson' + key]
       var.maxRecycleCount = packet['maxRecycleCount']
-        if(json != null && json != ''){
+        if(json != none && json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
@@ -62,9 +62,9 @@ ui:
       for(i in range(0, var.maxRecycleCount)){
         key = i.round()
         item = val.回收列表['回收项' + key]
-        if(item != null){
+        if(item != none){
           icon = item['物品图标']
-          if(icon != null){
+          if(icon != none){
             icon.seticon()
           }
         }
@@ -222,7 +222,7 @@ controls:
                           item = self['回收项'].copy('回收项' + key)
                           item.entryKey = key
                           icon = item['物品图标']
-                          if(icon != null){
+                          if(icon != none){
                             icon.entryKey = key
                           }
                         }
@@ -232,7 +232,7 @@ controls:
                         attribute:
                           entryKey: 0
                           entry: var.recyclables[self.entryKey]
-                          visible: self.entry != null
+                          visible: self.entry != none
                           width: 996
                           height: 64
                           normal: ~60,60,70,200
@@ -265,7 +265,7 @@ controls:
                               x: 76
                               y: 10
                               width: 260
-                              texts: "self.parent.entry != null ? '&f' + self.parent.entry['name'] : ''"
+                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
                               fontSize: 34
                               through: true
                           数量:
@@ -274,7 +274,7 @@ controls:
                               x: 76
                               y: 38
                               width: 120
-                              texts: "self.parent.entry != null ? '&7x' + self.parent.entry['amount'] : ''"
+                              texts: "self.parent.entry != none ? '&7x' + self.parent.entry['amount'] : none"
                               fontSize: 22
                               through: true
                           单价:
@@ -283,7 +283,7 @@ controls:
                               x: 380
                               y: 14
                               width: 200
-                              texts: "self.parent.entry != null ? '&e单价: &f' + self.parent.entry['unitPrice'] : ''"
+                              texts: "self.parent.entry != none ? '&e单价: &f' + self.parent.entry['unitPrice'] : none"
                               fontSize: 28
                               through: true
                           总价:
@@ -292,7 +292,7 @@ controls:
                               x: 620
                               y: 14
                               width: 200
-                              texts: "self.parent.entry != null ? '&a总计: &f' + self.parent.entry['totalPrice'] : ''"
+                              texts: "self.parent.entry != none ? '&a总计: &f' + self.parent.entry['totalPrice'] : none"
                               fontSize: 28
                               through: true
                           回收按钮:

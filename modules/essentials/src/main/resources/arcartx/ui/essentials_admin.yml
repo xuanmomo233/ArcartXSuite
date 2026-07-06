@@ -247,7 +247,7 @@ controls:
                             type: Texture
                             attribute:
                               entry: var.players[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 780
                               height: 54
                               normal: ~40,40,50,180
@@ -277,7 +277,7 @@ controls:
                                   y: 32
                                   through: true
                                   fontSize: 30
-                                  texts: "self.parent.entry['isFlying'] == true ? (self.parent.entry['isGod'] == true ? '&b✈飞行 &a✦无敌' : '&b✈飞行') : (self.parent.entry['isGod'] == true ? '&a✦无敌' : '')"
+                                  texts: "self.parent.entry['isFlying'] == true ? (self.parent.entry['isGod'] == true ? '&b✈飞行 &a✦无敌' : '&b✈飞行') : (self.parent.entry['isGod'] == true ? '&a✦无敌' : none)"
                               player_world:
                                 type: Text
                                 attribute:
@@ -476,7 +476,7 @@ controls:
                             type: Texture
                             attribute:
                               entry: var.bans[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 780
                               height: 60
                               normal: ~40,40,50,180
@@ -498,7 +498,7 @@ controls:
                                   y: 34
                                   through: true
                                   fontSize: 22
-                                  texts: "~&7原因: &e{self.parent.entry['reason'] != '' ? self.parent.entry['reason'] : '未填写'}  &7操作者: &b{self.parent.entry['operator']}"
+                                  texts: "~&7原因: &e{self.parent.entry['reason'] != none ? self.parent.entry['reason'] : '未填写'}  &7操作者: &b{self.parent.entry['operator']}"
                               ban_permanent:
                                 type: Text
                                 attribute:
@@ -816,7 +816,7 @@ controls:
                             type: Texture
                             attribute:
                               entry: var.warps[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 780
                               height: 48
                               normal: ~40,40,50,180

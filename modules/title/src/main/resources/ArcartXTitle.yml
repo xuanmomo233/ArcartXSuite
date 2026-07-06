@@ -58,7 +58,7 @@ storage:
     port: 3306
     database: "arcartxsuite"
     username: "root"
-    password: ""
+    password: none
 
 ui:
   # 菜单 UI ID。
@@ -116,7 +116,7 @@ display-title:
   separator: " "
 
   # 没有装备任何称号时返回的文本。留空则返回空字符串。
-  empty-text: ""
+  empty-text: none
 
 groups:
   # 分组字典。

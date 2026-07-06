@@ -85,7 +85,7 @@ ui:
   action:
     open: |-
       var.packetId = 'AXS_MAP'
-      var.selectedWorldId = ''
+      var.selectedWorldId = none
       var.selectedWorldName = '未选择'
       var.worldRows = {}
       var.anchorRows = {}
@@ -97,12 +97,12 @@ ui:
       var.clearTrackVisible = false
       var.trackingText = '当前未导航'
       var.detailSelectedType = 'none'
-      var.detailSelectedId = ''
+      var.detailSelectedId = none
       var.detailTitle = '未选中目标'
       var.detailDescription = '请选择一个锚点或路径点。'
       var.detailUnlocked = true
-      var.detailUnlockCostText = ''
-      var.detailTeleportCostText = ''
+      var.detailUnlockCostText = none
+      var.detailTeleportCostText = none
       var.detailExternalTarget = false
       var.detailCanUnlock = false
       var.detailCanTeleport = false
@@ -233,10 +233,10 @@ controls:
                     attribute:
                       entryKey: 0
                       entry: var.worldRows[self.entryKey]
-                      visible: self.entry != null
+                      visible: self.entry != none
                       width: 148
                       height: 68
-                      normal: "self.entry != null && self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                      normal: "self.entry != none && self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
                       shape: ~round_rect
                       radius: 16
                     action:
@@ -247,7 +247,7 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          texts: "self.parent.entry != null ? self.parent.entry['displayName'] : ''"
+                          texts: "self.parent.entry != none ? self.parent.entry['displayName'] : none"
                           fontSize: 18
                           shadow: false
                           through: true
@@ -348,10 +348,10 @@ controls:
                     attribute:
                       entryKey: 0
                       entry: var.anchorRows[self.entryKey]
-                      visible: self.entry != null
+                      visible: self.entry != none
                       width: 500
                       height: 70
-                      normal: "self.entry != null && self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                      normal: "self.entry != none && self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
                       shape: ~round_rect
                       radius: 14
                     action:
@@ -364,7 +364,7 @@ controls:
                           point: ~top_left
                           x: 18
                           y: 12
-                          texts: "self.parent.entry != null ? self.parent.entry['displayName'] : ''"
+                          texts: "self.parent.entry != none ? self.parent.entry['displayName'] : none"
                           fontSize: 18
                           shadow: false
                           through: true
@@ -374,7 +374,7 @@ controls:
                           point: ~top_left
                           x: 18
                           y: 40
-                          texts: "self.parent.entry != null ? (self.parent.entry['unlocked'] ? '&a已解锁' : '&c未解锁') : ''"
+                          texts: "self.parent.entry != none ? (self.parent.entry['unlocked'] ? '&a已解锁' : '&c未解锁') : none"
                           fontSize: 14
                           shadow: false
                           through: true
@@ -446,10 +446,10 @@ controls:
                     attribute:
                       entryKey: 0
                       entry: var.waypointRows[self.entryKey]
-                      visible: self.entry != null
+                      visible: self.entry != none
                       width: 500
                       height: 48
-                      normal: "self.entry != null && self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                      normal: "self.entry != none && self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
                       shape: ~round_rect
                       radius: 14
                     action:
@@ -461,7 +461,7 @@ controls:
                         attribute:
                           point: ~middle_left
                           x: 18
-                          texts: "self.parent.entry != null ? self.parent.entry['name'] : ''"
+                          texts: "self.parent.entry != none ? self.parent.entry['name'] : none"
                           fontSize: 16
                           shadow: false
                           through: true
@@ -533,10 +533,10 @@ controls:
                     attribute:
                       entryKey: 0
                       entry: var.externalTargetRows[self.entryKey]
-                      visible: self.entry != null
+                      visible: self.entry != none
                       width: 500
                       height: 48
-                      normal: "self.entry != null && self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                      normal: "self.entry != none && self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
                       shape: ~round_rect
                       radius: 14
                     action:
@@ -548,7 +548,7 @@ controls:
                         attribute:
                           point: ~middle_left
                           x: 18
-                          texts: "self.parent.entry != null ? self.parent.entry['name'] : ''"
+                          texts: "self.parent.entry != none ? self.parent.entry['name'] : none"
                           fontSize: 16
                           shadow: false
                           through: true

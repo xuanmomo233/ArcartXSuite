@@ -57,13 +57,13 @@ ui:
         ri.entryKey = key
       }
     close: |-
-      var.token = ''
-      var.packetId = packet['packetId'] == null ? '' : packet['packetId']
-      var.speakerName = ''
+      var.token = none
+      var.packetId = packet['packetId'] == none ? none : packet['packetId']
+      var.speakerName = none
       var.messageLines = []
-      var.hintText = ''
+      var.hintText = none
       var.canReply = false
-      var.selectedReplyId = ''
+      var.selectedReplyId = none
       var.selectedReplyIndex = -1
       var.replyCount = 0
       var.replyScrollRatio = 0
@@ -71,13 +71,13 @@ ui:
       Screen.close()
   action:
     load: |-
-      var.token = ''
-      var.packetId = ''
-      var.speakerName = ''
+      var.token = none
+      var.packetId = none
+      var.speakerName = none
       var.messageLines = []
-      var.hintText = ''
+      var.hintText = none
       var.canReply = false
-      var.selectedReplyId = ''
+      var.selectedReplyId = none
       var.selectedReplyIndex = -1
       var.replyCount = 0
       var.replyScrollRatio = 0
@@ -88,7 +88,7 @@ ui:
       var.k = self.currentKeyPress
       if(var.k >= "1" && var.k <= "9"){
         var.rowKey = (var.k - 1).round()
-        if(var.replyRows[var.rowKey] != null){
+        if(var.replyRows[var.rowKey] != none){
           Chat.say("/session reply " + var.replyRows[var.rowKey]['id'])
         }
       }
@@ -249,9 +249,9 @@ controls:
                     type: Texture
                     attribute:
                       entryKey: 0
-                      visible: "var.replyRows[self.entryKey] != null"
-                      entry: "var.replyRows[self.entryKey] != null ? var.replyRows[self.entryKey] : null"
-                      replyId: "var.replyRows[self.entryKey] != null ? var.replyRows[self.entryKey]['id'] : ''"
+                      visible: "var.replyRows[self.entryKey] != none"
+                      entry: "var.replyRows[self.entryKey] != none ? var.replyRows[self.entryKey] : none"
+                      replyId: "var.replyRows[self.entryKey] != none ? var.replyRows[self.entryKey]['id'] : none"
                       width: 394
                       height: 42
                       normal: ~150,150,150,200
@@ -263,7 +263,7 @@ controls:
                         color: ~0,0,0,255
                     action:
                       clickLeft: |-
-                        if(self.entry != null){
+                        if(self.entry != none){
                           if(self.entry['selected']){
                             Chat.say("/session reply {self.replyId}")
                           }else{
@@ -274,7 +274,7 @@ controls:
                       selected_overlay:
                         type: Texture
                         attribute:
-                          visible: "self.parent.entry != null ? self.parent.entry['selected'] : false"
+                          visible: "self.parent.entry != none ? self.parent.entry['selected'] : false"
                           width: 394
                           height: 42
                           normal: ~200,200,200,200
@@ -291,7 +291,7 @@ controls:
                           point: ~middle_left
                           x: 10
                           y: 10
-                          texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
+                          texts: "self.parent.entry != none ? self.parent.entry['text'] : none"
                           fontSize: 49
                           through: true
                       reply_index:
@@ -299,7 +299,7 @@ controls:
                         attribute:
                           x: 300
                           y: 12
-                          realtext: "self.parent.entry != null ? '&8选项：' + (self.parent.entry['index']+1).round() : ''"
+                          realtext: "self.parent.entry != none ? '&8选项：' + (self.parent.entry['index']+1).round() : none"
                           texts: "self.realtext"
                           fontSize: 36
                           through: true

@@ -362,7 +362,7 @@ controls:
                             type: Texture
                             attribute:
                               entry: var.homes[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 680
                               height: 50
                               normal: ~40,40,50,180
@@ -490,7 +490,7 @@ controls:
                             type: Texture
                             attribute:
                               entry: var.warps[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 680
                               height: 50
                               normal: ~40,40,50,180
@@ -640,7 +640,7 @@ controls:
                             type: Texture
                             attribute:
                               entry: var.onlinePlayers[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 680
                               height: 44
                               normal: ~40,40,50,180

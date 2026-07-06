@@ -34,8 +34,8 @@ ui:
   action:
     load: |-
       var.packetId = 'AXS_FISHING'
-      var.fishId = ''
-      var.fishName = ''
+      var.fishId = none
+      var.fishName = none
       var.fishY = 0.5
       var.barY = 0.5
       var.barHeight = 0.24

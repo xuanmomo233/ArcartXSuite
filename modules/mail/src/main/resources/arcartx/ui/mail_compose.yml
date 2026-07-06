@@ -17,21 +17,21 @@ ui:
   screenScale: true
   action:
     load: |-
-      var.sessionId = ''
+      var.sessionId = none
       var.baseFee = '0'
       var.vaultTaxRate = '0'
       var.allowVault = true
       var.quoteSuccess = true
-      var.quoteMessage = ''
+      var.quoteMessage = none
       var.itemFee = '0'
       var.totalFee = '0'
       var.maxAttachments = 0
       var.attachmentCount = 0
       var.subjectMax = 48
       var.bodyMax = 400
-      var.composeRecipient = ''
-      var.composeSubject = ''
-      var.composeBody = ''
+      var.composeRecipient = none
+      var.composeSubject = none
+      var.composeBody = none
       var.composeVault = '0'
   # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
   packetHandler:
@@ -48,9 +48,9 @@ ui:
       var.attachmentCount = packet['attachment_count']
       var.subjectMax = packet['subject_max']
       var.bodyMax = packet['body_max']
-      var.composeRecipient = ''
-      var.composeSubject = ''
-      var.composeBody = ''
+      var.composeRecipient = none
+      var.composeSubject = none
+      var.composeBody = none
       var.composeVault = '0'
     update: |-
       var.baseFee = packet['base_fee']
@@ -331,7 +331,7 @@ controls:
               y: 676
               fontSize: 49
               width: 880
-              texts: "'&7邮件总费用: &0' + var.totalFee + '金币' + '   &7物品手续费: &0' + var.itemFee + '金币' + (var.quoteMessage == '' ? '' : '   &7提示: &0' + var.quoteMessage)"
+              texts: "'&7邮件总费用: &0' + var.totalFee + '金币' + '   &7物品手续费: &0' + var.itemFee + '金币' + (var.quoteMessage == none ? none : '   &7提示: &0' + var.quoteMessage)"
           底部按钮区:
             type: HStack
             attribute:

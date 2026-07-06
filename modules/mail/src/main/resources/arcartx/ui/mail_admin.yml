@@ -18,7 +18,7 @@ ui:
   action:
     open: |-
       var.view = 'list'
-      var.resultMsg = ''
+      var.resultMsg = none
       var.editItemCount = 0
       var.maxPresetCount = 0
   packetHandler:
@@ -39,7 +39,7 @@ ui:
       var.editConditions = packet['claimConditions']
       var.editFound = packet['found']
       var.view = 'edit'
-      var.resultMsg = ''
+      var.resultMsg = none
     attachment-count: |-
       var.editItemCount = packet['itemAttachmentCount'].round()
     result: |-
@@ -140,19 +140,19 @@ controls:
                         color: ~80,180,255,180
                     action:
                       click: |-
-                        var.editId = ''
+                        var.editId = none
                         var.editEnabled = true
-                        var.editDisplayName = ''
-                        var.editSubject = ''
-                        var.editBody = ''
+                        var.editDisplayName = none
+                        var.editSubject = none
+                        var.editBody = none
                         var.editExpiresDays = 15
-                        var.editCurrencies = ''
+                        var.editCurrencies = none
                         var.editItemCount = 0
-                        var.editCommands = ''
-                        var.editConditions = ''
+                        var.editCommands = none
+                        var.editConditions = none
                         var.editFound = false
                         var.view = 'edit'
-                        var.resultMsg = ''
+                        var.resultMsg = none
                         Packet.send('AXS_MAIL', 'admin-preset-new')
                     children:
                       btn_new_text:
@@ -185,7 +185,7 @@ controls:
               normal: ~50,50,60,255
               shape: ~round_rect
               radius: 6
-              visible: "var.view == 'list' || var.view == null"
+              visible: "var.view == 'list' || var.view == none"
             children:
               col_id:
                 type: Text
@@ -241,7 +241,7 @@ controls:
               y: 132
               width: 1460
               height: 720
-              visible: "var.view == 'list' || var.view == null"
+              visible: "var.view == 'list' || var.view == none"
               moveY: "self.parent['预设滑块'].getDragYRatio()"
             action:
               wheel: |-
@@ -278,7 +278,7 @@ controls:
                       normal: ~45,45,55,220
                       shape: ~round_rect
                       radius: 6
-                      visible: self.entry != null
+                      visible: self.entry != none
                     action:
                       enter: |-
                         self.normal = '60,60,75,200'
@@ -405,7 +405,7 @@ controls:
               y: 300
               center: true
               fontSize: 64
-              visible: "var.presets == null || var.total == 0"
+              visible: "var.presets == none || var.total == 0"
               texts: "~&8暂无预设，点击右上角 &a新建 &8开始创建"
 
           # 编辑表单区域

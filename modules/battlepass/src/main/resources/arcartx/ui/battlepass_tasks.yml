@@ -25,21 +25,21 @@ ui:
       for(i in range(0, var.maxDailyCount)){
         key = i.round()
         item = val.每日任务列表['任务项' + key]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
       }
       for(i in range(0, var.maxWeeklyCount)){
         key = i.round()
         item = val.每周任务列表['任务项' + key]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
       }
       for(i in range(0, var.maxSeasonCount)){
         key = i.round()
         item = val.赛季任务列表['任务项' + key]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
       }
@@ -205,10 +205,10 @@ controls:
                             attribute:
                               entryKey: 0
                               entry: var.dailyTasks[self.entryKey]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 728
                               height: 60
-                              normal: "self.entry != null && self.entry['completed'] ? '75,175,120,200' : '60,60,70,200'"
+                              normal: "self.entry != none && self.entry['completed'] ? '75,175,120,200' : '60,60,70,200'"
                               shape: ~round_rect
                               radius: 12
                             effect:
@@ -221,7 +221,7 @@ controls:
                                 attribute:
                                   x: 16
                                   y: 6
-                                  texts: "self.parent.entry != null ? self.parent.entry['difficultyDisplay'] : ''"
+                                  texts: "self.parent.entry != none ? self.parent.entry['difficultyDisplay'] : none"
                                   fontSize: 22
                                   through: true
                               任务名:
@@ -229,7 +229,7 @@ controls:
                                 attribute:
                                   x: 80
                                   y: 6
-                                  texts: "self.parent.entry != null ? '&f' + self.parent.entry['name'] : ''"
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
                                   fontSize: 32
                                   through: true
                               任务描述:
@@ -237,7 +237,7 @@ controls:
                                 attribute:
                                   x: 16
                                   y: 32
-                                  texts: "self.parent.entry != null ? '&8' + self.parent.entry['description'] : ''"
+                                  texts: "self.parent.entry != none ? '&8' + self.parent.entry['description'] : none"
                                   fontSize: 22
                                   through: true
                               任务进度:
@@ -245,7 +245,7 @@ controls:
                                 attribute:
                                   x: 16
                                   y: 56
-                                  texts: "self.parent.entry != null ? '&7进度: &f' + self.parent.entry['progress'] + ' / ' + self.parent.entry['required'] + '  &8(' + self.parent.entry['progressPercent'] + ')' : ''"
+                                  texts: "self.parent.entry != none ? '&7进度: &f' + self.parent.entry['progress'] + ' / ' + self.parent.entry['required'] + '  &8(' + self.parent.entry['progressPercent'] + ')' : none"
                                   fontSize: 24
                                   through: true
                               任务奖励:
@@ -253,7 +253,7 @@ controls:
                                 attribute:
                                   x: 560
                                   y: 24
-                                  texts: "self.parent.entry != null ? '&e+' + self.parent.entry['xpReward'] + ' XP' : ''"
+                                  texts: "self.parent.entry != none ? '&e+' + self.parent.entry['xpReward'] + ' XP' : none"
                                   fontSize: 26
                                   through: true
                               完成标记:
@@ -261,7 +261,7 @@ controls:
                                 attribute:
                                   x: 660
                                   y: 24
-                                  texts: "self.parent.entry != null && self.parent.entry['completed'] ? '&a已完成' : '&7进行中'"
+                                  texts: "self.parent.entry != none && self.parent.entry['completed'] ? '&a已完成' : '&7进行中'"
                                   fontSize: 26
                                   through: true
 
@@ -300,10 +300,10 @@ controls:
                             attribute:
                               entryKey: 0
                               entry: var.weeklyTasks[self.entryKey]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 728
                               height: 60
-                              normal: "self.entry != null && self.entry['completed'] ? '75,175,120,200' : '60,60,70,200'"
+                              normal: "self.entry != none && self.entry['completed'] ? '75,175,120,200' : '60,60,70,200'"
                               shape: ~round_rect
                               radius: 12
                             effect:
@@ -316,7 +316,7 @@ controls:
                                 attribute:
                                   x: 16
                                   y: 6
-                                  texts: "self.parent.entry != null ? self.parent.entry['difficultyDisplay'] : ''"
+                                  texts: "self.parent.entry != none ? self.parent.entry['difficultyDisplay'] : none"
                                   fontSize: 22
                                   through: true
                               任务名:
@@ -324,7 +324,7 @@ controls:
                                 attribute:
                                   x: 80
                                   y: 6
-                                  texts: "self.parent.entry != null ? '&f' + self.parent.entry['name'] : ''"
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
                                   fontSize: 32
                                   through: true
                               任务描述:
@@ -332,7 +332,7 @@ controls:
                                 attribute:
                                   x: 16
                                   y: 32
-                                  texts: "self.parent.entry != null ? '&8' + self.parent.entry['description'] : ''"
+                                  texts: "self.parent.entry != none ? '&8' + self.parent.entry['description'] : none"
                                   fontSize: 22
                                   through: true
                               任务进度:
@@ -340,7 +340,7 @@ controls:
                                 attribute:
                                   x: 16
                                   y: 56
-                                  texts: "self.parent.entry != null ? '&7进度: &f' + self.parent.entry['progress'] + ' / ' + self.parent.entry['required'] + '  &8(' + self.parent.entry['progressPercent'] + ')' : ''"
+                                  texts: "self.parent.entry != none ? '&7进度: &f' + self.parent.entry['progress'] + ' / ' + self.parent.entry['required'] + '  &8(' + self.parent.entry['progressPercent'] + ')' : none"
                                   fontSize: 24
                                   through: true
                               任务奖励:
@@ -348,7 +348,7 @@ controls:
                                 attribute:
                                   x: 560
                                   y: 24
-                                  texts: "self.parent.entry != null ? '&e+' + self.parent.entry['xpReward'] + ' XP' : ''"
+                                  texts: "self.parent.entry != none ? '&e+' + self.parent.entry['xpReward'] + ' XP' : none"
                                   fontSize: 26
                                   through: true
                               完成标记:
@@ -356,7 +356,7 @@ controls:
                                 attribute:
                                   x: 660
                                   y: 24
-                                  texts: "self.parent.entry != null && self.parent.entry['completed'] ? '&a已完成' : '&7进行中'"
+                                  texts: "self.parent.entry != none && self.parent.entry['completed'] ? '&a已完成' : '&7进行中'"
                                   fontSize: 26
                                   through: true
 
@@ -395,10 +395,10 @@ controls:
                             attribute:
                               entryKey: 0
                               entry: var.seasonTasks[self.entryKey]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 728
                               height: 60
-                              normal: "self.entry != null && self.entry['completed'] ? '75,175,120,200' : '60,60,70,200'"
+                              normal: "self.entry != none && self.entry['completed'] ? '75,175,120,200' : '60,60,70,200'"
                               shape: ~round_rect
                               radius: 12
                             effect:
@@ -411,7 +411,7 @@ controls:
                                 attribute:
                                   x: 16
                                   y: 6
-                                  texts: "self.parent.entry != null ? self.parent.entry['difficultyDisplay'] : ''"
+                                  texts: "self.parent.entry != none ? self.parent.entry['difficultyDisplay'] : none"
                                   fontSize: 22
                                   through: true
                               任务名:
@@ -419,7 +419,7 @@ controls:
                                 attribute:
                                   x: 80
                                   y: 6
-                                  texts: "self.parent.entry != null ? '&f' + self.parent.entry['name'] : ''"
+                                  texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
                                   fontSize: 32
                                   through: true
                               任务描述:
@@ -427,7 +427,7 @@ controls:
                                 attribute:
                                   x: 16
                                   y: 32
-                                  texts: "self.parent.entry != null ? '&8' + self.parent.entry['description'] : ''"
+                                  texts: "self.parent.entry != none ? '&8' + self.parent.entry['description'] : none"
                                   fontSize: 22
                                   through: true
                               任务进度:
@@ -435,7 +435,7 @@ controls:
                                 attribute:
                                   x: 16
                                   y: 56
-                                  texts: "self.parent.entry != null ? '&7进度: &f' + self.parent.entry['progress'] + ' / ' + self.parent.entry['required'] + '  &8(' + self.parent.entry['progressPercent'] + ')' : ''"
+                                  texts: "self.parent.entry != none ? '&7进度: &f' + self.parent.entry['progress'] + ' / ' + self.parent.entry['required'] + '  &8(' + self.parent.entry['progressPercent'] + ')' : none"
                                   fontSize: 24
                                   through: true
                               任务奖励:
@@ -443,7 +443,7 @@ controls:
                                 attribute:
                                   x: 560
                                   y: 24
-                                  texts: "self.parent.entry != null ? '&e+' + self.parent.entry['xpReward'] + ' XP' : ''"
+                                  texts: "self.parent.entry != none ? '&e+' + self.parent.entry['xpReward'] + ' XP' : none"
                                   fontSize: 26
                                   through: true
                               完成标记:
@@ -451,6 +451,6 @@ controls:
                                 attribute:
                                   x: 660
                                   y: 24
-                                  texts: "self.parent.entry != null && self.parent.entry['completed'] ? '&a已完成' : '&7进行中'"
+                                  texts: "self.parent.entry != none && self.parent.entry['completed'] ? '&a已完成' : '&7进行中'"
                                   fontSize: 26
                                   through: true

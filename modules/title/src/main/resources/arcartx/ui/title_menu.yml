@@ -13,32 +13,32 @@ ui:
       var.sets = {}
       var.equippedByGroup = {}
       var.filterModes = {}
-      var.selectedId = ''
+      var.selectedId = none
       var.selectedCanEquip = false
       var.selectedIsEquipped = false
-      var.selectedName = ''
-      var.selectedKind = ''
-      var.selectedKindText = ''
-      var.selectedChatPrefix = ''
-      var.selectedChatSuffix = ''
-      var.selectedTabPrefix = ''
-      var.selectedTabSuffix = ''
-      var.selectedGroupId = ''
-      var.selectedGroupName = ''
-      var.selectedQualityName = ''
-      var.selectedDescription = ''
-      var.selectedSource = ''
+      var.selectedName = none
+      var.selectedKind = none
+      var.selectedKindText = none
+      var.selectedChatPrefix = none
+      var.selectedChatSuffix = none
+      var.selectedTabPrefix = none
+      var.selectedTabSuffix = none
+      var.selectedGroupId = none
+      var.selectedGroupName = none
+      var.selectedQualityName = none
+      var.selectedDescription = none
+      var.selectedSource = none
       var.selectedOwned = false
       var.selectedHidden = false
-      var.selectedRemainingText = ''
-      var.selectedDisplayAttributesText = ''
-      var.selectedCollectionAttributesText = ''
-      var.displayAttributesText = ''
-      var.collectionAttributesText = ''
-      var.totalAttributesText = ''
-      var.setBonusAttributesText = ''
-      var.displayTitleName = ''
-      var.displayTitleId = ''
+      var.selectedRemainingText = none
+      var.selectedDisplayAttributesText = none
+      var.selectedCollectionAttributesText = none
+      var.displayAttributesText = none
+      var.collectionAttributesText = none
+      var.totalAttributesText = none
+      var.setBonusAttributesText = none
+      var.displayTitleName = none
+      var.displayTitleId = none
       var.selectedIsDisplayTitle = false
       var.ownedCount = 0
       var.hiddenCount = 0
@@ -65,7 +65,7 @@ ui:
       var.selectedIsEquipped = packet['selected_is_equipped']
       var.selectedName = packet['selected_display_name']
       var.selectedKind = packet['selected_kind']
-      var.selectedKindText = var.selectedKind == 'text' ? '文本称号' : (var.selectedKind == 'icon' ? '贴图称号' : '')
+      var.selectedKindText = var.selectedKind == 'text' ? '文本称号' : (var.selectedKind == 'icon' ? '贴图称号' : none)
       var.selectedChatPrefix = packet['selected_chat_prefix']
       var.selectedChatSuffix = packet['selected_chat_suffix']
       var.selectedTabPrefix = packet['selected_tab_prefix']
@@ -91,7 +91,7 @@ ui:
       var.hiddenCount = packet['hidden_count']
       var.equippedCount = packet['equipped_count']
       var.activeSetCount = 0
-      if(var.sets != null){
+      if(var.sets != none){
         for(key in var.sets.keys()){
           if(var.sets[key]['active']){
             var.activeSetCount = var.activeSetCount + 1
@@ -107,15 +107,15 @@ ui:
       var.titleIndex = 0
       for(key in var.titleKeys){
         item = val.title_list['称号项' + var.titleIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.titleIndex = var.titleIndex + 1
       }
       while(var.titleIndex < 200){
         item = val.title_list['称号项' + var.titleIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.titleIndex = var.titleIndex + 1
       }
@@ -123,15 +123,15 @@ ui:
       var.groupIndex = 0
       for(key in var.groupKeys){
         item = val.group_list['分组项' + var.groupIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.groupIndex = var.groupIndex + 1
       }
       while(var.groupIndex < 64){
         item = val.group_list['分组项' + var.groupIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.groupIndex = var.groupIndex + 1
       }
@@ -139,15 +139,15 @@ ui:
       var.qualityIndex = 0
       for(key in var.qualityKeys){
         item = val.quality_list['品质项' + var.qualityIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.qualityIndex = var.qualityIndex + 1
       }
       while(var.qualityIndex < 64){
         item = val.quality_list['品质项' + var.qualityIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.qualityIndex = var.qualityIndex + 1
       }
@@ -155,15 +155,15 @@ ui:
       var.equippedIndex = 0
       for(key in var.equippedKeys){
         item = val.equipped_list['已装备项' + var.equippedIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.equippedIndex = var.equippedIndex + 1
       }
       while(var.equippedIndex < 64){
         item = val.equipped_list['已装备项' + var.equippedIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.equippedIndex = var.equippedIndex + 1
       }
@@ -171,15 +171,15 @@ ui:
       var.setIndex = 0
       for(key in var.setKeys){
         item = val.set_list['套装项' + var.setIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.setIndex = var.setIndex + 1
       }
       while(var.setIndex < 64){
         item = val.set_list['套装项' + var.setIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.setIndex = var.setIndex + 1
       }
@@ -195,7 +195,7 @@ ui:
       var.selectedIsEquipped = packet['selected_is_equipped']
       var.selectedName = packet['selected_display_name']
       var.selectedKind = packet['selected_kind']
-      var.selectedKindText = var.selectedKind == 'text' ? '文本称号' : (var.selectedKind == 'icon' ? '贴图称号' : '')
+      var.selectedKindText = var.selectedKind == 'text' ? '文本称号' : (var.selectedKind == 'icon' ? '贴图称号' : none)
       var.selectedChatPrefix = packet['selected_chat_prefix']
       var.selectedChatSuffix = packet['selected_chat_suffix']
       var.selectedTabPrefix = packet['selected_tab_prefix']
@@ -221,7 +221,7 @@ ui:
       var.hiddenCount = packet['hidden_count']
       var.equippedCount = packet['equipped_count']
       var.activeSetCount = 0
-      if(var.sets != null){
+      if(var.sets != none){
         for(key in var.sets.keys()){
           if(var.sets[key]['active']){
             var.activeSetCount = var.activeSetCount + 1
@@ -232,15 +232,15 @@ ui:
       var.titleIndex = 0
       for(key in var.titleKeys){
         item = val.title_list['称号项' + var.titleIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.titleIndex = var.titleIndex + 1
       }
       while(var.titleIndex < 200){
         item = val.title_list['称号项' + var.titleIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.titleIndex = var.titleIndex + 1
       }
@@ -248,15 +248,15 @@ ui:
       var.groupIndex = 0
       for(key in var.groupKeys){
         item = val.group_list['分组项' + var.groupIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.groupIndex = var.groupIndex + 1
       }
       while(var.groupIndex < 64){
         item = val.group_list['分组项' + var.groupIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.groupIndex = var.groupIndex + 1
       }
@@ -264,15 +264,15 @@ ui:
       var.qualityIndex = 0
       for(key in var.qualityKeys){
         item = val.quality_list['品质项' + var.qualityIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.qualityIndex = var.qualityIndex + 1
       }
       while(var.qualityIndex < 64){
         item = val.quality_list['品质项' + var.qualityIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.qualityIndex = var.qualityIndex + 1
       }
@@ -280,15 +280,15 @@ ui:
       var.equippedIndex = 0
       for(key in var.equippedKeys){
         item = val.equipped_list['已装备项' + var.equippedIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.equippedIndex = var.equippedIndex + 1
       }
       while(var.equippedIndex < 64){
         item = val.equipped_list['已装备项' + var.equippedIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.equippedIndex = var.equippedIndex + 1
       }
@@ -296,15 +296,15 @@ ui:
       var.setIndex = 0
       for(key in var.setKeys){
         item = val.set_list['套装项' + var.setIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.setIndex = var.setIndex + 1
       }
       while(var.setIndex < 64){
         item = val.set_list['套装项' + var.setIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.setIndex = var.setIndex + 1
       }
@@ -360,7 +360,7 @@ controls:
               x: 40
               y: 108
               fontSize: 36
-              texts: "'&0总展示称号: &0' + (var.displayTitleName == '' ? '无' : var.displayTitleName)"
+              texts: "'&0总展示称号: &0' + (var.displayTitleName == none ? '无' : var.displayTitleName)"
 
           # ========== 左侧栏 ==========
           左侧面板:
@@ -502,20 +502,20 @@ controls:
                   create: |-
                     for(i in range(0, 64)){
                       item = self['分组模板'].copy('分组项' + i.round())
-                      item.entryKey = ''
+                      item.entryKey = none
                     }
                 children:
                   分组模板:
                     type: Texture
                     attribute:
-                      entryKey: ''
+                      entryKey: none
                       entry: var.groups[self.entryKey]
                       width: 100
                       height: 36
                       normal: "var.filterGroup == self.entryKey ? '120,190,255,230' : '145,145,145,255'"
                       shape: ~round_rect
                       radius: 12
-                      visible: self.entryKey != '' && self.entry != null
+                      visible: self.entryKey != none && self.entry != none
                     effect:
                       stroke:
                         width: 2
@@ -532,7 +532,7 @@ controls:
                           through: true
                           center: true
                           fontSize: 36
-                          texts: "self.parent.entry != null ? self.parent.entry['name'] : ''"
+                          texts: "self.parent.entry != none ? self.parent.entry['name'] : none"
           品质标签:
             type: Text
             attribute:
@@ -577,20 +577,20 @@ controls:
                   create: |-
                     for(i in range(0, 64)){
                       item = self['品质模板'].copy('品质项' + i.round())
-                      item.entryKey = ''
+                      item.entryKey = none
                     }
                 children:
                   品质模板:
                     type: Texture
                     attribute:
-                      entryKey: ''
+                      entryKey: none
                       entry: var.qualities[self.entryKey]
                       width: 100
                       height: 36
                       normal: "var.filterQuality == self.entryKey ? '200,150,80,230' : '145,145,145,255'"
                       shape: ~round_rect
                       radius: 12
-                      visible: self.entryKey != '' && self.entry != null
+                      visible: self.entryKey != none && self.entry != none
                     effect:
                       stroke:
                         width: 2
@@ -607,7 +607,7 @@ controls:
                           through: true
                           center: true
                           fontSize: 36
-                          texts: "self.parent.entry != null ? self.parent.entry['name'] : ''"
+                          texts: "self.parent.entry != none ? self.parent.entry['name'] : none"
           称号列表标签:
             type: Text
             attribute:
@@ -652,20 +652,20 @@ controls:
                   create: |-
                     for(i in range(0, 200)){
                       item = self['称号模板'].copy('称号项' + i.round())
-                      item.entryKey = ''
+                      item.entryKey = none
                     }
                 children:
                   称号模板:
                     type: Texture
                     attribute:
-                      entryKey: ''
+                      entryKey: none
                       entry: var.titles[self.entryKey]
                       width: 372
                       height: 64
-                      normal: "self.entry != null && self.entry['selected'] ? '120,190,255,230' : '145,145,145,255'"
+                      normal: "self.entry != none && self.entry['selected'] ? '120,190,255,230' : '145,145,145,255'"
                       shape: ~round_rect
                       radius: 14
-                      visible: "self.entryKey != '' && self.entry != null && (var.filterMode == 'all' || (var.filterMode == 'owned' && self.entry['owned']) || (var.filterMode == 'hidden' && self.entry['hidden'])) && (var.filterGroup == 'all' || var.filterGroup == self.entry['group_id']) && (var.filterQuality == 'all' || var.filterQuality == self.entry['quality_id'])"
+                      visible: "self.entryKey != none && self.entry != none && (var.filterMode == 'all' || (var.filterMode == 'owned' && self.entry['owned']) || (var.filterMode == 'hidden' && self.entry['hidden'])) && (var.filterGroup == 'all' || var.filterGroup == self.entry['group_id']) && (var.filterQuality == 'all' || var.filterQuality == self.entry['quality_id'])"
                     effect:
                       stroke:
                         width: 2
@@ -700,7 +700,7 @@ controls:
                           width: 28
                           fontSize: 48
                           texts: '&a✔'
-                          visible: self.parent.entry != null && self.parent.entry['equipped']
+                          visible: self.parent.entry != none && self.parent.entry['equipped']
                           through: true
 
           # ========== 中间栏 ==========
@@ -724,14 +724,14 @@ controls:
               x: 504
               y: 160
               fontSize: 49
-              texts: "var.selectedName == '' ? '&0未选择称号' : var.selectedName"
+              texts: "var.selectedName == none ? '&0未选择称号' : var.selectedName"
           详情副标题:
             type: Text
             attribute:
               x: 504
               y: 196
               fontSize: 36
-              texts: "var.selectedKindText == '' ? '' : '&0' + var.selectedKindText + '    &0分组: &0' + var.selectedGroupName + '    &0品质: &0' + var.selectedQualityName"
+              texts: "var.selectedKindText == none ? none : '&0' + var.selectedKindText + '    &0分组: &0' + var.selectedGroupName + '    &0品质: &0' + var.selectedQualityName"
           分割线:
             type: Texture
             attribute:
@@ -780,10 +780,10 @@ controls:
                       fontSize: 36
                       lineSpace: 10
                       texts:
-                        - "'&0聊天前缀: &0' + (var.selectedChatPrefix == '' ? '无' : var.selectedChatPrefix)"
-                        - "'&0聊天后缀: &0' + (var.selectedChatSuffix == '' ? '无' : var.selectedChatSuffix)"
-                        - "'&0Tab 前缀: &0' + (var.selectedTabPrefix == '' ? '无' : var.selectedTabPrefix)"
-                        - "'&0Tab 后缀: &0' + (var.selectedTabSuffix == '' ? '无' : var.selectedTabSuffix)"
+                        - "'&0聊天前缀: &0' + (var.selectedChatPrefix == none ? '无' : var.selectedChatPrefix)"
+                        - "'&0聊天后缀: &0' + (var.selectedChatSuffix == none ? '无' : var.selectedChatSuffix)"
+                        - "'&0Tab 前缀: &0' + (var.selectedTabPrefix == none ? '无' : var.selectedTabPrefix)"
+                        - "'&0Tab 后缀: &0' + (var.selectedTabSuffix == none ? '无' : var.selectedTabSuffix)"
                   选中描述:
                     type: Text
                     attribute:
@@ -791,8 +791,8 @@ controls:
                       fontSize: 36
                       lineSpace: 10
                       texts:
-                        - "'&0介绍: &0' + (var.selectedDescription == '' ? '暂无介绍' : var.selectedDescription)"
-                        - "'&0获取渠道: &0' + (var.selectedSource == '' ? '未填写' : var.selectedSource)"
+                        - "'&0介绍: &0' + (var.selectedDescription == none ? '暂无介绍' : var.selectedDescription)"
+                        - "'&0获取渠道: &0' + (var.selectedSource == none ? '未填写' : var.selectedSource)"
                         - "'&0拥有状态: &0' + (var.selectedOwned ? '已拥有' : '未拥有')"
                         - "'&0剩余时间: &0' + var.selectedRemainingText"
                   佩戴属性标签:
@@ -866,7 +866,7 @@ controls:
                       width: 472
                       fontSize: 49
                       texts: '&0&l套装加成属性'
-                      visible: var.sets != null && var.sets.size() > 0
+                      visible: var.sets != none && var.sets.size() > 0
                   套装加成值:
                     type: Text
                     attribute:
@@ -874,32 +874,32 @@ controls:
                       fontSize: 36
                       lineSpace: 4
                       texts: var.setBonusAttributesText
-                      visible: var.sets != null && var.sets.size() > 0
+                      visible: var.sets != none && var.sets.size() > 0
                   套装列表:
                     val: set_list
                     type: VStack
                     attribute:
                       width: 472
                       spaceBetween: 10
-                      visible: var.sets != null && var.sets.size() > 0
+                      visible: var.sets != none && var.sets.size() > 0
                     action:
                       create: |-
                         for(i in range(0, 64)){
                           item = self['套装模板'].copy('套装项' + i.round())
-                          item.entryKey = ''
+                          item.entryKey = none
                         }
                     children:
                       套装模板:
                         type: Texture
                         attribute:
-                          entryKey: ''
+                          entryKey: none
                           entry: var.sets[self.entryKey]
                           width: 472
                           height: 80
                           normal: ~255,255,255,80
                           shape: ~round_rect
                           radius: 12
-                          visible: self.entryKey != '' && self.entry != null
+                          visible: self.entryKey != none && self.entry != none
                         children:
                           套装信息:
                             type: Text
@@ -913,7 +913,7 @@ controls:
                                 - "(self.parent.entry['active'] ? '&a✔ ' : '&c✘ ') + '&0' + self.parent.entry['display_name'] + '  &0(' + self.parent.entry['progress'] + ')'"
                                 - "'&0所需: ' + self.parent.entry['required_titles_text']"
                                 - "'&0加成: &0' + self.parent.entry['bonus_text']"
-                              visible: self.parent.entry != null
+                              visible: self.parent.entry != none
                               through: true
 
           # ========== 右侧栏 ==========
@@ -979,20 +979,20 @@ controls:
                       create: |-
                         for(i in range(0, 64)){
                           item = self['已装备模板'].copy('已装备项' + i.round())
-                          item.entryKey = ''
+                          item.entryKey = none
                         }
                     children:
                       已装备模板:
                         type: Texture
                         attribute:
-                          entryKey: ''
+                          entryKey: none
                           entry: var.equippedByGroup[self.entryKey]
                           width: 392
                           height: 52
                           normal: ~255,255,255,80
                           shape: ~round_rect
                           radius: 10
-                          visible: self.entryKey != '' && self.entry != null
+                          visible: self.entryKey != none && self.entry != none
                         children:
                           已装备信息:
                             type: Text
@@ -1003,9 +1003,9 @@ controls:
                               fontSize: 36
                               lineSpace: 6
                               texts:
-                                - "'&0' + self.parent.entry['group_name'] + ': ' + (self.parent.entry['title_id'] == '' ? '&7未装备' : self.parent.entry['display_name'])"
-                                - "self.parent.entry['title_id'] != '' ? '&0' + self.parent.entry['quality_name'] : ''"
-                              visible: self.parent.entry != null
+                                - "'&0' + self.parent.entry['group_name'] + ': ' + (self.parent.entry['title_id'] == none ? '&7未装备' : self.parent.entry['display_name'])"
+                                - "self.parent.entry['title_id'] != none ? '&0' + self.parent.entry['quality_name'] : none"
+                              visible: self.parent.entry != none
                               through: true
                   总属性标题:
                     type: Text
@@ -1029,7 +1029,7 @@ controls:
                     attribute:
                       width: 408
                       fontSize: 36
-                      texts: "var.displayTitleId != '' && var.displayTitleName != '' ? '&0' + var.displayTitleName : '&7未设置'"
+                      texts: "var.displayTitleId != none && var.displayTitleName != none ? '&0' + var.displayTitleName : '&7未设置'"
           按钮行1:
             type: HStack
             attribute:

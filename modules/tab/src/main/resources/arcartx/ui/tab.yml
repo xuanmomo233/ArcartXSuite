@@ -156,4 +156,4 @@ controls:
                     type: text
                     attribute:
                       fontSize: 33
-                      texts: "~null"
+                      texts: "~none"

@@ -37,22 +37,22 @@ ui:
       var.entry1Visible = false
       var.entry1CreatedAt = 0
       var.entry1Amount = 0
-      var.entry1ItemJson = ''
+      var.entry1ItemJson = none
       var.entry1IconDirty = false
       var.entry2Visible = false
       var.entry2CreatedAt = 0
       var.entry2Amount = 0
-      var.entry2ItemJson = ''
+      var.entry2ItemJson = none
       var.entry2IconDirty = false
       var.entry3Visible = false
       var.entry3CreatedAt = 0
       var.entry3Amount = 0
-      var.entry3ItemJson = ''
+      var.entry3ItemJson = none
       var.entry3IconDirty = false
       var.entry4Visible = false
       var.entry4CreatedAt = 0
       var.entry4Amount = 0
-      var.entry4ItemJson = ''
+      var.entry4ItemJson = none
       var.entry4IconDirty = false
     tick: |-
       var.now = Time.currentTime()
@@ -69,25 +69,25 @@ ui:
         var.entry4Visible = false
       }
       if(var.entry1IconDirty){
-        if(var.entry1ItemJson != ''){
+        if(var.entry1ItemJson != none){
           val.pickup_slot_1.setItemIcon(var.entry1ItemJson)
         }
         var.entry1IconDirty = false
       }
       if(var.entry2IconDirty){
-        if(var.entry2ItemJson != ''){
+        if(var.entry2ItemJson != none){
           val.pickup_slot_2.setItemIcon(var.entry2ItemJson)
         }
         var.entry2IconDirty = false
       }
       if(var.entry3IconDirty){
-        if(var.entry3ItemJson != ''){
+        if(var.entry3ItemJson != none){
           val.pickup_slot_3.setItemIcon(var.entry3ItemJson)
         }
         var.entry3IconDirty = false
       }
       if(var.entry4IconDirty){
-        if(var.entry4ItemJson != ''){
+        if(var.entry4ItemJson != none){
           val.pickup_slot_4.setItemIcon(var.entry4ItemJson)
         }
         var.entry4IconDirty = false
@@ -141,7 +141,7 @@ controls:
                   normal: ~0,0,0,0
                   hover: ~0,0,0,0
                   itemScale: 0.85
-                  visible: var.entry1ItemJson != ''
+                  visible: var.entry1ItemJson != none
               文字:
                 type: Text
                 attribute:
@@ -181,7 +181,7 @@ controls:
                   normal: ~0,0,0,0
                   hover: ~0,0,0,0
                   itemScale: 0.85
-                  visible: var.entry2ItemJson != ''
+                  visible: var.entry2ItemJson != none
               文字:
                 type: Text
                 attribute:
@@ -222,7 +222,7 @@ controls:
                   normal: ~0,0,0,0
                   hover: ~0,0,0,0
                   itemScale: 0.85
-                  visible: var.entry3ItemJson != ''
+                  visible: var.entry3ItemJson != none
               文字:
                 type: Text
                 attribute:
@@ -263,7 +263,7 @@ controls:
                   normal: ~0,0,0,0
                   hover: ~0,0,0,0
                   itemScale: 0.85
-                  visible: var.entry4ItemJson != ''
+                  visible: var.entry4ItemJson != none
               文字:
                 type: Text
                 attribute:

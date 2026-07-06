@@ -19,10 +19,10 @@ ui:
       var.qqId = packet['qqId']
       var.playerName = packet['playerName']
       var.bindTime = packet['bindTime']
-      var.code = ''
+      var.code = none
       var.codeExpire = 0
-      var.result = ''
-      var.resultType = ''
+      var.result = none
+      var.resultType = none
       var.tab = 'status'
       var.messages = packet['messages']
       var.msgCount = packet['msgCount']
@@ -45,17 +45,17 @@ ui:
     load: |-
       var.packetId = 'AXS_qqbot'
       var.bound = false
-      var.qqId = ''
-      var.playerName = ''
-      var.bindTime = ''
-      var.code = ''
+      var.qqId = none
+      var.playerName = none
+      var.bindTime = none
+      var.code = none
       var.codeExpire = 0
-      var.result = ''
-      var.resultType = ''
+      var.result = none
+      var.resultType = none
       var.tab = 'status'
       var.messages = []
       var.msgCount = 0
-      var.replyText = ''
+      var.replyText = none
 
 controls:
   自适应:
@@ -214,9 +214,9 @@ controls:
                 attribute:
                   x: 220
                   y: 92
-                  texts: "var.code != '' ? '&e验证码: &f&l' + var.code + ' &7(' + var.codeExpire + 's)' : ''"
+                  texts: "var.code != none ? '&e验证码: &f&l' + var.code + ' &7(' + var.codeExpire + 's)' : none"
                   fontSize: 36
-                  visible: "!var.bound && var.code != ''"
+                  visible: "!var.bound && var.code != none"
               # 解绑按钮
               解绑按钮:
                 type: Texture
@@ -244,7 +244,7 @@ controls:
                   y: 144
                   texts: "var.resultType == 'success' ? '&a' + var.result : (var.resultType == 'error' ? '&c' + var.result : '&7' + var.result)"
                   fontSize: 32
-                  visible: var.result != ''
+                  visible: var.result != none
           # ── 群消息页 ──
           消息容器:
             type: Canvas
@@ -291,7 +291,7 @@ controls:
                             type: Texture
                             attribute:
                               entry: var.messages[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 636
                               height: 40
                               normal: ~40,44,54,180
@@ -341,7 +341,7 @@ controls:
                   fontSize: 30
                 action:
                   clickLeft: |-
-                    if(var.replyText != ''){
+                    if(var.replyText != none){
                       Packet.send(var.packetId, 'send_message', var.replyText)
-                      var.replyText = ''
+                      var.replyText = none
                     }

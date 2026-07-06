@@ -27,24 +27,24 @@ ui:
       var.textWidth = packet['textWidth']
       var.textX = Display.width()
       if(!var.displayVisible){
-        var.currentText = ''
+        var.currentText = none
       }
   action:
     load: |-
       var.displayVisible = false
-      var.currentEntryId = ''
-      var.currentText = ''
+      var.currentEntryId = none
+      var.currentText = none
       var.currentClickable = false
-      var.lastRevision = ''
+      var.lastRevision = none
       var.textX = Display.width()
       var.textWidth = 0
       var.scrollSpeed = 1.5
     tick: |-
-      if(var.displayVisible && var.currentText != ''){
+      if(var.displayVisible && var.currentText != none){
         var.textX = var.textX - var.scrollSpeed
         if(var.textX < 0 - var.textWidth){
           var.displayVisible = false
-          var.currentText = ''
+          var.currentText = none
         }
       }
 
@@ -64,7 +64,7 @@ controls:
           y: 84
           height: 72
           normal: ~Frosted:30;95,95,95,220
-          visible: var.displayVisible && var.currentText != ''
+          visible: var.displayVisible && var.currentText != none
       公告点击区:
         type: Canvas
         attribute:
@@ -74,7 +74,7 @@ controls:
           width: Display.width()
           height: 72
           through: false
-          visible: var.displayVisible && var.currentClickable && var.currentText != ''
+          visible: var.displayVisible && var.currentClickable && var.currentText != none
         action:
           clickLeft: |-
             Packet.send("AXS_announcer_click", var.currentEntryId)
@@ -86,4 +86,4 @@ controls:
           y: 95
           texts: "'&f' + var.currentText"
           fontSize: 100
-          visible: var.displayVisible && var.currentText != ''
+          visible: var.displayVisible && var.currentText != none

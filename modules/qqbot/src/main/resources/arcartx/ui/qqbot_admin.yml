@@ -24,7 +24,7 @@ ui:
       var.bindPage = 0
       var.bindTotal = packet['bindTotal']
       var.cmdHistory = []
-      var.cmdResult = ''
+      var.cmdResult = none
       var.tab = 'dashboard'
     update: |-
       var.botConnected = packet['botConnected']
@@ -50,9 +50,9 @@ ui:
       var.bindPage = 0
       var.bindTotal = 0
       var.cmdHistory = []
-      var.cmdResult = ''
-      var.cmdInput = ''
-      var.searchInput = ''
+      var.cmdResult = none
+      var.cmdInput = none
+      var.searchInput = none
       var.tab = 'dashboard'
 
 controls:
@@ -378,7 +378,7 @@ controls:
                             type: Texture
                             attribute:
                               entry: var.bindings[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 816
                               height: 46
                               normal: ~40,44,54,180
@@ -520,7 +520,7 @@ controls:
                             type: Texture
                             attribute:
                               entry: var.cmdHistory[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 816
                               height: 56
                               normal: ~35,38,48,200
@@ -579,7 +579,7 @@ controls:
                   fontSize: 32
                 action:
                   clickLeft: |-
-                    if(var.cmdInput != ''){
+                    if(var.cmdInput != none){
                       Packet.send(var.packetId, 'exec_command', var.cmdInput)
-                      var.cmdInput = ''
+                      var.cmdInput = none
                     }

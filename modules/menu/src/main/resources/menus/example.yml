@@ -40,7 +40,7 @@ buttons-per-page: 64
 # 打开菜单所需权限节点（可选，留空 = 无限制）
 # 格式为插件权限字符串，如 "arcartxsuite.menu.example"
 # 玩家无此权限时无法通过任何方式打开此菜单
-permission: ""
+permission: none
 
 # 打开菜单的前置条件列表（可选）
 # 支持 PlaceholderAPI 变量表达式，所有条件必须同时满足
@@ -406,7 +406,7 @@ pages:
           name: "&a出生点"
           lore:
             - "&7传送到服务器出生点"
-            - ""
+            - none
             - "&e点击传送"
         actions:
           - "command: spawn"

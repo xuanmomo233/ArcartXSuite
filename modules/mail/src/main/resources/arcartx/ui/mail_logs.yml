@@ -209,7 +209,7 @@ controls:
                       normal: ~120,120,120,255
                       shape: ~round_rect
                       radius: 16
-                      visible: self.entry != null
+                      visible: self.entry != none
                     effect:
                       stroke:
                         width: 2

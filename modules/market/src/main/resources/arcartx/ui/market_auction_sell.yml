@@ -11,7 +11,7 @@ ui:
       for(key in var.backpackItems.keys()){
         json = packet['itemJson' + key]
       var.maxBackpackCount = packet['maxBackpackCount']
-        if(json != null && json != ''){
+        if(json != none && json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
@@ -20,13 +20,13 @@ ui:
       for(i in range(0, var.maxBackpackCount)){
         key = i.round()
         slot = val.背包网格['背包槽' + key]
-        if(slot != null){
+        if(slot != none){
           slot.seticon()
         }
       }
-      if(var.selectedSlot != null){
+      if(var.selectedSlot != none){
         preview = val.信息面板['预览槽']
-        if(preview != null){
+        if(preview != none){
           preview.seticon()
         }
       }
@@ -36,7 +36,7 @@ ui:
       for(key in var.backpackItems.keys()){
         json = packet['itemJson' + key]
       var.maxBackpackCount = packet['maxBackpackCount']
-        if(json != null && json != ''){
+        if(json != none && json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
@@ -45,13 +45,13 @@ ui:
       for(i in range(0, var.maxBackpackCount)){
         key = i.round()
         slot = val.背包网格['背包槽' + key]
-        if(slot != null){
+        if(slot != none){
           slot.seticon()
         }
       }
-      if(var.selectedSlot != null){
+      if(var.selectedSlot != none){
         preview = val.信息面板['预览槽']
-        if(preview != null){
+        if(preview != none){
           preview.seticon()
         }
       }
@@ -59,9 +59,9 @@ ui:
       var.packetId = 'AXS_MARKET'
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       var.maxBackpackCount = 0
-      var.selectedSlot = null
-      var.selectedPrice = ''
-      var.selectedMessage = ''
+      var.selectedSlot = none
+      var.selectedPrice = none
+      var.selectedMessage = none
       var.selectedDuration = 86400
     open: |-
       Packet.send(var.packetId, 'auction_sell_open')
@@ -195,14 +195,14 @@ controls:
                     action:
                       clickLeft: |-
                         entry = var.backpackItems[self.entryKey + '']
-                        if(entry != null && entry['hasItem']){
+                        if(entry != none && entry['hasItem']){
                           if(var.selectedSlot == self.entryKey){
-                            var.selectedSlot = null
+                            var.selectedSlot = none
                           } else {
                             var.selectedSlot = self.entryKey
                           }
                           preview = val.信息面板['预览槽']
-                          if(preview != null){
+                          if(preview != none){
                             preview.seticon()
                           }
                         }
@@ -250,7 +250,7 @@ controls:
                   shape: ~round_rect
                   radius: 14
                   through: true
-                  seticon: "var.selectedSlot != null ? self.setItemIcon(var.itemJsons[var.selectedSlot]) : self.setItemIcon(var.emptyItemJson)"
+                  seticon: "var.selectedSlot != none ? self.setItemIcon(var.itemJsons[var.selectedSlot]) : self.setItemIcon(var.emptyItemJson)"
                 effect:
                   stroke:
                     width: 2
@@ -262,7 +262,7 @@ controls:
                   x: 120
                   y: 72
                   width: 400
-                  texts: "var.selectedSlot != null && var.backpackItems[var.selectedSlot + ''] != null ? '&f' + var.backpackItems[var.selectedSlot + '']['name'] : '&7未选择物品'"
+                  texts: "var.selectedSlot != none && var.backpackItems[var.selectedSlot + ''] != none ? '&f' + var.backpackItems[var.selectedSlot + '']['name'] : '&7未选择物品'"
                   fontSize: 32
                   through: true
 
@@ -414,10 +414,10 @@ controls:
                   radius: 14
                 action:
                   clickLeft: |-
-                    if(var.selectedSlot == null){
+                    if(var.selectedSlot == none){
                       return
                     }
-                    if(var.selectedPrice == ''){
+                    if(var.selectedPrice == none){
                       return
                     }
                     Packet.send(var.packetId, 'auction_list_create', var.selectedSlot + '', var.selectedPrice, var.selectedMessage, var.selectedDuration + '')

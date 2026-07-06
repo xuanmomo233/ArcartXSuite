@@ -31,15 +31,15 @@ ui:
       var.taskIndex = 0
       for(key in var.taskKeys){
         item = val.guide_task_list['引导项' + var.taskIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.taskIndex = var.taskIndex + 1
       }
       while(var.taskIndex < 3){
         item = val.guide_task_list['引导项' + var.taskIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.taskIndex = var.taskIndex + 1
       }
@@ -61,15 +61,15 @@ ui:
       var.taskIndex = 0
       for(key in var.taskKeys){
         item = val.guide_task_list['引导项' + var.taskIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.taskIndex = var.taskIndex + 1
       }
       while(var.taskIndex < 3){
         item = val.guide_task_list['引导项' + var.taskIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.taskIndex = var.taskIndex + 1
       }
@@ -77,13 +77,13 @@ ui:
     load: |-
       var.packetId = 'AXS_QUESTGPS'
       var.active = false
-      var.questName = ''
+      var.questName = none
       var.completedCount = 0
       var.totalCount = 0
       var.progressText = '0/0'
       var.tasks = {}
       var.taskCount = 0
-      var.navWorld = ''
+      var.navWorld = none
       var.navX = 0
       var.navY = 0
       var.navZ = 0
@@ -208,8 +208,8 @@ controls:
                   point: ~top_left
                   width: 388
                   height: 66
-                  entryKey: ''
-                  visible: self.entryKey != '' && var.tasks[self.entryKey] != null
+                  entryKey: none
+                  visible: self.entryKey != none && var.tasks[self.entryKey] != none
                   entry: var.tasks[self.entryKey]
                 children:
                   状态图标:
@@ -218,7 +218,7 @@ controls:
                       point: ~top_left
                       x: 8
                       y: 10
-                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&a✓' : '&f◈') : ''"
+                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a✓' : '&f◈') : none"
                       fontSize: 16
                       shadow: false
                   任务文字:
@@ -228,7 +228,7 @@ controls:
                       x: 30
                       y: 10
                       width: 280
-                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&7&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : ''"
+                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&7&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : none"
                       fontSize: 14
                       shadow: false
                   任务状态:
@@ -237,7 +237,7 @@ controls:
                       point: ~top_right
                       x: -8
                       y: 10
-                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&a已完成' : '&e进行中') : ''"
+                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a已完成' : '&e进行中') : none"
                       fontSize: 12
                       shadow: false
                   行分隔线:
@@ -255,8 +255,8 @@ controls:
                   point: ~top_left
                   width: 388
                   height: 66
-                  entryKey: ''
-                  visible: self.entryKey != '' && var.tasks[self.entryKey] != null
+                  entryKey: none
+                  visible: self.entryKey != none && var.tasks[self.entryKey] != none
                   entry: var.tasks[self.entryKey]
                 children:
                   状态图标:
@@ -265,7 +265,7 @@ controls:
                       point: ~top_left
                       x: 8
                       y: 10
-                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&a✓' : '&f◈') : ''"
+                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a✓' : '&f◈') : none"
                       fontSize: 16
                       shadow: false
                   任务文字:
@@ -275,7 +275,7 @@ controls:
                       x: 30
                       y: 10
                       width: 280
-                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&7&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : ''"
+                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&7&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : none"
                       fontSize: 14
                       shadow: false
                   任务状态:
@@ -284,7 +284,7 @@ controls:
                       point: ~top_right
                       x: -8
                       y: 10
-                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&a已完成' : '&e进行中') : ''"
+                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a已完成' : '&e进行中') : none"
                       fontSize: 12
                       shadow: false
                   行分隔线:
@@ -302,8 +302,8 @@ controls:
                   point: ~top_left
                   width: 388
                   height: 66
-                  entryKey: ''
-                  visible: self.entryKey != '' && var.tasks[self.entryKey] != null
+                  entryKey: none
+                  visible: self.entryKey != none && var.tasks[self.entryKey] != none
                   entry: var.tasks[self.entryKey]
                 children:
                   状态图标:
@@ -312,7 +312,7 @@ controls:
                       point: ~top_left
                       x: 8
                       y: 10
-                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&a✓' : '&f◈') : ''"
+                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a✓' : '&f◈') : none"
                       fontSize: 16
                       shadow: false
                   任务文字:
@@ -322,7 +322,7 @@ controls:
                       x: 30
                       y: 10
                       width: 280
-                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&7&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : ''"
+                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&7&m' + self.parent.entry['text'] : '&f' + self.parent.entry['text']) : none"
                       fontSize: 14
                       shadow: false
                   任务状态:
@@ -331,7 +331,7 @@ controls:
                       point: ~top_right
                       x: -8
                       y: 10
-                      texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&a已完成' : '&e进行中') : ''"
+                      texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&a已完成' : '&e进行中') : none"
                       fontSize: 12
                       shadow: false
                   行分隔线:

@@ -35,5 +35,5 @@ root_control:
         fontSize: 64
         x: 160
         y: 60
-        texts: "self.parent.data['type'] == 'mute' ? '§7剩余时间: §f' + (self.parent.data['remaining'] != null ? self.parent.data['remaining'] : '永久') : '§7' + (self.parent.data['message'] != null ? self.parent.data['message'] : '内容违规')"
+        texts: "self.parent.data['type'] == 'mute' ? '§7剩余时间: §f' + (self.parent.data['remaining'] != none ? self.parent.data['remaining'] : '永久') : '§7' + (self.parent.data['message'] != none ? self.parent.data['message'] : '内容违规')"
         through: true

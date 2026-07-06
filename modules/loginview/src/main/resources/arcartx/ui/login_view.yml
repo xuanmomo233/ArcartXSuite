@@ -27,20 +27,20 @@ ui:
       var.registered = true
       var.premiumBypass = false
       var.qqBound = false
-      var.bindPrompt = ''
-      var.playerName = ''
-      var.serverName = ''
+      var.bindPrompt = none
+      var.playerName = none
+      var.serverName = none
       var.online = 0
       var.maxPlayers = 0
-      var.address = ''
-      var.time = ''
-      var.result = ''
-      var.password = ''
-      var.confirmPassword = ''
-      var.oldPassword = ''
-      var.newPassword = ''
-      var.changeConfirmPassword = ''
-      var.bindCode = ''
+      var.address = none
+      var.time = none
+      var.result = none
+      var.password = none
+      var.confirmPassword = none
+      var.oldPassword = none
+      var.newPassword = none
+      var.changeConfirmPassword = none
+      var.bindCode = none
       var.agreed = false
       var.showRules = false
       var.requireTerms = true
@@ -52,9 +52,9 @@ ui:
       if (var.lastSuccess && var.type == 'change') {
         var.type = 'login'
         var.title = '登录服务器'
-        var.oldPassword = ''
-        var.newPassword = ''
-        var.changeConfirmPassword = ''
+        var.oldPassword = none
+        var.newPassword = none
+        var.changeConfirmPassword = none
       }
     init: |-
       var.packetId = packet['packetId']
@@ -73,12 +73,12 @@ ui:
       var.bindPrompt = packet['bindPrompt']
       var.result = packet['message']
       var.resultAlpha = 0
-      var.password = ''
-      var.confirmPassword = ''
-      var.oldPassword = ''
-      var.newPassword = ''
-      var.changeConfirmPassword = ''
-      var.bindCode = ''
+      var.password = none
+      var.confirmPassword = none
+      var.oldPassword = none
+      var.newPassword = none
+      var.changeConfirmPassword = none
+      var.bindCode = none
       var.agreed = false
       var.showRules = false
       var.requireTerms = packet['requireTerms']
@@ -148,7 +148,7 @@ controls:
             attribute:
               x: 42
               y: 124
-              texts: "'&f时间: ' + (Placeholder.parse('%server_time_yyyy年MM月dd日hh:mm:ss%') != null ? Placeholder.parse('%server_time_yyyy年MM月dd日hh:mm:ss%') : var.time )"
+              texts: "'&f时间: ' + (Placeholder.parse('%server_time_yyyy年MM月dd日hh:mm:ss%') != none ? Placeholder.parse('%server_time_yyyy年MM月dd日hh:mm:ss%') : var.time )"
               fontSize: 28
           登录须知:
             type: Text
@@ -234,11 +234,11 @@ controls:
               clickLeft: |-
                 var.type = 'change'
                 var.title = '修改密码'
-                var.result = ''
-                var.password = ''
-                var.oldPassword = ''
-                var.newPassword = ''
-                var.changeConfirmPassword = ''
+                var.result = none
+                var.password = none
+                var.oldPassword = none
+                var.newPassword = none
+                var.changeConfirmPassword = none
             effect:
               stroke:
                 width: 2
@@ -492,10 +492,10 @@ controls:
               clickLeft: |-
                 var.type = 'login'
                 var.title = '登录服务器'
-                var.result = ''
-                var.oldPassword = ''
-                var.newPassword = ''
-                var.changeConfirmPassword = ''
+                var.result = none
+                var.oldPassword = none
+                var.newPassword = none
+                var.changeConfirmPassword = none
             effect:
               stroke:
                 width: 2

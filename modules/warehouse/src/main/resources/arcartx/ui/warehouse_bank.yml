@@ -112,10 +112,10 @@ ui:
       var.fixedDepositTexts = {}
       var.unlocked = false
       var.hasPassword = false
-      var.passwordText = ''
+      var.passwordText = none
       var.selectedCurrency = 'money'
-      var.selectedProduct = ''
-      var.bankAmount = ''
+      var.selectedProduct = none
+      var.bankAmount = none
       var.maxBalanceCount = 0
       var.maxProductCount = 0
       var.maxFixedCount = 0
@@ -383,10 +383,10 @@ controls:
                         attribute:
                           entryKey: 0
                           entry: var.balances[self.entryKey]
-                          visible: self.entry != null
+                          visible: self.entry != none
                           width: 450
                           height: 56
-                          normal: "self.entry != null && self.entry['id'] == var.selectedCurrency ? '110,170,230,255' : '255,255,255,150'"
+                          normal: "self.entry != none && self.entry['id'] == var.selectedCurrency ? '110,170,230,255' : '255,255,255,150'"
                           hover: ~Frosted:0;255,255,255,240
                           shape: ~round_rect
                           radius: 14
@@ -483,10 +483,10 @@ controls:
                         attribute:
                           entryKey: 0
                           entry: var.products[self.entryKey]
-                          visible: self.entry != null
+                          visible: self.entry != none
                           width: 450
                           height: 78
-                          normal: "self.entry != null && self.entry['id'] == var.selectedProduct ? '110,170,230,255' : '255,255,255,150'"
+                          normal: "self.entry != none && self.entry['id'] == var.selectedProduct ? '110,170,230,255' : '255,255,255,150'"
                           hover: ~Frosted:0;255,255,255,240
                           shape: ~round_rect
                           radius: 14
@@ -561,7 +561,7 @@ controls:
                         attribute:
                           entryKey: 0
                           entry: var.fixedDeposits[self.entryKey]
-                          visible: self.entry != null
+                          visible: self.entry != none
                           width: 450
                           height: 70
                           normal: ~255,255,255,150

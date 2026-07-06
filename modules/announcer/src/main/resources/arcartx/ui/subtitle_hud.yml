@@ -16,7 +16,7 @@ ui:
       var.subtitleAnimation = Lerp(0, var.subtitleLength, var.subtitleTime)
     close: |-
       var.subtitleVisible = false
-      var.subtitleText = ''
+      var.subtitleText = none
       var.subtitleLength = 0
       var.subtitleTime = 0
       var.subtitleShowBackground = false
@@ -24,7 +24,7 @@ ui:
   action:
     load: |-
       var.subtitleVisible = false
-      var.subtitleText = ''
+      var.subtitleText = none
       var.subtitleLength = 0
       var.subtitleTime = 0
       var.subtitleShowBackground = false

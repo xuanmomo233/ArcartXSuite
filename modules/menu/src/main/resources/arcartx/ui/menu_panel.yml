@@ -33,7 +33,7 @@ ui:
         key = i.round()
         mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
         mb.entryKey = key
-        if(mb['图标'] != null){
+        if(mb['图标'] != none){
           mb['图标'].seticon()
         }
       }
@@ -70,7 +70,7 @@ ui:
         key = i.round()
         mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
         mb.entryKey = key
-        if(mb['图标'] != null){
+        if(mb['图标'] != none){
           mb['图标'].seticon()
         }
       }
@@ -85,7 +85,7 @@ ui:
   action:
     open: |-
       var.packetId = 'AXS_MENU'
-      var.menuId = ''
+      var.menuId = none
       var.layout = 'panel'
       var.title = '菜单'
       var.pageId = 'main'
@@ -217,21 +217,21 @@ controls:
                     attribute:
                       entryKey: 0
                       entry: var.buttonRows[self.entryKey]
-                      visible: self.entry != null
+                      visible: self.entry != none
                       through: false
                       width: 218
                       height: 60
-                      normal: "self.entry != null && self.entry['enabled'] ? '95,95,95,255' : '55,55,55,200'"
-                      hover: "self.entry != null && self.entry['enabled'] ? '255,255,255,255' : '55,55,55,200'"
+                      normal: "self.entry != none && self.entry['enabled'] ? '95,95,95,255' : '55,55,55,200'"
+                      hover: "self.entry != none && self.entry['enabled'] ? '255,255,255,255' : '55,55,55,200'"
                       shape: ~round_rect
                       radius: 10
                     effect:
                       stroke:
                         width: 2
-                        color: "self.entry != null && self.entry['enabled'] ? '~255,255,255,255' : '~120,120,120,255'"
+                        color: "self.entry != none && self.entry['enabled'] ? '~255,255,255,255' : '~120,120,120,255'"
                     action:
                       clickLeft: |-
-                        if(self.entry != null && self.entry['enabled']){
+                        if(self.entry != none && self.entry['enabled']){
                           Packet.send(var.packetId, 'click', self.entry['id'])
                         }
                     children:
@@ -239,7 +239,7 @@ controls:
                         type: Slot
                         attribute:
                           slotType: ~Icon
-                          visible: "self.parent.entry != null && self.parent.entry['hasIcon']"
+                          visible: "self.parent.entry != none && self.parent.entry['hasIcon']"
                           itemScale: 0.72
                           x: 8
                           y: 6
@@ -249,14 +249,14 @@ controls:
                           shape: ~round_rect
                           radius: 8
                           through: true
-                          seticon: "self.parent.entry != null ? self.setItemIcon(self.parent.entry['itemJson']) : null"
+                          seticon: "self.parent.entry != none ? self.setItemIcon(self.parent.entry['itemJson']) : none"
                       标签:
                         type: Text
                         attribute:
                           through: true
-                          x: "self.parent.entry != null && self.parent.entry['hasIcon'] ? 138 : 109"
+                          x: "self.parent.entry != none && self.parent.entry['hasIcon'] ? 138 : 109"
                           y: 18
-                          texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
+                          texts: "self.parent.entry != none ? self.parent.entry['text'] : none"
                           center: true
                           fontSize: 48
           导航栏:
@@ -328,20 +328,20 @@ controls:
                     attribute:
                       entryKey: 0
                       entry: var.footerRows[self.entryKey]
-                      visible: self.entry != null
+                      visible: self.entry != none
                       width: 180
                       height: 48
-                      normal: "self.entry != null && self.entry['enabled'] ? '47,47,47,255' : '35,35,35,200'"
-                      hover: "self.entry != null && self.entry['enabled'] ? '255,255,255,255' : '35,35,35,200'"
+                      normal: "self.entry != none && self.entry['enabled'] ? '47,47,47,255' : '35,35,35,200'"
+                      hover: "self.entry != none && self.entry['enabled'] ? '255,255,255,255' : '35,35,35,200'"
                       shape: ~round_rect
                       radius: 10
                     effect:
                       stroke:
                         width: 2
-                        color: "self.entry != null && self.entry['enabled'] ? '~255,255,255,255' : '~120,120,120,255'"
+                        color: "self.entry != none && self.entry['enabled'] ? '~255,255,255,255' : '~120,120,120,255'"
                     action:
                       clickLeft: |-
-                        if(self.entry != null && self.entry['enabled']){
+                        if(self.entry != none && self.entry['enabled']){
                           if(self.entry['clientAction'] == 'options'){
                             Game.options()
                           }elif(self.entry['clientAction'] == 'quit'){
@@ -357,7 +357,7 @@ controls:
                           through: true
                           x: 90
                           y: 12
-                          texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
+                          texts: "self.parent.entry != none ? self.parent.entry['text'] : none"
                           center: true
                           fontSize: 48
 

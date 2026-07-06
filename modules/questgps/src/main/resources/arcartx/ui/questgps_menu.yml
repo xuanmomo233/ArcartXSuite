@@ -40,27 +40,27 @@ ui:
       var.catIndex = 0
       for(key in var.catKeys){
         item = val.cat_list['分类项' + var.catIndex.round()]
-        if(item != null){ item.entryKey = key }
+        if(item != none){ item.entryKey = key }
         var.catIndex = var.catIndex + 1
       }
       while(var.catIndex < 8){
         item = val.cat_list['分类项' + var.catIndex.round()]
-        if(item != null){ item.entryKey = '' }
+        if(item != none){ item.entryKey = none }
         var.catIndex = var.catIndex + 1
       }
       var.qKeys = var.quests.keys()
       var.qIndex = 0
       for(key in var.qKeys){
         item = val.quest_list['任务项' + var.qIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.qIndex = var.qIndex + 1
       }
       while(var.qIndex < 16){
         item = val.quest_list['任务项' + var.qIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.qIndex = var.qIndex + 1
       }
@@ -68,29 +68,29 @@ ui:
       var.tIndex = 0
       for(key in var.tKeys){
         item = val.task_list['目标项' + var.tIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.tIndex = var.tIndex + 1
       }
       while(var.tIndex < 8){
         item = val.task_list['目标项' + var.tIndex.round()]
-        if(item != null){ item.entryKey = '' }
+        if(item != none){ item.entryKey = none }
         var.tIndex = var.tIndex + 1
       }
       var.rKeys = var.rewards.keys()
       var.rIndex = 0
       for(key in var.rKeys){
         item = val.reward_list['奖励项' + var.rIndex.round()]
-        if(item != null){
-          item.entryKey = key; if(item['奖励图标'] != null){ item['奖励图标'].seticon() }
+        if(item != none){
+          item.entryKey = key; if(item['奖励图标'] != none){ item['奖励图标'].seticon() }
         }
         var.rIndex = var.rIndex + 1
       }
       while(var.rIndex < 8){
         item = val.reward_list['奖励项' + var.rIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.rIndex = var.rIndex + 1
       }
@@ -128,15 +128,15 @@ ui:
       var.catIndex = 0
       for(key in var.catKeys){
         item = val.cat_list['分类项' + var.catIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.catIndex = var.catIndex + 1
       }
       while(var.catIndex < 8){
         item = val.cat_list['分类项' + var.catIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.catIndex = var.catIndex + 1
       }
@@ -144,15 +144,15 @@ ui:
       var.qIndex = 0
       for(key in var.qKeys){
         item = val.quest_list['任务项' + var.qIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.qIndex = var.qIndex + 1
       }
       while(var.qIndex < 16){
         item = val.quest_list['任务项' + var.qIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.qIndex = var.qIndex + 1
       }
@@ -160,15 +160,15 @@ ui:
       var.tIndex = 0
       for(key in var.tKeys){
         item = val.task_list['目标项' + var.tIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
         }
         var.tIndex = var.tIndex + 1
       }
       while(var.tIndex < 8){
         item = val.task_list['目标项' + var.tIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.tIndex = var.tIndex + 1
       }
@@ -176,9 +176,9 @@ ui:
       var.rIndex = 0
       for(key in var.rKeys){
         item = val.reward_list['奖励项' + var.rIndex.round()]
-        if(item != null){
+        if(item != none){
           item.entryKey = key
-          if(item['奖励图标'] != null){
+          if(item['奖励图标'] != none){
             item['奖励图标'].seticon()
           }
         }
@@ -186,8 +186,8 @@ ui:
       }
       while(var.rIndex < 8){
         item = val.reward_list['奖励项' + var.rIndex.round()]
-        if(item != null){
-          item.entryKey = ''
+        if(item != none){
+          item.entryKey = none
         }
         var.rIndex = var.rIndex + 1
       }
@@ -199,19 +199,19 @@ ui:
       var.quests = {}
       var.tasks = {}
       var.rewards = {}
-      var.categoryId = ''
-      var.pageId = ''
-      var.categoryName = ''
+      var.categoryId = none
+      var.pageId = none
+      var.categoryName = none
       var.pageName = '可接取'
       var.availableCount = 0
       var.activeCount = 0
       var.completedCount = 0
       var.questCount = 0
       var.navigationReady = false
-      var.selectedQuestId = ''
+      var.selectedQuestId = none
       var.selectedQuestName = '暂无任务'
-      var.selectedQuestState = ''
-      var.selectedQuestPath = ''
+      var.selectedQuestState = none
+      var.selectedQuestPath = none
       var.selectedQuestDescriptionText = '当前分类下没有可展示的任务。'
       var.trackSummary = '当前未设置导航'
       var.canAccept = false
@@ -347,21 +347,21 @@ controls:
                   create: |-
                     for(i in range(0, 8)){
                       item = self['分类模板'].copy('分类项' + i.round())
-                      item.entryKey = ''
+                      item.entryKey = none
                     }
                 children:
                   分类模板:
                     type: Texture
                     attribute:
-                      entryKey: ''
+                      entryKey: none
                       entry: var.categories[self.entryKey]
-                      visible: self.entryKey != '' && self.entry != null
+                      visible: self.entryKey != none && self.entry != none
                       width: 100
                       height: 40
-                      normal: "self.entry != null && self.entry['selected'] ? '120,190,255,230' : '145,145,145,255'"
+                      normal: "self.entry != none && self.entry['selected'] ? '120,190,255,230' : '145,145,145,255'"
                       shape: ~round_rect
                       radius: 12
-                      texts: "self.entry != null ? self.entry['name'] : ''"
+                      texts: "self.entry != none ? self.entry['name'] : none"
                       center: true
                       fontSize: 36
                     effect:
@@ -475,18 +475,18 @@ controls:
                   create: |-
                     for(i in range(0, 16)){
                       item = self['任务模板'].copy('任务项' + i.round())
-                      item.entryKey = ''
+                      item.entryKey = none
                     }
                 children:
                   任务模板:
                     type: Texture
                     attribute:
-                      entryKey: ''
+                      entryKey: none
                       entry: var.quests[self.entryKey]
-                      visible: self.entryKey != '' && self.entry != null
+                      visible: self.entryKey != none && self.entry != none
                       width: 348
                       height: 80
-                      normal: "self.entry != null && self.entry['selected'] ? '120,190,255,230' : '145,145,145,255'"
+                      normal: "self.entry != none && self.entry['selected'] ? '120,190,255,230' : '145,145,145,255'"
                       shape: ~round_rect
                       radius: 14
                     effect:
@@ -504,7 +504,7 @@ controls:
                           y: 10
                           width: 220
                           fontSize: 36
-                          texts: "self.parent.entry != null ? '&0' + self.parent.entry['name'] : ''"
+                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['name'] : none"
                           through: true
                       任务状态:
                         type: Text
@@ -512,7 +512,7 @@ controls:
                           x: 240
                           y: 12
                           fontSize: 30
-                          texts: "self.parent.entry != null ? '&7' + self.parent.entry['state'] : ''"
+                          texts: "self.parent.entry != none ? '&7' + self.parent.entry['state'] : none"
                           through: true
                       任务摘要:
                         type: Text
@@ -521,7 +521,7 @@ controls:
                           y: 42
                           width: 260
                           fontSize: 30
-                          texts: "self.parent.entry != null ? '&7' + self.parent.entry['summary'] : ''"
+                          texts: "self.parent.entry != none ? '&7' + self.parent.entry['summary'] : none"
                           through: true
                       可导航:
                         type: Text
@@ -529,7 +529,7 @@ controls:
                           x: 290
                           y: 42
                           fontSize: 28
-                          texts: "self.parent.entry != null && self.parent.entry['trackable'] ? '&a可导航' : ''"
+                          texts: "self.parent.entry != none && self.parent.entry['trackable'] ? '&a可导航' : none"
                           through: true
           右板:
             type: Texture
@@ -551,7 +551,7 @@ controls:
               x: 464
               y: 116
               fontSize: 56
-              texts: "var.selectedQuestName == '' ? '&0未选择任务' : '&0' + var.selectedQuestName"
+              texts: "var.selectedQuestName == none ? '&0未选择任务' : '&0' + var.selectedQuestName"
           详情状态:
             type: Text
             attribute:
@@ -627,18 +627,18 @@ controls:
                   create: |-
                     for(i in range(0, 8)){
                       item = self['目标模板'].copy('目标项' + i.round())
-                      item.entryKey = ''
+                      item.entryKey = none
                     }
                 children:
                   目标模板:
                     type: Texture
                     attribute:
-                      entryKey: ''
+                      entryKey: none
                       entry: var.tasks[self.entryKey]
-                      visible: self.entryKey != '' && self.entry != null
+                      visible: self.entryKey != none && self.entry != none
                       width: 868
                       height: 50
-                      normal: "self.entry != null && self.entry['tracked'] ? '110,170,230,255' : '145,145,145,255'"
+                      normal: "self.entry != none && self.entry['tracked'] ? '110,170,230,255' : '145,145,145,255'"
                       shape: ~round_rect
                       radius: 12
                     effect:
@@ -656,7 +656,7 @@ controls:
                           y: 10
                           width: 680
                           fontSize: 36
-                          texts: "self.parent.entry != null ? (self.parent.entry['completed'] ? '&7&m' + self.parent.entry['text'] : '&0' + self.parent.entry['text']) : ''"
+                          texts: "self.parent.entry != none ? (self.parent.entry['completed'] ? '&7&m' + self.parent.entry['text'] : '&0' + self.parent.entry['text']) : none"
                           through: true
                       目标状态:
                         type: Text
@@ -665,7 +665,7 @@ controls:
                           y: 10
                           width: 150
                           fontSize: 36
-                          texts: "self.parent.entry != null ? '&7' + self.parent.entry['status'] : ''"
+                          texts: "self.parent.entry != none ? '&7' + self.parent.entry['status'] : none"
                           through: true
           奖励标题:
             type: Text
@@ -711,15 +711,15 @@ controls:
                   create: |-
                     for(i in range(0, 8)){
                       item = self['奖励模板'].copy('奖励项' + i.round())
-                      item.entryKey = ''
+                      item.entryKey = none
                     }
                 children:
                   奖励模板:
                     type: Texture
                     attribute:
-                      entryKey: ''
+                      entryKey: none
                       entry: var.rewards[self.entryKey]
-                      visible: self.entryKey != '' && self.entry != null
+                      visible: self.entryKey != none && self.entry != none
                       width: 868
                       height: 50
                       normal: ~145,145,145,255
@@ -734,7 +734,7 @@ controls:
                         type: Slot
                         attribute:
                           slotType: ~Icon
-                          visible: "self.parent.entry != null && self.parent.entry['itemJson'] != null && self.parent.entry['itemJson'] != ''"
+                          visible: "self.parent.entry != none && self.parent.entry['itemJson'] != none && self.parent.entry['itemJson'] != none"
                           itemScale: 0.72
                           x: 4
                           y: 1
@@ -744,14 +744,14 @@ controls:
                           shape: ~round_rect
                           radius: 8
                           through: true
-                          seticon: "self.parent.entry != null && self.parent.entry['itemJson'] != null ? self.setItemIcon(self.parent.entry['itemJson']) : null"
+                          seticon: "self.parent.entry != none && self.parent.entry['itemJson'] != none ? self.setItemIcon(self.parent.entry['itemJson']) : none"
                       奖励名:
                         type: Text
                         attribute:
                           x: 60
                           y: 10
                           fontSize: 36
-                          texts: "self.parent.entry != null ? '&0' + self.parent.entry['title'] : ''"
+                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['title'] : none"
                           through: true
                       奖励描述:
                         type: Text
@@ -760,7 +760,7 @@ controls:
                           y: 10
                           width: 420
                           fontSize: 36
-                          texts: "self.parent.entry != null ? '&7' + self.parent.entry['description'] : ''"
+                          texts: "self.parent.entry != none ? '&7' + self.parent.entry['description'] : none"
                           through: true
           操作区:
             type: HStack
@@ -864,5 +864,4 @@ controls:
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'open_map')
-
 

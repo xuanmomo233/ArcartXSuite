@@ -18,7 +18,7 @@ ui:
       var.currentPage = packet['page']
       var.totalPages = packet['totalPages']
       var.totalCount = packet['totalCount']
-      var.resultMsg = ''
+      var.resultMsg = none
     statistics: |-
       var.totalCount = packet['totalCount']
       var.successCount = packet['successCount']
@@ -84,7 +84,7 @@ controls:
                   radius: 8
                 action:
                   click: |-
-                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', '', '', 1)
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, 1)
                 children:
                   全部文字:
                     type: Text
@@ -104,7 +104,7 @@ controls:
                   radius: 8
                 action:
                   click: |-
-                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'success', '', 1)
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'success', none, 1)
                 children:
                   成功文字:
                     type: Text
@@ -124,7 +124,7 @@ controls:
                   radius: 8
                 action:
                   click: |-
-                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'failed', '', 1)
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'failed', none, 1)
                 children:
                   失败文字:
                     type: Text
@@ -144,7 +144,7 @@ controls:
                   radius: 8
                 action:
                   click: |-
-                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'pending', '', 1)
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'pending', none, 1)
                 children:
                   待发文字:
                     type: Text
@@ -164,7 +164,7 @@ controls:
                   radius: 8
                 action:
                   click: |-
-                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', '', '', var.currentPage)
+                    Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, var.currentPage)
                 children:
                   刷新文字:
                     type: Text
@@ -438,7 +438,7 @@ controls:
                   radius: 6
                 action:
                   click: |-
-                    if (var.currentPage > 1) { Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', '', '', var.currentPage - 1) }
+                    if (var.currentPage > 1) { Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, var.currentPage - 1) }
                 children:
                   上一页文字:
                     type: Text
@@ -464,7 +464,7 @@ controls:
                   radius: 6
                 action:
                   click: |-
-                    if (var.currentPage < var.totalPages) { Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', '', '', var.currentPage + 1) }
+                    if (var.currentPage < var.totalPages) { Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, var.currentPage + 1) }
                 children:
                   下一页文字:
                     type: Text

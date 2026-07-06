@@ -51,13 +51,13 @@ ui:
     load: |-
       var.packetId = 'AXS_LOTTERY_GACHA'
       var.poolName = '等待同步'
-      var.poolType = ''
-      var.poolBanner = ''
-      var.upItemName = ''
+      var.poolType = none
+      var.poolBanner = none
+      var.upItemName = none
       var.upItemStar = 5
-      var.upItemDesc = ''
-      var.guaranteeDesc = ''
-      var.remainingTime = ''
+      var.upItemDesc = none
+      var.guaranteeDesc = none
+      var.remainingTime = none
       var.fateCount = 0
       var.primogemCount = 0
       var.stardustCount = 0
@@ -156,10 +156,10 @@ controls:
                   height: 70
                   point: ~top_left
                   index: 0
-                  visible: "var.poolList[self.index] != null"
+                  visible: "var.poolList[self.index] != none"
                 action:
                   click: |-
-                    if(var.poolList[self.index] != null){
+                    if(var.poolList[self.index] != none){
                       Packet.send(var.packetId, 'switch_pool', self.index)
                     }
                 children:
@@ -200,7 +200,7 @@ controls:
                       x: 55
                       y: 15
                       fontSize: 28
-                      texts: "var.poolList[self.index] != null ? var.poolList[self.index] : ''"
+                      texts: "var.poolList[self.index] != none ? var.poolList[self.index] : none"
                       through: true
 
   # ── 中央主展示 ──
@@ -754,7 +754,7 @@ controls:
                     action:
                       create: |-
                         var.r = self.parent['十连槽位'].getItemText('rarity')
-                        self.rarityColor = var.rarityColors[var.r] != null ? var.rarityColors[var.r] : var.rarityColors['']
+                        self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors['']
                   十连槽位:
                     type: Slot
                     attribute:

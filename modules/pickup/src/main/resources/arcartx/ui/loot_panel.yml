@@ -55,38 +55,38 @@ ui:
       var.item5Amount = 0
       var.item6Amount = 0
       var.item7Amount = 0
-      var.item0ItemJson = ''
-      var.item1ItemJson = ''
-      var.item2ItemJson = ''
-      var.item3ItemJson = ''
-      var.item4ItemJson = ''
-      var.item5ItemJson = ''
-      var.item6ItemJson = ''
-      var.item7ItemJson = ''
+      var.item0ItemJson = none
+      var.item1ItemJson = none
+      var.item2ItemJson = none
+      var.item3ItemJson = none
+      var.item4ItemJson = none
+      var.item5ItemJson = none
+      var.item6ItemJson = none
+      var.item7ItemJson = none
     tick: |-
       if(var.dirty){
-        if(var.item0ItemJson != ''){
+        if(var.item0ItemJson != none){
           val.loot_slot_0.setItemIcon(var.item0ItemJson)
         }
-        if(var.item1ItemJson != ''){
+        if(var.item1ItemJson != none){
           val.loot_slot_1.setItemIcon(var.item1ItemJson)
         }
-        if(var.item2ItemJson != ''){
+        if(var.item2ItemJson != none){
           val.loot_slot_2.setItemIcon(var.item2ItemJson)
         }
-        if(var.item3ItemJson != ''){
+        if(var.item3ItemJson != none){
           val.loot_slot_3.setItemIcon(var.item3ItemJson)
         }
-        if(var.item4ItemJson != ''){
+        if(var.item4ItemJson != none){
           val.loot_slot_4.setItemIcon(var.item4ItemJson)
         }
-        if(var.item5ItemJson != ''){
+        if(var.item5ItemJson != none){
           val.loot_slot_5.setItemIcon(var.item5ItemJson)
         }
-        if(var.item6ItemJson != ''){
+        if(var.item6ItemJson != none){
           val.loot_slot_6.setItemIcon(var.item6ItemJson)
         }
-        if(var.item7ItemJson != ''){
+        if(var.item7ItemJson != none){
           val.loot_slot_7.setItemIcon(var.item7ItemJson)
         }
         var.dirty = false

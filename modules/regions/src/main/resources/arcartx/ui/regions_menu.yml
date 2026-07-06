@@ -173,7 +173,7 @@ controls:
                       x: 0
                       y: 50
                       fontSize: 28
-                      texts: "~&7区域: {var.currentRegion != '' ? '&f' + var.currentRegion : '&8无 (荒野)'}"
+                      texts: "~&7区域: {var.currentRegion != none ? '&f' + var.currentRegion : '&8无 (荒野)'}"
                   cur_world:
                     type: Text
                     attribute:
@@ -242,7 +242,7 @@ controls:
                             type: Texture
                             attribute:
                               entry: var.currentFlags[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 650
                               height: 36
                               normal: ~38,38,48,160
@@ -332,7 +332,7 @@ controls:
                             type: Texture
                             attribute:
                               entry: var.myRegions[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 650
                               height: 50
                               normal: ~40,40,50,180
@@ -405,7 +405,7 @@ controls:
                       x: 0
                       y: 116
                       fontSize: 28
-                      texts: "~&7体积: &f{var.regionVolume} 方块  &7父区域: &f{var.regionParent != '' ? var.regionParent : '无'}"
+                      texts: "~&7体积: &f{var.regionVolume} 方块  &7父区域: &f{var.regionParent != none ? var.regionParent : '无'}"
                   detail_owners_label:
                     type: Text
                     attribute:
@@ -453,7 +453,7 @@ controls:
                             type: Text
                             attribute:
                               entry: var.owners[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               x: 8
                               y: 2
                               fontSize: 24
@@ -505,7 +505,7 @@ controls:
                             type: Text
                             attribute:
                               entry: var.members[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               x: 8
                               y: 2
                               fontSize: 24
@@ -557,7 +557,7 @@ controls:
                             type: Texture
                             attribute:
                               entry: var.flags[self.key]
-                              visible: self.entry != null
+                              visible: self.entry != none
                               width: 650
                               height: 32
                               normal: ~38,38,48,160

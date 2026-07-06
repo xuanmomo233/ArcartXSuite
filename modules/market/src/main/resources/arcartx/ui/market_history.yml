@@ -26,7 +26,7 @@ ui:
       for(key in var.records.keys()){
         json = packet['historyItemJson' + key]
       var.maxRecordCount = packet['maxRecordCount']
-        if(json != null && json != ''){
+        if(json != none && json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
@@ -35,9 +35,9 @@ ui:
       for(i in range(0, var.maxRecordCount)){
         key = i.round()
         row = val.记录列表['记录行' + key]
-        if(row != null){
+        if(row != none){
           icon = row['物品图标']
-          if(icon != null){
+          if(icon != none){
             icon.seticon()
           }
         }
@@ -51,7 +51,7 @@ ui:
       for(key in var.records.keys()){
         json = packet['historyItemJson' + key]
       var.maxRecordCount = packet['maxRecordCount']
-        if(json != null && json != ''){
+        if(json != none && json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
@@ -60,9 +60,9 @@ ui:
       for(i in range(0, var.maxRecordCount)){
         key = i.round()
         row = val.记录列表['记录行' + key]
-        if(row != null){
+        if(row != none){
           icon = row['物品图标']
-          if(icon != null){
+          if(icon != none){
             icon.seticon()
           }
         }
@@ -212,7 +212,7 @@ controls:
                           row = self['记录行'].copy('记录行' + key)
                           row.entryKey = key
                           icon = row['物品图标']
-                          if(icon != null){
+                          if(icon != none){
                             icon.entryKey = key
                           }
                         }
@@ -222,7 +222,7 @@ controls:
                         attribute:
                           entryKey: 0
                           entry: var.records[self.entryKey]
-                          visible: self.entry != null
+                          visible: self.entry != none
                           width: 1196
                           height: 68
                           normal: ~60,60,70,200
@@ -254,7 +254,7 @@ controls:
                               x: 80
                               y: 8
                               width: 120
-                              texts: "self.parent.entry != null ? self.parent.entry['typeColor'] + self.parent.entry['typeText'] : ''"
+                              texts: "self.parent.entry != none ? self.parent.entry['typeColor'] + self.parent.entry['typeText'] : none"
                               fontSize: 36
                               through: true
                           物品名:
@@ -263,7 +263,7 @@ controls:
                               x: 200
                               y: 8
                               width: 280
-                              texts: "self.parent.entry != null ? '&f' + self.parent.entry['itemName'] : ''"
+                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['itemName'] : none"
                               fontSize: 36
                               through: true
                           对方:
@@ -272,7 +272,7 @@ controls:
                               x: 200
                               y: 40
                               width: 200
-                              texts: "self.parent.entry != null ? '&7' + self.parent.entry['counterpart'] : ''"
+                              texts: "self.parent.entry != none ? '&7' + self.parent.entry['counterpart'] : none"
                               fontSize: 22
                               through: true
                           金额:
@@ -281,7 +281,7 @@ controls:
                               x: 540
                               y: 14
                               width: 260
-                              texts: "self.parent.entry != null ? '&e' + self.parent.entry['amount'] : ''"
+                              texts: "self.parent.entry != none ? '&e' + self.parent.entry['amount'] : none"
                               fontSize: 32
                               through: true
                           时间:
@@ -290,7 +290,7 @@ controls:
                               x: 860
                               y: 14
                               width: 300
-                              texts: "self.parent.entry != null ? '&7' + self.parent.entry['time'] : ''"
+                              texts: "self.parent.entry != none ? '&7' + self.parent.entry['time'] : none"
                               fontSize: 28
                               through: true
 

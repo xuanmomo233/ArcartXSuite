@@ -29,7 +29,7 @@ ui:
         json = packet['shopItemJson' + key]
       var.maxShopCount = packet['maxShopCount']
       var.maxItemCount = packet['maxItemCount']
-        if(json != null && json != ''){
+        if(json != none && json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
@@ -38,9 +38,9 @@ ui:
       for(i in range(0, var.maxItemCount)){
         key = i.round()
         item = val.商品列表['商品项' + key]
-        if(item != null){
+        if(item != none){
           icon = item['物品图标']
-          if(icon != null){
+          if(icon != none){
             icon.seticon()
           }
         }
@@ -57,7 +57,7 @@ ui:
         json = packet['shopItemJson' + key]
       var.maxShopCount = packet['maxShopCount']
       var.maxItemCount = packet['maxItemCount']
-        if(json != null && json != ''){
+        if(json != none && json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
@@ -66,9 +66,9 @@ ui:
       for(i in range(0, var.maxItemCount)){
         key = i.round()
         item = val.商品列表['商品项' + key]
-        if(item != null){
+        if(item != none){
           icon = item['物品图标']
-          if(icon != null){
+          if(icon != none){
             icon.seticon()
           }
         }
@@ -76,7 +76,7 @@ ui:
   action:
     open: |-
       var.packetId = 'AXS_MARKET'
-      var.shopId = ''
+      var.shopId = none
       var.shopName = '系统商店'
       var.shops = {}
       var.shopTexts = {}
@@ -87,7 +87,7 @@ ui:
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       var.maxShopCount = 0
       var.maxItemCount = 0
-      Packet.send(var.packetId, 'shop_list', '')
+      Packet.send(var.packetId, 'shop_list', none)
 
 controls:
   根:
@@ -235,10 +235,10 @@ controls:
                         attribute:
                           entryKey: 0
                           entry: var.shops[self.entryKey]
-                          visible: self.entry != null
+                          visible: self.entry != none
                           width: 200
                           height: 48
-                          normal: "self.entry != null && self.entry['id'] == var.shopId ? '80,160,255,220' : '70,70,80,200'"
+                          normal: "self.entry != none && self.entry['id'] == var.shopId ? '80,160,255,220' : '70,70,80,200'"
                           hover: ~Frosted:0;255,255,255,200
                           shape: ~round_rect
                           radius: 12
@@ -310,7 +310,7 @@ controls:
                           item = self['商品项'].copy('商品项' + key)
                           item.entryKey = key
                           icon = item['物品图标']
-                          if(icon != null){
+                          if(icon != none){
                             icon.entryKey = key
                           }
                         }
@@ -320,7 +320,7 @@ controls:
                         attribute:
                           entryKey: 0
                           entry: var.items[self.entryKey]
-                          visible: self.entry != null
+                          visible: self.entry != none
                           width: 1038
                           height: 68
                           normal: ~60,60,70,200
@@ -353,7 +353,7 @@ controls:
                               x: 80
                               y: 10
                               width: 280
-                              texts: "self.parent.entry != null ? '&f' + self.parent.entry['name'] : ''"
+                              texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
                               fontSize: 36
                               through: true
                           价格:
@@ -362,7 +362,7 @@ controls:
                               x: 80
                               y: 40
                               width: 200
-                              texts: "self.parent.entry != null ? '&e价格: &f' + self.parent.entry['price'] : ''"
+                              texts: "self.parent.entry != none ? '&e价格: &f' + self.parent.entry['price'] : none"
                               fontSize: 22
                               through: true
                           库存:
@@ -371,7 +371,7 @@ controls:
                               x: 400
                               y: 14
                               width: 200
-                              texts: "self.parent.entry != null ? '&7库存: &f' + self.parent.entry['stock'] : ''"
+                              texts: "self.parent.entry != none ? '&7库存: &f' + self.parent.entry['stock'] : none"
                               fontSize: 28
                               through: true
                           限购:
@@ -380,7 +380,7 @@ controls:
                               x: 400
                               y: 44
                               width: 200
-                              texts: "self.parent.entry != null && self.parent.entry['limitText'] != '' ? '&c' + self.parent.entry['limitText'] : ''"
+                              texts: "self.parent.entry != none && self.parent.entry['limitText'] != none ? '&c' + self.parent.entry['limitText'] : none"
                               fontSize: 22
                               through: true
                           购买按钮:
@@ -419,6 +419,6 @@ controls:
                   y: 360
                   center: true
                   fontSize: 36
-                  visible: "var.items == null || var.items.keys().length == 0"
+                  visible: "var.items == none || var.items.keys().length == 0"
                   texts: '&8暂无商品'
                   through: true

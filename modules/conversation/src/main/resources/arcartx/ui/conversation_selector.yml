@@ -45,22 +45,22 @@ ui:
         ni.entryKey = key
       }
     close: |-
-      var.token = ''
-      var.packetId = packet['packetId'] == null ? '' : packet['packetId']
-      var.title = ''
-      var.hintText = ''
-      var.selectedNpcId = ''
+      var.token = none
+      var.packetId = packet['packetId'] == none ? none : packet['packetId']
+      var.title = none
+      var.hintText = none
+      var.selectedNpcId = none
       var.selectedNpcIndex = -1
       var.npcCount = 0
       var.npcScrollRatio = 0
       var.npcRows = {}
   action:
     load: |-
-      var.token = ''
-      var.packetId = ''
-      var.title = ''
-      var.hintText = ''
-      var.selectedNpcId = ''
+      var.token = none
+      var.packetId = none
+      var.title = none
+      var.hintText = none
+      var.selectedNpcId = none
       var.selectedNpcIndex = -1
       var.npcCount = 0
       var.npcScrollRatio = 0
@@ -177,7 +177,7 @@ controls:
                     attribute:
                       entryKey: 0
                       entry: var.npcRows[self.entryKey]
-                      visible: self.entry != null
+                      visible: self.entry != none
                       width: 392
                       height: 42
                       normal: ~150,150,150,175
@@ -189,16 +189,16 @@ controls:
                         color: ~0,0,0,255
                     action:
                       clickLeft: |-
-                        if(self.entry != null && self.entry['selected']){
+                        if(self.entry != none && self.entry['selected']){
                           Packet.send(var.packetId, 'confirm_npc', var.token, self.entry['id'])
-                        }elif(self.entry != null){
+                        }elif(self.entry != none){
                           Packet.send(var.packetId, 'select_npc', var.token, self.entry['id'])
                         }
                     children:
                       选中覆盖:
                         type: Texture
                         attribute:
-                          visible: "self.parent.entry != null ? self.parent.entry['selected'] : false"
+                          visible: "self.parent.entry != none ? self.parent.entry['selected'] : false"
                           width: 392
                           height: 42
                           normal: ~200,200,200,200
@@ -214,25 +214,25 @@ controls:
                         attribute:
                           x: 18
                           y: 9
-                          texts: "'&F➣ ' + (self.parent.entry != null ? self.parent.entry['text'] : '')"
+                          texts: "'&F➣ ' + (self.parent.entry != none ? self.parent.entry['text'] : none)"
                           fontSize: 49
                           through: true
-                          visible: "self.parent.entry != null ? self.parent.entry['selected'] : false"
+                          visible: "self.parent.entry != none ? self.parent.entry['selected'] : false"
                       NPC名:
                         type: Text
                         attribute:
                           x: 18
                           y: 9
-                          texts: "self.parent.entry != null ? self.parent.entry['text'] : ''"
+                          texts: "self.parent.entry != none ? self.parent.entry['text'] : none"
                           fontSize: 49
                           through: true
-                          visible: "self.parent.entry != null ? !self.parent.entry['selected'] : false"
+                          visible: "self.parent.entry != none ? !self.parent.entry['selected'] : false"
                       NPC距离:
                         type: Text
                         attribute:
                           x: 250
                           y: 12
                           realtext: "'&7距离: ' + self.parent.entry['distanceText']"
-                          texts: "self.parent.entry != null ? self.realtext : ''"
+                          texts: "self.parent.entry != none ? self.realtext : none"
                           fontSize: 36
                           through: true

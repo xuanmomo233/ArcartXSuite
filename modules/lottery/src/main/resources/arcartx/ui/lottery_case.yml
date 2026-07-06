@@ -32,11 +32,11 @@ ui:
       val.交互按键.visible = false
       async {
         Thread.sleep(10000)
-        if(val.开箱动画 != null && val.Scroll != null){
+        if(val.开箱动画 != none && val.Scroll != none){
           val.Scroll.moveX = 0
           val.开箱动画.visible = false
         }
-        if(val.奖品展示单抽 != null){
+        if(val.奖品展示单抽 != none){
           val.奖品展示单抽.visible = true
         }
       }
@@ -123,7 +123,7 @@ controls:
           奖品副标题:
             type: Text
             attribute:
-              texts: "self.parent['奖品槽位'].getItemText('rarity') != '' ? self.parent['奖品槽位'].getItemText('rarity') : 'COMMON'"
+              texts: "self.parent['奖品槽位'].getItemText('rarity') != none ? self.parent['奖品槽位'].getItemText('rarity') : 'COMMON'"
               y: 100.0
               fontSize: 81
               point: ~top_center
@@ -153,7 +153,7 @@ controls:
           品质贴图:
             type: Texture
             attribute:
-              rarityColor: ''
+              rarityColor: none
               normal: "{self.rarityColor}"
               width: 600
               y: 200
@@ -164,7 +164,7 @@ controls:
             action:
               create: |-
                 var.r = self.parent['奖品槽位'].getItemText('rarity')
-                self.rarityColor = var.rarityColors[var.r] != null ? var.rarityColors[var.r] : var.rarityColors['']
+                self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors['']
 
   # ── 奖品展示（十连抽结果）──
   奖品展示十连抽:
@@ -209,7 +209,7 @@ controls:
                   品质背景:
                     type: Texture
                     attribute:
-                      rarityColor: ''
+                      rarityColor: none
                       normal: "{self.rarityColor}"
                       width: 200
                       height: 150
@@ -220,7 +220,7 @@ controls:
                     action:
                       create: |-
                         var.r = self.parent['奖品槽位'].getItemText('rarity')
-                        self.rarityColor = var.rarityColors[var.r] != null ? var.rarityColors[var.r] : var.rarityColors['']
+                        self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors['']
                   奖品名称:
                     type: Text
                     attribute:
@@ -314,7 +314,7 @@ controls:
                       品质背景:
                         type: Texture
                         attribute:
-                          rarityColor: ''
+                          rarityColor: none
                           normal: "{self.rarityColor}"
                           width: 200
                           height: 150
@@ -325,7 +325,7 @@ controls:
                         action:
                           create: |-
                             var.r = self.parent['slot0'].getItemText('rarity')
-                            self.rarityColor = var.rarityColors[var.r] != null ? var.rarityColors[var.r] : var.rarityColors['']
+                            self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors['']
                       slot0:
                         type: Slot
                         attribute:
@@ -488,12 +488,12 @@ controls:
                       width: 200
                       height: 150
                       scale: 0.8
-                      visible: "self['slot0'].getSlotItemStack().getName() != ''"
+                      visible: "self['slot0'].getSlotItemStack().getName() != none"
                     children:
                       品质背景:
                         type: Texture
                         attribute:
-                          rarityColor: ''
+                          rarityColor: none
                           normal: "{self.rarityColor}"
                           width: 200
                           height: 150
@@ -504,7 +504,7 @@ controls:
                         action:
                           create: |-
                             var.r = self.parent['slot0'].getItemText('rarity')
-                            self.rarityColor = var.rarityColors[var.r] != null ? var.rarityColors[var.r] : var.rarityColors['']
+                            self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors['']
                       slot0:
                         type: Slot
                         attribute:
