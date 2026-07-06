@@ -67,7 +67,7 @@ ui:
       Packet.send(var.packetId, 'auction_sell_open')
 
 controls:
-  根:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
@@ -194,7 +194,7 @@ controls:
                       seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
                     action:
                       clickLeft: |-
-                        entry = var.backpackItems[self.entryKey + '']
+                        entry = var.backpackItems[self.entryKey]
                         if(entry != none && entry['hasItem']){
                           if(var.selectedSlot == self.entryKey){
                             var.selectedSlot = none
@@ -262,7 +262,7 @@ controls:
                   x: 120
                   y: 72
                   width: 400
-                  texts: "var.selectedSlot != none && var.backpackItems[var.selectedSlot + ''] != none ? '&f' + var.backpackItems[var.selectedSlot + '']['name'] : '&7未选择物品'"
+                  texts: "var.selectedSlot != none && var.backpackItems[var.selectedSlot] != none ? '&f' + var.backpackItems[var.selectedSlot]['name'] : '&7未选择物品'"
                   fontSize: 32
                   through: true
 
@@ -420,7 +420,7 @@ controls:
                     if(var.selectedPrice == none){
                       return
                     }
-                    Packet.send(var.packetId, 'auction_list_create', var.selectedSlot + '', var.selectedPrice, var.selectedMessage, var.selectedDuration + '')
+                    Packet.send(var.packetId, 'auction_list_create', var.selectedSlot, var.selectedPrice, var.selectedMessage, var.selectedDuration)
                 effect:
                   stroke:
                     width: 2

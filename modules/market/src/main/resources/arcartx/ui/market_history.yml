@@ -80,7 +80,7 @@ ui:
       Packet.send(var.packetId, 'history_list', '0')
 
 controls:
-  根:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
@@ -309,7 +309,7 @@ controls:
             action:
               clickLeft: |-
                 if(var.page > 0){
-                  Packet.send(var.packetId, 'history_list', (var.page - 1) + '')
+                  Packet.send(var.packetId, 'history_list', (var.page - 1))
                 }
             effect:
               stroke:
@@ -349,7 +349,7 @@ controls:
             action:
               clickLeft: |-
                 if(var.page < var.totalPages - 1){
-                  Packet.send(var.packetId, 'history_list', (var.page + 1) + '')
+                  Packet.send(var.packetId, 'history_list', (var.page + 1))
                 }
             effect:
               stroke:

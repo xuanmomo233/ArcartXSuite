@@ -67,13 +67,13 @@ ui:
       var.currentPoolIndex = 0
       # 品质颜色字典
       var.rarityColors = {}
-      var.rarityColors['COMMON']    = '~192,195,198,255'
-      var.rarityColors['UNCOMMON']  = '~176,195,217,255'
-      var.rarityColors['RARE']      = '~94,152,217,255'
-      var.rarityColors['EPIC']      = '~136,71,255,255'
-      var.rarityColors['LEGENDARY'] = '~235,75,75,255'
-      var.rarityColors['MYTHIC']    = '~255,215,0,255'
-      var.rarityColors[''] = '~128,128,128,255'
+      var.rarityColors['COMMON']    = '192,195,198,255'
+      var.rarityColors['UNCOMMON']  = '176,195,217,255'
+      var.rarityColors['RARE']      = '94,152,217,255'
+      var.rarityColors['EPIC']      = '136,71,255,255'
+      var.rarityColors['LEGENDARY'] = '235,75,75,255'
+      var.rarityColors['MYTHIC']    = '255,215,0,255'
+      var.rarityColors[none] = '128,128,128,255'
       # 初始状态
       val.祈愿界面.visible = true
       val.单抽结果.visible = false
@@ -170,14 +170,14 @@ controls:
                       height: 50
                       point: ~middle_left
                       x: 0
-                      normal: "self.index == var.currentPoolIndex ? '~255,215,0,255' : '~255,255,255,0'"
+                      normal: "self.index == var.currentPoolIndex ? '255,215,0,255' : '255,255,255,0'"
                   条目背景:
                     type: Texture
                     attribute:
                       width: 196
                       height: 60
                       point: ~middle_center
-                      normal: "self.index == var.currentPoolIndex ? '~255,215,0,60' : '~0,0,0,80'"
+                      normal: "self.index == var.currentPoolIndex ? '255,215,0,60' : '0,0,0,80'"
                       shape: ~round_rect
                       radius: 8
                     effect:
@@ -277,7 +277,7 @@ controls:
               x: 40
               y: 260
               fontSize: 40
-              texts: "var.upItemStar >= 5 ? '~★★★★★' : var.upItemStar >= 4 ? '~★★★★' : '~★★★'"
+              texts: "var.upItemStar >= 5 ? '★★★★★' : var.upItemStar >= 4 ? '★★★★' : '★★★'"
           # 描述
           描述文本:
             type: Text
@@ -313,7 +313,7 @@ controls:
               x: 40
               y: 420
               fontSize: 28
-              texts: "'~剩余时间: ' + var.remainingTime"
+              texts: "'剩余时间: ' + var.remainingTime"
               color: ~200,200,200,255
           # 保底计数
           保底计数:
@@ -322,7 +322,7 @@ controls:
               x: 40
               y: 460
               fontSize: 24
-              texts: "'~4星保底: ' + var.pity4 + '  5星保底: ' + var.pity5"
+              texts: "'4星保底: ' + var.pity4 + '  5星保底: ' + var.pity5"
               color: ~180,180,180,255
 
   # ── 顶部资源栏 ──
@@ -640,7 +640,7 @@ controls:
               normal: ~255,255,255,0
             effect:
               gradient:
-                color1: "var.upItemStar >= 5 ? '~255,215,0,80' : var.upItemStar >= 4 ? '~136,71,255,80' : '~94,152,217,80'"
+                color1: "var.upItemStar >= 5 ? '255,215,0,80' : var.upItemStar >= 4 ? '136,71,255,80' : '94,152,217,80'"
                 color2: ~255,255,255,0
                 type: 1
                 angleDeg: 0
@@ -665,7 +665,7 @@ controls:
               point: ~top_center
               y: 140
               fontSize: 40
-              texts: "var.upItemStar >= 5 ? '~★★★★★' : var.upItemStar >= 4 ? '~★★★★' : '~★★★'"
+              texts: "var.upItemStar >= 5 ? '★★★★★' : var.upItemStar >= 4 ? '★★★★' : '★★★'"
           确认按钮:
             type: Slot
             attribute:
@@ -754,7 +754,7 @@ controls:
                     action:
                       create: |-
                         var.r = self.parent['十连槽位'].getItemText('rarity')
-                        self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors['']
+                        self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors[none]
                   十连槽位:
                     type: Slot
                     attribute:

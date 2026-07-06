@@ -15,14 +15,14 @@ ui:
     load: |-
       # ── 品质颜色字典 ──
       var.rarityColors = {}
-      var.rarityColors['COMMON']    = '~192,195,198,255'
-      var.rarityColors['UNCOMMON']  = '~176,195,217,255'
-      var.rarityColors['RARE']      = '~94,152,217,255'
-      var.rarityColors['EPIC']      = '~136,71,255,255'
-      var.rarityColors['LEGENDARY'] = '~235,75,75,255'
-      var.rarityColors['MYTHIC']    = '~255,215,0,255'
+      var.rarityColors['COMMON']    = '192,195,198,255'
+      var.rarityColors['UNCOMMON']  = '176,195,217,255'
+      var.rarityColors['RARE']      = '94,152,217,255'
+      var.rarityColors['EPIC']      = '136,71,255,255'
+      var.rarityColors['LEGENDARY'] = '235,75,75,255'
+      var.rarityColors['MYTHIC']    = '255,215,0,255'
       # 默认灰色兜底
-      var.rarityColors[''] = '~128,128,128,255'
+      var.rarityColors[none] = '128,128,128,255'
     open: |-
       var.random = 0.8 + math.random() * 0.01
       var.V = TwoLerp(1, 3, 0.5, 2000, 6000)
@@ -164,7 +164,7 @@ controls:
             action:
               create: |-
                 var.r = self.parent['奖品槽位'].getItemText('rarity')
-                self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors['']
+                self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors[none]
 
   # ── 奖品展示（十连抽结果）──
   奖品展示十连抽:
@@ -220,7 +220,7 @@ controls:
                     action:
                       create: |-
                         var.r = self.parent['奖品槽位'].getItemText('rarity')
-                        self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors['']
+                        self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors[none]
                   奖品名称:
                     type: Text
                     attribute:
@@ -325,7 +325,7 @@ controls:
                         action:
                           create: |-
                             var.r = self.parent['slot0'].getItemText('rarity')
-                            self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors['']
+                            self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors[none]
                       slot0:
                         type: Slot
                         attribute:
@@ -504,7 +504,7 @@ controls:
                         action:
                           create: |-
                             var.r = self.parent['slot0'].getItemText('rarity')
-                            self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors['']
+                            self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors[none]
                       slot0:
                         type: Slot
                         attribute:

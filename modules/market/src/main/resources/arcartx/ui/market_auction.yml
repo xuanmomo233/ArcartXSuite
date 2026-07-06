@@ -97,11 +97,10 @@ ui:
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       var.maxCategoryCount = 0
       var.maxListingCount = 0
-    open: |-
       Packet.send(var.packetId, 'auction_list', '0', none, none)
 
 controls:
-  根:
+  自适应全局布局:
     type: Adaptive
     attribute:
       point: ~stretch_all
@@ -220,7 +219,7 @@ controls:
               radius: 14
             action:
               clickLeft: |-
-                Packet.send(var.packetId, 'auction_list', var.page + '', var.currentCategory, var.search)
+                Packet.send(var.packetId, 'auction_list', var.page, var.currentCategory, var.search)
             effect:
               stroke:
                 width: 2
@@ -492,7 +491,7 @@ controls:
                           radius: 14
                         action:
                           clickLeft: |-
-                            Packet.send(var.packetId, 'auction_buy', self.entry['id'] + '')
+                            Packet.send(var.packetId, 'auction_buy', self.entry['id'])
                         effect:
                           stroke:
                             width: 1
@@ -580,7 +579,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'auction_buy', self.parent.parent.entry['id'] + '')
+                                Packet.send(var.packetId, 'auction_buy', self.parent.parent.entry['id'])
                             effect:
                               stroke:
                                 width: 1
@@ -609,7 +608,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'auction_cancel', self.parent.parent.entry['id'] + '')
+                                Packet.send(var.packetId, 'auction_cancel', self.parent.parent.entry['id'])
                             effect:
                               stroke:
                                 width: 1
@@ -640,7 +639,7 @@ controls:
             action:
               clickLeft: |-
                 if(var.page > 0){
-                  Packet.send(var.packetId, 'auction_list', (var.page - 1) + '', var.currentCategory, var.search)
+                  Packet.send(var.packetId, 'auction_list', (var.page - 1), var.currentCategory, var.search)
                 }
             effect:
               stroke:
@@ -680,7 +679,7 @@ controls:
             action:
               clickLeft: |-
                 if(var.page < var.totalPages - 1){
-                  Packet.send(var.packetId, 'auction_list', (var.page + 1) + '', var.currentCategory, var.search)
+                  Packet.send(var.packetId, 'auction_list', (var.page + 1), var.currentCategory, var.search)
                 }
             effect:
               stroke:
