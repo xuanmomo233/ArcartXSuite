@@ -322,6 +322,9 @@ controls:
               页脚行:
                 type: Canvas
                 val: footer_rows
+                attribute:
+                  width: 180
+                  height: 48
                 children:
                   页脚按钮:
                     type: Texture
