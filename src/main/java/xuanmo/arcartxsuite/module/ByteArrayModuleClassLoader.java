@@ -38,7 +38,7 @@ public final class ByteArrayModuleClassLoader extends ClassLoader {
     private static final String ENC_SUFFIX = ".enc";
 
     private final String moduleId;
-    private final byte[] jarBytes;
+    private byte[] jarBytes;
     // 方案 B：模块自带的逐类解密种子（= 云端下发的 32 字节 moduleKey）。null 时回退本体 root_seed（n6）。
     private final byte[] moduleSeed;
     private final Map<String, byte[]> entries = new HashMap<>();
@@ -54,7 +54,11 @@ public final class ByteArrayModuleClassLoader extends ClassLoader {
         this.moduleId = moduleId;
         this.jarBytes = jarBytes;
         this.moduleSeed = (moduleSeed != null && moduleSeed.length == 32) ? moduleSeed.clone() : null;
-        indexEntries();
+        try {
+            indexEntries();
+        } finally {
+            this.jarBytes = null;
+        }
     }
 
     private void indexEntries() {
@@ -202,6 +206,7 @@ public final class ByteArrayModuleClassLoader extends ClassLoader {
     public void close() throws IOException {
         entries.clear();
         encryptedClasses.clear();
+        jarBytes = null;
         if (moduleSeed != null) {
             java.util.Arrays.fill(moduleSeed, (byte) 0);
         }

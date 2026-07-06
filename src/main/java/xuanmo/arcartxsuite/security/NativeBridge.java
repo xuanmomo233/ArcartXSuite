@@ -5,6 +5,8 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import xuanmo.arcartxsuite.security.protection.JvmAntiDebug;
+
 /**
  * Native JNI 桥接类，提供加密/解密、签名验证、反调试等安全操作。
  * 所有 native 方法名已随机化，实际映射由 JNI_OnLoad 通过 RegisterNatives 动态注册。
@@ -155,7 +157,7 @@ public final class NativeBridge {
 
     // Native 层双向校验入口
     @SuppressWarnings("unused")
-    static boolean t0() { return true; }
+    static boolean t0() { return JvmAntiDebug.hasKnownTamperSignal(); }
 
     // ═══ 原有 native 方法 ════════════════════════════════════════
 

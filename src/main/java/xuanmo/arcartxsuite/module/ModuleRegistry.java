@@ -618,19 +618,11 @@ public final class ModuleRegistry {
     public List<String> getLoadedCloudModuleIds() {
         List<String> ids = new ArrayList<>();
         for (LoadedModule loaded : modules.values()) {
-            if (loaded.jarBytes() != null) {
+            if (loaded.classLoader() instanceof ByteArrayModuleClassLoader) {
                 ids.add(loaded.descriptor().id());
             }
         }
         return ids;
-    }
-
-    public java.util.Optional<CloudModuleSnapshot> getLoadedCloudModuleSnapshot(String moduleId) {
-        LoadedModule loaded = modules.get(moduleId);
-        if (loaded == null || loaded.jarBytes() == null) {
-            return java.util.Optional.empty();
-        }
-        return java.util.Optional.of(new CloudModuleSnapshot(loaded.jarBytes(), loaded.moduleSeed()));
     }
 
     public Map<String, ModuleCommandHandler> commandHandlerMap() {
@@ -1305,13 +1297,6 @@ public final class ModuleRegistry {
             enabledModules = List.copyOf(enabledModules);
             skippedModules = List.copyOf(skippedModules);
             failedModules = List.copyOf(failedModules);
-        }
-    }
-
-    public record CloudModuleSnapshot(byte[] jarBytes, byte[] moduleSeed) {
-        public CloudModuleSnapshot {
-            jarBytes = jarBytes == null ? null : jarBytes.clone();
-            moduleSeed = moduleSeed == null ? null : moduleSeed.clone();
         }
     }
 }

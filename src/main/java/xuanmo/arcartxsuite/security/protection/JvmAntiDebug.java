@@ -108,6 +108,10 @@ public final class JvmAntiDebug {
         return threats;
     }
 
+    public static boolean hasKnownTamperSignal() {
+        return checkAll() != 0;
+    }
+
     // ─── 检测方法 ─────────────────────────────────────────────────
 
     private static boolean isJdwpAttached() {
@@ -130,8 +134,26 @@ public final class JvmAntiDebug {
                     ClassLoader.getSystemClassLoader());
             return true;
         } catch (ClassNotFoundException e) {
-            return false;
+            return hasTransformerAgentSignals();
         }
+    }
+
+    private static boolean hasTransformerAgentSignals() {
+        try {
+            for (StackTraceElement[] stack : Thread.getAllStackTraces().values()) {
+                for (StackTraceElement element : stack) {
+                    String className = element.getClassName().toLowerCase();
+                    if (className.contains("sun.instrument")
+                            || className.contains("java.lang.instrument")
+                            || className.contains("classfiletransformer")
+                            || className.contains("bytebuddy")
+                            || className.contains("javassist")) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return false;
     }
 
     private static boolean hasSuspiciousThreads() {

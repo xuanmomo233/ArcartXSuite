@@ -572,7 +572,6 @@ public final class CloudModuleService {
                         plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败：新模块未通过本地校验");
                         return CompletableFuture.completedFuture(false);
                     }
-                    ModuleRegistry.CloudModuleSnapshot snapshot = registry.getLoadedCloudModuleSnapshot(moduleId).orElse(null);
                     CompletableFuture<Boolean> result = new CompletableFuture<>();
                     plugin.getServer().getScheduler().runTask(plugin.host(), () -> {
                         boolean unloaded = true;
@@ -590,11 +589,7 @@ public final class CloudModuleService {
                             result.complete(true);
                             return;
                         }
-                        if (snapshot != null && registry.loadCloudModule(snapshot.jarBytes(), snapshot.moduleSeed())) {
-                            plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败，已回滚旧版本");
-                        } else {
-                            plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败且旧版本回滚失败");
-                        }
+                        plugin.consoleWarn("[Cloud] 模块 " + moduleId + " 更新失败，新版本加载失败（旧版本已卸载，等待下次同步自愈）");
                         result.complete(false);
                     });
                     return result;
