@@ -5,6 +5,8 @@
 #include <cstring>
 #include <cstdlib>
 
+static constexpr bool kHardenedBuild = (AXS_HARDENED != 0);
+
 // ═══ 密钥分层架构（方案 B：字节码加密 key 与机器/时间解耦） ═══════
 // Layer 0: Root Seed (编译时嵌入，分散存储)
 // Layer 1: Master Key = HKDF(root_seed, salt=build_salt_l1)
@@ -287,6 +289,7 @@ static jbyteArray decrypt_class_with_session(
 
 // ─── 本体路径：用全局 session_key（root_seed 派生）解密 ──────────
 jbyteArray decryptClass(JNIEnv *env, jclass clazz, jbyteArray classNameHash, jbyteArray encData) {
+    if (kHardenedBuild && native_hard_reject_signal(env)) return nullptr;
     if (!keys_initialized) return nullptr;
     return decrypt_class_with_session(env, session_key, classNameHash, encData);
 }
@@ -297,6 +300,7 @@ jbyteArray decryptClass(JNIEnv *env, jclass clazz, jbyteArray classNameHash, jby
 jbyteArray decryptModuleClass(
         JNIEnv *env, jclass clazz,
         jbyteArray classNameHash, jbyteArray encData, jbyteArray moduleSeed) {
+    if (kHardenedBuild && native_hard_reject_signal(env)) return nullptr;
     if (!moduleSeed || env->GetArrayLength(moduleSeed) != 32) return nullptr;
     jbyte *seed_raw = env->GetByteArrayElements(moduleSeed, nullptr);
     uint8_t session[32];

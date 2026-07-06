@@ -184,7 +184,7 @@ jobs:
       - name: Build native library
         run: |
           cd native
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DAXS_HARDENED=ON
           cmake --build build --config Release
 
       - name: Move artifact to root
@@ -236,7 +236,7 @@ jobs:
         shell: msys2 {0}
         run: |
           cd native
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DAXS_HARDENED=ON -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
           cmake --build build --verbose
 
       - name: Locate and normalize DLL name
@@ -300,6 +300,48 @@ jobs:
 
       - name: Restore keys
         run: cp -r protect-material/keys keys
+
+      - name: AXB keypair smoke check
+        env:
+          AXB_SIGN_SEED_B64: ${{ secrets.AXB_SIGN_SEED_B64 }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64
+          import os
+          import pathlib
+          import re
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+          seed = base64.b64decode(os.environ["AXB_SIGN_SEED_B64"].strip())
+          if len(seed) != 32:
+              raise SystemExit("FAIL: AXB_SIGN_SEED_B64 must decode to 32 bytes")
+          derived_pub = Ed25519PrivateKey.from_private_bytes(seed).public_key().public_bytes(
+              encoding=serialization.Encoding.Raw,
+              format=serialization.PublicFormat.Raw,
+          )
+
+          keys_root = pathlib.Path("keys")
+          version = (keys_root / "current_version.txt").read_text(encoding="utf-8").strip()
+          pem_path = keys_root / version / "ed25519_public.pem"
+          pem_pub = serialization.load_pem_public_key(pem_path.read_bytes()).public_bytes(
+              encoding=serialization.Encoding.Raw,
+              format=serialization.PublicFormat.Raw,
+          )
+
+          source = (pathlib.Path("protect-material/native-src/integrity_check.cpp").read_text(encoding="utf-8"))
+          match = re.search(r'static const uint8_t ed25519_public_key\[32\]\s*=\s*\{([^}]*)\};', source, re.S)
+          if not match:
+              raise SystemExit("FAIL: embedded ed25519_public_key not found")
+          embedded_pub = bytes(int(x, 16) for x in re.findall(r'0x([0-9a-fA-F]{2})', match.group(1)))
+          if len(embedded_pub) != 32:
+              raise SystemExit("FAIL: embedded ed25519_public_key must be 32 bytes")
+
+          if not (derived_pub == pem_pub == embedded_pub):
+              raise SystemExit("FAIL: AXB keypair smoke check failed")
+          print("OK: AXB keypair smoke check passed")
+          PY
 
       - name: Download Linux native (real-seed)
         uses: actions/download-artifact@v5

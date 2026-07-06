@@ -33,6 +33,7 @@ void get_hardware_fingerprint(uint8_t out[32]);
 
 // Native 自校验（integrity_check.cpp）
 bool verify_native_self_integrity();
+bool native_hard_reject_signal(JNIEnv *env);
 // .axb 验签复用的 Ed25519 公钥（integrity_check.cpp 内嵌的同一密钥）
 const uint8_t* axb_sign_pubkey();
 

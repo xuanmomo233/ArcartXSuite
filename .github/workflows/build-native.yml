@@ -33,6 +33,12 @@ jobs:
           cmake -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release
 
+      - name: Compile hardened native library (validation only)
+        run: |
+          cd native
+          cmake -B build-hardened -DCMAKE_BUILD_TYPE=Release -DAXS_HARDENED=ON
+          cmake --build build-hardened --config Release
+
       - name: Move artifact to root
         run: cp src/main/resources/native/libaxs-native.so libaxs-native.so
 
@@ -73,6 +79,13 @@ jobs:
           cd native
           cmake -B build -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
           cmake --build build --verbose
+
+      - name: Compile hardened native library (validation only)
+        shell: msys2 {0}
+        run: |
+          cd native
+          cmake -B build-hardened -DCMAKE_BUILD_TYPE=Release -DAXS_HARDENED=ON -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
+          cmake --build build-hardened --verbose
 
       - name: Debug build output
         shell: msys2 {0}

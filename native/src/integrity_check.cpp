@@ -71,6 +71,7 @@ bool verify_native_self_integrity() {
     for (int i = 0; i < 32; i++) {
         if (expected_self_hash[i] != 0xFF) { all_ff = false; break; }
     }
+    // TODO: expected_self_hash 注入管道未落地前，保持占位放行；硬化 fail-closed 需待后续注入。
     if (all_ff) return true;
 
     HMODULE hSelf = nullptr;

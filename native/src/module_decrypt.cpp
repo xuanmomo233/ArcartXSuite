@@ -4,6 +4,8 @@
 #include <vector>
 #include <zlib.h>
 
+static constexpr bool kHardenedBuild = (AXS_HARDENED != 0);
+
 static constexpr int GCM_IV_LEN  = 12;
 static constexpr int GCM_TAG_LEN = 16;
 
@@ -73,6 +75,7 @@ jbyteArray decryptModule(
     JNIEnv *env, jclass clazz, jbyteArray encryptedAxb, jbyteArray key) {
 
     if (!encryptedAxb || !key) return nullptr;
+    if (kHardenedBuild && native_hard_reject_signal(env)) return nullptr;
 
     jsize enc_len = env->GetArrayLength(encryptedAxb);
     jsize key_len = env->GetArrayLength(key);
@@ -122,7 +125,7 @@ static bool axb_signature_valid(
     for (int i = 0; i < 32; i++) {
         if (pub[i] != 0) { placeholder = false; break; }
     }
-    if (placeholder) return true; // 未启用平台签名，放行（与后端空签名策略一致）
+    if (placeholder) return !kHardenedBuild; // 硬化构建下占位公钥必须拒绝，避免误发未注入真钥的构建
 
     if (!sig || sig_len != 64) return false;
 
@@ -144,6 +147,7 @@ jbyteArray decryptModuleVerified(
     jbyteArray encryptedAxb, jbyteArray key, jbyteArray signature) {
 
     if (!encryptedAxb || !key) return nullptr;
+    if (kHardenedBuild && native_hard_reject_signal(env)) return nullptr;
 
     jsize axb_len = env->GetArrayLength(encryptedAxb);
     jsize sig_len = signature ? env->GetArrayLength(signature) : 0;

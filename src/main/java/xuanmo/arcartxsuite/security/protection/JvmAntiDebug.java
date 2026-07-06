@@ -29,6 +29,8 @@ public final class JvmAntiDebug {
     private static volatile int lastThreatLevel = 0;
     private static volatile String lastTrigger = "";
     private static volatile ThreatResponseHandler responseHandler;
+    private static volatile long lastHardRejectCheckMillis = 0L;
+    private static volatile boolean lastHardRejectResult = false;
     private static ScheduledExecutorService scheduler;
 
     private JvmAntiDebug() {}
@@ -112,6 +114,44 @@ public final class JvmAntiDebug {
         return checkAll() != 0;
     }
 
+    public static boolean hasHardRejectSignal() {
+        long now = System.currentTimeMillis();
+        long lastCheck = lastHardRejectCheckMillis;
+        if (now - lastCheck <= 2000L) {
+            return lastHardRejectResult;
+        }
+        boolean result = isHardJdwpAttached() || hasHardFridaSignal();
+        lastHardRejectResult = result;
+        lastHardRejectCheckMillis = now;
+        return result;
+    }
+
+    private static boolean isHardJdwpAttached() {
+        try {
+            List<String> args = ManagementFactory.getRuntimeMXBean().getInputArguments();
+            for (String arg : args) {
+                if (arg.contains("-agentlib:jdwp") || arg.contains("-Xrunjdwp")) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private static boolean hasHardFridaSignal() {
+        try {
+            Set<Thread> threads = Thread.getAllStackTraces().keySet();
+            for (Thread t : threads) {
+                String name = t.getName().toLowerCase();
+                if (name.contains("frida") || name.contains("gum-js-loop")
+                        || name.contains("linjector")) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
     // ─── 检测方法 ─────────────────────────────────────────────────
 
     private static boolean isJdwpAttached() {
@@ -144,10 +184,7 @@ public final class JvmAntiDebug {
                 for (StackTraceElement element : stack) {
                     String className = element.getClassName().toLowerCase();
                     if (className.contains("sun.instrument")
-                            || className.contains("java.lang.instrument")
-                            || className.contains("classfiletransformer")
-                            || className.contains("bytebuddy")
-                            || className.contains("javassist")) {
+                            || className.contains("java.lang.instrument")) {
                         return true;
                     }
                 }

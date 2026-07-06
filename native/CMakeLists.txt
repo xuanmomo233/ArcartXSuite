@@ -48,6 +48,7 @@ set(SOURCES
 )
 
 add_library(axs-native SHARED ${SOURCES})
+target_compile_definitions(axs-native PRIVATE AXS_HARDENED=$<BOOL:${AXS_HARDENED}>)
 target_include_directories(axs-native PRIVATE include ${JNI_INCLUDE_DIRS})
 target_link_libraries(axs-native PRIVATE OpenSSL::Crypto zlibstatic)
 
@@ -76,6 +77,9 @@ if(MINGW)
         "${MINGW_LIBGCC}" "${MINGW_LIBSTDCPP}" "${MINGW_LIBWINPTHREAD}"
     )
 endif()
+
+# ─── 硬化开关（发布构建 / 纯编译校验都走同一套源码分支） ───────────
+option(AXS_HARDENED "Enable hardened fail-closed checks" OFF)
 
 # ─── OLLVM 混淆（可选，极高保护级别） ───────────────────────────
 option(ENABLE_OLLVM "Enable OLLVM obfuscation" OFF)
