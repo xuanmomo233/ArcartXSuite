@@ -19,6 +19,11 @@ on:
 permissions:
   contents: read
 
+# generate-keys.py / embed-keys.py print CJK text; force Python UTF-8 mode so
+# stdout does not crash under the Windows runner's default cp1252 code page.
+env:
+  PYTHONUTF8: "1"
+
 jobs:
   axbcheck-linux:
     runs-on: ubuntu-latest
