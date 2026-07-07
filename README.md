@@ -44,9 +44,6 @@
 | **Essentials** | 基础工具（传送/管控/一键砍树） |
 | **Regions** | 区域保护（40+ 标志） |
 | **AFKReward** | 挂机奖励 |
-| **Fishing** | 钓鱼小游戏 |
-| **Lottery** | 抽奖系统 |
-| **BattlePass** | 战斗通行证 |
 
 ### 付费模块
 
@@ -61,6 +58,9 @@
 | **Market** | 全球市场（商店 + 拍卖行 + 回收） |
 | **QQBot** | QQ 群服互联（OneBot 11 协议） |
 | **Menu** | 通用菜单框架 |
+| **Fishing** | 钓鱼小游戏 |
+| **Lottery** | 抽奖系统 |
+| **BattlePass** | 战斗通行证 |
 
 ### 福利模块
 
