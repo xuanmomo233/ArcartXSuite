@@ -80,22 +80,26 @@ public final class JvmAntiDebug {
 
     private static void performCheck() {
         try {
-            int threats = checkAll();
+            int javaThreats = checkAll();
+            int nativeThreats = 0;
+            boolean nativeAvailable = NativeBridge.isAvailable();
 
-            // 同时检查 native 层（如果可用）
-            if (NativeBridge.isAvailable()) {
-                threats |= NativeBridge.n8();
+            // ???? native ???????
+            if (nativeAvailable) {
+                nativeThreats = NativeBridge.n8();
             }
 
+            int threats = javaThreats | nativeThreats;
             lastThreatLevel = threats;
+            ProtectionEnvironment.observeThreats(javaThreats, nativeThreats, nativeAvailable);
             // AGENT(instrumentation present) alone must NOT trigger downgrade:
             // legit profilers/monitors (Spark/async-profiler) load as javaagent.
-            final int TRIGGER_MASK = THREAT_JDWP | THREAT_FRIDA | THREAT_ATTACH | THREAT_SUSPICIOUS;
-            if ((threats & TRIGGER_MASK) != 0 && responseHandler != null) {
+            if (nativeAvailable && ProtectionEnvironment.isHardThreatSignal(javaThreats, nativeThreats)
+                    && responseHandler != null) {
                 responseHandler.onThreatDetected(threats);
             }
         } catch (Exception ignored) {
-            // 检测本身不应抛出异常影响宿主
+            // ??????????????
         }
     }
 

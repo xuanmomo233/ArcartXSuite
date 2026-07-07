@@ -1,7 +1,11 @@
 #include "axs_native.h"
 #include <openssl/evp.h>
 #include <openssl/sha.h>
+#include <algorithm>
 #include <cstring>
+#include <fstream>
+#include <string>
+#include <vector>
 
 // Ed25519 公钥（构建时由 generate-keys.py 生成并嵌入）
 // !!! 以下占位值必须在构建前替换为真实公钥 !!!
@@ -50,80 +54,115 @@ jboolean verifyIntegrity(JNIEnv *env, jclass clazz, jbyteArray rootHash, jbyteAr
     return result;
 }
 
-// ─── Native 自校验 ───────────────────────────────────────────────
+// ─── Native 自校验 ──────────────────────────────
 // 编译后由 post-build 脚本计算并嵌入实际哈希
-
-// 预期的 .text 段哈希（post-build 替换）
+// 槽位布局：16 字节 MAGIC 紧跟 32 字节 expected_self_hash 槽
+static const uint8_t AXS_SELFHASH_MAGIC[16] = {
+    0xA3, 0x51, 0x7D, 0x9C, 0xE4, 0x2B, 0x18, 0xF0,
+    0x6D, 0xC7, 0x91, 0x34, 0xBA, 0x5E, 0xD2, 0x88
+};
 static uint8_t expected_self_hash[32] = {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
 };
-
+namespace {
+constexpr size_t kSelfHashMagicSize = sizeof(AXS_SELFHASH_MAGIC);
+constexpr size_t kSelfHashSlotSize = 32;
+bool is_all_ff_placeholder() {
+    for (int i = 0; i < 32; i++) {
+        if (expected_self_hash[i] != 0xFF) {
+            return false;
+        }
+    }
+    return true;
+}
+bool read_file_bytes(const std::string& path, std::vector<uint8_t>& out) {
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file) {
+        return false;
+    }
+    std::streamsize size = file.tellg();
+    if (size <= 0) {
+        return false;
+    }
+    out.resize(static_cast<size_t>(size));
+    file.seekg(0, std::ios::beg);
+    if (!file.read(reinterpret_cast<char*>(out.data()), size)) {
+        return false;
+    }
+    return true;
+}
+bool compute_slot_excluded_hash(const std::vector<uint8_t>& file_bytes, uint8_t out[32]) {
+    if (file_bytes.size() < kSelfHashMagicSize + kSelfHashSlotSize) {
+        return false;
+    }
+    size_t magic_offset = static_cast<size_t>(-1);
+    for (size_t i = 0; i + kSelfHashMagicSize + kSelfHashSlotSize <= file_bytes.size(); ++i) {
+        if (std::memcmp(file_bytes.data() + i, AXS_SELFHASH_MAGIC, kSelfHashMagicSize) == 0) {
+            if (magic_offset != static_cast<size_t>(-1)) {
+                return false;
+            }
+            magic_offset = i;
+        }
+    }
+    if (magic_offset == static_cast<size_t>(-1)) {
+        return false;
+    }
+    std::vector<uint8_t> hashed(file_bytes);
+    size_t slot_offset = magic_offset + kSelfHashMagicSize;
+    std::fill_n(hashed.data() + slot_offset, kSelfHashSlotSize, static_cast<uint8_t>(0));
+    SHA256(hashed.data(), hashed.size(), out);
+    return true;
+}
+bool verify_self_integrity_file(const std::string& path) {
+    std::vector<uint8_t> file_bytes;
+    if (!read_file_bytes(path, file_bytes)) {
+        return false;
+    }
+    uint8_t hash[32];
+    if (!compute_slot_excluded_hash(file_bytes, hash)) {
+        return false;
+    }
+    return std::memcmp(hash, expected_self_hash, 32) == 0;
+}
+} // namespace
 #ifdef _WIN32
 #include <windows.h>
-#include <psapi.h>
-
 bool verify_native_self_integrity() {
-    // 全 0xFF = 占位未替换，跳过校验
-    bool all_ff = true;
-    for (int i = 0; i < 32; i++) {
-        if (expected_self_hash[i] != 0xFF) { all_ff = false; break; }
-    }
-    if (all_ff) return true;
-
+#ifndef AXS_PRODUCTION
+    return true;
+#else
+    if (is_all_ff_placeholder()) return false;
     HMODULE hSelf = nullptr;
-    GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
-                       (LPCSTR)verify_native_self_integrity, &hSelf);
-    if (!hSelf) return false;
-
-    MODULEINFO modInfo = {};
-    GetModuleInformation(GetCurrentProcess(), hSelf, &modInfo, sizeof(modInfo));
-
-    // 计算模块 .text 段 SHA-256（简化：计算整个模块哈希，排除 hash 占位区）
-    // 实际产品中应精确定位 .text 节区
-    uint8_t hash[32];
-    SHA256_CTX sha;
-    SHA256_Init(&sha);
-    SHA256_Update(&sha, modInfo.lpBaseOfDll, modInfo.SizeOfImage);
-    SHA256_Final(hash, &sha);
-
-    return memcmp(hash, expected_self_hash, 32) == 0;
+    if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                            reinterpret_cast<LPCSTR>(&verify_native_self_integrity),
+                            &hSelf)) {
+        return false;
+    }
+    char path[MAX_PATH * 4] = {0};
+    DWORD len = GetModuleFileNameA(hSelf, path, static_cast<DWORD>(sizeof(path)));
+    if (len == 0 || len >= sizeof(path)) {
+        return false;
+    }
+    return verify_self_integrity_file(path);
+#endif
 }
 
 #else
-#include <fstream>
 #include <dlfcn.h>
 
 bool verify_native_self_integrity() {
-    bool all_ff = true;
-    for (int i = 0; i < 32; i++) {
-        if (expected_self_hash[i] != 0xFF) { all_ff = false; break; }
-    }
-    if (all_ff) return true;
-
-    // 读取 /proc/self/maps 找到自身模块的映射区域
+#ifndef AXS_PRODUCTION
+    return true;
+#else
+    if (is_all_ff_placeholder()) return false;
     Dl_info info;
-    if (!dladdr((void*)verify_native_self_integrity, &info)) return false;
-
-    std::ifstream lib(info.dli_fname, std::ios::binary);
-    if (!lib) return false;
-
-    lib.seekg(0, std::ios::end);
-    size_t size = lib.tellg();
-    lib.seekg(0);
-
-    uint8_t hash[32];
-    SHA256_CTX sha;
-    SHA256_Init(&sha);
-    char buf[4096];
-    while (lib.read(buf, sizeof(buf))) {
-        SHA256_Update(&sha, buf, lib.gcount());
+    if (!dladdr((void*)verify_native_self_integrity, &info) || info.dli_fname == nullptr) {
+        return false;
     }
-    if (lib.gcount() > 0) SHA256_Update(&sha, buf, lib.gcount());
-    SHA256_Final(hash, &sha);
-
-    return memcmp(hash, expected_self_hash, 32) == 0;
+    return verify_self_integrity_file(info.dli_fname);
+#endif
 }
 #endif

@@ -15,12 +15,18 @@ on:
 
 permissions:
   contents: read
+env:
+  # Keep native fail-closed self-integrity OFF until the injected self-hash path is validated in CI.
+  AXS_PRODUCTION: OFF
 
 jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
@@ -30,8 +36,10 @@ jobs:
       - name: Build native library
         run: |
           cd native
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DAXS_PRODUCTION="${AXS_PRODUCTION}"
           cmake --build build --config Release
+      - name: Inject native self-hash
+        run: python scripts/inject-self-hash.py src/main/resources/native/libaxs-native.so
 
       - name: Move artifact to root
         run: cp src/main/resources/native/libaxs-native.so libaxs-native.so
@@ -46,6 +54,9 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Setup JDK
         uses: actions/setup-java@v5
@@ -71,8 +82,18 @@ jobs:
         shell: msys2 {0}
         run: |
           cd native
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DAXS_PRODUCTION="${AXS_PRODUCTION}" -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
           cmake --build build --verbose
+      - name: Inject native self-hash
+        shell: msys2 {0}
+        run: |
+          DLL_PATH=$(find src/main/resources/native -maxdepth 1 -type f \( -name "axs-native.dll" -o -name "libaxs-native.dll" \) | head -1)
+          if [ -z "$DLL_PATH" ]; then
+            echo "ERROR: No axs-native DLL found in src/main/resources/native!"
+            find src/main/resources/native -type f || true
+            exit 1
+          fi
+          python scripts/inject-self-hash.py "$DLL_PATH"
 
       - name: Debug build output
         shell: msys2 {0}

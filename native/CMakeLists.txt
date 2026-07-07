@@ -77,6 +77,10 @@ if(MINGW)
     )
 endif()
 
+option(AXS_PRODUCTION "Enable fail-closed native production checks" OFF)
+if(AXS_PRODUCTION)
+    target_compile_definitions(axs-native PRIVATE AXS_PRODUCTION)
+endif()
 # ─── OLLVM 混淆（可选，极高保护级别） ───────────────────────────
 option(ENABLE_OLLVM "Enable OLLVM obfuscation" OFF)
 if(ENABLE_OLLVM)

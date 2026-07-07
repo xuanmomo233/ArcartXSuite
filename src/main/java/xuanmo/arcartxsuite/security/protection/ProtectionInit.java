@@ -57,6 +57,7 @@ public final class ProtectionInit {
         if (!encrypted) {
             if (nativeOk) {
                 try { NativeBridge.n5(); } catch (Throwable ignored) {}
+                ProtectionEnvironment.ensureCleanEnvironment();
                 JvmAntiDebug.startMonitoring(ProtectionInit::onThreatDetected, CHECK_INTERVAL_SECONDS);
             }
             active = true;
@@ -78,6 +79,7 @@ public final class ProtectionInit {
             return false;
         }
 
+        ProtectionEnvironment.ensureCleanEnvironment();
         try {
             if (!verifyJarIntegrity(jarPath)) {
                 LOGGER.severe("[Protection] JAR 完整性校验失败");
@@ -291,6 +293,7 @@ public final class ProtectionInit {
         if (protectedLoader != null) {
             protectedLoader.deactivate();
         }
+        ProtectionEnvironment.reset();
         active = false;
     }
 
