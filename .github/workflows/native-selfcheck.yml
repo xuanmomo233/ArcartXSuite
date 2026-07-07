@@ -1,0 +1,126 @@
+name: Native Self-Integrity Runtime Check
+
+# 手动触发。以 AXS_PRODUCTION=ON 构建 native 库并注入自哈希，然后在 JVM 中真实加载库、
+# 调用 NativeBridge.n5()（initProtection → verify_native_self_integrity），断言：
+#   - 未篡改库通过自校验（n5 != -1）
+#   - 篡改库被拒（n5 == -1）
+# 这是把 AXS_PRODUCTION 翻 ON 之前，对"自哈希在运行时真能校验通过/拦截篡改"的验证。
+# 不产出可分发产物、不上传云端。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selfcheck-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libssl-dev zlib1g-dev default-jdk-headless
+
+      - name: Build native library (AXS_PRODUCTION=ON)
+        run: |
+          cd native
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DAXS_PRODUCTION=ON
+          cmake --build build --config Release
+
+      - name: Inject native self-hash
+        run: python scripts/inject-self-hash.py src/main/resources/native/libaxs-native.so
+
+      - name: Compile Java harness
+        run: |
+          mkdir -p out
+          javac -d out \
+            native/selfcheck/xuanmo/arcartxsuite/security/NativeBridge.java \
+            native/selfcheck/SelfCheckHarness.java
+
+      - name: Positive - untampered library must pass self-check
+        run: java -cp out SelfCheckHarness src/main/resources/native/libaxs-native.so expect_pass
+
+      - name: Make tampered copy
+        run: python scripts/make-tampered-copy.py src/main/resources/native/libaxs-native.so tampered-libaxs-native.so
+
+      - name: Negative - tampered library must be rejected
+        run: java -cp out SelfCheckHarness tampered-libaxs-native.so expect_tamper
+
+  selfcheck-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup MSYS2 MinGW-w64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-make
+            make
+
+      - name: Build native library (AXS_PRODUCTION=ON)
+        shell: msys2 {0}
+        run: |
+          cd native
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DAXS_PRODUCTION=ON -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
+          cmake --build build --verbose
+
+      - name: Locate and normalize DLL name
+        shell: pwsh
+        run: |
+          $dll = Get-ChildItem -Path src/main/resources/native -File |
+                 Where-Object { $_.Name -in @('axs-native.dll','libaxs-native.dll') } |
+                 Select-Object -First 1
+          if (-not $dll) {
+            Write-Error "No axs-native DLL found in src/main/resources/native!"
+            Get-ChildItem -Path src/main/resources/native -File | ForEach-Object { $_.FullName }
+            exit 1
+          }
+          if ($dll.Name -ne 'axs-native.dll') {
+            Copy-Item $dll.FullName src/main/resources/native/axs-native.dll -Force
+          }
+
+      - name: Inject native self-hash
+        shell: pwsh
+        run: python scripts/inject-self-hash.py src/main/resources/native/axs-native.dll
+
+      - name: Compile Java harness
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          javac -d out native/selfcheck/xuanmo/arcartxsuite/security/NativeBridge.java native/selfcheck/SelfCheckHarness.java
+
+      - name: Positive - untampered library must pass self-check
+        shell: pwsh
+        run: java -cp out SelfCheckHarness src/main/resources/native/axs-native.dll expect_pass
+
+      - name: Make tampered copy
+        shell: pwsh
+        run: python scripts/make-tampered-copy.py src/main/resources/native/axs-native.dll tampered-axs-native.dll
+
+      - name: Negative - tampered library must be rejected
+        shell: pwsh
+        run: java -cp out SelfCheckHarness tampered-axs-native.dll expect_tamper
