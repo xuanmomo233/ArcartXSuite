@@ -9,6 +9,11 @@ name: Native Self-Integrity Runtime Check
 
 on:
   workflow_dispatch:
+  # 临时：该 workflow 尚未进入默认分支，gh/API 无法按文件名 dispatch（仅默认分支上的
+  # workflow 才可被 workflow_dispatch）。故在验证分支上加 push 触发以便运行；验证完成可移除。
+  push:
+    branches:
+      - devin/fix-builddev-proxy-shadowjar
 
 permissions:
   contents: read
