@@ -1,19 +1,14 @@
 name: Native Self-Integrity Runtime Check
 
-# 手动触发。以 AXS_PRODUCTION=ON 构建 native 库并注入自哈希，然后在 JVM 中真实加载库、
-# 调用 NativeBridge.n5()（initProtection → verify_native_self_integrity），断言：
-#   - 未篡改库通过自校验（n5 != -1）
-#   - 篡改库被拒（n5 == -1）
-# 这是把 AXS_PRODUCTION 翻 ON 之前，对"自哈希在运行时真能校验通过/拦截篡改"的验证。
-# 不产出可分发产物、不上传云端。
+# Manual workflow_dispatch. Builds native with AXS_PRODUCTION=ON, injects the
+# self-hash, then loads the library in a JVM and calls NativeBridge.n5()
+# (initProtection -> verify_native_self_integrity), asserting:
+#   - untampered library passes self-check (n5 != -1)
+#   - tampered library is rejected (n5 == -1)
+# Produces no distributable artifact and uploads nothing.
 
 on:
   workflow_dispatch:
-  # 临时：该 workflow 尚未进入默认分支，gh/API 无法按文件名 dispatch（仅默认分支上的
-  # workflow 才可被 workflow_dispatch）。故在验证分支上加 push 触发以便运行；验证完成可移除。
-  push:
-    branches:
-      - devin/fix-builddev-proxy-shadowjar
 
 permissions:
   contents: read

@@ -8,13 +8,10 @@ name: Native AXB Signature Check
 #   - the JVM harness calls NativeBridge.n10(axb, key, sig) and asserts:
 #       * valid signed .axb        -> accepted (non-null result)
 #       * tampered signature/.axb  -> rejected (null), i.e. fail-closed
-# Temporary push trigger on the feature branch; remove after validation.
+# Trigger: manual workflow_dispatch only (post-validation).
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - devin/fix-builddev-proxy-shadowjar
 
 permissions:
   contents: read
