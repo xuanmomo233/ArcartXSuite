@@ -48,7 +48,7 @@ jobs:
       - name: Compile Java harness
         run: |
           mkdir -p out
-          javac -d out \
+          javac -encoding UTF-8 -d out \
             native/selfcheck/xuanmo/arcartxsuite/security/NativeBridge.java \
             native/selfcheck/SelfCheckHarness.java
 
@@ -116,7 +116,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path out | Out-Null
-          javac -d out native/selfcheck/xuanmo/arcartxsuite/security/NativeBridge.java native/selfcheck/SelfCheckHarness.java
+          javac -encoding UTF-8 -d out native/selfcheck/xuanmo/arcartxsuite/security/NativeBridge.java native/selfcheck/SelfCheckHarness.java
 
       - name: Positive - untampered library must pass self-check
         shell: pwsh
