@@ -89,6 +89,7 @@ public final class CloudModuleService {
     private final Map<String, CachedAxb> cachedAxb = new ConcurrentHashMap<>();
     /** 正在下载中的模块去重：同一模块多个并发入口时复用同一个 Future */
     private final Map<String, CompletableFuture<Void>> downloading = new ConcurrentHashMap<>();
+    private final ResponseSignatureVerifier responseSignatureVerifier = new ResponseSignatureVerifier();
 
     private BukkitTask heartbeatTask;
     private final long pluginStartTime = System.currentTimeMillis();
@@ -114,6 +115,29 @@ public final class CloudModuleService {
     }
 
     private record CloudResponse<T>(CloudStatus status, T body, int httpStatus, String endpoint, String message, String rawBody) {
+        boolean isOk() {
+            return status == CloudStatus.OK;
+        }
+
+        boolean isTransient() {
+            return status == CloudStatus.TRANSIENT;
+        }
+
+        boolean isRejected() {
+            return status == CloudStatus.REJECTED;
+        }
+    }
+
+    private record SignedCloudResponse(
+        CloudStatus status,
+        byte[] body,
+        int httpStatus,
+        String endpoint,
+        String message,
+        String rawBody,
+        String signatureB64,
+        String signatureTs
+    ) {
         boolean isOk() {
             return status == CloudStatus.OK;
         }
@@ -239,6 +263,130 @@ public final class CloudModuleService {
             });
     }
 
+    private CompletableFuture<SignedCloudResponse> sendSignedWithFailover(
+        String operation,
+        java.util.function.Function<String, HttpRequest> requestFactory,
+        java.util.function.Function<SignedCloudResponse, SignedCloudResponse> responseProcessor
+    ) {
+        return sendSignedWithFailover(operation, requestFactory, responseProcessor, orderedApiBaseUrls(), 0);
+    }
+
+    private CompletableFuture<SignedCloudResponse> sendSignedWithFailover(
+        String operation,
+        java.util.function.Function<String, HttpRequest> requestFactory,
+        java.util.function.Function<SignedCloudResponse, SignedCloudResponse> responseProcessor,
+        List<String> endpoints,
+        int index
+    ) {
+        if (endpoints == null || index >= endpoints.size()) {
+            return CompletableFuture.completedFuture(new SignedCloudResponse(CloudStatus.TRANSIENT, null, 0, null, operation + " exhausted", null, null, null));
+        }
+        String endpoint = endpoints.get(index);
+        HttpRequest request = requestFactory.apply(endpoint);
+        return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
+            .handle((response, throwable) -> classifySignedResponse(endpoint, response, throwable))
+            .thenCompose(result -> {
+                SignedCloudResponse processed = responseProcessor.apply(result);
+                if (processed.isTransient() && index + 1 < endpoints.size()) {
+                    return sendSignedWithFailover(operation, requestFactory, responseProcessor, endpoints, index + 1);
+                }
+                return CompletableFuture.completedFuture(processed);
+            });
+    }
+
+    private SignedCloudResponse classifySignedResponse(String endpoint, HttpResponse<byte[]> response, Throwable throwable) {
+        if (throwable != null) {
+            Throwable cause = unwrap(throwable);
+            if (isTransientException(cause)) {
+                return new SignedCloudResponse(CloudStatus.TRANSIENT, null, 0, endpoint, cause.getMessage(), null, null, null);
+            }
+            return new SignedCloudResponse(CloudStatus.REJECTED, null, 0, endpoint, cause.getMessage(), null, null, null);
+        }
+        int statusCode = response.statusCode();
+        byte[] body = response.body();
+        String rawBody = body == null ? null : new String(body, StandardCharsets.UTF_8);
+        String signature = response.headers().firstValue("X-AXS-Signature").orElse(null);
+        String signatureTs = response.headers().firstValue("X-AXS-Signature-Ts").orElse(null);
+        if (statusCode >= 200 && statusCode < 300) {
+            if (bodyHasRejectMarker(rawBody)) {
+                return new SignedCloudResponse(CloudStatus.REJECTED, body, statusCode, endpoint, rawBody, rawBody, signature, signatureTs);
+            }
+            return new SignedCloudResponse(CloudStatus.OK, body, statusCode, endpoint, null, rawBody, signature, signatureTs);
+        }
+        if (isTransientStatus(statusCode)) {
+            return new SignedCloudResponse(CloudStatus.TRANSIENT, body, statusCode, endpoint, rawBody, rawBody, signature, signatureTs);
+        }
+        if (isRejectedStatus(statusCode)) {
+            return new SignedCloudResponse(CloudStatus.REJECTED, body, statusCode, endpoint, rawBody, rawBody, signature, signatureTs);
+        }
+        return new SignedCloudResponse(CloudStatus.REJECTED, body, statusCode, endpoint, rawBody, rawBody, signature, signatureTs);
+    }
+
+    private SignedCloudResponse validateSignedResponse(String endpointKey, String label, SignedCloudResponse resp) {
+        if (!responseSignatureVerifier.isActive()) {
+            return resp;
+        }
+        if (resp == null) {
+            plugin.consoleWarn(label + " 响应为空，按暂时故障处理。");
+            return transientSignedResponse(resp, "response signature verification failed");
+        }
+        if (resp.signatureB64() == null || resp.signatureB64().isBlank() || resp.signatureTs() == null || resp.signatureTs().isBlank()) {
+            plugin.consoleWarn(label + " 缺少响应签名头，按暂时故障处理。");
+            return transientSignedResponse(resp, "response signature verification failed");
+        }
+
+        long timestamp;
+        try {
+            timestamp = Long.parseLong(resp.signatureTs().trim());
+        } catch (NumberFormatException e) {
+            plugin.consoleWarn(label + " 响应时间戳无效，按暂时故障处理。");
+            return transientSignedResponse(resp, "response signature verification failed");
+        }
+
+        long now = System.currentTimeMillis();
+        if (!ResponseSignatureVerifier.isFresh(now, timestamp)) {
+            plugin.consoleWarn(label + " 响应时间戳不在允许窗口内，按暂时故障处理。");
+            return transientSignedResponse(resp, "response signature verification failed");
+        }
+        if (responseSignatureVerifier.isReplay(endpointKey, timestamp)) {
+            plugin.consoleWarn(label + " 响应时间戳回退，按暂时故障处理。");
+            return transientSignedResponse(resp, "response signature verification failed");
+        }
+
+        byte[] signature;
+        try {
+            signature = Base64.getDecoder().decode(resp.signatureB64().trim());
+        } catch (IllegalArgumentException e) {
+            plugin.consoleWarn(label + " 响应签名不是有效 Base64，按暂时故障处理。");
+            return transientSignedResponse(resp, "response signature verification failed");
+        }
+
+        byte[] body = resp.body() == null ? new byte[0] : resp.body();
+        if (!responseSignatureVerifier.verify(timestamp, body, signature)) {
+            plugin.consoleWarn(label + " 响应签名校验失败，按暂时故障处理。");
+            return transientSignedResponse(resp, "response signature verification failed");
+        }
+
+        responseSignatureVerifier.recordTimestamp(endpointKey, timestamp);
+        return resp;
+    }
+
+    private SignedCloudResponse transientSignedResponse(SignedCloudResponse resp, String message) {
+        if (resp == null) {
+            return new SignedCloudResponse(CloudStatus.TRANSIENT, null, 0, null, message, null, null, null);
+        }
+        return new SignedCloudResponse(
+            CloudStatus.TRANSIENT,
+            resp.body(),
+            resp.httpStatus(),
+            resp.endpoint(),
+            message,
+            resp.rawBody(),
+            resp.signatureB64(),
+            resp.signatureTs()
+        );
+    }
+
     private boolean hasServerCode() {
         return serverCode != null && !serverCode.isEmpty();
     }
@@ -270,14 +418,14 @@ public final class CloudModuleService {
             + "\"name\":\"" + escapeJson(serverName) + "\""
             + "}";
 
-        return sendWithFailover(
+        return sendSignedWithFailover(
             "bind",
             endpoint -> HttpRequest.newBuilder()
                 .uri(URI.create(endpoint + "/v1/servers/bind"))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(payload))
                 .build(),
-            HttpResponse.BodyHandlers.ofString()
+            resp -> validateSignedResponse("bind", "[Cloud] 服务器绑定响应", resp)
         ).thenApply(resp -> {
             if (!resp.isOk()) {
                 if (resp.isTransient()) {
@@ -287,6 +435,7 @@ public final class CloudModuleService {
                 }
                 return new CloudResponse<>(resp.status(), null, resp.httpStatus(), resp.endpoint(), resp.message(), resp.rawBody());
             }
+            rememberSuccessfulEndpoint(resp.endpoint());
             String body = resp.rawBody();
             String code = extractJsonField(body, "serverCode");
             String token = extractJsonField(body, "token");
@@ -365,7 +514,7 @@ public final class CloudModuleService {
             .POST(HttpRequest.BodyPublishers.ofString(refreshPayload))
             .build();
 
-        return sendWithFailover(
+        return sendSignedWithFailover(
             "refresh",
             endpoint -> HttpRequest.newBuilder()
                 .uri(URI.create(endpoint + "/v1/servers/refresh"))
@@ -375,7 +524,7 @@ public final class CloudModuleService {
                 .header("X-Signature", signature)
                 .POST(HttpRequest.BodyPublishers.ofString(refreshPayload))
                 .build(),
-            HttpResponse.BodyHandlers.ofString()
+            resp -> validateSignedResponse("refresh", "[Cloud] 刷新令牌响应", resp)
         ).thenCompose(resp -> {
             if (!resp.isOk()) {
                 String body = resp.rawBody();
@@ -399,6 +548,7 @@ public final class CloudModuleService {
                 }
                 return CompletableFuture.completedFuture(new CloudResponse<>(resp.status(), null, resp.httpStatus(), resp.endpoint(), resp.message(), body));
             }
+            rememberSuccessfulEndpoint(resp.endpoint());
             String body = resp.rawBody();
             debugLog("[Cloud] refresh 响应: " + body);
             String token = extractJsonField(body, "token");
@@ -873,7 +1023,7 @@ public final class CloudModuleService {
     }
 
     private CompletableFuture<String> requestModuleKey(String moduleId) {
-        return sendWithFailover(
+        return sendSignedWithFailover(
             "key",
             endpoint -> HttpRequest.newBuilder()
                 .uri(URI.create(endpoint + "/v1/modules/" + moduleId + "/key"))
@@ -883,7 +1033,7 @@ public final class CloudModuleService {
                 .header("X-Fingerprint", sha256(generateFingerprint()))
                 .POST(HttpRequest.BodyPublishers.ofString("{}"))
                 .build(),
-            HttpResponse.BodyHandlers.ofString()
+            resp -> validateSignedResponse("key:" + moduleId, "[Cloud] 获取模块 " + moduleId + " 密钥响应", resp)
         ).thenApply(resp -> {
             if (!resp.isOk()) {
                 if (resp.isTransient()) {
@@ -898,6 +1048,7 @@ public final class CloudModuleService {
                 plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥成功但响应体为空");
                 return null;
             }
+            rememberSuccessfulEndpoint(resp.endpoint());
             String key = extractJsonField(body, "key");
             if (key == null || key.isEmpty()) {
                 plugin.consoleWarn("[Cloud] 获取模块 " + moduleId + " 密钥失败，响应中缺少 key 字段");

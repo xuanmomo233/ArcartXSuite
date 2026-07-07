@@ -20,6 +20,8 @@ jbyteArray decryptClass(JNIEnv *env, jclass clazz, jbyteArray classNameHash, jby
 // n11：方案 B 自包含模块逐类解密——session 由外部传入的 32 字节模块种子（云端 moduleKey）派生。
 jbyteArray decryptModuleClass(JNIEnv *env, jclass clazz, jbyteArray classNameHash, jbyteArray encData, jbyteArray moduleSeed);
 jboolean verifyIntegrity(JNIEnv *env, jclass clazz, jbyteArray rootHash, jbyteArray signature);
+jboolean verifyResponseSig(JNIEnv *env, jclass clazz, jlong timestamp, jbyteArray body, jbyteArray signature);
+jboolean responseVerifyActive(JNIEnv *env, jclass clazz);
 jint enhancedEnvironmentCheck(JNIEnv *env, jclass clazz);
 jbyteArray getHardwareFingerprint(JNIEnv *env, jclass clazz);
 
