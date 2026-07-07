@@ -55,24 +55,47 @@ jboolean verifyIntegrity(JNIEnv *env, jclass clazz, jbyteArray rootHash, jbyteAr
 }
 
 // ─── Native 自校验 ──────────────────────────────
-// 编译后由 post-build 脚本计算并嵌入实际哈希
-// 槽位布局：16 字节 MAGIC 紧跟 32 字节 expected_self_hash 槽
-static const uint8_t AXS_SELFHASH_MAGIC[16] = {
+// 编译后由 post-build 脚本（inject-self-hash.py）计算并嵌入实际哈希。
+// 槽位布局：16 字节 MAGIC 紧跟 32 字节 expected_self_hash 槽，二者在二进制中必须连续，
+// 故合并为单一数组——分成两个变量时 const MAGIC 落在 .rodata、可变槽落在 .data，
+// 不再相邻，注入脚本按“MAGIC+16”定位到的将不是真正的比较槽位。
+// used 保证即使 dev 构建（AXS_PRODUCTION=OFF）未引用也会写入二进制供注入脚本定位；
+// volatile 防止 -O2 把占位初值常量折叠进比较逻辑。
+#if defined(__GNUC__) || defined(__clang__)
+#define AXS_USED __attribute__((used))
+#else
+#define AXS_USED
+#endif
+
+static volatile AXS_USED uint8_t g_self_hash_block[48] = {
+    // [0..15] MAGIC
     0xA3, 0x51, 0x7D, 0x9C, 0xE4, 0x2B, 0x18, 0xF0,
-    0x6D, 0xC7, 0x91, 0x34, 0xBA, 0x5E, 0xD2, 0x88
-};
-static uint8_t expected_self_hash[32] = {
+    0x6D, 0xC7, 0x91, 0x34, 0xBA, 0x5E, 0xD2, 0x88,
+    // [16..47] expected_self_hash 槽（占位全 0xFF，注入后为真实哈希）
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
 };
+
+#ifdef AXS_PRODUCTION
 namespace {
-constexpr size_t kSelfHashMagicSize = sizeof(AXS_SELFHASH_MAGIC);
+constexpr size_t kSelfHashMagicSize = 16;
 constexpr size_t kSelfHashSlotSize = 32;
-bool is_all_ff_placeholder() {
-    for (int i = 0; i < 32; i++) {
-        if (expected_self_hash[i] != 0xFF) {
+
+// 从 volatile 存储快照出 MAGIC 与 expected_self_hash，避免 volatile 直接参与 memcmp。
+void load_self_hash_block(uint8_t magic_out[kSelfHashMagicSize],
+                          uint8_t hash_out[kSelfHashSlotSize]) {
+    for (size_t i = 0; i < kSelfHashMagicSize; ++i) {
+        magic_out[i] = g_self_hash_block[i];
+    }
+    for (size_t i = 0; i < kSelfHashSlotSize; ++i) {
+        hash_out[i] = g_self_hash_block[kSelfHashMagicSize + i];
+    }
+}
+bool is_all_ff_placeholder(const uint8_t hash[kSelfHashSlotSize]) {
+    for (size_t i = 0; i < kSelfHashSlotSize; ++i) {
+        if (hash[i] != 0xFF) {
             return false;
         }
     }
@@ -94,13 +117,15 @@ bool read_file_bytes(const std::string& path, std::vector<uint8_t>& out) {
     }
     return true;
 }
-bool compute_slot_excluded_hash(const std::vector<uint8_t>& file_bytes, uint8_t out[32]) {
+bool compute_slot_excluded_hash(const std::vector<uint8_t>& file_bytes,
+                                const uint8_t magic[kSelfHashMagicSize],
+                                uint8_t out[kSelfHashSlotSize]) {
     if (file_bytes.size() < kSelfHashMagicSize + kSelfHashSlotSize) {
         return false;
     }
     size_t magic_offset = static_cast<size_t>(-1);
     for (size_t i = 0; i + kSelfHashMagicSize + kSelfHashSlotSize <= file_bytes.size(); ++i) {
-        if (std::memcmp(file_bytes.data() + i, AXS_SELFHASH_MAGIC, kSelfHashMagicSize) == 0) {
+        if (std::memcmp(file_bytes.data() + i, magic, kSelfHashMagicSize) == 0) {
             if (magic_offset != static_cast<size_t>(-1)) {
                 return false;
             }
@@ -117,24 +142,30 @@ bool compute_slot_excluded_hash(const std::vector<uint8_t>& file_bytes, uint8_t 
     return true;
 }
 bool verify_self_integrity_file(const std::string& path) {
+    uint8_t magic[kSelfHashMagicSize];
+    uint8_t expected[kSelfHashSlotSize];
+    load_self_hash_block(magic, expected);
+    if (is_all_ff_placeholder(expected)) {
+        return false;
+    }
     std::vector<uint8_t> file_bytes;
     if (!read_file_bytes(path, file_bytes)) {
         return false;
     }
-    uint8_t hash[32];
-    if (!compute_slot_excluded_hash(file_bytes, hash)) {
+    uint8_t hash[kSelfHashSlotSize];
+    if (!compute_slot_excluded_hash(file_bytes, magic, hash)) {
         return false;
     }
-    return std::memcmp(hash, expected_self_hash, 32) == 0;
+    return std::memcmp(hash, expected, kSelfHashSlotSize) == 0;
 }
 } // namespace
+#endif // AXS_PRODUCTION
 #ifdef _WIN32
 #include <windows.h>
 bool verify_native_self_integrity() {
 #ifndef AXS_PRODUCTION
     return true;
 #else
-    if (is_all_ff_placeholder()) return false;
     HMODULE hSelf = nullptr;
     if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
                             reinterpret_cast<LPCSTR>(&verify_native_self_integrity),
@@ -157,7 +188,6 @@ bool verify_native_self_integrity() {
 #ifndef AXS_PRODUCTION
     return true;
 #else
-    if (is_all_ff_placeholder()) return false;
     Dl_info info;
     if (!dladdr((void*)verify_native_self_integrity, &info) || info.dli_fname == nullptr) {
         return false;
