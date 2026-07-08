@@ -649,6 +649,7 @@ jobs:
       - name: Upload encrypted modules (.axb) to cloud
         env:
           CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
+          FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}
         run: |
           set -euo pipefail
           if [ -z "${CLOUD_CI_TOKEN:-}" ]; then
@@ -705,4 +706,31 @@ jobs:
             rm -f "$RESP"
             echo ""
             echo "OK: $module 已上传云端（setCurrent=true）"
+
+            FLARE_BASE_URL="${FLARE_BASE_URL:-https://flare.021209.xyz}"
+            RESP_FLARE=$(mktemp)
+            set +e
+            curl -fS --retry 3 --retry-delay 5 --retry-max-time 60 --max-time 120 \
+              -o "$RESP_FLARE" \
+              -F "axb=@$axb" \
+              -F "version=$version" \
+              -F "key=$key" \
+              -F "iv=$iv" \
+              -F "setCurrent=true" \
+              -H "X-CI-Token: $CLOUD_CI_TOKEN" \
+              "${FLARE_BASE_URL}/v1/ci/modules/$module/versions"
+            FLARE_EXIT=$?
+            set -e
+            echo ""
+            if [ $FLARE_EXIT -ne 0 ]; then
+              echo "WARN: FlareCloud module upload failed (exit=$FLARE_EXIT)"
+              if [ -s "$RESP_FLARE" ]; then
+                echo "FlareCloud response:"
+                cat "$RESP_FLARE"
+              fi
+            else
+              cat "$RESP_FLARE"
+              echo "OK: module mirrored to FlareCloud"
+            fi
+            rm -f "$RESP_FLARE"
           done
