@@ -12,7 +12,7 @@
 # ─── JAR 保护引导类（方案 ②：必须保留原始类名，且含其全部内部类） ──
 # encrypt-jar.py 以全限定名识别引导类（保持明文、不加密），ProtectionInit 运行时
 # 也按原名捕获/复用它们；若被 ProGuard 重命名或加密，则 ClassLoader 注入链断裂。
-# 这 5 个类本就是必须明文的引导脚手架，保留类名不降低整体保护强度。
+# 这 6 个类本就是必须明文的引导脚手架，保留类名不降低整体保护强度。
 -keep class xuanmo.arcartxsuite.ArcartXSuitePlugin { *; }
 -keep class xuanmo.arcartxsuite.ArcartXSuitePlugin$* { *; }
 -keep class xuanmo.arcartxsuite.security.NativeBridge { *; }
@@ -23,6 +23,8 @@
 -keep class xuanmo.arcartxsuite.security.protection.ProtectedClassLoader$* { *; }
 -keep class xuanmo.arcartxsuite.security.protection.JvmAntiDebug { *; }
 -keep class xuanmo.arcartxsuite.security.protection.JvmAntiDebug$* { *; }
+-keep class xuanmo.arcartxsuite.security.protection.ProtectionEnvironment { *; }
+-keep class xuanmo.arcartxsuite.security.protection.ProtectionEnvironment$* { *; }
 
 # ─── Suite-core 契约接口（明文、版本化，宿主薄壳与业务核心唯一耦合点） ──
 # 宿主薄壳直接引用本接口，必须保留全限定名与成员（且 encrypt-jar 保持明文）。

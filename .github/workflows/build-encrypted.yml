@@ -449,7 +449,7 @@ jobs:
             --keys-dir "$KEYS_DIR" \
             --protection-level high \
             --no-native \
-            --bootstrap-classes "xuanmo.arcartxsuite.ArcartXSuitePlugin,xuanmo.arcartxsuite.bootstrap.SuiteCore,xuanmo.arcartxsuite.security.NativeBridge,xuanmo.arcartxsuite.security.protection.ProtectionInit,xuanmo.arcartxsuite.security.protection.ProtectedClassLoader,xuanmo.arcartxsuite.security.protection.JvmAntiDebug" \
+            --bootstrap-classes "xuanmo.arcartxsuite.ArcartXSuitePlugin,xuanmo.arcartxsuite.bootstrap.SuiteCore,xuanmo.arcartxsuite.security.NativeBridge,xuanmo.arcartxsuite.security.protection.ProtectionInit,xuanmo.arcartxsuite.security.protection.ProtectedClassLoader,xuanmo.arcartxsuite.security.protection.JvmAntiDebug,xuanmo.arcartxsuite.security.protection.ProtectionEnvironment" \
             --encrypt-prefixes "xuanmo.arcartxsuite." \
             --keep-prefixes "xuanmo.arcartxsuite.api.,xuanmo.arcartxsuite.auth.,xuanmo.arcartxsuite.bootstrap." \
             --fake-classes-count 20

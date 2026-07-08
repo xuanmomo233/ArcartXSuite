@@ -155,6 +155,7 @@ public final class ProtectionInit {
             NativeBridge.class,
             ProtectionInit.class,
             ProtectedClassLoader.class,
+            ProtectionEnvironment.class,
         };
         for (Class<?> c : boot) {
             m.put(c.getName(), c);
