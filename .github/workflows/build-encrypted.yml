@@ -486,6 +486,10 @@ jobs:
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           VERSION="${BASEVER}-ci.${SHORT_SHA}"
           echo "Uploading 本体 jar version=$VERSION file=$OUT"
+          FLARE_BASE_URL="${FLARE_BASE_URL:-https://flare.021209.xyz}"
+          PRIMARY_OK=0
+          FLARE_OK=0
+          # ── 主云（cloud.021209.xyz）──
           RESP=$(mktemp)
           set +e
           curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
@@ -500,21 +504,16 @@ jobs:
           CURL_EXIT=$?
           set -e
           echo ""
-          if [ $CURL_EXIT -ne 0 ]; then
-            echo "ERROR: 本体 jar 上传失败 (curl exit=$CURL_EXIT)"
-            if [ -s "$RESP" ]; then
-              echo "Server response:"
-              cat "$RESP"
-            fi
-            rm -f "$RESP"
-            exit 1
+          if [ $CURL_EXIT -eq 0 ]; then
+            PRIMARY_OK=1
+            cat "$RESP"; echo ""
+            echo "OK: 本体 jar 已上传主云（setCurrent=true）"
+          else
+            echo "WARN: 主云本体上传失败 (curl exit=$CURL_EXIT)"
+            [ -s "$RESP" ] && cat "$RESP" || true
           fi
-          cat "$RESP"
           rm -f "$RESP"
-          echo ""
-          echo "OK: 本体 jar 已上传云端（setCurrent=true）"
-          # ── FlareCloud 镜像（故障转移备份，失败不阻断 CI）──
-          FLARE_BASE_URL="${FLARE_BASE_URL:-https://flare.021209.xyz}"
+          # ── FlareCloud 镜像（故障转移）──
           RESP_FLARE=$(mktemp)
           set +e
           curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
@@ -528,14 +527,21 @@ jobs:
             "${FLARE_BASE_URL}/v1/ci/app-jar/versions"
           FLARE_EXIT=$?
           set -e
-          if [ $FLARE_EXIT -ne 0 ]; then
+          echo ""
+          if [ $FLARE_EXIT -eq 0 ]; then
+            FLARE_OK=1
+            cat "$RESP_FLARE"; echo ""
+            echo "OK: 本体 jar 已镜像到 FlareCloud"
+          else
             echo "WARN: FlareCloud 本体镜像失败 (exit=$FLARE_EXIT)"
             [ -s "$RESP_FLARE" ] && cat "$RESP_FLARE" || true
-          else
-            cat "$RESP_FLARE"
-            echo "OK: 本体 jar 已镜像到 FlareCloud"
           fi
           rm -f "$RESP_FLARE"
+          if [ $PRIMARY_OK -eq 0 ] && [ $FLARE_OK -eq 0 ]; then
+            echo "ERROR: 本体 jar 主云与 FlareCloud 均上传失败"
+            exit 1
+          fi
+          echo "DONE: 本体 jar 上传完成 (primary=$PRIMARY_OK flare=$FLARE_OK)"
 
       - name: Build proxy JARs (Bungee + Velocity)
         if: success()
@@ -565,6 +571,10 @@ jobs:
               echo "ERROR: 未找到 $FLAVOR proxy jar ($GLOB)"; exit 1
             fi
             echo "Uploading proxy/$FLAVOR version=$VERSION file=$JAR"
+            FLARE_BASE_URL="${FLARE_BASE_URL:-https://flare.021209.xyz}"
+            PRIMARY_OK=0
+            FLARE_OK=0
+            # ── 主云 ──
             RESP=$(mktemp)
             set +e
             curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
@@ -578,17 +588,16 @@ jobs:
               "$CLOUD_BASE_URL/v1/ci/proxy-jar/$FLAVOR/versions"
             CURL_EXIT=$?
             set -e
-            if [ $CURL_EXIT -ne 0 ]; then
-              echo "ERROR: proxy/$FLAVOR 上传失败 (curl exit=$CURL_EXIT)"
+            if [ $CURL_EXIT -eq 0 ]; then
+              PRIMARY_OK=1
+              cat "$RESP"
+              echo "OK: proxy/$FLAVOR 已上传主云"
+            else
+              echo "WARN: 主云 proxy/$FLAVOR 上传失败 (curl exit=$CURL_EXIT)"
               cat "$RESP" || true
-              rm -f "$RESP"
-              exit 1
             fi
-            cat "$RESP"
             rm -f "$RESP"
-            echo "OK: proxy/$FLAVOR 已上传"
-            # ── FlareCloud 镜像（失败不阻断）──
-            FLARE_BASE_URL="${FLARE_BASE_URL:-https://flare.021209.xyz}"
+            # ── FlareCloud 镜像（故障转移）──
             RESP_FLARE=$(mktemp)
             set +e
             curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
@@ -602,13 +611,19 @@ jobs:
               "${FLARE_BASE_URL}/v1/ci/proxy-jar/$FLAVOR/versions"
             FLARE_EXIT=$?
             set -e
-            if [ $FLARE_EXIT -ne 0 ]; then
+            if [ $FLARE_EXIT -eq 0 ]; then
+              FLARE_OK=1
+              echo "OK: proxy/$FLAVOR 已镜像到 FlareCloud"
+            else
               echo "WARN: FlareCloud proxy/$FLAVOR 镜像失败 (exit=$FLARE_EXIT)"
               cat "$RESP_FLARE" || true
-            else
-              echo "OK: proxy/$FLAVOR 已镜像到 FlareCloud"
             fi
             rm -f "$RESP_FLARE"
+            if [ $PRIMARY_OK -eq 0 ] && [ $FLARE_OK -eq 0 ]; then
+              echo "ERROR: proxy/$FLAVOR 主云与 FlareCloud 均上传失败"
+              exit 1
+            fi
+            echo "DONE: proxy/$FLAVOR (primary=$PRIMARY_OK flare=$FLARE_OK)"
           }
           upload_one bungee "proxy/bungee/build/libs/ArcartXSuite-Proxy-Bungee-*.jar"
           upload_one velocity "proxy/velocity/build/libs/ArcartXSuite-Proxy-Velocity-*.jar"
@@ -655,7 +670,14 @@ jobs:
               echo "ERROR: 未找到 $FLAVOR proxy jar"; exit 1
             fi
             echo "Uploading proxy/$FLAVOR version=$VERSION"
+            FLARE_BASE_URL="${FLARE_BASE_URL:-https://flare.021209.xyz}"
+            PRIMARY_OK=0
+            FLARE_OK=0
+            # ── 主云 ──
+            RESP=$(mktemp)
+            set +e
             curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
+              -o "$RESP" \
               -X POST \
               -F "jar=@$JAR" \
               -F "version=$VERSION" \
@@ -663,8 +685,18 @@ jobs:
               -F "setCurrent=true" \
               -H "X-CI-Token: $CLOUD_CI_TOKEN" \
               "$CLOUD_BASE_URL/v1/ci/proxy-jar/$FLAVOR/versions"
-            # ── FlareCloud 镜像（失败不阻断）──
-            FLARE_BASE_URL="${FLARE_BASE_URL:-https://flare.021209.xyz}"
+            CURL_EXIT=$?
+            set -e
+            if [ $CURL_EXIT -eq 0 ]; then
+              PRIMARY_OK=1
+              cat "$RESP"
+              echo "OK: proxy/$FLAVOR 已上传主云"
+            else
+              echo "WARN: 主云 proxy/$FLAVOR 上传失败 (curl exit=$CURL_EXIT)"
+              cat "$RESP" || true
+            fi
+            rm -f "$RESP"
+            # ── FlareCloud 镜像（故障转移）──
             RESP_FLARE=$(mktemp)
             set +e
             curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
@@ -678,13 +710,19 @@ jobs:
               "${FLARE_BASE_URL}/v1/ci/proxy-jar/$FLAVOR/versions"
             FLARE_EXIT=$?
             set -e
-            if [ $FLARE_EXIT -ne 0 ]; then
+            if [ $FLARE_EXIT -eq 0 ]; then
+              FLARE_OK=1
+              echo "OK: proxy/$FLAVOR 已镜像到 FlareCloud"
+            else
               echo "WARN: FlareCloud proxy/$FLAVOR 镜像失败 (exit=$FLARE_EXIT)"
               cat "$RESP_FLARE" || true
-            else
-              echo "OK: proxy/$FLAVOR 已镜像到 FlareCloud"
             fi
             rm -f "$RESP_FLARE"
+            if [ $PRIMARY_OK -eq 0 ] && [ $FLARE_OK -eq 0 ]; then
+              echo "ERROR: proxy/$FLAVOR 主云与 FlareCloud 均上传失败"
+              exit 1
+            fi
+            echo "DONE: proxy/$FLAVOR (primary=$PRIMARY_OK flare=$FLARE_OK)"
           }
           upload_one bungee "proxy/bungee/build/libs/ArcartXSuite-Proxy-Bungee-*.jar"
           upload_one velocity "proxy/velocity/build/libs/ArcartXSuite-Proxy-Velocity-*.jar"
@@ -774,6 +812,10 @@ jobs:
             iv=$(jq -r '.moduleIv' "$meta")
             version="$VERSION"
             echo "Uploading $module ($version) ..."
+            FLARE_BASE_URL="${FLARE_BASE_URL:-https://flare.021209.xyz}"
+            PRIMARY_OK=0
+            FLARE_OK=0
+            # ── 主云 ──
             RESP=$(mktemp)
             set +e
             curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
@@ -788,21 +830,16 @@ jobs:
             CURL_EXIT=$?
             set -e
             echo ""
-            if [ $CURL_EXIT -ne 0 ]; then
-              echo "ERROR: 模块 $module 上传失败 (curl exit=$CURL_EXIT)"
-              if [ -s "$RESP" ]; then
-                echo "Server response:"
-                cat "$RESP"
-              fi
-              rm -f "$RESP"
-              exit 1
+            if [ $CURL_EXIT -eq 0 ]; then
+              PRIMARY_OK=1
+              cat "$RESP"; echo ""
+              echo "OK: $module 已上传主云（setCurrent=true）"
+            else
+              echo "WARN: 主云模块 $module 上传失败 (curl exit=$CURL_EXIT)"
+              [ -s "$RESP" ] && cat "$RESP" || true
             fi
-            cat "$RESP"
             rm -f "$RESP"
-            echo ""
-            echo "OK: $module 已上传云端（setCurrent=true）"
-
-            FLARE_BASE_URL="${FLARE_BASE_URL:-https://flare.021209.xyz}"
+            # ── FlareCloud 镜像（故障转移）──
             RESP_FLARE=$(mktemp)
             set +e
             curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
@@ -817,15 +854,18 @@ jobs:
             FLARE_EXIT=$?
             set -e
             echo ""
-            if [ $FLARE_EXIT -ne 0 ]; then
-              echo "WARN: FlareCloud module upload failed (exit=$FLARE_EXIT)"
-              if [ -s "$RESP_FLARE" ]; then
-                echo "FlareCloud response:"
-                cat "$RESP_FLARE"
-              fi
+            if [ $FLARE_EXIT -eq 0 ]; then
+              FLARE_OK=1
+              cat "$RESP_FLARE"; echo ""
+              echo "OK: module $module mirrored to FlareCloud"
             else
-              cat "$RESP_FLARE"
-              echo "OK: module mirrored to FlareCloud"
+              echo "WARN: FlareCloud module $module upload failed (exit=$FLARE_EXIT)"
+              [ -s "$RESP_FLARE" ] && cat "$RESP_FLARE" || true
             fi
             rm -f "$RESP_FLARE"
+            if [ $PRIMARY_OK -eq 0 ] && [ $FLARE_OK -eq 0 ]; then
+              echo "ERROR: 模块 $module 主云与 FlareCloud 均上传失败"
+              exit 1
+            fi
+            echo "DONE: module $module (primary=$PRIMARY_OK flare=$FLARE_OK)"
           done
