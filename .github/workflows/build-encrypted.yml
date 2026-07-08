@@ -492,7 +492,7 @@ jobs:
           # ── 主云（cloud.021209.xyz）──
           RESP=$(mktemp)
           set +e
-          curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
+          curl -fS --http1.1 --connect-timeout 10 --retry 3 --retry-delay 3 --retry-all-errors --retry-max-time 90 --max-time 120 \
             -o "$RESP" \
             -X POST \
             -F "jar=@$OUT" \
@@ -577,7 +577,7 @@ jobs:
             # ── 主云 ──
             RESP=$(mktemp)
             set +e
-            curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
+            curl -fS --http1.1 --connect-timeout 10 --retry 3 --retry-delay 3 --retry-all-errors --retry-max-time 90 --max-time 120 \
               -o "$RESP" \
               -X POST \
               -F "jar=@$JAR" \
@@ -676,7 +676,7 @@ jobs:
             # ── 主云 ──
             RESP=$(mktemp)
             set +e
-            curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
+            curl -fS --http1.1 --connect-timeout 10 --retry 3 --retry-delay 3 --retry-all-errors --retry-max-time 90 --max-time 120 \
               -o "$RESP" \
               -X POST \
               -F "jar=@$JAR" \
@@ -818,7 +818,7 @@ jobs:
             # ── 主云 ──
             RESP=$(mktemp)
             set +e
-            curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
+            curl -fS --http1.1 --connect-timeout 10 --retry 3 --retry-delay 3 --retry-all-errors --retry-max-time 90 --max-time 120 \
               -o "$RESP" \
               -F "axb=@$axb" \
               -F "version=$version" \
