@@ -487,7 +487,7 @@ jobs:
           echo "Uploading 本体 jar version=$VERSION file=$OUT"
           RESP=$(mktemp)
           set +e
-          curl -fS --retry 3 --retry-delay 5 --retry-max-time 60 --max-time 120 \
+          curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
             -o "$RESP" \
             -X POST \
             -F "jar=@$OUT" \
@@ -542,7 +542,7 @@ jobs:
             echo "Uploading proxy/$FLAVOR version=$VERSION file=$JAR"
             RESP=$(mktemp)
             set +e
-            curl -fS --retry 3 --retry-delay 5 --max-time 120 \
+            curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
               -o "$RESP" \
               -X POST \
               -F "jar=@$JAR" \
@@ -607,7 +607,7 @@ jobs:
               echo "ERROR: 未找到 $FLAVOR proxy jar"; exit 1
             fi
             echo "Uploading proxy/$FLAVOR version=$VERSION"
-            curl -fS --retry 3 --max-time 120 \
+            curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
               -X POST \
               -F "jar=@$JAR" \
               -F "version=$VERSION" \
@@ -706,7 +706,7 @@ jobs:
             echo "Uploading $module ($version) ..."
             RESP=$(mktemp)
             set +e
-            curl -fS --retry 3 --retry-delay 5 --retry-max-time 60 --max-time 120 \
+            curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
               -o "$RESP" \
               -F "axb=@$axb" \
               -F "version=$version" \
@@ -735,7 +735,7 @@ jobs:
             FLARE_BASE_URL="${FLARE_BASE_URL:-https://flare.021209.xyz}"
             RESP_FLARE=$(mktemp)
             set +e
-            curl -fS --retry 3 --retry-delay 5 --retry-max-time 60 --max-time 120 \
+            curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
               -o "$RESP_FLARE" \
               -F "axb=@$axb" \
               -F "version=$version" \
