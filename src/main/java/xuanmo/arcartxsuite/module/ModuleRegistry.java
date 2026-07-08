@@ -767,6 +767,8 @@ public final class ModuleRegistry {
             }
         } catch (IOException exception) {
             LOGGER.warning("关闭模块 ClassLoader 失败: " + loaded.descriptor().id() + " | " + exception.getMessage());
+        } finally {
+            loaded.clearSensitiveMaterial();
         }
     }
 
@@ -1308,10 +1310,20 @@ public final class ModuleRegistry {
         }
     }
 
-    public record CloudModuleSnapshot(byte[] jarBytes, byte[] moduleSeed) {
+    public record CloudModuleSnapshot(byte[] jarBytes, byte[] moduleSeed) implements AutoCloseable {
         public CloudModuleSnapshot {
             jarBytes = jarBytes == null ? null : jarBytes.clone();
             moduleSeed = moduleSeed == null ? null : moduleSeed.clone();
+        }
+        @Override
+        public void close() {
+            wipe(jarBytes);
+            wipe(moduleSeed);
+        }
+        private static void wipe(byte[] data) {
+            if (data != null) {
+                java.util.Arrays.fill(data, (byte) 0);
+            }
         }
     }
 }

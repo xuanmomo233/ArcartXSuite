@@ -100,9 +100,24 @@ public final class EventPacketDispatchService {
      * @param packetId  客户端发送的 packetId（如 "ArcartXEventPacket"）
      * @param presetId  预设 ID（客户端 data 中的第一个元素）
      * @param subject   发包玩家
+     * @param args      客户端 data 中除预设 ID 外的附加参数
      * @return true 表示匹配到了预设规则并已分发
      */
-    public boolean dispatchClientPacket(String packetId, String presetId, Player subject) {
+    public boolean dispatchClientPacket(String packetId, String presetId, Player subject, List<String> args) {
+        return dispatchClientPacket(packetId, presetId, subject, args, false);
+    }
+
+    /**
+     * 处理客户端回包触发，支持是否绕过权限与冷却检查。
+     *
+     * @param packetId  客户端发送的 packetId（如 "ArcartXEventPacket"）
+     * @param presetId  预设 ID（客户端 data 中的第一个元素）
+     * @param subject   发包玩家
+     * @param args      客户端 data 中除预设 ID 外的附加参数
+     * @param bypass    是否绕过权限、冷却检查（管理命令调试用）
+     * @return true 表示匹配到了预设规则并已分发
+     */
+    public boolean dispatchClientPacket(String packetId, String presetId, Player subject, List<String> args, boolean bypass) {
         PluginConfiguration configuration = configurationProvider.get();
         if (configuration == null || packetId == null || presetId == null || subject == null) {
             return false;
@@ -114,13 +129,68 @@ public final class EventPacketDispatchService {
         if (rule == null) {
             return false;
         }
-        dispatchRule(
-            rule,
+        if (!bypass && rule.hasPermissionFilter() && !subject.hasPermission(rule.permission())) {
+            return true;
+        }
+        List<String> effectiveArgs = args == null ? List.of() : List.copyOf(args);
+        if (rule.allowArgs()) {
+            if (!validateClientPacketArgs(rule, effectiveArgs)) {
+                return true;
+            }
+        } else {
+            effectiveArgs = List.of();
+        }
+        Map<String, String> variables = new LinkedHashMap<>();
+        variables.put("preset_id", presetId);
+        for (int index = 0; index < effectiveArgs.size(); index++) {
+            variables.put("arg" + (index + 1), effectiveArgs.get(index));
+        }
+        if (bypass) {
+            executeBypassClientPacket(rule, subject, variables);
+        } else {
+            dispatchRule(
+                rule,
+                EventPacketTrigger.CLIENT_PACKET,
+                subject,
+                EventPacketContext.fromVariables(
+                    EventPacketTrigger.CLIENT_PACKET,
+                    subject,
+                    presetId,
+                    variables
+                )
+            );
+        }
+        return true;
+    }
+
+    private void executeBypassClientPacket(EventPacketRule rule, Player subject, Map<String, String> variables) {
+        EventPacketContext context = EventPacketContext.fromVariables(
             EventPacketTrigger.CLIENT_PACKET,
             subject,
-            EventPacketContext.fromSignal(subject, presetId, Map.of("preset_id", presetId))
+            rule.signal(),
+            variables
         );
-        return true;
+        for (EventPacketAction action : rule.actions()) {
+            executeAction(rule, action, subject, context);
+        }
+    }
+
+    private boolean validateClientPacketArgs(EventPacketRule rule, List<String> args) {
+        if (!rule.hasArgsPattern()) {
+            return true;
+        }
+        try {
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(rule.argsPattern());
+            for (String arg : args) {
+                if (!pattern.matcher(arg).matches()) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (java.util.regex.PatternSyntaxException exception) {
+            logger.warning("EventPacket 预设 " + rule.signal() + " 的参数正则表达式无效: " + rule.argsPattern());
+            return false;
+        }
     }
 
     public void dispatchSignal(String signal, Player subject, Map<String, String> variables) {

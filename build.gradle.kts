@@ -195,5 +195,11 @@ tasks.register("buildDev") {
     description = "Build all JARs WITHOUT obfuscation (dev only)"
     dependsOn(":axs-core:shadowJar")
     dependsOn(subprojects.filter { it.path.startsWith(":modules:") }.map { "${it.path}:jar" })
-    dependsOn(subprojects.filter { it.path.startsWith(":proxy:") }.map { "${it.path}:shadowJar" })
+    // 仅对应用了 shadow 插件的代理子项目（velocity/bungee）依赖 shadowJar；
+    // proxy:common 是纯 java 库、无 shadowJar 任务，其 jar 会随 velocity/bungee 的 shadowJar 传递构建。
+    dependsOn(
+        subprojects
+            .filter { it.path.startsWith(":proxy:") && it.plugins.hasPlugin("com.gradleup.shadow") }
+            .map { "${it.path}:shadowJar" }
+    )
 }

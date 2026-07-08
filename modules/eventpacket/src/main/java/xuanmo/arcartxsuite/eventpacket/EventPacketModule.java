@@ -180,7 +180,7 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         registerCapability(SignalDispatchable.class, (signal, subject, variables) ->
             dispatchService.dispatchSignal(signal, subject, variables));
 
-        adminCommand = new EventPacketAdminCommand(() -> dispatchService, () -> cleanupService, messages());
+        adminCommand = new EventPacketAdminCommand(() -> dispatchService, () -> cleanupService, () -> configuration, messages());
         listener = new PlayerEventPacketListener(dispatchService, watcherService);
         Bukkit.getPluginManager().registerEvents(listener, plugin);
 
@@ -294,7 +294,8 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
             if (presetId.isBlank()) {
                 return false;
             }
-            return dispatchService.dispatchClientPacket(packetId, presetId, player);
+            List<String> args = data == null || data.size() <= 1 ? List.of() : data.subList(1, data.size());
+            return dispatchService.dispatchClientPacket(packetId, presetId, player, args);
         };
     }
 

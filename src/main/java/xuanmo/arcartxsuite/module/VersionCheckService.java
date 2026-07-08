@@ -28,7 +28,7 @@ import com.google.gson.JsonParser;
  */
 public final class VersionCheckService implements Listener {
 
-    private static final String VERSION_URL = "https://axs.021209.xyz/api/version";
+    private static final String VERSION_URL = "https://cloud.021209.xyz/api/version";
     private static final String PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
     private static final Duration TIMEOUT = Duration.ofSeconds(5);
 

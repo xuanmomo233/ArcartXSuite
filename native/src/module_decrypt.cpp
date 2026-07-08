@@ -122,7 +122,11 @@ static bool axb_signature_valid(
     for (int i = 0; i < 32; i++) {
         if (pub[i] != 0) { placeholder = false; break; }
     }
-    if (placeholder) return true; // 未启用平台签名，放行（与后端空签名策略一致）
+#ifndef AXS_PRODUCTION
+    if (placeholder) return true; // 未启用平台签名，dev 构建放行（与后端空签名策略一致）
+#else
+    if (placeholder) return false; // 生产构建：占位公钥视为无效，fail-closed
+#endif
 
     if (!sig || sig_len != 64) return false;
 
