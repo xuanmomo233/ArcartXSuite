@@ -65,3 +65,5 @@ src/main/resources/native/*.so
 
 # Protection keys (NEVER commit)
 keys/
+API_INSPECTION_REPORT.md
+API_USAGE_GUIDE.md

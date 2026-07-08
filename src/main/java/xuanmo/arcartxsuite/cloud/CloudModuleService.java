@@ -52,8 +52,7 @@ public final class CloudModuleService {
     /** 云端平台地址：按优先级尝试。 */
     private static final List<String> API_BASE_URLS = List.of(
         "https://cloud.021209.xyz",
-        "https://cloud-backup.021209.xyz",
-        "https://cloud-mirror.021209.xyz"
+        "https://flare.021209.xyz"
     );
 
     /** 加密密钥对文件格式版本标识。 */
