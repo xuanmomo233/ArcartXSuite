@@ -73,17 +73,11 @@ public final class ByteArrayModuleClassLoader extends ClassLoader {
         this.jarBytes = jarBytes == null ? null : jarBytes.clone();
 
         this.moduleSeed = (moduleSeed != null && moduleSeed.length == 32) ? moduleSeed.clone() : null;
-
         try {
-
             indexEntries();
-
         } finally {
-
             wipe(this.jarBytes);
-
         }
-
     }
 
     private void indexEntries() {
@@ -248,15 +242,10 @@ public final class ByteArrayModuleClassLoader extends ClassLoader {
     public void close() throws IOException {
         entries.clear();
         encryptedClasses.clear();
-
         wipe(jarBytes);
-
         if (moduleSeed != null) {
-
             wipe(moduleSeed);
-
         }
-
     }
 
     private static void wipe(byte[] data) {

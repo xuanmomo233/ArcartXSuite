@@ -618,19 +618,28 @@ public final class ModuleRegistry {
     public List<String> getLoadedCloudModuleIds() {
         List<String> ids = new ArrayList<>();
         for (LoadedModule loaded : modules.values()) {
-            if (loaded.jarBytes() != null) {
+            if (loaded.classLoader() instanceof ByteArrayModuleClassLoader) {
                 ids.add(loaded.descriptor().id());
             }
         }
         return ids;
     }
 
-    public java.util.Optional<CloudModuleSnapshot> getLoadedCloudModuleSnapshot(String moduleId) {
+    /**
+     * 为指定云端模块创建 jarBytes + moduleSeed 快照，用于更新失败时回滚。
+     * 非云端模块或模块未加载时返回 null。
+     */
+    public CloudModuleSnapshot createSnapshot(String moduleId) {
         LoadedModule loaded = modules.get(moduleId);
-        if (loaded == null || loaded.jarBytes() == null) {
-            return java.util.Optional.empty();
+        if (loaded == null || !(loaded.classLoader() instanceof ByteArrayModuleClassLoader)) {
+            return null;
         }
-        return java.util.Optional.of(new CloudModuleSnapshot(loaded.jarBytes(), loaded.moduleSeed()));
+        byte[] bytes = loaded.jarBytes();
+        byte[] seed = loaded.moduleSeed();
+        if (bytes == null) {
+            return null;
+        }
+        return new CloudModuleSnapshot(bytes, seed);
     }
 
     public Map<String, ModuleCommandHandler> commandHandlerMap() {
@@ -1309,7 +1318,6 @@ public final class ModuleRegistry {
             failedModules = List.copyOf(failedModules);
         }
     }
-
     public record CloudModuleSnapshot(byte[] jarBytes, byte[] moduleSeed) implements AutoCloseable {
         public CloudModuleSnapshot {
             jarBytes = jarBytes == null ? null : jarBytes.clone();

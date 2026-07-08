@@ -34,8 +34,8 @@ final class LoadedModule {
         this.instance = instance;
         this.classLoader = classLoader;
         this.jarFile = null;
-        this.jarBytes = jarBytes;
-        this.moduleSeed = moduleSeed;
+        this.jarBytes = jarBytes == null ? null : jarBytes.clone();
+        this.moduleSeed = moduleSeed == null ? null : moduleSeed.clone();
         this.enabled = false;
     }
 
@@ -64,11 +64,11 @@ final class LoadedModule {
     }
 
     byte[] jarBytes() {
-        return jarBytes;
+        return jarBytes == null ? null : jarBytes.clone();
     }
 
     byte[] moduleSeed() {
-        return moduleSeed;
+        return moduleSeed == null ? null : moduleSeed.clone();
     }
 
     boolean isEnabled() {

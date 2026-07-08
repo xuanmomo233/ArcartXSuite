@@ -41,6 +41,12 @@ jobs:
       - name: Inject native self-hash
         run: python scripts/inject-self-hash.py src/main/resources/native/libaxs-native.so
 
+      - name: Compile hardened native library (validation only)
+        run: |
+          cd native
+          cmake -B build-hardened -DCMAKE_BUILD_TYPE=Release -DAXS_HARDENED=ON
+          cmake --build build-hardened --config Release
+
       - name: Move artifact to root
         run: cp src/main/resources/native/libaxs-native.so libaxs-native.so
 
@@ -98,6 +104,13 @@ jobs:
             exit 1
           }
           python scripts/inject-self-hash.py $dll.FullName
+
+      - name: Compile hardened native library (validation only)
+        shell: msys2 {0}
+        run: |
+          cd native
+          cmake -B build-hardened -DCMAKE_BUILD_TYPE=Release -DAXS_HARDENED=ON -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
+          cmake --build build-hardened --verbose
 
       - name: Debug build output
         shell: msys2 {0}
