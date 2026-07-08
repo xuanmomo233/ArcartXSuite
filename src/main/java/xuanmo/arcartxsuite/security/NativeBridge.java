@@ -5,6 +5,8 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import xuanmo.arcartxsuite.security.protection.JvmAntiDebug;
+
 /**
  * Native JNI 桥接类，提供加密/解密、签名验证、反调试等安全操作。
  * 所有 native 方法名已随机化，实际映射由 JNI_OnLoad 通过 RegisterNatives 动态注册。
@@ -155,7 +157,7 @@ public final class NativeBridge {
 
     // Native 层双向校验入口
     @SuppressWarnings("unused")
-    static boolean t0() { return true; }
+    static boolean t0() { return JvmAntiDebug.hasKnownTamperSignal(); }
 
     // ═══ 原有 native 方法 ════════════════════════════════════════
 
@@ -210,6 +212,17 @@ public final class NativeBridge {
      * @return true = 完整性通过
      */
     public static native boolean n7(byte[] rootHash, byte[] signature);
+
+    /**
+     * 验证云端响应的 Ed25519 签名。
+     * 消息内容 = UTF-8 的 "<ts>\n<rawBody>"。
+     */
+    public static native boolean verifyResponseSig(long timestamp, byte[] body, byte[] signature);
+
+    /**
+     * 响应验签是否启用：仅硬化构建且内嵌的响应公钥非占位时返回 true。
+     */
+    public static native boolean responseVerifyActive();
 
     /**
      * 增强型调试环境检测（Frida、硬件断点、IAT/PLT hook）。

@@ -52,6 +52,8 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
         {"n6", "([B[B)[B",   reinterpret_cast<void *>(decryptClass)},
         {"n11", "([B[B[B)[B", reinterpret_cast<void *>(decryptModuleClass)},
         {"n7", "([B[B)Z",    reinterpret_cast<void *>(verifyIntegrity)},
+        {"verifyResponseSig", "(J[B[B)Z", reinterpret_cast<void *>(verifyResponseSig)},
+        {"responseVerifyActive", "()Z", reinterpret_cast<void *>(responseVerifyActive)},
         {"n8", "()I",         reinterpret_cast<void *>(enhancedEnvironmentCheck)},
         {"n9", "()[B",        reinterpret_cast<void *>(getHardwareFingerprint)},
     };

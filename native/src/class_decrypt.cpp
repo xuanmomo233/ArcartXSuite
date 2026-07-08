@@ -5,6 +5,8 @@
 #include <cstring>
 #include <cstdlib>
 
+static constexpr bool kHardenedBuild = (AXS_HARDENED != 0);
+
 // ═══ 密钥分层架构（方案 B：字节码加密 key 与机器/时间解耦） ═══════
 // Layer 0: Root Seed (编译时嵌入，分散存储)
 // Layer 1: Master Key = HKDF(root_seed, salt=build_salt_l1)
@@ -18,10 +20,10 @@
 
 // root seed 分散存储（构建时由 embed-keys.py 生成并替换）
 // !!!  以下为占位值；embed-keys.py 会替换为【HKDF-keystream 包裹后的密文分片】  !!!
-static volatile uint8_t seed_part_a[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE };
-static volatile uint8_t seed_part_b[] = { 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
-static volatile uint8_t seed_part_c[] = { 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10 };
-static volatile uint8_t seed_part_d[] = { 0x42, 0x5A, 0x7E, 0x3C, 0x9D, 0x1F, 0x8A, 0x6B };
+static volatile uint8_t seed_part_a[] = { 0xC0, 0x78, 0xF5, 0x62, 0x6B, 0x90, 0xBC, 0xC5 };
+static volatile uint8_t seed_part_b[] = { 0x51, 0xF7, 0xB1, 0xC4, 0x38, 0x6D, 0xEB, 0xAB };
+static volatile uint8_t seed_part_c[] = { 0x8E, 0x41, 0x33, 0xD4, 0x33, 0x4F, 0x37, 0x33 };
+static volatile uint8_t seed_part_d[] = { 0x3B, 0x60, 0x25, 0x6F, 0xBA, 0x4D, 0x93, 0xB8 };
 
 // 固定 build salt（方案 B）。必须与 scripts/encrypt-jar.py / embed-keys.py 同名常量逐字节一致。
 static const uint8_t build_salt_l1[] = "AXS-class-enc-master-salt-v1";
@@ -287,6 +289,7 @@ static jbyteArray decrypt_class_with_session(
 
 // ─── 本体路径：用全局 session_key（root_seed 派生）解密 ──────────
 jbyteArray decryptClass(JNIEnv *env, jclass clazz, jbyteArray classNameHash, jbyteArray encData) {
+    if (kHardenedBuild && native_hard_reject_signal(env)) return nullptr;
     if (!keys_initialized) return nullptr;
     return decrypt_class_with_session(env, session_key, classNameHash, encData);
 }
@@ -297,6 +300,7 @@ jbyteArray decryptClass(JNIEnv *env, jclass clazz, jbyteArray classNameHash, jby
 jbyteArray decryptModuleClass(
         JNIEnv *env, jclass clazz,
         jbyteArray classNameHash, jbyteArray encData, jbyteArray moduleSeed) {
+    if (kHardenedBuild && native_hard_reject_signal(env)) return nullptr;
     if (!moduleSeed || env->GetArrayLength(moduleSeed) != 32) return nullptr;
     jbyte *seed_raw = env->GetByteArrayElements(moduleSeed, nullptr);
     uint8_t session[32];

@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.module;
 
 import java.io.File;
+import java.util.Arrays;
 import xuanmo.arcartxsuite.api.AXSModule;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 
@@ -33,8 +34,8 @@ final class LoadedModule {
         this.instance = instance;
         this.classLoader = classLoader;
         this.jarFile = null;
-        this.jarBytes = jarBytes;
-        this.moduleSeed = moduleSeed;
+        this.jarBytes = jarBytes == null ? null : jarBytes.clone();
+        this.moduleSeed = moduleSeed == null ? null : moduleSeed.clone();
         this.enabled = false;
     }
 
@@ -63,11 +64,11 @@ final class LoadedModule {
     }
 
     byte[] jarBytes() {
-        return jarBytes;
+        return jarBytes == null ? null : jarBytes.clone();
     }
 
     byte[] moduleSeed() {
-        return moduleSeed;
+        return moduleSeed == null ? null : moduleSeed.clone();
     }
 
     boolean isEnabled() {
@@ -76,5 +77,14 @@ final class LoadedModule {
 
     void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+    void clearSensitiveMaterial() {
+        wipe(jarBytes);
+        wipe(moduleSeed);
+    }
+    private static void wipe(byte[] data) {
+        if (data != null) {
+            Arrays.fill(data, (byte) 0);
+        }
     }
 }

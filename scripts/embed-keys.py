@@ -134,6 +134,24 @@ def read_ed25519_public_key(keys_dir: Path) -> bytes:
     sys.exit(1)
 
 
+def read_response_ed25519_public_key(keys_dir: Path) -> bytes:
+    """读取响应签名公钥的原始 32 字节。"""
+    pem_file = keys_dir / "response_ed25519_public.pem"
+    bin_file = keys_dir / "response_ed25519_public_raw.bin"
+
+    if pem_file.exists() and HAS_CRYPTO:
+        public_key = serialization.load_pem_public_key(pem_file.read_bytes())
+        return public_key.public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        )
+    if bin_file.exists():
+        return bin_file.read_bytes()[:32]
+    print(f"[!] 响应签名公钥未找到（需要 {pem_file} 或 {bin_file}）")
+    print("[!] 请确认已安装 cryptography 库: pip install cryptography")
+    sys.exit(1)
+
+
 def format_seed_array(data, label) -> str:
     hex_values = ", ".join(f"0x{b:02X}" for b in data)
     return f"static volatile uint8_t seed_part_{label}[] = {{ {hex_values} }};"
@@ -162,6 +180,22 @@ def replace_pubkey_in_source(source: str, pubkey: bytes) -> str:
     source, count = re.subn(pattern, new_array, source)
     if count != 1:
         print(f"[!] ed25519_public_key 匹配数异常: {count}（期望 1）")
+        sys.exit(1)
+    return source
+
+
+def replace_response_pubkey_in_source(source: str, pubkey: bytes) -> str:
+    lines = []
+    for row in range(4):
+        offset = row * 8
+        hex_values = ", ".join(f"0x{pubkey[offset + i]:02X}" for i in range(8))
+        lines.append(f"    {hex_values}")
+    new_array = "static const uint8_t ed25519_response_public_key[32] = {\n" + ",\n".join(lines) + "\n};"
+
+    pattern = r'static const uint8_t ed25519_response_public_key\[32\]\s*=\s*\{[^}]+\};'
+    source, count = re.subn(pattern, new_array, source)
+    if count != 1:
+        print(f"[!] ed25519_response_public_key 匹配数异常: {count}（期望 1）")
         sys.exit(1)
     return source
 
@@ -223,9 +257,12 @@ def main():
     # 4. patch integrity_check.cpp
     print("\n[4/4] 嵌入 Ed25519 公钥到 integrity_check.cpp...")
     pubkey = read_ed25519_public_key(keys_dir)
+    response_pubkey = read_response_ed25519_public_key(keys_dir)
     print(f"    ed25519_public_key = {pubkey.hex()[:16]}...")
+    print(f"    ed25519_response_public_key = {response_pubkey.hex()[:16]}...")
     source = integrity_file.read_text(encoding='utf-8')
     source = replace_pubkey_in_source(source, pubkey)
+    source = replace_response_pubkey_in_source(source, response_pubkey)
     integrity_file.write_text(source, encoding='utf-8')
     print(f"    已更新: {integrity_file}")
 

@@ -26,6 +26,8 @@ storage:
 
 packet-command:
   # 客户端 Packet.send 回包预设入口，随 EventPacket 一起加载。
+  # 预设文件字段: type(op/console/player), permission, cooldown(秒, 如 5s/1m), allow-args, args-pattern, commands
+  # 可用占位符: <player>, <uuid>, <world>, <arg1>, <arg2> ...
   enabled: true
   packet-id: "ArcartXEventPacket"
   presets-directory: "eventpacket/packet-command-presets"

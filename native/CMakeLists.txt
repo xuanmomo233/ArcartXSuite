@@ -48,6 +48,7 @@ set(SOURCES
 )
 
 add_library(axs-native SHARED ${SOURCES})
+target_compile_definitions(axs-native PRIVATE AXS_HARDENED=$<BOOL:${AXS_PRODUCTION}>)
 target_include_directories(axs-native PRIVATE include ${JNI_INCLUDE_DIRS})
 target_link_libraries(axs-native PRIVATE OpenSSL::Crypto zlibstatic)
 
@@ -77,6 +78,10 @@ if(MINGW)
     )
 endif()
 
+option(AXS_PRODUCTION "Enable fail-closed native production checks" OFF)
+if(AXS_PRODUCTION)
+    target_compile_definitions(axs-native PRIVATE AXS_PRODUCTION)
+endif()
 # ─── OLLVM 混淆（可选，极高保护级别） ───────────────────────────
 option(ENABLE_OLLVM "Enable OLLVM obfuscation" OFF)
 if(ENABLE_OLLVM)

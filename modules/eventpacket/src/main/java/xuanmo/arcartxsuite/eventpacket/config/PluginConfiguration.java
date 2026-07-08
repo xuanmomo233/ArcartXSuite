@@ -163,7 +163,10 @@ public record PluginConfiguration(
             conditions,
             actions,
             "",
-            script
+            script,
+            "",
+            false,
+            ""
         );
     }
 
@@ -364,10 +367,20 @@ public record PluginConfiguration(
                     if (commands.isEmpty()) {
                         continue;
                     }
+                    String permission = nullToEmpty(section.getString("permission")).trim();
+                    boolean allowArgs = section.getBoolean("allow-args", false);
+                    String argsPattern = nullToEmpty(section.getString("args-pattern", "[\\w.:-]{1,64}")).trim();
+                    long cooldownMillis = parseCooldownMillis(section.get("cooldown"));
                     List<EventPacketAction> actions = new ArrayList<>();
                     for (String command : commands) {
                         Map<String, Object> actionValues = new LinkedHashMap<>();
-                        actionValues.put("command", command.replace("<player>", "{player_name}"));
+                        actionValues.put(
+                            "command",
+                            command
+                                .replace("<player>", "{player_name}")
+                                .replace("<uuid>", "{player_uuid}")
+                                .replace("<world>", "{player_world}")
+                        );
                         actionValues.put("executor", executorType);
                         actions.add(new EventPacketAction("command.dispatch", actionValues));
                     }
@@ -384,11 +397,14 @@ public record PluginConfiguration(
                         Set.of(),
                         Set.of(),
                         true,
-                        0L,
+                        cooldownMillis,
                         List.of(),
                         List.copyOf(actions),
                         packetId,
-                        ""
+                        "",
+                        permission,
+                        allowArgs,
+                        argsPattern
                     ));
                 } catch (IllegalArgumentException exception) {
                     logger.warning(

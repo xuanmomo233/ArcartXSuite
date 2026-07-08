@@ -104,3 +104,36 @@ jint environmentCheck(JNIEnv *env, jclass clazz) {
 
     return flags;
 }
+
+bool native_hard_reject_signal(JNIEnv *env) {
+    int flags = 0;
+
+#ifdef _WIN32
+    if (check_debugger_win())        flags |= FLAG_DEBUGGER;
+    if (check_suspicious_processes()) flags |= FLAG_AGENT;
+#else
+    if (check_debugger_linux())      flags |= FLAG_DEBUGGER;
+#endif
+
+    bool java_reject = false;
+    if (env) {
+        jclass antiDebug = env->FindClass("xuanmo/arcartxsuite/security/protection/JvmAntiDebug");
+        if (antiDebug) {
+            jmethodID hardReject = env->GetStaticMethodID(antiDebug, "hasHardRejectSignal", "()Z");
+            if (hardReject) {
+                jboolean ok = env->CallStaticBooleanMethod(antiDebug, hardReject);
+                if (!env->ExceptionCheck()) {
+                    java_reject = (ok == JNI_TRUE);
+                } else {
+                    env->ExceptionClear();
+                }
+            } else if (env->ExceptionCheck()) {
+                env->ExceptionClear();
+            }
+        } else if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+        }
+    }
+
+    return java_reject || flags != 0;
+}

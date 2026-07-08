@@ -20,6 +20,8 @@ jbyteArray decryptClass(JNIEnv *env, jclass clazz, jbyteArray classNameHash, jby
 // n11：方案 B 自包含模块逐类解密——session 由外部传入的 32 字节模块种子（云端 moduleKey）派生。
 jbyteArray decryptModuleClass(JNIEnv *env, jclass clazz, jbyteArray classNameHash, jbyteArray encData, jbyteArray moduleSeed);
 jboolean verifyIntegrity(JNIEnv *env, jclass clazz, jbyteArray rootHash, jbyteArray signature);
+jboolean verifyResponseSig(JNIEnv *env, jclass clazz, jlong timestamp, jbyteArray body, jbyteArray signature);
+jboolean responseVerifyActive(JNIEnv *env, jclass clazz);
 jint enhancedEnvironmentCheck(JNIEnv *env, jclass clazz);
 jbyteArray getHardwareFingerprint(JNIEnv *env, jclass clazz);
 
@@ -33,6 +35,7 @@ void get_hardware_fingerprint(uint8_t out[32]);
 
 // Native 自校验（integrity_check.cpp）
 bool verify_native_self_integrity();
+bool native_hard_reject_signal(JNIEnv *env);
 // .axb 验签复用的 Ed25519 公钥（integrity_check.cpp 内嵌的同一密钥）
 const uint8_t* axb_sign_pubkey();
 

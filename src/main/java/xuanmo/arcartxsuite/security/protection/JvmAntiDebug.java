@@ -29,6 +29,8 @@ public final class JvmAntiDebug {
     private static volatile int lastThreatLevel = 0;
     private static volatile String lastTrigger = "";
     private static volatile ThreatResponseHandler responseHandler;
+    private static volatile long lastHardRejectCheckMillis = 0L;
+    private static volatile boolean lastHardRejectResult = false;
     private static ScheduledExecutorService scheduler;
 
     private JvmAntiDebug() {}
@@ -80,22 +82,26 @@ public final class JvmAntiDebug {
 
     private static void performCheck() {
         try {
-            int threats = checkAll();
+            int javaThreats = checkAll();
+            int nativeThreats = 0;
+            boolean nativeAvailable = NativeBridge.isAvailable();
 
-            // 同时检查 native 层（如果可用）
-            if (NativeBridge.isAvailable()) {
-                threats |= NativeBridge.n8();
+            // ???? native ???????
+            if (nativeAvailable) {
+                nativeThreats = NativeBridge.n8();
             }
 
+            int threats = javaThreats | nativeThreats;
             lastThreatLevel = threats;
+            ProtectionEnvironment.observeThreats(javaThreats, nativeThreats, nativeAvailable);
             // AGENT(instrumentation present) alone must NOT trigger downgrade:
             // legit profilers/monitors (Spark/async-profiler) load as javaagent.
-            final int TRIGGER_MASK = THREAT_JDWP | THREAT_FRIDA | THREAT_ATTACH | THREAT_SUSPICIOUS;
-            if ((threats & TRIGGER_MASK) != 0 && responseHandler != null) {
+            if (nativeAvailable && ProtectionEnvironment.isHardThreatSignal(javaThreats, nativeThreats)
+                    && responseHandler != null) {
                 responseHandler.onThreatDetected(threats);
             }
         } catch (Exception ignored) {
-            // 检测本身不应抛出异常影响宿主
+            // ??????????????
         }
     }
 
@@ -106,6 +112,48 @@ public final class JvmAntiDebug {
         if (hasSuspiciousThreads()) threats |= THREAT_FRIDA | THREAT_SUSPICIOUS;
         if (isAttachApiActive()) threats |= THREAT_ATTACH;
         return threats;
+    }
+
+    public static boolean hasKnownTamperSignal() {
+        return checkAll() != 0;
+    }
+
+    public static boolean hasHardRejectSignal() {
+        long now = System.currentTimeMillis();
+        long lastCheck = lastHardRejectCheckMillis;
+        if (now - lastCheck <= 2000L) {
+            return lastHardRejectResult;
+        }
+        boolean result = isHardJdwpAttached() || hasHardFridaSignal();
+        lastHardRejectResult = result;
+        lastHardRejectCheckMillis = now;
+        return result;
+    }
+
+    private static boolean isHardJdwpAttached() {
+        try {
+            List<String> args = ManagementFactory.getRuntimeMXBean().getInputArguments();
+            for (String arg : args) {
+                if (arg.contains("-agentlib:jdwp") || arg.contains("-Xrunjdwp")) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private static boolean hasHardFridaSignal() {
+        try {
+            Set<Thread> threads = Thread.getAllStackTraces().keySet();
+            for (Thread t : threads) {
+                String name = t.getName().toLowerCase();
+                if (name.contains("frida") || name.contains("gum-js-loop")
+                        || name.contains("linjector")) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {}
+        return false;
     }
 
     // ─── 检测方法 ─────────────────────────────────────────────────
@@ -130,8 +178,23 @@ public final class JvmAntiDebug {
                     ClassLoader.getSystemClassLoader());
             return true;
         } catch (ClassNotFoundException e) {
-            return false;
+            return hasTransformerAgentSignals();
         }
+    }
+
+    private static boolean hasTransformerAgentSignals() {
+        try {
+            for (StackTraceElement[] stack : Thread.getAllStackTraces().values()) {
+                for (StackTraceElement element : stack) {
+                    String className = element.getClassName().toLowerCase();
+                    if (className.contains("sun.instrument")
+                            || className.contains("java.lang.instrument")) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return false;
     }
 
     private static boolean hasSuspiciousThreads() {

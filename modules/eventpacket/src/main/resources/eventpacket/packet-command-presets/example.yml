@@ -10,12 +10,35 @@
 example_op:
   # 可选: op / console / player
   type: op
+  # 触发所需权限，留空表示不校验
+  permission: ""
+  # 冷却时间，支持数字(秒)或单位后缀: 5s / 1m / 1h / 1d
+  cooldown: 0
+  # 是否允许客户端透传额外参数
+  allow-args: false
+  # 当 allow-args 为 true 时，对每个参数进行正则校验
+  args-pattern: "[\\w.:-]{1,64}"
   commands:
     - say 你好，我是 <player>
     - say 这里是 OP 身份执行
 
 example_console:
   type: console
+  permission: ""
+  cooldown: 0
+  allow-args: false
+  args-pattern: "[\\w.:-]{1,64}"
   commands:
     - say 控制台正在响应 <player>
+
+# 带参数透传的示例
+# 客户端调用: Packet.send('ArcartXEventPacket', 'give_item', 'DIAMOND_SWORD', '1')
+example_with_args:
+  type: op
+  permission: "eventpacket.preset.give"
+  cooldown: 5s
+  allow-args: true
+  args-pattern: "[A-Z_0-9]{1,64}"
+  commands:
+    - give <player> <arg1> <arg2>
 

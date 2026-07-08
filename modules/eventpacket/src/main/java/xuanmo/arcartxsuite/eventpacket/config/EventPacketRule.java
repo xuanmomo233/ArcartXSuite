@@ -22,7 +22,10 @@ public record EventPacketRule(
     List<ScriptCondition> conditions,
     List<EventPacketAction> actions,
     String clientPacketId,
-    String script
+    String script,
+    String permission,
+    boolean allowArgs,
+    String argsPattern
 ) {
     public EventPacketRule(
         String id, boolean enabled, EventPacketTrigger trigger,
@@ -33,7 +36,7 @@ public record EventPacketRule(
     ) {
         this(id, enabled, trigger, signal, placeholder, threshold,
             requireNonEmpty, requiredCount, worlds, entityTypes, mythicMobIds,
-            repeatable, cooldownMillis, conditions, actions, "", "");
+            repeatable, cooldownMillis, conditions, actions, "", "", "", false, "");
     }
 
     public boolean papiTrigger() {
@@ -46,5 +49,13 @@ public record EventPacketRule(
 
     public boolean isScriptTrigger() {
         return trigger != null && trigger.scriptTrigger();
+    }
+
+    public boolean hasPermissionFilter() {
+        return permission != null && !permission.isBlank();
+    }
+
+    public boolean hasArgsPattern() {
+        return argsPattern != null && !argsPattern.isBlank();
     }
 }

@@ -33,6 +33,9 @@ on:
 
 permissions:
   contents: read
+env:
+  # Keep native fail-closed self-integrity OFF until a native CI run validates injected hashes.
+  AXS_PRODUCTION: OFF
 
 jobs:
   detect-changes:
@@ -122,6 +125,7 @@ jobs:
       - name: Generate keys + embed into native sources
         env:
           AXB_SIGN_SEED_B64: ${{ secrets.AXB_SIGN_SEED_B64 }}
+          AXB_RESP_SIGN_SEED_B64: ${{ secrets.AXB_RESP_SIGN_SEED_B64 }}
           # 固定 seed 分片 → canonical root_seed 跨 CI 稳定，本体与单独重建的模块同一真实 seed
           AXS_SEED_PARTS_B64: ${{ secrets.AXS_SEED_PARTS_B64 }}
         run: |
@@ -165,6 +169,9 @@ jobs:
     if: needs.detect-changes.outputs.core_changed == 'true'
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - uses: actions/download-artifact@v5
         with:
@@ -184,8 +191,10 @@ jobs:
       - name: Build native library
         run: |
           cd native
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DAXS_PRODUCTION="${AXS_PRODUCTION}"
           cmake --build build --config Release
+      - name: Inject native self-hash
+        run: python scripts/inject-self-hash.py src/main/resources/native/libaxs-native.so
 
       - name: Move artifact to root
         run: cp src/main/resources/native/libaxs-native.so libaxs-native.so
@@ -202,6 +211,9 @@ jobs:
     if: needs.detect-changes.outputs.core_changed == 'true'
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - uses: actions/download-artifact@v5
         with:
@@ -236,8 +248,18 @@ jobs:
         shell: msys2 {0}
         run: |
           cd native
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DAXS_PRODUCTION="${AXS_PRODUCTION}" -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
           cmake --build build --verbose
+      - name: Inject native self-hash
+        shell: msys2 {0}
+        run: |
+          DLL_PATH=$(find src/main/resources/native -maxdepth 1 -type f \( -name "axs-native.dll" -o -name "libaxs-native.dll" \) | head -1)
+          if [ -z "$DLL_PATH" ]; then
+            echo "ERROR: No axs-native DLL found"
+            find src/main/resources/native -type f || true
+            exit 1
+          fi
+          python scripts/inject-self-hash.py "$DLL_PATH"
 
       - name: Locate and normalize DLL name
         shell: msys2 {0}
@@ -300,6 +322,68 @@ jobs:
 
       - name: Restore keys
         run: cp -r protect-material/keys keys
+
+      - name: AXB keypair smoke check
+        env:
+          AXB_SIGN_SEED_B64: ${{ secrets.AXB_SIGN_SEED_B64 }}
+          AXB_RESP_SIGN_SEED_B64: ${{ secrets.AXB_RESP_SIGN_SEED_B64 }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64
+          import os
+          import pathlib
+          import re
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+          seed = base64.b64decode(os.environ["AXB_SIGN_SEED_B64"].strip())
+          if len(seed) != 32:
+              raise SystemExit("FAIL: AXB_SIGN_SEED_B64 must decode to 32 bytes")
+          derived_pub = Ed25519PrivateKey.from_private_bytes(seed).public_key().public_bytes(
+              encoding=serialization.Encoding.Raw,
+              format=serialization.PublicFormat.Raw,
+          )
+
+          resp_seed = base64.b64decode(os.environ["AXB_RESP_SIGN_SEED_B64"].strip())
+          if len(resp_seed) != 32:
+              raise SystemExit("FAIL: AXB_RESP_SIGN_SEED_B64 must decode to 32 bytes")
+          resp_derived_pub = Ed25519PrivateKey.from_private_bytes(resp_seed).public_key().public_bytes(
+              encoding=serialization.Encoding.Raw,
+              format=serialization.PublicFormat.Raw,
+          )
+
+          keys_root = pathlib.Path("keys")
+          version = (keys_root / "current_version.txt").read_text(encoding="utf-8").strip()
+          pem_path = keys_root / version / "ed25519_public.pem"
+          pem_pub = serialization.load_pem_public_key(pem_path.read_bytes()).public_bytes(
+              encoding=serialization.Encoding.Raw,
+              format=serialization.PublicFormat.Raw,
+          )
+          resp_pem_path = keys_root / version / "response_ed25519_public.pem"
+          resp_pem_pub = serialization.load_pem_public_key(resp_pem_path.read_bytes()).public_bytes(
+              encoding=serialization.Encoding.Raw,
+              format=serialization.PublicFormat.Raw,
+          )
+
+          source = (pathlib.Path("protect-material/native-src/integrity_check.cpp").read_text(encoding="utf-8"))
+          match = re.search(r'static const uint8_t ed25519_public_key\[32\]\s*=\s*\{([^}]*)\};', source, re.S)
+          resp_match = re.search(r'static const uint8_t ed25519_response_public_key\[32\]\s*=\s*\{([^}]*)\};', source, re.S)
+          if not match:
+              raise SystemExit("FAIL: embedded ed25519_public_key not found")
+          if not resp_match:
+              raise SystemExit("FAIL: embedded ed25519_response_public_key not found")
+          embedded_pub = bytes(int(x, 16) for x in re.findall(r'0x([0-9a-fA-F]{2})', match.group(1)))
+          resp_embedded_pub = bytes(int(x, 16) for x in re.findall(r'0x([0-9a-fA-F]{2})', resp_match.group(1)))
+          if len(embedded_pub) != 32 or len(resp_embedded_pub) != 32:
+              raise SystemExit("FAIL: embedded public keys must be 32 bytes")
+
+          if not (derived_pub == pem_pub == embedded_pub):
+              raise SystemExit("FAIL: AXB keypair smoke check failed")
+          if not (resp_derived_pub == resp_pem_pub == resp_embedded_pub):
+              raise SystemExit("FAIL: response keypair smoke check failed")
+          print("OK: AXB and response keypair smoke check passed")
+          PY
 
       - name: Download Linux native (real-seed)
         uses: actions/download-artifact@v5
@@ -586,6 +670,7 @@ jobs:
       - name: Upload encrypted modules (.axb) to cloud
         env:
           CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
+          FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}
         run: |
           set -euo pipefail
           if [ -z "${CLOUD_CI_TOKEN:-}" ]; then
@@ -642,4 +727,31 @@ jobs:
             rm -f "$RESP"
             echo ""
             echo "OK: $module 已上传云端（setCurrent=true）"
+
+            FLARE_BASE_URL="${FLARE_BASE_URL:-https://flare.021209.xyz}"
+            RESP_FLARE=$(mktemp)
+            set +e
+            curl -fS --retry 3 --retry-delay 5 --retry-max-time 60 --max-time 120 \
+              -o "$RESP_FLARE" \
+              -F "axb=@$axb" \
+              -F "version=$version" \
+              -F "key=$key" \
+              -F "iv=$iv" \
+              -F "setCurrent=true" \
+              -H "X-CI-Token: $CLOUD_CI_TOKEN" \
+              "${FLARE_BASE_URL}/v1/ci/modules/$module/versions"
+            FLARE_EXIT=$?
+            set -e
+            echo ""
+            if [ $FLARE_EXIT -ne 0 ]; then
+              echo "WARN: FlareCloud module upload failed (exit=$FLARE_EXIT)"
+              if [ -s "$RESP_FLARE" ]; then
+                echo "FlareCloud response:"
+                cat "$RESP_FLARE"
+              fi
+            else
+              cat "$RESP_FLARE"
+              echo "OK: module mirrored to FlareCloud"
+            fi
+            rm -f "$RESP_FLARE"
           done
