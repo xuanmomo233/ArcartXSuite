@@ -29,35 +29,19 @@ except ImportError:
     HAS_CRYPTO = False
 
 
-def generate_ed25519_keypair():
-    """生成 Ed25519 签名密钥对（优先复用 env 固定种子 AXB_SIGN_SEED_B64，缺省随机生成）"""
-    fixed_b64 = os.environ.get("AXB_SIGN_SEED_B64", "").strip()
+def _load_ed25519_keypair_from_env(env_name: str, label: str):
+    fixed_b64 = os.environ.get(env_name, "").strip()
     if HAS_CRYPTO:
         if fixed_b64:
             seed = base64.b64decode(fixed_b64)
             if len(seed) != 32:
-                raise ValueError(f"AXB_SIGN_SEED_B64 解码后必须为 32 字节, 实际 {len(seed)}")
+                raise ValueError(f"{env_name} 解码后必须为 32 字节, 实际 {len(seed)}")
             private_key = Ed25519PrivateKey.from_private_bytes(seed)
-            print("[*] 复用固定 Ed25519 签名密钥对 (env AXB_SIGN_SEED_B64)")
+            print(f"[*] 复用固定 {label} Ed25519 密钥对 (env {env_name})")
         else:
             private_key = Ed25519PrivateKey.generate()
-        public_key = private_key.public_key()
-
-        private_pem = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        public_pem = public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
-        raw_seed = private_key.private_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PrivateFormat.Raw,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        return private_pem, public_pem, raw_seed
+            print(f"[*] 生成新的 {label} Ed25519 密钥对")
+        return private_key
     else:
         # 回退：使用 secrets 生成随机种子（不生成真正的 Ed25519 密钥）
         print("[!] cryptography 库未安装，使用随机种子替代 Ed25519 密钥")
@@ -65,6 +49,56 @@ def generate_ed25519_keypair():
         private_seed = base64.b64decode(fixed_b64) if fixed_b64 else secrets.token_bytes(32)
         public_seed = hashlib.sha256(private_seed).digest()
         return private_seed, public_seed, private_seed
+
+
+def generate_ed25519_keypair():
+    """生成 Ed25519 签名密钥对（优先复用 env 固定种子 AXB_SIGN_SEED_B64，缺省随机生成）"""
+    result = _load_ed25519_keypair_from_env("AXB_SIGN_SEED_B64", "AXB 签名")
+    if not HAS_CRYPTO:
+        return result
+
+    private_key = result
+    public_key = private_key.public_key()
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+    public_pem = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    raw_seed = private_key.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+    return private_pem, public_pem, raw_seed
+
+
+def generate_response_ed25519_keypair():
+    """生成响应签名 Ed25519 密钥对（优先复用 env 固定种子 AXB_RESP_SIGN_SEED_B64）"""
+    result = _load_ed25519_keypair_from_env("AXB_RESP_SIGN_SEED_B64", "响应签名")
+    if not HAS_CRYPTO:
+        return result
+
+    private_key = result
+    public_key = private_key.public_key()
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+    public_pem = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    raw_seed = private_key.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+    return private_pem, public_pem, raw_seed
 
 
 def generate_root_seed():
@@ -150,22 +184,31 @@ def main():
     # 1. 生成 Ed25519 密钥对
     print("[1/5] 生成 Ed25519 签名密钥对...")
     private_key, public_key, axb_sign_seed = generate_ed25519_keypair()
+    response_private_key, response_public_key, response_sign_seed = generate_response_ed25519_keypair()
 
     # 注意：crypto 分支返回的是 PEM 字节（也是 bytes），不能用 isinstance(bytes) 区分，
     # 必须用 HAS_CRYPTO 判定，否则会永远走回退命名、永远不产出 .pem。
     if HAS_CRYPTO:
         (version_dir / "ed25519_private.pem").write_bytes(private_key)
         (version_dir / "ed25519_public.pem").write_bytes(public_key)
+        (version_dir / "response_ed25519_private.pem").write_bytes(response_private_key)
+        (version_dir / "response_ed25519_public.pem").write_bytes(response_public_key)
     else:
         # 回退模式（无 cryptography）：写原始字节，文件名与 embed-keys 期望的 *_raw.bin 对齐
         (version_dir / "ed25519_private_raw.bin").write_bytes(private_key)
         (version_dir / "ed25519_public_raw.bin").write_bytes(public_key)
+        (version_dir / "response_ed25519_private_raw.bin").write_bytes(response_private_key)
+        (version_dir / "response_ed25519_public_raw.bin").write_bytes(response_public_key)
 
     # V6: 后端 .axb 签名私钥（= 与 native 内嵌公钥同一 Ed25519 密钥对的原始 32 字节种子）。
     # 运维把此 Base64 配置到后端 AXB_SIGN_PRIVATE_KEY_B64，即可与 native 验签公钥匹配。
     (version_dir / "axb_sign_private_key_b64.txt").write_text(
         base64.b64encode(axb_sign_seed).decode("ascii")
     )
+    if response_sign_seed is not None:
+        (version_dir / "response_sign_private_key_b64.txt").write_text(
+            base64.b64encode(response_sign_seed).decode("ascii")
+        )
 
     # 2. 生成 root seed
     print("[2/5] 生成 root seed...")
@@ -206,6 +249,7 @@ def main():
             "root_seed.bin: 256-bit 主密钥种子，用于 native 层 HKDF 派生",
             "ed25519_private.pem: Ed25519 签名私钥，用于签名 JAR 完整性哈希",
             "ed25519_public.pem: Ed25519 签名公钥，嵌入 native 库用于验证",
+            "response_ed25519_public.pem: 响应签名公钥，嵌入 native 库用于响应验签",
             "root_seed_native.txt: root seed 的 C/C++ 分散存储代码",
             "class_key_params.json: 每个类的 HKDF salt 和 info 参数",
             "hardware_fingerprint.json: 硬件指纹采集源配置"

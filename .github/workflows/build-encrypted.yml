@@ -125,6 +125,7 @@ jobs:
       - name: Generate keys + embed into native sources
         env:
           AXB_SIGN_SEED_B64: ${{ secrets.AXB_SIGN_SEED_B64 }}
+          AXB_RESP_SIGN_SEED_B64: ${{ secrets.AXB_RESP_SIGN_SEED_B64 }}
           # 固定 seed 分片 → canonical root_seed 跨 CI 稳定，本体与单独重建的模块同一真实 seed
           AXS_SEED_PARTS_B64: ${{ secrets.AXS_SEED_PARTS_B64 }}
         run: |
@@ -325,6 +326,7 @@ jobs:
       - name: AXB keypair smoke check
         env:
           AXB_SIGN_SEED_B64: ${{ secrets.AXB_SIGN_SEED_B64 }}
+          AXB_RESP_SIGN_SEED_B64: ${{ secrets.AXB_RESP_SIGN_SEED_B64 }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -343,6 +345,14 @@ jobs:
               format=serialization.PublicFormat.Raw,
           )
 
+          resp_seed = base64.b64decode(os.environ["AXB_RESP_SIGN_SEED_B64"].strip())
+          if len(resp_seed) != 32:
+              raise SystemExit("FAIL: AXB_RESP_SIGN_SEED_B64 must decode to 32 bytes")
+          resp_derived_pub = Ed25519PrivateKey.from_private_bytes(resp_seed).public_key().public_bytes(
+              encoding=serialization.Encoding.Raw,
+              format=serialization.PublicFormat.Raw,
+          )
+
           keys_root = pathlib.Path("keys")
           version = (keys_root / "current_version.txt").read_text(encoding="utf-8").strip()
           pem_path = keys_root / version / "ed25519_public.pem"
@@ -350,18 +360,29 @@ jobs:
               encoding=serialization.Encoding.Raw,
               format=serialization.PublicFormat.Raw,
           )
+          resp_pem_path = keys_root / version / "response_ed25519_public.pem"
+          resp_pem_pub = serialization.load_pem_public_key(resp_pem_path.read_bytes()).public_bytes(
+              encoding=serialization.Encoding.Raw,
+              format=serialization.PublicFormat.Raw,
+          )
 
           source = (pathlib.Path("protect-material/native-src/integrity_check.cpp").read_text(encoding="utf-8"))
           match = re.search(r'static const uint8_t ed25519_public_key\[32\]\s*=\s*\{([^}]*)\};', source, re.S)
+          resp_match = re.search(r'static const uint8_t ed25519_response_public_key\[32\]\s*=\s*\{([^}]*)\};', source, re.S)
           if not match:
               raise SystemExit("FAIL: embedded ed25519_public_key not found")
+          if not resp_match:
+              raise SystemExit("FAIL: embedded ed25519_response_public_key not found")
           embedded_pub = bytes(int(x, 16) for x in re.findall(r'0x([0-9a-fA-F]{2})', match.group(1)))
-          if len(embedded_pub) != 32:
-              raise SystemExit("FAIL: embedded ed25519_public_key must be 32 bytes")
+          resp_embedded_pub = bytes(int(x, 16) for x in re.findall(r'0x([0-9a-fA-F]{2})', resp_match.group(1)))
+          if len(embedded_pub) != 32 or len(resp_embedded_pub) != 32:
+              raise SystemExit("FAIL: embedded public keys must be 32 bytes")
 
           if not (derived_pub == pem_pub == embedded_pub):
               raise SystemExit("FAIL: AXB keypair smoke check failed")
-          print("OK: AXB keypair smoke check passed")
+          if not (resp_derived_pub == resp_pem_pub == resp_embedded_pub):
+              raise SystemExit("FAIL: response keypair smoke check failed")
+          print("OK: AXB and response keypair smoke check passed")
           PY
 
       - name: Download Linux native (real-seed)

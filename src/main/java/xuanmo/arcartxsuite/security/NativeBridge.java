@@ -214,6 +214,17 @@ public final class NativeBridge {
     public static native boolean n7(byte[] rootHash, byte[] signature);
 
     /**
+     * 验证云端响应的 Ed25519 签名。
+     * 消息内容 = UTF-8 的 "<ts>\n<rawBody>"。
+     */
+    public static native boolean verifyResponseSig(long timestamp, byte[] body, byte[] signature);
+
+    /**
+     * 响应验签是否启用：仅硬化构建且内嵌的响应公钥非占位时返回 true。
+     */
+    public static native boolean responseVerifyActive();
+
+    /**
      * 增强型调试环境检测（Frida、硬件断点、IAT/PLT hook）。
      * 返回威胁等级 bitmap（0 = 安全）。
      */
