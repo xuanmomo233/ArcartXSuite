@@ -471,6 +471,7 @@ jobs:
         if: success()
         env:
           CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
+          FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}
         run: |
           set -euo pipefail
           if [ -z "${CLOUD_CI_TOKEN:-}" ]; then
@@ -512,6 +513,29 @@ jobs:
           rm -f "$RESP"
           echo ""
           echo "OK: 本体 jar 已上传云端（setCurrent=true）"
+          # ── FlareCloud 镜像（故障转移备份，失败不阻断 CI）──
+          FLARE_BASE_URL="${FLARE_BASE_URL:-https://flare.021209.xyz}"
+          RESP_FLARE=$(mktemp)
+          set +e
+          curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
+            -o "$RESP_FLARE" \
+            -X POST \
+            -F "jar=@$OUT" \
+            -F "version=$VERSION" \
+            -F "releaseNotes=CI build ${{ github.sha }}" \
+            -F "setCurrent=true" \
+            -H "X-CI-Token: $CLOUD_CI_TOKEN" \
+            "${FLARE_BASE_URL}/v1/ci/app-jar/versions"
+          FLARE_EXIT=$?
+          set -e
+          if [ $FLARE_EXIT -ne 0 ]; then
+            echo "WARN: FlareCloud 本体镜像失败 (exit=$FLARE_EXIT)"
+            [ -s "$RESP_FLARE" ] && cat "$RESP_FLARE" || true
+          else
+            cat "$RESP_FLARE"
+            echo "OK: 本体 jar 已镜像到 FlareCloud"
+          fi
+          rm -f "$RESP_FLARE"
 
       - name: Build proxy JARs (Bungee + Velocity)
         if: success()
@@ -522,6 +546,7 @@ jobs:
         env:
           CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
           CLOUD_BASE_URL: https://cloud.021209.xyz
+          FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}
         run: |
           set -euo pipefail
           if [ -z "${CLOUD_CI_TOKEN:-}" ]; then
@@ -562,6 +587,28 @@ jobs:
             cat "$RESP"
             rm -f "$RESP"
             echo "OK: proxy/$FLAVOR 已上传"
+            # ── FlareCloud 镜像（失败不阻断）──
+            FLARE_BASE_URL="${FLARE_BASE_URL:-https://flare.021209.xyz}"
+            RESP_FLARE=$(mktemp)
+            set +e
+            curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
+              -o "$RESP_FLARE" \
+              -X POST \
+              -F "jar=@$JAR" \
+              -F "version=$VERSION" \
+              -F "releaseNotes=CI build ${{ github.sha }}" \
+              -F "setCurrent=true" \
+              -H "X-CI-Token: $CLOUD_CI_TOKEN" \
+              "${FLARE_BASE_URL}/v1/ci/proxy-jar/$FLAVOR/versions"
+            FLARE_EXIT=$?
+            set -e
+            if [ $FLARE_EXIT -ne 0 ]; then
+              echo "WARN: FlareCloud proxy/$FLAVOR 镜像失败 (exit=$FLARE_EXIT)"
+              cat "$RESP_FLARE" || true
+            else
+              echo "OK: proxy/$FLAVOR 已镜像到 FlareCloud"
+            fi
+            rm -f "$RESP_FLARE"
           }
           upload_one bungee "proxy/bungee/build/libs/ArcartXSuite-Proxy-Bungee-*.jar"
           upload_one velocity "proxy/velocity/build/libs/ArcartXSuite-Proxy-Velocity-*.jar"
@@ -590,6 +637,7 @@ jobs:
         env:
           CLOUD_CI_TOKEN: ${{ secrets.CLOUD_CI_TOKEN }}
           CLOUD_BASE_URL: https://cloud.021209.xyz
+          FLARE_BASE_URL: ${{ vars.FLARE_BASE_URL }}
         run: |
           set -euo pipefail
           if [ -z "${CLOUD_CI_TOKEN:-}" ]; then
@@ -615,6 +663,28 @@ jobs:
               -F "setCurrent=true" \
               -H "X-CI-Token: $CLOUD_CI_TOKEN" \
               "$CLOUD_BASE_URL/v1/ci/proxy-jar/$FLAVOR/versions"
+            # ── FlareCloud 镜像（失败不阻断）──
+            FLARE_BASE_URL="${FLARE_BASE_URL:-https://flare.021209.xyz}"
+            RESP_FLARE=$(mktemp)
+            set +e
+            curl -fS --http1.1 --retry 5 --retry-delay 5 --retry-all-errors --retry-max-time 300 --max-time 300 \
+              -o "$RESP_FLARE" \
+              -X POST \
+              -F "jar=@$JAR" \
+              -F "version=$VERSION" \
+              -F "releaseNotes=CI build ${{ github.sha }}" \
+              -F "setCurrent=true" \
+              -H "X-CI-Token: $CLOUD_CI_TOKEN" \
+              "${FLARE_BASE_URL}/v1/ci/proxy-jar/$FLAVOR/versions"
+            FLARE_EXIT=$?
+            set -e
+            if [ $FLARE_EXIT -ne 0 ]; then
+              echo "WARN: FlareCloud proxy/$FLAVOR 镜像失败 (exit=$FLARE_EXIT)"
+              cat "$RESP_FLARE" || true
+            else
+              echo "OK: proxy/$FLAVOR 已镜像到 FlareCloud"
+            fi
+            rm -f "$RESP_FLARE"
           }
           upload_one bungee "proxy/bungee/build/libs/ArcartXSuite-Proxy-Bungee-*.jar"
           upload_one velocity "proxy/velocity/build/libs/ArcartXSuite-Proxy-Velocity-*.jar"
