@@ -1,0 +1,194 @@
+name: Native AXB Signature Check
+
+# Manual + branch-push trigger. Builds native with AXS_PRODUCTION=ON and validates
+# the .axb Ed25519 signature gate (NativeBridge.n10) end-to-end at runtime:
+#   - CI generates a fresh random Ed25519 keypair (no repo secrets, no server)
+#   - embed-keys.py embeds the pubkey into native/src/integrity_check.cpp
+#   - wrap-axb.py packs a sample .axb; sign-axb-test.py signs the raw .axb bytes
+#   - the JVM harness calls NativeBridge.n10(axb, key, sig) and asserts:
+#       * valid signed .axb        -> accepted (non-null result)
+#       * tampered signature/.axb  -> rejected (null), i.e. fail-closed
+# Trigger: manual workflow_dispatch only (post-validation).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# generate-keys.py / embed-keys.py print CJK text; force Python UTF-8 mode so
+# stdout does not crash under the Windows runner's default cp1252 code page.
+env:
+  PYTHONUTF8: "1"
+
+jobs:
+  axbcheck-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ libssl-dev zlib1g-dev default-jdk-headless
+          pip install cryptography
+
+      - name: Generate fresh keys
+        run: |
+          python scripts/generate-keys.py --output keys/
+          echo "KEYS_DIR=keys/$(cat keys/current_version.txt)" >> "$GITHUB_ENV"
+
+      - name: Embed keys into native sources
+        run: python scripts/embed-keys.py --keys-dir "$KEYS_DIR" --native-dir native/src
+
+      - name: Build native library (AXS_PRODUCTION=ON)
+        run: |
+          cd native
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DAXS_PRODUCTION=ON
+          cmake --build build --config Release
+
+      - name: Locate native library
+        run: |
+          LIB_PATH=$(find src/main/resources/native -maxdepth 1 -type f \( -name "libaxs-native.so" -o -name "axs-native.so" \) | head -1)
+          if [ -z "$LIB_PATH" ]; then
+            echo "ERROR: no native library found"
+            find src/main/resources/native -type f || true
+            exit 1
+          fi
+          echo "LIB_PATH=$LIB_PATH" >> "$GITHUB_ENV"
+
+      - name: Inject native self-hash
+        run: python scripts/inject-self-hash.py "$LIB_PATH"
+
+      - name: Make test payload and wrap as .axb
+        run: |
+          mkdir -p build/axbcheck
+          python -c "import os,zipfile; os.makedirs('build/axbcheck',exist_ok=True); z=zipfile.ZipFile('build/axbcheck/sample.jar','w'); z.writestr('a.txt','axb-check-sample'); z.close()"
+          python scripts/wrap-axb.py --input build/axbcheck/sample.jar --output build/axbcheck/sample.axb
+
+      - name: Sign the raw .axb bytes
+        run: python scripts/sign-axb-test.py --axb build/axbcheck/sample.axb --seed-b64-file "$KEYS_DIR/axb_sign_private_key_b64.txt" --output build/axbcheck/sample.sig
+
+      - name: Tamper copies
+        run: |
+          python scripts/make-tampered-copy.py build/axbcheck/sample.sig build/axbcheck/sample.sig.tampered
+          python scripts/make-tampered-copy.py build/axbcheck/sample.axb build/axbcheck/sample.axb.tampered
+
+      - name: Compile Java harness
+        run: |
+          mkdir -p build/axbcheck/out
+          javac -encoding UTF-8 -d build/axbcheck/out native/selfcheck/xuanmo/arcartxsuite/security/NativeBridge.java native/selfcheck/AxbCheckHarness.java
+
+      - name: Positive - signed .axb must pass
+        run: java -cp build/axbcheck/out AxbCheckHarness "$LIB_PATH" build/axbcheck/sample.axb build/axbcheck/sample.meta.json build/axbcheck/sample.sig expect_pass
+
+      - name: Negative - tampered signature must fail closed
+        run: java -cp build/axbcheck/out AxbCheckHarness "$LIB_PATH" build/axbcheck/sample.axb build/axbcheck/sample.meta.json build/axbcheck/sample.sig.tampered expect_tamper
+
+      - name: Negative - tampered payload must fail closed
+        run: java -cp build/axbcheck/out AxbCheckHarness "$LIB_PATH" build/axbcheck/sample.axb.tampered build/axbcheck/sample.meta.json build/axbcheck/sample.sig expect_tamper
+
+  axbcheck-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup MSYS2 MinGW-w64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-make
+            make
+            file
+
+      - name: Install cryptography
+        shell: pwsh
+        run: pip install cryptography
+
+      - name: Generate fresh keys
+        shell: pwsh
+        run: |
+          python scripts/generate-keys.py --output keys/
+          $keyDir = Join-Path 'keys' (Get-Content keys/current_version.txt).Trim()
+          "KEYS_DIR=$keyDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Embed keys into native sources
+        shell: pwsh
+        run: python scripts/embed-keys.py --keys-dir $env:KEYS_DIR --native-dir native/src
+
+      - name: Build native library (AXS_PRODUCTION=ON)
+        shell: msys2 {0}
+        run: |
+          cd native
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DAXS_PRODUCTION=ON -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
+          cmake --build build --verbose
+
+      - name: Locate native library
+        shell: pwsh
+        run: |
+          $dll = Get-ChildItem -Path src/main/resources/native -File | Where-Object { $_.Name -in @('axs-native.dll','libaxs-native.dll') } | Select-Object -First 1
+          if (-not $dll) {
+            Write-Error "No axs-native DLL found in src/main/resources/native!"
+            Get-ChildItem -Path src/main/resources/native -File | ForEach-Object { $_.FullName }
+            exit 1
+          }
+          "LIB_PATH=$($dll.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Inject native self-hash
+        shell: pwsh
+        run: python scripts/inject-self-hash.py $env:LIB_PATH
+
+      - name: Make test payload and wrap as .axb
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build/axbcheck | Out-Null
+          python -c "import os,zipfile; os.makedirs('build/axbcheck',exist_ok=True); z=zipfile.ZipFile('build/axbcheck/sample.jar','w'); z.writestr('a.txt','axb-check-sample'); z.close()"
+          python scripts/wrap-axb.py --input build/axbcheck/sample.jar --output build/axbcheck/sample.axb
+
+      - name: Sign the raw .axb bytes
+        shell: pwsh
+        run: python scripts/sign-axb-test.py --axb build/axbcheck/sample.axb --seed-b64-file "$env:KEYS_DIR/axb_sign_private_key_b64.txt" --output build/axbcheck/sample.sig
+
+      - name: Tamper copies
+        shell: pwsh
+        run: |
+          python scripts/make-tampered-copy.py build/axbcheck/sample.sig build/axbcheck/sample.sig.tampered
+          python scripts/make-tampered-copy.py build/axbcheck/sample.axb build/axbcheck/sample.axb.tampered
+
+      - name: Compile Java harness
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build/axbcheck/out | Out-Null
+          javac -encoding UTF-8 -d build/axbcheck/out native/selfcheck/xuanmo/arcartxsuite/security/NativeBridge.java native/selfcheck/AxbCheckHarness.java
+
+      - name: Positive - signed .axb must pass
+        shell: pwsh
+        run: java -cp build/axbcheck/out AxbCheckHarness "$env:LIB_PATH" build/axbcheck/sample.axb build/axbcheck/sample.meta.json build/axbcheck/sample.sig expect_pass
+
+      - name: Negative - tampered signature must fail closed
+        shell: pwsh
+        run: java -cp build/axbcheck/out AxbCheckHarness "$env:LIB_PATH" build/axbcheck/sample.axb build/axbcheck/sample.meta.json build/axbcheck/sample.sig.tampered expect_tamper
+
+      - name: Negative - tampered payload must fail closed
+        shell: pwsh
+        run: java -cp build/axbcheck/out AxbCheckHarness "$env:LIB_PATH" build/axbcheck/sample.axb.tampered build/axbcheck/sample.meta.json build/axbcheck/sample.sig expect_tamper

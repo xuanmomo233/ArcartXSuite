@@ -15,12 +15,18 @@ on:
 
 permissions:
   contents: read
+env:
+  # Keep native fail-closed self-integrity OFF until the injected self-hash path is validated in CI.
+  AXS_PRODUCTION: OFF
 
 jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
@@ -30,8 +36,10 @@ jobs:
       - name: Build native library
         run: |
           cd native
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DAXS_PRODUCTION="${AXS_PRODUCTION}"
           cmake --build build --config Release
+      - name: Inject native self-hash
+        run: python scripts/inject-self-hash.py src/main/resources/native/libaxs-native.so
 
       - name: Compile hardened native library (validation only)
         run: |
@@ -52,6 +60,9 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
       - name: Setup JDK
         uses: actions/setup-java@v5
@@ -77,8 +88,22 @@ jobs:
         shell: msys2 {0}
         run: |
           cd native
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DAXS_PRODUCTION="${AXS_PRODUCTION}" -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
           cmake --build build --verbose
+      - name: Inject native self-hash
+        shell: pwsh
+        run: |
+          # 用 pwsh（而非 msys2）执行：setup-python 的 python 在默认 shell 的 PATH 上，
+          # 而 MSYS2 MINGW64 环境未安装/未暴露该 python，会报 command not found。
+          $dll = Get-ChildItem -Path src/main/resources/native -File |
+                 Where-Object { $_.Name -in @('axs-native.dll','libaxs-native.dll') } |
+                 Select-Object -First 1
+          if (-not $dll) {
+            Write-Error "No axs-native DLL found in src/main/resources/native!"
+            Get-ChildItem -Path src/main/resources/native -File | ForEach-Object { $_.FullName }
+            exit 1
+          }
+          python scripts/inject-self-hash.py $dll.FullName
 
       - name: Compile hardened native library (validation only)
         shell: msys2 {0}

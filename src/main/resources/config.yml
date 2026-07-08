@@ -1,4 +1,4 @@
-﻿config-version: 2
+config-version: 2
 
 # ========== 云端授权（AXS Cloud Platform）==========
 # 连接 AXS 云端平台，按服主账号下发已购买/免费模块。
@@ -28,6 +28,8 @@ cloud:
   server-code: ""
   # 调试日志：开启后会输出签名、密钥 hash 等敏感诊断信息，生产环境请保持 false。
   debug: false
+  # Base64 Ed25519 SubjectPublicKeyInfo values used to verify signed JSON responses.
+  response-signature-public-keys: []
 
 
 # ========== 安全设置 ==========
@@ -594,6 +596,5 @@ modules:
     enabled: false
     # Lottery 抽奖系统
     # 功能：CS 开箱动画、原神祈愿卡池（单抽 / 十连）、保底机制（大小保底）、磨损度系统（影响物品外观价值）。
-
 
 

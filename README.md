@@ -41,29 +41,34 @@
 | **CombatEffect** | 战斗特效包（击中/暴击/击杀） |
 | **EventPacket** | 事件包分发引擎 |
 | **Prop** | 快捷道具栏 |
-| **Chat** | 全频道聊天系统 |
 | **Essentials** | 基础工具（传送/管控/一键砍树） |
 | **Regions** | 区域保护（40+ 标志） |
 | **AFKReward** | 挂机奖励 |
-| **Fishing** | 钓鱼小游戏 |
-| **Lottery** | 抽奖系统 |
-| **Menu** | 通用菜单框架 |
-| **BattlePass** | 战斗通行证 |
 
 ### 付费模块
 
 | 模块 | 说明 |
 |------|------|
-| **Tab** | 自定义 Tab 列表面板 |
-| **Title** | 称号系统（属性联动） |
-| **Conversation** | NPC 对话引擎 |
-| **EntityTracker** | Boss / 目标追踪面板 |
+| **title** | 称号系统（属性联动） |
+| **conversation** | NPC 对话引擎 |
 | **Mail** | 邮件系统 |
 | **Warehouse** | 仓库系统 |
 | **QuestGPS** | 任务导航系统 |
 | **Map** | 大地图 / 锚点系统 |
 | **Market** | 全球市场（商店 + 拍卖行 + 回收） |
 | **QQBot** | QQ 群服互联（OneBot 11 协议） |
+| **Menu** | 通用菜单框架 |
+| **Fishing** | 钓鱼小游戏 |
+| **Lottery** | 抽奖系统 |
+| **BattlePass** | 战斗通行证 |
+
+### 福利模块
+
+| 模块 | 说明 |
+|------|------|
+| **Chat** | 全频道聊天系统 |
+| **Tab** | 自定义 Tab 列表面板 |
+| **EntityTracker** | Boss / 目标追踪面板 |
 
 ---
 

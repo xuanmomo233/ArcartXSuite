@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.security.protection;
 
 import xuanmo.arcartxsuite.security.NativeBridge;
+import xuanmo.arcartxsuite.security.protection.ProtectionEnvironment;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -116,6 +117,9 @@ public final class ProtectedClassLoader extends ClassLoader {
             throw new ClassNotFoundException("Protection unavailable: " + name);
         }
 
+        if (!ProtectionEnvironment.ensureCleanEnvironment()) {
+            throw new ClassNotFoundException("Protection compromised: " + name);
+        }
         byte[] plain = null;
         try {
             byte[] encData = readEntry(entry);

@@ -625,6 +625,23 @@ public final class ModuleRegistry {
         return ids;
     }
 
+    /**
+     * 为指定云端模块创建 jarBytes + moduleSeed 快照，用于更新失败时回滚。
+     * 非云端模块或模块未加载时返回 null。
+     */
+    public CloudModuleSnapshot createSnapshot(String moduleId) {
+        LoadedModule loaded = modules.get(moduleId);
+        if (loaded == null || !(loaded.classLoader() instanceof ByteArrayModuleClassLoader)) {
+            return null;
+        }
+        byte[] bytes = loaded.jarBytes();
+        byte[] seed = loaded.moduleSeed();
+        if (bytes == null) {
+            return null;
+        }
+        return new CloudModuleSnapshot(bytes, seed);
+    }
+
     public Map<String, ModuleCommandHandler> commandHandlerMap() {
         return Collections.unmodifiableMap(commandHandlers);
     }
@@ -759,6 +776,8 @@ public final class ModuleRegistry {
             }
         } catch (IOException exception) {
             LOGGER.warning("关闭模块 ClassLoader 失败: " + loaded.descriptor().id() + " | " + exception.getMessage());
+        } finally {
+            loaded.clearSensitiveMaterial();
         }
     }
 
@@ -1297,6 +1316,22 @@ public final class ModuleRegistry {
             enabledModules = List.copyOf(enabledModules);
             skippedModules = List.copyOf(skippedModules);
             failedModules = List.copyOf(failedModules);
+        }
+    }
+    public record CloudModuleSnapshot(byte[] jarBytes, byte[] moduleSeed) implements AutoCloseable {
+        public CloudModuleSnapshot {
+            jarBytes = jarBytes == null ? null : jarBytes.clone();
+            moduleSeed = moduleSeed == null ? null : moduleSeed.clone();
+        }
+        @Override
+        public void close() {
+            wipe(jarBytes);
+            wipe(moduleSeed);
+        }
+        private static void wipe(byte[] data) {
+            if (data != null) {
+                java.util.Arrays.fill(data, (byte) 0);
+            }
         }
     }
 }
