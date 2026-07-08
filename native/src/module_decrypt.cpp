@@ -68,8 +68,8 @@ static std::vector<unsigned char> ungzip(const unsigned char *data, int data_len
 
 // ─── JNI 导出：解密云端模块 .axb ───────────────────────────────
 //
-// axb 文件自包含格式：IV(12 字节) + 密文 + GCM 认证标签(16 字节)。
-// 故 IV 直接从 axb 前 12 字节读取，无需单独传入。
+// axb 文件自包含格式：magic(4 字节) + IV(12 字节) + 密文 + GCM 认证标签(16 字节)。
+// 故跳过前 4 字节 magic 后读取 12 字节 IV，无需单独传入。
 
 jbyteArray decryptModule(
     JNIEnv *env, jclass clazz, jbyteArray encryptedAxb, jbyteArray key) {

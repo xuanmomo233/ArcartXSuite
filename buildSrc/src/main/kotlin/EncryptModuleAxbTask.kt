@@ -22,7 +22,7 @@ import org.gradle.work.DisableCachingByDefault
  * 将模块 Jar 加密为 .axb 文件，用于上传到 AXS Cloud Platform。
  *
  * 加密流程：GZIP 压缩 → AES-256-GCM 加密。
- * 输出格式：IV (12 bytes) + ciphertext + auth tag (16 bytes)。
+ * 输出格式：随机 magic (4 bytes) + IV (12 bytes) + ciphertext + auth tag (16 bytes)。
  *
  * 模块作者需在 Gradle 中配置 moduleKey 和 moduleIv（Base64），
  * 或在任务执行时自动生成随机密钥并输出到控制台。
