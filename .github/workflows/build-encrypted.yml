@@ -251,15 +251,19 @@ jobs:
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DAXS_PRODUCTION="${AXS_PRODUCTION}" -G "MinGW Makefiles" -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++
           cmake --build build --verbose
       - name: Inject native self-hash
-        shell: msys2 {0}
+        shell: pwsh
         run: |
-          DLL_PATH=$(find src/main/resources/native -maxdepth 1 -type f \( -name "axs-native.dll" -o -name "libaxs-native.dll" \) | head -1)
-          if [ -z "$DLL_PATH" ]; then
-            echo "ERROR: No axs-native DLL found"
-            find src/main/resources/native -type f || true
+          # 用 pwsh（而非 msys2）执行：setup-python 的 python 在默认 shell 的 PATH 上，
+          # 而 MSYS2 MINGW64 环境未安装/未暴露该 python，会报 command not found。
+          $dll = Get-ChildItem -Path src/main/resources/native -File |
+                 Where-Object { $_.Name -in @('axs-native.dll','libaxs-native.dll') } |
+                 Select-Object -First 1
+          if (-not $dll) {
+            Write-Error "No axs-native DLL found in src/main/resources/native!"
+            Get-ChildItem -Path src/main/resources/native -File | ForEach-Object { $_.FullName }
             exit 1
-          fi
-          python scripts/inject-self-hash.py "$DLL_PATH"
+          }
+          python scripts/inject-self-hash.py $dll.FullName
 
       - name: Locate and normalize DLL name
         shell: msys2 {0}
