@@ -29,6 +29,12 @@ ui:
       var.footerCount = packet['footerCount']
       var.maxButtonCount = packet['maxButtonCount']
       var.maxFooterCount = packet['maxFooterCount']
+      while(val.button_rows.childrenCount() > 1){
+        val.button_rows.get(1).remove()
+      }
+      while(val.footer_rows.childrenCount() > 1){
+        val.footer_rows.get(1).remove()
+      }
       for(i in range(0, var.buttonCount)){
         key = i.round()
         mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
@@ -222,13 +228,13 @@ controls:
                       width: 218
                       height: 60
                       normal: "self.entry != none && self.entry['enabled'] ? '95,95,95,255' : '55,55,55,200'"
-                      hover: "self.entry != none && self.entry['enabled'] ? '255,255,255,255' : '55,55,55,200'"
+                      hover: "self.entry != none && self.entry['enabled'] ? '120,120,120,255' : '55,55,55,200'"
                       shape: ~round_rect
                       radius: 10
                     effect:
                       stroke:
                         width: 2
-                        color: "self.entry != none && self.entry['enabled'] ? '~255,255,255,255' : '~120,120,120,255'"
+                        color: "self.entry != none && self.entry['enabled'] ? '255,255,255,255' : '120,120,120,255'"
                     action:
                       clickLeft: |-
                         if(self.entry != none && self.entry['enabled']){
@@ -341,7 +347,7 @@ controls:
                     effect:
                       stroke:
                         width: 2
-                        color: "self.entry != none && self.entry['enabled'] ? '~255,255,255,255' : '~120,120,120,255'"
+                        color: "self.entry != none && self.entry['enabled'] ? '255,255,255,255' : '120,120,120,255'"
                     action:
                       clickLeft: |-
                         if(self.entry != none && self.entry['enabled']){
