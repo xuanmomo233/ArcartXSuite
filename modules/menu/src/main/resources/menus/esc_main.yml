@@ -50,7 +50,7 @@ pages:
         #   command: 执行指令 | close: 关闭菜单 | open: 打开其他菜单
         #   page: 跳转页面 | message: 发送消息
         actions:
-          - "command: /market shop"
+          - "command: market shop"
           - "close"
 
       # ——— 仓库系统按钮 ———
@@ -58,7 +58,7 @@ pages:
         text: "&f仓库系统"
         order: 1
         actions:
-          - "command: /warehouse open"
+          - "command: warehouse open"
           - "close"
 
       # ——— 邮件按钮 ———
@@ -66,7 +66,7 @@ pages:
         text: "&f邮件"
         order: 2
         actions:
-          - "command: /mail open"
+          - "command: mail open"
           - "close"
 
       # ——— 在线奖励按钮 ———
@@ -78,7 +78,7 @@ pages:
         #   - "%player_level% >= 5"
         # deny-message: "&c需要达到 5 级才能领取在线奖励"
         actions:
-          - "command: /onlinerewards open"
+          - "command: onlinerewards open"
           - "close"
 
       # ——— 任务导航按钮 ———
@@ -86,7 +86,7 @@ pages:
         text: "&f任务"
         order: 4
         actions:
-          - "command: /questgps open"
+          - "command: questgps open"
           - "close"
 
       # ——— 地图按钮 ———
@@ -94,7 +94,7 @@ pages:
         text: "&f地图"
         order: 5
         actions:
-          - "command: /map open"
+          - "command: map open"
           - "close"
 
       # ——— 称号按钮 ———
@@ -102,7 +102,7 @@ pages:
         text: "&f称号"
         order: 6
         actions:
-          - "command: /title open"
+          - "command: title open"
           - "close"
 
       # ——— 功能菜单（跳转到 example 子菜单） ———
@@ -119,7 +119,7 @@ pages:
         text: "&f帮助"
         order: 8
         actions:
-          - "command: /help"
+          - "command: help"
 
 # 底部固定按钮（ESC 布局专属），始终显示在菜单底部
 footer-buttons:
