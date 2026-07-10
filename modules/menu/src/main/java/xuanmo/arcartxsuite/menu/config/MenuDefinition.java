@@ -25,6 +25,7 @@ public record MenuDefinition(
     List<MenuItemBinding> itemBinds,
     List<MenuPageDefinition> pages,
     Map<String, MenuButtonDefinition> footerButtons,
+    List<MenuUiTarget> uiTargets,
     String sourceFile
 ) {
 
@@ -91,6 +92,7 @@ public record MenuDefinition(
             pages.add(new MenuPageDefinition("main", yaml.getString("title", id), Map.of()));
         }
         List<MenuItemBinding> itemBinds = MenuItemBinding.loadList(yaml.getMapList("item-binds"), id);
+        List<MenuUiTarget> uiTargets = loadUiTargets(yaml);
 
         return new MenuDefinition(
             id,
@@ -108,8 +110,47 @@ public record MenuDefinition(
             itemBinds,
             List.copyOf(pages),
             Map.copyOf(footerButtons),
+            uiTargets,
             sourceFile
         );
+    }
+
+    /**
+     * 解析 UI 发包目标。
+     * <p>
+     * 优先读取 {@code ui-targets} 列表；若不存在则读取简写 {@code ui-id + packet-handler}。
+     * 两者都未配置时返回空列表，表示使用模块默认的 layout-based UI 与 init/update handler。
+     */
+    @SuppressWarnings("unchecked")
+    private static List<MenuUiTarget> loadUiTargets(YamlConfiguration yaml) {
+        List<Map<?, ?>> targetMaps = yaml.getMapList("ui-targets");
+        if (!targetMaps.isEmpty()) {
+            List<MenuUiTarget> targets = new ArrayList<>(targetMaps.size());
+            for (Map<?, ?> map : targetMaps) {
+                String uiId = readString(map, "ui-id");
+                String handler = readString(map, "packet-handler");
+                if (uiId == null || handler == null) {
+                    continue;
+                }
+                targets.add(new MenuUiTarget(uiId, handler));
+            }
+            return List.copyOf(targets);
+        }
+        String uiId = yaml.getString("ui-id", "").trim();
+        String handler = yaml.getString("packet-handler", "").trim();
+        if (!uiId.isBlank() && !handler.isBlank()) {
+            return List.of(new MenuUiTarget(uiId, handler));
+        }
+        return List.of();
+    }
+
+    private static String readString(Map<?, ?> map, String key) {
+        Object value = map.get(key);
+        if (value == null) {
+            return null;
+        }
+        String str = value.toString().trim();
+        return str.isBlank() ? null : str;
     }
 }
 

@@ -15,11 +15,8 @@ cross-server:
 
 ui:
   id: "AXS:warehouse_storage"
-  file: "arcartx/ui/warehouse_menu.yml"
   manage-id: "AXS:warehouse_manage"
-  manage-file: "arcartx/ui/warehouse_manage.yml"
   bank-id: "AXS:warehouse_bank"
-  bank-file: "arcartx/ui/warehouse_bank.yml"
   packet-id: "AXS_WAREHOUSE"
   register-ui-on-enable: true
   overwrite-ui-files: false

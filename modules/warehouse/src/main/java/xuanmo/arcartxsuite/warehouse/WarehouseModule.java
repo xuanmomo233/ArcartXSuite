@@ -53,8 +53,8 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
 
     private WarehouseAdminCommand adminCommand;
 
-    private static final String STORAGE_UI_RESOURCE_PATH = "arcartx/ui/warehouse_menu.yml";
-    private static final String STORAGE_UI_FILE_PATH = "ui/warehouse_menu.yml";
+    private static final String STORAGE_UI_RESOURCE_PATH = "arcartx/ui/warehouse_storage.yml";
+    private static final String STORAGE_UI_FILE_PATH = "ui/warehouse_storage.yml";
     private static final String MANAGE_UI_RESOURCE_PATH = "arcartx/ui/warehouse_manage.yml";
     private static final String MANAGE_UI_FILE_PATH = "ui/warehouse_manage.yml";
     private static final String BANK_UI_RESOURCE_PATH = "arcartx/ui/warehouse_bank.yml";

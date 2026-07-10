@@ -96,8 +96,8 @@ public final class WarehouseService implements Listener {
     private static final String PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
     private static final String OWNER_PERSONAL = "personal";
     private static final String OWNER_SHARED = "shared";
-    private static final String STORAGE_UI_RESOURCE_PATH = "arcartx/ui/warehouse_menu.yml";
-    private static final String STORAGE_UI_FILE_PATH = "ui/warehouse_menu.yml";
+    private static final String STORAGE_UI_RESOURCE_PATH = "arcartx/ui/warehouse_storage.yml";
+    private static final String STORAGE_UI_FILE_PATH = "ui/warehouse_storage.yml";
     private static final String MANAGE_UI_RESOURCE_PATH = "arcartx/ui/warehouse_manage.yml";
     private static final String MANAGE_UI_FILE_PATH = "ui/warehouse_manage.yml";
     private static final String BANK_UI_RESOURCE_PATH = "arcartx/ui/warehouse_bank.yml";
@@ -806,19 +806,19 @@ public final class WarehouseService implements Listener {
     private void bindUis() throws Exception {
         storageRuntimeUiId = bindUi(
             configuration.ui().uiId(),
-            configuration.ui().uiFile().isBlank() ? STORAGE_UI_RESOURCE_PATH : configuration.ui().uiFile(),
+            STORAGE_UI_RESOURCE_PATH,
             STORAGE_UI_FILE_PATH,
             "storage"
         );
         manageRuntimeUiId = bindUi(
             configuration.ui().manageUiId(),
-            configuration.ui().manageUiFile().isBlank() ? MANAGE_UI_RESOURCE_PATH : configuration.ui().manageUiFile(),
+            MANAGE_UI_RESOURCE_PATH,
             MANAGE_UI_FILE_PATH,
             "manage"
         );
         bankRuntimeUiId = bindUi(
             configuration.ui().bankUiId(),
-            configuration.ui().bankUiFile().isBlank() ? BANK_UI_RESOURCE_PATH : configuration.ui().bankUiFile(),
+            BANK_UI_RESOURCE_PATH,
             BANK_UI_FILE_PATH,
             "bank"
         );

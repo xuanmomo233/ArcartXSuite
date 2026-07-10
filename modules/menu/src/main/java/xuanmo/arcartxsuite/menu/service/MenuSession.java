@@ -6,12 +6,14 @@ public final class MenuSession {
 
     private final String menuId;
     private final MenuLayoutType layout;
+    private final String runtimeUiId;
     private int pageIndex;
     private long lastClickAt;
 
-    public MenuSession(String menuId, MenuLayoutType layout, int pageIndex) {
+    public MenuSession(String menuId, MenuLayoutType layout, String runtimeUiId, int pageIndex) {
         this.menuId = menuId;
         this.layout = layout;
+        this.runtimeUiId = runtimeUiId;
         this.pageIndex = pageIndex;
     }
 
@@ -21,6 +23,10 @@ public final class MenuSession {
 
     public MenuLayoutType layout() {
         return layout;
+    }
+
+    public String runtimeUiId() {
+        return runtimeUiId;
     }
 
     public int pageIndex() {

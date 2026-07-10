@@ -35,6 +35,24 @@ columns: 4
 # 推荐值：columns × 期望行数（如 4列 × 4行 = 16）
 buttons-per-page: 64
 
+# ─── 自定义 UI 目标（可选）────────────────────────────────────
+# 默认情况下，菜单根据 layout 自动选择 panel / esc UI 并使用 init/update handler。
+# 如果需要指定自定义 UI 或自定义 handler，可配置以下字段：
+#
+# 单 UI 目标（简写格式）：
+# ui-id: "my_custom_panel"
+# packet-handler: "menu"
+#
+# 多 UI 目标（同一 payload 同时发给多个 UI，第一个用于 open/close）：
+# ui-targets:
+#   - ui-id: "my_custom_panel"
+#     packet-handler: "menu"
+#   - ui-id: "menu_hud"
+#     packet-handler: "overlay"
+#
+# 注意：ui-targets 优先级高于 ui-id + packet-handler；两者不要同时写。
+# 自定义 ui-id 对应的 UI 文件需要自行注册或放到 ArcartXSuite/ui/ 目录下。
+
 # ─── 权限与条件 ─────────────────────────────────────────────
 
 # 打开菜单所需权限节点（可选，留空 = 无限制）

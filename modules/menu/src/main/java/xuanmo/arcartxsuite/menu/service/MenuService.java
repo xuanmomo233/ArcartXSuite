@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -22,6 +23,7 @@ import xuanmo.arcartxsuite.menu.config.MenuLayoutType;
 import xuanmo.arcartxsuite.menu.config.MenuMessagesConfiguration;
 import xuanmo.arcartxsuite.menu.config.MenuModuleConfiguration;
 import xuanmo.arcartxsuite.menu.config.MenuPageDefinition;
+import xuanmo.arcartxsuite.menu.config.MenuUiTarget;
 import java.util.logging.Logger;
 
 public final class MenuService {
@@ -166,7 +168,8 @@ public final class MenuService {
             notifyOpenFailed(player, definition.id(), "requirements");
             return false;
         }
-        MenuSession session = new MenuSession(definition.id(), definition.layout(), Math.max(0, pageIndex));
+        String runtimeUiId = primaryRuntimeUiId(definition);
+        MenuSession session = new MenuSession(definition.id(), definition.layout(), runtimeUiId, Math.max(0, pageIndex));
         sessions.put(player.getUniqueId(), session);
         actionExecutor.executeAll(player, definition.openActions());
 
@@ -175,7 +178,7 @@ public final class MenuService {
             return false;
         }
         if (openUi) {
-            packetBridge.openUi(player, runtimeUiId(definition.layout()));
+            packetBridge.openUi(player, runtimeUiId);
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (player.isOnline()) {
                     pushPayload(player, session, definition, true);
@@ -214,7 +217,7 @@ public final class MenuService {
             actionExecutor.executeAll(player, definition.closeActions());
         }
         if (packetBridge != null && packetBridge.isAvailable()) {
-            packetBridge.closeUi(player, runtimeUiId(session.layout()));
+            packetBridge.closeUi(player, session.runtimeUiId());
         }
     }
 
@@ -338,12 +341,27 @@ public final class MenuService {
             session,
             iconResolver
         );
-        packetBridge.sendPacket(
-            player,
-            runtimeUiId(definition.layout()),
-            initPacket ? "init" : "update",
-            payload
-        );
+        List<MenuUiTarget> targets = definition.uiTargets();
+        if (targets.isEmpty()) {
+            packetBridge.sendPacket(
+                player,
+                session.runtimeUiId(),
+                initPacket ? "init" : "update",
+                payload
+            );
+            return;
+        }
+        for (MenuUiTarget target : targets) {
+            packetBridge.sendPacket(player, target.uiId(), target.packetHandler(), payload);
+        }
+    }
+
+    private String primaryRuntimeUiId(MenuDefinition definition) {
+        List<MenuUiTarget> targets = definition.uiTargets();
+        if (!targets.isEmpty()) {
+            return targets.get(0).uiId();
+        }
+        return runtimeUiId(definition.layout());
     }
 
     private String runtimeUiId(MenuLayoutType layout) {

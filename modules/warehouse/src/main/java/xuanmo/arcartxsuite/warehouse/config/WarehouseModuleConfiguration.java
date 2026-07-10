@@ -54,11 +54,8 @@ public record WarehouseModuleConfiguration(
 
         UiConfiguration ui = new UiConfiguration(
             readString(configuration, "ui.id", "AXS:warehouse_storage"),
-            readString(configuration, "ui.file", "arcartx/ui/warehouse_menu.yml"),
             readString(configuration, "ui.manage-id", "AXS:warehouse_manage"),
-            readString(configuration, "ui.manage-file", "arcartx/ui/warehouse_manage.yml"),
             readString(configuration, "ui.bank-id", "AXS:warehouse_bank"),
-            readString(configuration, "ui.bank-file", "arcartx/ui/warehouse_bank.yml"),
             readString(configuration, "ui.packet-id", "AXS_WAREHOUSE"),
             configuration.getBoolean("ui.register-ui-on-enable", true),
             configuration.getBoolean("ui.overwrite-ui-files", false),
@@ -514,14 +511,11 @@ public record WarehouseModuleConfiguration(
         }
     }
 
-    /** 三套 AXUI 的 ID、文件路径与包标识配置。 */
+    /** 三套 AXUI 的 ID 与包标识配置。 */
     public record UiConfiguration(
         String uiId,
-        String uiFile,
         String manageUiId,
-        String manageUiFile,
         String bankUiId,
-        String bankUiFile,
         String packetId,
         boolean registerUiOnEnable,
         boolean overwriteUiFiles,
