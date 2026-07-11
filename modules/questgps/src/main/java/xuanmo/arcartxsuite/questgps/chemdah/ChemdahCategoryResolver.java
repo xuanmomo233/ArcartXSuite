@@ -14,13 +14,15 @@ import xuanmo.arcartxsuite.questgps.config.CategorySource;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 
 /**
- * 任务分类解析：全局仅一种数据源（Chemdah meta.type 或 overlay category），无多层回退。
+ * 任务分类解析：全局仅一种数据源（Chemdah meta.type 或 overlay category），
+ * 未匹配时可按配置归入兜底分类。
  */
 public final class ChemdahCategoryResolver {
 
     private final Logger logger;
     private final CategoryDefaults categoryDefaults;
     private final Map<String, QuestGpsCategory> categoryRegistry;
+    private final QuestGpsCategory fallbackCategory;
     private final Set<String> warnedMetaTypeQuestIds = new HashSet<>();
     private final Set<String> warnedOverlayQuestIds = new HashSet<>();
 
@@ -32,6 +34,10 @@ public final class ChemdahCategoryResolver {
         this.logger = logger;
         this.categoryDefaults = categoryDefaults == null ? CategoryDefaults.defaults() : categoryDefaults;
         this.categoryRegistry = categoryRegistry == null ? Map.of() : categoryRegistry;
+        CategoryDefaults.FallbackCategory fallback = this.categoryDefaults.fallback();
+        this.fallbackCategory = fallback.enabled()
+            ? QuestGpsCategory.parse(fallback.id(), this.categoryRegistry)
+            : null;
     }
 
     public QuestGpsCategory resolveEffectiveCategory(
@@ -63,6 +69,9 @@ public final class ChemdahCategoryResolver {
         if (overlay != null && overlay.categoryOverride() != null) {
             return overlay.categoryOverride();
         }
+        if (fallbackCategory != null) {
+            return fallbackCategory;
+        }
         String questId = overlay == null ? "unknown" : overlay.id();
         if (warnedOverlayQuestIds.add(questId)) {
             logger.warning("QuestGPS: category.source=overlay 但任务未配置 category: " + questId);
@@ -74,6 +83,9 @@ public final class ChemdahCategoryResolver {
         QuestGpsCategory fromMeta = resolveMetaType(template);
         if (fromMeta != null) {
             return fromMeta;
+        }
+        if (fallbackCategory != null) {
+            return fallbackCategory;
         }
         String questId = questIdForLog != null && !questIdForLog.isBlank()
             ? questIdForLog

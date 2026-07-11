@@ -381,7 +381,7 @@ controls:
               normal: "var.pageId == 'available' ? '120,190,255,230' : '100,100,100,200'"
               shape: ~round_rect
               radius: 12
-              texts: "'&0可接取 ' + var.availableCount"
+              texts: "'&0可接取 ' + var.availableCount.round()"
               center: true
               fontSize: 30
             effect:
@@ -401,7 +401,7 @@ controls:
               normal: "var.pageId == 'active' ? '100,200,130,230' : '100,100,100,200'"
               shape: ~round_rect
               radius: 12
-              texts: "'&0进行中 ' + var.activeCount"
+              texts: "'&0进行中 ' + var.activeCount.round()"
               center: true
               fontSize: 30
             effect:
@@ -421,7 +421,7 @@ controls:
               normal: "var.pageId == 'completed' ? '200,150,80,230' : '100,100,100,200'"
               shape: ~round_rect
               radius: 12
-              texts: "'&0已完成 ' + var.completedCount"
+              texts: "'&0已完成 ' + var.completedCount.round()"
               center: true
               fontSize: 30
             effect:
@@ -437,7 +437,7 @@ controls:
               x: 56
               y: 258
               fontSize: 36
-              texts: "'&0任务列表 (' + var.questCount + ')'"
+              texts: "'&0任务列表 (' + var.questCount.round() + ')'"
           任务滑块:
             type: Texture
             val: 任务滑块
@@ -589,7 +589,7 @@ controls:
               x: 464
               y: 260
               fontSize: 36
-              texts: "'&0任务目标 (' + var.taskCount + ')'"
+              texts: "'&0任务目标 (' + var.taskCount.round() + ')'"
           目标滑块:
             type: Texture
             val: 目标滑块
@@ -673,7 +673,7 @@ controls:
               x: 464
               y: 490
               fontSize: 36
-              texts: "'&0任务奖励 (' + var.rewardCount + ')'"
+              texts: "'&0任务奖励 (' + var.rewardCount.round() + ')'"
           奖励滑块:
             type: Texture
             val: 奖励滑块

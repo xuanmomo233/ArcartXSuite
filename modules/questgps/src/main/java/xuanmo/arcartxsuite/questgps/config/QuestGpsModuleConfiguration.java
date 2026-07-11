@@ -59,6 +59,10 @@ public record QuestGpsModuleConfiguration(
         QuestGpsDatabaseSettings database = loadDatabaseSettings(configuration.getConfigurationSection("database"));
         String discoveryMode = string(configuration.getString("discovery.mode"), "overlay");
         List<QuestGpsCategory> customCategories = loadCustomCategories(configuration.getConfigurationSection("categories"), logger);
+        if (categoryDefaults.fallback().enabled()) {
+            CategoryDefaults.FallbackCategory fallback = categoryDefaults.fallback();
+            customCategories.add(new QuestGpsCategory(fallback.id(), fallback.displayName(), fallback.sortOrder()));
+        }
         Map<String, QuestGpsCategory> categoryRegistry = QuestGpsCategory.buildRegistry(customCategories);
         GateConfiguration gate = loadGate(configuration.getConfigurationSection("gate"), categoryRegistry);
         Map<String, QuestDefinition> quests = new LinkedHashMap<>();
@@ -157,7 +161,17 @@ public record QuestGpsModuleConfiguration(
                     + "（chemdah=meta.type，overlay=quests/*.yml 的 category）"
             );
         }
-        return new CategoryDefaults(source);
+        CategoryDefaults.FallbackCategory fallbackDefaults = CategoryDefaults.FallbackCategory.disabled();
+        ConfigurationSection fallbackSection = section.getConfigurationSection("fallback");
+        if (fallbackSection != null) {
+            fallbackDefaults = new CategoryDefaults.FallbackCategory(
+                fallbackSection.getBoolean("enabled", fallbackDefaults.enabled()),
+                string(fallbackSection.getString("id"), fallbackDefaults.id()),
+                string(fallbackSection.getString("display-name"), fallbackDefaults.displayName()),
+                fallbackSection.getInt("sort-order", fallbackDefaults.sortOrder())
+            );
+        }
+        return new CategoryDefaults(source, fallbackDefaults);
     }
 
     private static int categorySortPlaceholder(QuestGpsCategory categoryOverride) {
