@@ -66,8 +66,8 @@ permission: none
 #   - "%player_level% >= 10"          — 等级 ≥ 10
 #   - "%player_world% == world_hub"   — 在主城世界
 #   - "%vault_eco_balance% >= 100"    — 余额 ≥ 100
-# 也支持 Aria 脚本条件（需 Blink 系插件）：
-#   - "aria: return player.getLevel() >= 10"
+# 也支持 Aria 脚本条件（Aria 无 player 对象；求值前先把 PAPI 占位符展开成字面值再运算）：
+#   - "aria: %player_level% >= 10"
 open-requirements: []
 # ─── 生命周期动作 ───────────────────────────────────────────
 
@@ -211,8 +211,8 @@ pages:
         #   - 若未配置 deny-message：按钮完全隐藏
         condition:
           - "%player_level% >= 5"
-          # Aria 脚本条件（需 Blink 系插件注入 BlinkAriaHost）:
-          # - "aria: return player.getLevel() >= 5"
+          # Aria 脚本条件（PAPI 占位符先展开再运算；Aria 无 player 对象）:
+          # - "aria: %player_level% >= 5"
         # 条件不满足时的提示消息
         deny-message: "&c需要达到 5 级才能领取在线奖励"
         # deny-actions: 条件不满足时执行的动作（可选）
@@ -286,6 +286,28 @@ pages:
         order: 1
         actions:
           - "command: axs essentials spawn"
+          - "close"
+
+      # ─── 脚本动作示例（aria / js）───
+      # Aria 与 JS 的能力不同，别混用：
+      #   aria：适合【条件/纯运算】。求值前先把脚本里的 PAPI 占位符（%...%）和 {player}
+      #         展开成字面值，脚本只做算术/逻辑比较。Aria【没有】 player / Bukkit 对象，
+      #         作为动作时返回值会被丢弃，无法执行指令或改玩家状态——派发指令请用
+      #         下面的 command / console 动作（配合 use-conditions 判定）。
+      #   js  ：注入 player + Bukkit，可反射调用其方法、按运算结果派发指令；但需服务器
+      #         classpath 上有 JS 引擎（GraalJS 等），Java 15+ 默认无 Nashorn，无引擎时静默跳过。
+      script_demo:
+        text: "&f脚本动作示例"
+        order: 2
+        # 使用条件用 Aria 做纯运算：PAPI 值展开后比较（不满足则按钮灰色禁用）
+        use-conditions:
+          - "aria: %player_level% >= 30 && %vault_eco_balance% >= 100"
+        deny-message: "&c需要 30 级且余额 ≥ 100"
+        actions:
+          # 条件已在 use-conditions 用 Aria 判过，这里直接派发指令
+          - "command: warp vip"
+          # 若需“按运算结果派发不同指令”且服务器有 JS 引擎，可用 JS 动作（注入 player + Bukkit）：
+          # - "js: player.getLevel() >= 30 ? Bukkit.dispatchCommand(Bukkit.getConsoleSender(), 'give ' + player.getName() + ' diamond 1') : player.sendMessage('§c等级不足 30')"
           - "close"
       # ─── 物品库图标示例入口 ───
       item_sources:
@@ -386,8 +408,20 @@ pages:
 #   "op: <命令>"               — 以玩家身份临时给予 OP 执行，用完自动收回
 #   "signal: <名称>"            — 触发 EventPacket command-signal 信号
 #   "signal: <名称>|键=值|键2=值2" — 触发信号并传递变量
+#   "aria: <脚本>"             — 执行 Aria 脚本（以【条件/纯运算】为主）
+#   "js: <脚本>"               — 执行 JavaScript（注入 player、Bukkit），需 classpath 上有 JS 引擎
 #
-# 所有动作中均可使用 PlaceholderAPI 变量：
+# 注意：aria 与 js 取值方式【不同】——
+#   aria：求值前先把脚本里的 PAPI 占位符（%...%）和 {player} 展开成字面值，脚本只做纯运算。
+#         Aria【没有】 player / Bukkit 对象，无法直接调用 Bukkit API 或执行指令；
+#         作为动作时返回值被丢弃。字符串比较记得加引号，如 "aria: '%player_name%' == 'Steve'"。
+#         运行时由 ArcartX 内置提供（硬依赖），未就绪时该 aria 条件/动作静默跳过。
+#         需要按结果派发指令：用 use-conditions 判定 + command/console 动作，或改用 js。
+#   js  ：注入 player + Bukkit，可反射调用其方法、执行指令（player.performCommand(...) 或
+#         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), ...)）；但需 classpath 上有 JS 引擎
+#         （GraalJS 等），Java 15+ 默认无 Nashorn，无引擎时 js 动作/条件静默跳过。
+#
+# 所有 command / console / message / op / signal 动作中均可使用 PlaceholderAPI 变量：
 #   %player_name%    — 玩家名
 #   %player_level%   — 玩家等级
 #   %player_world%   — 当前世界名

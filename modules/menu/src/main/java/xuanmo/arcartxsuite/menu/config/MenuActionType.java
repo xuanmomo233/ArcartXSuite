@@ -12,6 +12,8 @@ public enum MenuActionType {
     PAGE,
     SOUND,
     SIGNAL,
+    SCRIPT_JS,
+    SCRIPT_ARIA,
     NONE;
 
     public static MenuActionType parse(String raw) {
@@ -28,6 +30,8 @@ public enum MenuActionType {
             case "page" -> PAGE;
             case "sound" -> SOUND;
             case "signal" -> SIGNAL;
+            case "js" -> SCRIPT_JS;
+            case "aria" -> SCRIPT_ARIA;
             default -> NONE;
         };
     }

@@ -44,12 +44,12 @@ public record ScriptCondition(
         Matcher jsMatcher = INLINE_JS_PREFIX.matcher(trimmed);
         if (jsMatcher.matches()) {
             String script = jsMatcher.group(1).trim();
-            return script.isBlank() ? null : js(trimmed, trimmed);
+            return script.isBlank() ? null : js(script, trimmed);
         }
         Matcher ariaMatcher = INLINE_ARIA_PREFIX.matcher(trimmed);
         if (ariaMatcher.matches()) {
             String script = ariaMatcher.group(1).trim();
-            return script.isBlank() ? null : aria(trimmed, trimmed);
+            return script.isBlank() ? null : aria(script, trimmed);
         }
         Matcher papiMatcher = INLINE_PAPI_PATTERN.matcher(trimmed);
         if (!papiMatcher.matches()) {

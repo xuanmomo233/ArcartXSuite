@@ -23,8 +23,10 @@ public final class DefaultAriaBridge implements AriaBridge {
     private static final String OLD_MANAGER_CLASS = "priv.seventeen.artist.blink.script.AriaScriptManager";
 
     // ── 宿主插件发现 ────────────────────────────────────────────
+    // ArcartX 为硬依赖（plugin.yml depend），内置 Aria 语言，优先从其 classloader 发现；
+    // 其余为旧版 Blink 生态的兼容回退（已非必需）。
     private static final String[] DISCOVERY_PLUGINS = {
-        "Aria", "Symphony", "Overture", "BlinkAriaHost"
+        "ArcartX", "Aria", "Symphony", "Overture", "BlinkAriaHost"
     };
 
     private final JavaPlugin plugin;

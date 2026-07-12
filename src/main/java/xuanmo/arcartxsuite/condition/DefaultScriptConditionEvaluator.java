@@ -75,6 +75,38 @@ public final class DefaultScriptConditionEvaluator implements ScriptConditionEva
         return result == null ? withPlayer : result;
     }
 
+    @Override
+    public @Nullable Object execute(@Nullable Player player, @NotNull ScriptConditionKind kind, @NotNull String script) {
+        if (player == null || script == null || script.isBlank()) {
+            return null;
+        }
+        if (kind == ScriptConditionKind.ARIA) {
+            if (!ariaBridge.available()) {
+                return null;
+            }
+            // Aria 无法反射调用注入的活对象（官方 Blink 模式）：
+            // 先将 PAPI / {player} 展开进脚本源码，脚本只做纯运算。
+            String expanded = applyPlaceholders(player, script);
+            return ariaBridge.eval(expanded, new HashMap<>());
+        }
+        if (kind == ScriptConditionKind.JS) {
+            if (jsEngine == null) {
+                return null;
+            }
+            try {
+                Bindings bindings = jsEngine.createBindings();
+                bindings.put("player", player);
+                bindings.put("Bukkit", Bukkit.class);
+                return jsEngine.eval(script, bindings);
+            } catch (Exception exception) {
+                xuanmo.arcartxsuite.module.AxsLog.logger()
+                    .warning("[Menu] JS 动作执行失败: " + exception.getMessage());
+                return null;
+            }
+        }
+        return null;
+    }
+
     private boolean evaluate(Player player, ScriptCondition condition) {
         if (condition.kind() == ScriptConditionKind.ARIA) {
             return evaluateAria(player, condition.script());
@@ -96,9 +128,9 @@ public final class DefaultScriptConditionEvaluator implements ScriptConditionEva
         if (!ariaBridge.available()) {
             return false;
         }
-        Map<String, Object> bindings = new HashMap<>();
-        bindings.put("player", player);
-        return ariaBridge.evalBoolean(script, bindings);
+        // Aria 条件同样采用“值拼进源码”模式：先展开 PAPI / {player}，再求值。
+        String expanded = applyPlaceholders(player, script);
+        return ariaBridge.evalBoolean(expanded, new HashMap<>());
     }
 
     private boolean evaluateJs(Player player, @Nullable String script) {
