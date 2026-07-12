@@ -126,6 +126,9 @@ footer-buttons:
   # 游戏选项 — 打开 Minecraft 原版设置界面
   options:
     text: "&f游戏选项"
+  # 按钮图标配置
+  # icon:
+  #   material: compass
     # client-action: 触发客户端原生动作（options = 设置界面，quit = 退出游戏）
     client-action: "options"
   # 退出游戏
