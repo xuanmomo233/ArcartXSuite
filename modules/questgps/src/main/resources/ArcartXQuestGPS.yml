@@ -86,7 +86,7 @@ navigation:
   marker:
     enabled: true
     # ArcartX 模型 ID（在 ArcartX model 配置中定义）。
-    model-id: "nav_beacon"
+    model-id: "waypoint"
     # 模型缩放比例。
     scale: 1.0
     # 模型默认状态名称。
@@ -94,7 +94,7 @@ navigation:
     # 循环播放的动画名称（客户端执行）。
     animation: "rotate"
     # 模型相对导航目标的 Y 轴偏移（方块数）。
-    y-offset: 2.0
+    y-offset: 0.0
     # ---- 路径寻路参数 ----
     # 路径标记间距（方块数，沿路径每隔多少格放一个标记）。
     path-interval: 3.0

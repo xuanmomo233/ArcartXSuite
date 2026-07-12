@@ -352,7 +352,10 @@ public final class MenuService {
             return;
         }
         for (MenuUiTarget target : targets) {
-            packetBridge.sendPacket(player, target.uiId(), target.packetHandler(), payload);
+            String handler = target.hasPacketHandler()
+                ? target.packetHandler()
+                : (initPacket ? "init" : "update");
+            packetBridge.sendPacket(player, target.uiId(), handler, payload);
         }
     }
 

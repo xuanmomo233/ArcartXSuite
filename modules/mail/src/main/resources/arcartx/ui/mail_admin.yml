@@ -26,6 +26,14 @@ ui:
       var.presets = packet['presets']
       var.total = packet['total']
       var.maxPresetCount = packet['maxPresetCount']
+      while(val.preset_data.childrenCount() > 1){
+        val.preset_data.get(1).remove()
+      }
+      for(i in range(0, var.maxPresetCount)){
+        key = i.round()
+        e = val.preset_data['preset_row'].copy('preset_row' + key)
+        e.entryKey = key
+      }
     preset-detail: |-
       var.editId = packet['id']
       var.editEnabled = packet['enabled']
@@ -260,13 +268,6 @@ controls:
                   y: 0
                   width: 1460
                   spaceBetween: 4
-                action:
-                  create: |-
-                    for(i in range(1, var.maxPresetCount)){
-                      key = i.round()
-                      row = self['preset_row'].copy('preset_row' + key)
-                      row.entryKey = key
-                    }
                 children:
                   preset_row:
                     type: Texture

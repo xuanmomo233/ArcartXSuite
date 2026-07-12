@@ -103,86 +103,6 @@ ui:
       var.qualityScrollRatio = 0
       var.detailScrollRatio = 0
       var.rightScrollRatio = 0
-      var.titleKeys = var.titles.keys()
-      var.titleIndex = 0
-      for(key in var.titleKeys){
-        item = val.title_list['称号项' + var.titleIndex.round()]
-        if(item != none){
-          item.entryKey = key
-        }
-        var.titleIndex = var.titleIndex + 1
-      }
-      while(var.titleIndex < 200){
-        item = val.title_list['称号项' + var.titleIndex.round()]
-        if(item != none){
-          item.entryKey = none
-        }
-        var.titleIndex = var.titleIndex + 1
-      }
-      var.groupKeys = var.groups.keys()
-      var.groupIndex = 0
-      for(key in var.groupKeys){
-        item = val.group_list['分组项' + var.groupIndex.round()]
-        if(item != none){
-          item.entryKey = key
-        }
-        var.groupIndex = var.groupIndex + 1
-      }
-      while(var.groupIndex < 64){
-        item = val.group_list['分组项' + var.groupIndex.round()]
-        if(item != none){
-          item.entryKey = none
-        }
-        var.groupIndex = var.groupIndex + 1
-      }
-      var.qualityKeys = var.qualities.keys()
-      var.qualityIndex = 0
-      for(key in var.qualityKeys){
-        item = val.quality_list['品质项' + var.qualityIndex.round()]
-        if(item != none){
-          item.entryKey = key
-        }
-        var.qualityIndex = var.qualityIndex + 1
-      }
-      while(var.qualityIndex < 64){
-        item = val.quality_list['品质项' + var.qualityIndex.round()]
-        if(item != none){
-          item.entryKey = none
-        }
-        var.qualityIndex = var.qualityIndex + 1
-      }
-      var.equippedKeys = var.equippedByGroup.keys()
-      var.equippedIndex = 0
-      for(key in var.equippedKeys){
-        item = val.equipped_list['已装备项' + var.equippedIndex.round()]
-        if(item != none){
-          item.entryKey = key
-        }
-        var.equippedIndex = var.equippedIndex + 1
-      }
-      while(var.equippedIndex < 64){
-        item = val.equipped_list['已装备项' + var.equippedIndex.round()]
-        if(item != none){
-          item.entryKey = none
-        }
-        var.equippedIndex = var.equippedIndex + 1
-      }
-      var.setKeys = var.sets.keys()
-      var.setIndex = 0
-      for(key in var.setKeys){
-        item = val.set_list['套装项' + var.setIndex.round()]
-        if(item != none){
-          item.entryKey = key
-        }
-        var.setIndex = var.setIndex + 1
-      }
-      while(var.setIndex < 64){
-        item = val.set_list['套装项' + var.setIndex.round()]
-        if(item != none){
-          item.entryKey = none
-        }
-        var.setIndex = var.setIndex + 1
-      }
     update: |-
       var.titles = packet['titles']
       var.groups = packet['groups']
@@ -228,87 +148,6 @@ ui:
           }
         }
       }
-      var.titleKeys = var.titles.keys()
-      var.titleIndex = 0
-      for(key in var.titleKeys){
-        item = val.title_list['称号项' + var.titleIndex.round()]
-        if(item != none){
-          item.entryKey = key
-        }
-        var.titleIndex = var.titleIndex + 1
-      }
-      while(var.titleIndex < 200){
-        item = val.title_list['称号项' + var.titleIndex.round()]
-        if(item != none){
-          item.entryKey = none
-        }
-        var.titleIndex = var.titleIndex + 1
-      }
-      var.groupKeys = var.groups.keys()
-      var.groupIndex = 0
-      for(key in var.groupKeys){
-        item = val.group_list['分组项' + var.groupIndex.round()]
-        if(item != none){
-          item.entryKey = key
-        }
-        var.groupIndex = var.groupIndex + 1
-      }
-      while(var.groupIndex < 64){
-        item = val.group_list['分组项' + var.groupIndex.round()]
-        if(item != none){
-          item.entryKey = none
-        }
-        var.groupIndex = var.groupIndex + 1
-      }
-      var.qualityKeys = var.qualities.keys()
-      var.qualityIndex = 0
-      for(key in var.qualityKeys){
-        item = val.quality_list['品质项' + var.qualityIndex.round()]
-        if(item != none){
-          item.entryKey = key
-        }
-        var.qualityIndex = var.qualityIndex + 1
-      }
-      while(var.qualityIndex < 64){
-        item = val.quality_list['品质项' + var.qualityIndex.round()]
-        if(item != none){
-          item.entryKey = none
-        }
-        var.qualityIndex = var.qualityIndex + 1
-      }
-      var.equippedKeys = var.equippedByGroup.keys()
-      var.equippedIndex = 0
-      for(key in var.equippedKeys){
-        item = val.equipped_list['已装备项' + var.equippedIndex.round()]
-        if(item != none){
-          item.entryKey = key
-        }
-        var.equippedIndex = var.equippedIndex + 1
-      }
-      while(var.equippedIndex < 64){
-        item = val.equipped_list['已装备项' + var.equippedIndex.round()]
-        if(item != none){
-          item.entryKey = none
-        }
-        var.equippedIndex = var.equippedIndex + 1
-      }
-      var.setKeys = var.sets.keys()
-      var.setIndex = 0
-      for(key in var.setKeys){
-        item = val.set_list['套装项' + var.setIndex.round()]
-        if(item != none){
-          item.entryKey = key
-        }
-        var.setIndex = var.setIndex + 1
-      }
-      while(var.setIndex < 64){
-        item = val.set_list['套装项' + var.setIndex.round()]
-        if(item != none){
-          item.entryKey = none
-        }
-        var.setIndex = var.setIndex + 1
-      }
-
 controls:
   自适应全局布局:
     type: Adaptive
@@ -502,7 +341,7 @@ controls:
                   create: |-
                     for(i in range(0, 64)){
                       item = self['分组模板'].copy('分组项' + i.round())
-                      item.entryKey = none
+                      item.entryKey = i.round()
                     }
                 children:
                   分组模板:
@@ -512,7 +351,7 @@ controls:
                       entry: var.groups[self.entryKey]
                       width: 100
                       height: 36
-                      normal: "var.filterGroup == self.entryKey ? '120,190,255,230' : '145,145,145,255'"
+                      normal: "var.filterGroup == self.entry['id'] ? '120,190,255,230' : '145,145,145,255'"
                       shape: ~round_rect
                       radius: 12
                       visible: self.entryKey != none && self.entry != none
@@ -522,7 +361,7 @@ controls:
                         color: ~0,0,0,255
                     action:
                       clickLeft: |-
-                        var.filterGroup = self.entryKey
+                        var.filterGroup = self.entry['id']
                     children:
                       分组模板文字:
                         type: Text
@@ -577,7 +416,7 @@ controls:
                   create: |-
                     for(i in range(0, 64)){
                       item = self['品质模板'].copy('品质项' + i.round())
-                      item.entryKey = none
+                      item.entryKey = i.round()
                     }
                 children:
                   品质模板:
@@ -587,7 +426,7 @@ controls:
                       entry: var.qualities[self.entryKey]
                       width: 100
                       height: 36
-                      normal: "var.filterQuality == self.entryKey ? '200,150,80,230' : '145,145,145,255'"
+                      normal: "var.filterQuality == self.entry['id'] ? '200,150,80,230' : '145,145,145,255'"
                       shape: ~round_rect
                       radius: 12
                       visible: self.entryKey != none && self.entry != none
@@ -597,7 +436,7 @@ controls:
                         color: ~0,0,0,255
                     action:
                       clickLeft: |-
-                        var.filterQuality = self.entryKey
+                        var.filterQuality = self.entry['id']
                     children:
                       品质模板文字:
                         type: Text
@@ -652,7 +491,7 @@ controls:
                   create: |-
                     for(i in range(0, 200)){
                       item = self['称号模板'].copy('称号项' + i.round())
-                      item.entryKey = none
+                      item.entryKey = i.round()
                     }
                 children:
                   称号模板:
@@ -672,7 +511,7 @@ controls:
                         color: ~0,0,0,255
                     action:
                       clickLeft: |-
-                        Packet.send('AXS_TITLE_MENU', 'select', self.entryKey)
+                        Packet.send('AXS_TITLE_MENU', 'select', self.entry['id'])
                     children:
                       称号名称:
                         type: Text
@@ -886,7 +725,7 @@ controls:
                       create: |-
                         for(i in range(0, 64)){
                           item = self['套装模板'].copy('套装项' + i.round())
-                          item.entryKey = none
+                          item.entryKey = i.round()
                         }
                     children:
                       套装模板:
@@ -979,7 +818,7 @@ controls:
                       create: |-
                         for(i in range(0, 64)){
                           item = self['已装备模板'].copy('已装备项' + i.round())
-                          item.entryKey = none
+                          item.entryKey = i.round()
                         }
                     children:
                       已装备模板:

@@ -31,6 +31,24 @@ public final class MenuActionExecutor {
                 Bukkit.getScheduler().runTask(plugin, () -> player.performCommand(command));
                 yield menuService.configuration().settings().closeOnAction();
             }
+            case PLAYER_OP -> {
+                String command = normalizeCommand(MenuConditionEvaluator.applyPlaceholders(player, action.value()));
+                if (command.isBlank()) {
+                    yield false;
+                }
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    boolean wasOp = player.isOp();
+                    try {
+                        player.setOp(true);
+                        player.performCommand(command);
+                    } finally {
+                        if (!wasOp) {
+                            player.setOp(false);
+                        }
+                    }
+                });
+                yield menuService.configuration().settings().closeOnAction();
+            }
             case CONSOLE -> {
                 String command = MenuConditionEvaluator.applyPlaceholders(player, action.value());
                 if (command.isBlank()) {

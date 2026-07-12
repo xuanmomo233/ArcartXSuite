@@ -52,6 +52,14 @@ ui:
       var.selectedAttachmentSummary = packet['selected_attachment_summary']
       var.selectedClaimable = packet['selected_claimable']
       var.maxMailCount = packet['maxMailCount']
+      while(val.mail_list.childrenCount() > 1){
+        val.mail_list.get(1).remove()
+      }
+      for(i in range(0, var.maxMailCount)){
+        key = i.round()
+        e = val.mail_list['item'].copy('item' + key)
+        e.entryKey = key
+      }
     update: |-
       var.messages = packet['messages']
       var.totalCount = packet['total_count']
@@ -68,6 +76,14 @@ ui:
       var.selectedAttachmentSummary = packet['selected_attachment_summary']
       var.selectedClaimable = packet['selected_claimable']
       var.maxMailCount = packet['maxMailCount']
+      while(val.mail_list.childrenCount() > 1){
+        val.mail_list.get(1).remove()
+      }
+      for(i in range(0, var.maxMailCount)){
+        key = i.round()
+        e = val.mail_list['item'].copy('item' + key)
+        e.entryKey = key
+      }
 
 # controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
 
@@ -296,13 +312,6 @@ controls:
                 attribute:
                   width: 632
                   spaceBetween: 10
-                action:
-                  create: |-
-                    for(i in range(0, var.maxMailCount)){
-                      key = i.round()
-                      mail = self['item'].copy('item' + key)
-                      mail.entryKey = key
-                    }
                 children:
                   item:
                     type: Texture

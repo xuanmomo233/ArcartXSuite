@@ -62,6 +62,38 @@ ui:
         }
       }
       var.calendarRate = var.calendarCount > 0 ? (var.calendarSignedCount / var.calendarCount * 100).round(0) : 0
+      while(val.日历网格.childrenCount() > 1){
+        val.日历网格.get(1).remove()
+      }
+      for(i in range(0, var.calendarCount)){
+        key = i.round()
+        e = val.日历网格['日历模板'].copy('日历项_' + key)
+        e.entryKey = key
+      }
+      while(val.阶段堆叠.childrenCount() > 1){
+        val.阶段堆叠.get(1).remove()
+      }
+      for(i in range(0, var.maxRewardCount)){
+        key = i.round()
+        e = val.阶段堆叠['阶段奖励项'].copy('阶段奖励项_' + key)
+        e.entryKey = key
+      }
+      while(val.周期堆叠.childrenCount() > 1){
+        val.周期堆叠.get(1).remove()
+      }
+      for(i in range(0, var.maxPeriodicCount)){
+        key = i.round()
+        e = val.周期堆叠['周期奖励项'].copy('周期奖励项_' + key)
+        e.entryKey = key
+      }
+      while(val.签到堆叠.childrenCount() > 1){
+        val.签到堆叠.get(1).remove()
+      }
+      for(i in range(0, var.maxSigninRewardCount)){
+        key = i.round()
+        e = val.签到堆叠['签到奖励项'].copy('签到奖励项_' + key)
+        e.entryKey = key
+      }
     update: |-
       var.packetId = packet['packetId']
       var.dailyTimeText = packet['dailyTimeText']
@@ -112,6 +144,38 @@ ui:
         }
       }
       var.calendarRate = var.calendarCount > 0 ? (var.calendarSignedCount / var.calendarCount * 100).round(0) : 0
+      while(val.日历网格.childrenCount() > 1){
+        val.日历网格.get(1).remove()
+      }
+      for(i in range(0, var.calendarCount)){
+        key = i.round()
+        e = val.日历网格['日历模板'].copy('日历项_' + key)
+        e.entryKey = key
+      }
+      while(val.阶段堆叠.childrenCount() > 1){
+        val.阶段堆叠.get(1).remove()
+      }
+      for(i in range(0, var.maxRewardCount)){
+        key = i.round()
+        e = val.阶段堆叠['阶段奖励项'].copy('阶段奖励项_' + key)
+        e.entryKey = key
+      }
+      while(val.周期堆叠.childrenCount() > 1){
+        val.周期堆叠.get(1).remove()
+      }
+      for(i in range(0, var.maxPeriodicCount)){
+        key = i.round()
+        e = val.周期堆叠['周期奖励项'].copy('周期奖励项_' + key)
+        e.entryKey = key
+      }
+      while(val.签到堆叠.childrenCount() > 1){
+        val.签到堆叠.get(1).remove()
+      }
+      for(i in range(0, var.maxSigninRewardCount)){
+        key = i.round()
+        e = val.签到堆叠['签到奖励项'].copy('签到奖励项_' + key)
+        e.entryKey = key
+      }
   action:
     load: |-
       var.maxRewardCount = 0
@@ -361,13 +425,6 @@ controls:
               column: 7
               spaceBetweenX: 6
               spaceBetweenY: 6
-            action:
-              create: |-
-                for(i in range(0, var.calendarCount)){
-                  key = i.round()
-                  di = self['日历模板'].copy('日历项_' + key)
-                  di.entryKey = key
-                }
             children:
               日历模板:
                 type: Texture
@@ -686,13 +743,6 @@ controls:
                 attribute:
                   width: 510
                   spaceBetween: 8
-                action:
-                  create: |-
-                    for(i in range(0, var.maxRewardCount)){
-                      key = i.round()
-                      ri = self['阶段奖励项'].copy('阶段奖励项_' + key)
-                      ri.entryKey = key
-                    }
                 children:
                   阶段奖励项:
                     type: Texture
@@ -780,13 +830,6 @@ controls:
                 attribute:
                   width: 510
                   spaceBetween: 6
-                action:
-                  create: |-
-                    for(i in range(0, var.maxPeriodicCount)){
-                      key = i.round()
-                      pi = self['周期奖励项'].copy('周期奖励项_' + key)
-                      pi.entryKey = key
-                    }
                 children:
                   周期奖励项:
                     type: Texture
@@ -874,13 +917,6 @@ controls:
                 attribute:
                   width: 510
                   spaceBetween: 6
-                action:
-                  create: |-
-                    for(i in range(0, var.maxSigninRewardCount)){
-                      key = i.round()
-                      si = self['签到奖励项'].copy('签到奖励项_' + key)
-                      si.entryKey = key
-                    }
                 children:
                   签到奖励项:
                     type: Texture

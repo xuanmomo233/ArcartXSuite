@@ -8,21 +8,24 @@ ui:
       var.packetId = packet['packetId']
       var.backpackItems = packet['backpackItems']
       var.itemJsons = {}
+      var.maxBackpackCount = packet['maxBackpackCount']
       for(key in var.backpackItems.keys()){
         json = packet['itemJson' + key]
-      var.maxBackpackCount = packet['maxBackpackCount']
         if(json != none && json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
         }
       }
+      while(val.背包网格.childrenCount() > 1){
+        val.背包网格.get(1).remove()
+      }
       for(i in range(0, var.maxBackpackCount)){
         key = i.round()
-        slot = val.背包网格['背包槽' + key]
-        if(slot != none){
-          slot.seticon()
-        }
+        e = val.背包网格['背包槽'].copy('背包槽' + key)
+        e.entryKey = key
+        e.id = key
+        e.seticon()
       }
       if(var.selectedSlot != none){
         preview = val.信息面板['预览槽']
@@ -33,21 +36,24 @@ ui:
     update: |-
       var.backpackItems = packet['backpackItems']
       var.itemJsons = {}
+      var.maxBackpackCount = packet['maxBackpackCount']
       for(key in var.backpackItems.keys()){
         json = packet['itemJson' + key]
-      var.maxBackpackCount = packet['maxBackpackCount']
         if(json != none && json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
         }
       }
+      while(val.背包网格.childrenCount() > 1){
+        val.背包网格.get(1).remove()
+      }
       for(i in range(0, var.maxBackpackCount)){
         key = i.round()
-        slot = val.背包网格['背包槽' + key]
-        if(slot != none){
-          slot.seticon()
-        }
+        e = val.背包网格['背包槽'].copy('背包槽' + key)
+        e.entryKey = key
+        e.id = key
+        e.seticon()
       }
       if(var.selectedSlot != none){
         preview = val.信息面板['预览槽']
@@ -92,7 +98,7 @@ controls:
           y: 180
           width: 1220
           height: 720
-          normal: ~30,30,35,240
+          normal: ~32,32,42,238
           shape: ~round_rect
           radius: 24
         effect:
@@ -116,7 +122,7 @@ controls:
               y: 16
               width: 56
               height: 56
-              normal: ~65,65,75,220
+              normal: ~62,62,74,205
               hover: ~Frosted:0;255,100,100,230
               shape: ~round_rect
               radius: 14
@@ -167,14 +173,6 @@ controls:
                   column: 6
                   spaceBetweenX: 10
                   spaceBetweenY: 10
-                action:
-                  create: |-
-                    for(i in range(0, var.maxBackpackCount)){
-                      key = i.round()
-                      slot = self['背包槽'].copy('背包槽' + key)
-                      slot.entryKey = key
-                      slot.id = key
-                    }
                 children:
                   背包槽:
                     type: Slot
@@ -212,6 +210,17 @@ controls:
                         color: ~0,0,0,255
 
           # ── 右侧上架信息区 ──────────────────────────────
+            空背包提示:
+              type: Text
+              attribute:
+                point: ~middle_center
+                x: 280
+                y: 300
+                center: true
+                fontSize: 36
+                visible: "var.backpackItems == none || var.backpackItems.keys().length == 0"
+                texts: '&8暂无可上架物品'
+                through: true
           信息面板:
             type: Texture
             val: 信息面板
@@ -246,9 +255,9 @@ controls:
                   y: 64
                   width: 80
                   height: 80
-                  normal: ~45,45,55,200
+                  normal: ~45,47,56,205
                   shape: ~round_rect
-                  radius: 14
+                  radius: 10
                   through: true
                   seticon: "var.selectedSlot != none ? self.setItemIcon(var.itemJsons[var.selectedSlot]) : self.setItemIcon(var.emptyItemJson)"
                 effect:
@@ -285,7 +294,7 @@ controls:
                   length: 12
                   emptyText: ~输入价格...
                   fontSize: 28
-                  background: ~60,60,70,200
+                  background: ~62,62,74,205
                   shape: ~round_rect
                   radius: 10
                 action:
@@ -315,7 +324,7 @@ controls:
                   length: 64
                   emptyText: ~输入留言...
                   fontSize: 28
-                  background: ~60,60,70,200
+                  background: ~62,62,74,205
                   shape: ~round_rect
                   radius: 10
                 action:
@@ -443,7 +452,7 @@ controls:
                   y: 520
                   width: 120
                   height: 56
-                  normal: ~65,65,75,220
+                  normal: ~62,62,74,205
                   hover: ~Frosted:0;255,255,255,180
                   shape: ~round_rect
                   radius: 14
@@ -464,3 +473,4 @@ controls:
                       center: true
                       fontSize: 32
                       texts: "&f返回"
+

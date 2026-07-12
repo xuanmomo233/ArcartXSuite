@@ -128,18 +128,18 @@ public record MenuDefinition(
             List<MenuUiTarget> targets = new ArrayList<>(targetMaps.size());
             for (Map<?, ?> map : targetMaps) {
                 String uiId = readString(map, "ui-id");
-                String handler = readString(map, "packet-handler");
-                if (uiId == null || handler == null) {
+                if (uiId == null) {
                     continue;
                 }
+                String handler = readString(map, "packet-handler");
                 targets.add(new MenuUiTarget(uiId, handler));
             }
             return List.copyOf(targets);
         }
         String uiId = yaml.getString("ui-id", "").trim();
         String handler = yaml.getString("packet-handler", "").trim();
-        if (!uiId.isBlank() && !handler.isBlank()) {
-            return List.of(new MenuUiTarget(uiId, handler));
+        if (!uiId.isBlank()) {
+            return List.of(new MenuUiTarget(uiId, handler.isBlank() ? null : handler));
         }
         return List.of();
     }

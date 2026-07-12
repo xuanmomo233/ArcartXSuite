@@ -4,6 +4,7 @@ import java.util.Locale;
 
 public enum MenuActionType {
     COMMAND,
+    PLAYER_OP,
     CONSOLE,
     MESSAGE,
     OPEN,
@@ -17,10 +18,11 @@ public enum MenuActionType {
             return NONE;
         }
         return switch (raw.trim().toLowerCase(Locale.ROOT)) {
-            case "command", "cmd", "player" -> COMMAND;
-            case "console", "op" -> CONSOLE;
-            case "message", "msg", "tell" -> MESSAGE;
-            case "open", "menu" -> OPEN;
+            case "command" -> COMMAND;
+            case "op" -> PLAYER_OP;
+            case "console" -> CONSOLE;
+            case "message" -> MESSAGE;
+            case "open" -> OPEN;
             case "close" -> CLOSE;
             case "page" -> PAGE;
             case "sound" -> SOUND;

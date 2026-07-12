@@ -12,15 +12,22 @@ public record MenuUiTarget(String uiId, String packetHandler) {
         if (uiId == null || uiId.isBlank()) {
             throw new IllegalArgumentException("MenuUiTarget.uiId must not be blank");
         }
-        if (packetHandler == null || packetHandler.isBlank()) {
-            throw new IllegalArgumentException("MenuUiTarget.packetHandler must not be blank");
-        }
         uiId = uiId.trim();
-        packetHandler = packetHandler.trim();
+        packetHandler = (packetHandler == null || packetHandler.isBlank()) ? null : packetHandler.trim();
+    }
+
+    /**
+     * 是否指定了自定义 handler 名称。
+     * <p>
+     * 未指定时，菜单按内置的 {@code init}/{@code update} 生命周期驱动该 UI，
+     * 这样自定义 UI 可直接复用 menu_panel/menu_esc 的 packetHandler 写法。
+     */
+    public boolean hasPacketHandler() {
+        return packetHandler != null && !packetHandler.isBlank();
     }
 
     @Override
     public String toString() {
-        return uiId + ":" + packetHandler;
+        return uiId + ":" + (packetHandler == null ? "<init/update>" : packetHandler);
     }
 }

@@ -77,7 +77,7 @@ open-requirements: []
 open-actions:
   - "message: &a欢迎打开示例菜单！"
   # 更多示例：
-  # - "sound: ENTITY_EXPERIENCE_ORB_PICKUP 1.0 1.0"   — 播放音效（音效名 音量 音调）
+  # - "sound: ENTITY_EXPERIENCE_ORB_PICKUP|1.0|1.0"   — 播放音效（音效名 音量 音调）
   # - "command: log menu_open %player_name%"          — 执行后台命令
   # - "console: say %player_name% 打开了菜单"          — 以控制台身份执行命令
 
@@ -85,7 +85,7 @@ open-actions:
 # 在菜单关闭后执行，适合：保存状态、音效反馈
 close-actions: []
   # 示例：
-  # - "sound: UI_BUTTON_CLICK 0.5 1.2"
+  # - "sound: UI_BUTTON_CLICK|0.5|1.2"
   # - "message: &7已关闭菜单"
 
 # ─── 命令绑定 ───────────────────────────────────────────────
@@ -217,7 +217,7 @@ pages:
         deny-message: "&c需要达到 5 级才能领取在线奖励"
         # deny-actions: 条件不满足时执行的动作（可选）
         # deny-actions:
-        #   - "sound: ENTITY_VILLAGER_NO 1.0 1.0"
+        #   - "sound: ENTITY_VILLAGER_NO|1.0|1.0"
         #   - "close"
         actions:
           - "command: onlinerewards open"
@@ -382,13 +382,8 @@ pages:
 #   "open: <菜单id>"         — 打开另一个菜单
 #   "page: <页面id>"         — 切换到同菜单内的另一页
 #   "message: <消息>"        — 向玩家发送聊天消息（支持颜色代码）
-#   "sound: <音效> <音量> <音调>"  — 播放音效
-#   "title: <主标题>"        — 显示大标题（屏幕中央）
-#   "subtitle: <副标题>"     — 显示副标题
-#   "actionbar: <消息>"      — 显示动作栏消息（屏幕底部）
-#   "delay: <tick数>"        — 延迟执行后续动作（20 tick = 1 秒）
-#   "back"                   — 返回上一个打开的菜单（历史栈）
-#   "refresh"                — 刷新当前菜单（重新加载数据）
+#   "sound: <音效名>|<音量>|<音调>"  — 播放音效
+#   "op: <命令>"               — 以玩家身份临时给予 OP 执行，用完自动收回
 #
 # 所有动作中均可使用 PlaceholderAPI 变量：
 #   %player_name%    — 玩家名
@@ -464,7 +459,7 @@ pages:
         text: "&7« 返回主菜单"
         order: 2
         # "open: <主菜单id>" — 返回主菜单（跨菜单跳转）
-        # 也可用 "back" 动作返回上一个菜单（自动历史栈）
+        # 返回请使用 "open: <主菜单id>"；back 只是本按钮的 ID，不是内置动作
         actions:
           - "open: example"
 

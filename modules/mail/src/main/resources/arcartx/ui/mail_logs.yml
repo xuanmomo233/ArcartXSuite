@@ -29,12 +29,28 @@ ui:
       var.maxPage = packet['max_page']
       var.totalCount = packet['total_count']
       var.maxLogCount = packet['maxLogCount']
+      while(val.logs_list.childrenCount() > 1){
+        val.logs_list.get(1).remove()
+      }
+      for(i in range(0, var.maxLogCount)){
+        key = i.round()
+        e = val.logs_list['item'].copy('item' + key)
+        e.entryKey = key
+      }
     update: |-
       var.logs = packet['logs']
       var.page = packet['page']
       var.maxPage = packet['max_page']
       var.totalCount = packet['total_count']
       var.maxLogCount = packet['maxLogCount']
+      while(val.logs_list.childrenCount() > 1){
+        val.logs_list.get(1).remove()
+      }
+      for(i in range(0, var.maxLogCount)){
+        key = i.round()
+        e = val.logs_list['item'].copy('item' + key)
+        e.entryKey = key
+      }
 
 # controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
 
@@ -191,13 +207,6 @@ controls:
                 attribute:
                   width: 1300
                   spaceBetween: 10
-                action:
-                  create: |-
-                    for(i in range(0, var.maxLogCount)){
-                      key = i.round()
-                      log = self['item'].copy('item' + key)
-                      log.entryKey = key
-                    }
                 children:
                   item:
                     type: Texture

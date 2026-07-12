@@ -34,6 +34,7 @@ public final class TitleMenuPacketFactory {
         boolean selectedCanEquip = selectedOwnedTitle != null && !selectedIsEquipped;
 
         Map<String, Object> titles = new LinkedHashMap<>();
+        int titleIndex = 0;
         for (TitleDefinition definition : configuration.orderedTitles()) {
             TitleGroupDefinition groupDefinition = configuration.group(definition.groupId());
             TitleQualityDefinition qualityDefinition = configuration.quality(definition.qualityId());
@@ -76,20 +77,25 @@ public final class TitleMenuPacketFactory {
                     TitleTextFormats.toSourceLines(definition.collectionAttributes(), definition.collectionAttributeLines())
                 )
             );
-            titles.put(definition.id(), titleData);
+            titles.put(rowKey(titleIndex++), titleData);
         }
+
+        Map<String, Object> groups = buildGroupPacket(configuration);
+        Map<String, Object> qualities = buildQualityPacket(configuration);
+        Map<String, Object> equippedByGroup = buildEquippedByGroupPacket(configuration, resolvedState);
+        Map<String, Object> sets = buildSetPacket(configuration, resolvedState, state);
 
         Map<String, Object> packet = new LinkedHashMap<>();
         packet.put("titles", titles);
-        packet.put("groups", buildGroupPacket(configuration));
-        packet.put("qualities", buildQualityPacket(configuration));
+        packet.put("groups", groups);
+        packet.put("qualities", qualities);
         packet.put("filter_modes", buildFilterModesPacket());
         packet.put("selected_id", selectedTitleId);
         packet.put("equipped_summary", equippedSummary(configuration, resolvedState));
         packet.put("owned_count", resolvedState.ownedCount());
         packet.put("hidden_count", resolvedState.hiddenCount());
         packet.put("equipped_count", resolvedState.equippedTitleIdsByGroup().size());
-        packet.put("equipped_by_group", buildEquippedByGroupPacket(configuration, resolvedState));
+        packet.put("equipped_by_group", equippedByGroup);
         packet.put("selected_display_name", selectedDefinition == null ? "" : selectedDefinition.displayName());
         packet.put("selected_kind", selectedDefinition == null ? "" : selectedDefinition.kind().configKey());
         packet.put("selected_chat_prefix", selectedDefinition == null ? "" : selectedDefinition.chatPrefix());
@@ -161,7 +167,7 @@ public final class TitleMenuPacketFactory {
         packet.put("collection_attributes_text", colorize(collectionLines, colorPrefix, emptyPlaceholder));
         packet.put("total_attributes_text", colorize(totalLines, colorPrefix, emptyPlaceholder));
         packet.put("set_bonus_attributes_text", colorize(setBonusLines, colorPrefix, emptyPlaceholder));
-        packet.put("sets", buildSetPacket(configuration, resolvedState, state));
+        packet.put("sets", sets);
         packet.put("display_title_id", resolvedState.totalDisplayTitle() == null ? "" : resolvedState.totalDisplayTitle().id());
         packet.put("display_title_name", displayTitleField(configuration, resolvedState, TitleDefinition::displayName));
         packet.put("display_title_chat_prefix", displayTitleField(configuration, resolvedState, TitleDefinition::chatPrefix));
@@ -208,12 +214,17 @@ public final class TitleMenuPacketFactory {
         return value == null ? "" : value;
     }
 
+    private static String rowKey(int index) {
+        return Integer.toString(index);
+    }
+
     private static Map<String, Object> buildGroupPacket(TitleModuleConfiguration configuration) {
         Map<String, Object> groups = new LinkedHashMap<>();
-        groups.put("all", Map.of("id", "all", "name", "全部分组", "sort_order", -1));
+        int index = 0;
+        groups.put(rowKey(index++), Map.of("id", "all", "name", "全部分组", "sort_order", -1));
         for (TitleGroupDefinition groupDefinition : configuration.groups().values()) {
             groups.put(
-                groupDefinition.id(),
+                rowKey(index++),
                 Map.of(
                     "id", groupDefinition.id(),
                     "name", groupDefinition.name(),
@@ -226,10 +237,11 @@ public final class TitleMenuPacketFactory {
 
     private static Map<String, Object> buildQualityPacket(TitleModuleConfiguration configuration) {
         Map<String, Object> qualities = new LinkedHashMap<>();
-        qualities.put("all", Map.of("id", "all", "name", "全部品质", "sort_order", -1));
+        int index = 0;
+        qualities.put(rowKey(index++), Map.of("id", "all", "name", "全部品质", "sort_order", -1));
         for (TitleQualityDefinition qualityDefinition : configuration.qualities().values()) {
             qualities.put(
-                qualityDefinition.id(),
+                rowKey(index++),
                 Map.of(
                     "id", qualityDefinition.id(),
                     "name", qualityDefinition.name(),
@@ -253,6 +265,7 @@ public final class TitleMenuPacketFactory {
         ResolvedTitleState resolvedState
     ) {
         Map<String, Object> result = new LinkedHashMap<>();
+        int index = 0;
         for (TitleGroupDefinition groupDefinition : configuration.groups().values()) {
             String groupId = groupDefinition.id();
             TitleDefinition title = resolvedState.equippedTitlesByGroup().get(groupId);
@@ -263,7 +276,7 @@ public final class TitleMenuPacketFactory {
             entry.put("title_id", title == null ? "" : title.id());
             entry.put("display_name", title == null ? "" : title.displayName());
             entry.put("quality_name", quality == null ? (title == null ? "" : title.qualityId()) : quality.name());
-            result.put(groupId, entry);
+            result.put(rowKey(index++), entry);
         }
         return result;
     }
@@ -297,6 +310,7 @@ public final class TitleMenuPacketFactory {
         PlayerTitleState state
     ) {
         Map<String, Object> sets = new LinkedHashMap<>();
+        int index = 0;
         for (TitleSetDefinition setDef : configuration.sets().values()) {
             Map<String, Object> setData = new LinkedHashMap<>();
             setData.put("id", setDef.id());
@@ -323,7 +337,7 @@ public final class TitleMenuPacketFactory {
                 titleNames.append(playerOwns ? "&a✔ " : "&c✘ ").append("&0").append(def.displayName());
             }
             setData.put("required_titles_text", titleNames.toString());
-            sets.put(setDef.id(), setData);
+            sets.put(rowKey(index++), setData);
         }
         return sets;
     }

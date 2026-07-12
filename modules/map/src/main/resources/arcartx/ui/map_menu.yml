@@ -48,6 +48,38 @@ ui:
       var.maxAnchorCount = packet['maxAnchorCount']
       var.maxWaypointCount = packet['maxWaypointCount']
       var.maxExternalCount = packet['maxExternalCount']
+      while(val.world_entry.childrenCount() > 1){
+        val.world_entry.get(1).remove()
+      }
+      for(i in range(0, var.maxWorldCount)){
+        key = i.round()
+        e = val.world_entry['item'].copy('item' + key)
+        e.entryKey = key
+      }
+      while(val.anchor_row.childrenCount() > 1){
+        val.anchor_row.get(1).remove()
+      }
+      for(i in range(0, var.maxAnchorCount)){
+        key = i.round()
+        e = val.anchor_row['item'].copy('item' + key)
+        e.entryKey = key
+      }
+      while(val.waypoint_row.childrenCount() > 1){
+        val.waypoint_row.get(1).remove()
+      }
+      for(i in range(0, var.maxWaypointCount)){
+        key = i.round()
+        e = val.waypoint_row['item'].copy('item' + key)
+        e.entryKey = key
+      }
+      while(val.external_row.childrenCount() > 1){
+        val.external_row.get(1).remove()
+      }
+      for(i in range(0, var.maxExternalCount)){
+        key = i.round()
+        e = val.external_row['item'].copy('item' + key)
+        e.entryKey = key
+      }
     update: |-
       var.packetId = packet['packetId']
       var.selectedWorldId = packet['selectedWorldId']
@@ -82,6 +114,38 @@ ui:
       var.maxAnchorCount = packet['maxAnchorCount']
       var.maxWaypointCount = packet['maxWaypointCount']
       var.maxExternalCount = packet['maxExternalCount']
+      while(val.world_entry.childrenCount() > 1){
+        val.world_entry.get(1).remove()
+      }
+      for(i in range(0, var.maxWorldCount)){
+        key = i.round()
+        e = val.world_entry['item'].copy('item' + key)
+        e.entryKey = key
+      }
+      while(val.anchor_row.childrenCount() > 1){
+        val.anchor_row.get(1).remove()
+      }
+      for(i in range(0, var.maxAnchorCount)){
+        key = i.round()
+        e = val.anchor_row['item'].copy('item' + key)
+        e.entryKey = key
+      }
+      while(val.waypoint_row.childrenCount() > 1){
+        val.waypoint_row.get(1).remove()
+      }
+      for(i in range(0, var.maxWaypointCount)){
+        key = i.round()
+        e = val.waypoint_row['item'].copy('item' + key)
+        e.entryKey = key
+      }
+      while(val.external_row.childrenCount() > 1){
+        val.external_row.get(1).remove()
+      }
+      for(i in range(0, var.maxExternalCount)){
+        key = i.round()
+        e = val.external_row['item'].copy('item' + key)
+        e.entryKey = key
+      }
   action:
     open: |-
       var.packetId = 'AXS_MAP'
@@ -220,13 +284,6 @@ controls:
                 attribute:
                   height: 68
                   spaceBetween: 12
-                action:
-                  create: |-
-                    for(i in range(0, var.maxWorldCount)){
-                      key = i.round()
-                      wi = self['item'].copy('item' + key)
-                      wi.entryKey = key
-                    }
                 children:
                   item:
                     type: Texture
@@ -335,13 +392,6 @@ controls:
                 attribute:
                   width: 500
                   spaceBetween: 10
-                action:
-                  create: |-
-                    for(i in range(0, var.maxAnchorCount)){
-                      key = i.round()
-                      ai = self['item'].copy('item' + key)
-                      ai.entryKey = key
-                    }
                 children:
                   item:
                     type: Texture
@@ -433,13 +483,6 @@ controls:
                 attribute:
                   width: 500
                   spaceBetween: 8
-                action:
-                  create: |-
-                    for(i in range(0, var.maxWaypointCount)){
-                      key = i.round()
-                      wpi = self['item'].copy('item' + key)
-                      wpi.entryKey = key
-                    }
                 children:
                   item:
                     type: Texture
@@ -520,13 +563,6 @@ controls:
                 attribute:
                   width: 500
                   spaceBetween: 8
-                action:
-                  create: |-
-                    for(i in range(0, var.maxExternalCount)){
-                      key = i.round()
-                      ei = self['item'].copy('item' + key)
-                      ei.entryKey = key
-                    }
                 children:
                   item:
                     type: Texture

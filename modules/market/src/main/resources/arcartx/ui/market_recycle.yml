@@ -24,24 +24,23 @@ ui:
       var.multiplier = packet['multiplier']
       var.recyclables = packet['recyclables']
       var.itemJsons = {}
+      var.maxRecycleCount = packet['maxRecycleCount']
       for(key in var.recyclables.keys()){
         json = packet['recycleItemJson' + key]
-      var.maxRecycleCount = packet['maxRecycleCount']
         if(json != none && json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
         }
       }
+      while(val.回收列表.childrenCount() > 1){
+        val.回收列表.get(1).remove()
+      }
       for(i in range(0, var.maxRecycleCount)){
         key = i.round()
-        item = val.回收列表['回收项' + key]
-        if(item != none){
-          icon = item['物品图标']
-          if(icon != none){
-            icon.seticon()
-          }
-        }
+        e = val.回收列表['回收项'].copy('回收项' + key)
+        e.entryKey = key
+        if(e['物品图标'] != none){ e['物品图标'].entryKey = key; e['物品图标'].seticon() }
       }
     update: |-
       var.packetId = packet['packetId']
@@ -50,24 +49,23 @@ ui:
       var.multiplier = packet['multiplier']
       var.recyclables = packet['recyclables']
       var.itemJsons = {}
+      var.maxRecycleCount = packet['maxRecycleCount']
       for(key in var.recyclables.keys()){
         json = packet['recycleItemJson' + key]
-      var.maxRecycleCount = packet['maxRecycleCount']
         if(json != none && json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
         }
       }
+      while(val.回收列表.childrenCount() > 1){
+        val.回收列表.get(1).remove()
+      }
       for(i in range(0, var.maxRecycleCount)){
         key = i.round()
-        item = val.回收列表['回收项' + key]
-        if(item != none){
-          icon = item['物品图标']
-          if(icon != none){
-            icon.seticon()
-          }
-        }
+        e = val.回收列表['回收项'].copy('回收项' + key)
+        e.entryKey = key
+        if(e['物品图标'] != none){ e['物品图标'].entryKey = key; e['物品图标'].seticon() }
       }
   action:
     open: |-
@@ -101,7 +99,7 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~35,35,45,235
+              normal: ~32,32,42,238
               shape: ~round_rect
               radius: 24
             effect:
@@ -166,7 +164,7 @@ controls:
               y: 120
               width: 1036
               height: 530
-              normal: ~50,50,60,180
+              normal: ~52,52,62,190
               shape: ~round_rect
               radius: 20
             effect:
@@ -181,6 +179,17 @@ controls:
                   y: 12
                   texts: '&7可回收物品'
                   fontSize: 32
+              空回收提示:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  x: 518
+                  y: 360
+                  center: true
+                  fontSize: 36
+                  visible: "var.recyclables == none || var.recyclables.keys().length == 0"
+                  texts: '&8暂无可回收物品'
+                  through: true
               列表纵向滑块:
                 type: Texture
                 val: 列表纵向滑块
@@ -214,18 +223,7 @@ controls:
                     type: VStack
                     attribute:
                       width: 996
-                      spaceBetween: 6
-                    action:
-                      create: |-
-                        for(i in range(0, var.maxRecycleCount)){
-                          key = i.round()
-                          item = self['回收项'].copy('回收项' + key)
-                          item.entryKey = key
-                          icon = item['物品图标']
-                          if(icon != none){
-                            icon.entryKey = key
-                          }
-                        }
+                      spaceBetween: 8
                     children:
                       回收项:
                         type: Texture
@@ -235,7 +233,7 @@ controls:
                           visible: self.entry != none
                           width: 996
                           height: 64
-                          normal: ~60,60,70,200
+                          normal: ~62,62,74,205
                           hover: ~Frosted:0;60,160,90,200
                           shape: ~round_rect
                           radius: 14
@@ -254,7 +252,7 @@ controls:
                               y: 4
                               width: 56
                               height: 56
-                              normal: ~45,45,55,200
+                              normal: ~45,47,56,205
                               shape: ~round_rect
                               radius: 10
                               through: true
@@ -343,7 +341,7 @@ controls:
               normal: ~60,200,100,220
               hover: ~Frosted:0;80,240,120,240
               shape: ~round_rect
-              radius: 16
+              radius: 14
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'recycle_all')
@@ -369,10 +367,10 @@ controls:
               y: 660
               width: 68
               height: 56
-              normal: ~65,65,75,220
+              normal: ~62,62,74,205
               hover: ~Frosted:0;255,255,255,180
               shape: ~round_rect
-              radius: 16
+              radius: 14
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'recycle_preview')
@@ -390,3 +388,4 @@ controls:
                   center: true
                   fontSize: 36
                   texts: '&f↻'
+

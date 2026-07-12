@@ -150,6 +150,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         );
         service.setRuntimeUiIds(panelBinding.runtimeUiId(), escBinding.runtimeUiId());
         service.reload(dataFolder);
+        registerCustomMenuUis(panelBinding.runtimeUiId(), escBinding.runtimeUiId());
         packetHandler = new MenuUiPacketHandler(service, configuration.client().packetId());
         adminCommand = new MenuAdminCommand(service, messages());
 
@@ -166,6 +167,40 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         });
 
         logger.info("Menu 模块已启动，菜单数量=" + service.menus().size());
+    }
+
+
+    private void registerCustomMenuUis(String panelRuntimeUiId, String escRuntimeUiId) {
+        if (service == null || packetBridge == null || !packetBridge.isAvailable()) {
+            return;
+        }
+        java.util.Set<String> builtin = new java.util.HashSet<>();
+        builtin.add(panelRuntimeUiId);
+        builtin.add(escRuntimeUiId);
+        java.util.Set<String> handled = new java.util.HashSet<>();
+        File uiDirectory = new File(pluginDataFolder, "ui");
+        for (xuanmo.arcartxsuite.menu.config.MenuDefinition definition : service.menus()) {
+            for (xuanmo.arcartxsuite.menu.config.MenuUiTarget target : definition.uiTargets()) {
+                String uiId = target.uiId();
+                if (uiId == null || uiId.isBlank() || builtin.contains(uiId) || !handled.add(uiId)) {
+                    continue;
+                }
+                File uiFile = new File(uiDirectory, uiId + ".yml");
+                if (!uiFile.isFile()) {
+                    logger.warning("菜单 " + definition.id() + " 引用的自定义 UI 文件不存在，已跳过: ui/" + uiId + ".yml");
+                    continue;
+                }
+                PacketBridgeAPI.UiRegistrationResult result = packetBridge.registerOrReloadUi(uiId, uiFile);
+                if (!result.success()) {
+                    logger.warning("自定义菜单 UI 注册失败: " + uiId + " -> " + result.message());
+                } else if (!uiId.equals(result.runtimeUiId())) {
+                    logger.warning("自定义菜单 UI runtime id 与配置不一致(请让 ui-id 使用不带命名空间前缀的 id): 配置="
+                        + uiId + " runtime=" + result.runtimeUiId());
+                } else {
+                    logger.info("已注册自定义菜单 UI: " + uiId + " (" + uiFile.getName() + ")");
+                }
+            }
+        }
     }
 
     @Override

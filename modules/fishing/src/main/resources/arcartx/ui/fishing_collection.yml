@@ -21,12 +21,13 @@ ui:
       var.collectionPercent = packet['collectionPercent']
       var.fishList = packet['fishList']
       var.maxFishCount = packet['maxFishCount']
+      while(val.鱼类列表.childrenCount() > 1){
+        val.鱼类列表.get(1).remove()
+      }
       for(i in range(0, var.maxFishCount)){
         key = i.round()
-        item = val.鱼类列表['鱼条目' + key]
-        if(item != none){
-          item.entryKey = key
-        }
+        e = val.鱼类列表['鱼条目'].copy('鱼条目' + key)
+        e.entryKey = key
       }
     update: |-
       var.packetId = packet['packetId']
@@ -38,6 +39,14 @@ ui:
       var.collectionPercent = packet['collectionPercent']
       var.fishList = packet['fishList']
       var.maxFishCount = packet['maxFishCount']
+      while(val.鱼类列表.childrenCount() > 1){
+        val.鱼类列表.get(1).remove()
+      }
+      for(i in range(0, var.maxFishCount)){
+        key = i.round()
+        e = val.鱼类列表['鱼条目'].copy('鱼条目' + key)
+        e.entryKey = key
+      }
   action:
     open: |-
       var.packetId = 'AXS_FISHING'
@@ -189,13 +198,6 @@ controls:
                 attribute:
                   width: 728
                   spaceBetween: 6
-                action:
-                  create: |-
-                    for(i in range(0, var.maxFishCount)){
-                      key = i.round()
-                      item = self['鱼条目'].copy('鱼条目' + key)
-                      item.entryKey = key
-                    }
                 children:
                   鱼条目:
                     type: Texture

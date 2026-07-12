@@ -22,26 +22,29 @@ ui:
       var.maxDailyCount = packet['maxDailyCount']
       var.maxWeeklyCount = packet['maxWeeklyCount']
       var.maxSeasonCount = packet['maxSeasonCount']
+      while(val.每日任务列表.childrenCount() > 1){
+        val.每日任务列表.get(1).remove()
+      }
       for(i in range(0, var.maxDailyCount)){
         key = i.round()
-        item = val.每日任务列表['任务项' + key]
-        if(item != none){
-          item.entryKey = key
-        }
+        e = val.每日任务列表['任务项'].copy('任务项' + key)
+        e.entryKey = key
+      }
+      while(val.每周任务列表.childrenCount() > 1){
+        val.每周任务列表.get(1).remove()
       }
       for(i in range(0, var.maxWeeklyCount)){
         key = i.round()
-        item = val.每周任务列表['任务项' + key]
-        if(item != none){
-          item.entryKey = key
-        }
+        e = val.每周任务列表['任务项'].copy('任务项' + key)
+        e.entryKey = key
+      }
+      while(val.赛季任务列表.childrenCount() > 1){
+        val.赛季任务列表.get(1).remove()
       }
       for(i in range(0, var.maxSeasonCount)){
         key = i.round()
-        item = val.赛季任务列表['任务项' + key]
-        if(item != none){
-          item.entryKey = key
-        }
+        e = val.赛季任务列表['任务项'].copy('任务项' + key)
+        e.entryKey = key
       }
     update: |-
       var.packetId = packet['packetId']
@@ -54,6 +57,30 @@ ui:
       var.maxDailyCount = packet['maxDailyCount']
       var.maxWeeklyCount = packet['maxWeeklyCount']
       var.maxSeasonCount = packet['maxSeasonCount']
+      while(val.每日任务列表.childrenCount() > 1){
+        val.每日任务列表.get(1).remove()
+      }
+      for(i in range(0, var.maxDailyCount)){
+        key = i.round()
+        e = val.每日任务列表['任务项'].copy('任务项' + key)
+        e.entryKey = key
+      }
+      while(val.每周任务列表.childrenCount() > 1){
+        val.每周任务列表.get(1).remove()
+      }
+      for(i in range(0, var.maxWeeklyCount)){
+        key = i.round()
+        e = val.每周任务列表['任务项'].copy('任务项' + key)
+        e.entryKey = key
+      }
+      while(val.赛季任务列表.childrenCount() > 1){
+        val.赛季任务列表.get(1).remove()
+      }
+      for(i in range(0, var.maxSeasonCount)){
+        key = i.round()
+        e = val.赛季任务列表['任务项'].copy('任务项' + key)
+        e.entryKey = key
+      }
   action:
     open: |-
       var.packetId = 'AXS_BATTLEPASS'
@@ -192,13 +219,6 @@ controls:
                           y: 44
                           width: 728
                           spaceBetween: 6
-                        action:
-                          create: |-
-                            for(i in range(0, var.maxDailyCount)){
-                              key = i.round()
-                              item = self['任务项'].copy('任务项' + key)
-                              item.entryKey = key
-                            }
                         children:
                           任务项:
                             type: Texture
@@ -287,13 +307,6 @@ controls:
                           y: 44
                           width: 728
                           spaceBetween: 6
-                        action:
-                          create: |-
-                            for(i in range(0, var.maxWeeklyCount)){
-                              key = i.round()
-                              item = self['任务项'].copy('任务项' + key)
-                              item.entryKey = key
-                            }
                         children:
                           任务项:
                             type: Texture
@@ -382,13 +395,6 @@ controls:
                           y: 44
                           width: 728
                           spaceBetween: 6
-                        action:
-                          create: |-
-                            for(i in range(0, var.maxSeasonCount)){
-                              key = i.round()
-                              item = self['任务项'].copy('任务项' + key)
-                              item.entryKey = key
-                            }
                         children:
                           任务项:
                             type: Texture

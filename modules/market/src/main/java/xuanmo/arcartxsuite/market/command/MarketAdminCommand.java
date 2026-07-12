@@ -43,12 +43,7 @@ public class MarketAdminCommand {
             return true;
         }
 
-        if (args.length == 0) {
-            sendHelp(sender);
-            return true;
-        }
-
-        String action = args[0].toLowerCase();
+        String action = args.length >= 2 ? args[1].toLowerCase() : "help";
         switch (action) {
             case "status" -> {
                 sender.sendMessage(fullMsg("status.title"));
@@ -73,12 +68,12 @@ public class MarketAdminCommand {
                 sender.sendMessage(fullMsg("admin.clear-expired-success", cleared));
             }
             case "remove" -> {
-                if (args.length < 2) {
+                if (args.length < 3) {
                     sender.sendMessage(fullMsg("admin.remove-usage"));
                     return true;
                 }
                 try {
-                    long id = Long.parseLong(args[1]);
+                    long id = Long.parseLong(args[2]);
                     boolean removed = service.adminRemoveListing(id);
                     sender.sendMessage(removed ? fullMsg("admin.remove-success") : fullMsg("admin.remove-not-found"));
                 } catch (NumberFormatException e) {
@@ -91,8 +86,8 @@ public class MarketAdminCommand {
     }
 
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
-        if (args.length <= 1) {
-            String input = args.length == 0 ? "" : args[0].toLowerCase();
+        if (args.length == 2) {
+            String input = args[1].toLowerCase();
             return actions().stream().filter(s -> s.startsWith(input)).toList();
         }
         return List.of();
