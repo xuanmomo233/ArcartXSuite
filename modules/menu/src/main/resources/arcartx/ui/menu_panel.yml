@@ -4,6 +4,7 @@
 ui:
   isHud: false
   defaultOpen: false
+  # 如果想打开图标物品的tooltip，需要设置为true
   through: false
   background: true
   closeDied: true
@@ -85,9 +86,6 @@ ui:
         fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + key)
         fb.entryKey = key
       }
-    close: |-
-      var.buttonRows = {}
-      var.footerRows = {}
   action:
     open: |-
       var.packetId = 'AXS_MENU'

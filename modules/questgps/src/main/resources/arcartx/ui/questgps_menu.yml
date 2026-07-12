@@ -37,60 +37,45 @@ ui:
       var.taskCount = packet['taskCount']
       var.rewardCount = packet['rewardCount']
       var.catKeys = var.categories.keys()
+      while(val.cat_list.childrenCount() > 1){
+        val.cat_list.get(1).remove()
+      }
       var.catIndex = 0
       for(key in var.catKeys){
-        item = val.cat_list['分类项' + var.catIndex.round()]
-        if(item != none){ item.entryKey = key }
-        var.catIndex = var.catIndex + 1
-      }
-      while(var.catIndex < 8){
-        item = val.cat_list['分类项' + var.catIndex.round()]
-        if(item != none){ item.entryKey = none }
+        item = val.cat_list['分类模板'].copy('分类项' + var.catIndex.round())
+        item.entryKey = key
         var.catIndex = var.catIndex + 1
       }
       var.qKeys = var.quests.keys()
+      while(val.quest_list.childrenCount() > 1){
+        val.quest_list.get(1).remove()
+      }
       var.qIndex = 0
       for(key in var.qKeys){
-        item = val.quest_list['任务项' + var.qIndex.round()]
-        if(item != none){
-          item.entryKey = key
-        }
-        var.qIndex = var.qIndex + 1
-      }
-      while(var.qIndex < 16){
-        item = val.quest_list['任务项' + var.qIndex.round()]
-        if(item != none){
-          item.entryKey = none
-        }
+        item = val.quest_list['任务模板'].copy('任务项' + var.qIndex.round())
+        item.entryKey = key
         var.qIndex = var.qIndex + 1
       }
       var.tKeys = var.tasks.keys()
+      while(val.task_list.childrenCount() > 1){
+        val.task_list.get(1).remove()
+      }
       var.tIndex = 0
       for(key in var.tKeys){
-        item = val.task_list['目标项' + var.tIndex.round()]
-        if(item != none){
-          item.entryKey = key
-        }
-        var.tIndex = var.tIndex + 1
-      }
-      while(var.tIndex < 8){
-        item = val.task_list['目标项' + var.tIndex.round()]
-        if(item != none){ item.entryKey = none }
+        item = val.task_list['目标模板'].copy('目标项' + var.tIndex.round())
+        item.entryKey = key
         var.tIndex = var.tIndex + 1
       }
       var.rKeys = var.rewards.keys()
+      while(val.reward_list.childrenCount() > 1){
+        val.reward_list.get(1).remove()
+      }
       var.rIndex = 0
       for(key in var.rKeys){
-        item = val.reward_list['奖励项' + var.rIndex.round()]
-        if(item != none){
-          item.entryKey = key; if(item['奖励图标'] != none){ item['奖励图标'].seticon() }
-        }
-        var.rIndex = var.rIndex + 1
-      }
-      while(var.rIndex < 8){
-        item = val.reward_list['奖励项' + var.rIndex.round()]
-        if(item != none){
-          item.entryKey = none
+        item = val.reward_list['奖励模板'].copy('奖励项' + var.rIndex.round())
+        item.entryKey = key
+        if(item['奖励图标'] != none){
+          item['奖励图标'].seticon()
         }
         var.rIndex = var.rIndex + 1
       }
@@ -125,69 +110,45 @@ ui:
       var.taskCount = packet['taskCount']
       var.rewardCount = packet['rewardCount']
       var.catKeys = var.categories.keys()
+      while(val.cat_list.childrenCount() > 1){
+        val.cat_list.get(1).remove()
+      }
       var.catIndex = 0
       for(key in var.catKeys){
-        item = val.cat_list['分类项' + var.catIndex.round()]
-        if(item != none){
-          item.entryKey = key
-        }
-        var.catIndex = var.catIndex + 1
-      }
-      while(var.catIndex < 8){
-        item = val.cat_list['分类项' + var.catIndex.round()]
-        if(item != none){
-          item.entryKey = none
-        }
+        item = val.cat_list['分类模板'].copy('分类项' + var.catIndex.round())
+        item.entryKey = key
         var.catIndex = var.catIndex + 1
       }
       var.qKeys = var.quests.keys()
+      while(val.quest_list.childrenCount() > 1){
+        val.quest_list.get(1).remove()
+      }
       var.qIndex = 0
       for(key in var.qKeys){
-        item = val.quest_list['任务项' + var.qIndex.round()]
-        if(item != none){
-          item.entryKey = key
-        }
-        var.qIndex = var.qIndex + 1
-      }
-      while(var.qIndex < 16){
-        item = val.quest_list['任务项' + var.qIndex.round()]
-        if(item != none){
-          item.entryKey = none
-        }
+        item = val.quest_list['任务模板'].copy('任务项' + var.qIndex.round())
+        item.entryKey = key
         var.qIndex = var.qIndex + 1
       }
       var.tKeys = var.tasks.keys()
+      while(val.task_list.childrenCount() > 1){
+        val.task_list.get(1).remove()
+      }
       var.tIndex = 0
       for(key in var.tKeys){
-        item = val.task_list['目标项' + var.tIndex.round()]
-        if(item != none){
-          item.entryKey = key
-        }
-        var.tIndex = var.tIndex + 1
-      }
-      while(var.tIndex < 8){
-        item = val.task_list['目标项' + var.tIndex.round()]
-        if(item != none){
-          item.entryKey = none
-        }
+        item = val.task_list['目标模板'].copy('目标项' + var.tIndex.round())
+        item.entryKey = key
         var.tIndex = var.tIndex + 1
       }
       var.rKeys = var.rewards.keys()
+      while(val.reward_list.childrenCount() > 1){
+        val.reward_list.get(1).remove()
+      }
       var.rIndex = 0
       for(key in var.rKeys){
-        item = val.reward_list['奖励项' + var.rIndex.round()]
-        if(item != none){
-          item.entryKey = key
-          if(item['奖励图标'] != none){
-            item['奖励图标'].seticon()
-          }
-        }
-        var.rIndex = var.rIndex + 1
-      }
-      while(var.rIndex < 8){
-        item = val.reward_list['奖励项' + var.rIndex.round()]
-        if(item != none){
-          item.entryKey = none
+        item = val.reward_list['奖励模板'].copy('奖励项' + var.rIndex.round())
+        item.entryKey = key
+        if(item['奖励图标'] != none){
+          item['奖励图标'].seticon()
         }
         var.rIndex = var.rIndex + 1
       }
@@ -264,10 +225,10 @@ controls:
           关闭:
             type: Texture
             attribute:
-              x: 1304
+              x: 1290
               y: 24
-              width: 56
-              height: 56
+              width: 70
+              height: 49
               normal: ~180,60,60,200
               hover: ~Frosted:0;220,80,80,230
               shape: ~round_rect
@@ -283,12 +244,12 @@ controls:
               关闭字:
                 type: Text
                 attribute:
-                  x: 28
+                  x: 35
                   y: 14
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&fX'
+                  texts: ~&f关闭
           左板:
             type: Texture
             attribute:
@@ -309,25 +270,25 @@ controls:
               x: 56
               y: 116
               fontSize: 36
-              texts: '&0分类筛选'
+              texts: ~&0分类筛选
           分类滑块:
             type: Texture
             val: 分类滑块
             attribute:
               x: 56
-              y: 190
+              y: 192
               width: 40
               height: 4
               normal: ~120,120,120,200
-              maxDragX: 316
+              maxDragX: 308
           分类滚动:
             type: Scroll
             attribute:
               x: 56
               y: 148
-              width: 348
+              width: 350
               height: 40
-              moveX: "self.parent['分类滑块'].getDragXRatio()"
+              moveX: self.parent['分类滑块'].getDragXRatio()
             action:
               wheel: |-
                 if(self.moveX >= 0 && self.wheelValue > 0){
@@ -343,12 +304,6 @@ controls:
                 attribute:
                   height: 40
                   spaceBetween: 10
-                action:
-                  create: |-
-                    for(i in range(0, 8)){
-                      item = self['分类模板'].copy('分类项' + i.round())
-                      item.entryKey = none
-                    }
                 children:
                   分类模板:
                     type: Texture
@@ -394,7 +349,7 @@ controls:
           进行中:
             type: Texture
             attribute:
-              x: 172
+              x: 174
               y: 204
               width: 108
               height: 40
@@ -414,7 +369,7 @@ controls:
           已完成:
             type: Texture
             attribute:
-              x: 288
+              x: 292
               y: 204
               width: 108
               height: 40
@@ -447,13 +402,13 @@ controls:
               width: 6
               height: 50
               normal: ~120,120,120,200
-              maxDragY: 440
+              maxDragY: 410
           任务滚动:
             type: Scroll
             attribute:
               x: 56
               y: 300
-              width: 348
+              width: 352
               height: 460
               moveY: "self.parent['任务滑块'].getDragYRatio()"
             action:
@@ -471,12 +426,6 @@ controls:
                 attribute:
                   width: 348
                   spaceBetween: 8
-                action:
-                  create: |-
-                    for(i in range(0, 16)){
-                      item = self['任务模板'].copy('任务项' + i.round())
-                      item.entryKey = none
-                    }
                 children:
                   任务模板:
                     type: Texture
@@ -605,7 +554,7 @@ controls:
             attribute:
               x: 464
               y: 300
-              width: 868
+              width: 870
               height: 180
               moveY: "self.parent['目标滑块'].getDragYRatio()"
             action:
@@ -623,12 +572,6 @@ controls:
                 attribute:
                   width: 868
                   spaceBetween: 8
-                action:
-                  create: |-
-                    for(i in range(0, 8)){
-                      item = self['目标模板'].copy('目标项' + i.round())
-                      item.entryKey = none
-                    }
                 children:
                   目标模板:
                     type: Texture
@@ -689,7 +632,7 @@ controls:
             attribute:
               x: 464
               y: 530
-              width: 868
+              width: 870
               height: 130
               moveY: "self.parent['奖励滑块'].getDragYRatio()"
             action:
@@ -707,12 +650,6 @@ controls:
                 attribute:
                   width: 868
                   spaceBetween: 8
-                action:
-                  create: |-
-                    for(i in range(0, 8)){
-                      item = self['奖励模板'].copy('奖励项' + i.round())
-                      item.entryKey = none
-                    }
                 children:
                   奖励模板:
                     type: Texture

@@ -8,7 +8,8 @@ ui:
     - online
     - 聊天栏
   itemSize: 16
-  through: true
+  # 如果想打开图标物品的tooltip，需要设置为true
+  through: false
   escClose: false
   background: false
   closeDied: false
@@ -41,6 +42,9 @@ ui:
         key = i.round()
         mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
         mb.entryKey = key
+        if(mb['图标'] != none){
+          mb['图标'].seticon()
+        }
       }
       for(i in range(0, var.maxFooterCount)){
         key = i.round()
@@ -70,15 +74,15 @@ ui:
         key = i.round()
         mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
         mb.entryKey = key
+        if(mb['图标'] != none){
+          mb['图标'].seticon()
+        }
       }
       for(i in range(0, var.maxFooterCount)){
         key = i.round()
         fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + key)
         fb.entryKey = key
       }
-    close: |-
-      var.buttonRows = {}
-      var.footerRows = {}
   action:
     open: |-
       var.animation = TwoLerp(1, 1, 0, 300, 300)
@@ -256,9 +260,6 @@ controls:
                           radius: 8
                           through: true
                           seticon: "self.parent.entry != none ? self.setItemIcon(self.parent.entry['itemJson']) : none"
-                        action:
-                          create: |-
-                            self.seticon()
                       标签:
                         type: Text
                         attribute:
