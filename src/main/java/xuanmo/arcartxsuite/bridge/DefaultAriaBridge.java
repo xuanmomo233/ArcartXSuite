@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.bridge;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Map;
@@ -16,8 +17,11 @@ public final class DefaultAriaBridge implements AriaBridge {
     private static final String NEW_ARIA_CLASS = "priv.seventeen.artist.aria.Aria";
     private static final String NEW_CONTEXT_CLASS = "priv.seventeen.artist.aria.context.Context";
     private static final String NEW_VARIABLE_KEY_CLASS = "priv.seventeen.artist.aria.context.VariableKey";
-    private static final String NEW_NATIVE_CALLABLE_CLASS = "priv.seventeen.artist.aria.callable.NativeCallable";
+    private static final String NEW_GLOBAL_STORAGE_CLASS = "priv.seventeen.artist.aria.context.GlobalStorage";
     private static final String NEW_IVALUE_CLASS = "priv.seventeen.artist.aria.value.IValue";
+    private static final String NEW_OBJECT_VALUE_CLASS = "priv.seventeen.artist.aria.value.ObjectValue";
+    private static final String NEW_IARIA_OBJECT_CLASS = "priv.seventeen.artist.aria.object.IAriaObject";
+    private static final String NEW_JAVA_OBJECT_MIRROR_CLASS = "priv.seventeen.artist.aria.interop.JavaObjectMirror";
 
     // ── 旧版 Blink API ──────────────────────────────────────────
     private static final String OLD_MANAGER_CLASS = "priv.seventeen.artist.blink.script.AriaScriptManager";
@@ -39,10 +43,11 @@ public final class DefaultAriaBridge implements AriaBridge {
     private Method newCreateContext;
     private Method newEval;
     private Method newVariableKeyOf;
-    private Method newWrapObject;
-    private Method newForceSetLocalValue;
-    private Class<?> newVariableKeyClass;
-    private Class<?> newIValueClass;
+    private Method newGetGlobalStorage;
+    private Method newGetGlobalVariable;
+    private Method newSetValue;
+    private Constructor<?> newJavaObjectMirrorCtor;
+    private Constructor<?> newObjectValueCtor;
 
     // 旧版 API 反射缓存
     private Object oldManagerInstance;
@@ -72,15 +77,24 @@ public final class DefaultAriaBridge implements AriaBridge {
         try {
             Class<?> ariaClass = Class.forName(NEW_ARIA_CLASS, true, cl);
             Class<?> contextClass = Class.forName(NEW_CONTEXT_CLASS, true, cl);
-            newVariableKeyClass = Class.forName(NEW_VARIABLE_KEY_CLASS, true, cl);
-            Class<?> nativeCallableClass = Class.forName(NEW_NATIVE_CALLABLE_CLASS, true, cl);
-            newIValueClass = Class.forName(NEW_IVALUE_CLASS, true, cl);
+            Class<?> variableKeyClass = Class.forName(NEW_VARIABLE_KEY_CLASS, true, cl);
+            Class<?> globalStorageClass = Class.forName(NEW_GLOBAL_STORAGE_CLASS, true, cl);
+            Class<?> iValueClass = Class.forName(NEW_IVALUE_CLASS, true, cl);
+            Class<?> objectValueClass = Class.forName(NEW_OBJECT_VALUE_CLASS, true, cl);
+            Class<?> iAriaObjectClass = Class.forName(NEW_IARIA_OBJECT_CLASS, true, cl);
+            Class<?> javaObjectMirrorClass = Class.forName(NEW_JAVA_OBJECT_MIRROR_CLASS, true, cl);
 
             newCreateContext = ariaClass.getMethod("createContext");
             newEval = ariaClass.getMethod("eval", String.class, contextClass);
-            newVariableKeyOf = newVariableKeyClass.getMethod("of", String.class);
-            newWrapObject = nativeCallableClass.getMethod("wrapObject", Object.class);
-            newForceSetLocalValue = contextClass.getMethod("forceSetLocalValue", newVariableKeyClass, newIValueClass);
+            newVariableKeyOf = variableKeyClass.getMethod("of", String.class);
+            newGetGlobalStorage = contextClass.getMethod("getGlobalStorage");
+            newGetGlobalVariable = globalStorageClass.getMethod("getGlobalVariable", variableKeyClass);
+            // VariableReference.setValue(IValue) —— 官方 Overture 注入路径
+            Class<?> variableReferenceClass = newGetGlobalVariable.getReturnType();
+            newSetValue = variableReferenceClass.getMethod("setValue", iValueClass);
+            // 活对象注入：new ObjectValue(new JavaObjectMirror(obj))
+            newJavaObjectMirrorCtor = javaObjectMirrorClass.getConstructor(Object.class);
+            newObjectValueCtor = objectValueClass.getConstructor(iAriaObjectClass);
 
             // 尝试获取版本（AriaEngine 可能暴露版本信息）
             version = resolveNewApiVersion(ariaClass);
@@ -174,22 +188,11 @@ public final class DefaultAriaBridge implements AriaBridge {
     private @Nullable Object evalNewApi(@NotNull String code, @NotNull Map<String, Object> bindings) {
         try {
             Object context = newCreateContext.invoke(null);
-            for (Map.Entry<String, Object> entry : bindings.entrySet()) {
-                Object key = newVariableKeyOf.invoke(null, entry.getKey());
-                Object wrapped = newWrapObject.invoke(null, entry.getValue());
-                newForceSetLocalValue.invoke(context, key, wrapped);
-            }
+            injectBindings(context, bindings);
             Object result = newEval.invoke(null, code, context);
-            if (result == null) {
-                return null;
-            }
-            // IValue<?>.jvmValue() 返回原生 Java 对象
-            Method jvmValue = result.getClass().getMethod("jvmValue");
-            return jvmValue.invoke(result);
+            return unwrap(result);
         } catch (ReflectiveOperationException exception) {
-            Throwable cause = exception.getCause();
-            String msg = cause != null ? cause.getMessage() : exception.getMessage();
-            xuanmo.arcartxsuite.module.AxsLog.logger().fine("[Aria] eval 失败: " + msg);
+            logEvalFailure("eval", exception);
             return null;
         }
     }
@@ -208,11 +211,7 @@ public final class DefaultAriaBridge implements AriaBridge {
     private boolean evalBooleanNewApi(@NotNull String code, @NotNull Map<String, Object> bindings) {
         try {
             Object context = newCreateContext.invoke(null);
-            for (Map.Entry<String, Object> entry : bindings.entrySet()) {
-                Object key = newVariableKeyOf.invoke(null, entry.getKey());
-                Object wrapped = newWrapObject.invoke(null, entry.getValue());
-                newForceSetLocalValue.invoke(context, key, wrapped);
-            }
+            injectBindings(context, bindings);
             Object result = newEval.invoke(null, code, context);
             if (result == null) {
                 return false;
@@ -222,11 +221,65 @@ public final class DefaultAriaBridge implements AriaBridge {
             Object bv = booleanValue.invoke(result);
             return bv instanceof Boolean b && b;
         } catch (ReflectiveOperationException exception) {
-            Throwable cause = exception.getCause();
-            String msg = cause != null ? cause.getMessage() : exception.getMessage();
-            xuanmo.arcartxsuite.module.AxsLog.logger().fine("[Aria] evalBoolean 失败: " + msg);
+            logEvalFailure("evalBoolean", exception);
             return false;
         }
+    }
+
+    // 官方 Overture 注入路径：把活对象包装成 ObjectValue(JavaObjectMirror(obj))，
+    // 写入全局变量，脚本内以裸名（如 player）访问并可反射调用其 Java 方法。
+    private void injectBindings(Object context, Map<String, Object> bindings) throws ReflectiveOperationException {
+        if (bindings.isEmpty()) {
+            return;
+        }
+        Object storage = newGetGlobalStorage.invoke(context);
+        for (Map.Entry<String, Object> entry : bindings.entrySet()) {
+            Object value = entry.getValue();
+            if (value == null) {
+                continue;
+            }
+            Object key = newVariableKeyOf.invoke(null, entry.getKey());
+            Object mirror = newJavaObjectMirrorCtor.newInstance(value);
+            Object objectValue = newObjectValueCtor.newInstance(mirror);
+            Object reference = newGetGlobalVariable.invoke(storage, key);
+            newSetValue.invoke(reference, objectValue);
+        }
+    }
+
+    // 按 IValue 具体类型取原生 Java 值：NumberValue.jvmValue() 在 aria-1.0.1 返回 0.0，
+    // 故数值走 numberValue()，字符串走 stringValue()，布尔走 booleanValue()，其余走 jvmValue()。
+    private @Nullable Object unwrap(@Nullable Object result) throws ReflectiveOperationException {
+        if (result == null) {
+            return null;
+        }
+        String typeName = result.getClass().getSimpleName();
+        switch (typeName) {
+            case "NoneValue" -> {
+                return null;
+            }
+            case "NumberValue" -> {
+                double d = ((Number) result.getClass().getMethod("numberValue").invoke(result)).doubleValue();
+                if (d == Math.rint(d) && !Double.isInfinite(d)) {
+                    return (long) d;
+                }
+                return d;
+            }
+            case "StringValue" -> {
+                return result.getClass().getMethod("stringValue").invoke(result);
+            }
+            case "BooleanValue" -> {
+                return result.getClass().getMethod("booleanValue").invoke(result);
+            }
+            default -> {
+                return result.getClass().getMethod("jvmValue").invoke(result);
+            }
+        }
+    }
+
+    private void logEvalFailure(String tag, ReflectiveOperationException exception) {
+        Throwable cause = exception.getCause();
+        String msg = cause != null ? cause.getMessage() : exception.getMessage();
+        xuanmo.arcartxsuite.module.AxsLog.logger().fine("[Aria] " + tag + " 失败: " + msg);
     }
 
     private @Nullable Object evalOldApi(@NotNull String code, @NotNull Map<String, Object> bindings) {
@@ -278,10 +331,11 @@ public final class DefaultAriaBridge implements AriaBridge {
         newCreateContext = null;
         newEval = null;
         newVariableKeyOf = null;
-        newWrapObject = null;
-        newForceSetLocalValue = null;
-        newVariableKeyClass = null;
-        newIValueClass = null;
+        newGetGlobalStorage = null;
+        newGetGlobalVariable = null;
+        newSetValue = null;
+        newJavaObjectMirrorCtor = null;
+        newObjectValueCtor = null;
         oldManagerInstance = null;
         oldEvalMethod = null;
     }

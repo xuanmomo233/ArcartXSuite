@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.condition;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import javax.script.Bindings;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
@@ -18,6 +19,8 @@ import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.api.script.AriaBridge;
 
 public final class DefaultScriptConditionEvaluator implements ScriptConditionEvaluator {
+
+    private static final Pattern RETURN_PATTERN = Pattern.compile("\\breturn\\b");
 
     private final AriaBridge ariaBridge;
     private final ScriptEngine jsEngine;
@@ -84,10 +87,11 @@ public final class DefaultScriptConditionEvaluator implements ScriptConditionEva
             if (!ariaBridge.available()) {
                 return null;
             }
-            // Aria 无法反射调用注入的活对象（官方 Blink 模式）：
-            // 先将 PAPI / {player} 展开进脚本源码，脚本只做纯运算。
+            // 官方 Overture 写法：注入活的 player 对象（可调用其 Bukkit 方法），
+            // 同时展开 PAPI / {player} 便于引用不在 Player 对象上的占位符值。
+            // 动作脚本按原样执行（副作用即执行），返回值由调用方决定是否使用。
             String expanded = applyPlaceholders(player, script);
-            return ariaBridge.eval(expanded, new HashMap<>());
+            return ariaBridge.eval(expanded, ariaBindings(player));
         }
         if (kind == ScriptConditionKind.JS) {
             if (jsEngine == null) {
@@ -128,9 +132,26 @@ public final class DefaultScriptConditionEvaluator implements ScriptConditionEva
         if (!ariaBridge.available()) {
             return false;
         }
-        // Aria 条件同样采用“值拼进源码”模式：先展开 PAPI / {player}，再求值。
-        String expanded = applyPlaceholders(player, script);
-        return ariaBridge.evalBoolean(expanded, new HashMap<>());
+        // 条件为单个表达式，需补 return 才能取回布尔值（Aria 顶层裸表达式不产出返回值）；
+        // 若用户已自行写了 return / if-return 则原样执行。同时注入活的 player 对象。
+        String expanded = ensureReturn(applyPlaceholders(player, script));
+        return ariaBridge.evalBoolean(expanded, ariaBindings(player));
+    }
+
+    private static Map<String, Object> ariaBindings(Player player) {
+        Map<String, Object> bindings = new HashMap<>();
+        bindings.put("player", player);
+        return bindings;
+    }
+
+    private static String ensureReturn(String script) {
+        if (script == null || script.isBlank()) {
+            return script;
+        }
+        if (RETURN_PATTERN.matcher(script).find()) {
+            return script;
+        }
+        return "return " + script;
     }
 
     private boolean evaluateJs(Player player, @Nullable String script) {
