@@ -34,6 +34,7 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.api.account.AccountType;
 import xuanmo.arcartxsuite.api.account.AccountTypeService;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
@@ -79,6 +80,7 @@ public final class LoginViewService implements Listener {
     private final Set<String> allowedCommandPrefixes = new HashSet<>();
     private final Set<UUID> loginViewInvulnerablePlayers = new HashSet<>();
     private boolean started;
+    private BukkitTask cleanupTask;
 
     public LoginViewService(
         JavaPlugin plugin,
@@ -136,7 +138,10 @@ public final class LoginViewService implements Listener {
         }
         // 每小时清理一次过期 session
         long cleanupInterval = 20L * 60 * 60;
-        Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
+        cleanupTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
+            if (!started) {
+                return;
+            }
             try {
                 repository.deleteExpiredSessions();
             } catch (SQLException e) {
@@ -155,6 +160,10 @@ public final class LoginViewService implements Listener {
         }
         failedAttempts.clear();
         loginViewInvulnerablePlayers.clear();
+        if (cleanupTask != null) {
+            cleanupTask.cancel();
+            cleanupTask = null;
+        }
         repository.close();
         started = false;
     }
