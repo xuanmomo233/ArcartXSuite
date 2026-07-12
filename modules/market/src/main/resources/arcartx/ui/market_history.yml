@@ -114,7 +114,7 @@ controls:
             attribute:
               x: 42
               y: 24
-              texts: '&d&l交易历史'
+              texts: "~&d交易历史"
               fontSize: 56
           副标题:
             type: Text
@@ -151,7 +151,7 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&fX'
+                  texts: "~&fX"
 
           # ── 记录列表区 ──────────────────────────────
           列表卡片:
@@ -178,7 +178,7 @@ controls:
                   center: true
                   fontSize: 36
                   visible: "var.records == none || var.records.keys().length == 0"
-                  texts: '&8暂无记录'
+                  texts: "~&8暂无记录"
                   through: true
               列表纵向滑块:
                 type: Texture
@@ -322,7 +322,7 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&f< 上一页'
+                  texts: "~&f< 上一页"
 
           页码:
             type: Text
@@ -362,5 +362,5 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&f下一页 >'
+                  texts: "~&f下一页 >"
 

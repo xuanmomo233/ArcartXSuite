@@ -140,14 +140,14 @@ controls:
             attribute:
               x: 42
               y: 24
-              texts: "~&e&l{var.shopName}"
+              texts: "~&e{var.shopName}"
               fontSize: 56
           副标题:
             type: Text
             attribute:
               x: 42
               y: 78
-              texts: '&7系统商店'
+              texts: "~&7系统商店"
               fontSize: 32
 
           关闭按钮:
@@ -177,7 +177,7 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&fX'
+                  texts: "~&fX"
 
           # ── 左侧商店列表 ──────────────────────────────
           商店卡片:
@@ -200,7 +200,7 @@ controls:
                 attribute:
                   x: 20
                   y: 16
-                  texts: '&e商店列表'
+                  texts: "~&e商店列表"
                   fontSize: 36
               商店纵向滑块:
                 type: Texture
@@ -406,7 +406,7 @@ controls:
                                   through: true
                                   center: true
                                   fontSize: 28
-                                  texts: '&f购买'
+                                  texts: "~&f购买"
               空商品提示:
                 type: Text
                 attribute:
@@ -416,5 +416,5 @@ controls:
                   center: true
                   fontSize: 36
                   visible: "var.items == none || var.items.keys().length == 0"
-                  texts: '&8暂无商品'
+                  texts: "~&8暂无商品"
                   through: true

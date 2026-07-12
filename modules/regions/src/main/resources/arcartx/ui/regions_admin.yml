@@ -72,7 +72,7 @@ controls:
                   x: 24
                   y: 8
                   fontSize: 38
-                  texts: '&6&l🛡 区域管理'
+                  texts: "~&6🛡 区域管理"
               region_count:
                 type: Text
                 attribute:
@@ -113,7 +113,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 28
-                      texts: '&f区域列表'
+                      texts: "~&f区域列表"
 
               nav_edit:
                 type: Texture
@@ -134,7 +134,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 28
-                      texts: '&f编辑'
+                      texts: "~&f编辑"
 
           # ═══ 内容区 ═══
           内容区:
@@ -163,7 +163,7 @@ controls:
                       x: 0
                       y: 0
                       fontSize: 36
-                      texts: '&6&l所有区域'
+                      texts: "~&6所有区域"
                   区域列表滑块:
                     type: Texture
                     val: 区域列表滑块
@@ -265,7 +265,7 @@ controls:
                                       through: true
                                       center: true
                                       fontSize: 22
-                                      texts: '&f编辑'
+                                      texts: "~&f编辑"
                               删除按钮:
                                 type: Texture
                                 attribute:
@@ -288,7 +288,7 @@ controls:
                                       through: true
                                       center: true
                                       fontSize: 22
-                                      texts: '&f删除'
+                                      texts: "~&f删除"
 
               # ─── 区域编辑视图 ───
               page_edit:
@@ -307,7 +307,7 @@ controls:
                       x: 0
                       y: 0
                       fontSize: 36
-                      texts: "~&6&l编辑: &f{var.selId}"
+                      texts: "~&6编辑: &f{var.selId}"
                   edit_info:
                     type: Text
                     attribute:
@@ -330,7 +330,7 @@ controls:
                       x: 0
                       y: 118
                       fontSize: 28
-                      texts: '&b成员:'
+                      texts: "~&b成员:"
                   编辑成员滑块:
                     type: Texture
                     val: 编辑成员滑块
@@ -416,7 +416,7 @@ controls:
                                       through: true
                                       center: true
                                       fontSize: 20
-                                      texts: '&f移除'
+                                      texts: "~&f移除"
 
                   # 标志列表
                   flags_label:
@@ -425,7 +425,7 @@ controls:
                       x: 0
                       y: 300
                       fontSize: 28
-                      texts: '&e标志设置:'
+                      texts: "~&e标志设置:"
                   编辑标志滑块:
                     type: Texture
                     val: 编辑标志滑块
@@ -519,7 +519,7 @@ controls:
                                       through: true
                                       center: true
                                       fontSize: 20
-                                      texts: '&f允许'
+                                      texts: "~&f允许"
                               btn_deny:
                                 type: Texture
                                 attribute:
@@ -542,7 +542,7 @@ controls:
                                       through: true
                                       center: true
                                       fontSize: 20
-                                      texts: '&f拒绝'
+                                      texts: "~&f拒绝"
                               btn_clear_flag:
                                 type: Texture
                                 attribute:
@@ -565,7 +565,7 @@ controls:
                                       through: true
                                       center: true
                                       fontSize: 20
-                                      texts: '&7清除'
+                                      texts: "~&7清除"
 
                   返回按钮:
                     type: Texture
@@ -589,4 +589,4 @@ controls:
                           through: true
                           center: true
                           fontSize: 26
-                          texts: '&f← 返回'
+                          texts: "~&f← 返回"

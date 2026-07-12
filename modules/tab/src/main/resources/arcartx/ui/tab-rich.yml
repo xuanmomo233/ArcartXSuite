@@ -76,7 +76,7 @@ controls:
               y: 23
               x: 26
               fontSize: 33
-              texts: "'&a&l在线玩家（完整版）：'"
+              texts: "'&a在线玩家（完整版）：'"
               lineSpace: 8
           RichTAB遍历:
             type: VGrid

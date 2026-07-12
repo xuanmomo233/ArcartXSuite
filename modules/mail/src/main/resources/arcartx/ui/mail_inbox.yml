@@ -124,7 +124,7 @@ controls:
               x: 42
               y: 30
               fontSize: 42
-              texts: "~&f&lAXS 邮箱"
+              texts: "~&fAXS 邮箱"
           摘要:
             type: Text
             attribute:
@@ -338,7 +338,7 @@ controls:
                           x: 18
                           y: 12
                           fontSize: 49
-                          texts: "self.parent.entry['unread'] ? '&0&l' + self.parent.entry['subject'] : '&0' + self.parent.entry['subject']"
+                          texts: "self.parent.entry['unread'] ? '&0' + self.parent.entry['subject'] : '&0' + self.parent.entry['subject']"
                       meta:
                         type: Text
                         attribute:

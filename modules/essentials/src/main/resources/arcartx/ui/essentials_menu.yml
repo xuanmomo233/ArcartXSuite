@@ -70,7 +70,7 @@ controls:
                   x: 24
                   y: 14
                   fontSize: 64
-                  texts: '&b&l⚙ 玩家工具'
+                  texts: "~&b⚙ 玩家工具"
               title_player:
                 type: Text
                 attribute:
@@ -111,7 +111,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 49
-                      texts: '&f首页'
+                      texts: "~&f首页"
 
               nav_homes:
                 type: Texture
@@ -135,7 +135,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 49
-                      texts: '&f家'
+                      texts: "~&f家"
 
               nav_warps:
                 type: Texture
@@ -159,7 +159,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 49
-                      texts: '&f传送点'
+                      texts: "~&f传送点"
 
               nav_tpa:
                 type: Texture
@@ -183,7 +183,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 49
-                      texts: '&f传送'
+                      texts: "~&f传送"
 
               nav_settings:
                 type: Texture
@@ -207,7 +207,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 49
-                      texts: '&f设置'
+                      texts: "~&f设置"
 
           # ═══ 右侧内容区 ═══
           内容区:
@@ -237,7 +237,7 @@ controls:
                       x: 0
                       y: 0
                       fontSize: 64
-                      texts: '&6&l玩家状态'
+                      texts: "~&6玩家状态"
                   status_fly:
                     type: Text
                     attribute:
@@ -298,7 +298,7 @@ controls:
                       x: 0
                       y: 0
                       fontSize: 64
-                      texts: '&6&l我的家'
+                      texts: "~&6我的家"
                   btn_set_home:
                     type: Texture
                     attribute:
@@ -321,7 +321,7 @@ controls:
                           through: true
                           center: true
                           fontSize: 49
-                          texts: '&f设置家'
+                          texts: "~&f设置家"
                   家滑块:
                     type: Texture
                     val: 家滑块
@@ -407,7 +407,7 @@ controls:
                                       through: true
                                       center: true
                                       fontSize: 22
-                                      texts: '&f传送'
+                                      texts: "~&f传送"
                               btn_del_home:
                                 type: Texture
                                 attribute:
@@ -430,7 +430,7 @@ controls:
                                       through: true
                                       center: true
                                       fontSize: 22
-                                      texts: '&f删除'
+                                      texts: "~&f删除"
 
               # ─── 传送点视图 ───
               page_warps:
@@ -449,7 +449,7 @@ controls:
                       x: 0
                       y: 0
                       fontSize: 64
-                      texts: '&6&l传送点列表'
+                      texts: "~&6传送点列表"
                   传送点滑块:
                     type: Texture
                     val: 传送点滑块
@@ -527,7 +527,7 @@ controls:
                                       through: true
                                       center: true
                                       fontSize: 22
-                                      texts: '&f传送'
+                                      texts: "~&f传送"
 
               # ─── TPA 视图 ───
               page_tpa:
@@ -546,14 +546,14 @@ controls:
                       x: 0
                       y: 0
                       fontSize: 64
-                      texts: '&6&l传送请求'
+                      texts: "~&6传送请求"
                   tpa_hint:
                     type: Text
                     attribute:
                       x: 0
                       y: 46
                       fontSize: 36
-                      texts: '&7点击玩家名发送传送请求'
+                      texts: "~&7点击玩家名发送传送请求"
                   btn_accept_tpa:
                     type: Texture
                     attribute:
@@ -576,7 +576,7 @@ controls:
                           through: true
                           center: true
                           fontSize: 49
-                          texts: '&f接受'
+                          texts: "~&f接受"
                   btn_deny_tpa:
                     type: Texture
                     attribute:
@@ -599,7 +599,7 @@ controls:
                           through: true
                           center: true
                           fontSize: 49
-                          texts: '&f拒绝'
+                          texts: "~&f拒绝"
                   玩家滑块:
                     type: Texture
                     val: 玩家滑块
@@ -676,7 +676,7 @@ controls:
                       x: 0
                       y: 0
                       fontSize: 64
-                      texts: '&6&l个人设置'
+                      texts: "~&6个人设置"
                   # 飞行开关
                   btn_toggle_fly:
                     type: Texture
@@ -772,4 +772,4 @@ controls:
                           through: true
                           center: true
                           fontSize: 49
-                          texts: '&f背包整理'
+                          texts: "~&f背包整理"

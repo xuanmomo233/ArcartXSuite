@@ -76,7 +76,7 @@ controls:
                   x: 28
                   y: 14
                   fontSize: 42
-                  texts: "~&6&l排行榜奖励管理"
+                  texts: "~&6排行榜奖励管理"
               周奖励按钮:
                 type: Texture
                 attribute:
@@ -364,7 +364,7 @@ controls:
                   x: 40
                   y: 20
                   fontSize: 36
-                  texts: "~&6&l调度器状态"
+                  texts: "~&6调度器状态"
               周奖励状态:
                 type: Text
                 attribute:

@@ -79,7 +79,7 @@ controls:
                   x: 24
                   y: 8
                   fontSize: 38
-                  texts: '&a&l🌍 区域信息'
+                  texts: "~&a🌍 区域信息"
 
           # ═══ 左侧导航 ═══
           导航栏:
@@ -113,7 +113,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 28
-                      texts: '&f当前'
+                      texts: "~&f当前"
 
               nav_my:
                 type: Texture
@@ -137,7 +137,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 28
-                      texts: '&f我的'
+                      texts: "~&f我的"
 
           # ═══ 内容区 ═══
           内容区:
@@ -166,7 +166,7 @@ controls:
                       x: 0
                       y: 0
                       fontSize: 36
-                      texts: '&a&l当前所在区域'
+                      texts: "~&a当前所在区域"
                   cur_name:
                     type: Text
                     attribute:
@@ -201,7 +201,7 @@ controls:
                       x: 0
                       y: 210
                       fontSize: 30
-                      texts: '&e标志:'
+                      texts: "~&e标志:"
                   当前标志滑块:
                     type: Texture
                     val: 当前标志滑块
@@ -291,7 +291,7 @@ controls:
                       x: 0
                       y: 0
                       fontSize: 36
-                      texts: "~&a&l我的区域 &7({var.myRegionCount})"
+                      texts: "~&a我的区域 &7({var.myRegionCount})"
                   我的区域滑块:
                     type: Texture
                     val: 我的区域滑块
@@ -384,7 +384,7 @@ controls:
                       x: 0
                       y: 0
                       fontSize: 36
-                      texts: "~&a&l区域: &f{var.regionId}"
+                      texts: "~&a区域: &f{var.regionId}"
                   detail_world:
                     type: Text
                     attribute:
@@ -412,7 +412,7 @@ controls:
                       x: 0
                       y: 162
                       fontSize: 28
-                      texts: '&6所有者:'
+                      texts: "~&6所有者:"
                   所有者滑块:
                     type: Texture
                     val: 所有者滑块
@@ -464,7 +464,7 @@ controls:
                       x: 340
                       y: 162
                       fontSize: 28
-                      texts: '&b成员:'
+                      texts: "~&b成员:"
                   成员滑块:
                     type: Texture
                     val: 成员滑块
@@ -516,7 +516,7 @@ controls:
                       x: 0
                       y: 310
                       fontSize: 28
-                      texts: '&e标志:'
+                      texts: "~&e标志:"
                   详情标志滑块:
                     type: Texture
                     val: 详情标志滑块
@@ -610,4 +610,4 @@ controls:
                           through: true
                           center: true
                           fontSize: 26
-                          texts: '&f← 返回'
+                          texts: "~&f← 返回"

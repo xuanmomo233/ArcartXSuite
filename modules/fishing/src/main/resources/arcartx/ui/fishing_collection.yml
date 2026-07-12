@@ -96,7 +96,7 @@ controls:
             attribute:
               x: 36
               y: 28
-              texts: "&e&l钓鱼图鉴"
+              texts: "~&e钓鱼图鉴"
               fontSize: 56
 
           关闭按钮:
@@ -126,7 +126,7 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&fX'
+                  texts: "~&fX"
 
           统计信息:
             type: Canvas

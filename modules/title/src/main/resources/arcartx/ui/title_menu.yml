@@ -185,7 +185,7 @@ controls:
               x: 40
               y: 30
               fontSize: 81
-              texts: '&f&l称号总览'
+              texts: "~&f称号总览"
           统计摘要:
             type: Text
             attribute:
@@ -242,7 +242,7 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&0全部'
+                  texts: "~&0全部"
           已拥有模式:
             type: Texture
             attribute:
@@ -269,7 +269,7 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&0已拥有'
+                  texts: "~&0已拥有"
           已隐藏模式:
             type: Texture
             attribute:
@@ -296,14 +296,14 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&0已隐藏'
+                  texts: "~&0已隐藏"
           分组标签:
             type: Text
             attribute:
               x: 56
               y: 206
               fontSize: 36
-              texts: '&0分组筛选'
+              texts: "~&0分组筛选"
           分组滑块:
             type: Texture
             val: 分组滑块
@@ -378,7 +378,7 @@ controls:
               x: 56
               y: 286
               fontSize: 36
-              texts: '&0品质筛选'
+              texts: "~&0品质筛选"
           品质滑块:
             type: Texture
             val: 品质滑块
@@ -453,7 +453,7 @@ controls:
               x: 56
               y: 366
               fontSize: 36
-              texts: '&0称号列表'
+              texts: "~&0称号列表"
           称号滑块:
             type: Texture
             val: 称号滑块
@@ -538,7 +538,7 @@ controls:
                           y: 14
                           width: 28
                           fontSize: 48
-                          texts: '&a✔'
+                          texts: "~&a✔"
                           visible: self.parent.entry != none && self.parent.entry['equipped']
                           through: true
 
@@ -639,7 +639,7 @@ controls:
                     attribute:
                       width: 472
                       fontSize: 49
-                      texts: '&0&l佩戴属性'
+                      texts: "~&0佩戴属性"
                   佩戴属性值:
                     type: Text
                     attribute:
@@ -652,7 +652,7 @@ controls:
                     attribute:
                       width: 472
                       fontSize: 49
-                      texts: '&0&l收集属性'
+                      texts: "~&0收集属性"
                   收集属性值:
                     type: Text
                     attribute:
@@ -665,7 +665,7 @@ controls:
                     attribute:
                       width: 472
                       fontSize: 49
-                      texts: '&0&l当前装备属性'
+                      texts: "~&0当前装备属性"
                   当前装备属性值:
                     type: Text
                     attribute:
@@ -678,7 +678,7 @@ controls:
                     attribute:
                       width: 472
                       fontSize: 49
-                      texts: '&0&l当前收集属性'
+                      texts: "~&0当前收集属性"
                   当前收集属性值:
                     type: Text
                     attribute:
@@ -691,7 +691,7 @@ controls:
                     attribute:
                       width: 472
                       fontSize: 49
-                      texts: '&0&l总属性'
+                      texts: "~&0总属性"
                   总属性值:
                     type: Text
                     attribute:
@@ -704,7 +704,7 @@ controls:
                     attribute:
                       width: 472
                       fontSize: 49
-                      texts: '&0&l套装加成属性'
+                      texts: "~&0套装加成属性"
                       visible: var.sets != none && var.sets.size() > 0
                   套装加成值:
                     type: Text
@@ -807,7 +807,7 @@ controls:
                     type: Text
                     attribute:
                       fontSize: 49
-                      texts: '&0&l当前已装备'
+                      texts: "~&0当前已装备"
                   已装备列表:
                     val: equipped_list
                     type: VStack
@@ -850,7 +850,7 @@ controls:
                     type: Text
                     attribute:
                       fontSize: 49
-                      texts: '&0&l总属性汇总'
+                      texts: "~&0总属性汇总"
                   总属性汇总值:
                     type: Text
                     attribute:
@@ -862,7 +862,7 @@ controls:
                     type: Text
                     attribute:
                       fontSize: 49
-                      texts: '&0&l当前主展示'
+                      texts: "~&0当前主展示"
                   主展示值:
                     type: Text
                     attribute:
@@ -903,7 +903,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 36
-                      texts: '&0设为主展示'
+                      texts: "~&0设为主展示"
               装备按钮:
                 type: Texture
                 attribute:
@@ -929,7 +929,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 36
-                      texts: '&0装备本组'
+                      texts: "~&0装备本组"
               卸下本组按钮:
                 type: Texture
                 attribute:
@@ -955,7 +955,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 36
-                      texts: '&0卸下本组'
+                      texts: "~&0卸下本组"
           按钮行2:
             type: HStack
             attribute:
@@ -989,7 +989,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 36
-                      texts: '&0全部卸下'
+                      texts: "~&0全部卸下"
               隐藏按钮:
                 type: Texture
                 attribute:
@@ -1015,7 +1015,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 36
-                      texts: '&0隐藏'
+                      texts: "~&0隐藏"
               取消隐藏按钮:
                 type: Texture
                 attribute:
@@ -1041,7 +1041,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 36
-                      texts: '&0取消隐藏'
+                      texts: "~&0取消隐藏"
           刷新按钮:
             type: Texture
             attribute:
@@ -1068,4 +1068,4 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&0刷新'
+                  texts: "~&0刷新"

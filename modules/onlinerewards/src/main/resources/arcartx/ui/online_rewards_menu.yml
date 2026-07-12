@@ -256,7 +256,7 @@ controls:
             attribute:
               x: 40
               y: 30
-              texts: '~&f&l在线奖励中心'
+              texts: "~&f在线奖励中心"
               fontSize: 81
           刷新按钮:
             type: Texture
@@ -306,7 +306,7 @@ controls:
             attribute:
               x: 56
               y: 128
-              texts: "~&0&l每日签到"
+              texts: "~&0每日签到"
               fontSize: 49
           左栏签到统计:
             type: Text
@@ -480,7 +480,7 @@ controls:
             attribute:
               x: 56
               y: 616
-              texts: "~&0&l本月签到统计"
+              texts: "~&0本月签到统计"
               fontSize: 49
           已签到统计:
             type: Text
@@ -517,7 +517,7 @@ controls:
             attribute:
               x: 540
               y: 128
-              texts: "~&0&l在线时长统计"
+              texts: "~&0在线时长统计"
               fontSize: 49
           今日在线:
             type: Text
@@ -572,7 +572,7 @@ controls:
             attribute:
               x: 540
               y: 460
-              texts: "~&0&l阶段进度"
+              texts: "~&0阶段进度"
               fontSize: 49
           阶段名称:
             type: Text
@@ -635,7 +635,7 @@ controls:
             attribute:
               x: 540
               y: 620
-              texts: "~&0&l全服签到目标"
+              texts: "~&0全服签到目标"
               fontSize: 49
               visible: var.serverSignInGoalEnabled
           目标文本:
@@ -684,7 +684,7 @@ controls:
               x: 540
               y: 760
               visible: var.completed
-              texts: "~&0&l今日在线阶段奖励已全部完成！"
+              texts: "~&0今日在线阶段奖励已全部完成！"
               fontSize: 36
 
           # ========== 右栏：奖励列表 ==========
@@ -708,7 +708,7 @@ controls:
             attribute:
               x: 1120
               y: 128
-              texts: "~&0&l在线阶段奖励"
+              texts: "~&0在线阶段奖励"
               fontSize: 49
           阶段滑块:
             type: Texture
@@ -787,7 +787,7 @@ controls:
             attribute:
               x: 1120
               y: 438
-              texts: "~&0&l周/月周期奖励"
+              texts: "~&0周/月周期奖励"
               fontSize: 49
           周期奖励空提示:
             type: Text
@@ -874,7 +874,7 @@ controls:
             attribute:
               x: 1120
               y: 678
-              texts: "~&0&l签到奖励"
+              texts: "~&0签到奖励"
               fontSize: 49
           签到奖励空提示:
             type: Text

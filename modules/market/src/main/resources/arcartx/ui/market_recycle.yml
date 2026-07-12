@@ -117,7 +117,7 @@ controls:
             attribute:
               x: 42
               y: 24
-              texts: '&a&l回收商店'
+              texts: "~&a回收商店"
               fontSize: 56
           副标题:
             type: Text
@@ -154,7 +154,7 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&fX'
+                  texts: "~&fX"
 
           # ── 物品列表 ──────────────────────────────────
           列表卡片:
@@ -177,7 +177,7 @@ controls:
                 attribute:
                   x: 20
                   y: 12
-                  texts: '&7可回收物品'
+                  texts: "~&7可回收物品"
                   fontSize: 32
               空回收提示:
                 type: Text
@@ -188,7 +188,7 @@ controls:
                   center: true
                   fontSize: 36
                   visible: "var.recyclables == none || var.recyclables.keys().length == 0"
-                  texts: '&8暂无可回收物品'
+                  texts: "~&8暂无可回收物品"
                   through: true
               列表纵向滑块:
                 type: Texture
@@ -320,7 +320,7 @@ controls:
                                   through: true
                                   center: true
                                   fontSize: 28
-                                  texts: '&f回收'
+                                  texts: "~&f回收"
 
           # ── 底部操作栏 ──────────────────────────────
           总价值:
@@ -358,7 +358,7 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&f&l一键回收全部'
+                  texts: "~&f一键回收全部"
 
           刷新按钮:
             type: Texture
@@ -387,5 +387,5 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&f↻'
+                  texts: "~&f↻"
 

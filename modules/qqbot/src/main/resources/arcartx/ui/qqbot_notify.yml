@@ -90,7 +90,7 @@ controls:
                       x: 12
                       y: 6
                       through: true
-                      texts: '&b✉'
+                      texts: "~&b✉"
                       fontSize: 32
                   发送者:
                     type: Text

@@ -147,7 +147,7 @@ controls:
               x: 44
               y: 14
               width: 260
-              texts: "'&e&l' + var.questName"
+              texts: "'&e' + var.questName"
               fontSize: 18
               shadow: false
           进度条背景:

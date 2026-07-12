@@ -91,7 +91,7 @@ controls:
               x: 42
               y: 30
               fontSize: 64
-              texts: "~&f&l邮件日志"
+              texts: "~&f邮件日志"
           摘要:
             type: Text
             attribute:
@@ -230,7 +230,7 @@ controls:
                           x: 18
                           y: 14
                           fontSize: 49
-                          texts: "'&0&l[' + self.parent.entry['type_text'] + ']'"
+                          texts: "'&0[' + self.parent.entry['type_text'] + ']'"
                       time:
                         type: Text
                         attribute:

@@ -79,7 +79,7 @@ controls:
                   x: 28
                   y: 14
                   fontSize: 42
-                  texts: "~&6&l{var.mode == 'edit' ? '编辑' : '新建'}奖励配置"
+                  texts: "~&6{var.mode == 'edit' ? '编辑' : '新建'}奖励配置"
               保存按钮:
                 type: Texture
                 attribute:

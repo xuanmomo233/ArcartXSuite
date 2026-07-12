@@ -100,7 +100,7 @@ controls:
                   x: 28
                   y: 24
                   fontSize: 49
-                  texts: "~&b&lAXS Mail Admin &8- &7预设管理"
+                  texts: "~&bAXS Mail Admin &8- &7预设管理"
               标题按钮区:
                 type: HStack
                 attribute:
@@ -712,7 +712,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 36
-                      texts: "~&f&l保存"
+                      texts: "~&f保存"
 
               btn_cancel:
                 type: Texture

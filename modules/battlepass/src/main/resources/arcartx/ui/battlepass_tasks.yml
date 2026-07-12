@@ -131,7 +131,7 @@ controls:
             attribute:
               x: 36
               y: 28
-              texts: "&e&l任务列表"
+              texts: "~&e任务列表"
               fontSize: 56
 
           关闭按钮:
@@ -161,7 +161,7 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&fX'
+                  texts: "~&fX"
 
           任务滑块:
             type: Texture
@@ -209,7 +209,7 @@ controls:
                         attribute:
                           x: 0
                           y: 0
-                          texts: "&b每日任务"
+                          texts: "~&b每日任务"
                           fontSize: 36
                       每日任务列表:
                         val: 每日任务列表
@@ -297,7 +297,7 @@ controls:
                         attribute:
                           x: 0
                           y: 0
-                          texts: "&6每周任务"
+                          texts: "~&6每周任务"
                           fontSize: 36
                       每周任务列表:
                         val: 每周任务列表
@@ -385,7 +385,7 @@ controls:
                         attribute:
                           x: 0
                           y: 0
-                          texts: "&d赛季任务"
+                          texts: "~&d赛季任务"
                           fontSize: 36
                       赛季任务列表:
                         val: 赛季任务列表

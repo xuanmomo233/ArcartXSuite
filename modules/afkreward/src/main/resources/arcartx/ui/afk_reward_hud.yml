@@ -43,7 +43,7 @@ controls:
           y: 10
           center: true
           fontSize: 36
-          texts: "~&b&l挂机区域: &f{var.area}"
+          texts: "~&b挂机区域: &f{var.area}"
           visible: var.visible
       时间:
         type: Text

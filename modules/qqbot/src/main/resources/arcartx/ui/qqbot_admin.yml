@@ -95,7 +95,7 @@ controls:
             attribute:
               x: 44
               y: 20
-              texts: '&6&lQQBot 管理后台'
+              texts: "~&6QQBot 管理后台"
               fontSize: 49
           关闭按钮:
             type: Texture
@@ -108,7 +108,7 @@ controls:
               hover: ~220,70,70,255
               shape: ~round_rect
               radius: 10
-              texts: '&f✕'
+              texts: "~&f✕"
               center: true
               fontSize: 36
             action:
@@ -126,7 +126,7 @@ controls:
               hover: ~255,200,90,255
               shape: ~round_rect
               radius: 10
-              texts: '&f仪表盘'
+              texts: "~&f仪表盘"
               center: true
               fontSize: 34
             action:
@@ -143,7 +143,7 @@ controls:
               hover: ~255,200,90,255
               shape: ~round_rect
               radius: 10
-              texts: '&f绑定管理'
+              texts: "~&f绑定管理"
               center: true
               fontSize: 34
             action:
@@ -161,7 +161,7 @@ controls:
               hover: ~255,200,90,255
               shape: ~round_rect
               radius: 10
-              texts: '&f控制台'
+              texts: "~&f控制台"
               center: true
               fontSize: 34
             action:
@@ -201,7 +201,7 @@ controls:
                       x: 16
                       y: 10
                       through: true
-                      texts: '&7机器人状态'
+                      texts: "~&7机器人状态"
                       fontSize: 26
                   状态值:
                     type: Text
@@ -241,7 +241,7 @@ controls:
                       x: 16
                       y: 10
                       through: true
-                      texts: '&7绑定统计'
+                      texts: "~&7绑定统计"
                       fontSize: 26
                   绑定数:
                     type: Text
@@ -287,7 +287,7 @@ controls:
                   hover: ~80,160,220,255
                   shape: ~round_rect
                   radius: 10
-                  texts: '&f刷新数据'
+                  texts: "~&f刷新数据"
                   center: true
                   fontSize: 34
                 action:
@@ -335,7 +335,7 @@ controls:
                   hover: ~80,160,220,255
                   shape: ~round_rect
                   radius: 8
-                  texts: '&f搜索'
+                  texts: "~&f搜索"
                   center: true
                   fontSize: 28
                 action:
@@ -420,7 +420,7 @@ controls:
                                   hover: ~210,80,70,255
                                   shape: ~round_rect
                                   radius: 8
-                                  texts: '&f解绑'
+                                  texts: "~&f解绑"
                                   center: true
                                   fontSize: 24
                                 action:
@@ -438,7 +438,7 @@ controls:
                   hover: ~70,75,85,255
                   shape: ~round_rect
                   radius: 8
-                  texts: '&f← 上页'
+                  texts: "~&f← 上页"
                   center: true
                   fontSize: 26
                   visible: var.bindPage > 0
@@ -464,7 +464,7 @@ controls:
                   hover: ~70,75,85,255
                   shape: ~round_rect
                   radius: 8
-                  texts: '&f下页 →'
+                  texts: "~&f下页 →"
                   center: true
                   fontSize: 26
                   visible: (var.bindPage + 1) * 10 < var.bindTotal
@@ -574,7 +574,7 @@ controls:
                   hover: ~230,180,60,255
                   shape: ~round_rect
                   radius: 10
-                  texts: '&f执行'
+                  texts: "~&f执行"
                   center: true
                   fontSize: 32
                 action:

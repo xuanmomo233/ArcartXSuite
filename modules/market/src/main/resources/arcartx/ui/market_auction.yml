@@ -150,7 +150,7 @@ controls:
             attribute:
               x: 42
               y: 24
-              texts: '&6&l全球拍卖行'
+              texts: "~&6全球拍卖行"
               fontSize: 56
           副标题:
             type: Text
@@ -189,7 +189,7 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&f全部'
+                  texts: "~&f全部"
 
           我的上架按钮:
             type: Texture
@@ -218,7 +218,7 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&f我的上架'
+                  texts: "~&f我的上架"
 
           刷新按钮:
             type: Texture
@@ -247,7 +247,7 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&f刷新'
+                  texts: "~&f刷新"
 
           我要上架按钮:
             type: Texture
@@ -276,7 +276,7 @@ controls:
                   through: true
                   center: true
                   fontSize: 32
-                  texts: '&f我要上架'
+                  texts: "~&f我要上架"
 
           # ── 搜索框 ──────────────────────────────────
           搜索区:
@@ -339,7 +339,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 28
-                      texts: '&f搜索'
+                      texts: "~&f搜索"
 
           # ── 左侧分类栏 ──────────────────────────────
           分类卡片:
@@ -362,7 +362,7 @@ controls:
                 attribute:
                   x: 20
                   y: 16
-                  texts: '&e分类筛选'
+                  texts: "~&e分类筛选"
                   fontSize: 36
               分类纵向滑块:
                 type: Texture
@@ -447,7 +447,7 @@ controls:
                   center: true
                   fontSize: 36
                   visible: "var.listings == none || var.listings.keys().length == 0"
-                  texts: '&8暂无拍卖物品'
+                  texts: "~&8暂无拍卖物品"
                   through: true
               物品纵向滑块:
                 type: Texture
@@ -600,7 +600,7 @@ controls:
                                   through: true
                                   center: true
                                   fontSize: 28
-                                  texts: '&f购买'
+                                  texts: "~&f购买"
                           取消按钮:
                             type: Texture
                             attribute:
@@ -629,7 +629,7 @@ controls:
                                   through: true
                                   center: true
                                   fontSize: 28
-                                  texts: '&f取消'
+                                  texts: "~&f取消"
 
           # ── 底部分页栏 ──────────────────────────────
           上一页:
@@ -661,7 +661,7 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&f< 上一页'
+                  texts: "~&f< 上一页"
 
           页码:
             type: Text
@@ -701,4 +701,4 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&f下一页 >'
+                  texts: "~&f下一页 >"

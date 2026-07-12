@@ -96,7 +96,7 @@ controls:
               point: ~top_center
               y: 18
               fontSize: 32
-              texts: "'&c&lRED  &fvs  &9&lBLUE'"
+              texts: "'&cRED  &fvs  &9BLUE'"
               lineSpace: 6
           中线:
             type: Texture

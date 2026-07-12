@@ -102,7 +102,7 @@ controls:
               x: 38
               y: 28
               fontSize: 49
-              texts: "~&f&l写信中"
+              texts: "~&f写信中"
           提示:
             type: Text
             attribute:

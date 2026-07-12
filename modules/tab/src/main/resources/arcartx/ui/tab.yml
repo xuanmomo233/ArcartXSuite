@@ -68,7 +68,7 @@ controls:
               y: 23
               x: 26
               fontSize: 33
-              texts: "'&a&l在线玩家：'"
+              texts: "'&a在线玩家：'"
               lineSpace: 8
           信息排列布局:
             type: HGrid
@@ -89,7 +89,7 @@ controls:
                     type: text
                     attribute:
                       fontSize: 33
-                      texts: "~&f&l玩家延迟：{server.player_ping}"
+                      texts: "~&f玩家延迟：{server.player_ping}"
                       lineSpace: 8
               TPS:
                 type: Canvas
@@ -101,7 +101,7 @@ controls:
                     type: text
                     attribute:
                       fontSize: 33
-                      texts: "~&f&l服务器TPS：{server.server_tps_1}"
+                      texts: "~&f服务器TPS：{server.server_tps_1}"
                       lineSpace: 8
           TAB遍历:
             type: VGrid

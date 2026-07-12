@@ -89,7 +89,7 @@ controls:
             attribute:
               x: 36
               y: 28
-              texts: "&e&l战令系统"
+              texts: "~&e战令系统"
               fontSize: 56
 
           赛季名:
@@ -127,7 +127,7 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: '&fX'
+                  texts: "~&fX"
 
           高级版标签背景:
             type: Texture
@@ -237,7 +237,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 36
-                      texts: "&f任务列表"
+                      texts: "~&f任务列表"
 
               奖励按钮:
                 type: Texture
@@ -266,4 +266,4 @@ controls:
                       through: true
                       center: true
                       fontSize: 36
-                      texts: "&f领取奖励"
+                      texts: "~&f领取奖励"

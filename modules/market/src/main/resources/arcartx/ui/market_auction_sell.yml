@@ -111,7 +111,7 @@ controls:
             attribute:
               x: 40
               y: 24
-              texts: "&f物品上架"
+              texts: "~&f物品上架"
               fontSize: 42
               through: true
 
@@ -126,7 +126,7 @@ controls:
               hover: ~Frosted:0;255,100,100,230
               shape: ~round_rect
               radius: 14
-              texts: "&cX"
+              texts: "~&cX"
               center: true
               fontSize: 32
             action:
@@ -158,7 +158,7 @@ controls:
                 attribute:
                   x: 20
                   y: 16
-                  texts: "&f选择背包物品"
+                  texts: "~&f选择背包物品"
                   fontSize: 36
                   through: true
 
@@ -219,7 +219,7 @@ controls:
                 center: true
                 fontSize: 36
                 visible: "var.backpackItems == none || var.backpackItems.keys().length == 0"
-                texts: '&8暂无可上架物品'
+                texts: "~&8暂无可上架物品"
                 through: true
           信息面板:
             type: Texture
@@ -242,7 +242,7 @@ controls:
                 attribute:
                   x: 20
                   y: 16
-                  texts: "&f上架信息"
+                  texts: "~&f上架信息"
                   fontSize: 36
                   through: true
 
@@ -280,7 +280,7 @@ controls:
                 attribute:
                   x: 20
                   y: 170
-                  texts: "&f起拍价格"
+                  texts: "~&f起拍价格"
                   fontSize: 30
                   through: true
 
@@ -310,7 +310,7 @@ controls:
                 attribute:
                   x: 20
                   y: 280
-                  texts: "&f物品留言"
+                  texts: "~&f物品留言"
                   fontSize: 30
                   through: true
 
@@ -340,7 +340,7 @@ controls:
                 attribute:
                   x: 20
                   y: 390
-                  texts: "&f上架时长"
+                  texts: "~&f上架时长"
                   fontSize: 30
                   through: true
 
@@ -355,7 +355,7 @@ controls:
                   hover: ~Frosted:0;255,255,255,180
                   shape: ~round_rect
                   radius: 10
-                  texts: "&f1天"
+                  texts: "~&f1天"
                   center: true
                   fontSize: 26
                 action:
@@ -377,7 +377,7 @@ controls:
                   hover: ~Frosted:0;255,255,255,180
                   shape: ~round_rect
                   radius: 10
-                  texts: "&f3天"
+                  texts: "~&f3天"
                   center: true
                   fontSize: 26
                 action:
@@ -399,7 +399,7 @@ controls:
                   hover: ~Frosted:0;255,255,255,180
                   shape: ~round_rect
                   radius: 10
-                  texts: "&f7天"
+                  texts: "~&f7天"
                   center: true
                   fontSize: 26
                 action:
@@ -443,7 +443,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 32
-                      texts: "&f确认上架"
+                      texts: "~&f确认上架"
 
               返回按钮:
                 type: Texture
@@ -472,5 +472,5 @@ controls:
                       through: true
                       center: true
                       fontSize: 32
-                      texts: "&f返回"
+                      texts: "~&f返回"
 

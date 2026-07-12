@@ -78,7 +78,7 @@ controls:
           连击数字:
             type: Text
             attribute:
-              texts: ~&f&l{server.combo_count}
+              texts: "~&f{server.combo_count}"
               shadow: false
               fontSize: 72
               center: true
@@ -90,7 +90,7 @@ controls:
           连击标签:
             type: Text
             attribute:
-              texts: "'&e&lCOMBO'"
+              texts: "'&eCOMBO'"
               shadow: false
               fontSize: 28
               center: true

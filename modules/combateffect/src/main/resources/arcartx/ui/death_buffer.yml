@@ -66,7 +66,7 @@ controls:
           死亡标题:
             type: Text
             attribute:
-              texts: "'&c&l你死了'"
+              texts: "'&c你死了'"
               shadow: false
               fontSize: 72
               center: true
@@ -77,7 +77,7 @@ controls:
           击杀者信息:
             type: Text
             attribute:
-              texts: ~&7被 &f&l{var.killer_name} &7击杀
+              texts: "~&7被 &f{var.killer_name} &7击杀"
               shadow: false
               fontSize: 36
               center: true

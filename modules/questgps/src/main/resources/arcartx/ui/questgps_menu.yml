@@ -221,7 +221,7 @@ controls:
               x: 40
               y: 30
               fontSize: 64
-              texts: "'&f&l任务总览  &r&7' + var.categoryName + ' · ' + var.pageName"
+              texts: "'&f任务总览  &r&7' + var.categoryName + ' · ' + var.pageName"
           关闭:
             type: Texture
             attribute:

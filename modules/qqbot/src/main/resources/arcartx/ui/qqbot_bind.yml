@@ -97,7 +97,7 @@ controls:
             attribute:
               x: 44
               y: 20
-              texts: '&f&lQQ 绑定中心'
+              texts: "~&fQQ 绑定中心"
               fontSize: 49
           关闭按钮:
             type: Texture
@@ -110,7 +110,7 @@ controls:
               hover: ~220,70,70,255
               shape: ~round_rect
               radius: 10
-              texts: '&f✕'
+              texts: "~&f✕"
               center: true
               fontSize: 36
             action:
@@ -128,7 +128,7 @@ controls:
               hover: ~100,200,255,255
               shape: ~round_rect
               radius: 10
-              texts: '&f绑定状态'
+              texts: "~&f绑定状态"
               center: true
               fontSize: 34
             action:
@@ -201,7 +201,7 @@ controls:
                   hover: ~80,160,220,255
                   shape: ~round_rect
                   radius: 12
-                  texts: '&f获取验证码'
+                  texts: "~&f获取验证码"
                   center: true
                   fontSize: 36
                   visible: "!var.bound"
@@ -214,7 +214,7 @@ controls:
                 attribute:
                   x: 220
                   y: 92
-                  texts: "var.code != none ? '&e验证码: &f&l' + var.code + ' &7(' + var.codeExpire + 's)' : none"
+                  texts: "var.code != none ? '&e验证码: &f' + var.code + ' &7(' + var.codeExpire + 's)' : none"
                   fontSize: 36
                   visible: "!var.bound && var.code != none"
               # 解绑按钮
@@ -229,7 +229,7 @@ controls:
                   hover: ~210,100,80,255
                   shape: ~round_rect
                   radius: 12
-                  texts: '&f解除绑定'
+                  texts: "~&f解除绑定"
                   center: true
                   fontSize: 36
                   visible: var.bound
@@ -336,7 +336,7 @@ controls:
                   hover: ~80,160,220,255
                   shape: ~round_rect
                   radius: 10
-                  texts: '&f发送'
+                  texts: "~&f发送"
                   center: true
                   fontSize: 30
                 action:

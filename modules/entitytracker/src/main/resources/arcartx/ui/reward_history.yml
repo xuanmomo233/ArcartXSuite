@@ -71,7 +71,7 @@ controls:
                   x: 28
                   y: 14
                   fontSize: 42
-                  texts: "~&d&l奖励发放历史"
+                  texts: "~&d奖励发放历史"
               全部筛选按钮:
                 type: Texture
                 attribute:

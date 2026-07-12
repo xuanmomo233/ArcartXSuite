@@ -64,7 +64,7 @@ controls:
                   x: 24
                   y: 14
                   fontSize: 64
-                  texts: '&6&l⚡ 管理面板'
+                  texts: "~&6⚡ 管理面板"
               online_count:
                 type: Text
                 attribute:
@@ -105,7 +105,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 49
-                      texts: '&f玩家'
+                      texts: "~&f玩家"
 
               nav_bans:
                 type: Texture
@@ -129,7 +129,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 49
-                      texts: '&f封禁'
+                      texts: "~&f封禁"
 
               nav_warps:
                 type: Texture
@@ -153,7 +153,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 49
-                      texts: '&f传送点'
+                      texts: "~&f传送点"
 
               nav_world:
                 type: Texture
@@ -177,7 +177,7 @@ controls:
                       through: true
                       center: true
                       fontSize: 49
-                      texts: '&f世界'
+                      texts: "~&f世界"
 
           # ═══ 内容区 ═══
           内容区:
@@ -206,7 +206,7 @@ controls:
                       x: 0
                       y: 0
                       fontSize: 36
-                      texts: '&6&l在线玩家'
+                      texts: "~&6在线玩家"
                   在线玩家滑块:
                     type: Texture
                     val: 在线玩家滑块
@@ -308,7 +308,7 @@ controls:
                                       through: true
                                       center: true
                                       fontSize: 42
-                                      texts: '&f治疗'
+                                      texts: "~&f治疗"
                               btn_feed:
                                 type: Texture
                                 attribute:
@@ -331,7 +331,7 @@ controls:
                                       through: true
                                       center: true
                                       fontSize: 42
-                                      texts: '&f喂食'
+                                      texts: "~&f喂食"
                               btn_fly:
                                 type: Texture
                                 attribute:
@@ -354,7 +354,7 @@ controls:
                                       through: true
                                       center: true
                                       fontSize: 42
-                                      texts: '&f飞行'
+                                      texts: "~&f飞行"
                               btn_kick:
                                 type: Texture
                                 attribute:
@@ -377,7 +377,7 @@ controls:
                                       through: true
                                       center: true
                                       fontSize: 42
-                                      texts: '&f踢出'
+                                      texts: "~&f踢出"
                               btn_ban:
                                 type: Texture
                                 attribute:
@@ -400,7 +400,7 @@ controls:
                                       through: true
                                       center: true
                                       fontSize: 42
-                                      texts: '&f封禁'
+                                      texts: "~&f封禁"
 
               # ─── 封禁列表视图 ───
               page_bans:
@@ -419,7 +419,7 @@ controls:
                       x: 0
                       y: 0
                       fontSize: 36
-                      texts: '&6&l封禁列表'
+                      texts: "~&6封禁列表"
                   bans_count:
                     type: Text
                     attribute:
@@ -435,7 +435,7 @@ controls:
                       fontSize: 28
                       visible: |-
                         var.banCount == '0'
-                      texts: '&8暂无封禁记录'
+                      texts: "~&8暂无封禁记录"
                   封禁滑块:
                     type: Texture
                     val: 封禁滑块
@@ -529,7 +529,7 @@ controls:
                                       through: true
                                       center: true
                                       fontSize: 22
-                                      texts: '&f解封'
+                                      texts: "~&f解封"
 
               # ─── 世界控制视图 ───
               page_world:
@@ -548,7 +548,7 @@ controls:
                       x: 0
                       y: 0
                       fontSize: 36
-                      texts: '&6&l世界管理'
+                      texts: "~&6世界管理"
                   world_info:
                     type: Text
                     attribute:
@@ -563,7 +563,7 @@ controls:
                       x: 0
                       y: 100
                       fontSize: 36
-                      texts: '&b时间设置:'
+                      texts: "~&b时间设置:"
                   btn_day:
                     type: Texture
                     attribute:
@@ -586,7 +586,7 @@ controls:
                           through: true
                           center: true
                           fontSize: 36
-                          texts: '&f白天'
+                          texts: "~&f白天"
                   btn_night:
                     type: Texture
                     attribute:
@@ -609,7 +609,7 @@ controls:
                           through: true
                           center: true
                           fontSize: 36
-                          texts: '&f夜晚'
+                          texts: "~&f夜晚"
                   btn_noon:
                     type: Texture
                     attribute:
@@ -632,7 +632,7 @@ controls:
                           through: true
                           center: true
                           fontSize: 36
-                          texts: '&f正午'
+                          texts: "~&f正午"
                   # 天气控制
                   weather_label:
                     type: Text
@@ -640,7 +640,7 @@ controls:
                       x: 0
                       y: 200
                       fontSize: 36
-                      texts: '&b天气设置:'
+                      texts: "~&b天气设置:"
                   清除按钮:
                     type: Texture
                     attribute:
@@ -663,7 +663,7 @@ controls:
                           through: true
                           center: true
                           fontSize: 36
-                          texts: '&f晴天'
+                          texts: "~&f晴天"
                   btn_rain:
                     type: Texture
                     attribute:
@@ -686,7 +686,7 @@ controls:
                           through: true
                           center: true
                           fontSize: 36
-                          texts: '&f雨天'
+                          texts: "~&f雨天"
                   btn_thunder:
                     type: Texture
                     attribute:
@@ -709,7 +709,7 @@ controls:
                           through: true
                           center: true
                           fontSize: 36
-                          texts: '&f雷暴'
+                          texts: "~&f雷暴"
                   # 出生点
                   btn_set_spawn:
                     type: Texture
@@ -733,7 +733,7 @@ controls:
                           through: true
                           center: true
                           fontSize: 36
-                          texts: '&f设置出生点'
+                          texts: "~&f设置出生点"
 
               # ─── 传送点管理视图 ───
               page_warps:
@@ -752,7 +752,7 @@ controls:
                       x: 0
                       y: 0
                       fontSize: 36
-                      texts: '&6&l传送点管理'
+                      texts: "~&6传送点管理"
                   btn_add_warp:
                     type: Texture
                     attribute:
@@ -775,7 +775,7 @@ controls:
                           through: true
                           center: true
                           fontSize: 36
-                          texts: '&f+ 新建传送点'
+                          texts: "~&f+ 新建传送点"
                   传送点滑块:
                     type: Texture
                     val: 传送点滑块
@@ -853,4 +853,4 @@ controls:
                                       through: true
                                       center: true
                                       fontSize: 36
-                                      texts: '&f删除'
+                                      texts: "~&f删除"
