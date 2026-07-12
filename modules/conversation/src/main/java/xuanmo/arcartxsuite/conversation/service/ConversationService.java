@@ -480,6 +480,13 @@ public final class ConversationService implements Listener {
     }
 
     private void registerTheme() {
+        Object existing = ChemdahAPI.INSTANCE.getConversationTheme().get(configuration.themeName());
+        if (existing == theme) {
+            return;
+        }
+        if (existing != null) {
+            ChemdahAPI.INSTANCE.getConversationTheme().remove(configuration.themeName());
+        }
         theme.register(configuration.themeName());
         if (configuration.debug()) {
             this.logger.info("ArcartXConversation 已注册 Chemdah 主题: " + configuration.themeName());
