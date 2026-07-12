@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -15,6 +16,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
+import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.menu.config.MenuButtonDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuDefinition;
@@ -53,14 +55,15 @@ public final class MenuService {
         PacketGuardAPI packetGuard,
         MenuModuleConfiguration configuration,
         ItemBridgeAPI itemStackBridge,
-        ItemSourceRegistry itemSourceRegistry
+        ItemSourceRegistry itemSourceRegistry,
+        Supplier<SignalDispatchable> signalProvider
     ) {
         this.plugin = plugin;
         this.logger = logger;
         this.packetBridge = packetBridge;
         this.packetGuard = packetGuard;
         this.configuration = configuration;
-        this.actionExecutor = new MenuActionExecutor(plugin, this);
+        this.actionExecutor = new MenuActionExecutor(plugin, this, logger, signalProvider);
         this.iconResolver = new MenuIconResolver(itemStackBridge, itemSourceRegistry);
     }
 

@@ -384,6 +384,8 @@ pages:
 #   "message: <消息>"        — 向玩家发送聊天消息（支持颜色代码）
 #   "sound: <音效名>|<音量>|<音调>"  — 播放音效
 #   "op: <命令>"               — 以玩家身份临时给予 OP 执行，用完自动收回
+#   "signal: <名称>"            — 触发 EventPacket command-signal 信号
+#   "signal: <名称>|键=值|键2=值2" — 触发信号并传递变量
 #
 # 所有动作中均可使用 PlaceholderAPI 变量：
 #   %player_name%    — 玩家名

@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -20,6 +21,7 @@ import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.MenuOpenable;
+import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
@@ -146,7 +148,8 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
             packetGuard,
             configuration,
             itemStackBridge,
-            itemSourceRegistry
+            itemSourceRegistry,
+            (Supplier<SignalDispatchable>) () -> getCapability(SignalDispatchable.class)
         );
         service.setRuntimeUiIds(panelBinding.runtimeUiId(), escBinding.runtimeUiId());
         service.reload(dataFolder);

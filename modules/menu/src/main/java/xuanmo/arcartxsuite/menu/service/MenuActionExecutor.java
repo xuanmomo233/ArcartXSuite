@@ -1,10 +1,15 @@
 package xuanmo.arcartxsuite.menu.service;
 
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Supplier;
+import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.menu.config.MenuActionDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuActionType;
 
@@ -12,10 +17,19 @@ public final class MenuActionExecutor {
 
     private final JavaPlugin plugin;
     private final MenuService menuService;
+    private final Logger logger;
+    private final Supplier<SignalDispatchable> signalProvider;
 
-    public MenuActionExecutor(JavaPlugin plugin, MenuService menuService) {
+    public MenuActionExecutor(
+        JavaPlugin plugin,
+        MenuService menuService,
+        Logger logger,
+        Supplier<SignalDispatchable> signalProvider
+    ) {
         this.plugin = plugin;
         this.menuService = menuService;
+        this.logger = logger;
+        this.signalProvider = signalProvider;
     }
 
     public boolean execute(Player player, MenuActionDefinition action) {
@@ -82,6 +96,45 @@ public final class MenuActionExecutor {
             case SOUND -> {
                 playSound(player, action.value());
                 yield false;
+            }
+            case SIGNAL -> {
+                String[] segments = action.value() == null
+                    ? new String[0]
+                    : action.value().split("\\|", -1);
+                String signal = segments.length == 0
+                    ? ""
+                    : MenuConditionEvaluator.applyPlaceholders(player, segments[0].trim()).trim();
+                if (signal.isBlank()) {
+                    logger.warning("Menu signal 动作解析为空信号，已跳过。");
+                    yield false;
+                }
+
+                SignalDispatchable dispatcher = signalProvider == null ? null : signalProvider.get();
+                if (dispatcher == null) {
+                    logger.warning("Menu signal 动作无法执行：EventPacket 能力不可用，已跳过。");
+                    yield false;
+                }
+
+                Map<String, String> variables = new LinkedHashMap<>();
+                for (int index = 1; index < segments.length; index++) {
+                    String segment = segments[index];
+                    int separator = segment.indexOf('=');
+                    if (separator < 0) {
+                        continue;
+                    }
+                    String key = segment.substring(0, separator).trim();
+                    if (key.isBlank()) {
+                        continue;
+                    }
+                    String value = MenuConditionEvaluator.applyPlaceholders(
+                        player,
+                        segment.substring(separator + 1).trim()
+                    );
+                    variables.put(key, value);
+                }
+
+                dispatcher.dispatchSignal(signal, player, variables);
+                yield menuService.configuration().settings().closeOnAction();
             }
             case NONE -> false;
         };

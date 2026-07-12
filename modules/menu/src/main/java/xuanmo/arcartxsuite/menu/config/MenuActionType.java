@@ -11,6 +11,7 @@ public enum MenuActionType {
     CLOSE,
     PAGE,
     SOUND,
+    SIGNAL,
     NONE;
 
     public static MenuActionType parse(String raw) {
@@ -26,6 +27,7 @@ public enum MenuActionType {
             case "close" -> CLOSE;
             case "page" -> PAGE;
             case "sound" -> SOUND;
+            case "signal" -> SIGNAL;
             default -> NONE;
         };
     }
