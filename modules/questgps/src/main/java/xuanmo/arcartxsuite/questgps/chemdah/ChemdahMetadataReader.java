@@ -143,6 +143,9 @@ public final class ChemdahMetadataReader {
             if (stats == null) {
                 return "";
             }
+            if (profile.getQuestById(template.getId(), false) == null) {
+                return "";
+            }
             CompletableFuture<Progress> future = stats.getProgress(profile, task);
             Progress progress = future.getNow(null);
             if (progress == null) {

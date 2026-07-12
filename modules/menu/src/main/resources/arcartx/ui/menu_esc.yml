@@ -302,7 +302,7 @@ controls:
                   width: 218
                   height: 60
                   normal: "self.entry != none && self.entry['enabled'] ? '95,95,95,255' : '55,55,55,200'"
-                  hover: "self.entry != none && self.entry['enabled'] ? '255,255,255,255' : '55,55,55,200'"
+                  hover: "self.entry != none && self.entry['enabled'] ? '120,120,120,255' : '55,55,55,200'"
                   shape: ~round_rect
                   radius: 10
                 effect:
