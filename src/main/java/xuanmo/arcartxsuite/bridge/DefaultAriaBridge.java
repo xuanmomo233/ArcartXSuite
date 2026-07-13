@@ -30,7 +30,11 @@ public final class DefaultAriaBridge implements AriaBridge {
         "priv.seventeen.artist.aria.object.IAriaObject";
     private static final String NEW_JAVA_OBJECT_MIRROR_CLASS =
         "priv.seventeen.artist.aria.interop.JavaObjectMirror";
-    private static final String[] DISCOVERY_PLUGINS = {"ArcartX", "Aria"};
+    private static final String[] DISCOVERY_PLUGINS = {
+        "BlinkAriaHost",
+        "ArcartX",
+        "Aria"
+    };
 
     private boolean available;
     private String version;
@@ -285,10 +289,18 @@ public final class DefaultAriaBridge implements AriaBridge {
             }
             ClassLoader classLoader = candidate.getClass().getClassLoader();
             try {
-                Class.forName(NEW_ARIA_CLASS, false, classLoader);
+                Class<?> ariaClass = Class.forName(
+                    NEW_ARIA_CLASS, false, classLoader
+                );
+                Class<?> contextClass = Class.forName(
+                    NEW_CONTEXT_CLASS, false, classLoader
+                );
+                ariaClass.getMethod("eval", String.class, contextClass);
                 return classLoader;
-            } catch (ClassNotFoundException ignored) {
-                // 继续检查另一个新版 Aria 宿主名称。
+            } catch (
+                ClassNotFoundException | NoSuchMethodException ignored
+            ) {
+                // Candidate does not expose a self-consistent Aria API.
             }
         }
         return null;
