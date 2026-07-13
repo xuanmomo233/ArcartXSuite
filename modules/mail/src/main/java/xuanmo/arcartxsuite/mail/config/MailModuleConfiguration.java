@@ -161,8 +161,8 @@ public record MailModuleConfiguration(
     private static Map<String, CurrencyDefinition> loadCurrencies(ConfigurationSection section) {
         LinkedHashMap<String, CurrencyDefinition> values = new LinkedHashMap<>();
         if (section == null) {
-            values.put("money", new CurrencyDefinition("money", "vault", "金币", 2, "", "", ""));
-            values.put("points", new CurrencyDefinition("points", "playerpoints", "点券", 0, "", "", ""));
+            values.put("money", new CurrencyDefinition("money", "vault", "金币", 2, "", "", "", "DOWN"));
+            values.put("points", new CurrencyDefinition("points", "playerpoints", "点券", 0, "", "", "", "DOWN"));
             return Map.copyOf(values);
         }
         for (String rawId : section.getKeys(false)) {
@@ -180,12 +180,13 @@ public record MailModuleConfiguration(
                     Math.max(0, child.getInt("scale", 0)),
                     string(child.getString("balance-placeholder", "")),
                     string(child.getString("withdraw-command", "")),
-                    string(child.getString("deposit-command", ""))
+                    string(child.getString("deposit-command", "")),
+                    string(child.getString("rounding", "DOWN"))
                 )
             );
         }
-        values.putIfAbsent("money", new CurrencyDefinition("money", "vault", "金币", 2, "", "", ""));
-        values.putIfAbsent("points", new CurrencyDefinition("points", "playerpoints", "点券", 0, "", "", ""));
+        values.putIfAbsent("money", new CurrencyDefinition("money", "vault", "金币", 2, "", "", "", "DOWN"));
+        values.putIfAbsent("points", new CurrencyDefinition("points", "playerpoints", "点券", 0, "", "", "", "DOWN"));
         return Map.copyOf(values);
     }
 

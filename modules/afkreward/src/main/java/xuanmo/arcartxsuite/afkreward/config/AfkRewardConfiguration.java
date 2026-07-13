@@ -63,13 +63,33 @@ public record AfkRewardConfiguration(
         boolean restrictActions,
         boolean returnOnEnd,
         boolean broadcastRewards,
+        int combatCooldownSeconds,
         int leaderboardSize,
         String signalOnReward,
         String signalOnEnd,
         String subtitleOnReward,
         String subtitleOnEnd,
-        List<String> endMailPresets
-    ) {}
+        List<String> endMailPresets,
+        Protections protections
+    ) {
+        public record Protections(
+            boolean movement,
+            boolean teleport,
+            boolean interact,
+            boolean blockBreak,
+            boolean inventory,
+            boolean receiveDamage,
+            boolean dealDamage,
+            boolean entityTarget,
+            boolean vehicleEnter,
+            boolean interactEntity,
+            boolean dropItem,
+            boolean swapHand,
+            boolean pickupItem,
+            boolean experience,
+            boolean collidable
+        ) {}
+    }
 
     public AfkRewardConfiguration withAreas(Map<String, AfkArea> newAreas) {
         return new AfkRewardConfiguration(
@@ -145,16 +165,37 @@ public record AfkRewardConfiguration(
 
         // manual
         ConfigurationSection manualSec = yaml.getConfigurationSection("manual");
+        ConfigurationSection protectionsSec = manualSec != null
+            ? manualSec.getConfigurationSection("protections") : null;
+        ManualConfig.Protections protections = new ManualConfig.Protections(
+            protectionsSec == null || protectionsSec.getBoolean("movement", true),
+            protectionsSec == null || protectionsSec.getBoolean("teleport", true),
+            protectionsSec == null || protectionsSec.getBoolean("interact", true),
+            protectionsSec == null || protectionsSec.getBoolean("block-break", true),
+            protectionsSec == null || protectionsSec.getBoolean("inventory", true),
+            protectionsSec == null || protectionsSec.getBoolean("receive-damage", true),
+            protectionsSec == null || protectionsSec.getBoolean("deal-damage", true),
+            protectionsSec == null || protectionsSec.getBoolean("entity-target", true),
+            protectionsSec == null || protectionsSec.getBoolean("vehicle-enter", true),
+            protectionsSec == null || protectionsSec.getBoolean("interact-entity", true),
+            protectionsSec == null || protectionsSec.getBoolean("drop-item", true),
+            protectionsSec == null || protectionsSec.getBoolean("swap-hand", true),
+            protectionsSec == null || protectionsSec.getBoolean("pickup-item", true),
+            protectionsSec == null || protectionsSec.getBoolean("experience", true),
+            protectionsSec == null || protectionsSec.getBoolean("collidable", true)
+        );
         ManualConfig manual = new ManualConfig(
             manualSec != null && manualSec.getBoolean("restrict-actions", true),
             manualSec != null && manualSec.getBoolean("return-on-end", false),
             manualSec != null && manualSec.getBoolean("broadcast-rewards", true),
+            manualSec != null ? Math.max(0, manualSec.getInt("combat-cooldown-seconds", 10)) : 10,
             manualSec != null ? Math.max(1, Math.min(100, manualSec.getInt("leaderboard-size", 10))) : 10,
             manualSec != null ? manualSec.getString("signal-on-reward", "") : "",
             manualSec != null ? manualSec.getString("signal-on-end", "") : "",
             manualSec != null ? manualSec.getString("subtitle-on-reward", "") : "",
             manualSec != null ? manualSec.getString("subtitle-on-end", "") : "",
-            manualSec != null ? manualSec.getStringList("end-mail-presets") : List.of()
+            manualSec != null ? manualSec.getStringList("end-mail-presets") : List.of(),
+            protections
         );
 
         return new AfkRewardConfiguration(debug, areasDirectory, reward, Collections.unmodifiableMap(types),

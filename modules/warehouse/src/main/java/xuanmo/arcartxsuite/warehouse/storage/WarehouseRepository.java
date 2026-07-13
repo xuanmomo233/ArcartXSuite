@@ -19,6 +19,8 @@ public interface WarehouseRepository {
 
     void updatePersonalWarehouseShowcase(UUID playerUuid, String warehouseId, boolean showcaseEnabled, long updatedAt) throws SQLException;
 
+    void deletePersonalWarehouse(UUID playerUuid, String warehouseId) throws SQLException;
+
     List<SlotItemRecord> loadSlots(String ownerType, String ownerId, String warehouseId) throws SQLException;
 
     Optional<SlotItemRecord> loadSlot(String ownerType, String ownerId, String warehouseId, int slot) throws SQLException;
@@ -65,6 +67,14 @@ public interface WarehouseRepository {
     void updateSharedWarehouseShowcase(String sharedId, boolean showcaseEnabled, long updatedAt) throws SQLException;
 
     void transferSharedWarehouse(String sharedId, UUID previousOwnerUuid, UUID newOwnerUuid, long updatedAt) throws SQLException;
+
+    void upsertPendingTransfer(PendingTransfer transfer) throws SQLException;
+
+    Optional<PendingTransfer> loadPendingTransfer(String sharedId) throws SQLException;
+
+    List<PendingTransfer> loadPendingTransfers(UUID targetUuid) throws SQLException;
+
+    void deletePendingTransfer(String sharedId) throws SQLException;
 
     void deleteSharedWarehouse(String sharedId) throws SQLException;
 
@@ -138,6 +148,9 @@ public interface WarehouseRepository {
         String viewerRole,
         boolean showcaseEnabled
     ) {
+    }
+
+    record PendingTransfer(String sharedId, UUID fromOwnerUuid, UUID targetUuid, long createdAt, long expiresAt) {
     }
 
     record SharedMemberRecord(String sharedId, UUID playerUuid, String role, long updatedAt) {

@@ -35,6 +35,13 @@ import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository.PlayerStats;
 
 public final class AfkRewardService {
 
+    public enum ManualProtection {
+        MOVEMENT, TELEPORT, INTERACT, BLOCK_BREAK, INVENTORY,
+        RECEIVE_DAMAGE, DEAL_DAMAGE, ENTITY_TARGET, VEHICLE_ENTER,
+        INTERACT_ENTITY, DROP_ITEM, SWAP_HAND, PICKUP_ITEM, EXPERIENCE,
+        COLLIDABLE
+    }
+
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final long TICK_INTERVAL = 20L; // 每秒一次
 
@@ -60,6 +67,7 @@ public final class AfkRewardService {
     private final Set<UUID> enterNotified = ConcurrentHashMap.newKeySet();
     // HUD 显示开关
     private final Set<UUID> hudDisabled = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, Long> lastCombat = new ConcurrentHashMap<>();
 
     private BukkitTask tickTask;
     private boolean active;
@@ -134,6 +142,7 @@ public final class AfkRewardService {
         statsCache.clear();
         enterNotified.clear();
         hudDisabled.clear();
+        lastCombat.clear();
     }
 
     private void tick() {
@@ -155,13 +164,13 @@ public final class AfkRewardService {
                 endManualAfk(player, true);
                 return;
             }
+            if (!player.hasPermission("axs.afkreward.area." + state.areaName)) {
+                endManualAfk(player, true);
+                player.sendMessage(messages != null ? messages.get("hints.no-permission-area") : "§c你没有权限在此区域挂机。");
+                return;
+            }
             state.seconds++;
             updateTotalTime(uuid, 1);
-            int roundSeconds = config.reward().roundMinutes() * 60;
-            if (state.seconds - state.lastRewardSeconds >= roundSeconds) {
-                grantReward(player, area);
-                state.lastRewardSeconds = state.seconds;
-            }
             return;
         }
 
@@ -417,6 +426,10 @@ public final class AfkRewardService {
 
     public boolean startManualAfk(Player player, String areaName) {
         UUID uuid = player.getUniqueId();
+        if (isInCombat(uuid)) {
+            player.sendMessage(messages != null ? messages.get("hints.manual.in-combat") : "§c你刚刚参与过战斗，请稍后再开始挂机。");
+            return false;
+        }
         AfkArea area = config.areas().get(areaName);
         if (area == null || !area.enabled() || !area.hasTeleport() || !area.manualEnabled()) {
             player.sendMessage(messages != null ? messages.get("hints.manual.no-teleport", areaName) : "§c该区域不支持原地挂机。");
@@ -460,7 +473,13 @@ public final class AfkRewardService {
         afkStates.put(uuid, state);
 
         // 传送
+        if (isManualProtectionEnabled(ManualProtection.VEHICLE_ENTER)) {
+            player.leaveVehicle();
+        }
         player.teleport(area.teleport());
+        if (isManualProtectionEnabled(ManualProtection.COLLIDABLE)) {
+            player.setCollidable(false);
+        }
 
         // 行为封锁
         if (config.manual().restrictActions()) {
@@ -499,6 +518,7 @@ public final class AfkRewardService {
         if (config.manual().restrictActions()) {
             player.setWalkSpeed(state.originalWalkSpeed);
         }
+        player.setCollidable(true);
         if (config.manual().returnOnEnd() && state.originalLocation != null) {
             player.teleport(state.originalLocation);
         }
@@ -604,9 +624,45 @@ public final class AfkRewardService {
         if (msg != null && actualTimes > 0) player.sendMessage(msg);
     }
 
+    public void markCombat(UUID uuid) {
+        lastCombat.put(uuid, System.currentTimeMillis());
+    }
+
+    public boolean isInCombat(UUID uuid) {
+        Long timestamp = lastCombat.get(uuid);
+        if (timestamp == null) return false;
+        long cooldownMillis = config.manual().combatCooldownSeconds() * 1000L;
+        if (cooldownMillis <= 0 || System.currentTimeMillis() - timestamp >= cooldownMillis) {
+            lastCombat.remove(uuid, timestamp);
+            return false;
+        }
+        return true;
+    }
+
     public boolean isInManualAfk(UUID uuid) {
         PlayerAfkState state = afkStates.get(uuid);
         return state != null && state.mode == AfkMode.MANUAL && state.areaName != null;
+    }
+
+    public boolean isManualProtectionEnabled(ManualProtection protection) {
+        var protections = config.manual().protections();
+        return switch (protection) {
+            case MOVEMENT -> protections.movement();
+            case TELEPORT -> protections.teleport();
+            case INTERACT -> protections.interact();
+            case BLOCK_BREAK -> protections.blockBreak();
+            case INVENTORY -> protections.inventory();
+            case RECEIVE_DAMAGE -> protections.receiveDamage();
+            case DEAL_DAMAGE -> protections.dealDamage();
+            case ENTITY_TARGET -> protections.entityTarget();
+            case VEHICLE_ENTER -> protections.vehicleEnter();
+            case INTERACT_ENTITY -> protections.interactEntity();
+            case DROP_ITEM -> protections.dropItem();
+            case SWAP_HAND -> protections.swapHand();
+            case PICKUP_ITEM -> protections.pickupItem();
+            case EXPERIENCE -> protections.experience();
+            case COLLIDABLE -> protections.collidable();
+        };
     }
 
     public List<OnlineAfkPlayer> getOnlineAfkPlayers() {
@@ -752,6 +808,7 @@ public final class AfkRewardService {
         }
         afkStates.remove(playerUuid);
         enterNotified.remove(playerUuid);
+        lastCombat.remove(playerUuid);
         statsCache.remove(playerUuid);
     }
 

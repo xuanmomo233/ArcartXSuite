@@ -61,7 +61,7 @@ version-check-public-key: ""
 # 重载命令: /axs reload all 或 /axs <module> reload。
 
 # ========== 全局货币定义 ==========
-# 所有模块共享同一组货币。provider 支持: vault / playerpoints / rondo / command / placeholder-command / custom。
+# 所有模块共享同一组货币。provider 支持: vault / playerpoints / rondo / xconomy / command / placeholder-command / custom。
 # 模块配置中的 currencies 节将合并到此全局池中（不覆盖已有同名货币）。
 currencies:
   money:
@@ -69,11 +69,14 @@ currencies:
     provider: "vault"
     display-name: "金币"
     precision: 2
+    # 舍入策略：DOWN（默认），也可使用 HALF_UP 等标准 RoundingMode 名称。
+    rounding: "DOWN"
   points:
     enabled: true
     provider: "playerpoints"
     display-name: "点券"
     precision: 0
+    rounding: "DOWN"
 
 # ========== 跨服传输（全模块共用）==========
 # 各模块在 ArcartX*.yml 的 cross-server.enabled 开启后接入此配置。

@@ -17,7 +17,7 @@ import xuanmo.arcartxsuite.warehouse.service.WarehouseService;
 
 public final class WarehouseAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "reload", "open", "info", "password", "bank");
+    private static final List<String> ACTIONS = List.of("help", "status", "reload", "open", "info", "view", "delete", "password", "bank");
 
     private final Supplier<WarehouseService> serviceProvider;
     private final MessageProvider messages;
@@ -37,6 +37,10 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
+        if (sender instanceof Player player && !player.hasPermission("arcartxsuite.warehouse.admin")) {
+            sender.sendMessage(fullMsg("common.no-permission"));
+            return true;
+        }
         String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "help";
         switch (action) {
             case "help" -> sendHelp(sender, label);
@@ -44,6 +48,8 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
             case "reload" -> sender.sendMessage(fullMsg("common.reload-hint", label));
             case "open" -> handleOpen(sender, args);
             case "info" -> handleInfo(sender, args);
+            case "view" -> handleView(sender, args);
+            case "delete" -> handleDelete(sender, args);
             case "password" -> handlePassword(sender, args);
             case "bank" -> handleBank(sender, args);
             default -> sender.sendMessage(fullMsg("common.unknown", label));
@@ -54,7 +60,7 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) return filter(ACTIONS, args[1]);
-        if (args.length == 3 && List.of("open", "info", "password", "bank").contains(args[1].toLowerCase(Locale.ROOT))) {
+        if (args.length == 3 && List.of("open", "info", "view", "delete", "password", "bank").contains(args[1].toLowerCase(Locale.ROOT))) {
             return null; // player names
         }
         WarehouseService svc = serviceProvider.get();
@@ -74,6 +80,8 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("help.status", cmd));
         sender.sendMessage(fullMsg("help.open", cmd));
         sender.sendMessage(fullMsg("help.info", cmd));
+        sender.sendMessage(fullMsg("help.view", cmd));
+        sender.sendMessage(fullMsg("help.delete", cmd));
         sender.sendMessage(fullMsg("help.password", cmd));
         sender.sendMessage(fullMsg("help.bank", cmd));
     }
@@ -104,14 +112,48 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
         WarehouseService svc = serviceProvider.get();
         if (svc == null) { sender.sendMessage(fullMsg("common.service-down")); return; }
         if (args.length < 3) { sender.sendMessage(fullMsg("admin.info.usage")); return; }
-        Player target = Bukkit.getPlayer(args[2]);
-        UUID uuid = target != null ? target.getUniqueId() : Bukkit.getOfflinePlayer(args[2]).getUniqueId();
-        String name = target != null ? target.getName() : args[2];
+        org.bukkit.OfflinePlayer target = resolvePlayer(args[2]);
+        if (target == null) { sender.sendMessage(fullMsg("admin.player-not-found", args[2])); return; }
+        UUID uuid = target.getUniqueId();
+        String name = target.getName() == null ? args[2] : target.getName();
         String prefix = messages != null ? messages.get("prefix") : "";
         svc.describePlayer(uuid, name,
             lines -> lines.forEach(line -> sender.sendMessage(prefix + line)),
             error -> sender.sendMessage(prefix + ChatColor.RED + error)
         );
+    }
+
+    private void handleView(CommandSender sender, String[] args) {
+        WarehouseService svc = serviceProvider.get();
+        if (svc == null) { sender.sendMessage(fullMsg("common.service-down")); return; }
+        if (args.length < 4) { sender.sendMessage(fullMsg("admin.view.usage")); return; }
+        org.bukkit.OfflinePlayer target = resolvePlayer(args[2]);
+        if (target == null) { sender.sendMessage(fullMsg("admin.player-not-found", args[2])); return; }
+        String prefix = messages != null ? messages.get("prefix") : "";
+        svc.describePersonalWarehouse(target.getUniqueId(), target.getName() == null ? args[2] : target.getName(), args[3],
+            lines -> lines.forEach(line -> sender.sendMessage(prefix + line)),
+            error -> sender.sendMessage(prefix + ChatColor.RED + error));
+    }
+
+    private void handleDelete(CommandSender sender, String[] args) {
+        WarehouseService svc = serviceProvider.get();
+        if (svc == null) { sender.sendMessage(fullMsg("common.service-down")); return; }
+        if (args.length < 4) { sender.sendMessage(fullMsg("admin.delete.usage")); return; }
+        org.bukkit.OfflinePlayer target = resolvePlayer(args[2]);
+        if (target == null) { sender.sendMessage(fullMsg("admin.player-not-found", args[2])); return; }
+        if (args.length < 5 || !"confirm".equalsIgnoreCase(args[4])) {
+            sender.sendMessage(fullMsg("admin.delete.confirm", args[2], args[3]));
+            return;
+        }
+        WarehouseService.ActionResult result = svc.adminDeletePersonalWarehouse(target.getUniqueId(), args[3]);
+        sender.sendMessage((messages != null ? messages.get("prefix") : "") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+    }
+
+    private org.bukkit.OfflinePlayer resolvePlayer(String name) {
+        Player online = Bukkit.getPlayer(name);
+        if (online != null) return online;
+        org.bukkit.OfflinePlayer offline = Bukkit.getOfflinePlayer(name);
+        return offline.hasPlayedBefore() ? offline : null;
     }
 
     private void handlePassword(CommandSender sender, String[] args) {
@@ -121,8 +163,9 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
             sender.sendMessage(fullMsg("admin.password.usage"));
             return;
         }
-        Player target = Bukkit.getPlayer(args[2]);
-        UUID uuid = target != null ? target.getUniqueId() : Bukkit.getOfflinePlayer(args[2]).getUniqueId();
+        org.bukkit.OfflinePlayer target = resolvePlayer(args[2]);
+        if (target == null) { sender.sendMessage(fullMsg("admin.player-not-found", args[2])); return; }
+        UUID uuid = target.getUniqueId();
         sender.sendMessage(fullMsg("admin.password.clear-processing", args[2]));
         svc.adminClearSecondaryPassword(uuid, result ->
             sender.sendMessage((messages != null ? messages.get("prefix") : "") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message())
@@ -136,8 +179,9 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
             sender.sendMessage(fullMsg("admin.bank.usage"));
             return;
         }
-        Player target = Bukkit.getPlayer(args[2]);
-        UUID uuid = target != null ? target.getUniqueId() : Bukkit.getOfflinePlayer(args[2]).getUniqueId();
+        org.bukkit.OfflinePlayer target = resolvePlayer(args[2]);
+        if (target == null) { sender.sendMessage(fullMsg("admin.player-not-found", args[2])); return; }
+        UUID uuid = target.getUniqueId();
         svc.adminAdjustWallet(uuid, args[3], args[4], args[5], result ->
             sender.sendMessage((messages != null ? messages.get("prefix") : "") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message())
         );

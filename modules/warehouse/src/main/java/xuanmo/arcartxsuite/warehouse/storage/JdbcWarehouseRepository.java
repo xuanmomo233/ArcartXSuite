@@ -47,7 +47,8 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             "warehouse_fixed_deposits",
             "warehouse_shared",
             "warehouse_shared_members",
-            "warehouse_security"
+            "warehouse_security",
+            "warehouse_pending_transfers"
         );
     }
 
@@ -553,6 +554,31 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
     }
 
     @Override
+    public void deletePersonalWarehouse(UUID playerUuid, String warehouseId) throws SQLException {
+        try (Connection connection = connection()) {
+            boolean previousAutoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try (PreparedStatement slots = connection.prepareStatement(
+                     "DELETE FROM warehouse_slots WHERE owner_type = 'personal' AND owner_id = ? AND warehouse_id = ?");
+                 PreparedStatement personal = connection.prepareStatement(
+                     "DELETE FROM warehouse_personal WHERE player_uuid = ? AND warehouse_id = ?")) {
+                slots.setString(1, playerUuid.toString());
+                slots.setString(2, warehouseId);
+                slots.executeUpdate();
+                personal.setString(1, playerUuid.toString());
+                personal.setString(2, warehouseId);
+                personal.executeUpdate();
+                connection.commit();
+            } catch (SQLException exception) {
+                connection.rollback();
+                throw exception;
+            } finally {
+                connection.setAutoCommit(previousAutoCommit);
+            }
+        }
+    }
+
+    @Override
     public void transferSharedWarehouse(String sharedId, UUID previousOwnerUuid, UUID newOwnerUuid, long updatedAt) throws SQLException {
         try (Connection connection = connection()) {
             boolean previousAutoCommit = connection.getAutoCommit();
@@ -594,17 +620,89 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
     }
 
     @Override
+    public void upsertPendingTransfer(PendingTransfer transfer) throws SQLException {
+        try (Connection connection = connection()) {
+            boolean previousAutoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try (PreparedStatement delete = connection.prepareStatement("DELETE FROM warehouse_pending_transfers WHERE shared_id = ?");
+                 PreparedStatement insert = connection.prepareStatement(
+                     "INSERT INTO warehouse_pending_transfers (shared_id, from_owner_uuid, to_uuid, created_at, expires_at) VALUES (?, ?, ?, ?, ?)")) {
+                delete.setString(1, transfer.sharedId());
+                delete.executeUpdate();
+                insert.setString(1, transfer.sharedId());
+                insert.setString(2, transfer.fromOwnerUuid().toString());
+                insert.setString(3, transfer.targetUuid().toString());
+                insert.setLong(4, transfer.createdAt());
+                insert.setLong(5, transfer.expiresAt());
+                insert.executeUpdate();
+                connection.commit();
+            } catch (SQLException exception) {
+                connection.rollback();
+                throw exception;
+            } finally {
+                connection.setAutoCommit(previousAutoCommit);
+            }
+        }
+    }
+
+    @Override
+    public Optional<PendingTransfer> loadPendingTransfer(String sharedId) throws SQLException {
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT from_owner_uuid, to_uuid, created_at, expires_at FROM warehouse_pending_transfers WHERE shared_id = ?")) {
+            statement.setString(1, sharedId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (!resultSet.next()) return Optional.empty();
+                return Optional.of(new PendingTransfer(sharedId,
+                    UUID.fromString(resultSet.getString("from_owner_uuid")),
+                    UUID.fromString(resultSet.getString("to_uuid")),
+                    resultSet.getLong("created_at"), resultSet.getLong("expires_at")));
+            }
+        }
+    }
+
+    @Override
+    public List<PendingTransfer> loadPendingTransfers(UUID targetUuid) throws SQLException {
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT shared_id, from_owner_uuid, created_at, expires_at FROM warehouse_pending_transfers WHERE to_uuid = ? ORDER BY created_at ASC")) {
+            statement.setString(1, targetUuid.toString());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<PendingTransfer> result = new ArrayList<>();
+                while (resultSet.next()) {
+                    result.add(new PendingTransfer(resultSet.getString("shared_id"),
+                        UUID.fromString(resultSet.getString("from_owner_uuid")), targetUuid,
+                        resultSet.getLong("created_at"), resultSet.getLong("expires_at")));
+                }
+                return result;
+            }
+        }
+    }
+
+    @Override
+    public void deletePendingTransfer(String sharedId) throws SQLException {
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement("DELETE FROM warehouse_pending_transfers WHERE shared_id = ?")) {
+            statement.setString(1, sharedId);
+            statement.executeUpdate();
+        }
+    }
+
+    @Override
     public void deleteSharedWarehouse(String sharedId) throws SQLException {
         try (Connection connection = connection()) {
             boolean previousAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(false);
             try (PreparedStatement slots = connection.prepareStatement("DELETE FROM warehouse_slots WHERE owner_type = 'shared' AND owner_id = ?");
                  PreparedStatement members = connection.prepareStatement("DELETE FROM warehouse_shared_members WHERE shared_id = ?");
+                 PreparedStatement pending = connection.prepareStatement("DELETE FROM warehouse_pending_transfers WHERE shared_id = ?");
                  PreparedStatement shared = connection.prepareStatement("DELETE FROM warehouse_shared WHERE id = ?")) {
                 slots.setString(1, sharedId);
                 slots.executeUpdate();
                 members.setString(1, sharedId);
                 members.executeUpdate();
+                pending.setString(1, sharedId);
+                pending.executeUpdate();
                 shared.setString(1, sharedId);
                 shared.executeUpdate();
                 connection.commit();
@@ -881,6 +979,15 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                     hash VARCHAR(256) NOT NULL,
                     encrypted_password TEXT NOT NULL,
                     updated_at BIGINT NOT NULL
+                )
+                """);
+            statement.execute("""
+                CREATE TABLE IF NOT EXISTS warehouse_pending_transfers (
+                    shared_id VARCHAR(36) PRIMARY KEY,
+                    from_owner_uuid VARCHAR(36) NOT NULL,
+                    to_uuid VARCHAR(36) NOT NULL,
+                    created_at BIGINT NOT NULL,
+                    expires_at BIGINT NOT NULL
                 )
                 """);
         }

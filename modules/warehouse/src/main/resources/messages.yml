@@ -38,8 +38,14 @@ admin:
   open:
     usage: "&e用法: /axs warehouse open <玩家>"
     offline: "&c玩家不在线: {0}"
+  player-not-found: "&c找不到玩家: &f{0}"
   info:
     usage: "&e用法: /axs warehouse info <玩家>"
+  view:
+    usage: "&e用法: /axs warehouse view <玩家> <仓库ID>"
+  delete:
+    usage: "&e用法: /axs warehouse delete <玩家> <仓库ID> confirm"
+    confirm: "&e请确认删除 /axs warehouse delete <玩家> <仓库ID> confirm"
   password:
     usage: "&e用法: /axs warehouse password <玩家> clear"
   bank:
@@ -50,6 +56,8 @@ player:
   only-player: "&c该命令只能由玩家执行。"
   no-permission: "&c你没有权限执行这个命令。"
   module-down: "&cWarehouse 模块当前未启用。"
+  transfer:
+    usage: "&e用法: /warehouse transfer <confirm|reject> <sharedId>"
   preview:
     usage: "&e用法: /{0} preview <玩家名或UUID>"
     not-found: "&c找不到玩家: &f{0}&c，请检查拼写或使用 UUID。"

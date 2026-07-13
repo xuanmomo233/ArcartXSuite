@@ -7,6 +7,7 @@ public record CurrencyDefinition(
     int scale,
     String balancePlaceholder,
     String withdrawCommand,
-    String depositCommand
+    String depositCommand,
+    String rounding
 ) {
 }

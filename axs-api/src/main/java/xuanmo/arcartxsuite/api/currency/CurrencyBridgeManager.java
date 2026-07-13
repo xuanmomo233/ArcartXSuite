@@ -2,12 +2,16 @@ package xuanmo.arcartxsuite.api.currency;
 
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
@@ -18,10 +22,14 @@ import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 
 public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
 
+    private static final String RANGE_FAILURE = "金额超出该货币可处理范围。";
+
     private final JavaPlugin plugin;
-    private final Map<String, CurrencyDefinition> definitions;
-    private final Map<String, CurrencyBridge> bridges = new LinkedHashMap<>();
+    private final Map<String, CurrencyDefinition> registeredDefinitions;
+    private volatile Map<String, CurrencyDefinition> definitions;
+    private volatile Map<String, CurrencyBridge> bridges;
     private final PlaceholderResolverAPI placeholderResolver;
+    private final Map<UUID, Object> customOperationLocks = new ConcurrentHashMap<>();
 
     public CurrencyBridgeManager(JavaPlugin plugin) {
         this(plugin, Map.of(), null);
@@ -33,27 +41,32 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
 
     public CurrencyBridgeManager(JavaPlugin plugin, Map<String, CurrencyDefinition> definitions, PlaceholderResolverAPI placeholderResolver) {
         this.plugin = plugin;
-        this.definitions = definitions == null ? new LinkedHashMap<>() : new LinkedHashMap<>(definitions);
+        this.registeredDefinitions = definitions == null ? new LinkedHashMap<>() : new LinkedHashMap<>(definitions);
+        this.definitions = immutableCopy(this.registeredDefinitions);
+        this.bridges = Map.of();
         this.placeholderResolver = placeholderResolver;
     }
 
-    public void initialize() {
-        bridges.clear();
-        for (CurrencyDefinition definition : definitions.values()) {
-            bridges.put(definition.id(), createBridge(definition));
+    public synchronized void initialize() {
+        LinkedHashMap<String, CurrencyDefinition> definitionSnapshot = new LinkedHashMap<>(registeredDefinitions);
+        LinkedHashMap<String, CurrencyBridge> bridgeSnapshot = new LinkedHashMap<>();
+        for (CurrencyDefinition definition : definitionSnapshot.values()) {
+            bridgeSnapshot.put(definition.id(), createBridge(definition));
         }
+        definitions = immutableCopy(definitionSnapshot);
+        bridges = immutableCopy(bridgeSnapshot);
     }
 
     /**
      * 动态注册额外的货币定义（不覆盖已有）。
      * 注册后需调用 {@link #initialize()} 生效。
      */
-    public void registerCurrencies(Map<String, CurrencyDefinition> additional) {
+    public synchronized void registerCurrencies(Map<String, CurrencyDefinition> additional) {
         if (additional == null || additional.isEmpty()) {
             return;
         }
         for (Map.Entry<String, CurrencyDefinition> entry : additional.entrySet()) {
-            definitions.putIfAbsent(normalizeId(entry.getKey()), entry.getValue());
+            registeredDefinitions.putIfAbsent(normalizeId(entry.getKey()), entry.getValue());
         }
     }
 
@@ -84,13 +97,14 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
         if (definition == null) {
             return amount == null ? "0" : amount.stripTrailingZeros().toPlainString();
         }
-        BigDecimal scaled = (amount == null ? BigDecimal.ZERO : amount).setScale(definition.scale(), RoundingMode.DOWN);
+        BigDecimal scaled = (amount == null ? BigDecimal.ZERO : amount).setScale(definition.scale(), roundingMode(definition.rounding()));
         return scaled.stripTrailingZeros().toPlainString();
     }
 
     private CurrencyBridge createBridge(CurrencyDefinition definition) {
         return switch (normalizeId(definition.provider())) {
             case "playerpoints" -> new PlayerPointsBridge(definition);
+            case "xconomy" -> new XConomyCurrencyBridge(definition);
             case "placeholder-command", "command", "custom" -> new CommandCurrencyBridge(definition, placeholderResolver);
             case "rondo" -> new RondoCurrencyBridge(definition);
             default -> new VaultCurrencyBridge(definition);
@@ -114,7 +128,7 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
             if (amount == null) {
                 return BigDecimal.ZERO;
             }
-            return amount.max(BigDecimal.ZERO).setScale(definition.scale(), RoundingMode.DOWN);
+            return amount.max(BigDecimal.ZERO).setScale(definition.scale(), roundingMode(definition.rounding()));
         }
 
         protected String formatAmount(BigDecimal amount) {
@@ -137,7 +151,10 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
 
         @Override
         public boolean available() {
-            return economy != null && balanceMethod != null && withdrawMethod != null && depositMethod != null;
+            if (!isReady()) {
+                initializeVault();
+            }
+            return isReady();
         }
 
         @Override
@@ -153,7 +170,7 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
             try {
                 Object value = invokeEconomyMethod(balanceMethod, player, BigDecimal.ZERO);
                 return convertToBigDecimal(value);
-            } catch (ReflectiveOperationException exception) {
+            } catch (ReflectiveOperationException | AmountRangeException exception) {
                 return BigDecimal.ZERO;
             }
         }
@@ -168,7 +185,17 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
             return invokeEconomyTransaction(depositMethod, player, amount, "入账失败。");
         }
 
+        private boolean isReady() {
+            return economy != null
+                && balanceMethod != null
+                && withdrawMethod != null
+                && depositMethod != null;
+        }
+
         private void initializeVault() {
+            if (isReady()) {
+                return;
+            }
             try {
                 Class<?> economyClass = Class.forName("net.milkbowl.vault.economy.Economy");
                 RegisteredServiceProvider<?> registration = Bukkit.getServicesManager().getRegistration(economyClass);
@@ -180,8 +207,10 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 balanceMethod = findEconomyMethod(economy.getClass(), "getBalance");
                 withdrawMethod = findEconomyMethod(economy.getClass(), "withdrawPlayer");
                 depositMethod = findEconomyMethod(economy.getClass(), "depositPlayer");
-                if (!available()) {
+                if (!isReady()) {
                     unavailableReason = "未找到兼容的 Vault Economy 方法";
+                } else {
+                    unavailableReason = "";
                 }
             } catch (ClassNotFoundException exception) {
                 unavailableReason = "Vault 未安装";
@@ -196,16 +225,18 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 return CurrencyTransactionResult.failure("金额必须大于 0。");
             }
             try {
-                Object response = invokeEconomyMethod(method, player, amount);
+                Object response = invokeEconomyMethod(method, player, normalize(amount));
                 return transactionSucceeded(response)
                     ? CurrencyTransactionResult.ok()
                     : CurrencyTransactionResult.failure(resolveTransactionMessage(response, defaultMessage));
+            } catch (AmountRangeException exception) {
+                return CurrencyTransactionResult.failure(RANGE_FAILURE);
             } catch (ReflectiveOperationException exception) {
                 return CurrencyTransactionResult.failure(defaultMessage);
             }
         }
 
-        private Object invokeEconomyMethod(Method method, Player player, BigDecimal amount) throws ReflectiveOperationException {
+        private Object invokeEconomyMethod(Method method, Player player, BigDecimal amount) throws ReflectiveOperationException, AmountRangeException {
             Class<?>[] parameterTypes = method.getParameterTypes();
             if (parameterTypes.length == 1) {
                 return method.invoke(economy, resolveFirstArgument(method, player));
@@ -301,7 +332,12 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
             if (player == null || amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
                 return CurrencyTransactionResult.failure("金额必须大于 0。");
             }
-            int points = normalize(amount).intValue();
+            int points;
+            try {
+                points = normalize(amount).intValueExact();
+            } catch (ArithmeticException exception) {
+                return CurrencyTransactionResult.failure(RANGE_FAILURE);
+            }
             if (points <= 0) {
                 return CurrencyTransactionResult.failure("金额必须大于 0。");
             }
@@ -311,6 +347,115 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 return success ? CurrencyTransactionResult.ok() : CurrencyTransactionResult.failure(defaultMessage);
             } catch (ReflectiveOperationException exception) {
                 return CurrencyTransactionResult.failure(defaultMessage);
+            }
+        }
+    }
+
+    private final class XConomyCurrencyBridge extends AbstractCurrencyBridge {
+
+        private Object api;
+        private Method getPlayerDataMethod;
+        private Method getBalanceMethod;
+        private Method changePlayerBalanceMethod;
+        private String unavailableReason = "";
+
+        private XConomyCurrencyBridge(CurrencyDefinition definition) {
+            super(definition);
+            initializeXConomy();
+        }
+
+        @Override
+        public boolean available() {
+            return api != null
+                && getPlayerDataMethod != null
+                && getBalanceMethod != null
+                && changePlayerBalanceMethod != null;
+        }
+
+        @Override
+        public String unavailableReason() {
+            return unavailableReason;
+        }
+
+        @Override
+        public BigDecimal balance(Player player) {
+            if (!available() || player == null) {
+                return BigDecimal.ZERO;
+            }
+            try {
+                Object playerData = getPlayerDataMethod.invoke(api, player.getUniqueId());
+                if (playerData == null) {
+                    return BigDecimal.ZERO;
+                }
+                Object balance = getBalanceMethod.invoke(playerData);
+                return balance instanceof BigDecimal decimal ? decimal : BigDecimal.ZERO;
+            } catch (ReflectiveOperationException exception) {
+                return BigDecimal.ZERO;
+            }
+        }
+
+        @Override
+        public CurrencyTransactionResult withdraw(Player player, BigDecimal amount) {
+            return changeBalance(player, amount, Boolean.FALSE, "扣款失败。");
+        }
+
+        @Override
+        public CurrencyTransactionResult deposit(Player player, BigDecimal amount) {
+            return changeBalance(player, amount, Boolean.TRUE, "入账失败。");
+        }
+
+        private CurrencyTransactionResult changeBalance(
+            Player player,
+            BigDecimal amount,
+            Boolean isAdd,
+            String defaultMessage
+        ) {
+            if (!available()) {
+                return CurrencyTransactionResult.failure(unavailableReason());
+            }
+            if (player == null || amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+                return CurrencyTransactionResult.failure("金额必须大于 0。");
+            }
+            try {
+                int result = (Integer) changePlayerBalanceMethod.invoke(
+                    api,
+                    player.getUniqueId(),
+                    player.getName(),
+                    normalize(amount),
+                    isAdd,
+                    "ArcartXSuite"
+                );
+                return switch (result) {
+                    case 0 -> CurrencyTransactionResult.ok();
+                    case 1 -> CurrencyTransactionResult.failure("当前不允许修改余额。");
+                    case 2 -> CurrencyTransactionResult.failure("余额不足。");
+                    case 3 -> CurrencyTransactionResult.failure(RANGE_FAILURE);
+                    default -> CurrencyTransactionResult.failure(defaultMessage);
+                };
+            } catch (ReflectiveOperationException | ClassCastException exception) {
+                return CurrencyTransactionResult.failure(defaultMessage);
+            }
+        }
+
+        private void initializeXConomy() {
+            try {
+                Class<?> apiClass = Class.forName("me.yic.xconomy.api.XConomyAPI");
+                api = apiClass.getConstructor().newInstance();
+                getPlayerDataMethod = apiClass.getMethod("getPlayerData", UUID.class);
+                getBalanceMethod = getPlayerDataMethod.getReturnType()
+                    .getMethod("getBalance");
+                changePlayerBalanceMethod = apiClass.getMethod(
+                    "changePlayerBalance",
+                    UUID.class,
+                    String.class,
+                    BigDecimal.class,
+                    Boolean.class,
+                    String.class
+                );
+            } catch (ClassNotFoundException exception) {
+                unavailableReason = "XConomy 未安装";
+            } catch (ReflectiveOperationException exception) {
+                unavailableReason = "XConomy API 初始化失败";
             }
         }
     }
@@ -356,14 +501,17 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
             if (player == null || amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
                 return CurrencyTransactionResult.failure("金额必须大于 0。");
             }
-            if (balance(player).compareTo(normalize(amount)) < 0) {
-                return CurrencyTransactionResult.failure("余额不足。");
+            Object lock = customOperationLocks.computeIfAbsent(player.getUniqueId(), ignored -> new Object());
+            synchronized (lock) {
+                if (balance(player).compareTo(normalize(amount)) < 0) {
+                    return CurrencyTransactionResult.failure("余额不足。");
+                }
+                // 仅串行化本插件内的操作；外部插件并发修改余额仍由外部系统负责。
+                return dispatchConsoleCommand(definition().withdrawCommand(), player, amount)
+                    ? CurrencyTransactionResult.ok()
+                    : CurrencyTransactionResult.failure("执行扣款命令失败。");
             }
-            return dispatchConsoleCommand(definition().withdrawCommand(), player, amount)
-                ? CurrencyTransactionResult.ok()
-                : CurrencyTransactionResult.failure("执行扣款命令失败。");
         }
-
         @Override
         public CurrencyTransactionResult deposit(Player player, BigDecimal amount) {
             if (!available()) {
@@ -454,7 +602,7 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 try {
                     Object value = invokeVaultEconomyMethod(vaultBalanceMethod, player, BigDecimal.ZERO);
                     return convertToBigDecimal(value);
-                } catch (ReflectiveOperationException ignored) {
+                } catch (ReflectiveOperationException | AmountRangeException ignored) {
                 }
             }
             // 回退 Rondo 原生
@@ -487,10 +635,12 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
             // 优先 Vault
             if (vaultEconomy != null && vaultMethod != null) {
                 try {
-                    Object response = invokeVaultEconomyMethod(vaultMethod, player, amount);
+                    Object response = invokeVaultEconomyMethod(vaultMethod, player, normalize(amount));
                     return transactionSucceeded(response)
                         ? CurrencyTransactionResult.ok()
                         : CurrencyTransactionResult.failure(resolveTransactionMessage(response, defaultMessage));
+                } catch (AmountRangeException exception) {
+                    return CurrencyTransactionResult.failure(RANGE_FAILURE);
                 } catch (ReflectiveOperationException ignored) {
                 }
             }
@@ -541,7 +691,7 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
             }
         }
 
-        private Object invokeVaultEconomyMethod(Method method, Player player, BigDecimal amount) throws ReflectiveOperationException {
+        private Object invokeVaultEconomyMethod(Method method, Player player, BigDecimal amount) throws ReflectiveOperationException, AmountRangeException {
             Class<?>[] parameterTypes = method.getParameterTypes();
             if (parameterTypes.length == 1) {
                 return method.invoke(vaultEconomy, resolveFirstArgument(method, player));
@@ -555,6 +705,24 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 player.getWorld().getName(),
                 castNumeric(parameterTypes[2], amount)
             );
+        }
+    }
+
+    private static final class AmountRangeException extends Exception {
+    }
+
+    private static <T> Map<String, T> immutableCopy(Map<String, T> source) {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(source));
+    }
+
+    private static RoundingMode roundingMode(String value) {
+        if (value == null || value.isBlank()) {
+            return RoundingMode.DOWN;
+        }
+        try {
+            return RoundingMode.valueOf(value.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            return RoundingMode.DOWN;
         }
     }
 
@@ -653,19 +821,41 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
         return type == double.class || type == Double.class || type == int.class || type == Integer.class || type == long.class || type == Long.class;
     }
 
-    private static Object castNumeric(Class<?> targetType, BigDecimal amount) {
-        if (targetType == int.class || targetType == Integer.class) {
-            return amount.intValue();
+    private static Object castNumeric(Class<?> targetType, BigDecimal amount) throws AmountRangeException {
+        try {
+            if (targetType == int.class || targetType == Integer.class) {
+                return amount.intValueExact();
+            }
+            if (targetType == long.class || targetType == Long.class) {
+                return amount.longValueExact();
+            }
+            double value = amount.doubleValue();
+            if (!Double.isFinite(value) || BigDecimal.valueOf(value).compareTo(amount) != 0) {
+                throw new ArithmeticException();
+            }
+            return value;
+        } catch (ArithmeticException exception) {
+            throw new AmountRangeException();
         }
-        if (targetType == long.class || targetType == Long.class) {
-            return amount.longValue();
-        }
-        return amount.doubleValue();
     }
 
     private static BigDecimal convertToBigDecimal(Object rawValue) {
+        if (rawValue instanceof BigDecimal decimal) {
+            return decimal;
+        }
+        if (rawValue instanceof BigInteger integer) {
+            return new BigDecimal(integer);
+        }
+        if (rawValue instanceof Byte || rawValue instanceof Short
+            || rawValue instanceof Integer || rawValue instanceof Long) {
+            return BigDecimal.valueOf(((Number) rawValue).longValue());
+        }
         if (rawValue instanceof Number number) {
-            return BigDecimal.valueOf(number.doubleValue());
+            try {
+                return new BigDecimal(number.toString());
+            } catch (NumberFormatException exception) {
+                return BigDecimal.ZERO;
+            }
         }
         if (rawValue != null) {
             return parseNumericString(String.valueOf(rawValue));

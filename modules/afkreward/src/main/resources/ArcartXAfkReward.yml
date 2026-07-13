@@ -54,6 +54,8 @@ manual:
   return-on-end: false
   # 结束挂机时是否全服广播奖励消息
   broadcast-rewards: true
+  # 参与战斗后开始原地挂机前的冷却时间（秒）
+  combat-cooldown-seconds: 10
   # 排行榜显示人数
   leaderboard-size: 10
   # 发奖时触发的 EventPacket 信号名（为空则不触发）
@@ -67,6 +69,39 @@ manual:
   # 结束挂机时发送的邮件预设
   end-mail-presets:
     - "afk_end_mail"
+
+  # MANUAL 挂机期间的独立行为保护开关，默认全部开启。
+  protections:
+    # 禁止移动。
+    movement: true
+    # 禁止传送。
+    teleport: true
+    # 禁止交互方块或空气。
+    interact: true
+    # 禁止破坏方块。
+    block-break: true
+    # 禁止打开容器或背包界面。
+    inventory: true
+    # 受到伤害时无敌。
+    receive-damage: true
+    # 禁止对其他实体造成伤害。
+    deal-damage: true
+    # 禁止被怪物锁定为目标。
+    entity-target: true
+    # 禁止进入载具。
+    vehicle-enter: true
+    # 禁止右键实体。
+    interact-entity: true
+    # 禁止丢弃物品。
+    drop-item: true
+    # 禁止副手换手。
+    swap-hand: true
+    # 禁止拾取掉落物。
+    pickup-item: true
+    # 禁止获得经验。
+    experience: true
+    # 禁止碰撞（setCollidable(false)。）
+    collidable: true
 
 # 存储配置
 storage:

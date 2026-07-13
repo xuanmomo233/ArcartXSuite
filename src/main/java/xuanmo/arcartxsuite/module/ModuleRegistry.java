@@ -937,8 +937,8 @@ public final class ModuleRegistry {
         org.bukkit.configuration.ConfigurationSection section = config.getConfigurationSection("currencies");
         LinkedHashMap<String, CurrencyDefinition> result = new LinkedHashMap<>();
         if (section == null) {
-            result.put("money", new CurrencyDefinition("money", "vault", "金币", 2, "", "", ""));
-            result.put("points", new CurrencyDefinition("points", "playerpoints", "点券", 0, "", "", ""));
+            result.put("money", new CurrencyDefinition("money", "vault", "金币", 2, "", "", "", "DOWN"));
+            result.put("points", new CurrencyDefinition("points", "playerpoints", "点券", 0, "", "", "", "DOWN"));
             return result;
         }
         for (String rawId : section.getKeys(false)) {
@@ -954,11 +954,12 @@ public final class ModuleRegistry {
                 child.getInt("precision", 2),
                 child.getString("balance-placeholder", ""),
                 child.getString("withdraw-command", ""),
-                child.getString("deposit-command", "")
+                child.getString("deposit-command", ""),
+                child.getString("rounding", "DOWN")
             ));
         }
-        result.putIfAbsent("money", new CurrencyDefinition("money", "vault", "金币", 2, "", "", ""));
-        result.putIfAbsent("points", new CurrencyDefinition("points", "playerpoints", "点券", 0, "", "", ""));
+        result.putIfAbsent("money", new CurrencyDefinition("money", "vault", "金币", 2, "", "", "", "DOWN"));
+        result.putIfAbsent("points", new CurrencyDefinition("points", "playerpoints", "点券", 0, "", "", "", "DOWN"));
         return result;
     }
 

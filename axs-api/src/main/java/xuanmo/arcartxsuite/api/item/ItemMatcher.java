@@ -11,12 +11,13 @@ public record ItemMatcher(
     List<String> kinds,
     List<String> nameContains,
     List<String> loreContains,
+    List<String> nbtKeys,
     List<Pattern> namePatterns,
     List<Pattern> lorePatterns
 ) {
 
     public static ItemMatcher empty() {
-        return new ItemMatcher(List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+        return new ItemMatcher(List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     public boolean emptyMatcher() {
@@ -27,6 +28,7 @@ public record ItemMatcher(
             && kinds.isEmpty()
             && nameContains.isEmpty()
             && loreContains.isEmpty()
+            && nbtKeys.isEmpty()
             && namePatterns.isEmpty()
             && lorePatterns.isEmpty();
     }

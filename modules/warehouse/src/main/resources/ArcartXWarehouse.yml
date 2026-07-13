@@ -8,6 +8,8 @@ config-version: 1
 settings:
   debug: false
   flush-interval-ticks: 100
+  # 共享仓库转让确认等待时长（小时），<=0 表示永不过期。
+  transfer-confirm-expire-hours: 24
 
 # 跨服共享仓库编辑锁；MySQL 共享库 + 多子服时建议开启。连接参数见宿主 config.yml cross-server 节。
 cross-server:
@@ -258,3 +260,5 @@ blacklist:
   name-regex: []
   # 物品 Lore 匹配任意正则即拦截。
   lore-regex: []
+  # 只要物品 PDC 或原始 NMS NBT 复合标签中存在任意一个 key 即禁止存入，原始 NBT 会递归检查嵌套 compound/list，只判断 key 存在不比较 value；反射读取失败时安全降级为无原始 NBT 匹配。
+  nbt-keys: []

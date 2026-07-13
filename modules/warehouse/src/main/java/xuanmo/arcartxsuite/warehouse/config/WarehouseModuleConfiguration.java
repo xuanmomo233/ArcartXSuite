@@ -25,6 +25,7 @@ import xuanmo.arcartxsuite.api.item.ItemMatcherLoader;
 public record WarehouseModuleConfiguration(
     boolean debug,
     long flushIntervalTicks,
+    long transferConfirmExpireHours,
     UiConfiguration ui,
     StorageConfiguration storage,
     SecurityConfiguration security,
@@ -51,6 +52,7 @@ public record WarehouseModuleConfiguration(
     public static WarehouseModuleConfiguration load(FileConfiguration configuration, Logger logger) {
         boolean debug = configuration.getBoolean("settings.debug", false);
         long flushIntervalTicks = Math.max(20L, configuration.getLong("settings.flush-interval-ticks", 100L));
+        long transferConfirmExpireHours = configuration.getLong("settings.transfer-confirm-expire-hours", 24L);
 
         UiConfiguration ui = new UiConfiguration(
             readString(configuration, "ui.id", "AXS:warehouse_storage"),
@@ -116,6 +118,7 @@ public record WarehouseModuleConfiguration(
         return new WarehouseModuleConfiguration(
             debug,
             flushIntervalTicks,
+            transferConfirmExpireHours,
             ui,
             storage,
             security,
@@ -289,7 +292,8 @@ public record WarehouseModuleConfiguration(
                     Math.max(0, child.getInt("scale", 0)),
                     readString(child, "balance-placeholder", ""),
                     readString(child, "withdraw-command", ""),
-                    readString(child, "deposit-command", "")
+                    readString(child, "deposit-command", ""),
+                    readString(child, "rounding", "DOWN")
                 )
             );
         }

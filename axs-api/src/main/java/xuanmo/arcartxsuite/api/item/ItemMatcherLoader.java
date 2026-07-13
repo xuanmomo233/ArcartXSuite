@@ -25,6 +25,7 @@ public final class ItemMatcherLoader {
             normalizeStringList(section.getStringList("kinds")),
             normalizeStringList(section.getStringList("name-contains")),
             normalizeStringList(section.getStringList("lore-contains")),
+            normalizeStringList(section.getStringList("nbt-keys")),
             compilePatterns(section.getStringList("name-regex"), logger, path + ".name-regex"),
             compilePatterns(section.getStringList("lore-regex"), logger, path + ".lore-regex")
         );

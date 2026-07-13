@@ -46,6 +46,16 @@ public final class WarehousePlayerCommand implements org.bukkit.command.TabExecu
         }
         String subCommand = args.length > 0 ? args[0].toLowerCase() : "open";
         switch (subCommand) {
+            case "transfer" -> {
+                if (args.length < 3 || !("confirm".equalsIgnoreCase(args[1]) || "reject".equalsIgnoreCase(args[1]))) {
+                    player.sendMessage(fullMsg("player.transfer.usage", label));
+                    break;
+                }
+                WarehouseService.ActionResult result = "confirm".equalsIgnoreCase(args[1])
+                    ? service.confirmPendingTransfer(player, args[2])
+                    : service.rejectPendingTransfer(player, args[2]);
+                player.sendMessage((messages != null ? messages.get("prefix") : "") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+            }
             case "showcase" -> {
                 WarehouseService.ActionResult showcaseResult = service.showcase(player);
                 if (!showcaseResult.success()) {
@@ -142,7 +152,7 @@ public final class WarehousePlayerCommand implements org.bukkit.command.TabExecu
         if (args.length == 1) {
             String prefix = args[0].toLowerCase();
             List<String> completions = new ArrayList<>();
-            for (String cmd : List.of("open", "showcase", "preview")) {
+            for (String cmd : List.of("open", "showcase", "preview", "transfer")) {
                 if (cmd.startsWith(prefix)) completions.add(cmd);
             }
             return completions;

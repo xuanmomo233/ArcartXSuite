@@ -48,6 +48,7 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -78,6 +79,7 @@ import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.Warehou
 import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.WarehouseLevelDefinition;
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository;
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.FixedDepositRecord;
+import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.PendingTransfer;
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.SecurityRecord;
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.SharedMemberRecord;
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.SharedWarehouseRecord;
@@ -561,6 +563,8 @@ public final class WarehouseService implements Listener {
                 case "shared_invite" -> inviteSharedMember(player, value(data, 1, ""), value(data, 2, ""), value(data, 3, "member"));
                 case "shared_remove" -> removeSharedMember(player, value(data, 1, ""), value(data, 2, ""));
                 case "shared_transfer" -> transferSharedWarehouse(player, value(data, 1, ""), value(data, 2, ""));
+                case "shared_transfer_confirm" -> confirmPendingTransfer(player, value(data, 1, ""));
+                case "shared_transfer_reject" -> rejectPendingTransfer(player, value(data, 1, ""));
                 case "password_set" -> setPassword(player, value(data, 1, ""));
                 case "password_unlock" -> unlockPassword(player, value(data, 1, ""));
                 case "password_lock" -> {
@@ -619,6 +623,32 @@ public final class WarehouseService implements Listener {
      * @param playerUuid 目标玩家 UUID
      * @param callback   操作结果回调
      */
+    public void describePersonalWarehouse(UUID playerUuid, String playerName, String warehouseId, Consumer<List<String>> callback, Consumer<String> errorCallback) {
+        try {
+            Optional<WarehouseRecord> warehouse = repository.loadPersonalWarehouses(playerUuid).stream().filter(record -> record.warehouseId().equals(warehouseId)).findFirst();
+            if (warehouse.isEmpty()) { errorCallback.accept("指定仓库不存在: " + warehouseId); return; }
+            List<SlotItemRecord> slots = repository.loadSlots(OWNER_PERSONAL, playerUuid.toString(), warehouseId);
+            List<String> lines = new ArrayList<>();
+            lines.add(ChatColor.GRAY + "玩家: " + ChatColor.WHITE + playerName);
+            lines.add(ChatColor.GRAY + "仓库: " + ChatColor.WHITE + warehouseId + " (" + warehouse.get().customName() + ")");
+            lines.add(ChatColor.GRAY + "物品槽: " + ChatColor.WHITE + slots.size());
+            if (slots.isEmpty()) lines.add(ChatColor.DARK_GRAY + "- 空");
+            for (SlotItemRecord slot : slots) lines.add(ChatColor.GRAY + "[" + slot.slot() + "] " + ChatColor.WHITE + slot.displayName() + ChatColor.GRAY + " x" + slot.amount() + " (" + slot.materialId() + ")");
+            callback.accept(lines);
+        } catch (Exception exception) { errorCallback.accept("读取仓库内容失败: " + exception.getMessage()); }
+    }
+
+    public ActionResult adminDeletePersonalWarehouse(UUID playerUuid, String warehouseId) {
+        try {
+            Optional<WarehouseRecord> warehouse = repository.loadPersonalWarehouses(playerUuid).stream().filter(record -> record.warehouseId().equals(warehouseId)).findFirst();
+            if (warehouse.isEmpty()) return ActionResult.failure("指定仓库不存在: " + warehouseId);
+            repository.deletePersonalWarehouse(playerUuid, warehouseId);
+            Player target = Bukkit.getPlayer(playerUuid);
+            if (target != null) refreshBoth(target);
+            return ActionResult.success("已删除玩家 " + playerUuid + " 的仓库 " + warehouseId + "。");
+        } catch (Exception exception) { return ActionResult.failure("删除仓库失败: " + exception.getMessage()); }
+    }
+
     public void adminClearSecondaryPassword(UUID playerUuid, Consumer<ActionResult> callback) {
         try {
             repository.clearSecurity(playerUuid);
@@ -1931,8 +1961,8 @@ public final class WarehouseService implements Listener {
             return;
         }
         OfflinePlayer target = Bukkit.getOfflinePlayer(memberName);
-        if (target.getUniqueId() == null) {
-            sendMessage(player, false, "找不到玩家。");
+        if (!isRealPlayer(target)) {
+            sendMessage(player, false, "该玩家不存在或从未进服。");
             refreshBoth(player);
             return;
         }
@@ -1982,6 +2012,76 @@ public final class WarehouseService implements Listener {
      * 将共享仓库所有权转让给现有 member 角色成员。
      * 转让后原所有者变为 viewer，目标成员提升为 owner。
      */
+    private boolean isRealPlayer(OfflinePlayer player) {
+        return player != null && player.getUniqueId() != null
+            && (Bukkit.getPlayer(player.getUniqueId()) != null || player.hasPlayedBefore());
+    }
+
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        try {
+            List<PendingTransfer> pending = repository.loadPendingTransfers(event.getPlayer().getUniqueId());
+            long now = System.currentTimeMillis();
+            for (PendingTransfer transfer : pending) {
+                if (transfer.expiresAt() > 0 && transfer.expiresAt() <= now) {
+                    repository.deletePendingTransfer(transfer.sharedId());
+                    sendMessage(event.getPlayer(), false, "共享仓库转让已过期或失效。");
+                } else {
+                    sendMessage(event.getPlayer(), true, "你有待确认的共享仓库转让请求，使用 /warehouse transfer confirm <sharedId> 或 reject <sharedId> 处理。");
+                }
+            }
+        } catch (Exception exception) {
+            logger.warning("检查仓库待确认转让失败: " + exception.getMessage());
+        }
+    }
+
+    public ActionResult confirmPendingTransfer(Player player, String sharedId) {
+        try {
+            Optional<PendingTransfer> pendingOptional = repository.loadPendingTransfer(sharedId);
+            if (pendingOptional.isEmpty() || !pendingOptional.get().targetUuid().equals(player.getUniqueId())) return ActionResult.failure("没有待确认的转让请求。");
+            PendingTransfer pending = pendingOptional.get();
+            if (pending.expiresAt() > 0 && pending.expiresAt() <= System.currentTimeMillis()) { repository.deletePendingTransfer(sharedId); return ActionResult.failure("转让请求已过期。"); }
+            Optional<SharedWarehouseRecord> shared = repository.loadSharedWarehouses(pending.fromOwnerUuid()).stream().filter(record -> record.id().equals(sharedId) && record.ownerUuid().equals(pending.fromOwnerUuid()) && "owner".equalsIgnoreCase(record.viewerRole())).findFirst();
+            Optional<SharedMemberRecord> member = repository.loadSharedMembers(sharedId).stream().filter(record -> record.playerUuid().equals(player.getUniqueId()) && "member".equalsIgnoreCase(record.role())).findFirst();
+            if (shared.isEmpty() || member.isEmpty()) { repository.deletePendingTransfer(sharedId); return ActionResult.failure("转让请求已失效。"); }
+            repository.transferSharedWarehouse(sharedId, pending.fromOwnerUuid(), player.getUniqueId(), System.currentTimeMillis());
+            repository.deletePendingTransfer(sharedId);
+
+            SharedEditLock sharedLock = sharedEditLocks.remove(sharedId);
+            if (sharedLock != null && crossServerLockService != null && crossServerLockService.isActive()) {
+                crossServerLockService.publishUnlock(sharedId, sharedLock.playerUuid());
+            }
+            releaseSharedLocks(pending.fromOwnerUuid());
+            releaseSharedLocks(player.getUniqueId());
+
+            Player previousOwner = Bukkit.getPlayer(pending.fromOwnerUuid());
+            if (previousOwner != null) {
+                ViewState previousOwnerState = viewStates.get(previousOwner.getUniqueId());
+                if (previousOwnerState != null && OWNER_SHARED.equals(previousOwnerState.ownerType())
+                    && sharedId.equals(previousOwnerState.ownerId())) {
+                    previousOwnerState.setSharedEditMode(false);
+                }
+                refreshBoth(previousOwner);
+            }
+            ViewState targetState = viewStates.get(player.getUniqueId());
+            if (targetState != null && OWNER_SHARED.equals(targetState.ownerType())
+                && sharedId.equals(targetState.ownerId())) {
+                targetState.setSharedEditMode(false);
+            }
+            refreshBoth(player);
+            return ActionResult.success("已确认接收共享仓库转让。");
+        } catch (Exception exception) { return ActionResult.failure("确认转让失败: " + exception.getMessage()); }
+    }
+
+    public ActionResult rejectPendingTransfer(Player player, String sharedId) {
+        try {
+            Optional<PendingTransfer> pending = repository.loadPendingTransfer(sharedId);
+            if (pending.isEmpty() || !pending.get().targetUuid().equals(player.getUniqueId())) return ActionResult.failure("没有待确认的转让请求。");
+            repository.deletePendingTransfer(sharedId);
+            return ActionResult.success("已拒绝该共享仓库转让。");
+        } catch (Exception exception) { return ActionResult.failure("拒绝转让失败: " + exception.getMessage()); }
+    }
+
     private void transferSharedWarehouse(Player player, String sharedId, String memberName) throws Exception {
         if (!isSecondaryUnlocked(player.getUniqueId())) {
             sendMessage(player, false, "转让共享仓库前请先解锁二级密码。");
@@ -1997,7 +2097,12 @@ public final class WarehouseService implements Listener {
             return;
         }
         OfflinePlayer target = Bukkit.getOfflinePlayer(memberName);
-        if (target.getUniqueId() == null || target.getUniqueId().equals(player.getUniqueId())) {
+        if (!isRealPlayer(target)) {
+            sendMessage(player, false, "该玩家不存在或从未进服。");
+            refreshBoth(player);
+            return;
+        }
+        if (target.getUniqueId().equals(player.getUniqueId())) {
             sendMessage(player, false, "只能转让给其他成员。");
             refreshBoth(player);
             return;
@@ -2010,18 +2115,17 @@ public final class WarehouseService implements Listener {
             refreshBoth(player);
             return;
         }
-        repository.transferSharedWarehouse(sharedId, player.getUniqueId(), target.getUniqueId(), System.currentTimeMillis());
-        SharedEditLock lock = sharedEditLocks.remove(sharedId);
-        if (lock != null && crossServerLockService != null && crossServerLockService.isActive()) {
-            crossServerLockService.publishUnlock(sharedId, lock.playerUuid());
+        long now = System.currentTimeMillis();
+        long expireHours = configuration.transferConfirmExpireHours();
+        long expiresAt = expireHours <= 0 ? 0L : now + expireHours * 60L * 60L * 1000L;
+        repository.upsertPendingTransfer(new PendingTransfer(sharedId, player.getUniqueId(), target.getUniqueId(), now, expiresAt));
+        sendMessage(player, true, "已发起转让，等待接收人确认。");
+        Player onlineTarget = Bukkit.getPlayer(target.getUniqueId());
+        if (onlineTarget != null) {
+            sendMessage(onlineTarget, true, "你收到了一个共享仓库转让请求，请使用 /warehouse transfer confirm <sharedId> 或 reject <sharedId> 处理。");
         }
-        releaseSharedLocks(target.getUniqueId());
-        ViewState state = state(player);
-        if (OWNER_SHARED.equals(state.ownerType()) && sharedId.equals(state.ownerId())) {
-            state.setSharedEditMode(false);
-        }
-        sendMessage(player, true, "已将共享仓库转让给 " + (target.getName() == null ? memberName : target.getName()) + "。");
         refreshBoth(player);
+        return;
     }
 
     /**
