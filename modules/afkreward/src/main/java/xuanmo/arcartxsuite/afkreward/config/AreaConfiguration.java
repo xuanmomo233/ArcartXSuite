@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Logger;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -22,6 +23,11 @@ import xuanmo.arcartxsuite.afkreward.model.AfkArea;
 public final class AreaConfiguration {
 
     public static Map<String, AfkArea> loadAreas(File dataFolder, String areasDirectory, Logger logger) {
+        return loadAreas(dataFolder, areasDirectory, logger, null);
+    }
+
+    public static Map<String, AfkArea> loadAreas(File dataFolder, String areasDirectory,
+                                                 Logger logger, Set<String> rewardTypes) {
         File dir = new File(dataFolder, areasDirectory);
         if (!dir.exists()) {
             dir.mkdirs();
@@ -34,28 +40,42 @@ public final class AreaConfiguration {
             return Collections.unmodifiableMap(areas);
         }
 
+        Set<String> usedNames = new java.util.HashSet<>();
+        int skipped = 0;
         for (File file : files) {
             String fileName = file.getName();
             // 提取 ID：area-<id>.yml
             String id = fileName.substring("area-".length(), fileName.length() - ".yml".length());
             if (id.isBlank()) {
                 logger.warning("[AfkReward] 跳过无效区域文件名: " + fileName);
+                skipped++;
                 continue;
             }
             try {
                 YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
-                AfkArea area = parseArea(id, yaml, logger);
+                AfkArea area = parseArea(id, yaml, logger, rewardTypes);
                 if (area != null) {
+                    if (!usedNames.add(area.name())) {
+                        logger.warning("[AfkReward] 区域名称重复 '" + area.name()
+                            + "'，文件 " + fileName + " 已跳过。");
+                        skipped++;
+                        continue;
+                    }
                     areas.put(area.name(), area);
+                } else {
+                    skipped++;
                 }
             } catch (Exception e) {
                 logger.warning("[AfkReward] 加载区域文件失败 " + fileName + ": " + e.getMessage());
+                skipped++;
             }
         }
+        logger.info("[AfkReward] 区域加载完成：成功" + areas.size() + "个，跳过" + skipped + "个。");
         return Collections.unmodifiableMap(areas);
     }
 
-    private static AfkArea parseArea(String id, YamlConfiguration yaml, Logger logger) {
+    private static AfkArea parseArea(String id, YamlConfiguration yaml, Logger logger,
+                                     Set<String> rewardTypes) {
         String name = yaml.getString("name", id);
         if (name == null || name.isBlank()) {
             name = id;
@@ -63,18 +83,36 @@ public final class AreaConfiguration {
         boolean enabled = yaml.getBoolean("enabled", true);
         String world = yaml.getString("world", "");
         String type = yaml.getString("type", id);
+        if (world.isBlank()) {
+            logger.warning("[AfkReward] 区域 '" + name + "' (" + id + ") 未配置 world，已跳过。");
+            return null;
+        }
+        if (rewardTypes != null && !rewardTypes.contains(type)) {
+            logger.warning("[AfkReward] 区域 '" + name + "' (" + id + ") 引用不存在的奖励类型 '"
+                + type + "'，已跳过。");
+            return null;
+        }
         boolean manualEnabled = yaml.getBoolean("manual-enabled", true);
+        double rewardWeight = yaml.getDouble("reward-weight", 1.0);
 
         List<String> posList = yaml.getStringList("pos");
         List<AfkArea.Point> points = new ArrayList<>();
         for (String pos : posList) {
             String[] parts = pos.split(",");
-            if (parts.length >= 2) {
+            if (parts.length == 2) {
                 try {
                     int x = Integer.parseInt(parts[0].trim());
                     int z = Integer.parseInt(parts[1].trim());
                     points.add(new AfkArea.Point(x, z));
-                } catch (NumberFormatException ignored) {}
+                } catch (NumberFormatException e) {
+                    logger.warning("[AfkReward] 区域 '" + name + "' (" + id
+                        + ") 存在非法坐标 '" + pos + "'，已跳过。");
+                    return null;
+                }
+            } else {
+                logger.warning("[AfkReward] 区域 '" + name + "' (" + id
+                    + ") 存在非法坐标 '" + pos + "'，已跳过。");
+                return null;
             }
         }
         if (points.size() < 3) {
@@ -85,7 +123,11 @@ public final class AreaConfiguration {
         // 传送点
         Location teleport = null;
         ConfigurationSection tpSec = yaml.getConfigurationSection("teleport");
-        if (tpSec != null) {
+        if (tpSec == null) {
+            logger.warning("[AfkReward] 区域 '" + name + "' (" + id + ") 缺少 teleport 配置，已跳过。");
+            return null;
+        }
+        {
             String tpWorld = tpSec.getString("world", world);
             double tpx = tpSec.getDouble("x", 0);
             double tpy = tpSec.getDouble("y", 64);
@@ -95,11 +137,15 @@ public final class AreaConfiguration {
             World w = org.bukkit.Bukkit.getWorld(tpWorld);
             if (w != null) {
                 teleport = new Location(w, tpx, tpy, tpz, yaw, pitch);
+            } else {
+                logger.warning("[AfkReward] 区域 '" + name + "' (" + id
+                    + ") 的 teleport 世界 '" + tpWorld + "' 未加载，已跳过。");
+                return null;
             }
         }
 
         return new AfkArea(id, name, enabled, world, type,
-            Collections.unmodifiableList(points), teleport, manualEnabled);
+            Collections.unmodifiableList(points), teleport, manualEnabled, rewardWeight);
     }
 
     /**

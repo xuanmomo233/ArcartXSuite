@@ -17,6 +17,8 @@ reward:
     enable: true
     limit: 30
     # 无视限制权限: axs.afkreward.not.player.limit
+  overflow-to-mail:
+    enable: false
 
 # 奖励类型配置
 # 玩家需要有 axs.afkreward.start.<类型名> 权限才能进入该区域挂机
@@ -24,6 +26,8 @@ types:
   泡澡池:
     describe: "泡澡的人越多，获取的铜币和经验越多"
     # 发奖时同时发送的邮件预设（对应 Mail 模块预设模板）
+    # 背包无空位时使用的邮件预设，留空则仍执行命令
+    full-inventory-mail: ""
     mail-presets:
       - "afk_reward_mail"
     # 权限等级从高到低检测，取玩家拥有的最高等级
@@ -46,6 +50,46 @@ types:
 # 每个区域为独立的 area-<id>.yml 文件
 areas-directory: "areas"
 
+# 反滥用配置（默认关闭）
+anti-abuse:
+  time-limit:
+    enable: false
+    session-seconds: 0
+    daily-seconds: 0
+    on-exceed: STOP
+    exempt-permission: "axs.afkreward.bypass.timelimit"
+  bot-detection:
+    enable: false
+    window-seconds: 300
+    min-view-changes: 3
+    action: NO_REWARD
+    exempt-permission: "axs.afkreward.bypass.botcheck"
+  ip-limit:
+    enable: false
+    exempt-permission: "axs.afkreward.bypass.iplimit"
+  decay:
+    enable: false
+    start-seconds: 3600
+    factor-per-hour: 0.2
+    min-multiplier: 0.3
+
+# 加权/定时倍率
+multiplier:
+  enable: false
+  base: 1.0
+  weekend: 1.0
+  combine: MAX
+  schedules:
+    - days: "SAT,SUN"
+      start: "20:00"
+      end: "22:00"
+      multiplier: 2.0
+
+# 发奖审计日志
+audit:
+  enable: true
+  file: "audit.log"
+
 # 原地挂机配置
 manual:
   # 挂机期间是否封锁玩家行为（移动/交互/破坏/开箱/传送/受击）
@@ -56,6 +100,8 @@ manual:
   broadcast-rewards: true
   # 参与战斗后开始原地挂机前的冷却时间（秒）
   combat-cooldown-seconds: 10
+  # MANUAL 模式权限及区域复查间隔（秒）
+  permission-recheck-seconds: 5
   # 排行榜显示人数
   leaderboard-size: 10
   # 发奖时触发的 EventPacket 信号名（为空则不触发）
@@ -102,6 +148,12 @@ manual:
     experience: true
     # 禁止碰撞（setCollidable(false)。）
     collidable: true
+
+# 性能保护
+performance:
+  pause-on-low-tps:
+    enable: false
+    min-tps: 15.0
 
 # 存储配置
 storage:

@@ -1,7 +1,13 @@
 package xuanmo.arcartxsuite.afkreward.service;
 
 import java.time.LocalDate;
+import java.time.DayOfWeek;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.io.File;
+import java.net.InetAddress;
+import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -10,6 +16,8 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,6 +29,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
@@ -34,6 +43,10 @@ import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository.AreaStats;
 import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository.PlayerStats;
 
 public final class AfkRewardService {
+
+    public enum EndReason {
+        MANUAL, COMBAT, AREA_REMOVED, NO_PERMISSION, TIME_LIMIT, FULL
+    }
 
     public enum ManualProtection {
         MOVEMENT, TELEPORT, INTERACT, BLOCK_BREAK, INVENTORY,
@@ -68,6 +81,15 @@ public final class AfkRewardService {
     // HUD 显示开关
     private final Set<UUID> hudDisabled = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Long> lastCombat = new ConcurrentHashMap<>();
+    private final Map<UUID, Integer> dailySeconds = new ConcurrentHashMap<>();
+    private final Map<UUID, Deque<Long>> viewChanges = new ConcurrentHashMap<>();
+    private final Set<UUID> antiAbuseNotified = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> overflowNotified = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, EndReason> pendingManualEndReasons = new ConcurrentHashMap<>();
+    private volatile String dailySecondsDate = LocalDate.now().format(DATE_FMT);
+    private final AfkRewardAuditLogger auditLogger;
+    private volatile PacketBridgeAPI packetBridge;
+    private volatile String hudUiId;
 
     private BukkitTask tickTask;
     private boolean active;
@@ -95,10 +117,16 @@ public final class AfkRewardService {
         this.signalProvider = signalProvider;
         this.subtitleProvider = subtitleProvider;
         this.essentialsProvider = essentialsProvider;
+        this.auditLogger = new AfkRewardAuditLogger(plugin.getDataFolder(), config.audit(), logger);
     }
 
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
         this.eventBusProvider = eventBusProvider;
+    }
+
+    public void setHudBridge(PacketBridgeAPI packetBridge, String hudUiId) {
+        this.packetBridge = packetBridge;
+        this.hudUiId = hudUiId;
     }
 
     public void start() {
@@ -143,12 +171,48 @@ public final class AfkRewardService {
         enterNotified.clear();
         hudDisabled.clear();
         lastCombat.clear();
+        dailySeconds.clear();
+        viewChanges.clear();
+        antiAbuseNotified.clear();
+        overflowNotified.clear();
+        pendingManualEndReasons.clear();
     }
 
     private void tick() {
         if (!active) return;
+        if (config.performance().pauseOnLowTps()
+            && TpsProvider.currentTps() < config.performance().minTps()) return;
         for (Player player : Bukkit.getOnlinePlayers()) {
             processPlayer(player);
+            pushHud(player);
+        }
+    }
+
+    private void pushHud(Player player) {
+        PacketBridgeAPI bridge = packetBridge;
+        if (bridge == null || hudUiId == null || !bridge.isAvailable()) return;
+        PlayerAfkState state = afkStates.get(player.getUniqueId());
+        if (state == null) return;
+        String area = state.areaName != null ? state.areaName : "";
+        int remaining = 0;
+        if (state.areaName != null) {
+            int roundSec = config.reward().roundMinutes() * 60;
+            remaining = Math.max(0, roundSec - (state.seconds - state.lastRewardSeconds));
+        }
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("area", area);
+        payload.put("time", formatTime(state.seconds));
+        payload.put("next", String.valueOf(remaining));
+        payload.put("players", state.areaName != null
+            ? String.valueOf(countPlayersInArea(state.areaName)) : "0");
+        payload.put("session_rewards", String.valueOf(state.sessionRewards));
+        payload.put("session_time", formatTime(state.seconds));
+        payload.put("visible", String.valueOf(isHudEnabled(player.getUniqueId())
+            && state.areaName != null));
+        try {
+            bridge.sendPacket(player, hudUiId, "update", payload);
+        } catch (RuntimeException ignored) {
+            // 客户端桥接不可用时不影响计奖。
         }
     }
 
@@ -159,18 +223,22 @@ public final class AfkRewardService {
         // MANUAL 模式：不检测位置，只累加时间
         if (state != null && state.mode == AfkMode.MANUAL && state.areaName != null) {
             AfkArea area = config.areas().get(state.areaName);
-            if (area == null || !area.enabled()) {
+            int recheck = config.manual().permissionRecheckSeconds();
+            boolean shouldRecheck = state.seconds == 0 || recheck <= 1
+                || state.seconds % recheck == 0;
+            if (shouldRecheck && (area == null || !area.enabled())) {
                 // 区域被删除或禁用，强制结束
-                endManualAfk(player, true);
+                endManualAfk(player, true, EndReason.AREA_REMOVED);
                 return;
             }
-            if (!player.hasPermission("axs.afkreward.area." + state.areaName)) {
-                endManualAfk(player, true);
+            if (shouldRecheck && !player.hasPermission("axs.afkreward.area." + state.areaName)) {
+                endManualAfk(player, true, EndReason.NO_PERMISSION);
                 player.sendMessage(messages != null ? messages.get("hints.no-permission-area") : "§c你没有权限在此区域挂机。");
                 return;
             }
             state.seconds++;
             updateTotalTime(uuid, 1);
+            updateDailySeconds(uuid, 1);
             return;
         }
 
@@ -206,9 +274,13 @@ public final class AfkRewardService {
             state.mode = AfkMode.REGION;
             state.areaName = currentArea.name();
             state.rewardType = currentArea.rewardType();
-            state.seconds = 0;
-            state.lastRewardSeconds = 0;
-            enterNotified.remove(uuid);
+                state.seconds = 0;
+                state.lastRewardSeconds = 0;
+                state.sessionRewards = 0;
+                state.startTimeMillis = System.currentTimeMillis();
+                enterNotified.remove(uuid);
+                antiAbuseNotified.remove(uuid);
+                overflowNotified.remove(uuid);
         }
 
         // 权限检查
@@ -245,6 +317,7 @@ public final class AfkRewardService {
         // 累计时间
         state.seconds++;
         updateTotalTime(uuid, 1);
+        updateDailySeconds(uuid, 1);
 
         // 检查奖励
         int roundSeconds = config.reward().roundMinutes() * 60;
@@ -265,6 +338,7 @@ public final class AfkRewardService {
 
     private void grantReward(Player player, AfkArea area) {
         UUID uuid = player.getUniqueId();
+        if (!passesAntiAbuse(player, afkStates.get(uuid), area, false)) return;
         String today = LocalDate.now().format(DATE_FMT);
         PlayerStats stats = getStats(uuid);
 
@@ -305,10 +379,12 @@ public final class AfkRewardService {
         List<String> commands = rewardType.tierCommands().get(matchedTier);
         if (commands == null || commands.isEmpty()) return;
 
-        // 执行命令
-        for (String cmd : commands) {
-            String parsed = cmd.replace("%player_name%", player.getName());
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), parsed);
+        boolean mailed = tryOverflowMail(player, rewardType);
+        if (!mailed) {
+            for (String cmd : commands) {
+                String parsed = replaceRewardPlaceholders(cmd, player, afkStates.get(uuid), area);
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), parsed);
+            }
         }
 
         // 更新统计
@@ -320,9 +396,14 @@ public final class AfkRewardService {
         );
         statsCache.put(uuid, stats);
         trySave(uuid, stats);
+        PlayerAfkState rewardedState = afkStates.get(uuid);
+        if (rewardedState != null) rewardedState.sessionRewards++;
 
         // 更新区域统计
         updateAreaTime(uuid, area.name(), 0);
+        auditLogger.log(player, uuid, area.name(), "REGION",
+            mailed ? matchedTier + "(mail)" : matchedTier, 1,
+            computeMultiplier(player, afkStates.get(uuid), area));
 
         // 触发联动
         AfkRewardType rewardTypeObj = config.types().get(area.rewardType());
@@ -356,6 +437,190 @@ public final class AfkRewardService {
         eventBus.publish("axs.afkreward.reward_claimed", player, payload);
     }
 
+    public void markViewChange(UUID uuid) {
+        PlayerAfkState state = afkStates.get(uuid);
+        if (state == null || state.mode != AfkMode.REGION || state.areaName == null) return;
+        Deque<Long> changes = viewChanges.computeIfAbsent(uuid, key -> new ArrayDeque<>());
+        long now = System.currentTimeMillis();
+        long cutoff = now - config.antiAbuse().botDetection().windowSeconds() * 1000L;
+        synchronized (changes) {
+            changes.addLast(now);
+            while (!changes.isEmpty() && changes.peekFirst() < cutoff) changes.removeFirst();
+        }
+    }
+
+    private boolean passesAntiAbuse(Player player, PlayerAfkState state, AfkArea area, boolean manual) {
+        if (state == null || area == null) return true;
+        UUID uuid = player.getUniqueId();
+        AfkRewardConfiguration.AntiAbuseConfig anti = config.antiAbuse();
+        AfkRewardConfiguration.TimeLimitConfig limit = anti.timeLimit();
+        boolean exemptLimit = !limit.enable() || player.hasPermission(limit.exemptPermission());
+        boolean sessionExceeded = limit.sessionSeconds() > 0 && state.seconds >= limit.sessionSeconds();
+        boolean dailyExceeded = limit.dailySeconds() > 0 && dailySeconds.getOrDefault(uuid, 0) >= limit.dailySeconds();
+        if (!exemptLimit && (sessionExceeded || dailyExceeded)) {
+            String key = sessionExceeded ? "hints.anti-abuse.time-limit-session"
+                : "hints.anti-abuse.time-limit-daily";
+            if ("KICK".equalsIgnoreCase(limit.onExceed())) {
+                if (!manual) {
+                    afkStates.remove(uuid);
+                    enterNotified.remove(uuid);
+                }
+                sendAntiAbuseHint(player, key);
+                if (manual) {
+                    pendingManualEndReasons.put(uuid, EndReason.TIME_LIMIT);
+                }
+                return false;
+            }
+            if ("STOP".equalsIgnoreCase(limit.onExceed())) {
+                sendAntiAbuseHint(player, key);
+                return false;
+            }
+        }
+
+        if (!manual && anti.botDetection().enable()
+            && !player.hasPermission(anti.botDetection().exemptPermission())) {
+            Deque<Long> changes = viewChanges.get(uuid);
+            int count = 0;
+            long cutoff = System.currentTimeMillis() - anti.botDetection().windowSeconds() * 1000L;
+            if (changes != null) {
+                synchronized (changes) {
+                    while (!changes.isEmpty() && changes.peekFirst() < cutoff) changes.removeFirst();
+                    count = changes.size();
+                }
+            }
+            if (count < anti.botDetection().minViewChanges()) {
+                if ("KICK".equalsIgnoreCase(anti.botDetection().action())) {
+                    afkStates.remove(uuid);
+                    enterNotified.remove(uuid);
+                }
+                sendAntiAbuseHint(player, "hints.anti-abuse.bot-suspected");
+                return false;
+            }
+        }
+
+        if (anti.ipLimit().enable() && !player.hasPermission(anti.ipLimit().exemptPermission())
+            && isIpLimited(player, area.name())) {
+            sendAntiAbuseHint(player, "hints.anti-abuse.ip-limit");
+            return false;
+        }
+        return true;
+    }
+
+    private void sendAntiAbuseHint(Player player, String key) {
+        UUID uuid = player.getUniqueId();
+        if (!antiAbuseNotified.add(uuid)) return;
+        String msg = messages != null ? messages.get(key) : null;
+        if (msg != null) player.sendMessage(msg);
+    }
+
+    private boolean isIpLimited(Player player, String areaName) {
+        if (player.getAddress() == null || player.getAddress().getAddress() == null) return false;
+        String ip = player.getAddress().getAddress().getHostAddress();
+        UUID earliest = null;
+        long earliestStart = Long.MAX_VALUE;
+        for (Map.Entry<UUID, PlayerAfkState> entry : afkStates.entrySet()) {
+            Player other = Bukkit.getPlayer(entry.getKey());
+            PlayerAfkState otherState = entry.getValue();
+            if (other == null || !other.isOnline() || otherState == null
+                || !areaName.equals(otherState.areaName) || other.getAddress() == null
+                || other.getAddress().getAddress() == null) continue;
+            if (!ip.equals(other.getAddress().getAddress().getHostAddress())) continue;
+            if (otherState.startTimeMillis < earliestStart) {
+                earliestStart = otherState.startTimeMillis;
+                earliest = entry.getKey();
+            }
+        }
+        return earliest != null && !earliest.equals(player.getUniqueId());
+    }
+
+    public double computeMultiplier(Player player, PlayerAfkState state, AfkArea area) {
+        AfkRewardConfiguration.MultiplierConfig multiplier = config.multiplier();
+        double result = multiplier.enable() ? multiplier.base() : 1.0;
+        if (multiplier.enable()) {
+            List<Double> matches = new ArrayList<>();
+            LocalTime now = LocalTime.now();
+            DayOfWeek day = java.time.LocalDate.now().getDayOfWeek();
+            if ((day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY)
+                && multiplier.weekend() != 1.0) matches.add(multiplier.weekend());
+            for (AfkRewardConfiguration.ScheduleConfig schedule : multiplier.schedules()) {
+                if (scheduleMatches(schedule, day, now)) matches.add(schedule.multiplier());
+            }
+            for (double value : matches) {
+                result = switch (multiplier.combine().toUpperCase()) {
+                    case "MULTIPLY" -> result * value;
+                    case "LAST" -> value;
+                    default -> Math.max(result, value);
+                };
+            }
+        }
+        result *= area.rewardWeight();
+        if (config.antiAbuse().decay().enable() && state != null
+            && state.seconds > config.antiAbuse().decay().startSeconds()) {
+            double elapsedHours = (state.seconds - config.antiAbuse().decay().startSeconds()) / 3600.0;
+            double decay = Math.max(config.antiAbuse().decay().minMultiplier(),
+                1.0 - config.antiAbuse().decay().factorPerHour() * elapsedHours);
+            result *= decay;
+        }
+        AfkRewardConfiguration.TimeLimitConfig limit = config.antiAbuse().timeLimit();
+        if (limit.enable() && "DECAY".equalsIgnoreCase(limit.onExceed())
+            && state != null && (limit.sessionSeconds() > 0 && state.seconds >= limit.sessionSeconds()
+                || limit.dailySeconds() > 0 && dailySeconds.getOrDefault(player.getUniqueId(), 0) >= limit.dailySeconds())) {
+            result = Math.min(result, config.antiAbuse().decay().minMultiplier());
+        }
+        return Math.max(0.0, result);
+    }
+
+    private boolean scheduleMatches(AfkRewardConfiguration.ScheduleConfig schedule,
+                                    DayOfWeek day, LocalTime now) {
+        String days = schedule.days();
+        boolean dayMatches = "ALL".equalsIgnoreCase(days);
+        if (!dayMatches) {
+            for (String value : days.split(",")) {
+                if (day.name().startsWith(value.trim().toUpperCase())) {
+                    dayMatches = true;
+                    break;
+                }
+            }
+        }
+        if (!dayMatches) return false;
+        try {
+            LocalTime start = LocalTime.parse(schedule.start());
+            LocalTime end = LocalTime.parse(schedule.end());
+            return end.isBefore(start) ? !now.isBefore(start) || !now.isAfter(end)
+                : !now.isBefore(start) && !now.isAfter(end);
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private String replaceRewardPlaceholders(String command, Player player,
+                                             PlayerAfkState state, AfkArea area) {
+        String value = String.format(java.util.Locale.ROOT, "%.2f",
+            computeMultiplier(player, state, area));
+        return command.replace("%player_name%", player.getName())
+            .replace("%axsafk_multiplier%", value)
+            .replace("%axsafkreward_multiplier%", value);
+    }
+
+    private boolean tryOverflowMail(Player player, AfkRewardType rewardType) {
+        if (!config.reward().overflowToMail().enable()
+            || rewardType.fullInventoryMail() == null
+            || rewardType.fullInventoryMail().isBlank()
+            || player.getInventory().firstEmpty() != -1) {
+            return false;
+        }
+        MailDispatchable mail = mailProvider != null ? mailProvider.get() : null;
+        if (mail == null || !mail.dispatchPreset(rewardType.fullInventoryMail(),
+            player.getName(), "AfkReward")) {
+            return false;
+        }
+        if (overflowNotified.add(player.getUniqueId())) {
+            String msg = messages != null ? messages.get("hints.overflow-mail") : null;
+            if (msg != null) player.sendMessage(msg);
+        }
+        return true;
+    }
+
     private int countPlayersInArea(String areaName) {
         int count = 0;
         for (Map.Entry<UUID, PlayerAfkState> entry : afkStates.entrySet()) {
@@ -382,6 +647,15 @@ public final class AfkRewardService {
         if (state != null && state.areaName != null) {
             updateAreaTime(uuid, state.areaName, deltaSeconds);
         }
+    }
+
+    private void updateDailySeconds(UUID uuid, int deltaSeconds) {
+        String today = LocalDate.now().format(DATE_FMT);
+        if (!today.equals(dailySecondsDate)) {
+            dailySeconds.clear();
+            dailySecondsDate = today;
+        }
+        dailySeconds.merge(uuid, deltaSeconds, Integer::sum);
     }
 
     private PlayerStats getStats(UUID uuid) {
@@ -498,7 +772,15 @@ public final class AfkRewardService {
     }
 
     public boolean endManualAfk(Player player, boolean silent) {
+        return endManualAfk(player, silent, EndReason.MANUAL);
+    }
+
+    public boolean endManualAfk(Player player, boolean silent, EndReason reason) {
         UUID uuid = player.getUniqueId();
+        EndReason pendingReason = pendingManualEndReasons.remove(uuid);
+        if (pendingReason != null && reason == EndReason.MANUAL) {
+            reason = pendingReason;
+        }
         PlayerAfkState state = afkStates.get(uuid);
         if (state == null || state.mode != AfkMode.MANUAL || state.areaName == null) {
             if (!silent) player.sendMessage(messages != null ? messages.get("hints.manual.not-started") : "§c你未在挂机中。");
@@ -559,10 +841,17 @@ public final class AfkRewardService {
 
         afkStates.remove(uuid);
         enterNotified.remove(uuid);
+        overflowNotified.remove(uuid);
+        pendingManualEndReasons.remove(uuid);
 
         if (!silent) {
             String msg = messages != null ? messages.get(times > 0 ? "hints.manual.end" : "hints.manual.end-no-reward",
                 formatTime(state.seconds), String.valueOf(times)) : null;
+            if (msg != null) player.sendMessage(msg);
+        }
+        if (reason != EndReason.MANUAL) {
+            String msg = messages != null ? messages.get("hints.manual.end-reason."
+                + reason.name().toLowerCase(java.util.Locale.ROOT)) : null;
             if (msg != null) player.sendMessage(msg);
         }
         if (config.debug()) {
@@ -580,6 +869,7 @@ public final class AfkRewardService {
     private void grantManualRewards(Player player, AfkArea area, int times) {
         AfkRewardType rewardType = config.types().get(area.rewardType());
         if (rewardType == null) return;
+        PlayerAfkState state = afkStates.get(player.getUniqueId());
         List<String> tierKeys = new ArrayList<>(rewardType.tierCommands().keySet());
         String matchedTier = null;
         for (String tier : tierKeys) {
@@ -603,22 +893,32 @@ public final class AfkRewardService {
         }
 
         int actualTimes = 0;
+        boolean mailedAny = false;
         for (int i = 0; i < times; i++) {
+            if (!passesAntiAbuse(player, state, area, true)) break;
             // 每日上限检查
             if (config.reward().max().enabled() && stats.todayCount() >= config.reward().max().limit()) {
                 if (!player.hasPermission("axs.afkreward.not.reward.limit")) break;
             }
-            for (String cmd : commands) {
-                String parsed = cmd.replace("%player_name%", player.getName());
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), parsed);
+            boolean mailed = tryOverflowMail(player, rewardType);
+            mailedAny |= mailed;
+            if (!mailed) {
+                for (String cmd : commands) {
+                    String parsed = replaceRewardPlaceholders(cmd, player, state, area);
+                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), parsed);
+                }
             }
             actualTimes++;
+            if (state != null) state.sessionRewards++;
             stats = new PlayerStats(stats.playerName(), stats.todayDate(),
                 stats.todayCount() + 1, stats.totalCount() + 1, stats.totalSeconds());
         }
         if (actualTimes > 0) {
             statsCache.put(uuid, stats);
             trySave(uuid, stats);
+            auditLogger.log(player, uuid, area.name(), "MANUAL",
+                mailedAny ? matchedTier + "(mail)" : matchedTier, actualTimes,
+                computeMultiplier(player, state, area));
         }
         String msg = messages != null ? messages.get("hints.reward", area.name(), String.valueOf(config.reward().roundMinutes())) : null;
         if (msg != null && actualTimes > 0) player.sendMessage(msg);
@@ -793,6 +1093,35 @@ public final class AfkRewardService {
         return config.reward().roundMinutes();
     }
 
+    public int getSessionRewards(UUID uuid) {
+        PlayerAfkState state = afkStates.get(uuid);
+        return state != null ? state.sessionRewards : 0;
+    }
+
+    public int getSessionSeconds(UUID uuid) {
+        PlayerAfkState state = afkStates.get(uuid);
+        return state != null ? state.seconds : 0;
+    }
+
+    public int getDailySeconds(UUID uuid) {
+        String today = LocalDate.now().format(DATE_FMT);
+        if (!today.equals(dailySecondsDate)) {
+            dailySeconds.clear();
+            dailySecondsDate = today;
+        }
+        return dailySeconds.getOrDefault(uuid, 0);
+    }
+
+    public int getRemainingDailySeconds(UUID uuid) {
+        int limit = config.antiAbuse().timeLimit().dailySeconds();
+        if (limit <= 0) return -1;
+        return Math.max(0, limit - getDailySeconds(uuid));
+    }
+
+    public AfkArea getArea(String areaName) {
+        return areaName != null ? config.areas().get(areaName) : null;
+    }
+
     public void onPlayerQuit(UUID playerUuid) {
         PlayerAfkState state = afkStates.get(playerUuid);
         if (state != null && state.mode == AfkMode.MANUAL && state.areaName != null) {
@@ -809,6 +1138,9 @@ public final class AfkRewardService {
         afkStates.remove(playerUuid);
         enterNotified.remove(playerUuid);
         lastCombat.remove(playerUuid);
+        overflowNotified.remove(playerUuid);
+        pendingManualEndReasons.remove(playerUuid);
+        viewChanges.remove(playerUuid);
         statsCache.remove(playerUuid);
     }
 
@@ -919,6 +1251,7 @@ public final class AfkRewardService {
         public volatile String rewardType;
         public volatile int seconds;
         public volatile int lastRewardSeconds;
+        public volatile int sessionRewards;
         public volatile float originalWalkSpeed = 0.2f;
         public volatile org.bukkit.Location originalLocation;
         public volatile long startTimeMillis;

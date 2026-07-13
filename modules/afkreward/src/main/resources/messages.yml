@@ -63,7 +63,14 @@ hints:
   reward-limit: "&c你今日已达到该区域最大奖励次数限制。"
   player-limit: "&c该区域已满员，请稍后再来。"
   no-permission-area: "&c你没有权限在此区域挂机。"
+  overflow-mail: "&e背包空间不足，本次奖励已通过邮件发送。"
   manual:
+    end-reason:
+      combat: "&c挂机已因战斗强制结束。"
+      area_removed: "&c挂机已因区域被删除或禁用强制结束。"
+      no_permission: "&c挂机已因区域权限失效强制结束。"
+      time_limit: "&c挂机已因达到时长上限强制结束。"
+      full: "&c挂机已因区域人数达到上限强制结束。"
     start: "&a已开始原地挂机，区域: &f{0}&a。"
     end: "&a挂机结束，本次挂机 &f{0}&a，获得奖励 &f{1} &a次。"
     end-no-reward: "&e挂机结束，本次挂机 &f{0}&e，未达到奖励时间。"
@@ -74,3 +81,9 @@ hints:
     in-combat: "&c你刚刚参与过战斗，请稍后再开始挂机。"
     broadcast: "&e恭喜玩家 &f{0} &e挂机结束，挂机时长 &f{1}&e，获得奖励 &f{2} &e次！"
     recovered: "&e检测到上次服崩挂机记录，已自动结算 &f{0}&e，奖励次数 &f{1}&e。"
+  anti-abuse:
+    time-limit-session: "&c本次连续挂机已达到时长上限，已停止发奖。"
+    time-limit-daily: "&c今日挂机累计已达到时长上限，已停止发奖。"
+    bot-suspected: "&c检测到挂机行为异常，本次未发放奖励。"
+    ip-limit: "&c同 IP 多开限制生效，本账号暂不发放奖励。"
+    forced-end: "&e挂机已因反滥用规则强制结束：&f{0}"

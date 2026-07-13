@@ -7,5 +7,6 @@ public record AfkRewardType(
     String name,
     String describe,
     Map<String, List<String>> tierCommands,
-    List<String> mailPresets
+    List<String> mailPresets,
+    String fullInventoryMail
 ) {}

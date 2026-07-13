@@ -79,7 +79,19 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
             ValidationRule.of("reward.player.limit", ValueType.INT)
                 .withRange(1, 9999),
             ValidationRule.of("manual.leaderboard-size", ValueType.INT)
-                .withRange(1, 100)
+                .withRange(1, 100),
+            ValidationRule.of("anti-abuse.time-limit.on-exceed", ValueType.STRING)
+                .withEnum(java.util.Set.of("STOP", "KICK", "DECAY")),
+            ValidationRule.of("anti-abuse.bot-detection.action", ValueType.STRING)
+                .withEnum(java.util.Set.of("NO_REWARD", "KICK")),
+            ValidationRule.of("anti-abuse.bot-detection.window-seconds", ValueType.INT)
+                .withRange(1, 3600),
+            ValidationRule.of("anti-abuse.bot-detection.min-view-changes", ValueType.INT)
+                .withRange(0, 1000),
+            ValidationRule.of("multiplier.combine", ValueType.STRING)
+                .withEnum(java.util.Set.of("MAX", "MULTIPLY", "LAST")),
+            ValidationRule.of("manual.permission-recheck-seconds", ValueType.INT)
+                .withRange(1, 3600)
         );
     }
 
@@ -123,7 +135,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         // 加载区域独立配置文件
         String effectiveAreasDir = configuration.areasDirectory();
         java.util.Map<String, xuanmo.arcartxsuite.afkreward.model.AfkArea> loadedAreas =
-            AreaConfiguration.loadAreas(dataFolder, effectiveAreasDir, logger);
+            AreaConfiguration.loadAreas(dataFolder, effectiveAreasDir, logger, configuration.types().keySet());
         configuration = configuration.withAreas(loadedAreas);
 
         repository = new AfkRewardRepository(
@@ -139,16 +151,19 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
             () -> getCapability(EssentialsQueryable.class)
         );
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+        UiBinding hudBinding = null;
+        if (configuration.ui().registerOnEnable()) {
+            hudBinding = registerModuleUi(HUD_UI_FILE_PATH, configuration.ui().hudId(), true);
+        }
+        if (hudBinding != null) {
+            service.setHudBridge(packetBridge, hudBinding.runtimeUiId());
+        }
         service.start();
 
         listener = new AfkRewardListener(() -> service);
         adminCommand = new AfkRewardAdminCommand(() -> service, messages());
 
         // UI 绑定
-        if (configuration.ui().registerOnEnable()) {
-            registerModuleUi(HUD_UI_FILE_PATH, configuration.ui().hudId(), true);
-        }
-
         registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
                 @Override public @NotNull String moduleId() { return "afkreward"; }
@@ -253,5 +268,3 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
 
 
 }
-
-

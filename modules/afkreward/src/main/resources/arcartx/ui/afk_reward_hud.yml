@@ -11,12 +11,16 @@ ui:
       var.time = packet['time']
       var.next = packet['next']
       var.players = packet['players']
+      var.session_rewards = packet['session_rewards']
+      var.session_time = packet['session_time']
       var.visible = packet['visible']
     update: |-
       var.area = packet['area']
       var.time = packet['time']
       var.next = packet['next']
       var.players = packet['players']
+      var.session_rewards = packet['session_rewards']
+      var.session_time = packet['session_time']
       var.visible = packet['visible']
 
 controls:
@@ -26,7 +30,7 @@ controls:
       x: 10
       y: 10
       width: 200
-      height: 100
+      height: 150
       normal: ~30,30,40,200
       shape: ~round_rect
       radius: 8
@@ -68,4 +72,20 @@ controls:
           y: 84
           fontSize: 22
           texts: "~&7区域人数: &f{var.players}"
+          visible: var.visible
+      本次收益:
+        type: Text
+        attribute:
+          x: 10
+          y: 106
+          fontSize: 22
+          texts: "~&7本次收益: &f{var.session_rewards} 次"
+          visible: var.visible
+      本次时长:
+        type: Text
+        attribute:
+          x: 10
+          y: 128
+          fontSize: 22
+          texts: "~&7累计挂机: &f{var.session_time}"
           visible: var.visible

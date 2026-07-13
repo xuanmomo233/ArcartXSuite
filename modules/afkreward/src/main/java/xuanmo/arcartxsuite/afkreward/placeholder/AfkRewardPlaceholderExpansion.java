@@ -56,6 +56,21 @@ public final class AfkRewardPlaceholderExpansion extends PlaceholderExpansion {
                 yield state.mode == AfkRewardService.AfkMode.MANUAL ? "原地挂机" : "区域挂机";
             }
             case "area" -> (state != null && state.areaName != null) ? state.areaName : "";
+            case "status" -> state != null && state.areaName != null ? "挂机中" : "未挂机";
+            case "mode" -> state != null && state.areaName != null ? state.mode.name() : "";
+            case "session_rewards" -> String.valueOf(service.getSessionRewards(player.getUniqueId()));
+            case "session_time" -> formatTime(service.getSessionSeconds(player.getUniqueId()));
+            case "daily_seconds" -> String.valueOf(service.getDailySeconds(player.getUniqueId()));
+            case "remaining_daily" -> {
+                int remaining = service.getRemainingDailySeconds(player.getUniqueId());
+                yield remaining >= 0 ? String.valueOf(remaining) : "";
+            }
+            case "multiplier" -> {
+                if (state == null || state.areaName == null) yield "1.00";
+                var area = service.getArea(state.areaName);
+                yield area == null ? "1.00" : String.format(java.util.Locale.ROOT, "%.2f",
+                    service.computeMultiplier(player, state, area));
+            }
             case "time" -> formatTime(state != null ? state.seconds : 0);
             case "total_time" -> formatTime(stats != null ? stats.totalSeconds() : 0);
             case "today" -> String.valueOf(stats != null ? stats.todayCount() : 0);

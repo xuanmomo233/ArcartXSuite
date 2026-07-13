@@ -19,17 +19,59 @@ public record AfkRewardConfiguration(
     Map<String, AfkArea> areas,
     StorageConfig storage,
     UiConfig ui,
-    ManualConfig manual
+    ManualConfig manual,
+    AntiAbuseConfig antiAbuse,
+    MultiplierConfig multiplier,
+    AuditConfig audit,
+    PerformanceConfig performance
 ) {
+
+    public record AntiAbuseConfig(
+        TimeLimitConfig timeLimit,
+        BotDetectionConfig botDetection,
+        IpLimitConfig ipLimit,
+        DecayConfig decay
+    ) {}
+
+    public record TimeLimitConfig(
+        boolean enable, int sessionSeconds, int dailySeconds,
+        String onExceed, String exemptPermission
+    ) {}
+
+    public record BotDetectionConfig(
+        boolean enable, int windowSeconds, int minViewChanges,
+        String action, String exemptPermission
+    ) {}
+
+    public record IpLimitConfig(boolean enable, String exemptPermission) {}
+
+    public record DecayConfig(
+        boolean enable, int startSeconds, double factorPerHour, double minMultiplier
+    ) {}
+
+    public record MultiplierConfig(
+        boolean enable, double base, double weekend, String combine,
+        List<ScheduleConfig> schedules
+    ) {}
+
+    public record ScheduleConfig(
+        String days, String start, String end, double multiplier
+    ) {}
+
+    public record AuditConfig(boolean enable, String file) {}
 
     public record RewardConfig(
         int roundMinutes,
         MaxConfig max,
-        PlayerLimitConfig player
+        PlayerLimitConfig player,
+        OverflowConfig overflowToMail
     ) {
         public record MaxConfig(boolean enabled, int limit) {}
         public record PlayerLimitConfig(boolean enabled, int limit) {}
+        public record OverflowConfig(boolean enable) {}
     }
+
+    public record PerformanceConfig(boolean pauseOnLowTps, double minTps) {}
 
     public record StorageConfig(
         Dialect dialect, String sqliteFile,
@@ -70,7 +112,8 @@ public record AfkRewardConfiguration(
         String subtitleOnReward,
         String subtitleOnEnd,
         List<String> endMailPresets,
-        Protections protections
+        Protections protections,
+        int permissionRecheckSeconds
     ) {
         public record Protections(
             boolean movement,
@@ -94,7 +137,7 @@ public record AfkRewardConfiguration(
     public AfkRewardConfiguration withAreas(Map<String, AfkArea> newAreas) {
         return new AfkRewardConfiguration(
             debug, areasDirectory, reward, types,
-            Collections.unmodifiableMap(newAreas), storage, ui, manual
+            Collections.unmodifiableMap(newAreas), storage, ui, manual, antiAbuse, multiplier, audit, performance
         );
     }
 
@@ -112,6 +155,9 @@ public record AfkRewardConfiguration(
             new RewardConfig.PlayerLimitConfig(
                 rewardSec != null && rewardSec.getBoolean("player.enable", true),
                 rewardSec != null ? rewardSec.getInt("player.limit", 30) : 30
+            ),
+            new RewardConfig.OverflowConfig(
+                rewardSec != null && rewardSec.getBoolean("overflow-to-mail.enable", false)
             )
         );
 
@@ -124,16 +170,19 @@ public record AfkRewardConfiguration(
                 if (typeSec == null) continue;
                 String describe = typeSec.getString("describe", "");
                 List<String> mailPresets = typeSec.getStringList("mail-presets");
+                String fullInventoryMail = typeSec.getString("full-inventory-mail");
                 Map<String, List<String>> tiers = new LinkedHashMap<>();
                 for (String tierKey : typeSec.getKeys(false)) {
-                    if ("describe".equals(tierKey) || "mail-presets".equals(tierKey)) continue;
+                    if ("describe".equals(tierKey) || "mail-presets".equals(tierKey)
+                        || "full-inventory-mail".equals(tierKey)) continue;
                     List<String> cmds = typeSec.getStringList(tierKey);
                     if (!cmds.isEmpty()) {
                         tiers.put(tierKey, new ArrayList<>(cmds));
                     }
                 }
                 types.put(typeName, new AfkRewardType(typeName, describe,
-                    Collections.unmodifiableMap(tiers), Collections.unmodifiableList(mailPresets)));
+                    Collections.unmodifiableMap(tiers), Collections.unmodifiableList(mailPresets),
+                    fullInventoryMail));
             }
         }
 
@@ -195,10 +244,81 @@ public record AfkRewardConfiguration(
             manualSec != null ? manualSec.getString("subtitle-on-reward", "") : "",
             manualSec != null ? manualSec.getString("subtitle-on-end", "") : "",
             manualSec != null ? manualSec.getStringList("end-mail-presets") : List.of(),
-            protections
+            protections,
+            manualSec != null ? Math.max(1, manualSec.getInt("permission-recheck-seconds", 5)) : 5
+        );
+
+        ConfigurationSection antiAbuseSec = yaml.getConfigurationSection("anti-abuse");
+        ConfigurationSection timeLimitSec = antiAbuseSec != null
+            ? antiAbuseSec.getConfigurationSection("time-limit") : null;
+        ConfigurationSection botSec = antiAbuseSec != null
+            ? antiAbuseSec.getConfigurationSection("bot-detection") : null;
+        ConfigurationSection ipSec = antiAbuseSec != null
+            ? antiAbuseSec.getConfigurationSection("ip-limit") : null;
+        ConfigurationSection decaySec = antiAbuseSec != null
+            ? antiAbuseSec.getConfigurationSection("decay") : null;
+        AntiAbuseConfig antiAbuse = new AntiAbuseConfig(
+            new TimeLimitConfig(
+                timeLimitSec != null && timeLimitSec.getBoolean("enable", false),
+                timeLimitSec != null ? Math.max(0, timeLimitSec.getInt("session-seconds", 0)) : 0,
+                timeLimitSec != null ? Math.max(0, timeLimitSec.getInt("daily-seconds", 0)) : 0,
+                timeLimitSec != null ? timeLimitSec.getString("on-exceed", "STOP") : "STOP",
+                timeLimitSec != null ? timeLimitSec.getString("exempt-permission",
+                    "axs.afkreward.bypass.timelimit") : "axs.afkreward.bypass.timelimit"
+            ),
+            new BotDetectionConfig(
+                botSec != null && botSec.getBoolean("enable", false),
+                botSec != null ? Math.max(1, botSec.getInt("window-seconds", 300)) : 300,
+                botSec != null ? Math.max(0, botSec.getInt("min-view-changes", 3)) : 3,
+                botSec != null ? botSec.getString("action", "NO_REWARD") : "NO_REWARD",
+                botSec != null ? botSec.getString("exempt-permission",
+                    "axs.afkreward.bypass.botcheck") : "axs.afkreward.bypass.botcheck"
+            ),
+            new IpLimitConfig(
+                ipSec != null && ipSec.getBoolean("enable", false),
+                ipSec != null ? ipSec.getString("exempt-permission",
+                    "axs.afkreward.bypass.iplimit") : "axs.afkreward.bypass.iplimit"
+            ),
+            new DecayConfig(
+                decaySec != null && decaySec.getBoolean("enable", false),
+                decaySec != null ? Math.max(0, decaySec.getInt("start-seconds", 3600)) : 3600,
+                decaySec != null ? Math.max(0.0, decaySec.getDouble("factor-per-hour", 0.2)) : 0.2,
+                decaySec != null ? Math.max(0.0, decaySec.getDouble("min-multiplier", 0.3)) : 0.3
+            )
+        );
+
+        ConfigurationSection multiplierSec = yaml.getConfigurationSection("multiplier");
+        List<ScheduleConfig> schedules = new ArrayList<>();
+        if (multiplierSec != null) {
+            for (Map<?, ?> raw : multiplierSec.getMapList("schedules")) {
+                String days = String.valueOf(raw.containsKey("days") ? raw.get("days") : "ALL");
+                String start = String.valueOf(raw.containsKey("start") ? raw.get("start") : "00:00");
+                String end = String.valueOf(raw.containsKey("end") ? raw.get("end") : "23:59");
+                double value = raw.get("multiplier") instanceof Number n ? n.doubleValue() : 1.0;
+                schedules.add(new ScheduleConfig(days, start, end, value));
+            }
+        }
+        MultiplierConfig multiplier = new MultiplierConfig(
+            multiplierSec != null && multiplierSec.getBoolean("enable", false),
+            multiplierSec != null ? multiplierSec.getDouble("base", 1.0) : 1.0,
+            multiplierSec != null ? multiplierSec.getDouble("weekend", 1.0) : 1.0,
+            multiplierSec != null ? multiplierSec.getString("combine", "MAX") : "MAX",
+            Collections.unmodifiableList(schedules)
+        );
+
+        ConfigurationSection auditSec = yaml.getConfigurationSection("audit");
+        AuditConfig audit = new AuditConfig(
+            auditSec == null || auditSec.getBoolean("enable", true),
+            auditSec != null ? auditSec.getString("file", "audit.log") : "audit.log"
+        );
+
+        ConfigurationSection performanceSec = yaml.getConfigurationSection("performance.pause-on-low-tps");
+        PerformanceConfig performance = new PerformanceConfig(
+            performanceSec != null && performanceSec.getBoolean("enable", false),
+            performanceSec != null ? performanceSec.getDouble("min-tps", 15.0) : 15.0
         );
 
         return new AfkRewardConfiguration(debug, areasDirectory, reward, Collections.unmodifiableMap(types),
-            Collections.unmodifiableMap(areas), storage, ui, manual);
+            Collections.unmodifiableMap(areas), storage, ui, manual, antiAbuse, multiplier, audit, performance);
     }
 }

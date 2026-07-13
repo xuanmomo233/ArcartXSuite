@@ -36,6 +36,11 @@ public final class AfkRewardListener implements Listener {
     public void onPlayerMove(PlayerMoveEvent event) {
         AfkRewardService service = serviceSupplier.get();
         if (service == null) return;
+        if (event.getTo() != null
+            && (event.getFrom().getYaw() != event.getTo().getYaw()
+                || event.getFrom().getPitch() != event.getTo().getPitch())) {
+            service.markViewChange(event.getPlayer().getUniqueId());
+        }
         // 只检测坐标变化，忽略视角转动
         if (event.getFrom().getBlockX() == event.getTo().getBlockX()
             && event.getFrom().getBlockY() == event.getTo().getBlockY()

@@ -27,6 +27,8 @@ type: 泡澡池
 
 # 是否支持原地挂机（/afk start 此区域）
 manual-enabled: true
+# 区域奖励权重，默认 1.0
+reward-weight: 1.0
 
 # 原地挂机传送点
 teleport:

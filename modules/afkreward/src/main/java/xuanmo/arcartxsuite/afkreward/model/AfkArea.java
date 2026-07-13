@@ -13,7 +13,8 @@ public record AfkArea(
     String rewardType,
     List<Point> points,
     Location teleport,
-    boolean manualEnabled
+    boolean manualEnabled,
+    double rewardWeight
 ) {
     public record Point(int x, int z) {}
 
