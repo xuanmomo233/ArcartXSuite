@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.afkreward.model;
 
 import java.util.List;
+import java.util.Map;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -14,9 +15,35 @@ public record AfkArea(
     List<Point> points,
     Location teleport,
     boolean manualEnabled,
-    double rewardWeight
+    double rewardWeight,
+    RewardConfig reward,
+    MultiplierConfig multiplier
 ) {
     public record Point(int x, int z) {}
+
+    public record RewardConfig(
+        int roundMinutes,
+        MaxConfig max,
+        PlayerLimitConfig player,
+        OverflowConfig overflowToMail,
+        AfkRewardType type
+    ) {
+        public record MaxConfig(boolean enabled, int limit) {}
+        public record PlayerLimitConfig(boolean enabled, int limit) {}
+        public record OverflowConfig(boolean enable) {}
+    }
+
+    public record MultiplierConfig(
+        boolean enable,
+        double base,
+        double weekend,
+        String combine,
+        List<ScheduleConfig> schedules
+    ) {}
+
+    public record ScheduleConfig(
+        String days, String start, String end, double multiplier
+    ) {}
 
     /**
      * 射线法判断点是否在多边形内。

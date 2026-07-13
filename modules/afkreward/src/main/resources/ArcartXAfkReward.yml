@@ -1,50 +1,10 @@
-config-version: 4
+config-version: 5
 # ArcartXSuite AfkReward - 区域挂机奖励模块
 # 重载: /axs afkreward reload
+# 奖励周期、上限、倍率与奖励定义已下放到各个 areas/area-*.yml 文件，
+# 每个区域文件现在可以独立配置完整的奖励规则。
 
 debug: false
-
-# 奖励周期（分钟/次）
-reward:
-  round: 15
-  # 每日最大奖励次数限制
-  max:
-    enable: true
-    limit: 32
-    # 无视限制权限: axs.afkreward.not.reward.limit
-  # 区域最大同时挂机人数
-  player:
-    enable: true
-    limit: 30
-    # 无视限制权限: axs.afkreward.not.player.limit
-  overflow-to-mail:
-    enable: false
-
-# 奖励类型配置
-# 玩家需要有 axs.afkreward.start.<类型名> 权限才能进入该区域挂机
-types:
-  泡澡池:
-    describe: "泡澡的人越多，获取的铜币和经验越多"
-    # 发奖时同时发送的邮件预设（对应 Mail 模块预设模板）
-    # 背包无空位时使用的邮件预设，留空则仍执行命令
-    full-inventory-mail: ""
-    mail-presets:
-      - "afk_reward_mail"
-    # 权限等级从高到低检测，取玩家拥有的最高等级
-    vip3:
-      - "addbalance %player_name% 铜币 %axsafk_players%*35+%player_level%/4+250"
-      - "cmi give %player_name% cobblestone 54"
-      - "cmi exp %player_name% add %axsafk_players%*%player_level%/4+%player_level%"
-    vip2:
-      - "addbalance %player_name% 铜币 %axsafk_players%*30+%player_level%/6+200"
-      - "cmi give %player_name% cobblestone 54"
-      - "cmi exp %player_name% add %axsafk_players%*%player_level%/6+%player_level%/2"
-    vip1:
-      - "addbalance %player_name% 铜币 %axsafk_players%*25+%player_level%/8+150"
-      - "cmi exp %player_name% add %axsafk_players%*%player_level%/8+%player_level%/4"
-    common:
-      - "addbalance %player_name% 铜币 %axsafk_players%*20+%player_level%/10+100"
-      - "cmi exp %player_name% add %axsafk_players%*%player_level%/10+%player_level%/4"
 
 # 区域配置目录（相对于 data/afkreward/ 文件夹）
 # 每个区域为独立的 area-<id>.yml 文件
@@ -72,18 +32,6 @@ anti-abuse:
     start-seconds: 3600
     factor-per-hour: 0.2
     min-multiplier: 0.3
-
-# 加权/定时倍率
-multiplier:
-  enable: false
-  base: 1.0
-  weekend: 1.0
-  combine: MAX
-  schedules:
-    - days: "SAT,SUN"
-      start: "20:00"
-      end: "22:00"
-      multiplier: 2.0
 
 # 发奖审计日志
 audit:

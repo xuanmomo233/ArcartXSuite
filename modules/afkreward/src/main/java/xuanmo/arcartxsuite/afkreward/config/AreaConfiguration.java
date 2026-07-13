@@ -13,6 +13,7 @@ import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.afkreward.model.AfkArea;
+import xuanmo.arcartxsuite.afkreward.model.AfkRewardType;
 
 /**
  * 区域独立配置文件加载器。
@@ -23,11 +24,6 @@ import xuanmo.arcartxsuite.afkreward.model.AfkArea;
 public final class AreaConfiguration {
 
     public static Map<String, AfkArea> loadAreas(File dataFolder, String areasDirectory, Logger logger) {
-        return loadAreas(dataFolder, areasDirectory, logger, null);
-    }
-
-    public static Map<String, AfkArea> loadAreas(File dataFolder, String areasDirectory,
-                                                 Logger logger, Set<String> rewardTypes) {
         File dir = new File(dataFolder, areasDirectory);
         if (!dir.exists()) {
             dir.mkdirs();
@@ -53,7 +49,7 @@ public final class AreaConfiguration {
             }
             try {
                 YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
-                AfkArea area = parseArea(id, yaml, logger, rewardTypes);
+                AfkArea area = parseArea(id, yaml, logger);
                 if (area != null) {
                     if (!usedNames.add(area.name())) {
                         logger.warning("[AfkReward] 区域名称重复 '" + area.name()
@@ -74,8 +70,7 @@ public final class AreaConfiguration {
         return Collections.unmodifiableMap(areas);
     }
 
-    private static AfkArea parseArea(String id, YamlConfiguration yaml, Logger logger,
-                                     Set<String> rewardTypes) {
+    private static AfkArea parseArea(String id, YamlConfiguration yaml, Logger logger) {
         String name = yaml.getString("name", id);
         if (name == null || name.isBlank()) {
             name = id;
@@ -85,11 +80,6 @@ public final class AreaConfiguration {
         String type = yaml.getString("type", id);
         if (world.isBlank()) {
             logger.warning("[AfkReward] 区域 '" + name + "' (" + id + ") 未配置 world，已跳过。");
-            return null;
-        }
-        if (rewardTypes != null && !rewardTypes.contains(type)) {
-            logger.warning("[AfkReward] 区域 '" + name + "' (" + id + ") 引用不存在的奖励类型 '"
-                + type + "'，已跳过。");
             return null;
         }
         boolean manualEnabled = yaml.getBoolean("manual-enabled", true);
@@ -144,8 +134,79 @@ public final class AreaConfiguration {
             }
         }
 
+        ConfigurationSection rewardSec = yaml.getConfigurationSection("reward");
+        AfkRewardType rewardType = parseRewardType(id, type, rewardSec);
+        AfkArea.RewardConfig reward = new AfkArea.RewardConfig(
+            rewardSec != null ? Math.max(1, rewardSec.getInt("round", 15)) : 15,
+            new AfkArea.RewardConfig.MaxConfig(
+                rewardSec == null || rewardSec.getBoolean("max.enable", true),
+                rewardSec != null ? Math.max(1, rewardSec.getInt("max.limit", 32)) : 32
+            ),
+            new AfkArea.RewardConfig.PlayerLimitConfig(
+                rewardSec == null || rewardSec.getBoolean("player.enable", true),
+                rewardSec != null ? Math.max(1, rewardSec.getInt("player.limit", 30)) : 30
+            ),
+            new AfkArea.RewardConfig.OverflowConfig(
+                rewardSec != null && rewardSec.getBoolean("overflow-to-mail.enable", false)
+            ),
+            rewardType
+        );
+
+        ConfigurationSection multiplierSec = yaml.getConfigurationSection("multiplier");
+        List<AfkArea.ScheduleConfig> schedules = new ArrayList<>();
+        if (multiplierSec != null) {
+            for (Map<?, ?> raw : multiplierSec.getMapList("schedules")) {
+                String days = String.valueOf(raw.containsKey("days") ? raw.get("days") : "ALL");
+                String start = String.valueOf(raw.containsKey("start") ? raw.get("start") : "00:00");
+                String end = String.valueOf(raw.containsKey("end") ? raw.get("end") : "23:59");
+                double value = raw.get("multiplier") instanceof Number n ? n.doubleValue() : 1.0;
+                schedules.add(new AfkArea.ScheduleConfig(days, start, end, value));
+            }
+        }
+        AfkArea.MultiplierConfig multiplier = new AfkArea.MultiplierConfig(
+            multiplierSec != null && multiplierSec.getBoolean("enable", false),
+            multiplierSec != null ? multiplierSec.getDouble("base", 1.0) : 1.0,
+            multiplierSec != null ? multiplierSec.getDouble("weekend", 1.0) : 1.0,
+            multiplierSec != null ? multiplierSec.getString("combine", "MAX") : "MAX",
+            Collections.unmodifiableList(schedules)
+        );
+
         return new AfkArea(id, name, enabled, world, type,
-            Collections.unmodifiableList(points), teleport, manualEnabled, rewardWeight);
+            Collections.unmodifiableList(points), teleport, manualEnabled, rewardWeight,
+            reward, multiplier);
+    }
+
+    private static AfkRewardType parseRewardType(
+        String id, String typeName, ConfigurationSection rewardSec
+    ) {
+        String name = typeName == null || typeName.isBlank() ? id : typeName;
+        String describe = rewardSec != null ? rewardSec.getString("describe", "") : "";
+        List<String> mailPresets = rewardSec != null
+            ? new ArrayList<>(rewardSec.getStringList("mail-presets")) : List.of();
+        String fullInventoryMail = rewardSec != null
+            ? rewardSec.getString("full-inventory-mail", "") : "";
+        Map<String, List<String>> tiers = new LinkedHashMap<>();
+        if (rewardSec != null) {
+            for (String tierKey : rewardSec.getKeys(false)) {
+                if ("round".equals(tierKey) || "max".equals(tierKey)
+                    || "player".equals(tierKey) || "overflow-to-mail".equals(tierKey)
+                    || "describe".equals(tierKey) || "mail-presets".equals(tierKey)
+                    || "full-inventory-mail".equals(tierKey)) {
+                    continue;
+                }
+                List<String> commands = rewardSec.getStringList(tierKey);
+                if (!commands.isEmpty()) {
+                    tiers.put(tierKey, new ArrayList<>(commands));
+                }
+            }
+        }
+        return new AfkRewardType(
+            name,
+            describe,
+            Collections.unmodifiableMap(tiers),
+            Collections.unmodifiableList(mailPresets),
+            fullInventoryMail
+        );
     }
 
     /**

@@ -1,6 +1,5 @@
 package xuanmo.arcartxsuite.afkreward.config;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -9,19 +8,15 @@ import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.afkreward.model.AfkArea;
-import xuanmo.arcartxsuite.afkreward.model.AfkRewardType;
 
 public record AfkRewardConfiguration(
     boolean debug,
     String areasDirectory,
-    RewardConfig reward,
-    Map<String, AfkRewardType> types,
     Map<String, AfkArea> areas,
     StorageConfig storage,
     UiConfig ui,
     ManualConfig manual,
     AntiAbuseConfig antiAbuse,
-    MultiplierConfig multiplier,
     AuditConfig audit,
     PerformanceConfig performance
 ) {
@@ -49,27 +44,7 @@ public record AfkRewardConfiguration(
         boolean enable, int startSeconds, double factorPerHour, double minMultiplier
     ) {}
 
-    public record MultiplierConfig(
-        boolean enable, double base, double weekend, String combine,
-        List<ScheduleConfig> schedules
-    ) {}
-
-    public record ScheduleConfig(
-        String days, String start, String end, double multiplier
-    ) {}
-
     public record AuditConfig(boolean enable, String file) {}
-
-    public record RewardConfig(
-        int roundMinutes,
-        MaxConfig max,
-        PlayerLimitConfig player,
-        OverflowConfig overflowToMail
-    ) {
-        public record MaxConfig(boolean enabled, int limit) {}
-        public record PlayerLimitConfig(boolean enabled, int limit) {}
-        public record OverflowConfig(boolean enable) {}
-    }
 
     public record PerformanceConfig(boolean pauseOnLowTps, double minTps) {}
 
@@ -136,55 +111,13 @@ public record AfkRewardConfiguration(
 
     public AfkRewardConfiguration withAreas(Map<String, AfkArea> newAreas) {
         return new AfkRewardConfiguration(
-            debug, areasDirectory, reward, types,
-            Collections.unmodifiableMap(newAreas), storage, ui, manual, antiAbuse, multiplier, audit, performance
+            debug, areasDirectory, Collections.unmodifiableMap(newAreas),
+            storage, ui, manual, antiAbuse, audit, performance
         );
     }
 
     public static AfkRewardConfiguration load(YamlConfiguration yaml, Logger logger) {
         boolean debug = yaml.getBoolean("debug", false);
-
-        // reward
-        ConfigurationSection rewardSec = yaml.getConfigurationSection("reward");
-        RewardConfig reward = new RewardConfig(
-            rewardSec != null ? Math.max(1, rewardSec.getInt("round", 15)) : 15,
-            new RewardConfig.MaxConfig(
-                rewardSec != null && rewardSec.getBoolean("max.enable", true),
-                rewardSec != null ? rewardSec.getInt("max.limit", 32) : 32
-            ),
-            new RewardConfig.PlayerLimitConfig(
-                rewardSec != null && rewardSec.getBoolean("player.enable", true),
-                rewardSec != null ? rewardSec.getInt("player.limit", 30) : 30
-            ),
-            new RewardConfig.OverflowConfig(
-                rewardSec != null && rewardSec.getBoolean("overflow-to-mail.enable", false)
-            )
-        );
-
-        // types
-        Map<String, AfkRewardType> types = new LinkedHashMap<>();
-        ConfigurationSection typesSec = yaml.getConfigurationSection("types");
-        if (typesSec != null) {
-            for (String typeName : typesSec.getKeys(false)) {
-                ConfigurationSection typeSec = typesSec.getConfigurationSection(typeName);
-                if (typeSec == null) continue;
-                String describe = typeSec.getString("describe", "");
-                List<String> mailPresets = typeSec.getStringList("mail-presets");
-                String fullInventoryMail = typeSec.getString("full-inventory-mail");
-                Map<String, List<String>> tiers = new LinkedHashMap<>();
-                for (String tierKey : typeSec.getKeys(false)) {
-                    if ("describe".equals(tierKey) || "mail-presets".equals(tierKey)
-                        || "full-inventory-mail".equals(tierKey)) continue;
-                    List<String> cmds = typeSec.getStringList(tierKey);
-                    if (!cmds.isEmpty()) {
-                        tiers.put(tierKey, new ArrayList<>(cmds));
-                    }
-                }
-                types.put(typeName, new AfkRewardType(typeName, describe,
-                    Collections.unmodifiableMap(tiers), Collections.unmodifiableList(mailPresets),
-                    fullInventoryMail));
-            }
-        }
 
         // areas 现在由独立配置文件加载，此处仅解析 areas-directory
         String areasDirectory = yaml.getString("areas-directory", "areas");
@@ -287,25 +220,6 @@ public record AfkRewardConfiguration(
             )
         );
 
-        ConfigurationSection multiplierSec = yaml.getConfigurationSection("multiplier");
-        List<ScheduleConfig> schedules = new ArrayList<>();
-        if (multiplierSec != null) {
-            for (Map<?, ?> raw : multiplierSec.getMapList("schedules")) {
-                String days = String.valueOf(raw.containsKey("days") ? raw.get("days") : "ALL");
-                String start = String.valueOf(raw.containsKey("start") ? raw.get("start") : "00:00");
-                String end = String.valueOf(raw.containsKey("end") ? raw.get("end") : "23:59");
-                double value = raw.get("multiplier") instanceof Number n ? n.doubleValue() : 1.0;
-                schedules.add(new ScheduleConfig(days, start, end, value));
-            }
-        }
-        MultiplierConfig multiplier = new MultiplierConfig(
-            multiplierSec != null && multiplierSec.getBoolean("enable", false),
-            multiplierSec != null ? multiplierSec.getDouble("base", 1.0) : 1.0,
-            multiplierSec != null ? multiplierSec.getDouble("weekend", 1.0) : 1.0,
-            multiplierSec != null ? multiplierSec.getString("combine", "MAX") : "MAX",
-            Collections.unmodifiableList(schedules)
-        );
-
         ConfigurationSection auditSec = yaml.getConfigurationSection("audit");
         AuditConfig audit = new AuditConfig(
             auditSec == null || auditSec.getBoolean("enable", true),
@@ -318,7 +232,7 @@ public record AfkRewardConfiguration(
             performanceSec != null ? performanceSec.getDouble("min-tps", 15.0) : 15.0
         );
 
-        return new AfkRewardConfiguration(debug, areasDirectory, reward, Collections.unmodifiableMap(types),
-            Collections.unmodifiableMap(areas), storage, ui, manual, antiAbuse, multiplier, audit, performance);
+        return new AfkRewardConfiguration(debug, areasDirectory,
+            Collections.unmodifiableMap(areas), storage, ui, manual, antiAbuse, audit, performance);
     }
 }

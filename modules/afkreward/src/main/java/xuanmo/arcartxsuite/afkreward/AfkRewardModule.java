@@ -59,7 +59,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
 
     @Override
     protected int currentConfigVersion() {
-        return 4;
+        return 5;
     }
 
     @Override
@@ -72,12 +72,6 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         return List.of(
             ValidationRule.required("storage.dialect", ValueType.STRING)
                 .withEnum(java.util.Set.of("sqlite", "mysql")),
-            ValidationRule.of("reward.round", ValueType.INT)
-                .withRange(1, 1440),
-            ValidationRule.of("reward.max.limit", ValueType.INT)
-                .withRange(1, 9999),
-            ValidationRule.of("reward.player.limit", ValueType.INT)
-                .withRange(1, 9999),
             ValidationRule.of("manual.leaderboard-size", ValueType.INT)
                 .withRange(1, 100),
             ValidationRule.of("anti-abuse.time-limit.on-exceed", ValueType.STRING)
@@ -88,8 +82,6 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
                 .withRange(1, 3600),
             ValidationRule.of("anti-abuse.bot-detection.min-view-changes", ValueType.INT)
                 .withRange(0, 1000),
-            ValidationRule.of("multiplier.combine", ValueType.STRING)
-                .withEnum(java.util.Set.of("MAX", "MULTIPLY", "LAST")),
             ValidationRule.of("manual.permission-recheck-seconds", ValueType.INT)
                 .withRange(1, 3600)
         );
@@ -97,10 +89,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
 
     @Override
     protected @NotNull SyncPolicy defaultSyncPolicy() {
-        // types.* 允许用户自由增删
-        return SyncPolicy.builder()
-            .dynamicSection("types")
-            .build();
+        return SyncPolicy.builder().build();
     }
 
     @Override
@@ -135,7 +124,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         // 加载区域独立配置文件
         String effectiveAreasDir = configuration.areasDirectory();
         java.util.Map<String, xuanmo.arcartxsuite.afkreward.model.AfkArea> loadedAreas =
-            AreaConfiguration.loadAreas(dataFolder, effectiveAreasDir, logger, configuration.types().keySet());
+            AreaConfiguration.loadAreas(dataFolder, effectiveAreasDir, logger);
         configuration = configuration.withAreas(loadedAreas);
 
         repository = new AfkRewardRepository(
@@ -205,7 +194,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
 
         logger.info(
             ChatColor.GOLD + "AfkReward 模块已启动 (区域=" + configuration.areas().size()
-                + " | 类型=" + configuration.types().size() + ")"
+                + ")"
         );
     }
 

@@ -83,7 +83,7 @@ public final class AfkRewardPlaceholderExpansion extends PlaceholderExpansion {
             }
             case "next" -> {
                 if (state != null && state.areaName != null) {
-                    int roundSec = service.getRewardRoundMinutes() * 60;
+                    int roundSec = service.getRewardRoundMinutes(state.areaName) * 60;
                     int elapsed = state.seconds - state.lastRewardSeconds;
                     int remain = Math.max(0, roundSec - elapsed);
                     yield String.valueOf(remain);

@@ -196,7 +196,8 @@ public final class AfkRewardService {
         String area = state.areaName != null ? state.areaName : "";
         int remaining = 0;
         if (state.areaName != null) {
-            int roundSec = config.reward().roundMinutes() * 60;
+            AfkArea hudArea = config.areas().get(state.areaName);
+            int roundSec = hudArea != null ? hudArea.reward().roundMinutes() * 60 : 15 * 60;
             remaining = Math.max(0, roundSec - (state.seconds - state.lastRewardSeconds));
         }
         Map<String, String> payload = new LinkedHashMap<>();
@@ -273,7 +274,7 @@ public final class AfkRewardService {
             }
             state.mode = AfkMode.REGION;
             state.areaName = currentArea.name();
-            state.rewardType = currentArea.rewardType();
+            state.rewardType = currentArea.id();
                 state.seconds = 0;
                 state.lastRewardSeconds = 0;
                 state.sessionRewards = 0;
@@ -293,9 +294,9 @@ public final class AfkRewardService {
         }
 
         // 人数限制
-        if (config.reward().player().enabled()) {
+        if (currentArea.reward().player().enabled()) {
             int count = countPlayersInArea(currentArea.name());
-            if (count > config.reward().player().limit()) {
+            if (count > currentArea.reward().player().limit()) {
                 if (!enterNotified.contains(uuid)) {
                     player.sendMessage(messages != null ? messages.get("hints.player-limit") : "§c该区域已满员，请稍后再来。");
                     enterNotified.add(uuid);
@@ -320,7 +321,7 @@ public final class AfkRewardService {
         updateDailySeconds(uuid, 1);
 
         // 检查奖励
-        int roundSeconds = config.reward().roundMinutes() * 60;
+        int roundSeconds = currentArea.reward().roundMinutes() * 60;
         if (state.seconds - state.lastRewardSeconds >= roundSeconds) {
             grantReward(player, currentArea);
             state.lastRewardSeconds = state.seconds;
@@ -349,7 +350,7 @@ public final class AfkRewardService {
         }
 
         // 每日上限
-        if (config.reward().max().enabled() && stats.todayCount() >= config.reward().max().limit()) {
+        if (area.reward().max().enabled() && stats.todayCount() >= area.reward().max().limit()) {
             if (!player.hasPermission("axs.afkreward.not.reward.limit")) {
                 player.sendMessage(messages != null ? messages.get("hints.reward-limit") : "§c你今日已达到该区域最大奖励次数限制。");
                 return;
@@ -357,15 +358,14 @@ public final class AfkRewardService {
         }
 
         // 找到奖励类型
-        AfkRewardType rewardType = config.types().get(area.rewardType());
-        if (rewardType == null) return;
+        AfkRewardType rewardType = area.reward().type();
 
         // 确定玩家等级 (从高到低)
         List<String> tierKeys = new ArrayList<>(rewardType.tierCommands().keySet());
         // 常见排序: vip3 > vip2 > vip1 > common，自定义顺序保持配置顺序
         String matchedTier = null;
         for (String tier : tierKeys) {
-            if (player.hasPermission("axs.afkreward.start." + area.rewardType() + "." + tier)
+            if (player.hasPermission("axs.afkreward.start." + area.id() + "." + tier)
                 || player.hasPermission("axs.afkreward.start." + tier)) {
                 matchedTier = tier;
                 break;
@@ -379,7 +379,7 @@ public final class AfkRewardService {
         List<String> commands = rewardType.tierCommands().get(matchedTier);
         if (commands == null || commands.isEmpty()) return;
 
-        boolean mailed = tryOverflowMail(player, rewardType);
+        boolean mailed = tryOverflowMail(player, area, rewardType);
         if (!mailed) {
             for (String cmd : commands) {
                 String parsed = replaceRewardPlaceholders(cmd, player, afkStates.get(uuid), area);
@@ -406,10 +406,7 @@ public final class AfkRewardService {
             computeMultiplier(player, afkStates.get(uuid), area));
 
         // 触发联动
-        AfkRewardType rewardTypeObj = config.types().get(area.rewardType());
-        if (rewardTypeObj != null) {
-            dispatchMail(player, rewardTypeObj.mailPresets());
-        }
+        dispatchMail(player, rewardType.mailPresets());
         PlayerAfkState currentState = afkStates.get(uuid);
         dispatchSignal("afk_reward", player, Map.of(
             "area", area.name(), "mode", "REGION",
@@ -419,7 +416,7 @@ public final class AfkRewardService {
         dispatchSubtitle(player, config.manual().subtitleOnReward());
         publishRewardEvent(player, area.name());
 
-        String msg = messages != null ? messages.get("hints.reward", area.name(), String.valueOf(config.reward().roundMinutes())) : null;
+        String msg = messages != null ? messages.get("hints.reward", area.name(), String.valueOf(area.reward().roundMinutes())) : null;
         if (msg != null) player.sendMessage(msg);
 
         if (config.debug()) {
@@ -534,7 +531,7 @@ public final class AfkRewardService {
     }
 
     public double computeMultiplier(Player player, PlayerAfkState state, AfkArea area) {
-        AfkRewardConfiguration.MultiplierConfig multiplier = config.multiplier();
+        AfkArea.MultiplierConfig multiplier = area.multiplier();
         double result = multiplier.enable() ? multiplier.base() : 1.0;
         if (multiplier.enable()) {
             List<Double> matches = new ArrayList<>();
@@ -542,7 +539,7 @@ public final class AfkRewardService {
             DayOfWeek day = java.time.LocalDate.now().getDayOfWeek();
             if ((day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY)
                 && multiplier.weekend() != 1.0) matches.add(multiplier.weekend());
-            for (AfkRewardConfiguration.ScheduleConfig schedule : multiplier.schedules()) {
+            for (AfkArea.ScheduleConfig schedule : multiplier.schedules()) {
                 if (scheduleMatches(schedule, day, now)) matches.add(schedule.multiplier());
             }
             for (double value : matches) {
@@ -570,7 +567,7 @@ public final class AfkRewardService {
         return Math.max(0.0, result);
     }
 
-    private boolean scheduleMatches(AfkRewardConfiguration.ScheduleConfig schedule,
+    private boolean scheduleMatches(AfkArea.ScheduleConfig schedule,
                                     DayOfWeek day, LocalTime now) {
         String days = schedule.days();
         boolean dayMatches = "ALL".equalsIgnoreCase(days);
@@ -602,8 +599,8 @@ public final class AfkRewardService {
             .replace("%axsafkreward_multiplier%", value);
     }
 
-    private boolean tryOverflowMail(Player player, AfkRewardType rewardType) {
-        if (!config.reward().overflowToMail().enable()
+    private boolean tryOverflowMail(Player player, AfkArea area, AfkRewardType rewardType) {
+        if (!area.reward().overflowToMail().enable()
             || rewardType.fullInventoryMail() == null
             || rewardType.fullInventoryMail().isBlank()
             || player.getInventory().firstEmpty() != -1) {
@@ -714,9 +711,9 @@ public final class AfkRewardService {
             return false;
         }
         // 人数限制
-        if (config.reward().player().enabled()) {
+        if (area.reward().player().enabled()) {
             int count = countPlayersInArea(areaName);
-            if (count >= config.reward().player().limit() && !player.hasPermission("axs.afkreward.not.player.limit")) {
+            if (count >= area.reward().player().limit() && !player.hasPermission("axs.afkreward.not.player.limit")) {
                 player.sendMessage(messages != null ? messages.get("hints.player-limit") : "§c该区域已满员。");
                 return false;
             }
@@ -738,7 +735,7 @@ public final class AfkRewardService {
         PlayerAfkState state = new PlayerAfkState();
         state.mode = AfkMode.MANUAL;
         state.areaName = areaName;
-        state.rewardType = area.rewardType();
+        state.rewardType = area.id();
         state.seconds = 0;
         state.lastRewardSeconds = 0;
         state.originalWalkSpeed = player.getWalkSpeed();
@@ -790,7 +787,7 @@ public final class AfkRewardService {
         AfkArea area = config.areas().get(state.areaName);
         int times = 0;
         if (area != null) {
-            times = computeRewardTimes(state.seconds);
+            times = computeRewardTimes(area, state.seconds);
             if (times > 0) {
                 grantManualRewards(player, area, times);
             }
@@ -861,19 +858,18 @@ public final class AfkRewardService {
         return true;
     }
 
-    private int computeRewardTimes(int totalSeconds) {
-        int roundSec = config.reward().roundMinutes() * 60;
+    private int computeRewardTimes(AfkArea area, int totalSeconds) {
+        int roundSec = area != null ? area.reward().roundMinutes() * 60 : 15 * 60;
         return totalSeconds / roundSec;
     }
 
     private void grantManualRewards(Player player, AfkArea area, int times) {
-        AfkRewardType rewardType = config.types().get(area.rewardType());
-        if (rewardType == null) return;
+        AfkRewardType rewardType = area.reward().type();
         PlayerAfkState state = afkStates.get(player.getUniqueId());
         List<String> tierKeys = new ArrayList<>(rewardType.tierCommands().keySet());
         String matchedTier = null;
         for (String tier : tierKeys) {
-            if (player.hasPermission("axs.afkreward.start." + area.rewardType() + "." + tier)
+            if (player.hasPermission("axs.afkreward.start." + area.id() + "." + tier)
                 || player.hasPermission("axs.afkreward.start." + tier)) {
                 matchedTier = tier;
                 break;
@@ -897,10 +893,10 @@ public final class AfkRewardService {
         for (int i = 0; i < times; i++) {
             if (!passesAntiAbuse(player, state, area, true)) break;
             // 每日上限检查
-            if (config.reward().max().enabled() && stats.todayCount() >= config.reward().max().limit()) {
+            if (area.reward().max().enabled() && stats.todayCount() >= area.reward().max().limit()) {
                 if (!player.hasPermission("axs.afkreward.not.reward.limit")) break;
             }
-            boolean mailed = tryOverflowMail(player, rewardType);
+            boolean mailed = tryOverflowMail(player, area, rewardType);
             mailedAny |= mailed;
             if (!mailed) {
                 for (String cmd : commands) {
@@ -920,7 +916,7 @@ public final class AfkRewardService {
                 mailedAny ? matchedTier + "(mail)" : matchedTier, actualTimes,
                 computeMultiplier(player, state, area));
         }
-        String msg = messages != null ? messages.get("hints.reward", area.name(), String.valueOf(config.reward().roundMinutes())) : null;
+        String msg = messages != null ? messages.get("hints.reward", area.name(), String.valueOf(area.reward().roundMinutes())) : null;
         if (msg != null && actualTimes > 0) player.sendMessage(msg);
     }
 
@@ -988,7 +984,8 @@ public final class AfkRewardService {
                 long elapsedMs = serviceStartTime - session.startTime();
                 if (elapsedMs < 0) elapsedMs = 0;
                 int elapsedSec = (int) (elapsedMs / 1000);
-                int times = computeRewardTimes(elapsedSec + session.startSeconds());
+                AfkArea area = config.areas().get(session.areaName());
+                int times = computeRewardTimes(area, elapsedSec + session.startSeconds());
 
                 // 恢复 stats 到 session 记录时的状态
                 PlayerStats recoveredStats = new PlayerStats(
@@ -997,7 +994,6 @@ public final class AfkRewardService {
                 );
                 statsCache.put(player.getUniqueId(), recoveredStats);
 
-                AfkArea area = config.areas().get(session.areaName());
                 if (area != null && times > 0) {
                     grantManualRewards(player, area, times);
                 }
@@ -1086,11 +1082,23 @@ public final class AfkRewardService {
     }
 
     public Map<String, AfkRewardType> types() {
-        return config.types();
+        Map<String, AfkRewardType> result = new LinkedHashMap<>();
+        for (AfkArea area : config.areas().values()) {
+            result.put(area.id(), area.reward().type());
+        }
+        return Collections.unmodifiableMap(result);
     }
 
     public int getRewardRoundMinutes() {
-        return config.reward().roundMinutes();
+        return config.areas().values().stream()
+            .findFirst()
+            .map(area -> area.reward().roundMinutes())
+            .orElse(15);
+    }
+
+    public int getRewardRoundMinutes(String areaName) {
+        AfkArea area = areaName == null ? null : config.areas().get(areaName);
+        return area != null ? area.reward().roundMinutes() : getRewardRoundMinutes();
     }
 
     public int getSessionRewards(UUID uuid) {

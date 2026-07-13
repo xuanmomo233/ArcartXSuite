@@ -1,16 +1,16 @@
-# 区域唯一 ID（内部标识）
+# 区域唯一 ID（同时用于区域奖励权限：axs.afkreward.start.<id>.<档位>）
 id: default
 
-# 区域显示名称（支持中文）
-name: "温泉"
+# 区域显示名称（也用于区域权限：axs.afkreward.area.<名称>）
+name: "泡澡池"
 
-# 是否启用
+# 是否启用区域
 enabled: true
 
-# 所属世界
+# 区域所在世界
 world: bskyblock_world
 
-# 多边形坐标点（射线法判断）
+# 区域边界点（x,z），至少需要 3 个点
 pos:
   - "-11,138"
   - "17,114"
@@ -22,13 +22,67 @@ pos:
   - "10,171"
   - "-4,159"
 
-# 关联奖励类型（对应主配置 types 中的 key）
+# 兼容旧字段；奖励定义现在直接写在本区域 reward 中
 type: 泡澡池
 
-# 是否支持原地挂机（/afk start 此区域）
+# 是否允许 /afk start 原地挂机
 manual-enabled: true
-# 区域奖励权重，默认 1.0
+
+# 区域奖励权重，最终倍率会乘以该值
 reward-weight: 1.0
+
+# 本区域完整奖励配置
+reward:
+  # 每多少分钟发放一次奖励
+  round: 15
+  # 每日最大奖励次数
+  max:
+    enable: true
+    limit: 32
+  # 本区域最大同时挂机人数
+  player:
+    enable: true
+    limit: 30
+  # 背包满时是否改发 full-inventory-mail
+  overflow-to-mail:
+    enable: false
+
+  # 奖励说明
+  describe: "泡澡的人越多，获取的铜币和经验越多"
+  # 发奖后发送的邮件预设（需 Mail 模块）
+  mail-presets:
+    - "afk_reward_mail"
+  # 背包满时使用的邮件预设，留空则继续执行命令
+  full-inventory-mail: ""
+
+  # 奖励档位从高到低排列
+  vip3:
+    - "addbalance %player_name% 铜币 %axsafk_players%*35+%player_level%/4+250"
+    - "cmi give %player_name% cobblestone 54"
+    - "cmi exp %player_name% add %axsafk_players%*%player_level%/4+%player_level%"
+  vip2:
+    - "addbalance %player_name% 铜币 %axsafk_players%*30+%player_level%/6+200"
+    - "cmi give %player_name% cobblestone 54"
+    - "cmi exp %player_name% add %axsafk_players%*%player_level%/6+%player_level%/2"
+  vip1:
+    - "addbalance %player_name% 铜币 %axsafk_players%*25+%player_level%/8+150"
+    - "cmi exp %player_name% add %axsafk_players%*%player_level%/8+%player_level%/4"
+  common:
+    - "addbalance %player_name% 铜币 %axsafk_players%*20+%player_level%/10+100"
+    - "cmi exp %player_name% add %axsafk_players%*%player_level%/10+%player_level%/4"
+
+# 本区域倍率配置
+multiplier:
+  enable: false
+  base: 1.0
+  weekend: 1.0
+  combine: MAX
+  schedules:
+    # 周六、周日 20:00-22:00，倍率 2 倍
+    - days: "SAT,SUN"
+      start: "20:00"
+      end: "22:00"
+      multiplier: 2.0
 
 # 原地挂机传送点
 teleport:
