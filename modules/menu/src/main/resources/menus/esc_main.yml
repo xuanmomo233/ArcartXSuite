@@ -126,6 +126,8 @@ footer-buttons:
   # 游戏选项 — 打开 Minecraft 原版设置界面
   options:
     text: "&f游戏选项"
+    # 按钮排列顺序，数字越小越靠前
+    order: 0
   # 按钮图标配置
   # icon:
   #   material: compass
@@ -134,4 +136,6 @@ footer-buttons:
   # 退出游戏
   quit:
     text: "&f退出游戏"
+    # 按钮排列顺序，数字越小越靠前
+    order: 1
     client-action: "quit"

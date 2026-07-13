@@ -13,6 +13,10 @@ import xuanmo.arcartxsuite.menu.config.MenuPageDefinition;
 
 public final class MenuPacketFactory {
 
+    private static final Comparator<MenuButtonDefinition> BUTTON_ORDER =
+        Comparator.comparingInt(MenuButtonDefinition::order)
+            .thenComparing(MenuButtonDefinition::id);
+
     private MenuPacketFactory() {
     }
 
@@ -51,17 +55,24 @@ public final class MenuPacketFactory {
         payload.put("buttonRows", buttonRows);
         payload.put("buttonCount", pageButtons.size());
 
-        LinkedHashMap<String, Object> footerRows = new LinkedHashMap<>();
-        int footerIndex = 0;
+        List<MenuButtonDefinition> visibleFooters = new ArrayList<>();
         for (MenuButtonDefinition footer : definition.footerButtons().values()) {
             if (!MenuConditionEvaluator.hasPermission(player, footer.permission())
                 || !MenuConditionEvaluator.passes(player, footer.viewConditions())) {
                 continue;
             }
+            visibleFooters.add(footer);
+        }
+        visibleFooters.sort(BUTTON_ORDER);
+
+        LinkedHashMap<String, Object> footerRows = new LinkedHashMap<>();
+        int footerIndex = 0;
+        for (MenuButtonDefinition footer : visibleFooters) {
             boolean enabled = MenuConditionEvaluator.passes(player, footer.useConditions());
             LinkedHashMap<String, Object> row = new LinkedHashMap<>();
             row.put("id", footer.id());
             row.put("text", MenuConditionEvaluator.applyPlaceholders(player, footer.text()));
+            row.put("order", footer.order());
             row.put("clientAction", footer.clientAction());
             row.put("enabled", enabled);
             String footerItemJson = iconResolver == null ? "" : iconResolver.resolveItemJson(player, footer.icon());
@@ -91,7 +102,7 @@ public final class MenuPacketFactory {
             }
             result.add(button);
         }
-        result.sort(Comparator.comparingInt(MenuButtonDefinition::order).thenComparing(MenuButtonDefinition::id));
+        result.sort(BUTTON_ORDER);
         return result;
     }
 

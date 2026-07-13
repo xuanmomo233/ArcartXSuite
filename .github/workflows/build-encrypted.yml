@@ -455,6 +455,41 @@ jobs:
             --fake-classes-count 20
           ls -la "$OUT"
 
+      - name: Embed build provenance in final JAR
+        run: |
+          set -euo pipefail
+          python - "$OUT" "${{ github.sha }}" <<'PY'
+          import json
+          import os
+          import sys
+          import tempfile
+          import zipfile
+
+          jar_path, commit = sys.argv[1], sys.argv[2].lower()
+          fd, temp_path = tempfile.mkstemp(suffix=".jar", dir=os.path.dirname(jar_path))
+          os.close(fd)
+          try:
+              with zipfile.ZipFile(jar_path, "r") as source, zipfile.ZipFile(temp_path, "w", zipfile.ZIP_DEFLATED) as target:
+                  for info in source.infolist():
+                      if info.filename == "axs-build.json":
+                          continue
+                      target.writestr(info, source.read(info.filename))
+                  target.writestr(
+                      "axs-build.json",
+                      json.dumps({"commit": commit}, separators=(",", ":")).encode("utf-8"),
+                  )
+              os.replace(temp_path, jar_path)
+          finally:
+              if os.path.exists(temp_path):
+                  os.unlink(temp_path)
+
+          with zipfile.ZipFile(jar_path, "r") as check:
+              embedded = json.loads(check.read("axs-build.json").decode("utf-8")).get("commit", "").lower()
+          if embedded != commit:
+              raise SystemExit(f"embedded commit mismatch: {embedded!r} != {commit!r}")
+          print(f"Embedded axs-build.json commit={embedded}")
+          PY
+
       - name: Verify protection (best-effort)
         run: |
           KEYS_DIR="keys/$(cat keys/current_version.txt)"
@@ -485,7 +520,14 @@ jobs:
           BASEVER=${BASE#ArcartX-Suite-}
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           VERSION="${BASEVER}-ci.${SHORT_SHA}"
+          COMMIT_TIME=$(git show -s --format=%ct "${{ github.sha }}")
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            SET_CURRENT=true
+          else
+            SET_CURRENT=false
+          fi
           echo "Uploading 本体 jar version=$VERSION file=$OUT"
+          echo "commit=${{ github.sha }} commitTime=$COMMIT_TIME setCurrent=$SET_CURRENT"
           FLARE_BASE_URL="${FLARE_BASE_URL:-https://flare.021209.xyz}"
           PRIMARY_OK=0
           FLARE_OK=0
@@ -497,8 +539,10 @@ jobs:
             -X POST \
             -F "jar=@$OUT" \
             -F "version=$VERSION" \
+            -F "commit=${{ github.sha }}" \
+            -F "commitTime=$COMMIT_TIME" \
             -F "releaseNotes=CI build ${{ github.sha }}" \
-            -F "setCurrent=true" \
+            -F "setCurrent=$SET_CURRENT" \
             -H "X-CI-Token: $CLOUD_CI_TOKEN" \
             "https://cloud.021209.xyz/v1/ci/app-jar/versions"
           CURL_EXIT=$?
@@ -507,7 +551,7 @@ jobs:
           if [ $CURL_EXIT -eq 0 ]; then
             PRIMARY_OK=1
             cat "$RESP"; echo ""
-            echo "OK: 本体 jar 已上传主云（setCurrent=true）"
+            echo "OK: 本体 jar 已上传主云（setCurrent=$SET_CURRENT）"
           else
             echo "WARN: 主云本体上传失败 (curl exit=$CURL_EXIT)"
             [ -s "$RESP" ] && cat "$RESP" || true
@@ -521,8 +565,10 @@ jobs:
             -X POST \
             -F "jar=@$OUT" \
             -F "version=$VERSION" \
+            -F "commit=${{ github.sha }}" \
+            -F "commitTime=$COMMIT_TIME" \
             -F "releaseNotes=CI build ${{ github.sha }}" \
-            -F "setCurrent=true" \
+            -F "setCurrent=$SET_CURRENT" \
             -H "X-CI-Token: $CLOUD_CI_TOKEN" \
             "${FLARE_BASE_URL}/v1/ci/app-jar/versions"
           FLARE_EXIT=$?
