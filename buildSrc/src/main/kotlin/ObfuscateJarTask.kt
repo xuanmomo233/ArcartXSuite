@@ -92,7 +92,7 @@ abstract class ObfuscateJarTask : DefaultTask() {
         // JDK modules (Java 17)
         val javaHome = System.getProperty("java.home")
         listOf("java.base", "java.logging", "java.sql", "java.management",
-               "java.naming", "java.desktop", "java.instrument").forEach { mod ->
+               "java.naming", "java.desktop", "java.instrument", "java.security.sasl", "java.security.jgss").forEach { mod ->
             sb.appendLine("-libraryjars ${quote(java.io.File("$javaHome/jmods/$mod.jmod"))}(!**.jar,!module-info.class)")
         }
 
