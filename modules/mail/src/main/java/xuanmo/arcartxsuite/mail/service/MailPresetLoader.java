@@ -51,14 +51,8 @@ public final class MailPresetLoader {
             List<MailAttachment> attachments = loadAttachments(presetSection, logger, maxAttachments, id);
             List<String> claimCommands = presetSection.getStringList("claim-commands");
             List<ScriptCondition> claimConditions = new ArrayList<>(
-                ScriptConditionsLoader.load(presetSection, "claim-conditions", "aria-conditions", "ariaConditions")
+                ScriptConditionsLoader.loadClaimConditions(presetSection)
             );
-            if (claimConditions.isEmpty()) {
-                claimConditions = presetSection.getStringList("claim-conditions").stream()
-                    .map(MailPresetLoader::parseCondition)
-                    .filter(java.util.Objects::nonNull)
-                    .toList();
-            }
             List<MailPresetCdkDefinition> cdks = loadCdks(presetSection, logger, id);
             result.put(id, new MailPresetDefinition(id, enabled, displayName, subject, body, expiresAfter, attachments, claimCommands, claimConditions, cdks));
         }
@@ -227,7 +221,7 @@ public final class MailPresetLoader {
         if (preset.claimConditions() != null && !preset.claimConditions().isEmpty()) {
             List<String> condList = new ArrayList<>();
             for (ScriptCondition cond : preset.claimConditions()) {
-                condList.add(cond.serialize().replace('\t', ':'));
+                condList.add(cond.serialize());
             }
             section.set("claim-conditions", condList);
         }
@@ -266,18 +260,6 @@ public final class MailPresetLoader {
         if (seconds % 3600 == 0) return (seconds / 3600) + "h";
         if (seconds % 60 == 0) return (seconds / 60) + "m";
         return seconds + "s";
-    }
-
-    private static ScriptCondition parseCondition(String rawValue) {
-        if (rawValue == null || rawValue.isBlank()) {
-            return null;
-        }
-        ScriptCondition inline = ScriptCondition.parseInline(rawValue);
-        if (inline != null) {
-            return inline;
-        }
-        String normalized = rawValue.replace("::", "\t");
-        return ScriptCondition.deserialize(normalized);
     }
 
     private static String resolveDescription(ItemStack itemStack) {

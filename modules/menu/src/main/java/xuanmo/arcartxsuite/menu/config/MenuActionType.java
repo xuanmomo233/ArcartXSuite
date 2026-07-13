@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.menu.config;
 
 import java.util.Locale;
+import java.util.logging.Logger;
 
 public enum MenuActionType {
     COMMAND,
@@ -15,6 +16,8 @@ public enum MenuActionType {
     SCRIPT_JS,
     SCRIPT_ARIA,
     NONE;
+
+    private static final Logger LOGGER = Logger.getLogger(MenuActionType.class.getName());
 
     public static MenuActionType parse(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -32,7 +35,10 @@ public enum MenuActionType {
             case "signal" -> SIGNAL;
             case "js" -> SCRIPT_JS;
             case "aria" -> SCRIPT_ARIA;
-            default -> NONE;
+            default -> {
+                LOGGER.warning("未知 Menu 动作关键字，已降级为 NONE: " + raw);
+                yield NONE;
+            }
         };
     }
 }

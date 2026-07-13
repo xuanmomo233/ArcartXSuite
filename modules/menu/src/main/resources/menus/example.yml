@@ -66,13 +66,17 @@ permission: none
 #   - "%player_level% >= 10"          — 等级 ≥ 10
 #   - "%player_world% == world_hub"   — 在主城世界
 #   - "%vault_eco_balance% >= 100"    — 余额 ≥ 100
-# 也支持 Aria 脚本条件（由硬依赖的 ArcartX 内置提供）：会注入活的 player 对象（原生 Bukkit
-# Player），脚本内以裸名 player 调用其方法。条件为单个表达式，Suite 会自动补 return。
-# 注意：只支持在 player 上的【单层】方法调用（链式如 player.getWorld().getName() 不可用）；
-# 需要世界名等请改用 %...% PAPI 占位符（求值前展开为字面值，字符串值记得加引号）。
+# 也支持 Aria 脚本条件（Aria 由硬依赖的 ArcartX 内置提供，始终可用）：Suite 会注入 AXS 自有的
+# player 门面对象，脚本内以裸名 player 调用其方法（读取属性 / 权限 / 变量 / 动作）。
+# 条件为单个表达式，Suite 会自动补 return。常用读取方法（返回原始值，可直接比较/运算）：
+#   player.getLevel() / player.getFood() / player.getHealth() / player.getWorld()（返回世界名字符串）
+#   player.hasPermission('a.b') / player.hasPermission('a.b')
+#   player.papi('%...%')（PAPI 解析为字符串） / player.papiNumber('%...%')（解析为数字）
+# 注意：AriaPlayer 门面已把常用值收敛为单层方法，`player.getWorld()` 直接返回世界名；门面未覆盖的原生 API 使用 `player.bukkit()`。
 #   - "aria: player.getLevel() >= 10"
 #   - "aria: player.hasPermission('essentials.fly')"
-#   - "aria: '%player_world%' == 'world'"
+#   - "aria: player.getWorld() == 'world'"
+#   - "aria: player.papiNumber('%vault_eco_balance%') >= 100"
 open-requirements: []
 # ─── 生命周期动作 ───────────────────────────────────────────
 
@@ -214,9 +218,9 @@ pages:
         # 条件满足时按钮正常显示，不满足时：
         #   - 若配置了 deny-message：按钮仍显示但点击后提示消息
         #   - 若未配置 deny-message：按钮完全隐藏
-        condition:
+        use-conditions:
           - "%player_level% >= 5"
-          # 等价的 Aria 脚本条件（注入活 player 对象，Suite 自动补 return）:
+          # 等价的 Aria 脚本条件（注入 AXS player 门面，Suite 自动补 return）:
           # - "aria: player.getLevel() >= 5"
         # 条件不满足时的提示消息
         deny-message: "&c需要达到 5 级才能领取在线奖励"
@@ -294,27 +298,96 @@ pages:
           - "close"
 
       # ─── 脚本动作示例（aria / js）───
-      # aria 与 js 都会注入活的 player 对象，脚本内以裸名 player 调用其 Bukkit 方法：
-      #   aria：由硬依赖的 ArcartX 内置提供（始终可用）。动作脚本按原样执行、可有副作用
-      #         （player.performCommand 派发指令、player.sendMessage 发消息）；作为条件时是
-      #         单个表达式，Suite 自动补 return。只支持 player 上的【单层】方法调用
-      #         （链式 player.getWorld().getName() 不可用，需要世界名用 %player_world%）。
-      #         Aria 语法：// 注释、字符串用单引号、空值 none、elif、a..b、for(x in ...)。
-      #   js  ：注入 player + Bukkit，但需服务器 classpath 上有 JS 引擎（GraalJS 等），
+      # aria 与 js 都会注入 AXS 自有的 player 门面对象，脚本内以裸名 player 调用其方法：
+      #   读取：player.getLevel()/getFood()/getHealth()/getWorld()、player.hasPermission('a.b')、
+      #         player.papi('%...%')（字符串）、player.papiNumber('%...%')（数字，便于比较/计算）。
+      #   动作：player.command('warp vip')（玩家执行）、player.console('eco take %player_name% 100')（控制台）、
+      #         player.op('cmd')（临时OP执行）、player.msg('&c...')（发消息，支持 & 颜色）、
+      #         player.title('主','副')、player.sound('ENTITY_PLAYER_LEVELUP')、player.close()。
+      #   aria：由硬依赖的 ArcartX 内置提供（始终可用）。动作按原样执行（副作用即执行）；
+      #         作为条件时是单个表达式，Suite 自动补 return。常用值使用门面单层方法；
+      #         player.getWorld() 直接返回世界名，门面未覆盖的原生 API 使用 player.bukkit()。
+      #         Aria 语法：// 注释、字符串用单引号、空值 none、if/elif/else、&& || >= <= ==。
+      #   js  ：同样注入 player 门面，但需服务器 classpath 上有 JS 引擎（GraalJS 等），
       #         Java 15+ 默认无 Nashorn，无引擎时该 js 动作/条件静默跳过。
       script_demo:
         text: "&f脚本动作示例"
         order: 2
-        # 使用条件用 Aria 表达式判定（注入活 player，自动补 return），不满足则按钮灰色禁用
+        # 使用条件用 Aria 表达式判定（自动补 return），不满足则按钮灰色禁用
         use-conditions:
           - "aria: player.getLevel() >= 30 && player.hasPermission('menu.vip')"
         deny-message: "&c需要 30 级且拥有 menu.vip 权限"
         actions:
-          # Aria 动作：直接调用活 player 的 Bukkit 方法，按运算结果派发指令（单行 if/else）
-          - "aria: if (player.getLevel() >= 30) { player.performCommand('warp vip') } else { player.sendMessage('§c等级不足 30 级') }"
+          # Aria 动作：按权限/等级/经济分支，为不同玩家派发不同指令（单行 if/elif/else）
+          - "aria: if (player.hasPermission('rank.mvp')) { player.command('warp mvp') } elif (player.papiNumber('%vault_eco_balance%') >= 1000) { player.console('eco take %player_name% 1000'); player.command('warp vip') } else { player.msg('&c权限/余额不足') }"
           # 等效 JS 写法（需 classpath 上有 JS 引擎）：
-          # - "js: player.getLevel() >= 30 ? player.performCommand('warp vip') : player.sendMessage('§c等级不足 30')"
+          # - "js: player.getLevel() >= 30 ? player.command('warp vip') : player.msg('&c等级不足 30')"
           - "close"
+      # 以下示例使用 YAML 多行块标量：首行写 aria:，后续脚本可按换行或 ; 分句。
+      # VIP 折扣购买：按权限和余额扣除折后价格，再发放物品。
+      script_vip_discount:
+        text: "&aVIP 折扣购买（多行 Aria）"
+        order: 4
+        actions:
+          - |
+            aria:
+              if (player.hasPermission('shop.vip') && player.papiNumber('%vault_eco_balance%') >= 80) {
+                player.console('eco take %player_name% 80');
+                player.command('give %player_name% diamond 1');
+                player.msg('&aVIP 折扣购买成功：扣除 80 金币');
+              } elif (player.papiNumber('%vault_eco_balance%') >= 100) {
+                player.console('eco take %player_name% 100');
+                player.command('give %player_name% diamond 1');
+                player.msg('&a购买成功：扣除 100 金币');
+              } else {
+                player.msg('&c余额不足');
+              }
+      # 按余额分档发放不同数量的奖励。
+      script_balance_tiers:
+        text: "&e余额分档奖励（多行 Aria）"
+        order: 5
+        actions:
+          - |
+            aria:
+              if (player.papiNumber('%vault_eco_balance%') >= 10000) {
+                player.console('give %player_name% diamond 3');
+              } elif (player.papiNumber('%vault_eco_balance%') >= 5000) {
+                player.console('give %player_name% diamond 2');
+              } elif (player.papiNumber('%vault_eco_balance%') >= 1000) {
+                player.console('give %player_name% diamond 1');
+              } else {
+                player.msg('&c余额未达到奖励档位');
+              }
+      # 按权限发放不同奖励。
+      script_permission_rewards:
+        text: "&b权限分档奖励（多行 Aria）"
+        order: 6
+        actions:
+          - |
+            aria:
+              if (player.hasPermission('rank.mvp')) {
+                player.command('give %player_name% diamond 5');
+              } elif (player.hasPermission('rank.vip')) {
+                player.command('give %player_name% diamond 2');
+              } else {
+                player.msg('&c需要 VIP 或 MVP 权限');
+              }
+      # 扣货币、发物资，并用声音和标题反馈结果。
+      script_purchase_feedback:
+        text: "&d购买反馈组合（多行 Aria）"
+        order: 7
+        actions:
+          - |
+            aria:
+              if (player.papiNumber('%vault_eco_balance%') >= 250) {
+                player.console('eco take %player_name% 250');
+                player.command('give %player_name% emerald 8');
+                player.sound('ENTITY_PLAYER_LEVELUP', 1.0, 1.0);
+                player.title('&a购买成功', '&f获得 8 个绿宝石');
+              } else {
+                player.msg('&c需要 250 金币');
+                player.sound('ENTITY_VILLAGER_NO');
+              }
       # ─── 物品库图标示例入口 ───
       item_sources:
         text: "&f物品库图标示例 »"
@@ -414,17 +487,22 @@ pages:
 #   "op: <命令>"               — 以玩家身份临时给予 OP 执行，用完自动收回
 #   "signal: <名称>"            — 触发 EventPacket command-signal 信号
 #   "signal: <名称>|键=值|键2=值2" — 触发信号并传递变量
-#   "aria: <脚本>"             — 执行 Aria 脚本（注入活 player 对象，可调用其 Bukkit 方法）
-#   "js: <脚本>"               — 执行 JavaScript（注入 player、Bukkit），需 classpath 上有 JS 引擎
+#   "aria: <脚本>"             — 执行 Aria 脚本（注入 AXS player 门面，调用其读取/动作方法）
+#   "js: <脚本>"               — 执行 JavaScript（注入 AXS player 门面 + Bukkit），需 classpath 上有 JS 引擎
 #
-# aria 与 js 都能以裸名 player 调用其方法，区别在运行时来源与限制：
-#   aria：由 ArcartX 内置提供（硬依赖，始终可用）。注入活的原生 Bukkit Player，脚本内直接调用，
-#         如 player.performCommand('spawn')、player.getLevel()、player.sendMessage('§a你好')。
+# aria 与 js 都注入 AXS 自有的 player 门面对象，以裸名 player 调用；区别在运行时来源与限制：
+#   aria：由 ArcartX 内置提供（硬依赖，始终可用）。常用方法：
+#         读取 player.getLevel()/getFood()/getHealth()/getWorld()/getName()、isSneaking()/isFlying() 等；
+#         权限 player.hasPermission('a.b')；变量 player.papi('%...%')（字符串）/papiNumber('%...%')（数字）；
+#         动作 player.command('cmd')（玩家）/console('cmd')（控制台）/op('cmd')（临时OP）/
+#              msg('&a..')（发消息）/title('主','副')/sound('名字')/close()。
 #         动作脚本按原样执行（副作用即执行）；作为条件时为单个表达式，Suite 自动补 return。
-#         【只支持 player 上的单层方法调用】——链式如 player.getWorld().getName() 不可用；
-#         需要世界名等请改用 %...% PAPI 占位符（求值前展开为字面值，字符串加引号，
-#         如 "aria: '%player_world%' == 'world'"）。Aria 语法：// 注释、单引号字符串、空值 none。
-#   js  ：注入 player + Bukkit，可调用其方法/派发指令；但需 classpath 上有 JS 引擎（GraalJS 等），
+#         AriaPlayer 门面已把常用值收敛为单层方法，player.getWorld() 直接返回世界名；
+#         门面未覆盖的原生 Bukkit API、链式调用或世界对象请使用 player.bukkit()。
+#         Aria 动作求值前会预展开 %...% PAPI 与 {player}；JS 动作不做脚本级预展开，
+#         JS 中取 PAPI 请使用 player.papi(...) / player.papiNumber(...)。
+#         Aria 语法：// 注释、单引号字符串、空值 none、if/elif/else、&& || >= <= ==。
+#   js  ：注入同一个 player 门面 + Bukkit；但需 classpath 上有 JS 引擎（GraalJS 等），
 #         Java 15+ 默认无 Nashorn，无引擎时 js 动作/条件静默跳过。
 #
 # 所有 command / console / message / op / signal 动作中均可使用 PlaceholderAPI 变量：

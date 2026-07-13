@@ -80,7 +80,7 @@ public interface ModuleContext {
     @ApiStability.Stable
     AttributeBridgeRegistry attributeBridge();
 
-    /** 获取 Blink/Aria 脚本桥接（需服务器安装 Blink 系插件并启用 Aria；不可用时 available() 为 false） */
+    /** 获取 ArcartX 内置 Aria 脚本桥接（不可用时 available() 为 false） */
     @ApiStability.Stable
     @NotNull AriaBridge ariaBridge();
 

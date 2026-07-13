@@ -23,6 +23,7 @@ import xuanmo.arcartxsuite.api.capability.QuestGpsNavigable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
 import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.util.TemporaryOpExecutor;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketAction;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionServices;
@@ -250,15 +251,25 @@ public final class EventPacketDispatchService {
         }
 
         boolean anySuccess = false;
+        int failedActionCount = 0;
         for (EventPacketAction action : rule.actions()) {
-            anySuccess |= executeAction(rule, action, subject, context);
+            boolean success = executeAction(rule, action, subject, context);
+            anySuccess |= success;
+            if (!success) {
+                failedActionCount++;
+            }
         }
-        if (anySuccess || !rule.actions().isEmpty()) {
+        if (rule.actions().isEmpty() || anySuccess) {
             firedRulesCache.add(stateKey);
             persistFired(subject, rule.id());
             if (rule.cooldownMillis() > 0L) {
                 cooldowns.put(stateKey, now + rule.cooldownMillis());
             }
+        } else {
+            logger.warning(
+                "EventPacket 规则命中但所有动作执行失败，未记录为已触发: rule="
+                    + rule.id() + " | failedActions=" + failedActionCount
+            );
         }
     }
 
@@ -463,17 +474,11 @@ public final class EventPacketDispatchService {
         }
         String executor = renderString(action.object("executor"), context, subject);
         if ("op".equalsIgnoreCase(executor) && subject != null) {
-            boolean wasOp = subject.isOp();
-            try {
-                if (!wasOp) {
-                    subject.setOp(true);
-                }
-                return Bukkit.dispatchCommand(subject, command);
-            } finally {
-                if (!wasOp) {
-                    subject.setOp(false);
-                }
-            }
+            String commandToDispatch = command;
+            return TemporaryOpExecutor.execute(
+                subject,
+                () -> Bukkit.dispatchCommand(subject, commandToDispatch)
+            );
         }
         CommandSender sender = "player".equalsIgnoreCase(executor) && subject != null
             ? subject

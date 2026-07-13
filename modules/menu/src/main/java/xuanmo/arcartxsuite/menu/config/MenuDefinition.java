@@ -60,7 +60,7 @@ public record MenuDefinition(
             throw new IllegalArgumentException("菜单缺少 id: " + sourceFile);
         }
         List<ScriptCondition> openRequirements = new ArrayList<>(
-            ScriptConditionsLoader.load(yaml, "open-requirements", "aria-conditions", "ariaConditions")
+            ScriptConditionsLoader.loadOpenRequirements(yaml)
         );
         Map<String, MenuButtonDefinition> footerButtons = new LinkedHashMap<>();
         ConfigurationSection footerSection = yaml.getConfigurationSection("footer-buttons");

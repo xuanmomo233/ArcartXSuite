@@ -10,10 +10,11 @@ import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
-import xuanmo.arcartxsuite.api.condition.ScriptConditionKind;
+import xuanmo.arcartxsuite.api.condition.ScriptActionKind;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionServices;
 import xuanmo.arcartxsuite.menu.config.MenuActionDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuActionType;
+import xuanmo.arcartxsuite.util.TemporaryOpExecutor;
 
 public final class MenuActionExecutor {
 
@@ -52,17 +53,16 @@ public final class MenuActionExecutor {
                 if (command.isBlank()) {
                     yield false;
                 }
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    boolean wasOp = player.isOp();
-                    try {
-                        player.setOp(true);
-                        player.performCommand(command);
-                    } finally {
-                        if (!wasOp) {
-                            player.setOp(false);
+                Bukkit.getScheduler().runTask(
+                    plugin,
+                    () -> TemporaryOpExecutor.execute(
+                        player,
+                        () -> {
+                            player.performCommand(command);
+                            return null;
                         }
-                    }
-                });
+                    )
+                );
                 yield menuService.configuration().settings().closeOnAction();
             }
             case CONSOLE -> {
@@ -138,20 +138,17 @@ public final class MenuActionExecutor {
                 dispatcher.dispatchSignal(signal, player, variables);
                 yield menuService.configuration().settings().closeOnAction();
             }
-            case SCRIPT_JS -> runScript(player, ScriptConditionKind.JS, action.value());
-            case SCRIPT_ARIA -> runScript(player, ScriptConditionKind.ARIA, action.value());
+            case SCRIPT_JS -> runScript(player, ScriptActionKind.JS, action.value());
+            case SCRIPT_ARIA -> runScript(player, ScriptActionKind.ARIA, action.value());
             case NONE -> false;
         };
     }
 
-    private boolean runScript(Player player, ScriptConditionKind kind, String script) {
+    private boolean runScript(Player player, ScriptActionKind kind, String script) {
         if (script == null || script.isBlank()) {
             return false;
         }
-        Bukkit.getScheduler().runTask(
-            plugin,
-            () -> ScriptConditionServices.evaluator().execute(player, kind, script)
-        );
+        ScriptConditionServices.actionExecutor().execute(player, kind, script);
         return menuService.configuration().settings().closeOnAction();
     }
 

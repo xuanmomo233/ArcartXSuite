@@ -22,25 +22,8 @@ public record MenuButtonDefinition(
         if (section == null) {
             return new MenuButtonDefinition(id, id, 0, "", List.of(), List.of(), "", List.of(), "", null);
         }
-        List<ScriptCondition> viewConditions = ScriptConditionsLoader.load(
-            section,
-            "requirements",
-            "view-conditions",
-            "viewConditions",
-            "conditions",
-            "aria-conditions",
-            "ariaConditions"
-        );
-        List<ScriptCondition> useConditions = ScriptConditionsLoader.load(
-            section,
-            "condition",
-            "use-conditions",
-            "useConditions",
-            "click-conditions",
-            "clickConditions",
-            "aria-condition",
-            "ariaCondition"
-        );
+        List<ScriptCondition> viewConditions = ScriptConditionsLoader.loadViewConditions(section);
+        List<ScriptCondition> useConditions = ScriptConditionsLoader.loadUseConditions(section);
         return new MenuButtonDefinition(
             id,
             section.getString("text", id),

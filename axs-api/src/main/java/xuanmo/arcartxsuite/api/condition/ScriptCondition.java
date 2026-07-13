@@ -53,9 +53,6 @@ public record ScriptCondition(
         }
         Matcher papiMatcher = INLINE_PAPI_PATTERN.matcher(trimmed);
         if (!papiMatcher.matches()) {
-            if (trimmed.contains("::")) {
-                return deserialize(trimmed.replace("::", "\t"));
-            }
             return null;
         }
         return papi(
@@ -79,17 +76,13 @@ public record ScriptCondition(
             return parseJsSection(section);
         }
         String jsInline = firstNonBlank(
-            section.getString("js"),
-            section.getString("js-condition"),
-            section.getString("jsCondition")
+            section.getString("js")
         );
         if (jsInline != null) {
             return js(jsInline, jsInline);
         }
         String ariaInline = firstNonBlank(
-            section.getString("aria"),
-            section.getString("aria-condition"),
-            section.getString("ariaCondition")
+            section.getString("aria")
         );
         if (ariaInline != null) {
             return aria(ariaInline, ariaInline);
@@ -171,11 +164,8 @@ public record ScriptCondition(
             return null;
         }
         String trimmed = rawValue.trim();
-        if (trimmed.startsWith("js\t") || trimmed.startsWith("js::")) {
-            String encoded = trimmed.substring(trimmed.indexOf('\t') >= 0 ? trimmed.indexOf('\t') + 1 : 3);
-            if (trimmed.startsWith("js::")) {
-                encoded = trimmed.substring("js::".length());
-            }
+        if (trimmed.startsWith("js\t")) {
+            String encoded = trimmed.substring(3);
             try {
                 String script = new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
                 return js(script, trimmed);
@@ -183,11 +173,8 @@ public record ScriptCondition(
                 return js(encoded, trimmed);
             }
         }
-        if (trimmed.startsWith("aria\t") || trimmed.startsWith("aria::")) {
-            String encoded = trimmed.substring(trimmed.indexOf('\t') >= 0 ? trimmed.indexOf('\t') + 1 : 6);
-            if (trimmed.startsWith("aria::")) {
-                encoded = trimmed.substring("aria::".length());
-            }
+        if (trimmed.startsWith("aria\t")) {
+            String encoded = trimmed.substring(5);
             try {
                 String script = new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
                 return aria(script, trimmed);
@@ -200,9 +187,6 @@ public record ScriptCondition(
             return inline;
         }
         String[] parts = trimmed.split("\t", 3);
-        if (parts.length < 3) {
-            parts = trimmed.split("::", 3);
-        }
         if (parts.length < 3) {
             return null;
         }

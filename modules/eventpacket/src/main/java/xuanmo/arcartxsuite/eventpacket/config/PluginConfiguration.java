@@ -217,21 +217,11 @@ public record PluginConfiguration(
     }
 
     private static List<ScriptCondition> loadConditions(ConfigurationSection section, Logger logger, String ruleId) {
-        List<ScriptCondition> conditions = new ArrayList<>(
-            ScriptConditionsLoader.load(section, "conditions", "aria-conditions", "ariaConditions")
+        return ScriptConditionsLoader.loadModuleConditions(
+            section,
+            logger,
+            "EventPacket 规则条件格式无效，已跳过: " + ruleId + " -> "
         );
-        if (conditions.isEmpty()) {
-            List<?> rawConditions = section.getList("conditions");
-            if (rawConditions != null) {
-                for (Object rawCondition : rawConditions) {
-                    String line = nullToEmpty(rawCondition == null ? "" : String.valueOf(rawCondition)).trim();
-                    if (!line.isBlank()) {
-                        logger.warning("EventPacket 规则条件格式无效，已跳过: " + ruleId + " -> " + line);
-                    }
-                }
-            }
-        }
-        return List.copyOf(conditions);
     }
 
     private static Set<String> normalizeSet(List<String> values) {

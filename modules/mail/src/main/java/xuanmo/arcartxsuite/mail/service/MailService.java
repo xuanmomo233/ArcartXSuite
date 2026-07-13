@@ -1077,7 +1077,7 @@ public final class MailService implements Listener {
             List<String> condStrings = new ArrayList<>();
             if (def.claimConditions() != null) {
                 for (ScriptCondition cond : def.claimConditions()) {
-                    condStrings.add(cond.serialize().replace('\t', ':'));
+                    condStrings.add(cond.serialize());
                 }
             }
             payload.put("claimConditions", condStrings);

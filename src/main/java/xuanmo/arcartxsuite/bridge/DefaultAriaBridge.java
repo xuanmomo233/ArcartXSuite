@@ -4,6 +4,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Map;
+import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -13,33 +14,26 @@ import xuanmo.arcartxsuite.api.script.AriaBridge;
 
 public final class DefaultAriaBridge implements AriaBridge {
 
-    // ── 新版 Aria API (priv.seventeen.artist.aria) ──────────────
-    private static final String NEW_ARIA_CLASS = "priv.seventeen.artist.aria.Aria";
-    private static final String NEW_CONTEXT_CLASS = "priv.seventeen.artist.aria.context.Context";
-    private static final String NEW_VARIABLE_KEY_CLASS = "priv.seventeen.artist.aria.context.VariableKey";
-    private static final String NEW_GLOBAL_STORAGE_CLASS = "priv.seventeen.artist.aria.context.GlobalStorage";
-    private static final String NEW_IVALUE_CLASS = "priv.seventeen.artist.aria.value.IValue";
-    private static final String NEW_OBJECT_VALUE_CLASS = "priv.seventeen.artist.aria.value.ObjectValue";
-    private static final String NEW_IARIA_OBJECT_CLASS = "priv.seventeen.artist.aria.object.IAriaObject";
-    private static final String NEW_JAVA_OBJECT_MIRROR_CLASS = "priv.seventeen.artist.aria.interop.JavaObjectMirror";
-
-    // ── 旧版 Blink API ──────────────────────────────────────────
-    private static final String OLD_MANAGER_CLASS = "priv.seventeen.artist.blink.script.AriaScriptManager";
-
-    // ── 宿主插件发现 ────────────────────────────────────────────
-    // ArcartX 为硬依赖（plugin.yml depend），内置 Aria 语言，优先从其 classloader 发现；
-    // 其余为旧版 Blink 生态的兼容回退（已非必需）。
-    private static final String[] DISCOVERY_PLUGINS = {
-        "ArcartX", "Aria", "Symphony", "Overture", "BlinkAriaHost"
-    };
-
-    private final JavaPlugin plugin;
+    private static final String NEW_ARIA_CLASS =
+        "priv.seventeen.artist.aria.Aria";
+    private static final String NEW_CONTEXT_CLASS =
+        "priv.seventeen.artist.aria.context.Context";
+    private static final String NEW_VARIABLE_KEY_CLASS =
+        "priv.seventeen.artist.aria.context.VariableKey";
+    private static final String NEW_GLOBAL_STORAGE_CLASS =
+        "priv.seventeen.artist.aria.context.GlobalStorage";
+    private static final String NEW_IVALUE_CLASS =
+        "priv.seventeen.artist.aria.value.IValue";
+    private static final String NEW_OBJECT_VALUE_CLASS =
+        "priv.seventeen.artist.aria.value.ObjectValue";
+    private static final String NEW_IARIA_OBJECT_CLASS =
+        "priv.seventeen.artist.aria.object.IAriaObject";
+    private static final String NEW_JAVA_OBJECT_MIRROR_CLASS =
+        "priv.seventeen.artist.aria.interop.JavaObjectMirror";
+    private static final String[] DISCOVERY_PLUGINS = {"ArcartX", "Aria"};
 
     private boolean available;
     private String version;
-    private boolean newApi;
-
-    // 新版 API 反射缓存
     private Method newCreateContext;
     private Method newEval;
     private Method newVariableKeyOf;
@@ -49,123 +43,104 @@ public final class DefaultAriaBridge implements AriaBridge {
     private Constructor<?> newJavaObjectMirrorCtor;
     private Constructor<?> newObjectValueCtor;
 
-    // 旧版 API 反射缓存
-    private Object oldManagerInstance;
-    private Method oldEvalMethod;
-
     public DefaultAriaBridge(JavaPlugin plugin) {
-        this.plugin = plugin;
     }
 
     public void initialize() {
         reset();
         ClassLoader classLoader = resolveClassLoader();
         if (classLoader == null) {
+            logInitializationFailure(
+                new IllegalStateException(
+                    "新版 Aria API 未在 ArcartX classloader 中找到"
+                )
+            );
             return;
         }
-        // 优先尝试新版 Aria API
-        if (tryInitNewApi(classLoader)) {
-            return;
+        if (!tryInitNewApi(classLoader)) {
+            reset();
         }
-        // 回退到旧版 Blink API
-        tryInitOldApi(classLoader);
     }
 
-    // ── 新版 Aria 初始化 ────────────────────────────────────────
-
-    private boolean tryInitNewApi(ClassLoader cl) {
+    private boolean tryInitNewApi(ClassLoader classLoader) {
         try {
-            Class<?> ariaClass = Class.forName(NEW_ARIA_CLASS, true, cl);
-            Class<?> contextClass = Class.forName(NEW_CONTEXT_CLASS, true, cl);
-            Class<?> variableKeyClass = Class.forName(NEW_VARIABLE_KEY_CLASS, true, cl);
-            Class<?> globalStorageClass = Class.forName(NEW_GLOBAL_STORAGE_CLASS, true, cl);
-            Class<?> iValueClass = Class.forName(NEW_IVALUE_CLASS, true, cl);
-            Class<?> objectValueClass = Class.forName(NEW_OBJECT_VALUE_CLASS, true, cl);
-            Class<?> iAriaObjectClass = Class.forName(NEW_IARIA_OBJECT_CLASS, true, cl);
-            Class<?> javaObjectMirrorClass = Class.forName(NEW_JAVA_OBJECT_MIRROR_CLASS, true, cl);
+            Class<?> ariaClass = Class.forName(
+                NEW_ARIA_CLASS, true, classLoader
+            );
+            Class<?> contextClass = Class.forName(
+                NEW_CONTEXT_CLASS, true, classLoader
+            );
+            Class<?> variableKeyClass = Class.forName(
+                NEW_VARIABLE_KEY_CLASS, true, classLoader
+            );
+            Class<?> globalStorageClass = Class.forName(
+                NEW_GLOBAL_STORAGE_CLASS, true, classLoader
+            );
+            Class<?> iValueClass = Class.forName(
+                NEW_IVALUE_CLASS, true, classLoader
+            );
+            Class<?> objectValueClass = Class.forName(
+                NEW_OBJECT_VALUE_CLASS, true, classLoader
+            );
+            Class<?> iAriaObjectClass = Class.forName(
+                NEW_IARIA_OBJECT_CLASS, true, classLoader
+            );
+            Class<?> javaObjectMirrorClass = Class.forName(
+                NEW_JAVA_OBJECT_MIRROR_CLASS, true, classLoader
+            );
 
             newCreateContext = ariaClass.getMethod("createContext");
             newEval = ariaClass.getMethod("eval", String.class, contextClass);
             newVariableKeyOf = variableKeyClass.getMethod("of", String.class);
             newGetGlobalStorage = contextClass.getMethod("getGlobalStorage");
-            newGetGlobalVariable = globalStorageClass.getMethod("getGlobalVariable", variableKeyClass);
-            // VariableReference.setValue(IValue) —— 官方 Overture 注入路径
-            Class<?> variableReferenceClass = newGetGlobalVariable.getReturnType();
-            newSetValue = variableReferenceClass.getMethod("setValue", iValueClass);
-            // 活对象注入：new ObjectValue(new JavaObjectMirror(obj))
-            newJavaObjectMirrorCtor = javaObjectMirrorClass.getConstructor(Object.class);
-            newObjectValueCtor = objectValueClass.getConstructor(iAriaObjectClass);
+            newGetGlobalVariable = globalStorageClass.getMethod(
+                "getGlobalVariable", variableKeyClass
+            );
+            Class<?> variableReferenceClass =
+                newGetGlobalVariable.getReturnType();
+            newSetValue = variableReferenceClass.getMethod(
+                "setValue", iValueClass
+            );
+            newJavaObjectMirrorCtor =
+                javaObjectMirrorClass.getConstructor(Object.class);
+            newObjectValueCtor =
+                objectValueClass.getConstructor(iAriaObjectClass);
 
-            // 尝试获取版本（AriaEngine 可能暴露版本信息）
             version = resolveNewApiVersion(ariaClass);
             available = true;
-            newApi = true;
             xuanmo.arcartxsuite.module.AxsLog.logger().fine(
-                "[Aria] 新版桥接初始化成功" + (version != null ? " (v" + version + ")" : "")
+                "[Aria] 新版桥接初始化成功"
+                    + (version != null ? " (v" + version + ")" : "")
             );
             return true;
-        } catch (ClassNotFoundException ignored) {
-            // 新版 Aria 不在 classpath 中
+        } catch (ClassNotFoundException exception) {
+            logInitializationFailure(exception);
         } catch (ReflectiveOperationException exception) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().fine(
-                "[Aria] 新版 API 反射失败，回退旧版: " + exception.getMessage()
-            );
+            logInitializationFailure(exception);
         }
         return false;
     }
 
     private @Nullable String resolveNewApiVersion(Class<?> ariaClass) {
         try {
-            // Aria 本体无 getVersion，尝试从 AriaEngine 获取或返回 null
             Class<?> engineClass = Class.forName(
-                "priv.seventeen.artist.aria.api.AriaEngine", true, ariaClass.getClassLoader()
+                "priv.seventeen.artist.aria.api.AriaEngine",
+                true,
+                ariaClass.getClassLoader()
             );
-            // 检查是否有版本字段
             try {
                 Field versionField = engineClass.getDeclaredField("VERSION");
                 versionField.setAccessible(true);
-                Object val = versionField.get(null);
-                return val != null ? String.valueOf(val) : null;
+                Object value = versionField.get(null);
+                return value == null ? null : String.valueOf(value);
             } catch (NoSuchFieldException ignored) {
+                // AriaEngine 没有公开版本字段时使用默认版本标识。
             }
         } catch (ReflectiveOperationException ignored) {
+            // 版本信息是诊断信息，不影响 Aria 执行。
         }
         return "new";
     }
-
-    // ── 旧版 Blink 初始化 ───────────────────────────────────────
-
-    private void tryInitOldApi(ClassLoader cl) {
-        try {
-            Class<?> managerClass = Class.forName(OLD_MANAGER_CLASS, true, cl);
-            oldManagerInstance = resolveKotlinObject(managerClass);
-            if (oldManagerInstance == null) {
-                return;
-            }
-            Method isAvailableMethod = managerClass.getMethod("isAvailable");
-            Object availableFlag = isAvailableMethod.invoke(oldManagerInstance);
-            if (!(availableFlag instanceof Boolean bool) || !bool) {
-                oldManagerInstance = null;
-                return;
-            }
-            oldEvalMethod = managerClass.getMethod("eval", String.class, Map.class);
-            Method versionGetter = managerClass.getMethod("getVersion");
-            Object versionValue = versionGetter.invoke(oldManagerInstance);
-            version = versionValue == null ? null : String.valueOf(versionValue);
-            available = true;
-            newApi = false;
-            xuanmo.arcartxsuite.module.AxsLog.logger().fine(
-                "[Aria] 旧版桥接初始化成功 (v" + (version == null ? "?" : version) + ")"
-            );
-        } catch (ReflectiveOperationException exception) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning(
-                "[Aria] 桥接初始化失败: " + exception.getMessage()
-            );
-            reset();
-        }
-    }
-
-    // ── AriaBridge 接口实现 ──────────────────────────────────────
 
     @Override
     public boolean available() {
@@ -178,14 +153,20 @@ public final class DefaultAriaBridge implements AriaBridge {
     }
 
     @Override
-    public @Nullable Object eval(@NotNull String code, @NotNull Map<String, Object> bindings) {
+    public @Nullable Object eval(
+        @NotNull String code,
+        @NotNull Map<String, Object> bindings
+    ) {
         if (!available) {
             return null;
         }
-        return newApi ? evalNewApi(code, bindings) : evalOldApi(code, bindings);
+        return evalNewApi(code, bindings);
     }
 
-    private @Nullable Object evalNewApi(@NotNull String code, @NotNull Map<String, Object> bindings) {
+    private @Nullable Object evalNewApi(
+        @NotNull String code,
+        @NotNull Map<String, Object> bindings
+    ) {
         try {
             Object context = newCreateContext.invoke(null);
             injectBindings(context, bindings);
@@ -198,37 +179,35 @@ public final class DefaultAriaBridge implements AriaBridge {
     }
 
     @Override
-    public boolean evalBoolean(@NotNull String code, @NotNull Map<String, Object> bindings) {
+    public boolean evalBoolean(
+        @NotNull String code,
+        @NotNull Map<String, Object> bindings
+    ) {
         if (!available) {
             return false;
         }
-        if (newApi) {
-            return evalBooleanNewApi(code, bindings);
-        }
-        return AriaBridge.toBoolean(evalOldApi(code, bindings));
+        return evalBooleanNewApi(code, bindings);
     }
 
-    private boolean evalBooleanNewApi(@NotNull String code, @NotNull Map<String, Object> bindings) {
+    private boolean evalBooleanNewApi(
+        @NotNull String code,
+        @NotNull Map<String, Object> bindings
+    ) {
         try {
             Object context = newCreateContext.invoke(null);
             injectBindings(context, bindings);
             Object result = newEval.invoke(null, code, context);
-            if (result == null) {
-                return false;
-            }
-            // IValue<?>.booleanValue() 直接返回 boolean
-            Method booleanValue = result.getClass().getMethod("booleanValue");
-            Object bv = booleanValue.invoke(result);
-            return bv instanceof Boolean b && b;
+            return AriaBridge.toBoolean(unwrap(result));
         } catch (ReflectiveOperationException exception) {
             logEvalFailure("evalBoolean", exception);
             return false;
         }
     }
 
-    // 官方 Overture 注入路径：把活对象包装成 ObjectValue(JavaObjectMirror(obj))，
-    // 写入全局变量，脚本内以裸名（如 player）访问并可反射调用其 Java 方法。
-    private void injectBindings(Object context, Map<String, Object> bindings) throws ReflectiveOperationException {
+    private void injectBindings(
+        Object context,
+        Map<String, Object> bindings
+    ) throws ReflectiveOperationException {
         if (bindings.isEmpty()) {
             return;
         }
@@ -246,9 +225,8 @@ public final class DefaultAriaBridge implements AriaBridge {
         }
     }
 
-    // 按 IValue 具体类型取原生 Java 值：NumberValue.jvmValue() 在 aria-1.0.1 返回 0.0，
-    // 故数值走 numberValue()，字符串走 stringValue()，布尔走 booleanValue()，其余走 jvmValue()。
-    private @Nullable Object unwrap(@Nullable Object result) throws ReflectiveOperationException {
+    private @Nullable Object unwrap(@Nullable Object result)
+        throws ReflectiveOperationException {
         if (result == null) {
             return null;
         }
@@ -258,11 +236,15 @@ public final class DefaultAriaBridge implements AriaBridge {
                 return null;
             }
             case "NumberValue" -> {
-                double d = ((Number) result.getClass().getMethod("numberValue").invoke(result)).doubleValue();
-                if (d == Math.rint(d) && !Double.isInfinite(d)) {
-                    return (long) d;
+                double number = ((Number) result.getClass()
+                    .getMethod("numberValue")
+                    .invoke(result))
+                    .doubleValue();
+                if (number == Math.rint(number)
+                    && !Double.isInfinite(number)) {
+                    return (long) number;
                 }
-                return d;
+                return number;
             }
             case "StringValue" -> {
                 return result.getClass().getMethod("stringValue").invoke(result);
@@ -276,25 +258,24 @@ public final class DefaultAriaBridge implements AriaBridge {
         }
     }
 
-    private void logEvalFailure(String tag, ReflectiveOperationException exception) {
-        Throwable cause = exception.getCause();
-        String msg = cause != null ? cause.getMessage() : exception.getMessage();
-        xuanmo.arcartxsuite.module.AxsLog.logger().fine("[Aria] " + tag + " 失败: " + msg);
+    private void logInitializationFailure(Exception exception) {
+        xuanmo.arcartxsuite.module.AxsLog.logger().log(
+            Level.WARNING,
+            "[Aria] 桥接初始化失败，Aria 不可用",
+            exception
+        );
     }
 
-    private @Nullable Object evalOldApi(@NotNull String code, @NotNull Map<String, Object> bindings) {
-        if (oldEvalMethod == null || oldManagerInstance == null) {
-            return null;
-        }
-        try {
-            return oldEvalMethod.invoke(oldManagerInstance, code, bindings);
-        } catch (ReflectiveOperationException exception) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().fine("[Aria] eval 失败: " + exception.getMessage());
-            return null;
-        }
+    private void logEvalFailure(
+        String operation,
+        ReflectiveOperationException exception
+    ) {
+        xuanmo.arcartxsuite.module.AxsLog.logger().log(
+            Level.WARNING,
+            "[Aria] " + operation + " 失败",
+            exception
+        );
     }
-
-    // ── 宿主发现 ────────────────────────────────────────────────
 
     private @Nullable ClassLoader resolveClassLoader() {
         for (String pluginName : DISCOVERY_PLUGINS) {
@@ -302,32 +283,20 @@ public final class DefaultAriaBridge implements AriaBridge {
             if (candidate == null || !candidate.isEnabled()) {
                 continue;
             }
-            ClassLoader cl = candidate.getClass().getClassLoader();
-            // 优先检测新版 Aria
+            ClassLoader classLoader = candidate.getClass().getClassLoader();
             try {
-                Class.forName(NEW_ARIA_CLASS, false, cl);
-                return cl;
+                Class.forName(NEW_ARIA_CLASS, false, classLoader);
+                return classLoader;
             } catch (ClassNotFoundException ignored) {
-            }
-            // 回退检测旧版 Blink
-            try {
-                Class.forName(OLD_MANAGER_CLASS, false, cl);
-                return cl;
-            } catch (ClassNotFoundException ignored) {
+                // 继续检查另一个新版 Aria 宿主名称。
             }
         }
         return null;
     }
 
-    private static @Nullable Object resolveKotlinObject(Class<?> managerClass) throws ReflectiveOperationException {
-        Field instanceField = managerClass.getField("INSTANCE");
-        return instanceField.get(null);
-    }
-
     private void reset() {
         available = false;
         version = null;
-        newApi = false;
         newCreateContext = null;
         newEval = null;
         newVariableKeyOf = null;
@@ -336,7 +305,5 @@ public final class DefaultAriaBridge implements AriaBridge {
         newSetValue = null;
         newJavaObjectMirrorCtor = null;
         newObjectValueCtor = null;
-        oldManagerInstance = null;
-        oldEvalMethod = null;
     }
 }

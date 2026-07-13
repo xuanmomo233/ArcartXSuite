@@ -108,21 +108,11 @@ public final class PropDefinitionLoader {
     }
 
     private static List<ScriptCondition> readConditions(FileConfiguration configuration, String propId, Logger logger) {
-        List<ScriptCondition> conditions = new ArrayList<>(
-            ScriptConditionsLoader.load(configuration, "conditions", "aria-conditions", "ariaConditions")
+        return ScriptConditionsLoader.loadModuleConditions(
+            configuration,
+            logger,
+            "Prop " + propId + " 条件格式无效，已跳过: "
         );
-        if (conditions.isEmpty() && logger != null) {
-            List<?> rawList = configuration.getList("conditions");
-            if (rawList != null && !rawList.isEmpty()) {
-                for (Object raw : rawList) {
-                    String line = safe(raw == null ? "" : String.valueOf(raw));
-                    if (!line.isBlank()) {
-                        logger.warning("Prop " + propId + " 条件格式无效，已跳过: " + line);
-                    }
-                }
-            }
-        }
-        return List.copyOf(conditions);
     }
 
     private static String readString(FileConfiguration configuration, String path, String defaultValue) {
