@@ -5,8 +5,11 @@ import java.io.IOException;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -26,6 +29,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.scheduler.BukkitTask;
 import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.permissions.Permissible;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI;
@@ -322,6 +326,10 @@ public class TitleService {
                     player.sendMessage(prefix() + ChatColor.RED + "称号不存在: " + titleId);
                     return;
                 }
+                if (!hasGroupAccess(player, definition.groupId())) {
+                    player.sendMessage(prefix() + ChatColor.RED + "你没有权限使用该称号分组。");
+                    return;
+                }
                 if (!state.hasOwnedTitle(normalizedTitleId)) {
                     player.sendMessage(prefix() + ChatColor.RED + "你尚未拥有称号: " + ChatColor.translateAlternateColorCodes('&', definition.displayName()));
                     return;
@@ -430,6 +438,10 @@ public class TitleService {
         if (definition == null) {
             return TitleOperationResult.failure("称号不存在: " + titleId);
         }
+        Player target = Bukkit.getPlayer(playerUuid);
+        if (target != null && target.isOnline() && !hasGroupAccess(target, definition.groupId())) {
+            return TitleOperationResult.failure("目标玩家没有权限使用该称号分组。");
+        }
 
         Instant now = clock.instant();
         Instant activatesAt;
@@ -491,7 +503,33 @@ public class TitleService {
     }
 
     public ResolvedTitleState resolveState(UUID playerUuid) {
-        return TitleStateResolver.resolve(getCachedState(playerUuid), configuration, clock.instant());
+        return TitleStateResolver.resolve(
+            getCachedState(playerUuid),
+            configuration,
+            clock.instant(),
+            accessibleGroupIds(playerUuid)
+        );
+    }
+
+    public boolean hasGroupAccess(Permissible player, String groupId) {
+        var group = configuration.group(groupId);
+        if (group == null || group.permission().isBlank()) {
+            return true;
+        }
+        return player != null && player.hasPermission(group.permission());
+    }
+
+    public Set<String> accessibleGroupIds(UUID playerUuid) {
+        Player player = playerUuid == null ? null : Bukkit.getPlayer(playerUuid);
+        Set<String> accessible = new HashSet<>();
+        for (var group : configuration.groups().values()) {
+            if (player != null && player.isOnline()
+                ? hasGroupAccess(player, group.id())
+                : group.permission().isBlank()) {
+                accessible.add(group.id());
+            }
+        }
+        return Collections.unmodifiableSet(accessible);
     }
 
     public boolean attributePlusHooked() {
@@ -616,6 +654,10 @@ public class TitleService {
                 if (definition == null) {
                     return;
                 }
+                if (!hasGroupAccess(player, definition.groupId())) {
+                    player.sendMessage(prefix() + ChatColor.RED + "你没有权限使用该称号分组。");
+                    return;
+                }
                 if (!state.equippedTitleIdsByGroup().containsValue(normalizedTitleId)) {
                     player.sendMessage(prefix() + ChatColor.RED + "只能将已装备的称号设为主展示称号。");
                     return;
@@ -649,13 +691,26 @@ public class TitleService {
         }
         Instant now = clock.instant();
         PlayerTitleState sanitizedState = state.sanitize(now);
-        ResolvedTitleState resolvedState = TitleStateResolver.resolve(sanitizedState, configuration, now);
+        Set<String> accessibleGroupIds = accessibleGroupIds(player.getUniqueId());
+        ResolvedTitleState resolvedState = TitleStateResolver.resolve(
+            sanitizedState,
+            configuration,
+            now,
+            accessibleGroupIds
+        );
         String selectedTitleId = ensureSelectedTitle(player.getUniqueId(), sanitizedState);
         bridge.sendPacket(
             player,
             runtimeUiId,
             handlerName,
-            TitleMenuPacketFactory.build(configuration, sanitizedState, resolvedState, selectedTitleId, now)
+            TitleMenuPacketFactory.build(
+                configuration,
+                sanitizedState,
+                resolvedState,
+                selectedTitleId,
+                accessibleGroupIds,
+                now
+            )
         );
     }
 
@@ -768,7 +823,12 @@ public class TitleService {
             return;
         }
         PlayerTitleState sanitizedState = sanitizeCachedState(player.getUniqueId(), state);
-        ResolvedTitleState resolvedState = TitleStateResolver.resolve(sanitizedState, configuration, clock.instant());
+        ResolvedTitleState resolvedState = TitleStateResolver.resolve(
+            sanitizedState,
+            configuration,
+            clock.instant(),
+            accessibleGroupIds(player.getUniqueId())
+        );
         attributePlusService.sync(player, resolvedState);
         mythicLibService.sync(player, resolvedState);
         craneAttributeService.sync(player, resolvedState);
@@ -793,7 +853,10 @@ public class TitleService {
 
     private String ensureSelectedTitle(UUID playerUuid, PlayerTitleState state) {
         String currentSelection = normalizeTitleId(selectedTitleIds.get(playerUuid));
-        if (!currentSelection.isBlank() && configuration.title(currentSelection) != null) {
+        TitleDefinition currentDefinition = configuration.title(currentSelection);
+        if (!currentSelection.isBlank()
+            && currentDefinition != null
+            && hasGroupAccess(Bukkit.getPlayer(playerUuid), currentDefinition.groupId())) {
             return currentSelection;
         }
         String defaultSelection = defaultSelectedTitle(state);

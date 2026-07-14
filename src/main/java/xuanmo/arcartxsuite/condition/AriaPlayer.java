@@ -149,10 +149,7 @@ public final class AriaPlayer {
 
     /** 临时给玩家 OP 权限执行命令，执行后恢复原状态。 */
     public boolean op(@NotNull String command) {
-        return TemporaryOpExecutor.execute(
-            player,
-            () -> player.performCommand(strip(papi(command)))
-        );
+        return TemporaryOpExecutor.execute(player, strip(papi(command)));
     }
 
     /** 推荐使用的消息发送方法。 */

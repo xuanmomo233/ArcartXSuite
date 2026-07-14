@@ -404,6 +404,14 @@ public record PluginConfiguration(
                 return null;
             }
             String permission = nullToEmpty(section.getString("permission")).trim();
+        if ("op".equals(executorType) && permission.isBlank()) {
+            logger.warning(
+                "EventPacket 预设 " + key
+                    + " 使用 type: op，但 permission 为空；"
+                    + "临时 OP 预设必须配置非空 permission，已跳过该预设"
+            );
+            return null;
+        }
             boolean allowArgs = section.getBoolean("allow-args", false);
             String argsPattern = nullToEmpty(section.getString("args-pattern", "[\\w.:-]{1,64}")).trim();
             long cooldownMillis = parseCooldownMillis(section.get("cooldown"));

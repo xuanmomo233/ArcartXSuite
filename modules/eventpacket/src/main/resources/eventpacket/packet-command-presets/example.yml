@@ -11,7 +11,7 @@ example_op:
   # 可选: op / console / player
   type: op
   # 触发所需权限，留空表示不校验
-  permission: ""
+  permission: "eventpacket.preset.example"
   # 冷却时间，支持数字(秒)或单位后缀: 5s / 1m / 1h / 1d
   cooldown: 0
   # 是否允许客户端透传额外参数

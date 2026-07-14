@@ -220,7 +220,7 @@ public record TitleModuleConfiguration(
     private static Map<String, TitleGroupDefinition> loadGroups(ConfigurationSection section) {
         LinkedHashMap<String, TitleGroupDefinition> groups = new LinkedHashMap<>();
         if (section == null) {
-            groups.put("default", new TitleGroupDefinition("default", "默认", 0));
+            groups.put("default", new TitleGroupDefinition("default", "默认", 0, ""));
             return groups;
         }
 
@@ -233,11 +233,12 @@ public record TitleModuleConfiguration(
             ConfigurationSection child = section.getConfigurationSection(rawId);
             String name = child == null ? rawId : nullToEmpty(child.getString("name", rawId)).trim();
             int sortOrder = child == null ? index : child.getInt("sort-order", index);
-            groups.put(id, new TitleGroupDefinition(id, name.isBlank() ? rawId : name, sortOrder));
+            String permission = child == null ? "" : nullToEmpty(child.getString("permission", "")).trim();
+            groups.put(id, new TitleGroupDefinition(id, name.isBlank() ? rawId : name, sortOrder, permission));
             index++;
         }
         if (groups.isEmpty()) {
-            groups.put("default", new TitleGroupDefinition("default", "默认", 0));
+            groups.put("default", new TitleGroupDefinition("default", "默认", 0, ""));
         }
         return groups;
     }

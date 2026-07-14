@@ -474,11 +474,7 @@ public final class EventPacketDispatchService {
         }
         String executor = renderString(action.object("executor"), context, subject);
         if ("op".equalsIgnoreCase(executor) && subject != null) {
-            String commandToDispatch = command;
-            return TemporaryOpExecutor.execute(
-                subject,
-                () -> Bukkit.dispatchCommand(subject, commandToDispatch)
-            );
+            return TemporaryOpExecutor.execute(subject, command);
         }
         CommandSender sender = "player".equalsIgnoreCase(executor) && subject != null
             ? subject

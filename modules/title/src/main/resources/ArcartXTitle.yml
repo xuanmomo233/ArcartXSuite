@@ -122,17 +122,22 @@ groups:
   # 分组字典。
   # key 为分组 ID，只建议使用小写英文、数字、下划线。
   # name 为显示名称，sort-order 越小越靠前。
+  # permission 为空表示所有人可用；填写权限节点后，仅拥有该权限的玩家可获取和显示该组称号。
+  # 推荐权限节点约定为 arcartxsuite.title.group.<groupId>，默认示例均不限制。
   adventure:
     name: "&f冒险类&7"
     sort-order: 10
+    permission: ""
 
   exploration:
     name: "&f探索类&7"
     sort-order: 20
+    permission: ""
 
   activity:
     name: "&f活动类&7"
     sort-order: 30
+    permission: ""
 
 qualities:
   # 品质字典。

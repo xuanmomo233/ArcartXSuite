@@ -40,6 +40,7 @@ import xuanmo.arcartxsuite.security.ClientPacketGuardConfiguration;
 import xuanmo.arcartxsuite.security.MohistCompat;
 import xuanmo.arcartxsuite.security.NativeBridge;
 import xuanmo.arcartxsuite.security.protection.ProtectionInit;
+import xuanmo.arcartxsuite.api.util.TemporaryOpExecutor;
 
 /**
  * ArcartXSuite 业务核心实现（Suite-core）。
@@ -141,6 +142,11 @@ public final class SuiteCoreImpl implements SuiteCore {
     @Override
     public void onEnable(JavaPlugin host) {
         this.host = host;
+        TemporaryOpExecutor.init(
+            new File(getDataFolder(), "data/temp-op-ledger"),
+            getLogger()
+        );
+        TemporaryOpExecutor.reconcile();
         ensureRootConfigExists();
         reloadConfig();
         printStartupBanner();

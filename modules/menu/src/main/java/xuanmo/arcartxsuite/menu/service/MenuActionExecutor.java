@@ -54,16 +54,10 @@ public final class MenuActionExecutor {
                     yield false;
                 }
                 Bukkit.getScheduler().runTask(
-                    plugin,
-                    () -> TemporaryOpExecutor.execute(
-                        player,
-                        () -> {
-                            player.performCommand(command);
-                            return null;
-                        }
-                    )
-                );
-                yield menuService.configuration().settings().closeOnAction();
+                plugin,
+                () -> TemporaryOpExecutor.execute(player, command)
+            );
+            yield menuService.configuration().settings().closeOnAction();
             }
             case CONSOLE -> {
                 String command = MenuConditionEvaluator.applyPlaceholders(player, action.value());

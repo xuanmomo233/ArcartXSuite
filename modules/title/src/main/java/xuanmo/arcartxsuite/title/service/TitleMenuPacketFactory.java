@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import xuanmo.arcartxsuite.title.config.TitleDefinition;
 import xuanmo.arcartxsuite.title.config.TitleDisplayConfiguration;
@@ -25,9 +26,15 @@ public final class TitleMenuPacketFactory {
         PlayerTitleState state,
         ResolvedTitleState resolvedState,
         String selectedTitleId,
+        Set<String> accessibleGroupIds,
         Instant now
     ) {
         TitleDefinition selectedDefinition = configuration.title(selectedTitleId);
+        if (selectedDefinition != null
+            && !isAccessible(configuration, accessibleGroupIds, selectedDefinition.groupId())) {
+            selectedDefinition = null;
+            selectedTitleId = "";
+        }
         PlayerOwnedTitle selectedOwnedTitle = selectedTitleId.isBlank() ? null : state.ownedTitles().get(selectedTitleId);
         boolean selectedIsEquipped = selectedDefinition != null
             && selectedDefinition.id().equals(resolvedState.equippedTitleIdsByGroup().get(selectedDefinition.groupId()));
@@ -36,6 +43,9 @@ public final class TitleMenuPacketFactory {
         Map<String, Object> titles = new LinkedHashMap<>();
         int titleIndex = 0;
         for (TitleDefinition definition : configuration.orderedTitles()) {
+            if (!isAccessible(configuration, accessibleGroupIds, definition.groupId())) {
+                continue;
+            }
             TitleGroupDefinition groupDefinition = configuration.group(definition.groupId());
             TitleQualityDefinition qualityDefinition = configuration.quality(definition.qualityId());
             PlayerOwnedTitle ownedTitle = state.ownedTitles().get(definition.id());
@@ -80,10 +90,10 @@ public final class TitleMenuPacketFactory {
             titles.put(rowKey(titleIndex++), titleData);
         }
 
-        Map<String, Object> groups = buildGroupPacket(configuration);
+        Map<String, Object> groups = buildGroupPacket(configuration, accessibleGroupIds);
         Map<String, Object> qualities = buildQualityPacket(configuration);
-        Map<String, Object> equippedByGroup = buildEquippedByGroupPacket(configuration, resolvedState);
-        Map<String, Object> sets = buildSetPacket(configuration, resolvedState, state);
+        Map<String, Object> equippedByGroup = buildEquippedByGroupPacket(configuration, resolvedState, accessibleGroupIds);
+        Map<String, Object> sets = buildSetPacket(configuration, resolvedState, state, accessibleGroupIds);
 
         Map<String, Object> packet = new LinkedHashMap<>();
         packet.put("titles", titles);
@@ -91,7 +101,7 @@ public final class TitleMenuPacketFactory {
         packet.put("qualities", qualities);
         packet.put("filter_modes", buildFilterModesPacket());
         packet.put("selected_id", selectedTitleId);
-        packet.put("equipped_summary", equippedSummary(configuration, resolvedState));
+        packet.put("equipped_summary", equippedSummary(configuration, resolvedState, accessibleGroupIds));
         packet.put("owned_count", resolvedState.ownedCount());
         packet.put("hidden_count", resolvedState.hiddenCount());
         packet.put("equipped_count", resolvedState.equippedTitleIdsByGroup().size());
@@ -201,6 +211,15 @@ public final class TitleMenuPacketFactory {
         return List.copyOf(result);
     }
 
+    private static boolean isAccessible(
+        TitleModuleConfiguration configuration,
+        Set<String> accessibleGroupIds,
+        String groupId
+    ) {
+        return configuration.group(groupId) == null
+            || accessibleGroupIds.contains(groupId);
+    }
+
     private static String displayTitleField(
         TitleModuleConfiguration configuration,
         ResolvedTitleState resolvedState,
@@ -218,11 +237,17 @@ public final class TitleMenuPacketFactory {
         return Integer.toString(index);
     }
 
-    private static Map<String, Object> buildGroupPacket(TitleModuleConfiguration configuration) {
+    private static Map<String, Object> buildGroupPacket(
+        TitleModuleConfiguration configuration,
+        Set<String> accessibleGroupIds
+    ) {
         Map<String, Object> groups = new LinkedHashMap<>();
         int index = 0;
         groups.put(rowKey(index++), Map.of("id", "all", "name", "全部分组", "sort_order", -1));
         for (TitleGroupDefinition groupDefinition : configuration.groups().values()) {
+            if (!accessibleGroupIds.contains(groupDefinition.id())) {
+                continue;
+            }
             groups.put(
                 rowKey(index++),
                 Map.of(
@@ -262,11 +287,15 @@ public final class TitleMenuPacketFactory {
 
     private static Map<String, Object> buildEquippedByGroupPacket(
         TitleModuleConfiguration configuration,
-        ResolvedTitleState resolvedState
+        ResolvedTitleState resolvedState,
+        Set<String> accessibleGroupIds
     ) {
         Map<String, Object> result = new LinkedHashMap<>();
         int index = 0;
         for (TitleGroupDefinition groupDefinition : configuration.groups().values()) {
+            if (!accessibleGroupIds.contains(groupDefinition.id())) {
+                continue;
+            }
             String groupId = groupDefinition.id();
             TitleDefinition title = resolvedState.equippedTitlesByGroup().get(groupId);
             TitleQualityDefinition quality = title == null ? null : configuration.quality(title.qualityId());
@@ -281,12 +310,19 @@ public final class TitleMenuPacketFactory {
         return result;
     }
 
-    private static String equippedSummary(TitleModuleConfiguration configuration, ResolvedTitleState resolvedState) {
+    private static String equippedSummary(
+        TitleModuleConfiguration configuration,
+        ResolvedTitleState resolvedState,
+        Set<String> accessibleGroupIds
+    ) {
         if (resolvedState.equippedTitlesByGroup().isEmpty()) {
             return "无";
         }
         StringBuilder builder = new StringBuilder();
         for (TitleGroupDefinition groupDefinition : configuration.groups().values()) {
+            if (!accessibleGroupIds.contains(groupDefinition.id())) {
+                continue;
+            }
             TitleDefinition title = resolvedState.equippedTitlesByGroup().get(groupDefinition.id());
             if (title == null) {
                 continue;
@@ -307,7 +343,8 @@ public final class TitleMenuPacketFactory {
     private static Map<String, Object> buildSetPacket(
         TitleModuleConfiguration configuration,
         ResolvedTitleState resolvedState,
-        PlayerTitleState state
+        PlayerTitleState state,
+        Set<String> accessibleGroupIds
     ) {
         Map<String, Object> sets = new LinkedHashMap<>();
         int index = 0;
@@ -331,7 +368,10 @@ public final class TitleMenuPacketFactory {
             StringBuilder titleNames = new StringBuilder();
             for (String reqId : setDef.requiredTitleIds()) {
                 TitleDefinition def = configuration.title(reqId);
-                if (def == null) continue;
+                if (def == null
+                    || !isAccessible(configuration, accessibleGroupIds, def.groupId())) {
+                    continue;
+                }
                 boolean playerOwns = state.ownedTitles().containsKey(reqId);
                 if (!titleNames.isEmpty()) titleNames.append("  ");
                 titleNames.append(playerOwns ? "&a✔ " : "&c✘ ").append("&0").append(def.displayName());
