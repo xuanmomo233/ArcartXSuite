@@ -148,7 +148,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
             throw new IllegalStateException("ArcartXWarehouse.yml 配置文件缺失");
         }
         FileConfiguration yaml = YamlConfiguration.loadConfiguration(configFile);
-        configuration = WarehouseModuleConfiguration.load(yaml, logger);
+        configuration = WarehouseModuleConfiguration.load(yaml, logger, currencyManager);
         crossServerChannelConfig = CrossServerChannelConfigs.fromSection(yaml.getConfigurationSection("cross-server"));
     }
 

@@ -96,25 +96,11 @@ categories:
     default: true
 
 bank:
+  # 银行展示的全局货币 ID 子集；定义必须存在于宿主 config.yml 的 currencies 中。
+  # 未在全局池定义的 ID 会在加载时告警并跳过。
   currencies:
-    money:
-      enabled: true
-      provider: "vault"
-      display-name: "金币"
-      scale: 2
-    points:
-      enabled: true
-      provider: "playerpoints"
-      display-name: "点券"
-      scale: 0
-    custom_token:
-      enabled: false
-      provider: "placeholder-command"
-      display-name: "自定义货币"
-      scale: 0
-      balance-placeholder: "%some_currency_balance%"
-      withdraw-command: "somecurrency take %player% %amount%"
-      deposit-command: "somecurrency give %player% %amount%"
+    - money
+    - points
   deposit-products:
     money_stable_1d:
       enabled: true

@@ -28,7 +28,9 @@ cloud:
   server-code: ""
   # 调试日志：开启后会输出签名、密钥 hash 等敏感诊断信息，生产环境请保持 false。
   debug: false
-  # Base64 Ed25519 SubjectPublicKeyInfo values used to verify signed JSON responses.
+  # 用于校验云平台/更新服务返回的已签名 JSON 响应；服务端通过响应签名头提交签名。
+  # 每项为 Base64 编码的 Ed25519 SubjectPublicKeyInfo 公钥，支持配置多个公钥，便于密钥轮换或多环境部署。
+  # 当前响应校验由 NativeBridge 的构建时公钥和安全库执行；空列表 [] 不提供额外公钥，是否启用校验仍由安全库是否可用及其内置公钥决定。
   response-signature-public-keys: []
 
 
@@ -39,7 +41,6 @@ cloud:
 # 何时需要填写：如果你使用的是第三方/私人定制模块，且对方提供了 Ed25519 公钥，
 #   填入后即可强制校验模块签名，签名无效或缺失的模块将被拒绝加载。
 # 支持多个公钥：不同模块作者可使用不同私钥签名，对应公钥逐一填入列表即可。
-# 向后兼容：旧版单字符串配置 "module-signature-public-key" 仍可正常读取。
 # 默认值：[]（关闭）
 module-signature-public-keys: []
 
@@ -61,22 +62,31 @@ version-check-public-key: ""
 # 重载命令: /axs reload all 或 /axs <module> reload。
 
 # ========== 全局货币定义 ==========
-# 所有模块共享同一组货币。provider 支持: vault / playerpoints / rondo / xconomy / command / placeholder-command / custom。
-# 模块配置中的 currencies 节将合并到此全局池中（不覆盖已有同名货币）。
+# 所有模块只使用此处定义的全局货币池，模块配置中的 currency/currencies 字段只引用货币 ID。
+# provider 支持: vault / playerpoints / xconomy / rondo / command / placeholder-command / custom。
+# command、placeholder-command、custom 当前共用 CommandCurrencyBridge。
+# 标准字段：enabled、provider、display-name、scale、rounding、balance-placeholder、withdraw-command、deposit-command。
+# scale 是标准小数位字段；为兼容旧配置，parser 仍会在缺少 scale 时读取 precision。
 currencies:
   money:
     enabled: true
     provider: "vault"
     display-name: "金币"
-    precision: 2
+    scale: 2
     # 舍入策略：DOWN（默认），也可使用 HALF_UP 等标准 RoundingMode 名称。
     rounding: "DOWN"
+    balance-placeholder: ""
+    withdraw-command: ""
+    deposit-command: ""
   points:
     enabled: true
     provider: "playerpoints"
     display-name: "点券"
-    precision: 0
+    scale: 0
     rounding: "DOWN"
+    balance-placeholder: ""
+    withdraw-command: ""
+    deposit-command: ""
 
 # ========== 跨服传输（全模块共用）==========
 # 各模块在 ArcartX*.yml 的 cross-server.enabled 开启后接入此配置。

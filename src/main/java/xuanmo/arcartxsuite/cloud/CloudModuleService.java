@@ -76,6 +76,12 @@ public final class CloudModuleService {
     /** PBKDF2 迭代次数，用于从机器指纹派生密钥文件的加密密钥。 */
 
     private static final int KDF_ITERATIONS = 120_000;
+    private static final List<String> EXCLUDED_INTERFACE_PATTERNS = List.of(
+        "tun", "tap", "vpn", "ppp", "docker", "veth", "vethernet", "wsl",
+        "vmware", "vmnet", "virtualbox", "vbox", "hyper-v", "hyperv", "loopback",
+        "isatap", "teredo", "bluetooth", "zerotier", "tailscale", "wg", "wireguard",
+        "clash", "radmin", "npcap", "pcap"
+    );
 
     private final SuiteCoreImpl plugin;
     private final ModuleRegistry registry;
@@ -1538,50 +1544,64 @@ public final class CloudModuleService {
         File keyFile = new File(plugin.getDataFolder(), ".cloud-keypair");
         if (keyFile.exists()) {
             KeyPair loaded = tryLoadKeyPair(keyFile);
-            if (loaded != null) {
-                return loaded;
-            }
-
-            plugin.consoleWarn("[Cloud] 持久化密钥对无法在本机解密或已损坏，将重新生成（会触发自动重新绑定）。");
-
+            if (loaded != null) return loaded;
         }
         KeyPair kp = generateKeyPair();
-        if (kp != null) {
-            saveKeyPair(kp, keyFile);
-        }
+        if (kp != null) saveKeyPair(kp, keyFile);
         return kp;
     }
 
-    /**
-
-     * 尝试加载持久化密钥对：优先按加密格式（AXSKP1）解密。
-
-     */
+    /** Try the stable fingerprint first, then migrate from the legacy fingerprint. */
     private KeyPair tryLoadKeyPair(File keyFile) {
         try {
             String content = new String(Files.readAllBytes(keyFile.toPath()), StandardCharsets.UTF_8).trim();
-            String[] parts = content.split("\\R");
-            if (parts.length >= 5 && KEYPAIR_MAGIC.equals(parts[0].trim())) {
-                byte[] publicEncoded = Base64.getDecoder().decode(parts[1].trim());
-                byte[] salt = Base64.getDecoder().decode(parts[2].trim());
-                byte[] iv = Base64.getDecoder().decode(parts[3].trim());
-                byte[] ciphertext = Base64.getDecoder().decode(parts[4].trim());
-                byte[] privateEncoded = decryptPrivateKey(ciphertext, iv, salt);
-                if (privateEncoded == null) return null;
-                KeyPair kp = rebuildKeyPair(publicEncoded, privateEncoded);
-                if (kp != null) {
-
-                    debugLog("[Cloud] 已加载加密持久化 Ed25519 密钥对，裸公钥: " + encodeRawEd25519PublicKey(kp));
-
-                }
-                return kp;
+            String[] parts = content.split("\\R", -1);
+            if (parts.length != 5 || !KEYPAIR_MAGIC.equals(parts[0].trim())) {
+                plugin.consoleWarn("[Cloud] 持久化密钥文件格式损坏（magic/字段结构无效），将重新生成并触发自动重新绑定。");
+                return null;
             }
-        } catch (Exception e) {
-
-            plugin.consoleWarn("[Cloud] 读取持久化密钥对失败: " + e.getMessage());
-
+            byte[] publicEncoded;
+            byte[] salt;
+            byte[] iv;
+            byte[] ciphertext;
+            try {
+                publicEncoded = Base64.getDecoder().decode(parts[1].trim());
+                salt = Base64.getDecoder().decode(parts[2].trim());
+                iv = Base64.getDecoder().decode(parts[3].trim());
+                ciphertext = Base64.getDecoder().decode(parts[4].trim());
+            } catch (IllegalArgumentException exception) {
+                plugin.consoleWarn("[Cloud] 持久化密钥文件格式损坏（Base64 字段无效），将重新生成并触发自动重新绑定。");
+                return null;
+            }
+            if (publicEncoded.length == 0 || salt.length != 16 || iv.length != 12 || ciphertext.length == 0) {
+                plugin.consoleWarn("[Cloud] 持久化密钥文件格式损坏（字段长度无效），将重新生成并触发自动重新绑定。");
+                return null;
+            }
+            byte[] privateEncoded = decryptPrivateKey(ciphertext, iv, salt, generateFingerprint());
+            boolean migrated = false;
+            if (privateEncoded == null) {
+                privateEncoded = decryptPrivateKey(ciphertext, iv, salt, generateLegacyFingerprint());
+                migrated = privateEncoded != null;
+            }
+            if (privateEncoded == null) {
+                plugin.consoleWarn("[Cloud] 持久化密钥文件结构有效，但新旧机器指纹均无法解密；可能硬件指纹已变化，将重新生成并触发自动重新绑定。");
+                return null;
+            }
+            KeyPair kp = rebuildKeyPair(publicEncoded, privateEncoded);
+            if (kp == null) {
+                plugin.consoleWarn("[Cloud] 持久化密钥文件解密内容无效，将重新生成并触发自动重新绑定。");
+                return null;
+            }
+            if (migrated) {
+                plugin.consoleInfo("[Cloud] 已使用旧版机器指纹恢复密钥对，正在用稳定指纹重新加密迁移，服务器码将保持不变。");
+                saveKeyPair(kp, keyFile);
+            }
+            debugLog("[Cloud] 已加载加密持久化 Ed25519 密钥对，裸公钥: " + encodeRawEd25519PublicKey(kp));
+            return kp;
+        } catch (Exception exception) {
+            plugin.consoleWarn("[Cloud] 持久化密钥文件格式损坏（magic/字段结构无效），将重新生成并触发自动重新绑定。: " + exception.getMessage());
+            return null;
         }
-        return null;
     }
 
     private KeyPair rebuildKeyPair(byte[] publicEncoded, byte[] privateEncoded) {
@@ -1590,19 +1610,16 @@ public final class CloudModuleService {
             PublicKey publicKey = kf.generatePublic(new X509EncodedKeySpec(publicEncoded));
             PrivateKey privateKey = kf.generatePrivate(new PKCS8EncodedKeySpec(privateEncoded));
             return new KeyPair(publicKey, privateKey);
-        } catch (Exception e) {
-
-            plugin.consoleWarn("[Cloud] 重建密钥对失败: " + e.getMessage());
-
+        } catch (Exception exception) {
+            plugin.consoleWarn("[Cloud] 重建密钥对失败: " + exception.getMessage());
             return null;
         }
     }
 
     private void saveKeyPair(KeyPair keyPair, File keyFile) {
+        java.nio.file.Path temporaryPath = null;
         try {
-            if (!keyFile.getParentFile().exists()) {
-                keyFile.getParentFile().mkdirs();
-            }
+            if (!keyFile.getParentFile().exists()) keyFile.getParentFile().mkdirs();
             byte[] salt = new byte[16];
             byte[] iv = new byte[12];
             SecureRandom rng = new SecureRandom();
@@ -1610,9 +1627,7 @@ public final class CloudModuleService {
             rng.nextBytes(iv);
             byte[] ciphertext = encryptPrivateKey(keyPair.getPrivate().getEncoded(), iv, salt);
             if (ciphertext == null) {
-
                 plugin.consoleWarn("[Cloud] 私钥加密失败，未写入密钥文件。");
-
                 return;
             }
             String out = KEYPAIR_MAGIC + "\n"
@@ -1620,23 +1635,39 @@ public final class CloudModuleService {
                 + Base64.getEncoder().encodeToString(salt) + "\n"
                 + Base64.getEncoder().encodeToString(iv) + "\n"
                 + Base64.getEncoder().encodeToString(ciphertext);
-            Files.write(keyFile.toPath(), out.getBytes(StandardCharsets.UTF_8));
+            java.nio.file.Path targetPath = keyFile.toPath();
+            temporaryPath = Files.createTempFile(targetPath.getParent(), keyFile.getName(), ".tmp");
+            Files.write(temporaryPath, out.getBytes(StandardCharsets.UTF_8));
+            restrictFilePermissions(temporaryPath.toFile());
+            try {
+                Files.move(temporaryPath, targetPath,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException exception) {
+                Files.move(temporaryPath, targetPath,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            temporaryPath = null;
             restrictFilePermissions(keyFile);
-
             plugin.consoleInfo("[Cloud] Ed25519 密钥对已加密持久化到 " + keyFile.getAbsolutePath());
-
-        } catch (Exception e) {
-
-            plugin.consoleWarn("[Cloud] 保存密钥对失败: " + e.getMessage());
-
+        } catch (Exception exception) {
+            plugin.consoleWarn("[Cloud] 重建密钥对失败: " + exception.getMessage());
+        } finally {
+            if (temporaryPath != null) {
+                try { Files.deleteIfExists(temporaryPath); } catch (Exception ignored) {
+                    // 临时文件清理失败不影响主流程
+                }
+            }
         }
     }
 
-
-    /** 基于机器指纹派生 256 位 AES 密钥，使密钥文件与本机硬件绑定，复制到其它机器无法解密。 */
-
+    /** Derive the AES key from the selected machine fingerprint. */
     private static SecretKeySpec deriveKeyFromFingerprint(byte[] salt) throws Exception {
-        char[] password = generateFingerprint().toCharArray();
+        return deriveKeyFromFingerprint(salt, generateFingerprint());
+    }
+
+    private static SecretKeySpec deriveKeyFromFingerprint(byte[] salt, String fingerprint) throws Exception {
+        char[] password = fingerprint.toCharArray();
         SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
         PBEKeySpec spec = new PBEKeySpec(password, salt, KDF_ITERATIONS, 256);
         byte[] keyBytes = factory.generateSecret(spec).getEncoded();
@@ -1648,27 +1679,21 @@ public final class CloudModuleService {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.ENCRYPT_MODE, deriveKeyFromFingerprint(salt), new GCMParameterSpec(128, iv));
             return cipher.doFinal(plaintext);
-        } catch (Exception e) {
-
-            plugin.consoleWarn("[Cloud] 私钥加密异常: " + e.getMessage());
-
+        } catch (Exception exception) {
+                plugin.consoleWarn("[Cloud] 私钥加密异常: " + exception.getMessage());
             return null;
         }
     }
 
-    private byte[] decryptPrivateKey(byte[] ciphertext, byte[] iv, byte[] salt) {
+    private byte[] decryptPrivateKey(byte[] ciphertext, byte[] iv, byte[] salt, String fingerprint) {
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, deriveKeyFromFingerprint(salt), new GCMParameterSpec(128, iv));
+            cipher.init(Cipher.DECRYPT_MODE, deriveKeyFromFingerprint(salt, fingerprint), new GCMParameterSpec(128, iv));
             return cipher.doFinal(ciphertext);
-        } catch (Exception e) {
-
-            // 指纹变化（换机器/换网卡）或文件损坏都会走到这里
-
+        } catch (Exception ignored) {
             return null;
         }
     }
-
 
     /** 尽力收紧密钥文件权限（POSIX 设为 owner-only；Windows 等不支持则降级为只读）。 */
 
@@ -1755,16 +1780,23 @@ public final class CloudModuleService {
         return sb.toString();
     }
 
-    /**
-
-     * 生成机器指纹。除操作系统信息外，还纳入网卡 MAC 地址、主机名、CPU 核心数等
-
-     * 较难在虚拟机中伪造的硬件特征，使凭据更难脱离原机器复用。
-
-     * MAC 列表经排序，保证同一机器多次启动结果稳定。
-
-     */
+    /** Generate a stable fingerprint from OS identity, architecture, and filtered physical MACs. */
     private static String generateFingerprint() {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            md.update(System.getProperty("os.name", "unknown").getBytes(StandardCharsets.UTF_8));
+            md.update(System.getProperty("os.arch", "unknown").getBytes(StandardCharsets.UTF_8));
+            for (String mac : collectHardwareAddresses()) {
+                md.update(mac.getBytes(StandardCharsets.UTF_8));
+            }
+            return Base64.getEncoder().encodeToString(md.digest());
+        } catch (Exception exception) {
+            return "unknown";
+        }
+    }
+
+    /** Preserve the old fingerprint algorithm for one-time key migration only. */
+    private static String generateLegacyFingerprint() {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             md.update(System.getProperty("os.name", "unknown").getBytes(StandardCharsets.UTF_8));
@@ -1774,23 +1806,62 @@ public final class CloudModuleService {
             try {
                 md.update(java.net.InetAddress.getLocalHost().getHostName().getBytes(StandardCharsets.UTF_8));
             } catch (Exception ignored) {
-
                 // 某些环境无法解析主机名，忽略
-
             }
-            for (String mac : collectHardwareAddresses()) {
+            for (String mac : collectLegacyHardwareAddresses()) {
                 md.update(mac.getBytes(StandardCharsets.UTF_8));
             }
             return Base64.getEncoder().encodeToString(md.digest());
-        } catch (Exception e) {
+        } catch (Exception exception) {
             return "unknown";
         }
     }
 
-
-    /** 收集所有可用物理网卡的 MAC 地址（去重、排序、过滤回环与未启用网卡）。 */
-
+    /** Collect stable physical MACs without requiring interfaces to be up. */
     private static List<String> collectHardwareAddresses() {
+        List<String> macs = new ArrayList<>();
+        try {
+            Enumeration<NetworkInterface> nics = NetworkInterface.getNetworkInterfaces();
+            while (nics != null && nics.hasMoreElements()) {
+                NetworkInterface nic = nics.nextElement();
+                try {
+                    if (nic.isLoopback() || nic.isVirtual() || nic.isPointToPoint()
+                        || isExcludedInterface(nic)) continue;
+                } catch (Exception ignored) {
+                    continue;
+                }
+                byte[] hw = nic.getHardwareAddress();
+                if (hw == null || hw.length == 0 || isAllZeroMac(hw)) continue;
+                String mac = bytesToHex(hw);
+                if (!macs.contains(mac)) macs.add(mac);
+            }
+        } catch (Exception ignored) {
+                    // 临时文件清理失败不影响主流程
+        }
+        java.util.Collections.sort(macs);
+        return macs;
+    }
+
+    private static boolean isExcludedInterface(NetworkInterface nic) {
+        String name = nic.getName();
+        String displayName = nic.getDisplayName();
+        String value = ((name == null ? "" : name) + " "
+            + (displayName == null ? "" : displayName)).toLowerCase(java.util.Locale.ROOT);
+        for (String pattern : EXCLUDED_INTERFACE_PATTERNS) {
+            if (value.contains(pattern)) return true;
+        }
+        return false;
+    }
+
+    private static boolean isAllZeroMac(byte[] hardwareAddress) {
+        for (byte value : hardwareAddress) {
+            if (value != 0) return false;
+        }
+        return true;
+    }
+
+    /** Preserve the old isUp-based collection for legacy key migration only. */
+    private static List<String> collectLegacyHardwareAddresses() {
         List<String> macs = new ArrayList<>();
         try {
             Enumeration<NetworkInterface> nics = NetworkInterface.getNetworkInterfaces();
@@ -1804,14 +1875,10 @@ public final class CloudModuleService {
                 byte[] hw = nic.getHardwareAddress();
                 if (hw == null || hw.length == 0) continue;
                 String mac = bytesToHex(hw);
-                if (!macs.contains(mac)) {
-                    macs.add(mac);
-                }
+                if (!macs.contains(mac)) macs.add(mac);
             }
         } catch (Exception ignored) {
-
-            // 无法枚举网卡时返回已收集到的内容
-
+                    // 临时文件清理失败不影响主流程
         }
         java.util.Collections.sort(macs);
         return macs;

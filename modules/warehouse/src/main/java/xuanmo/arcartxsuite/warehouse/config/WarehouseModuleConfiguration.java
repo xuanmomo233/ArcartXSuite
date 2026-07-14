@@ -11,15 +11,15 @@ import java.util.Map;
 import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
-import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
+import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemMatcher;
 import xuanmo.arcartxsuite.api.item.ItemMatcherLoader;
 
 /**
  * Warehouse 模块配置聚合，对应 {@code ArcartXWarehouse.yml}。
  * <p>
- * 所有字段均为不可变，通过 {@link #load(FileConfiguration, Logger)} 从 Bukkit YAML 解析。
- * 动态节（warehouses / categories / currencies / deposit-products / shared / sort-profiles）
+ * 所有字段均为不可变，通过 {@link #load(FileConfiguration, Logger, CurrencyBridgeAPI)} 从 Bukkit YAML 解析。
+ * 动态节（warehouses / categories / bank.currencies / deposit-products / shared / sort-profiles）
  * 在 {@link xuanmo.arcartxsuite.warehouse.WarehouseModule#defaultSyncPolicy()} 中声明，不会被 ConfigDiagnosticEngine 覆盖。
  */
 public record WarehouseModuleConfiguration(
@@ -33,7 +33,7 @@ public record WarehouseModuleConfiguration(
     SearchConfiguration search,
     Map<String, WarehouseDefinition> warehouses,
     Map<String, CategoryDefinition> categories,
-    Map<String, CurrencyDefinition> currencies,
+    List<String> bankCurrencies,
     Map<String, DepositProductDefinition> depositProducts,
     SharedConfiguration shared,
     Map<String, SortProfile> sortProfiles,
@@ -50,6 +50,10 @@ public record WarehouseModuleConfiguration(
      * @return 不可变的配置实例
      */
     public static WarehouseModuleConfiguration load(FileConfiguration configuration, Logger logger) {
+        return load(configuration, logger, null);
+    }
+
+    public static WarehouseModuleConfiguration load(FileConfiguration configuration, Logger logger, CurrencyBridgeAPI currencyBridge) {
         boolean debug = configuration.getBoolean("settings.debug", false);
         long flushIntervalTicks = Math.max(20L, configuration.getLong("settings.flush-interval-ticks", 100L));
         long transferConfirmExpireHours = configuration.getLong("settings.transfer-confirm-expire-hours", 24L);
@@ -99,8 +103,11 @@ public record WarehouseModuleConfiguration(
 
         Map<String, WarehouseDefinition> warehouses = loadWarehouses(configuration.getConfigurationSection("warehouses"), logger);
         Map<String, CategoryDefinition> categories = loadCategories(configuration.getConfigurationSection("categories"), logger);
-        ConfigurationSection currenciesSection = configuration.getConfigurationSection("bank.currencies");
-        Map<String, CurrencyDefinition> currencies = loadCurrencies(currenciesSection);
+        List<String> bankCurrencies = loadBankCurrencies(
+            configuration.getStringList("bank.currencies"),
+            currencyBridge,
+            logger
+        );
         Map<String, DepositProductDefinition> depositProducts = loadDepositProducts(configuration.getConfigurationSection("bank.deposit-products"), logger);
         SharedConfiguration shared = loadShared(configuration.getConfigurationSection("shared"));
         Map<String, SortProfile> sortProfiles = loadSortProfiles(configuration.getConfigurationSection("sort-profiles"), logger);
@@ -126,7 +133,7 @@ public record WarehouseModuleConfiguration(
             search,
             immutableCopy(warehouses),
             immutableCopy(categories),
-            immutableCopy(currencies),
+            bankCurrencies,
             immutableCopy(depositProducts),
             shared,
             immutableCopy(sortProfiles),
@@ -148,10 +155,6 @@ public record WarehouseModuleConfiguration(
 
     public CategoryDefinition category(String categoryId) {
         return categories.get(normalizeId(categoryId));
-    }
-
-    public CurrencyDefinition currency(String currencyId) {
-        return currencies.get(normalizeId(currencyId));
     }
 
     public DepositProductDefinition depositProduct(String productId) {
@@ -272,32 +275,24 @@ public record WarehouseModuleConfiguration(
         return values;
     }
 
-    private static Map<String, CurrencyDefinition> loadCurrencies(ConfigurationSection section) {
-        LinkedHashMap<String, CurrencyDefinition> values = new LinkedHashMap<>();
-        if (section == null) {
-            return values;
-        }
-        for (String rawId : section.getKeys(false)) {
-            ConfigurationSection child = section.getConfigurationSection(rawId);
-            if (child == null || !child.getBoolean("enabled", true)) {
+    private static List<String> loadBankCurrencies(
+        List<String> rawCurrencies,
+        CurrencyBridgeAPI currencyBridge,
+        Logger logger
+    ) {
+        List<String> values = new ArrayList<>();
+        for (String rawCurrency : rawCurrencies) {
+            String id = normalizeId(rawCurrency);
+            if (id.isBlank() || values.contains(id)) {
                 continue;
             }
-            String id = normalizeId(rawId);
-            values.put(
-                id,
-                new CurrencyDefinition(
-                    id,
-                    normalizeId(child.getString("provider", "vault")),
-                    readString(child, "display-name", rawId),
-                    Math.max(0, child.getInt("scale", 0)),
-                    readString(child, "balance-placeholder", ""),
-                    readString(child, "withdraw-command", ""),
-                    readString(child, "deposit-command", ""),
-                    readString(child, "rounding", "DOWN")
-                )
-            );
+            if (currencyBridge != null && currencyBridge.definition(id) == null) {
+                logger.warning("Warehouse bank currency is not defined in global currencies: " + id);
+                continue;
+            }
+            values.add(id);
         }
-        return values;
+        return List.copyOf(values);
     }
 
     private static Map<String, DepositProductDefinition> loadDepositProducts(ConfigurationSection section, Logger logger) {

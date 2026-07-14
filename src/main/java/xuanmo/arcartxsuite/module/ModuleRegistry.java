@@ -126,12 +126,8 @@ public final class ModuleRegistry {
         this.crossServerService = crossServerService;
         this.placeholderResolver = placeholderResolver;
         List<String> sigPubKeys = plugin.getConfig().getStringList("module-signature-public-keys");
-        if (sigPubKeys.isEmpty()) {
-            // 向后兼容旧版单个字符串配置
-            String legacy = plugin.getConfig().getString("module-signature-public-key", "");
-            if (legacy != null && !legacy.isBlank()) {
-                sigPubKeys = List.of(legacy);
-            }
+        if (plugin.getConfig().contains("module-signature-public-key")) {
+            LOGGER.warning("[ModuleSignature] Legacy setting module-signature-public-key is no longer supported; use module-signature-public-keys (list). The legacy value will be ignored.");
         }
         this.signatureVerifier = new ModuleSignatureVerifier(sigPubKeys, LOGGER);
     }
@@ -951,7 +947,9 @@ public final class ModuleRegistry {
                 id,
                 child.getString("provider", "vault").trim().toLowerCase(java.util.Locale.ROOT),
                 child.getString("display-name", rawId),
-                child.getInt("precision", 2),
+                child.contains("scale")
+                    ? child.getInt("scale", 2)
+                    : child.getInt("precision", 2),
                 child.getString("balance-placeholder", ""),
                 child.getString("withdraw-command", ""),
                 child.getString("deposit-command", ""),

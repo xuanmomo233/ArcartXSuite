@@ -69,26 +69,6 @@ ui:
   # 卡片最小宽度
   notify-min-width: 550
 
-currencies:
-  # provider 货币来源:
-  # vault 使用 Vault 经济；playerpoints 使用 PlayerPoints；placeholder-command 用 PAPI 读余额并用命令扣/加款；command 只通过命令扣/加款；custom 预留给自定义扩展。
-  money:
-    enabled: true
-    provider: vault
-    display-name: 金币
-    scale: 2
-    balance-placeholder: ""
-    withdraw-command: ""
-    deposit-command: ""
-  points:
-    enabled: true
-    provider: playerpoints
-    display-name: 点券
-    scale: 0
-    balance-placeholder: ""
-    withdraw-command: ""
-    deposit-command: ""
-
 player-send:
   # 玩家写信功能总开关。
   enabled: true

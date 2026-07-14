@@ -671,7 +671,7 @@ public final class WarehouseService implements Listener {
     public void adminAdjustWallet(UUID playerUuid, String currencyId, String mode, String amountText, Consumer<ActionResult> callback) {
         try {
             String normalizedCurrency = normalizeId(currencyId);
-            if (!configuration.currencies().containsKey(normalizedCurrency)) {
+            if (!currencyBridgeManager.currencyIds().contains(normalizedCurrency)) {
                 callback.accept(ActionResult.failure("未知货币: " + normalizedCurrency));
                 return;
             }
@@ -2872,13 +2872,13 @@ public final class WarehouseService implements Listener {
         Map<String, Object> result = new LinkedHashMap<>();
         Map<String, BigDecimal> balances = repository.loadBankBalances(player.getUniqueId());
         int idx = 0;
-        for (String currencyId : configuration.currencies().keySet()) {
+        for (String currencyId : configuration.bankCurrencies()) {
             BigDecimal balance = balances.getOrDefault(currencyId, BigDecimal.ZERO);
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", currencyId);
-            row.put("name", configuration.currency(currencyId).displayName());
+            row.put("name", currencyDisplayName(currencyId));
             row.put("balance", formatCurrency(currencyId, balance));
-            row.put("text", "&0" + configuration.currency(currencyId).displayName() + "  &7" + formatCurrency(currencyId, balance));
+            row.put("text", "&0" + currencyDisplayName(currencyId) + "  &7" + formatCurrency(currencyId, balance));
             result.put(Integer.toString(idx), row);
             idx++;
         }
@@ -3193,7 +3193,7 @@ public final class WarehouseService implements Listener {
     }
 
     private String currencyDisplayName(String currencyId) {
-        CurrencyDefinition definition = configuration.currency(currencyId);
+        CurrencyDefinition definition = currencyBridgeManager.definition(currencyId);
         return definition == null ? currencyId : definition.displayName();
     }
 

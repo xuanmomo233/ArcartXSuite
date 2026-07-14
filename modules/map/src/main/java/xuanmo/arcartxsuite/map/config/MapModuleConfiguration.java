@@ -13,7 +13,6 @@ import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
-import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 import xuanmo.arcartxsuite.api.item.ItemMatcher;
 import xuanmo.arcartxsuite.api.item.ItemMatcherLoader;
 
@@ -23,7 +22,6 @@ public record MapModuleConfiguration(
     KeybindConfiguration keybinds,
     JoinConfiguration join,
     StorageConfiguration storage,
-    Map<String, CurrencyDefinition> currencies,
     NavigationConfiguration navigation,
     Map<String, WorldDefinition> worlds,
     List<DefaultUnlockRule> defaultUnlocks,
@@ -76,8 +74,6 @@ public record MapModuleConfiguration(
             storageSection == null ? 4 : Math.max(1, storageSection.getInt("pool-size", 4))
         );
 
-        Map<String, CurrencyDefinition> currencies = loadCurrencies(configuration.getConfigurationSection("currencies"));
-
         ConfigurationSection navigationSection = configuration.getConfigurationSection("navigation");
         NavigationConfiguration navigation = new NavigationConfiguration(
             navigationSection == null || navigationSection.getBoolean("enabled", true),
@@ -100,7 +96,6 @@ public record MapModuleConfiguration(
             keybinds,
             join,
             storage,
-            Map.copyOf(currencies),
             navigation,
             immutableCopy(worlds),
             List.copyOf(defaultUnlocks),
@@ -123,38 +118,6 @@ public record MapModuleConfiguration(
             string(section == null ? null : section.getString("display-name"), defaultName),
             string(section == null ? null : section.getString("default-key"), defaultKey)
         );
-    }
-
-    private static Map<String, CurrencyDefinition> loadCurrencies(ConfigurationSection section) {
-        LinkedHashMap<String, CurrencyDefinition> values = new LinkedHashMap<>();
-        if (section == null) {
-            values.put("money", new CurrencyDefinition("money", "vault", "金币", 2, "", "", "", "DOWN"));
-            values.put("points", new CurrencyDefinition("points", "playerpoints", "点券", 0, "", "", "", "DOWN"));
-            return values;
-        }
-        for (String rawId : section.getKeys(false)) {
-            ConfigurationSection child = section.getConfigurationSection(rawId);
-            if (child == null || !child.getBoolean("enabled", true)) {
-                continue;
-            }
-            String id = normalizeId(rawId);
-            values.put(
-                id,
-                new CurrencyDefinition(
-                    id,
-                    string(child.getString("provider", "vault"), "vault").toLowerCase(Locale.ROOT),
-                    string(child.getString("display-name", rawId), rawId),
-                    Math.max(0, child.getInt("scale", 0)),
-                    string(child.getString("balance-placeholder", ""), ""),
-                    string(child.getString("withdraw-command", ""), ""),
-                    string(child.getString("deposit-command", ""), ""),
-                    string(child.getString("rounding", "DOWN"), "DOWN")
-                )
-            );
-        }
-        values.putIfAbsent("money", new CurrencyDefinition("money", "vault", "金币", 2, "", "", "", "DOWN"));
-        values.putIfAbsent("points", new CurrencyDefinition("points", "playerpoints", "点券", 0, "", "", "", "DOWN"));
-        return values;
     }
 
     private static Map<String, WorldDefinition> loadWorlds(ConfigurationSection section) {

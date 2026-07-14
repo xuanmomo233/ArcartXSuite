@@ -196,8 +196,18 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
             if (isReady()) {
                 return;
             }
+            Plugin vault = Bukkit.getPluginManager().getPlugin("Vault");
+            if (vault == null) {
+                unavailableReason = "Vault 未安装";
+                return;
+            }
             try {
-                Class<?> economyClass = Class.forName("net.milkbowl.vault.economy.Economy");
+                ClassLoader classLoader = vault.getClass().getClassLoader();
+                Class<?> economyClass = Class.forName(
+                    "net.milkbowl.vault.economy.Economy",
+                    true,
+                    classLoader
+                );
                 RegisteredServiceProvider<?> registration = Bukkit.getServicesManager().getRegistration(economyClass);
                 if (registration == null || registration.getProvider() == null) {
                     unavailableReason = "Vault Economy 服务未注册";
@@ -213,7 +223,7 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                     unavailableReason = "";
                 }
             } catch (ClassNotFoundException exception) {
-                unavailableReason = "Vault 未安装";
+                unavailableReason = "Vault API 类不可用";
             }
         }
 
@@ -657,8 +667,18 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
         }
 
         private void initializeVault() {
+            Plugin vault = Bukkit.getPluginManager().getPlugin("Vault");
+            if (vault == null) {
+                vaultUnavailableReason = "Vault 未安装";
+                return;
+            }
             try {
-                Class<?> economyClass = Class.forName("net.milkbowl.vault.economy.Economy");
+                ClassLoader classLoader = vault.getClass().getClassLoader();
+                Class<?> economyClass = Class.forName(
+                    "net.milkbowl.vault.economy.Economy",
+                    true,
+                    classLoader
+                );
                 RegisteredServiceProvider<?> registration = Bukkit.getServicesManager().getRegistration(economyClass);
                 if (registration == null || registration.getProvider() == null) {
                     vaultUnavailableReason = "Vault Economy 服务未注册";
@@ -668,8 +688,9 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 vaultBalanceMethod = findEconomyMethod(vaultEconomy.getClass(), "getBalance");
                 vaultWithdrawMethod = findEconomyMethod(vaultEconomy.getClass(), "withdrawPlayer");
                 vaultDepositMethod = findEconomyMethod(vaultEconomy.getClass(), "depositPlayer");
+                vaultUnavailableReason = vaultAvailable() ? "" : "未找到兼容的 Vault Economy 方法";
             } catch (ClassNotFoundException exception) {
-                vaultUnavailableReason = "Vault 未安装";
+                vaultUnavailableReason = "Vault API 类不可用";
             }
         }
 

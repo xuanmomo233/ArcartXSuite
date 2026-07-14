@@ -61,7 +61,6 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
     protected @NotNull SyncPolicy defaultSyncPolicy() {
         // currencies、presets 包含用户自定义货币与邮件模板预设
         return SyncPolicy.builder()
-            .dynamicSection("currencies")
             .dynamicSection("presets")
             .build();
     }

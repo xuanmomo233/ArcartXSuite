@@ -12,14 +12,12 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
-import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 
 public record MailModuleConfiguration(
     boolean debug,
     MailStorageConfiguration storage,
     CrossServerChannelConfig crossServer,
     MailUiConfiguration ui,
-    Map<String, CurrencyDefinition> currencies,
     MailPlayerSendConfiguration playerSend,
     MailModerationConfiguration moderation,
     MailRetentionConfiguration retention,
@@ -65,8 +63,6 @@ public record MailModuleConfiguration(
             uiSection == null ? 300 : uiSection.getInt("notify-min-width", 300)
         );
 
-        Map<String, CurrencyDefinition> currencies = loadCurrencies(configuration.getConfigurationSection("currencies"));
-
         ConfigurationSection playerSendSection = configuration.getConfigurationSection("player-send");
         Map<String, Double> attachmentTaxRates = loadTaxRates(playerSendSection == null ? null : playerSendSection.getConfigurationSection("attachment-tax-rates"));
         if (playerSendSection != null && playerSendSection.contains("vault-tax-rate")) {
@@ -110,7 +106,7 @@ public record MailModuleConfiguration(
         ConfigurationSection presetsSection = configuration.getConfigurationSection("presets");
         String presetsDirectory = presetsSection == null ? "presets" : string(presetsSection.getString("directory", "presets"));
 
-        return new MailModuleConfiguration(debug, storage, crossServer, ui, currencies, playerSend, moderation, retention, presetsDirectory);
+        return new MailModuleConfiguration(debug, storage, crossServer, ui, playerSend, moderation, retention, presetsDirectory);
     }
 
     private static String string(String value) {
@@ -156,38 +152,6 @@ public record MailModuleConfiguration(
             }
         }
         return List.copyOf(result);
-    }
-
-    private static Map<String, CurrencyDefinition> loadCurrencies(ConfigurationSection section) {
-        LinkedHashMap<String, CurrencyDefinition> values = new LinkedHashMap<>();
-        if (section == null) {
-            values.put("money", new CurrencyDefinition("money", "vault", "金币", 2, "", "", "", "DOWN"));
-            values.put("points", new CurrencyDefinition("points", "playerpoints", "点券", 0, "", "", "", "DOWN"));
-            return Map.copyOf(values);
-        }
-        for (String rawId : section.getKeys(false)) {
-            ConfigurationSection child = section.getConfigurationSection(rawId);
-            if (child == null || !child.getBoolean("enabled", true)) {
-                continue;
-            }
-            String id = lower(rawId);
-            values.put(
-                id,
-                new CurrencyDefinition(
-                    id,
-                    lower(child.getString("provider", "vault")),
-                    string(child.getString("display-name", rawId)),
-                    Math.max(0, child.getInt("scale", 0)),
-                    string(child.getString("balance-placeholder", "")),
-                    string(child.getString("withdraw-command", "")),
-                    string(child.getString("deposit-command", "")),
-                    string(child.getString("rounding", "DOWN"))
-                )
-            );
-        }
-        values.putIfAbsent("money", new CurrencyDefinition("money", "vault", "金币", 2, "", "", "", "DOWN"));
-        values.putIfAbsent("points", new CurrencyDefinition("points", "playerpoints", "点券", 0, "", "", "", "DOWN"));
-        return Map.copyOf(values);
     }
 
     private static Map<String, Double> loadTaxRates(ConfigurationSection section) {
