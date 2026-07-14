@@ -8,6 +8,7 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
+import xuanmo.arcartxsuite.api.util.TemporaryOpExecutor;
 import xuanmo.arcartxsuite.module.AxsLog;
 
 /**
@@ -148,7 +149,7 @@ public final class AriaPlayer {
 
     /** 临时给玩家 OP 权限执行命令，执行后恢复原状态。 */
     public boolean op(@NotNull String command) {
-        return xuanmo.arcartxsuite.util.TemporaryOpExecutor.execute(
+        return TemporaryOpExecutor.execute(
             player,
             () -> player.performCommand(strip(papi(command)))
         );

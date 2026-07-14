@@ -1,4 +1,4 @@
-package xuanmo.arcartxsuite.util;
+package xuanmo.arcartxsuite.api.util;
 
 import java.util.Objects;
 import java.util.function.Supplier;

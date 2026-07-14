@@ -99,7 +99,7 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         String rulesDirRelative = yaml.getString("rules-directory", "rules");
         File rulesDirectory = new File(dataFolder, rulesDirRelative);
         ensureRuleDefaults(rulesDirRelative);
-        File presetsDir = new File(pluginDataFolder, "eventpacket/packet-command-presets");
+        File presetsDir = new File(dataFolder, "packet-command-presets");
         if (yaml.getBoolean("packet-command.enabled", true)) {
             ensurePacketPresetDefaults(presetsDir);
         }
@@ -335,5 +335,4 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 

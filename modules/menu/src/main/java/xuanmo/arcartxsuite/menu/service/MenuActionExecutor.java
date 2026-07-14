@@ -14,7 +14,7 @@ import xuanmo.arcartxsuite.api.condition.ScriptActionKind;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionServices;
 import xuanmo.arcartxsuite.menu.config.MenuActionDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuActionType;
-import xuanmo.arcartxsuite.util.TemporaryOpExecutor;
+import xuanmo.arcartxsuite.api.util.TemporaryOpExecutor;
 
 public final class MenuActionExecutor {
 
