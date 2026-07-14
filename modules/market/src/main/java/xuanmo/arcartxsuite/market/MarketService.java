@@ -504,19 +504,28 @@ public class MarketService {
         Map<String, Object> shops = new LinkedHashMap<>();
         Map<String, Object> shopTexts = new LinkedHashMap<>();
         String firstShopId = null;
+        int shopIndex = 0;
         if (shopService != null) {
             for (var entry : shopService.getShops().entrySet()) {
                 String id = entry.getKey();
                 if (firstShopId == null) firstShopId = id;
-                shops.put(id, true);
-                shopTexts.put(id, "&f" + entry.getValue().displayName());
+                String key = Integer.toString(shopIndex++);
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", id);
+                shops.put(key, row);
+                shopTexts.put(key, "&f" + entry.getValue().displayName());
             }
         }
         packet.put("shops", shops);
         packet.put("shopTexts", shopTexts);
 
         // 当前选中商店
-        String activeShopId = (selectedShopId != null && !selectedShopId.isEmpty()) ? selectedShopId : firstShopId;
+        String activeShopId = selectedShopId != null
+            && !selectedShopId.isEmpty()
+            && shopService != null
+            && shopService.getShop(selectedShopId) != null
+            ? selectedShopId
+            : firstShopId;
         packet.put("shopId", activeShopId != null ? activeShopId : "");
         packet.put("shopName", "");
 
