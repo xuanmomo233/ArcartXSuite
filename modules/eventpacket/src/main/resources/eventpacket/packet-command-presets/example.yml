@@ -10,7 +10,8 @@
 example_op:
   # 可选: op / console / player
   type: op
-  # 触发所需权限，留空表示不校验
+  # permission 是触发门槛（player.hasPermission 检测）；留空表示任何玩家（含改包客户端发此包）都能触发该预设。
+  # type: op 触发后命令以 OP 身份执行，留空风险自负；命令黑名单仍拦截 op/deop/stop/luckperms 等致命命令，建议为 op 预设配置 permission。
   permission: "eventpacket.preset.example"
   # 冷却时间，支持数字(秒)或单位后缀: 5s / 1m / 1h / 1d
   cooldown: 0
