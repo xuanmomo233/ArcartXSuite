@@ -172,7 +172,8 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
             java.util.List.copyOf(guideRuntimeUiIds),
             itemSourceRegistry,
             createWaypointBridge(),
-            createAdyeshachNpcBridge()
+            createAdyeshachNpcBridge(),
+            messages()
         );
         service.start();
 
@@ -257,7 +258,6 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 
 
 

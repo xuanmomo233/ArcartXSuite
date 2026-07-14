@@ -9,6 +9,8 @@ prefix: "&3◆ &6ArcartXSuite &7| &r"
 
 # ── 通用 ──────────────────────────────────────────────
 common:
+  rewards-disabled: "&c[EntityTracker] 排行榜奖励系统未启用。"
+  service-down-command: "&c[EntityTracker] BossTracker 服务未启动，管理命令不可用。"
   service-down: "&cBossTracker 服务未启动。"
   reload-hint: "&e请使用 /{0} reload entitytracker"
   unknown: "&e未知命令，使用 /{0} entitytracker help 查看帮助"
@@ -34,6 +36,7 @@ status:
 
 # ── admin ─────────────────────────────────────────────
 admin:
+  drop-allocation: "&6[EntityTracker] &e{0} 分配: &f{1} &7→ &a{2} &7({3})"
   sessions:
     empty: "&7当前没有活跃的 Boss 会话。"
     title: "&6活跃 Boss 会话 ({0}):"
@@ -55,6 +58,10 @@ admin:
     info: "&7时间: {0} | 参与={1} | 总伤害={2}"
     item-format: "{0} &b{1} &7伤害={2} 奖励={3}"
   reissue:
+    record-not-found: "&c找不到结算记录: {0}"
+    rank-not-found: "&c该结算记录中不存在第 {0} 名。"
+    success: "&a已补发 {0} 第 {1} 名奖励 -> {2}"
+    failure: "&c补发失败: {0}"
     usage: "&e用法: /axs entitytracker reissue <结算ID> <名次> [玩家]"
     invalid-rank: "&c无效的名次: {0}"
     result: "&a{0}"

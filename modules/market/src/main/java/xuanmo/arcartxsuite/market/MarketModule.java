@@ -151,7 +151,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
         service = new MarketService(plugin, configuration, packetBridge,
             currencyManager, itemSourceRegistry, itemSerializer,
-            itemStackBridge, mailSupplier, logger, crossServer);
+            itemStackBridge, mailSupplier, logger, crossServer, messages());
         service.setSignalProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.SignalDispatchable.class));
         service.setQQBotProvider(

@@ -31,6 +31,7 @@ import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
 import xuanmo.arcartxsuite.api.capability.QQBotBroadcastable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
@@ -72,6 +73,7 @@ public class OnlineRewardsService implements Listener {
     private final JavaPlugin plugin;
     private final Logger logger;
     private final OnlineRewardsModuleConfiguration configuration;
+    private final MessageProvider messages;
     private final OnlineRewardsRepository repository;
     private final ClientBridgeAPI clientBridge;
     private final PacketBridgeAPI packetBridge;
@@ -114,12 +116,13 @@ public class OnlineRewardsService implements Listener {
         Supplier<SubtitlePlayable> subtitleProvider,
         Supplier<QQBotBroadcastable> qqBotProvider,
         Supplier<EventBusCapability> eventBusProvider,
+        MessageProvider messages,
         Function<Boolean, File> menuUiFileExporter,
         CrossServerAPI crossServer
     ) {
         this(plugin, logger, configuration, repository, clientBridge, packetBridge,
             packetGuard, mailProvider, signalProvider, chatCardProvider, titleProvider,
-            subtitleProvider, qqBotProvider, eventBusProvider, menuUiFileExporter,
+            subtitleProvider, qqBotProvider, eventBusProvider, messages, menuUiFileExporter,
             Clock.systemDefaultZone(), crossServer);
     }
 
@@ -138,6 +141,7 @@ public class OnlineRewardsService implements Listener {
         Supplier<SubtitlePlayable> subtitleProvider,
         Supplier<QQBotBroadcastable> qqBotProvider,
         Supplier<EventBusCapability> eventBusProvider,
+        MessageProvider messages,
         Function<Boolean, File> menuUiFileExporter,
         Clock clock,
         CrossServerAPI crossServer
@@ -145,6 +149,7 @@ public class OnlineRewardsService implements Listener {
         this.plugin = plugin;
         this.logger = logger;
         this.configuration = configuration;
+        this.messages = messages;
         this.repository = repository;
         this.clientBridge = clientBridge;
         this.packetBridge = packetBridge;
@@ -1535,5 +1540,4 @@ public class OnlineRewardsService implements Listener {
         }
     }
 }
-
 

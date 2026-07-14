@@ -33,3 +33,7 @@ mode:
 state:
   'on': "&a\u5df2\u5f00\u542f"
   'off': "&c\u5df2\u5173\u95ed"
+
+hints:
+  warehouse-stored: "&a已自动存入仓库 {0} 件物品。"
+  inventory-full: "&c背包空间不足，部分物品未能拾取。"

@@ -10,15 +10,19 @@ import org.bukkit.command.CommandSender;
 import xuanmo.arcartxsuite.loginview.config.LoginViewModuleConfiguration.MigrationConfiguration;
 import xuanmo.arcartxsuite.loginview.storage.LoginViewRepository;
 import xuanmo.arcartxsuite.loginview.storage.MigratedAuthMeAccount;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 
 public final class AuthMeMigrationService {
 
     private final MigrationConfiguration configuration;
     private final LoginViewRepository repository;
+    private final MessageProvider messages;
 
-    public AuthMeMigrationService(MigrationConfiguration configuration, LoginViewRepository repository) {
+    public AuthMeMigrationService(MigrationConfiguration configuration, LoginViewRepository repository,
+                                  MessageProvider messages) {
         this.configuration = configuration;
         this.repository = repository;
+        this.messages = messages;
     }
 
     public MigrationResult migrate(CommandSender sender, boolean dryRun) throws SQLException {
@@ -51,7 +55,7 @@ public final class AuthMeMigrationService {
                 }
                 imported++;
                 if (sender != null && imported % configuration.batchSize() == 0) {
-                    sender.sendMessage("已扫描 AuthMe 账户 " + scanned + " 个，准备导入 " + imported + " 个。");
+                    sender.sendMessage(messages.get("migrate.progress", scanned, imported));
                 }
             }
         }

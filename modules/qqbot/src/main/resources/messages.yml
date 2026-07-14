@@ -51,6 +51,7 @@ admin:
     by-player-success: "&a玩家 &b{0}&a 绑定QQ: &e{1}"
     by-player-none: "&c玩家 &7{0}&c 未绑定。"
   snowluma:
+    checking: "&e正在检查 SnowLuma 版本..."
     title: "&bSnowLuma 管理:"
     start: "&e  /axs qqbot snowluma start&7 - 启动 SnowLuma"
     stop: "&e  /axs qqbot snowluma stop&7 - 停止 SnowLuma"
@@ -64,6 +65,8 @@ admin:
 
 # ── player ────────────────────────────────────────────
 player:
+  at-title: "&b[QQ群] &f{0} @了你"
+  at-message: "&7[QQ群] &f{0} &7@了你，快去看看吧"
   help:
     title: "&bQQBot 命令帮助:"
     bind: "&e  /{0} bind <验证码>&7 - 绑定QQ"

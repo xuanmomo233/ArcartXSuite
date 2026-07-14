@@ -64,7 +64,7 @@ public final class WarehousePlayerCommand implements org.bukkit.command.TabExecu
             }
             case "preview" -> {
                 if (!player.hasPermission("arcartxsuite.warehouse.admin")) {
-                    player.sendMessage((messages != null ? messages.get("prefix") : "") + ChatColor.RED + "你没有权限使用此命令。");
+                    player.sendMessage(fullMsg("player.no-permission"));
                     return true;
                 }
                 if (args.length < 2) {

@@ -30,5 +30,8 @@ status:
 
 # ── set ───────────────────────────────────────────────
 set:
+  no-item: "请先手持一个物品。"
+  invalid-id: "道具 ID 不存在: {0}"
+  success: "已将手中物品设置为道具 {0}。"
   only-player: "&c此命令只能由玩家执行。"
   usage: "&e用法: /axs prop set <道具ID>"

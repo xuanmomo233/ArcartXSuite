@@ -69,7 +69,7 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
         Map<String, PropDefinition> definitions = PropDefinitionLoader.load(
             new File(dataFolder, "props"), logger);
 
-        service = new PropService(plugin, logger, configuration, propBridge, keyMapping, language, definitions, attributeBridge);
+        service = new PropService(plugin, logger, configuration, propBridge, keyMapping, language, definitions, attributeBridge, messages());
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
         adminCommand = new PropAdminCommand(() -> service, messages());

@@ -3,7 +3,7 @@
 # ------------------------------------------------------------
 #  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
 #  修改后执行 /axs reload title 即可生效。
-#  注：发放/收回称号的结果文本来自业务层，不在此文件。
+#  玩家提示及业务层操作结果文本均可在此文件配置。
 # ============================================================
 
 prefix: "&3◆ &6ArcartXSuite &7| &r"
@@ -36,8 +36,13 @@ status:
 give:
   usage: "&e用法: /axs title give <玩家> <称号ID> <时长>"
   invalid-duration: "&c无效时长: {0} (支持 permanent/7d/12h/30m)"
+  title-not-found: "称号不存在: {0}"
+  group-no-permission: "目标玩家没有权限使用该称号分组。"
+  success: "已授予称号: {0}"
 revoke:
   usage: "&e用法: /axs title revoke <玩家> <称号ID>"
+  title-not-found: "称号不存在: {0}"
+  success: "已扣除称号: {0}"
 open:
   usage: "&e用法: /axs title open <玩家>"
   success: "&a已为 {0} 打开称号菜单。"
@@ -92,3 +97,14 @@ player:
   hide-usage: "&e用法: /{0} hide <titleId>"
   unhide-usage: "&e用法: /{0} unhide <titleId>"
   usage: "&e用法: /{0} open|equip <titleId>|unequip <groupId|all>|hide <titleId>|unhide <titleId>"
+  data-load-failed: "&c称号数据加载失败，请稍后重试。"
+  title-not-found: "&c称号不存在: {0}"
+  group-no-permission: "&c你没有权限使用该称号分组。"
+  not-owned: "&c你尚未拥有称号: {0}"
+  equipped: "&a已装备称号到分组 {0}: {1}"
+  unequipped-group: "&e已卸下分组称号: {0}"
+  unequipped-all: "&e已卸下全部分组称号。"
+  hidden: "&e已隐藏称号: {0}"
+  unhidden: "&a已取消隐藏称号: {0}"
+  only-equipped: "&c只能将已装备的称号设为主展示称号。"
+  display-set: "&a已将 {0} 设为主展示称号。"

@@ -30,6 +30,10 @@ claim:
   level-not-reached: '&c尚未达到该等级。'
   premium-required: '&c需要激活进阶版战令。'
 admin:
+  season-unimplemented: "&6===== 战令模块状态 ===== 赛季管理暂未实现。"
+  service-unavailable-status: "&6===== 战令模块状态 ===== 服务未就绪。"
+  reset-usage-full: "&c用法: /{0} battlepass reset <玩家>"
+  unlock-usage-full: "&c用法: /{0} battlepass unlock <玩家> <premium|deluxe>"
   help:
     title: '&6===== 战令管理 &7v{0} &6====='
     status: '&e/axs battlepass status &7- 查看模块状态'
@@ -45,3 +49,10 @@ admin:
   reset:
     usage: '&c用法: {0}'
     offline: '&c玩家不在线: {0}'
+
+player:
+  only-player: "&c该命令仅限玩家使用。"
+  help-title: "&6==== BattlePass 命令 ===="
+  help-open: "&e/{0} &f— 打开战令主界面"
+  help-tasks: "&e/{0} tasks&f— 打开任务列表"
+  help-help: "&e/{0} help&f— 显示帮助"

@@ -139,7 +139,8 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             mapRepo,
             packetBridge, menuBinding.runtimeUiId(), hudBinding.runtimeUiId(),
             itemSourceRegistry, itemMatcher, currencyManager,
-            createWaypointBridge()
+            createWaypointBridge(),
+            messages()
         );
         service.start();
 
@@ -247,6 +248,5 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 
 

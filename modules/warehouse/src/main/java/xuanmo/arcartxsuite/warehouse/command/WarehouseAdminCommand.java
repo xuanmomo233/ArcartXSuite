@@ -94,7 +94,7 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("status.dirty", svc.dirtyPlayerCount()));
         sender.sendMessage(fullMsg("status.currency", String.join(", ", svc.currencyIds())));
         sender.sendMessage(fullMsg("status.cross-server",
-            svc.crossServerActive() ? ChatColor.GREEN + "已启用" : ChatColor.YELLOW + "未启用"));
+            svc.crossServerActive() ? messages.get("status.cross-server-enabled") : messages.get("status.cross-server-disabled")));
         sender.sendMessage(fullMsg("status.shared-locks", svc.activeSharedEditLockCount()));
     }
 

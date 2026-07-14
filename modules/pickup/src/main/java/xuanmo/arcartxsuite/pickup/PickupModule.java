@@ -163,7 +163,8 @@ public final class PickupModule extends AbstractAXSModule {
         scannerService = new LootScannerService(
             plugin, logger, configuration, packetGuard, packetBridge, itemStackBridge,
             uiBinding.runtimeUiId(), interactBinding.runtimeUiId(),
-            () -> getCapability(WarehouseAutoDepositable.class)
+            () -> getCapability(WarehouseAutoDepositable.class),
+            messages()
         );
         scannerService.start();
 

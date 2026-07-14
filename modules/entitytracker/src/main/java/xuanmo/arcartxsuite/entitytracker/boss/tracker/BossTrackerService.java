@@ -89,7 +89,7 @@ public final class BossTrackerService implements Listener {
         xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge
     ) {
         this(plugin, logger, configuration, arcartXBridge, runtimeUiIds, serverPlatform, signalDispatcher,
-            () -> null, itemSourceRegistry, attributeBridge, null, null, null);
+            () -> null, itemSourceRegistry, attributeBridge, null, null, null, null);
     }
 
     public BossTrackerService(
@@ -104,7 +104,7 @@ public final class BossTrackerService implements Listener {
         EntityTrackerCrossServerService crossServerService
     ) {
         this(plugin, plugin.getLogger(), configuration, arcartXBridge, runtimeUiIds, serverPlatform, signalDispatcher,
-            () -> null, itemSourceRegistry, attributeBridge, crossServerService, null, null);
+            () -> null, itemSourceRegistry, attributeBridge, crossServerService, null, null, null);
     }
 
     public BossTrackerService(
@@ -120,7 +120,7 @@ public final class BossTrackerService implements Listener {
         BossKillRecordingService killRecordingService
     ) {
         this(plugin, plugin.getLogger(), configuration, arcartXBridge, runtimeUiIds, serverPlatform, signalDispatcher,
-            () -> null, itemSourceRegistry, attributeBridge, crossServerService, killRecordingService, null);
+            () -> null, itemSourceRegistry, attributeBridge, crossServerService, killRecordingService, null, null);
     }
 
     public BossTrackerService(
@@ -136,7 +136,8 @@ public final class BossTrackerService implements Listener {
         xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge,
         EntityTrackerCrossServerService crossServerService,
         BossKillRecordingService killRecordingService,
-        PlaceholderResolverAPI placeholderResolver
+        PlaceholderResolverAPI placeholderResolver,
+        xuanmo.arcartxsuite.api.message.MessageProvider messages
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -149,7 +150,7 @@ public final class BossTrackerService implements Listener {
         this.crossServerService = crossServerService;
         this.killRecordingService = killRecordingService;
         this.settlementService = new BossDamageSettlementService(
-            plugin, logger, mailDispatchableProvider, signalDispatcher, itemSourceRegistry, placeholderResolver
+            plugin, logger, mailDispatchableProvider, signalDispatcher, itemSourceRegistry, placeholderResolver, messages
         );
     }
 
@@ -165,7 +166,7 @@ public final class BossTrackerService implements Listener {
         xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge
     ) {
         this(plugin, plugin.getLogger(), configuration, arcartXBridge, runtimeUiIds, serverPlatform, signalDispatcher,
-            mailDispatchableProvider, itemSourceRegistry, attributeBridge, null, null, null);
+            mailDispatchableProvider, itemSourceRegistry, attributeBridge, null, null, null, null);
     }
 
     public void start() {
@@ -1003,4 +1004,3 @@ public final class BossTrackerService implements Listener {
         }
     }
 }
-

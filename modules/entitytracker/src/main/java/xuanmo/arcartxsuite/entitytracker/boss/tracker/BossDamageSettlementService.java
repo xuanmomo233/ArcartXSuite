@@ -25,6 +25,7 @@ import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardInventoryFu
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardMessageTarget;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import java.util.logging.Logger;
 
 final class BossDamageSettlementService {
@@ -38,6 +39,7 @@ final class BossDamageSettlementService {
     private final java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider;
     private final java.util.function.BiConsumer<String, org.bukkit.entity.Player> signalDispatcher;
     private final ItemSourceRegistry itemSourceRegistry;
+    private final MessageProvider messages;
     private final Map<String, BossDamageSettlementRecord> settlementsById = new LinkedHashMap<>();
     private final Map<UUID, BossDamagePlayerSettlementView> lastSettlementByPlayer = new LinkedHashMap<>();
 
@@ -46,7 +48,7 @@ final class BossDamageSettlementService {
 
     public BossDamageSettlementService(JavaPlugin plugin,
         Logger logger, ItemSourceRegistry itemSourceRegistry, PlaceholderResolverAPI placeholderResolver) {
-        this(plugin, logger, () -> null, null, itemSourceRegistry, placeholderResolver);
+        this(plugin, logger, () -> null, null, itemSourceRegistry, placeholderResolver, null);
     }
 
     public BossDamageSettlementService(
@@ -55,7 +57,8 @@ final class BossDamageSettlementService {
         java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider,
         java.util.function.BiConsumer<String, org.bukkit.entity.Player> signalDispatcher,
         ItemSourceRegistry itemSourceRegistry,
-        PlaceholderResolverAPI placeholderResolver
+        PlaceholderResolverAPI placeholderResolver,
+        MessageProvider messages
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -63,6 +66,7 @@ final class BossDamageSettlementService {
         this.signalDispatcher = signalDispatcher;
         this.itemSourceRegistry = itemSourceRegistry;
         this.placeholderResolver = placeholderResolver;
+        this.messages = messages;
     }
 
     public void shutdown() {
@@ -157,22 +161,23 @@ final class BossDamageSettlementService {
     public BossDamageRewardDispatchResult reissueReward(String settlementId, int rank, OfflinePlayer overridePlayer) {
         BossDamageSettlementRecord record = settlement(settlementId);
         if (record == null) {
-            return BossDamageRewardDispatchResult.failure("找不到结算记录: " + settlementId);
+            return BossDamageRewardDispatchResult.failure(messages.get("admin.reissue.record-not-found", settlementId));
         }
         BossDamageSettlementEntry entry = record.entry(rank);
         if (entry.rank() <= 0) {
-            return BossDamageRewardDispatchResult.failure("该结算记录中不存在第 " + rank + " 名。");
+            return BossDamageRewardDispatchResult.failure(messages.get("admin.reissue.rank-not-found", rank));
         }
 
         BossDamageSettlementEntry reissuedEntry = executeRewardActions(record, entry, overridePlayer, false);
         if (reissuedEntry.rewarded()) {
             String targetName = resolveTargetName(overridePlayer, entry);
             return BossDamageRewardDispatchResult.success(
-                "已补发 " + settlementId + " 第 " + rank + " 名奖励 -> " + targetName
+                messages.get("admin.reissue.success", settlementId, rank, targetName)
             );
         }
         return BossDamageRewardDispatchResult.failure(
-            "补发失败: " + (reissuedEntry.rewardFailure().isBlank() ? "未知错误" : reissuedEntry.rewardFailure())
+            messages.get("admin.reissue.failure",
+                reissuedEntry.rewardFailure().isBlank() ? "未知错误" : reissuedEntry.rewardFailure())
         );
     }
 
@@ -581,7 +586,6 @@ final class BossDamageSettlementService {
         return new BossDamageSettlementActionResult("signal", true, "信号 " + action.signal() + " 已发送");
     }
 }
-
 
 
 

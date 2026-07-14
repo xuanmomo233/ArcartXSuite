@@ -1,6 +1,7 @@
 prefix: "&3◆ &6ArcartXSuite &7| &r"
 
 common:
+  ui-unavailable: "&cArcartX UI 当前不可用。"
   player-only: "&c该命令只能由玩家执行。"
   no-permission: "&c你没有权限执行此操作。"
   module-disabled: "&cMenu 模块当前不可用。"

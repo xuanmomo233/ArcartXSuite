@@ -116,7 +116,7 @@ public final class MailAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("status.title"));
         sender.sendMessage(fullMsg("status.preset", svc.presetCount()));
         sender.sendMessage(fullMsg("status.cross-server",
-            svc.crossServerActive() ? ChatColor.GREEN + "已启用" : ChatColor.YELLOW + "未启用"));
+            svc.crossServerActive() ? messages.get("status.cross-server-enabled") : messages.get("status.cross-server-disabled")));
         sender.sendMessage(fullMsg("status.compose", svc.composeSessionCount()));
     }
 
@@ -178,7 +178,7 @@ public final class MailAdminCommand implements ModuleCommandHandler {
         }
         sender.sendMessage(fullMsg("admin.preset.list-title", definitions.size()));
         for (MailPresetDefinition def : definitions) {
-            String check = def.enabled() ? ChatColor.GREEN + "✔" : ChatColor.RED + "✖";
+            String check = def.enabled() ? messages.get("admin.preset.enabled-marker") : messages.get("admin.preset.disabled-marker");
             int attCount = def.attachments() != null ? def.attachments().size() : 0;
             int cmdCount = def.claimCommands() != null ? def.claimCommands().size() : 0;
             sender.sendMessage(fullMsg("admin.preset.item-format", check, def.id(), ChatColor.translateAlternateColorCodes('&', def.displayName()), attCount, cmdCount));
@@ -197,7 +197,7 @@ public final class MailAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("admin.preset.info-subject", def.subject()));
         String displayBody = def.body().length() > 50 ? def.body().substring(0, 50) + "..." : def.body();
         sender.sendMessage(fullMsg("admin.preset.info-body", displayBody));
-        sender.sendMessage(fullMsg("admin.preset.info-expires", def.expiresAfter() != null ? def.expiresAfter().toDays() + " 天" : "默认"));
+        sender.sendMessage(fullMsg("admin.preset.info-expires", def.expiresAfter() != null ? def.expiresAfter().toDays() + " 天" : messages.get("admin.preset.info-expires-default")));
         sender.sendMessage(fullMsg("admin.preset.info-attachments", def.attachments() != null ? def.attachments().size() : 0));
         sender.sendMessage(fullMsg("admin.preset.info-commands", def.claimCommands() != null ? def.claimCommands().size() : 0));
         sender.sendMessage(fullMsg("admin.preset.info-conditions", def.claimConditions() != null ? def.claimConditions().size() : 0));
@@ -239,7 +239,7 @@ public final class MailAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("admin.cdk.info-title", cdk.code()));
         sender.sendMessage(fullMsg("admin.cdk.info-preset", cdk.presetId()));
         sender.sendMessage(fullMsg("admin.cdk.info-claims", cdk.claimedCount(), cdk.maxClaims()));
-        sender.sendMessage(fullMsg("admin.cdk.info-expires", cdk.expiresAt() == null ? "永不" : cdk.expiresAt().toString()));
+        sender.sendMessage(fullMsg("admin.cdk.info-expires", cdk.expiresAt() == null ? messages.get("admin.cdk.info-expires-never") : cdk.expiresAt().toString()));
         sender.sendMessage(fullMsg("admin.cdk.info-enabled", cdk.enabled()));
     }
 
@@ -249,7 +249,7 @@ public final class MailAdminCommand implements ModuleCommandHandler {
         if (cdks.isEmpty()) { sender.sendMessage(fullMsg("admin.cdk.list-empty", page)); return; }
         sender.sendMessage(fullMsg("admin.cdk.list-title", page));
         for (MailCdkDefinition c : cdks) {
-            String stateStr = c.enabled() ? ChatColor.GREEN + "启用" : ChatColor.RED + "禁用";
+            String stateStr = c.enabled() ? messages.get("admin.cdk.enabled") : messages.get("admin.cdk.disabled");
             sender.sendMessage(fullMsg("admin.cdk.list-item", c.code(), c.presetId(), c.claimedCount(), c.maxClaims(), stateStr));
         }
     }

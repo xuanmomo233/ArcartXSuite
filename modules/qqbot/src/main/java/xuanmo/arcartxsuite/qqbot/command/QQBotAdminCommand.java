@@ -164,7 +164,7 @@ public final class QQBotAdminCommand {
                 }
             }
             case "check-update" -> {
-                sender.sendMessage("&e正在检查 SnowLuma 版本...");
+                sender.sendMessage(messages != null ? messages.get("admin.snowluma.checking") : "&e正在检查 SnowLuma 版本...");
                 snowLuma.checkUpdateAsync().thenAccept(result -> {
                     sender.sendMessage((messages != null ? messages.get("prefix") : "") + result);
                 });

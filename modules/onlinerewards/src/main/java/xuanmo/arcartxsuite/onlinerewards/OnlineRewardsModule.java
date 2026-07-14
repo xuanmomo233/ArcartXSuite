@@ -151,6 +151,7 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
             () -> getCapability(SubtitlePlayable.class),
             () -> getCapability(QQBotBroadcastable.class),
             () -> getCapability(EventBusCapability.class),
+            messages(),
             overwrite -> {
                 try {
                     return exportUiResource(

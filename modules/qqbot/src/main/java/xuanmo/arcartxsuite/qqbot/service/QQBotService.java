@@ -28,6 +28,7 @@ import xuanmo.arcartxsuite.qqbot.onebot.OneBotEvent;
 import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository;
 import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.QQBotBinding;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 
 public final class QQBotService implements Listener {
 
@@ -36,6 +37,7 @@ public final class QQBotService implements Listener {
 
     private final JavaPlugin plugin;
     private final QQBotConfiguration config;
+    private final MessageProvider messages;
     private volatile OneBotClient client;
     private final QQBotBindService bindService;
     private final QQBotRepository repository;
@@ -59,10 +61,12 @@ public final class QQBotService implements Listener {
         QQBotBindService bindService,
         QQBotRepository repository,
         Logger logger,
-        PlaceholderResolverAPI placeholderResolver
+        PlaceholderResolverAPI placeholderResolver,
+        MessageProvider messages
     ) {
         this.plugin = plugin;
         this.config = config;
+        this.messages = messages;
         this.bindService = bindService;
         this.repository = repository;
         this.logger = logger;
@@ -323,9 +327,8 @@ public final class QQBotService implements Listener {
             Player player = Bukkit.getPlayerExact(binding.playerName());
             if (player == null || !player.isOnline()) continue;
             Bukkit.getScheduler().runTask(plugin, () -> {
-                player.sendTitle("", "§b[QQ群] §f" + nick + " @了你", 10, 70, 20);
-                player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                    "&7[QQ群] &f" + nick + " &7@了你，快去看看吧"));
+                player.sendTitle("", messages.get("player.at-title", nick), 10, 70, 20);
+                player.sendMessage(messages.get("player.at-message", nick));
             });
         }
     }

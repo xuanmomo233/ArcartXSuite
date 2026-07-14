@@ -27,7 +27,7 @@ public final class BattlePassPlayerCommand implements TabExecutor {
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                               @NotNull String label, @NotNull String[] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(ChatColor.RED + "该命令仅限玩家使用。");
+            sender.sendMessage(messages != null ? messages.get("player.only-player") : ChatColor.RED + "该命令仅限玩家使用。");
             return true;
         }
 
@@ -65,10 +65,14 @@ public final class BattlePassPlayerCommand implements TabExecutor {
     }
 
     private void sendHelp(Player player, String label) {
-        player.sendMessage(ChatColor.GOLD + "==== BattlePass 命令 ====");
-        player.sendMessage(ChatColor.YELLOW + "/" + label + " " + ChatColor.WHITE + "— 打开战令主界面");
-        player.sendMessage(ChatColor.YELLOW + "/" + label + " tasks" + ChatColor.WHITE + "— 打开任务列表");
-        player.sendMessage(ChatColor.YELLOW + "/" + label + " help" + ChatColor.WHITE + "— 显示帮助");
+        player.sendMessage(plainMsg("player.help-title"));
+        player.sendMessage(plainMsg("player.help-open", label));
+        player.sendMessage(plainMsg("player.help-tasks", label));
+        player.sendMessage(plainMsg("player.help-help", label));
+    }
+
+    private String plainMsg(String key, Object... args) {
+        return messages == null ? key : messages.get(key, args);
     }
 
     private String fullMsg(String key, Object... args) {

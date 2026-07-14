@@ -167,7 +167,7 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
             sender.sendMessage(prefix() + fmtMsg(config.messages().regionCreated().replace("{name}", name)));
             manager.clearSelection(player.getUniqueId());
         } catch (SQLException e) {
-            sender.sendMessage(prefix() + ChatColor.RED + "保存失败: " + e.getMessage());
+            sender.sendMessage(fullMsg("admin.save-failed", e.getMessage()));
         }
     }
 
@@ -184,7 +184,7 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
             manager.deleteRegion(region);
             sender.sendMessage(prefix() + fmtMsg(config.messages().regionDeleted().replace("{name}", name)));
         } catch (SQLException e) {
-            sender.sendMessage(prefix() + ChatColor.RED + "删除失败: " + e.getMessage());
+            sender.sendMessage(fullMsg("admin.delete-failed", e.getMessage()));
         }
     }
 
@@ -206,9 +206,9 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
         region.redefine(sel.x1(), sel.y1(), sel.z1(), sel.x2(), sel.y2(), sel.z2());
         try {
             manager.saveRegion(region);
-            sender.sendMessage(prefix() + ChatColor.GREEN + "区域 " + name + " 已重新定义。");
+            sender.sendMessage(fullMsg("admin.redefine.success", name));
         } catch (SQLException e) {
-            sender.sendMessage(prefix() + ChatColor.RED + "保存失败: " + e.getMessage());
+            sender.sendMessage(fullMsg("admin.save-failed", e.getMessage()));
         }
     }
 
@@ -221,10 +221,7 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
         }
         sender.sendMessage(fullMsg("admin.list.title", (world != null ? world : "所有世界"), list.size()));
         for (Region r : list) {
-            sender.sendMessage(prefix() + ChatColor.GRAY + "- " + ChatColor.WHITE + r.id()
-                + ChatColor.GRAY + " [P:" + r.priority() + "] "
-                + ChatColor.DARK_GRAY + "(" + r.minX() + "," + r.minY() + "," + r.minZ()
-                + " → " + r.maxX() + "," + r.maxY() + "," + r.maxZ() + ")");
+            sender.sendMessage(fullMsg("admin.list.entry", r.id(), r.priority(), r.minX() + "," + r.minY() + "," + r.minZ(), r.maxX() + "," + r.maxY() + "," + r.maxZ()));
         }
     }
 
@@ -285,7 +282,7 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
                 .replace("{flag}", flag.configKey())
                 .replace("{value}", state.name().toLowerCase())));
         } catch (SQLException e) {
-            sender.sendMessage(prefix() + ChatColor.RED + "保存失败: " + e.getMessage());
+            sender.sendMessage(fullMsg("admin.save-failed", e.getMessage()));
         }
     }
 
@@ -305,12 +302,12 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
             sender.sendMessage(prefix() + fmtMsg(config.messages().flagRemoved()
                 .replace("{region}", region.id()).replace("{flag}", flag.configKey())));
         } catch (SQLException e) {
-            sender.sendMessage(prefix() + ChatColor.RED + "保存失败: " + e.getMessage());
+            sender.sendMessage(fullMsg("admin.save-failed", e.getMessage()));
         }
     }
 
     private void handleFlags(CommandSender sender, String[] args) {
-        if (args.length < 3) { sender.sendMessage(prefix() + ChatColor.YELLOW + "用法: /axs regions flags <区域>"); return; }
+        if (args.length < 3) { sender.sendMessage(fullMsg("admin.flags.usage")); return; }
         Region region = manager.getRegion(args[2]);
         if (region == null) { sender.sendMessage(prefix() + fmtMsg(config.messages().regionNotFound().replace("{name}", args[2]))); return; }
 
@@ -324,8 +321,7 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
             String data = region.getFlagData(entry.getKey());
             String extra = data != null ? ChatColor.DARK_GRAY + " (" + data + ")" : "";
             ChatColor color = entry.getValue() == RegionFlag.State.ALLOW ? ChatColor.GREEN : ChatColor.RED;
-            sender.sendMessage(prefix() + ChatColor.GRAY + "  " + entry.getKey().configKey() + ": "
-                + color + entry.getValue().name().toLowerCase() + extra);
+            sender.sendMessage(fullMsg("admin.flags.entry", entry.getKey().configKey(), color + entry.getValue().name().toLowerCase() + extra));
         }
     }
 
@@ -352,7 +348,7 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
             sender.sendMessage(prefix() + fmtMsg(config.messages().memberAdded()
                 .replace("{player}", targetName).replace("{region}", region.id()).replace("{role}", roleDisplay)));
         } catch (SQLException e) {
-            sender.sendMessage(prefix() + ChatColor.RED + "保存失败: " + e.getMessage());
+            sender.sendMessage(fullMsg("admin.save-failed", e.getMessage()));
         }
     }
 
@@ -377,7 +373,7 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
             sender.sendMessage(prefix() + fmtMsg(config.messages().memberRemoved()
                 .replace("{player}", targetName).replace("{region}", region.id())));
         } catch (SQLException e) {
-            sender.sendMessage(prefix() + ChatColor.RED + "保存失败: " + e.getMessage());
+            sender.sendMessage(fullMsg("admin.save-failed", e.getMessage()));
         }
     }
 
@@ -395,7 +391,7 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
         } catch (NumberFormatException e) {
             sender.sendMessage(fullMsg("admin.priority.invalid", args[3]));
         } catch (SQLException e) {
-            sender.sendMessage(prefix() + ChatColor.RED + "保存失败: " + e.getMessage());
+            sender.sendMessage(fullMsg("admin.save-failed", e.getMessage()));
         }
     }
 
@@ -417,7 +413,7 @@ public final class RegionCommandHandler implements ModuleCommandHandler {
             manager.saveRegion(region);
             sender.sendMessage(fullMsg("admin.parent.success", region.id(), parentName));
         } catch (SQLException e) {
-            sender.sendMessage(prefix() + ChatColor.RED + "保存失败: " + e.getMessage());
+            sender.sendMessage(fullMsg("admin.save-failed", e.getMessage()));
         }
     }
 

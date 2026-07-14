@@ -9,6 +9,7 @@ prefix: "&3◆ &6ArcartXSuite &7| &r"
 
 # ── 通用 ──────────────────────────────────────────────
 common:
+  service-down-command: "&c[Conversation] 服务未启动，命令不可用。"
   service-down: "&cConversation 服务未启动。"
   reload-hint: "&e请使用 /{0} reload conversation"
   unknown: "&e未知命令，使用 /{0} conversation help"

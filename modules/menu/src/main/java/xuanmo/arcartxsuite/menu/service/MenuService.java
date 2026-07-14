@@ -18,6 +18,7 @@ import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.menu.config.MenuButtonDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuDefinitionLoader;
@@ -44,6 +45,7 @@ public final class MenuService {
     private final Map<UUID, MenuSession> sessions = new ConcurrentHashMap<>();
     private final MenuActionExecutor actionExecutor;
     private final MenuIconResolver iconResolver;
+    private final MessageProvider messageProvider;
     private final MenuBindingRegistry bindingRegistry = new MenuBindingRegistry();
     private String panelRuntimeUiId = "menu_panel";
     private String escRuntimeUiId = "menu_esc";
@@ -56,7 +58,8 @@ public final class MenuService {
         MenuModuleConfiguration configuration,
         ItemBridgeAPI itemStackBridge,
         ItemSourceRegistry itemSourceRegistry,
-        Supplier<SignalDispatchable> signalProvider
+        Supplier<SignalDispatchable> signalProvider,
+        MessageProvider messageProvider
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -65,6 +68,7 @@ public final class MenuService {
         this.configuration = configuration;
         this.actionExecutor = new MenuActionExecutor(plugin, this, logger, signalProvider);
         this.iconResolver = new MenuIconResolver(itemStackBridge, itemSourceRegistry);
+        this.messageProvider = messageProvider;
     }
 
     public void setRuntimeUiIds(String panelRuntimeUiId, String escRuntimeUiId) {
@@ -177,7 +181,7 @@ public final class MenuService {
         actionExecutor.executeAll(player, definition.openActions());
 
         if (packetBridge == null || !packetBridge.isAvailable()) {
-            player.sendMessage(messages().colorize("&cArcartX UI 当前不可用。"));
+            player.sendMessage(messageProvider.get("common.ui-unavailable"));
             return false;
         }
         if (openUi) {
@@ -384,5 +388,4 @@ public final class MenuService {
         ));
     }
 }
-
 

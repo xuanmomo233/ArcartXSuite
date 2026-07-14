@@ -19,6 +19,7 @@ import xuanmo.arcartxsuite.entitytracker.config.DropAllocationSettings;
 import xuanmo.arcartxsuite.entitytracker.dao.DropAllocationRecordDao;
 import xuanmo.arcartxsuite.entitytracker.dao.PlayerDkpDao;
 import xuanmo.arcartxsuite.entitytracker.entity.BossKillRecord;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import java.util.logging.Logger;
 
 /**
@@ -31,15 +32,18 @@ public final class DropAllocationService {
     private final DropAllocationSettings settings;
     private final DropAllocationRecordDao allocationDao;
     private final PlayerDkpDao dkpDao;
+    private final MessageProvider messages;
     private final Random random = new Random();
 
     public DropAllocationService(JavaPlugin plugin,
-        Logger logger, DropAllocationSettings settings, DataSource dataSource) {
+        Logger logger, DropAllocationSettings settings, DataSource dataSource,
+        MessageProvider messages) {
         this.plugin = plugin;
         this.logger = logger;
         this.settings = settings;
         this.allocationDao = new DropAllocationRecordDao(dataSource, plugin);
         this.dkpDao = new PlayerDkpDao(dataSource, this.logger);
+        this.messages = messages;
     }
 
     public void allocateAfterKill(
@@ -217,8 +221,7 @@ public final class DropAllocationService {
     }
 
     private void broadcastAllocation(String mode, String winnerName, String itemName, int score) {
-        Bukkit.broadcastMessage("§6[EntityTracker] §e" + mode + " 分配: §f" + itemName
-            + " §7→ §a" + winnerName + " §7(" + score + ")");
+        Bukkit.broadcastMessage(messages.get("admin.drop-allocation", mode, itemName, winnerName, score));
     }
 
     private static List<Participant> buildParticipants(BossDamageSettlementRecord settlement) {
@@ -235,6 +238,5 @@ public final class DropAllocationService {
     private record Participant(UUID uuid, String name, int rank) {
     }
 }
-
 
 

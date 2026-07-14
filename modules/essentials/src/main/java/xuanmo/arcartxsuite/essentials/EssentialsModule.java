@@ -284,7 +284,7 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         if (commandDelegate == null) {
-            sender.sendMessage("\u00a7cEssentials \u547d\u4ee4\u5904\u7406\u5668\u5c1a\u672a\u521d\u59cb\u5316\u3002");
+            sender.sendMessage(messages() != null ? messages().get("common.command-handler-down") : "§cEssentials 命令处理器尚未初始化。");
             return true;
         }
         return commandDelegate.onCommand(sender, label, args);

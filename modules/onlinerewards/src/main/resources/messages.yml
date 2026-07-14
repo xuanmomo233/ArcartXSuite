@@ -60,3 +60,6 @@ admin:
   savings:
     usage: "&e用法: /axs onlinerewards savings add|set|reset <时长> <玩家>"
     invalid: "&c无效时长: {0} (支持 30m/2h/1d)"
+
+hints:
+  server-goal: "&e[全服签到] &f{0} &7已达成！今日签到人数：&f{1}&7。"

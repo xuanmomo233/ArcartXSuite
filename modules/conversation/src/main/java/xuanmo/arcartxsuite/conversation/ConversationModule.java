@@ -189,7 +189,7 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         if (adminCommand != null) {
             return adminCommand.onCommand(sender, label, args);
         }
-        sender.sendMessage("\u00a7c[Conversation] 服务未启动，命令不可用。");
+        sender.sendMessage(messages().get("common.service-down-command"));
         return true;
     }
 

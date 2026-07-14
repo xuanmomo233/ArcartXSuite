@@ -44,6 +44,7 @@ import xuanmo.arcartxsuite.map.model.MapPlayerViewState;
 import xuanmo.arcartxsuite.map.model.MapWaypoint;
 import xuanmo.arcartxsuite.map.storage.MapRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import java.util.logging.Logger;
 
 public final class MapService implements Listener, MapUiPacketHandler.ActionTarget {
@@ -69,6 +70,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private final ItemSourceRegistry itemSourceRegistry;
     private final ItemMatcherAPI itemMatcherSupport;
     private final WaypointBridgeAPI waypointBridge;
+    private final MessageProvider messages;
     private final ConcurrentMap<UUID, MapPlayerViewState> viewStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, MapNavigationState> navigationStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, ConcurrentMap<String, MapExternalTarget>> externalTargets = new ConcurrentHashMap<>();
@@ -93,6 +95,25 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         CurrencyBridgeAPI currencyBridgeManager,
         WaypointBridgeAPI waypointBridge
     ) {
+        this(plugin, logger, packetGuard, configuration, repository, bridge, menuUiId, hudUiId,
+            itemSourceRegistry, itemMatcherSupport, currencyBridgeManager, waypointBridge, null);
+    }
+
+    public MapService(
+        JavaPlugin plugin,
+        Logger logger,
+        PacketGuardAPI packetGuard,
+        MapModuleConfiguration configuration,
+        MapRepository repository,
+        PacketBridgeAPI bridge,
+        String menuUiId,
+        String hudUiId,
+        ItemSourceRegistry itemSourceRegistry,
+        ItemMatcherAPI itemMatcherSupport,
+        CurrencyBridgeAPI currencyBridgeManager,
+        WaypointBridgeAPI waypointBridge,
+        MessageProvider messages
+    ) {
         this.plugin = plugin;
         this.logger = logger;
         this.packetGuard = packetGuard;
@@ -106,6 +127,11 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         this.itemSourceRegistry = itemSourceRegistry;
         this.itemMatcherSupport = itemMatcherSupport;
         this.waypointBridge = waypointBridge;
+        this.messages = messages;
+    }
+
+    private String message(String key, Object... args) {
+        return messages == null ? "" : messages.get(key, args);
     }
 
     public void start() throws Exception {
@@ -188,7 +214,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
 
     public MapOperationResult setHud(Player player, String mode) {
         if (player == null || !player.isOnline()) {
-            return MapOperationResult.failure("玩家当前不在线。");
+            return MapOperationResult.failure(message("player.offline"));
         }
         boolean targetVisible;
         if ("on".equalsIgnoreCase(mode)) {
@@ -288,7 +314,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         String resolvedWorldId = normalizeId(worldId);
         if (!configuration.worlds().containsKey(resolvedWorldId)) {
-            player.sendMessage(PREFIX + ChatColor.RED + "未配置地图世界: " + worldId);
+            player.sendMessage(PREFIX + message("player.world-not-configured", worldId));
             return;
         }
         state(player).selectWorld(resolvedWorldId);
@@ -397,28 +423,28 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
 
     private MapOperationResult openMenuInternal(Player player, String worldId, boolean pushInitPacket) {
         if (player == null || !player.isOnline()) {
-            return MapOperationResult.failure("玩家当前不在线。");
+            return MapOperationResult.failure(message("player.offline"));
         }
         String resolvedWorldId = resolveOpenWorld(player, worldId);
         if (resolvedWorldId.isBlank()) {
-            return MapOperationResult.failure("当前世界未配置地图，且没有可用的默认地图。");
+            return MapOperationResult.failure(message("player.map-unavailable"));
         }
         if (!configuration.worlds().containsKey(resolvedWorldId)) {
-            return MapOperationResult.failure("未配置地图世界: " + worldId);
+            return MapOperationResult.failure(message("player.world-not-configured", worldId));
         }
         state(player).selectWorld(resolvedWorldId);
         bridge.openUi(player, menuUiId);
         syncMenu(player, pushInitPacket);
-        return MapOperationResult.success("已打开地图界面。");
+        return MapOperationResult.success(message("player.map-opened"));
     }
 
     private MapOperationResult setHudInternal(Player player, boolean visible, boolean announce) {
         if (player == null || !player.isOnline()) {
-            return MapOperationResult.failure("玩家当前不在线。");
+            return MapOperationResult.failure(message("player.offline"));
         }
         String resolvedWorldId = resolveOpenWorld(player, "");
         if (visible && resolvedWorldId.isBlank()) {
-            return MapOperationResult.failure("当前没有可显示的小地图世界。");
+            return MapOperationResult.failure(message("player.no-display-world"));
         }
         if (!resolvedWorldId.isBlank()) {
             state(player).selectWorld(resolvedWorldId);
@@ -427,22 +453,22 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (!visible) {
             openedHudPlayers.remove(player.getUniqueId());
             bridge.closeUi(player, hudUiId);
-            return announce ? MapOperationResult.success("已关闭小地图 HUD。") : MapOperationResult.success("");
+            return announce ? MapOperationResult.success(message("player.hud-disabled")) : MapOperationResult.success("");
         }
         syncHud(player, !openedHudPlayers.contains(player.getUniqueId()));
-        return announce ? MapOperationResult.success("已显示小地图 HUD。") : MapOperationResult.success("");
+        return announce ? MapOperationResult.success(message("player.hud-enabled")) : MapOperationResult.success("");
     }
 
     private MapOperationResult unlockAnchorInternal(Player player, String anchorId) {
         if (player == null || !player.isOnline()) {
-            return MapOperationResult.failure("玩家当前不在线。");
+            return MapOperationResult.failure(message("player.offline"));
         }
         AnchorDefinition anchor = configuration.anchor(anchorId);
         if (anchor == null) {
-            return MapOperationResult.failure("未找到锚点: " + anchorId);
+            return MapOperationResult.failure(message("player.anchor-not-found", anchorId));
         }
         if (isAnchorUnlocked(player, anchor)) {
-            return MapOperationResult.failure("该锚点已解锁。");
+            return MapOperationResult.failure(message("player.anchor-already-unlocked"));
         }
         MapOperationResult accessResult = validateAnchorAccess(player, anchor);
         if (!accessResult.success()) {
@@ -455,10 +481,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         long unlockTime = System.currentTimeMillis();
         try {
             if (!repository.tryUnlockAnchor(player.getUniqueId(), anchor.id(), unlockTime)) {
-                return MapOperationResult.failure("该锚点已解锁。");
+                return MapOperationResult.failure(message("player.anchor-already-unlocked"));
             }
         } catch (Exception exception) {
-            return MapOperationResult.failure("写入锚点解锁数据失败。");
+            return MapOperationResult.failure(message("player.anchor-unlock-save-failed"));
         }
         CurrencyChargeReceipt currencyReceipt = chargeCurrencies(player, anchor.unlockCurrencies());
         if (!currencyReceipt.success()) {
@@ -473,7 +499,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         invalidatePlayerDataCache(player.getUniqueId());
         sync(player, false);
-        return MapOperationResult.success("已解锁锚点: " + anchor.displayName());
+        return MapOperationResult.success(message("player.anchor-unlocked", anchor.displayName()));
     }
 
     private void rollbackUnlock(UUID playerUuid, String anchorId) {
@@ -486,14 +512,14 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
 
     private MapOperationResult teleportAnchorInternal(Player player, String anchorId) {
         if (player == null || !player.isOnline()) {
-            return MapOperationResult.failure("玩家当前不在线。");
+            return MapOperationResult.failure(message("player.offline"));
         }
         AnchorDefinition anchor = configuration.anchor(anchorId);
         if (anchor == null) {
-            return MapOperationResult.failure("未找到锚点: " + anchorId);
+            return MapOperationResult.failure(message("player.anchor-not-found", anchorId));
         }
         if (!isAnchorUnlocked(player, anchor)) {
-            return MapOperationResult.failure("该锚点尚未解锁。");
+            return MapOperationResult.failure(message("player.anchor-locked"));
         }
         MapOperationResult accessResult = validateAnchorAccess(player, anchor);
         if (!accessResult.success()) {
@@ -501,7 +527,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
         World world = Bukkit.getWorld(anchor.worldId());
         if (world == null) {
-            return MapOperationResult.failure("目标世界当前未加载: " + anchor.worldId());
+            return MapOperationResult.failure(message("player.anchor-world-unloaded", anchor.worldId()));
         }
         CurrencyChargeReceipt currencyReceipt = chargeCurrencies(player, anchor.teleportCurrencies());
         if (!currencyReceipt.success()) {
@@ -512,22 +538,22 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         );
         if (!teleported) {
             rollbackCurrencies(player, currencyReceipt.successfulCharges());
-            return MapOperationResult.failure("传送失败，请稍后重试。");
+            return MapOperationResult.failure(message("player.teleport-failed"));
         }
         sync(player, false);
-        return MapOperationResult.success("已传送到锚点: " + anchor.displayName());
+        return MapOperationResult.success(message("player.teleported-to-anchor", anchor.displayName()));
     }
 
     private MapOperationResult trackAnchorInternal(Player player, String anchorId) {
         if (!configuration.navigation().enabled()) {
-            return MapOperationResult.failure("当前未启用导航功能。");
+            return MapOperationResult.failure(message("player.navigation-disabled"));
         }
         AnchorDefinition anchor = configuration.anchor(anchorId);
         if (player == null || !player.isOnline() || anchor == null) {
-            return MapOperationResult.failure("未找到锚点: " + anchorId);
+            return MapOperationResult.failure(message("player.anchor-not-found", anchorId));
         }
         if (!waypointBridge.available()) {
-            return MapOperationResult.failure("当前找不到可用的 ArcartX waypoint 能力。");
+            return MapOperationResult.failure(message("player.waypoint-unavailable"));
         }
         clearTrackSilently(player);
         String waypointId = configuration.navigation().anchorIdPrefix() + sanitize(anchor.id());
@@ -537,26 +563,26 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             "Map"
         );
         if (!waypointBridge.addWaypoint(player, waypointId, anchor.displayName(), styleId, anchor.x(), anchor.y(), anchor.z())) {
-            return MapOperationResult.failure("创建锚点导航失败。");
+            return MapOperationResult.failure(message("player.anchor-navigation-failed"));
         }
         navigationStates.put(
             player.getUniqueId(),
             new MapNavigationState(true, TargetType.ANCHOR, anchor.worldId(), anchor.id(), waypointId, anchor.displayName(), "map")
         );
         sync(player, false);
-        return MapOperationResult.success("已开始导航锚点: " + anchor.displayName());
+        return MapOperationResult.success(message("player.anchor-navigation-started", anchor.displayName()));
     }
 
     private MapOperationResult trackWaypointInternal(Player player, String waypointId) {
         if (!configuration.navigation().enabled()) {
-            return MapOperationResult.failure("当前未启用导航功能。");
+            return MapOperationResult.failure(message("player.navigation-disabled"));
         }
         MapWaypoint waypoint = findWaypoint(player, waypointId);
         if (player == null || !player.isOnline() || waypoint == null) {
-            return MapOperationResult.failure("未找到路径点: " + waypointId);
+            return MapOperationResult.failure(message("player.waypoint-not-found", waypointId));
         }
         if (!waypointBridge.available()) {
-            return MapOperationResult.failure("当前找不到可用的 ArcartX waypoint 能力。");
+            return MapOperationResult.failure(message("player.waypoint-unavailable"));
         }
         clearTrackSilently(player);
         String runtimeWaypointId = configuration.navigation().waypointIdPrefix() + sanitize(waypoint.waypointId());
@@ -566,7 +592,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             "Map"
         );
         if (!waypointBridge.addWaypoint(player, runtimeWaypointId, waypoint.name(), styleId, waypoint.x(), waypoint.y(), waypoint.z())) {
-            return MapOperationResult.failure("创建路径点导航失败。");
+            return MapOperationResult.failure(message("player.waypoint-navigation-failed"));
         }
         navigationStates.put(
             player.getUniqueId(),
@@ -581,19 +607,19 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             )
         );
         sync(player, false);
-        return MapOperationResult.success("已开始导航路径点: " + waypoint.name());
+        return MapOperationResult.success(message("player.waypoint-navigation-started", waypoint.name()));
     }
 
     private MapOperationResult trackExternalTargetInternal(Player player, String targetId) {
         if (!configuration.navigation().enabled()) {
-            return MapOperationResult.failure("当前未启用导航功能。");
+            return MapOperationResult.failure(message("player.navigation-disabled"));
         }
         MapExternalTarget target = findExternalTarget(player, targetId);
         if (player == null || !player.isOnline() || target == null) {
-            return MapOperationResult.failure("未找到任务导航点: " + targetId);
+            return MapOperationResult.failure(message("player.target-not-found", targetId));
         }
         if (!waypointBridge.available()) {
-            return MapOperationResult.failure("当前找不到可用的 ArcartX waypoint 能力。");
+            return MapOperationResult.failure(message("player.waypoint-unavailable"));
         }
         clearTrackSilently(player);
         String runtimeWaypointId = configuration.navigation().waypointIdPrefix() + "external-" + sanitize(target.targetId());
@@ -603,7 +629,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             "Map"
         );
         if (!waypointBridge.addWaypoint(player, runtimeWaypointId, target.title(), styleId, target.x(), target.y(), target.z())) {
-            return MapOperationResult.failure("创建任务导航点失败。");
+            return MapOperationResult.failure(message("player.target-navigation-failed"));
         }
         navigationStates.put(
             player.getUniqueId(),
@@ -620,46 +646,46 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         state(player).selectWorld(normalizeId(target.worldId()));
         state(player).selectExternalTarget(normalizeId(target.targetId()));
         sync(player, false);
-        return MapOperationResult.success("已开始导航任务点: " + target.title());
+        return MapOperationResult.success(message("player.target-navigation-started", target.title()));
     }
 
     private MapOperationResult clearTrackInternal(Player player, boolean sync) {
         if (player == null || !player.isOnline()) {
-            return MapOperationResult.failure("玩家当前不在线。");
+            return MapOperationResult.failure(message("player.offline"));
         }
         MapNavigationState state = navigationStates.get(player.getUniqueId());
         if (state == null || !state.active()) {
             if (sync) {
                 sync(player, false);
             }
-            return MapOperationResult.success("当前没有活动导航。");
+            return MapOperationResult.success(message("player.no-active-navigation"));
         }
         if (!waypointBridge.removeWaypoint(player, state.waypointId(), false)) {
-            return MapOperationResult.failure("清除导航失败。");
+            return MapOperationResult.failure(message("player.clear-navigation-failed"));
         }
         navigationStates.remove(player.getUniqueId());
         if (sync) {
             sync(player, false);
         }
-        return MapOperationResult.success("已清除当前导航。");
+        return MapOperationResult.success(message("player.navigation-cleared"));
     }
 
     private MapOperationResult createWaypointInternal(Player player) {
         if (player == null || !player.isOnline()) {
-            return MapOperationResult.failure("玩家当前不在线。");
+            return MapOperationResult.failure(message("player.offline"));
         }
         if (!configuration.waypoints().enabled()) {
-            return MapOperationResult.failure("当前未启用自定义路径点。");
+            return MapOperationResult.failure(message("player.custom-waypoints-disabled"));
         }
         String worldId = normalizeId(player.getWorld().getName());
         if (!configuration.worlds().containsKey(worldId)) {
-            return MapOperationResult.failure("当前世界未配置地图，无法创建路径点。");
+            return MapOperationResult.failure(message("player.waypoint-world-not-configured"));
         }
         List<MapWaypoint> waypoints = loadWaypoints(player);
         int limit = resolveWaypointLimit(player);
         long countInWorld = waypoints.stream().filter(waypoint -> normalizeId(waypoint.world()).equals(worldId)).count();
         if (countInWorld >= limit) {
-            return MapOperationResult.failure("当前世界的路径点数量已达到上限: " + limit);
+            return MapOperationResult.failure(message("player.waypoint-limit-reached", limit));
         }
         long now = System.currentTimeMillis();
         String waypointId = configuration.waypoints().idPrefix() + UUID.randomUUID().toString().replace("-", "");
@@ -679,29 +705,29 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             if (!repository.createWaypointIfUnderWorldLimit(
                 player.getUniqueId(), waypoint, worldId, limit
             )) {
-                return MapOperationResult.failure("当前世界的路径点数量已达到上限: " + limit);
+                return MapOperationResult.failure(message("player.waypoint-limit-reached", limit));
             }
             invalidatePlayerDataCache(player.getUniqueId());
             state(player).selectWorld(worldId);
             state(player).selectWaypoint(waypoint.waypointId());
             sync(player, false);
-            return MapOperationResult.success("已创建路径点: " + name);
+            return MapOperationResult.success(message("player.waypoint-created", name));
         } catch (Exception exception) {
-            return MapOperationResult.failure("保存路径点失败。");
+            return MapOperationResult.failure(message("player.waypoint-save-failed"));
         }
     }
 
     private MapOperationResult deleteWaypointInternal(Player player, String waypointId) {
         if (player == null || !player.isOnline()) {
-            return MapOperationResult.failure("玩家当前不在线。");
+            return MapOperationResult.failure(message("player.offline"));
         }
         MapWaypoint waypoint = findWaypoint(player, waypointId);
         if (waypoint == null) {
-            return MapOperationResult.failure("未找到路径点: " + waypointId);
+            return MapOperationResult.failure(message("player.waypoint-not-found", waypointId));
         }
         try {
             if (!repository.deleteWaypoint(player.getUniqueId(), waypoint.waypointId())) {
-                return MapOperationResult.failure("删除路径点失败。");
+                return MapOperationResult.failure(message("player.waypoint-delete-failed"));
             }
             invalidatePlayerDataCache(player.getUniqueId());
             if (navigationStates.getOrDefault(player.getUniqueId(), MapNavigationState.none()).matchesWaypoint(waypoint.waypointId())) {
@@ -711,18 +737,18 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                 state(player).clearSelection();
             }
             sync(player, false);
-            return MapOperationResult.success("已删除路径点: " + waypoint.name());
+            return MapOperationResult.success(message("player.waypoint-deleted", waypoint.name()));
         } catch (Exception exception) {
-            return MapOperationResult.failure("删除路径点失败。");
+            return MapOperationResult.failure(message("player.waypoint-delete-failed"));
         }
     }
 
     private MapOperationResult validateAnchorAccess(Player player, AnchorDefinition anchor) {
         if (!anchor.permission().isBlank() && !player.hasPermission(anchor.permission())) {
-            return MapOperationResult.failure("你没有使用该锚点的权限。");
+            return MapOperationResult.failure(message("player.anchor-no-permission"));
         }
         if (!configuration.worlds().containsKey(anchor.worldId())) {
-            return MapOperationResult.failure("锚点所在世界未配置地图: " + anchor.worldId());
+            return MapOperationResult.failure(message("player.anchor-world-not-configured", anchor.worldId()));
         }
         return MapOperationResult.success("");
     }
@@ -734,10 +760,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         for (CurrencyCost cost : costs) {
             CurrencyBridge bridge = currencyBridgeManager.bridge(cost.currencyId());
             if (bridge == null || !bridge.available()) {
-                return CurrencyChargeReceipt.failure("货币桥接不可用: " + cost.currencyId());
+                return CurrencyChargeReceipt.failure(message("player.currency-bridge-unavailable", cost.currencyId()));
             }
             if (bridge.balance(player).compareTo(cost.amount()) < 0) {
-                return CurrencyChargeReceipt.failure("余额不足: " + cost.currencyId());
+                return CurrencyChargeReceipt.failure(message("player.insufficient-balance", cost.currencyId()));
             }
         }
         List<CurrencyCost> successfulCharges = new ArrayList<>();
@@ -745,12 +771,12 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             CurrencyBridge bridge = currencyBridgeManager.bridge(cost.currencyId());
             if (bridge == null || !bridge.available()) {
                 rollbackCurrencies(player, successfulCharges);
-                return CurrencyChargeReceipt.failure("货币桥接不可用: " + cost.currencyId());
+                return CurrencyChargeReceipt.failure(message("player.currency-bridge-unavailable", cost.currencyId()));
             }
             CurrencyTransactionResult result = bridge.withdraw(player, cost.amount());
             if (!result.success()) {
                 rollbackCurrencies(player, successfulCharges);
-                return CurrencyChargeReceipt.failure(result.message().isBlank() ? "扣费失败: " + cost.currencyId() : result.message());
+                return CurrencyChargeReceipt.failure(result.message().isBlank() ? message("player.charge-failed", cost.currencyId()) : result.message());
             }
             successfulCharges.add(cost);
         }
@@ -790,7 +816,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                 need -= take;
             }
             if (need > 0) {
-                return PreparedItemConsumption.failure("缺少解锁所需物品。");
+                return PreparedItemConsumption.failure(message("player.missing-unlock-items"));
             }
         }
         return PreparedItemConsumption.success(snapshot, deductions);
@@ -1269,4 +1295,3 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
     }
 }
-

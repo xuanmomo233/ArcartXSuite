@@ -28,6 +28,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration;
@@ -61,6 +62,7 @@ public final class LootScannerService implements Listener {
     private final String uiId;
     /** 交互 Menu 的运行时 UI ID */
     private final String interactUiId;
+    private final MessageProvider messages;
 
     /** 每位玩家的掉落物状态（可见列表 + 选中索引） */
     private final Map<UUID, PlayerLootState> playerStates = new HashMap<>();
@@ -85,7 +87,8 @@ public final class LootScannerService implements Listener {
         ItemBridgeAPI itemStackBridge,
         String uiId,
         String interactUiId,
-        Supplier<WarehouseAutoDepositable> warehouseAutoDepositableSupplier
+        Supplier<WarehouseAutoDepositable> warehouseAutoDepositableSupplier,
+        MessageProvider messages
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -94,6 +97,7 @@ public final class LootScannerService implements Listener {
         this.packetBridge = packetBridge;
         this.itemStackBridge = itemStackBridge;
         this.warehouseAutoDepositableSupplier = warehouseAutoDepositableSupplier == null ? () -> null : warehouseAutoDepositableSupplier;
+        this.messages = messages;
         this.filterEngine = new LootFilterEngine(configuration.filter());
         this.uiId = uiId;
         this.interactUiId = interactUiId;
@@ -324,7 +328,7 @@ public final class LootScannerService implements Listener {
         if (storedInWarehouse > 0L && remainingForInventory <= 0) {
             itemEntity.remove();
             state.visibleItems.remove(selectedIndex);
-            player.sendMessage(ChatColor.GREEN + "已自动存入仓库 " + storedInWarehouse + " 件物品。");
+            player.sendMessage(messages.get("hints.warehouse-stored", storedInWarehouse));
             if (state.selectedIndex >= state.visibleItems.size()) {
                 state.selectedIndex = Math.max(0, state.visibleItems.size() - 1);
             }
@@ -343,11 +347,11 @@ public final class LootScannerService implements Listener {
         } else {
             ItemStack remaining = leftover.values().iterator().next();
             itemEntity.setItemStack(remaining);
-            player.sendMessage(ChatColor.RED + "背包空间不足，部分物品未能拾取。");
+            player.sendMessage(messages.get("hints.inventory-full"));
         }
 
         if (storedInWarehouse > 0L) {
-            player.sendMessage(ChatColor.GREEN + "已自动存入仓库 " + storedInWarehouse + " 件物品。");
+            player.sendMessage(messages.get("hints.warehouse-stored", storedInWarehouse));
         }
 
         if (state.selectedIndex >= state.visibleItems.size()) {

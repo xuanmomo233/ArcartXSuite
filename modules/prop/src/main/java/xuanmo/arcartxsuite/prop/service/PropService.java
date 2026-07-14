@@ -27,6 +27,7 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.bridge.PropBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PropPlayerHandle;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
@@ -51,6 +52,7 @@ public final class PropService implements Listener {
     private final PropMythicLibService mythicLibService;
     private final PropSymphonyService symphonyService;
     private Supplier<EventBusCapability> eventBusProvider;
+    private final MessageProvider messages;
     private final Set<String> registeredBindingIds = new LinkedHashSet<>();
 
     public PropService(
@@ -61,7 +63,8 @@ public final class PropService implements Listener {
         PropKeyMappingConfiguration keyMappingConfiguration,
         PropLanguageConfiguration languageConfiguration,
         Map<String, PropDefinition> definitionsByNormalizedId,
-        xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge
+        xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge,
+        MessageProvider messages
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -70,6 +73,7 @@ public final class PropService implements Listener {
         this.keyMappingConfiguration = keyMappingConfiguration;
         this.languageConfiguration = languageConfiguration;
         this.definitionsByNormalizedId = definitionsByNormalizedId;
+        this.messages = messages;
         this.attributePlusService = new PropAttributePlusService(plugin, attributeBridge.attributePlus());
         this.mythicLibService = new PropMythicLibService(plugin, this.logger, configuration.mythicLib(), attributeBridge.mythicLib());
         this.symphonyService = new PropSymphonyService(plugin, attributeBridge.symphony());
@@ -127,22 +131,22 @@ public final class PropService implements Listener {
 
     public PropOperationResult applyPropToMainHand(Player player, String propId) {
         if (player == null) {
-            return PropOperationResult.failure("只有玩家可以使用该命令。");
+            return PropOperationResult.failure(messages.get("set.only-player"));
         }
 
         ItemStack mainHand = player.getInventory().getItemInMainHand();
         if (!isRealItem(mainHand)) {
-            return PropOperationResult.failure("请先手持一个物品。");
+            return PropOperationResult.failure(messages.get("set.no-item"));
         }
 
         PropDefinition definition = resolveDefinition(propId);
         if (definition == null) {
-            return PropOperationResult.failure("道具 ID 不存在: " + propId);
+            return PropOperationResult.failure(messages.get("set.invalid-id", propId));
         }
 
         ItemStack boundItem = bindItem(mainHand, definition.id(), definition.coolDownGroup());
         player.getInventory().setItemInMainHand(boundItem);
-        return PropOperationResult.success("已将手中物品设置为道具 " + definition.id() + "。");
+        return PropOperationResult.success(messages.get("set.success", definition.id()));
     }
 
     public void handleClientInitialized(Player player) {
@@ -644,6 +648,5 @@ public final class PropService implements Listener {
         KEY
     }
 }
-
 
 

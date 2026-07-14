@@ -47,8 +47,10 @@ admin:
     usage: "&e用法: /axs regions remove <名称>"
   redefine:
     usage: "&e用法: /axs regions redefine <名称>"
+    success: "&a区域 {0} 已重新定义。"
   list:
     empty: "&c没有找到区域。"
+    entry: "&7- &f{0}&7 [P:{1}] &8({2} → {3})"
     title: "&6区域列表 ({0}): {1} 个"
   info:
     usage: "&e用法: /axs regions info <名称>"
@@ -66,8 +68,10 @@ admin:
   removeflag:
     usage: "&e用法: /axs regions removeflag <区域> <标志>"
   flags:
+    usage: "&e用法: /axs regions flags <区域>"
     empty: "&e区域 {0} 没有设置任何标志。"
     title: "&6区域 {0} 的标志:"
+    entry: "&7  {0}: {1}"
   addowner:
     usage: "&e用法: /axs regions addowner/addmember <区域> <玩家>"
   removeowner:
@@ -79,6 +83,8 @@ admin:
   parent:
     usage: "&e用法: /axs regions parent <区域> <父区域|none>"
     success: "&a区域 {0} 父区域已设为 {1}。"
+  save-failed: "&c保存失败: {0}"
+  delete-failed: "&c删除失败: {0}"
   tp:
     usage: "&e用法: /axs regions tp <区域>"
     world-offline: "&c目标世界不存在或未加载: {0}"

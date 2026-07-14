@@ -60,6 +60,7 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.chat.service.ChatEnvelopeCodec;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import java.util.logging.Logger;
 
 public final class ChatService implements Listener {
@@ -90,6 +91,7 @@ public final class ChatService implements Listener {
     private final String completionUiId;
     private final CrossServerAPI crossServer;
     private final PlaceholderResolverAPI placeholderResolver;
+    private final MessageProvider messages;
 
     private CrossServerChannel crossServerChannel;
     private BukkitTask cleanupTask;
@@ -111,6 +113,23 @@ public final class ChatService implements Listener {
         CrossServerAPI crossServer,
         PlaceholderResolverAPI placeholderResolver
     ) {
+        this(plugin, logger, tabRefreshableProvider, configuration, repository, packetBridge, itemStackBridge,
+            completionUiId, crossServer, placeholderResolver, null);
+    }
+
+    public ChatService(
+        JavaPlugin plugin,
+        Logger logger,
+        java.util.function.Supplier<TabRefreshable> tabRefreshableProvider,
+        ChatModuleConfiguration configuration,
+        ChatRepository repository,
+        PacketBridgeAPI packetBridge,
+        ItemBridgeAPI itemStackBridge,
+        String completionUiId,
+        CrossServerAPI crossServer,
+        PlaceholderResolverAPI placeholderResolver,
+        MessageProvider messages
+    ) {
         this.plugin = Objects.requireNonNull(plugin);
         this.logger = logger;
         this.tabRefreshableProvider = tabRefreshableProvider;
@@ -121,11 +140,16 @@ public final class ChatService implements Listener {
         this.completionUiId = completionUiId;
         this.crossServer = Objects.requireNonNull(crossServer);
         this.placeholderResolver = placeholderResolver;
+        this.messages = messages;
         this.ioExecutor = Executors.newSingleThreadExecutor(runnable -> {
             Thread thread = new Thread(runnable, "AXS-Chat-IO");
             thread.setDaemon(true);
             return thread;
         });
+    }
+
+    private String message(String key, Object... args) {
+        return messages == null ? "" : messages.get(key, args);
     }
 
     public void setEventBusProvider(java.util.function.Supplier<EventBusCapability> eventBusProvider) {
@@ -262,7 +286,7 @@ public final class ChatService implements Listener {
 
     public ChatOperationResult handleChatMessage(Player sender, String rawMessage) {
         if (sender == null || !sender.isOnline()) {
-            return ChatOperationResult.failure("玩家当前不在线。");
+            return ChatOperationResult.failure(message("result.player-offline"));
         }
         ChatPlayerState state = state(sender.getUniqueId());
         ChatChannelDefinition channel = channel(state.currentChannelId());
@@ -270,16 +294,16 @@ public final class ChatService implements Listener {
             channel = channel(configuration.defaultChannelId());
         }
         if (channel == null) {
-            return ChatOperationResult.failure("未找到可用聊天频道。");
+            return ChatOperationResult.failure(message("result.no-channel"));
         }
         if (channel.mode() == ChatChannelMode.PRIVATE) {
             UUID targetUuid = replyTargets.get(sender.getUniqueId());
             if (targetUuid == null) {
-                return ChatOperationResult.failure("当前私聊频道没有最近会话对象，请先使用 /msg。");
+                return ChatOperationResult.failure(message("result.private-no-target"));
             }
             ChatPlayerProfile targetProfile = profile(targetUuid);
             if (targetProfile == null) {
-                return ChatOperationResult.failure("最近私聊对象不可用，请重新使用 /msg。");
+                return ChatOperationResult.failure(message("result.private-target-unavailable"));
             }
             return dispatchPrivateMessage(sender, targetProfile, rawMessage, channel, false);
         }
@@ -289,16 +313,16 @@ public final class ChatService implements Listener {
     public ChatOperationResult changeChannel(Player player, String channelId) {
         ChatChannelDefinition channel = channel(channelId);
         if (channel == null) {
-            return ChatOperationResult.failure("未知频道: " + channelId);
+            return ChatOperationResult.failure(message("result.unknown-channel", channelId));
         }
         if (!channel.sendPermission().isBlank() && !player.hasPermission(channel.sendPermission())) {
-            return ChatOperationResult.failure("你没有权限进入该频道。");
+            return ChatOperationResult.failure(message("result.channel-no-permission"));
         }
         ChatPlayerState updated = state(player.getUniqueId()).withCurrentChannel(channel.id(), Instant.now());
         states.put(player.getUniqueId(), updated);
         saveStateAsync(updated);
         refreshTab(player, "chat-channel");
-        return ChatOperationResult.success("当前频道已切换为 " + channel.displayName() + "。");
+        return ChatOperationResult.success(message("result.channel-switched", channel.displayName()));
     }
 
     public ChatOperationResult setAcceptsPrivate(Player player, Boolean enabled) {
@@ -308,7 +332,7 @@ public final class ChatService implements Listener {
         states.put(player.getUniqueId(), updated);
         saveStateAsync(updated);
         refreshTab(player, "chat-toggle-private");
-        return ChatOperationResult.success("私聊接收已" + (nextValue ? "开启" : "关闭") + "。");
+        return ChatOperationResult.success(message("result.private-toggle", nextValue ? "开启" : "关闭"));
     }
 
     public ChatOperationResult setAcceptsMentions(Player player, Boolean enabled) {
@@ -318,12 +342,12 @@ public final class ChatService implements Listener {
         states.put(player.getUniqueId(), updated);
         saveStateAsync(updated);
         refreshTab(player, "chat-toggle-mentions");
-        return ChatOperationResult.success("提及接收已" + (nextValue ? "开启" : "关闭") + "。");
+        return ChatOperationResult.success(message("result.mentions-toggle", nextValue ? "开启" : "关闭"));
     }
 
     public ChatOperationResult setSocialSpy(Player player, Boolean enabled) {
         if (!player.hasPermission(SOCIAL_SPY_PERMISSION)) {
-            return ChatOperationResult.failure("你没有权限切换社交监听。");
+            return ChatOperationResult.failure(message("result.socialspy-no-permission"));
         }
         ChatPlayerState previous = state(player.getUniqueId());
         boolean nextValue = enabled == null ? !previous.socialSpyEnabled() : enabled.booleanValue();
@@ -331,13 +355,13 @@ public final class ChatService implements Listener {
         states.put(player.getUniqueId(), updated);
         saveStateAsync(updated);
         refreshTab(player, "chat-social-spy");
-        return ChatOperationResult.success("社交监听已" + (nextValue ? "开启" : "关闭") + "。");
+        return ChatOperationResult.success(message("result.socialspy-toggle", nextValue ? "开启" : "关闭"));
     }
 
     public ChatOperationResult setSocialSpy(String playerName, boolean enabled, String operatorName) {
         ChatPlayerProfile profile = resolveProfileByName(playerName);
         if (profile == null) {
-            return ChatOperationResult.failure("找不到玩家: " + playerName);
+            return ChatOperationResult.failure(message("result.player-not-found", playerName));
         }
         ChatPlayerState previous = state(profile.playerUuid());
         ChatPlayerState updated = previous.withSocialSpyEnabled(enabled, Instant.now());
@@ -345,59 +369,59 @@ public final class ChatService implements Listener {
         saveStateAsync(updated);
         Player online = Bukkit.getPlayer(profile.playerUuid());
         if (online != null) {
-            online.sendMessage(PREFIX + ChatColor.YELLOW + "你的社交监听已被 " + operatorName + (enabled ? " 开启。" : " 关闭。"));
+            online.sendMessage(PREFIX + ChatColor.YELLOW + message("result.socialspy-notify", operatorName, enabled ? "开启" : "关闭"));
             refreshTab(online, "chat-admin-spy");
         }
-        return ChatOperationResult.success("已将 " + profile.lastKnownName() + " 的社交监听设置为 " + enabled + "。");
+        return ChatOperationResult.success(message("result.socialspy-set", profile.lastKnownName(), enabled));
     }
 
     public ChatOperationResult ignore(Player player, String targetName) {
         ChatPlayerProfile target = resolveProfileByName(targetName);
         if (target == null) {
-            return ChatOperationResult.failure("找不到玩家: " + targetName);
+            return ChatOperationResult.failure(message("result.player-not-found", targetName));
         }
         if (player.getUniqueId().equals(target.playerUuid())) {
-            return ChatOperationResult.failure("不能忽略自己。");
+            return ChatOperationResult.failure(message("result.ignore-self"));
         }
         ChatPlayerState previous = state(player.getUniqueId());
         LinkedHashSet<UUID> ignored = new LinkedHashSet<>(previous.ignoredPlayers());
         if (!ignored.add(target.playerUuid())) {
-            return ChatOperationResult.failure("你已经忽略了 " + target.lastKnownName() + "。");
+            return ChatOperationResult.failure(message("result.already-ignored", target.lastKnownName()));
         }
         ChatPlayerState updated = previous.withIgnoredPlayers(ignored, Instant.now());
         states.put(player.getUniqueId(), updated);
         saveStateAsync(updated);
         saveIgnoredAsync(updated.playerUuid(), updated.ignoredPlayers());
         refreshTab(player, "chat-ignore");
-        return ChatOperationResult.success("已忽略 " + target.lastKnownName() + "。");
+        return ChatOperationResult.success(message("result.ignored", target.lastKnownName()));
     }
 
     public ChatOperationResult unignore(Player player, String targetName) {
         ChatPlayerProfile target = resolveProfileByName(targetName);
         if (target == null) {
-            return ChatOperationResult.failure("找不到玩家: " + targetName);
+            return ChatOperationResult.failure(message("result.player-not-found", targetName));
         }
         ChatPlayerState previous = state(player.getUniqueId());
         LinkedHashSet<UUID> ignored = new LinkedHashSet<>(previous.ignoredPlayers());
         if (!ignored.remove(target.playerUuid())) {
-            return ChatOperationResult.failure("你没有忽略 " + target.lastKnownName() + "。");
+            return ChatOperationResult.failure(message("result.not-ignored", target.lastKnownName()));
         }
         ChatPlayerState updated = previous.withIgnoredPlayers(ignored, Instant.now());
         states.put(player.getUniqueId(), updated);
         saveStateAsync(updated);
         saveIgnoredAsync(updated.playerUuid(), updated.ignoredPlayers());
         refreshTab(player, "chat-unignore");
-        return ChatOperationResult.success("已取消忽略 " + target.lastKnownName() + "。");
+        return ChatOperationResult.success(message("result.unignored", target.lastKnownName()));
     }
 
     public ChatOperationResult sendPrivateMessage(Player sender, String targetName, String message) {
         ChatChannelDefinition channel = privateChannel();
         if (channel == null) {
-            return ChatOperationResult.failure("未配置私聊频道。");
+            return ChatOperationResult.failure(message("result.no-private-channel"));
         }
         ChatPlayerProfile target = resolveProfileByName(targetName);
         if (target == null) {
-            return ChatOperationResult.failure("找不到玩家: " + targetName);
+            return ChatOperationResult.failure(message("result.player-not-found", targetName));
         }
         return dispatchPrivateMessage(sender, target, message, channel, false);
     }
@@ -405,15 +429,15 @@ public final class ChatService implements Listener {
     public ChatOperationResult reply(Player sender, String message) {
         ChatChannelDefinition channel = privateChannel();
         if (channel == null) {
-            return ChatOperationResult.failure("未配置私聊频道。");
+            return ChatOperationResult.failure(message("result.no-private-channel"));
         }
         UUID targetUuid = replyTargets.get(sender.getUniqueId());
         if (targetUuid == null) {
-            return ChatOperationResult.failure("当前没有可回复的私聊对象。");
+            return ChatOperationResult.failure(message("result.no-reply-target"));
         }
         ChatPlayerProfile target = profile(targetUuid);
         if (target == null) {
-            return ChatOperationResult.failure("最近私聊对象不存在。");
+            return ChatOperationResult.failure(message("result.reply-target-missing"));
         }
         return dispatchPrivateMessage(sender, target, message, channel, true);
     }
@@ -421,7 +445,7 @@ public final class ChatService implements Listener {
     public ChatOperationResult mutePlayer(String playerName, Instant expiresAt, String reason, String mutedBy) {
         ChatPlayerProfile target = resolveProfileByName(playerName);
         if (target == null) {
-            return ChatOperationResult.failure("找不到玩家: " + playerName);
+            return ChatOperationResult.failure(message("result.player-not-found", playerName));
         }
         ChatMuteRecord record = new ChatMuteRecord(
             target.playerUuid(),
@@ -445,26 +469,26 @@ public final class ChatService implements Listener {
                 )
             );
             if (!cardSent) {
-                online.sendMessage(PREFIX + ChatColor.RED + "你已被禁言，时长: " + record.remainingText(Instant.now()) + "。");
+                online.sendMessage(PREFIX + ChatColor.RED + message("result.muted-notify", record.remainingText(Instant.now())));
             }
             refreshTab(online, "chat-muted");
         }
-        return ChatOperationResult.success("已禁言 " + target.lastKnownName() + "。");
+        return ChatOperationResult.success(message("result.muted", target.lastKnownName()));
     }
 
     public ChatOperationResult unmutePlayer(String playerName) {
         ChatPlayerProfile target = resolveProfileByName(playerName);
         if (target == null) {
-            return ChatOperationResult.failure("找不到玩家: " + playerName);
+            return ChatOperationResult.failure(message("result.player-not-found", playerName));
         }
         mutes.remove(target.playerUuid());
         deleteMuteAsync(target.playerUuid());
         Player online = Bukkit.getPlayer(target.playerUuid());
         if (online != null) {
-            online.sendMessage(PREFIX + ChatColor.GREEN + "你的聊天禁言已解除。");
+            online.sendMessage(PREFIX + ChatColor.GREEN + message("result.unmuted-notify"));
             refreshTab(online, "chat-unmuted");
         }
-        return ChatOperationResult.success("已解除 " + target.lastKnownName() + " 的禁言。");
+        return ChatOperationResult.success(message("result.unmuted", target.lastKnownName()));
     }
 
 
@@ -532,7 +556,7 @@ public final class ChatService implements Listener {
     private ChatOperationResult dispatchChannelMessage(Player sender, String rawMessage, ChatChannelDefinition channel) {
         String message = sanitizeAndValidateOutgoingMessage(sender, rawMessage);
         if (message == null) {
-            return ChatOperationResult.failure("消息不能为空。");
+            return ChatOperationResult.failure(message("result.empty-message"));
         }
         ChatOperationResult validation = validateBeforeSend(sender, message, channel, false);
         if (!validation.success()) {
@@ -546,8 +570,8 @@ public final class ChatService implements Listener {
             List.copyOf(cloudWords)
         );
         if (moderationResult.blocked()) {
-            boolean cardSent = sendSystemCard(sender, "filter", Map.of("message", "消息包含被禁止内容"));
-            return cardSent ? ChatOperationResult.failureCardNotified("消息包含被禁止内容。") : ChatOperationResult.failure("消息包含被禁止内容。");
+            boolean cardSent = sendSystemCard(sender, "filter", Map.of("message", message("result.filtered")));
+            return cardSent ? ChatOperationResult.failureCardNotified(message("result.filtered")) : ChatOperationResult.failure(message("result.filtered"));
         }
         processedMessage = moderationResult.message();
 
@@ -597,7 +621,7 @@ public final class ChatService implements Listener {
         }
         trackMessageFingerprint(sender.getUniqueId(), processedMessage);
         publishChatEvent(sender, channel.id(), "channel");
-        return ChatOperationResult.success("聊天已发送。");
+        return ChatOperationResult.success(message("result.chat-sent"));
     }
 
     private ChatOperationResult dispatchPrivateMessage(
@@ -608,14 +632,14 @@ public final class ChatService implements Listener {
         boolean replyMode
     ) {
         if (targetProfile == null) {
-            return ChatOperationResult.failure("目标玩家不存在。");
+            return ChatOperationResult.failure(message("result.target-missing"));
         }
         if (sender.getUniqueId().equals(targetProfile.playerUuid())) {
-            return ChatOperationResult.failure("不能给自己发送私聊。");
+            return ChatOperationResult.failure(message("result.self-private"));
         }
         String message = sanitizeAndValidateOutgoingMessage(sender, rawMessage);
         if (message == null) {
-            return ChatOperationResult.failure("消息不能为空。");
+            return ChatOperationResult.failure(message("result.empty-message"));
         }
         ChatOperationResult validation = validateBeforeSend(sender, message, channel, true);
         if (!validation.success()) {
@@ -626,13 +650,13 @@ public final class ChatService implements Listener {
         if (localTarget != null) {
             ChatPlayerState targetState = state(localTarget.getUniqueId());
             if (!targetState.acceptsPrivateMessages()) {
-                return ChatOperationResult.failure("对方当前拒收私聊。");
+                return ChatOperationResult.failure(message("result.target-rejects"));
             }
             if (targetState.ignores(sender.getUniqueId())) {
-                return ChatOperationResult.failure("对方已忽略你。");
+                return ChatOperationResult.failure(message("result.target-ignored"));
             }
         } else if (!crossServerActive()) {
-            return ChatOperationResult.failure("对方当前不在线。");
+            return ChatOperationResult.failure(message("result.target-offline"));
         }
 
         String processedMessage = applyCustomComponents(message);
@@ -642,8 +666,8 @@ public final class ChatService implements Listener {
             List.copyOf(cloudWords)
         );
         if (moderationResult.blocked()) {
-            boolean cardSent = sendSystemCard(sender, "filter", Map.of("message", "消息包含被禁止内容"));
-            return cardSent ? ChatOperationResult.failureCardNotified("消息包含被禁止内容。") : ChatOperationResult.failure("消息包含被禁止内容。");
+            boolean cardSent = sendSystemCard(sender, "filter", Map.of("message", message("result.filtered")));
+            return cardSent ? ChatOperationResult.failureCardNotified(message("result.filtered")) : ChatOperationResult.failure(message("result.filtered"));
         }
         processedMessage = moderationResult.message();
 
@@ -708,18 +732,18 @@ public final class ChatService implements Listener {
             refreshTab(localTarget, "chat-msg-target");
         }
         trackMessageFingerprint(sender.getUniqueId(), processedMessage);
-        return ChatOperationResult.success("私聊已发送。");
+        return ChatOperationResult.success(message("result.private-sent"));
     }
 
     private ChatOperationResult validateBeforeSend(Player sender, String message, ChatChannelDefinition channel, boolean privateMessage) {
         if (sender == null || !sender.isOnline()) {
-            return ChatOperationResult.failure("玩家当前不在线。");
+            return ChatOperationResult.failure(message("result.player-offline"));
         }
         if (!channel.sendPermission().isBlank() && !sender.hasPermission(channel.sendPermission())) {
-            return ChatOperationResult.failure("你没有权限在该频道发言。");
+            return ChatOperationResult.failure(message("result.channel-speak-no-permission"));
         }
         if (privateMessage && !sender.hasPermission(PRIVATE_PERMISSION)) {
-            return ChatOperationResult.failure("你没有权限使用私聊。");
+            return ChatOperationResult.failure(message("result.private-no-permission"));
         }
         ChatMuteRecord muteRecord = currentMute(sender.getUniqueId());
         if (muteRecord != null && muteRecord.active(Instant.now())) {
@@ -733,8 +757,8 @@ public final class ChatService implements Listener {
                 )
             );
             return cardSent
-                ? ChatOperationResult.failureCardNotified("你当前处于禁言状态，剩余 " + muteRecord.remainingText(Instant.now()) + "。")
-                : ChatOperationResult.failure("你当前处于禁言状态，剩余 " + muteRecord.remainingText(Instant.now()) + "。");
+                ? ChatOperationResult.failureCardNotified(message("result.mute-remaining", muteRecord.remainingText(Instant.now())))
+                : ChatOperationResult.failure(message("result.mute-remaining", muteRecord.remainingText(Instant.now())));
         }
 
         long now = System.currentTimeMillis();
@@ -742,7 +766,7 @@ public final class ChatService implements Listener {
         if (cooldownMillis > 0L) {
             long lastAt = lastMessageTimes.getOrDefault(sender.getUniqueId(), 0L);
             if (now - lastAt < cooldownMillis) {
-                return ChatOperationResult.failure("发言过快，请稍后再试。");
+                return ChatOperationResult.failure(message("result.too-fast"));
             }
         }
 
@@ -751,7 +775,7 @@ public final class ChatService implements Listener {
             String normalized = ChatFormatSupport.normalizeForDuplicateCheck(message);
             DuplicateStamp previous = lastDuplicateStamps.get(sender.getUniqueId());
             if (previous != null && previous.normalizedMessage().equals(normalized) && now - previous.atMillis() < duplicateWindowMillis) {
-                return ChatOperationResult.failure("请勿重复发送相同内容。");
+                return ChatOperationResult.failure(message("result.duplicate"));
             }
         }
         return ChatOperationResult.success("ok");
@@ -766,7 +790,7 @@ public final class ChatService implements Listener {
             return null;
         }
         if (message.length() > configuration.maxLength()) {
-            sender.sendMessage(PREFIX + ChatColor.RED + "消息长度不能超过 " + configuration.maxLength() + " 个字符。");
+            sender.sendMessage(PREFIX + message("result.message-too-long", configuration.maxLength()));
             return null;
         }
         return message;
@@ -1752,5 +1776,3 @@ public final class ChatService implements Listener {
         return c >= '\u2E80';
     }
 }
-
-

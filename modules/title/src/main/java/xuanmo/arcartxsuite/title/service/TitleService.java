@@ -34,6 +34,7 @@ import xuanmo.arcartxsuite.api.capability.TabRefreshable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.title.TitleDurationParser.TitleDurationSpec;
 import xuanmo.arcartxsuite.title.config.TitleDefinition;
 import xuanmo.arcartxsuite.title.config.TitleModuleConfiguration;
@@ -71,6 +72,7 @@ public class TitleService {
     private final TitleCraneAttributeService craneAttributeService;
     private final TitleSymphonyService symphonyService;
     private final TitleOverheadService overheadService;
+    private final MessageProvider messages;
     private final ExecutorService databaseExecutor = Executors.newSingleThreadExecutor(new TitleThreadFactory());
     private volatile boolean databaseWritesEnabled = true;
     private final ConcurrentMap<UUID, PlayerTitleState> states = new ConcurrentHashMap<>();
@@ -94,7 +96,23 @@ public class TitleService {
         xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge,
         WorldTextureBridgeAPI worldTextureBridge
     ) {
-        this(plugin, logger, configuration, repository, bridge, packetGuard, tabRefreshableProvider, uiResourceExporter, Clock.systemUTC(), attributeBridge, worldTextureBridge);
+        this(plugin, logger, configuration, repository, bridge, packetGuard, tabRefreshableProvider, uiResourceExporter, Clock.systemUTC(), attributeBridge, worldTextureBridge, null);
+    }
+
+    public TitleService(
+        JavaPlugin plugin,
+        Logger logger,
+        TitleModuleConfiguration configuration,
+        TitleRepository repository,
+        PacketBridgeAPI bridge,
+        PacketGuardAPI packetGuard,
+        Supplier<TabRefreshable> tabRefreshableProvider,
+        UiResourceExporter uiResourceExporter,
+        xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge,
+        WorldTextureBridgeAPI worldTextureBridge,
+        MessageProvider messages
+    ) {
+        this(plugin, logger, configuration, repository, bridge, packetGuard, tabRefreshableProvider, uiResourceExporter, Clock.systemUTC(), attributeBridge, worldTextureBridge, messages);
     }
 
     public TitleService(
@@ -108,7 +126,8 @@ public class TitleService {
         UiResourceExporter uiResourceExporter,
         Clock clock,
         xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge,
-        WorldTextureBridgeAPI worldTextureBridge
+        WorldTextureBridgeAPI worldTextureBridge,
+        MessageProvider messages
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
@@ -119,6 +138,7 @@ public class TitleService {
         this.uiResourceExporter = uiResourceExporter;
         this.clock = clock;
         this.logger = logger;
+        this.messages = messages;
         this.attributePlusService = new TitleAttributePlusService(plugin, configuration.attributePlus(), attributeBridge.attributePlus());
         this.mythicLibService = new TitleMythicLibService(plugin, this.logger, configuration.mythicLib(), attributeBridge.mythicLib());
         this.craneAttributeService = new TitleCraneAttributeService(plugin, configuration.craneAttribute(), attributeBridge.craneAttribute());
@@ -263,7 +283,7 @@ public class TitleService {
                 bridge.openUi(player, runtimeUiId);
                 sendMenuPacket(player, "init");
             },
-            exception -> player.sendMessage(prefix() + ChatColor.RED + "称号数据加载失败，请稍后重试。")
+            exception -> player.sendMessage(prefix() + message("player.data-load-failed"))
         );
     }
 
@@ -323,15 +343,18 @@ public class TitleService {
             state -> {
                 TitleDefinition definition = requireTitle(normalizedTitleId);
                 if (definition == null) {
-                    player.sendMessage(prefix() + ChatColor.RED + "称号不存在: " + titleId);
+                    player.sendMessage(prefix() + message("player.title-not-found", titleId));
                     return;
                 }
                 if (!hasGroupAccess(player, definition.groupId())) {
-                    player.sendMessage(prefix() + ChatColor.RED + "你没有权限使用该称号分组。");
+                    player.sendMessage(prefix() + message("player.group-no-permission"));
                     return;
                 }
                 if (!state.hasOwnedTitle(normalizedTitleId)) {
-                    player.sendMessage(prefix() + ChatColor.RED + "你尚未拥有称号: " + ChatColor.translateAlternateColorCodes('&', definition.displayName()));
+                    player.sendMessage(prefix() + message(
+                        "player.not-owned",
+                        ChatColor.translateAlternateColorCodes('&', definition.displayName())
+                    ));
                     return;
                 }
                 Instant now = clock.instant();
@@ -345,9 +368,13 @@ public class TitleService {
                 syncExternalAttributes(player, updatedState);
                 refreshMenu(player);
                 requestGlobalTabRefresh("title-equip");
-                player.sendMessage(prefix() + ChatColor.GREEN + "已装备称号到分组 " + definition.groupId() + ": " + ChatColor.translateAlternateColorCodes('&', definition.displayName()));
+                player.sendMessage(prefix() + message(
+                    "player.equipped",
+                    definition.groupId(),
+                    ChatColor.translateAlternateColorCodes('&', definition.displayName())
+                ));
             },
-            exception -> player.sendMessage(prefix() + ChatColor.RED + "称号数据加载失败，请稍后重试。")
+            exception -> player.sendMessage(prefix() + message("player.data-load-failed"))
         );
     }
 
@@ -377,9 +404,9 @@ public class TitleService {
                 syncExternalAttributes(player, updatedState);
                 refreshMenu(player);
                 requestGlobalTabRefresh("title-unequip");
-                player.sendMessage(prefix() + ChatColor.YELLOW + "已卸下分组称号: " + normalizedGroupId);
+                player.sendMessage(prefix() + message("player.unequipped-group", normalizedGroupId));
             },
-            exception -> player.sendMessage(prefix() + ChatColor.RED + "称号数据加载失败，请稍后重试。")
+            exception -> player.sendMessage(prefix() + message("player.data-load-failed"))
         );
     }
 
@@ -407,9 +434,9 @@ public class TitleService {
                 syncExternalAttributes(player, updatedState);
                 refreshMenu(player);
                 requestGlobalTabRefresh("title-unequip-all");
-                player.sendMessage(prefix() + ChatColor.YELLOW + "已卸下全部分组称号。");
+                player.sendMessage(prefix() + message("player.unequipped-all"));
             },
-            exception -> player.sendMessage(prefix() + ChatColor.RED + "称号数据加载失败，请稍后重试。")
+            exception -> player.sendMessage(prefix() + message("player.data-load-failed"))
         );
     }
 
@@ -436,11 +463,11 @@ public class TitleService {
     public TitleOperationResult giveTitle(UUID playerUuid, String titleId, TitleDurationSpec durationSpec, String grantedBy) {
         TitleDefinition definition = requireTitle(titleId);
         if (definition == null) {
-            return TitleOperationResult.failure("称号不存在: " + titleId);
+            return TitleOperationResult.failure(message("give.title-not-found", titleId));
         }
         Player target = Bukkit.getPlayer(playerUuid);
         if (target != null && target.isOnline() && !hasGroupAccess(target, definition.groupId())) {
-            return TitleOperationResult.failure("目标玩家没有权限使用该称号分组。");
+            return TitleOperationResult.failure(message("give.group-no-permission"));
         }
 
         Instant now = clock.instant();
@@ -470,7 +497,10 @@ public class TitleService {
         syncExternalAttributesForOnlinePlayer(playerUuid);
         refreshMenuForOnlinePlayer(playerUuid);
         requestGlobalTabRefresh("title-grant");
-        return TitleOperationResult.success("已授予称号: " + ChatColor.translateAlternateColorCodes('&', definition.displayName()));
+        return TitleOperationResult.success(message(
+            "give.success",
+            ChatColor.translateAlternateColorCodes('&', definition.displayName())
+        ));
     }
 
     /**
@@ -485,7 +515,7 @@ public class TitleService {
     public TitleOperationResult revokeTitle(UUID playerUuid, String titleId) {
         TitleDefinition definition = requireTitle(titleId);
         if (definition == null) {
-            return TitleOperationResult.failure("称号不存在: " + titleId);
+            return TitleOperationResult.failure(message("revoke.title-not-found", titleId));
         }
 
         Instant now = clock.instant();
@@ -499,7 +529,10 @@ public class TitleService {
         syncExternalAttributesForOnlinePlayer(playerUuid);
         refreshMenuForOnlinePlayer(playerUuid);
         requestGlobalTabRefresh("title-revoke");
-        return TitleOperationResult.success("已扣除称号: " + ChatColor.translateAlternateColorCodes('&', definition.displayName()));
+        return TitleOperationResult.success(message(
+            "revoke.success",
+            ChatColor.translateAlternateColorCodes('&', definition.displayName())
+        ));
     }
 
     public ResolvedTitleState resolveState(UUID playerUuid) {
@@ -588,13 +621,16 @@ public class TitleService {
                 TitleDefinition definition = requireTitle(normalizedTitleId);
                 if (definition == null) {
                     if (notify) {
-                        player.sendMessage(prefix() + ChatColor.RED + "称号不存在: " + titleId);
+                        player.sendMessage(prefix() + message("player.title-not-found", titleId));
                     }
                     return;
                 }
                 if (!state.hasOwnedTitle(normalizedTitleId)) {
                     if (notify) {
-                        player.sendMessage(prefix() + ChatColor.RED + "你尚未拥有称号: " + ChatColor.translateAlternateColorCodes('&', definition.displayName()));
+                        player.sendMessage(prefix() + message(
+                            "player.not-owned",
+                            ChatColor.translateAlternateColorCodes('&', definition.displayName())
+                        ));
                     }
                     return;
                 }
@@ -610,14 +646,16 @@ public class TitleService {
                 if (notify) {
                     player.sendMessage(
                         prefix()
-                            + (hidden ? ChatColor.YELLOW + "已隐藏称号: " : ChatColor.GREEN + "已取消隐藏称号: ")
-                            + ChatColor.translateAlternateColorCodes('&', definition.displayName())
+                            + message(
+                                hidden ? "player.hidden" : "player.unhidden",
+                                ChatColor.translateAlternateColorCodes('&', definition.displayName())
+                            )
                     );
                 }
             },
             exception -> {
                 if (notify) {
-                    player.sendMessage(prefix() + ChatColor.RED + "称号数据加载失败，请稍后重试。");
+                    player.sendMessage(prefix() + message("player.data-load-failed"));
                 }
             }
         );
@@ -655,11 +693,11 @@ public class TitleService {
                     return;
                 }
                 if (!hasGroupAccess(player, definition.groupId())) {
-                    player.sendMessage(prefix() + ChatColor.RED + "你没有权限使用该称号分组。");
+                    player.sendMessage(prefix() + message("player.group-no-permission"));
                     return;
                 }
                 if (!state.equippedTitleIdsByGroup().containsValue(normalizedTitleId)) {
-                    player.sendMessage(prefix() + ChatColor.RED + "只能将已装备的称号设为主展示称号。");
+                    player.sendMessage(prefix() + message("player.only-equipped"));
                     return;
                 }
                 Instant now = clock.instant();
@@ -671,7 +709,10 @@ public class TitleService {
                 );
                 refreshMenu(player);
                 requestGlobalTabRefresh("title-display-change");
-                player.sendMessage(prefix() + ChatColor.GREEN + "已将 " + ChatColor.translateAlternateColorCodes('&', definition.displayName()) + " 设为主展示称号。");
+                player.sendMessage(prefix() + message(
+                    "player.display-set",
+                    ChatColor.translateAlternateColorCodes('&', definition.displayName())
+                ));
             },
             exception -> { }
         );
@@ -907,6 +948,10 @@ public class TitleService {
         return ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
     }
 
+    private String message(String key, Object... args) {
+        return messages == null ? "" : messages.get(key, args);
+    }
+
     private void requestGlobalTabRefresh(String reason) {
         TabRefreshable refresher = tabRefreshableProvider == null ? null : tabRefreshableProvider.get();
         if (refresher != null) {
@@ -947,8 +992,5 @@ public class TitleService {
         }
     }
 }
-
-
-
 
 

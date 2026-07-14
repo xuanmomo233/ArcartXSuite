@@ -43,7 +43,7 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
             case "reload" -> sender.sendMessage(msg("common.reload-hint", label));
             case "reset" -> handleReset(sender, args);
             case "unlock" -> handleUnlock(sender, args);
-            case "season" -> sender.sendMessage(msg("admin.status.title") + " 赛季管理暂未实现。");
+            case "season" -> sender.sendMessage(msg("admin.season-unimplemented"));
             default -> sender.sendMessage(msg("common.unknown", cmd));
         }
         return true;
@@ -78,7 +78,7 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
     private void sendStatus(CommandSender sender) {
         BattlePassService service = serviceProvider.get();
         if (service == null) {
-            sender.sendMessage(msg("admin.status.title") + " 服务未就绪。");
+            sender.sendMessage(msg("admin.service-unavailable-status"));
             return;
         }
         var config = service.configuration();
@@ -95,7 +95,7 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
 
     private void handleReset(CommandSender sender, String[] args) {
         if (args.length < 3) {
-            sender.sendMessage(msg("admin.reset.usage", "/" + args[0] + " battlepass reset <玩家>"));
+            sender.sendMessage(msg("admin.reset-usage-full", args[0]));
             return;
         }
         Player target = Bukkit.getPlayerExact(args[2]);
@@ -114,7 +114,7 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
 
     private void handleUnlock(CommandSender sender, String[] args) {
         if (args.length < 4) {
-            sender.sendMessage(msg("admin.unlock.usage", "/" + args[0] + " battlepass unlock <玩家> <premium|deluxe>"));
+            sender.sendMessage(msg("admin.unlock-usage-full", args[0]));
             return;
         }
         Player target = Bukkit.getPlayerExact(args[2]);

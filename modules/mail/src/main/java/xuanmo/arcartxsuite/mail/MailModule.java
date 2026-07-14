@@ -141,7 +141,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             plugin, logger, dataFolder, configuration,
             mailRepo,
             packetBridge, packetGuard, uiExporter, presetWriter, null,
-            currencyManager, crossServer
+            currencyManager, crossServer, messages()
         );
         service.start();
         adminCommand = new MailAdminCommand(() -> service, messages());
@@ -252,7 +252,6 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 
 
 

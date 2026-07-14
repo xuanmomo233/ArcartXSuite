@@ -151,7 +151,8 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
             () -> getCapability(TabRefreshable.class),
             uiExporter,
             attributeBridge,
-            worldTextureBridge
+            worldTextureBridge,
+            messages()
         );
         service.start();
         adminCommand = new TitleAdminCommand(() -> service, messages());
@@ -252,6 +253,5 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 
 

@@ -23,6 +23,7 @@ import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.market.auction.AuctionItemSerializer;
 import xuanmo.arcartxsuite.market.auction.AuctionListing;
 import xuanmo.arcartxsuite.market.auction.AuctionService;
@@ -50,6 +51,7 @@ public class MarketService {
     private final @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier;
     private final Logger logger;
     private final CrossServerAPI crossServer;
+    private final MessageProvider messages;
 
     private static final int AUCTION_PAGE_SIZE = 20;
     private static final int HISTORY_PAGE_SIZE = 20;
@@ -73,7 +75,8 @@ public class MarketService {
                          @Nullable ItemBridgeAPI itemStackBridge,
                          @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier,
                          Logger logger,
-                         CrossServerAPI crossServer) {
+                         CrossServerAPI crossServer,
+                         MessageProvider messages) {
         this.plugin = plugin;
         this.config = config;
         this.packetBridge = packetBridge;
@@ -84,6 +87,7 @@ public class MarketService {
         this.mailSupplier = mailSupplier;
         this.logger = logger;
         this.crossServer = crossServer;
+        this.messages = messages;
     }
 
     public void setSignalProvider(java.util.function.Supplier<SignalDispatchable> provider) {
@@ -163,7 +167,7 @@ public class MarketService {
 
     public void createListing(Player player, ItemStack item, double buyNowPrice, double startingBid, String currency, long duration) {
         if (auctionService == null) {
-            player.sendMessage(ChatColor.RED + "拍卖行未启用");
+            player.sendMessage(messages.get("player.auction-unavailable"));
             return;
         }
         if (duration <= 0) duration = config.auction().defaultDurationSeconds();
@@ -189,7 +193,7 @@ public class MarketService {
         if (success) {
             player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().auctionCancelled()));
         } else {
-            player.sendMessage(ChatColor.RED + "取消失败（不存在或非本人上架）");
+            player.sendMessage(messages.get("player.cancel-failed"));
         }
     }
 
@@ -202,7 +206,7 @@ public class MarketService {
 
     public void buyFromShop(Player player, String shopId, String itemId, int amount) {
         if (shopService == null) {
-            player.sendMessage(ChatColor.RED + "系统商店未启用");
+            player.sendMessage(messages.get("player.shop-unavailable"));
             return;
         }
         var result = shopService.buy(player, shopId, itemId, amount);
@@ -219,7 +223,7 @@ public class MarketService {
 
     public void recycleBatch(Player player) {
         if (recycleService == null) {
-            player.sendMessage(ChatColor.RED + "回收商店未启用");
+            player.sendMessage(messages.get("player.recycle-unavailable"));
             return;
         }
         var result = recycleService.recycleBatch(player);

@@ -174,7 +174,8 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
             plugin, logger, configuration, repository, packetBridge, packetGuard,
             () -> getCapability(SignalDispatchable.class), accountTypeService,
             () -> getCapability(xuanmo.arcartxsuite.api.capability.QqBindCapable.class),
-            uiBinding.runtimeUiId()
+            uiBinding.runtimeUiId(),
+            messages()
         );
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
@@ -332,7 +333,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
             return;
         }
         if (configFile == null) {
-            sender.sendMessage(msg("reload.failed", "配置文件未加载"));
+            sender.sendMessage(msg("reload.failed", messages().get("reload.config-not-loaded")));
             return;
         }
         Location loc = player.getLocation();
@@ -372,6 +373,5 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         return result;
     }
 }
-
 
 

@@ -59,7 +59,7 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
         } else if (sender instanceof Player p) {
             target = p;
         } else {
-            sender.sendMessage(msg.apply("command_player_not_found", new Object[]{""}) + " (请指定玩家)");
+            sender.sendMessage(msg.apply("command_player_required", new Object[]{""}));
             return;
         }
 
@@ -82,7 +82,7 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
 
     private void handleGiveXp(@NotNull CommandSender sender, @NotNull String[] args, @NotNull FishingService service) {
         if (args.length < 3) {
-            sender.sendMessage("&c用法: /axs fishing givexp <玩家> <经验值>");
+            sender.sendMessage(msg.apply("command_usage_givexp", new Object[]{}));
             return;
         }
         Player target = Bukkit.getPlayer(args[1]);
@@ -95,7 +95,7 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
             service.giveXp(target.getUniqueId(), amount);
             sender.sendMessage(msg.apply("command_give_xp", new Object[]{target.getName(), String.valueOf(amount)}));
         } catch (NumberFormatException e) {
-            sender.sendMessage("&c经验值必须是数字。");
+            sender.sendMessage(msg.apply("command_invalid_xp", new Object[]{}));
         }
     }
 
@@ -106,7 +106,7 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
         } else if (sender instanceof Player p) {
             target = p;
         } else {
-            sender.sendMessage("&c用法: /axs fishing reset <玩家>");
+            sender.sendMessage(msg.apply("command_usage_reset", new Object[]{}));
             return;
         }
 
@@ -120,10 +120,10 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
     }
 
     private void showHelp(@NotNull CommandSender sender) {
-        sender.sendMessage("&6=== 钓鱼模块命令 ===");
-        sender.sendMessage("&7/axs fishing stats [玩家] &f- 查看钓鱼统计");
-        sender.sendMessage("&7/axs fishing givexp <玩家> <经验值> &f- 给予钓鱼经验");
-        sender.sendMessage("&7/axs fishing reset <玩家> &f- 重置钓鱼数据");
+        sender.sendMessage(msg.apply("command_help_title", new Object[]{}));
+        sender.sendMessage(msg.apply("command_help_stats", new Object[]{}));
+        sender.sendMessage(msg.apply("command_help_givexp", new Object[]{}));
+        sender.sendMessage(msg.apply("command_help_reset", new Object[]{}));
     }
 
     @Override

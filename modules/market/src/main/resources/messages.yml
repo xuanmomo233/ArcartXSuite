@@ -45,6 +45,10 @@ admin:
 
 # ── player ────────────────────────────────────────────
 player:
+  auction-unavailable: "&c拍卖行未启用"
+  cancel-failed: "&c取消失败（不存在或非本人上架）"
+  shop-unavailable: "&c系统商店未启用"
+  recycle-unavailable: "&c回收商店未启用"
   help:
     title: "&6=== AXS 全球市场 ==="
     auction: "&7/market&f - 打开拍卖行"

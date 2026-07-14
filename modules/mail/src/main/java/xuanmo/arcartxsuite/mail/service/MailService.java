@@ -47,6 +47,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.UiRegistrationResult;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI.CurrencyBridge;
 import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
@@ -127,6 +128,7 @@ public final class MailService implements Listener {
     private final BiConsumer<String, Player> signalDispatcher;
     private final CurrencyBridgeAPI currencyBridgeManager;
     private final CrossServerAPI crossServer;
+    private final MessageProvider messages;
     private final Map<String, MailPresetDefinition> presets = new ConcurrentHashMap<>();
     private final Map<UUID, Long> selectedMailIds = new ConcurrentHashMap<>();
     private final Map<UUID, MailInboxQuery> inboxQueries = new ConcurrentHashMap<>();
@@ -163,7 +165,7 @@ public final class MailService implements Listener {
         CrossServerAPI crossServer
     ) {
         this(plugin, logger, plugin.getDataFolder(), configuration, repository, bridge, packetGuard,
-            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer);
+            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null);
     }
 
     public MailService(
@@ -180,6 +182,25 @@ public final class MailService implements Listener {
         CurrencyBridgeAPI currencyBridgeManager,
         CrossServerAPI crossServer
     ) {
+        this(plugin, logger, baseDataDir, configuration, repository, bridge, packetGuard,
+            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null);
+    }
+
+    public MailService(
+        JavaPlugin plugin,
+        Logger logger,
+        File baseDataDir,
+        MailModuleConfiguration configuration,
+        MailRepository repository,
+        PacketBridgeAPI bridge,
+        PacketGuardAPI packetGuard,
+        UiResourceExporter uiResourceExporter,
+        BundledResourceWriter bundledResourceWriter,
+        BiConsumer<String, Player> signalDispatcher,
+        CurrencyBridgeAPI currencyBridgeManager,
+        CrossServerAPI crossServer,
+        MessageProvider messages
+    ) {
         this.plugin = plugin;
         this.logger = logger;
         this.baseDataDir = baseDataDir;
@@ -192,6 +213,11 @@ public final class MailService implements Listener {
         this.signalDispatcher = signalDispatcher;
         this.currencyBridgeManager = currencyBridgeManager;
         this.crossServer = crossServer;
+        this.messages = messages;
+    }
+
+    private String message(String key, Object... args) {
+        return messages == null ? "" : messages.get(key, args);
     }
 
     public void start() throws Exception {
@@ -313,16 +339,16 @@ public final class MailService implements Listener {
      */
     public MailOperationResult savePreset(MailPresetDefinition preset) {
         if (preset == null || preset.id() == null || preset.id().isBlank()) {
-            return MailOperationResult.failure("预设 ID 不能为空。");
+            return MailOperationResult.failure(message("player.preset-id-required"));
         }
         try {
             File directory = new File(baseDataDir, configuration.presetsDirectory());
             MailPresetLoader.savePreset(directory, preset);
             presets.put(preset.id().trim().toLowerCase(Locale.ROOT), preset);
-            return MailOperationResult.success("预设已保存: " + preset.id());
+            return MailOperationResult.success(message("admin.preset-saved", preset.id()));
         } catch (Exception exception) {
             this.logger.warning("保存预设失败: " + exception.getMessage());
-            return MailOperationResult.failure("保存预设失败: " + exception.getMessage());
+            return MailOperationResult.failure(message("admin.preset-save-failed", exception.getMessage()));
         }
     }
 
@@ -331,20 +357,20 @@ public final class MailService implements Listener {
      */
     public MailOperationResult deletePreset(String presetId) {
         if (presetId == null || presetId.isBlank()) {
-            return MailOperationResult.failure("预设 ID 不能为空。");
+            return MailOperationResult.failure(message("player.preset-id-required"));
         }
         String normalized = presetId.trim().toLowerCase(Locale.ROOT);
         MailPresetDefinition removed = presets.remove(normalized);
         if (removed == null) {
-            return MailOperationResult.failure("预设不存在: " + presetId);
+            return MailOperationResult.failure(message("admin.preset-not-found", presetId));
         }
         try {
             File directory = new File(baseDataDir, configuration.presetsDirectory());
             MailPresetLoader.deletePresetFile(directory, normalized);
-            return MailOperationResult.success("预设已删除: " + presetId);
+            return MailOperationResult.success(message("admin.preset-deleted", presetId));
         } catch (Exception exception) {
             this.logger.warning("删除预设文件失败: " + exception.getMessage());
-            return MailOperationResult.success("预设已从内存移除，但文件删除失败: " + exception.getMessage());
+            return MailOperationResult.success(message("admin.preset-memory-removed-file-delete-failed", exception.getMessage()));
         }
     }
 
@@ -354,10 +380,10 @@ public final class MailService implements Listener {
     public MailOperationResult reloadPresets() {
         try {
             loadPresets();
-            return MailOperationResult.success("已重新加载 " + presets.size() + " 个预设。");
+            return MailOperationResult.success(message("admin.preset-reloaded", presets.size()));
         } catch (Exception exception) {
             this.logger.warning("重新加载预设失败: " + exception.getMessage());
-            return MailOperationResult.failure("重新加载预设失败: " + exception.getMessage());
+            return MailOperationResult.failure(message("admin.preset-reload-failed", exception.getMessage()));
         }
     }
 
@@ -367,7 +393,7 @@ public final class MailService implements Listener {
     public void openAdminUi(Player player) {
         if (player == null || !player.isOnline()) return;
         if (adminUiId == null) {
-            player.sendMessage(MESSAGE_PREFIX + ChatColor.RED + "Admin UI 未注册。");
+            player.sendMessage(MESSAGE_PREFIX + ChatColor.RED + message("player.admin-ui-unregistered"));
             return;
         }
 
@@ -430,7 +456,7 @@ public final class MailService implements Listener {
         String senderName
     ) {
         if (playerUuid == null) {
-            return MailOperationResult.failure("收件人不能为空。");
+            return MailOperationResult.failure(message("player.recipient-required"));
         }
 
         Instant now = Instant.now();
@@ -463,7 +489,7 @@ public final class MailService implements Listener {
 
     public MailOperationResult openInbox(Player player) {
         if (player == null || !player.isOnline()) {
-            return MailOperationResult.failure("目标玩家不在线。");
+            return MailOperationResult.failure(message("player.target-offline"));
         }
         try {
             touchProfile(player, false);
@@ -472,16 +498,16 @@ public final class MailService implements Listener {
             logViewers.remove(player.getUniqueId());
             bridge.openUi(player, inboxUiId);
             refreshInbox(player, true);
-            return MailOperationResult.success("已打开邮箱。");
+            return MailOperationResult.success(message("player.mailbox-opened"));
         } catch (Exception exception) {
             this.logger.warning("打开邮箱失败: " + exception.getMessage());
-            return MailOperationResult.failure("打开邮箱失败，请查看控制台。");
+            return MailOperationResult.failure(message("player.mailbox-open-failed"));
         }
     }
 
     public MailOperationResult openCompose(Player player) {
         if (player == null || !player.isOnline()) {
-            return MailOperationResult.failure("目标玩家不在线。");
+            return MailOperationResult.failure(message("player.target-offline"));
         }
 
         ComposeSession previous = composeSessions.remove(player.getUniqueId());
@@ -509,6 +535,7 @@ public final class MailService implements Listener {
                         session.sessionId(),
                         configuration,
                         currencyBridgeManager,
+                        messages,
                         calculateComposeQuote(configuration.playerSend(), Map.of(), 0),
                         effectiveAttachmentSlots(inventory),
                         0
@@ -516,12 +543,12 @@ public final class MailService implements Listener {
                 );
             }
         });
-        return MailOperationResult.success("已打开写信界面。");
+        return MailOperationResult.success(message("player.compose-opened"));
     }
 
     public MailOperationResult claimAll(Player player) {
         if (player == null || !player.isOnline()) {
-            return MailOperationResult.failure("目标玩家不在线。");
+            return MailOperationResult.failure(message("player.target-offline"));
         }
 
         try {
@@ -533,17 +560,17 @@ public final class MailService implements Listener {
             }
             refreshPlayerViews(player, false);
             return claimed > 0
-                ? MailOperationResult.success("已批量领取 " + claimed + " 封邮件。")
-                : MailOperationResult.failure("当前没有可领取的邮件。");
+                ? MailOperationResult.success(message("player.claim-all-success", claimed))
+                : MailOperationResult.failure(message("player.claim-all-empty"));
         } catch (Exception exception) {
             this.logger.warning("批量领取邮件失败: " + exception.getMessage());
-            return MailOperationResult.failure("批量领取失败。");
+            return MailOperationResult.failure(message("player.claim-all-failed"));
         }
     }
 
     public MailOperationResult deleteAll(Player player) {
         if (player == null || !player.isOnline()) {
-            return MailOperationResult.failure("目标玩家不在线。");
+            return MailOperationResult.failure(message("player.target-offline"));
         }
 
         try {
@@ -555,35 +582,35 @@ public final class MailService implements Listener {
             }
             refreshPlayerViews(player, false);
             return deleted > 0
-                ? MailOperationResult.success("已批量删除 " + deleted + " 封邮件。")
-                : MailOperationResult.failure("没有可删除的邮件。");
+                ? MailOperationResult.success(message("player.delete-all-success", deleted))
+                : MailOperationResult.failure(message("player.delete-all-empty"));
         } catch (Exception exception) {
             this.logger.warning("批量删除邮件失败: " + exception.getMessage());
-            return MailOperationResult.failure("批量删除失败。");
+            return MailOperationResult.failure(message("player.delete-all-failed"));
         }
     }
 
     public MailOperationResult redeemCdk(Player player, String rawCode) {
         if (player == null || !player.isOnline()) {
-            return MailOperationResult.failure("目标玩家不在线。");
+            return MailOperationResult.failure(message("player.target-offline"));
         }
 
         String code = normalizeCdkCode(rawCode);
         if (code.isBlank()) {
-            return MailOperationResult.failure("CDK 不能为空。");
+            return MailOperationResult.failure(message("player.cdk-required"));
         }
 
         try {
             Optional<MailCdkDefinition> preview = repository.loadCdk(code);
             if (preview.isEmpty()) {
-                cdkPreviewStates.put(player.getUniqueId(), new CdkPreviewState(code, "missing", "CDK 不存在。", false));
-                return MailOperationResult.failure("CDK 不存在。");
+                cdkPreviewStates.put(player.getUniqueId(), new CdkPreviewState(code, "missing", message("player.cdk-preview-missing"), false));
+                return MailOperationResult.failure(message("player.cdk-not-found"));
             }
 
             MailCdkDefinition previewDefinition = preview.get();
             MailPresetDefinition preset = preset(previewDefinition.presetId());
             if (preset == null || !preset.enabled()) {
-                return MailOperationResult.failure("CDK 绑定的预设不存在或未启用。");
+                return MailOperationResult.failure(message("player.cdk-preset-unavailable"));
             }
 
             MailRepository.CdkClaimResult claimResult = repository.claimCdk(code, player.getUniqueId(), Instant.now());
@@ -610,26 +637,26 @@ public final class MailService implements Listener {
             cdkPreviewStates.put(player.getUniqueId(), new CdkPreviewState(code, "success", preset.displayName(), true));
             refreshPlayerViews(player, false);
             dispatchCdkRedeemedSignal(player, code, preset);
-            return MailOperationResult.success("CDK 兑换成功，奖励已发送到邮箱。");
+            return MailOperationResult.success(message("player.cdk-claim-success"));
         } catch (Exception exception) {
             this.logger.warning("兑换 CDK 失败: " + exception.getMessage());
-            return MailOperationResult.failure("兑换 CDK 失败。");
+            return MailOperationResult.failure(message("player.cdk-claim-failed"));
         }
     }
 
     public MailOperationResult dispatchPreset(String presetId, String target, String actorName) {
         MailPresetDefinition preset = preset(presetId);
         if (preset == null) {
-            return MailOperationResult.failure("未找到邮件预设: " + presetId);
+            return MailOperationResult.failure(message("admin.preset-not-found", presetId));
         }
         if (!preset.enabled()) {
-            return MailOperationResult.failure("邮件预设已禁用: " + preset.id());
+            return MailOperationResult.failure(message("admin.preset-disabled", preset.id()));
         }
 
         try {
             List<RecipientResolution> recipients = resolvePresetRecipients(target);
             if (recipients.isEmpty()) {
-                return MailOperationResult.failure("没有找到可派发的目标玩家。");
+                return MailOperationResult.failure(message("player.preset-dispatch-no-target"));
             }
 
             int successCount = 0;
@@ -640,29 +667,29 @@ public final class MailService implements Listener {
             }
 
             if (successCount <= 0) {
-                return MailOperationResult.failure("预设邮件派发失败。");
+                return MailOperationResult.failure(message("player.preset-dispatch-failed"));
             }
             if (successCount < recipients.size()) {
-                return MailOperationResult.success("预设邮件已部分派发: " + successCount + "/" + recipients.size());
+                return MailOperationResult.success(message("player.preset-dispatch-partial", successCount, recipients.size()));
             }
-            return MailOperationResult.success("预设邮件已派发给 " + successCount + " 名玩家。");
+            return MailOperationResult.success(message("player.preset-dispatch-success", successCount));
         } catch (Exception exception) {
             this.logger.warning("派发预设邮件失败: " + exception.getMessage());
-            return MailOperationResult.failure("预设邮件派发失败。");
+            return MailOperationResult.failure(message("player.preset-dispatch-failed"));
         }
     }
 
     public MailOperationResult dispatchPresetToPlayer(String presetId, Player player, String actorName) {
         if (player == null || !player.isOnline()) {
-            return MailOperationResult.failure("目标玩家不在线。");
+            return MailOperationResult.failure(message("player.target-offline"));
         }
 
         MailPresetDefinition preset = preset(presetId);
         if (preset == null) {
-            return MailOperationResult.failure("未找到邮件预设: " + presetId);
+            return MailOperationResult.failure(message("admin.preset-not-found", presetId));
         }
         if (!preset.enabled()) {
-            return MailOperationResult.failure("邮件预设已禁用: " + preset.id());
+            return MailOperationResult.failure(message("admin.preset-disabled", preset.id()));
         }
 
         try {
@@ -677,20 +704,20 @@ public final class MailService implements Listener {
             );
         } catch (Exception exception) {
             this.logger.warning("派发预设邮件失败: " + exception.getMessage());
-            return MailOperationResult.failure("预设邮件派发失败。");
+            return MailOperationResult.failure(message("player.preset-dispatch-failed"));
         }
     }
 
     public MailOperationResult createCdk(String presetId, String rawCode, int maxClaims, Instant expiresAt, String createdBy) {
         MailPresetDefinition preset = preset(presetId);
         if (preset == null) {
-            return MailOperationResult.failure("未找到邮件预设: " + presetId);
+            return MailOperationResult.failure(message("admin.preset-not-found", presetId));
         }
         if (!preset.enabled()) {
-            return MailOperationResult.failure("邮件预设已禁用: " + preset.id());
+            return MailOperationResult.failure(message("admin.preset-disabled", preset.id()));
         }
         if (maxClaims <= 0) {
-            return MailOperationResult.failure("maxClaims 必须大于 0。");
+            return MailOperationResult.failure(message("player.cdk-max-claims-invalid"));
         }
 
         try {
@@ -698,18 +725,18 @@ public final class MailService implements Listener {
                 ? generateUniqueCdkCode()
                 : normalizeCdkCode(rawCode);
             if (code.isBlank()) {
-                return MailOperationResult.failure("CDK 格式无效。");
+                return MailOperationResult.failure(message("player.cdk-format-invalid"));
             }
             if (repository.loadCdk(code).isPresent()) {
-                return MailOperationResult.failure("CDK 已存在: " + code);
+                return MailOperationResult.failure(message("player.cdk-exists", code));
             }
 
             Instant now = Instant.now();
             repository.saveCdk(new MailCdkDefinition(code, preset.id(), maxClaims, 0, expiresAt, true, safe(createdBy), now, now));
-            return MailOperationResult.success("CDK 创建成功: " + code);
+            return MailOperationResult.success(message("player.cdk-created", code));
         } catch (Exception exception) {
             this.logger.warning("创建 CDK 失败: " + exception.getMessage());
-            return MailOperationResult.failure("创建 CDK 失败。");
+            return MailOperationResult.failure(message("player.cdk-create-failed"));
         }
     }
 
@@ -738,15 +765,15 @@ public final class MailService implements Listener {
     public MailOperationResult deleteCdk(String rawCode) {
         String code = normalizeCdkCode(rawCode);
         if (code.isBlank()) {
-            return MailOperationResult.failure("CDK 不能为空。");
+            return MailOperationResult.failure(message("player.cdk-required"));
         }
         try {
             return repository.deleteCdk(code)
-                ? MailOperationResult.success("已删除 CDK: " + code)
-                : MailOperationResult.failure("CDK 不存在。");
+                ? MailOperationResult.success(message("player.cdk-deleted", code))
+                : MailOperationResult.failure(message("player.cdk-not-found"));
         } catch (Exception exception) {
             this.logger.warning("删除 CDK 失败: " + exception.getMessage());
-            return MailOperationResult.failure("删除 CDK 失败。");
+            return MailOperationResult.failure(message("player.cdk-delete-failed"));
         }
     }
 
@@ -786,7 +813,7 @@ public final class MailService implements Listener {
             composeSessions.remove(player.getUniqueId());
             if (!session.sent()) {
                 returnComposeItems(player, session);
-                player.sendMessage(MESSAGE_PREFIX + ChatColor.YELLOW + "未发送的附件已退回。");
+                player.sendMessage(MESSAGE_PREFIX + ChatColor.YELLOW + message("player.compose-attachments-returned"));
             }
             return;
         }
@@ -795,7 +822,7 @@ public final class MailService implements Listener {
         if (adminSession != null && event.getInventory() == adminSession.inventory()) {
             adminEditSessions.remove(player.getUniqueId());
             returnAdminItems(player, adminSession);
-            player.sendMessage(MESSAGE_PREFIX + ChatColor.YELLOW + "Admin 编辑已关闭，物品已退回。");
+            player.sendMessage(MESSAGE_PREFIX + ChatColor.YELLOW + message("player.admin-edits-returned"));
         }
     }
 
@@ -917,7 +944,7 @@ public final class MailService implements Listener {
             }
             case "compose-send" -> {
                 if (data == null || data.size() < 6) {
-                    sendPlayerResult(player, MailOperationResult.failure("写信参数不完整。"));
+                    sendPlayerResult(player, MailOperationResult.failure(message("player.compose-args-incomplete")));
                 } else {
                     sendPlayerResult(player, handleComposeSend(player, data));
                 }
@@ -951,7 +978,7 @@ public final class MailService implements Listener {
             }
             case "cdk" -> {
                 if (data == null || data.size() < 2) {
-                    sendPlayerResult(player, MailOperationResult.failure("请输入 CDK。"));
+                    sendPlayerResult(player, MailOperationResult.failure(message("player.cdk-please-enter")));
                 } else {
                     sendPlayerResult(player, redeemCdk(player, data.get(1)));
                 }
@@ -1088,13 +1115,13 @@ public final class MailService implements Listener {
     private void handleAdminPresetSave(Player player, List<String> data) {
         // data: [action, id, enabled, displayName, subject, body, expiresAfterDays, currencyAttachments, claimCommands]
         if (data == null || data.size() < 7) {
-            sendAdminResult(player, MailOperationResult.failure("保存参数不完整。"));
+            sendAdminResult(player, MailOperationResult.failure(message("player.admin-save-args-incomplete")));
             return;
         }
         try {
             String id = safe(data.get(1)).trim().toLowerCase(Locale.ROOT);
             if (id.isBlank()) {
-                sendAdminResult(player, MailOperationResult.failure("预设 ID 不能为空。"));
+                sendAdminResult(player, MailOperationResult.failure(message("player.preset-id-required")));
                 return;
             }
             boolean enabled = "true".equalsIgnoreCase(safe(data.get(2)).trim());
@@ -1162,7 +1189,7 @@ public final class MailService implements Listener {
             }
         } catch (Exception exception) {
             this.logger.warning("Admin 预设保存处理异常: " + exception.getMessage());
-            sendAdminResult(player, MailOperationResult.failure("保存处理异常: " + exception.getMessage()));
+            sendAdminResult(player, MailOperationResult.failure(message("player.admin-save-exception", exception.getMessage())));
         }
     }
 
@@ -1391,13 +1418,13 @@ public final class MailService implements Listener {
             if (publishRedis) {
                 publishRefresh(ownerUuid);
             }
-            return MailOperationResult.success("邮件发送成功。");
+            return MailOperationResult.success(message("player.mail-send-success"));
         } catch (Exception exception) {
             this.logger.warning("发送邮件失败: " + exception.getMessage());
             if (configuration.debug() && logContent != null && !logContent.isBlank()) {
                 this.logger.warning("发送邮件失败的上下文: " + logContent);
             }
-            return MailOperationResult.failure("邮件发送失败。");
+            return MailOperationResult.failure(message("player.mail-send-failed"));
         }
     }
 
@@ -1508,7 +1535,7 @@ public final class MailService implements Listener {
                 player,
                 inboxUiId,
                 initPacket ? "init" : "update",
-                MailInboxPacketFactory.build(page, selectedMailId, stats, query.filter(), claimableCount)
+                MailInboxPacketFactory.build(page, selectedMailId, stats, query.filter(), claimableCount, messages)
             );
         } catch (Exception exception) {
             this.logger.warning("刷新邮箱界面失败: " + exception.getMessage());
@@ -1524,7 +1551,7 @@ public final class MailService implements Listener {
             int requestedPage = Math.max(1, logPages.getOrDefault(player.getUniqueId(), 1));
             MailPage<MailLogEntry> page = repository.loadLogPage(player.getUniqueId(), requestedPage, LOG_PAGE_SIZE);
             logPages.put(player.getUniqueId(), page.page());
-            bridge.sendPacket(player, logsUiId, initPacket ? "init" : "update", MailLogsPacketFactory.build(page));
+            bridge.sendPacket(player, logsUiId, initPacket ? "init" : "update", MailLogsPacketFactory.build(page, messages));
         } catch (Exception exception) {
             this.logger.warning("刷新日志界面失败: " + exception.getMessage());
         }
@@ -1532,7 +1559,7 @@ public final class MailService implements Listener {
 
     private MailOperationResult openLogs(Player player) {
         if (player == null || !player.isOnline()) {
-            return MailOperationResult.failure("目标玩家不在线。");
+            return MailOperationResult.failure(message("player.target-offline"));
         }
         try {
             touchProfile(player, false);
@@ -1541,10 +1568,10 @@ public final class MailService implements Listener {
             inboxViewers.remove(player.getUniqueId());
             bridge.openUi(player, logsUiId);
             refreshLogs(player, true);
-            return MailOperationResult.success("已打开邮件日志。");
+            return MailOperationResult.success(message("player.logs-opened"));
         } catch (Exception exception) {
             this.logger.warning("打开邮件日志失败: " + exception.getMessage());
-            return MailOperationResult.failure("打开邮件日志失败。");
+            return MailOperationResult.failure(message("player.logs-open-failed"));
         }
     }
 
@@ -1599,19 +1626,19 @@ public final class MailService implements Listener {
     private MailOperationResult handleComposeSend(Player player, List<String> data) {
         ComposeSession session = composeSessions.get(player.getUniqueId());
         if (session == null) {
-            return MailOperationResult.failure("当前没有写信会话。");
+            return MailOperationResult.failure(message("player.compose-session-missing"));
         }
         if (!session.sessionId().toString().equalsIgnoreCase(safe(data.get(1)))) {
-            return MailOperationResult.failure("写信会话已失效，请重新打开。");
+            return MailOperationResult.failure(message("player.compose-session-expired"));
         }
 
         if (!configuration.playerSend().enabled()) {
-            MailOperationResult result = MailOperationResult.failure("当前服务器已关闭玩家寄信。");
+            MailOperationResult result = MailOperationResult.failure(message("player.compose-disabled"));
             pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
             return result;
         }
         if (configuration.playerSend().requirePermission() && !player.hasPermission("arcartxsuite.mail.send")) {
-            MailOperationResult result = MailOperationResult.failure("你没有寄信权限。");
+            MailOperationResult result = MailOperationResult.failure(message("player.compose-no-permission"));
             pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
             return result;
         }
@@ -1620,23 +1647,23 @@ public final class MailService implements Listener {
         String subject = crop(data.get(3), configuration.playerSend().subjectMaxLength());
         String body = crop(data.get(4), configuration.playerSend().bodyMaxLength());
         if (recipientInput.isBlank()) {
-            MailOperationResult result = MailOperationResult.failure("收件人不能为空。");
+            MailOperationResult result = MailOperationResult.failure(message("player.recipient-required"));
             pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
             return result;
         }
         if (subject.isBlank()) {
-            MailOperationResult result = MailOperationResult.failure("邮件标题不能为空。");
+            MailOperationResult result = MailOperationResult.failure(message("player.subject-required"));
             pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
             return result;
         }
         if (containsBlockedText(subject) || containsBlockedText(body)) {
-            MailOperationResult result = MailOperationResult.failure("邮件内容包含敏感词或被屏蔽的正则。");
+            MailOperationResult result = MailOperationResult.failure(message("player.body-blocked"));
             pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
             return result;
         }
         int maxAttachmentSlots = effectiveAttachmentSlots(session.inventory());
         if (hasItemsOutsideAttachmentSlots(session.inventory(), maxAttachmentSlots)) {
-            MailOperationResult result = MailOperationResult.failure("仅允许在前 " + maxAttachmentSlots + " 个槽位放置附件。");
+            MailOperationResult result = MailOperationResult.failure(message("player.attachment-slot-limit", maxAttachmentSlots));
             pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
             return result;
         }
@@ -1644,18 +1671,18 @@ public final class MailService implements Listener {
         try {
             RecipientResolution recipient = resolveRecipient(recipientInput);
             if (recipient == null) {
-                MailOperationResult result = MailOperationResult.failure("未找到玩家: " + recipientInput);
+                MailOperationResult result = MailOperationResult.failure(message("player.recipient-not-found", recipientInput));
                 pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
                 return result;
             }
             if (!configuration.playerSend().allowSelfSend() && player.getUniqueId().equals(recipient.playerUuid())) {
-                MailOperationResult result = MailOperationResult.failure("当前配置不允许给自己寄信。");
+                MailOperationResult result = MailOperationResult.failure(message("player.compose-self-not-allowed"));
                 pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
                 return result;
             }
             boolean recipientOnline = isPlayerOnline(recipient.playerUuid());
             if (!recipientOnline && !configuration.playerSend().allowOfflineSend()) {
-                MailOperationResult result = MailOperationResult.failure("当前配置不允许给离线玩家寄信。");
+                MailOperationResult result = MailOperationResult.failure(message("player.compose-offline-not-allowed"));
                 pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
                 return result;
             }
@@ -1666,7 +1693,7 @@ public final class MailService implements Listener {
                 Instant nextAvailableAt = senderProfile.get().lastSendAt().plusSeconds(cooldownSeconds);
                 if (cooldownSeconds > 0 && nextAvailableAt.isAfter(Instant.now())) {
                     MailOperationResult result = MailOperationResult.failure(
-                        "寄信冷却中，请在 " + TIME_FORMATTER.format(nextAvailableAt) + " 后再试。"
+                        message("player.compose-cooldown", TIME_FORMATTER.format(nextAvailableAt))
                     );
                     pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
                     return result;
@@ -1682,12 +1709,12 @@ public final class MailService implements Listener {
 
             BigDecimal vaultAmount = parseCurrencyAmount(data.get(5));
             if (vaultAmount == null) {
-                MailOperationResult result = MailOperationResult.failure("金币附件金额格式无效。");
+                MailOperationResult result = MailOperationResult.failure(message("player.currency-amount-invalid"));
                 pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
                 return result;
             }
             if (vaultAmount.compareTo(BigDecimal.ZERO) > 0 && !configuration.playerSend().allowVaultAttachment()) {
-                MailOperationResult result = MailOperationResult.failure("当前配置未启用金币附件。");
+                MailOperationResult result = MailOperationResult.failure(message("player.currency-attachment-disabled"));
                 pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
                 return result;
             }
@@ -1710,7 +1737,7 @@ public final class MailService implements Listener {
                 attachments = buildComposeAttachments(attachmentItems, attachmentAmounts);
             } catch (IOException exception) {
                 this.logger.warning("序列化玩家邮件附件失败: " + exception.getMessage());
-                MailOperationResult result = MailOperationResult.failure("附件物品保存失败，请取回后重试。");
+                MailOperationResult result = MailOperationResult.failure(message("player.attachment-save-failed"));
                 pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
                 return result;
             }
@@ -1738,7 +1765,7 @@ public final class MailService implements Listener {
 
             Map<String, BigDecimal> charged = chargeSender(player, quote);
             if (charged.isEmpty() && requiredCurrencyTotal(quote).values().stream().anyMatch(amount -> amount.compareTo(BigDecimal.ZERO) > 0)) {
-                MailOperationResult result = MailOperationResult.failure("扣费失败，请稍后重试。");
+                MailOperationResult result = MailOperationResult.failure(message("player.charge-failed"));
                 pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
                 return result;
             }
@@ -1761,10 +1788,10 @@ public final class MailService implements Listener {
                     openInbox(player);
                 }
             });
-            return MailOperationResult.success("邮件已发送给 " + recipient.lastKnownName() + "。");
+            return MailOperationResult.success(message("player.mail-sent-to", recipient.lastKnownName()));
         } catch (Exception exception) {
             this.logger.warning("发送玩家邮件失败: " + exception.getMessage());
-            MailOperationResult result = MailOperationResult.failure("发送邮件失败。");
+            MailOperationResult result = MailOperationResult.failure(message("player.mail-send-failed"));
             pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
             return result;
         }
@@ -1774,15 +1801,15 @@ public final class MailService implements Listener {
         try {
             Optional<MailMessage> optionalMail = repository.loadMail(player.getUniqueId(), mailId);
             if (optionalMail.isEmpty()) {
-                return MailOperationResult.failure("邮件不存在。");
+                return MailOperationResult.failure(message("player.mail-not-found"));
             }
 
             MailMessage mail = optionalMail.get();
             if (!mail.claimable()) {
-                return MailOperationResult.failure("该邮件当前不可领取。");
+                return MailOperationResult.failure(message("player.mail-not-claimable"));
             }
             if (!checkClaimConditions(player, mail.claimConditions())) {
-                return MailOperationResult.failure("你尚未满足该邮件的领取条件。");
+                return MailOperationResult.failure(message("player.mail-claim-conditions-unmet"));
             }
 
             List<ItemStack> itemRewards;
@@ -1790,7 +1817,7 @@ public final class MailService implements Listener {
                 itemRewards = deserializeItemRewards(mail.attachments());
             } catch (IOException exception) {
                 this.logger.warning("读取邮件物品附件失败: " + exception.getMessage());
-                return MailOperationResult.failure("附件物品读取失败，请联系管理员。");
+                return MailOperationResult.failure(message("player.attachment-read-failed"));
             }
             MailOperationResult currencyValidation = validateClaimCurrencies(mail.attachments());
             if (!currencyValidation.success()) {
@@ -1800,7 +1827,7 @@ public final class MailService implements Listener {
             Instant now = Instant.now();
             MailStatus previousStatus = mail.status();
             if (!repository.tryClaimMail(player.getUniqueId(), mailId, now)) {
-                return MailOperationResult.failure("该邮件已被领取或当前不可领取。");
+                return MailOperationResult.failure(message("player.mail-already-claimed"));
             }
 
             deliverItemRewards(player, itemRewards);
@@ -1818,10 +1845,10 @@ public final class MailService implements Listener {
             if (refresh) {
                 refreshPlayerViews(player, false);
             }
-            return MailOperationResult.success("邮件已领取。");
+            return MailOperationResult.success(message("player.mail-claimed"));
         } catch (Exception exception) {
             this.logger.warning("领取邮件失败: " + exception.getMessage());
-            return MailOperationResult.failure("领取邮件失败。");
+            return MailOperationResult.failure(message("player.mail-claim-failed"));
         }
     }
 
@@ -1859,12 +1886,12 @@ public final class MailService implements Listener {
         try {
             Optional<MailMessage> optionalMail = repository.loadMail(player.getUniqueId(), mailId);
             if (optionalMail.isEmpty()) {
-                return MailOperationResult.failure("邮件不存在。");
+                return MailOperationResult.failure(message("player.mail-not-found"));
             }
 
             MailMessage mail = optionalMail.get();
             if (!canDeleteMail(configuration.retention().allowDeleteWithUnclaimedAttachments(), mail)) {
-                return MailOperationResult.failure("该邮件仍有未领取内容，当前配置不允许直接删除。");
+                return MailOperationResult.failure(message("player.mail-delete-restricted"));
             }
 
             Instant now = Instant.now();
@@ -1895,10 +1922,10 @@ public final class MailService implements Listener {
             if (refresh) {
                 refreshPlayerViews(player, false);
             }
-            return MailOperationResult.success("邮件已删除。");
+            return MailOperationResult.success(message("player.mail-deleted"));
         } catch (Exception exception) {
             this.logger.warning("删除邮件失败: " + exception.getMessage());
-            return MailOperationResult.failure("删除邮件失败。");
+            return MailOperationResult.failure(message("player.mail-delete-failed"));
         }
     }
 
@@ -1982,7 +2009,7 @@ public final class MailService implements Listener {
         boolean publishRedis
     ) {
         if (recipient == null || preset == null) {
-            return MailOperationResult.failure("预设邮件参数无效。");
+            return MailOperationResult.failure(message("player.preset-mail-params-invalid"));
         }
 
         Instant now = Instant.now();
@@ -2058,13 +2085,13 @@ public final class MailService implements Listener {
                 continue;
             }
             if (configuration.moderation().blockedMaterials().contains(itemStack.getType().name())) {
-                return MailOperationResult.failure("附件包含被禁止的物品类型: " + itemStack.getType().name());
+                return MailOperationResult.failure(message("player.attachment-blocked-material", itemStack.getType().name()));
             }
             ItemMeta meta = itemStack.getItemMeta();
             if (meta != null && meta.getLore() != null) {
                 for (String line : meta.getLore()) {
                     if (matchesBlockedLore(line)) {
-                        return MailOperationResult.failure("附件 Lore 命中了屏蔽规则。");
+                        return MailOperationResult.failure(message("player.attachment-blocked-lore"));
                     }
                 }
             }
@@ -2131,7 +2158,7 @@ public final class MailService implements Listener {
                 player,
                 composeUiId,
                 "update",
-                MailComposePacketFactory.buildQuote(configuration, currencyBridgeManager, quote, maxAttachments, attachmentCount)
+                MailComposePacketFactory.buildQuote(configuration, currencyBridgeManager, messages, quote, maxAttachments, attachmentCount)
             );
         }
     }
@@ -2168,10 +2195,10 @@ public final class MailService implements Listener {
             }
             CurrencyBridge currencyBridge = currencyBridgeManager.bridge(entry.getKey());
             if (currencyBridge == null || !currencyBridge.available()) {
-                return MailOperationResult.failure("货币桥接不可用: " + entry.getKey());
+                return MailOperationResult.failure(message("player.currency-bridge-unavailable", entry.getKey()));
             }
             if (currencyBridge.balance(player).compareTo(amount) < 0) {
-                return MailOperationResult.failure("余额不足: " + entry.getKey());
+                return MailOperationResult.failure(message("player.insufficient-balance", entry.getKey()));
             }
         }
         return MailOperationResult.success("");
@@ -2315,7 +2342,7 @@ public final class MailService implements Listener {
             }
             CurrencyBridge currencyBridge = currencyBridgeManager.bridge(attachment.normalizedCurrencyId());
             if (currencyBridge == null || !currencyBridge.available()) {
-                return MailOperationResult.failure("附件货币暂不可用: " + attachment.normalizedCurrencyId());
+                return MailOperationResult.failure(message("player.attachment-currency-unavailable", attachment.normalizedCurrencyId()));
             }
         }
         return MailOperationResult.success("");
@@ -2331,11 +2358,11 @@ public final class MailService implements Listener {
             }
             CurrencyBridge currencyBridge = currencyBridgeManager.bridge(attachment.normalizedCurrencyId());
             if (currencyBridge == null || !currencyBridge.available()) {
-                return MailOperationResult.failure("附件货币暂不可用: " + attachment.normalizedCurrencyId());
+                return MailOperationResult.failure(message("player.attachment-currency-unavailable", attachment.normalizedCurrencyId()));
             }
             CurrencyTransactionResult result = currencyBridge.deposit(player, BigDecimal.valueOf(attachment.amount()));
             if (!result.success()) {
-                return MailOperationResult.failure("领取货币附件失败: " + attachment.normalizedCurrencyId());
+                return MailOperationResult.failure(message("player.claim-currency-failed", attachment.normalizedCurrencyId()));
             }
         }
         return MailOperationResult.success("");
@@ -2702,6 +2729,3 @@ public final class MailService implements Listener {
     }
 
 }
-
-
-

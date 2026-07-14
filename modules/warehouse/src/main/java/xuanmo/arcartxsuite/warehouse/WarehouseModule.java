@@ -181,7 +181,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
             warehouseRepo,
             itemSourceRegistry, itemMatcher, currencyManager,
             () -> getCapability(PickupNotifiable.class),
-            crossServer, crossServerChannelConfig
+            crossServer, crossServerChannelConfig, messages()
         );
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();

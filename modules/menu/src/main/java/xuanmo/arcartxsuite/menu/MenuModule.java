@@ -149,7 +149,8 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
             configuration,
             itemStackBridge,
             itemSourceRegistry,
-            (Supplier<SignalDispatchable>) () -> getCapability(SignalDispatchable.class)
+            (Supplier<SignalDispatchable>) () -> getCapability(SignalDispatchable.class),
+            messages()
         );
         service.setRuntimeUiIds(panelBinding.runtimeUiId(), escBinding.runtimeUiId());
         service.reload(dataFolder);
@@ -276,6 +277,5 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 
 

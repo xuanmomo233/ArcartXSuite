@@ -50,6 +50,7 @@ import xuanmo.arcartxsuite.loginview.security.LoginViewPasswordHasher;
 import xuanmo.arcartxsuite.loginview.storage.LoginViewAccount;
 import xuanmo.arcartxsuite.loginview.storage.LoginViewRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import java.util.logging.Logger;
 
 public final class LoginViewService implements Listener {
@@ -74,6 +75,7 @@ public final class LoginViewService implements Listener {
     private final AuthMeBridge authMeBridge = new AuthMeBridge();
     private final AccountTypeService accountTypeService;
     private final Supplier<QqBindCapable> qqBindProvider;
+    private final MessageProvider messages;
     private Supplier<EventBusCapability> eventBusProvider;
     private final Set<UUID> authenticatedPlayers = new HashSet<>();
     private final Map<UUID, Integer> failedAttempts = new HashMap<>();
@@ -92,7 +94,8 @@ public final class LoginViewService implements Listener {
         Supplier<SignalDispatchable> signalProvider,
         AccountTypeService accountTypeService,
         Supplier<QqBindCapable> qqBindProvider,
-        String uiId
+        String uiId,
+        MessageProvider messages
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -104,6 +107,7 @@ public final class LoginViewService implements Listener {
         this.accountTypeService = accountTypeService;
         this.qqBindProvider = qqBindProvider;
         this.uiId = uiId;
+        this.messages = messages;
         for (String command : configuration.security().allowCommandsPrefix().split(",")) {
             String normalized = command.trim().toLowerCase(Locale.ROOT);
             if (!normalized.isBlank()) {
@@ -238,7 +242,7 @@ public final class LoginViewService implements Listener {
     }
 
     public MigrationResult migrateAuthMe(CommandSender sender, boolean dryRun) throws SQLException {
-        AuthMeMigrationService migrationService = new AuthMeMigrationService(configuration.migration(), repository);
+        AuthMeMigrationService migrationService = new AuthMeMigrationService(configuration.migration(), repository, messages);
         return migrationService.migrate(sender, dryRun);
     }
 
@@ -757,5 +761,4 @@ public final class LoginViewService implements Listener {
         return player.getAddress().getAddress().getHostAddress();
     }
 }
-
 

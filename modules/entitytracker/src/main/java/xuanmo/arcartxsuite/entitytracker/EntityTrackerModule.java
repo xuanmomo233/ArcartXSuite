@@ -197,7 +197,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                 plugin, logger, configuration, packetBridge, bossRuntimeUiIds,
                 platform, null, () -> getCapability(MailDispatchable.class),
                 itemSourceRegistry, attributeBridge,
-                crossServerService, killRecordingService, placeholderResolver
+                crossServerService, killRecordingService, placeholderResolver, messages()
             );
             bossService.start();
             adminCommand = new EntityTrackerAdminCommand(() -> bossService, messages());
@@ -277,7 +277,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         }
         if (newFeaturesSettings.dropAllocation().enabled()) {
             dropAllocationService = new DropAllocationService(
-                plugin, logger, newFeaturesSettings.dropAllocation(), ds
+                plugin, logger, newFeaturesSettings.dropAllocation(), ds, messages()
             );
         }
         boolean crossServerRanking = newFeaturesSettings.crossServerRanking().enabled()
@@ -518,8 +518,6 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
-
 
 
 

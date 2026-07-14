@@ -41,6 +41,7 @@ import xuanmo.arcartxsuite.questgps.chemdah.ChemdahRewardReader;
 import xuanmo.arcartxsuite.questgps.chemdah.ChemdahTrackerBridge;
 import xuanmo.arcartxsuite.questgps.chemdah.QuestGpsOverlayValidator;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
 import java.util.logging.Logger;
 
@@ -74,6 +75,7 @@ public final class QuestGpsService implements Listener {
     private final QuestGpsNavigationService navigationService;
     private final QuestGpsSnapshotBuilder snapshotBuilder = new QuestGpsSnapshotBuilder();
     private final QuestGpsUiPacketHandler uiPacketHandler;
+    private final MessageProvider messages;
     private final ConcurrentMap<UUID, QuestGpsViewState> viewStates = new ConcurrentHashMap<>();
     private final List<Listener> chemdahEventListeners = new ArrayList<>();
 
@@ -93,7 +95,8 @@ public final class QuestGpsService implements Listener {
         java.util.List<String> guideUiIds,
         xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry,
         xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI waypointBridge,
-        xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI npcBridge
+        xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI npcBridge,
+        MessageProvider messages
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -103,6 +106,7 @@ public final class QuestGpsService implements Listener {
         this.chatCardSendableProvider = chatCardSendableProvider == null ? () -> null : chatCardSendableProvider;
         this.hookDispatcher = hookDispatcher;
         this.configuration = configuration;
+        this.messages = messages;
         this.bridge = bridge;
         this.menuUiIds = menuUiIds;
         this.guideUiIds = guideUiIds;
@@ -260,17 +264,17 @@ public final class QuestGpsService implements Listener {
         String targetQuestId = resolveQuestId(player, questId);
         QuestGpsModuleConfiguration.QuestDefinition definition = configuration.quest(targetQuestId);
         if (definition == null) {
-            player.sendMessage(PREFIX + ChatColor.RED + "该任务未配置到 QuestGPS: " + targetQuestId);
+            player.sendMessage(PREFIX + message("player.quest-not-configured", targetQuestId));
             return;
         }
         Template template = ChemdahAPI.INSTANCE.getQuestTemplate(definition.id());
         if (template == null) {
-            player.sendMessage(PREFIX + ChatColor.RED + "未找到 Chemdah 任务: " + definition.id());
+            player.sendMessage(PREFIX + message("player.chemdah-not-found", definition.id()));
             return;
         }
         QuestGpsCategory effectiveCategory = presentationService.effectiveCategory(template, definition);
         if (effectiveCategory == null) {
-            player.sendMessage(PREFIX + ChatColor.RED + "任务分类未在 categories 注册，无法接取: " + definition.id());
+            player.sendMessage(PREFIX + message("player.category-not-registered", definition.id()));
             return;
         }
         if (isCategoryLocked(player, effectiveCategory) || !presentationService.hasCompletedRequiredMainline(profile, definition.requiredMainline())) {
@@ -280,7 +284,7 @@ public final class QuestGpsService implements Listener {
 
         template.acceptTo(profile).whenComplete((result, throwable) -> Bukkit.getScheduler().runTask(plugin, () -> {
             if (throwable != null) {
-                player.sendMessage(PREFIX + ChatColor.RED + "接取任务失败，请检查控制台。");
+                player.sendMessage(PREFIX + message("player.accept-failed"));
                 this.logger.log(Level.WARNING, "QuestGPS: 接取任务失败: " + definition.id(), throwable);
                 refreshViewer(player);
                 return;
@@ -289,10 +293,16 @@ public final class QuestGpsService implements Listener {
                 QuestGpsViewState state = viewStates.computeIfAbsent(player.getUniqueId(), ignored -> new QuestGpsViewState());
                 state.setPage(QuestGpsPage.ACTIVE);
                 state.setSelectedQuestId(definition.id());
-                player.sendMessage(PREFIX + ChatColor.GREEN + "已接取任务: " + chemdahBootstrap.metadataReader().questDisplayName(template, definition, configuration.presentation()));
+                player.sendMessage(PREFIX + message(
+                    "player.accept-success",
+                    chemdahBootstrap.metadataReader().questDisplayName(template, definition, configuration.presentation())
+                ));
             } else {
                 String reason = result == null ? "未知原因" : safe(result.getReason());
-                player.sendMessage(PREFIX + ChatColor.RED + "接取失败: " + blankTo(reason, result == null ? "未知错误" : result.getType().name()));
+                player.sendMessage(PREFIX + message(
+                    "player.accept-result-failed",
+                    blankTo(reason, result == null ? "未知错误" : result.getType().name())
+                ));
             }
             refreshViewer(player);
         }));
@@ -306,19 +316,19 @@ public final class QuestGpsService implements Listener {
         String targetQuestId = resolveQuestId(player, questId);
         QuestGpsModuleConfiguration.QuestDefinition definition = configuration.quest(targetQuestId);
         if (definition == null || !definition.allowAbandon()) {
-            player.sendMessage(PREFIX + ChatColor.RED + "该任务不允许放弃。");
+            player.sendMessage(PREFIX + message("player.abandon-not-allowed"));
             return;
         }
         Template template = ChemdahAPI.INSTANCE.getQuestTemplate(definition.id());
         Quest activeQuest = profile.getQuestById(definition.id(), false);
         if (template == null || activeQuest == null || activeQuest.isCompleted()) {
-            player.sendMessage(PREFIX + ChatColor.RED + "当前任务不可放弃。");
+            player.sendMessage(PREFIX + message("player.abandon-unavailable"));
             return;
         }
 
         activeQuest.failQuestFuture().whenComplete((success, throwable) -> Bukkit.getScheduler().runTask(plugin, () -> {
             if (throwable != null || success == null || !success) {
-                player.sendMessage(PREFIX + ChatColor.RED + "放弃任务失败。");
+                player.sendMessage(PREFIX + message("player.abandon-failed"));
                 if (throwable != null) {
                     this.logger.log(Level.WARNING, "QuestGPS 放弃任务失败: " + definition.id(), throwable);
                 }
@@ -329,7 +339,10 @@ public final class QuestGpsService implements Listener {
             QuestGpsViewState state = viewStates.computeIfAbsent(player.getUniqueId(), ignored -> new QuestGpsViewState());
             state.setPage(QuestGpsPage.AVAILABLE);
             state.setSelectedQuestId(definition.id());
-            player.sendMessage(PREFIX + ChatColor.YELLOW + "已放弃任务: " + chemdahBootstrap.metadataReader().questDisplayName(template, definition, configuration.presentation()));
+            player.sendMessage(PREFIX + message(
+                "player.abandon-success",
+                chemdahBootstrap.metadataReader().questDisplayName(template, definition, configuration.presentation())
+            ));
             refreshViewer(player);
         }));
     }
@@ -343,16 +356,19 @@ public final class QuestGpsService implements Listener {
         List<QuestGpsSnapshotBuilder.QuestDescriptor> descriptors = presentationService.collectDescriptors(profile, this::isCategoryLocked);
         QuestGpsSnapshotBuilder.QuestDescriptor descriptor = presentationService.findDescriptor(descriptors, targetQuestId);
         if (descriptor == null || !descriptor.questTrackAvailable()) {
-            player.sendMessage(PREFIX + ChatColor.RED + "该任务当前没有可用导航点。");
+            player.sendMessage(PREFIX + message("player.navigation-unavailable"));
             return;
         }
         boolean success = navigationService.trackQuest(player, descriptor.questId(), descriptor.displayName(), presentationService.prioritizedTaskIds(descriptor.tasks()));
         if (!success) {
-            player.sendMessage(PREFIX + ChatColor.RED + "任务导航创建失败。");
+            player.sendMessage(PREFIX + message("player.navigation-create-failed"));
             return;
         }
         afterTrackChanged(player, descriptor.questId());
-        player.sendMessage(PREFIX + ChatColor.GREEN + "已设置任务导航: " + ChatColor.translateAlternateColorCodes('&', descriptor.displayName()));
+        player.sendMessage(PREFIX + message(
+            "player.navigation-set",
+            ChatColor.translateAlternateColorCodes('&', descriptor.displayName())
+        ));
         refreshViewer(player);
     }
 
@@ -365,21 +381,21 @@ public final class QuestGpsService implements Listener {
         List<QuestGpsSnapshotBuilder.QuestDescriptor> descriptors = presentationService.collectDescriptors(profile, this::isCategoryLocked);
         QuestGpsSnapshotBuilder.QuestDescriptor descriptor = presentationService.findDescriptor(descriptors, targetQuestId);
         if (descriptor == null) {
-            player.sendMessage(PREFIX + ChatColor.RED + "未找到任务。");
+            player.sendMessage(PREFIX + message("player.task-not-found"));
             return;
         }
         QuestGpsSnapshotBuilder.TaskDescriptor taskDescriptor = presentationService.findTask(descriptor.tasks(), taskId);
         if (taskDescriptor == null || !taskDescriptor.trackAvailable()) {
-            player.sendMessage(PREFIX + ChatColor.RED + "该任务目标当前没有可用导航点。");
+            player.sendMessage(PREFIX + message("player.task-navigation-unavailable"));
             return;
         }
         boolean success = navigationService.trackTask(player, descriptor.questId(), taskDescriptor.taskId(), taskDescriptor.text());
         if (!success) {
-            player.sendMessage(PREFIX + ChatColor.RED + "任务目标导航创建失败。");
+            player.sendMessage(PREFIX + message("player.task-navigation-create-failed"));
             return;
         }
         afterTrackChanged(player, descriptor.questId());
-        player.sendMessage(PREFIX + ChatColor.GREEN + "已设置任务目标导航: " + taskDescriptor.text());
+        player.sendMessage(PREFIX + message("player.task-navigation-set", taskDescriptor.text()));
         refreshViewer(player);
     }
 
@@ -620,7 +636,7 @@ public final class QuestGpsService implements Listener {
         }
         closeGuide(player);
         if (notify) {
-            player.sendMessage(PREFIX + ChatColor.YELLOW + "已清除当前任务导航。");
+            player.sendMessage(PREFIX + message("player.navigation-cleared"));
         }
     }
 
@@ -781,13 +797,13 @@ public final class QuestGpsService implements Listener {
         }
         if (!ChemdahAPI.INSTANCE.isChemdahProfileLoaded(player)) {
             if (notify) {
-                player.sendMessage(PREFIX + ChatColor.RED + "Chemdah 玩家档案尚未加载。");
+                player.sendMessage(PREFIX + message("player.chemdah-profile-not-loaded"));
             }
             return null;
         }
         PlayerProfile profile = ChemdahAPI.INSTANCE.getChemdahProfile(player);
         if (profile == null && notify) {
-            player.sendMessage(PREFIX + ChatColor.RED + "无法读取 Chemdah 玩家档案。");
+            player.sendMessage(PREFIX + message("player.chemdah-profile-read-failed"));
         }
         return profile;
     }
@@ -815,6 +831,10 @@ public final class QuestGpsService implements Listener {
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    private String message(String key, Object... args) {
+        return messages == null ? "" : messages.get(key, args);
+    }
+
     private static String safe(String value) {
         return value == null ? "" : value.trim();
     }
@@ -833,7 +853,6 @@ public final class QuestGpsService implements Listener {
         }
     }
 }
-
 
 
 
