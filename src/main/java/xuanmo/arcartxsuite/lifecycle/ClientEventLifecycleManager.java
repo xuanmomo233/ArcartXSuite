@@ -24,14 +24,12 @@ public final class ClientEventLifecycleManager {
 
     private final JavaPlugin plugin;
     private final Supplier<ModuleRegistry> registrySupplier;
-    private final ReflectionCache reflectionCache;
     private Listener clientCustomPacketListener;
     private Listener clientInitializedListener;
 
     public ClientEventLifecycleManager(JavaPlugin plugin, Supplier<ModuleRegistry> registrySupplier) {
         this.plugin = plugin;
         this.registrySupplier = registrySupplier;
-        this.reflectionCache = new ReflectionCache(plugin.getClass().getClassLoader());
     }
 
     public void start() {
@@ -54,15 +52,16 @@ public final class ClientEventLifecycleManager {
         }
 
         try {
-            Class<?> rawEventClass = reflectionCache.forName("priv.seventeen.artist.arcartx.event.client.ClientCustomPacketEvent");
+            ReflectionCache arcartXReflection = new ReflectionCache(arcartX.getClass().getClassLoader());
+            Class<?> rawEventClass = arcartXReflection.forName("priv.seventeen.artist.arcartx.event.client.ClientCustomPacketEvent");
             if (!Event.class.isAssignableFrom(rawEventClass)) {
                 xuanmo.arcartxsuite.module.AxsLog.logger().warning("ArcartX ClientCustomPacketEvent 不是 Bukkit Event，已跳过监听。");
                 return;
             }
             Class<? extends Event> eventClass = (Class<? extends Event>) rawEventClass;
-            Method getPlayerMethod = reflectionCache.method(rawEventClass, "getPlayer");
-            Method getIdMethod = reflectionCache.method(rawEventClass, "getId");
-            Method getDataMethod = reflectionCache.method(rawEventClass, "getData");
+            Method getPlayerMethod = arcartXReflection.method(rawEventClass, "getPlayer");
+            Method getIdMethod = arcartXReflection.method(rawEventClass, "getId");
+            Method getDataMethod = arcartXReflection.method(rawEventClass, "getData");
 
             clientCustomPacketListener = new Listener() {};
             plugin.getServer().getPluginManager().registerEvent(
@@ -128,13 +127,14 @@ public final class ClientEventLifecycleManager {
         }
 
         try {
-            Class<?> rawEventClass = reflectionCache.forName("priv.seventeen.artist.arcartx.event.client.ClientInitializedEvent$End");
+            ReflectionCache arcartXReflection = new ReflectionCache(arcartX.getClass().getClassLoader());
+            Class<?> rawEventClass = arcartXReflection.forName("priv.seventeen.artist.arcartx.event.client.ClientInitializedEvent$End");
             if (!Event.class.isAssignableFrom(rawEventClass)) {
                 xuanmo.arcartxsuite.module.AxsLog.logger().warning("ArcartX ClientInitializedEvent$End 不是 Bukkit Event，已跳过监听。");
                 return;
             }
             Class<? extends Event> eventClass = (Class<? extends Event>) rawEventClass;
-            Method getPlayerMethod = reflectionCache.method(rawEventClass, "getPlayer");
+            Method getPlayerMethod = arcartXReflection.method(rawEventClass, "getPlayer");
 
             clientInitializedListener = new Listener() {};
             plugin.getServer().getPluginManager().registerEvent(

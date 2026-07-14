@@ -147,11 +147,7 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
     }
 
     private static Class<?> resolveItemBridgeClass(ClassLoader classLoader) throws ClassNotFoundException {
-        try {
-            return Class.forName("priv.seventeen.artist.arcartx.nms.ItemBridge", true, classLoader);
-        } catch (ClassNotFoundException ignored) {
-            return Class.forName("priv.seventeen.artist.arcartx.nms.ItemStackNMS", true, classLoader);
-        }
+        return Class.forName("priv.seventeen.artist.arcartx.nms.ItemBridge", true, classLoader);
     }
 
     private static Method findMethod(Class<?> type, String name, Class<?>... parameterTypes) {

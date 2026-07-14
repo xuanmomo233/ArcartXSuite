@@ -100,6 +100,9 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         File rulesDirectory = new File(dataFolder, rulesDirRelative);
         ensureRuleDefaults(rulesDirRelative);
         File presetsDir = new File(pluginDataFolder, "eventpacket/packet-command-presets");
+        if (yaml.getBoolean("packet-command.enabled", true)) {
+            ensurePacketPresetDefaults(presetsDir);
+        }
         configuration = PluginConfiguration.load(yaml, logger, presetsDir, rulesDirectory);
     }
 
@@ -115,6 +118,17 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         File target = new File(rulesDir, "examples.yml");
         if (!target.exists()) {
             exportResource("rules/examples.yml", target, false);
+        }
+    }
+
+    private void ensurePacketPresetDefaults(File presetsDirectory) {
+        if (!presetsDirectory.exists() && !presetsDirectory.mkdirs()) {
+            logger.warning("EventPacket 客户端回包预设目录创建失败: " + presetsDirectory);
+            return;
+        }
+        File target = new File(presetsDirectory, "example.yml");
+        if (!target.exists()) {
+            exportResource("eventpacket/packet-command-presets/example.yml", target, false);
         }
     }
 
@@ -321,7 +335,5 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
-
 
 

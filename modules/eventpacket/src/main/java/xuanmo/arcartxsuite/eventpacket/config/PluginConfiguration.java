@@ -64,8 +64,9 @@ public record PluginConfiguration(
             if (clientPacketId.isBlank()) {
                 clientPacketId = "ArcartXEventPacket";
             }
+            ConfigurationSection inlinePresets = clientPacketSection.getConfigurationSection("presets");
             List<EventPacketRule> presetRules = loadClientPacketPresets(
-                clientPacketPresetsDirectory, clientPacketId, logger
+                inlinePresets, clientPacketPresetsDirectory, clientPacketId, logger
             );
             clientPacketPresetCount = presetRules.size();
             rules.addAll(presetRules);
@@ -330,11 +331,24 @@ public record PluginConfiguration(
     }
 
     private static List<EventPacketRule> loadClientPacketPresets(
+        ConfigurationSection inlinePresets,
         File presetsDirectory,
         String packetId,
         Logger logger
     ) {
         List<EventPacketRule> rules = new ArrayList<>();
+        Set<String> presetIds = new LinkedHashSet<>();
+        if (inlinePresets != null) {
+            for (String key : inlinePresets.getKeys(false)) {
+                EventPacketRule rule = parseClientPacketPreset(
+                    inlinePresets.getConfigurationSection(key), key, packetId, "packet-command.presets", logger
+                );
+                if (rule != null) {
+                    presetIds.add(key);
+                    rules.add(rule);
+                }
+            }
+        }
         if (presetsDirectory == null || !presetsDirectory.exists() || !presetsDirectory.isDirectory()) {
             return rules;
         }
@@ -346,67 +360,97 @@ public record PluginConfiguration(
         for (File file : files) {
             YamlConfiguration configuration = YamlConfiguration.loadConfiguration(file);
             for (String key : configuration.getKeys(false)) {
-                ConfigurationSection section = configuration.getConfigurationSection(key);
-                if (section == null) {
-                    logger.warning("EventPacket 客户端回包预设文件 " + file.getName() + " 的节点 " + key + " 不是配置节，已跳过。");
+                if (!presetIds.add(key)) {
+                    logger.warning(
+                        "EventPacket 客户端回包预设 ID 冲突: " + key
+                            + "（文件 " + file.getName() + " 与已有配置重复），文件中的定义已跳过。"
+                    );
                     continue;
                 }
-                try {
-                    String executorType = nullToEmpty(section.getString("type", "op")).trim().toLowerCase(Locale.ROOT);
-                    List<String> commands = List.copyOf(section.getStringList("commands"));
-                    if (commands.isEmpty()) {
-                        continue;
-                    }
-                    String permission = nullToEmpty(section.getString("permission")).trim();
-                    boolean allowArgs = section.getBoolean("allow-args", false);
-                    String argsPattern = nullToEmpty(section.getString("args-pattern", "[\\w.:-]{1,64}")).trim();
-                    long cooldownMillis = parseCooldownMillis(section.get("cooldown"));
-                    List<EventPacketAction> actions = new ArrayList<>();
-                    for (String command : commands) {
-                        Map<String, Object> actionValues = new LinkedHashMap<>();
-                        actionValues.put(
-                            "command",
-                            command
-                                .replace("<player>", "{player_name}")
-                                .replace("<uuid>", "{player_uuid}")
-                                .replace("<world>", "{player_world}")
-                        );
-                        actionValues.put("executor", executorType);
-                        actions.add(new EventPacketAction("command.dispatch", actionValues));
-                    }
-                    rules.add(new EventPacketRule(
-                        "pcmd@" + key,
-                        true,
-                        EventPacketTrigger.CLIENT_PACKET,
-                        key,
-                        "",
-                        null,
-                        false,
-                        1,
-                        Set.of(),
-                        Set.of(),
-                        Set.of(),
-                        true,
-                        cooldownMillis,
-                        List.of(),
-                        List.copyOf(actions),
-                        packetId,
-                        "",
-                        permission,
-                        allowArgs,
-                        argsPattern
-                    ));
-                } catch (IllegalArgumentException exception) {
-                    logger.warning(
-                        "EventPacket 客户端回包预设 " + key + " 解析失败("
-                            + file.getName()
-                            + "): "
-                            + exception.getMessage()
-                    );
+                EventPacketRule rule = parseClientPacketPreset(
+                    configuration.getConfigurationSection(key), key, packetId, file.getName(), logger
+                );
+                if (rule != null) {
+                    rules.add(rule);
                 }
             }
         }
         return rules;
+    }
+
+    private static EventPacketRule parseClientPacketPreset(
+        ConfigurationSection section,
+        String key,
+        String packetId,
+        String source,
+        Logger logger
+    ) {
+        if (section == null) {
+            logger.warning("EventPacket 客户端回包预设 " + source + " 的节点 " + key + " 不是配置节，已跳过。");
+            return null;
+        }
+        try {
+            String executorType = nullToEmpty(section.getString("type", "op")).trim().toLowerCase(Locale.ROOT);
+            if (!Set.of("op", "console", "player").contains(executorType)) {
+                logger.warning(
+                    "EventPacket 客户端回包预设 " + key + " 的执行类型无效: " + executorType
+                        + "（仅支持 op/console/player），已跳过。"
+                );
+                return null;
+            }
+            List<String> commands = List.copyOf(section.getStringList("commands"));
+            if (commands.isEmpty()) {
+                logger.warning("EventPacket 客户端回包预设 " + key + " 未配置 commands，已跳过。");
+                return null;
+            }
+            String permission = nullToEmpty(section.getString("permission")).trim();
+            boolean allowArgs = section.getBoolean("allow-args", false);
+            String argsPattern = nullToEmpty(section.getString("args-pattern", "[\\w.:-]{1,64}")).trim();
+            long cooldownMillis = parseCooldownMillis(section.get("cooldown"));
+            List<EventPacketAction> actions = new ArrayList<>();
+            for (String command : commands) {
+                Map<String, Object> actionValues = new LinkedHashMap<>();
+                actionValues.put("command", normalizeClientPacketCommand(command));
+                actionValues.put("executor", executorType);
+                actions.add(new EventPacketAction("command.dispatch", actionValues));
+            }
+            return new EventPacketRule(
+                "pcmd@" + key,
+                true,
+                EventPacketTrigger.CLIENT_PACKET,
+                key,
+                "",
+                null,
+                false,
+                1,
+                Set.of(),
+                Set.of(),
+                Set.of(),
+                true,
+                cooldownMillis,
+                List.of(),
+                List.copyOf(actions),
+                packetId,
+                "",
+                permission,
+                allowArgs,
+                argsPattern
+            );
+        } catch (IllegalArgumentException exception) {
+            logger.warning(
+                "EventPacket 客户端回包预设 " + key + " 解析失败("
+                    + source + "): " + exception.getMessage()
+            );
+            return null;
+        }
+    }
+
+    private static String normalizeClientPacketCommand(String command) {
+        return command
+            .replace("<player>", "{player_name}")
+            .replace("<uuid>", "{player_uuid}")
+            .replace("<world>", "{player_world}")
+            .replaceAll("<arg([1-9][0-9]*)>", "{arg$1}");
     }
 
     public List<EventPacketRule> clientPacketRules() {
