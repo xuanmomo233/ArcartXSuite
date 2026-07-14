@@ -57,19 +57,19 @@ reward:
 
   # 奖励档位从高到低排列
   vip3:
-    - "addbalance %player_name% 铜币 %axsafk_players%*35+%player_level%/4+250"
+    - "addbalance %player_name% 铜币 %axsafkreward_players%*35+%player_level%/4+250"
     - "cmi give %player_name% cobblestone 54"
-    - "cmi exp %player_name% add %axsafk_players%*%player_level%/4+%player_level%"
+    - "cmi exp %player_name% add %axsafkreward_players%*%player_level%/4+%player_level%"
   vip2:
-    - "addbalance %player_name% 铜币 %axsafk_players%*30+%player_level%/6+200"
+    - "addbalance %player_name% 铜币 %axsafkreward_players%*30+%player_level%/6+200"
     - "cmi give %player_name% cobblestone 54"
-    - "cmi exp %player_name% add %axsafk_players%*%player_level%/6+%player_level%/2"
+    - "cmi exp %player_name% add %axsafkreward_players%*%player_level%/6+%player_level%/2"
   vip1:
-    - "addbalance %player_name% 铜币 %axsafk_players%*25+%player_level%/8+150"
-    - "cmi exp %player_name% add %axsafk_players%*%player_level%/8+%player_level%/4"
+    - "addbalance %player_name% 铜币 %axsafkreward_players%*25+%player_level%/8+150"
+    - "cmi exp %player_name% add %axsafkreward_players%*%player_level%/8+%player_level%/4"
   common:
-    - "addbalance %player_name% 铜币 %axsafk_players%*20+%player_level%/10+100"
-    - "cmi exp %player_name% add %axsafk_players%*%player_level%/10+%player_level%/4"
+    - "addbalance %player_name% 铜币 %axsafkreward_players%*20+%player_level%/10+100"
+    - "cmi exp %player_name% add %axsafkreward_players%*%player_level%/10+%player_level%/4"
 
 # 本区域倍率配置
 multiplier:
