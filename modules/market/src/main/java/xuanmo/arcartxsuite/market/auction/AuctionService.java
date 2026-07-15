@@ -28,7 +28,7 @@ import xuanmo.arcartxsuite.market.storage.MarketRepository;
 import xuanmo.arcartxsuite.market.storage.RedisMarketCache;
 
 /**
- * ÃÂ¦ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¨ÃÂ¡ÃÂÃÂ¦ÃÂ ÃÂ¸ÃÂ¥ÃÂ¿ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¥ÃÂÃÂ¡ÃÂ¦ÃÂÃÂÃÂ¥ÃÂÃÂ¡ÃÂ£ÃÂÃÂ
+ * 拍卖行核心业务服务。
  */
 public class AuctionService {
 
@@ -64,7 +64,7 @@ public class AuctionService {
 
     public void start(long intervalTicks) {
         schedulerTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::processExpired, intervalTicks, intervalTicks);
-        logger.info("[Market-Auction] ÃÂ¦ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¨ÃÂ¡ÃÂÃÂ¦ÃÂÃÂÃÂ¥ÃÂÃÂ¡ÃÂ¥ÃÂ·ÃÂ²ÃÂ¥ÃÂÃÂ¯ÃÂ¥ÃÂÃÂ¨ÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂÃÂ°ÃÂ¦ÃÂÃÂÃÂ¦ÃÂ£ÃÂÃÂ¦ÃÂÃÂ¥ÃÂ©ÃÂÃÂ´ÃÂ©ÃÂÃÂ: " + intervalTicks + " ticks");
+        logger.info("[Market-Auction] æåè¡æå¡å·²å¯å¨ï¼å°ææ£æ¥é´é: " + intervalTicks + " ticks");
     }
 
     public void shutdown() {
@@ -75,7 +75,7 @@ public class AuctionService {
     }
 
     /**
-     * ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂ®ÃÂ¶ÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂÃÂ¶ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ£ÃÂÃÂ
+     * 玩家上架物品。
      */
     public ListingResult createListing(Player seller, ItemStack item, double buyNowPrice,
                                        double startingBid, String currency, long durationSeconds) {
@@ -102,35 +102,35 @@ public class AuctionService {
                                                  double startingBid, String currency, long durationSeconds,
                                                  String message, int sourceSlot) {
         if (item == null || item.getType().isAir()) {
-            return ListingResult.fail("ÃÂ¦ÃÂ²ÃÂ¡ÃÂ¦ÃÂÃÂÃÂ¥ÃÂÃÂ¯ÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂÃÂ¶ÃÂ§ÃÂÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂ");
+            return ListingResult.fail("æ²¡æå¯ä¸æ¶çç©å");
         }
-        // ÃÂ©ÃÂÃÂ²ÃÂ¦ÃÂ­ÃÂ¢ÃÂ¤ÃÂ¸ÃÂÃÂ¤ÃÂ¸ÃÂ»ÃÂ¦ÃÂÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¥ÃÂ¼ÃÂÃÂ§ÃÂÃÂ¨ÃÂ¥ÃÂÃÂ«ÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¤ÃÂ½ÃÂ¿ÃÂ§ÃÂÃÂ¨ÃÂ¥ÃÂÃÂ¯ÃÂ¦ÃÂÃÂ¬ÃÂ¤ÃÂ½ÃÂÃÂ¤ÃÂ¸ÃÂºÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂÃÂ¶ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂ
+        // é²æ­¢ä¸ä¸»æç©åå¼ç¨å«åï¼ä½¿ç¨å¯æ¬ä½ä¸ºä¸æ¶ç©å
         item = item.clone();
 
-        // ÃÂ¦ÃÂ£ÃÂÃÂ¦ÃÂÃÂ¥ÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂÃÂ¶ÃÂ¦ÃÂÃÂ°ÃÂ©ÃÂÃÂÃÂ©ÃÂÃÂÃÂ¥ÃÂÃÂ¶
+        // æ£æ¥ä¸æ¶æ°ééå¶
         int currentCount = repository.countListingsBySeller(seller.getUniqueId());
         if (currentCount >= config.maxListingsPerPlayer()) {
-            return ListingResult.fail("ÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂÃÂ¶ÃÂ¦ÃÂÃÂ°ÃÂ©ÃÂÃÂÃÂ¥ÃÂ·ÃÂ²ÃÂ¨ÃÂ¾ÃÂ¾ÃÂ¤ÃÂ¸ÃÂÃÂ©ÃÂÃÂ (" + config.maxListingsPerPlayer() + ")");
+            return ListingResult.fail("ä¸æ¶æ°éå·²è¾¾ä¸é (" + config.maxListingsPerPlayer() + ")");
         }
 
-        // ÃÂ¦ÃÂ£ÃÂÃÂ¦ÃÂÃÂ¥ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ©ÃÂ»ÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂ
+        // æ£æ¥ç©åé»åå
         if (isBlacklisted(item)) {
             return ListingResult.fail(messages.itemBlacklisted());
         }
 
-        // ÃÂ¦ÃÂ ÃÂ¡ÃÂ©ÃÂªÃÂÃÂ¤ÃÂ¸ÃÂ»ÃÂ¦ÃÂÃÂÃÂ§ÃÂ¡ÃÂ®ÃÂ¥ÃÂ®ÃÂÃÂ¦ÃÂÃÂÃÂ¦ÃÂÃÂÃÂ¨ÃÂ¦ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂÃÂ¶ÃÂ§ÃÂÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ©ÃÂÃÂ²ÃÂ¦ÃÂ­ÃÂ¢ÃÂ¥ÃÂ®ÃÂ¢ÃÂ¦ÃÂÃÂ·ÃÂ§ÃÂ«ÃÂ¯ÃÂ¤ÃÂ¼ÃÂªÃÂ©ÃÂÃÂ ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂ / ÃÂ¦ÃÂÃÂ°ÃÂ©ÃÂÃÂÃÂ¤ÃÂ¸ÃÂÃÂ§ÃÂ¬ÃÂ¦ÃÂ¥ÃÂ¯ÃÂ¼ÃÂ¨ÃÂÃÂ´ÃÂ¥ÃÂ¤ÃÂÃÂ¥ÃÂÃÂ¶ÃÂ¯ÃÂ¼ÃÂ
+        // æ ¡éªä¸»æç¡®å®ææè¦ä¸æ¶çç©åï¼é²æ­¢å®¢æ·ç«¯ä¼ªé ç©å / æ°éä¸ç¬¦å¯¼è´å¤å¶ï¼
         ItemStack inHand = sourceSlot >= 0
             ? seller.getInventory().getItem(sourceSlot)
             : seller.getInventory().getItemInMainHand();
         if (inHand == null || inHand.getType().isAir()
                 || !inHand.isSimilar(item) || inHand.getAmount() < item.getAmount()) {
-            return ListingResult.fail("ÃÂ¨ÃÂ¯ÃÂ·ÃÂ¦ÃÂÃÂÃÂ¦ÃÂÃÂÃÂ¨ÃÂ¦ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂÃÂ¶ÃÂ§ÃÂÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂ");
+            return ListingResult.fail("è¯·ææè¦ä¸æ¶çç©å");
         }
 
-        // ÃÂ©ÃÂÃÂÃÂ¥ÃÂÃÂ¶ÃÂ¦ÃÂÃÂ¶ÃÂ©ÃÂÃÂ¿
+        // éå¶æ¶é¿
         long duration = Math.max(config.minDurationSeconds(), Math.min(config.maxDurationSeconds(), durationSeconds));
 
-        // ÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ£ÃÂ©ÃÂÃÂ¤ÃÂ¨ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂÃÂ ÃÂ¦ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¯ÃÂ¼ÃÂÃÂ©ÃÂÃÂ¿ÃÂ¥ÃÂÃÂ"ÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂ¥ÃÂ¥ÃÂºÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ£ÃÂ©ÃÂÃÂ¤"ÃÂ¥ÃÂÃÂ¨ÃÂ¥ÃÂ¼ÃÂÃÂ¥ÃÂ¸ÃÂ¸ÃÂ¦ÃÂÃÂ¶ÃÂ©ÃÂÃÂ ÃÂ¦ÃÂÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¥ÃÂ¤ÃÂÃÂ¥ÃÂÃÂ¶
+        // åæ£é¤èåç©åï¼å æï¼ï¼é¿å"åå¥åºåæ£é¤"å¨å¼å¸¸æ¶é æç©åå¤å¶
         if (inHand.getAmount() == item.getAmount()) {
             seller.getInventory().setItem(sourceSlot >= 0 ? sourceSlot : heldSlot(seller), null);
         } else {
@@ -138,14 +138,14 @@ public class AuctionService {
             seller.getInventory().setItem(sourceSlot >= 0 ? sourceSlot : heldSlot(seller), inHand);
         }
 
-        // ÃÂ¦ÃÂÃÂ£ÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂÃÂ¶ÃÂ¨ÃÂ´ÃÂ¹
+        // æ£ä¸æ¶è´¹
         BigDecimal feeCharged = null;
         CurrencyBridgeAPI.CurrencyBridge feeBridge = null;
         if (config.listingFee() > 0) {
             feeBridge = currencyManager.bridge(config.listingFeeCurrency());
             if (feeBridge == null || !feeBridge.available()) {
                 giveBack(seller, item);
-                return ListingResult.fail("ÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂÃÂ¶ÃÂ¨ÃÂ´ÃÂ¹ÃÂ¨ÃÂ´ÃÂ§ÃÂ¥ÃÂ¸ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¥ÃÂÃÂ¯ÃÂ§ÃÂÃÂ¨");
+                return ListingResult.fail("ä¸æ¶è´¹è´§å¸ä¸å¯ç¨");
             }
             CurrencyTransactionResult feeResult = feeBridge.withdraw(seller, BigDecimal.valueOf(config.listingFee()));
             if (!feeResult.success()) {
@@ -155,12 +155,12 @@ public class AuctionService {
             feeCharged = BigDecimal.valueOf(config.listingFee());
         }
 
-        // ÃÂ¥ÃÂºÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂ
+        // åºååç©å
         String itemData = itemSerializer.serialize(item);
         String displayName = getItemDisplayName(item);
         String category = classifyItem(item);
 
-        // ÃÂ§ÃÂ¡ÃÂ®ÃÂ¥ÃÂ®ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂÃÂ¶ÃÂ§ÃÂ±ÃÂ»ÃÂ¥ÃÂÃÂ
+        // ç¡®å®ä¸æ¶ç±»å
         AuctionListing.ListingType type;
         if (buyNowPrice > 0 && startingBid > 0) type = AuctionListing.ListingType.BOTH;
         else if (buyNowPrice > 0) type = AuctionListing.ListingType.BUY_NOW;
@@ -175,16 +175,16 @@ public class AuctionService {
         );
         listing.setMessage(message);
 
-        // ÃÂ¥ÃÂÃÂ¥ÃÂ¥ÃÂºÃÂÃÂ¥ÃÂ¤ÃÂ±ÃÂ¨ÃÂ´ÃÂ¥ÃÂ¥ÃÂÃÂÃÂ©ÃÂÃÂÃÂ¨ÃÂ´ÃÂ¹ + ÃÂ¥ÃÂ½ÃÂÃÂ¨ÃÂ¿ÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¤ÃÂ¿ÃÂÃÂ¨ÃÂ¯ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¤ÃÂ¸ÃÂ¢
+        // å¥åºå¤±è´¥åéè´¹ + å½è¿ç©åï¼ä¿è¯ä¸ä¸¢
         if (!repository.insertListing(listing)) {
             if (feeCharged != null && feeBridge != null) {
                 feeBridge.deposit(seller, feeCharged);
             }
             giveBack(seller, item);
-            return ListingResult.fail("ÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂÃÂ¶ÃÂ¥ÃÂ¤ÃÂ±ÃÂ¨ÃÂ´ÃÂ¥ÃÂ¯ÃÂ¼ÃÂÃÂ¨ÃÂ¯ÃÂ·ÃÂ§ÃÂ¨ÃÂÃÂ¥ÃÂÃÂÃÂ©ÃÂÃÂÃÂ¨ÃÂ¯ÃÂ");
+            return ListingResult.fail("ä¸æ¶å¤±è´¥ï¼è¯·ç¨åéè¯");
         }
 
-        // ÃÂ¤ÃÂ½ÃÂ¿ Redis ÃÂ§ÃÂ¼ÃÂÃÂ¥ÃÂ­ÃÂÃÂ¥ÃÂ¤ÃÂ±ÃÂ¦ÃÂÃÂ
+        // ä½¿ Redis ç¼å­å¤±æ
         if (redisCache.isAvailable()) {
             redisCache.invalidateByPrefix("market:listings:");
             publishCrossServer("LISTING_CREATED:" + listing.getId());
@@ -193,7 +193,7 @@ public class AuctionService {
         return ListingResult.success(listing);
     }
 
-    /** ÃÂ¦ÃÂÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¥ÃÂ½ÃÂÃÂ¨ÃÂ¿ÃÂÃÂ§ÃÂ»ÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂ®ÃÂ¶ÃÂ¯ÃÂ¼ÃÂÃÂ¨ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¨ÃÂ£ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ§ÃÂÃÂÃÂ©ÃÂÃÂ¨ÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂÃÂ¨ÃÂÃÂ½ÃÂ¥ÃÂÃÂ¨ÃÂ¨ÃÂÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¯ÃÂ¼ÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂ®ÃÂ¶ÃÂ¥ÃÂÃÂ¨ÃÂ¥ÃÂÃÂºÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂ®ÃÂÃÂ¥ÃÂÃÂ¨ÃÂ¯ÃÂ¼ÃÂÃÂ£ÃÂÃÂ */
+    /** 把物品归还给玩家，背包装不下的部分掉落在脚下（玩家在场，安全）。 */
     private int heldSlot(Player player) {
         return player.getInventory().getHeldItemSlot();
     }
@@ -206,18 +206,18 @@ public class AuctionService {
     }
 
     /**
-     * ÃÂ¤ÃÂ¸ÃÂÃÂ¥ÃÂÃÂ£ÃÂ¤ÃÂ»ÃÂ·ÃÂ¨ÃÂ´ÃÂ­ÃÂ¤ÃÂ¹ÃÂ°ÃÂ£ÃÂÃÂ
+     * 一口价购买。
      */
     public PurchaseResult buyNow(Player buyer, long listingId) {
         AuctionListing listing = repository.getListing(listingId);
         if (listing == null || !listing.isActive()) {
-            return PurchaseResult.fail("ÃÂ¨ÃÂ¯ÃÂ¥ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¥ÃÂ·ÃÂ²ÃÂ¤ÃÂ¸ÃÂÃÂ¥ÃÂÃÂ¯ÃÂ¨ÃÂ´ÃÂ­ÃÂ¤ÃÂ¹ÃÂ°");
+            return PurchaseResult.fail("è¯¥ç©åå·²ä¸å¯è´­ä¹°");
         }
         if (listing.getBuyNowPrice() <= 0) {
-            return PurchaseResult.fail("ÃÂ¨ÃÂ¯ÃÂ¥ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂÃÂ¯ÃÂ¦ÃÂÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¥ÃÂÃÂ£ÃÂ¤ÃÂ»ÃÂ·");
+            return PurchaseResult.fail("è¯¥ç©åä¸æ¯æä¸å£ä»·");
         }
         if (listing.getSeller().equals(buyer.getUniqueId())) {
-            return PurchaseResult.fail("ÃÂ¤ÃÂ¸ÃÂÃÂ¨ÃÂÃÂ½ÃÂ¨ÃÂ´ÃÂ­ÃÂ¤ÃÂ¹ÃÂ°ÃÂ¨ÃÂÃÂªÃÂ¥ÃÂ·ÃÂ±ÃÂ§ÃÂÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂ");
+            return PurchaseResult.fail("ä¸è½è´­ä¹°èªå·±çç©å");
         }
 
         double price = listing.getBuyNowPrice();
@@ -225,16 +225,16 @@ public class AuctionService {
 
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(currency);
         if (bridge == null || !bridge.available()) {
-            return PurchaseResult.fail("ÃÂ¨ÃÂ´ÃÂ§ÃÂ¥ÃÂ¸ÃÂÃÂ§ÃÂ³ÃÂ»ÃÂ§ÃÂ»ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¥ÃÂÃÂ¯ÃÂ§ÃÂÃÂ¨");
+            return PurchaseResult.fail("è´§å¸ç³»ç»ä¸å¯ç¨");
         }
 
-        // ÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¢ÃÂ¥ÃÂÃÂ ÃÂ¯ÃÂ¼ÃÂÃÂ§ÃÂÃÂ¶ÃÂ¦ÃÂÃÂ CASÃÂ¯ÃÂ¼ÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¤ÃÂ¿ÃÂÃÂ¨ÃÂ¯ÃÂÃÂ¥ÃÂÃÂÃÂ¤ÃÂ¸ÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¤ÃÂ¼ÃÂÃÂ¨ÃÂ¢ÃÂ«ÃÂ¥ÃÂ¹ÃÂ¶ÃÂ¥ÃÂÃÂÃÂ¨ÃÂ´ÃÂ­ÃÂ¤ÃÂ¹ÃÂ° / ÃÂ¥ÃÂÃÂ°ÃÂ¦ÃÂÃÂÃÂ¤ÃÂ»ÃÂ»ÃÂ¥ÃÂÃÂ¡ÃÂ©ÃÂÃÂÃÂ¥ÃÂ¤ÃÂÃÂ§ÃÂ»ÃÂÃÂ§ÃÂ®ÃÂ
+        // åæ¢å ï¼ç¶æ CASï¼ï¼ä¿è¯åä¸ç©åä¸ä¼è¢«å¹¶åè´­ä¹° / å°æä»»å¡éå¤ç»ç®
         if (!repository.compareAndSetListingStatus(listingId,
                 AuctionListing.ListingStatus.ACTIVE, AuctionListing.ListingStatus.SOLD)) {
-            return PurchaseResult.fail("ÃÂ¨ÃÂ¯ÃÂ¥ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¥ÃÂ·ÃÂ²ÃÂ¤ÃÂ¸ÃÂÃÂ¥ÃÂÃÂ¯ÃÂ¨ÃÂ´ÃÂ­ÃÂ¤ÃÂ¹ÃÂ°");
+            return PurchaseResult.fail("è¯¥ç©åå·²ä¸å¯è´­ä¹°");
         }
 
-        // ÃÂ¦ÃÂÃÂ£ÃÂ¤ÃÂ¹ÃÂ°ÃÂ¥ÃÂ®ÃÂ¶ÃÂ©ÃÂÃÂ±ÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂ¤ÃÂ±ÃÂ¨ÃÂ´ÃÂ¥ÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂ»ÃÂÃÂ¦ÃÂÃÂ¢ÃÂ¥ÃÂÃÂ ÃÂ¯ÃÂ¼ÃÂ
+        // æ£ä¹°å®¶é±ï¼å¤±è´¥ååæ»æ¢å ï¼
         CurrencyTransactionResult withdrawResult = bridge.withdraw(buyer, BigDecimal.valueOf(price));
         if (!withdrawResult.success()) {
             repository.compareAndSetListingStatus(listingId,
@@ -242,36 +242,36 @@ public class AuctionService {
             return PurchaseResult.fail(messages.insufficientFunds());
         }
 
-        // BOTH ÃÂ§ÃÂ±ÃÂ»ÃÂ¥ÃÂÃÂÃÂ¨ÃÂÃÂ¥ÃÂ¥ÃÂ·ÃÂ²ÃÂ¦ÃÂÃÂÃÂ§ÃÂ«ÃÂÃÂ¤ÃÂ»ÃÂ·ÃÂ¨ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¥ÃÂÃÂ£ÃÂ¤ÃÂ»ÃÂ·ÃÂ¦ÃÂÃÂÃÂ¤ÃÂºÃÂ¤ÃÂ©ÃÂÃÂÃÂ©ÃÂÃÂÃÂ¨ÃÂ¿ÃÂÃÂ¥ÃÂÃÂ¶ÃÂ¦ÃÂÃÂ¼ÃÂ©ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂ®ÃÂÃÂ¥ÃÂÃÂ¨ÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ¯ÃÂ¼ÃÂÃÂ§ÃÂ¦ÃÂ»ÃÂ§ÃÂºÃÂ¿ÃÂ¤ÃÂ¸ÃÂÃÂ¤ÃÂ¸ÃÂ¢ÃÂ¯ÃÂ¼ÃÂ
+        // BOTH ç±»åè¥å·²æç«ä»·èï¼ä¸å£ä»·æäº¤ééè¿å¶æ¼éï¼å®å¨åæ¾ï¼ç¦»çº¿ä¸ä¸¢ï¼
         if (listing.getHighestBidder() != null && listing.getCurrentBid() > 0
                 && !listing.getHighestBidder().equals(buyer.getUniqueId())) {
             depositSafe(listing.getHighestBidder(), currency, listing.getCurrentBid(), "auction_outbid_refund");
         }
 
-        // ÃÂ¨ÃÂ®ÃÂ¡ÃÂ§ÃÂ®ÃÂÃÂ§ÃÂ¨ÃÂÃÂ¨ÃÂ´ÃÂ¹
+        // è®¡ç®ç¨è´¹
         double taxRate = getEffectiveTaxRate(listing.getSeller());
         double tax = price * taxRate;
         double sellerIncome = price - tax;
 
-        // ÃÂ§ÃÂ»ÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂ®ÃÂ¶ÃÂ¦ÃÂÃÂÃÂ©ÃÂÃÂ±ÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂÃÂ¨ÃÂ§ÃÂºÃÂ¿ÃÂ¥ÃÂÃÂ³ÃÂ¦ÃÂÃÂ¶ / ÃÂ§ÃÂ¦ÃÂ»ÃÂ§ÃÂºÃÂ¿ÃÂ¥ÃÂÃÂ¥ÃÂ¥ÃÂ¾ÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ©ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ§ÃÂ»ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¤ÃÂ¸ÃÂ¢ÃÂ©ÃÂÃÂ±ÃÂ¯ÃÂ¼ÃÂ
+        // ç»åå®¶æé±ï¼å¨çº¿å³æ¶ / ç¦»çº¿å¥å¾åæ¾éåï¼ç»ä¸ä¸¢é±ï¼
         depositSafe(listing.getSeller(), currency, sellerIncome, "auction_sold_income");
 
-        // ÃÂ¦ÃÂÃÂÃÂ¤ÃÂ¹ÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂ¶ÃÂ¤ÃÂ½ÃÂÃÂ¥ÃÂ­ÃÂÃÂ¦ÃÂ®ÃÂµÃÂ¯ÃÂ¼ÃÂÃÂ§ÃÂÃÂ¶ÃÂ¦ÃÂÃÂÃÂ¥ÃÂ·ÃÂ²ÃÂ¦ÃÂÃÂ¯ SOLDÃÂ¯ÃÂ¼ÃÂ
+        // æä¹åå¶ä½å­æ®µï¼ç¶æå·²æ¯ SOLDï¼
         listing.setStatus(AuctionListing.ListingStatus.SOLD);
         repository.updateListing(listing);
 
-        // ÃÂ§ÃÂ»ÃÂÃÂ¤ÃÂ¹ÃÂ°ÃÂ¥ÃÂ®ÃÂ¶ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂÃÂ¨ÃÂ§ÃÂºÃÂ¿ÃÂ¥ÃÂÃÂ³ÃÂ¦ÃÂÃÂ¶ / ÃÂ§ÃÂ¦ÃÂ»ÃÂ§ÃÂºÃÂ¿ÃÂ¦ÃÂÃÂÃÂ¨ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂ»ÃÂ¡ÃÂ¥ÃÂÃÂ¥ÃÂ©ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ§ÃÂ»ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¤ÃÂ¸ÃÂ¢ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂ
+        // ç»ä¹°å®¶ç©åï¼å¨çº¿å³æ¶ / ç¦»çº¿æèåæ»¡å¥éï¼ç»ä¸ä¸¢ç©åï¼
         deliverItemSafe(buyer.getUniqueId(), listing, "auction_buynow_item");
         ItemStack item = itemSerializer.deserialize(listing.getItemData());
 
-        // ÃÂ¨ÃÂ®ÃÂ°ÃÂ¥ÃÂ½ÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂ²
+        // è®°å½åå²
         repository.insertHistory(new AuctionHistory(
             0, listing.getId(), listing.getSeller(), buyer.getUniqueId(),
             listing.getItemData(), listing.getItemDisplayName(),
             price, currency, tax, "BUY_NOW", System.currentTimeMillis()
         ));
 
-        // ÃÂ©ÃÂÃÂÃÂ§ÃÂÃÂ¥ÃÂ¥ÃÂÃÂÃÂ¥ÃÂ®ÃÂ¶ÃÂ¯ÃÂ¼ÃÂÃÂ¤ÃÂ»ÃÂÃÂ¥ÃÂÃÂ¨ÃÂ§ÃÂºÃÂ¿ÃÂ¦ÃÂÃÂ¶ÃÂ¯ÃÂ¼ÃÂÃÂ¤ÃÂ¸ÃÂ»ÃÂ§ÃÂºÃÂ¿ÃÂ§ÃÂ¨ÃÂÃÂ¥ÃÂ®ÃÂÃÂ¥ÃÂÃÂ¨ÃÂ¯ÃÂ¼ÃÂ
+        // éç¥åå®¶ï¼ä»å¨çº¿æ¶ï¼ä¸»çº¿ç¨å®å¨ï¼
         Player sellerOnline = Bukkit.getPlayer(listing.getSeller());
         if (sellerOnline != null) {
             sellerOnline.sendMessage(ChatColor.translateAlternateColorCodes('&',
@@ -279,7 +279,7 @@ public class AuctionService {
                     .replace("%amount%", currencyManager.format(currency, BigDecimal.valueOf(sellerIncome)))));
         }
 
-        // Redis ÃÂ¥ÃÂ¹ÃÂ¿ÃÂ¦ÃÂÃÂ­
+        // Redis å¹¿æ­
         if (redisCache.isAvailable()) {
             redisCache.invalidateByPrefix("market:listings:");
             publishCrossServer("LISTING_SOLD:" + listing.getId());
@@ -289,21 +289,21 @@ public class AuctionService {
     }
 
     /**
-     * ÃÂ§ÃÂ«ÃÂÃÂ¤ÃÂ»ÃÂ·ÃÂ£ÃÂÃÂ
+     * 竞价。
      */
     public BidResult placeBid(Player bidder, long listingId, double amount) {
         AuctionListing listing = repository.getListing(listingId);
         if (listing == null || !listing.isActive()) {
-            return BidResult.fail("ÃÂ¨ÃÂ¯ÃÂ¥ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¥ÃÂ·ÃÂ²ÃÂ¤ÃÂ¸ÃÂÃÂ¥ÃÂÃÂ¯ÃÂ§ÃÂ«ÃÂÃÂ¤ÃÂ»ÃÂ·");
+            return BidResult.fail("è¯¥ç©åå·²ä¸å¯ç«ä»·");
         }
         if (listing.getType() == AuctionListing.ListingType.BUY_NOW) {
-            return BidResult.fail("ÃÂ¨ÃÂ¯ÃÂ¥ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂÃÂ¯ÃÂ¦ÃÂÃÂÃÂ§ÃÂ«ÃÂÃÂ¤ÃÂ»ÃÂ·");
+            return BidResult.fail("è¯¥ç©åä¸æ¯æç«ä»·");
         }
         if (listing.getSeller().equals(bidder.getUniqueId())) {
-            return BidResult.fail("ÃÂ¤ÃÂ¸ÃÂÃÂ¨ÃÂÃÂ½ÃÂ¥ÃÂ¯ÃÂ¹ÃÂ¨ÃÂÃÂªÃÂ¥ÃÂ·ÃÂ±ÃÂ§ÃÂÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂºÃÂ¤ÃÂ»ÃÂ·");
+            return BidResult.fail("ä¸è½å¯¹èªå·±çç©ååºä»·");
         }
 
-        // ÃÂ¨ÃÂ®ÃÂ¡ÃÂ§ÃÂ®ÃÂÃÂ¦ÃÂÃÂÃÂ¤ÃÂ½ÃÂÃÂ¥ÃÂÃÂºÃÂ¤ÃÂ»ÃÂ·
+        // è®¡ç®æä½åºä»·
         double currentHighest = listing.getCurrentBid() > 0 ? listing.getCurrentBid() : listing.getStartingBid();
         double minIncrement = Math.max(
             currentHighest * config.minBidIncrementRatio(),
@@ -312,21 +312,21 @@ public class AuctionService {
         double minBid = listing.getCurrentBid() > 0 ? currentHighest + minIncrement : listing.getStartingBid();
 
         if (amount < minBid) {
-            return BidResult.fail("ÃÂ¥ÃÂÃÂºÃÂ¤ÃÂ»ÃÂ·ÃÂ¥ÃÂ¿ÃÂÃÂ©ÃÂ¡ÃÂ» ÃÂ¢ÃÂÃÂ¥ " + currencyManager.format(listing.getCurrency(), BigDecimal.valueOf(minBid)));
+            return BidResult.fail("出价必须 ≥ " + currencyManager.format(listing.getCurrency(), BigDecimal.valueOf(minBid)));
         }
 
-        // ÃÂ¥ÃÂÃÂ»ÃÂ§ÃÂ»ÃÂÃÂ¤ÃÂ¹ÃÂ°ÃÂ¥ÃÂ®ÃÂ¶ÃÂ¨ÃÂµÃÂÃÂ©ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¦ÃÂÃÂ£ÃÂ¦ÃÂ¬ÃÂ¾ÃÂ¯ÃÂ¼ÃÂ
+        // å»ç»ä¹°å®¶èµéï¼æ£æ¬¾ï¼
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(listing.getCurrency());
         if (bridge == null || !bridge.available()) {
-            return BidResult.fail("ÃÂ¨ÃÂ´ÃÂ§ÃÂ¥ÃÂ¸ÃÂÃÂ§ÃÂ³ÃÂ»ÃÂ§ÃÂ»ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¥ÃÂÃÂ¯ÃÂ§ÃÂÃÂ¨");
+            return BidResult.fail("è´§å¸ç³»ç»ä¸å¯ç¨");
         }
         CurrencyTransactionResult result = bridge.withdraw(bidder, BigDecimal.valueOf(amount));
         if (!result.success()) {
             return BidResult.fail(messages.insufficientFunds());
         }
 
-        // ÃÂ©ÃÂÃÂÃÂ¨ÃÂ¿ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¤ÃÂ½ÃÂÃÂ¦ÃÂÃÂÃÂ©ÃÂ«ÃÂÃÂ¥ÃÂÃÂºÃÂ¤ÃÂ»ÃÂ·ÃÂ¨ÃÂÃÂÃÂ¦ÃÂÃÂ¼ÃÂ©ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂ®ÃÂÃÂ¥ÃÂÃÂ¨ÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂÃÂ¨ÃÂ§ÃÂºÃÂ¿ÃÂ¥ÃÂÃÂ³ÃÂ¦ÃÂÃÂ¶ÃÂ¥ÃÂÃÂ¥ÃÂ¨ÃÂ´ÃÂ¦ÃÂ¥ÃÂ¹ÃÂ¶ÃÂ©ÃÂÃÂÃÂ§ÃÂÃÂ¥ÃÂ¯ÃÂ¼ÃÂÃÂ§ÃÂ¦ÃÂ»ÃÂ§ÃÂºÃÂ¿ÃÂ¥ÃÂÃÂ¥ÃÂ¥ÃÂ¾ÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ©ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ§ÃÂ»ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¤ÃÂ¸ÃÂ¢ÃÂ©ÃÂÃÂ±ÃÂ¯ÃÂ¼ÃÂ
-        // ÃÂ¦ÃÂ³ÃÂ¨ÃÂ¯ÃÂ¼ÃÂÃÂ§ÃÂ«ÃÂÃÂ¤ÃÂ»ÃÂ·ÃÂ¤ÃÂ¾ÃÂÃÂ¨ÃÂµÃÂÃÂ¥ÃÂ®ÃÂ¢ÃÂ¦ÃÂÃÂ·ÃÂ§ÃÂ«ÃÂ¯ÃÂ¥ÃÂÃÂÃÂ¥ÃÂ·ÃÂ²ÃÂ¥ÃÂÃÂÃÂ¤ÃÂ¸ÃÂ»ÃÂ§ÃÂºÃÂ¿ÃÂ§ÃÂ¨ÃÂÃÂ¤ÃÂ¸ÃÂ²ÃÂ¨ÃÂ¡ÃÂÃÂ¦ÃÂÃÂ§ÃÂ¨ÃÂ¡ÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ ÃÂ¥ÃÂ¹ÃÂ¶ÃÂ¥ÃÂÃÂÃÂ¨ÃÂ¦ÃÂÃÂ§ÃÂÃÂÃÂ©ÃÂÃÂ®ÃÂ©ÃÂ¢ÃÂÃÂ£ÃÂÃÂ
+        // éè¿ä¸ä¸ä½æé«åºä»·èæ¼éï¼å®å¨åæ¾ï¼å¨çº¿å³æ¶å¥è´¦å¹¶éç¥ï¼ç¦»çº¿å¥å¾åæ¾éåï¼ç»ä¸ä¸¢é±ï¼
+        // 注：竞价依赖客户端包已切主线程串行执行，单服内无并发覆盖问题。
         UUID previousBidder = listing.getHighestBidder();
         double previousBid = listing.getCurrentBid();
 
@@ -384,7 +384,7 @@ public class AuctionService {
         return BidResult.success(amount);
     }
     /**
-     * ÃÂ¥ÃÂÃÂÃÂ¦ÃÂ¶ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂÃÂ¶ÃÂ£ÃÂÃÂ
+     * 取消上架。
      */
     public boolean cancelListing(Player seller, long listingId) {
         AuctionListing listing = repository.getListing(listingId);
@@ -392,13 +392,13 @@ public class AuctionService {
         if (!listing.getSeller().equals(seller.getUniqueId())) return false;
         if (listing.getStatus() != AuctionListing.ListingStatus.ACTIVE) return false;
 
-        // ÃÂ¦ÃÂÃÂ¢ÃÂ¥ÃÂÃÂ ÃÂ¯ÃÂ¼ÃÂÃÂ©ÃÂÃÂ¿ÃÂ¥ÃÂÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¥ÃÂÃÂ°ÃÂ¦ÃÂÃÂÃÂ¤ÃÂ»ÃÂ»ÃÂ¥ÃÂÃÂ¡ÃÂ¥ÃÂ¹ÃÂ¶ÃÂ¥ÃÂÃÂÃÂ©ÃÂÃÂÃÂ¥ÃÂ¤ÃÂÃÂ¥ÃÂ¤ÃÂÃÂ§ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ©ÃÂÃÂÃÂ¦ÃÂ¬ÃÂ¾ + ÃÂ©ÃÂÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂªÃÂ¥ÃÂÃÂÃÂ§ÃÂÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂ¬ÃÂ¡ÃÂ¯ÃÂ¼ÃÂ
+        // æ¢å ï¼é¿åä¸å°æä»»å¡å¹¶åéå¤å¤çï¼éæ¬¾ + éç©åªåçä¸æ¬¡ï¼
         if (!repository.compareAndSetListingStatus(listingId,
                 AuctionListing.ListingStatus.ACTIVE, AuctionListing.ListingStatus.CANCELLED)) {
             return false;
         }
 
-        // ÃÂ¥ÃÂ¦ÃÂÃÂ¦ÃÂÃÂÃÂ¦ÃÂÃÂÃÂ§ÃÂ«ÃÂÃÂ¤ÃÂ»ÃÂ·ÃÂ¨ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ©ÃÂÃÂÃÂ¨ÃÂ¿ÃÂÃÂ¦ÃÂÃÂ¼ÃÂ©ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂ®ÃÂÃÂ¥ÃÂÃÂ¨ÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ¯ÃÂ¼ÃÂÃÂ§ÃÂ¦ÃÂ»ÃÂ§ÃÂºÃÂ¿ÃÂ¤ÃÂ¸ÃÂÃÂ¤ÃÂ¸ÃÂ¢ÃÂ¯ÃÂ¼ÃÂ
+        // å¦ææç«ä»·èï¼éè¿æ¼éï¼å®å¨åæ¾ï¼ç¦»çº¿ä¸ä¸¢ï¼
         if (listing.getHighestBidder() != null && listing.getCurrentBid() > 0) {
             depositSafe(listing.getHighestBidder(), listing.getCurrency(), listing.getCurrentBid(), "auction_cancel_refund");
         }
@@ -406,7 +406,7 @@ public class AuctionService {
         listing.setStatus(AuctionListing.ListingStatus.CANCELLED);
         repository.updateListing(listing);
 
-        // ÃÂ¨ÃÂ¿ÃÂÃÂ¨ÃÂ¿ÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂ®ÃÂÃÂ¥ÃÂÃÂ¨ÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ¯ÃÂ¼ÃÂÃÂ¨ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂ»ÃÂ¡ÃÂ¦ÃÂÃÂÃÂ§ÃÂ¦ÃÂ»ÃÂ§ÃÂºÃÂ¿ÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂ¥ÃÂ¥ÃÂ¾ÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ©ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂ
+        // è¿è¿ç©åï¼å®å¨åæ¾ï¼èåæ»¡æç¦»çº¿åå¥å¾åæ¾éåï¼
         deliverItemSafe(seller.getUniqueId(), listing, "auction_cancel_return");
 
         repository.insertHistory(new AuctionHistory(
@@ -424,7 +424,7 @@ public class AuctionService {
     }
 
     /**
-     * ÃÂ§ÃÂ®ÃÂ¡ÃÂ§ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂ¼ÃÂºÃÂ¥ÃÂÃÂ¶ÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂÃÂ¶ÃÂ¯ÃÂ¼ÃÂÃÂ©ÃÂÃÂÃÂ¨ÃÂ¿ÃÂÃÂ§ÃÂ«ÃÂÃÂ¤ÃÂ»ÃÂ·ÃÂ¦ÃÂÃÂ¼ÃÂ©ÃÂÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¦ÃÂÃÂ¶ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂ¥ÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂ²ÃÂ£ÃÂÃÂ
+     * 管理员强制下架：退还竞价押金与上架物品，写入历史。
      */
     public boolean adminForceCancelListing(long listingId) {
         AuctionListing listing = repository.getListing(listingId);
@@ -458,7 +458,7 @@ public class AuctionService {
     }
 
     /**
-     * ÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¢ÃÂ¦ÃÂÃÂ¶ÃÂ¨ÃÂÃÂÃÂ£ÃÂÃÂ
+     * 切换收藏。
      */
     public boolean toggleFavorite(UUID player, long listingId) {
         if (repository.isFavorite(player, listingId)) {
@@ -507,7 +507,7 @@ public class AuctionService {
     }
 
     /**
-     * ÃÂ¦ÃÂÃÂÃÂ¥ÃÂÃÂ¨ÃÂ¨ÃÂ§ÃÂ¦ÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂ°ÃÂ¦ÃÂÃÂÃÂ¥ÃÂ¤ÃÂÃÂ§ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¨ÃÂ¿ÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂ¤ÃÂÃÂ§ÃÂÃÂÃÂ§ÃÂÃÂÃÂ¦ÃÂÃÂ¡ÃÂ§ÃÂÃÂ®ÃÂ¦ÃÂÃÂ°ÃÂ£ÃÂÃÂ
+     * 手动触发到期处理，返回处理的条目数。
      */
     public int triggerExpiredProcessing() {
         List<AuctionListing> expired = repository.getExpiredListings();
@@ -518,7 +518,7 @@ public class AuctionService {
         return count;
     }
 
-    // ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ ÃÂ¥ÃÂ®ÃÂÃÂ¦ÃÂÃÂÃÂ¥ÃÂ¤ÃÂÃÂ§ÃÂÃÂ ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
+    // ─── 定期处理 ───────────────────────────────────────────
 
     private void processExpired() {
         try {
@@ -527,7 +527,7 @@ public class AuctionService {
                 Bukkit.getScheduler().runTask(plugin, () -> processExpiredListing(listing));
             }
         } catch (Exception e) {
-            logger.log(Level.SEVERE, "[Market-Auction] ÃÂ¥ÃÂÃÂ°ÃÂ¦ÃÂÃÂÃÂ¥ÃÂ¤ÃÂÃÂ§ÃÂÃÂÃÂ¥ÃÂ¼ÃÂÃÂ¥ÃÂ¸ÃÂ¸", e);
+            logger.log(Level.SEVERE, "[Market-Auction] å°æå¤çå¼å¸¸", e);
         }
     }
 
@@ -537,7 +537,7 @@ public class AuctionService {
             ? AuctionListing.ListingStatus.SOLD
             : AuctionListing.ListingStatus.EXPIRED;
 
-        // ÃÂ¦ÃÂÃÂ¢ÃÂ¥ÃÂÃÂ ÃÂ¯ÃÂ¼ÃÂÃÂ¤ÃÂ»ÃÂÃÂ¥ÃÂ½ÃÂÃÂ¤ÃÂ»ÃÂÃÂ¤ÃÂ¸ÃÂº ACTIVE ÃÂ¦ÃÂÃÂ¶ÃÂ¦ÃÂÃÂ¬ÃÂ¦ÃÂ¬ÃÂ¡ÃÂ¦ÃÂÃÂÃÂ¨ÃÂ´ÃÂÃÂ¨ÃÂ´ÃÂ£ÃÂ§ÃÂ»ÃÂÃÂ§ÃÂ®ÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¦ÃÂÃÂÃÂ§ÃÂ»ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¨ÃÂ´ÃÂ­ÃÂ¤ÃÂ¹ÃÂ°/ÃÂ¦ÃÂÃÂÃÂ¥ÃÂÃÂ¨ÃÂ¨ÃÂ§ÃÂ¦ÃÂ¥ÃÂÃÂ/ÃÂ¤ÃÂ¸ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¨ÃÂ½ÃÂ®ÃÂ¤ÃÂ»ÃÂ»ÃÂ¥ÃÂÃÂ¡ÃÂ©ÃÂÃÂÃÂ¥ÃÂ¤ÃÂÃÂ§ÃÂ»ÃÂÃÂ§ÃÂ®ÃÂÃÂ¯ÃÂ¼ÃÂÃÂ©ÃÂÃÂÃÂ¥ÃÂ¤ÃÂÃÂ¥ÃÂÃÂÃÂ©ÃÂÃÂ±ÃÂ¥ÃÂÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂ
+        // æ¢å ï¼ä»å½ä»ä¸º ACTIVE æ¶æ¬æ¬¡æè´è´£ç»ç®ï¼æç»ä¸è´­ä¹°/æå¨è§¦å/ä¸ä¸è½®ä»»å¡éå¤ç»ç®ï¼éå¤åé±åç©åï¼
         if (!repository.compareAndSetListingStatus(listing.getId(),
                 AuctionListing.ListingStatus.ACTIVE, target)) {
             return;
@@ -545,12 +545,12 @@ public class AuctionService {
         listing.setStatus(target);
 
         if (hasBidder) {
-            // ÃÂ§ÃÂ«ÃÂÃÂ¤ÃÂ»ÃÂ·ÃÂ¦ÃÂÃÂÃÂ¤ÃÂºÃÂ¤
+            // ç«ä»·æäº¤
             double taxRate = getEffectiveTaxRate(listing.getSeller());
             double tax = listing.getCurrentBid() * taxRate;
             double sellerIncome = listing.getCurrentBid() - tax;
 
-            // ÃÂ¥ÃÂÃÂÃÂ¥ÃÂ®ÃÂ¶ÃÂ¦ÃÂÃÂ¶ÃÂ¦ÃÂ¬ÃÂ¾ + ÃÂ¤ÃÂ¹ÃÂ°ÃÂ¥ÃÂ®ÃÂ¶ÃÂ¥ÃÂ¾ÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂ®ÃÂÃÂ¥ÃÂÃÂ¨ÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ¯ÃÂ¼ÃÂÃÂ§ÃÂ¦ÃÂ»ÃÂ§ÃÂºÃÂ¿ÃÂ¤ÃÂ¸ÃÂÃÂ¤ÃÂ¸ÃÂ¢ÃÂ¯ÃÂ¼ÃÂ
+            // åå®¶æ¶æ¬¾ + ä¹°å®¶å¾ç©åï¼å®å¨åæ¾ï¼ç¦»çº¿ä¸ä¸¢ï¼
             depositSafe(listing.getSeller(), listing.getCurrency(), sellerIncome, "auction_bidwin_income");
             deliverItemSafe(listing.getHighestBidder(), listing, "auction_bidwin_item");
 
@@ -562,7 +562,7 @@ public class AuctionService {
                 "BID_WIN", System.currentTimeMillis()
             ));
         } else {
-            // ÃÂ¦ÃÂÃÂ ÃÂ¤ÃÂºÃÂºÃÂ§ÃÂ«ÃÂÃÂ¤ÃÂ»ÃÂ·ÃÂ¯ÃÂ¼ÃÂÃÂ©ÃÂÃÂÃÂ¨ÃÂ¿ÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ§ÃÂ»ÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂ®ÃÂ¶ÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂ®ÃÂÃÂ¥ÃÂÃÂ¨ÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ¯ÃÂ¼ÃÂ
+            // æ äººç«ä»·ï¼éè¿ç©åç»åå®¶ï¼å®å¨åæ¾ï¼
             deliverItemSafe(listing.getSeller(), listing, "auction_expired_return");
             repository.updateListing(listing);
 
@@ -572,7 +572,7 @@ public class AuctionService {
                 0, listing.getCurrency(), 0, "EXPIRED", System.currentTimeMillis()
             ));
 
-            // ÃÂ©ÃÂÃÂÃÂ§ÃÂÃÂ¥ÃÂ¥ÃÂÃÂÃÂ¥ÃÂ®ÃÂ¶ÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂÃÂ¨ÃÂ§ÃÂºÃÂ¿ÃÂ¦ÃÂÃÂ¶ÃÂ¯ÃÂ¼ÃÂ
+            // éç¥åå®¶ï¼å¨çº¿æ¶ï¼
             Player seller = Bukkit.getPlayer(listing.getSeller());
             if (seller != null) {
                 seller.sendMessage(ChatColor.translateAlternateColorCodes('&',
@@ -585,7 +585,7 @@ public class AuctionService {
         }
     }
 
-    /** ÃÂ¥ÃÂÃÂ¨ÃÂ¤ÃÂ¸ÃÂ»ÃÂ§ÃÂºÃÂ¿ÃÂ§ÃÂ¨ÃÂÃÂ¦ÃÂÃÂ§ÃÂ¨ÃÂ¡ÃÂÃÂ¤ÃÂ»ÃÂ»ÃÂ¥ÃÂÃÂ¡ÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂ·ÃÂ²ÃÂ¥ÃÂÃÂ¨ÃÂ¤ÃÂ¸ÃÂ»ÃÂ§ÃÂºÃÂ¿ÃÂ§ÃÂ¨ÃÂÃÂ¥ÃÂÃÂÃÂ§ÃÂÃÂ´ÃÂ¦ÃÂÃÂ¥ÃÂ¦ÃÂÃÂ§ÃÂ¨ÃÂ¡ÃÂÃÂ¯ÃÂ¼ÃÂÃÂ£ÃÂÃÂ */
+    /** 在主线程执行任务（已在主线程则直接执行）。 */
     private void runOnMain(Runnable task) {
         if (Bukkit.isPrimaryThread()) {
             task.run();
@@ -595,13 +595,13 @@ public class AuctionService {
     }
 
     /**
-     * ÃÂ¥ÃÂ®ÃÂÃÂ¥ÃÂÃÂ¨ÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¦ÃÂÃÂ¶ÃÂ¤ÃÂ»ÃÂ¶ÃÂ¤ÃÂºÃÂºÃÂ¥ÃÂÃÂ¨ÃÂ§ÃÂºÃÂ¿ÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂ¨ÃÂ¤ÃÂ¸ÃÂ»ÃÂ§ÃÂºÃÂ¿ÃÂ§ÃÂ¨ÃÂÃÂ¦ÃÂÃÂ¾ÃÂ¥ÃÂÃÂ¥ÃÂ¨ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¨ÃÂ£ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ§ÃÂÃÂÃÂ©ÃÂÃÂ¨ÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂ¥ÃÂ¥ÃÂ¾ÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ©ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¯ÃÂ¼ÃÂ
-     * ÃÂ§ÃÂ¦ÃÂ»ÃÂ§ÃÂºÃÂ¿ÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ´ÃÂ§ÃÂ¬ÃÂÃÂ¥ÃÂÃÂ¥ÃÂ¥ÃÂ¾ÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ©ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂ®ÃÂ¶ÃÂ¤ÃÂ¸ÃÂÃÂ§ÃÂºÃÂ¿ÃÂ¦ÃÂÃÂ¶ÃÂ¨ÃÂ¡ÃÂ¥ÃÂ¥ÃÂÃÂÃÂ£ÃÂÃÂÃÂ¥ÃÂ½ÃÂ»ÃÂ¥ÃÂºÃÂÃÂ©ÃÂÃÂ¿ÃÂ¥ÃÂÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¤ÃÂ¸ÃÂ¢ÃÂ¥ÃÂ¤ÃÂ±ÃÂ£ÃÂÃÂ
+     * å®å¨åæ¾ç©åï¼æ¶ä»¶äººå¨çº¿åå¨ä¸»çº¿ç¨æ¾å¥èåï¼è£ä¸ä¸çé¨åå¥å¾åæ¾éåï¼ï¼
+     * 离线则整笔入待发放队列，玩家上线时补发。彻底避免物品丢失。
      */
     private void deliverItemSafe(UUID target, AuctionListing listing, String reason) {
         final ItemStack item = itemSerializer.deserialize(listing.getItemData());
         if (item == null) {
-            logger.warning("[Market-Auction] ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂºÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂ¤ÃÂ±ÃÂ¨ÃÂ´ÃÂ¥ÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂ·ÃÂ²ÃÂ¨ÃÂ½ÃÂ¬ÃÂ¥ÃÂÃÂ¥ÃÂ¥ÃÂ¾ÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ©ÃÂÃÂÃÂ¥ÃÂÃÂ listing=" + listing.getId());
+            logger.warning("[Market-Auction] ç©åååºååå¤±è´¥ï¼å·²è½¬å¥å¾åæ¾éå listing=" + listing.getId());
             repository.addPendingItem(target, listing.getItemData(), reason);
             return;
         }
@@ -619,8 +619,8 @@ public class AuctionService {
     }
 
     /**
-     * ÃÂ¥ÃÂ®ÃÂÃÂ¥ÃÂÃÂ¨ÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ¨ÃÂ´ÃÂ§ÃÂ¥ÃÂ¸ÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¦ÃÂÃÂ¶ÃÂ¤ÃÂ»ÃÂ¶ÃÂ¤ÃÂºÃÂºÃÂ¥ÃÂÃÂ¨ÃÂ§ÃÂºÃÂ¿ÃÂ¤ÃÂ¸ÃÂÃÂ¨ÃÂ´ÃÂ§ÃÂ¥ÃÂ¸ÃÂÃÂ¥ÃÂÃÂ¯ÃÂ§ÃÂÃÂ¨ÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂ¨ÃÂ¤ÃÂ¸ÃÂ»ÃÂ§ÃÂºÃÂ¿ÃÂ§ÃÂ¨ÃÂÃÂ¥ÃÂÃÂ¥ÃÂ¨ÃÂ´ÃÂ¦ÃÂ¯ÃÂ¼ÃÂ
-     * ÃÂ¥ÃÂÃÂ¦ÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂ¥ÃÂ¥ÃÂ¾ÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ©ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂ®ÃÂ¶ÃÂ¤ÃÂ¸ÃÂÃÂ§ÃÂºÃÂ¿ÃÂ¦ÃÂÃÂ¶ÃÂ¨ÃÂ¡ÃÂ¥ÃÂ¥ÃÂÃÂÃÂ£ÃÂÃÂÃÂ¥ÃÂ½ÃÂ»ÃÂ¥ÃÂºÃÂÃÂ©ÃÂÃÂ¿ÃÂ¥ÃÂÃÂÃÂ¨ÃÂ´ÃÂ§ÃÂ¦ÃÂ¬ÃÂ¾ÃÂ¤ÃÂ¸ÃÂ¢ÃÂ¥ÃÂ¤ÃÂ±ÃÂ£ÃÂÃÂ
+     * å®å¨åæ¾è´§å¸ï¼æ¶ä»¶äººå¨çº¿ä¸è´§å¸å¯ç¨åå¨ä¸»çº¿ç¨å¥è´¦ï¼
+     * 否则入待发放队列，玩家上线时补发。彻底避免货款丢失。
      */
     private void depositSafe(UUID target, String currency, double amount, String reason) {
         if (amount <= 0) {
@@ -634,13 +634,13 @@ public class AuctionService {
             if (resultHolder[0] != null && resultHolder[0].success()) {
                 return;
             }
-            logger.warning("[Market-Auction] ÃÂ¥ÃÂÃÂ¨ÃÂ§ÃÂºÃÂ¿ÃÂ¥ÃÂÃÂ¥ÃÂ¨ÃÂ´ÃÂ¦ÃÂ¥ÃÂ¤ÃÂ±ÃÂ¨ÃÂ´ÃÂ¥ÃÂ¯ÃÂ¼ÃÂÃÂ¨ÃÂ½ÃÂ¬ÃÂ¥ÃÂÃÂ¥ÃÂ¥ÃÂ¾ÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ©ÃÂÃÂÃÂ¥ÃÂÃÂ: player="
+            logger.warning("[Market-Auction] å¨çº¿å¥è´¦å¤±è´¥ï¼è½¬å¥å¾åæ¾éå: player="
                 + online.getName() + " currency=" + currency + " amount=" + amount);
         }
         repository.addPendingCurrency(target, currency, amount, reason);
     }
 
-    // ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ ÃÂ¥ÃÂ·ÃÂ¥ÃÂ¥ÃÂÃÂ·ÃÂ¦ÃÂÃÂ¹ÃÂ¦ÃÂ³ÃÂ ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
+    // ─── 工具方法 ───────────────────────────────────────────
 
     private double getEffectiveTaxRate(UUID seller) {
         Player player = Bukkit.getPlayer(seller);
@@ -727,8 +727,8 @@ public class AuctionService {
         return item.getType().name();
     }
 
-    // ÃÂ§ÃÂ¦ÃÂ»ÃÂ§ÃÂºÃÂ¿ / ÃÂ¨ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂºÃÂ¢ÃÂ¥ÃÂÃÂºÃÂ§ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ§ÃÂ»ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ§ÃÂÃÂ± deliverItemSafe / depositSafe + ÃÂ¥ÃÂ¾ÃÂÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂ¾ÃÂ©ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂ¤ÃÂÃÂ§ÃÂÃÂÃÂ¯ÃÂ¼ÃÂ
-    // ÃÂ¤ÃÂ¸ÃÂÃÂ¥ÃÂÃÂÃÂ¤ÃÂ½ÃÂ¿ÃÂ§ÃÂÃÂ¨ÃÂ¦ÃÂÃÂ§ÃÂ§ÃÂÃÂ depositOffline / createOfflineDepositÃÂ¯ÃÂ¼ÃÂÃÂ§ÃÂ¦ÃÂ»ÃÂ§ÃÂºÃÂ¿ÃÂ¦ÃÂÃÂ¶ÃÂ¤ÃÂ¼ÃÂÃÂ¤ÃÂ¸ÃÂ¢ÃÂ©ÃÂÃÂ±ÃÂ¯ÃÂ¼ÃÂÃÂ£ÃÂÃÂ
+    // ç¦»çº¿ / èåæº¢åºçåæ¾ç»ä¸ç± deliverItemSafe / depositSafe + å¾åæ¾éåå¤çï¼
+    // 不再使用旧的 depositOffline / createOfflineDeposit（离线时会丢钱）。
 
     private void publishCrossServer(String message) {
         if (crossServerPublisher != null && message != null && !message.isBlank()) {
@@ -736,7 +736,7 @@ public class AuctionService {
         }
     }
 
-    // ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ ÃÂ§ÃÂ»ÃÂÃÂ¦ÃÂÃÂÃÂ§ÃÂ±ÃÂ» ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
+    // ─── 结果类 ─────────────────────────────────────────────
 
     public record ListingResult(boolean success, @Nullable String error, @Nullable AuctionListing listing) {
         public static ListingResult success(AuctionListing listing) { return new ListingResult(true, null, listing); }

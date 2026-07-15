@@ -23,7 +23,7 @@ import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.RecycleConfig
 import xuanmo.arcartxsuite.market.storage.MarketRepository;
 
 /**
- * Ã¥ÂÂÃ¦ÂÂ¶Ã¥ÂÂÃ¥ÂºÂÃ¤Â¸ÂÃ¥ÂÂ¡Ã¦ÂÂÃ¥ÂÂ¡Ã£ÂÂ
+ * 回收商店业务服务。
  */
 public class RecycleService {
 
@@ -51,7 +51,7 @@ public class RecycleService {
 
     public void start() {
         loadRecycleTables();
-        logger.info("[Market-Recycle] Ã¥ÂÂÃ¦ÂÂ¶Ã¨Â¡Â¨Ã¥Â·Â²Ã¥ÂÂ Ã¨Â½Â½ " + entries.size() + " Ã¤Â¸ÂªÃ¦ÂÂ¡Ã§ÂÂ®");
+        logger.info("[Market-Recycle] åæ¶è¡¨å·²å è½½ " + entries.size() + " ä¸ªæ¡ç®");
     }
 
     public void shutdown() {
@@ -91,17 +91,17 @@ public class RecycleService {
                     ));
                 }
             } catch (Exception e) {
-                logger.log(Level.WARNING, "[Market-Recycle] Ã¥ÂÂ Ã¨Â½Â½Ã¥ÂÂÃ¦ÂÂ¶Ã¨Â¡Â¨Ã¦ÂÂÃ¤Â»Â¶Ã¥Â¤Â±Ã¨Â´Â¥: " + file.getName(), e);
+                logger.log(Level.WARNING, "[Market-Recycle] å è½½åæ¶è¡¨æä»¶å¤±è´¥: " + file.getName(), e);
             }
         }
     }
 
     /**
-     * Ã¥ÂÂÃ¦ÂÂ¶Ã¥ÂÂÃ¤Â¸ÂªÃ§ÂÂ©Ã¥ÂÂÃ£ÂÂ
+     * 回收单个物品。
      */
     public RecycleResult recycle(Player player, ItemStack item) {
         RecycleEntry entry = findEntry(item);
-        if (entry == null) return RecycleResult.fail("Ã¨Â¯Â¥Ã§ÂÂ©Ã¥ÂÂÃ¤Â¸ÂÃ¥ÂÂ¯Ã¥ÂÂÃ¦ÂÂ¶");
+        if (entry == null) return RecycleResult.fail("è¯¥ç©åä¸å¯åæ¶");
 
         double pricePerUnit = entry.price();
         double multiplier = getMultiplier(player);
@@ -109,24 +109,24 @@ public class RecycleService {
 
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(entry.currency());
         if (bridge == null || !bridge.available()) {
-            return RecycleResult.fail("Ã¨Â´Â§Ã¥Â¸ÂÃ§Â³Â»Ã§Â»ÂÃ¤Â¸ÂÃ¥ÂÂ¯Ã§ÂÂ¨");
+            return RecycleResult.fail("è´§å¸ç³»ç»ä¸å¯ç¨");
         }
         CurrencyTransactionResult result = bridge.deposit(player, BigDecimal.valueOf(total));
         if (!result.success()) {
-            return RecycleResult.fail("Ã¥Â­ÂÃ¦Â¬Â¾Ã¥Â¤Â±Ã¨Â´Â¥");
+            return RecycleResult.fail("å­æ¬¾å¤±è´¥");
         }
 
         int count = item.getAmount();
         item.setAmount(0);
 
-        // Ã§Â»ÂÃ¨Â®Â¡
+        // ç»è®¡
         repository.addRecycleStats(player.getUniqueId(), entry.currency(), total, count);
 
         return RecycleResult.success(total, entry.currency(), count, Map.of(entry.currency(), total));
     }
 
     /**
-     * Ã¦ÂÂ¹Ã©ÂÂÃ¥ÂÂÃ¦ÂÂ¶Ã¨ÂÂÃ¥ÂÂÃ¦ÂÂÃ¦ÂÂÃ¥ÂÂ¯Ã¥ÂÂÃ¦ÂÂ¶Ã§ÂÂ©Ã¥ÂÂÃ£ÂÂ
+     * 批量回收背包所有可回收物品。
      */
     public RecycleResult recycleBatch(Player player) {
         double totalEarnings = 0;
@@ -166,14 +166,14 @@ public class RecycleService {
     }
 
     /**
-     * Ã¦Â£ÂÃ¦ÂÂ¥Ã§ÂÂ©Ã¥ÂÂÃ¦ÂÂ¯Ã¥ÂÂ¦Ã¥ÂÂ¯Ã¥ÂÂÃ¦ÂÂ¶Ã£ÂÂ
+     * 检查物品是否可回收。
      */
     public boolean isRecyclable(ItemStack item) {
         return findEntry(item) != null;
     }
 
     /**
-     * Ã¨ÂÂ·Ã¥ÂÂÃ§ÂÂ©Ã¥ÂÂÃ¥ÂÂÃ¦ÂÂ¶Ã¤Â»Â·Ã¦Â Â¼Ã£ÂÂ
+     * 获取物品回收价格。
      */
     public @Nullable String getRecycleCurrency(ItemStack item) {
         RecycleEntry entry = findEntry(item);
@@ -230,7 +230,7 @@ public class RecycleService {
         return 1.0;
     }
 
-    // Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ Ã§Â»ÂÃ¦ÂÂ Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
+    // ─── 结果 ───────────────────────────────────────────────
 
     public record RecycleResult(boolean success, @Nullable String error, double totalAmount, @Nullable String currency, int itemCount, Map<String, Double> earningsByCurrency) {
         public static RecycleResult success(double amount, String currency, int count, Map<String, Double> earnings) {
