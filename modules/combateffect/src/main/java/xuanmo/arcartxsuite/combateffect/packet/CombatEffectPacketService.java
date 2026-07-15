@@ -91,6 +91,7 @@ public final class CombatEffectPacketService implements Listener {
         if (attacker == null || attacker.equals(target)) {
             return;
         }
+        publishDamageEvent(attacker, target, event);
         dispatchPackets(PacketTrigger.ATTACK, CombatPacketContext.fromAttack(attacker, target, event));
     }
 
@@ -167,6 +168,26 @@ public final class CombatEffectPacketService implements Listener {
                 payload.put("victim", victim.getName());
             }
             eventBus.publish(topic, killer, payload);
+        } catch (Exception e) {
+            logger.warning("CombatEffect EventBus 发布失败: " + e.getMessage());
+        }
+    }
+
+    private void publishDamageEvent(Player attacker, LivingEntity target, EntityDamageByEntityEvent event) {
+        if (eventBusProvider == null) {
+            return;
+        }
+        EventBusCapability eventBus = eventBusProvider.get();
+        if (eventBus == null) {
+            return;
+        }
+        try {
+            Map<String, String> payload = new java.util.LinkedHashMap<>();
+            payload.put("attacker", attacker.getName());
+            payload.put("targetType", target.getType().name());
+            payload.put("targetName", target.getName());
+            payload.put("damage", String.valueOf(event.getFinalDamage()));
+            eventBus.publish("axs.combateffect.damage_dealt", attacker, payload);
         } catch (Exception e) {
             logger.warning("CombatEffect EventBus 发布失败: " + e.getMessage());
         }

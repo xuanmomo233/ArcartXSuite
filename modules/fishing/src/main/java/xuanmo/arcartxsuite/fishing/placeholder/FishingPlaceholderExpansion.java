@@ -53,15 +53,18 @@ public final class FishingPlaceholderExpansion extends PlaceholderExpansion {
         return switch (identifier.toLowerCase()) {
             case "level" -> String.valueOf(service.getPlayerData(uuid).level());
             case "total_xp" -> String.valueOf(service.getPlayerData(uuid).totalXp());
+            case "xp" -> String.valueOf(service.getPlayerData(uuid).totalXp());
             case "total_caught" -> String.valueOf(service.getPlayerData(uuid).totalCaught());
             case "perfect_catches" -> String.valueOf(service.getPlayerData(uuid).perfectCatches());
             case "collection_count" -> String.valueOf(service.getCollectionCount(uuid));
+            case "collection" -> service.getCollectionCount(uuid) + "/" + service.getTotalFishTypes();
             case "collection_percent" -> {
                 int total = service.getTotalFishTypes();
                 if (total <= 0) yield "0";
                 int count = service.getCollectionCount(uuid);
                 yield String.valueOf((count * 100) / total);
             }
+            case "favorite_fish" -> service.getFavoriteFishDisplayName(uuid);
             default -> null;
         };
     }

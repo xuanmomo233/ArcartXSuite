@@ -38,8 +38,10 @@ public final class FishingListener implements Listener {
         }
 
         // 取消原版钓鱼，启动小游戏
-        event.setCancelled(true);
-        service.startMinigame(player);
+        boolean started = service.startMinigame(player);
+        if (started) {
+            event.setCancelled(true);
+        }
     }
 
     @EventHandler

@@ -31,7 +31,12 @@ public final class FishingPacketHandler implements ClientPacketHandler {
         switch (action) {
             case "input" -> {
                 if (data.size() > 1) {
-                    boolean pressing = Boolean.parseBoolean(data.get(1));
+                    String pressingValue = data.get(1);
+                    if (!"true".equalsIgnoreCase(pressingValue)
+                        && !"false".equalsIgnoreCase(pressingValue)) {
+                        break;
+                    }
+                    boolean pressing = Boolean.parseBoolean(pressingValue);
                     FishingMinigame minigame = minigameLookup.apply(player);
                     if (minigame != null && !minigame.isFinished()) {
                         minigame.getSession().setPressing(pressing);

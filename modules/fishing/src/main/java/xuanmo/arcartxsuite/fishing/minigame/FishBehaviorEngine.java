@@ -20,7 +20,7 @@ public final class FishBehaviorEngine implements FishBehavior {
 
     @Override
     public double tick(double currentPosition, double currentVelocity, long tick, int difficulty) {
-        double jitter = difficulty / 100.0;
+        double jitter = this.difficulty / 100.0;
         switch (type) {
             case SMOOTH -> {
                 return smoothBehavior(currentPosition, tick, jitter);

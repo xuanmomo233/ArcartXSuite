@@ -222,12 +222,17 @@ public class RecycleService {
     }
 
     public double getMultiplier(Player player) {
+        double bestMultiplier = 1.0;
+        boolean matched = false;
         for (var entry : config.priceMultiplier().entrySet()) {
             if (player.hasPermission(entry.getKey())) {
-                return entry.getValue();
+                if (!matched || entry.getValue() > bestMultiplier) {
+                    bestMultiplier = entry.getValue();
+                }
+                matched = true;
             }
         }
-        return 1.0;
+        return matched ? bestMultiplier : 1.0;
     }
 
     // ─── 结果 ───────────────────────────────────────────────

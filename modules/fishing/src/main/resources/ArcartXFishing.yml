@@ -1,4 +1,4 @@
-config-version: 1
+config-version: 2
 
 # ─── 数据存储 ────────────────────────────────────────
 # mode: sqlite 或 mysql。

@@ -42,6 +42,11 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
         }
 
         String action = args[0].toLowerCase();
+        if ((action.equals("stats") || action.equals("givexp") || action.equals("reset"))
+            && !sender.hasPermission("axs.fishing.admin")) {
+            sender.sendMessage(msg.apply("command_no_permission", new Object[]{}));
+            return true;
+        }
         switch (action) {
             case "help" -> showHelp(sender);
             case "stats" -> handleStats(sender, args, service);
@@ -124,6 +129,7 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(msg.apply("command_help_stats", new Object[]{}));
         sender.sendMessage(msg.apply("command_help_givexp", new Object[]{}));
         sender.sendMessage(msg.apply("command_help_reset", new Object[]{}));
+        sender.sendMessage(msg.apply("command_help_reload", new Object[]{}));
     }
 
     @Override

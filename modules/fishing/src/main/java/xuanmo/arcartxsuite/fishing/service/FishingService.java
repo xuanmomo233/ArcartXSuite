@@ -132,12 +132,12 @@ public final class FishingService {
         return activeMinigames.get(uuid);
     }
 
-    public void startMinigame(@NotNull Player player) {
+    public boolean startMinigame(@NotNull Player player) {
         if (packetBridge == null || !packetBridge.isAvailable()) {
-            return;
+            return false;
         }
         if (isPlayerInMinigame(player.getUniqueId())) {
-            return;
+            return false;
         }
 
         // 解析水域
@@ -146,7 +146,7 @@ public final class FishingService {
 
         // 权限检查
         if (water.requirePermission() != null && !player.hasPermission(water.requirePermission())) {
-            return;
+            return false;
         }
 
         // 检测饵料
@@ -160,12 +160,12 @@ public final class FishingService {
         List<FishDefinition> pool = getFishPool(water);
         if (pool.isEmpty()) {
             // 没有符合条件的鱼，走原版
-            return;
+            return false;
         }
 
         FishDefinition fish = selectFishFromPool(player, pool, baitId);
         if (fish == null) {
-            return;
+            return false;
         }
 
         // 应用水域难度修改器
@@ -191,6 +191,7 @@ public final class FishingService {
         if (msg != null && !msg.isEmpty()) {
             player.sendMessage(msg.replace("{water}", water.displayName()));
         }
+        return true;
     }
 
     public void onMinigameComplete(@NotNull FishingSession session, boolean success, boolean perfect) {
@@ -216,15 +217,6 @@ public final class FishingService {
         // 计算经验（应用钓竿经验倍率）
         int xp = (int) (fish.calculateXp(size, perfect) * session.expMultiplier());
         xp = Math.max(1, xp);
-        FishingPlayerData updatedData = playerData.withXpAdded(xp).withCaught(perfect, false);
-
-        // 检查升级
-        while (updatedData.canLevelUp(configuration.fishing().baseXpPerLevel())) {
-            updatedData = updatedData.withLevelUp();
-        }
-
-        repository.savePlayerData(updatedData);
-
         // 更新图鉴
         FishCollectionEntry existing = repository.loadCollectionEntry(player.getUniqueId(), fish.id());
         boolean isFirstCatch = existing == null || existing.caughtCount() == 0;
@@ -260,6 +252,13 @@ public final class FishingService {
                 gotTreasure = true;
             }
         }
+
+        FishingPlayerData updatedData = playerData.withXpAdded(xp).withCaught(perfect, gotTreasure);
+        while (updatedData.canLevelUp(configuration.fishing().baseXpPerLevel())) {
+            updatedData = updatedData.withLevelUp();
+        }
+
+        repository.savePlayerData(updatedData);
 
         // ─── 货币奖励 ────────────────────────────────────────────
         if (fish.currencyReward() != null) {
@@ -357,16 +356,14 @@ public final class FishingService {
         // 应用饵料吸引权重
         double totalWeight = 0;
         Map<FishDefinition, Double> weights = new java.util.LinkedHashMap<>();
+        BaitDefinition bait = baitId != null ? configuration.baits().stream()
+            .filter(b -> b.id().equals(baitId))
+            .findFirst()
+            .orElse(null) : null;
         for (FishDefinition fish : candidates) {
             double weight = fish.rarity().weightMultiplier();
-            if (baitId != null) {
-                BaitDefinition bait = configuration.baits().stream()
-                    .filter(b -> b.id().equals(baitId))
-                    .findFirst()
-                    .orElse(null);
-                if (bait != null) {
-                    weight *= bait.attractModifier(fish.id());
-                }
+            if (bait != null) {
+                weight *= bait.attractModifier(fish.id());
             }
             weights.put(fish, weight);
             totalWeight += weight;
@@ -709,6 +706,23 @@ public final class FishingService {
         return configuration.fishes().size();
     }
 
+    public @NotNull String getFavoriteFishDisplayName(@NotNull UUID uuid) {
+        Map<String, FishCollectionEntry> entries = new HashMap<>();
+        for (FishCollectionEntry entry : repository.loadCollection(uuid)) {
+            entries.put(entry.fishId(), entry);
+        }
+        FishDefinition favoriteFish = null;
+        int favoriteCount = 0;
+        for (FishDefinition fish : configuration.fishes()) {
+            FishCollectionEntry entry = entries.get(fish.id());
+            if (entry != null && entry.caughtCount() > favoriteCount) {
+                favoriteFish = fish;
+                favoriteCount = entry.caughtCount();
+            }
+        }
+        return favoriteFish != null ? favoriteFish.displayName() : "";
+    }
+
     public void pushCollectionData(@NotNull Player player, @NotNull String uiId) {
         if (packetBridge == null || !packetBridge.isAvailable()) return;
 
@@ -925,8 +939,8 @@ public final class FishingService {
                 bridge.deposit(player, BigDecimal.valueOf(price * item.getAmount()));
                 earnings.merge(currency, (double) price * item.getAmount(), Double::sum);
                 totalSold += item.getAmount();
+                player.getInventory().setItem(i, null);
             }
-            player.getInventory().setItem(i, null);
         }
 
         if (totalSold == 0) {

@@ -56,7 +56,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     protected int currentConfigVersion() {
-        return 1;
+        return 2;
     }
 
     @Override
@@ -233,6 +233,19 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
+        if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
+            if (!sender.hasPermission("axs.fishing.admin")) {
+                sender.sendMessage(msg("command_no_permission"));
+                return true;
+            }
+            try {
+                onReload();
+                sender.sendMessage(msg("command_reload_success"));
+            } catch (Exception exception) {
+                sender.sendMessage(msg("command_reload_failed", exception.getMessage()));
+            }
+            return true;
+        }
         return adminCommand != null && adminCommand.onCommand(sender, label, args);
     }
 
@@ -248,6 +261,4 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         return prefix + mp.get(key, args);
     }
 }
-
-
 

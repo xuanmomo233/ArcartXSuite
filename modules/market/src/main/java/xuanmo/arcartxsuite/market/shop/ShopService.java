@@ -175,11 +175,17 @@ public class ShopService {
         // åºå­æ£æ¥ï¼stock-mode: global / per-playerï¼
         // è®¡ç®ä»·æ ¼ï¼å«ææ£ï¼ï¼å¨ç¨ BigDecimal é¿åæµ®ç¹ç´¯è®¡è¯¯å·®
         BigDecimal unitPrice = BigDecimal.valueOf(shopItem.buyPrice());
+        BigDecimal bestDiscount = null;
         for (var entry : shopItem.discount().entrySet()) {
             if (player.hasPermission(entry.getKey())) {
-                unitPrice = unitPrice.multiply(BigDecimal.valueOf(entry.getValue()));
-                break;
+                BigDecimal discount = BigDecimal.valueOf(entry.getValue());
+                if (bestDiscount == null || discount.compareTo(bestDiscount) < 0) {
+                    bestDiscount = discount;
+                }
             }
+        }
+        if (bestDiscount != null) {
+            unitPrice = unitPrice.multiply(bestDiscount);
         }
         BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(amount));
 

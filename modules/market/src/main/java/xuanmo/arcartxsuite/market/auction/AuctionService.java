@@ -645,12 +645,18 @@ public class AuctionService {
     private double getEffectiveTaxRate(UUID seller) {
         Player player = Bukkit.getPlayer(seller);
         if (player == null) return config.transactionTaxRate();
+        double bestTaxRate = Double.POSITIVE_INFINITY;
+        boolean matched = false;
         for (var entry : config.taxDiscount().entrySet()) {
             if (player.hasPermission(entry.getKey())) {
-                return Math.max(0, entry.getValue());
+                double taxRate = Math.max(0, entry.getValue());
+                if (!matched || taxRate < bestTaxRate) {
+                    bestTaxRate = taxRate;
+                }
+                matched = true;
             }
         }
-        return config.transactionTaxRate();
+        return matched ? bestTaxRate : config.transactionTaxRate();
     }
 
     private boolean isBlacklisted(ItemStack item) {

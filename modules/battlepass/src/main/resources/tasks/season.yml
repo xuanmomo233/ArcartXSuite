@@ -22,7 +22,7 @@ season-market-50:
   display-name: "交易大师"
   description: "本赛季在市场累计交易50次"
   difficulty: normal
-  event-topic: "axs.market.listing_created"
+  event-topic: "market.listing_created"
   required-count: 50
   base-xp-reward: 1500
   conditions: []

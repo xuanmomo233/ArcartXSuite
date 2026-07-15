@@ -439,10 +439,6 @@ controls:
                 action:
                   clickLeft: |-
                     var.selectedDuration = 86400
-      var.selectedCurrency = none
-      var.priceMin = 1
-      var.priceMax = 1000000000
-      var.messageMaxLength = 50
                 effect:
                   stroke:
                     width: 1

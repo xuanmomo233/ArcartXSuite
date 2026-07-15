@@ -26,6 +26,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import java.util.function.Supplier;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.MapNavigable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
@@ -76,6 +77,7 @@ public final class QuestGpsService implements Listener {
     private final QuestGpsSnapshotBuilder snapshotBuilder = new QuestGpsSnapshotBuilder();
     private final QuestGpsUiPacketHandler uiPacketHandler;
     private final MessageProvider messages;
+    private Supplier<EventBusCapability> eventBusProvider;
     private final ConcurrentMap<UUID, QuestGpsViewState> viewStates = new ConcurrentHashMap<>();
     private final List<Listener> chemdahEventListeners = new ArrayList<>();
 
@@ -144,6 +146,10 @@ public final class QuestGpsService implements Listener {
         );
         this.overlayValidator = new QuestGpsOverlayValidator(this.logger, configuration, categoryResolver);
         this.uiPacketHandler = new QuestGpsUiPacketHandler(this, configuration.client().packetId());
+    }
+
+    public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
+        this.eventBusProvider = eventBusProvider;
     }
 
     public void start() {
@@ -569,9 +575,35 @@ public final class QuestGpsService implements Listener {
             if (player != null && definition != null) {
                 fireQuestHooks(player, definition, lifecycle);
             }
+            if (lifecycle == Lifecycle.COMPLETED && player != null) {
+                publishQuestCompleted(player, questId, definition);
+            }
             refreshByProfile(profile);
         } catch (ReflectiveOperationException | RuntimeException exception) {
             this.logger.warning("QuestGPS: 处理 Chemdah 任务事件失败: " + exception.getMessage());
+        }
+    }
+
+    private void publishQuestCompleted(
+        Player player,
+        String questId,
+        QuestGpsModuleConfiguration.QuestDefinition definition
+    ) {
+        if (eventBusProvider == null) {
+            return;
+        }
+        EventBusCapability eventBus = eventBusProvider.get();
+        if (eventBus == null) {
+            return;
+        }
+        try {
+            Map<String, String> payload = new java.util.LinkedHashMap<>();
+            payload.put("quest_id", questId);
+            String questName = definition == null ? questId : definition.displayNameOverride();
+            payload.put("quest_name", questName == null || questName.isBlank() ? questId : questName);
+            eventBus.publish("axs.questgps.quest_completed", player, payload);
+        } catch (Exception exception) {
+            logger.warning("QuestGPS EventBus 发布失败: " + exception.getMessage());
         }
     }
 
@@ -853,6 +885,5 @@ public final class QuestGpsService implements Listener {
         }
     }
 }
-
 
 

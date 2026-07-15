@@ -26,6 +26,9 @@ command_help_title: "&6=== 钓鱼模块命令 ==="
 command_help_stats: "&7/axs fishing stats [玩家] &f- 查看钓鱼统计"
 command_help_givexp: "&7/axs fishing givexp <玩家> <经验值> &f- 给予钓鱼经验"
 command_help_reset: "&7/axs fishing reset <玩家> &f- 重置钓鱼数据"
+command_help_reload: "&7/axs fishing reload &f- 重载钓鱼模块配置"
+command_reload_success: "&a钓鱼模块重载完成。"
+command_reload_failed: "&c钓鱼模块重载失败: &f{0}"
 
 fishing_inventory_full: "&c你的背包已满，鱼掉落在地上了！"
 

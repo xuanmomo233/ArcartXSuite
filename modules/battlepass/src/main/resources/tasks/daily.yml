@@ -9,7 +9,7 @@ daily-login:
   display-name: "每日登录"
   description: "每天登录游戏即可获得奖励"
   difficulty: easy                # easy / normal / hard
-  event-topic: "axs.onlinerewards.signin_success"
+  event-topic: "axs.loginview.login_success"
   required-count: 1
   base-xp-reward: 100
   conditions: []                  # 无条件限制

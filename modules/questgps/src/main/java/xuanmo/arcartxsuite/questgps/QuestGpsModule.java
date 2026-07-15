@@ -18,6 +18,7 @@ import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
+import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.MapNavigable;
 import xuanmo.arcartxsuite.api.capability.QuestGpsNavigable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
@@ -175,6 +176,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
             createAdyeshachNpcBridge(),
             messages()
         );
+        service.setEventBusProvider(() -> getCapability(EventBusCapability.class));
         service.start();
 
         // 注册 QuestGpsNavigable capability
@@ -258,6 +260,5 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 
 
