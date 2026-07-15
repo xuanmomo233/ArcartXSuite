@@ -89,16 +89,16 @@ import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.WarehouseRecord
 import java.util.logging.Logger;
 
 /**
- * Warehouse æ ¸å¿ƒä¸šåŠ¡æœåŠ¡ï¼Œç»Ÿç­¹ä¸ªäººä»“åº“ã€å…±äº«ä»“åº“ã€å¤šè´§å¸é“¶è¡Œã€äºŒçº§å¯†ç ä¸Žè‡ªåŠ¨æ‹¾å–é€»è¾‘ã€‚
+ * Warehouse 核�ƒ�š�Š��œ��Š��Œ�Ÿ筹个人�“�“�€��…�享�“�“�€��š货币�“��Œ�€��Œ级�†码�Ž�‡��Š��‹��–�€��‘�€‚
  * <p>
- * é€šè¿‡ {@link PacketBridgeAPI} ä¸Žå®¢æˆ·ç«¯ AXUI é€šä¿¡ï¼Œæ‰€æœ‰çŠ¶æ€å˜æ›´åŽå›žå‘æ›´æ–°åŒ…åˆ·æ–°ç•Œé¢ã€‚
- * å…±äº«ä»“åº“ä½¿ç”¨ {@link #sharedEditLocks} å®žçŽ°ç¼–è¾‘äº’æ–¥é”ï¼›å¯ç”¨ cross-server æ—¶ç» SDK åŒæ­¥è‡³å…¶ä»–å­æœã€‚
+ * �€š�‡ {@link PacketBridgeAPI} �Ž客�ˆ�端 AXUI �€š信�Œ�‰€�œ‰�Š��€��˜�›��Ž�›ž�‘�›��–��Œ…�ˆ��–��•Œ面�€‚
+ * �…�享�“�“使�”� {@link #sharedEditLocks} �ž�Ž��–�‘�’�–��”��›启�”� cross-server �—�经 SDK �Œ步�‡��…��–子�œ��€‚
  */
 public final class WarehouseService implements Listener {
 
     private final MessageProvider messages;
 
-    private static final String PREFIX = ChatColor.DARK_AQUA + "â—† " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
+    private static final String PREFIX = ChatColor.DARK_AQUA + "�—† " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
     private static final String OWNER_PERSONAL = "personal";
     private static final String OWNER_SHARED = "shared";
     private static final String STORAGE_UI_RESOURCE_PATH = "arcartx/ui/warehouse_storage.yml";
@@ -120,7 +120,7 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * UI èµ„æºå¯¼å‡ºå‡½æ•°ã€‚
+     * UI �„源导�‡��‡��•��€‚
      */
     @FunctionalInterface
     public interface UiResourceExporter {
@@ -140,17 +140,17 @@ public final class WarehouseService implements Listener {
     private final CurrencyBridgeAPI currencyBridgeManager;
     private final Supplier<PickupNotifiable> pickupNotifiableSupplier;
     private final SecureRandom secureRandom = new SecureRandom();
-    /** çŽ©å®¶å½“å‰ UI è§†å›¾çŠ¶æ€ï¼ˆownerType / warehouseId / page / search ç­‰ï¼‰ã€‚ */
+    /** �Ž�家�“�‰� UI �†�›��Š��€��ˆownerType / warehouseId / page / search �‰�‰�€‚ */
     private final ConcurrentMap<UUID, ViewState> viewStates = new ConcurrentHashMap<>();
-    /** çŽ©å®¶äºŒçº§å¯†ç è§£é”è¿‡æœŸæ—¶é—´æˆ³ï¼ˆæ¯«ç§’ï¼‰ã€‚ */
+    /** �Ž�家�Œ级�†码解�”��‡�œŸ�—��—��ˆ��ˆ毫�’�‰�€‚ */
     private final ConcurrentMap<UUID, Long> unlockedUntil = new ConcurrentHashMap<>();
-    /** å…±äº«ä»“åº“ç¼–è¾‘äº’æ–¥é”ï¼šå…±äº«ä»“åº“ ID â†’ å½“å‰ç¼–è¾‘è€…ï¼ˆå«å­æœ nodeIdï¼‰ã€‚ */
+    /** �…�享�“�“�–�‘�’�–��”��š�…�享�“�“ ID �†’ �“�‰��–�‘�€…�ˆ含子�œ� nodeId�‰�€‚ */
     private final ConcurrentMap<String, SharedEditLock> sharedEditLocks = new ConcurrentHashMap<>();
     private final CrossServerAPI crossServerApi;
     private final CrossServerChannelConfig crossServerChannelConfig;
     private WarehouseCrossServerLockService crossServerLockService;
     private Supplier<EventBusCapability> eventBusProvider;
-    /** çŽ©å®¶ä¸Šæ¬¡å±•ç¤ºä»“åº“çš„æ—¶é—´æˆ³ï¼ˆæ¯«ç§’ï¼‰ï¼Œç”¨äºŽå†·å´æŽ§åˆ¶ã€‚ */
+    /** �Ž�家�Š次�•示�“�“�š„�—��—��ˆ��ˆ毫�’�‰�Œ�”��Ž�†�却�Ž��ˆ��€‚ */
     private final ConcurrentMap<UUID, Long> showcaseCooldowns = new ConcurrentHashMap<>();
     private String storageRuntimeUiId = "";
     private String manageRuntimeUiId = "";
@@ -235,7 +235,7 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * å¯åŠ¨æœåŠ¡ï¼šåˆå§‹åŒ–æ•°æ®åº“ã€ç»‘å®šä¸‰å¥— AXUIã€æ³¨å†Œ Bukkit äº‹ä»¶ç›‘å¬ã€‚
+     * 启�Š��œ��Š��š�ˆ��‹�Œ–�•�据�“�€��‘�š�‰�— AXUI�€�注�†Œ Bukkit �‹件�›‘听�€‚
      */
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
         this.eventBusProvider = eventBusProvider;
@@ -261,7 +261,7 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * å…³é—­æœåŠ¡ï¼šæ³¨é”€äº‹ä»¶ç›‘å¬ã€æ¸…ç† UI å›žè°ƒä¸ŽçŽ©å®¶çŠ¶æ€ã€å…³é—­æ•°æ®åº“è¿žæŽ¥ã€‚
+     * �…��—��œ��Š��š注�”€�‹件�›‘听�€��…�† UI �›ž�ƒ�Ž�Ž�家�Š��€��€��…��—��•�据�“�ž�Ž��€‚
      */
     public void shutdown() {
         if (crossServerLockService != null) {
@@ -322,20 +322,20 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * ä¾›å¤–éƒ¨æ¨¡å—ï¼ˆå¦‚ Pickupï¼‰è°ƒç”¨çš„è‡ªåŠ¨å…¥åº“æŽ¥å£ã€‚
-     * å°†ç‰©å“å­˜å…¥çŽ©å®¶ç¬¬ä¸€ä¸ªä¸ªäººä»“åº“ï¼Œè¿”å›žå­˜å…¥ç»“æžœã€‚
+     * �›�–�ƒ�模�—�ˆ�‚ Pickup�‰�ƒ�”��š„�‡��Š��…��“�Ž�口�€‚
+     * �†�‰��“��˜�…��Ž�家第�€个个人�“�“�Œ�”�›ž�˜�…��“�žœ�€‚
      *
-     * @param player    ç›®æ ‡çŽ©å®¶
-     * @param itemStack å¾…å­˜å…¥ç‰©å“ï¼ˆä¼šè¢« cloneï¼Œä¸ä¼šä¿®æ”¹åŽŸå¯¹è±¡ï¼‰
-     * @return å­˜å…¥ç»“æžœï¼ŒåŒ…å«æˆåŠŸçŠ¶æ€ã€å·²å­˜æ•°é‡ã€å‰©ä½™æ•°é‡ä¸Žæç¤ºæ¶ˆæ¯
+     * @param player    �›��‡�Ž�家
+     * @param itemStack �…�˜�…��‰��“��ˆ�š被 clone�Œ不�š修�”��ŽŸ对象�‰
+     * @return �˜�…��“�žœ�Œ�Œ…含�ˆ��ŠŸ�Š��€��€�已�˜�•��‡��€��‰��™�•��‡��Ž提示�ˆ息
      */
     public WarehouseAutoDepositable.DepositResult depositToPersonalWarehouse(Player player, ItemStack itemStack) {
         if (player == null || !player.isOnline()) {
-            return new WarehouseAutoDepositable.DepositResult(false, 0L, 0, "çŽ©å®¶ä¸åœ¨çº¿ã€‚");
+            return new WarehouseAutoDepositable.DepositResult(false, 0L, 0, "�Ž�家不�œ�线�€‚");
         }
         ItemStack stack = itemStack == null ? null : itemStack.clone();
         if (stack == null || stack.getType().isAir() || stack.getAmount() <= 0) {
-            return new WarehouseAutoDepositable.DepositResult(false, 0L, 0, "æ²¡æœ‰å¯å­˜å…¥ç‰©å“ã€‚");
+            return new WarehouseAutoDepositable.DepositResult(false, 0L, 0, "没�œ‰可�˜�…��‰��“��€‚");
         }
         try {
             DepositResult result = depositStack(player, OWNER_PERSONAL, player.getUniqueId().toString(), firstPersonalWarehouseId(), stack);
@@ -350,9 +350,9 @@ public final class WarehouseService implements Listener {
             );
         } catch (Exception exception) {
             if (configuration.debug()) {
-                this.logger.warning("å¤–éƒ¨è‡ªåŠ¨å…¥åº“å¤±è´¥: " + exception.getMessage());
+                this.logger.warning("�–�ƒ��‡��Š��…��“失败: " + exception.getMessage());
             }
-            return new WarehouseAutoDepositable.DepositResult(false, 0L, stack.getAmount(), "è‡ªåŠ¨å…¥åº“å¤±è´¥ã€‚");
+            return new WarehouseAutoDepositable.DepositResult(false, 0L, stack.getAmount(), "�‡��Š��…��“失败�€‚");
         }
     }
 
@@ -367,11 +367,11 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * ä¸ºçŽ©å®¶æ‰“å¼€ä»“åº“ä¸»ç•Œé¢ï¼ˆå­˜å–ç•Œé¢ï¼‰ã€‚
-     * ä¼šè‡ªåŠ¨åˆå§‹åŒ–çŽ©å®¶æƒé™ä»“åº“ã€ç¡®ä¿å½“å‰ä»“åº“æœ‰æ•ˆï¼Œå¹¶å‘é€ storage æ›´æ–°åŒ…ã€‚
+     * 为�Ž�家�‰“�€�“�“主�•Œ面�ˆ�˜�–�•Œ面�‰�€‚
+     * �š�‡��Š��ˆ��‹�Œ–�Ž�家�ƒ�™��“�“�€�确保�“�‰��“�“�œ‰�•ˆ�Œ并�‘�€� storage �›��–��Œ…�€‚
      *
-     * @param player ç›®æ ‡çŽ©å®¶
-     * @return æ“ä½œç»“æžœ
+     * @param player �›��‡�Ž�家
+     * @return �“��œ�“�žœ
      */
     public ActionResult openMenu(Player player) {
         if (player == null || !player.isOnline()) {
@@ -387,19 +387,19 @@ public final class WarehouseService implements Listener {
             openStorage(player, "init");
             return ActionResult.success(message("player.opened"));
         } catch (Exception exception) {
-            this.logger.warning("æ‰“å¼€ä»“åº“å¤±è´¥: " + exception.getMessage());
+            this.logger.warning("�‰“�€�“�“失败: " + exception.getMessage());
             return ActionResult.failure(message("player.open-failed"));
         }
     }
 
     /**
-     * ä»¥åªè¯»é¢„è§ˆæ¨¡å¼æ‰“å¼€ç›®æ ‡çŽ©å®¶çš„ä»“åº“ã€‚
-     * é¢„è§ˆæ¨¡å¼ä¸‹ä»…æ”¯æŒç¿»é¡µã€åˆ†ç±»ã€æœç´¢ã€é€‰æ‹©å’Œåˆ·æ–°ï¼Œç¦æ­¢å­˜å–ä¸Žåˆ‡æ¢ä»“åº“ã€‚
+     * 以只读�„�ˆ模式�‰“�€�›��‡�Ž�家�š„�“�“�€‚
+     * �„�ˆ模式�‹�…�”��Œ�翻页�€��ˆ†类�€��œ索�€��€‰�‹��’Œ�ˆ��–��Œ禁止�˜�–�Ž�ˆ‡换�“�“�€‚
      *
-     * @param viewer      é¢„è§ˆè€…
-     * @param targetUuid  è¢«é¢„è§ˆçŽ©å®¶ UUID
-     * @param warehouseId æŒ‡å®šä»“åº“ IDï¼Œç©ºå­—ç¬¦ä¸²åˆ™ä½¿ç”¨é»˜è®¤ä»“åº“
-     * @return æ“ä½œç»“æžœ
+     * @param viewer      �„�ˆ�€…
+     * @param targetUuid  被�„�ˆ�Ž�家 UUID
+     * @param warehouseId �Œ‡�š�“�“ ID�Œ空�—符串�ˆ™使�”��˜认�“�“
+     * @return �“��œ�“�žœ
      */
     public ActionResult openPreview(Player viewer, UUID targetUuid, String warehouseId) {
         if (viewer == null || !viewer.isOnline()) {
@@ -421,18 +421,18 @@ public final class WarehouseService implements Listener {
             openStorage(viewer, "init");
             return ActionResult.success(message("player.preview-opened"));
         } catch (Exception exception) {
-            this.logger.warning("æ‰“å¼€ä»“åº“é¢„è§ˆå¤±è´¥: " + exception.getMessage());
+            this.logger.warning("�‰“�€�“�“�„�ˆ失败: " + exception.getMessage());
             return ActionResult.failure(message("player.preview-open-failed"));
         }
     }
 
     /**
-     * å‘å…¨æœå±•ç¤ºçŽ©å®¶ä»“åº“ã€‚
-     * è‹¥é…ç½®äº† {@code card-id} åˆ™å‘é€ ArcartX èŠå¤©å¡ç‰‡ï¼Œå¦åˆ™å‘é€å¯ç‚¹å‡»èŠå¤©æ¶ˆæ¯ã€‚
-     * å— {@code cooldown-seconds} å†·å´æŽ§åˆ¶ã€‚
+     * �‘�…��œ��•示�Ž�家�“�“�€‚
+     * �‹��…�置�† {@code card-id} �ˆ™�‘�€� ArcartX �Š天卡�‰‡�Œ否�ˆ™�‘�€�可�‚��‡��Š天�ˆ息�€‚
+     * �— {@code cooldown-seconds} �†�却�Ž��ˆ��€‚
      *
-     * @param player å±•ç¤ºè€…
-     * @return æ“ä½œç»“æžœ
+     * @param player �•示�€…
+     * @return �“��œ�“�žœ
      */
     public ActionResult showcase(Player player) {
         if (player == null || !player.isOnline()) {
@@ -457,7 +457,7 @@ public final class WarehouseService implements Listener {
         UUID playerUuid = player.getUniqueId();
         String displayName = player.getName();
 
-        // æ”¶é›†å¯å±•ç¤ºä»“åº“ï¼šä¸ªäººä»“åº“è®¾ç½®äº†å¯å±•ç¤º + ä¸»äººè®¾ç½®äº†å¯å±•ç¤ºçš„å…±äº«ä»“åº“
+        // �”��›†可�•示�“�“�š个人�“�“设置�†可�•示 + 主人设置�†可�•示�š„�…�享�“�“
         List<String[]> showcaseEntries = new ArrayList<>();
         try {
             Map<String, WarehouseRecord> personalRecords = personalWarehouseMap(playerUuid);
@@ -491,7 +491,7 @@ public final class WarehouseService implements Listener {
             }
         } else {
             net.md_5.bungee.api.chat.TextComponent prefix = new net.md_5.bungee.api.chat.TextComponent(
-                ChatColor.GOLD + "[ä»“åº“å±•ç¤º] " + ChatColor.WHITE + displayName + " æ­£åœ¨å±•ç¤ºä»“åº“ï¼š "
+                ChatColor.GOLD + "[�“�“�•示] " + ChatColor.WHITE + displayName + " 正�œ��•示�“�“�š "
             );
             for (String[] entry : showcaseEntries) {
                 net.md_5.bungee.api.chat.TextComponent link = new net.md_5.bungee.api.chat.TextComponent(
@@ -503,7 +503,7 @@ public final class WarehouseService implements Listener {
                 ));
                 link.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
                     net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
-                    new net.md_5.bungee.api.chat.hover.content.Text(ChatColor.GRAY + "ç‚¹å‡»é¢„è§ˆ " + displayName + " çš„ " + entry[0])
+                    new net.md_5.bungee.api.chat.hover.content.Text(ChatColor.GRAY + "�‚��‡��„�ˆ " + displayName + " �š„ " + entry[0])
                 ));
                 prefix.addExtra(link);
                 prefix.addExtra(" ");
@@ -516,15 +516,15 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * å¤„ç†å®¢æˆ·ç«¯ UI å‘æ¥çš„æ“ä½œåŒ…ã€‚
+     * �„�†客�ˆ�端 UI �‘来�š„�“��œ�Œ…�€‚
      * <p>
-     * æ”¯æŒçš„æ“ä½œï¼ˆactionï¼‰è¯¦è§ wiki æ–‡æ¡£ã€Œå®¢æˆ·ç«¯åŒ…åè®®ã€ç« èŠ‚ã€‚
-     * æ‰€æœ‰æ“ä½œå‡ç»è¿‡ {@link PacketGuardAPI} æ ¡éªŒï¼Œå¼‚å¸¸æ—¶è‡ªåŠ¨åˆ·æ–° UIã€‚
+     * �”��Œ��š„�“��œ�ˆaction�‰详见 wiki �–‡档�€Œ客�ˆ�端�Œ…协议�€�章�Š‚�€‚
+     * �‰€�œ‰�“��œ�‡经�‡ {@link PacketGuardAPI} 校�Œ�Œ�‚常�—��‡��Š��ˆ��–� UI�€‚
      *
-     * @param player   å‘é€åŒ…çš„çŽ©å®¶
-     * @param packetId åŒ… IDï¼ˆåº”ä¸º {@code AXS_WAREHOUSE}ï¼‰
-     * @param data     åŒ…æ•°æ®åˆ—è¡¨ï¼Œç¬¬ä¸€é¡¹é€šå¸¸ä¸º action
-     * @return true è¡¨ç¤ºå·²å¤„ç†ï¼ˆæ— è®ºæˆåŠŸæˆ–å¤±è´¥ï¼‰
+     * @param player   �‘�€��Œ…�š„�Ž�家
+     * @param packetId �Œ… ID�ˆ�”为 {@code AXS_WAREHOUSE}�‰
+     * @param data     �Œ…�•�据�ˆ—表�Œ第�€项�€š常为 action
+     * @return true 表示已�„�†�ˆ�—�论�ˆ��ŠŸ�ˆ–失败�‰
      */
     public boolean handleClientPacket(Player player, String packetId, List<String> data) {
         if (player == null || !player.isOnline() || packetId == null || !configuration.ui().packetId().equalsIgnoreCase(packetId)) {
@@ -580,7 +580,7 @@ public final class WarehouseService implements Listener {
                 case "bank_withdraw" -> bankWithdraw(player, value(data, 1, ""), parseDecimal(value(data, 2, "0")));
                 case "fixed_create" -> createFixedDeposit(player, value(data, 1, ""), parseDecimal(value(data, 2, "0")));
                 case "fixed_claim" -> claimFixedDeposit(player, value(data, 1, ""));
-                case "shared_create" -> createSharedWarehouse(player, value(data, 1, "å…±äº«ä»“åº“"));
+                case "shared_create" -> createSharedWarehouse(player, value(data, 1, "�…�享�“�“"));
                 case "shared_rename" -> renameSharedWarehouse(player, value(data, 1, ""), value(data, 2, ""));
                 case "shared_showcase_toggle" -> toggleSharedWarehouseShowcase(player, value(data, 1, ""));
                 case "personal_rename" -> renamePersonalWarehouse(player, value(data, 1, ""), value(data, 2, ""));
@@ -605,25 +605,25 @@ public final class WarehouseService implements Listener {
                 default -> refreshBoth(player);
             }
         } catch (Exception exception) {
-            this.logger.warning("å¤„ç†ä»“åº“å®¢æˆ·ç«¯åŒ…å¤±è´¥: " + exception.getMessage());
+            this.logger.warning("�„�†�“�“客�ˆ�端�Œ…失败: " + exception.getMessage());
             debug("IN-ERROR player=" + player.getName() + " action=" + action + " error=" + exception.getClass().getSimpleName() + ": " + exception.getMessage());
             sendMessage(player, false, message("player.operation-failed"));
             try {
                 refreshBoth(player);
             } catch (Exception refreshException) {
-                this.logger.warning("åˆ·æ–°ä»“åº“ UI å¤±è´¥: " + refreshException.getMessage());
+                this.logger.warning("�ˆ��–��“�“ UI 失败: " + refreshException.getMessage());
             }
         }
         return true;
     }
 
     /**
-     * å¼‚æ­¥ç”ŸæˆçŽ©å®¶ä»“åº“æ¦‚è§ˆä¿¡æ¯ï¼Œç”¨äºŽç®¡ç†å‘˜æŸ¥è¯¢ã€‚
+     * �‚步�”Ÿ�ˆ��Ž�家�“�“�‚�ˆ信息�Œ�”��Ž管�†�‘˜�Ÿ�询�€‚
      *
-     * @param playerUuid   çŽ©å®¶ UUID
-     * @param playerName   çŽ©å®¶åç§°ï¼ˆç”¨äºŽæ˜¾ç¤ºï¼‰
-     * @param callback     æˆåŠŸå›žè°ƒï¼ŒæŽ¥æ”¶æ ¼å¼åŒ–åŽçš„ä¿¡æ¯è¡Œåˆ—è¡¨
-     * @param errorCallback å¤±è´¥å›žè°ƒï¼ŒæŽ¥æ”¶é”™è¯¯ä¿¡æ¯
+     * @param playerUuid   �Ž�家 UUID
+     * @param playerName   �Ž�家名称�ˆ�”��Ž�˜�示�‰
+     * @param callback     �ˆ��ŠŸ�›ž�ƒ�Œ�Ž��”�格式�Œ–�Ž�š„信息�Œ�ˆ—表
+     * @param errorCallback 失败�›ž�ƒ�Œ�Ž��”��”™误信息
      */
     public void describePlayer(UUID playerUuid, String playerName, Consumer<List<String>> callback, Consumer<String> errorCallback) {
         try {
@@ -633,21 +633,21 @@ public final class WarehouseService implements Listener {
             List<FixedDepositRecord> deposits = repository.loadFixedDeposits(playerUuid);
             List<SharedWarehouseRecord> shared = repository.loadSharedWarehouses(playerUuid);
             List<String> lines = new ArrayList<>();
-            lines.add(ChatColor.GRAY + "çŽ©å®¶: " + ChatColor.WHITE + playerName);
-            lines.add(ChatColor.GRAY + "ä¸ªäººä»“åº“: " + ChatColor.WHITE + used + "/" + capacity + " æ ¼ï¼Œåˆè®¡ " + total + " ä»¶");
-            lines.add(ChatColor.GRAY + "å…±äº«ä»“åº“: " + ChatColor.WHITE + shared.size() + " ä¸ª");
-            lines.add(ChatColor.GRAY + "å®šæœŸå­˜æ¬¾: " + ChatColor.WHITE + deposits.stream().filter(d -> !d.claimed()).count() + " ç¬”æœªé¢†å–");
+            lines.add(ChatColor.GRAY + "�Ž�家: " + ChatColor.WHITE + playerName);
+            lines.add(ChatColor.GRAY + "个人�“�“: " + ChatColor.WHITE + used + "/" + capacity + " 格�Œ�ˆ计 " + total + " 件");
+            lines.add(ChatColor.GRAY + "�…�享�“�“: " + ChatColor.WHITE + shared.size() + " 个");
+            lines.add(ChatColor.GRAY + "�š�œŸ�˜款: " + ChatColor.WHITE + deposits.stream().filter(d -> !d.claimed()).count() + " �”�œ��†�–");
             callback.accept(lines);
         } catch (Exception exception) {
-            errorCallback.accept("è¯»å–ä»“åº“ä¿¡æ¯å¤±è´¥: " + exception.getMessage());
+            errorCallback.accept("读�–�“�“信息失败: " + exception.getMessage());
         }
     }
 
     /**
-     * ç®¡ç†å‘˜æ¸…é™¤çŽ©å®¶äºŒçº§å¯†ç ã€‚
+     * 管�†�‘˜�…�™��Ž�家�Œ级�†码�€‚
      *
-     * @param playerUuid ç›®æ ‡çŽ©å®¶ UUID
-     * @param callback   æ“ä½œç»“æžœå›žè°ƒ
+     * @param playerUuid �›��‡�Ž�家 UUID
+     * @param callback   �“��œ�“�žœ�›ž�ƒ
      */
     public void describePersonalWarehouse(UUID playerUuid, String playerName, String warehouseId, Consumer<List<String>> callback, Consumer<String> errorCallback) {
         try {
@@ -655,13 +655,13 @@ public final class WarehouseService implements Listener {
             if (warehouse.isEmpty()) { errorCallback.accept(message("player.warehouse-not-found", warehouseId)); return; }
             List<SlotItemRecord> slots = repository.loadSlots(OWNER_PERSONAL, playerUuid.toString(), warehouseId);
             List<String> lines = new ArrayList<>();
-            lines.add(ChatColor.GRAY + "çŽ©å®¶: " + ChatColor.WHITE + playerName);
-            lines.add(ChatColor.GRAY + "ä»“åº“: " + ChatColor.WHITE + warehouseId + " (" + warehouse.get().customName() + ")");
-            lines.add(ChatColor.GRAY + "ç‰©å“æ§½: " + ChatColor.WHITE + slots.size());
-            if (slots.isEmpty()) lines.add(ChatColor.DARK_GRAY + "- ç©º");
+            lines.add(ChatColor.GRAY + "�Ž�家: " + ChatColor.WHITE + playerName);
+            lines.add(ChatColor.GRAY + "�“�“: " + ChatColor.WHITE + warehouseId + " (" + warehouse.get().customName() + ")");
+            lines.add(ChatColor.GRAY + "�‰��“�槽: " + ChatColor.WHITE + slots.size());
+            if (slots.isEmpty()) lines.add(ChatColor.DARK_GRAY + "- 空");
             for (SlotItemRecord slot : slots) lines.add(ChatColor.GRAY + "[" + slot.slot() + "] " + ChatColor.WHITE + slot.displayName() + ChatColor.GRAY + " x" + slot.amount() + " (" + slot.materialId() + ")");
             callback.accept(lines);
-        } catch (Exception exception) { errorCallback.accept("è¯»å–ä»“åº“å†…å®¹å¤±è´¥: " + exception.getMessage()); }
+        } catch (Exception exception) { errorCallback.accept("读�–�“�“�†…容失败: " + exception.getMessage()); }
     }
 
     public ActionResult adminDeletePersonalWarehouse(UUID playerUuid, String warehouseId) {
@@ -686,13 +686,13 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * ç®¡ç†å‘˜è°ƒæ•´çŽ©å®¶é“¶è¡Œä½™é¢ã€‚æ”¯æŒ set / add / take ä¸‰ç§æ¨¡å¼ã€‚
+     * 管�†�‘˜�ƒ�•��Ž�家�“��Œ�™额�€‚�”��Œ� set / add / take �‰种模式�€‚
      *
-     * @param playerUuid ç›®æ ‡çŽ©å®¶ UUID
-     * @param currencyId è´§å¸ ID
-     * @param mode       æ“ä½œæ¨¡å¼ï¼šset / add / take
-     * @param amountText é‡‘é¢æ–‡æœ¬
-     * @param callback   æ“ä½œç»“æžœå›žè°ƒ
+     * @param playerUuid �›��‡�Ž�家 UUID
+     * @param currencyId 货币 ID
+     * @param mode       �“��œ模式�šset / add / take
+     * @param amountText �‡‘额�–‡�œ�
+     * @param callback   �“��œ�“�žœ�›ž�ƒ
      */
     public void adminAdjustWallet(UUID playerUuid, String currencyId, String mode, String amountText, Consumer<ActionResult> callback) {
         try {
@@ -842,7 +842,7 @@ public final class WarehouseService implements Listener {
             }
             boolean notify = state != null ? state.autoPickupNotify() : configuration.pickup().notifyOnAutoStore();
             if (notify) {
-                // å¦‚æžœ Pickup é€šçŸ¥æ¨¡å¼å·²ä¸ºè¯¥çŽ©å®¶æä¾› HUD æç¤ºï¼Œåˆ™è·³è¿‡èŠå¤©æ æ¶ˆæ¯
+                // �‚�žœ Pickup �€š�Ÿ�模式已为该�Ž�家提�› HUD 提示�Œ�ˆ™跳�‡�Š天栏�ˆ息
                 PickupNotifiable pickupNotifiable = pickupNotifiableSupplier.get();
                 boolean hudActive = pickupNotifiable != null && pickupNotifiable.isNotificationActive(player.getUniqueId());
                 if (!hudActive) {
@@ -851,13 +851,13 @@ public final class WarehouseService implements Listener {
             }
         } catch (Exception exception) {
             if (configuration.debug()) {
-                this.logger.warning("è‡ªåŠ¨å…¥åº“å¤±è´¥: " + exception.getMessage());
+                this.logger.warning("�‡��Š��…��“失败: " + exception.getMessage());
             }
         }
     }
 
     /**
-     * å¯¼å‡ºå¹¶æ³¨å†Œä¸‰å¥— AXUI æ–‡ä»¶ï¼ˆstorage / manage / bankï¼‰ï¼ŒåŒæ—¶ä¸ºæ¯å¥— UI æ³¨å†Œå…³é—­å›žè°ƒã€‚
+     * 导�‡�并注�†Œ�‰�— AXUI �–‡件�ˆstorage / manage / bank�‰�Œ�Œ�—�为每�— UI 注�†Œ�…��—��›ž�ƒ�€‚
      */
     private void bindUis() throws Exception {
         storageRuntimeUiId = bindUi(
@@ -886,13 +886,13 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * å¯¼å‡ºå•ä¸ª UI èµ„æºæ–‡ä»¶å¹¶æ³¨å†Œåˆ° PacketBridgeã€‚
+     * 导�‡��•个 UI �„源�–‡件并注�†Œ�ˆ� PacketBridge�€‚
      *
-     * @param configuredId   é…ç½®ä¸­çš„ UI ID
-     * @param resourcePath   jar å†…èµ„æºè·¯å¾„
-     * @param destinationPath å¯¼å‡ºåˆ°ç£ç›˜çš„ç›¸å¯¹è·¯å¾„
-     * @param uiKind         UI ç±»åž‹æ ‡è¯†ï¼ˆstorage / manage / bankï¼‰
-     * @return è¿è¡Œæ—¶ UI ID
+     * @param configuredId   �…�置中�š„ UI ID
+     * @param resourcePath   jar �†…�„源路�„
+     * @param destinationPath 导�‡��ˆ�磁�›˜�š„�›�对路�„
+     * @param uiKind         UI 类�ž‹�‡�†�ˆstorage / manage / bank�‰
+     * @return 运�Œ�—� UI ID
      */
     private String bindUi(String configuredId, String resourcePath, String destinationPath, String uiKind) throws Exception {
         PacketBridgeAPI bridge = packetBridge;
@@ -900,13 +900,13 @@ public final class WarehouseService implements Listener {
         if (bridge == null || !configuration.ui().registerUiOnEnable()) {
             String runtime = xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.normalizeUiId(configuredId, uiFile);
             if (bridge != null) {
-                this.logger.fine("Warehouse UI è‡ªåŠ¨æ³¨å†Œå·²å…³é—­ï¼Œå°†ç›´æŽ¥ä½¿ç”¨ UI æ ‡è¯†: " + runtime);
+                this.logger.fine("Warehouse UI �‡��Š�注�†Œ已�…��—��Œ�†�›��Ž�使�”� UI �‡�†: " + runtime);
             }
             return runtime;
         }
         xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.UiRegistrationResult registration = bridge.registerOrReloadUi(configuredId, uiFile);
         if (!registration.success()) {
-            throw new IllegalStateException("æ³¨å†Œ Warehouse UI å¤±è´¥: " + registration.message());
+            throw new IllegalStateException("注�†Œ Warehouse UI 失败: " + registration.message());
         }
         String registered = registration.registeredUiId() == null ? "" : registration.registeredUiId();
         switch (uiKind) {
@@ -918,8 +918,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * æ‰“å¼€ä»“åº“å­˜å–ç•Œé¢å¹¶å‘é€åˆå§‹åŒ–/æ›´æ–°æ•°æ®åŒ…ã€‚
-     * å»¶è¿Ÿ 2 ticks å‘é€ï¼Œé¿å…ä½Žæ€§èƒ½å®¢æˆ·ç«¯ UI åŠ è½½æœªå®Œæˆæ—¶ä¸¢å¤± packetã€‚
+     * �‰“�€�“�“�˜�–�•Œ面并�‘�€��ˆ��‹�Œ–/�›��–��•�据�Œ…�€‚
+     * 延�Ÿ 2 ticks �‘�€��Œ避�…��Ž�€��ƒ�客�ˆ�端 UI �Š�载�œ��Œ�ˆ��—�丢失 packet�€‚
      */
     private void openStorage(Player player, String handler) throws Exception {
         ensureEntitlements(player);
@@ -934,14 +934,14 @@ public final class WarehouseService implements Listener {
                     sendStorage(player, handler);
                 }
             } catch (Exception exception) {
-                this.logger.warning("å»¶è¿Ÿå‘é€ä»“åº“æ•°æ®åŒ…å¤±è´¥: " + exception.getMessage());
+                this.logger.warning("延�Ÿ�‘�€��“�“�•�据�Œ…失败: " + exception.getMessage());
             }
         }, 2L);
     }
 
     /**
-     * æ‰“å¼€å…±äº«ç®¡ç†ç•Œé¢å¹¶å‘é€åˆå§‹åŒ–/æ›´æ–°æ•°æ®åŒ…ã€‚
-     * å»¶è¿Ÿ 2 ticks å‘é€ï¼Œé¿å…ä½Žæ€§èƒ½å®¢æˆ·ç«¯ UI åŠ è½½æœªå®Œæˆæ—¶ä¸¢å¤± packetã€‚
+     * �‰“�€�…�享管�†�•Œ面并�‘�€��ˆ��‹�Œ–/�›��–��•�据�Œ…�€‚
+     * 延�Ÿ 2 ticks �‘�€��Œ避�…��Ž�€��ƒ�客�ˆ�端 UI �Š�载�œ��Œ�ˆ��—�丢失 packet�€‚
      */
     private void openManage(Player player, String handler) throws Exception {
         ensureEntitlements(player);
@@ -953,14 +953,14 @@ public final class WarehouseService implements Listener {
                     sendManage(player, handler);
                 }
             } catch (Exception exception) {
-                this.logger.warning("å»¶è¿Ÿå‘é€ç®¡ç†æ•°æ®åŒ…å¤±è´¥: " + exception.getMessage());
+                this.logger.warning("延�Ÿ�‘�€�管�†�•�据�Œ…失败: " + exception.getMessage());
             }
         }, 2L);
     }
 
     /**
-     * æ‰“å¼€é“¶è¡Œç•Œé¢å¹¶å‘é€åˆå§‹åŒ–/æ›´æ–°æ•°æ®åŒ…ã€‚
-     * å»¶è¿Ÿ 2 ticks å‘é€ï¼Œé¿å…ä½Žæ€§èƒ½å®¢æˆ·ç«¯ UI åŠ è½½æœªå®Œæˆæ—¶ä¸¢å¤± packetã€‚
+     * �‰“�€�“��Œ�•Œ面并�‘�€��ˆ��‹�Œ–/�›��–��•�据�Œ…�€‚
+     * 延�Ÿ 2 ticks �‘�€��Œ避�…��Ž�€��ƒ�客�ˆ�端 UI �Š�载�œ��Œ�ˆ��—�丢失 packet�€‚
      */
     private void openBank(Player player, String handler) throws Exception {
         ensureEntitlements(player);
@@ -972,13 +972,13 @@ public final class WarehouseService implements Listener {
                     sendBank(player, handler);
                 }
             } catch (Exception exception) {
-                this.logger.warning("å»¶è¿Ÿå‘é€é“¶è¡Œæ•°æ®åŒ…å¤±è´¥: " + exception.getMessage());
+                this.logger.warning("延�Ÿ�‘�€��“��Œ�•�据�Œ…失败: " + exception.getMessage());
             }
         }, 2L);
     }
 
     /**
-     * åŒæ—¶åˆ·æ–° storageã€manageã€bank ä¸‰ä¸ªç•Œé¢çš„æ•°æ®åŒ…ã€‚
+     * �Œ�—��ˆ��–� storage�€�manage�€�bank �‰个�•Œ面�š„�•�据�Œ…�€‚
      */
     private void refreshBoth(Player player) throws Exception {
         ensureEntitlements(player);
@@ -1020,7 +1020,7 @@ public final class WarehouseService implements Listener {
             return;
         }
         releaseCurrentSharedLock(player);
-        // é¢„è§ˆæ¨¡å¼ä¸‹å…³é—­ UI å³é€€å‡ºé¢„è§ˆçŠ¶æ€ï¼Œé¿å…çŽ©å®¶"å¡"åœ¨é¢„è§ˆä¸­
+        // �„�ˆ模式�‹�…��—� UI 即�€€�‡��„�ˆ�Š��€��Œ避�…��Ž�家"卡"�œ��„�ˆ中
         ViewState state = viewStates.get(player.getUniqueId());
         if (state != null && state.previewMode()) {
             viewStates.remove(player.getUniqueId());
@@ -1028,7 +1028,7 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * æž„å»ºä»“åº“å­˜å–ç•Œé¢çš„æ•°æ®åŒ…ï¼ŒåŒ…å«åˆ†é¡µæ§½ä½ã€é€‰ä¸­ç‰©å“ã€èƒŒåŒ…ä¿¡æ¯ã€å®¹é‡ä¸Žæƒé™çŠ¶æ€ã€‚
+     * �ž„建�“�“�˜�–�•Œ面�š„�•�据�Œ…�Œ�Œ…含�ˆ†页槽位�€��€‰中�‰��“��€��ƒŒ�Œ…信息�€�容�‡��Ž�ƒ�™��Š��€��€‚
      */
     private Map<String, Object> buildStoragePacket(Player player, ViewState state) throws Exception {
         List<SlotItemRecord> visibleSlots = visibleSlots(state);
@@ -1126,7 +1126,7 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * æž„å»ºå…±äº«ç®¡ç†ç•Œé¢çš„æ•°æ®åŒ…ï¼ŒåŒ…å«æˆå‘˜åˆ—è¡¨ã€æœç´¢ç»“æžœã€è‡ªåŠ¨æ‹¾å–è®¾ç½®ç­‰ã€‚
+     * �ž„建�…�享管�†�•Œ面�š„�•�据�Œ…�Œ�Œ…含�ˆ��‘˜�ˆ—表�€��œ索�“�žœ�€��‡��Š��‹��–设置�‰�€‚
      */
     private Map<String, Object> buildManagePacket(Player player, ViewState state) throws Exception {
         Map<String, Object> packet = basePacket(player, state);
@@ -1155,7 +1155,7 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * æž„å»ºé“¶è¡Œç•Œé¢çš„æ•°æ®åŒ…ï¼ŒåŒ…å«æ´»æœŸä½™é¢ã€å®šæœŸäº§å“å’Œå½“å‰å®šæœŸåˆ—è¡¨ã€‚
+     * �ž„建�“��Œ�•Œ面�š„�•�据�Œ…�Œ�Œ…含活�œŸ�™额�€��š�œŸ产�“��’Œ�“�‰��š�œŸ�ˆ—表�€‚
      */
     private Map<String, Object> buildBankPacket(Player player, ViewState state) throws Exception {
         Map<String, Object> packet = basePacket(player, state);
@@ -1367,9 +1367,9 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * å°†çŽ©å®¶èƒŒåŒ…æŒ‡å®šæ§½ä½çš„ç‰©å“å­˜å…¥å½“å‰ä»“åº“ã€‚
-     * ä¼šæ£€æŸ¥åªè¯»æƒé™ã€é»‘åå•å’Œå®¹é‡ä¸Šé™ï¼ŒæˆåŠŸæ—¶æ‰£é™¤èƒŒåŒ…ç‰©å“å¹¶åˆ·æ–° UIã€‚
-     * æ”¯æŒæŒ‡å®šå­˜å…¥æ•°é‡ï¼ˆrequestedAmountï¼‰ï¼Œè‹¥å¤§äºŽå®žé™…å †å æ•°é‡åˆ™æŒ‰å®žé™…æ•°é‡å­˜å…¥ã€‚
+     * �†�Ž�家�ƒŒ�Œ…�Œ‡�š槽位�š„�‰��“��˜�…��“�‰��“�“�€‚
+     * �š�€�Ÿ�只读�ƒ�™��€��‘名�•�’Œ容�‡��Š�™��Œ�ˆ��ŠŸ�—��‰��™��ƒŒ�Œ…�‰��“�并�ˆ��–� UI�€‚
+     * �”��Œ��Œ‡�š�˜�…��•��‡��ˆrequestedAmount�‰�Œ�‹�大�Ž�ž�™…�†叠�•��‡��ˆ™�Œ‰�ž�™…�•��‡��˜�…��€‚
      */
     private void depositSlot(Player player, String rawSlotValue, long requestedAmount) throws Exception {
         ViewState state = state(player);
@@ -1430,8 +1430,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * ä¸€é”®å­˜å…¥èƒŒåŒ…å…¨éƒ¨ç‰©å“ï¼ˆä¸»åº“å­˜ 9~44 æ§½ï¼‰ã€‚
-     * é€ä»¶æ£€æŸ¥é»‘åå•å’Œå®¹é‡ï¼Œè·³è¿‡ä¸å¯å­˜ç‰©å“ï¼Œç»Ÿè®¡å­˜å…¥ç»“æžœã€‚
+     * �€�”��˜�…��ƒŒ�Œ…�…��ƒ��‰��“��ˆ主�“�˜ 9~44 槽�‰�€‚
+     * �€�件�€�Ÿ��‘名�•�’Œ容�‡��Œ跳�‡不可�˜�‰��“��Œ�Ÿ计�˜�…��“�žœ�€‚
      */
     private void depositAllBackpack(Player player) throws Exception {
         ViewState state = state(player);
@@ -1478,8 +1478,8 @@ public final class WarehouseService implements Listener {
         if (totalStored > 0L) {
             player.updateInventory();
             String suffix = skippedBlacklisted > 0 || failedSlots > 0
-                ? "ï¼Œè·³è¿‡ " + skippedBlacklisted + " æ ¼ç¦å­˜ç‰©å“ï¼Œ" + failedSlots + " æ ¼æœªèƒ½å­˜å…¥ã€‚"
-                : "ã€‚";
+                ? "�Œ跳�‡ " + skippedBlacklisted + " 格禁�˜�‰��“��Œ" + failedSlots + " 格�œ��ƒ��˜�…��€‚"
+                : "�€‚";
             sendMessage(player, true, message("player.deposit-from-inventory", totalStored, changedSlots, suffix));
         } else if (!foundItem) {
             sendMessage(player, false, message("player.no-deposit-items"));
@@ -1492,16 +1492,16 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * æ ¸å¿ƒå­˜å…¥é€»è¾‘ï¼šå°†ç‰©å“å †æ ˆå­˜å…¥æŒ‡å®šä»“åº“ã€‚
-     * ä¼˜å…ˆå°è¯•ä¸Žå·²æœ‰åŒ hash æ§½ä½åˆå¹¶ï¼ˆèšåˆä¸Šé™ {@link #MAX_AGGREGATED_AMOUNT}ï¼‰ï¼Œ
-     * æ— æ³•åˆå¹¶åˆ™å ç”¨æ–°ç©ºæ§½ã€‚è‹¥ä»“åº“å·²æ»¡åˆ™è¿”å›žå¤±è´¥ã€‚
+     * 核�ƒ�˜�…��€��‘�š�†�‰��“��†�ˆ�˜�…��Œ‡�š�“�“�€‚
+     * �˜�…ˆ尝�•�Ž已�œ‰�Œ hash 槽位�ˆ并�ˆ�š�ˆ�Š�™� {@link #MAX_AGGREGATED_AMOUNT}�‰�Œ
+     * �—��•�ˆ并�ˆ™占�”��–�空槽�€‚�‹��“�“已满�ˆ™�”�›ž失败�€‚
      *
-     * @param player      æ“ä½œçŽ©å®¶ï¼ˆç”¨äºŽæ—¥å¿—ä¸Ž debugï¼‰
-     * @param ownerType   {@code personal} æˆ– {@code shared}
-     * @param ownerId     æ‰€æœ‰è€…æ ‡è¯†ï¼ˆUUID å­—ç¬¦ä¸²æˆ–å…±äº«ä»“åº“ IDï¼‰
-     * @param warehouseId ä»“åº“ ID
-     * @param stack       å¾…å­˜å…¥ç‰©å“ï¼ˆamount å¯èƒ½éƒ¨åˆ†å­˜å…¥ï¼‰
-     * @return å­˜å…¥ç»“æžœ
+     * @param player      �“��œ�Ž�家�ˆ�”��Ž�—��—�Ž debug�‰
+     * @param ownerType   {@code personal} �ˆ– {@code shared}
+     * @param ownerId     �‰€�œ‰�€…�‡�†�ˆUUID �—符串�ˆ–�…�享�“�“ ID�‰
+     * @param warehouseId �“�“ ID
+     * @param stack       �…�˜�…��‰��“��ˆamount 可�ƒ��ƒ��ˆ†�˜�…��‰
+     * @return �˜�…��“�žœ
      */
     private DepositResult depositStack(Player player, String ownerType, String ownerId, String warehouseId, ItemStack stack) throws Exception {
         if (stack == null || stack.getType().isAir() || stack.getAmount() <= 0 || itemMatcherSupport.matches(configuration.blacklist(), stack)) {
@@ -1601,8 +1601,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * ä»Žå½“å‰ä»“åº“å–å‡ºç‰©å“åˆ°çŽ©å®¶èƒŒåŒ…ã€‚
-     * éœ€è¦äºŒçº§å¯†ç å·²è§£é”ï¼Œä¸”å½“å‰ä»“åº“å¯å†™ã€‚æŒ‰å †å ä¸Šé™åˆ†æ‰¹ç»™äºˆï¼ŒèƒŒåŒ…æ»¡æ—¶åœæ­¢ã€‚
+     * �Ž�“�‰��“�“�–�‡��‰��“��ˆ��Ž�家�ƒŒ�Œ…�€‚
+     * �œ€要�Œ级�†码已解�”��Œ�”�“�‰��“�“可�†™�€‚�Œ‰�†叠�Š�™��ˆ†�‰��™�ˆ�Œ�ƒŒ�Œ…满�—��œ止�€‚
      */
     private void withdraw(Player player, int slot, long requestedAmount, boolean all) throws Exception {
         if (!isSecondaryUnlocked(player.getUniqueId())) {
@@ -1668,8 +1668,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * çŽ©å®¶å°†èƒŒåŒ…è´§å¸å­˜å…¥é“¶è¡Œæ´»æœŸè´¦æˆ·ã€‚
-     * å…ˆé€šè¿‡è´§å¸æ¡¥æŽ¥æ‰£æ¬¾ï¼Œå†å†™å…¥æ•°æ®åº“ï¼›å¤±è´¥æ—¶è‡ªåŠ¨å›žæ»šã€‚
+     * �Ž�家�†�ƒŒ�Œ…货币�˜�…��“��Œ活�œŸ账�ˆ��€‚
+     * �…ˆ�€š�‡货币桥�Ž��‰�款�Œ�†��†™�…��•�据�“�›失败�—��‡��Š��›ž�š�€‚
      */
     private void bankDeposit(Player player, String currencyId, BigDecimal amount) throws Exception {
         String normalized = normalizeId(currencyId);
@@ -1701,8 +1701,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * çŽ©å®¶ä»Žé“¶è¡Œæ´»æœŸè´¦æˆ·æçŽ°åˆ°èƒŒåŒ…ã€‚
-     * å…ˆåŽŸå­æ‰£å‡æ•°æ®åº“ä½™é¢ï¼Œå†é€šè¿‡è´§å¸æ¡¥æŽ¥æ”¾æ¬¾ï¼›å¤±è´¥æ—¶è‡ªåŠ¨å›žæ»šã€‚
+     * �Ž�家�Ž�“��Œ活�œŸ账�ˆ�提�Ž��ˆ��ƒŒ�Œ…�€‚
+     * �…ˆ�ŽŸ子�‰��‡��•�据�“�™额�Œ�†��€š�‡货币桥�Ž��”�款�›失败�—��‡��Š��›ž�š�€‚
      */
     private void bankWithdraw(Player player, String currencyId, BigDecimal amount) throws Exception {
         if (!isSecondaryUnlocked(player.getUniqueId())) {
@@ -1741,8 +1741,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * è´­ä¹°å®šæœŸå­˜æ¬¾äº§å“ã€‚
-     * æ ¡éªŒé‡‘é¢åŒºé—´ã€åŒ¹é…åˆ©çŽ‡é˜¶æ¢¯ã€åŽŸå­æ‰£å‡æ´»æœŸä½™é¢åŽåˆ›å»ºå®šæœŸè®°å½•ã€‚
+     * 购买�š�œŸ�˜款产�“��€‚
+     * 校�Œ�‡‘额�Œ��—��€��Œ��…��ˆ��Ž‡�˜�梯�€��ŽŸ子�‰��‡�活�œŸ�™额�Ž�ˆ›建�š�œŸ记�•�€‚
      */
     private void createFixedDeposit(Player player, String productId, BigDecimal amount) throws Exception {
         DepositProductDefinition product = configuration.depositProduct(productId);
@@ -1796,8 +1796,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * é¢†å–åˆ°æœŸå®šæœŸå­˜æ¬¾æœ¬æ¯ã€‚
-     * é€šè¿‡ {@link WarehouseRepository#claimFixedDepositAtomic} åŽŸå­æ ‡è®° claimed å¹¶è®¡ç®—æœ¬æ¯å…¥è´¦ï¼Œé˜²æ­¢å¹¶å‘é‡å¤é¢†å–ã€‚
+     * �†�–�ˆ��œŸ�š�œŸ�˜款�œ�息�€‚
+     * �€š�‡ {@link WarehouseRepository#claimFixedDepositAtomic} �ŽŸ子�‡记 claimed 并计�—�œ�息�…�账�Œ�˜�止并�‘�‡�复�†�–�€‚
      */
     private void claimFixedDeposit(Player player, String depositId) throws Exception {
         if (!isSecondaryUnlocked(player.getUniqueId())) {
@@ -1830,7 +1830,7 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * åˆ›å»ºå…±äº«ä»“åº“ã€‚æ ¡éªŒæƒé™å±‚çº§çš„ max-owned é™åˆ¶ï¼Œæ‰£é™¤åˆ›å»ºè´¹ç”¨åŽå†™å…¥æ•°æ®åº“ã€‚
+     * �ˆ›建�…�享�“�“�€‚校�Œ�ƒ�™��‚级�š„ max-owned �™��ˆ��Œ�‰��™��ˆ›建费�”��Ž�†™�…��•�据�“�€‚
      */
     private void createSharedWarehouse(Player player, String rawName) throws Exception {
         if (!configuration.shared().enabled()) {
@@ -1860,7 +1860,7 @@ public final class WarehouseService implements Listener {
         long now = System.currentTimeMillis();
         String id = UUID.randomUUID().toString();
         try {
-            repository.createSharedWarehouse(new SharedWarehouseRecord(id, player.getUniqueId(), crop(rawName.isBlank() ? "å…±äº«ä»“åº“" : rawName, 64), level, capacity, now, now, "owner", true));
+            repository.createSharedWarehouse(new SharedWarehouseRecord(id, player.getUniqueId(), crop(rawName.isBlank() ? "�…�享�“�“" : rawName, 64), level, capacity, now, now, "owner", true));
         } catch (Exception exception) {
             refundCost(player, cost);
             throw exception;
@@ -1870,7 +1870,7 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * åˆ é™¤å…±äº«ä»“åº“ï¼ˆéœ€äºŒçº§å¯†ç ç¡®è®¤ï¼‰ã€‚ä»…æ‰€æœ‰è€…å¯æ“ä½œï¼Œåˆ é™¤åŽæ¸…ç†äº’æ–¥é”å¹¶é‡ç½®å½“å‰è§†å›¾ã€‚
+     * �ˆ��™��…�享�“�“�ˆ�œ€�Œ级�†码确认�‰�€‚�…�‰€�œ‰�€…可�“��œ�Œ�ˆ��™��Ž�…�†�’�–��”�并�‡�置�“�‰��†�›��€‚
      */
     private void deleteSharedWarehouse(Player player, String sharedId, String password) throws Exception {
         if (!validatePassword(player.getUniqueId(), password)) {
@@ -1969,8 +1969,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * é‚€è¯·çŽ©å®¶åŠ å…¥å…±äº«ä»“åº“ï¼Œæˆ–ä¿®æ”¹çŽ°æœ‰æˆå‘˜è§’è‰²ã€‚
-     * ä»…æ‰€æœ‰è€…å¯æ“ä½œï¼Œæ ¡éªŒæˆå‘˜æ•°é‡ä¸Šé™ï¼Œç›®æ ‡è§’è‰²ä¸å¯ä¸º ownerã€‚
+     * �‚€请�Ž�家�Š��…��…�享�“�“�Œ�ˆ–修�”��Ž��œ‰�ˆ��‘˜�’�‰��€‚
+     * �…�‰€�œ‰�€…可�“��œ�Œ校�Œ�ˆ��‘˜�•��‡��Š�™��Œ�›��‡�’�‰�不可为 owner�€‚
      */
     private void inviteSharedMember(Player player, String sharedId, String memberName, String role) throws Exception {
         if (!isSecondaryUnlocked(player.getUniqueId())) {
@@ -2035,8 +2035,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * å°†å…±äº«ä»“åº“æ‰€æœ‰æƒè½¬è®©ç»™çŽ°æœ‰ member è§’è‰²æˆå‘˜ã€‚
-     * è½¬è®©åŽåŽŸæ‰€æœ‰è€…å˜ä¸º viewerï¼Œç›®æ ‡æˆå‘˜æå‡ä¸º ownerã€‚
+     * �†�…�享�“�“�‰€�œ‰�ƒ转让�™�Ž��œ‰ member �’�‰��ˆ��‘˜�€‚
+     * 转让�Ž�ŽŸ�‰€�œ‰�€…�˜为 viewer�Œ�›��‡�ˆ��‘˜提�‡为 owner�€‚
      */
     private boolean isRealPlayer(OfflinePlayer player) {
         return player != null && player.getUniqueId() != null
@@ -2057,7 +2057,7 @@ public final class WarehouseService implements Listener {
                 }
             }
         } catch (Exception exception) {
-            logger.warning("æ£€æŸ¥ä»“åº“å¾…ç¡®è®¤è½¬è®©å¤±è´¥: " + exception.getMessage());
+            logger.warning("�€�Ÿ��“�“�…确认转让失败: " + exception.getMessage());
         }
     }
 
@@ -2155,8 +2155,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * è®¾ç½®äºŒçº§å¯†ç ã€‚ä½¿ç”¨ PBKDF2WithHmacSHA256 120,000 æ¬¡è¿­ä»£ hashï¼Œéšæœº saltã€‚
-     * è®¾ç½®æˆåŠŸåŽè‡ªåŠ¨è§£é”å½“å‰ä¼šè¯ã€‚
+     * 设置�Œ级�†码�€‚使�”� PBKDF2WithHmacSHA256 120,000 次迭代 hash�Œ�š��œ� salt�€‚
+     * 设置�ˆ��ŠŸ�Ž�‡��Š�解�”��“�‰��š话�€‚
      */
     private void setPassword(Player player, String password) throws Exception {
         String normalized = safe(password);
@@ -2259,7 +2259,7 @@ public final class WarehouseService implements Listener {
             return repository.loadSlots(ownerType, ownerId, warehouseId);
         } catch (Exception exception) {
             if (configuration.debug()) {
-                this.logger.warning("è¯»å–ä»“åº“æ§½ä½å¤±è´¥: " + exception.getMessage());
+                this.logger.warning("读�–�“�“槽位失败: " + exception.getMessage());
             }
             return List.of();
         }
@@ -2418,7 +2418,7 @@ public final class WarehouseService implements Listener {
             try {
                 refreshBoth(online);
             } catch (Exception exception) {
-                this.logger.warning("[Warehouse] åˆ·æ–°å…±äº«ä»“åº“ UI å¤±è´¥: " + exception.getMessage());
+                this.logger.warning("[Warehouse] �ˆ��–��…�享�“�“ UI 失败: " + exception.getMessage());
             }
         }
     }
@@ -2435,12 +2435,12 @@ public final class WarehouseService implements Listener {
 
     private String buildLockBusyMessage(SharedEditLock lock) {
         if (lock == null) {
-            return "è¯¥å…±äº«ä»“åº“æ­£åœ¨è¢«å…¶ä»–æˆå‘˜ç¼–è¾‘ï¼Œå½“å‰ä»¥åªè¯»æ–¹å¼æ‰“å¼€ã€‚";
+            return "该�…�享�“�“正�œ�被�…��–�ˆ��‘˜�–�‘�Œ�“�‰�以只读�–�式�‰“�€�€‚";
         }
         if (localNodeId().equals(lock.nodeId())) {
-            return "è¯¥å…±äº«ä»“åº“æ­£åœ¨è¢« " + lock.playerName() + " ç¼–è¾‘ï¼Œå½“å‰ä»¥åªè¯»æ–¹å¼æ‰“å¼€ã€‚";
+            return "该�…�享�“�“正�œ�被 " + lock.playerName() + " �–�‘�Œ�“�‰�以只读�–�式�‰“�€�€‚";
         }
-        return "è¯¥å…±äº«ä»“åº“æ­£åœ¨è¢« " + lock.playerName() + "ï¼ˆ" + lock.nodeId() + "ï¼‰ç¼–è¾‘ï¼Œå½“å‰ä»¥åªè¯»æ–¹å¼æ‰“å¼€ã€‚";
+        return "该�…�享�“�“正�œ�被 " + lock.playerName() + "�ˆ" + lock.nodeId() + "�‰�–�‘�Œ�“�‰�以只读�–�式�‰“�€�€‚";
     }
 
     private String localNodeId() {
@@ -2553,8 +2553,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * æ‰©å……å½“å‰ä»“åº“åˆ°ä¸‹ä¸€ç­‰çº§ã€‚
-     * ä¸ªäººä»“åº“å’Œå…±äº«ä»“åº“å‡æ”¯æŒï¼Œæ‰£é™¤å‡çº§è´¹ç”¨åŽæ›´æ–°æ•°æ®åº“ã€‚
+     * �‰��……�“�‰��“�“�ˆ��‹�€�‰级�€‚
+     * 个人�“�“�’Œ�…�享�“�“�‡�”��Œ��Œ�‰��™��‡级费�”��Ž�›��–��•�据�“�€‚
      */
     private void upgradeCurrentWarehouse(Player player) throws Exception {
         ViewState state = state(player);
@@ -2925,8 +2925,8 @@ public final class WarehouseService implements Listener {
             row.put("currency", product.currencyId());
             row.put("duration", product.durationSeconds());
             row.put("min", formatCurrency(product.currencyId(), product.minAmount()));
-            row.put("max", product.maxAmount().compareTo(BigDecimal.ZERO) <= 0 ? "ä¸é™" : formatCurrency(product.currencyId(), product.maxAmount()));
-            row.put("text", "&0" + product.displayName() + "\n&7æœ€ä½Ž " + formatCurrency(product.currencyId(), product.minAmount()) + "  " + product.description());
+            row.put("max", product.maxAmount().compareTo(BigDecimal.ZERO) <= 0 ? "不�™�" : formatCurrency(product.currencyId(), product.maxAmount()));
+            row.put("text", "&0" + product.displayName() + "\n&7�œ€�Ž " + formatCurrency(product.currencyId(), product.minAmount()) + "  " + product.description());
             result.put(Integer.toString(idx), row);
             idx++;
         }
@@ -2946,7 +2946,7 @@ public final class WarehouseService implements Listener {
             row.put("rate", deposit.interestRate().toPlainString());
             row.put("maturesAt", TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt())));
             row.put("matured", deposit.maturesAt() <= now);
-            row.put("text", "&0" + deposit.productId() + " &7æœ¬é‡‘ " + formatCurrency(deposit.currencyId(), deposit.principal()) + "\n&7åˆ°æœŸ " + TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt())));
+            row.put("text", "&0" + deposit.productId() + " &7�œ��‡‘ " + formatCurrency(deposit.currencyId(), deposit.principal()) + "\n&7�ˆ��œŸ " + TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt())));
             result.put(Integer.toString(idx), row);
             idx++;
         }
@@ -2992,14 +2992,14 @@ public final class WarehouseService implements Listener {
                 .filter(shared -> shared.id().equals(state.ownerId()))
                 .map(SharedWarehouseRecord::name)
                 .findFirst()
-                .orElse("å…±äº«ä»“åº“");
+                .orElse("�…�享�“�“");
         }
         WarehouseRecord record = personalWarehouseMap(lookupUuid).get(state.warehouseId());
         if (record != null && record.customName() != null && !record.customName().isBlank()) {
             return record.customName();
         }
         WarehouseDefinition definition = configuration.warehouse(state.warehouseId());
-        return definition == null ? "ä¸ªäººä»“åº“" : ChatColor.translateAlternateColorCodes('&', definition.displayName());
+        return definition == null ? "个人�“�“" : ChatColor.translateAlternateColorCodes('&', definition.displayName());
     }
 
     private String firstPersonalWarehouseId() {
@@ -3055,21 +3055,21 @@ public final class WarehouseService implements Listener {
             ItemStack stack = ItemSerializer.deserialize(Base64.getDecoder().decode(item.itemData()));
             return loreLines(stack);
         } catch (RuntimeException exception) {
-            return List.of("&fç‰©å“æè¿°è¯»å–å¤±è´¥ã€‚");
+            return List.of("&f�‰��“�描述读�–失败�€‚");
         }
     }
 
     private List<String> loreLines(ItemStack itemStack) {
         if (itemStack == null) {
-            return List.of("&fè¿™ä¸ªç‰©å“æ²¡æœ‰é¢å¤–æè¿°ã€‚");
+            return List.of("&f�™个�‰��“�没�œ‰额�–描述�€‚");
         }
         ItemMeta meta = itemStack.getItemMeta();
         if (meta == null || !meta.hasLore() || meta.getLore() == null || meta.getLore().isEmpty()) {
-            return List.of("&fè¿™ä¸ªç‰©å“æ²¡æœ‰é¢å¤–æè¿°ã€‚");
+            return List.of("&f�™个�‰��“�没�œ‰额�–描述�€‚");
         }
         List<String> result = new ArrayList<>();
         for (String line : meta.getLore()) {
-            result.add(line == null ? "" : line.replace("k!", "Â§"));
+            result.add(line == null ? "" : line.replace("k!", "�"));
         }
         return List.copyOf(result);
     }
@@ -3571,6 +3571,7 @@ public final class WarehouseService implements Listener {
         void setSharedEditMode(boolean sharedEditMode) { this.sharedEditMode = sharedEditMode; }
     }
 }
+
 
 
 

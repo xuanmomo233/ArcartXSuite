@@ -105,7 +105,7 @@ public interface MarketRepository {
     /**
      * 原子扣减全局库存。
      *
-     * @return {@code true} è¡¨ç¤ºæ£åæå
+     * @return {@code true} 表示扣减成功
      */
     boolean tryConsumeGlobalShopStock(String shopId, String itemId, int amount, int defaultMax);
 
@@ -120,7 +120,7 @@ public interface MarketRepository {
     /**
      * 原子扣减玩家独立库存。
      *
-     * @return {@code true} è¡¨ç¤ºæ£åæå
+     * @return {@code true} 表示扣减成功
      */
     boolean tryConsumePlayerShopStock(UUID player, String shopId, String itemId, int amount, int defaultMax);
 

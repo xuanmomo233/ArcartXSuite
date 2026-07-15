@@ -123,7 +123,9 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             throw new IllegalStateException("ArcartXMarket.yml 配置文件缺失");
         }
         configuration = MarketModuleConfiguration.load(
-            YamlConfiguration.loadConfiguration(configFile), logger);
+            YamlConfiguration.loadConfiguration(configFile),
+            YamlConfiguration.loadConfiguration(new File(configFile.getParentFile(), messagesFileName())),
+            logger);
     }
 
     @Override

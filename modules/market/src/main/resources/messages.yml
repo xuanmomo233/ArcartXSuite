@@ -74,3 +74,24 @@ player:
     invalid-id: "&c无效的上架 ID 格式"
   search:
     usage: "&e用法: /market search <关键词>"
+
+# 消息前缀，所有 Market 消息都会自动附加此前缀
+prefix: "&8[&6AXS市场&8] &7"
+# ── 拍卖行消息 ──
+auction-listed: "&a物品已成功上架！"
+auction-bought: "&a购买成功！"
+auction-bid-placed: "&a出价成功！当前最高出价: &e%amount%"
+auction-outbid: "&c您对 &e%item% &c的出价已被超越！新最高价: &e%amount%"
+auction-expired: "&7您上架的 &e%item% &7已到期，已退回。"
+auction-sold: "&a您上架的 &e%item% &a已售出！收入: &e%amount%"
+auction-cancelled: "&7已取消上架。"
+# ── 系统商店消息 ──
+shop-bought: "&a购买成功！花费: &e%amount%"
+shop-limit-reached: "&c该商品已达购买上限。"
+# ── 回收商店消息 ──
+recycle-success: "&a回收成功！获得: &e%amount%"
+recycle-nothing: "&7背包中没有可回收的物品。"
+# ── 通用错误消息 ──
+insufficient-funds: "&c余额不足。"
+item-blacklisted: "&c该物品不允许上架。"
+auto-recycle-disabled: "&c批量回收功能已关闭"

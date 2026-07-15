@@ -64,7 +64,7 @@ public class AuctionService {
 
     public void start(long intervalTicks) {
         schedulerTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::processExpired, intervalTicks, intervalTicks);
-        logger.info("[Market-Auction] æåè¡æå¡å·²å¯å¨ï¼å°ææ£æ¥é´é: " + intervalTicks + " ticks");
+        logger.info("[Market-Auction] 拍卖行服务已启动，到期检查间隔: " + intervalTicks + " ticks");
     }
 
     public void shutdown() {
@@ -102,35 +102,35 @@ public class AuctionService {
                                                  double startingBid, String currency, long durationSeconds,
                                                  String message, int sourceSlot) {
         if (item == null || item.getType().isAir()) {
-            return ListingResult.fail("æ²¡æå¯ä¸æ¶çç©å");
+            return ListingResult.fail("没有可上架的物品");
         }
-        // é²æ­¢ä¸ä¸»æç©åå¼ç¨å«åï¼ä½¿ç¨å¯æ¬ä½ä¸ºä¸æ¶ç©å
+        // 防止与主手物品引用别名：使用副本作为上架物品
         item = item.clone();
 
-        // æ£æ¥ä¸æ¶æ°ééå¶
+        // 检查上架数量限制
         int currentCount = repository.countListingsBySeller(seller.getUniqueId());
         if (currentCount >= config.maxListingsPerPlayer()) {
-            return ListingResult.fail("ä¸æ¶æ°éå·²è¾¾ä¸é (" + config.maxListingsPerPlayer() + ")");
+            return ListingResult.fail("上架数量已达上限 (" + config.maxListingsPerPlayer() + ")");
         }
 
-        // æ£æ¥ç©åé»åå
+        // 检查物品黑名单
         if (isBlacklisted(item)) {
             return ListingResult.fail(messages.itemBlacklisted());
         }
 
-        // æ ¡éªä¸»æç¡®å®ææè¦ä¸æ¶çç©åï¼é²æ­¢å®¢æ·ç«¯ä¼ªé ç©å / æ°éä¸ç¬¦å¯¼è´å¤å¶ï¼
+        // 校验主手确实持有要上架的物品（防止客户端伪造物品 / 数量不符导致复制）
         ItemStack inHand = sourceSlot >= 0
             ? seller.getInventory().getItem(sourceSlot)
             : seller.getInventory().getItemInMainHand();
         if (inHand == null || inHand.getType().isAir()
                 || !inHand.isSimilar(item) || inHand.getAmount() < item.getAmount()) {
-            return ListingResult.fail("è¯·ææè¦ä¸æ¶çç©å");
+            return ListingResult.fail("请手持要上架的物品");
         }
 
-        // éå¶æ¶é¿
+        // 限制时长
         long duration = Math.max(config.minDurationSeconds(), Math.min(config.maxDurationSeconds(), durationSeconds));
 
-        // åæ£é¤èåç©åï¼å æï¼ï¼é¿å"åå¥åºåæ£é¤"å¨å¼å¸¸æ¶é æç©åå¤å¶
+        // 先扣除背包物品（占有），避免"先入库后扣除"在异常时造成物品复制
         if (inHand.getAmount() == item.getAmount()) {
             seller.getInventory().setItem(sourceSlot >= 0 ? sourceSlot : heldSlot(seller), null);
         } else {
@@ -138,14 +138,14 @@ public class AuctionService {
             seller.getInventory().setItem(sourceSlot >= 0 ? sourceSlot : heldSlot(seller), inHand);
         }
 
-        // æ£ä¸æ¶è´¹
+        // 扣上架费
         BigDecimal feeCharged = null;
         CurrencyBridgeAPI.CurrencyBridge feeBridge = null;
         if (config.listingFee() > 0) {
             feeBridge = currencyManager.bridge(config.listingFeeCurrency());
             if (feeBridge == null || !feeBridge.available()) {
                 giveBack(seller, item);
-                return ListingResult.fail("ä¸æ¶è´¹è´§å¸ä¸å¯ç¨");
+                return ListingResult.fail("上架费货币不可用");
             }
             CurrencyTransactionResult feeResult = feeBridge.withdraw(seller, BigDecimal.valueOf(config.listingFee()));
             if (!feeResult.success()) {
@@ -155,12 +155,12 @@ public class AuctionService {
             feeCharged = BigDecimal.valueOf(config.listingFee());
         }
 
-        // åºååç©å
+        // 序列化物品
         String itemData = itemSerializer.serialize(item);
         String displayName = getItemDisplayName(item);
         String category = classifyItem(item);
 
-        // ç¡®å®ä¸æ¶ç±»å
+        // 确定上架类型
         AuctionListing.ListingType type;
         if (buyNowPrice > 0 && startingBid > 0) type = AuctionListing.ListingType.BOTH;
         else if (buyNowPrice > 0) type = AuctionListing.ListingType.BUY_NOW;
@@ -175,16 +175,16 @@ public class AuctionService {
         );
         listing.setMessage(message);
 
-        // å¥åºå¤±è´¥åéè´¹ + å½è¿ç©åï¼ä¿è¯ä¸ä¸¢
+        // 入库失败则退费 + 归还物品，保证不丢
         if (!repository.insertListing(listing)) {
             if (feeCharged != null && feeBridge != null) {
                 feeBridge.deposit(seller, feeCharged);
             }
             giveBack(seller, item);
-            return ListingResult.fail("ä¸æ¶å¤±è´¥ï¼è¯·ç¨åéè¯");
+            return ListingResult.fail("上架失败，请稍后重试");
         }
 
-        // ä½¿ Redis ç¼å­å¤±æ
+        // 使 Redis 缓存失效
         if (redisCache.isAvailable()) {
             redisCache.invalidateByPrefix("market:listings:");
             publishCrossServer("LISTING_CREATED:" + listing.getId());
@@ -211,13 +211,13 @@ public class AuctionService {
     public PurchaseResult buyNow(Player buyer, long listingId) {
         AuctionListing listing = repository.getListing(listingId);
         if (listing == null || !listing.isActive()) {
-            return PurchaseResult.fail("è¯¥ç©åå·²ä¸å¯è´­ä¹°");
+            return PurchaseResult.fail("该物品已不可购买");
         }
         if (listing.getBuyNowPrice() <= 0) {
-            return PurchaseResult.fail("è¯¥ç©åä¸æ¯æä¸å£ä»·");
+            return PurchaseResult.fail("该物品不支持一口价");
         }
         if (listing.getSeller().equals(buyer.getUniqueId())) {
-            return PurchaseResult.fail("ä¸è½è´­ä¹°èªå·±çç©å");
+            return PurchaseResult.fail("不能购买自己的物品");
         }
 
         double price = listing.getBuyNowPrice();
@@ -225,16 +225,16 @@ public class AuctionService {
 
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(currency);
         if (bridge == null || !bridge.available()) {
-            return PurchaseResult.fail("è´§å¸ç³»ç»ä¸å¯ç¨");
+            return PurchaseResult.fail("货币系统不可用");
         }
 
-        // åæ¢å ï¼ç¶æ CASï¼ï¼ä¿è¯åä¸ç©åä¸ä¼è¢«å¹¶åè´­ä¹° / å°æä»»å¡éå¤ç»ç®
+        // 先抢占（状态 CAS），保证同一物品不会被并发购买 / 到期任务重复结算
         if (!repository.compareAndSetListingStatus(listingId,
                 AuctionListing.ListingStatus.ACTIVE, AuctionListing.ListingStatus.SOLD)) {
-            return PurchaseResult.fail("è¯¥ç©åå·²ä¸å¯è´­ä¹°");
+            return PurchaseResult.fail("该物品已不可购买");
         }
 
-        // æ£ä¹°å®¶é±ï¼å¤±è´¥ååæ»æ¢å ï¼
+        // 扣买家钱（失败则回滚抢占）
         CurrencyTransactionResult withdrawResult = bridge.withdraw(buyer, BigDecimal.valueOf(price));
         if (!withdrawResult.success()) {
             repository.compareAndSetListingStatus(listingId,
@@ -242,36 +242,36 @@ public class AuctionService {
             return PurchaseResult.fail(messages.insufficientFunds());
         }
 
-        // BOTH ç±»åè¥å·²æç«ä»·èï¼ä¸å£ä»·æäº¤ééè¿å¶æ¼éï¼å®å¨åæ¾ï¼ç¦»çº¿ä¸ä¸¢ï¼
+        // BOTH 类型若已有竞价者，一口价成交需退还其押金（安全发放，离线不丢）
         if (listing.getHighestBidder() != null && listing.getCurrentBid() > 0
                 && !listing.getHighestBidder().equals(buyer.getUniqueId())) {
             depositSafe(listing.getHighestBidder(), currency, listing.getCurrentBid(), "auction_outbid_refund");
         }
 
-        // è®¡ç®ç¨è´¹
+        // 计算税费
         double taxRate = getEffectiveTaxRate(listing.getSeller());
         double tax = price * taxRate;
         double sellerIncome = price - tax;
 
-        // ç»åå®¶æé±ï¼å¨çº¿å³æ¶ / ç¦»çº¿å¥å¾åæ¾éåï¼ç»ä¸ä¸¢é±ï¼
+        // 给卖家打钱（在线即时 / 离线入待发放队列，绝不丢钱）
         depositSafe(listing.getSeller(), currency, sellerIncome, "auction_sold_income");
 
-        // æä¹åå¶ä½å­æ®µï¼ç¶æå·²æ¯ SOLDï¼
+        // 持久化其余字段（状态已是 SOLD）
         listing.setStatus(AuctionListing.ListingStatus.SOLD);
         repository.updateListing(listing);
 
-        // ç»ä¹°å®¶ç©åï¼å¨çº¿å³æ¶ / ç¦»çº¿æèåæ»¡å¥éï¼ç»ä¸ä¸¢ç©åï¼
+        // 给买家物品（在线即时 / 离线或背包满入队，绝不丢物品）
         deliverItemSafe(buyer.getUniqueId(), listing, "auction_buynow_item");
         ItemStack item = itemSerializer.deserialize(listing.getItemData());
 
-        // è®°å½åå²
+        // 记录历史
         repository.insertHistory(new AuctionHistory(
             0, listing.getId(), listing.getSeller(), buyer.getUniqueId(),
             listing.getItemData(), listing.getItemDisplayName(),
             price, currency, tax, "BUY_NOW", System.currentTimeMillis()
         ));
 
-        // éç¥åå®¶ï¼ä»å¨çº¿æ¶ï¼ä¸»çº¿ç¨å®å¨ï¼
+        // 通知卖家（仅在线时；主线程安全）
         Player sellerOnline = Bukkit.getPlayer(listing.getSeller());
         if (sellerOnline != null) {
             sellerOnline.sendMessage(ChatColor.translateAlternateColorCodes('&',
@@ -279,7 +279,7 @@ public class AuctionService {
                     .replace("%amount%", currencyManager.format(currency, BigDecimal.valueOf(sellerIncome)))));
         }
 
-        // Redis å¹¿æ­
+        // Redis 广播
         if (redisCache.isAvailable()) {
             redisCache.invalidateByPrefix("market:listings:");
             publishCrossServer("LISTING_SOLD:" + listing.getId());
@@ -294,16 +294,16 @@ public class AuctionService {
     public BidResult placeBid(Player bidder, long listingId, double amount) {
         AuctionListing listing = repository.getListing(listingId);
         if (listing == null || !listing.isActive()) {
-            return BidResult.fail("è¯¥ç©åå·²ä¸å¯ç«ä»·");
+            return BidResult.fail("该物品已不可竞价");
         }
         if (listing.getType() == AuctionListing.ListingType.BUY_NOW) {
-            return BidResult.fail("è¯¥ç©åä¸æ¯æç«ä»·");
+            return BidResult.fail("该物品不支持竞价");
         }
         if (listing.getSeller().equals(bidder.getUniqueId())) {
-            return BidResult.fail("ä¸è½å¯¹èªå·±çç©ååºä»·");
+            return BidResult.fail("不能对自己的物品出价");
         }
 
-        // è®¡ç®æä½åºä»·
+        // 计算最低出价
         double currentHighest = listing.getCurrentBid() > 0 ? listing.getCurrentBid() : listing.getStartingBid();
         double minIncrement = Math.max(
             currentHighest * config.minBidIncrementRatio(),
@@ -315,17 +315,17 @@ public class AuctionService {
             return BidResult.fail("出价必须 ≥ " + currencyManager.format(listing.getCurrency(), BigDecimal.valueOf(minBid)));
         }
 
-        // å»ç»ä¹°å®¶èµéï¼æ£æ¬¾ï¼
+        // 冻结买家资金（扣款）
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(listing.getCurrency());
         if (bridge == null || !bridge.available()) {
-            return BidResult.fail("è´§å¸ç³»ç»ä¸å¯ç¨");
+            return BidResult.fail("货币系统不可用");
         }
         CurrencyTransactionResult result = bridge.withdraw(bidder, BigDecimal.valueOf(amount));
         if (!result.success()) {
             return BidResult.fail(messages.insufficientFunds());
         }
 
-        // éè¿ä¸ä¸ä½æé«åºä»·èæ¼éï¼å®å¨åæ¾ï¼å¨çº¿å³æ¶å¥è´¦å¹¶éç¥ï¼ç¦»çº¿å¥å¾åæ¾éåï¼ç»ä¸ä¸¢é±ï¼
+        // 退还上一位最高出价者押金（安全发放：在线即时入账并通知，离线入待发放队列，绝不丢钱）
         // 注：竞价依赖客户端包已切主线程串行执行，单服内无并发覆盖问题。
         UUID previousBidder = listing.getHighestBidder();
         double previousBid = listing.getCurrentBid();
@@ -392,13 +392,13 @@ public class AuctionService {
         if (!listing.getSeller().equals(seller.getUniqueId())) return false;
         if (listing.getStatus() != AuctionListing.ListingStatus.ACTIVE) return false;
 
-        // æ¢å ï¼é¿åä¸å°æä»»å¡å¹¶åéå¤å¤çï¼éæ¬¾ + éç©åªåçä¸æ¬¡ï¼
+        // 抢占，避免与到期任务并发重复处理（退款 + 退物只发生一次）
         if (!repository.compareAndSetListingStatus(listingId,
                 AuctionListing.ListingStatus.ACTIVE, AuctionListing.ListingStatus.CANCELLED)) {
             return false;
         }
 
-        // å¦ææç«ä»·èï¼éè¿æ¼éï¼å®å¨åæ¾ï¼ç¦»çº¿ä¸ä¸¢ï¼
+        // 如果有竞价者，退还押金（安全发放，离线不丢）
         if (listing.getHighestBidder() != null && listing.getCurrentBid() > 0) {
             depositSafe(listing.getHighestBidder(), listing.getCurrency(), listing.getCurrentBid(), "auction_cancel_refund");
         }
@@ -406,7 +406,7 @@ public class AuctionService {
         listing.setStatus(AuctionListing.ListingStatus.CANCELLED);
         repository.updateListing(listing);
 
-        // è¿è¿ç©åï¼å®å¨åæ¾ï¼èåæ»¡æç¦»çº¿åå¥å¾åæ¾éåï¼
+        // 返还物品（安全发放：背包满或离线均入待发放队列）
         deliverItemSafe(seller.getUniqueId(), listing, "auction_cancel_return");
 
         repository.insertHistory(new AuctionHistory(
@@ -527,7 +527,7 @@ public class AuctionService {
                 Bukkit.getScheduler().runTask(plugin, () -> processExpiredListing(listing));
             }
         } catch (Exception e) {
-            logger.log(Level.SEVERE, "[Market-Auction] å°æå¤çå¼å¸¸", e);
+            logger.log(Level.SEVERE, "[Market-Auction] 到期处理异常", e);
         }
     }
 
@@ -537,7 +537,7 @@ public class AuctionService {
             ? AuctionListing.ListingStatus.SOLD
             : AuctionListing.ListingStatus.EXPIRED;
 
-        // æ¢å ï¼ä»å½ä»ä¸º ACTIVE æ¶æ¬æ¬¡æè´è´£ç»ç®ï¼æç»ä¸è´­ä¹°/æå¨è§¦å/ä¸ä¸è½®ä»»å¡éå¤ç»ç®ï¼éå¤åé±åç©åï¼
+        // 抢占：仅当仍为 ACTIVE 时本次才负责结算，杜绝与购买/手动触发/上一轮任务重复结算（重复发钱发物品）
         if (!repository.compareAndSetListingStatus(listing.getId(),
                 AuctionListing.ListingStatus.ACTIVE, target)) {
             return;
@@ -545,12 +545,12 @@ public class AuctionService {
         listing.setStatus(target);
 
         if (hasBidder) {
-            // ç«ä»·æäº¤
+            // 竞价成交
             double taxRate = getEffectiveTaxRate(listing.getSeller());
             double tax = listing.getCurrentBid() * taxRate;
             double sellerIncome = listing.getCurrentBid() - tax;
 
-            // åå®¶æ¶æ¬¾ + ä¹°å®¶å¾ç©åï¼å®å¨åæ¾ï¼ç¦»çº¿ä¸ä¸¢ï¼
+            // 卖家收款 + 买家得物品（安全发放，离线不丢）
             depositSafe(listing.getSeller(), listing.getCurrency(), sellerIncome, "auction_bidwin_income");
             deliverItemSafe(listing.getHighestBidder(), listing, "auction_bidwin_item");
 
@@ -562,7 +562,7 @@ public class AuctionService {
                 "BID_WIN", System.currentTimeMillis()
             ));
         } else {
-            // æ äººç«ä»·ï¼éè¿ç©åç»åå®¶ï¼å®å¨åæ¾ï¼
+            // 无人竞价，退还物品给卖家（安全发放）
             deliverItemSafe(listing.getSeller(), listing, "auction_expired_return");
             repository.updateListing(listing);
 
@@ -572,7 +572,7 @@ public class AuctionService {
                 0, listing.getCurrency(), 0, "EXPIRED", System.currentTimeMillis()
             ));
 
-            // éç¥åå®¶ï¼å¨çº¿æ¶ï¼
+            // 通知卖家（在线时）
             Player seller = Bukkit.getPlayer(listing.getSeller());
             if (seller != null) {
                 seller.sendMessage(ChatColor.translateAlternateColorCodes('&',
@@ -595,13 +595,13 @@ public class AuctionService {
     }
 
     /**
-     * å®å¨åæ¾ç©åï¼æ¶ä»¶äººå¨çº¿åå¨ä¸»çº¿ç¨æ¾å¥èåï¼è£ä¸ä¸çé¨åå¥å¾åæ¾éåï¼ï¼
+     * 安全发放物品：收件人在线则在主线程放入背包（装不下的部分入待发放队列），
      * 离线则整笔入待发放队列，玩家上线时补发。彻底避免物品丢失。
      */
     private void deliverItemSafe(UUID target, AuctionListing listing, String reason) {
         final ItemStack item = itemSerializer.deserialize(listing.getItemData());
         if (item == null) {
-            logger.warning("[Market-Auction] ç©åååºååå¤±è´¥ï¼å·²è½¬å¥å¾åæ¾éå listing=" + listing.getId());
+            logger.warning("[Market-Auction] 物品反序列化失败，已转入待发放队列 listing=" + listing.getId());
             repository.addPendingItem(target, listing.getItemData(), reason);
             return;
         }
@@ -619,7 +619,7 @@ public class AuctionService {
     }
 
     /**
-     * å®å¨åæ¾è´§å¸ï¼æ¶ä»¶äººå¨çº¿ä¸è´§å¸å¯ç¨åå¨ä¸»çº¿ç¨å¥è´¦ï¼
+     * 安全发放货币：收件人在线且货币可用则在主线程入账，
      * 否则入待发放队列，玩家上线时补发。彻底避免货款丢失。
      */
     private void depositSafe(UUID target, String currency, double amount, String reason) {
@@ -634,7 +634,7 @@ public class AuctionService {
             if (resultHolder[0] != null && resultHolder[0].success()) {
                 return;
             }
-            logger.warning("[Market-Auction] å¨çº¿å¥è´¦å¤±è´¥ï¼è½¬å¥å¾åæ¾éå: player="
+            logger.warning("[Market-Auction] 在线入账失败，转入待发放队列: player="
                 + online.getName() + " currency=" + currency + " amount=" + amount);
         }
         repository.addPendingCurrency(target, currency, amount, reason);
@@ -733,7 +733,7 @@ public class AuctionService {
         return item.getType().name();
     }
 
-    // ç¦»çº¿ / èåæº¢åºçåæ¾ç»ä¸ç± deliverItemSafe / depositSafe + å¾åæ¾éåå¤çï¼
+    // 离线 / 背包溢出的发放统一由 deliverItemSafe / depositSafe + 待发放队列处理，
     // 不再使用旧的 depositOffline / createOfflineDeposit（离线时会丢钱）。
 
     private void publishCrossServer(String message) {

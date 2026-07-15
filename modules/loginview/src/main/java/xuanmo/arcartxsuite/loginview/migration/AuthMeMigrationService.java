@@ -55,7 +55,7 @@ public final class AuthMeMigrationService {
                 }
                 imported++;
                 if (sender != null && imported % configuration.batchSize() == 0) {
-                    sender.sendMessage(messages.get("migrate.progress", scanned, imported));
+                    sender.sendMessage(messages.get("migration.progress", scanned, imported));
                 }
             }
         }

@@ -97,7 +97,8 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
             throw new IllegalStateException("ArcartXRegions.yml 配置文件缺失");
         }
         rawYaml = YamlConfiguration.loadConfiguration(configFile);
-        configuration = RegionsConfiguration.load(rawYaml, logger);
+        configuration = RegionsConfiguration.load(rawYaml,
+            YamlConfiguration.loadConfiguration(new File(configFile.getParentFile(), messagesFileName())), logger);
     }
 
     @Override

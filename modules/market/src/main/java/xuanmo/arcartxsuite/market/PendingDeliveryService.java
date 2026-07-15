@@ -21,9 +21,9 @@ import xuanmo.arcartxsuite.market.storage.MarketRepository;
 import xuanmo.arcartxsuite.market.storage.PendingDelivery;
 
 /**
- * å¾åæ¾éåæ¶è´¹èï¼ç©å®¶ä¸çº¿æ¶è¡¥åå¶ç¦»çº¿æé´ï¼æèåæ¾æ»¡æ¶ï¼ç´¯ç§¯çç©å / è´§å¸ã
+ * 待发放队列消费者：玩家上线时补发其离线期间（或背包曾满时）累积的物品 / 货币。
  * <p>
- * ä¸æåç»ç®ç"å®å¨åæ¾"éåï¼ä¿è¯ Market äº¤æå¨ä»»ä½å¨çº¿/ç¦»çº¿/èåç¶æä¸é½ä¸ä¸¢é±ãä¸ä¸¢ç©åã
+ * 与拍卖结算的"安全发放"配合，保证 Market 交易在任何在线/离线/背包状态下都不丢钱、不丢物品。
  */
 public class PendingDeliveryService implements Listener {
 
@@ -46,7 +46,7 @@ public class PendingDeliveryService implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onJoin(PlayerJoinEvent event) {
         final UUID uuid = event.getPlayer().getUniqueId();
-        // å¼æ­¥è¯»åéåï¼ä¸»çº¿ç¨åæ¾ï¼å»¶è¿ç¡®ä¿ç©å®¶å®å¨å è½½ï¼
+        // 异步读取队列，主线程发放（延迟确保玩家完全加载）
         Bukkit.getScheduler().runTaskLaterAsynchronously(plugin, () -> {
             List<PendingDelivery> pending = repository.getPendingDeliveries(uuid);
             if (pending.isEmpty()) {
@@ -69,12 +69,12 @@ public class PendingDeliveryService implements Listener {
                 if (delivery.isItem()) {
                     ItemStack item = itemSerializer.deserialize(delivery.itemData());
                     if (item == null) {
-                        logger.warning("[Market] å¾åæ¾ç©åååºååå¤±è´¥ï¼å·²ä¸¢å¼ id=" + delivery.id());
+                        logger.warning("[Market] 待发放物品反序列化失败，已丢弃 id=" + delivery.id());
                         continue;
                     }
                     Map<Integer, ItemStack> overflow = player.getInventory().addItem(item);
                     if (!overflow.isEmpty()) {
-                        // èåä»è£ä¸ä¸ï¼ä¿çè®°å½ï¼å¾ä¸æ¬¡ä¸çº¿ / è¾ç©ºååè¡¥å
+                        // 背包仍装不下：保留记录，待下次上线 / 腾空后再补发
                         continue;
                     }
                     deliveredItems++;
@@ -91,14 +91,14 @@ public class PendingDeliveryService implements Listener {
                 }
                 repository.deletePendingDelivery(delivery.id());
             } catch (Exception e) {
-                logger.warning("[Market] è¡¥åè®°å½å¤çå¼å¸¸ id=" + delivery.id() + ": " + e.getMessage());
+                logger.warning("[Market] 补发记录处理异常 id=" + delivery.id() + ": " + e.getMessage());
             }
         }
 
         if (deliveredItems > 0 || deliveredCurrency > 0) {
-            StringBuilder sb = new StringBuilder(ChatColor.GREEN + "[å¸åº] å·²è¡¥åç¦»çº¿æé´ç");
+            StringBuilder sb = new StringBuilder(ChatColor.GREEN + "[市场] 已补发离线期间的");
             if (deliveredItems > 0) {
-                sb.append(' ').append(deliveredItems).append(" ä»¶ç©å");
+                sb.append(' ').append(deliveredItems).append(" 件物品");
             }
             if (deliveredCurrency > 0) {
                 sb.append(' ').append(deliveredCurrency);

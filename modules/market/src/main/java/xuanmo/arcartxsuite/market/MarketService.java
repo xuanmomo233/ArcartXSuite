@@ -105,11 +105,11 @@ public class MarketService {
     }
 
     public void start(java.io.File dataFolder) throws Exception {
-        // åå§åå­å¨
+        // 初始化存储
         repository = new JdbcMarketRepository(config.storage(), logger, dataFolder);
         repository.initialize();
 
-        // åå§å Redis
+        // 初始化 Redis
         redisCache = new RedisMarketCache(config.redis(), logger);
         redisCache.initialize();
 
@@ -124,7 +124,7 @@ public class MarketService {
             }
         };
 
-        // å¯å¨å­æå¡
+        // 启动子服务
         if (config.auction().enabled()) {
             auctionService = new AuctionService(plugin, config.auction(), config.messages(),
                 repository, redisCache, crossServerPublisher, currencyManager, mailSupplier, itemSerializer, logger);
@@ -143,7 +143,7 @@ public class MarketService {
             recycleService.start();
         }
 
-        logger.info("[Market] å¨çå¸åºæå¡å·²å¯å¨");
+        logger.info("[Market] 全球市场服务已启动");
     }
 
     public void shutdown() {
@@ -199,7 +199,7 @@ public class MarketService {
     }
 
     public void searchAuction(Player player, String keyword) {
-        // éè¿ packet æ¨éæç´¢ç»æå°å®¢æ·ç«¯ UI
+        // 通过 packet 推送搜索结果到客户端 UI
         openAuctionUi(player);
     }
 
@@ -278,7 +278,7 @@ public class MarketService {
         if (!config.ui().packetId().equals(packetId)) return false;
         if (data.isEmpty()) return false;
 
-        // data[0] = action, åç»­å­æ®µä¸ºåæ°
+        // data[0] = action, 后续字段为参数
         String action = data.get(0);
         switch (action) {
             case "auction_list" -> handleAuctionListPacket(player, data);
@@ -300,7 +300,7 @@ public class MarketService {
         return true;
     }
 
-    // åè®®æ ¼å¼: data[0]=action, data[1..n]=åæ°
+    // 协议格式: data[0]=action, data[1..n]=参数
     // auction_list: [action, page, category?, keyword?]
     // auction_buy: [action, listingId]
     // auction_bid: [action, listingId, amount]
@@ -408,20 +408,20 @@ public class MarketService {
         var result = auctionService.buyNow(player, listingId);
         if (result.success()) {
             player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().auctionBought()));
-            // è§¦åä¿¡å·
+            // 触发信号
             dispatchSignal("market_purchase", player, Map.of(
                 "listing_id", String.valueOf(listingId),
                 "price", String.valueOf(result.price())
             ));
-            // åå¸å°äºä»¶æ»çº¿ï¼è®¢éæ¹èªè¡å³å®æ¯å¦æ­æ¥ï¼
+            // 发布到事件总线（订阅方自行决定是否播报）
             publishEvent("market.auction_purchased", player, Map.of(
                 "listing_id", String.valueOf(listingId),
                 "price", String.valueOf(result.price()),
                 "formatted_price", currencyManager.format(result.currency(), BigDecimal.valueOf(result.price()))
             ));
-            // å¤§é¢äº¤æç¾¤æ­æ¥ï¼åå¤ç´æ¥è°ç¨ï¼åç»­å¯ç§»é¤ï¼
+            // 大额交易群播报（后备直接调用，后续可移除）
             if (result.price() >= qqBroadcastThreshold) {
-                broadcastToQQ(player.getName() + " ä»¥ " + currencyManager.format(result.currency(), BigDecimal.valueOf(result.price())) + " è´­ä¹°äºæåè¡ç©å");
+                broadcastToQQ(player.getName() + " 以 " + currencyManager.format(result.currency(), BigDecimal.valueOf(result.price())) + " 购买了拍卖行物品");
             }
         } else {
             player.sendMessage(ChatColor.RED + result.error());
@@ -469,7 +469,7 @@ public class MarketService {
         int amount = data.size() > 3 ? parseIntSafe(data.get(3), 1) : 1;
         if (shopId.isEmpty() || itemId.isEmpty()) return;
         buyFromShop(player, shopId, itemId, amount);
-        // è´­ä¹°åå·æ°ååº UI
+        // 购买后刷新商店 UI
         if (shopService != null) {
             Map<String, Object> packet = buildShopPacket(player, shopId);
             sendUiPacket(player, config.ui().shopId(), "update", packet);
@@ -499,7 +499,7 @@ public class MarketService {
         } else {
             player.sendMessage(ChatColor.RED + result.error());
         }
-        // åæ¶åå·æ° UI
+        // 回收后刷新 UI
         handleRecyclePreviewPacket(player);
     }
 
@@ -566,14 +566,14 @@ public class MarketService {
         packet.put("pageText", (page + 1) + "/" + totalPages);
         packet.put("currentCategory", currentCategory);
 
-        // åç±»æ°æ®
+        // 分类数据
         Map<String, Object> categories = new LinkedHashMap<>();
         Map<String, Object> categoryTexts = new LinkedHashMap<>();
         int categoryIndex = 0;
         Map<String, Object> allCategory = new LinkedHashMap<>();
         allCategory.put("id", "all");
         categories.put(Integer.toString(categoryIndex), allCategory);
-        categoryTexts.put(Integer.toString(categoryIndex), "&få¨é¨");
+        categoryTexts.put(Integer.toString(categoryIndex), "&f全部");
         categoryIndex++;
         for (var entry : config.auction().categories().entrySet()) {
             Map<String, Object> category = new LinkedHashMap<>();
@@ -585,7 +585,7 @@ public class MarketService {
         packet.put("categories", categories);
         packet.put("categoryTexts", categoryTexts);
 
-        // ç©ååè¡¨æ°æ®
+        // 物品列表数据
         Map<String, Object> listingsMap = new LinkedHashMap<>();
         Map<String, Object> listingTexts = new LinkedHashMap<>();
         Set<Long> favoriteIds = new java.util.HashSet<>(repository.getFavorites(player.getUniqueId()));
@@ -616,7 +616,7 @@ public class MarketService {
             listingsMap.put(key, row);
             listingTexts.put(key, listing.getItemDisplayName());
 
-            // ç©å JSONï¼flat å­æ®µï¼
+            // 物品 JSON（flat 字段）
             packet.put("itemJson" + i, listingItemJson(listing));
         }
         packet.put("listings", listingsMap);
@@ -630,7 +630,7 @@ public class MarketService {
         Map<String, Object> packet = new LinkedHashMap<>();
         packet.put("packetId", config.ui().packetId());
 
-        // ååºåè¡¨
+        // 商店列表
         Map<String, Object> shops = new LinkedHashMap<>();
         Map<String, Object> shopTexts = new LinkedHashMap<>();
         String firstShopId = null;
@@ -649,7 +649,7 @@ public class MarketService {
         packet.put("shops", shops);
         packet.put("shopTexts", shopTexts);
 
-        // å½åéä¸­ååº
+        // 当前选中商店
         String activeShopId = selectedShopId != null
             && !selectedShopId.isEmpty()
             && shopService != null
@@ -659,7 +659,7 @@ public class MarketService {
         packet.put("shopId", activeShopId != null ? activeShopId : "");
         packet.put("shopName", "");
 
-        // åååè¡¨
+        // 商品列表
         Map<String, Object> items = new LinkedHashMap<>();
         if (activeShopId != null && shopService != null) {
             var shopDef = shopService.getShop(activeShopId);
@@ -674,10 +674,10 @@ public class MarketService {
                     row.put("name", shopItem.displayName());
                     row.put("price", formatPrice(shopItem.buyPrice()));
                     row.put("stock", formatShopStock(player, activeShopId, itemEntry.getKey(), shopItem));
-                    row.put("limitText", shopItem.limitPerPlayer() > 0 ? "éè´­ " + shopItem.limitPerPlayer() + " ä¸ª" : "");
+                    row.put("limitText", shopItem.limitPerPlayer() > 0 ? "限购 " + shopItem.limitPerPlayer() + " 个" : "");
                     items.put(key, row);
 
-                    // ç©å JSONï¼flat å­æ®µï¼
+                    // 物品 JSON（flat 字段）
                     packet.put("shopItemJson" + idx, shopItemJson(shopItem));
                     idx++;
                 }
@@ -756,22 +756,22 @@ public class MarketService {
             String counterpart;
             switch (h.transactionType()) {
                 case "BUY_NOW" -> {
-                    typeText = isSeller ? "å®åº" : "è´­ä¹°";
+                    typeText = isSeller ? "售出" : "购买";
                     typeColor = isSeller ? "&a" : "&e";
-                    counterpart = isSeller ? "ä¹°å®¶: " + nameFromUuid(h.buyer()) : "åå®¶: " + nameFromUuid(h.seller());
+                    counterpart = isSeller ? "买家: " + nameFromUuid(h.buyer()) : "卖家: " + nameFromUuid(h.seller());
                 }
                 case "BID_WIN" -> {
-                    typeText = isSeller ? "ç«ä»·å®åº" : "ç«ä»·è·å¾";
+                    typeText = isSeller ? "竞价售出" : "竞价获得";
                     typeColor = isSeller ? "&a" : "&b";
-                    counterpart = isSeller ? "ä¹°å®¶: " + nameFromUuid(h.buyer()) : "åå®¶: " + nameFromUuid(h.seller());
+                    counterpart = isSeller ? "买家: " + nameFromUuid(h.buyer()) : "卖家: " + nameFromUuid(h.seller());
                 }
                 case "EXPIRED" -> {
-                    typeText = "è¿æéè¿";
+                    typeText = "过期退还";
                     typeColor = "&7";
                     counterpart = "";
                 }
                 case "CANCELLED" -> {
-                    typeText = "å·²åæ¶";
+                    typeText = "已取消";
                     typeColor = "&c";
                     counterpart = "";
                 }
@@ -789,7 +789,7 @@ public class MarketService {
             row.put("time", TIME_FMT.format(new Date(h.timestamp())));
             records.put(key, row);
 
-            // ç©å JSONï¼flat å­æ®µï¼
+            // 物品 JSON（flat 字段）
             packet.put("historyItemJson" + i, historyItemJson(h));
         }
         packet.put("records", records);
@@ -801,10 +801,10 @@ public class MarketService {
 
     private String formatShopStock(Player player, String shopId, String itemKey, ShopService.ShopItem shopItem) {
         if ("unlimited".equalsIgnoreCase(shopItem.stockMode())) {
-            return "æ é";
+            return "无限";
         }
         if (repository == null || shopItem.stockAmount() <= 0) {
-            return "æ é";
+            return "无限";
         }
         if ("global".equalsIgnoreCase(shopItem.stockMode())) {
             return String.valueOf(repository.getGlobalShopStock(shopId, itemKey, shopItem.stockAmount()));
@@ -893,16 +893,16 @@ public class MarketService {
 
     private String formatTimeLeft(long expiresAt) {
         long remaining = expiresAt - System.currentTimeMillis();
-        if (remaining <= 0) return "å·²è¿æ";
+        if (remaining <= 0) return "已过期";
         long hours = remaining / (1000 * 60 * 60);
         long minutes = (remaining / (1000 * 60)) % 60;
-        if (hours >= 24) return (hours / 24) + "å¤©" + (hours % 24) + "æ¶";
-        if (hours > 0) return hours + "æ¶" + minutes + "å";
-        return minutes + "å";
+        if (hours >= 24) return (hours / 24) + "天" + (hours % 24) + "时";
+        if (hours > 0) return hours + "时" + minutes + "分";
+        return minutes + "分";
     }
 
     private String nameFromUuid(java.util.UUID uuid) {
-        if (uuid == null) return "æªç¥";
+        if (uuid == null) return "未知";
         Player online = org.bukkit.Bukkit.getPlayer(uuid);
         if (online != null) return online.getName();
         var offline = org.bukkit.Bukkit.getOfflinePlayer(uuid);
@@ -956,7 +956,7 @@ public class MarketService {
     }
 
     public int clearExpired() {
-        // æå¨è§¦åå°æå¤ç
+        // 手动触发到期处理
         if (auctionService == null) return 0;
         return auctionService.triggerExpiredProcessing();
     }
@@ -1012,7 +1012,7 @@ public class MarketService {
         if (qqBotProvider == null) return;
         QQBotBroadcastable qqBot = qqBotProvider.get();
         if (qqBot != null) {
-            qqBot.sendToAllGroups("[äº¤æ] " + message);
+            qqBot.sendToAllGroups("[交易] " + message);
         }
     }
 

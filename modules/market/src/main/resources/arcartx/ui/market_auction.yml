@@ -163,7 +163,7 @@ controls:
             attribute:
               x: 42
               y: 78
-              texts: "~&7第 {var.page + 1}/{var.totalPages} 页"
+              texts: "~&7第 {(var.page + 1).round()} / {var.totalPages.round()} 页"
               fontSize: 32
 
           # ── 顶部按钮栏 ──────────────────────────────
@@ -728,7 +728,7 @@ controls:
               x: 750
               y: 834
               center: true
-              texts: "~&7第 &f{var.page + 1} &7/ &f{var.totalPages} &7页"
+              texts: "~&7第 &f{(var.page + 1).round()} &7/ &f{var.totalPages.round()} &7页"
               fontSize: 32
 
           下一页:

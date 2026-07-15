@@ -24,7 +24,7 @@ public record MarketModuleConfiguration(
     MessagesConfiguration messages
 ) {
 
-    public static MarketModuleConfiguration load(FileConfiguration config, Logger logger) {
+    public static MarketModuleConfiguration load(FileConfiguration config, FileConfiguration messagesConfig, Logger logger) {
         boolean debug = config.getBoolean("settings.debug", false);
         long schedulerInterval = Math.max(20L, config.getLong("settings.scheduler-interval-ticks", 200L));
 
@@ -37,7 +37,7 @@ public record MarketModuleConfiguration(
         AuctionConfiguration auction = loadAuction(config, logger);
         ShopConfiguration shop = loadShop(config);
         RecycleConfiguration recycle = loadRecycle(config);
-        MessagesConfiguration messages = loadMessages(config);
+        MessagesConfiguration messages = loadMessages(messagesConfig);
 
         return new MarketModuleConfiguration(debug, schedulerInterval, ui, storage, redis, crossServer, auction, shop, recycle, messages);
     }
@@ -202,21 +202,21 @@ public record MarketModuleConfiguration(
         ConfigurationSection sec = config.getConfigurationSection("messages");
         if (sec == null) return MessagesConfiguration.defaults();
         return new MessagesConfiguration(
-            readStr(sec, "prefix", "&8[&6AXSå¸åº&8] &7"),
-            readStr(sec, "auction-listed", "&aç©åå·²æåä¸æ¶ï¼"),
-            readStr(sec, "auction-bought", "&aè´­ä¹°æåï¼"),
-            readStr(sec, "auction-bid-placed", "&aåºä»·æåï¼å½åæé«åºä»·: &e%amount%"),
-            readStr(sec, "auction-outbid", "&cæ¨å¯¹ &e%item% &cçåºä»·å·²è¢«è¶è¶ï¼æ°æé«ä»·: &e%amount%"),
+            readStr(sec, "prefix", "&8[&6AXS市场&8] &7"),
+            readStr(sec, "auction-listed", "&a物品已成功上架！"),
+            readStr(sec, "auction-bought", "&a购买成功！"),
+            readStr(sec, "auction-bid-placed", "&a出价成功！当前最高出价: &e%amount%"),
+            readStr(sec, "auction-outbid", "&c您对 &e%item% &c的出价已被超越！新最高价: &e%amount%"),
             readStr(sec, "auction-expired", "&7您上架的 &e%item% &7已到期，已退回。"),
-            readStr(sec, "auction-sold", "&aæ¨ä¸æ¶ç &e%item% &aå·²å®åºï¼æ¶å¥: &e%amount%"),
+            readStr(sec, "auction-sold", "&a您上架的 &e%item% &a已售出！收入: &e%amount%"),
             readStr(sec, "auction-cancelled", "&7已取消上架。"),
-            readStr(sec, "shop-bought", "&aè´­ä¹°æåï¼è±è´¹: &e%amount%"),
+            readStr(sec, "shop-bought", "&a购买成功！花费: &e%amount%"),
             readStr(sec, "shop-limit-reached", "&c该商品已达购买上限。"),
-            readStr(sec, "recycle-success", "&aåæ¶æåï¼è·å¾: &e%amount%"),
+            readStr(sec, "recycle-success", "&a回收成功！获得: &e%amount%"),
             readStr(sec, "recycle-nothing", "&7背包中没有可回收的物品。"),
             readStr(sec, "insufficient-funds", "&c余额不足。"),
             readStr(sec, "item-blacklisted", "&c该物品不允许上架。"),
-            readStr(sec, "auto-recycle-disabled", "&cæ¹éåæ¶åè½å·²å³é­")
+            readStr(sec, "auto-recycle-disabled", "&c批量回收功能已关闭")
         );
     }
 
@@ -338,14 +338,14 @@ public record MarketModuleConfiguration(
     ) {
         public static MessagesConfiguration defaults() {
             return new MessagesConfiguration(
-                "&8[&6AXSå¸åº&8] &7", "&aç©åå·²æåä¸æ¶ï¼", "&aè´­ä¹°æåï¼",
-                "&aåºä»·æåï¼å½åæé«åºä»·: &e%amount%", "&cæ¨å¯¹ &e%item% &cçåºä»·å·²è¢«è¶è¶ï¼æ°æé«ä»·: &e%amount%",
+                "&8[&6AXS市场&8] &7", "&a物品已成功上架！", "&a购买成功！",
+                "&a出价成功！当前最高出价: &e%amount%", "&c您对 &e%item% &c的出价已被超越！新最高价: &e%amount%",
                 "&7您上架的 &e%item% &7已到期，已退回。", "&a您上架的 &e%item% &a已售出！收入: &e%amount%",
                 "&7已取消上架。", "&a购买成功！花费: &e%amount%", "&c该商品已达购买上限。",
                 "&a回收成功！获得: &e%amount%", "&7背包中没有可回收的物品。",
                 "&c余额不足。",
                 "&c该物品不允许上架。",
-                "&cæ¹éåæ¶åè½å·²å³é­"
+                "&c批量回收功能已关闭"
             );
         }
     }

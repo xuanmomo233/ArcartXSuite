@@ -51,7 +51,7 @@ public class RecycleService {
 
     public void start() {
         loadRecycleTables();
-        logger.info("[Market-Recycle] åæ¶è¡¨å·²å è½½ " + entries.size() + " ä¸ªæ¡ç®");
+        logger.info("[Market-Recycle] 回收表已加载 " + entries.size() + " 个条目");
     }
 
     public void shutdown() {
@@ -91,7 +91,7 @@ public class RecycleService {
                     ));
                 }
             } catch (Exception e) {
-                logger.log(Level.WARNING, "[Market-Recycle] å è½½åæ¶è¡¨æä»¶å¤±è´¥: " + file.getName(), e);
+                logger.log(Level.WARNING, "[Market-Recycle] 加载回收表文件失败: " + file.getName(), e);
             }
         }
     }
@@ -101,7 +101,7 @@ public class RecycleService {
      */
     public RecycleResult recycle(Player player, ItemStack item) {
         RecycleEntry entry = findEntry(item);
-        if (entry == null) return RecycleResult.fail("è¯¥ç©åä¸å¯åæ¶");
+        if (entry == null) return RecycleResult.fail("该物品不可回收");
 
         double pricePerUnit = entry.price();
         double multiplier = getMultiplier(player);
@@ -109,17 +109,17 @@ public class RecycleService {
 
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(entry.currency());
         if (bridge == null || !bridge.available()) {
-            return RecycleResult.fail("è´§å¸ç³»ç»ä¸å¯ç¨");
+            return RecycleResult.fail("货币系统不可用");
         }
         CurrencyTransactionResult result = bridge.deposit(player, BigDecimal.valueOf(total));
         if (!result.success()) {
-            return RecycleResult.fail("å­æ¬¾å¤±è´¥");
+            return RecycleResult.fail("存款失败");
         }
 
         int count = item.getAmount();
         item.setAmount(0);
 
-        // ç»è®¡
+        // 统计
         repository.addRecycleStats(player.getUniqueId(), entry.currency(), total, count);
 
         return RecycleResult.success(total, entry.currency(), count, Map.of(entry.currency(), total));

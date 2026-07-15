@@ -58,27 +58,3 @@ storage:
   password: ""
   table-prefix: "axs_rg_"
   pool-size: 3
-
-# 消息
-messages:
-  prefix: "&8[&6Regions&8] &r"
-  wand-pos1: "&a已设置选区点 1: &f{x}, {y}, {z}"
-  wand-pos2: "&a已设置选区点 2: &f{x}, {y}, {z}"
-  region-created: "&a区域 &f{name} &a已创建。"
-  region-deleted: "&c区域 &f{name} &c已删除。"
-  region-not-found: "&c未找到区域: &f{name}"
-  region-exists: "&c区域 &f{name} &c已存在。"
-  no-selection: "&c请先用选区工具选定两个点。"
-  selection-too-large: "&c选区体积超过限制 ({max} 方块)。"
-  max-regions-reached: "&c你已达到最大区域数量限制 ({max})。"
-  flag-set: "&a区域 &f{region} &a标志 &f{flag} &a已设置为 &f{value}&a。"
-  flag-removed: "&a区域 &f{region} &a标志 &f{flag} &a已移除。"
-  flag-unknown: "&c未知标志: &f{flag}"
-  member-added: "&a已将 &f{player} &a添加为区域 &f{region} &a的{role}。"
-  member-removed: "&a已将 &f{player} &a从区域 &f{region} &a移除。"
-  no-permission-region: "&c你没有在此区域执行该操作的权限。"
-  no-build: "&c你不能在此区域放置或破坏方块。"
-  no-interact: "&c你不能在此区域进行交互。"
-  no-pvp: "&c此区域禁止 PVP。"
-  region-enter: "&a[进入] &f{region}"
-  region-leave: "&a[离开] &f{region}"

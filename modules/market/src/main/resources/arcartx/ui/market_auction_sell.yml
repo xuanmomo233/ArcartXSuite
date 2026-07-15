@@ -3,6 +3,33 @@
 # packetId: AXS_MARKET
 
 ui:
+  isHud: false
+  defaultOpen: false
+  hide: []
+  through: false
+  background: false
+  escClose: true
+  closeDied: true
+  show: true
+  jei: false
+  level: 8
+  itemSize: 16
+  screenScale: true
+  action:
+    load: |-
+      var.packetId = 'AXS_MARKET'
+      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      var.maxBackpackCount = 0
+      var.selectedSlot = none
+      var.selectedPrice = none
+      var.selectedMessage = none
+      var.selectedDuration = 86400
+      var.selectedCurrency = none
+      var.priceMin = 1
+      var.priceMax = 1000000000
+      var.messageMaxLength = 50
+    open: |-
+      Packet.send(var.packetId, 'auction_sell_open')
   packetHandler:
     init: |-
       var.packetId = packet['packetId']
@@ -25,7 +52,7 @@ ui:
       }
       for(key in var.backpackItems.keys()){
         json = packet['itemJson' + key]
-        if(json != none && json != none){
+        if(json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
@@ -67,7 +94,7 @@ ui:
       }
       for(key in var.backpackItems.keys()){
         json = packet['itemJson' + key]
-        if(json != none && json != none){
+        if(json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
@@ -89,20 +116,6 @@ ui:
           preview.seticon()
         }
       }
-    load: |-
-      var.packetId = 'AXS_MARKET'
-      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-      var.maxBackpackCount = 0
-      var.selectedSlot = none
-      var.selectedPrice = none
-      var.selectedMessage = none
-      var.selectedDuration = 86400
-      var.selectedCurrency = none
-      var.priceMin = 1
-      var.priceMax = 1000000000
-      var.messageMaxLength = 50
-    open: |-
-      Packet.send(var.packetId, 'auction_sell_open')
 
 controls:
   自适应全局布局:
@@ -110,6 +123,7 @@ controls:
     attribute:
       point: ~stretch_all
       width: 1920
+      height: 1080
     children:
       背景遮罩:
         type: Texture
@@ -124,7 +138,7 @@ controls:
             Screen.close()
 
       主面板:
-        type: Texture
+        type: Canvas
         attribute:
           x: 350
           y: 180
@@ -138,6 +152,17 @@ controls:
             width: 2
             color: ~80,180,255,80
         children:
+          面板背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~32,32,42,238
+              shape: ~round_rect
+              radius: 24
+            effect:
+              stroke:
+                width: 2
+                color: ~80,180,255,80
           标题:
             type: Text
             attribute:
@@ -171,7 +196,7 @@ controls:
 
           # ── 左侧背包选择区 ──────────────────────────────
           背包面板:
-            type: Texture
+            type: Canvas
             attribute:
               x: 40
               y: 80
@@ -185,6 +210,17 @@ controls:
                 width: 2
                 color: ~0,0,0,255
             children:
+              面板背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~255,255,255,120
+                  shape: ~round_rect
+                  radius: 24
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
               背包标题:
                 type: Text
                 attribute:
@@ -254,7 +290,7 @@ controls:
                 texts: "~&8暂无可上架物品"
                 through: true
           信息面板:
-            type: Texture
+            type: Canvas
             val: 信息面板
             attribute:
               x: 620
@@ -269,6 +305,17 @@ controls:
                 width: 2
                 color: ~0,0,0,255
             children:
+              面板背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~255,255,255,120
+                  shape: ~round_rect
+                  radius: 24
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
               信息标题:
                 type: Text
                 attribute:

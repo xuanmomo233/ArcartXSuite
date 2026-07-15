@@ -62,7 +62,7 @@ public class ShopService {
     public void start() {
         loadShops();
         refreshTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::refreshStocks, config.refreshIntervalTicks(), config.refreshIntervalTicks());
-        logger.info("[Market-Shop] ç³»ç»ååºå·²å è½½ " + shops.size() + " ä¸ªååº");
+        logger.info("[Market-Shop] 系统商店已加载 " + shops.size() + " 个商店");
     }
 
     public void shutdown() {
@@ -97,7 +97,7 @@ public class ShopService {
                     shops.put(shopId, shop);
                 }
             } catch (Exception e) {
-                logger.log(Level.WARNING, "[Market-Shop] å è½½ååºæä»¶å¤±è´¥: " + file.getName(), e);
+                logger.log(Level.WARNING, "[Market-Shop] 加载商店文件失败: " + file.getName(), e);
             }
         }
     }
@@ -150,20 +150,20 @@ public class ShopService {
      */
     public BuyResult buy(Player player, String shopId, String itemId, int amount) {
         ShopDefinition shop = shops.get(shopId);
-        if (shop == null) return BuyResult.fail("ååºä¸å­å¨");
+        if (shop == null) return BuyResult.fail("商店不存在");
         if (!shop.permission().isEmpty() && !player.hasPermission(shop.permission())) {
-            return BuyResult.fail("æ æéè®¿é®è¯¥ååº");
+            return BuyResult.fail("无权限访问该商店");
         }
 
         ShopItem shopItem = shop.items().get(itemId);
-        if (shopItem == null) return BuyResult.fail("ååä¸å­å¨");
+        if (shopItem == null) return BuyResult.fail("商品不存在");
 
-        // æ°éæ ¡éªï¼é²æ­¢å®¢æ·ç«¯ä¼ å¥ <=0 æè¶å¤§å¼ï¼æ´æ°æº¢åºç»è¿éè´­ / å·ç©åï¼
+        // 数量校验：防止客户端传入 <=0 或超大值（整数溢出绕过限购 / 刷物品）
         if (amount < 1 || amount > MAX_PURCHASE_AMOUNT) {
-            return BuyResult.fail("è´­ä¹°æ°ééæ³");
+            return BuyResult.fail("购买数量非法");
         }
 
-        // éè´­æ£æ¥ï¼ç¨ long è¿ç®ï¼é¿å int æº¢åºç»è¿ï¼
+        // 限购检查（用 long 运算，避免 int 溢出绕过）
         if (shopItem.limitPerPlayer() > 0) {
             ShopLimitRecord limit = repository.getShopLimit(player.getUniqueId(), shopId, itemId);
             long purchased = limit == null ? 0L : limit.purchasedCount();
@@ -172,8 +172,8 @@ public class ShopService {
             }
         }
 
-        // åºå­æ£æ¥ï¼stock-mode: global / per-playerï¼
-        // è®¡ç®ä»·æ ¼ï¼å«ææ£ï¼ï¼å¨ç¨ BigDecimal é¿åæµ®ç¹ç´¯è®¡è¯¯å·®
+        // 库存检查（stock-mode: global / per-player）
+        // 计算价格（含折扣），全程 BigDecimal 避免浮点累计误差
         BigDecimal unitPrice = BigDecimal.valueOf(shopItem.buyPrice());
         BigDecimal bestDiscount = null;
         for (var entry : shopItem.discount().entrySet()) {
@@ -189,14 +189,14 @@ public class ShopService {
         }
         BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(amount));
 
-        // æ£æ¬¾
+        // 扣款
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(shopItem.currency());
         if (bridge == null || !bridge.available()) {
-            return BuyResult.fail("è´§å¸ç³»ç»ä¸å¯ç¨");
+            return BuyResult.fail("货币系统不可用");
         }
 
         if (!tryConsumeStock(player, shopId, itemId, shopItem, amount)) {
-            return BuyResult.fail("åååºå­ä¸è¶³");
+            return BuyResult.fail("商品库存不足");
         }
         CurrencyTransactionResult result = bridge.withdraw(player, totalPrice);
         if (!result.success()) {
@@ -204,15 +204,15 @@ public class ShopService {
             return BuyResult.fail(messages.insufficientFunds());
         }
 
-        // çæç©å
+        // 生成物品
         ItemStack item = createItem(shopItem, amount);
         if (item == null) {
             depositSafe(player, shopItem.currency(), totalPrice, "shop_item_generation_refund");
             restoreStock(player, shopId, itemId, shopItem, amount);
-            return BuyResult.fail("ç©åçæå¤±è´¥");
+            return BuyResult.fail("物品生成失败");
         }
 
-        // ç»äºç©åï¼èåè£ä¸ä¸çé¨åææ¯ä¾éæ¬¾ï¼æç»"æ£äºé±å´åç©å"
+        // 给予物品；背包装不下的部分按比例退款，杜绝"扣了钱却吞物品"
         Map<Integer, ItemStack> overflow = player.getInventory().addItem(item);
         int leftover = overflow.values().stream().mapToInt(ItemStack::getAmount).sum();
         int delivered = amount - leftover;
@@ -220,13 +220,13 @@ public class ShopService {
             depositSafe(player, shopItem.currency(), unitPrice.multiply(BigDecimal.valueOf(leftover)), "shop_inventory_overflow_refund");
             restoreStock(player, shopId, itemId, shopItem, leftover);
             player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                "&eèåç©ºé´ä¸è¶³ï¼ä»è´­ä¹° " + delivered + " ä¸ªï¼å¤ä½æ¬¾é¡¹å·²éè¿"));
+                "&e背包空间不足，仅购买 " + delivered + " 个，多余款项已退还"));
         }
         if (delivered <= 0) {
-            return BuyResult.fail("èåç©ºé´ä¸è¶³");
+            return BuyResult.fail("背包空间不足");
         }
 
-        // æ´æ°éè´­è®°å½ï¼æå®éæäº¤æ°éè®¡ï¼
+        // 更新限购记录（按实际成交数量计）
         if (shopItem.limitPerPlayer() > 0) {
             ShopLimitRecord existing = repository.getShopLimit(player.getUniqueId(), shopId, itemId);
             int newCount = (existing == null ? 0 : existing.purchasedCount()) + delivered;
@@ -275,7 +275,7 @@ public class ShopService {
                         : null;
                 }
                 default -> {
-                    // minecraft åçç©å
+                    // minecraft 原版物品
                     org.bukkit.Material mat = org.bukkit.Material.matchMaterial(shopItem.itemId());
                     ItemStack base = mat != null ? new ItemStack(mat, amount) : null;
                     yield applyItemNbt(base, shopItem.itemNbt());
@@ -283,7 +283,7 @@ public class ShopService {
             };
             return item;
         } catch (Exception e) {
-            logger.log(Level.WARNING, "[Market-Shop] åå»ºç©åå¤±è´¥: " + shopItem.source() + ":" + shopItem.itemId(), e);
+            logger.log(Level.WARNING, "[Market-Shop] 创建物品失败: " + shopItem.source() + ":" + shopItem.itemId(), e);
             return null;
         }
     }

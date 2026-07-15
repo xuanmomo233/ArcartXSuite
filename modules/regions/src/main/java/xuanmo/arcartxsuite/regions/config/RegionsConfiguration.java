@@ -55,7 +55,7 @@ public record RegionsConfiguration(
         }
     }
 
-    public static RegionsConfiguration load(YamlConfiguration yaml, Logger logger) {
+    public static RegionsConfiguration load(YamlConfiguration yaml, YamlConfiguration messagesYaml, Logger logger) {
         var sel = yaml.getConfigurationSection("selection");
         Material wand = Material.matchMaterial(sel != null ? sel.getString("wand-item", "WOODEN_AXE") : "WOODEN_AXE");
         if (wand == null) wand = Material.WOODEN_AXE;
@@ -91,7 +91,7 @@ public record RegionsConfiguration(
             stor != null ? stor.getInt("pool-size", 3) : 3
         );
 
-        var msg = yaml.getConfigurationSection("messages");
+        var msg = messagesYaml;
         MessagesConfig messages = new MessagesConfig(
             s(msg, "prefix", "&8[&6Regions&8] &r"),
             s(msg, "wand-pos1", "&a已设置选区点 1: &f{x}, {y}, {z}"),
