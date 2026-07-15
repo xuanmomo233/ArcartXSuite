@@ -114,6 +114,16 @@ cross-server:
 auction:
   # 是否启用拍卖行功能
   enabled: true
+  # 允许用于拍卖交易的货币，id 必须已由 CurrencyBridgeAPI 注册
+  currencies:
+    - id: "money"
+      name: "金币"
+  default-currency: "money"
+  # 一口价/起拍价全局范围
+  min-price: 1
+  max-price: 1000000000
+  # 留言最大字符数
+  message-max-length: 50
   # 上架时长限制（秒）
   # 玩家上架物品时，时长必须在此范围内
   min-duration-seconds: 3600        # 最短 1 小时
@@ -218,6 +228,16 @@ auction:
 # ═══════════════════════════════════════════════════════════════════════════════
 shop:
   enabled: true
+  # 允许用于拍卖交易的货币，id 必须已由 CurrencyBridgeAPI 注册
+  currencies:
+    - id: "money"
+      name: "金币"
+  default-currency: "money"
+  # 一口价/起拍价全局范围
+  min-price: 1
+  max-price: 1000000000
+  # 留言最大字符数
+  message-max-length: 50
   # 商店定义文件所在目录（相对模块数据目录）
   # 模块启动时会递归扫描此目录下的所有 .yml 文件并加载为商店
   shops-directory: "shops"
@@ -237,6 +257,16 @@ shop:
 # ═══════════════════════════════════════════════════════════════════════════════
 recycle:
   enabled: true
+  # 允许用于拍卖交易的货币，id 必须已由 CurrencyBridgeAPI 注册
+  currencies:
+    - id: "money"
+      name: "金币"
+  default-currency: "money"
+  # 一口价/起拍价全局范围
+  min-price: 1
+  max-price: 1000000000
+  # 留言最大字符数
+  message-max-length: 50
   # 回收表定义文件所在目录（相对模块数据目录）
   recycle-directory: "recycle"
   # 默认回收货币类型（当回收条目未指定 currency 时 fallback）
@@ -285,4 +315,5 @@ messages:
   recycle-nothing: "&7背包中没有可回收的物品。"
   # ── 通用错误消息 ──
   insufficient-funds: "&c余额不足。"
-  item-blacklisted: "&c该物品不允许上架。"
+  item-blacklisted: "&c该物品不允许上架。"
+  auto-recycle-disabled: "&c批量回收功能已关闭"

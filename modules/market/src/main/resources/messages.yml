@@ -48,7 +48,8 @@ player:
   auction-unavailable: "&c拍卖行未启用"
   cancel-failed: "&c取消失败（不存在或非本人上架）"
   shop-unavailable: "&c系统商店未启用"
-  recycle-unavailable: "&c回收商店未启用"
+  recycle-unavailable: "&c回收商店未启用"
+  auto-recycle-disabled: "&c批量回收功能已关闭"
   help:
     title: "&6=== AXS 全球市场 ==="
     auction: "&7/market&f - 打开拍卖行"
@@ -63,6 +64,11 @@ player:
     usage: "&e用法: /market sell <一口价> [起拍价] [时长秒] [货币]"
     air: "&c请手持要上架的物品"
     invalid-price: "&c价格格式无效"
+    invalid-slot: "&c请选择有效的背包物品"
+    invalid-duration: "&c上架时长不在允许范围内"
+    invalid-currency: "&c所选货币不可用"
+    price-out-of-range: "&c价格必须在 {0} - {1} 范围内"
+    message-too-long: "&c留言不能超过 {0} 个字符"
   cancel:
     usage: "&e用法: /market cancel <上架ID>"
     invalid-id: "&c无效的上架 ID 格式"

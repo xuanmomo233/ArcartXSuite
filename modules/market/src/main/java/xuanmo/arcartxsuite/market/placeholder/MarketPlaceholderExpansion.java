@@ -9,7 +9,7 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.market.MarketService;
 
 /**
- * PlaceholderAPI 扩展：%axsmarket_xxx%。
+ * PlaceholderAPI Ã¦ÂÂ©Ã¥Â±ÂÃ¯Â¼Â%axsmarket_xxx%Ã£ÂÂ
  */
 public class MarketPlaceholderExpansion extends PlaceholderExpansion {
 
@@ -35,15 +35,14 @@ public class MarketPlaceholderExpansion extends PlaceholderExpansion {
             case "auction_count" -> String.valueOf(service.getAuctionCount());
             case "shop_count" -> String.valueOf(service.getShopCount());
             case "recycle_count" -> String.valueOf(service.getRecycleEntryCount());
-            case "redis_status", "list_cache_status" -> service.isListCacheConnected() ? "已连接" : "未连接";
-            case "cross_server_status" -> service.crossServerActive() ? "已启用" : "未启用";
+            case "redis_status", "list_cache_status" -> service.isListCacheConnected() ? "Ã¥Â·Â²Ã¨Â¿ÂÃ¦ÂÂ¥" : "Ã¦ÂÂªÃ¨Â¿ÂÃ¦ÂÂ¥";
+            case "cross_server_status" -> service.crossServerActive() ? "Ã¥Â·Â²Ã¥ÂÂ¯Ã§ÂÂ¨" : "Ã¦ÂÂªÃ¥ÂÂ¯Ã§ÂÂ¨";
             case "my_listings" -> player != null ? String.valueOf(getMyListingsCount(service, player)) : "0";
             default -> null;
         };
     }
 
     private int getMyListingsCount(MarketService service, Player player) {
-        // 通过 service 间接调用
-        return 0; // TODO: expose via service
+        return service.getMyListingsCount(player);
     }
 }

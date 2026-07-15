@@ -9,6 +9,20 @@ ui:
       var.backpackItems = packet['backpackItems']
       var.itemJsons = {}
       var.maxBackpackCount = packet['maxBackpackCount']
+      var.currencies = packet['currencies']
+      var.maxCurrencyCount = packet['maxCurrencyCount']
+      var.selectedCurrency = packet['defaultCurrency']
+      var.priceMin = packet['priceMin']
+      var.priceMax = packet['priceMax']
+      var.messageMaxLength = packet['messageMaxLength']
+      while(val.信息面板['货币列表'].childrenCount() > 1){
+        val.信息面板['货币列表'].get(1).remove()
+      }
+      for(i in range(0, var.maxCurrencyCount)){
+        key = i.round()
+        e = val.信息面板['货币列表']['货币项'].copy('货币项' + key)
+        e.entryKey = key
+      }
       for(key in var.backpackItems.keys()){
         json = packet['itemJson' + key]
         if(json != none && json != none){
@@ -37,6 +51,20 @@ ui:
       var.backpackItems = packet['backpackItems']
       var.itemJsons = {}
       var.maxBackpackCount = packet['maxBackpackCount']
+      var.currencies = packet['currencies']
+      var.maxCurrencyCount = packet['maxCurrencyCount']
+      var.selectedCurrency = packet['defaultCurrency']
+      var.priceMin = packet['priceMin']
+      var.priceMax = packet['priceMax']
+      var.messageMaxLength = packet['messageMaxLength']
+      while(val.信息面板['货币列表'].childrenCount() > 1){
+        val.信息面板['货币列表'].get(1).remove()
+      }
+      for(i in range(0, var.maxCurrencyCount)){
+        key = i.round()
+        e = val.信息面板['货币列表']['货币项'].copy('货币项' + key)
+        e.entryKey = key
+      }
       for(key in var.backpackItems.keys()){
         json = packet['itemJson' + key]
         if(json != none && json != none){
@@ -69,6 +97,10 @@ ui:
       var.selectedPrice = none
       var.selectedMessage = none
       var.selectedDuration = 86400
+      var.selectedCurrency = none
+      var.priceMin = 1
+      var.priceMax = 1000000000
+      var.messageMaxLength = 50
     open: |-
       Packet.send(var.packetId, 'auction_sell_open')
 
@@ -144,7 +176,7 @@ controls:
               x: 40
               y: 80
               width: 560
-              height: 610
+              height: 760
               normal: ~255,255,255,120
               shape: ~round_rect
               radius: 24
@@ -228,7 +260,7 @@ controls:
               x: 620
               y: 80
               width: 560
-              height: 610
+              height: 760
               normal: ~255,255,255,120
               shape: ~round_rect
               radius: 24
@@ -305,6 +337,15 @@ controls:
                     width: 1
                     color: ~80,180,255,80
 
+              价格范围提示:
+                type: Text
+                attribute:
+                  x: 280
+                  y: 215
+                  texts: "var.priceMin + ' - ' + var.priceMax"
+                  fontSize: 22
+                  through: true
+
               留言标签:
                 type: Text
                 attribute:
@@ -335,11 +376,48 @@ controls:
                     width: 1
                     color: ~80,180,255,80
 
+              货币标签:
+                type: Text
+                attribute:
+                  x: 300
+                  y: 390
+                  texts: "~&fCurrency"
+                  fontSize: 30
+                  through: true
+
+              货币列表:
+                val: 货币列表
+                type: VStack
+                attribute:
+                  x: 300
+                  y: 430
+                  width: 240
+                  spaceBetween: 6
+                children:
+                  货币项:
+                    type: Texture
+                    attribute:
+                      entryKey: 0
+                      entry: var.currencies[self.entryKey]
+                      visible: "self.entry != none"
+                      width: 220
+                      height: 38
+                      normal: "self.entry != none && self.entry['id'] == var.selectedCurrency ? '80,180,255,230' : '65,65,75,200'"
+                      hover: ~Frosted:0;255,255,255,180
+                      shape: ~round_rect
+                      radius: 10
+                      texts: "self.entry['name']"
+                      center: true
+                      fontSize: 24
+                    action:
+                      clickLeft: |-
+                        var.selectedCurrency = self.entry['id']
+
               时长标签:
                 type: Text
                 attribute:
                   x: 20
-                  y: 390
+                  y: 560
                   texts: "~&f上架时长"
                   fontSize: 30
                   through: true
@@ -348,7 +426,7 @@ controls:
                 type: Texture
                 attribute:
                   x: 20
-                  y: 430
+                  y: 600
                   width: 120
                   height: 42
                   normal: "var.selectedDuration == 86400 ? '80,180,255,230' : '65,65,75,200'"
@@ -361,6 +439,10 @@ controls:
                 action:
                   clickLeft: |-
                     var.selectedDuration = 86400
+      var.selectedCurrency = none
+      var.priceMin = 1
+      var.priceMax = 1000000000
+      var.messageMaxLength = 50
                 effect:
                   stroke:
                     width: 1
@@ -370,7 +452,7 @@ controls:
                 type: Texture
                 attribute:
                   x: 155
-                  y: 430
+                  y: 600
                   width: 120
                   height: 42
                   normal: "var.selectedDuration == 259200 ? '80,180,255,230' : '65,65,75,200'"
@@ -392,7 +474,7 @@ controls:
                 type: Texture
                 attribute:
                   x: 290
-                  y: 430
+                  y: 600
                   width: 120
                   height: 42
                   normal: "var.selectedDuration == 604800 ? '80,180,255,230' : '65,65,75,200'"
@@ -414,7 +496,7 @@ controls:
                 type: Texture
                 attribute:
                   x: 160
-                  y: 520
+                  y: 670
                   width: 240
                   height: 56
                   normal: ~60,180,100,200
@@ -429,7 +511,7 @@ controls:
                     if(var.selectedPrice == none){
                       return
                     }
-                    Packet.send(var.packetId, 'auction_list_create', var.selectedSlot, var.selectedPrice, var.selectedMessage, var.selectedDuration)
+                    Packet.send(var.packetId, 'auction_list_create', var.selectedSlot, var.selectedPrice, var.selectedMessage, var.selectedDuration, var.selectedCurrency)
                 effect:
                   stroke:
                     width: 2
@@ -449,7 +531,7 @@ controls:
                 type: Texture
                 attribute:
                   x: 20
-                  y: 520
+                  y: 670
                   width: 120
                   height: 56
                   normal: ~62,62,74,205

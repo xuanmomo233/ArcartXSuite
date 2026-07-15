@@ -53,7 +53,10 @@ ui:
         key = i.round()
         e = val.物品列表['物品行'].copy('物品行' + key)
         e.entryKey = key
-        if(e['物品图标'] != none){ e['物品图标'].entryKey = key; e['物品图标'].seticon() }
+        if(e['物品图标'] != none){
+          e['物品图标'].entryKey = key
+          e['物品图标'].seticon()
+        }
       }
     update: |-
       var.packetId = packet['packetId']
@@ -91,7 +94,10 @@ ui:
         key = i.round()
         e = val.物品列表['物品行'].copy('物品行' + key)
         e.entryKey = key
-        if(e['物品图标'] != none){ e['物品图标'].entryKey = key; e['物品图标'].seticon() }
+        if(e['物品图标'] != none){
+          e['物品图标'].entryKey = key
+          e['物品图标'].seticon()
+        }
       }
   action:
     open: |-
@@ -498,7 +504,9 @@ controls:
                           radius: 14
                         action:
                           clickLeft: |-
-                            Packet.send(var.packetId, 'auction_buy', self.entry['id'])
+                            if(self.entry != none && self.entry['canBuyNow']){
+                              Packet.send(var.packetId, 'auction_buy', self.entry['id'])
+                            }
                         effect:
                           stroke:
                             width: 1
@@ -580,6 +588,7 @@ controls:
                               y: 10
                               width: 100
                               height: 52
+                              visible: "self.parent.entry != none && self.parent.entry['canBuyNow']"
                               normal: ~60,180,100,200
                               hover: ~Frosted:0;80,220,120,230
                               shape: ~round_rect
@@ -601,6 +610,56 @@ controls:
                                   center: true
                                   fontSize: 28
                                   texts: "~&f购买"
+                          出价按钮:
+                            type: Texture
+                            attribute:
+                              x: 800
+                              y: 10
+                              width: 140
+                              height: 52
+                              visible: "self.parent.entry != none && self.parent.entry['canBid']"
+                              normal: ~220,150,50,200
+                              hover: ~Frosted:0;255,180,60,230
+                              shape: ~round_rect
+                              radius: 10
+                            action:
+                              clickLeft: |-
+                                Packet.send(var.packetId, 'auction_bid', self.parent.parent.entry['id'], self.parent.parent.entry['minBid'])
+                            children:
+                              文字:
+                                type: Text
+                                attribute:
+                                  x: 70
+                                  y: 14
+                                  through: true
+                                  center: true
+                                  fontSize: 26
+                                  texts: "~&f最低出价"
+                          收藏按钮:
+                            type: Texture
+                            attribute:
+                              x: 910
+                              y: 10
+                              width: 36
+                              height: 36
+                              visible: "self.parent.entry != none"
+                              normal: ~45,47,56,220
+                              hover: ~Frosted:0;100,140,220,230
+                              shape: ~round_rect
+                              radius: 8
+                            action:
+                              clickLeft: |-
+                                Packet.send(var.packetId, 'auction_favorite', self.parent.parent.entry['id'])
+                            children:
+                              文字:
+                                type: Text
+                                attribute:
+                                  x: 18
+                                  y: 4
+                                  through: true
+                                  center: true
+                                  fontSize: 28
+                                  texts: "self.parent.parent.entry['isFavorite'] ? '~&e★' : '~&7☆'"
                           取消按钮:
                             type: Texture
                             attribute:

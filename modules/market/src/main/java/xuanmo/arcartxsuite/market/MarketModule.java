@@ -38,6 +38,8 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
     private static final String SHOP_UI_FILE_PATH = "ui/market_shop.yml";
     private static final String AUCTION_UI_RESOURCE_PATH = "arcartx/ui/market_auction.yml";
     private static final String AUCTION_UI_FILE_PATH = "ui/market_auction.yml";
+    private static final String AUCTION_SELL_UI_RESOURCE_PATH = "arcartx/ui/market_auction_sell.yml";
+    private static final String AUCTION_SELL_UI_FILE_PATH = "ui/market_auction_sell.yml";
     private static final String RECYCLE_UI_RESOURCE_PATH = "arcartx/ui/market_recycle.yml";
     private static final String RECYCLE_UI_FILE_PATH = "ui/market_recycle.yml";
     private static final String HISTORY_UI_RESOURCE_PATH = "arcartx/ui/market_history.yml";
@@ -104,6 +106,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         Map<String, String> mappings = new LinkedHashMap<>();
         mappings.put(SHOP_UI_RESOURCE_PATH, SHOP_UI_FILE_PATH);
         mappings.put(AUCTION_UI_RESOURCE_PATH, AUCTION_UI_FILE_PATH);
+        mappings.put(AUCTION_SELL_UI_RESOURCE_PATH, AUCTION_SELL_UI_FILE_PATH);
         mappings.put(RECYCLE_UI_RESOURCE_PATH, RECYCLE_UI_FILE_PATH);
         mappings.put(HISTORY_UI_RESOURCE_PATH, HISTORY_UI_FILE_PATH);
         return mappings;
@@ -168,6 +171,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         // 注册 UI 到 ArcartX 桥接层
         bindMarketUi(configuration.ui().shopId(), SHOP_UI_FILE_PATH);
         bindMarketUi(configuration.ui().auctionId(), AUCTION_UI_FILE_PATH);
+        bindMarketUi("AXS:market_auction_sell", AUCTION_SELL_UI_FILE_PATH);
         bindMarketUi(configuration.ui().recycleId(), RECYCLE_UI_FILE_PATH);
         bindMarketUi(configuration.ui().historyId(), HISTORY_UI_FILE_PATH);
 

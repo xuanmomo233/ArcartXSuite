@@ -17,12 +17,13 @@ import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
+import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.MessagesConfiguration;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.RecycleConfiguration;
 import xuanmo.arcartxsuite.market.storage.MarketRepository;
 
 /**
- * 回收商店业务服务。
+ * Ã¥ÂÂÃ¦ÂÂ¶Ã¥ÂÂÃ¥ÂºÂÃ¤Â¸ÂÃ¥ÂÂ¡Ã¦ÂÂÃ¥ÂÂ¡Ã£ÂÂ
  */
 public class RecycleService {
 
@@ -30,6 +31,7 @@ public class RecycleService {
     private final MessagesConfiguration messages;
     private final MarketRepository repository;
     private final CurrencyBridgeAPI currencyManager;
+    private final ItemSourceRegistry itemSourceRegistry;
     private final File dataFolder;
     private final Logger logger;
 
@@ -37,18 +39,19 @@ public class RecycleService {
 
     public RecycleService(RecycleConfiguration config, MessagesConfiguration messages,
                           MarketRepository repository, CurrencyBridgeAPI currencyManager,
-                          File dataFolder, Logger logger) {
+                          ItemSourceRegistry itemSourceRegistry, File dataFolder, Logger logger) {
         this.config = config;
         this.messages = messages;
         this.repository = repository;
         this.currencyManager = currencyManager;
+        this.itemSourceRegistry = itemSourceRegistry;
         this.dataFolder = dataFolder;
         this.logger = logger;
     }
 
     public void start() {
         loadRecycleTables();
-        logger.info("[Market-Recycle] 回收表已加载 " + entries.size() + " 个条目");
+        logger.info("[Market-Recycle] Ã¥ÂÂÃ¦ÂÂ¶Ã¨Â¡Â¨Ã¥Â·Â²Ã¥ÂÂ Ã¨Â½Â½ " + entries.size() + " Ã¤Â¸ÂªÃ¦ÂÂ¡Ã§ÂÂ®");
     }
 
     public void shutdown() {
@@ -88,17 +91,17 @@ public class RecycleService {
                     ));
                 }
             } catch (Exception e) {
-                logger.log(Level.WARNING, "[Market-Recycle] 加载回收表文件失败: " + file.getName(), e);
+                logger.log(Level.WARNING, "[Market-Recycle] Ã¥ÂÂ Ã¨Â½Â½Ã¥ÂÂÃ¦ÂÂ¶Ã¨Â¡Â¨Ã¦ÂÂÃ¤Â»Â¶Ã¥Â¤Â±Ã¨Â´Â¥: " + file.getName(), e);
             }
         }
     }
 
     /**
-     * 回收单个物品。
+     * Ã¥ÂÂÃ¦ÂÂ¶Ã¥ÂÂÃ¤Â¸ÂªÃ§ÂÂ©Ã¥ÂÂÃ£ÂÂ
      */
     public RecycleResult recycle(Player player, ItemStack item) {
         RecycleEntry entry = findEntry(item);
-        if (entry == null) return RecycleResult.fail("该物品不可回收");
+        if (entry == null) return RecycleResult.fail("Ã¨Â¯Â¥Ã§ÂÂ©Ã¥ÂÂÃ¤Â¸ÂÃ¥ÂÂ¯Ã¥ÂÂÃ¦ÂÂ¶");
 
         double pricePerUnit = entry.price();
         double multiplier = getMultiplier(player);
@@ -106,24 +109,24 @@ public class RecycleService {
 
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(entry.currency());
         if (bridge == null || !bridge.available()) {
-            return RecycleResult.fail("货币系统不可用");
+            return RecycleResult.fail("Ã¨Â´Â§Ã¥Â¸ÂÃ§Â³Â»Ã§Â»ÂÃ¤Â¸ÂÃ¥ÂÂ¯Ã§ÂÂ¨");
         }
         CurrencyTransactionResult result = bridge.deposit(player, BigDecimal.valueOf(total));
         if (!result.success()) {
-            return RecycleResult.fail("存款失败");
+            return RecycleResult.fail("Ã¥Â­ÂÃ¦Â¬Â¾Ã¥Â¤Â±Ã¨Â´Â¥");
         }
 
         int count = item.getAmount();
         item.setAmount(0);
 
-        // 统计
+        // Ã§Â»ÂÃ¨Â®Â¡
         repository.addRecycleStats(player.getUniqueId(), entry.currency(), total, count);
 
-        return RecycleResult.success(total, entry.currency(), count);
+        return RecycleResult.success(total, entry.currency(), count, Map.of(entry.currency(), total));
     }
 
     /**
-     * 批量回收背包所有可回收物品。
+     * Ã¦ÂÂ¹Ã©ÂÂÃ¥ÂÂÃ¦ÂÂ¶Ã¨ÂÂÃ¥ÂÂÃ¦ÂÂÃ¦ÂÂÃ¥ÂÂ¯Ã¥ÂÂÃ¦ÂÂ¶Ã§ÂÂ©Ã¥ÂÂÃ£ÂÂ
      */
     public RecycleResult recycleBatch(Player player) {
         double totalEarnings = 0;
@@ -159,19 +162,24 @@ public class RecycleService {
             return RecycleResult.fail(messages.recycleNothing());
         }
 
-        return RecycleResult.success(totalEarnings, mainCurrency, totalItems);
+        return RecycleResult.success(totalEarnings, mainCurrency, totalItems, earningsByCurrency);
     }
 
     /**
-     * 检查物品是否可回收。
+     * Ã¦Â£ÂÃ¦ÂÂ¥Ã§ÂÂ©Ã¥ÂÂÃ¦ÂÂ¯Ã¥ÂÂ¦Ã¥ÂÂ¯Ã¥ÂÂÃ¦ÂÂ¶Ã£ÂÂ
      */
     public boolean isRecyclable(ItemStack item) {
         return findEntry(item) != null;
     }
 
     /**
-     * 获取物品回收价格。
+     * Ã¨ÂÂ·Ã¥ÂÂÃ§ÂÂ©Ã¥ÂÂÃ¥ÂÂÃ¦ÂÂ¶Ã¤Â»Â·Ã¦Â Â¼Ã£ÂÂ
      */
+    public @Nullable String getRecycleCurrency(ItemStack item) {
+        RecycleEntry entry = findEntry(item);
+        return entry == null ? null : entry.currency();
+    }
+
     public double getRecyclePrice(ItemStack item, Player player) {
         RecycleEntry entry = findEntry(item);
         if (entry == null) return 0;
@@ -184,13 +192,33 @@ public class RecycleService {
 
     private @Nullable RecycleEntry findEntry(ItemStack item) {
         if (item == null || item.getType().isAir()) return null;
-        String materialName = item.getType().name();
         for (RecycleEntry entry : entries.values()) {
-            if ("minecraft".equals(entry.source()) && entry.itemId().equalsIgnoreCase(materialName)) {
-                return entry;
-            }
+            String source = entry.source();
+            String itemId = identifyItemId(item, source);
+            if (itemId != null && entry.itemId().equalsIgnoreCase(itemId)) return entry;
         }
         return null;
+    }
+
+    private @Nullable String identifyItemId(ItemStack item, String source) {
+        if (source == null || source.isBlank() || "minecraft".equalsIgnoreCase(source)) {
+            return item.getType().name();
+        }
+        if (itemSourceRegistry == null) return null;
+        try {
+            return switch (source.toLowerCase(java.util.Locale.ROOT)) {
+                case "mythic", "mythicmobs" -> itemSourceRegistry.mythicBridgeAvailable()
+                    ? itemSourceRegistry.mythicItemId(item) : null;
+                case "neige", "neigeitems" -> itemSourceRegistry.neigeBridgeAvailable()
+                    ? itemSourceRegistry.neigeItemId(item) : null;
+                case "overture" -> itemSourceRegistry.overtureBridgeAvailable()
+                    ? itemSourceRegistry.overtureItemId(item) : null;
+                default -> null;
+            };
+        } catch (RuntimeException ex) {
+            logger.log(Level.FINE, "[Market-Recycle] item source identification failed: " + source, ex);
+            return null;
+        }
     }
 
     public double getMultiplier(Player player) {
@@ -202,14 +230,15 @@ public class RecycleService {
         return 1.0;
     }
 
-    // ─── 结果 ───────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ Ã§Â»ÂÃ¦ÂÂ Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
-    public record RecycleResult(boolean success, @Nullable String error, double totalAmount, @Nullable String currency, int itemCount) {
-        public static RecycleResult success(double amount, String currency, int count) {
-            return new RecycleResult(true, null, amount, currency, count);
+    public record RecycleResult(boolean success, @Nullable String error, double totalAmount, @Nullable String currency, int itemCount, Map<String, Double> earningsByCurrency) {
+        public static RecycleResult success(double amount, String currency, int count, Map<String, Double> earnings) {
+            return new RecycleResult(true, null, amount, currency, count,
+                Collections.unmodifiableMap(new LinkedHashMap<>(earnings)));
         }
         public static RecycleResult fail(String error) {
-            return new RecycleResult(false, error, 0, null, 0);
+            return new RecycleResult(false, error, 0, null, 0, Map.of());
         }
     }
 }

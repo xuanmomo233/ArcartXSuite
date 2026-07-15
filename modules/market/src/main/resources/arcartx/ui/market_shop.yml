@@ -107,6 +107,7 @@ ui:
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       var.maxShopCount = 0
       var.maxItemCount = 0
+      var.quantity = 1
       Packet.send(var.packetId, 'shop_list', none)
 
 controls:
@@ -385,6 +386,91 @@ controls:
                               texts: "self.parent.entry != none && self.parent.entry['limitText'] != none ? '&c' + self.parent.entry['limitText'] : none"
                               fontSize: 22
                               through: true
+                          数量选择:
+                            type: VStack
+                            attribute:
+                              x: 650
+                              y: 8
+                              width: 180
+                              height: 52
+                              spaceBetween: 4
+                            children:
+                              数量提示:
+                                type: Text
+                                attribute:
+                                  width: 180
+                                  height: 22
+                                  through: true
+                                  center: true
+                                  fontSize: 20
+                                  texts: "~&7数量: &f{var.quantity}"
+                              数量按钮:
+                                type: HStack
+                                attribute:
+                                  width: 180
+                                  height: 26
+                                  spaceBetween: 4
+                                children:
+                                  一份:
+                                    type: Texture
+                                    attribute:
+                                      width: 54
+                                      height: 26
+                                      normal: ~70,70,85,220
+                                      hover: ~Frosted:0;100,140,220,230
+                                    action:
+                                      clickLeft: |-
+                                        var.quantity = 1
+                                    children:
+                                      文字:
+                                        type: Text
+                                        attribute:
+                                          width: 54
+                                          height: 26
+                                          center: true
+                                          through: true
+                                          fontSize: 18
+                                          texts: "~&f1"
+                                  五份:
+                                    type: Texture
+                                    attribute:
+                                      width: 54
+                                      height: 26
+                                      normal: ~70,70,85,220
+                                      hover: ~Frosted:0;100,140,220,230
+                                    action:
+                                      clickLeft: |-
+                                        var.quantity = 5
+                                    children:
+                                      文字:
+                                        type: Text
+                                        attribute:
+                                          width: 54
+                                          height: 26
+                                          center: true
+                                          through: true
+                                          fontSize: 18
+                                          texts: "~&f5"
+                                  十份:
+                                    type: Texture
+                                    attribute:
+                                      width: 54
+                                      height: 26
+                                      normal: ~70,70,85,220
+                                      hover: ~Frosted:0;100,140,220,230
+                                    action:
+                                      clickLeft: |-
+                                        var.quantity = 10
+                                    children:
+                                      文字:
+                                        type: Text
+                                        attribute:
+                                          width: 54
+                                          height: 26
+                                          center: true
+                                          through: true
+                                          fontSize: 18
+                                          texts: "~&f10"
                           购买按钮:
                             type: Texture
                             attribute:
@@ -398,7 +484,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'shop_buy', var.shopId, self.parent.entry['key'], '1')
+                                Packet.send(var.packetId, 'shop_buy', var.shopId, self.parent.entry['key'], var.quantity)
                             effect:
                               stroke:
                                 width: 1

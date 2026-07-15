@@ -27,7 +27,7 @@ import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.ShopConfigura
 import xuanmo.arcartxsuite.market.storage.MarketRepository;
 
 /**
- * 系统商店业务服务。
+ * ÃÂ§ÃÂ³ÃÂ»ÃÂ§ÃÂ»ÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂºÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¥ÃÂÃÂ¡ÃÂ¦ÃÂÃÂÃÂ¥ÃÂÃÂ¡ÃÂ£ÃÂÃÂ
  */
 public class ShopService {
 
@@ -43,7 +43,7 @@ public class ShopService {
     private final Map<String, ShopDefinition> shops = new LinkedHashMap<>();
     private BukkitTask refreshTask;
 
-    /** 单次购买数量上限（36 格 × 64），防止客户端传入超大值导致整数溢出 / 刷物品。 */
+    /** ÃÂ¥ÃÂÃÂÃÂ¦ÃÂ¬ÃÂ¡ÃÂ¨ÃÂ´ÃÂ­ÃÂ¤ÃÂ¹ÃÂ°ÃÂ¦ÃÂÃÂ°ÃÂ©ÃÂÃÂÃÂ¤ÃÂ¸ÃÂÃÂ©ÃÂÃÂÃÂ¯ÃÂ¼ÃÂ36 ÃÂ¦ÃÂ ÃÂ¼ ÃÂÃÂ 64ÃÂ¯ÃÂ¼ÃÂÃÂ¯ÃÂ¼ÃÂÃÂ©ÃÂÃÂ²ÃÂ¦ÃÂ­ÃÂ¢ÃÂ¥ÃÂ®ÃÂ¢ÃÂ¦ÃÂÃÂ·ÃÂ§ÃÂ«ÃÂ¯ÃÂ¤ÃÂ¼ÃÂ ÃÂ¥ÃÂÃÂ¥ÃÂ¨ÃÂ¶ÃÂÃÂ¥ÃÂ¤ÃÂ§ÃÂ¥ÃÂÃÂ¼ÃÂ¥ÃÂ¯ÃÂ¼ÃÂ¨ÃÂÃÂ´ÃÂ¦ÃÂÃÂ´ÃÂ¦ÃÂÃÂ°ÃÂ¦ÃÂºÃÂ¢ÃÂ¥ÃÂÃÂº / ÃÂ¥ÃÂÃÂ·ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ£ÃÂÃÂ */
     private static final int MAX_PURCHASE_AMOUNT = 36 * 64;
 
     public ShopService(JavaPlugin plugin, ShopConfiguration config, MessagesConfiguration messages,
@@ -62,7 +62,7 @@ public class ShopService {
     public void start() {
         loadShops();
         refreshTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::refreshStocks, config.refreshIntervalTicks(), config.refreshIntervalTicks());
-        logger.info("[Market-Shop] 系统商店已加载 " + shops.size() + " 个商店");
+        logger.info("[Market-Shop] ÃÂ§ÃÂ³ÃÂ»ÃÂ§ÃÂ»ÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂºÃÂÃÂ¥ÃÂ·ÃÂ²ÃÂ¥ÃÂÃÂ ÃÂ¨ÃÂ½ÃÂ½ " + shops.size() + " ÃÂ¤ÃÂ¸ÃÂªÃÂ¥ÃÂÃÂÃÂ¥ÃÂºÃÂ");
     }
 
     public void shutdown() {
@@ -97,7 +97,7 @@ public class ShopService {
                     shops.put(shopId, shop);
                 }
             } catch (Exception e) {
-                logger.log(Level.WARNING, "[Market-Shop] 加载商店文件失败: " + file.getName(), e);
+                logger.log(Level.WARNING, "[Market-Shop] ÃÂ¥ÃÂÃÂ ÃÂ¨ÃÂ½ÃÂ½ÃÂ¥ÃÂÃÂÃÂ¥ÃÂºÃÂÃÂ¦ÃÂÃÂÃÂ¤ÃÂ»ÃÂ¶ÃÂ¥ÃÂ¤ÃÂ±ÃÂ¨ÃÂ´ÃÂ¥: " + file.getName(), e);
             }
         }
     }
@@ -146,24 +146,24 @@ public class ShopService {
     }
 
     /**
-     * 购买系统商店物品。
+     * ÃÂ¨ÃÂ´ÃÂ­ÃÂ¤ÃÂ¹ÃÂ°ÃÂ§ÃÂ³ÃÂ»ÃÂ§ÃÂ»ÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂºÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ£ÃÂÃÂ
      */
     public BuyResult buy(Player player, String shopId, String itemId, int amount) {
         ShopDefinition shop = shops.get(shopId);
-        if (shop == null) return BuyResult.fail("商店不存在");
+        if (shop == null) return BuyResult.fail("ÃÂ¥ÃÂÃÂÃÂ¥ÃÂºÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¥ÃÂ­ÃÂÃÂ¥ÃÂÃÂ¨");
         if (!shop.permission().isEmpty() && !player.hasPermission(shop.permission())) {
-            return BuyResult.fail("无权限访问该商店");
+            return BuyResult.fail("ÃÂ¦ÃÂÃÂ ÃÂ¦ÃÂÃÂÃÂ©ÃÂÃÂÃÂ¨ÃÂ®ÃÂ¿ÃÂ©ÃÂÃÂ®ÃÂ¨ÃÂ¯ÃÂ¥ÃÂ¥ÃÂÃÂÃÂ¥ÃÂºÃÂ");
         }
 
         ShopItem shopItem = shop.items().get(itemId);
-        if (shopItem == null) return BuyResult.fail("商品不存在");
+        if (shopItem == null) return BuyResult.fail("ÃÂ¥ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¥ÃÂ­ÃÂÃÂ¥ÃÂÃÂ¨");
 
-        // 数量校验：防止客户端传入 <=0 或超大值（整数溢出绕过限购 / 刷物品）
+        // ÃÂ¦ÃÂÃÂ°ÃÂ©ÃÂÃÂÃÂ¦ÃÂ ÃÂ¡ÃÂ©ÃÂªÃÂÃÂ¯ÃÂ¼ÃÂÃÂ©ÃÂÃÂ²ÃÂ¦ÃÂ­ÃÂ¢ÃÂ¥ÃÂ®ÃÂ¢ÃÂ¦ÃÂÃÂ·ÃÂ§ÃÂ«ÃÂ¯ÃÂ¤ÃÂ¼ÃÂ ÃÂ¥ÃÂÃÂ¥ <=0 ÃÂ¦ÃÂÃÂÃÂ¨ÃÂ¶ÃÂÃÂ¥ÃÂ¤ÃÂ§ÃÂ¥ÃÂÃÂ¼ÃÂ¯ÃÂ¼ÃÂÃÂ¦ÃÂÃÂ´ÃÂ¦ÃÂÃÂ°ÃÂ¦ÃÂºÃÂ¢ÃÂ¥ÃÂÃÂºÃÂ§ÃÂ»ÃÂÃÂ¨ÃÂ¿ÃÂÃÂ©ÃÂÃÂÃÂ¨ÃÂ´ÃÂ­ / ÃÂ¥ÃÂÃÂ·ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂ
         if (amount < 1 || amount > MAX_PURCHASE_AMOUNT) {
-            return BuyResult.fail("购买数量非法");
+            return BuyResult.fail("ÃÂ¨ÃÂ´ÃÂ­ÃÂ¤ÃÂ¹ÃÂ°ÃÂ¦ÃÂÃÂ°ÃÂ©ÃÂÃÂÃÂ©ÃÂÃÂÃÂ¦ÃÂ³ÃÂ");
         }
 
-        // 限购检查（用 long 运算，避免 int 溢出绕过）
+        // ÃÂ©ÃÂÃÂÃÂ¨ÃÂ´ÃÂ­ÃÂ¦ÃÂ£ÃÂÃÂ¦ÃÂÃÂ¥ÃÂ¯ÃÂ¼ÃÂÃÂ§ÃÂÃÂ¨ long ÃÂ¨ÃÂ¿ÃÂÃÂ§ÃÂ®ÃÂÃÂ¯ÃÂ¼ÃÂÃÂ©ÃÂÃÂ¿ÃÂ¥ÃÂÃÂ int ÃÂ¦ÃÂºÃÂ¢ÃÂ¥ÃÂÃÂºÃÂ§ÃÂ»ÃÂÃÂ¨ÃÂ¿ÃÂÃÂ¯ÃÂ¼ÃÂ
         if (shopItem.limitPerPlayer() > 0) {
             ShopLimitRecord limit = repository.getShopLimit(player.getUniqueId(), shopId, itemId);
             long purchased = limit == null ? 0L : limit.purchasedCount();
@@ -172,12 +172,8 @@ public class ShopService {
             }
         }
 
-        // 库存检查（stock-mode: global / per-player）
-        if (!tryConsumeStock(player, shopId, itemId, shopItem, amount)) {
-            return BuyResult.fail("商品库存不足");
-        }
-
-        // 计算价格（含折扣），全程 BigDecimal 避免浮点累计误差
+        // ÃÂ¥ÃÂºÃÂÃÂ¥ÃÂ­ÃÂÃÂ¦ÃÂ£ÃÂÃÂ¦ÃÂÃÂ¥ÃÂ¯ÃÂ¼ÃÂstock-mode: global / per-playerÃÂ¯ÃÂ¼ÃÂ
+        // ÃÂ¨ÃÂ®ÃÂ¡ÃÂ§ÃÂ®ÃÂÃÂ¤ÃÂ»ÃÂ·ÃÂ¦ÃÂ ÃÂ¼ÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂÃÂ«ÃÂ¦ÃÂÃÂÃÂ¦ÃÂÃÂ£ÃÂ¯ÃÂ¼ÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂÃÂ¨ÃÂ§ÃÂ¨ÃÂ BigDecimal ÃÂ©ÃÂÃÂ¿ÃÂ¥ÃÂÃÂÃÂ¦ÃÂµÃÂ®ÃÂ§ÃÂÃÂ¹ÃÂ§ÃÂ´ÃÂ¯ÃÂ¨ÃÂ®ÃÂ¡ÃÂ¨ÃÂ¯ÃÂ¯ÃÂ¥ÃÂ·ÃÂ®
         BigDecimal unitPrice = BigDecimal.valueOf(shopItem.buyPrice());
         for (var entry : shopItem.discount().entrySet()) {
             if (player.hasPermission(entry.getKey())) {
@@ -187,10 +183,14 @@ public class ShopService {
         }
         BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(amount));
 
-        // 扣款
+        // ÃÂ¦ÃÂÃÂ£ÃÂ¦ÃÂ¬ÃÂ¾
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(shopItem.currency());
         if (bridge == null || !bridge.available()) {
-            return BuyResult.fail("货币系统不可用");
+            return BuyResult.fail("Ã¨Â´Â§Ã¥Â¸ÂÃ§Â³Â»Ã§Â»ÂÃ¤Â¸ÂÃ¥ÂÂ¯Ã§ÂÂ¨");
+        }
+
+        if (!tryConsumeStock(player, shopId, itemId, shopItem, amount)) {
+            return BuyResult.fail("Ã¥ÂÂÃ¥ÂÂÃ¥ÂºÂÃ¥Â­ÂÃ¤Â¸ÂÃ¨Â¶Â³");
         }
         CurrencyTransactionResult result = bridge.withdraw(player, totalPrice);
         if (!result.success()) {
@@ -198,30 +198,29 @@ public class ShopService {
             return BuyResult.fail(messages.insufficientFunds());
         }
 
-        // 生成物品
+        // ÃÂ§ÃÂÃÂÃÂ¦ÃÂÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂ
         ItemStack item = createItem(shopItem, amount);
         if (item == null) {
-            bridge.deposit(player, totalPrice);
+            depositSafe(player, shopItem.currency(), totalPrice, "shop_item_generation_refund");
             restoreStock(player, shopId, itemId, shopItem, amount);
-            return BuyResult.fail("物品生成失败");
+            return BuyResult.fail("ÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ§ÃÂÃÂÃÂ¦ÃÂÃÂÃÂ¥ÃÂ¤ÃÂ±ÃÂ¨ÃÂ´ÃÂ¥");
         }
 
-        // 给予物品；背包装不下的部分按比例退款，杜绝"扣了钱却吞物品"
+        // ÃÂ§ÃÂ»ÃÂÃÂ¤ÃÂºÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¨ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¨ÃÂ£ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ¤ÃÂ¸ÃÂÃÂ§ÃÂÃÂÃÂ©ÃÂÃÂ¨ÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂÃÂ¦ÃÂ¯ÃÂÃÂ¤ÃÂ¾ÃÂÃÂ©ÃÂÃÂÃÂ¦ÃÂ¬ÃÂ¾ÃÂ¯ÃÂ¼ÃÂÃÂ¦ÃÂÃÂÃÂ§ÃÂ»ÃÂ"ÃÂ¦ÃÂÃÂ£ÃÂ¤ÃÂºÃÂÃÂ©ÃÂÃÂ±ÃÂ¥ÃÂÃÂ´ÃÂ¥ÃÂÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂ"
         Map<Integer, ItemStack> overflow = player.getInventory().addItem(item);
         int leftover = overflow.values().stream().mapToInt(ItemStack::getAmount).sum();
         int delivered = amount - leftover;
         if (leftover > 0) {
-            bridge.deposit(player, unitPrice.multiply(BigDecimal.valueOf(leftover)));
+            depositSafe(player, shopItem.currency(), unitPrice.multiply(BigDecimal.valueOf(leftover)), "shop_inventory_overflow_refund");
             restoreStock(player, shopId, itemId, shopItem, leftover);
             player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                "&e背包空间不足，仅购买 " + delivered + " 个，多余款项已退还"));
+                "&eÃÂ¨ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ§ÃÂ©ÃÂºÃÂ©ÃÂÃÂ´ÃÂ¤ÃÂ¸ÃÂÃÂ¨ÃÂ¶ÃÂ³ÃÂ¯ÃÂ¼ÃÂÃÂ¤ÃÂ»ÃÂÃÂ¨ÃÂ´ÃÂ­ÃÂ¤ÃÂ¹ÃÂ° " + delivered + " ÃÂ¤ÃÂ¸ÃÂªÃÂ¯ÃÂ¼ÃÂÃÂ¥ÃÂ¤ÃÂÃÂ¤ÃÂ½ÃÂÃÂ¦ÃÂ¬ÃÂ¾ÃÂ©ÃÂ¡ÃÂ¹ÃÂ¥ÃÂ·ÃÂ²ÃÂ©ÃÂÃÂÃÂ¨ÃÂ¿ÃÂ"));
         }
         if (delivered <= 0) {
-            restoreStock(player, shopId, itemId, shopItem, amount);
-            return BuyResult.fail("背包空间不足");
+            return BuyResult.fail("ÃÂ¨ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ§ÃÂ©ÃÂºÃÂ©ÃÂÃÂ´ÃÂ¤ÃÂ¸ÃÂÃÂ¨ÃÂ¶ÃÂ³");
         }
 
-        // 更新限购记录（按实际成交数量计）
+        // ÃÂ¦ÃÂÃÂ´ÃÂ¦ÃÂÃÂ°ÃÂ©ÃÂÃÂÃÂ¨ÃÂ´ÃÂ­ÃÂ¨ÃÂ®ÃÂ°ÃÂ¥ÃÂ½ÃÂÃÂ¯ÃÂ¼ÃÂÃÂ¦ÃÂÃÂÃÂ¥ÃÂ®ÃÂÃÂ©ÃÂÃÂÃÂ¦ÃÂÃÂÃÂ¤ÃÂºÃÂ¤ÃÂ¦ÃÂÃÂ°ÃÂ©ÃÂÃÂÃÂ¨ÃÂ®ÃÂ¡ÃÂ¯ÃÂ¼ÃÂ
         if (shopItem.limitPerPlayer() > 0) {
             ShopLimitRecord existing = repository.getShopLimit(player.getUniqueId(), shopId, itemId);
             int newCount = (existing == null ? 0 : existing.purchasedCount()) + delivered;
@@ -235,7 +234,7 @@ public class ShopService {
     }
 
     /**
-     * 获取所有商店列表。
+     * ÃÂ¨ÃÂÃÂ·ÃÂ¥ÃÂÃÂÃÂ¦ÃÂÃÂÃÂ¦ÃÂÃÂÃÂ¥ÃÂÃÂÃÂ¥ÃÂºÃÂÃÂ¥ÃÂÃÂÃÂ¨ÃÂ¡ÃÂ¨ÃÂ£ÃÂÃÂ
      */
     public Map<String, ShopDefinition> getShops() {
         return Collections.unmodifiableMap(shops);
@@ -243,6 +242,18 @@ public class ShopService {
 
     public @Nullable ShopDefinition getShop(String shopId) {
         return shops.get(shopId);
+    }
+
+    private void depositSafe(Player player, String currency, BigDecimal amount, String reason) {
+        if (amount == null || amount.signum() <= 0) return;
+        CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(currency);
+        if (bridge != null && bridge.available()) {
+            CurrencyTransactionResult result = bridge.deposit(player, amount);
+            if (result.success()) return;
+            logger.warning("[Market-Shop] refund failed; queueing pending currency: player=" + player.getName()
+                + " currency=" + currency + " amount=" + amount + " reason=" + reason);
+        }
+        repository.addPendingCurrency(player.getUniqueId(), currency, amount.doubleValue(), reason);
     }
 
     private @Nullable ItemStack createItem(ShopItem shopItem, int amount) {
@@ -258,7 +269,7 @@ public class ShopService {
                         : null;
                 }
                 default -> {
-                    // minecraft 原版物品
+                    // minecraft ÃÂ¥ÃÂÃÂÃÂ§ÃÂÃÂÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂ
                     org.bukkit.Material mat = org.bukkit.Material.matchMaterial(shopItem.itemId());
                     ItemStack base = mat != null ? new ItemStack(mat, amount) : null;
                     yield applyItemNbt(base, shopItem.itemNbt());
@@ -266,7 +277,7 @@ public class ShopService {
             };
             return item;
         } catch (Exception e) {
-            logger.log(Level.WARNING, "[Market-Shop] 创建物品失败: " + shopItem.source() + ":" + shopItem.itemId(), e);
+            logger.log(Level.WARNING, "[Market-Shop] ÃÂ¥ÃÂÃÂÃÂ¥ÃÂ»ÃÂºÃÂ§ÃÂÃÂ©ÃÂ¥ÃÂÃÂÃÂ¥ÃÂ¤ÃÂ±ÃÂ¨ÃÂ´ÃÂ¥: " + shopItem.source() + ":" + shopItem.itemId(), e);
             return null;
         }
     }
@@ -325,7 +336,7 @@ public class ShopService {
         }
     }
 
-    // ─── 数据模型 ───────────────────────────────────────────
+    // ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ ÃÂ¦ÃÂÃÂ°ÃÂ¦ÃÂÃÂ®ÃÂ¦ÃÂ¨ÃÂ¡ÃÂ¥ÃÂÃÂ ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
 
     public record ShopDefinition(
         String id, String displayName, String icon, String permission,

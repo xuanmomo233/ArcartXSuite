@@ -8,7 +8,7 @@ import xuanmo.arcartxsuite.market.auction.AuctionListing;
 import xuanmo.arcartxsuite.market.shop.ShopLimitRecord;
 
 /**
- * 市场数据持久化仓库接口。
+ * Ã¥Â¸ÂÃ¥ÂÂºÃ¦ÂÂ°Ã¦ÂÂ®Ã¦ÂÂÃ¤Â¹ÂÃ¥ÂÂÃ¤Â»ÂÃ¥ÂºÂÃ¦ÂÂ¥Ã¥ÂÂ£Ã£ÂÂ
  */
 public interface MarketRepository {
 
@@ -16,25 +16,28 @@ public interface MarketRepository {
 
     void shutdown();
 
-    // ─── 拍卖行 ─────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ Ã¦ÂÂÃ¥ÂÂÃ¨Â¡Â Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
     /**
-     * 插入上架记录。
+     * Ã¦ÂÂÃ¥ÂÂ¥Ã¤Â¸ÂÃ¦ÂÂ¶Ã¨Â®Â°Ã¥Â½ÂÃ£ÂÂ
      *
-     * @return {@code true} 表示插入成功（id 已回填）。调用方据此决定是否归还物品/退费。
+     * @return {@code true} Ã¨Â¡Â¨Ã§Â¤ÂºÃ¦ÂÂÃ¥ÂÂ¥Ã¦ÂÂÃ¥ÂÂÃ¯Â¼Âid Ã¥Â·Â²Ã¥ÂÂÃ¥Â¡Â«Ã¯Â¼ÂÃ£ÂÂÃ¨Â°ÂÃ§ÂÂ¨Ã¦ÂÂ¹Ã¦ÂÂ®Ã¦Â­Â¤Ã¥ÂÂ³Ã¥Â®ÂÃ¦ÂÂ¯Ã¥ÂÂ¦Ã¥Â½ÂÃ¨Â¿ÂÃ§ÂÂ©Ã¥ÂÂ/Ã©ÂÂÃ¨Â´Â¹Ã£ÂÂ
      */
     boolean insertListing(AuctionListing listing);
 
     void updateListing(AuctionListing listing);
 
     /**
-     * 状态 CAS：仅当当前状态等于 {@code expect} 时才更新为 {@code update}。
+     * Ã§ÂÂ¶Ã¦ÂÂ CASÃ¯Â¼ÂÃ¤Â»ÂÃ¥Â½ÂÃ¥Â½ÂÃ¥ÂÂÃ§ÂÂ¶Ã¦ÂÂÃ§Â­ÂÃ¤ÂºÂ {@code expect} Ã¦ÂÂ¶Ã¦ÂÂÃ¦ÂÂ´Ã¦ÂÂ°Ã¤Â¸Âº {@code update}Ã£ÂÂ
      *
-     * @return {@code true} 表示本次调用成功抢占（影响行数为 1），用于防止到期/购买并发重复结算。
+     * @return {@code true} Ã¨Â¡Â¨Ã§Â¤ÂºÃ¦ÂÂ¬Ã¦Â¬Â¡Ã¨Â°ÂÃ§ÂÂ¨Ã¦ÂÂÃ¥ÂÂÃ¦ÂÂ¢Ã¥ÂÂ Ã¯Â¼ÂÃ¥Â½Â±Ã¥ÂÂÃ¨Â¡ÂÃ¦ÂÂ°Ã¤Â¸Âº 1Ã¯Â¼ÂÃ¯Â¼ÂÃ§ÂÂ¨Ã¤ÂºÂÃ©ÂÂ²Ã¦Â­Â¢Ã¥ÂÂ°Ã¦ÂÂ/Ã¨Â´Â­Ã¤Â¹Â°Ã¥Â¹Â¶Ã¥ÂÂÃ©ÂÂÃ¥Â¤ÂÃ§Â»ÂÃ§Â®ÂÃ£ÂÂ
      */
     boolean compareAndSetListingStatus(long listingId,
                                        AuctionListing.ListingStatus expect,
                                        AuctionListing.ListingStatus update);
+
+    /** Update an active listing bid only when the new amount is strictly higher. */
+    boolean updateListingBidIfHigher(long listingId, double amount, UUID bidder);
 
     void deleteListing(long listingId);
 
@@ -48,13 +51,19 @@ public interface MarketRepository {
 
     List<AuctionListing> getListingsBySeller(UUID seller);
 
+    List<AuctionListing> getListingsBySeller(UUID seller, int offset, int limit);
+
     int countActiveListings();
+
+    int countActiveListingsByCategory(String category);
+
+    int countSearchListings(String keyword);
 
     int countListingsBySeller(UUID seller);
 
     List<AuctionListing> getExpiredListings();
 
-    // ─── 竞价 ───────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ Ã§Â«ÂÃ¤Â»Â· Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
     void insertBid(AuctionBid bid);
 
@@ -62,13 +71,15 @@ public interface MarketRepository {
 
     @Nullable AuctionBid getHighestBid(long listingId);
 
-    // ─── 交易历史 ────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ Ã¤ÂºÂ¤Ã¦ÂÂÃ¥ÂÂÃ¥ÂÂ² Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
     void insertHistory(AuctionHistory history);
 
     List<AuctionHistory> getHistoryByPlayer(UUID player, int offset, int limit);
 
-    // ─── 收藏 ───────────────────────────────────────────────
+    int countHistoryByPlayer(UUID player);
+
+    // Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ Ã¦ÂÂ¶Ã¨ÂÂ Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
     void addFavorite(UUID player, long listingId);
 
@@ -78,7 +89,7 @@ public interface MarketRepository {
 
     boolean isFavorite(UUID player, long listingId);
 
-    // ─── 系统商店限购 ────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ Ã§Â³Â»Ã§Â»ÂÃ¥ÂÂÃ¥ÂºÂÃ©ÂÂÃ¨Â´Â­ Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
     @Nullable ShopLimitRecord getShopLimit(UUID player, String shopId, String itemId);
 
@@ -86,53 +97,53 @@ public interface MarketRepository {
 
     void resetExpiredShopLimits(String resetType);
 
-    // ─── 系统商店全局库存（stock-mode: global）────────────────
+    // Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ Ã§Â³Â»Ã§Â»ÂÃ¥ÂÂÃ¥ÂºÂÃ¥ÂÂ¨Ã¥Â±ÂÃ¥ÂºÂÃ¥Â­ÂÃ¯Â¼Âstock-mode: globalÃ¯Â¼ÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
-    /** 当前剩余库存；若尚无记录则按 {@code defaultMax} 初始化。 */
+    /** Ã¥Â½ÂÃ¥ÂÂÃ¥ÂÂ©Ã¤Â½ÂÃ¥ÂºÂÃ¥Â­ÂÃ¯Â¼ÂÃ¨ÂÂ¥Ã¥Â°ÂÃ¦ÂÂ Ã¨Â®Â°Ã¥Â½ÂÃ¥ÂÂÃ¦ÂÂ {@code defaultMax} Ã¥ÂÂÃ¥Â§ÂÃ¥ÂÂÃ£ÂÂ */
     int getGlobalShopStock(String shopId, String itemId, int defaultMax);
 
     /**
-     * 原子扣减全局库存。
+     * Ã¥ÂÂÃ¥Â­ÂÃ¦ÂÂ£Ã¥ÂÂÃ¥ÂÂ¨Ã¥Â±ÂÃ¥ÂºÂÃ¥Â­ÂÃ£ÂÂ
      *
-     * @return {@code true} 表示扣减成功
+     * @return {@code true} Ã¨Â¡Â¨Ã§Â¤ÂºÃ¦ÂÂ£Ã¥ÂÂÃ¦ÂÂÃ¥ÂÂ
      */
     boolean tryConsumeGlobalShopStock(String shopId, String itemId, int amount, int defaultMax);
 
-    /** 退还库存（购买失败或部分成交时调用）。 */
+    /** Ã©ÂÂÃ¨Â¿ÂÃ¥ÂºÂÃ¥Â­ÂÃ¯Â¼ÂÃ¨Â´Â­Ã¤Â¹Â°Ã¥Â¤Â±Ã¨Â´Â¥Ã¦ÂÂÃ©ÂÂ¨Ã¥ÂÂÃ¦ÂÂÃ¤ÂºÂ¤Ã¦ÂÂ¶Ã¨Â°ÂÃ§ÂÂ¨Ã¯Â¼ÂÃ£ÂÂ */
     void restoreGlobalShopStock(String shopId, String itemId, int amount);
 
-    // ─── 系统商店玩家独立库存（stock-mode: per-player）────────
+    // Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ Ã§Â³Â»Ã§Â»ÂÃ¥ÂÂÃ¥ÂºÂÃ§ÂÂ©Ã¥Â®Â¶Ã§ÂÂ¬Ã§Â«ÂÃ¥ÂºÂÃ¥Â­ÂÃ¯Â¼Âstock-mode: per-playerÃ¯Â¼ÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
-    /** 玩家剩余库存；若尚无记录则按 {@code defaultMax} 初始化。 */
+    /** Ã§ÂÂ©Ã¥Â®Â¶Ã¥ÂÂ©Ã¤Â½ÂÃ¥ÂºÂÃ¥Â­ÂÃ¯Â¼ÂÃ¨ÂÂ¥Ã¥Â°ÂÃ¦ÂÂ Ã¨Â®Â°Ã¥Â½ÂÃ¥ÂÂÃ¦ÂÂ {@code defaultMax} Ã¥ÂÂÃ¥Â§ÂÃ¥ÂÂÃ£ÂÂ */
     int getPlayerShopStock(UUID player, String shopId, String itemId, int defaultMax);
 
     /**
-     * 原子扣减玩家独立库存。
+     * Ã¥ÂÂÃ¥Â­ÂÃ¦ÂÂ£Ã¥ÂÂÃ§ÂÂ©Ã¥Â®Â¶Ã§ÂÂ¬Ã§Â«ÂÃ¥ÂºÂÃ¥Â­ÂÃ£ÂÂ
      *
-     * @return {@code true} 表示扣减成功
+     * @return {@code true} Ã¨Â¡Â¨Ã§Â¤ÂºÃ¦ÂÂ£Ã¥ÂÂÃ¦ÂÂÃ¥ÂÂ
      */
     boolean tryConsumePlayerShopStock(UUID player, String shopId, String itemId, int amount, int defaultMax);
 
-    /** 退还玩家独立库存（购买失败或部分成交时调用）。 */
+    /** Ã©ÂÂÃ¨Â¿ÂÃ§ÂÂ©Ã¥Â®Â¶Ã§ÂÂ¬Ã§Â«ÂÃ¥ÂºÂÃ¥Â­ÂÃ¯Â¼ÂÃ¨Â´Â­Ã¤Â¹Â°Ã¥Â¤Â±Ã¨Â´Â¥Ã¦ÂÂÃ©ÂÂ¨Ã¥ÂÂÃ¦ÂÂÃ¤ÂºÂ¤Ã¦ÂÂ¶Ã¨Â°ÂÃ§ÂÂ¨Ã¯Â¼ÂÃ£ÂÂ */
     void restorePlayerShopStock(UUID player, String shopId, String itemId, int amount);
 
-    // ─── 回收统计 ───────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ Ã¥ÂÂÃ¦ÂÂ¶Ã§Â»ÂÃ¨Â®Â¡ Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
     void addRecycleStats(UUID player, String currency, double amount, int itemCount);
 
     double getRecycleTotal(UUID player, String currency);
 
-    // ─── 待发放队列（离线补发 / 背包溢出补发）────────────────
+    // Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ Ã¥Â¾ÂÃ¥ÂÂÃ¦ÂÂ¾Ã©ÂÂÃ¥ÂÂÃ¯Â¼ÂÃ§Â¦Â»Ã§ÂºÂ¿Ã¨Â¡Â¥Ã¥ÂÂ / Ã¨ÂÂÃ¥ÂÂÃ¦ÂºÂ¢Ã¥ÂÂºÃ¨Â¡Â¥Ã¥ÂÂÃ¯Â¼ÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
-    /** 入队一条待发放物品（itemData 为序列化后的物品）。 */
+    /** Ã¥ÂÂ¥Ã©ÂÂÃ¤Â¸ÂÃ¦ÂÂ¡Ã¥Â¾ÂÃ¥ÂÂÃ¦ÂÂ¾Ã§ÂÂ©Ã¥ÂÂÃ¯Â¼ÂitemData Ã¤Â¸ÂºÃ¥ÂºÂÃ¥ÂÂÃ¥ÂÂÃ¥ÂÂÃ§ÂÂÃ§ÂÂ©Ã¥ÂÂÃ¯Â¼ÂÃ£ÂÂ */
     void addPendingItem(UUID player, String itemData, String reason);
 
-    /** 入队一条待发放货币。 */
+    /** Ã¥ÂÂ¥Ã©ÂÂÃ¤Â¸ÂÃ¦ÂÂ¡Ã¥Â¾ÂÃ¥ÂÂÃ¦ÂÂ¾Ã¨Â´Â§Ã¥Â¸ÂÃ£ÂÂ */
     void addPendingCurrency(UUID player, String currency, double amount, String reason);
 
-    /** 取出某玩家的全部待发放记录。 */
+    /** Ã¥ÂÂÃ¥ÂÂºÃ¦ÂÂÃ§ÂÂ©Ã¥Â®Â¶Ã§ÂÂÃ¥ÂÂ¨Ã©ÂÂ¨Ã¥Â¾ÂÃ¥ÂÂÃ¦ÂÂ¾Ã¨Â®Â°Ã¥Â½ÂÃ£ÂÂ */
     List<PendingDelivery> getPendingDeliveries(UUID player);
 
-    /** 删除一条已成功发放的记录。 */
+    /** Ã¥ÂÂ Ã©ÂÂ¤Ã¤Â¸ÂÃ¦ÂÂ¡Ã¥Â·Â²Ã¦ÂÂÃ¥ÂÂÃ¥ÂÂÃ¦ÂÂ¾Ã§ÂÂÃ¨Â®Â°Ã¥Â½ÂÃ£ÂÂ */
     void deletePendingDelivery(long id);
 }

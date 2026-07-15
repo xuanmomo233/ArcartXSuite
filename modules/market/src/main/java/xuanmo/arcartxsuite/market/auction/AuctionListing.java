@@ -12,6 +12,7 @@ public class AuctionListing {
     private final String sellerName;
     private final String itemData;
     private final String itemDisplayName;
+    private String message;
     private final String category;
     private final double buyNowPrice;
     private final double startingBid;
@@ -33,6 +34,7 @@ public class AuctionListing {
         this.sellerName = sellerName;
         this.itemData = itemData;
         this.itemDisplayName = itemDisplayName;
+        this.message = "";
         this.category = category;
         this.buyNowPrice = buyNowPrice;
         this.startingBid = startingBid;
@@ -51,6 +53,8 @@ public class AuctionListing {
     public String getSellerName() { return sellerName; }
     public String getItemData() { return itemData; }
     public String getItemDisplayName() { return itemDisplayName; }
+    public String getMessage() { return message; }
+    public void setMessage(String message) { this.message = message == null ? "" : message; }
     public String getCategory() { return category; }
     public double getBuyNowPrice() { return buyNowPrice; }
     public double getStartingBid() { return startingBid; }
