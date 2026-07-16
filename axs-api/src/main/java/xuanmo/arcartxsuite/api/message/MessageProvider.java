@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Logger;
+import java.util.function.Function;
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
@@ -29,14 +30,22 @@ public final class MessageProvider {
     private final String resourcePath;
     private final ClassLoader classLoader;
     private final Logger logger;
+    private final Function<String, InputStream> resourceLoader;
     private final Map<String, String> messages = new HashMap<>();
 
     public MessageProvider(@NotNull File dataFolder, @NotNull String fileName,
                            @NotNull ClassLoader classLoader, @NotNull Logger logger) {
+        this(dataFolder, fileName, classLoader, logger, classLoader::getResourceAsStream);
+    }
+
+    public MessageProvider(@NotNull File dataFolder, @NotNull String fileName,
+                           @NotNull ClassLoader classLoader, @NotNull Logger logger,
+                           @NotNull Function<String, InputStream> resourceLoader) {
         this.file = new File(dataFolder, fileName);
         this.resourcePath = fileName;
         this.classLoader = classLoader;
         this.logger = logger;
+        this.resourceLoader = resourceLoader;
     }
 
     /**
@@ -98,8 +107,18 @@ public final class MessageProvider {
             @NotNull String resourcePath,
             @NotNull ClassLoader classLoader,
             @NotNull Logger logger) {
+        return loadYamlWithBundledDefaults(file, resourcePath, classLoader, logger,
+            classLoader::getResourceAsStream);
+    }
+
+    public static YamlConfiguration loadYamlWithBundledDefaults(
+            @NotNull File file,
+            @NotNull String resourcePath,
+            @NotNull ClassLoader classLoader,
+            @NotNull Logger logger,
+            @NotNull Function<String, InputStream> resourceLoader) {
         YamlConfiguration defaults = new YamlConfiguration();
-        try (InputStream input = classLoader.getResourceAsStream(resourcePath)) {
+        try (InputStream input = resourceLoader.apply(resourcePath)) {
             if (input != null) {
                 defaults.loadFromString(new String(input.readAllBytes(), StandardCharsets.UTF_8));
             }
@@ -118,7 +137,7 @@ public final class MessageProvider {
 
     private void exportDefaultIfAbsent() {
         if (file.exists()) return;
-        try (InputStream input = classLoader.getResourceAsStream(resourcePath)) {
+        try (InputStream input = resourceLoader.apply(resourcePath)) {
             if (input != null) {
                 file.getParentFile().mkdirs();
                 Files.copy(input, file.toPath());
@@ -129,7 +148,7 @@ public final class MessageProvider {
     }
 
     private void loadBundledDefaults() {
-        try (InputStream input = classLoader.getResourceAsStream(resourcePath)) {
+        try (InputStream input = resourceLoader.apply(resourcePath)) {
             if (input == null) {
                 return;
             }

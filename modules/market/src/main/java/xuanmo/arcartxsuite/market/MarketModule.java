@@ -129,7 +129,8 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
                 new File(configFile.getParentFile(), messagesFileName()),
                 messagesFileName(),
                 moduleClassLoader(),
-                logger),
+                logger,
+                resourcePath -> openProtectedResource(resourcePath, moduleClassLoader())),
             logger);
     }
 

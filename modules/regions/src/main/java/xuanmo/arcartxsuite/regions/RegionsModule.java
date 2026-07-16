@@ -104,7 +104,8 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
                 new File(configFile.getParentFile(), messagesFileName()),
                 messagesFileName(),
                 moduleClassLoader(),
-                logger),
+                logger,
+                resourcePath -> openProtectedResource(resourcePath, moduleClassLoader())),
             logger);
     }
 

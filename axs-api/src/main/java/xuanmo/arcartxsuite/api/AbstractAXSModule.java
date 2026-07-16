@@ -592,7 +592,9 @@ public abstract class AbstractAXSModule implements AXSModule {
                 moduleClassLoader()
             );
         }
-        messages = new MessageProvider(moduleDataFolder, fileName, moduleClassLoader(), context.logger());
+        messages = new MessageProvider(
+            moduleDataFolder, fileName, moduleClassLoader(), context.logger(),
+            resourcePath -> openProtectedResource(resourcePath, moduleClassLoader()));
         messages.load();
         context.logger().fine(descriptor().name() + " 已加载 " + messages.size() + " 条消息。");
     }

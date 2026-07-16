@@ -157,7 +157,8 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
                 new File(configFile.getParentFile(), messagesFileName()),
                 messagesFileName(),
                 moduleClassLoader(),
-                logger),
+                logger,
+                resourcePath -> openProtectedResource(resourcePath, moduleClassLoader())),
             logger);
     }
 
@@ -361,7 +362,8 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
                         new File(configFile.getParentFile(), messagesFileName()),
                         messagesFileName(),
                         moduleClassLoader(),
-                        logger),
+                        logger,
+                        resourcePath -> openProtectedResource(resourcePath, moduleClassLoader())),
                     logger);
                 if (service != null) {
                     service.setConfiguration(configuration);

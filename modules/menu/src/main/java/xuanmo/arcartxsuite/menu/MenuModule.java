@@ -97,7 +97,8 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
                 new File(configFile.getParentFile(), messagesFileName()),
                 messagesFileName(),
                 moduleClassLoader(),
-                logger));
+                logger,
+                resourcePath -> openProtectedResource(resourcePath, moduleClassLoader())));
         ensureDefaultMenus();
     }
 

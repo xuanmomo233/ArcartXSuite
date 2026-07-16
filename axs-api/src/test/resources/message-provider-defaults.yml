@@ -1,0 +1,5 @@
+prefix: "Legacy"
+ui:
+  warehouse-name: "&0{0}"
+  all-text: "&0全部"
+  category-name: "&0{0}"
