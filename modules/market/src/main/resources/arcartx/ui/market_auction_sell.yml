@@ -103,11 +103,11 @@ ui:
       while(val.背包网格.childrenCount() > 1){
         val.背包网格.get(1).remove()
       }
-      for(i in range(0, var.maxBackpackCount)){
-        key = i.round()
-        e = val.背包网格['背包槽'].copy('背包槽' + key)
-        e.entryKey = key
-        e.id = key
+       for(i in range(0, var.maxBackpackCount)){
+         key = i.round()
+         e = val.背包网格['背包槽'].copy('背包槽' + key)
+         e.entryKey = key
+         e.id = key
         e.seticon()
       }
       if(var.selectedSlot != none){
@@ -125,25 +125,13 @@ controls:
       width: 1920
       height: 1080
     children:
-      背景遮罩:
-        type: Texture
-        attribute:
-          x: 0
-          y: 0
-          width: 1920
-          height: 1080
-          normal: ~0,0,0,180
-        action:
-          clickLeft: |-
-            Screen.close()
-
       主面板:
         type: Canvas
         attribute:
-          x: 350
-          y: 180
-          width: 1220
-          height: 720
+          x: 210
+          y: 90
+          width: 1500
+          height: 900
           normal: ~32,32,42,238
           shape: ~round_rect
           radius: 24
@@ -175,7 +163,7 @@ controls:
           关闭按钮:
             type: Texture
             attribute:
-              x: 1140
+              x: 1400
               y: 16
               width: 56
               height: 56
@@ -200,27 +188,27 @@ controls:
             attribute:
               x: 40
               y: 80
-              width: 560
+              width: 820
               height: 760
-              normal: ~255,255,255,120
+              normal: ~45,47,56,205
               shape: ~round_rect
               radius: 24
             effect:
               stroke:
                 width: 2
-                color: ~0,0,0,255
+                color: ~80,180,255,120
             children:
               面板背景:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~255,255,255,120
+                  normal: ~45,47,56,205
                   shape: ~round_rect
                   radius: 24
                 effect:
                   stroke:
                     width: 2
-                    color: ~0,0,0,255
+                    color: ~80,180,255,120
               背包标题:
                 type: Text
                 attribute:
@@ -236,11 +224,11 @@ controls:
                 attribute:
                   x: 20
                   y: 60
-                  width: 520
-                  height: 520
-                  column: 6
-                  spaceBetweenX: 10
-                  spaceBetweenY: 10
+                  width: 780
+                  height: 320
+                  column: 9
+                  spaceBetweenX: 8
+                  spaceBetweenY: 8
                 children:
                   背包槽:
                     type: Slot
@@ -248,9 +236,9 @@ controls:
                       id: 0
                       entryKey: 0
                       slotType: ~Backpack
-                      itemScale: 0.72
-                      width: 76
-                      height: 76
+                      itemScale: 0.68
+                      width: 72
+                      height: 72
                       normal: "self.entryKey == var.selectedSlot ? '120,190,255,255' : 'Frosted:0;95,95,95,255'"
                       hover: "~Frosted:0;255,255,255,255"
                       shape: ~round_rect
@@ -282,10 +270,10 @@ controls:
               type: Text
               attribute:
                 point: ~middle_center
-                x: 280
-                y: 300
+                x: 0
+                y: 0
                 center: true
-                fontSize: 36
+                fontSize: 32
                 visible: "var.backpackItems == none || var.backpackItems.keys().length == 0"
                 texts: "~&8暂无可上架物品"
                 through: true
@@ -293,29 +281,29 @@ controls:
             type: Canvas
             val: 信息面板
             attribute:
-              x: 620
+              x: 880
               y: 80
               width: 560
               height: 760
-              normal: ~255,255,255,120
+              normal: ~45,47,56,205
               shape: ~round_rect
               radius: 24
             effect:
               stroke:
                 width: 2
-                color: ~0,0,0,255
+                color: ~80,180,255,120
             children:
               面板背景:
                 type: Texture
                 attribute:
                   point: ~stretch_all
-                  normal: ~255,255,255,120
+                  normal: ~45,47,56,205
                   shape: ~round_rect
                   radius: 24
                 effect:
                   stroke:
                     width: 2
-                    color: ~0,0,0,255
+                    color: ~80,180,255,120
               信息标题:
                 type: Text
                 attribute:
@@ -583,7 +571,7 @@ controls:
                   radius: 14
                 action:
                   clickLeft: |-
-                    Screen.close()
+                    Screen.open("AXS:market_auction")
                 effect:
                   stroke:
                     width: 2
@@ -598,4 +586,3 @@ controls:
                       center: true
                       fontSize: 32
                       texts: "~&f返回"
-

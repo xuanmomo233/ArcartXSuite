@@ -32,6 +32,8 @@ import xuanmo.arcartxsuite.market.storage.RedisMarketCache;
  */
 public class AuctionService {
 
+    private static final int AUCTION_BACKPACK_SLOTS = 36;
+
     private final JavaPlugin plugin;
     private final AuctionConfiguration config;
     private final MessagesConfiguration messages;
@@ -84,7 +86,7 @@ public class AuctionService {
 
     public ListingResult createListing(Player seller, int slot, double buyNowPrice,
                                        double startingBid, String currency, long durationSeconds) {
-        if (slot < 0 || slot >= seller.getInventory().getSize()) {
+        if (slot < 0 || slot >= AUCTION_BACKPACK_SLOTS) {
             return ListingResult.fail("invalid item slot");
         }
         ItemStack item = seller.getInventory().getItem(slot);
@@ -92,7 +94,7 @@ public class AuctionService {
     }
 
     public ListingResult createListing(Player seller, int slot, double buyNowPrice, double startingBid, String currency, long durationSeconds, String message) {
-        if (slot < 0 || slot >= seller.getInventory().getSize()) {
+        if (slot < 0 || slot >= AUCTION_BACKPACK_SLOTS) {
             return ListingResult.fail("invalid item slot");
         }
         return createListingInternal(seller, seller.getInventory().getItem(slot), buyNowPrice, startingBid, currency, durationSeconds, message, slot);

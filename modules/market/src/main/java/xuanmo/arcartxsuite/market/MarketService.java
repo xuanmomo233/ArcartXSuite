@@ -55,6 +55,7 @@ public class MarketService {
 
     private static final int AUCTION_PAGE_SIZE = 20;
     private static final String AUCTION_SELL_UI_ID = "AXS:market_auction_sell";
+    private static final int AUCTION_BACKPACK_SLOTS = 36;
     private static final int HISTORY_PAGE_SIZE = 20;
     private static final SimpleDateFormat TIME_FMT = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 
@@ -326,7 +327,7 @@ public class MarketService {
         long duration = data.size() > 4 ? parseLongSafe(data.get(4), 0) : 0;
         String currency = data.size() > 5 && data.get(5) != null && !data.get(5).isBlank()
             ? data.get(5) : config.auction().defaultCurrency();
-        if (slot < 0 || slot >= player.getInventory().getSize()) {
+        if (slot < 0 || slot >= AUCTION_BACKPACK_SLOTS) {
             player.sendMessage(messages.get("player.sell.invalid-slot"));
             return;
         }
@@ -526,8 +527,7 @@ public class MarketService {
         Map<String, Object> packet = new LinkedHashMap<>();
         packet.put("packetId", config.ui().packetId());
         Map<String, Object> backpackItems = new LinkedHashMap<>();
-        int inventorySize = player.getInventory().getSize();
-        for (int slot = 0; slot < inventorySize; slot++) {
+        for (int slot = 0; slot < AUCTION_BACKPACK_SLOTS; slot++) {
             ItemStack item = player.getInventory().getItem(slot);
             Map<String, Object> row = new LinkedHashMap<>();
             boolean hasItem = item != null && !item.getType().isAir();
@@ -547,7 +547,7 @@ public class MarketService {
             currencies.put(Integer.toString(currencyIndex++), currency);
         }
         packet.put("backpackItems", backpackItems);
-        packet.put("maxBackpackCount", inventorySize);
+        packet.put("maxBackpackCount", AUCTION_BACKPACK_SLOTS);
         packet.put("currencies", currencies);
         packet.put("maxCurrencyCount", currencies.size());
         packet.put("defaultCurrency", config.auction().defaultCurrency());
