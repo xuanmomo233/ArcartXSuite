@@ -21,11 +21,17 @@ public record LoginViewModuleConfiguration(
 ) {
 
     public static LoginViewModuleConfiguration load(FileConfiguration configuration, Logger logger) {
+        return load(configuration, configuration.getConfigurationSection("messages"), logger);
+    }
+
+    public static LoginViewModuleConfiguration load(
+            FileConfiguration configuration,
+            ConfigurationSection messagesSection,
+            Logger logger) {
         ConfigurationSection uiSection = configuration.getConfigurationSection("ui");
         ConfigurationSection securitySection = configuration.getConfigurationSection("security");
         ConfigurationSection storageSection = configuration.getConfigurationSection("storage");
         ConfigurationSection migrationSection = configuration.getConfigurationSection("authme-migration");
-        ConfigurationSection messagesSection = configuration.getConfigurationSection("messages");
         ConfigurationSection bypassWelcomeSection = configuration.getConfigurationSection("auth.bypass-welcome");
         ConfigurationSection qqBindingSection = configuration.getConfigurationSection("qq-binding");
         ConfigurationSection spawnOnLoginSection = configuration.getConfigurationSection("spawn-on-login");

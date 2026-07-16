@@ -34,15 +34,3 @@ settings:
       name-contains: "服务器菜单"
       action: RIGHT_CLICK
 
-messages:
-  prefix: "&3◆ &6ArcartXSuite &7| &r"
-  no-permission: "&c你没有权限执行此操作。"
-  player-only: "&c该命令只能由玩家执行。"
-  menu-not-found: "&c未找到菜单: &f{menu}"
-  menu-open-failed: "&c无法打开菜单 &f{menu}&c: &7{reason}"
-  menu-open-success: "&a已打开菜单 &f{menu}"
-  button-unavailable: "&c该按钮当前不可用。"
-  button-condition-denied: "&c条件未满足，无法使用该按钮。"
-  page-empty: "&7当前页没有可用按钮。"
-  reload-success: "&aMenu 模块配置已重载。"
-  reload-failed: "&cMenu 模块重载失败: &7{error}"

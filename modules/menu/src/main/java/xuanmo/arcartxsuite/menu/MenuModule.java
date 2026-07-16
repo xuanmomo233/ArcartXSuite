@@ -22,9 +22,9 @@ import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.MenuOpenable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
-import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.menu.command.MenuAdminCommand;
 import xuanmo.arcartxsuite.menu.command.MenuPlayerCommand;
@@ -66,13 +66,6 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
     }
 
     @Override
-    protected @NotNull SyncPolicy defaultSyncPolicy() {
-        return SyncPolicy.builder()
-            .dynamicSection("messages")
-            .build();
-    }
-
-    @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
             ValidationRule.required("client.packet-id", ValueType.STRING),
@@ -98,7 +91,13 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         if (configFile == null) {
             throw new IllegalStateException("ArcartXMenu.yml 配置文件缺失");
         }
-        configuration = MenuModuleConfiguration.load(YamlConfiguration.loadConfiguration(configFile));
+        configuration = MenuModuleConfiguration.load(
+            YamlConfiguration.loadConfiguration(configFile),
+            MessageProvider.loadYamlWithBundledDefaults(
+                new File(configFile.getParentFile(), messagesFileName()),
+                messagesFileName(),
+                moduleClassLoader(),
+                logger));
         ensureDefaultMenus();
     }
 
@@ -277,5 +276,4 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 

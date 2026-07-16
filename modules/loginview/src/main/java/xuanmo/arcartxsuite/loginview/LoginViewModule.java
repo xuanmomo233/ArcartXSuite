@@ -26,6 +26,7 @@ import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.loginview.config.LoginViewModuleConfiguration;
 import xuanmo.arcartxsuite.loginview.migration.AuthMeMigrationService.MigrationResult;
 import xuanmo.arcartxsuite.loginview.placeholder.LoginViewPlaceholderExpansion;
@@ -151,7 +152,13 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         }
         this.configFile = configFile;
         configuration = LoginViewModuleConfiguration.load(
-            YamlConfiguration.loadConfiguration(configFile), logger);
+            YamlConfiguration.loadConfiguration(configFile),
+            MessageProvider.loadYamlWithBundledDefaults(
+                new File(configFile.getParentFile(), messagesFileName()),
+                messagesFileName(),
+                moduleClassLoader(),
+                logger),
+            logger);
     }
 
     @Override
@@ -349,7 +356,13 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
             yaml.save(configFile);
             if (configFile != null) {
                 configuration = LoginViewModuleConfiguration.load(
-                    YamlConfiguration.loadConfiguration(configFile), logger);
+                    YamlConfiguration.loadConfiguration(configFile),
+                    MessageProvider.loadYamlWithBundledDefaults(
+                        new File(configFile.getParentFile(), messagesFileName()),
+                        messagesFileName(),
+                        moduleClassLoader(),
+                        logger),
+                    logger);
                 if (service != null) {
                     service.setConfiguration(configuration);
                 }
@@ -373,5 +386,4 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
         return result;
     }
 }
-
 

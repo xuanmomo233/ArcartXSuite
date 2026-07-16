@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.api.message;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
@@ -47,6 +48,7 @@ public final class MessageProvider {
         if (!file.exists()) {
             return;
         }
+        loadBundledDefaults();
         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
         for (String key : yaml.getKeys(true)) {
             if (yaml.isString(key)) {
@@ -91,6 +93,29 @@ public final class MessageProvider {
         return messages.size();
     }
 
+    public static YamlConfiguration loadYamlWithBundledDefaults(
+            @NotNull File file,
+            @NotNull String resourcePath,
+            @NotNull ClassLoader classLoader,
+            @NotNull Logger logger) {
+        YamlConfiguration defaults = new YamlConfiguration();
+        try (InputStream input = classLoader.getResourceAsStream(resourcePath)) {
+            if (input != null) {
+                defaults.loadFromString(new String(input.readAllBytes(), StandardCharsets.UTF_8));
+            }
+        } catch (Exception e) {
+            logger.warning("[Messages] Failed to load bundled defaults: " + e.getMessage());
+        }
+
+        YamlConfiguration configuration = YamlConfiguration.loadConfiguration(file);
+        for (String key : defaults.getKeys(true)) {
+            if (defaults.isString(key) && !configuration.contains(key)) {
+                configuration.set(key, defaults.getString(key, ""));
+            }
+        }
+        return configuration;
+    }
+
     private void exportDefaultIfAbsent() {
         if (file.exists()) return;
         try (InputStream input = classLoader.getResourceAsStream(resourcePath)) {
@@ -100,6 +125,23 @@ public final class MessageProvider {
             }
         } catch (IOException e) {
             logger.warning("[Messages] 导出默认消息文件失败: " + e.getMessage());
+        }
+    }
+
+    private void loadBundledDefaults() {
+        try (InputStream input = classLoader.getResourceAsStream(resourcePath)) {
+            if (input == null) {
+                return;
+            }
+            YamlConfiguration defaults = new YamlConfiguration();
+            defaults.loadFromString(new String(input.readAllBytes(), StandardCharsets.UTF_8));
+            for (String key : defaults.getKeys(true)) {
+                if (defaults.isString(key)) {
+                    messages.put(key, ChatColor.translateAlternateColorCodes('&', defaults.getString(key, "")));
+                }
+            }
+        } catch (Exception e) {
+            logger.warning("[Messages] Failed to load bundled defaults: " + e.getMessage());
         }
     }
 }

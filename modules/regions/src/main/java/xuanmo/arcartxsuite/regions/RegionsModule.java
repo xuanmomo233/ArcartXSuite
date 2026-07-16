@@ -23,6 +23,7 @@ import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.regions.command.RegionCommandHandler;
 import xuanmo.arcartxsuite.regions.config.RegionsConfiguration;
@@ -97,8 +98,14 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
             throw new IllegalStateException("ArcartXRegions.yml 配置文件缺失");
         }
         rawYaml = YamlConfiguration.loadConfiguration(configFile);
-        configuration = RegionsConfiguration.load(rawYaml,
-            YamlConfiguration.loadConfiguration(new File(configFile.getParentFile(), messagesFileName())), logger);
+        configuration = RegionsConfiguration.load(
+            rawYaml,
+            MessageProvider.loadYamlWithBundledDefaults(
+                new File(configFile.getParentFile(), messagesFileName()),
+                messagesFileName(),
+                moduleClassLoader(),
+                logger),
+            logger);
     }
 
     @Override
@@ -268,6 +275,5 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         return regionManager;
     }
 }
-
 
 

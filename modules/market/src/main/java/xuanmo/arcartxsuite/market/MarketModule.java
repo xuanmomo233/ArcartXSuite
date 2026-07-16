@@ -24,6 +24,7 @@ import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.market.auction.AuctionItemSerializer;
 import xuanmo.arcartxsuite.market.command.MarketAdminCommand;
 import xuanmo.arcartxsuite.market.command.MarketPlayerCommand;
@@ -124,7 +125,11 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         }
         configuration = MarketModuleConfiguration.load(
             YamlConfiguration.loadConfiguration(configFile),
-            YamlConfiguration.loadConfiguration(new File(configFile.getParentFile(), messagesFileName())),
+            MessageProvider.loadYamlWithBundledDefaults(
+                new File(configFile.getParentFile(), messagesFileName()),
+                messagesFileName(),
+                moduleClassLoader(),
+                logger),
             logger);
     }
 
@@ -307,7 +312,6 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 
 
 

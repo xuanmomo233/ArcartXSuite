@@ -140,18 +140,3 @@ authme-migration:
 
 # ─── 提示消息 ────────────────────────────────────────
 # 支持 & 颜色码与常见 PAPI 占位符。
-messages:
-  title-login: 登录服务器
-  title-register: 注册账号
-  login-success: '&a登录成功。'
-  register-success: '&a注册完成，已自动登录。'
-  change-success: '&a密码已修改。'
-  password-mismatch: '&c两次输入的密码不一致。'
-  password-too-short: '&c密码太短。'
-  password-too-long: '&c密码太长。'
-  wrong-password: '&c密码错误。'
-  already-registered: '&c你已经注册过账号。'
-  not-registered: '&e你还没有注册，请先设置密码。'
-  authme-unavailable: '&c当前配置为 AuthMe 兼容模式，但 AuthMe 不可用。'
-  locked: '&e请先完成登录。'
-  kicked: '&c密码错误次数过多。'

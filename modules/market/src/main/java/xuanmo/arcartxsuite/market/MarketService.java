@@ -527,7 +527,7 @@ public class MarketService {
         Map<String, Object> packet = new LinkedHashMap<>();
         packet.put("packetId", config.ui().packetId());
         Map<String, Object> backpackItems = new LinkedHashMap<>();
-        for (int slot = 0; slot < AUCTION_BACKPACK_SLOTS; slot++) {
+        for (int slot = 1; slot < 35; slot++) {
             ItemStack item = player.getInventory().getItem(slot);
             Map<String, Object> row = new LinkedHashMap<>();
             boolean hasItem = item != null && !item.getType().isAir();
@@ -547,7 +547,6 @@ public class MarketService {
             currencies.put(Integer.toString(currencyIndex++), currency);
         }
         packet.put("backpackItems", backpackItems);
-        packet.put("maxBackpackCount", AUCTION_BACKPACK_SLOTS);
         packet.put("currencies", currencies);
         packet.put("maxCurrencyCount", currencies.size());
         packet.put("defaultCurrency", config.auction().defaultCurrency());

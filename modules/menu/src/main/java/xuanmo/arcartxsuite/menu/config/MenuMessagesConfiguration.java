@@ -10,6 +10,7 @@ public record MenuMessagesConfiguration(
     String menuOpenFailed,
     String menuOpenSuccess,
     String buttonUnavailable,
+    String buttonConditionDenied,
     String pageEmpty,
     String reloadSuccess,
     String reloadFailed
@@ -28,6 +29,7 @@ public record MenuMessagesConfiguration(
             section.getString("menu-open-failed", defaults.menuOpenFailed()),
             section.getString("menu-open-success", defaults.menuOpenSuccess()),
             section.getString("button-unavailable", defaults.buttonUnavailable()),
+            section.getString("button-condition-denied", defaults.buttonConditionDenied()),
             section.getString("page-empty", defaults.pageEmpty()),
             section.getString("reload-success", defaults.reloadSuccess()),
             section.getString("reload-failed", defaults.reloadFailed())
@@ -43,6 +45,7 @@ public record MenuMessagesConfiguration(
             "&c无法打开菜单 &f{menu}&c: &7{reason}",
             "&a已打开菜单 &f{menu}",
             "&c该按钮当前不可用。",
+            "&c条件未满足，无法使用该按钮。",
             "&7当前页没有可用按钮。",
             "&aMenu 模块配置已重载。",
             "&cMenu 模块重载失败: &7{error}"

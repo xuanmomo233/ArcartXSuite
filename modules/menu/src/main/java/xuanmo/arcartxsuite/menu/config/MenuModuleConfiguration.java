@@ -20,6 +20,17 @@ public record MenuModuleConfiguration(
         );
     }
 
+    public static MenuModuleConfiguration load(
+            @NotNull YamlConfiguration yaml,
+            @NotNull YamlConfiguration messagesYaml) {
+        return new MenuModuleConfiguration(
+            yaml.getBoolean("debug.enabled", false),
+            MenuClientConfiguration.load(yaml.getConfigurationSection("client")),
+            MenuSettingsConfiguration.load(yaml.getConfigurationSection("settings")),
+            MenuMessagesConfiguration.load(messagesYaml)
+        );
+    }
+
     public @NotNull File menusDirectory(@NotNull File dataFolder) {
         return new File(dataFolder, settings.menusDirectory());
     }
