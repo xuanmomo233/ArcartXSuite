@@ -59,6 +59,10 @@ public class GachaEngine {
                 results.add(randomFrom(pool.star3Items()));
             }
 
+            if (results.get(results.size() - 1) == null) {
+                return new GachaResult(List.of(), state, state.guaranteedUp(), fateTriggered);
+            }
+
             // 更新 state（使用新的 record 实例）
             state = new PlayerGachaState(
                 state.playerUuid(), state.poolId(),

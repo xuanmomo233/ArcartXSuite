@@ -1,6 +1,3 @@
-# AXS Lottery Case 开箱 UI
-# 全部使用纯色块与渐变色，无外部贴图依赖
-# 品质颜色由物品 lore 中 "rarity" 字段驱动
 ui:
   match:
     - "AXS:lottery_case"
@@ -11,9 +8,21 @@ ui:
   closeDied: false
   show: true
   screenScale: true
+  packetHandler:
+    init: |-
+      var.packetId = packet['packetId']
+      var.poolName = packet['poolName']
+      var.poolDescription = packet['poolDescription']
+      var.poolList = packet['poolList']
+      var.currentPoolIndex = packet['currentPoolIndex']
+    update: |-
+      var.packetId = packet['packetId']
+      var.poolName = packet['poolName']
+      var.poolDescription = packet['poolDescription']
+      var.poolList = packet['poolList']
+      var.currentPoolIndex = packet['currentPoolIndex']
   action:
     load: |-
-      # ── 品质颜色字典 ──
       var.rarityColors = {}
       var.rarityColors['COMMON']    = '192,195,198,255'
       var.rarityColors['UNCOMMON']  = '176,195,217,255'
@@ -21,10 +30,10 @@ ui:
       var.rarityColors['EPIC']      = '136,71,255,255'
       var.rarityColors['LEGENDARY'] = '235,75,75,255'
       var.rarityColors['MYTHIC']    = '255,215,0,255'
-      # 默认灰色兜底
       var.rarityColors[none] = '128,128,128,255'
     open: |-
       var.random = 0.8 + math.random() * 0.01
+      Packet.send(var.packetId, 'open_case')
       var.V = TwoLerp(1, 3, 0.5, 2000, 6000)
       val.Scroll.moveX = 0.0005
       val.开箱动画.visible = true
@@ -53,7 +62,6 @@ ui:
   defaultOpen: true
 
 controls:
-  # ── 全屏半透明遮罩背景 ──
   背景遮罩:
     type: Adaptive
     attribute:
@@ -66,7 +74,6 @@ controls:
         attribute:
           point: ~stretch_all
           normal: ~0,0,0,200
-      # 顶部装饰渐变条
       顶部渐变:
         type: Texture
         attribute:
@@ -80,7 +87,6 @@ controls:
             color2: ~255,100,0,0
             type: 0
             angleDeg: 90
-      # 底部装饰渐变条
       底部渐变:
         type: Texture
         attribute:
@@ -95,7 +101,6 @@ controls:
             type: 0
             angleDeg: 90
 
-  # ── 奖品展示（单抽结果）──
   奖品展示单抽:
     type: Adaptive
     val: 奖品展示单抽
@@ -136,7 +141,6 @@ controls:
               point: ~middle_center
               id: 13
               itemScale: 1.2
-          # 传说级径向渐变背景
           品质光环:
             type: Texture
             attribute:
@@ -166,7 +170,6 @@ controls:
                 var.r = self.parent['奖品槽位'].getItemText('rarity')
                 self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors[none]
 
-  # ── 奖品展示（十连抽结果）──
   奖品展示十连抽:
     type: Adaptive
     val: 奖品展示十连抽
@@ -239,7 +242,6 @@ controls:
                       id: 8
                       x: 15.0
 
-  # ── 开箱动画（横向滚动带）──
   开箱动画:
     type: Adaptive
     val: 开箱动画
@@ -337,7 +339,6 @@ controls:
                           scale: 1.5
                           through: false
                           id: 0
-          # 抽奖幕布（左右遮罩，聚焦中间）
           抽奖幕布:
             type: Texture
             attribute:
@@ -346,7 +347,6 @@ controls:
               height: 2160
               through: true
               point: ~middle_center
-          # 准中线（高亮指示器）
           准中线:
             type: Texture
             attribute:
@@ -357,7 +357,6 @@ controls:
               through: true
               scale: 1.5
 
-  # ── 奖励预览（开箱前展示所有可能奖品）──
   奖励预览:
     type: Adaptive
     val: 奖励预览
@@ -376,7 +375,6 @@ controls:
           height: 128
           visible: true
         children:
-          # 箱子图标用纯色圆角块代替
           箱子贴图:
             type: Texture
             attribute:
@@ -523,7 +521,6 @@ controls:
                           fontSize: 30
                           point: ~bottom_left
 
-  # ── 交互按键 ──
   交互按键:
     type: Adaptive
     val: 交互按键
@@ -574,7 +571,6 @@ controls:
               fontSize: 49
               point: ~middle_left
               x: 100.0
-          # 开箱按钮（绿色渐变）
           开始:
             type: Slot
             attribute:

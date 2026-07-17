@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.logging.Logger;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.lottery.config.LotteryModuleConfiguration.StorageConfiguration;
 import xuanmo.arcartxsuite.lottery.model.PlayerCaseState;
@@ -26,6 +27,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
     private String tGachaLog;
     private String tCaseState;
     private String tCaseLog;
+    private String tPendingClaim;
 
     public JdbcLotteryRepository(File dataFolder, StorageConfiguration config, Logger logger) {
         super("AXS-Lottery", dataFolder, config.toDescriptor(), logger);
@@ -41,18 +43,19 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
         tGachaLog = prefix + "gacha_log";
         tCaseState = prefix + "case_state";
         tCaseLog = prefix + "case_log";
+        tPendingClaim = prefix + "pending_claim";
         createTables(conn);
         logger.info("[Lottery] " + (sqlite ? "SQLite" : "MySQL") + " 存储已初始化，表前缀: " + prefix);
     }
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of(tGachaState, tGachaLog, tCaseState, tCaseLog);
+        return List.of(tGachaState, tGachaLog, tCaseState, tCaseLog, tPendingClaim);
     }
 
     @Override
     protected List<String> allTables() {
-        return List.of(tGachaState, tGachaLog, tCaseState, tCaseLog);
+        return List.of(tGachaState, tGachaLog, tCaseState, tCaseLog, tPendingClaim);
     }
 
     private void createTables(Connection conn) throws SQLException {
@@ -109,6 +112,17 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             + "wear_tier TEXT"
             + ")");
         stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_case_log_player_pool ON " + tCaseLog + " (player_uuid, pool_id)");
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPendingClaim + " ("
+            + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            + "player_uuid TEXT NOT NULL,"
+            + "pool_id TEXT NOT NULL,"
+            + "item_metadata TEXT NOT NULL,"
+            + "item_data TEXT,"
+            + "created_time INTEGER NOT NULL,"
+            + "claimed INTEGER NOT NULL DEFAULT 0,"
+            + "attempts INTEGER NOT NULL DEFAULT 0"
+            + ")");
+        stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_pending_claim_player ON " + tPendingClaim + " (player_uuid, claimed)");
     }
 
     private void createTablesMysql(Statement stmt) throws SQLException {
@@ -154,6 +168,17 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             + "wear_value DOUBLE,"
             + "wear_tier VARCHAR(32),"
             + "INDEX idx_player_pool (player_uuid, pool_id)"
+            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPendingClaim + " ("
+            + "id BIGINT PRIMARY KEY AUTO_INCREMENT,"
+            + "player_uuid VARCHAR(36) NOT NULL,"
+            + "pool_id VARCHAR(64) NOT NULL,"
+            + "item_metadata TEXT NOT NULL,"
+            + "item_data LONGTEXT,"
+            + "created_time BIGINT NOT NULL,"
+            + "claimed BOOLEAN NOT NULL DEFAULT FALSE,"
+            + "attempts INT NOT NULL DEFAULT 0,"
+            + "INDEX idx_pending_claim_player (player_uuid, claimed)"
             + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     }
 
@@ -278,6 +303,67 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             ps.executeUpdate();
         } catch (SQLException e) {
             logger.warning("[Lottery] 删除 Case 状态失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public long enqueuePendingClaim(@NotNull UUID playerUuid, @NotNull String poolId,
+                                    @NotNull String itemMetadata, @Nullable String itemData) {
+        String sql = "INSERT INTO " + tPendingClaim
+            + " (player_uuid, pool_id, item_metadata, item_data, created_time, claimed, attempts)"
+            + " VALUES (?, ?, ?, ?, ?, ?, ?)";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            ps.setString(1, playerUuid.toString());
+            ps.setString(2, poolId);
+            ps.setString(3, itemMetadata);
+            ps.setString(4, itemData);
+            ps.setLong(5, System.currentTimeMillis());
+            ps.setBoolean(6, false);
+            ps.setInt(7, 0);
+            ps.executeUpdate();
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                return keys.next() ? keys.getLong(1) : -1L;
+            }
+        } catch (SQLException e) {
+            logger.warning("[Lottery] 保存待领取奖励失败: " + e.getMessage());
+            return -1L;
+        }
+    }
+
+    @Override
+    public @NotNull List<PendingClaim> getPendingClaims(@NotNull UUID playerUuid) {
+        List<PendingClaim> result = new ArrayList<>();
+        String sql = "SELECT id, pool_id, item_metadata, item_data, created_time, attempts FROM "
+            + tPendingClaim + " WHERE player_uuid = ? AND claimed = ? ORDER BY created_time ASC";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, playerUuid.toString());
+            ps.setBoolean(2, false);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    result.add(new PendingClaim(
+                        rs.getLong("id"), playerUuid, rs.getString("pool_id"),
+                        rs.getString("item_metadata"), rs.getString("item_data"),
+                        rs.getLong("created_time"), rs.getInt("attempts")));
+                }
+            }
+        } catch (SQLException e) {
+            logger.warning("[Lottery] 查询待领取奖励失败: " + e.getMessage());
+        }
+        return result;
+    }
+
+    @Override
+    public void markPendingClaimClaimed(long claimId) {
+        String sql = "UPDATE " + tPendingClaim + " SET claimed = ? WHERE id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setBoolean(1, true);
+            ps.setLong(2, claimId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.warning("[Lottery] 更新待领取奖励失败: " + e.getMessage());
         }
     }
 

@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.lottery.storage;
 import java.util.List;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.lottery.model.PlayerCaseState;
 import xuanmo.arcartxsuite.lottery.model.PlayerGachaState;
 
@@ -23,6 +24,16 @@ public interface LotteryRepository {
     void saveCaseState(@NotNull PlayerCaseState state);
 
     void deleteCaseState(@NotNull UUID playerUuid, @NotNull String poolId);
+
+    long enqueuePendingClaim(@NotNull UUID playerUuid, @NotNull String poolId,
+                              @NotNull String itemMetadata, @Nullable String itemData);
+
+    @NotNull List<PendingClaim> getPendingClaims(@NotNull UUID playerUuid);
+
+    void markPendingClaimClaimed(long claimId);
+
+    record PendingClaim(long id, UUID playerUuid, String poolId, String itemMetadata,
+                        String itemData, long createdTime, int attempts) {}
 
     // ─── Logs ───────────────────────────────────────────────
 

@@ -7,7 +7,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
@@ -32,11 +34,14 @@ public class LotteryPacketHandler implements ClientPacketHandler {
 
     private final LotteryService service;
     private final PacketBridgeAPI packetBridge;
+    private final JavaPlugin plugin;
     private final Map<UUID, Integer> playerPoolIndex = new ConcurrentHashMap<>();
 
-    public LotteryPacketHandler(@NotNull LotteryService service, @NotNull PacketBridgeAPI packetBridge) {
+    public LotteryPacketHandler(@NotNull LotteryService service, @NotNull PacketBridgeAPI packetBridge,
+                                @NotNull JavaPlugin plugin) {
         this.service = service;
         this.packetBridge = packetBridge;
+        this.plugin = plugin;
     }
 
     @Override
@@ -45,14 +50,25 @@ public class LotteryPacketHandler implements ClientPacketHandler {
             return false;
         }
 
-        String action = data.isEmpty() ? "refresh" : data.get(0).toLowerCase(Locale.ROOT);
-        switch (action) {
-            case "switch_pool" -> handleSwitchPool(player, data);
-            case "pull" -> handlePull(player, data);
-            case "open_case" -> handleOpenCase(player, data);
-            case "refresh" -> pushGachaData(player, getCurrentIndex(player));
-            default -> pushGachaData(player, getCurrentIndex(player));
-        }
+        Runnable operation = () -> {
+            String action = data.isEmpty() ? "refresh" : data.get(0).toLowerCase(Locale.ROOT);
+            boolean casePacket = CASE_PACKET_ID.equalsIgnoreCase(packetId);
+            switch (action) {
+                case "switch_pool" -> handleSwitchPool(player, data);
+                case "pull" -> handlePull(player, data);
+                case "open_case" -> handleOpenCase(player, data);
+                case "refresh" -> {
+                    if (casePacket) pushCaseData(player, getCurrentIndex(player));
+                    else pushGachaData(player, getCurrentIndex(player));
+                }
+                default -> {
+                    if (casePacket) pushCaseData(player, getCurrentIndex(player));
+                    else pushGachaData(player, getCurrentIndex(player));
+                }
+            }
+        };
+        if (Bukkit.isPrimaryThread()) operation.run();
+        else Bukkit.getScheduler().runTask(plugin, operation);
         return true;
     }
 
@@ -85,9 +101,8 @@ public class LotteryPacketHandler implements ClientPacketHandler {
         }
 
         try {
-            GachaResult result = service.pullGacha(player, pool.id(), count);
-            pushGachaData(player, getCurrentIndex(player));
-        } catch (Exception e) {
+            service.pullGacha(player, pool.id(), count);
+        } finally {
             pushGachaData(player, getCurrentIndex(player));
         }
     }
@@ -95,15 +110,14 @@ public class LotteryPacketHandler implements ClientPacketHandler {
     private void handleOpenCase(Player player, List<String> data) {
         PoolDefinition pool = getPoolAtIndex(player, getCurrentIndex(player));
         if (pool == null || pool.type() != PoolType.CASE || pool.caseConfig() == null) {
-            pushGachaData(player, getCurrentIndex(player));
+            pushCaseData(player, getCurrentIndex(player));
             return;
         }
 
         try {
             service.openCase(player, pool.id());
-            pushGachaData(player, getCurrentIndex(player));
-        } catch (Exception e) {
-            pushGachaData(player, getCurrentIndex(player));
+        } finally {
+            pushCaseData(player, getCurrentIndex(player));
         }
     }
 
@@ -143,10 +157,12 @@ public class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("poolName", pool.displayName());
         payload.put("poolType", pool.type().name());
         payload.put("poolBanner", ""); // 暂无 banner 配置，留空
-        payload.put("poolDescription", ""); // 暂无 description 配置，留空
-        payload.put("upItemName", ""); // 暂无 UP 物品名称配置，留空
+        payload.put("poolDescription", "");
+        payload.put("upItemName", "");
+        payload.put("upItemStar", 5);
+        payload.put("upItemDesc", "");
         payload.put("upItemIcon", ""); // 暂无 UP 物品图标配置，留空
-        payload.put("guaranteeText", buildGuaranteeText(pool));
+        payload.put("guaranteeDesc", buildGuaranteeText(pool));
         payload.put("remainingTime", ""); // 暂无限时配置，留空
         payload.put("fateCount", 0); // 暂无命运之契计数，留空
         payload.put("primogemCount", 0); // 暂无原石计数，留空
@@ -166,6 +182,21 @@ public class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("currentPoolIndex", poolIndex);
 
         packetBridge.sendPacket(player, GACHA_UI_FILE, "update", payload);
+    }
+
+    private void pushCaseData(Player player, int poolIndex) {
+        if (packetBridge == null || !packetBridge.isAvailable()) return;
+        List<PoolDefinition> pools = getOrderedPools();
+        if (pools.isEmpty()) return;
+        poolIndex = Math.max(0, Math.min(poolIndex, pools.size() - 1));
+        PoolDefinition pool = pools.get(poolIndex);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("packetId", CASE_PACKET_ID);
+        payload.put("poolName", pool.displayName());
+        payload.put("poolDescription", "");
+        payload.put("poolList", pools.stream().map(PoolDefinition::displayName).toList());
+        payload.put("currentPoolIndex", poolIndex);
+        packetBridge.sendPacket(player, CASE_UI_FILE, "update", payload);
     }
 
     private String buildGuaranteeText(PoolDefinition pool) {

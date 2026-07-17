@@ -8,6 +8,10 @@ import java.util.Set;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
@@ -174,6 +178,25 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
     }
 
     @Override
+    protected @NotNull List<Listener> createListeners() {
+        return List.of(new Listener() {
+            @EventHandler
+            public void onJoin(PlayerJoinEvent event) {
+                if (service != null) {
+                    service.claimPending(event.getPlayer());
+                }
+            }
+
+            @EventHandler
+            public void onQuit(PlayerQuitEvent event) {
+                if (service != null) {
+                    service.removePlayerLock(event.getPlayer().getUniqueId());
+                }
+            }
+        });
+    }
+
+    @Override
     protected void stopService() {
         if (service != null) {
             service.shutdown();
@@ -197,7 +220,7 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         if (service == null || packetBridge == null || !packetBridge.isAvailable()) {
             return null;
         }
-        return new LotteryPacketHandler(service, packetBridge);
+        return new LotteryPacketHandler(service, packetBridge, plugin);
     }
 
     // ─── ModuleCommandHandler (/axs lottery) ──────────────────
@@ -225,7 +248,5 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         return prefix + mp.get(key, args);
     }
 }
-
-
 
 

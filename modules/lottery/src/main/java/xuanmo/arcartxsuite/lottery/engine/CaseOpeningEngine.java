@@ -18,6 +18,9 @@ public class CaseOpeningEngine {
         List<PoolItem> items = itemsByRarity(caseConfig.items(), selectedRarity);
         PoolItem item = randomFrom(items);
 
+        if (item == null) {
+            return new CaseResult(null, selectedRarity, false, "FACTORY_NEW", 0.0);
+        }
         boolean isStattrak = item.stattrakEnabled() && ThreadLocalRandom.current().nextDouble() < caseConfig.stattrakChance();
 
         String wearTier = "FACTORY_NEW";

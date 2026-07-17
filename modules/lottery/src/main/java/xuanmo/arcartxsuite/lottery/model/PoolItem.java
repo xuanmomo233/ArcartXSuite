@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
+import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -17,6 +18,7 @@ public record PoolItem(
     @NotNull PluginItemType pluginType,
     @NotNull String pluginId,
     @Nullable String itemJson,
+    int amount,
     int weight,
     boolean stattrakEnabled,
     @Nullable String rarity,
@@ -53,6 +55,23 @@ public record PoolItem(
         String pluginTypeStr = section.getString("plugin-type", "PLAIN");
         PluginItemType pluginType = PluginItemType.valueOf(pluginTypeStr.toUpperCase());
         String pluginId = section.getString("plugin-id", "");
+        String itemJson = section.getString("item-json");
+        int amount = section.getInt("amount", 1);
+        if (amount <= 0) {
+            logger.warning("奖品 " + id + " 的 amount 必须为正数，已跳过");
+            return null;
+        }
+        if (pluginType == PluginItemType.PLAIN && (itemJson == null || itemJson.isBlank())) {
+            String materialName = pluginId.startsWith("minecraft:")
+                ? pluginId.substring("minecraft:".length()) : pluginId;
+            if (Material.matchMaterial(materialName, true) == null) {
+                logger.warning("奖品 " + id + " 的原版物品无效: " + pluginId + "，已跳过");
+                return null;
+            }
+        } else if (pluginId.isBlank()) {
+            logger.warning("奖品 " + id + " 缺少 plugin-id，已跳过");
+            return null;
+        }
 
         int weight = section.getInt("weight", 1);
         boolean stattrak = section.getBoolean("stattrak-enabled", false);
@@ -73,7 +92,12 @@ public record PoolItem(
             }
         }
 
+        if (weight <= 0) {
+            logger.warning("奖品 " + id + " 的 weight 必须为正数，已跳过");
+            return null;
+        }
+
         return new PoolItem(id, name, delivery, commands, mailPreset, pluginType, pluginId,
-            null, weight, stattrak, rarity, wearDist);
+            itemJson, amount, weight, stattrak, rarity, wearDist);
     }
 }

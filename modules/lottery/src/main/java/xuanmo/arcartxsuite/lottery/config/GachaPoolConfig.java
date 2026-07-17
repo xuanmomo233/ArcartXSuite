@@ -52,11 +52,31 @@ public record GachaPoolConfig(
         List<PoolItem> up4 = loadItems(section.getConfigurationSection("up-4star-items"), logger);
         List<PoolItem> std4 = loadItems(section.getConfigurationSection("standard-4star-items"), logger);
         List<PoolItem> star3 = loadItems(section.getConfigurationSection("star3-items"), logger);
+        if (pity5 <= 0 || pity4 <= 0 || softStart < 0
+                || softInc < 0 || base5 < 0 || base4 < 0 || upRate < 0 || upRate > 1
+                || fateCap < 0) {
+            throw new IllegalArgumentException("GACHA 保底、概率或命运值配置无效");
+        }
+        requireItems("star3", star3);
+        if (pity4 > 0 || base4 > 0) {
+            requireItems("up4star", up4);
+            requireItems("standard4star", std4);
+        }
+        if (pity5 > 0 || base5 > 0) {
+            if (upRate > 0) requireItems("up5star", up5);
+            if (upRate < 1) requireItems("standard5star", std5);
+        }
 
         return new GachaPoolConfig(
             poolType, pity5, pity4, softStart, softInc, base5, base4, upRate, fateCap, sharedGroup,
             up5, std5, up4, std4, star3
         );
+    }
+
+    private static void requireItems(String tier, List<PoolItem> items) {
+        if (items.isEmpty()) {
+            throw new IllegalArgumentException("GACHA 可达星级层 " + tier + " 没有可用奖品");
+        }
     }
 
     private static List<PoolItem> loadItems(@Nullable ConfigurationSection section, Logger logger) {

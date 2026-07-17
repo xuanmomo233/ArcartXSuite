@@ -50,6 +50,7 @@ public class LotteryPlayerCommand implements TabExecutor {
 
         String sub = args[0].toLowerCase();
         switch (sub) {
+            case "claim" -> service.claimPending(player);
             case "pull" -> {
                 if (args.length < 2) {
                     player.sendMessage(fullMsg("player.pull.usage"));
@@ -95,7 +96,7 @@ public class LotteryPlayerCommand implements TabExecutor {
             } else {
                 for (int i = 0; i < count; i++) {
                     var result = service.openCase(player, poolId);
-                    if (result != null) {
+                    if (result != null && result.item() != null) {
                         player.sendMessage(fullMsg("pull.result", ChatColor.translateAlternateColorCodes('&', pool.displayName()), result.item().name()));
                     }
                 }
@@ -158,7 +159,7 @@ public class LotteryPlayerCommand implements TabExecutor {
         if (service == null) return Collections.emptyList();
 
         if (args.length == 1) {
-            return List.of("pull", "info", "history");
+            return List.of("claim", "pull", "info", "history");
         }
         if (args.length == 2) {
             List<String> ids = new ArrayList<>(service.getPools().keySet());

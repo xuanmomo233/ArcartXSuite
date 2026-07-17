@@ -1,13 +1,6 @@
-# ============================================================
-#  Lottery 模块消息文件
-# ------------------------------------------------------------
-#  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
-#  修改后执行 /axs reload lottery 即可生效。
-# ============================================================
 
 prefix: "&3◆ &6ArcartXSuite &7| &r"
 
-# ── 通用 ──────────────────────────────────────────────
 common:
   service-down: "&c抽奖服务尚未就绪"
   only-player: "&c该命令只能由玩家执行。"
@@ -16,9 +9,21 @@ common:
   insufficient-currency: "&c余额不足，需要 &e{0}"
   insufficient-item: "&c缺少物品: &e{0}"
   inventory-full-mail: "&e背包已满，物品已通过邮件发放。"
-  error: "&c操作失败: {0}"
 
-# ── 玩家命令 ──────────────────────────────────────────
+  lock-busy: "&e操作进行中，请稍候。"
+  distribution-failed: "&c奖励发放失败: &e{0}"
+  pending-claim-enqueued: "&e奖励已暂存，请使用 /lottery claim 领取。"
+  pending-claim-available: "&e你有 {0} 个待领取奖励，请使用 /lottery claim。"
+  pending-claim-claimed: "&a已领取 {0} 个待领取奖励。"
+  mail-sent: "&a奖励已通过邮件发放: &f{0}"
+  error: "&c操作失败: {0}"
+  lock-busy: "&e操作进行中，请稍候。"
+  distribution-failed: "&c奖励发放失败: &e{0}"
+  pending-claim-enqueued: "&e奖励已暂存，请使用 /lottery claim 领取。"
+  pending-claim-manual: "&e奖励需要管理员处理: &f{0}"
+  pending-claim-available: "&e你有 {0} 个待领取奖励，请使用 /lottery claim。"
+  pending-claim-claimed: "&a已领取 {0} 个待领取奖励。"
+  mail-sent: "&a奖励已通过邮件发放: &f{0}"
 player:
   help:
     - "&6=== AXS 抽奖系统 ==="
@@ -36,14 +41,12 @@ player:
     title: "&6=== {0} 历史记录 ==="
     entry: "&7{0} &7- &f{1}"
 
-# ── 抽奖结果 ──────────────────────────────────────────
 pull:
   result: "&a你在 &e{0} &a抽中了: &f{1}"
   pity-info: "&7当前保底: 5星 &f{0} &7| 4星 &f{1}"
   fate-point: "&7命定值: &f{0}"
   wear-info: "&7磨损度: &f{0} &7({1})"
 
-# ── 管理命令 ──────────────────────────────────────────
 admin:
   help:
     - "&6Lottery 管理"
