@@ -134,8 +134,8 @@ controls:
           point: ~middle_center
           x: 0
           y: 0
-          width: 1500
-          height: 900
+          width: 1440
+          height: 760
           normal: ~32,32,42,238
           shape: ~round_rect
           radius: 24
@@ -164,7 +164,7 @@ controls:
           关闭按钮:
             type: Texture
             attribute:
-              x: 1400
+              x: 1340
               y: 18
               width: 56
               height: 56
@@ -181,15 +181,15 @@ controls:
             effect:
               stroke:
                 width: 2
-                color: ~255,120,120,120
+                color: ~150,150,165,180
 
           背包面板:
             type: Canvas
             attribute:
               x: 40
-              y: 92
-              width: 820
-              height: 760
+              y: 40
+              width: 800
+              height: 680
               normal: ~45,47,56,205
               shape: ~round_rect
               radius: 24
@@ -228,13 +228,13 @@ controls:
                 type: HGrid
                 val: 背包网格
                 attribute:
-                  x: 22
-                  y: 112
-                  width: 776
-                  height: 600
+                  x: 20
+                  y: 110
+                  width: 760
+                  height: 350
                   column: 9
-                  spaceBetweenX: 8
-                  spaceBetweenY: 8
+                  spaceBetweenX: 10
+                  spaceBetweenY: 10
                 children:
                   背包槽:
                     type: Slot
@@ -242,15 +242,14 @@ controls:
                       id: 9
                       entryKey: 1
                       slotType: ~Backpack
-                      itemScale: 0.68
-                      width: 72
-                      height: 72
-                      lock: true
+                      itemScale: 0.74
+                      width: 80
+                      height: 80
                       through: false
                       normal: "self.entryKey == var.selectedSlot ? '120,190,255,255' : 'Frosted:0;95,95,95,255'"
                       hover: "~Frosted:0;255,255,255,255"
                       shape: ~round_rect
-                      radius: 14
+                      radius: 16
                       seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
                     action:
                       clickLeft: |-
@@ -283,14 +282,23 @@ controls:
                   texts: "~&8暂无可上架物品"
                   through: true
 
+              操作提示:
+                type: Text
+                attribute:
+                  x: 24
+                  y: 490
+                  texts: "~&7点击物品选择，再次点击取消"
+                  fontSize: 22
+                  through: true
+
           信息面板:
             type: Canvas
             val: 信息面板
             attribute:
-              x: 880
-              y: 92
-              width: 560
-              height: 760
+              x: 860
+              y: 40
+              width: 600
+              height: 680
               normal: ~45,47,56,205
               shape: ~round_rect
               radius: 24
@@ -322,7 +330,7 @@ controls:
                   slotType: ~Icon
                   itemScale: 0.8
                   x: 24
-                  y: 70
+                  y: 55
                   width: 82
                   height: 82
                   normal: ~62,62,74,205
@@ -339,17 +347,27 @@ controls:
                 type: Text
                 attribute:
                   x: 124
-                  y: 82
+                  y: 65
                   width: 400
                   texts: "var.selectedSlot != none && var.backpackItems[var.selectedSlot] != none ? '&f' + var.backpackItems[var.selectedSlot]['name'] : '&7未选择物品'"
                   fontSize: 30
+                  through: true
+
+              预览物品数量:
+                type: Text
+                attribute:
+                  x: 124
+                  y: 105
+                  width: 400
+                  texts: "var.selectedSlot != none && var.backpackItems[var.selectedSlot] != none ? '&7数量: ' + var.backpackItems[var.selectedSlot]['amount'] : '&7数量: -'"
+                  fontSize: 22
                   through: true
 
               价格标签:
                 type: Text
                 attribute:
                   x: 24
-                  y: 182
+                  y: 155
                   texts: "~&f起拍价格"
                   fontSize: 30
                   through: true
@@ -358,7 +376,7 @@ controls:
                 type: TextBox
                 attribute:
                   x: 24
-                  y: 222
+                  y: 195
                   width: 250
                   height: 44
                   length: 12
@@ -379,16 +397,26 @@ controls:
                 type: Text
                 attribute:
                   x: 294
-                  y: 232
+                  y: 205
                   texts: "var.priceMin + ' - ' + var.priceMax"
                   fontSize: 22
+                  through: true
+
+              价格状态:
+                type: Text
+                attribute:
+                  x: 294
+                  y: 250
+                  width: 240
+                  texts: "var.selectedPrice == none || var.selectedPrice == '' ? '&c请输入价格' : '&a价格已填写'"
+                  fontSize: 20
                   through: true
 
               留言标签:
                 type: Text
                 attribute:
                   x: 24
-                  y: 292
+                  y: 280
                   texts: "~&f物品留言"
                   fontSize: 30
                   through: true
@@ -397,7 +425,7 @@ controls:
                 type: TextBox
                 attribute:
                   x: 24
-                  y: 332
+                  y: 320
                   width: 510
                   height: 44
                   length: 50
@@ -418,8 +446,18 @@ controls:
                 type: Text
                 attribute:
                   x: 24
-                  y: 382
+                  y: 370
                   texts: "'&7最多 ' + var.messageMaxLength + ' 字符'"
+                  fontSize: 20
+                  through: true
+
+              留言状态:
+                type: Text
+                attribute:
+                  x: 320
+                  y: 395
+                  width: 240
+                  texts: "var.selectedMessage == none || var.selectedMessage == '' ? '&7可选留言' : '&a留言已填写'"
                   fontSize: 20
                   through: true
 
@@ -427,7 +465,7 @@ controls:
                 type: Text
                 attribute:
                   x: 24
-                  y: 432
+                  y: 445
                   texts: "~&f结算货币"
                   fontSize: 30
                   through: true
@@ -437,7 +475,7 @@ controls:
                 val: 货币列表
                 attribute:
                   x: 24
-                  y: 472
+                  y: 480
                   width: 250
                   height: 82
                   spaceBetween: 6
@@ -470,8 +508,8 @@ controls:
               时长标签:
                 type: Text
                 attribute:
-                  x: 300
-                  y: 432
+                  x: 320
+                  y: 445
                   texts: "~&f上架时长"
                   fontSize: 30
                   through: true
@@ -479,8 +517,8 @@ controls:
               时长1天:
                 type: Texture
                 attribute:
-                  x: 300
-                  y: 472
+                  x: 320
+                  y: 480
                   width: 70
                   height: 38
                   normal: "var.selectedDuration == 86400 ? '80,180,255,230' : '65,65,75,200'"
@@ -501,8 +539,8 @@ controls:
               时长3天:
                 type: Texture
                 attribute:
-                  x: 378
-                  y: 472
+                  x: 398
+                  y: 480
                   width: 70
                   height: 38
                   normal: "var.selectedDuration == 259200 ? '80,180,255,230' : '65,65,75,200'"
@@ -523,8 +561,8 @@ controls:
               时长7天:
                 type: Texture
                 attribute:
-                  x: 456
-                  y: 472
+                  x: 476
+                  y: 480
                   width: 70
                   height: 38
                   normal: "var.selectedDuration == 604800 ? '80,180,255,230' : '65,65,75,200'"
@@ -546,7 +584,7 @@ controls:
                 type: Texture
                 attribute:
                   x: 24
-                  y: 650
+                  y: 600
                   width: 150
                   height: 56
                   normal: ~62,62,74,205
@@ -568,11 +606,11 @@ controls:
                 type: Texture
                 attribute:
                   x: 194
-                  y: 650
+                  y: 600
                   width: 330
                   height: 56
-                  normal: ~60,180,100,200
-                  hover: ~Frosted:0;80,220,120,230
+                  normal: "var.selectedSlot != none && var.selectedPrice != none && var.selectedPrice != '' ? '60,180,100,200' : '75,75,85,150'"
+                  hover: "var.selectedSlot != none && var.selectedPrice != none && var.selectedPrice != '' ? 'Frosted:0;80,220,120,230' : 'Frosted:0;105,105,115,180'"
                   shape: ~round_rect
                   radius: 14
                   texts: "~&f确认上架"
