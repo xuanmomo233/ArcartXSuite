@@ -20,59 +20,6 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
-    init: |-
-      var.packetId = packet['packetId']
-      var.ownerType = packet['ownerType']
-      var.ownerId = packet['ownerId']
-      var.warehouseId = packet['warehouseId']
-      var.warehouseName = packet['warehouseName']
-      var.personalWarehouses = packet['personalWarehouses']
-      var.personalWarehouseTexts = packet['personalWarehouseTexts']
-      var.manageWarehouses = packet['manageWarehouses']
-      var.manageWarehouseTexts = packet['manageWarehouseTexts']
-      var.manageWarehouseTypes = packet['manageWarehouseTypes']
-      var.manageWarehouseTargets = packet['manageWarehouseTargets']
-      var.manageWarehouseSelected = packet['manageWarehouseSelected']
-      var.sharedWarehouses = packet['sharedWarehouses']
-      var.sharedWarehouseManageTexts = packet['sharedWarehouseManageTexts']
-      var.sharedCreateCostText = packet['sharedCreateCostText']
-      var.sharedRoleOwnerName = packet['sharedRoleOwnerName']
-      var.sharedRoleMemberName = packet['sharedRoleMemberName']
-      var.sharedRoleViewerName = packet['sharedRoleViewerName']
-      var.sharedMembers = packet['sharedMembers']
-      var.sharedMemberTexts = packet['sharedMemberTexts']
-      var.sharedMemberNames = packet['sharedMemberNames']
-      var.sharedMemberRoles = packet['sharedMemberRoles']
-      var.unlocked = packet['unlocked']
-      var.hasPassword = packet['hasPassword']
-      var.readOnly = packet['readOnly']
-      var.lockOwner = packet['lockOwner']
-      var.capacityText = packet['capacityText']
-      var.level = packet['level']
-      var.canUpgrade = packet['canUpgrade']
-      var.nextUpgradeText = packet['nextUpgradeText']
-      var.autoPickup = packet['autoPickup']
-      var.autoPickupMythic = packet['autoPickupMythic']
-      var.autoPickupNotify = packet['autoPickupNotify']
-      var.showcaseEnabled = packet['showcaseEnabled']
-      var.maxManageCount = packet['maxManageCount']
-      var.maxMemberCount = packet['maxMemberCount']
-      while(val.共享列表.childrenCount() > 1){
-        val.共享列表.get(1).remove()
-      }
-      while(val.成员列表.childrenCount() > 1){
-        val.成员列表.get(1).remove()
-      }
-      for(i in range(0, var.maxManageCount)){
-        key = i.round()
-        item = val.共享列表['项'].copy('项' + key)
-        item.entryKey = key
-      }
-      for(i in range(0, var.maxMemberCount)){
-        key = i.round()
-        member = val.成员列表['项'].copy('项' + key)
-        member.entryKey = key
-      }
     update: |-
       var.packetId = packet['packetId']
       var.ownerType = packet['ownerType']

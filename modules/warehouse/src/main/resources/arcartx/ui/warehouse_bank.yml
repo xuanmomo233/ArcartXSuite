@@ -20,46 +20,6 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
-    init: |-
-      var.packetId = packet['packetId']
-      var.warehouseName = packet['warehouseName']
-      var.balances = packet['balances']
-      var.balanceTexts = packet['balanceTexts']
-      var.products = packet['products']
-      var.productTexts = packet['productTexts']
-      var.fixedDeposits = packet['fixedDeposits']
-      var.fixedDepositTexts = packet['fixedDepositTexts']
-      var.unlocked = packet['unlocked']
-      var.hasPassword = packet['hasPassword']
-      var.maxBalanceCount = packet['maxBalanceCount']
-      var.maxProductCount = packet['maxProductCount']
-      var.maxFixedCount = packet['maxFixedCount']
-
-      while(val.余额列表.childrenCount() > 1){
-        val.余额列表.get(1).remove()
-      }
-      while(val.产品列表.childrenCount() > 1){
-        val.产品列表.get(1).remove()
-      }
-      while(val.定期列表.childrenCount() > 1){
-        val.定期列表.get(1).remove()
-      }
-
-      for(i in range(0, var.maxBalanceCount)){
-        key = i.round()
-        bal = val.余额列表['项'].copy('项' + key)
-        bal.entryKey = key
-      }
-      for(i in range(0, var.maxProductCount)){
-        key = i.round()
-        prod = val.产品列表['项'].copy('项' + key)
-        prod.entryKey = key
-      }
-      for(i in range(0, var.maxFixedCount)){
-        key = i.round()
-        fd = val.定期列表['项'].copy('项' + key)
-        fd.entryKey = key
-      }
     update: |-
       var.packetId = packet['packetId']
       var.warehouseName = packet['warehouseName']
