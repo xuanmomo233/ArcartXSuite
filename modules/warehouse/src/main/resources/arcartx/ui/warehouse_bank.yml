@@ -34,32 +34,6 @@ ui:
       var.maxBalanceCount = packet['maxBalanceCount']
       var.maxProductCount = packet['maxProductCount']
       var.maxFixedCount = packet['maxFixedCount']
-
-      while(val.余额列表.childrenCount() > 1){
-        val.余额列表.get(1).remove()
-      }
-      while(val.产品列表.childrenCount() > 1){
-        val.产品列表.get(1).remove()
-      }
-      while(val.定期列表.childrenCount() > 1){
-        val.定期列表.get(1).remove()
-      }
-      
-      for(i in range(0, var.maxBalanceCount)){
-        key = i.round()
-        bal = val.余额列表['项'].copy('项' + key)
-        bal.entryKey = key
-      }
-      for(i in range(0, var.maxProductCount)){
-        key = i.round()
-        prod = val.产品列表['项'].copy('项' + key)
-        prod.entryKey = key
-      }
-      for(i in range(0, var.maxFixedCount)){
-        key = i.round()
-        fd = val.定期列表['项'].copy('项' + key)
-        fd.entryKey = key
-      }
   action:
     load: |-
       var.packetId = 'AXS_WAREHOUSE'
@@ -337,6 +311,13 @@ controls:
                     attribute:
                       width: 450
                       spaceBetween: 10
+                    action:
+                      # 静态创建：货币种类来自配置，预建 8 个，多余项由 visible:self.entry!=none 自动隐藏。
+                      create: |-
+                        for(i in range(1,7)){
+                          项 = self['项'].copy('项' + i.round())
+                          项.entryKey = i.round()
+                        }
                     children:
                       项:
                         type: Texture
@@ -437,6 +418,13 @@ controls:
                     attribute:
                       width: 450
                       spaceBetween: 10
+                    action:
+                      # 静态创建：定期产品来自配置（按权限过滤），预建 12 个，多余项由 visible:self.entry!=none 自动隐藏。
+                      create: |-
+                        for(i in range(1,11)){
+                          项 = self['项'].copy('项' + i.round())
+                          项.entryKey = i.round()
+                        }
                     children:
                       项:
                         type: Texture
@@ -515,6 +503,13 @@ controls:
                     attribute:
                       width: 450
                       spaceBetween: 10
+                    action:
+                      # 静态创建：玩家活期定期存单数量不固定，预建 32 个；界面内新建/领取定期时由 visible:self.entry!=none 绑定自动显示/隐藏，update 不再 copy。
+                      create: |-
+                        for(i in range(1,31)){
+                          项 = self['项'].copy('项' + i.round())
+                          项.entryKey = i.round()
+                        }
                     children:
                       项:
                         type: Texture

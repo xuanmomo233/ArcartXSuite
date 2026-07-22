@@ -381,6 +381,13 @@ controls:
                         attribute:
                           height: 48
                           spaceBetween: 10
+                        action:
+                          # 静态创建：个人仓库数量少且会话内不变，预建 8 个，多余项由 visible:self.entry!=none 自动隐藏。
+                          create: |-
+                            for(i in range(1,7)){
+                              项 = self['项'].copy('项' + i.round())
+                              项.entryKey = i.round()
+                            }
                         children:
                           项:
                             type: Texture
@@ -410,6 +417,13 @@ controls:
                         attribute:
                           height: 48
                           spaceBetween: 10
+                        action:
+                          # 静态创建：共享仓库可能较多，预建 32 个，多余项由 visible:self.entry!=none 自动隐藏。
+                          create: |-
+                            for(i in range(1,31)){
+                              项 = self['项'].copy('项' + i.round())
+                              项.entryKey = i.round()
+                            }
                         children:
                           项:
                             type: Texture
@@ -548,6 +562,13 @@ controls:
                     attribute:
                       width: 180
                       spaceBetween: 10
+                    action:
+                      # 静态创建：分类来自配置（含全部），预建 12 个足够，多余项由 visible:self.entry!=none 自动隐藏。
+                      create: |-
+                        for(i in range(1,11)){
+                          项 = self['项'].copy('项' + i.round())
+                          项.entryKey = i.round()
+                        }
                     children:
                       项:
                         type: Texture
@@ -598,6 +619,14 @@ controls:
                   column: 9
                   spaceBetweenX: 14
                   spaceBetweenY: 14
+                action:
+                  # 仓库网格是固定 54 格，控件在 UI 构建时一次性创建（与背包网格同一套做法）。
+                  # 原本这批 copy 在 packetHandler.init 里，refactor 删掉 init 后就没人创建了，导致刷新后网格是空的。
+                  create: |-
+                    for(i in range(1,53)){
+                      slot = self['物品图标'].copy('物品图标' + i.round())
+                      slot.entryKey = i.round()
+                    }
                 children:
                   物品图标:
                     type: Slot
