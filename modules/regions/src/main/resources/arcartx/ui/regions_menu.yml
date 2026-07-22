@@ -91,7 +91,7 @@ controls:
               height: 524
               normal: ~30,30,38,255
             children:
-              nav_current:
+              导航当前区域入口:
                 type: Texture
                 attribute:
                   x: 10
@@ -105,7 +105,7 @@ controls:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'current')
                 children:
-                  nav_current_text:
+                  导航当前区域文字:
                     type: Text
                     attribute:
                       x: 65
@@ -115,7 +115,7 @@ controls:
                       fontSize: 28
                       texts: "~&f当前"
 
-              nav_my:
+              导航我的区域入口:
                 type: Texture
                 attribute:
                   x: 10
@@ -129,7 +129,7 @@ controls:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'my')
                 children:
-                  nav_my_text:
+                  导航我的区域文字:
                     type: Text
                     attribute:
                       x: 65
@@ -150,7 +150,7 @@ controls:
               normal: ~20,20,25,100
             children:
               # ─── 当前区域 ───
-              page_current:
+              当前区域布局:
                 type: Canvas
                 attribute:
                   x: 20
@@ -160,42 +160,42 @@ controls:
                   visible: |-
                     var.page == 'current'
                 children:
-                  cur_title:
+                  当前区域标题:
                     type: Text
                     attribute:
                       x: 0
                       y: 0
                       fontSize: 36
                       texts: "~&a当前所在区域"
-                  cur_name:
+                  当前区域名称文字:
                     type: Text
                     attribute:
                       x: 0
                       y: 50
                       fontSize: 28
                       texts: "~&7区域: {var.currentRegion != none ? '&f' + var.currentRegion : '&8无 (荒野)'}"
-                  cur_world:
+                  当前区域世界文字:
                     type: Text
                     attribute:
                       x: 0
                       y: 86
                       fontSize: 28
                       texts: "~&7世界: &f{var.currentWorld}"
-                  cur_priority:
+                  当前区域优先级文字:
                     type: Text
                     attribute:
                       x: 0
                       y: 122
                       fontSize: 28
                       texts: "~&7优先级: &f{var.currentPriority}"
-                  cur_members:
+                  当前区域成员文字:
                     type: Text
                     attribute:
                       x: 0
                       y: 158
                       fontSize: 28
                       texts: "~&7所有者: &b{var.currentOwners}  &7成员: &b{var.currentMembers}"
-                  cur_flags_label:
+                  当前标志文字:
                     type: Text
                     attribute:
                       x: 0
@@ -212,7 +212,7 @@ controls:
                       height: 50
                       normal: ~120,120,120,200
                       maxDragY: 190
-                  cur_flags_scroll:
+                  当前标志滚动栏:
                     type: Scroll
                     attribute:
                       x: 0
@@ -238,7 +238,7 @@ controls:
                           width: 670
                           spaceBetween: 4
                         children:
-                          flag_row:
+                          标志行:
                             type: Texture
                             attribute:
                               entry: var.currentFlags[self.key]
@@ -249,7 +249,7 @@ controls:
                               shape: ~round_rect
                               radius: 4
                             children:
-                              flag_name:
+                              标志名称文字:
                                 type: Text
                                 attribute:
                                   x: 12
@@ -257,7 +257,7 @@ controls:
                                   through: true
                                   fontSize: 24
                                   texts: "~&b{self.parent.entry['name']}"
-                              flag_desc:
+                              标志描述文字:
                                 type: Text
                                 attribute:
                                   x: 200
@@ -265,7 +265,7 @@ controls:
                                   through: true
                                   fontSize: 22
                                   texts: "~&7{self.parent.entry['desc']}"
-                              flag_state:
+                              标志状态文字:
                                 type: Text
                                 attribute:
                                   x: 560
@@ -275,7 +275,7 @@ controls:
                                   texts: "~{self.parent.entry['state'] == 'allow' ? '&a允许' : '&c拒绝'}"
 
               # ─── 我的区域列表 ───
-              page_my:
+              我的区域布局:
                 type: Canvas
                 attribute:
                   x: 20
@@ -285,7 +285,7 @@ controls:
                   visible: |-
                     var.page == 'my'
                 children:
-                  my_title:
+                  我的区域标题:
                     type: Text
                     attribute:
                       x: 0
@@ -302,7 +302,7 @@ controls:
                       height: 50
                       normal: ~120,120,120,200
                       maxDragY: 380
-                  my_scroll:
+                  我的区域滚动栏:
                     type: Scroll
                     attribute:
                       x: 0
@@ -328,7 +328,7 @@ controls:
                           width: 670
                           spaceBetween: 6
                         children:
-                          region_row:
+                          我的区域行:
                             type: Texture
                             attribute:
                               entry: var.myRegions[self.key]
@@ -342,7 +342,7 @@ controls:
                               click: |-
                                 Packet.send(var.packetId, 'select_region', self.entry['id'])
                             children:
-                              region_id:
+                              我的区域编号文字:
                                 type: Text
                                 attribute:
                                   x: 16
@@ -350,7 +350,7 @@ controls:
                                   through: true
                                   fontSize: 28
                                   texts: "~&f{self.parent.entry['id']}"
-                              region_world:
+                              我的区域世界文字:
                                 type: Text
                                 attribute:
                                   x: 300
@@ -358,7 +358,7 @@ controls:
                                   through: true
                                   fontSize: 24
                                   texts: "~&7{self.parent.entry['world']}"
-                              region_role:
+                              我的区域身份文字:
                                 type: Text
                                 attribute:
                                   x: 520
@@ -368,7 +368,7 @@ controls:
                                   texts: "~{self.parent.entry['isOwner'] == 'true' ? '&6所有者' : '&b成员'}"
 
               # ─── 区域详情 ───
-              page_detail:
+              区域详情布局:
                 type: Canvas
                 attribute:
                   x: 20
@@ -385,28 +385,28 @@ controls:
                       y: 0
                       fontSize: 36
                       texts: "~&a区域: &f{var.regionId}"
-                  detail_world:
+                  详情世界文字:
                     type: Text
                     attribute:
                       x: 0
                       y: 48
                       fontSize: 28
                       texts: "~&7世界: &f{var.regionWorld}  &7优先级: &f{var.regionPriority}"
-                  detail_bounds:
+                  详情边界文字:
                     type: Text
                     attribute:
                       x: 0
                       y: 82
                       fontSize: 28
                       texts: "~&7范围: &f{var.regionMin} ~ {var.regionMax}"
-                  detail_volume:
+                  详情体积文字:
                     type: Text
                     attribute:
                       x: 0
                       y: 116
                       fontSize: 28
                       texts: "~&7体积: &f{var.regionVolume} 方块  &7父区域: &f{var.regionParent != none ? var.regionParent : '无'}"
-                  detail_owners_label:
+                  所有者文字:
                     type: Text
                     attribute:
                       x: 0
@@ -423,7 +423,7 @@ controls:
                       height: 20
                       normal: ~120,120,120,200
                       maxDragY: 80
-                  detail_owners_scroll:
+                  所有者滚动栏:
                     type: Scroll
                     attribute:
                       x: 0
@@ -449,7 +449,7 @@ controls:
                           width: 300
                           spaceBetween: 4
                         children:
-                          owner_item:
+                          所有者项目:
                             type: Text
                             attribute:
                               entry: var.owners[self.key]
@@ -458,7 +458,7 @@ controls:
                               y: 2
                               fontSize: 24
                               texts: "~&f{self.entry}"
-                  detail_members_label:
+                  成员文字:
                     type: Text
                     attribute:
                       x: 340
@@ -475,7 +475,7 @@ controls:
                       height: 20
                       normal: ~120,120,120,200
                       maxDragY: 80
-                  detail_members_scroll:
+                  成员滚动栏:
                     type: Scroll
                     attribute:
                       x: 340
@@ -501,7 +501,7 @@ controls:
                           width: 300
                           spaceBetween: 4
                         children:
-                          member_item:
+                          成员项目:
                             type: Text
                             attribute:
                               entry: var.members[self.key]
@@ -510,7 +510,7 @@ controls:
                               y: 2
                               fontSize: 24
                               texts: "~&f{self.entry}"
-                  detail_flags_label:
+                  详情标志文字:
                     type: Text
                     attribute:
                       x: 0
@@ -527,7 +527,7 @@ controls:
                       height: 30
                       normal: ~120,120,120,200
                       maxDragY: 110
-                  detail_flags_scroll:
+                  详情标志滚动栏:
                     type: Scroll
                     attribute:
                       x: 0
@@ -553,7 +553,7 @@ controls:
                           width: 670
                           spaceBetween: 4
                         children:
-                          d_flag_row:
+                          详情标志行:
                             type: Texture
                             attribute:
                               entry: var.flags[self.key]
@@ -564,7 +564,7 @@ controls:
                               shape: ~round_rect
                               radius: 4
                             children:
-                              d_flag_name:
+                              详情标志名称文字:
                                 type: Text
                                 attribute:
                                   x: 12
@@ -572,7 +572,7 @@ controls:
                                   through: true
                                   fontSize: 22
                                   texts: "~&b{self.parent.entry['name']}"
-                              d_flag_desc:
+                              详情标志描述文字:
                                 type: Text
                                 attribute:
                                   x: 200
@@ -580,7 +580,7 @@ controls:
                                   through: true
                                   fontSize: 20
                                   texts: "~&7{self.parent.entry['desc']}"
-                              d_flag_state:
+                              详情标志状态文字:
                                 type: Text
                                 attribute:
                                   x: 560

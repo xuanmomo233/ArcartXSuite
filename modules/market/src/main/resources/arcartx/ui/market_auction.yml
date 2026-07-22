@@ -638,7 +638,7 @@ controls:
                           收藏按钮:
                             type: Texture
                             attribute:
-                              x: 910
+                              x: 755
                               y: 10
                               width: 36
                               height: 36
@@ -659,7 +659,7 @@ controls:
                                   through: true
                                   center: true
                                   fontSize: 28
-                                  texts: "self.parent.parent.entry['isFavorite'] ? '~&e★' : '~&7☆'"
+                                  texts: "self.parent.parent.entry['isFavorite'] ? '&e★' : '&7☆'"
                           取消按钮:
                             type: Texture
                             attribute:

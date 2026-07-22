@@ -65,7 +65,7 @@ controls:
                   y: 14
                   fontSize: 64
                   texts: "~&6⚡ 管理面板"
-              online_count:
+              在线数量:
                 type: Text
                 attribute:
                   x: 820
@@ -83,7 +83,7 @@ controls:
               height: 600
               normal: ~30,30,38,255
             children:
-              nav_players:
+              导航玩家入口:
                 type: Texture
                 attribute:
                   x: 10
@@ -97,7 +97,7 @@ controls:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'players')
                 children:
-                  nav_players_text:
+                  导航玩家文字:
                     type: Text
                     attribute:
                       x: 70
@@ -107,7 +107,7 @@ controls:
                       fontSize: 49
                       texts: "~&f玩家"
 
-              nav_bans:
+              导航封禁入口:
                 type: Texture
                 attribute:
                   x: 10
@@ -121,7 +121,7 @@ controls:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'bans')
                 children:
-                  nav_bans_text:
+                  导航封禁文字:
                     type: Text
                     attribute:
                       x: 70
@@ -131,7 +131,7 @@ controls:
                       fontSize: 49
                       texts: "~&f封禁"
 
-              nav_warps:
+              导航传送点入口:
                 type: Texture
                 attribute:
                   x: 10
@@ -145,7 +145,7 @@ controls:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'warps')
                 children:
-                  nav_warps_text:
+                  导航传送点文字:
                     type: Text
                     attribute:
                       x: 70
@@ -155,7 +155,7 @@ controls:
                       fontSize: 49
                       texts: "~&f传送点"
 
-              nav_world:
+              导航世界入口:
                 type: Texture
                 attribute:
                   x: 10
@@ -169,7 +169,7 @@ controls:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'world')
                 children:
-                  nav_world_text:
+                  导航世界文字:
                     type: Text
                     attribute:
                       x: 70
@@ -190,7 +190,7 @@ controls:
               normal: ~20,20,25,100
             children:
               # ─── 玩家列表视图 ───
-              page_players:
+              玩家布局:
                 type: Canvas
                 attribute:
                   x: 20
@@ -200,7 +200,7 @@ controls:
                   visible: |-
                     var.page == 'players'
                 children:
-                  players_title:
+                  玩家标题:
                     type: Text
                     attribute:
                       x: 0
@@ -217,7 +217,7 @@ controls:
                       height: 50
                       normal: ~120,120,120,200
                       maxDragY: 460
-                  players_scroll:
+                  玩家滚动栏:
                     type: Scroll
                     attribute:
                       x: 0
@@ -243,7 +243,7 @@ controls:
                           width: 800
                           spaceBetween: 6
                         children:
-                          player_row:
+                          玩家行:
                             type: Texture
                             attribute:
                               entry: var.players[self.key]
@@ -254,7 +254,7 @@ controls:
                               shape: ~round_rect
                               radius: 6
                             children:
-                              player_name:
+                              玩家名称:
                                 type: Text
                                 attribute:
                                   x: 16
@@ -262,7 +262,7 @@ controls:
                                   through: true
                                   fontSize: 36
                                   texts: "~&f{self.parent.entry['name']}"
-                              player_health:
+                              玩家生命值:
                                 type: Text
                                 attribute:
                                   x: 150
@@ -270,7 +270,7 @@ controls:
                                   through: true
                                   fontSize: 30
                                   texts: "~&c❤ {self.parent.entry['health']}"
-                              player_status:
+                              玩家状态:
                                 type: Text
                                 attribute:
                                   x: 150
@@ -278,7 +278,7 @@ controls:
                                   through: true
                                   fontSize: 30
                                   texts: "self.parent.entry['isFlying'] == true ? (self.parent.entry['isGod'] == true ? '&b✈飞行 &a✦无敌' : '&b✈飞行') : (self.parent.entry['isGod'] == true ? '&a✦无敌' : none)"
-                              player_world:
+                              玩家世界:
                                 type: Text
                                 attribute:
                                   x: 260
@@ -286,7 +286,7 @@ controls:
                                   through: true
                                   fontSize: 36
                                   texts: "~&7{self.parent.entry['world']}"
-                              btn_heal:
+                              治疗按钮:
                                 type: Texture
                                 attribute:
                                   x: 440
@@ -300,7 +300,7 @@ controls:
                                   click: |-
                                     Packet.send(var.packetId, 'heal', self.parent.entry['name'])
                                 children:
-                                  btn_heal_t:
+                                  治疗按钮文字:
                                     type: Text
                                     attribute:
                                       x: 30
@@ -309,7 +309,7 @@ controls:
                                       center: true
                                       fontSize: 42
                                       texts: "~&f治疗"
-                              btn_feed:
+                              喂食按钮:
                                 type: Texture
                                 attribute:
                                   x: 508
@@ -323,7 +323,7 @@ controls:
                                   click: |-
                                     Packet.send(var.packetId, 'feed', self.parent.entry['name'])
                                 children:
-                                  btn_feed_t:
+                                  喂食按钮文字:
                                     type: Text
                                     attribute:
                                       x: 30
@@ -332,7 +332,7 @@ controls:
                                       center: true
                                       fontSize: 42
                                       texts: "~&f喂食"
-                              btn_fly:
+                              飞行按钮:
                                 type: Texture
                                 attribute:
                                   x: 576
@@ -346,7 +346,7 @@ controls:
                                   click: |-
                                     Packet.send(var.packetId, 'fly', self.parent.entry['name'])
                                 children:
-                                  btn_fly_t:
+                                  飞行按钮文字:
                                     type: Text
                                     attribute:
                                       x: 30
@@ -355,7 +355,7 @@ controls:
                                       center: true
                                       fontSize: 42
                                       texts: "~&f飞行"
-                              btn_kick:
+                              踢出按钮:
                                 type: Texture
                                 attribute:
                                   x: 644
@@ -369,7 +369,7 @@ controls:
                                   click: |-
                                     Packet.send(var.packetId, 'kick', self.parent.entry['name'])
                                 children:
-                                  btn_kick_t:
+                                  踢出按钮文字:
                                     type: Text
                                     attribute:
                                       x: 30
@@ -378,7 +378,7 @@ controls:
                                       center: true
                                       fontSize: 42
                                       texts: "~&f踢出"
-                              btn_ban:
+                              封禁按钮:
                                 type: Texture
                                 attribute:
                                   x: 712
@@ -392,7 +392,7 @@ controls:
                                   click: |-
                                     Packet.send(var.packetId, 'ban', self.parent.entry['name'])
                                 children:
-                                  btn_ban_t:
+                                  封禁按钮文字:
                                     type: Text
                                     attribute:
                                       x: 30
@@ -403,7 +403,7 @@ controls:
                                       texts: "~&f封禁"
 
               # ─── 封禁列表视图 ───
-              page_bans:
+              封禁布局:
                 type: Canvas
                 attribute:
                   x: 20
@@ -413,21 +413,21 @@ controls:
                   visible: |-
                     var.page == 'bans'
                 children:
-                  bans_title:
+                  封禁标题:
                     type: Text
                     attribute:
                       x: 0
                       y: 0
                       fontSize: 36
                       texts: "~&6封禁列表"
-                  bans_count:
+                  封禁数量:
                     type: Text
                     attribute:
                       x: 640
                       y: 6
                       fontSize: 28
                       texts: "~&7共 &f{var.banCount} &7条记录"
-                  bans_empty:
+                  封禁空状态:
                     type: Text
                     attribute:
                       x: 0
@@ -446,7 +446,7 @@ controls:
                       height: 50
                       normal: ~120,120,120,200
                       maxDragY: 460
-                  bans_scroll:
+                  封禁滚动栏:
                     type: Scroll
                     attribute:
                       x: 0
@@ -472,7 +472,7 @@ controls:
                           width: 800
                           spaceBetween: 6
                         children:
-                          ban_row:
+                          封禁行:
                             type: Texture
                             attribute:
                               entry: var.bans[self.key]
@@ -483,7 +483,7 @@ controls:
                               shape: ~round_rect
                               radius: 6
                             children:
-                              ban_name:
+                              封禁名称:
                                 type: Text
                                 attribute:
                                   x: 16
@@ -491,7 +491,7 @@ controls:
                                   through: true
                                   fontSize: 28
                                   texts: "~&f{self.parent.entry['name']}"
-                              ban_reason:
+                              封禁原因:
                                 type: Text
                                 attribute:
                                   x: 16
@@ -499,7 +499,7 @@ controls:
                                   through: true
                                   fontSize: 22
                                   texts: "~&7原因: &e{self.parent.entry['reason'] != none ? self.parent.entry['reason'] : '未填写'}  &7操作者: &b{self.parent.entry['operator']}"
-                              ban_permanent:
+                              封禁永久标记:
                                 type: Text
                                 attribute:
                                   x: 600
@@ -507,7 +507,7 @@ controls:
                                   through: true
                                   fontSize: 22
                                   texts: "self.parent.entry['permanent'] == 'true' ? '&c永久' : '&e临时'"
-                              btn_unban:
+                              解封按钮:
                                 type: Texture
                                 attribute:
                                   x: 690
@@ -521,7 +521,7 @@ controls:
                                   click: |-
                                     Packet.send(var.packetId, 'unban', self.parent.entry['uuid'])
                                 children:
-                                  btn_unban_t:
+                                  解封按钮文字:
                                     type: Text
                                     attribute:
                                       x: 40
@@ -532,7 +532,7 @@ controls:
                                       texts: "~&f解封"
 
               # ─── 世界控制视图 ───
-              page_world:
+              世界布局:
                 type: Canvas
                 attribute:
                   x: 20
@@ -542,14 +542,14 @@ controls:
                   visible: |-
                     var.page == 'world'
                 children:
-                  world_title:
+                  世界标题:
                     type: Text
                     attribute:
                       x: 0
                       y: 0
                       fontSize: 36
                       texts: "~&6世界管理"
-                  world_info:
+                  世界信息:
                     type: Text
                     attribute:
                       x: 0
@@ -557,14 +557,14 @@ controls:
                       fontSize: 36
                       texts: "~&7世界: &f{var.worldName}  &7时间: &f{var.worldTime}  &7天气: &f{var.worldWeather}"
                   # 时间控制
-                  time_label:
+                  时间文字:
                     type: Text
                     attribute:
                       x: 0
                       y: 100
                       fontSize: 36
                       texts: "~&b时间设置:"
-                  btn_day:
+                  白天按钮:
                     type: Texture
                     attribute:
                       x: 0
@@ -578,7 +578,7 @@ controls:
                       click: |-
                         Packet.send(var.packetId, 'set_time', 'day')
                     children:
-                      btn_day_t:
+                      白天按钮文字:
                         type: Text
                         attribute:
                           x: 50
@@ -587,7 +587,7 @@ controls:
                           center: true
                           fontSize: 36
                           texts: "~&f白天"
-                  btn_night:
+                  夜间按钮:
                     type: Texture
                     attribute:
                       x: 110
@@ -601,7 +601,7 @@ controls:
                       click: |-
                         Packet.send(var.packetId, 'set_time', 'night')
                     children:
-                      btn_night_t:
+                      夜间按钮文字:
                         type: Text
                         attribute:
                           x: 50
@@ -610,7 +610,7 @@ controls:
                           center: true
                           fontSize: 36
                           texts: "~&f夜晚"
-                  btn_noon:
+                  正午按钮:
                     type: Texture
                     attribute:
                       x: 220
@@ -624,7 +624,7 @@ controls:
                       click: |-
                         Packet.send(var.packetId, 'set_time', 'noon')
                     children:
-                      btn_noon_t:
+                      正午按钮文字:
                         type: Text
                         attribute:
                           x: 50
@@ -634,7 +634,7 @@ controls:
                           fontSize: 36
                           texts: "~&f正午"
                   # 天气控制
-                  weather_label:
+                  天气文字:
                     type: Text
                     attribute:
                       x: 0
@@ -664,7 +664,7 @@ controls:
                           center: true
                           fontSize: 36
                           texts: "~&f晴天"
-                  btn_rain:
+                  降雨按钮:
                     type: Texture
                     attribute:
                       x: 110
@@ -678,7 +678,7 @@ controls:
                       click: |-
                         Packet.send(var.packetId, 'set_weather', 'rain')
                     children:
-                      btn_rain_t:
+                      降雨按钮文字:
                         type: Text
                         attribute:
                           x: 50
@@ -687,7 +687,7 @@ controls:
                           center: true
                           fontSize: 36
                           texts: "~&f雨天"
-                  btn_thunder:
+                  雷暴按钮:
                     type: Texture
                     attribute:
                       x: 220
@@ -701,7 +701,7 @@ controls:
                       click: |-
                         Packet.send(var.packetId, 'set_weather', 'thunder')
                     children:
-                      btn_thunder_t:
+                      雷暴按钮文字:
                         type: Text
                         attribute:
                           x: 50
@@ -711,7 +711,7 @@ controls:
                           fontSize: 36
                           texts: "~&f雷暴"
                   # 出生点
-                  btn_set_spawn:
+                  设置出生点按钮:
                     type: Texture
                     attribute:
                       x: 0
@@ -725,7 +725,7 @@ controls:
                       click: |-
                         Packet.send(var.packetId, 'set_spawn')
                     children:
-                      btn_spawn_t:
+                      出生点按钮文字:
                         type: Text
                         attribute:
                           x: 80
@@ -736,7 +736,7 @@ controls:
                           texts: "~&f设置出生点"
 
               # ─── 传送点管理视图 ───
-              page_warps:
+              传送点布局:
                 type: Canvas
                 attribute:
                   x: 20
@@ -746,14 +746,14 @@ controls:
                   visible: |-
                     var.page == 'warps'
                 children:
-                  warps_title:
+                  传送点标题:
                     type: Text
                     attribute:
                       x: 0
                       y: 0
                       fontSize: 36
                       texts: "~&6传送点管理"
-                  btn_add_warp:
+                  添加传送点按钮:
                     type: Texture
                     attribute:
                       x: 640
@@ -767,7 +767,7 @@ controls:
                       click: |-
                         Packet.send(var.packetId, 'set_warp', 'new_warp')
                     children:
-                      btn_add_warp_t:
+                      添加传送点按钮文字:
                         type: Text
                         attribute:
                           x: 70
@@ -786,7 +786,7 @@ controls:
                       height: 50
                       normal: ~120,120,120,200
                       maxDragY: 460
-                  warps_scroll:
+                  传送点滚动栏:
                     type: Scroll
                     attribute:
                       x: 0
@@ -812,7 +812,7 @@ controls:
                           width: 800
                           spaceBetween: 6
                         children:
-                          warp_row:
+                          传送点行:
                             type: Texture
                             attribute:
                               entry: var.warps[self.key]
@@ -823,7 +823,7 @@ controls:
                               shape: ~round_rect
                               radius: 6
                             children:
-                              warp_name:
+                              传送点名称:
                                 type: Text
                                 attribute:
                                   x: 16
@@ -831,7 +831,7 @@ controls:
                                   through: true
                                   fontSize: 36
                                   texts: "~&e{self.parent.entry}"
-                              btn_del_warp:
+                              删除传送点按钮:
                                 type: Texture
                                 attribute:
                                   x: 700
@@ -845,7 +845,7 @@ controls:
                                   click: |-
                                     Packet.send(var.packetId, 'del_warp', self.parent.entry)
                                 children:
-                                  btn_del_warp_t:
+                                  删除传送点按钮文字:
                                     type: Text
                                     attribute:
                                       x: 35

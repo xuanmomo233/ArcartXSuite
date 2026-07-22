@@ -401,7 +401,6 @@ controls:
                                   width: 180
                                   height: 22
                                   through: true
-                                  center: true
                                   fontSize: 20
                                   texts: "~&7数量: &f{var.quantity}"
                               数量按钮:
@@ -427,6 +426,8 @@ controls:
                                         attribute:
                                           width: 54
                                           height: 26
+                                          x: 27
+                                          y: 4
                                           center: true
                                           through: true
                                           fontSize: 18
@@ -447,6 +448,8 @@ controls:
                                         attribute:
                                           width: 54
                                           height: 26
+                                          x: 27
+                                          y: 4
                                           center: true
                                           through: true
                                           fontSize: 18
@@ -467,6 +470,8 @@ controls:
                                         attribute:
                                           width: 54
                                           height: 26
+                                          x: 27
+                                          y: 4
                                           center: true
                                           through: true
                                           fontSize: 18

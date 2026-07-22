@@ -4,18 +4,28 @@
 
 ui:
   isHud: false
-  defaultOpen: false
   hide:
     - HUD
+  itemSize: 16
   through: false
-  background: false
   escClose: true
+  background: false
   closeDied: true
   show: true
   jei: false
   level: 8
-  itemSize: 16
   screenScale: true
+  action:
+    open: |-
+      var.packetId = 'AXS_MARKET'
+      var.page = 0
+      var.totalPages = 1
+      var.records = {}
+      var.itemJsons = {}
+      var.scrollRatio = 0
+      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      var.maxRecordCount = 0
+      Packet.send(var.packetId, 'history_list', '0')
   packetHandler:
     init: |-
       var.packetId = packet['packetId']
@@ -65,18 +75,7 @@ ui:
         e.entryKey = key
         if(e['物品图标'] != none){ e['物品图标'].entryKey = key; e['物品图标'].seticon() }
       }
-  action:
-    open: |-
-      var.packetId = 'AXS_MARKET'
-      var.page = 0
-      var.totalPages = 1
-      var.records = {}
-      var.itemJsons = {}
-      var.scrollRatio = 0
-      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
-      var.maxRecordCount = 0
-      Packet.send(var.packetId, 'history_list', '0')
-
+  defaultOpen: false
 controls:
   自适应全局布局:
     type: Adaptive
@@ -108,22 +107,20 @@ controls:
                 yOffset: 2
                 blur: 6
                 color: ~0,0,0,120
-
           标题:
             type: Text
             attribute:
               x: 42
               y: 24
-              texts: "~&d交易历史"
+              texts: ~&d交易历史
               fontSize: 56
           副标题:
             type: Text
             attribute:
               x: 42
               y: 78
-              texts: "~&7第 {var.page + 1}/{var.totalPages} 页"
+              texts: ~&7第 {(var.page + 1).round()}/{var.totalPages.round()} 页
               fontSize: 32
-
           关闭按钮:
             type: Texture
             attribute:
@@ -132,12 +129,11 @@ controls:
               width: 56
               height: 56
               normal: ~180,60,60,200
-              hover: ~Frosted:0;220,80,80,230
+              hover: "~Frosted:0;220,80,80,230"
               shape: ~round_rect
               radius: 14
             action:
-              clickLeft: |-
-                Screen.close()
+              clickLeft: Screen.close()
             effect:
               stroke:
                 width: 2
@@ -151,9 +147,7 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: "~&fX"
-
-          # ── 记录列表区 ──────────────────────────────
+                  texts: ~&fX
           列表卡片:
             type: Texture
             attribute:
@@ -177,8 +171,8 @@ controls:
                   y: 360
                   center: true
                   fontSize: 36
-                  visible: "var.records == none || var.records.keys().length == 0"
-                  texts: "~&8暂无记录"
+                  visible: var.records == none || var.records.keys().length == 0
+                  texts: ~&8暂无记录
                   through: true
               列表纵向滑块:
                 type: Texture
@@ -209,8 +203,8 @@ controls:
                     }
                 children:
                   记录列表:
-                    val: 记录列表
                     type: VStack
+                    val: 记录列表
                     attribute:
                       width: 1196
                       spaceBetween: 8
@@ -245,7 +239,7 @@ controls:
                               shape: ~round_rect
                               radius: 10
                               through: true
-                              seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
+                              seticon: self.setItemIcon(var.itemJsons[self.entryKey])
                           类型:
                             type: Text
                             attribute:
@@ -291,8 +285,6 @@ controls:
                               texts: "self.parent.entry != none ? '&7' + self.parent.entry['time'] : none"
                               fontSize: 28
                               through: true
-
-          # ── 底部分页栏 ──────────────────────────────
           上一页:
             type: Texture
             attribute:
@@ -301,7 +293,7 @@ controls:
               width: 120
               height: 48
               normal: ~62,62,74,205
-              hover: ~Frosted:0;255,255,255,180
+              hover: "~Frosted:0;255,255,255,180"
               shape: ~round_rect
               radius: 14
             action:
@@ -322,17 +314,15 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: "~&f< 上一页"
-
+                  texts: ~&f< 上一页
           页码:
             type: Text
             attribute:
               x: 650
               y: 806
               center: true
-              texts: "~&7第 &f{var.page + 1} &7/ &f{var.totalPages} &7页"
+              texts: ~&7第 &f{(var.page + 1).round()} &7/ &f{var.totalPages.round()} &7页
               fontSize: 32
-
           下一页:
             type: Texture
             attribute:
@@ -341,7 +331,7 @@ controls:
               width: 120
               height: 48
               normal: ~62,62,74,205
-              hover: ~Frosted:0;255,255,255,180
+              hover: "~Frosted:0;255,255,255,180"
               shape: ~round_rect
               radius: 14
             action:
@@ -362,5 +352,4 @@ controls:
                   through: true
                   center: true
                   fontSize: 36
-                  texts: "~&f下一页 >"
-
+                  texts: ~&f下一页 >

@@ -89,16 +89,16 @@ import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.WarehouseRecord
 import java.util.logging.Logger;
 
 /**
- * Warehouse 核�ƒ�š�Š��œ��Š��Œ�Ÿ筹个人�“�“�€��…�享�“�“�€��š货币�“��Œ�€��Œ级�†码�Ž�‡��Š��‹��–�€��‘�€‚
+ * Warehouse 核心业务服务，统筹个人仓库、共享仓库、多货币银行、二级密码与自动拾取逻辑。
  * <p>
- * �€š�‡ {@link PacketBridgeAPI} �Ž客�ˆ�端 AXUI �€š信�Œ�‰€�œ‰�Š��€��˜�›��Ž�›ž�‘�›��–��Œ…�ˆ��–��•Œ面�€‚
- * �…�享�“�“使�”� {@link #sharedEditLocks} �ž�Ž��–�‘�’�–��”��›启�”� cross-server �—�经 SDK �Œ步�‡��…��–子�œ��€‚
+ * 通过 {@link PacketBridgeAPI} 与客户端 AXUI 通信，所有状态变更后回发更新包刷新界面。
+ * 共享仓库使用 {@link #sharedEditLocks} 实现编辑互斥锁；启用 cross-server 时经 SDK 同步至其他子服。
  */
 public final class WarehouseService implements Listener {
 
     private final MessageProvider messages;
 
-    private static final String PREFIX = ChatColor.DARK_AQUA + "�—† " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
+    private static final String PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
     private static final String OWNER_PERSONAL = "personal";
     private static final String OWNER_SHARED = "shared";
     private static final String STORAGE_UI_RESOURCE_PATH = "arcartx/ui/warehouse_storage.yml";
@@ -120,7 +120,7 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * UI �„源导�‡��‡��•��€‚
+     * UI 资源导出函数。
      */
     @FunctionalInterface
     public interface UiResourceExporter {
@@ -140,17 +140,17 @@ public final class WarehouseService implements Listener {
     private final CurrencyBridgeAPI currencyBridgeManager;
     private final Supplier<PickupNotifiable> pickupNotifiableSupplier;
     private final SecureRandom secureRandom = new SecureRandom();
-    /** �Ž�家�“�‰� UI �†�›��Š��€��ˆownerType / warehouseId / page / search �‰�‰�€‚ */
+    /** 玩家当前 UI 视图状态（ownerType / warehouseId / page / search 等）。 */
     private final ConcurrentMap<UUID, ViewState> viewStates = new ConcurrentHashMap<>();
-    /** �Ž�家�Œ级�†码解�”��‡�œŸ�—��—��ˆ��ˆ毫�’�‰�€‚ */
+    /** 玩家二级密码解锁过期时间戳（毫秒）。 */
     private final ConcurrentMap<UUID, Long> unlockedUntil = new ConcurrentHashMap<>();
-    /** �…�享�“�“�–�‘�’�–��”��š�…�享�“�“ ID �†’ �“�‰��–�‘�€…�ˆ含子�œ� nodeId�‰�€‚ */
+    /** 共享仓库编辑互斥锁：共享仓库 ID → 当前编辑者（含子服 nodeId）。 */
     private final ConcurrentMap<String, SharedEditLock> sharedEditLocks = new ConcurrentHashMap<>();
     private final CrossServerAPI crossServerApi;
     private final CrossServerChannelConfig crossServerChannelConfig;
     private WarehouseCrossServerLockService crossServerLockService;
     private Supplier<EventBusCapability> eventBusProvider;
-    /** �Ž�家�Š次�•示�“�“�š„�—��—��ˆ��ˆ毫�’�‰�Œ�”��Ž�†�却�Ž��ˆ��€‚ */
+    /** 玩家上次展示仓库的时间戳（毫秒），用于冷却控制。 */
     private final ConcurrentMap<UUID, Long> showcaseCooldowns = new ConcurrentHashMap<>();
     private String storageRuntimeUiId = "";
     private String manageRuntimeUiId = "";
@@ -235,7 +235,7 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * 启�Š��œ��Š��š�ˆ��‹�Œ–�•�据�“�€��‘�š�‰�— AXUI�€�注�†Œ Bukkit �‹件�›‘听�€‚
+     * 启动服务：初始化数据库、绑定三套 AXUI、注册 Bukkit 事件监听。
      */
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
         this.eventBusProvider = eventBusProvider;
@@ -261,7 +261,7 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �…��—��œ��Š��š注�”€�‹件�›‘听�€��…�† UI �›ž�ƒ�Ž�Ž�家�Š��€��€��…��—��•�据�“�ž�Ž��€‚
+     * 关闭服务：注销事件监听、清理 UI 回调与玩家状态、关闭数据库连接。
      */
     public void shutdown() {
         if (crossServerLockService != null) {
@@ -322,20 +322,20 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �›�–�ƒ�模�—�ˆ�‚ Pickup�‰�ƒ�”��š„�‡��Š��…��“�Ž�口�€‚
-     * �†�‰��“��˜�…��Ž�家第�€个个人�“�“�Œ�”�›ž�˜�…��“�žœ�€‚
+     * 供外部模块（如 Pickup）调用的自动入库接口。
+     * 将物品存入玩家第一个个人仓库，返回存入结果。
      *
-     * @param player    �›��‡�Ž�家
-     * @param itemStack �…�˜�…��‰��“��ˆ�š被 clone�Œ不�š修�”��ŽŸ对象�‰
-     * @return �˜�…��“�žœ�Œ�Œ…含�ˆ��ŠŸ�Š��€��€�已�˜�•��‡��€��‰��™�•��‡��Ž提示�ˆ息
+     * @param player    目标玩家
+     * @param itemStack 待存入物品（会被 clone，不会修改原对象）
+     * @return 存入结果，包含成功状态、已存数量、剩余数量与提示消息
      */
     public WarehouseAutoDepositable.DepositResult depositToPersonalWarehouse(Player player, ItemStack itemStack) {
         if (player == null || !player.isOnline()) {
-            return new WarehouseAutoDepositable.DepositResult(false, 0L, 0, "�Ž�家不�œ�线�€‚");
+            return new WarehouseAutoDepositable.DepositResult(false, 0L, 0, "玩家不在线。");
         }
         ItemStack stack = itemStack == null ? null : itemStack.clone();
         if (stack == null || stack.getType().isAir() || stack.getAmount() <= 0) {
-            return new WarehouseAutoDepositable.DepositResult(false, 0L, 0, "没�œ‰可�˜�…��‰��“��€‚");
+            return new WarehouseAutoDepositable.DepositResult(false, 0L, 0, "没有可存入物品。");
         }
         try {
             DepositResult result = depositStack(player, OWNER_PERSONAL, player.getUniqueId().toString(), firstPersonalWarehouseId(), stack);
@@ -350,9 +350,9 @@ public final class WarehouseService implements Listener {
             );
         } catch (Exception exception) {
             if (configuration.debug()) {
-                this.logger.warning("�–�ƒ��‡��Š��…��“失败: " + exception.getMessage());
+                this.logger.warning("外部自动入库失败: " + exception.getMessage());
             }
-            return new WarehouseAutoDepositable.DepositResult(false, 0L, stack.getAmount(), "�‡��Š��…��“失败�€‚");
+            return new WarehouseAutoDepositable.DepositResult(false, 0L, stack.getAmount(), "自动入库失败。");
         }
     }
 
@@ -367,11 +367,11 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * 为�Ž�家�‰“�€�“�“主�•Œ面�ˆ�˜�–�•Œ面�‰�€‚
-     * �š�‡��Š��ˆ��‹�Œ–�Ž�家�ƒ�™��“�“�€�确保�“�‰��“�“�œ‰�•ˆ�Œ并�‘�€� storage �›��–��Œ…�€‚
+     * 为玩家打开仓库主界面（存取界面）。
+     * 会自动初始化玩家权限仓库、确保当前仓库有效，并发送 storage 更新包。
      *
-     * @param player �›��‡�Ž�家
-     * @return �“��œ�“�žœ
+     * @param player 目标玩家
+     * @return 操作结果
      */
     public ActionResult openMenu(Player player) {
         if (player == null || !player.isOnline()) {
@@ -387,19 +387,19 @@ public final class WarehouseService implements Listener {
             openStorage(player, "init");
             return ActionResult.success(message("player.opened"));
         } catch (Exception exception) {
-            this.logger.warning("�‰“�€�“�“失败: " + exception.getMessage());
+            this.logger.warning("打开仓库失败: " + exception.getMessage());
             return ActionResult.failure(message("player.open-failed"));
         }
     }
 
     /**
-     * 以只读�„�ˆ模式�‰“�€�›��‡�Ž�家�š„�“�“�€‚
-     * �„�ˆ模式�‹�…�”��Œ�翻页�€��ˆ†类�€��œ索�€��€‰�‹��’Œ�ˆ��–��Œ禁止�˜�–�Ž�ˆ‡换�“�“�€‚
+     * 以只读预览模式打开目标玩家的仓库。
+     * 预览模式下仅支持翻页、分类、搜索、选择和刷新，禁止存取与切换仓库。
      *
-     * @param viewer      �„�ˆ�€…
-     * @param targetUuid  被�„�ˆ�Ž�家 UUID
-     * @param warehouseId �Œ‡�š�“�“ ID�Œ空�—符串�ˆ™使�”��˜认�“�“
-     * @return �“��œ�“�žœ
+     * @param viewer      预览者
+     * @param targetUuid  被预览玩家 UUID
+     * @param warehouseId 指定仓库 ID，空字符串则使用默认仓库
+     * @return 操作结果
      */
     public ActionResult openPreview(Player viewer, UUID targetUuid, String warehouseId) {
         if (viewer == null || !viewer.isOnline()) {
@@ -421,18 +421,18 @@ public final class WarehouseService implements Listener {
             openStorage(viewer, "init");
             return ActionResult.success(message("player.preview-opened"));
         } catch (Exception exception) {
-            this.logger.warning("�‰“�€�“�“�„�ˆ失败: " + exception.getMessage());
+            this.logger.warning("打开仓库预览失败: " + exception.getMessage());
             return ActionResult.failure(message("player.preview-open-failed"));
         }
     }
 
     /**
-     * �‘�…��œ��•示�Ž�家�“�“�€‚
-     * �‹��…�置�† {@code card-id} �ˆ™�‘�€� ArcartX �Š天卡�‰‡�Œ否�ˆ™�‘�€�可�‚��‡��Š天�ˆ息�€‚
-     * �— {@code cooldown-seconds} �†�却�Ž��ˆ��€‚
+     * 向全服展示玩家仓库。
+     * 若配置了 {@code card-id} 则发送 ArcartX 聊天卡片，否则发送可点击聊天消息。
+     * 受 {@code cooldown-seconds} 冷却控制。
      *
-     * @param player �•示�€…
-     * @return �“��œ�“�žœ
+     * @param player 展示者
+     * @return 操作结果
      */
     public ActionResult showcase(Player player) {
         if (player == null || !player.isOnline()) {
@@ -457,7 +457,7 @@ public final class WarehouseService implements Listener {
         UUID playerUuid = player.getUniqueId();
         String displayName = player.getName();
 
-        // �”��›†可�•示�“�“�š个人�“�“设置�†可�•示 + 主人设置�†可�•示�š„�…�享�“�“
+        // 收集可展示仓库：个人仓库设置了可展示 + 主人设置了可展示的共享仓库
         List<String[]> showcaseEntries = new ArrayList<>();
         try {
             Map<String, WarehouseRecord> personalRecords = personalWarehouseMap(playerUuid);
@@ -491,7 +491,7 @@ public final class WarehouseService implements Listener {
             }
         } else {
             net.md_5.bungee.api.chat.TextComponent prefix = new net.md_5.bungee.api.chat.TextComponent(
-                ChatColor.GOLD + "[�“�“�•示] " + ChatColor.WHITE + displayName + " 正�œ��•示�“�“�š "
+                ChatColor.GOLD + "[仓库展示] " + ChatColor.WHITE + displayName + " 正在展示仓库： "
             );
             for (String[] entry : showcaseEntries) {
                 net.md_5.bungee.api.chat.TextComponent link = new net.md_5.bungee.api.chat.TextComponent(
@@ -503,7 +503,7 @@ public final class WarehouseService implements Listener {
                 ));
                 link.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
                     net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
-                    new net.md_5.bungee.api.chat.hover.content.Text(ChatColor.GRAY + "�‚��‡��„�ˆ " + displayName + " �š„ " + entry[0])
+                    new net.md_5.bungee.api.chat.hover.content.Text(ChatColor.GRAY + "点击预览 " + displayName + " 的 " + entry[0])
                 ));
                 prefix.addExtra(link);
                 prefix.addExtra(" ");
@@ -516,15 +516,15 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �„�†客�ˆ�端 UI �‘来�š„�“��œ�Œ…�€‚
+     * 处理客户端 UI 发来的操作包。
      * <p>
-     * �”��Œ��š„�“��œ�ˆaction�‰详见 wiki �–‡档�€Œ客�ˆ�端�Œ…协议�€�章�Š‚�€‚
-     * �‰€�œ‰�“��œ�‡经�‡ {@link PacketGuardAPI} 校�Œ�Œ�‚常�—��‡��Š��ˆ��–� UI�€‚
+     * 支持的操作（action）详见 wiki 文档「客户端包协议」章节。
+     * 所有操作均经过 {@link PacketGuardAPI} 校验，异常时自动刷新 UI。
      *
-     * @param player   �‘�€��Œ…�š„�Ž�家
-     * @param packetId �Œ… ID�ˆ�”为 {@code AXS_WAREHOUSE}�‰
-     * @param data     �Œ…�•�据�ˆ—表�Œ第�€项�€š常为 action
-     * @return true 表示已�„�†�ˆ�—�论�ˆ��ŠŸ�ˆ–失败�‰
+     * @param player   发送包的玩家
+     * @param packetId 包 ID（应为 {@code AXS_WAREHOUSE}）
+     * @param data     包数据列表，第一项通常为 action
+     * @return true 表示已处理（无论成功或失败）
      */
     public boolean handleClientPacket(Player player, String packetId, List<String> data) {
         if (player == null || !player.isOnline() || packetId == null || !configuration.ui().packetId().equalsIgnoreCase(packetId)) {
@@ -580,7 +580,7 @@ public final class WarehouseService implements Listener {
                 case "bank_withdraw" -> bankWithdraw(player, value(data, 1, ""), parseDecimal(value(data, 2, "0")));
                 case "fixed_create" -> createFixedDeposit(player, value(data, 1, ""), parseDecimal(value(data, 2, "0")));
                 case "fixed_claim" -> claimFixedDeposit(player, value(data, 1, ""));
-                case "shared_create" -> createSharedWarehouse(player, value(data, 1, "�…�享�“�“"));
+                case "shared_create" -> createSharedWarehouse(player, value(data, 1, "共享仓库"));
                 case "shared_rename" -> renameSharedWarehouse(player, value(data, 1, ""), value(data, 2, ""));
                 case "shared_showcase_toggle" -> toggleSharedWarehouseShowcase(player, value(data, 1, ""));
                 case "personal_rename" -> renamePersonalWarehouse(player, value(data, 1, ""), value(data, 2, ""));
@@ -605,25 +605,25 @@ public final class WarehouseService implements Listener {
                 default -> refreshBoth(player);
             }
         } catch (Exception exception) {
-            this.logger.warning("�„�†�“�“客�ˆ�端�Œ…失败: " + exception.getMessage());
+            this.logger.warning("处理仓库客户端包失败: " + exception.getMessage());
             debug("IN-ERROR player=" + player.getName() + " action=" + action + " error=" + exception.getClass().getSimpleName() + ": " + exception.getMessage());
             sendMessage(player, false, message("player.operation-failed"));
             try {
                 refreshBoth(player);
             } catch (Exception refreshException) {
-                this.logger.warning("�ˆ��–��“�“ UI 失败: " + refreshException.getMessage());
+                this.logger.warning("刷新仓库 UI 失败: " + refreshException.getMessage());
             }
         }
         return true;
     }
 
     /**
-     * �‚步�”Ÿ�ˆ��Ž�家�“�“�‚�ˆ信息�Œ�”��Ž管�†�‘˜�Ÿ�询�€‚
+     * 异步生成玩家仓库概览信息，用于管理员查询。
      *
-     * @param playerUuid   �Ž�家 UUID
-     * @param playerName   �Ž�家名称�ˆ�”��Ž�˜�示�‰
-     * @param callback     �ˆ��ŠŸ�›ž�ƒ�Œ�Ž��”�格式�Œ–�Ž�š„信息�Œ�ˆ—表
-     * @param errorCallback 失败�›ž�ƒ�Œ�Ž��”��”™误信息
+     * @param playerUuid   玩家 UUID
+     * @param playerName   玩家名称（用于显示）
+     * @param callback     成功回调，接收格式化后的信息行列表
+     * @param errorCallback 失败回调，接收错误信息
      */
     public void describePlayer(UUID playerUuid, String playerName, Consumer<List<String>> callback, Consumer<String> errorCallback) {
         try {
@@ -633,21 +633,21 @@ public final class WarehouseService implements Listener {
             List<FixedDepositRecord> deposits = repository.loadFixedDeposits(playerUuid);
             List<SharedWarehouseRecord> shared = repository.loadSharedWarehouses(playerUuid);
             List<String> lines = new ArrayList<>();
-            lines.add(ChatColor.GRAY + "�Ž�家: " + ChatColor.WHITE + playerName);
-            lines.add(ChatColor.GRAY + "个人�“�“: " + ChatColor.WHITE + used + "/" + capacity + " 格�Œ�ˆ计 " + total + " 件");
-            lines.add(ChatColor.GRAY + "�…�享�“�“: " + ChatColor.WHITE + shared.size() + " 个");
-            lines.add(ChatColor.GRAY + "�š�œŸ�˜款: " + ChatColor.WHITE + deposits.stream().filter(d -> !d.claimed()).count() + " �”�œ��†�–");
+            lines.add(ChatColor.GRAY + "玩家: " + ChatColor.WHITE + playerName);
+            lines.add(ChatColor.GRAY + "个人仓库: " + ChatColor.WHITE + used + "/" + capacity + " 格，合计 " + total + " 件");
+            lines.add(ChatColor.GRAY + "共享仓库: " + ChatColor.WHITE + shared.size() + " 个");
+            lines.add(ChatColor.GRAY + "定期存款: " + ChatColor.WHITE + deposits.stream().filter(d -> !d.claimed()).count() + " 笔未领取");
             callback.accept(lines);
         } catch (Exception exception) {
-            errorCallback.accept("读�–�“�“信息失败: " + exception.getMessage());
+            errorCallback.accept("读取仓库信息失败: " + exception.getMessage());
         }
     }
 
     /**
-     * 管�†�‘˜�…�™��Ž�家�Œ级�†码�€‚
+     * 管理员清除玩家二级密码。
      *
-     * @param playerUuid �›��‡�Ž�家 UUID
-     * @param callback   �“��œ�“�žœ�›ž�ƒ
+     * @param playerUuid 目标玩家 UUID
+     * @param callback   操作结果回调
      */
     public void describePersonalWarehouse(UUID playerUuid, String playerName, String warehouseId, Consumer<List<String>> callback, Consumer<String> errorCallback) {
         try {
@@ -655,13 +655,13 @@ public final class WarehouseService implements Listener {
             if (warehouse.isEmpty()) { errorCallback.accept(message("player.warehouse-not-found", warehouseId)); return; }
             List<SlotItemRecord> slots = repository.loadSlots(OWNER_PERSONAL, playerUuid.toString(), warehouseId);
             List<String> lines = new ArrayList<>();
-            lines.add(ChatColor.GRAY + "�Ž�家: " + ChatColor.WHITE + playerName);
-            lines.add(ChatColor.GRAY + "�“�“: " + ChatColor.WHITE + warehouseId + " (" + warehouse.get().customName() + ")");
-            lines.add(ChatColor.GRAY + "�‰��“�槽: " + ChatColor.WHITE + slots.size());
+            lines.add(ChatColor.GRAY + "玩家: " + ChatColor.WHITE + playerName);
+            lines.add(ChatColor.GRAY + "仓库: " + ChatColor.WHITE + warehouseId + " (" + warehouse.get().customName() + ")");
+            lines.add(ChatColor.GRAY + "物品槽: " + ChatColor.WHITE + slots.size());
             if (slots.isEmpty()) lines.add(ChatColor.DARK_GRAY + "- 空");
             for (SlotItemRecord slot : slots) lines.add(ChatColor.GRAY + "[" + slot.slot() + "] " + ChatColor.WHITE + slot.displayName() + ChatColor.GRAY + " x" + slot.amount() + " (" + slot.materialId() + ")");
             callback.accept(lines);
-        } catch (Exception exception) { errorCallback.accept("读�–�“�“�†…容失败: " + exception.getMessage()); }
+        } catch (Exception exception) { errorCallback.accept("读取仓库内容失败: " + exception.getMessage()); }
     }
 
     public ActionResult adminDeletePersonalWarehouse(UUID playerUuid, String warehouseId) {
@@ -686,13 +686,13 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * 管�†�‘˜�ƒ�•��Ž�家�“��Œ�™额�€‚�”��Œ� set / add / take �‰种模式�€‚
+     * 管理员调整玩家银行余额。支持 set / add / take 三种模式。
      *
-     * @param playerUuid �›��‡�Ž�家 UUID
+     * @param playerUuid 目标玩家 UUID
      * @param currencyId 货币 ID
-     * @param mode       �“��œ模式�šset / add / take
-     * @param amountText �‡‘额�–‡�œ�
-     * @param callback   �“��œ�“�žœ�›ž�ƒ
+     * @param mode       操作模式：set / add / take
+     * @param amountText 金额文本
+     * @param callback   操作结果回调
      */
     public void adminAdjustWallet(UUID playerUuid, String currencyId, String mode, String amountText, Consumer<ActionResult> callback) {
         try {
@@ -842,7 +842,7 @@ public final class WarehouseService implements Listener {
             }
             boolean notify = state != null ? state.autoPickupNotify() : configuration.pickup().notifyOnAutoStore();
             if (notify) {
-                // �‚�žœ Pickup �€š�Ÿ�模式已为该�Ž�家提�› HUD 提示�Œ�ˆ™跳�‡�Š天栏�ˆ息
+                // 如果 Pickup 通知模式已为该玩家提供 HUD 提示，则跳过聊天栏消息
                 PickupNotifiable pickupNotifiable = pickupNotifiableSupplier.get();
                 boolean hudActive = pickupNotifiable != null && pickupNotifiable.isNotificationActive(player.getUniqueId());
                 if (!hudActive) {
@@ -851,13 +851,13 @@ public final class WarehouseService implements Listener {
             }
         } catch (Exception exception) {
             if (configuration.debug()) {
-                this.logger.warning("�‡��Š��…��“失败: " + exception.getMessage());
+                this.logger.warning("自动入库失败: " + exception.getMessage());
             }
         }
     }
 
     /**
-     * 导�‡�并注�†Œ�‰�— AXUI �–‡件�ˆstorage / manage / bank�‰�Œ�Œ�—�为每�— UI 注�†Œ�…��—��›ž�ƒ�€‚
+     * 导出并注册三套 AXUI 文件（storage / manage / bank），同时为每套 UI 注册关闭回调。
      */
     private void bindUis() throws Exception {
         storageRuntimeUiId = bindUi(
@@ -886,13 +886,13 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * 导�‡��•个 UI �„源�–‡件并注�†Œ�ˆ� PacketBridge�€‚
+     * 导出单个 UI 资源文件并注册到 PacketBridge。
      *
-     * @param configuredId   �…�置中�š„ UI ID
-     * @param resourcePath   jar �†…�„源路�„
-     * @param destinationPath 导�‡��ˆ�磁�›˜�š„�›�对路�„
-     * @param uiKind         UI 类�ž‹�‡�†�ˆstorage / manage / bank�‰
-     * @return 运�Œ�—� UI ID
+     * @param configuredId   配置中的 UI ID
+     * @param resourcePath   jar 内资源路径
+     * @param destinationPath 导出到磁盘的相对路径
+     * @param uiKind         UI 类型标识（storage / manage / bank）
+     * @return 运行时 UI ID
      */
     private String bindUi(String configuredId, String resourcePath, String destinationPath, String uiKind) throws Exception {
         PacketBridgeAPI bridge = packetBridge;
@@ -900,13 +900,13 @@ public final class WarehouseService implements Listener {
         if (bridge == null || !configuration.ui().registerUiOnEnable()) {
             String runtime = xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.normalizeUiId(configuredId, uiFile);
             if (bridge != null) {
-                this.logger.fine("Warehouse UI �‡��Š�注�†Œ已�…��—��Œ�†�›��Ž�使�”� UI �‡�†: " + runtime);
+                this.logger.fine("Warehouse UI 自动注册已关闭，将直接使用 UI 标识: " + runtime);
             }
             return runtime;
         }
         xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI.UiRegistrationResult registration = bridge.registerOrReloadUi(configuredId, uiFile);
         if (!registration.success()) {
-            throw new IllegalStateException("注�†Œ Warehouse UI 失败: " + registration.message());
+            throw new IllegalStateException("注册 Warehouse UI 失败: " + registration.message());
         }
         String registered = registration.registeredUiId() == null ? "" : registration.registeredUiId();
         switch (uiKind) {
@@ -918,8 +918,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �‰“�€�“�“�˜�–�•Œ面并�‘�€��ˆ��‹�Œ–/�›��–��•�据�Œ…�€‚
-     * 延�Ÿ 2 ticks �‘�€��Œ避�…��Ž�€��ƒ�客�ˆ�端 UI �Š�载�œ��Œ�ˆ��—�丢失 packet�€‚
+     * 打开仓库存取界面并发送初始化/更新数据包。
+     * 延迟 2 ticks 发送，避免低性能客户端 UI 加载未完成时丢失 packet。
      */
     private void openStorage(Player player, String handler) throws Exception {
         ensureEntitlements(player);
@@ -934,14 +934,14 @@ public final class WarehouseService implements Listener {
                     sendStorage(player, handler);
                 }
             } catch (Exception exception) {
-                this.logger.warning("延�Ÿ�‘�€��“�“�•�据�Œ…失败: " + exception.getMessage());
+                this.logger.warning("延迟发送仓库数据包失败: " + exception.getMessage());
             }
         }, 2L);
     }
 
     /**
-     * �‰“�€�…�享管�†�•Œ面并�‘�€��ˆ��‹�Œ–/�›��–��•�据�Œ…�€‚
-     * 延�Ÿ 2 ticks �‘�€��Œ避�…��Ž�€��ƒ�客�ˆ�端 UI �Š�载�œ��Œ�ˆ��—�丢失 packet�€‚
+     * 打开共享管理界面并发送初始化/更新数据包。
+     * 延迟 2 ticks 发送，避免低性能客户端 UI 加载未完成时丢失 packet。
      */
     private void openManage(Player player, String handler) throws Exception {
         ensureEntitlements(player);
@@ -953,14 +953,14 @@ public final class WarehouseService implements Listener {
                     sendManage(player, handler);
                 }
             } catch (Exception exception) {
-                this.logger.warning("延�Ÿ�‘�€�管�†�•�据�Œ…失败: " + exception.getMessage());
+                this.logger.warning("延迟发送管理数据包失败: " + exception.getMessage());
             }
         }, 2L);
     }
 
     /**
-     * �‰“�€�“��Œ�•Œ面并�‘�€��ˆ��‹�Œ–/�›��–��•�据�Œ…�€‚
-     * 延�Ÿ 2 ticks �‘�€��Œ避�…��Ž�€��ƒ�客�ˆ�端 UI �Š�载�œ��Œ�ˆ��—�丢失 packet�€‚
+     * 打开银行界面并发送初始化/更新数据包。
+     * 延迟 2 ticks 发送，避免低性能客户端 UI 加载未完成时丢失 packet。
      */
     private void openBank(Player player, String handler) throws Exception {
         ensureEntitlements(player);
@@ -972,13 +972,13 @@ public final class WarehouseService implements Listener {
                     sendBank(player, handler);
                 }
             } catch (Exception exception) {
-                this.logger.warning("延�Ÿ�‘�€��“��Œ�•�据�Œ…失败: " + exception.getMessage());
+                this.logger.warning("延迟发送银行数据包失败: " + exception.getMessage());
             }
         }, 2L);
     }
 
     /**
-     * �Œ�—��ˆ��–� storage�€�manage�€�bank �‰个�•Œ面�š„�•�据�Œ…�€‚
+     * 同时刷新 storage、manage、bank 三个界面的数据包。
      */
     private void refreshBoth(Player player) throws Exception {
         ensureEntitlements(player);
@@ -1020,7 +1020,7 @@ public final class WarehouseService implements Listener {
             return;
         }
         releaseCurrentSharedLock(player);
-        // �„�ˆ模式�‹�…��—� UI 即�€€�‡��„�ˆ�Š��€��Œ避�…��Ž�家"卡"�œ��„�ˆ中
+        // 预览模式下关闭 UI 即退出预览状态，避免玩家"卡"在预览中
         ViewState state = viewStates.get(player.getUniqueId());
         if (state != null && state.previewMode()) {
             viewStates.remove(player.getUniqueId());
@@ -1028,7 +1028,7 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �ž„建�“�“�˜�–�•Œ面�š„�•�据�Œ…�Œ�Œ…含�ˆ†页槽位�€��€‰中�‰��“��€��ƒŒ�Œ…信息�€�容�‡��Ž�ƒ�™��Š��€��€‚
+     * 构建仓库存取界面的数据包，包含分页槽位、选中物品、背包信息、容量与权限状态。
      */
     private Map<String, Object> buildStoragePacket(Player player, ViewState state) throws Exception {
         List<SlotItemRecord> visibleSlots = visibleSlots(state);
@@ -1126,7 +1126,7 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �ž„建�…�享管�†�•Œ面�š„�•�据�Œ…�Œ�Œ…含�ˆ��‘˜�ˆ—表�€��œ索�“�žœ�€��‡��Š��‹��–设置�‰�€‚
+     * 构建共享管理界面的数据包，包含成员列表、搜索结果、自动拾取设置等。
      */
     private Map<String, Object> buildManagePacket(Player player, ViewState state) throws Exception {
         Map<String, Object> packet = basePacket(player, state);
@@ -1155,7 +1155,7 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �ž„建�“��Œ�•Œ面�š„�•�据�Œ…�Œ�Œ…含活�œŸ�™额�€��š�œŸ产�“��’Œ�“�‰��š�œŸ�ˆ—表�€‚
+     * 构建银行界面的数据包，包含活期余额、定期产品和当前定期列表。
      */
     private Map<String, Object> buildBankPacket(Player player, ViewState state) throws Exception {
         Map<String, Object> packet = basePacket(player, state);
@@ -1367,9 +1367,9 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �†�Ž�家�ƒŒ�Œ…�Œ‡�š槽位�š„�‰��“��˜�…��“�‰��“�“�€‚
-     * �š�€�Ÿ�只读�ƒ�™��€��‘名�•�’Œ容�‡��Š�™��Œ�ˆ��ŠŸ�—��‰��™��ƒŒ�Œ…�‰��“�并�ˆ��–� UI�€‚
-     * �”��Œ��Œ‡�š�˜�…��•��‡��ˆrequestedAmount�‰�Œ�‹�大�Ž�ž�™…�†叠�•��‡��ˆ™�Œ‰�ž�™…�•��‡��˜�…��€‚
+     * 将玩家背包指定槽位的物品存入当前仓库。
+     * 会检查只读权限、黑名单和容量上限，成功时扣除背包物品并刷新 UI。
+     * 支持指定存入数量（requestedAmount），若大于实际堆叠数量则按实际数量存入。
      */
     private void depositSlot(Player player, String rawSlotValue, long requestedAmount) throws Exception {
         ViewState state = state(player);
@@ -1430,8 +1430,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �€�”��˜�…��ƒŒ�Œ…�…��ƒ��‰��“��ˆ主�“�˜ 9~44 槽�‰�€‚
-     * �€�件�€�Ÿ��‘名�•�’Œ容�‡��Œ跳�‡不可�˜�‰��“��Œ�Ÿ计�˜�…��“�žœ�€‚
+     * 一键存入背包全部物品（主库存 9~44 槽）。
+     * 逐件检查黑名单和容量，跳过不可存物品，统计存入结果。
      */
     private void depositAllBackpack(Player player) throws Exception {
         ViewState state = state(player);
@@ -1478,8 +1478,8 @@ public final class WarehouseService implements Listener {
         if (totalStored > 0L) {
             player.updateInventory();
             String suffix = skippedBlacklisted > 0 || failedSlots > 0
-                ? "�Œ跳�‡ " + skippedBlacklisted + " 格禁�˜�‰��“��Œ" + failedSlots + " 格�œ��ƒ��˜�…��€‚"
-                : "�€‚";
+                ? "，跳过 " + skippedBlacklisted + " 格禁存物品，" + failedSlots + " 格未能存入。"
+                : "。";
             sendMessage(player, true, message("player.deposit-from-inventory", totalStored, changedSlots, suffix));
         } else if (!foundItem) {
             sendMessage(player, false, message("player.no-deposit-items"));
@@ -1492,16 +1492,16 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * 核�ƒ�˜�…��€��‘�š�†�‰��“��†�ˆ�˜�…��Œ‡�š�“�“�€‚
-     * �˜�…ˆ尝�•�Ž已�œ‰�Œ hash 槽位�ˆ并�ˆ�š�ˆ�Š�™� {@link #MAX_AGGREGATED_AMOUNT}�‰�Œ
-     * �—��•�ˆ并�ˆ™占�”��–�空槽�€‚�‹��“�“已满�ˆ™�”�›ž失败�€‚
+     * 核心存入逻辑：将物品堆栈存入指定仓库。
+     * 优先尝试与已有同 hash 槽位合并（聚合上限 {@link #MAX_AGGREGATED_AMOUNT}），
+     * 无法合并则占用新空槽。若仓库已满则返回失败。
      *
-     * @param player      �“��œ�Ž�家�ˆ�”��Ž�—��—�Ž debug�‰
-     * @param ownerType   {@code personal} �ˆ– {@code shared}
-     * @param ownerId     �‰€�œ‰�€…�‡�†�ˆUUID �—符串�ˆ–�…�享�“�“ ID�‰
-     * @param warehouseId �“�“ ID
-     * @param stack       �…�˜�…��‰��“��ˆamount 可�ƒ��ƒ��ˆ†�˜�…��‰
-     * @return �˜�…��“�žœ
+     * @param player      操作玩家（用于日志与 debug）
+     * @param ownerType   {@code personal} 或 {@code shared}
+     * @param ownerId     所有者标识（UUID 字符串或共享仓库 ID）
+     * @param warehouseId 仓库 ID
+     * @param stack       待存入物品（amount 可能部分存入）
+     * @return 存入结果
      */
     private DepositResult depositStack(Player player, String ownerType, String ownerId, String warehouseId, ItemStack stack) throws Exception {
         if (stack == null || stack.getType().isAir() || stack.getAmount() <= 0 || itemMatcherSupport.matches(configuration.blacklist(), stack)) {
@@ -1601,8 +1601,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �Ž�“�‰��“�“�–�‡��‰��“��ˆ��Ž�家�ƒŒ�Œ…�€‚
-     * �œ€要�Œ级�†码已解�”��Œ�”�“�‰��“�“可�†™�€‚�Œ‰�†叠�Š�™��ˆ†�‰��™�ˆ�Œ�ƒŒ�Œ…满�—��œ止�€‚
+     * 从当前仓库取出物品到玩家背包。
+     * 需要二级密码已解锁，且当前仓库可写。按堆叠上限分批给予，背包满时停止。
      */
     private void withdraw(Player player, int slot, long requestedAmount, boolean all) throws Exception {
         if (!isSecondaryUnlocked(player.getUniqueId())) {
@@ -1668,8 +1668,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �Ž�家�†�ƒŒ�Œ…货币�˜�…��“��Œ活�œŸ账�ˆ��€‚
-     * �…ˆ�€š�‡货币桥�Ž��‰�款�Œ�†��†™�…��•�据�“�›失败�—��‡��Š��›ž�š�€‚
+     * 玩家将背包货币存入银行活期账户。
+     * 先通过货币桥接扣款，再写入数据库；失败时自动回滚。
      */
     private void bankDeposit(Player player, String currencyId, BigDecimal amount) throws Exception {
         String normalized = normalizeId(currencyId);
@@ -1701,8 +1701,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �Ž�家�Ž�“��Œ活�œŸ账�ˆ�提�Ž��ˆ��ƒŒ�Œ…�€‚
-     * �…ˆ�ŽŸ子�‰��‡��•�据�“�™额�Œ�†��€š�‡货币桥�Ž��”�款�›失败�—��‡��Š��›ž�š�€‚
+     * 玩家从银行活期账户提现到背包。
+     * 先原子扣减数据库余额，再通过货币桥接放款；失败时自动回滚。
      */
     private void bankWithdraw(Player player, String currencyId, BigDecimal amount) throws Exception {
         if (!isSecondaryUnlocked(player.getUniqueId())) {
@@ -1741,8 +1741,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * 购买�š�œŸ�˜款产�“��€‚
-     * 校�Œ�‡‘额�Œ��—��€��Œ��…��ˆ��Ž‡�˜�梯�€��ŽŸ子�‰��‡�活�œŸ�™额�Ž�ˆ›建�š�œŸ记�•�€‚
+     * 购买定期存款产品。
+     * 校验金额区间、匹配利率阶梯、原子扣减活期余额后创建定期记录。
      */
     private void createFixedDeposit(Player player, String productId, BigDecimal amount) throws Exception {
         DepositProductDefinition product = configuration.depositProduct(productId);
@@ -1796,8 +1796,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �†�–�ˆ��œŸ�š�œŸ�˜款�œ�息�€‚
-     * �€š�‡ {@link WarehouseRepository#claimFixedDepositAtomic} �ŽŸ子�‡记 claimed 并计�—�œ�息�…�账�Œ�˜�止并�‘�‡�复�†�–�€‚
+     * 领取到期定期存款本息。
+     * 通过 {@link WarehouseRepository#claimFixedDepositAtomic} 原子标记 claimed 并计算本息入账，防止并发重复领取。
      */
     private void claimFixedDeposit(Player player, String depositId) throws Exception {
         if (!isSecondaryUnlocked(player.getUniqueId())) {
@@ -1830,7 +1830,7 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �ˆ›建�…�享�“�“�€‚校�Œ�ƒ�™��‚级�š„ max-owned �™��ˆ��Œ�‰��™��ˆ›建费�”��Ž�†™�…��•�据�“�€‚
+     * 创建共享仓库。校验权限层级的 max-owned 限制，扣除创建费用后写入数据库。
      */
     private void createSharedWarehouse(Player player, String rawName) throws Exception {
         if (!configuration.shared().enabled()) {
@@ -1860,7 +1860,7 @@ public final class WarehouseService implements Listener {
         long now = System.currentTimeMillis();
         String id = UUID.randomUUID().toString();
         try {
-            repository.createSharedWarehouse(new SharedWarehouseRecord(id, player.getUniqueId(), crop(rawName.isBlank() ? "�…�享�“�“" : rawName, 64), level, capacity, now, now, "owner", true));
+            repository.createSharedWarehouse(new SharedWarehouseRecord(id, player.getUniqueId(), crop(rawName.isBlank() ? "共享仓库" : rawName, 64), level, capacity, now, now, "owner", true));
         } catch (Exception exception) {
             refundCost(player, cost);
             throw exception;
@@ -1870,7 +1870,7 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �ˆ��™��…�享�“�“�ˆ�œ€�Œ级�†码确认�‰�€‚�…�‰€�œ‰�€…可�“��œ�Œ�ˆ��™��Ž�…�†�’�–��”�并�‡�置�“�‰��†�›��€‚
+     * 删除共享仓库（需二级密码确认）。仅所有者可操作，删除后清理互斥锁并重置当前视图。
      */
     private void deleteSharedWarehouse(Player player, String sharedId, String password) throws Exception {
         if (!validatePassword(player.getUniqueId(), password)) {
@@ -1969,8 +1969,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �‚€请�Ž�家�Š��…��…�享�“�“�Œ�ˆ–修�”��Ž��œ‰�ˆ��‘˜�’�‰��€‚
-     * �…�‰€�œ‰�€…可�“��œ�Œ校�Œ�ˆ��‘˜�•��‡��Š�™��Œ�›��‡�’�‰�不可为 owner�€‚
+     * 邀请玩家加入共享仓库，或修改现有成员角色。
+     * 仅所有者可操作，校验成员数量上限，目标角色不可为 owner。
      */
     private void inviteSharedMember(Player player, String sharedId, String memberName, String role) throws Exception {
         if (!isSecondaryUnlocked(player.getUniqueId())) {
@@ -2035,8 +2035,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �†�…�享�“�“�‰€�œ‰�ƒ转让�™�Ž��œ‰ member �’�‰��ˆ��‘˜�€‚
-     * 转让�Ž�ŽŸ�‰€�œ‰�€…�˜为 viewer�Œ�›��‡�ˆ��‘˜提�‡为 owner�€‚
+     * 将共享仓库所有权转让给现有 member 角色成员。
+     * 转让后原所有者变为 viewer，目标成员提升为 owner。
      */
     private boolean isRealPlayer(OfflinePlayer player) {
         return player != null && player.getUniqueId() != null
@@ -2057,7 +2057,7 @@ public final class WarehouseService implements Listener {
                 }
             }
         } catch (Exception exception) {
-            logger.warning("�€�Ÿ��“�“�…确认转让失败: " + exception.getMessage());
+            logger.warning("检查仓库待确认转让失败: " + exception.getMessage());
         }
     }
 
@@ -2155,8 +2155,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * 设置�Œ级�†码�€‚使�”� PBKDF2WithHmacSHA256 120,000 次迭代 hash�Œ�š��œ� salt�€‚
-     * 设置�ˆ��ŠŸ�Ž�‡��Š�解�”��“�‰��š话�€‚
+     * 设置二级密码。使用 PBKDF2WithHmacSHA256 120,000 次迭代 hash，随机 salt。
+     * 设置成功后自动解锁当前会话。
      */
     private void setPassword(Player player, String password) throws Exception {
         String normalized = safe(password);
@@ -2259,7 +2259,7 @@ public final class WarehouseService implements Listener {
             return repository.loadSlots(ownerType, ownerId, warehouseId);
         } catch (Exception exception) {
             if (configuration.debug()) {
-                this.logger.warning("读�–�“�“槽位失败: " + exception.getMessage());
+                this.logger.warning("读取仓库槽位失败: " + exception.getMessage());
             }
             return List.of();
         }
@@ -2418,7 +2418,7 @@ public final class WarehouseService implements Listener {
             try {
                 refreshBoth(online);
             } catch (Exception exception) {
-                this.logger.warning("[Warehouse] �ˆ��–��…�享�“�“ UI 失败: " + exception.getMessage());
+                this.logger.warning("[Warehouse] 刷新共享仓库 UI 失败: " + exception.getMessage());
             }
         }
     }
@@ -2435,12 +2435,12 @@ public final class WarehouseService implements Listener {
 
     private String buildLockBusyMessage(SharedEditLock lock) {
         if (lock == null) {
-            return "该�…�享�“�“正�œ�被�…��–�ˆ��‘˜�–�‘�Œ�“�‰�以只读�–�式�‰“�€�€‚";
+            return "该共享仓库正在被其他成员编辑，当前以只读方式打开。";
         }
         if (localNodeId().equals(lock.nodeId())) {
-            return "该�…�享�“�“正�œ�被 " + lock.playerName() + " �–�‘�Œ�“�‰�以只读�–�式�‰“�€�€‚";
+            return "该共享仓库正在被 " + lock.playerName() + " 编辑，当前以只读方式打开。";
         }
-        return "该�…�享�“�“正�œ�被 " + lock.playerName() + "�ˆ" + lock.nodeId() + "�‰�–�‘�Œ�“�‰�以只读�–�式�‰“�€�€‚";
+        return "该共享仓库正在被 " + lock.playerName() + "（" + lock.nodeId() + "）编辑，当前以只读方式打开。";
     }
 
     private String localNodeId() {
@@ -2553,8 +2553,8 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * �‰��……�“�‰��“�“�ˆ��‹�€�‰级�€‚
-     * 个人�“�“�’Œ�…�享�“�“�‡�”��Œ��Œ�‰��™��‡级费�”��Ž�›��–��•�据�“�€‚
+     * 扩充当前仓库到下一等级。
+     * 个人仓库和共享仓库均支持，扣除升级费用后更新数据库。
      */
     private void upgradeCurrentWarehouse(Player player) throws Exception {
         ViewState state = state(player);
@@ -2925,8 +2925,8 @@ public final class WarehouseService implements Listener {
             row.put("currency", product.currencyId());
             row.put("duration", product.durationSeconds());
             row.put("min", formatCurrency(product.currencyId(), product.minAmount()));
-            row.put("max", product.maxAmount().compareTo(BigDecimal.ZERO) <= 0 ? "不�™�" : formatCurrency(product.currencyId(), product.maxAmount()));
-            row.put("text", "&0" + product.displayName() + "\n&7�œ€�Ž " + formatCurrency(product.currencyId(), product.minAmount()) + "  " + product.description());
+            row.put("max", product.maxAmount().compareTo(BigDecimal.ZERO) <= 0 ? "不限" : formatCurrency(product.currencyId(), product.maxAmount()));
+            row.put("text", "&0" + product.displayName() + "\n&7最低 " + formatCurrency(product.currencyId(), product.minAmount()) + "  " + product.description());
             result.put(Integer.toString(idx), row);
             idx++;
         }
@@ -2946,7 +2946,7 @@ public final class WarehouseService implements Listener {
             row.put("rate", deposit.interestRate().toPlainString());
             row.put("maturesAt", TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt())));
             row.put("matured", deposit.maturesAt() <= now);
-            row.put("text", "&0" + deposit.productId() + " &7�œ��‡‘ " + formatCurrency(deposit.currencyId(), deposit.principal()) + "\n&7�ˆ��œŸ " + TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt())));
+            row.put("text", "&0" + deposit.productId() + " &7本金 " + formatCurrency(deposit.currencyId(), deposit.principal()) + "\n&7到期 " + TIME_FORMATTER.format(Instant.ofEpochMilli(deposit.maturesAt())));
             result.put(Integer.toString(idx), row);
             idx++;
         }
@@ -2992,14 +2992,14 @@ public final class WarehouseService implements Listener {
                 .filter(shared -> shared.id().equals(state.ownerId()))
                 .map(SharedWarehouseRecord::name)
                 .findFirst()
-                .orElse("�…�享�“�“");
+                .orElse("共享仓库");
         }
         WarehouseRecord record = personalWarehouseMap(lookupUuid).get(state.warehouseId());
         if (record != null && record.customName() != null && !record.customName().isBlank()) {
             return record.customName();
         }
         WarehouseDefinition definition = configuration.warehouse(state.warehouseId());
-        return definition == null ? "个人�“�“" : ChatColor.translateAlternateColorCodes('&', definition.displayName());
+        return definition == null ? "个人仓库" : ChatColor.translateAlternateColorCodes('&', definition.displayName());
     }
 
     private String firstPersonalWarehouseId() {
@@ -3055,21 +3055,21 @@ public final class WarehouseService implements Listener {
             ItemStack stack = ItemSerializer.deserialize(Base64.getDecoder().decode(item.itemData()));
             return loreLines(stack);
         } catch (RuntimeException exception) {
-            return List.of("&f�‰��“�描述读�–失败�€‚");
+            return List.of("&f物品描述读取失败。");
         }
     }
 
     private List<String> loreLines(ItemStack itemStack) {
         if (itemStack == null) {
-            return List.of("&f�™个�‰��“�没�œ‰额�–描述�€‚");
+            return List.of("&f这个物品没有额外描述。");
         }
         ItemMeta meta = itemStack.getItemMeta();
         if (meta == null || !meta.hasLore() || meta.getLore() == null || meta.getLore().isEmpty()) {
-            return List.of("&f�™个�‰��“�没�œ‰额�–描述�€‚");
+            return List.of("&f这个物品没有额外描述。");
         }
         List<String> result = new ArrayList<>();
         for (String line : meta.getLore()) {
-            result.add(line == null ? "" : line.replace("k!", "�"));
+            result.add(line == null ? "" : line.replace("k!", "§"));
         }
         return List.copyOf(result);
     }

@@ -73,7 +73,7 @@ controls:
                   y: 8
                   fontSize: 38
                   texts: "~&6🛡 区域管理"
-              region_count:
+              区域数量:
                 type: Text
                 attribute:
                   x: 860
@@ -91,7 +91,7 @@ controls:
               height: 622
               normal: ~30,30,38,255
             children:
-              nav_regions:
+              导航区域入口:
                 type: Texture
                 attribute:
                   x: 10
@@ -105,7 +105,7 @@ controls:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'regions')
                 children:
-                  nav_regions_text:
+                  导航区域文字:
                     type: Text
                     attribute:
                       x: 70
@@ -115,7 +115,7 @@ controls:
                       fontSize: 28
                       texts: "~&f区域列表"
 
-              nav_edit:
+              导航编辑入口:
                 type: Texture
                 attribute:
                   x: 10
@@ -126,7 +126,7 @@ controls:
                   shape: ~round_rect
                   radius: 8
                 children:
-                  nav_edit_text:
+                  导航编辑文字:
                     type: Text
                     attribute:
                       x: 70
@@ -147,7 +147,7 @@ controls:
               normal: ~20,20,25,100
             children:
               # ─── 区域列表 ───
-              page_regions:
+              区域列表布局:
                 type: Canvas
                 attribute:
                   x: 20
@@ -157,7 +157,7 @@ controls:
                   visible: |-
                     var.page == 'regions'
                 children:
-                  regions_title:
+                  区域列表标题:
                     type: Text
                     attribute:
                       x: 0
@@ -174,7 +174,7 @@ controls:
                       height: 50
                       normal: ~120,120,120,200
                       maxDragY: 480
-                  regions_scroll:
+                  区域滚动栏:
                     type: Scroll
                     attribute:
                       x: 0
@@ -200,7 +200,7 @@ controls:
                           width: 840
                           spaceBetween: 6
                         children:
-                          region_row:
+                          区域行:
                             type: Texture
                             attribute:
                               entry: var.regions[self.key]
@@ -211,7 +211,7 @@ controls:
                               shape: ~round_rect
                               radius: 6
                             children:
-                              region_id:
+                              区域编号文字:
                                 type: Text
                                 attribute:
                                   x: 16
@@ -219,7 +219,7 @@ controls:
                                   through: true
                                   fontSize: 28
                                   texts: "~&f{self.parent.entry['id']}"
-                              region_world:
+                              区域世界文字:
                                 type: Text
                                 attribute:
                                   x: 260
@@ -227,7 +227,7 @@ controls:
                                   through: true
                                   fontSize: 24
                                   texts: "~&7{self.parent.entry['world']}"
-                              region_priority:
+                              区域优先级文字:
                                 type: Text
                                 attribute:
                                   x: 440
@@ -235,7 +235,7 @@ controls:
                                   through: true
                                   fontSize: 24
                                   texts: "~&7P:{self.parent.entry['priority']}"
-                              region_volume:
+                              区域体积文字:
                                 type: Text
                                 attribute:
                                   x: 530
@@ -257,7 +257,7 @@ controls:
                                   click: |-
                                     Packet.send(var.packetId, 'select_region', self.parent.entry['id'])
                                 children:
-                                  btn_edit_t:
+                                  编辑按钮文字:
                                     type: Text
                                     attribute:
                                       x: 35
@@ -280,7 +280,7 @@ controls:
                                   click: |-
                                     Packet.send(var.packetId, 'delete_region', self.parent.entry['id'])
                                 children:
-                                  btn_delete_t:
+                                  删除按钮文字:
                                     type: Text
                                     attribute:
                                       x: 35
@@ -291,7 +291,7 @@ controls:
                                       texts: "~&f删除"
 
               # ─── 区域编辑视图 ───
-              page_edit:
+              编辑布局:
                 type: Canvas
                 attribute:
                   x: 20
@@ -308,14 +308,14 @@ controls:
                       y: 0
                       fontSize: 36
                       texts: "~&6编辑: &f{var.selId}"
-                  edit_info:
+                  编辑信息文字:
                     type: Text
                     attribute:
                       x: 0
                       y: 46
                       fontSize: 26
                       texts: "~&7世界: &f{var.selWorld}  &7优先级: &f{var.selPriority}  &7父: &f{var.selParent != none ? var.selParent : '无'}"
-                  edit_bounds:
+                  编辑边界文字:
                     type: Text
                     attribute:
                       x: 0
@@ -324,7 +324,7 @@ controls:
                       texts: "~&7范围: &f{var.selMin} ~ {var.selMax}  &7体积: &f{var.selVolume}"
 
                   # 成员列表
-                  members_label:
+                  成员文字:
                     type: Text
                     attribute:
                       x: 0
@@ -341,7 +341,7 @@ controls:
                       height: 20
                       normal: ~120,120,120,200
                       maxDragY: 120
-                  members_scroll:
+                  成员滚动栏:
                     type: Scroll
                     attribute:
                       x: 0
@@ -367,7 +367,7 @@ controls:
                           width: 400
                           spaceBetween: 4
                         children:
-                          member_row:
+                          成员行:
                             type: Texture
                             attribute:
                               entry: var.selMembers[self.key]
@@ -378,7 +378,7 @@ controls:
                               shape: ~round_rect
                               radius: 4
                             children:
-                              m_name:
+                              成员名称文字:
                                 type: Text
                                 attribute:
                                   x: 12
@@ -386,7 +386,7 @@ controls:
                                   through: true
                                   fontSize: 22
                                   texts: "~&f{self.parent.entry['name']}"
-                              m_role:
+                              成员身份文字:
                                 type: Text
                                 attribute:
                                   x: 180
@@ -394,7 +394,7 @@ controls:
                                   through: true
                                   fontSize: 20
                                   texts: "~{self.parent.entry['role'] == 'owner' ? '&6所有者' : '&b成员'}"
-                              btn_remove_member:
+                              移除成员按钮:
                                 type: Texture
                                 attribute:
                                   x: 310
@@ -408,7 +408,7 @@ controls:
                                   click: |-
                                     Packet.send(var.packetId, 'remove_member', var.selId, self.parent.entry['uuid'])
                                 children:
-                                  btn_rm_t:
+                                  移除成员按钮文字:
                                     type: Text
                                     attribute:
                                       x: 30
@@ -419,7 +419,7 @@ controls:
                                       texts: "~&f移除"
 
                   # 标志列表
-                  flags_label:
+                  标志文字:
                     type: Text
                     attribute:
                       x: 0
@@ -436,7 +436,7 @@ controls:
                       height: 30
                       normal: ~120,120,120,200
                       maxDragY: 220
-                  flags_scroll:
+                  标志滚动栏:
                     type: Scroll
                     attribute:
                       x: 0
@@ -462,7 +462,7 @@ controls:
                           width: 840
                           spaceBetween: 4
                         children:
-                          flag_row:
+                          标志行:
                             type: Texture
                             attribute:
                               entry: var.selFlags[self.key]
@@ -473,7 +473,7 @@ controls:
                               shape: ~round_rect
                               radius: 4
                             children:
-                              f_name:
+                              标志名称文字:
                                 type: Text
                                 attribute:
                                   x: 12
@@ -481,7 +481,7 @@ controls:
                                   through: true
                                   fontSize: 24
                                   texts: "~&b{self.parent.entry['key']}"
-                              f_desc:
+                              标志描述文字:
                                 type: Text
                                 attribute:
                                   x: 200
@@ -489,7 +489,7 @@ controls:
                                   through: true
                                   fontSize: 22
                                   texts: "~&7{self.parent.entry['desc']}"
-                              f_state:
+                              标志状态文字:
                                 type: Text
                                 attribute:
                                   x: 520
@@ -497,7 +497,7 @@ controls:
                                   through: true
                                   fontSize: 22
                                   texts: "~{self.parent.entry['state'] == 'allow' ? '&a允许' : self.parent.entry['state'] == 'deny' ? '&c拒绝' : '&8未设置'}"
-                              btn_allow:
+                              允许按钮:
                                 type: Texture
                                 attribute:
                                   x: 620
@@ -511,7 +511,7 @@ controls:
                                   click: |-
                                     Packet.send(var.packetId, 'set_flag', var.selId, self.parent.entry['key'], 'allow')
                                 children:
-                                  btn_allow_t:
+                                  允许按钮文字:
                                     type: Text
                                     attribute:
                                       x: 28
@@ -520,7 +520,7 @@ controls:
                                       center: true
                                       fontSize: 20
                                       texts: "~&f允许"
-                              btn_deny:
+                              拒绝按钮:
                                 type: Texture
                                 attribute:
                                   x: 684
@@ -534,7 +534,7 @@ controls:
                                   click: |-
                                     Packet.send(var.packetId, 'set_flag', var.selId, self.parent.entry['key'], 'deny')
                                 children:
-                                  btn_deny_t:
+                                  拒绝按钮文字:
                                     type: Text
                                     attribute:
                                       x: 28
@@ -543,7 +543,7 @@ controls:
                                       center: true
                                       fontSize: 20
                                       texts: "~&f拒绝"
-                              btn_clear_flag:
+                              清除标志按钮:
                                 type: Texture
                                 attribute:
                                   x: 748

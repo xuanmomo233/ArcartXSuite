@@ -31,7 +31,7 @@ ui:
       }
       for(i in range(0, var.maxPresetCount)){
         key = i.round()
-        e = val.preset_data['preset_row'].copy('preset_row' + key)
+        e = val.preset_data['预设行'].copy('预设行' + key)
         e.entryKey = key
       }
     preset-detail: |-
@@ -108,7 +108,7 @@ controls:
                   y: 12
                   spaceBetween: 14
                 children:
-                  btn_refresh:
+                  刷新按钮:
                     type: Texture
                     attribute:
                       width: 120
@@ -125,7 +125,7 @@ controls:
                         var.view = 'list'
                         Packet.send('AXS_MAIL', 'admin-preset-list')
                     children:
-                      btn_refresh_text:
+                      刷新按钮文字:
                         type: Text
                         attribute:
                           x: 60
@@ -134,7 +134,7 @@ controls:
                           point: ~middle_center
                           fontSize: 49
                           texts: "~&f刷新"
-                  btn_new:
+                  新建按钮:
                     type: Texture
                     attribute:
                       width: 120
@@ -163,7 +163,7 @@ controls:
                         var.resultMsg = none
                         Packet.send('AXS_MAIL', 'admin-preset-new')
                     children:
-                      btn_new_text:
+                      新建按钮文字:
                         type: Text
                         attribute:
                           x: 60
@@ -174,7 +174,7 @@ controls:
                           texts: "~&f新建"
 
           # 结果提示
-          result_bar:
+          结果栏:
             type: Text
             attribute:
               x: 28
@@ -183,7 +183,7 @@ controls:
               texts: "~&e{var.resultMsg}"
 
           # 列表表头（固定，不随滚动）
-          list_header:
+          列表标题:
             type: Texture
             attribute:
               x: 20
@@ -195,35 +195,35 @@ controls:
               radius: 6
               visible: "var.view == 'list' || var.view == none"
             children:
-              col_id:
+              编号列:
                 type: Text
                 attribute:
                   x: 16
                   y: 12
                   fontSize: 36
                   texts: "~&bID"
-              col_name:
+              名称列:
                 type: Text
                 attribute:
                   x: 300
                   y: 12
                   fontSize: 36
                   texts: "~&b显示名"
-              col_subject:
+              主题列:
                 type: Text
                 attribute:
                   x: 600
                   y: 12
                   fontSize: 36
                   texts: "~&b标题"
-              col_enabled:
+              启用列:
                 type: Text
                 attribute:
                   x: 920
                   y: 12
                   fontSize: 36
                   texts: "~&b启用"
-              col_actions:
+              操作列:
                 type: Text
                 attribute:
                   x: 1080
@@ -242,7 +242,7 @@ controls:
               normal: ~120,120,120,200
               maxDragY: 670
           # 预设列表区域（可滚动）
-          list_area:
+          列表区域:
             type: Scroll
             attribute:
               x: 20
@@ -269,7 +269,7 @@ controls:
                   width: 1460
                   spaceBetween: 4
                 children:
-                  preset_row:
+                  预设行:
                     type: Texture
                     attribute:
                       entryKey: 0
@@ -286,7 +286,7 @@ controls:
                       leave: |-
                         self.normal = '45,45,55,220'
                     children:
-                      row_id:
+                      行编号:
                         type: Text
                         attribute:
                           x: 16
@@ -294,7 +294,7 @@ controls:
                           width: 270
                           fontSize: 36
                           texts: "~&f{self.parent.entry['id']}"
-                      row_name:
+                      行名称:
                         type: Text
                         attribute:
                           x: 300
@@ -302,7 +302,7 @@ controls:
                           width: 290
                           fontSize: 36
                           texts: "~&7{self.parent.entry['displayName']}"
-                      row_subject:
+                      行主题:
                         type: Text
                         attribute:
                           x: 600
@@ -310,7 +310,7 @@ controls:
                           width: 310
                           fontSize: 36
                           texts: "~&7{self.parent.entry['subject']}"
-                      row_enabled:
+                      行启用:
                         type: Text
                         attribute:
                           x: 920
@@ -335,7 +335,7 @@ controls:
                           click: |-
                             Packet.send('AXS_MAIL', 'admin-preset-get', self.parent.entry['id'])
                         children:
-                          btn_edit_text:
+                          编辑按钮文字:
                             type: Text
                             attribute:
                               x: 40
@@ -344,7 +344,7 @@ controls:
                               center: true
                               fontSize: 36
                               texts: "~&f编辑"
-                      btn_send:
+                      发送按钮:
                         type: Texture
                         attribute:
                           x: 1170
@@ -362,7 +362,7 @@ controls:
                           click: |-
                             Packet.send('AXS_MAIL', 'admin-preset-send', self.parent.entry['id'], 'all-online')
                         children:
-                          btn_send_text:
+                          发送按钮文字:
                             type: Text
                             attribute:
                               x: 40
@@ -389,7 +389,7 @@ controls:
                           click: |-
                             Packet.send('AXS_MAIL', 'admin-preset-delete', self.parent.entry['id'])
                         children:
-                          btn_delete_text:
+                          删除按钮文字:
                             type: Text
                             attribute:
                               x: 40
@@ -399,7 +399,7 @@ controls:
                               fontSize: 36
                               texts: "~&f删除"
           # 空列表提示
-          empty_hint:
+          空状态提示:
             type: Text
             attribute:
               x: 600
@@ -410,7 +410,7 @@ controls:
               texts: "~&8暂无预设，点击右上角 &a新建 &8开始创建"
 
           # 编辑表单区域
-          edit_area:
+          编辑区域:
             type: Texture
             attribute:
               x: 20
@@ -466,14 +466,14 @@ controls:
                   texts: "~{var.editFound ? '&b编辑预设: &f' : '&a新建预设'}{var.editId}"
 
               # 第一行: ID / 显示名 / 启用 (label 在 input 上方)
-              label_id:
+              编号文字:
                 type: Text
                 attribute:
                   x: 0
                   y: 52
                   fontSize: 36
                   texts: "~&7预设 ID"
-              input_id:
+              输入编号框:
                 type: ChatTextBox
                 attribute:
                   x: 0
@@ -492,14 +492,14 @@ controls:
                     width: 1
                     color: ~80,180,255,100
 
-              label_displayName:
+              显示名文字:
                 type: Text
                 attribute:
                   x: 380
                   y: 52
                   fontSize: 36
                   texts: "~&7显示名"
-              input_displayName:
+              输入显示名框:
                 type: ChatTextBox
                 attribute:
                   x: 380
@@ -516,14 +516,14 @@ controls:
                     width: 1
                     color: ~80,180,255,100
 
-              label_enabled:
+              启用文字:
                 type: Text
                 attribute:
                   x: 760
                   y: 52
                   fontSize: 36
                   texts: "~&7启用"
-              btn_toggle:
+              切换按钮:
                 type: Texture
                 attribute:
                   x: 760
@@ -542,7 +542,7 @@ controls:
                   click: |-
                     var.editEnabled = !var.editEnabled
                 children:
-                  toggle_text:
+                  切换文字:
                     type: Text
                     attribute:
                       x: 35
@@ -553,14 +553,14 @@ controls:
                       texts: "~{var.editEnabled ? '&f开' : '&f关'}"
 
               # 第二行: 标题 (宽输入，模仿 compose 的 subject)
-              label_subject:
+              主题文字:
                 type: Text
                 attribute:
                   x: 0
                   y: 134
                   fontSize: 36
                   texts: "~&7标题"
-              input_subject:
+              输入主题框:
                 type: ChatTextBox
                 attribute:
                   x: 0
@@ -578,14 +578,14 @@ controls:
                     color: ~80,180,255,100
 
               # 第三行: 正文 (大面积输入区，模仿 compose 的 body)
-              label_body:
+              正文文字:
                 type: Text
                 attribute:
                   x: 0
                   y: 216
                   fontSize: 36
                   texts: "~&7正文"
-              input_body:
+              输入正文框:
                 type: ChatTextBox
                 attribute:
                   x: 0
@@ -603,14 +603,14 @@ controls:
                     color: ~80,180,255,100
 
               # 第四行: 过期 / 货币附件
-              label_expires:
+              过期时间文字:
                 type: Text
                 attribute:
                   x: 0
                   y: 402
                   fontSize: 36
                   texts: "~&7过期(天)"
-              input_expires:
+              输入过期时间框:
                 type: ChatTextBox
                 attribute:
                   x: 0
@@ -627,14 +627,14 @@ controls:
                     width: 1
                     color: ~80,180,255,100
 
-              label_currencies:
+              货币文字:
                 type: Text
                 attribute:
                   x: 200
                   y: 402
                   fontSize: 36
                   texts: "~&7货币附件"
-              input_currencies:
+              输入货币框:
                 type: ChatTextBox
                 attribute:
                   x: 200
@@ -652,14 +652,14 @@ controls:
                     color: ~80,180,255,100
 
               # 第五行: 领取命令
-              label_commands:
+              命令文字:
                 type: Text
                 attribute:
                   x: 0
                   y: 484
                   fontSize: 36
                   texts: "~&7领取命令"
-              input_commands:
+              输入命令框:
                 type: ChatTextBox
                 attribute:
                   x: 0
@@ -677,7 +677,7 @@ controls:
                     color: ~80,180,255,100
 
               # 底部信息 + 操作按钮
-              edit_summary:
+              编辑摘要:
                 type: Text
                 attribute:
                   x: 0
@@ -685,7 +685,7 @@ controls:
                   fontSize: 22
                   texts: "~&8物品附件: &f{var.editItemCount} &8个   &8货币格式: currency:amount:desc   &8命令用 | 分隔"
 
-              btn_save:
+              保存按钮:
                 type: Texture
                 attribute:
                   x: 0
@@ -704,7 +704,7 @@ controls:
                     var.resultMsg = '&e保存中...'
                     Packet.send('AXS_MAIL', 'admin-preset-save', var.editId, var.editEnabled, var.editDisplayName, var.editSubject, var.editBody, var.editExpiresDays, var.editCurrencies, var.editCommands)
                 children:
-                  btn_save_text:
+                  保存按钮文字:
                     type: Text
                     attribute:
                       x: 80
@@ -714,7 +714,7 @@ controls:
                       fontSize: 36
                       texts: "~&f保存"
 
-              btn_cancel:
+              取消按钮:
                 type: Texture
                 attribute:
                   x: 180
@@ -734,7 +734,7 @@ controls:
                     Packet.send('AXS_MAIL', 'admin-preset-cancel')
                     Packet.send('AXS_MAIL', 'admin-preset-list')
                 children:
-                  btn_cancel_text:
+                  取消按钮文字:
                     type: Text
                     attribute:
                       x: 60
@@ -745,7 +745,7 @@ controls:
                       texts: "~&f取消"
 
               # ─── 右侧: 物品附件面板 ───
-              attachment_panel:
+              附件面板:
                 type: Texture
                 attribute:
                   x: 860
@@ -760,14 +760,14 @@ controls:
                     width: 2
                     color: ~80,180,255,120
                 children:
-                  att_title:
+                  附件标题:
                     type: Text
                     attribute:
                       x: 14
                       y: 10
                       fontSize: 36
                       texts: "'&f物品附件 &7' + var.editItemCount + '/6'"
-                  att_hint:
+                  附件提示:
                     type: Text
                     attribute:
                       x: 14
@@ -776,7 +776,7 @@ controls:
                       texts:
                         - "~&7将物品拖入下方槽位"
                         - "~&7模板物品保存后不消耗"
-                  slot_grid:
+                  附件槽位网格:
                     type: HGrid
                     attribute:
                       x: 14
@@ -787,11 +787,11 @@ controls:
                     action:
                       create: |-
                         for(i in range(1,5)){
-                          slot = self['slot0'].copy('slot' + i)
+                          slot = self['管理槽位0'].copy('slot' + i)
                           slot.id = i
                         }
                     children:
-                      slot0:
+                      管理槽位0:
                         type: Slot
                         attribute:
                           width: 54
@@ -809,7 +809,7 @@ controls:
                             color: ~0,0,0,255
 
               # ─── 右侧: 背包面板 ───
-              admin_backpack:
+              管理背包:
                 type: Texture
                 attribute:
                   x: 860
@@ -824,7 +824,7 @@ controls:
                     width: 2
                     color: ~80,180,255,120
                 children:
-                  bp_grid:
+                  背包槽位网格:
                     type: HGrid
                     attribute:
                       x: 14
@@ -835,11 +835,11 @@ controls:
                     action:
                       create: |-
                         for(i in range(1,35)){
-                          slot = self['bp_slot0'].copy('bp_slot' + i)
+                          slot = self['背包槽位0'].copy('bp_slot' + i)
                           slot.id = i + 27
                         }
                     children:
-                      bp_slot0:
+                      背包槽位0:
                         type: Slot
                         attribute:
                           width: 54

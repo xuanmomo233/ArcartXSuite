@@ -85,7 +85,7 @@ controls:
       width: 1920
       height: 1080
     children:
-      选择器根面板:
+      选择器面板:
         type: Canvas
         attribute:
           point: ~middle_right
@@ -99,7 +99,7 @@ controls:
           leave: |-
             client.pickup = true
         children:
-          外壳:
+          背景:
             type: Texture
             attribute:
               point: ~stretch_all
@@ -124,7 +124,7 @@ controls:
               point: ~top_left
               x: 24
               y: 52
-              texts: "'~&7滚轮滑动查看选项,按[' + var.navPrevKey + ']与[' + var.navNextKey + ']选择选项,按[' + var.interactKey + ']确定选项'"
+              texts: "'&7滚轮滑动查看选项,按[' + var.navPrevKey + ']与[' + var.navNextKey + ']选择选项,按[' + var.interactKey + ']确定选项'"
               fontSize: 25
           选择器索引:
             type: Text
@@ -141,7 +141,7 @@ controls:
             val: 选择器滑块
             attribute:
               point: ~top_left
-              x: 408
+              x: 410
               y: 90
               width: 6
               height: 30
@@ -172,7 +172,7 @@ controls:
                   width: 392
                   spaceBetween: 8
                 children:
-                  选择器项:
+                  选择器模板:
                     type: Texture
                     attribute:
                       entryKey: 0

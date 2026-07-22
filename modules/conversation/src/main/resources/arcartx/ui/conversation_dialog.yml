@@ -100,7 +100,7 @@ controls:
       width: 1920
       height: 1080
     children:
-      dialog_root:
+      对话框布局:
         type: Canvas
         attribute:
           point: ~bottom_center
@@ -120,7 +120,7 @@ controls:
               stroke:
                 width: 2
                 color: ~0,0,0,255
-          header_name:
+          标题名称:
             type: Text
             attribute:
               point: ~top_left
@@ -128,7 +128,7 @@ controls:
               y: 22
               texts: "'&0' + var.speakerName"
               fontSize: 64
-          header_index:
+          标题序号:
             type: Text
             attribute:
               point: ~top_right
@@ -139,7 +139,7 @@ controls:
                 - "~&0点击键盘上方数字键1-9直接回复选项1-9"
               fontSize: 36
               lineSpace: 8
-          close_button:
+          关闭按钮:
             type: Texture
             attribute:
               point: ~top_right
@@ -161,7 +161,7 @@ controls:
             action:
               clickLeft: |-
                 Screen.close()
-          message_panel:
+          消息面板:
             type: Texture
             attribute:
               point: ~top_left
@@ -176,7 +176,7 @@ controls:
               stroke:
                 width: 2
                 color: ~0,0,0,255
-          message_text:
+          消息文字:
             type: Text
             attribute:
               point: ~top_left
@@ -185,7 +185,7 @@ controls:
               width: 858
               texts: "var.messageLines"
               fontSize: 49
-          reply_panel:
+          回复面板:
             type: Texture
             attribute:
               point: ~top_right
@@ -200,7 +200,7 @@ controls:
               stroke:
                 width: 2
                 color: ~0,0,0,255
-          reply_empty:
+          暂无回复提示:
             type: Text
             attribute:
               point: ~middle_center
@@ -220,7 +220,7 @@ controls:
               height: 30
               normal: ~120,120,120,200
               maxDragY: 218
-          reply_scroll:
+          回复滚动栏:
             type: Scroll
             attribute:
               point: ~top_right
@@ -271,7 +271,7 @@ controls:
                           }
                         }
                     children:
-                      selected_overlay:
+                      选中覆盖层:
                         type: Texture
                         attribute:
                           visible: "self.parent.entry != none ? self.parent.entry['selected'] : false"
@@ -285,7 +285,7 @@ controls:
                           stroke:
                             width: 2
                             color: ~0,0,0,255
-                      reply_text:
+                      回复文字:
                         type: Text
                         attribute:
                           point: ~middle_left
@@ -294,7 +294,7 @@ controls:
                           texts: "self.parent.entry != none ? self.parent.entry['text'] : none"
                           fontSize: 49
                           through: true
-                      reply_index:
+                      回复序号:
                         type: Text
                         attribute:
                           x: 300

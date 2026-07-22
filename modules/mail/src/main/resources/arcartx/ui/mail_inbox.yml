@@ -42,13 +42,13 @@ ui:
       var.unreadCount = packet['unread_count']
       var.claimableCount = packet['claimable_count']
       var.selectedId = packet['selected_id']
-      var.selectedSubject = packet['selected_subject']
+      var.selectedSubject = packet['已选主题']
       var.selectedSenderName = packet['selected_sender_name']
       var.selectedSourceText = packet['selected_source_text']
       var.selectedStatusText = packet['selected_status_text']
       var.selectedCreatedAt = packet['selected_created_at']
       var.selectedExpiresAt = packet['selected_expires_at']
-      var.selectedBody = packet['selected_body']
+      var.selectedBody = packet['已选正文']
       var.selectedAttachmentSummary = packet['selected_attachment_summary']
       var.selectedClaimable = packet['selected_claimable']
       var.maxMailCount = packet['maxMailCount']
@@ -57,7 +57,7 @@ ui:
       }
       for(i in range(0, var.maxMailCount)){
         key = i.round()
-        e = val.mail_list['item'].copy('item' + key)
+        e = val.mail_list['邮件项目'].copy('邮件项目' + key)
         e.entryKey = key
       }
     update: |-
@@ -66,13 +66,13 @@ ui:
       var.unreadCount = packet['unread_count']
       var.claimableCount = packet['claimable_count']
       var.selectedId = packet['selected_id']
-      var.selectedSubject = packet['selected_subject']
+      var.selectedSubject = packet['已选主题']
       var.selectedSenderName = packet['selected_sender_name']
       var.selectedSourceText = packet['selected_source_text']
       var.selectedStatusText = packet['selected_status_text']
       var.selectedCreatedAt = packet['selected_created_at']
       var.selectedExpiresAt = packet['selected_expires_at']
-      var.selectedBody = packet['selected_body']
+      var.selectedBody = packet['已选正文']
       var.selectedAttachmentSummary = packet['selected_attachment_summary']
       var.selectedClaimable = packet['selected_claimable']
       var.maxMailCount = packet['maxMailCount']
@@ -81,7 +81,7 @@ ui:
       }
       for(i in range(0, var.maxMailCount)){
         key = i.round()
-        e = val.mail_list['item'].copy('item' + key)
+        e = val.mail_list['邮件项目'].copy('邮件项目' + key)
         e.entryKey = key
       }
 
@@ -118,7 +118,7 @@ controls:
             color: ~255,255,255,110
             width: 0.05
         children:
-          标题:
+          邮件标题:
             type: Text
             attribute:
               x: 42
@@ -132,14 +132,14 @@ controls:
               y: 82
               fontSize: 49
               texts: "'&f总数: ' + var.totalCount.round(0) + '   &f未读: ' + var.unreadCount.round(0) + '   &f可领取: ' + var.claimableCount.round(0)"
-          filter_bar:
+          筛选栏:
             type: HStack
             attribute:
               x: 42
               y: 124
               spaceBetween: 10
             children:
-              filter_all:
+              全部筛选按钮:
                 type: Texture
                 attribute:
                   width: 104
@@ -157,7 +157,7 @@ controls:
                 action:
                   clickLeft: |-
                     var.filterMode = 'all'
-              filter_unread:
+              未读筛选按钮:
                 type: Texture
                 attribute:
                   width: 104
@@ -175,7 +175,7 @@ controls:
                 action:
                   clickLeft: |-
                     var.filterMode = 'unread'
-              filter_claimable:
+              可领取筛选按钮:
                 type: Texture
                 attribute:
                   width: 104
@@ -193,7 +193,7 @@ controls:
                 action:
                   clickLeft: |-
                     var.filterMode = 'claimable'
-              filter_system:
+              系统筛选按钮:
                 type: Texture
                 attribute:
                   width: 104
@@ -211,7 +211,7 @@ controls:
                 action:
                   clickLeft: |-
                     var.filterMode = 'system'
-              filter_player:
+              玩家筛选按钮:
                 type: Texture
                 attribute:
                   width: 104
@@ -229,7 +229,7 @@ controls:
                 action:
                   clickLeft: |-
                     var.filterMode = 'player'
-              filter_preset:
+              预设筛选按钮:
                 type: Texture
                 attribute:
                   width: 104
@@ -247,7 +247,7 @@ controls:
                 action:
                   clickLeft: |-
                     var.filterMode = 'preset'
-              filter_cdk:
+              兑换码筛选按钮:
                 type: Texture
                 attribute:
                   width: 104
@@ -265,7 +265,7 @@ controls:
                 action:
                   clickLeft: |-
                     var.filterMode = 'cdk'
-          left_panel:
+          左侧面板:
             type: Texture
             attribute:
               x: 42
@@ -289,7 +289,7 @@ controls:
               height: 50
               normal: ~120,120,120,200
               maxDragY: 612
-          left_scroll:
+          左侧滚动栏:
             type: Scroll
             attribute:
               x: 56
@@ -313,7 +313,7 @@ controls:
                   width: 632
                   spaceBetween: 10
                 children:
-                  item:
+                  邮件项目:
                     type: Texture
                     attribute:
                       entryKey: 0
@@ -332,28 +332,28 @@ controls:
                       clickLeft: |-
                         Packet.send('AXS_MAIL', 'select', self.entry['id'])
                     children:
-                      subject:
+                      主题:
                         type: Text
                         attribute:
                           x: 18
                           y: 12
                           fontSize: 49
-                          texts: "self.parent.entry['unread'] ? '&0' + self.parent.entry['subject'] : '&0' + self.parent.entry['subject']"
-                      meta:
+                          texts: "self.parent.entry['unread'] ? '&0' + self.parent.entry['主题'] : '&0' + self.parent.entry['主题']"
+                      元信息:
                         type: Text
                         attribute:
                           x: 18
                           y: 42
                           fontSize: 36
                           texts: "'&7' + self.parent.entry['sender_name'] + ' / ' + self.parent.entry['source_text'] + ' / ' + self.parent.entry['status_text']"
-                      preview:
+                      预览:
                         type: Text
                         attribute:
                           x: 18
                           y: 66
                           fontSize: 36
-                          texts: "'&8' + self.parent.entry['preview']"
-          right_panel:
+                          texts: "'&8' + self.parent.entry['预览']"
+          右侧面板:
             type: Texture
             attribute:
               x: 736
@@ -367,21 +367,21 @@ controls:
               stroke:
                 width: 2
                 color: ~0,0,0,255
-          selected_subject:
+          已选主题:
             type: Text
             attribute:
               x: 766
               y: 214
               fontSize: 49
               texts: "var.selectedSubject == none ? '&7未选择邮件' : '&0' + var.selectedSubject"
-          selected_meta:
+          已选元信息:
             type: Text
             attribute:
               x: 766
               y: 260
               fontSize: 49
               texts: "'&7发件人: &0' + var.selectedSenderName + '    &7来源: &0' + var.selectedSourceText + '    &7状态: &0' + var.selectedStatusText"
-          selected_time:
+          已选时间:
             type: Text
             attribute:
               x: 766
@@ -390,14 +390,14 @@ controls:
               texts: 
                 - "'&7创建: &0' + var.selectedCreatedAt"
                 - "'&7到期: &0' + var.selectedExpiresAt"
-          selected_attachment:
+          已选附件:
             type: Text
             attribute:
               x: 766
               y: 346
               fontSize: 36
               texts: "'&7附件: &0' + var.selectedAttachmentSummary"
-          selected_body:
+          已选正文:
             type: Text
             attribute:
               x: 766
@@ -405,14 +405,14 @@ controls:
               fontSize: 49
               width: 700
               texts: "var.selectedBody"
-          button_row_top:
+          顶部按钮区:
             type: HStack
             attribute:
               x: 766
               y: 690
               spaceBetween: 14
             children:
-              button_logs:
+              日志按钮:
                 type: Texture
                 attribute:
                   width: 124
@@ -430,14 +430,14 @@ controls:
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'logs')
-          button_row_actions:
+          操作按钮区:
             type: HStack
             attribute:
               x: 766
               y: 748
               spaceBetween: 14
             children:
-              button_compose:
+              撰写按钮:
                 type: Texture
                 attribute:
                   width: 124
@@ -455,7 +455,7 @@ controls:
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'compose')
-              button_claim:
+              领取按钮:
                 type: Texture
                 attribute:
                   width: 124
@@ -475,7 +475,7 @@ controls:
                     if(var.selectedId != none){
                       Packet.send('AXS_MAIL', 'claim', var.selectedId)
                     }
-              button_delete:
+              删除按钮:
                 type: Texture
                 attribute:
                   width: 124
@@ -495,7 +495,7 @@ controls:
                     if(var.selectedId != none){
                       Packet.send('AXS_MAIL', 'delete', var.selectedId)
                     }
-              button_claim_all:
+              领取全部按钮:
                 type: Texture
                 attribute:
                   width: 124
@@ -513,7 +513,7 @@ controls:
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'claimall')
-              button_delete_all:
+              删除全部按钮:
                 type: Texture
                 attribute:
                   width: 124
@@ -531,14 +531,14 @@ controls:
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'deleteall')
-          cdk_row:
+          兑换码行:
             type: HStack
             attribute:
               x: 780
               y: 806
               spaceBetween: 14
             children:
-              cdk_box:
+              兑换码输入框:
                 type: TextBox
                 attribute:
                   width: 385
@@ -556,7 +556,7 @@ controls:
                   stroke:
                     width: 2
                     color: ~0,0,0,255
-              cdk_button:
+              兑换码按钮:
                 type: Texture
                 attribute:
                   width: 124
@@ -576,7 +576,7 @@ controls:
                     if(var.cdkCode != none){
                       Packet.send('AXS_MAIL', 'cdk', var.cdkCode)
                     }
-              refresh_button:
+              刷新按钮:
                 type: Texture
                 attribute:
                   width: 124

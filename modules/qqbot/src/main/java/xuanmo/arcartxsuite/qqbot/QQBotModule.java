@@ -48,7 +48,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     private QQBotAdminCommand adminCommand;
     private SnowLumaProcessManager snowLumaManager;
     private QQBotLoginGateListener loginGateListener;
-    // �‚步启�Š��ˆ卫�šstartService �Ž台�‹‰起 SnowLuma �œŸ�—��‹�模�—被�…��—��Œ置位以�˜�止/�›ž�”�启�Š��Œ避�…�孤�„��›�‹�€‚
+    // 异步启动守卫：startService 后台拉起 SnowLuma 期间若模块被关闭，置位以阻止/回收启动，避免孤儿进程。
     private volatile boolean closed = false;
 
     @Override
@@ -90,11 +90,11 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
                 .withEnum(Set.of("sqlite", "mysql")),
             ValidationRule.required("storage.pool-size", ValueType.INT)
                 .withRange(1, 50),
-            // 签�ˆ�积�ˆ†
+            // 签到积分
             ValidationRule.of("signin.base-points", ValueType.INT).withRange(0, 100000),
             ValidationRule.of("signin.streak-bonus", ValueType.INT).withRange(0, 100000),
             ValidationRule.of("signin.max-streak-bonus", ValueType.INT).withRange(0, 1000000),
-            // �›‘�Ž��‘Š警
+            // 监控告警
             ValidationRule.of("monitor.tps-threshold", ValueType.DOUBLE).withRange(0.0, 20.0),
             ValidationRule.of("monitor.memory-threshold-percent", ValueType.INT).withRange(1, 100),
             ValidationRule.of("monitor.check-interval-seconds", ValueType.INT).withRange(5, 86400)
@@ -104,7 +104,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
         if (configFile == null) {
-            throw new IllegalStateException("ArcartXQQBot.yml �…�置�–‡件缺失");
+            throw new IllegalStateException("ArcartXQQBot.yml 配置文件缺失");
         }
         var yaml = YamlConfiguration.loadConfiguration(configFile);
         configuration = QQBotConfiguration.load(yaml, logger);
@@ -113,7 +113,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     @Override
     protected void startService() throws Exception {
         closed = false;
-        // 1. �ˆ��‹�Œ–�˜�‚�
+        // 1. 初始化存储
         repository = new JdbcQQBotRepository(
             dataFolder,
             configuration.storage(),
@@ -121,12 +121,12 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         );
         repository.initialize();
 
-        // 2. �ˆ��‹�Œ–�‘�š�œ��Š�
+        // 2. 初始化绑定服务
         QQBotBindService bindService = new QQBotBindService(
             configuration.binding(), repository
         );
 
-        // 3. �ˆ›建主�œ��Š�
+        // 3. 创建主服务
         service = new QQBotService(
             plugin, configuration,
             bindService,
@@ -136,7 +136,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             messages()
         );
 
-        // 4. �ˆ��‹�Œ– OneBot WebSocket 客�ˆ�端
+        // 4. 初始化 OneBot WebSocket 客户端
         oneBotClient = new OneBotClient(
             configuration.onebot().wsUrl(),
             configuration.onebot().accessToken(),
@@ -148,14 +148,14 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             () -> service.onBotDisconnected()
         );
 
-        // 5. 注�…� client + capability suppliers
+        // 5. 注入 client + capability suppliers
         service.setClient(oneBotClient);
         service.setEssentialsProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EssentialsQueryable.class));
         service.setMailProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.MailDispatchable.class));
 
-        // 6. 签�ˆ�积�ˆ†�œ��Š�
+        // 6. 签到积分服务
         signInService = new xuanmo.arcartxsuite.qqbot.service.QQBotSignInService(
             configuration, repository,
             () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class),
@@ -164,8 +164,8 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         service.setSignInService(signInService);
         service.start();
 
-        // 7. SnowLuma �›�‹管�†�ˆ�…须�œ� WS �ž�Ž��‰�启�Š��‰
-        // �Ž onebot.ws-url 解�ž��‡� WS 端口传�…��Œ使�€Œ�Œ‰端口�…�†�‹�•™�€��Ÿ�š��”��ˆ��…�置�Œ�€Œ�ž�†™死 3001�€‚
+        // 7. SnowLuma 进程管理（必须在 WS 连接前启动）
+        // 从 onebot.ws-url 解析出 WS 端口传入，使「按端口清理残留」跟随用户配置，而非写死 3001。
         int snowLumaWsPort = 3001;
         try {
             int p = java.net.URI.create(configuration.onebot().wsUrl()).getPort();
@@ -178,21 +178,21 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             () -> configuration.debug(),
             snowLumaWsPort
         );
-        // 8. SnowLuma 启�Š� + �‰�… WS 端口 + �ž�Ž� OneBot �€”�€” �”��ˆ��‚步线�‹�‰��Œ�€‚
-        // �™�›步骤�š�˜��ž�•��’�ˆnode/docker �›�‹启�Š��€�端口�Ž��‹�œ€�š 8s�‰�Œ�‹��œ�主线�‹
-        // �ˆonEnable�‰�‡Œ串�Œ�‰��Œ�š触�‘ Paper �œ‹�—��‹—�€Œserver has not responded for 10 seconds�€��€‚
+        // 8. SnowLuma 启动 + 等待 WS 端口 + 连接 OneBot —— 放到异步线程执行。
+        // 这些步骤会阻塞数秒（node/docker 进程启动、端口探测最多 8s），若在主线程
+        // （onEnable）里串行执行会触发 Paper 看门狗「server has not responded for 10 seconds」。
         final xuanmo.arcartxsuite.qqbot.process.SnowLumaProcessManager slm = snowLumaManager;
         final OneBotClient obc = oneBotClient;
         final String wsUrl = configuration.onebot().wsUrl();
         final boolean autoStartSnowLuma = configuration.onebot().snowluma().autoStart();
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            if (closed) return;                       // 已�…��—��š不�†��‹‰起�›�‹
+            if (closed) return;                       // 已关闭：不再拉起进程
             slm.init();
             boolean running = slm.getStatus() == xuanmo.arcartxsuite.qqbot.process.SnowLumaProcessManager.Status.RUNNING;
             if (running) {
                 waitForPort(wsUrl, 8000);
             }
-            if (closed) {                             // 启�Š��œŸ�—�模�—被�…��—��š�‹即�›ž�”��Œ避�…�孤�„��›�‹
+            if (closed) {                             // 启动期间模块被关闭：立即回收，避免孤儿进程
                 slm.shutdown();
                 obc.shutdown();
                 return;
@@ -200,18 +200,18 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             if (running) {
                 obc.start();
             } else if (autoStartSnowLuma) {
-                logger.warning("[QQBot] SnowLuma 启�Š�失败�ˆ–已�œ止�ŒOneBot �ž�Ž�被跳�‡�€‚" +
-                    "请�€�Ÿ� SnowLuma �›�‹�Š��€��Œ�ˆ–�‰‹�Š�启�Š��Ž�‰��Œ /axs qqbot reload");
+                logger.warning("[QQBot] SnowLuma 启动失败或已停止，OneBot 连接被跳过。" +
+                    "请检查 SnowLuma 进程状态，或手动启动后执行 /axs qqbot reload");
             } else {
-                // �”��ˆ��‰‹�Š�管�† SnowLuma�Œ�›��Ž�尝�•�ž�Ž�
+                // 用户手动管理 SnowLuma，直接尝试连接
                 obc.start();
             }
         });
 
-        // 9. 注�†Œ管�†�‘�令
+        // 9. 注册管理命令
         adminCommand = new QQBotAdminCommand(() -> service, () -> repository, snowLumaManager, messages());
 
-        // 10. 注�†Œ capability�ˆPlayerDataPurgeable + DatabaseMigratable�‰
+        // 10. 注册 capability（PlayerDataPurgeable + DatabaseMigratable）
         JdbcQQBotRepository jdbcRepo = repository;
         registerCapability(xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable.class,
             new xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable() {
@@ -238,7 +238,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
                 }
             });
 
-        // 11. 注�†Œ QqBindCapable capability�ˆ�› loginview �‰模�—�Ÿ�询�‘�š�Š��€��‰
+        // 11. 注册 QqBindCapable capability（供 loginview 等模块查询绑定状态）
         QQBotBindService bindSvc = bindService;
         registerCapability(xuanmo.arcartxsuite.api.capability.QqBindCapable.class,
             new xuanmo.arcartxsuite.api.capability.QqBindCapable() {
@@ -252,20 +252,20 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
                 @Override public @NotNull BindResult confirmBind(@NotNull org.bukkit.entity.Player player, @NotNull String code) {
                     var result = bindSvc.confirmBind(player, code);
                     if (result.success()) {
-                        // �‡��Š��Š��™�名�•�ˆ保�Œ��Ž�ŽŸ�œ‰ /qqbot bind �Œ为�€�‡��‰
+                        // 自动加白名单（保持与原有 /qqbot bind 行为一致）
                         if (configuration.whitelist().enabled() && configuration.whitelist().autoAddOnBind()) {
                             String wlCmd = configuration.whitelist().addCommand()
                                 .replace("{name}", player.getName());
                             org.bukkit.Bukkit.dispatchCommand(org.bukkit.Bukkit.getConsoleSender(), wlCmd);
                         }
-                        try { return new BindResult(true, Long.parseLong(result.message()), "�‘�š�ˆ��ŠŸ！QQ: " + result.message()); }
-                        catch (NumberFormatException e) { return new BindResult(true, null, "�‘�š�ˆ��ŠŸ！"); }
+                        try { return new BindResult(true, Long.parseLong(result.message()), "绑定成功！QQ: " + result.message()); }
+                        catch (NumberFormatException e) { return new BindResult(true, null, "绑定成功！"); }
                     }
                     return new BindResult(false, null, result.message());
                 }
             });
 
-        // 12. 注�†Œ QQBotBroadcastable capability
+        // 12. 注册 QQBotBroadcastable capability
         QQBotService svc = service;
         registerCapability(QQBotBroadcastable.class, new QQBotBroadcastable() {
             @Override
@@ -279,7 +279,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             }
         });
 
-        // 13. 注�†Œ QQBotNotifiable capability�ˆ反�‘�€š�Ÿ��‰
+        // 13. 注册 QQBotNotifiable capability（反向通知）
         registerCapability(xuanmo.arcartxsuite.api.capability.QQBotNotifiable.class,
             new xuanmo.arcartxsuite.api.capability.QQBotNotifiable() {
                 @Override
@@ -292,29 +292,29 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
                 }
             });
 
-        // 14. 审计�—��—�š�Ž�家账号类�ž‹�Ž�‘�š�Š��€��ˆ�… debug �“�‡��Œ不�‹��ˆ��™��•�‰
+        // 14. 审计日志：玩家账号类型与绑定状态（仅 debug 输出，不拦截登录）
         loginGateListener = new QQBotLoginGateListener(
             plugin, configuration, repository, accountTypeService, logger
         );
         loginGateListener.register();
 
-        // 15. UI �œ��Š�
+        // 15. UI 服务
         uiService = new QQBotUiService(
             plugin, configuration, repository, bindService, packetBridge, logger
         );
         uiService.setSendToGroupCallback(msg -> svc.sendToAllGroups(msg));
         uiService.setServiceConnectedSupplier(() -> svc.isConnected());
 
-        // 注�…�群�ˆ息�›‘听�™��ˆ� UI �œ��Š�
+        // 注入群消息监听器到 UI 服务
         QQBotUiService uiSvc = uiService;
         service.setGroupMessageListener((nick, message, groupId) -> {
             uiSvc.cacheGroupMessage(nick, message, groupId);
-            // 广�’��€š�Ÿ��ˆ��‰€�œ‰�œ�线�Ž�家
+            // 广播通知到所有在线玩家
             Bukkit.getScheduler().runTask(plugin, () ->
                 uiSvc.broadcastNotification(nick, message));
         });
 
-        // 注�†Œ UI �‘�š
+        // 注册 UI 绑定
         UiBinding bindUi = registerModuleUi(QQBotUiService.BIND_UI_FILE, "AXS:QQBot_Bind", true);
         if (bindUi.registeredUiId() != null) {
             uiService.setBindUiId(bindUi.runtimeUiId());
@@ -330,43 +330,43 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             uiService.setAdminUiId(adminUi.runtimeUiId());
         }
 
-        logger.info("QQBot 模�—已启�Š�"
-            + " | 群�•�=" + configuration.groups().size()
-            + " | �˜�‚�=" + configuration.storage().mode()
-            + " | �‘�š=" + (configuration.binding().enabled() ? "启�”�" : "禁�”�")
-            + " | �™�名�•=" + (configuration.whitelist().enabled() ? "启�”�" : "禁�”�")
-            + " | UI=" + (bindUi.registeredUiId() != null ? "启�”�" : "禁�”�")
+        logger.info("QQBot 模块已启动"
+            + " | 群数=" + configuration.groups().size()
+            + " | 存储=" + configuration.storage().mode()
+            + " | 绑定=" + (configuration.binding().enabled() ? "启用" : "禁用")
+            + " | 白名单=" + (configuration.whitelist().enabled() ? "启用" : "禁用")
+            + " | UI=" + (bindUi.registeredUiId() != null ? "启用" : "禁用")
         );
 
-        // 16. 订�˜… EventBus �‹件�ˆ解�€��’��Š��‰
+        // 16. 订阅 EventBus 事件（解耦播报）
         xuanmo.arcartxsuite.api.capability.EventBusCapability eventBus = getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class);
         if (eventBus != null) {
             eventBus.subscribe("market.*", event -> {
                 if ("market.auction_purchased".equals(event.topic())) {
                     String price = event.payload().getOrDefault("formatted_price", "?");
-                    String playerName = event.player() != null ? event.player().getName() : "�œ��Ÿ�";
-                    svc.sendToAllGroups("[交�˜“] " + playerName + " 以 " + price + " 购买�†�‹��–�Œ�‰��“�");
+                    String playerName = event.player() != null ? event.player().getName() : "未知";
+                    svc.sendToAllGroups("[交易] " + playerName + " 以 " + price + " 购买了拍卖行物品");
                 }
             });
             eventBus.subscribe("mail.*", event -> {
-                // �„�•™�š�‚�件�›��…��‹件群�€š�Ÿ�
+                // 预留：邮件相关事件群通知
             });
         }
 
-        // 17. �œ��Š��™��›‘�Ž��‘Š警
+        // 17. 服务器监控告警
         monitorService = new xuanmo.arcartxsuite.qqbot.service.QQBotMonitorService(
             plugin, configuration, svc::sendToGroup, logger
         );
         monitorService.start();
 
-        // 18. �š�—��ˆ息
+        // 18. 定时消息
         scheduledMessageService = new xuanmo.arcartxsuite.qqbot.service.QQBotScheduledMessageService(
             plugin, configuration, svc::sendToGroup, logger
         );
         scheduledMessageService.start();
 
-        // 19. �‘��“�—�Ž’�Œ�œ
+        // 19. 周结算排行榜
         if (configuration.signin().enabled()) {
             weeklyRankService = new QQBotWeeklyRankService(
                 plugin, configuration, repository, bindService, svc::sendToAllGroups, logger
@@ -374,7 +374,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             weeklyRankService.start();
         }
 
-        // 20. 红�Œ…�‡�œŸ�€€款�š�—��™��ˆ每小�—��€�Ÿ��€次�‰
+        // 20. 红包过期退款定时器（每小时检查一次）
         if (configuration.signin().enabled()) {
             Bukkit.getScheduler().runTaskTimerAsynchronously(plugin,
                 () -> signInService.refundExpiredRedPackets(), 72000L, 72000L);
@@ -412,7 +412,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
 
     @Override
     protected void stopService() {
-        closed = true;   // �€š�Ÿ��Ž台�‚步启�Š�任�Š��œ止/�›ž�”�
+        closed = true;   // 通知后台异步启动任务停止/回收
         uiService = null;
         if (monitorService != null) {
             monitorService.stop();
@@ -462,7 +462,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         return new QQBotPlaceholderExpansion(plugin, () -> service);
     }
 
-    // �”€�”€�”€ ModuleCommandHandler �ž�Ž� �”€�”€�”€�”€�”€�”€�”€�”€�”€�”€�”€�”€�”€�”€�”€�”€�”€�”€�”€�”€�”€�”€�”€
+    // ─── ModuleCommandHandler 实现 ───────────────────────
 
     @Override
     public String commandId() {
@@ -485,7 +485,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     }
 
     /**
-     * �‰�… WS 端口可达�ˆSnowLuma 启�Š��Ž WS �œ��Š��œ€要�‡��’�ˆ��‹�Œ–�‰�€‚
+     * 等待 WS 端口可达（SnowLuma 启动后 WS 服务需要几秒初始化）。
      */
     private void waitForPort(String wsUrl, int timeoutMs) {
         try {
@@ -493,7 +493,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             String host = uri.getHost() != null ? uri.getHost() : "127.0.0.1";
             int port = uri.getPort() > 0 ? uri.getPort() : 80;
             long deadline = System.currentTimeMillis() + timeoutMs;
-            logger.info("[QQBot] �‰�… WS 端口 " + host + ":" + port + " 就绪...");
+            logger.info("[QQBot] 等待 WS 端口 " + host + ":" + port + " 就绪...");
             while (System.currentTimeMillis() < deadline) {
                 try (java.net.Socket socket = new java.net.Socket()) {
                     socket.connect(new java.net.InetSocketAddress(host, port), 500);
@@ -503,9 +503,9 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
                     Thread.sleep(500);
                 }
             }
-            logger.warning("[QQBot] �‰�… WS 端口�…�—� (" + timeoutMs + "ms)�Œ�†仍尝�•�ž�Ž�");
+            logger.warning("[QQBot] 等待 WS 端口超时 (" + timeoutMs + "ms)，将仍尝试连接");
         } catch (Exception e) {
-            logger.warning("[QQBot] 端口�€�‹�‚常: " + e.getMessage());
+            logger.warning("[QQBot] 端口检测异常: " + e.getMessage());
         }
     }
 }

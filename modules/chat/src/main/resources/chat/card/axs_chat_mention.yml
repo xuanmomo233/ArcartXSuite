@@ -1,18 +1,18 @@
 # ArcartXSuite Chat — @提及通知卡片模板
 # 当有人在聊天中 @你 时显示此卡片
-root_control:
-  type: card
+卡片根布局:
+  type: Card
   attribute:
     width: "self.data['cardWidth'] + 0"
     height: "self.data['cardHeight'] + 0"
   children:
-    background:
+    卡片背景:
       type: Texture
       attribute:
         width: "self.parent.data['cardWidth'] + 0"
         height: "self.parent.data['cardHeight'] + 0"
         normal: ~25,25,35,200
-    icon_label:
+    图标文字:
       type: Text
       attribute:
         fontSize: 200
@@ -20,7 +20,7 @@ root_control:
         y: "self.parent.data['cardHeight']/2 - 5"
         texts: "'§b@'"
         through: true
-    title_label:
+    标题文字:
       type: Text
       attribute:
         fontSize: 64
@@ -28,7 +28,7 @@ root_control:
         y: 15
         texts: "self.parent.data['senderDisplayName'] + ' §7在 §f' + self.parent.data['channel'] + ' §7中提到了你'"
         through: true
-    message_label:
+    消息文字:
       type: Text
       attribute:
         fontSize: 64

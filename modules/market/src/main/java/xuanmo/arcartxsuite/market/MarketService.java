@@ -742,7 +742,9 @@ public class MarketService {
         List<AuctionHistory> histories = repository.getHistoryByPlayer(
             player.getUniqueId(), page * HISTORY_PAGE_SIZE, HISTORY_PAGE_SIZE);
 
+        packet.put("page", page);
         packet.put("totalPages", totalPages);
+        packet.put("pageText", (page + 1) + "/" + totalPages);
 
         Map<String, Object> records = new LinkedHashMap<>();
         for (int i = 0; i < histories.size() && i < HISTORY_PAGE_SIZE; i++) {

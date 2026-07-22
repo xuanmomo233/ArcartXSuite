@@ -34,7 +34,7 @@ ui:
       }
       for(i in range(0, var.maxLogCount)){
         key = i.round()
-        e = val.logs_list['item'].copy('item' + key)
+        e = val.logs_list['日志项目'].copy('日志项目' + key)
         e.entryKey = key
       }
     update: |-
@@ -48,7 +48,7 @@ ui:
       }
       for(i in range(0, var.maxLogCount)){
         key = i.round()
-        e = val.logs_list['item'].copy('item' + key)
+        e = val.logs_list['日志项目'].copy('日志项目' + key)
         e.entryKey = key
       }
 
@@ -85,7 +85,7 @@ controls:
             color: ~0,0,0,255
             width: 0.05
         children:
-          标题:
+          日志标题:
             type: Text
             attribute:
               x: 42
@@ -106,7 +106,7 @@ controls:
               y: 30
               spaceBetween: 15
             children:
-              back_button:
+              返回按钮:
                 type: Texture
                 attribute:
                   width: 110
@@ -124,7 +124,7 @@ controls:
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'open')
-              prev_button:
+              上一页按钮:
                 type: Texture
                 attribute:
                   width: 110
@@ -142,7 +142,7 @@ controls:
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'logs-prev')
-              next_button:
+              下一页按钮:
                 type: Texture
                 attribute:
                   width: 110
@@ -184,7 +184,7 @@ controls:
               height: 50
               normal: ~120,120,120,200
               maxDragY: 598
-          scroll:
+          日志滚动栏:
             type: Scroll
             attribute:
               x: 60
@@ -208,7 +208,7 @@ controls:
                   width: 1300
                   spaceBetween: 10
                 children:
-                  item:
+                  日志项目:
                     type: Texture
                     attribute:
                       entryKey: 0
@@ -224,25 +224,25 @@ controls:
                         width: 2
                         color: ~0,0,0,255
                     children:
-                      type:
+                      类型文字:
                         type: Text
                         attribute:
                           x: 18
                           y: 14
                           fontSize: 49
                           texts: "'&0[' + self.parent.entry['type_text'] + ']'"
-                      time:
+                      时间文字:
                         type: Text
                         attribute:
                           x: 18
                           y: 46
                           fontSize: 49
                           texts: "'&7' + self.parent.entry['created_at']"
-                      content:
+                      内容文字:
                         type: Text
                         attribute:
                           x: 240
                           y: 18
                           width: 1020
                           fontSize: 49
-                          texts: "'&0' + self.parent.entry['content']"
+                          texts: "'&0' + self.parent.entry['内容文字']"

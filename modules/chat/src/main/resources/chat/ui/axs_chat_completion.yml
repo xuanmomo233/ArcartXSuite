@@ -49,7 +49,7 @@ controls:
       point: ~stretch_all
       height: 1440
     children:
-      dropdown:
+      下拉布局:
         type: VStack
         attribute:
           visible: true
@@ -59,7 +59,7 @@ controls:
           width: 500
           spaceBetween: 2
         children:
-          ci_0:
+          候选项0:
             type: Texture
             attribute:
               visible: "var.matches.size() > 0"
@@ -81,7 +81,7 @@ controls:
                 }
                 var.showDropdown = false
             children:
-              label_0:
+              候选文字0:
                 type: Text
                 attribute:
                   through: true
@@ -89,7 +89,7 @@ controls:
                   y: 7
                   fontSize: 64
                   texts: "var.matches.size() > 0 ? '&e@ &f' + var.matches.get(0) : none"
-          ci_1:
+          候选项1:
             type: Texture
             attribute:
               visible: "var.matches.size() > 1"
@@ -111,7 +111,7 @@ controls:
                 }
                 var.showDropdown = false
             children:
-              label_1:
+              候选文字1:
                 type: Text
                 attribute:
                   through: true
@@ -119,7 +119,7 @@ controls:
                   y: 7
                   fontSize: 64
                   texts: "var.matches.size() > 1 ? '&e@ &f' + var.matches.get(1) : none"
-          ci_2:
+          候选项2:
             type: Texture
             attribute:
               visible: "var.matches.size() > 2"
@@ -141,7 +141,7 @@ controls:
                 }
                 var.showDropdown = false
             children:
-              label_2:
+              候选文字2:
                 type: Text
                 attribute:
                   through: true
@@ -149,7 +149,7 @@ controls:
                   y: 7
                   fontSize: 64
                   texts: "var.matches.size() > 2 ? '&e@ &f' + var.matches.get(2) : none"
-          ci_3:
+          候选项3:
             type: Texture
             attribute:
               visible: "var.matches.size() > 3"
@@ -171,7 +171,7 @@ controls:
                 }
                 var.showDropdown = false
             children:
-              label_3:
+              候选文字3:
                 type: Text
                 attribute:
                   through: true
@@ -179,7 +179,7 @@ controls:
                   y: 7
                   fontSize: 64
                   texts: "var.matches.size() > 3 ? '&e@ &f' + var.matches.get(3) : none"
-          ci_4:
+          候选项4:
             type: Texture
             attribute:
               visible: "var.matches.size() > 4"
@@ -201,7 +201,7 @@ controls:
                 }
                 var.showDropdown = false
             children:
-              label_4:
+              候选文字4:
                 type: Text
                 attribute:
                   through: true
@@ -209,7 +209,7 @@ controls:
                   y: 7
                   fontSize: 64
                   texts: "var.matches.size() > 4 ? '&e@ &f' + var.matches.get(4) : none"
-          ci_5:
+          候选项5:
             type: Texture
             attribute:
               visible: "var.matches.size() > 5"
@@ -231,7 +231,7 @@ controls:
                 }
                 var.showDropdown = false
             children:
-              label_5:
+              候选文字5:
                 type: Text
                 attribute:
                   through: true
@@ -239,7 +239,7 @@ controls:
                   y: 7
                   fontSize: 64
                   texts: "var.matches.size() > 5 ? '&e@ &f' + var.matches.get(5) : none"
-          ci_6:
+          候选项6:
             type: Texture
             attribute:
               visible: "var.matches.size() > 6"
@@ -261,7 +261,7 @@ controls:
                 }
                 var.showDropdown = false
             children:
-              label_6:
+              候选文字6:
                 type: Text
                 attribute:
                   through: true
@@ -269,7 +269,7 @@ controls:
                   y: 7
                   fontSize: 64
                   texts: "var.matches.size() > 6 ? '&e@ &f' + var.matches.get(6) : none"
-          ci_7:
+          候选项7:
             type: Texture
             attribute:
               visible: "var.matches.size() > 7"
@@ -291,7 +291,7 @@ controls:
                 }
                 var.showDropdown = false
             children:
-              label_7:
+              候选文字7:
                 type: Text
                 attribute:
                   through: true

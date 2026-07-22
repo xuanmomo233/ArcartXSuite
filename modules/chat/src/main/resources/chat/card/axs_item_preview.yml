@@ -1,19 +1,19 @@
 # ArcartXSuite Chat — 物品预览卡片模板
 # 玩家在聊天中使用 [item] 时，通过此卡片展示物品
 # 悬浮卡片中的物品槽位即可触发 ArcartX Tooltip
-root_control:
-  type: card
+卡片根布局:
+  type: Card
   attribute:
     width: "self.data['cardWidth'] - 100"
     height: "self.data['cardHeight'] + 0"
   children:
-    background:
+    卡片背景:
       type: Texture
       attribute:
         width: "self.parent.data['cardWidth'] + 0"
         height: "self.parent.data['cardHeight'] + 0"
         normal: ~25,25,35,200
-    item_slot:
+    物品槽位:
       type: Slot
       attribute:
         width: 80
@@ -25,7 +25,7 @@ root_control:
       action:
         create: |-
           self.setItemIcon(self.parent.data['itemJson'])
-    tooltip_overlay:
+    提示覆盖层:
       type: Slot
       attribute:
         width: "self.parent.data['cardWidth'] + 0"
@@ -35,7 +35,7 @@ root_control:
       action:
         create: |-
           self.setItemIcon(self.parent.data['itemJson'])
-    sender_label:
+    发送者文字:
       type: Text
       attribute:
         fontSize: 64
@@ -43,7 +43,7 @@ root_control:
         y: 15
         texts: "self.parent.data['senderDisplayName'] + ' §7展示了一件物品'"
         through: true
-    item_label:
+    物品名称:
       type: Text
       attribute:
         fontSize: 64

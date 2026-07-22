@@ -1,12 +1,12 @@
 # ArcartXSuite Chat — 私聊通知卡片模板
 # 收到或发送私聊消息时显示此卡片
-root_control:
-  type: card
+卡片根布局:
+  type: Card
   attribute:
     width: "self.data['cardWidth'] + 0"
     height: "self.data['cardHeight'] + 0"
   children:
-    background:
+    卡片背景:
       type: Texture
       attribute:
         width: "self.parent.data['cardWidth'] + 0"
@@ -15,7 +15,7 @@ root_control:
       action:
         click: |-
           Chat.setMessage('/msg ' + self.parent.data['senderName'] + ' ')
-    icon_label:
+    图标文字:
       type: Text
       attribute:
         fontSize: 260
@@ -23,7 +23,7 @@ root_control:
         y: "self.parent.data['cardHeight']/2 - 10"
         texts: "'§d✎'"
         through: true
-    title_label:
+    标题文字:
       type: Text
       attribute:
         fontSize: 64
@@ -31,7 +31,7 @@ root_control:
         y: 15
         texts: "self.parent.data['direction'] == 'sender' ? '§d私聊 → §f' + self.parent.data['targetName'] : '§d私聊 ← §f' + self.parent.data['senderDisplayName']"
         through: true
-    message_label:
+    消息文字:
       type: Text
       attribute:
         fontSize: 64

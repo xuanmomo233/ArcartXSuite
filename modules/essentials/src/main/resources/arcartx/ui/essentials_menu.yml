@@ -71,7 +71,7 @@ controls:
                   y: 14
                   fontSize: 64
                   texts: "~&b⚙ 玩家工具"
-              title_player:
+              标题玩家:
                 type: Text
                 attribute:
                   x: 700
@@ -89,7 +89,7 @@ controls:
               height: 540
               normal: ~30,30,38,255
             children:
-              nav_home:
+              导航首页入口:
                 type: Texture
                 attribute:
                   x: 10
@@ -103,7 +103,7 @@ controls:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'home')
                 children:
-                  nav_home_text:
+                  导航首页文字:
                     type: Text
                     attribute:
                       x: 70
@@ -113,7 +113,7 @@ controls:
                       fontSize: 49
                       texts: "~&f首页"
 
-              nav_homes:
+              导航家列表入口:
                 type: Texture
                 attribute:
                   x: 10
@@ -127,7 +127,7 @@ controls:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'homes')
                 children:
-                  nav_homes_text:
+                  导航家列表文字:
                     type: Text
                     attribute:
                       x: 70
@@ -137,7 +137,7 @@ controls:
                       fontSize: 49
                       texts: "~&f家"
 
-              nav_warps:
+              导航传送点入口:
                 type: Texture
                 attribute:
                   x: 10
@@ -151,7 +151,7 @@ controls:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'warps')
                 children:
-                  nav_warps_text:
+                  导航传送点文字:
                     type: Text
                     attribute:
                       x: 70
@@ -161,7 +161,7 @@ controls:
                       fontSize: 49
                       texts: "~&f传送点"
 
-              nav_tpa:
+              导航传送请求入口:
                 type: Texture
                 attribute:
                   x: 10
@@ -175,7 +175,7 @@ controls:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'tpa')
                 children:
-                  nav_tpa_text:
+                  导航传送请求文字:
                     type: Text
                     attribute:
                       x: 70
@@ -185,7 +185,7 @@ controls:
                       fontSize: 49
                       texts: "~&f传送"
 
-              nav_settings:
+              导航设置入口:
                 type: Texture
                 attribute:
                   x: 10
@@ -199,7 +199,7 @@ controls:
                   click: |-
                     Packet.send(var.packetId, 'navigate', 'settings')
                 children:
-                  nav_settings_text:
+                  导航设置文字:
                     type: Text
                     attribute:
                       x: 70
@@ -221,7 +221,7 @@ controls:
 
             children:
               # ─── 首页视图 ───
-              page_home:
+              首页概览布局:
                 type: Canvas
                 attribute:
                   x: 20
@@ -231,49 +231,49 @@ controls:
                   visible: |-
                     var.page == 'home'
                 children:
-                  home_title:
+                  首页标题:
                     type: Text
                     attribute:
                       x: 0
                       y: 0
                       fontSize: 64
                       texts: "~&6玩家状态"
-                  status_fly:
+                  状态飞行:
                     type: Text
                     attribute:
                       x: 0
                       y: 50
                       fontSize: 49
                       texts: "~&7飞行: {var.isFlying == 'true' ? '&a开启' : '&c关闭'}"
-                  status_god:
+                  状态无敌:
                     type: Text
                     attribute:
                       x: 0
                       y: 86
                       fontSize: 49
                       texts: "~&7无敌: {var.isGod == 'true' ? '&a开启' : '&c关闭'}"
-                  status_afk:
+                  状态闲置:
                     type: Text
                     attribute:
                       x: 0
                       y: 122
                       fontSize: 49
                       texts: "~&7AFK: {var.isAfk == 'true' ? '&e是' : '&a否'}"
-                  status_speed:
+                  状态速度:
                     type: Text
                     attribute:
                       x: 0
                       y: 158
                       fontSize: 49
                       texts: "~&7飞行速度: &f{var.flySpeed}  &7行走速度: &f{var.walkSpeed}"
-                  status_location:
+                  状态位置:
                     type: Text
                     attribute:
                       x: 0
                       y: 194
                       fontSize: 49
                       texts: "~&7位置: &f{var.location}"
-                  status_homes:
+                  状态家数量:
                     type: Text
                     attribute:
                       x: 0
@@ -282,7 +282,7 @@ controls:
                       texts: "~&7家数量: &b{var.homeCount}  &7传送点: &b{var.warpCount}"
 
               # ─── 家列表视图 ───
-              page_homes:
+              家列表布局:
                 type: Canvas
                 attribute:
                   x: 20
@@ -292,14 +292,14 @@ controls:
                   visible: |-
                     var.page == 'homes'
                 children:
-                  homes_title:
+                  家列表标题:
                     type: Text
                     attribute:
                       x: 0
                       y: 0
                       fontSize: 64
                       texts: "~&6我的家"
-                  btn_set_home:
+                  设置家按钮:
                     type: Texture
                     attribute:
                       x: 560
@@ -313,7 +313,7 @@ controls:
                       click: |-
                         Packet.send(var.packetId, 'set_home', 'home')
                     children:
-                      btn_set_home_text:
+                      设置家按钮文字:
                         type: Text
                         attribute:
                           x: 60
@@ -332,7 +332,7 @@ controls:
                       height: 50
                       normal: ~120,120,120,200
                       maxDragY: 390
-                  homes_scroll:
+                  家滚动栏:
                     type: Scroll
                     attribute:
                       x: 0
@@ -358,7 +358,7 @@ controls:
                           width: 700
                           spaceBetween: 6
                         children:
-                          home_item:
+                          家项目:
                             type: Texture
                             attribute:
                               entry: var.homes[self.key]
@@ -369,7 +369,7 @@ controls:
                               shape: ~round_rect
                               radius: 6
                             children:
-                              home_item_name:
+                              家项目名称:
                                 type: Text
                                 attribute:
                                   x: 16
@@ -377,7 +377,7 @@ controls:
                                   through: true
                                   fontSize: 49
                                   texts: "~&b{self.parent.entry['name']}"
-                              home_item_coords:
+                              家项目坐标:
                                 type: Text
                                 attribute:
                                   x: 200
@@ -385,7 +385,7 @@ controls:
                                   through: true
                                   fontSize: 24
                                   texts: "~&7{self.parent.entry['world']} {self.parent.entry['coords']}"
-                              btn_tp_home:
+                              传送家按钮:
                                 type: Texture
                                 attribute:
                                   x: 520
@@ -399,7 +399,7 @@ controls:
                                   click: |-
                                     Packet.send(var.packetId, 'teleport_home', self.parent.entry['name'])
                                 children:
-                                  btn_tp_home_text:
+                                  传送家按钮文字:
                                     type: Text
                                     attribute:
                                       x: 35
@@ -408,7 +408,7 @@ controls:
                                       center: true
                                       fontSize: 22
                                       texts: "~&f传送"
-                              btn_del_home:
+                              删除家按钮:
                                 type: Texture
                                 attribute:
                                   x: 600
@@ -422,7 +422,7 @@ controls:
                                   click: |-
                                     Packet.send(var.packetId, 'delete_home', self.parent.entry['name'])
                                 children:
-                                  btn_del_home_text:
+                                  删除家按钮文字:
                                     type: Text
                                     attribute:
                                       x: 35
@@ -433,7 +433,7 @@ controls:
                                       texts: "~&f删除"
 
               # ─── 传送点视图 ───
-              page_warps:
+              传送点布局:
                 type: Canvas
                 attribute:
                   x: 20
@@ -443,7 +443,7 @@ controls:
                   visible: |-
                     var.page == 'warps'
                 children:
-                  warps_title:
+                  传送点标题:
                     type: Text
                     attribute:
                       x: 0
@@ -460,7 +460,7 @@ controls:
                       height: 50
                       normal: ~120,120,120,200
                       maxDragY: 390
-                  warps_scroll:
+                  传送点滚动栏:
                     type: Scroll
                     attribute:
                       x: 0
@@ -486,7 +486,7 @@ controls:
                           width: 700
                           spaceBetween: 6
                         children:
-                          warp_item:
+                          传送点项目:
                             type: Texture
                             attribute:
                               entry: var.warps[self.key]
@@ -497,7 +497,7 @@ controls:
                               shape: ~round_rect
                               radius: 6
                             children:
-                              warp_item_name:
+                              传送点项目名称:
                                 type: Text
                                 attribute:
                                   x: 16
@@ -505,7 +505,7 @@ controls:
                                   through: true
                                   fontSize: 49
                                   texts: "~&e{self.parent.entry}"
-                              btn_tp_warp:
+                              传送点传送按钮:
                                 type: Texture
                                 attribute:
                                   x: 580
@@ -519,7 +519,7 @@ controls:
                                   click: |-
                                     Packet.send(var.packetId, 'teleport_warp', self.parent.entry)
                                 children:
-                                  btn_tp_warp_text:
+                                  传送点传送按钮文字:
                                     type: Text
                                     attribute:
                                       x: 40
@@ -530,7 +530,7 @@ controls:
                                       texts: "~&f传送"
 
               # ─── TPA 视图 ───
-              page_tpa:
+              传送请求布局:
                 type: Canvas
                 attribute:
                   x: 20
@@ -540,21 +540,21 @@ controls:
                   visible: |-
                     var.page == 'tpa'
                 children:
-                  tpa_title:
+                  传送请求标题:
                     type: Text
                     attribute:
                       x: 0
                       y: 0
                       fontSize: 64
                       texts: "~&6传送请求"
-                  tpa_hint:
+                  传送请求提示:
                     type: Text
                     attribute:
                       x: 0
                       y: 46
                       fontSize: 36
                       texts: "~&7点击玩家名发送传送请求"
-                  btn_accept_tpa:
+                  接受传送请求按钮:
                     type: Texture
                     attribute:
                       x: 500
@@ -568,7 +568,7 @@ controls:
                       click: |-
                         Packet.send(var.packetId, 'accept_tpa')
                     children:
-                      btn_accept_text:
+                      接受按钮文字:
                         type: Text
                         attribute:
                           x: 45
@@ -577,7 +577,7 @@ controls:
                           center: true
                           fontSize: 49
                           texts: "~&f接受"
-                  btn_deny_tpa:
+                  拒绝传送请求按钮:
                     type: Texture
                     attribute:
                       x: 600
@@ -591,7 +591,7 @@ controls:
                       click: |-
                         Packet.send(var.packetId, 'deny_tpa')
                     children:
-                      btn_deny_text:
+                      拒绝按钮文字:
                         type: Text
                         attribute:
                           x: 45
@@ -610,7 +610,7 @@ controls:
                       height: 50
                       normal: ~120,120,120,200
                       maxDragY: 350
-                  tpa_scroll:
+                  传送请求滚动栏:
                     type: Scroll
                     attribute:
                       x: 0
@@ -636,7 +636,7 @@ controls:
                           width: 700
                           spaceBetween: 6
                         children:
-                          tpa_player_item:
+                          传送请求玩家项目:
                             type: Texture
                             attribute:
                               entry: var.onlinePlayers[self.key]
@@ -650,7 +650,7 @@ controls:
                               click: |-
                                 Packet.send(var.packetId, 'send_tpa', self.entry)
                             children:
-                              tpa_player_name:
+                              传送请求玩家名称:
                                 type: Text
                                 attribute:
                                   x: 16
@@ -660,7 +660,7 @@ controls:
                                   texts: "~&f{self.parent.entry}"
 
               # ─── 设置视图 ───
-              page_settings:
+              设置布局:
                 type: Canvas
                 attribute:
                   x: 20
@@ -670,7 +670,7 @@ controls:
                   visible: |-
                     var.page == 'settings'
                 children:
-                  settings_title:
+                  设置标题:
                     type: Text
                     attribute:
                       x: 0
@@ -678,7 +678,7 @@ controls:
                       fontSize: 64
                       texts: "~&6个人设置"
                   # 飞行开关
-                  btn_toggle_fly:
+                  切换飞行按钮:
                     type: Texture
                     attribute:
                       x: 0
@@ -692,7 +692,7 @@ controls:
                       click: |-
                         Packet.send(var.packetId, 'toggle_fly')
                     children:
-                      fly_text:
+                      飞行文字:
                         type: Text
                         attribute:
                           x: 160
@@ -702,7 +702,7 @@ controls:
                           fontSize: 49
                           texts: "~飞行: {var.isFlying == 'true' ? '&a开启' : '&c关闭'}"
                   # 自动补种
-                  btn_toggle_replant:
+                  切换补种按钮:
                     type: Texture
                     attribute:
                       x: 0
@@ -716,7 +716,7 @@ controls:
                       click: |-
                         Packet.send(var.packetId, 'toggle_replant')
                     children:
-                      replant_text:
+                      补种文字:
                         type: Text
                         attribute:
                           x: 160
@@ -726,7 +726,7 @@ controls:
                           fontSize: 49
                           texts: "~自动补种: {var.replantEnabled == 'true' ? '&a开启' : '&c关闭'}"
                   # 自动工具
-                  btn_toggle_autotool:
+                  切换自动工具按钮:
                     type: Texture
                     attribute:
                       x: 0
@@ -740,7 +740,7 @@ controls:
                       click: |-
                         Packet.send(var.packetId, 'toggle_autotool')
                     children:
-                      autotool_text:
+                      自动工具文字:
                         type: Text
                         attribute:
                           x: 160
@@ -750,7 +750,7 @@ controls:
                           fontSize: 49
                           texts: "~自动工具: {var.autotoolEnabled == 'true' ? '&a开启' : '&c关闭'}"
                   # 背包整理
-                  btn_sort:
+                  排序按钮:
                     type: Texture
                     attribute:
                       x: 0
@@ -764,7 +764,7 @@ controls:
                       click: |-
                         Packet.send(var.packetId, 'sort')
                     children:
-                      sort_text:
+                      排序文字:
                         type: Text
                         attribute:
                           x: 160

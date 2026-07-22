@@ -1,19 +1,19 @@
 # ArcartXSuite Chat — 系统提示卡片模板
 # 禁言提示、敏感词拦截等系统通知时显示此卡片
 # data['type'] 可能的值: mute, filter
-root_control:
-  type: card
+卡片根布局:
+  type: Card
   attribute:
     width: "self.data['cardWidth'] + 0"
     height: "self.data['cardHeight'] + 0"
   children:
-    background:
+    卡片背景:
       type: Texture
       attribute:
         width: "self.parent.data['cardWidth'] + 0"
         height: "self.parent.data['cardHeight'] + 0"
         normal: ~25,25,35,200
-    icon_label:
+    图标文字:
       type: Text
       attribute:
         fontSize: 200
@@ -21,7 +21,7 @@ root_control:
         y: 3
         texts: "'§c⚠'"
         through: true
-    title_label:
+    标题文字:
       type: Text
       attribute:
         fontSize: 64
@@ -29,7 +29,7 @@ root_control:
         y: 15
         texts: "self.parent.data['type'] == 'mute' ? '§c§l你已被禁言' : '§c§l消息被拦截'"
         through: true
-    detail_label:
+    详情文字:
       type: Text
       attribute:
         fontSize: 64
