@@ -28,12 +28,10 @@ ui:
       }
       //此处的写法有点赘余，但这是为了防止报错写的伪判断,以及绕过ax的控件的复制删除BUG
       while(i <= packet.size()){
-        if(val.player.width == 250){
-          TAB = val.player.copy('player_' + var.TAB刷新轮次 + '_' + i)
-          TAB['player_text'].texts = packet.get(i)
-          TAB.visible = true
-          i++
-        }
+        TAB = val.player.copy('player_' + var.TAB刷新轮次 + '_' + i)
+        TAB['player_text'].texts = packet.get(i)
+        TAB.visible = true
+        i++
       }
       var.单列数量 = math.ceil(server.server_online / val.TAB遍历.row)
       var.第一列人数 = math.min(server.server_online, 15)

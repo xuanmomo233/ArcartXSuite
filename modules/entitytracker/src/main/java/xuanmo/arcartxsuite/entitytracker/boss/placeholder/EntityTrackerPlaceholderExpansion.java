@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.entitytracker.boss.placeholder;
 
 import java.util.Locale;
+import java.util.Optional;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
@@ -13,6 +14,8 @@ import xuanmo.arcartxsuite.entitytracker.boss.tracker.BossDamageSettlementPlaceh
 import xuanmo.arcartxsuite.entitytracker.boss.tracker.BossTrackerService;
 import xuanmo.arcartxsuite.entitytracker.boss.tracker.BossViewSlot;
 import xuanmo.arcartxsuite.entitytracker.boss.tracker.PlayerBossViewSnapshot;
+import xuanmo.arcartxsuite.entitytracker.target.service.EntityTargetHudService;
+import xuanmo.arcartxsuite.entitytracker.target.service.EntityTargetSnapshot;
 
 public final class EntityTrackerPlaceholderExpansion extends PlaceholderExpansion {
 
@@ -21,19 +24,22 @@ public final class EntityTrackerPlaceholderExpansion extends PlaceholderExpansio
     private final java.util.function.Supplier<BossTrackerService> serviceProvider;
     private final java.util.function.Supplier<String> runtimeUiIdProvider;
     private final java.util.function.Supplier<xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI> packetBridgeProvider;
+    private final java.util.function.Supplier<EntityTargetHudService> targetServiceProvider;
 
     public EntityTrackerPlaceholderExpansion(
         JavaPlugin plugin,
         java.util.function.Supplier<xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration> configurationProvider,
         java.util.function.Supplier<BossTrackerService> serviceProvider,
         java.util.function.Supplier<String> runtimeUiIdProvider,
-        java.util.function.Supplier<xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI> packetBridgeProvider
+        java.util.function.Supplier<xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI> packetBridgeProvider,
+        java.util.function.Supplier<EntityTargetHudService> targetServiceProvider
     ) {
         this.plugin = plugin;
         this.configurationProvider = configurationProvider == null ? () -> null : configurationProvider;
         this.serviceProvider = serviceProvider == null ? () -> null : serviceProvider;
         this.runtimeUiIdProvider = runtimeUiIdProvider == null ? () -> "" : runtimeUiIdProvider;
         this.packetBridgeProvider = packetBridgeProvider == null ? () -> null : packetBridgeProvider;
+        this.targetServiceProvider = targetServiceProvider == null ? () -> null : targetServiceProvider;
     }
 
     @Override
@@ -90,8 +96,21 @@ public final class EntityTrackerPlaceholderExpansion extends PlaceholderExpansio
                 return trackerService == null ? "0" : Integer.toString(trackerService.getActiveViewerCount());
             case "active_session_count":
                 return trackerService == null ? "0" : Integer.toString(trackerService.getActiveSessionCount());
+            case "target_active_count":
+                EntityTargetHudService countService = targetServiceProvider.get();
+                return countService == null ? "0" : Integer.toString(countService.activeTargetCount());
+            case "target_viewer_count":
+                EntityTargetHudService viewerService = targetServiceProvider.get();
+                return viewerService == null ? "0" : Integer.toString(viewerService.activeViewerCount());
             default:
                 break;
+        }
+
+        if (normalized.equals("has_target") || normalized.equals("target_present")) {
+            return Boolean.toString(resolveTargetSnapshot(offlinePlayer).isPresent());
+        }
+        if (normalized.startsWith("target_")) {
+            return resolveTargetPlaceholder(offlinePlayer, normalized.substring("target_".length()));
         }
 
         PlayerBossViewSnapshot snapshot = resolveSnapshot(offlinePlayer);
@@ -100,6 +119,27 @@ public final class EntityTrackerPlaceholderExpansion extends PlaceholderExpansio
             case "total_boss_count" -> Long.toString(snapshot.totalBossCount());
             default -> resolveDynamicPlaceholder(offlinePlayer, snapshot, normalized);
         };
+    }
+
+    private String resolveTargetPlaceholder(OfflinePlayer offlinePlayer, String field) {
+        Optional<EntityTargetSnapshot> snapshot = resolveTargetSnapshot(offlinePlayer);
+        if (snapshot.isEmpty()) {
+            return "";
+        }
+        String resolved = snapshot.get().resolvePlaceholder(field);
+        return resolved == null ? "" : resolved;
+    }
+
+    private Optional<EntityTargetSnapshot> resolveTargetSnapshot(OfflinePlayer offlinePlayer) {
+        EntityTargetHudService targetService = targetServiceProvider.get();
+        if (targetService == null || offlinePlayer == null) {
+            return Optional.empty();
+        }
+        Player player = offlinePlayer.getPlayer();
+        if (player == null || !player.isOnline()) {
+            return Optional.empty();
+        }
+        return targetService.resolveViewerTargetSnapshot(player);
     }
 
     private PlayerBossViewSnapshot resolveSnapshot(OfflinePlayer offlinePlayer) {

@@ -35,14 +35,12 @@ ui:
       }
       //与 tab.yml 同样使用伪判断绕过 ax 控件复制 BUG
       while(i <= packet.size()){
-        if(val.player_row.width == 320){
-          ROW = val.player_row.copy('rich_player_' + var.RichTAB刷新轮次 + '_' + i)
-          ROW['头部'].normal = 'PlayerSkin:' + packet.get(i).uuid
-          ROW['名称文字'].texts = packet.get(i).name
-          ROW['ping_text'].texts = packet.get(i).ping
-          ROW.visible = true
-          i++
-        }
+        ROW = val.player_row.copy('rich_player_' + var.RichTAB刷新轮次 + '_' + i)
+        ROW['头部'].normal = 'PlayerSkin:' + packet.get(i).uuid
+        ROW['名称文字'].texts = packet.get(i).name
+        ROW['ping_text'].texts = packet.get(i).ping
+        ROW.visible = true
+        i++
       }
       var.RichTAB单列数量 = math.ceil(server.server_online / val.RichTAB遍历.row)
       var.RichTAB第一列人数 = math.min(server.server_online, 15)

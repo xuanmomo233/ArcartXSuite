@@ -366,7 +366,8 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             () -> configuration,
             () -> bossService,
             () -> bossRuntimeUiIds.isEmpty() ? "" : bossRuntimeUiIds.get(0),
-            () -> packetBridge
+            () -> packetBridge,
+            () -> targetService
         );
     }
 

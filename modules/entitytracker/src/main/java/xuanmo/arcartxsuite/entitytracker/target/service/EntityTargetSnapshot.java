@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.entitytracker.target.service;
 
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 public record EntityTargetSnapshot(
@@ -84,6 +85,23 @@ public record EntityTargetSnapshot(
         packet.put("lastHitAgoMs", lastHitAgoMs);
         packet.put("timeoutMs", timeoutMs);
         return packet;
+    }
+
+    public String resolvePlaceholder(String field) {
+        if (field == null) {
+            return null;
+        }
+        String key = field.trim().toLowerCase(Locale.ROOT);
+        return switch (key) {
+            case "title" -> title;
+            case "subtitle" -> subtitle;
+            case "health_raw" -> Double.toString(health);
+            case "max_health_raw" -> Double.toString(maxHealth);
+            case "health_percent_raw" -> Double.toString(healthPercent);
+            case "progress" -> Double.toString(progress);
+            case "distance_raw" -> Integer.toString(distance);
+            default -> placeholderValues().get(key);
+        };
     }
 
     private String render(String template, Map<String, String> values) {

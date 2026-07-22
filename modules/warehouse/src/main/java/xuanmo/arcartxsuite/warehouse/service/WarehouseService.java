@@ -384,7 +384,7 @@ public final class WarehouseService implements Listener {
             ensureEntitlements(player);
             ViewState state = state(player);
             ensureCurrentWarehouse(player, state);
-            openStorage(player, "init");
+            openStorage(player);
             return ActionResult.success(message("player.opened"));
         } catch (Exception exception) {
             this.logger.warning("打开仓库失败: " + exception.getMessage());
@@ -418,7 +418,7 @@ public final class WarehouseService implements Listener {
             if (packetBridge != null) {
                 packetBridge.openUi(viewer, storageRuntimeUiId);
             }
-            openStorage(viewer, "init");
+            openStorage(viewer);
             return ActionResult.success(message("player.preview-opened"));
         } catch (Exception exception) {
             this.logger.warning("打开仓库预览失败: " + exception.getMessage());
@@ -554,9 +554,9 @@ public final class WarehouseService implements Listener {
                 return true;
             }
             switch (action) {
-                case "open", "storage" -> openStorage(player, "init");
-                case "manage" -> openManage(player, "init");
-                case "bank" -> openBank(player, "init");
+                case "open", "storage" -> openStorage(player);
+                case "manage" -> openManage(player);
+                case "bank" -> openBank(player);
                 case "refresh" -> refreshBoth(player);
                 case "showcase" -> {
                     ActionResult result = showcase(player);
@@ -918,63 +918,33 @@ public final class WarehouseService implements Listener {
     }
 
     /**
-     * 打开仓库存取界面并发送初始化/更新数据包。
-     * 延迟 2 ticks 发送，避免低性能客户端 UI 加载未完成时丢失 packet。
+     * 打开仓库存取界面；数据由 UI open 触发器请求。
      */
-    private void openStorage(Player player, String handler) throws Exception {
+    private void openStorage(Player player) throws Exception {
         ensureEntitlements(player);
         ensureCurrentWarehouse(player, state(player));
         if (state(player).sharedEditMode() && !acquireCurrentSharedLock(player, state(player))) {
             state(player).setSharedEditMode(false);
         }
         packetBridge.openUi(player, storageRuntimeUiId);
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            try {
-                if (player.isOnline()) {
-                    sendStorage(player, handler);
-                }
-            } catch (Exception exception) {
-                this.logger.warning("延迟发送仓库数据包失败: " + exception.getMessage());
-            }
-        }, 2L);
     }
 
     /**
-     * 打开共享管理界面并发送初始化/更新数据包。
-     * 延迟 2 ticks 发送，避免低性能客户端 UI 加载未完成时丢失 packet。
+     * 打开共享管理界面；数据由 UI open 触发器请求。
      */
-    private void openManage(Player player, String handler) throws Exception {
+    private void openManage(Player player) throws Exception {
         ensureEntitlements(player);
         ensureCurrentWarehouse(player, state(player));
         packetBridge.openUi(player, manageRuntimeUiId);
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            try {
-                if (player.isOnline()) {
-                    sendManage(player, handler);
-                }
-            } catch (Exception exception) {
-                this.logger.warning("延迟发送管理数据包失败: " + exception.getMessage());
-            }
-        }, 2L);
     }
 
     /**
-     * 打开银行界面并发送初始化/更新数据包。
-     * 延迟 2 ticks 发送，避免低性能客户端 UI 加载未完成时丢失 packet。
+     * 打开银行界面；数据由 UI open 触发器请求。
      */
-    private void openBank(Player player, String handler) throws Exception {
+    private void openBank(Player player) throws Exception {
         ensureEntitlements(player);
         ensureCurrentWarehouse(player, state(player));
         packetBridge.openUi(player, bankRuntimeUiId);
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            try {
-                if (player.isOnline()) {
-                    sendBank(player, handler);
-                }
-            } catch (Exception exception) {
-                this.logger.warning("延迟发送银行数据包失败: " + exception.getMessage());
-            }
-        }, 2L);
     }
 
     /**

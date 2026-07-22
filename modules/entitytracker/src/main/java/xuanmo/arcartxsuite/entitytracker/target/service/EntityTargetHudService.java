@@ -87,6 +87,36 @@ public final class EntityTargetHudService implements Listener {
         return openViewers.size();
     }
 
+    /**
+     * 只读地解析某个玩家当前正在追踪的目标快照，供 PlaceholderAPI 使用。
+     * 不会修改追踪状态或发送数据包，目标不可用时返回空。
+     */
+    public Optional<EntityTargetSnapshot> resolveViewerTargetSnapshot(Player viewer) {
+        if (viewer == null) {
+            return Optional.empty();
+        }
+        TrackedTarget trackedTarget = trackedTargets.get(viewer.getUniqueId());
+        if (trackedTarget == null || !viewer.isOnline() || viewer.isDead()) {
+            return Optional.empty();
+        }
+        Entity entity = plugin.getServer().getEntity(trackedTarget.targetUuid());
+        if (!(entity instanceof LivingEntity target)) {
+            return Optional.empty();
+        }
+        String mythicMobId = EntityCombatMetadata.resolveMythicMobId(target);
+        String entityType = EntityCombatMetadata.resolveEntityType(target);
+        if (shouldIgnoreTarget(configuration, bossConfigurationProvider.get(), mythicMobId, entityType)) {
+            return Optional.empty();
+        }
+        return EntityTargetStateResolver.resolve(
+            viewer,
+            target,
+            configuration,
+            trackedTarget.lastHitAtMillis(),
+            System.currentTimeMillis()
+        );
+    }
+
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityDamage(EntityDamageByEntityEvent event) {
         if (!(event.getEntity() instanceof LivingEntity target)) {
