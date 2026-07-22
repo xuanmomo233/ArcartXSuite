@@ -1139,6 +1139,11 @@ public final class ModuleRegistry {
         }
     }
 
+    /** Registers a capability owned by the core before external modules load. */
+    public <T> void registerCoreCapability(Class<T> capabilityType, T implementation) {
+        capabilities.put(capabilityType, implementation);
+    }
+
     /**
      * 获取所有支持一键数据迁移的模块 ID。
      */

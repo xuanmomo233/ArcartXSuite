@@ -22,6 +22,7 @@ ui:
   packet-id: "AXS_WAREHOUSE"
   register-ui-on-enable: true
   overwrite-ui-files: false
+  # 仓库网格每页显示的槽位数量（控件按此数量动态创建）。
   page-size: 54
 
 storage:
@@ -248,3 +249,8 @@ blacklist:
   lore-regex: []
   # 只要物品 PDC 或原始 NMS NBT 复合标签中存在任意一个 key 即禁止存入，原始 NBT 会递归检查嵌套 compound/list，只判断 key 存在不比较 value；反射读取失败时安全降级为无原始 NBT 匹配。
   nbt-keys: []
+
+# ─── 额外槽位背包（Extra Backpack）────────────────────────────────────────
+# 可选功能，默认关闭。启用后由本模块接管玩家原版背包的 27 个存储格（快捷栏 9 格不受影响）。
+# 背包由多个分类页组成（装备/材料/杂物…），每个分类页独立设置容量、上限与付费扩容价格；
+# 物品分类由 warehouse 模块自行按 NBT/lore 判断，无需服主在 ArcartX 中配置槽位。

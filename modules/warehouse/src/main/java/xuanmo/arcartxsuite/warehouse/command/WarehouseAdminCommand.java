@@ -17,7 +17,7 @@ import xuanmo.arcartxsuite.warehouse.service.WarehouseService;
 
 public final class WarehouseAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "reload", "open", "info", "view", "delete", "password", "bank");
+    private static final List<String> ACTIONS = List.of("help", "status", "reload", "open", "info", "view", "delete", "bank");
 
     private final Supplier<WarehouseService> serviceProvider;
     private final MessageProvider messages;
@@ -50,7 +50,6 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
             case "info" -> handleInfo(sender, args);
             case "view" -> handleView(sender, args);
             case "delete" -> handleDelete(sender, args);
-            case "password" -> handlePassword(sender, args);
             case "bank" -> handleBank(sender, args);
             default -> sender.sendMessage(fullMsg("common.unknown", label));
         }
@@ -60,12 +59,11 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) return filter(ACTIONS, args[1]);
-        if (args.length == 3 && List.of("open", "info", "view", "delete", "password", "bank").contains(args[1].toLowerCase(Locale.ROOT))) {
+        if (args.length == 3 && List.of("open", "info", "view", "delete", "bank").contains(args[1].toLowerCase(Locale.ROOT))) {
             return null; // player names
         }
         WarehouseService svc = serviceProvider.get();
         if (args.length == 4) {
-            if ("password".equalsIgnoreCase(args[1])) return filter(List.of("clear"), args[3]);
             if ("bank".equalsIgnoreCase(args[1]) && svc != null) return filter(new ArrayList<>(svc.currencyIds()), args[3]);
         }
         if (args.length == 5 && "bank".equalsIgnoreCase(args[1])) {
@@ -82,7 +80,6 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("help.info", cmd));
         sender.sendMessage(fullMsg("help.view", cmd));
         sender.sendMessage(fullMsg("help.delete", cmd));
-        sender.sendMessage(fullMsg("help.password", cmd));
         sender.sendMessage(fullMsg("help.bank", cmd));
     }
 
@@ -154,22 +151,6 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
         if (online != null) return online;
         org.bukkit.OfflinePlayer offline = Bukkit.getOfflinePlayer(name);
         return offline.hasPlayedBefore() ? offline : null;
-    }
-
-    private void handlePassword(CommandSender sender, String[] args) {
-        WarehouseService svc = serviceProvider.get();
-        if (svc == null) { sender.sendMessage(fullMsg("common.service-down")); return; }
-        if (args.length < 4 || !"clear".equalsIgnoreCase(args[3])) {
-            sender.sendMessage(fullMsg("admin.password.usage"));
-            return;
-        }
-        org.bukkit.OfflinePlayer target = resolvePlayer(args[2]);
-        if (target == null) { sender.sendMessage(fullMsg("admin.player-not-found", args[2])); return; }
-        UUID uuid = target.getUniqueId();
-        sender.sendMessage(fullMsg("admin.password.clear-processing", args[2]));
-        svc.adminClearSecondaryPassword(uuid, result ->
-            sender.sendMessage((messages != null ? messages.get("prefix") : "") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message())
-        );
     }
 
     private void handleBank(CommandSender sender, String[] args) {

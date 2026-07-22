@@ -611,3 +611,8 @@ modules:
     # 功能：CS 开箱动画、原神祈愿卡池（单抽 / 十连）、保底机制（大小保底）、磨损度系统（影响物品外观价值）。
 
 
+
+security:
+  secondary-password:
+    unlock-timeout-seconds: 1800
+

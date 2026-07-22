@@ -230,6 +230,16 @@ public final class BossTrackerService implements Listener {
         return sessions.size();
     }
 
+    public boolean isTrackedConfiguredBoss(UUID entityUuid) {
+        if (entityUuid == null) {
+            return false;
+        }
+        BossSession session = sessions.get(entityUuid);
+        return session != null
+            && session.getDefinition() != null
+            && session.getDefinition().enabled();
+    }
+
     public int getActiveViewerCount() {
         return viewerStates.size();
     }

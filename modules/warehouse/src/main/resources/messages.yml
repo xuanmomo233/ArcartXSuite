@@ -21,7 +21,7 @@ help:
   status: "&7{0} status&f - 查看模块状态"
   open: "&7{0} open <玩家>&f - 为玩家打开仓库"
   info: "&7{0} info <玩家>&f - 查看玩家仓库概览"
-  password: "&7{0} password <玩家> clear&f - 清除二级密码"
+  password: "&7{0} password <玩家> clear&f - 已移除，请使用 /axs password"
   bank: "&7{0} bank <玩家> <货币ID> <set|add|take> <金额>&f - 管理银行"
 
 # ── status ────────────────────────────────────────────
@@ -48,15 +48,11 @@ admin:
   delete:
     usage: "&e用法: /axs warehouse delete <玩家> <仓库ID> confirm"
     confirm: "&e请确认删除 /axs warehouse delete <玩家> <仓库ID> confirm"
-  password:
-    usage: "&e用法: /axs warehouse password <玩家> clear"
   bank:
     usage: "&e用法: /axs warehouse bank <玩家> <货币ID> <set|add|take> <金额>"
 
   warehouse-deleted: "已删除玩家 {0} 的仓库 {1}。"
   delete-failed: "删除仓库失败: {0}"
-  secondary-cleared: "已清除该玩家的仓库二级密码。"
-  password-clear-failed: "清除二级密码失败: {0}"
   unknown-currency: "未知货币: {0}"
   unknown-bank-mode: "未知银行操作模式: {0}"
   bank-updated: "已更新玩家银行 {0}={1}。"
@@ -177,10 +173,10 @@ player:
   transfer-started: "已发起转让，等待接收人确认。"
   transfer-received: "你收到了一个共享仓库转让请求，请使用 /warehouse transfer confirm <sharedId> 或 reject <sharedId> 处理。"
   password-length: "密码长度必须在 {0}-{1} 位之间。"
-  password-set: "已设置二级密码并自动解锁。"
   password-unlocked: "二级密码已解锁。"
   password-wrong: "二级密码错误。"
-  password-cleared: "已清除二级密码。"
+  secondary-unavailable: "统一二级密码服务暂不可用，操作已拒绝。"
+  password-managed-core: "二级密码由核心统一管理，请使用 /axs password set|unlock|clear。"
   lock-busy: "该共享仓库正在被其他成员编辑，当前以只读方式打开。"
   lock-busy-by: "该共享仓库正在被 {0} 编辑，当前以只读方式打开。"
   lock-busy-by-node: "该共享仓库正在被 {0}（{1}）编辑，当前以只读方式打开。"
@@ -195,6 +191,13 @@ player:
   unknown-upgrade-currency: "未知扩充货币。"
   unknown-shared-upgrade-currency: "未知共享仓库扩充货币。"
   shared-upgrade-success: "共享仓库已扩充到 Lv.{0}，容量 {1} 格。"
+  buy-slots-not-here: "当前仓库不能在此购买槽位。"
+  buy-slots-shared-owner: "只有共享仓库主人可以购买槽位。"
+  buy-slots-invalid: "请输入有效的购买数量。"
+  buy-slots-not-configured: "当前仓库未配置槽位价格，无法购买。"
+  buy-slots-maxed: "当前仓库槽位已达上限。"
+  unknown-buy-slots-currency: "未知的槽位购买货币。"
+  buy-slots-success: "已购买 {0} 个槽位，当前容量 {1} 格。"
 
 
 ui:
@@ -205,6 +208,10 @@ ui:
   shared-upgrade-owner: "只有共享仓库主人可扩充"
   upgrade-to: "扩充到 Lv.{0} / {1} 格"
   upgrade-to-cost: "扩充到 Lv.{0} / {1} 格，消耗 {2}"
+  buy-slots-not-configured: "未配置槽位价格"
+  buy-slots-shared-owner: "仅主人可购买槽位"
+  buy-slots-maxed: "槽位已达上限"
+  buy-slots-hint: "每个槽位 {0}，剩余可购买 {1} 个"
   all: "全部"
   all-text: "&0全部"
   no-selected-item: "未选择物品"
@@ -216,3 +223,5 @@ ui:
   personal-entry: "&0个人 {0}\n&7Lv.{1}  {2} 格"
   shared-create-free: "创建共享仓库免费"
   shared-create-cost: "创建共享仓库消耗 {0}"
+
+# ── 额外槽位背包 ────────────────────────────────────────

@@ -41,6 +41,7 @@ import xuanmo.arcartxsuite.security.MohistCompat;
 import xuanmo.arcartxsuite.security.NativeBridge;
 import xuanmo.arcartxsuite.security.protection.ProtectionInit;
 import xuanmo.arcartxsuite.api.util.TemporaryOpExecutor;
+import xuanmo.arcartxsuite.security.SecondaryPasswordService;
 
 /**
  * ArcartXSuite 业务核心实现（Suite-core）。
@@ -76,6 +77,7 @@ public final class SuiteCoreImpl implements SuiteCore {
     private xuanmo.arcartxsuite.auth.AuthlibInjectorManager authlibInjectorManager;
     private xuanmo.arcartxsuite.auth.AuthCommand authCommand;
     private ChatSignBypassService chatSignBypassService;
+    private SecondaryPasswordService secondaryPasswordService;
     private BridgeLifecycleManager bridgeLifecycleManager;
     private ClientEventLifecycleManager clientEventLifecycleManager;
     /** 宿主自身的 spec（config.yml） */
@@ -217,6 +219,17 @@ public final class SuiteCoreImpl implements SuiteCore {
             placeholderResolver
         );
         moduleRegistry.attachCore(this);
+        try {
+            long timeoutSeconds = getConfig().getLong(
+                "security.secondary-password.unlock-timeout-seconds", 1800L);
+            secondaryPasswordService = new SecondaryPasswordService(
+                getDataFolder(), timeoutSeconds);
+            moduleRegistry.registerCoreCapability(
+                xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess.class,
+                secondaryPasswordService);
+        } catch (Exception exception) {
+            consoleError("统一二级密码服务初始化失败: " + exception.getMessage());
+        }
         ModuleRegistry.LoadSummary summary = moduleRegistry.loadAll();
         consoleInfo(
             "模块加载完成: 发现 " + summary.discoveredCount()
@@ -458,6 +471,10 @@ public final class SuiteCoreImpl implements SuiteCore {
             moduleRegistry.unloadAll();
             moduleRegistry = null;
         }
+        if (secondaryPasswordService != null) {
+            secondaryPasswordService.close();
+            secondaryPasswordService = null;
+        }
         if (crossServerService != null) {
             crossServerService.shutdown();
             crossServerService = null;
@@ -480,6 +497,10 @@ public final class SuiteCoreImpl implements SuiteCore {
 
     public ModuleRegistry getModuleRegistry() {
         return moduleRegistry;
+    }
+
+    public SecondaryPasswordService getSecondaryPasswordService() {
+        return secondaryPasswordService;
     }
 
     public xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI getPacketBridge() {

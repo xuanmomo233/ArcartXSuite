@@ -22,6 +22,7 @@ import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.capability.ExtraBackpackAccess;
 import xuanmo.arcartxsuite.api.capability.PickupNotifiable;
 import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
@@ -181,10 +182,12 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
             warehouseRepo,
             itemSourceRegistry, itemMatcher, currencyManager,
             () -> getCapability(PickupNotifiable.class),
-            crossServer, crossServerChannelConfig, messages()
+            crossServer, crossServerChannelConfig, messages(),
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess.class)
         );
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
+
         adminCommand = new WarehouseAdminCommand(() -> service, messages());
 
         registerCapability(WarehouseAutoDepositable.class,
@@ -264,6 +267,14 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
         return service;
     }
 
+    /**
+     * Returns the optional extra-backpack provider without coupling warehouse
+     * behavior to the provider module's presence.
+     */
+    public @Nullable ExtraBackpackAccess getExtraBackpackAccess() {
+        return getCapability(ExtraBackpackAccess.class);
+    }
+
     public WarehouseModuleConfiguration getConfiguration() {
         return configuration;
     }
@@ -277,7 +288,4 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
-
-
 

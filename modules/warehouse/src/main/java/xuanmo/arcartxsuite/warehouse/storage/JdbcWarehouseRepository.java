@@ -35,7 +35,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of("warehouse_personal", "warehouse_bank_balances", "warehouse_fixed_deposits", "warehouse_security", "warehouse_shared_members");
+        return List.of("warehouse_personal", "warehouse_bank_balances", "warehouse_fixed_deposits", "warehouse_shared_members");
     }
 
     @Override
@@ -47,7 +47,6 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
             "warehouse_fixed_deposits",
             "warehouse_shared",
             "warehouse_shared_members",
-            "warehouse_security",
             "warehouse_pending_transfers"
         );
     }
@@ -239,8 +238,17 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return false;
         }
-        String sql = "UPDATE warehouse_bank_balances SET balance = balance - ?, updated_at = ?"
-            + " WHERE player_uuid = ? AND currency_id = ? AND CAST(balance AS REAL) >= ?";
+        String sql = configuration.dialect() == StorageDialect.SQLITE
+            ? """
+                UPDATE warehouse_bank_balances
+                SET balance = CAST(balance AS REAL) - ?, updated_at = ?
+                WHERE player_uuid = ? AND currency_id = ? AND CAST(balance AS REAL) >= ?
+                """
+            : """
+                UPDATE warehouse_bank_balances
+                SET balance = CAST(balance AS DECIMAL(38,8)) - ?, updated_at = ?
+                WHERE player_uuid = ? AND currency_id = ? AND CAST(balance AS DECIMAL(38,8)) >= ?
+                """;
         try (Connection connection = connection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, amount.toPlainString());
@@ -831,43 +839,6 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
     }
 
     @Override
-    public Optional<SecurityRecord> loadSecurity(UUID playerUuid) throws SQLException {
-        try (Connection connection = connection();
-             PreparedStatement statement = connection.prepareStatement(
-                 "SELECT * FROM warehouse_security WHERE player_uuid = ?"
-             )) {
-            statement.setString(1, playerUuid.toString());
-            try (ResultSet resultSet = statement.executeQuery()) {
-                return resultSet.next()
-                    ? Optional.of(new SecurityRecord(playerUuid, resultSet.getString("salt"), resultSet.getString("hash"), resultSet.getString("encrypted_password"), resultSet.getLong("updated_at")))
-                    : Optional.empty();
-            }
-        }
-    }
-
-    @Override
-    public void saveSecurity(SecurityRecord security) throws SQLException {
-        try (Connection connection = connection();
-             PreparedStatement statement = connection.prepareStatement(upsertSql("warehouse_security", List.of("player_uuid"), List.of("salt", "hash", "encrypted_password", "updated_at")))) {
-            statement.setString(1, security.playerUuid().toString());
-            statement.setString(2, security.saltBase64());
-            statement.setString(3, security.hashBase64());
-            statement.setString(4, security.encryptedPassword());
-            statement.setLong(5, security.updatedAt());
-            statement.executeUpdate();
-        }
-    }
-
-    @Override
-    public void clearSecurity(UUID playerUuid) throws SQLException {
-        try (Connection connection = connection();
-             PreparedStatement statement = connection.prepareStatement("DELETE FROM warehouse_security WHERE player_uuid = ?")) {
-            statement.setString(1, playerUuid.toString());
-            statement.executeUpdate();
-        }
-    }
-
-    @Override
     public void close() {
         shutdown();
     }
@@ -970,15 +941,6 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                     role VARCHAR(16) NOT NULL,
                     updated_at BIGINT NOT NULL,
                     PRIMARY KEY (shared_id, player_uuid)
-                )
-                """);
-            statement.execute("""
-                CREATE TABLE IF NOT EXISTS warehouse_security (
-                    player_uuid VARCHAR(36) PRIMARY KEY,
-                    salt VARCHAR(128) NOT NULL,
-                    hash VARCHAR(256) NOT NULL,
-                    encrypted_password TEXT NOT NULL,
-                    updated_at BIGINT NOT NULL
                 )
                 """);
             statement.execute("""

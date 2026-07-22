@@ -6,7 +6,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -26,11 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import javax.crypto.Cipher;
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.PBEKeySpec;
-import javax.crypto.spec.SecretKeySpec;
 import net.sourceforge.pinyin4j.PinyinHelper;
 import net.sourceforge.pinyin4j.format.HanyuPinyinCaseType;
 import net.sourceforge.pinyin4j.format.HanyuPinyinOutputFormat;
@@ -57,6 +51,7 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
+import xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess;
 import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
@@ -81,7 +76,6 @@ import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.Warehou
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository;
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.FixedDepositRecord;
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.PendingTransfer;
-import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.SecurityRecord;
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.SharedMemberRecord;
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.SharedWarehouseRecord;
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository.SlotItemRecord;
@@ -109,8 +103,6 @@ public final class WarehouseService implements Listener {
     private static final String BANK_UI_FILE_PATH = "ui/warehouse_bank.yml";
     private static final int SLOT_COUNT = 54;
     private static final long MAX_AGGREGATED_AMOUNT = Integer.MAX_VALUE;
-    private static final int PASSWORD_HASH_ITERATIONS = 120000;
-    private static final int PASSWORD_HASH_BITS = 256;
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
     private static final HanyuPinyinOutputFormat PINYIN_FORMAT = new HanyuPinyinOutputFormat();
 
@@ -139,11 +131,9 @@ public final class WarehouseService implements Listener {
     private final ItemMatcherAPI itemMatcherSupport;
     private final CurrencyBridgeAPI currencyBridgeManager;
     private final Supplier<PickupNotifiable> pickupNotifiableSupplier;
-    private final SecureRandom secureRandom = new SecureRandom();
+    private final Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier;
     /** 玩家当前 UI 视图状态（ownerType / warehouseId / page / search 等）。 */
     private final ConcurrentMap<UUID, ViewState> viewStates = new ConcurrentHashMap<>();
-    /** 玩家二级密码解锁过期时间戳（毫秒）。 */
-    private final ConcurrentMap<UUID, Long> unlockedUntil = new ConcurrentHashMap<>();
     /** 共享仓库编辑互斥锁：共享仓库 ID → 当前编辑者（含子服 nodeId）。 */
     private final ConcurrentMap<String, SharedEditLock> sharedEditLocks = new ConcurrentHashMap<>();
     private final CrossServerAPI crossServerApi;
@@ -173,11 +163,13 @@ public final class WarehouseService implements Listener {
         CurrencyBridgeAPI currencyBridgeManager,
         Supplier<PickupNotifiable> pickupNotifiableSupplier,
         CrossServerAPI crossServerApi,
-        CrossServerChannelConfig crossServerChannelConfig
+        CrossServerChannelConfig crossServerChannelConfig,
+        Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier
     ) {
         this(plugin, logger, packetBridge, itemStackBridge, packetGuard, uiResourceExporter, configuration,
             repository, itemSourceRegistry, itemMatcherSupport, currencyBridgeManager,
-            pickupNotifiableSupplier, crossServerApi, crossServerChannelConfig, null);
+            pickupNotifiableSupplier, crossServerApi, crossServerChannelConfig, null,
+            secondaryPasswordSupplier);
     }
 
     public WarehouseService(
@@ -195,7 +187,8 @@ public final class WarehouseService implements Listener {
         Supplier<PickupNotifiable> pickupNotifiableSupplier,
         CrossServerAPI crossServerApi,
         CrossServerChannelConfig crossServerChannelConfig,
-        MessageProvider messages
+        MessageProvider messages,
+        Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -209,6 +202,7 @@ public final class WarehouseService implements Listener {
         this.itemMatcherSupport = itemMatcherSupport;
         this.currencyBridgeManager = currencyBridgeManager;
         this.pickupNotifiableSupplier = pickupNotifiableSupplier;
+        this.secondaryPasswordSupplier = secondaryPasswordSupplier;
         this.crossServerApi = crossServerApi;
         this.messages = messages;
         this.crossServerChannelConfig = crossServerChannelConfig == null
@@ -231,7 +225,7 @@ public final class WarehouseService implements Listener {
     ) {
         this(plugin, logger, packetBridge, itemStackBridge, packetGuard, uiResourceExporter, configuration,
             repository, itemSourceRegistry, itemMatcherSupport, currencyBridgeManager,
-            pickupNotifiableSupplier, null, CrossServerChannelConfig.disabled(), null);
+            pickupNotifiableSupplier, null, CrossServerChannelConfig.disabled(), null, null);
     }
 
     /**
@@ -284,7 +278,6 @@ public final class WarehouseService implements Listener {
             }
         }
         viewStates.clear();
-        unlockedUntil.clear();
         sharedEditLocks.clear();
         repository.close();
     }
@@ -565,7 +558,7 @@ public final class WarehouseService implements Listener {
                     }
                 }
                 case "page" -> setPage(player, parseInt(value(data, 1, "1"), 1));
-                case "warehouse_upgrade" -> upgradeCurrentWarehouse(player);
+        case "warehouse_upgrade" -> upgradeCurrentWarehouse(player);
                 case "warehouse" -> selectPersonalWarehouse(player, value(data, 1, firstPersonalWarehouseId()));
                 case "shared" -> selectSharedWarehouse(player, value(data, 1, ""));
                 case "shared_mode" -> setSharedMode(player, value(data, 1, "readonly"));
@@ -591,14 +584,7 @@ public final class WarehouseService implements Listener {
                 case "shared_transfer" -> transferSharedWarehouse(player, value(data, 1, ""), value(data, 2, ""));
                 case "shared_transfer_confirm" -> confirmPendingTransfer(player, value(data, 1, ""));
                 case "shared_transfer_reject" -> rejectPendingTransfer(player, value(data, 1, ""));
-                case "password_set" -> setPassword(player, value(data, 1, ""));
                 case "password_unlock" -> unlockPassword(player, value(data, 1, ""));
-                case "password_lock" -> {
-                    unlockedUntil.remove(player.getUniqueId());
-                    sendMessage(player, true, message("player.secondary-locked"));
-                    refreshBoth(player);
-                }
-                case "password_clear" -> clearPassword(player, value(data, 1, ""));
                 case "toggle_auto_pickup" -> toggleAutoPickup(player, "pickup");
                 case "toggle_auto_mythic" -> toggleAutoPickup(player, "mythic");
                 case "toggle_auto_notify" -> toggleAutoPickup(player, "notify");
@@ -675,16 +661,6 @@ public final class WarehouseService implements Listener {
         } catch (Exception exception) { return ActionResult.failure(message("admin.delete-failed", exception.getMessage())); }
     }
 
-    public void adminClearSecondaryPassword(UUID playerUuid, Consumer<ActionResult> callback) {
-        try {
-            repository.clearSecurity(playerUuid);
-            unlockedUntil.remove(playerUuid);
-            callback.accept(ActionResult.success(message("admin.secondary-cleared")));
-        } catch (Exception exception) {
-            callback.accept(ActionResult.failure(message("admin.password-clear-failed", exception.getMessage())));
-        }
-    }
-
     /**
      * 管理员调整玩家银行余额。支持 set / add / take 三种模式。
      *
@@ -745,9 +721,7 @@ public final class WarehouseService implements Listener {
         try {
             long capacity = 0L;
             for (WarehouseRecord record : personalRecords(playerUuid)) {
-                WarehouseDefinition definition = configuration.warehouse(record.warehouseId());
-                WarehouseLevelDefinition level = definition == null ? null : definition.level(record.level());
-                capacity += level == null ? SLOT_COUNT : Math.max(SLOT_COUNT, level.capacity());
+                capacity += resolveCapacity(OWNER_PERSONAL, playerUuid.toString(), record.warehouseId());
             }
             return capacity;
         } catch (Exception exception) {
@@ -815,7 +789,6 @@ public final class WarehouseService implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         UUID playerUuid = event.getPlayer().getUniqueId();
         viewStates.remove(playerUuid);
-        unlockedUntil.remove(playerUuid);
         releaseSharedLocks(playerUuid);
     }
 
@@ -1006,11 +979,11 @@ public final class WarehouseService implements Listener {
         debug("buildStoragePacket visibleSlots order: " + slotOrder);
         Map<String, Object> slots = new LinkedHashMap<>();
         Map<String, Object> packet = basePacket(player, state);
-        int pageSize = SLOT_COUNT;
+        int pageSize = pageSize();
         int pageTotal = Math.max(1, (visibleSlots.size() + pageSize - 1) / pageSize);
         state.setPage(Math.max(1, Math.min(state.page(), pageTotal)));
         int start = (state.page() - 1) * pageSize;
-        for (int displaySlot = 0; displaySlot < SLOT_COUNT; displaySlot++) {
+        for (int displaySlot = 0; displaySlot < pageSize; displaySlot++) {
             int index = start + displaySlot;
             SlotItemRecord item = index >= 0 && index < visibleSlots.size()
                 ? visibleSlots.get(index)
@@ -1036,7 +1009,7 @@ public final class WarehouseService implements Listener {
             : null;
         packet.put("ui", "storage");
         packet.put("slots", slots);
-        packet.put("slotCount", SLOT_COUNT);
+        packet.put("slotCount", pageSize);
         packet.put("selectedSlot", selectedDisplaySlot);
         packet.put("selectedActualSlot", state.selectedSlot());
         packet.put("selectedItem", selected == null ? emptySelectionPacket() : slotPacket(selected));
@@ -1077,8 +1050,9 @@ public final class WarehouseService implements Listener {
         if (!validSlot(state.selectedSlot())) {
             return -1;
         }
-        int start = (Math.max(1, state.page()) - 1) * SLOT_COUNT;
-        for (int index = start; index < Math.min(visibleSlots.size(), start + SLOT_COUNT); index++) {
+        int pageSize = pageSize();
+        int start = (Math.max(1, state.page()) - 1) * pageSize;
+        for (int index = start; index < Math.min(visibleSlots.size(), start + pageSize); index++) {
             if (visibleSlots.get(index).slot() == state.selectedSlot()) {
                 return index - start;
             }
@@ -1087,11 +1061,12 @@ public final class WarehouseService implements Listener {
     }
 
     private int actualSlotFromDisplay(ViewState state, int displaySlot) {
-        if (displaySlot < 0 || displaySlot >= SLOT_COUNT) {
+        int pageSize = pageSize();
+        if (displaySlot < 0 || displaySlot >= pageSize) {
             return -1;
         }
         List<SlotItemRecord> visibleSlots = visibleSlots(state);
-        int index = (Math.max(1, state.page()) - 1) * SLOT_COUNT + displaySlot;
+        int index = (Math.max(1, state.page()) - 1) * pageSize + displaySlot;
         return index >= 0 && index < visibleSlots.size() ? visibleSlots.get(index).slot() : -1;
     }
 
@@ -1167,8 +1142,10 @@ public final class WarehouseService implements Listener {
         packet.put("search", state.search());
         packet.put("categories", categories);
         packet.put("categoryTexts", fieldMap(categories, "text"));
-        packet.put("unlocked", isSecondaryUnlocked(player.getUniqueId()));
-        packet.put("hasPassword", repository.loadSecurity(player.getUniqueId()).isPresent());
+        SecondaryPasswordAccess passwordAccess = secondaryPasswordSupplier == null
+            ? null : secondaryPasswordSupplier.get();
+        packet.put("unlocked", passwordAccess != null && passwordAccess.isUnlocked(player));
+        packet.put("hasPassword", passwordAccess != null && passwordAccess.isPasswordSet(player));
         packet.put("personalWarehouses", personalWarehouses);
         packet.put("personalWarehouseTexts", fieldMap(personalWarehouses, "text"));
         packet.put("sharedWarehouses", sharedWarehouses);
@@ -1575,7 +1552,7 @@ public final class WarehouseService implements Listener {
      * 需要二级密码已解锁，且当前仓库可写。按堆叠上限分批给予，背包满时停止。
      */
     private void withdraw(Player player, int slot, long requestedAmount, boolean all) throws Exception {
-        if (!isSecondaryUnlocked(player.getUniqueId())) {
+        if (!isSecondaryUnlocked(player)) {
             sendMessage(player, false, message("player.secondary-required-withdraw"));
             refreshBoth(player);
             return;
@@ -1586,7 +1563,7 @@ public final class WarehouseService implements Listener {
             refreshBoth(player);
             return;
         }
-        int selectedSlot = slot >= 0 && slot < SLOT_COUNT ? actualSlotFromDisplay(state, slot) : -1;
+        int selectedSlot = slot >= 0 && slot < pageSize() ? actualSlotFromDisplay(state, slot) : -1;
         if (!validSlot(selectedSlot)) {
             sendMessage(player, false, message("player.no-slot-selected"));
             refreshBoth(player);
@@ -1675,7 +1652,7 @@ public final class WarehouseService implements Listener {
      * 先原子扣减数据库余额，再通过货币桥接放款；失败时自动回滚。
      */
     private void bankWithdraw(Player player, String currencyId, BigDecimal amount) throws Exception {
-        if (!isSecondaryUnlocked(player.getUniqueId())) {
+        if (!isSecondaryUnlocked(player)) {
             sendMessage(player, false, message("player.secondary-required-withdraw-bank"));
             refreshBoth(player);
             return;
@@ -1770,7 +1747,7 @@ public final class WarehouseService implements Listener {
      * 通过 {@link WarehouseRepository#claimFixedDepositAtomic} 原子标记 claimed 并计算本息入账，防止并发重复领取。
      */
     private void claimFixedDeposit(Player player, String depositId) throws Exception {
-        if (!isSecondaryUnlocked(player.getUniqueId())) {
+        if (!isSecondaryUnlocked(player)) {
             sendMessage(player, false, message("player.secondary-required-claim"));
             refreshBoth(player);
             return;
@@ -1843,8 +1820,10 @@ public final class WarehouseService implements Listener {
      * 删除共享仓库（需二级密码确认）。仅所有者可操作，删除后清理互斥锁并重置当前视图。
      */
     private void deleteSharedWarehouse(Player player, String sharedId, String password) throws Exception {
-        if (!validatePassword(player.getUniqueId(), password)) {
-            sendMessage(player, false, message("player.shared-delete-confirm"));
+        if (!verifySecondaryPassword(player, password)) {
+            sendMessage(player, false, message(secondaryPasswordSupplier == null
+                || secondaryPasswordSupplier.get() == null
+                ? "player.secondary-unavailable" : "player.shared-delete-confirm"));
             refreshBoth(player);
             return;
         }
@@ -1943,7 +1922,7 @@ public final class WarehouseService implements Listener {
      * 仅所有者可操作，校验成员数量上限，目标角色不可为 owner。
      */
     private void inviteSharedMember(Player player, String sharedId, String memberName, String role) throws Exception {
-        if (!isSecondaryUnlocked(player.getUniqueId())) {
+        if (!isSecondaryUnlocked(player)) {
             sendMessage(player, false, message("player.secondary-required-add-member"));
             refreshBoth(player);
             return;
@@ -1979,7 +1958,7 @@ public final class WarehouseService implements Listener {
     }
 
     private void removeSharedMember(Player player, String sharedId, String memberName) throws Exception {
-        if (!isSecondaryUnlocked(player.getUniqueId())) {
+        if (!isSecondaryUnlocked(player)) {
             sendMessage(player, false, message("player.secondary-required-remove-member"));
             refreshBoth(player);
             return;
@@ -2079,7 +2058,7 @@ public final class WarehouseService implements Listener {
     }
 
     private void transferSharedWarehouse(Player player, String sharedId, String memberName) throws Exception {
-        if (!isSecondaryUnlocked(player.getUniqueId())) {
+        if (!isSecondaryUnlocked(player)) {
             sendMessage(player, false, message("player.secondary-required-transfer"));
             refreshBoth(player);
             return;
@@ -2124,51 +2103,15 @@ public final class WarehouseService implements Listener {
         return;
     }
 
-    /**
-     * 设置二级密码。使用 PBKDF2WithHmacSHA256 120,000 次迭代 hash，随机 salt。
-     * 设置成功后自动解锁当前会话。
-     */
-    private void setPassword(Player player, String password) throws Exception {
-        String normalized = safe(password);
-        if (normalized.length() < configuration.security().minLength() || normalized.length() > configuration.security().maxLength()) {
-            sendMessage(player, false, message("player.password-length", configuration.security().minLength(), configuration.security().maxLength()));
-            refreshBoth(player);
-            return;
-        }
-        byte[] salt = new byte[16];
-        secureRandom.nextBytes(salt);
-        byte[] hash = derivePasswordHash(normalized.toCharArray(), salt);
-        repository.saveSecurity(new SecurityRecord(
-            player.getUniqueId(),
-            Base64.getEncoder().encodeToString(salt),
-            Base64.getEncoder().encodeToString(hash),
-            encryptPasswordForInspection(normalized),
-            System.currentTimeMillis()
-        ));
-        unlockedUntil.put(player.getUniqueId(), System.currentTimeMillis() + configuration.security().unlockSessionMs());
-        sendMessage(player, true, message("player.password-set"));
-        refreshBoth(player);
-    }
-
     private void unlockPassword(Player player, String password) throws Exception {
-        if (validatePassword(player.getUniqueId(), password)) {
-            unlockedUntil.put(player.getUniqueId(), System.currentTimeMillis() + configuration.security().unlockSessionMs());
+        SecondaryPasswordAccess passwordAccess = secondaryPasswordSupplier == null
+            ? null : secondaryPasswordSupplier.get();
+        if (passwordAccess != null && passwordAccess.verify(player, safe(password))) {
             sendMessage(player, true, message("player.password-unlocked"));
         } else {
-            sendMessage(player, false, message("player.password-wrong"));
+            sendMessage(player, false, message(passwordAccess == null
+                ? "player.secondary-unavailable" : "player.password-wrong"));
         }
-        refreshBoth(player);
-    }
-
-    private void clearPassword(Player player, String password) throws Exception {
-        if (!validatePassword(player.getUniqueId(), password)) {
-            sendMessage(player, false, message("player.password-wrong"));
-            refreshBoth(player);
-            return;
-        }
-        repository.clearSecurity(player.getUniqueId());
-        unlockedUntil.remove(player.getUniqueId());
-        sendMessage(player, true, message("player.password-cleared"));
         refreshBoth(player);
     }
 
@@ -2442,6 +2385,24 @@ public final class WarehouseService implements Listener {
         }
     }
 
+    private int pageSize() {
+        return Math.max(1, configuration.ui().pageSize());
+    }
+
+    /** 解析仓库当前容量：优先读取已购买容量，缺省回退配置初始容量，并夹在 [初始, 上限] 之间。 */
+    private long resolveCapacity(String ownerType, String ownerId, String warehouseId) throws Exception {
+        if (!OWNER_PERSONAL.equals(ownerType)) {
+            return SLOT_COUNT;
+        }
+        WarehouseDefinition definition = configuration.warehouse(warehouseId);
+        WarehouseRecord record = personalWarehouseMap(UUID.fromString(ownerId)).get(warehouseId);
+        if (definition == null || record == null) {
+            return SLOT_COUNT;
+        }
+        WarehouseLevelDefinition level = definition.level(record.level());
+        return level == null ? SLOT_COUNT : Math.max(SLOT_COUNT, level.capacity());
+    }
+
     private long currentWarehouseCapacity(Player player, String ownerType, String ownerId, String warehouseId) throws Exception {
         if (OWNER_SHARED.equals(ownerType)) {
             return repository.loadSharedWarehouses(player.getUniqueId()).stream()
@@ -2450,21 +2411,18 @@ public final class WarehouseService implements Listener {
                 .findFirst()
                 .orElse((long) SLOT_COUNT);
         }
-        WarehouseDefinition definition = configuration.warehouse(warehouseId);
-        WarehouseRecord record = personalWarehouseMap(player.getUniqueId()).get(warehouseId);
-        if (definition == null || record == null) {
-            return SLOT_COUNT;
-        }
-        WarehouseLevelDefinition level = definition.level(record.level());
-        return level == null ? SLOT_COUNT : Math.max(SLOT_COUNT, level.capacity());
+        return resolveCapacity(ownerType, ownerId, warehouseId);
     }
 
     private void putCapacityFields(Player player, ViewState state, Map<String, Object> packet) throws Exception {
-        long capacity = currentWarehouseCapacity(player, state.ownerType(), state.ownerId(), state.warehouseId());
-        long used = loadSlots(state.ownerType(), state.ownerId(), state.warehouseId()).size();
+        String ownerType = state.ownerType();
+        long capacity = currentWarehouseCapacity(player, ownerType, state.ownerId(), state.warehouseId());
+        long used = loadSlots(ownerType, state.ownerId(), state.warehouseId()).size();
         packet.put("capacity", capacity);
         packet.put("used", used);
         packet.put("capacityText", used + "/" + capacity);
+        packet.put("slotCount", capacity);
+        packet.put("pageSize", pageSize());
         packet.put("level", 1);
         packet.put("canUpgrade", false);
         packet.put("nextUpgradeText", message("ui.upgrade-unavailable"));
@@ -2528,7 +2486,7 @@ public final class WarehouseService implements Listener {
      */
     private void upgradeCurrentWarehouse(Player player) throws Exception {
         ViewState state = state(player);
-        if (!isSecondaryUnlocked(player.getUniqueId())) {
+        if (!isSecondaryUnlocked(player)) {
             sendMessage(player, false, message("player.secondary-required-upgrade"));
             refreshBoth(player);
             return;
@@ -2642,7 +2600,7 @@ public final class WarehouseService implements Listener {
             row.put("name", ChatColor.translateAlternateColorCodes('&', definition.displayName()));
             row.put("text", message("ui.warehouse-name", ChatColor.translateAlternateColorCodes('&', definition.displayName())));
             row.put("level", record.level());
-            row.put("capacity", level == null ? SLOT_COUNT : level.capacity());
+            row.put("capacity", resolveCapacity(OWNER_PERSONAL, player.getUniqueId().toString(), definition.id()));
             result.put(Integer.toString(idx), row);
             idx++;
         }
@@ -2670,7 +2628,7 @@ public final class WarehouseService implements Listener {
             row.put("name", name);
             row.put("text", message("ui.warehouse-name", name));
             row.put("level", record.level());
-            row.put("capacity", level == null ? SLOT_COUNT : level.capacity());
+            row.put("capacity", resolveCapacity(OWNER_PERSONAL, targetUuid.toString(), definition.id()));
             result.put(Integer.toString(idx), row);
             idx++;
         }
@@ -3095,58 +3053,16 @@ public final class WarehouseService implements Listener {
         return longValue == null ? "" : Long.toString(longValue);
     }
 
-    private boolean isSecondaryUnlocked(UUID playerUuid) throws Exception {
-        if (repository.loadSecurity(playerUuid).isEmpty()) {
-            return true;
-        }
-        return unlockedUntil.getOrDefault(playerUuid, 0L) > System.currentTimeMillis();
+    private boolean isSecondaryUnlocked(Player player) {
+        SecondaryPasswordAccess passwordAccess = secondaryPasswordSupplier == null
+            ? null : secondaryPasswordSupplier.get();
+        return passwordAccess != null && passwordAccess.isUnlocked(player);
     }
 
-    private boolean validatePassword(UUID playerUuid, String candidate) throws Exception {
-        Optional<SecurityRecord> optional = repository.loadSecurity(playerUuid);
-        if (optional.isEmpty()) {
-            return true;
-        }
-        try {
-            SecurityRecord security = optional.get();
-            byte[] salt = Base64.getDecoder().decode(security.saltBase64());
-            byte[] expected = Base64.getDecoder().decode(security.hashBase64());
-            byte[] actual = derivePasswordHash(safe(candidate).toCharArray(), salt);
-            return MessageDigest.isEqual(expected, actual);
-        } catch (IllegalArgumentException exception) {
-            return false;
-        }
-    }
-
-    private byte[] derivePasswordHash(char[] password, byte[] salt) {
-        PBEKeySpec keySpec = new PBEKeySpec(password, salt, PASSWORD_HASH_ITERATIONS, PASSWORD_HASH_BITS);
-        try {
-            return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(keySpec).getEncoded();
-        } catch (GeneralSecurityException exception) {
-            throw new IllegalStateException("Unable to derive warehouse password hash.", exception);
-        } finally {
-            keySpec.clearPassword();
-        }
-    }
-
-    private String encryptPasswordForInspection(String password) {
-        if (!configuration.security().allowAdminPasswordReveal() || configuration.security().adminRevealSecret().isBlank()) {
-            return "";
-        }
-        try {
-            byte[] key = MessageDigest.getInstance("SHA-256").digest(configuration.security().adminRevealSecret().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            byte[] iv = new byte[12];
-            secureRandom.nextBytes(iv);
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(128, iv));
-            byte[] encrypted = cipher.doFinal(password.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            byte[] merged = new byte[iv.length + encrypted.length];
-            System.arraycopy(iv, 0, merged, 0, iv.length);
-            System.arraycopy(encrypted, 0, merged, iv.length, encrypted.length);
-            return Base64.getEncoder().encodeToString(merged);
-        } catch (GeneralSecurityException exception) {
-            return "";
-        }
+    private boolean verifySecondaryPassword(Player player, String password) {
+        SecondaryPasswordAccess passwordAccess = secondaryPasswordSupplier == null
+            ? null : secondaryPasswordSupplier.get();
+        return passwordAccess != null && passwordAccess.verify(player, safe(password));
     }
 
     private SharedPermissionTier resolveSharedTier(Player player) {
@@ -3541,7 +3457,3 @@ public final class WarehouseService implements Listener {
         void setSharedEditMode(boolean sharedEditMode) { this.sharedEditMode = sharedEditMode; }
     }
 }
-
-
-
-

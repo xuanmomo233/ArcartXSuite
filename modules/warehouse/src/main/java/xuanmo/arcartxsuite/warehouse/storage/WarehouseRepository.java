@@ -92,12 +92,6 @@ public interface WarehouseRepository {
 
     void removeSharedMember(String sharedId, UUID playerUuid) throws SQLException;
 
-    Optional<SecurityRecord> loadSecurity(UUID playerUuid) throws SQLException;
-
-    void saveSecurity(SecurityRecord security) throws SQLException;
-
-    void clearSecurity(UUID playerUuid) throws SQLException;
-
     void close();
 
     record WarehouseRecord(UUID playerUuid, String warehouseId, int level, String customName, boolean showcaseEnabled, long updatedAt) {
@@ -156,12 +150,4 @@ public interface WarehouseRepository {
     record SharedMemberRecord(String sharedId, UUID playerUuid, String role, long updatedAt) {
     }
 
-    record SecurityRecord(
-        UUID playerUuid,
-        String saltBase64,
-        String hashBase64,
-        String encryptedPassword,
-        long updatedAt
-    ) {
-    }
 }

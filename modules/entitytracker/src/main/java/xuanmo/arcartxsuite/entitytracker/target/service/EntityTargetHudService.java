@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -39,6 +40,7 @@ public final class EntityTargetHudService implements Listener {
     private BukkitTask refreshTask;
 
     private final java.util.function.Supplier<xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration> bossConfigurationProvider;
+    private final Predicate<UUID> trackedBossLookup;
 
     public EntityTargetHudService(
         JavaPlugin plugin,
@@ -46,7 +48,8 @@ public final class EntityTargetHudService implements Listener {
         java.util.function.Supplier<xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration> bossConfigurationProvider,
         EntityTargetHudConfiguration configuration,
         PacketBridgeAPI bridge,
-        List<String> uiIds
+        List<String> uiIds,
+        Predicate<UUID> trackedBossLookup
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -54,6 +57,7 @@ public final class EntityTargetHudService implements Listener {
         this.configuration = configuration;
         this.bridge = bridge;
         this.uiIds = uiIds;
+        this.trackedBossLookup = trackedBossLookup;
     }
 
     public void start() {
@@ -105,7 +109,14 @@ public final class EntityTargetHudService implements Listener {
         }
         String mythicMobId = EntityCombatMetadata.resolveMythicMobId(target);
         String entityType = EntityCombatMetadata.resolveEntityType(target);
-        if (shouldIgnoreTarget(configuration, bossConfigurationProvider.get(), mythicMobId, entityType)) {
+        if (shouldIgnoreTarget(
+            configuration,
+            bossConfigurationProvider.get(),
+            target.getUniqueId(),
+            trackedBossLookup,
+            mythicMobId,
+            entityType
+        )) {
             return Optional.empty();
         }
         return EntityTargetStateResolver.resolve(
@@ -130,7 +141,14 @@ public final class EntityTargetHudService implements Listener {
 
         String mythicMobId = EntityCombatMetadata.resolveMythicMobId(target);
         String entityType = EntityCombatMetadata.resolveEntityType(target);
-        if (shouldIgnoreTarget(configuration, bossConfigurationProvider.get(), mythicMobId, entityType)) {
+        if (shouldIgnoreTarget(
+            configuration,
+            bossConfigurationProvider.get(),
+            target.getUniqueId(),
+            trackedBossLookup,
+            mythicMobId,
+            entityType
+        )) {
             clearViewer(attacker);
             return;
         }
@@ -178,7 +196,14 @@ public final class EntityTargetHudService implements Listener {
 
         String mythicMobId = EntityCombatMetadata.resolveMythicMobId(target);
         String entityType = EntityCombatMetadata.resolveEntityType(target);
-        if (shouldIgnoreTarget(configuration, bossConfigurationProvider.get(), mythicMobId, entityType)) {
+        if (shouldIgnoreTarget(
+            configuration,
+            bossConfigurationProvider.get(),
+            target.getUniqueId(),
+            trackedBossLookup,
+            mythicMobId,
+            entityType
+        )) {
             trackedTargets.remove(viewerId);
             closeViewer(viewerId, attacker);
             return;
@@ -260,6 +285,8 @@ public final class EntityTargetHudService implements Listener {
     static boolean shouldIgnoreTarget(
         EntityTargetHudConfiguration configuration,
         PluginConfiguration entityTrackerConfiguration,
+        UUID entityUuid,
+        Predicate<UUID> trackedBossLookup,
         String mythicMobId,
         String entityType
     ) {
@@ -272,6 +299,11 @@ public final class EntityTargetHudService implements Listener {
         if (!configuration.ignoreTrackedBosses()) {
             return false;
         }
+        if (entityUuid != null
+            && trackedBossLookup != null
+            && trackedBossLookup.test(entityUuid)) {
+            return true;
+        }
         String normalizedMythicMobId = EntityCombatMetadata.normalizeMythicMobId(mythicMobId);
         if (normalizedMythicMobId.isBlank() || entityTrackerConfiguration == null) {
             return false;
@@ -283,7 +315,6 @@ public final class EntityTargetHudService implements Listener {
     private record TrackedTarget(UUID targetUuid, long lastHitAtMillis) {
     }
 }
-
 
 
 

@@ -26,7 +26,7 @@ import xuanmo.arcartxsuite.module.ModuleRegistry;
 public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter {
 
     private static final String PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
-    private static final List<String> ROOT_ACTIONS = List.of("help", "status", "reload", "load", "unload", "update", "sync", "config", "purge", "diagnostic", "migrate", "auth");
+    private static final List<String> ROOT_ACTIONS = List.of("help", "status", "reload", "load", "unload", "update", "sync", "config", "purge", "diagnostic", "migrate", "auth", "password");
 
     private static final long PURGE_CONFIRM_TIMEOUT_MS = 10_000;
 
@@ -44,6 +44,9 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
+        if (args.length > 0 && "password".equalsIgnoreCase(args[0])) {
+            return handlePassword(sender, args);
+        }
         if (!sender.hasPermission("arcartxsuite.admin")) {
             sender.sendMessage(PREFIX + ChatColor.RED + "你没有权限执行这个命令。");
             return true;
@@ -190,6 +193,9 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
             }
             return auth.tabComplete(subArgs);
         }
+        if ("password".equalsIgnoreCase(args[0])) {
+            return filter(List.of("set", "unlock", "clear"), args.length == 2 ? args[1] : "");
+        }
         if ("config".equalsIgnoreCase(args[0])) {
             String[] subArgs = new String[args.length - 1];
             System.arraycopy(args, 1, subArgs, 0, subArgs.length);
@@ -226,12 +232,65 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " auth <子命令>" + ChatColor.GRAY + " - 多方认证管理 (status/setup/update/check)");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " migrate <module|all> <direction> [overwrite]" + ChatColor.GRAY + " - 跨数据库一键无损迁移 (SQLite ↔ MySQL)");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " purge <玩家名|all> [模块ID|all]" + ChatColor.GRAY + " - 清除玩家模块数据 (控制台专用，10秒二次确认)");
+        sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " password <set|unlock|clear> ..." + ChatColor.GRAY + " - 管理统一二级密码");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " diagnostic" + ChatColor.GRAY + " - 生成诊断包到 diagnostics/ 目录");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " <module> [action]" + ChatColor.GRAY + " - 调用模块命令");
         ModuleRegistry registry = plugin.getModuleRegistry();
         if (registry != null && !registry.externalModuleIds().isEmpty()) {
             sender.sendMessage(PREFIX + ChatColor.GRAY + "已加载模块: " + ChatColor.WHITE + String.join(", ", registry.externalModuleIds()));
         }
+    }
+
+    private boolean handlePassword(CommandSender sender, String[] args) {
+        if (!(sender instanceof org.bukkit.entity.Player player)) {
+            sender.sendMessage(PREFIX + ChatColor.RED + "password 命令仅允许玩家执行。");
+            return true;
+        }
+        if (!sender.hasPermission("arcartxsuite.password")) {
+            sender.sendMessage(PREFIX + ChatColor.RED + "你没有权限执行这个命令。");
+            return true;
+        }
+        xuanmo.arcartxsuite.security.SecondaryPasswordService service =
+            plugin.getSecondaryPasswordService();
+        if (service == null) {
+            sender.sendMessage(PREFIX + ChatColor.RED + "统一二级密码服务暂不可用。");
+            return true;
+        }
+        if (args.length < 2) {
+            sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /axs password <set|unlock|clear> ...");
+            return true;
+        }
+        String action = args[1].toLowerCase(Locale.ROOT);
+        if ("set".equals(action)) {
+            if (args.length < 3 || args[2].isBlank()) {
+                sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /axs password set <新密码> [旧密码]");
+                return true;
+            }
+            String oldPassword = args.length >= 4 ? args[3] : "";
+            boolean ok = service.setPassword(player, oldPassword, args[2]);
+            sender.sendMessage(PREFIX + (ok ? ChatColor.GREEN + "二级密码设置成功。" : ChatColor.RED + "密码为空或旧密码验证失败。"));
+            return true;
+        }
+        if ("unlock".equals(action)) {
+            if (args.length < 3) {
+                sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /axs password unlock <密码>");
+                return true;
+            }
+            boolean ok = service.verify(player, args[2]);
+            sender.sendMessage(PREFIX + (ok ? ChatColor.GREEN + "二级密码解锁成功。" : ChatColor.RED + "二级密码错误。"));
+            return true;
+        }
+        if ("clear".equals(action)) {
+            if (args.length < 3) {
+                sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /axs password clear <当前密码>");
+                return true;
+            }
+            boolean ok = service.clearPassword(player, args[2]);
+            sender.sendMessage(PREFIX + (ok ? ChatColor.GREEN + "二级密码已清除。" : ChatColor.RED + "当前密码验证失败。"));
+            return true;
+        }
+        sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /axs password <set|unlock|clear> ...");
+        return true;
     }
 
     private void sendStatus(CommandSender sender) {

@@ -187,8 +187,8 @@ public record WarehouseModuleConfiguration(
             String id = normalizeId(rawId);
             Map<Integer, WarehouseLevelDefinition> levels = loadWarehouseLevels(child.getConfigurationSection("levels"));
             if (levels.isEmpty()) {
-                logger.warning("仓库 '" + id + "' 未定义等级，已跳过。");
-                continue;
+                levels = new LinkedHashMap<>();
+                levels.put(1, new WarehouseLevelDefinition(1, 1000L, null));
             }
             int defaultLevel = Math.max(1, child.getInt("default-level", 1));
             if (!levels.containsKey(defaultLevel)) {
@@ -578,6 +578,7 @@ public record WarehouseModuleConfiguration(
     public record WarehouseLevelDefinition(int level, long capacity, UpgradeCost upgradeCost) {
     }
 
+    /** 可购买槽位容量配置：初始容量、上限、每槽单价。 */
     /** 升级/创建费用：货币 ID 与金额。 */
     public record UpgradeCost(String currencyId, BigDecimal amount) {
     }
@@ -654,4 +655,5 @@ public record WarehouseModuleConfiguration(
     /** 排序字段：键与是否降序。 */
     public record SortField(String key, boolean descending) {
     }
+
 }

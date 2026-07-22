@@ -1,0 +1,684 @@
+# AXS Warehouse Extra Backpack
+# 额外槽位背包界面：多分类页（装备/材料/杂物…），每页独立容量与付费扩容。
+# 快捷栏 9 格保留为现有快捷存取区；原版背包与额外分类页共存。
+
+ui:
+  isHud: false
+  defaultOpen: false
+  match:
+    - 物品栏界面
+  hide:
+    - HUD
+    - online
+    - 聊天栏
+    - 纯色块HUD
+    - 纯色块HUD二改
+  through: false
+  background: false
+  escClose: true
+  closeDied: true
+  show: true
+  jei: false
+  level: 8
+  itemSize: 16
+  screenScale: true
+  packetHandler:
+    update: |-
+      var.packetId = packet['packetId']
+      var.activeCategory = packet['activeCategory']
+      var.categories = packet['categories']
+      var.categoryCount = packet['categoryCount']
+      var.slots = packet['slots']
+      var.slotCount = packet['slotCount']
+      var.used = packet['used']
+      var.capacityText = packet['capacityText']
+      var.maxCapacity = packet['maxCapacity']
+      var.canBuySlots = packet['canBuySlots']
+      var.remainingSlots = packet['remainingSlots']
+      var.buySlotsText = packet['buySlotsText']
+      var.hotbar = packet['hotbar']
+      var.vanillaTab = packet['vanillaTab']
+      var.vanillaSlots = packet['vanillaSlots']
+       var.vanillaInfo = packet['vanillaInfo']
+       var.vanillaOptions = packet['vanillaOptions']
+       var.passwordPanel = packet['passwordPanel']
+      // 分类页图标 json
+      var.itemJsons = {}
+      if(var.slots != none){
+        for(key in var.slots.keys()){
+          entry = var.slots[key]
+          if(entry != none && !entry['empty']){
+            var.itemJsons[key] = entry['itemJson']
+          } else {
+            var.itemJsons[key] = var.air
+          }
+        }
+      }
+      // 快捷栏图标 json
+      var.hotbarJsons = {}
+      if(var.hotbar != none){
+        for(key in var.hotbar.keys()){
+          entry = var.hotbar[key]
+          if(entry != none && !entry['empty']){
+            var.hotbarJsons[key] = entry['itemJson']
+          } else {
+            var.hotbarJsons[key] = var.air
+          }
+        }
+      }
+      var.vanillaJsons = {}
+      if(var.vanillaSlots != none){
+        for(key in var.vanillaSlots.keys()){
+          entry = var.vanillaSlots[key]
+          if(entry != none && !entry['empty']){
+            var.vanillaJsons[key] = entry['itemJson']
+          } else {
+            var.vanillaJsons[key] = var.air
+          }
+        }
+      }
+      // 分类标签按实际数量动态创建（只增不减）。模板为索引 0。
+      while(val.分类标签行.childrenCount() < var.categoryCount.round()){
+        key = val.分类标签行.childrenCount().round()
+        项 = val.分类标签行['项'].copy('项' + key)
+        项.entryKey = key
+      }
+      // 分类页槽位按当前页实际容量动态创建（只增不减）。模板为索引 0。
+      while(val.背包网格.childrenCount() < var.slotCount.round()){
+        key = val.背包网格.childrenCount().round()
+        slot = val.背包网格['物品图标'].copy('物品图标' + key)
+        slot.entryKey = key
+      }
+      for(i in range(0, var.slotCount.round())){
+        icon = val.背包网格.get(i.round())
+        if(icon != none){
+          icon.seticon()
+        }
+      }
+      // 快捷栏 9 格静态创建（数量固定）。模板为索引 0。
+      for(i in range(0, 9)){
+        icon = val.快捷栏网格.get(i.round())
+        if(icon != none){
+          icon.seticon()
+        }
+      }
+  action:
+    load: |-
+      var.packetId = 'AXS_BACKPACK'
+      var.activeCategory = none
+      var.categories = {}
+      var.categoryCount = 0
+      var.slots = {}
+      var.itemJsons = {}
+      var.hotbar = {}
+      var.hotbarJsons = {}
+      var.vanillaSlots = {}
+      var.vanillaJsons = {}
+      var.vanillaTab = false
+      var.vanillaInfo = {'visible': false, 'slot': -1, 'itemJson': '', 'amount': 0}
+       var.vanillaOptions = {'visible': false, 'slot': -1, 'itemJson': '', 'amount': 0}
+       var.passwordPanel = {'visible': false, 'mode': '', 'pendingSlot': -1}
+       var.destroyConfirm = false
+       var.destroyPassword = ''
+       var.passwordCurrent = ''
+       var.passwordNew = ''
+      var.slotCount = 0
+      var.used = 0
+      var.capacityText = '0/0'
+      var.maxCapacity = 0
+      var.canBuySlots = false
+      var.remainingSlots = 0
+      var.buySlotsText = none
+      var.buyAmount = 1
+      var.air = '{"id": "minecraft:air","Count":1b}'
+      // 快捷栏 9 格在构建时静态创建（数量固定，模板为索引 0）。
+      for(i in range(1, 9)){
+        slot = val.快捷栏网格['物品图标'].copy('物品图标' + i.round())
+        slot.entryKey = i.round()
+      }
+    open: |-
+      Packet.send(var.packetId, 'refresh')
+
+controls:
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      主面板:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 1200
+          height: 900
+        children:
+          背景:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: "~95,95,95,220"
+              shape: ~round_rect
+              radius: 28
+            effect:
+              stroke:
+                width: 3
+                color: ~255,255,255,255
+          标题:
+            type: Text
+            attribute:
+              x: 42
+              y: 24
+              texts: "~&f额外背包"
+              fontSize: 56
+          容量状态:
+            type: Text
+            attribute:
+              x: 42
+              y: 86
+              width: 600
+              texts: "'&f容量 ' + var.capacityText + ' / 上限 ' + var.maxCapacity"
+              fontSize: 34
+          刷新按钮:
+            type: Texture
+            attribute:
+              x: 1050
+              y: 30
+              width: 110
+              height: 50
+              normal: ~255,255,255,150
+              hover: ~Frosted:0;255,255,255,240
+              shape: ~round_rect
+              radius: 14
+              texts: "~&0刷新"
+              center: true
+              fontSize: 34
+              action:
+                clickLeft: |-
+                 Packet.send(var.packetId, 'vanilla_info', -1)
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+
+          分类标签卡片:
+            type: Texture
+            attribute:
+              x: 42
+              y: 138
+              width: 1116
+              height: 72
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 18
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            children:
+              分类标签行:
+                type: HStack
+                val: 分类标签行
+                attribute:
+                  x: 14
+                  y: 12
+                  height: 48
+                  spaceBetween: 10
+                children:
+                  项:
+                    type: Texture
+                    attribute:
+                      entryKey: 0
+                      entry: var.categories[self.entryKey]
+                      visible: self.entry != none
+                      width: 180
+                      height: 48
+                      normal: "self.entry != none && self.entry['active'] ? '120,190,255,230' : '255,255,255,145'"
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 14
+                      texts: "self.entry != none ? '&0' + self.entry['name'] : none"
+                      center: true
+                      fontSize: 32
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'category', self.entry['id'])
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+
+          分类页卡片:
+            type: Texture
+            attribute:
+              x: 42
+              y: 228
+              width: 1116
+              height: 470
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 24
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            children:
+              背包网格:
+                type: HGrid
+                val: 背包网格
+                attribute:
+                  x: 16
+                  y: 16
+                  width: 1084
+                  height: 438
+                  column: 12
+                  spaceBetweenX: 12
+                  spaceBetweenY: 12
+                children:
+                  物品图标:
+                    type: Slot
+                    attribute:
+                      entryKey: 0
+                       entry: var.vanillaTab ? var.vanillaSlots[self.entryKey] : var.slots[self.entryKey]
+                      visible: self.entry != none
+                      slotType: ~Icon
+                      itemScale: 0.76
+                      width: 72
+                      height: 72
+                      normal: "~95,95,95,255"
+                      hover: ~Frosted:0;255,255,255,255
+                      shape: ~round_rect
+                      radius: 16
+                       seticon: "self.setItemIcon(var.vanillaTab ? var.vanillaJsons[self.entryKey] : var.itemJsons[self.entryKey])"
+                     action:
+                       clickLeft: |-
+                         Packet.send(var.packetId, var.vanillaTab ? 'vanilla_info' : 'withdraw', self.entryKey)
+                       clickRight: |-
+                         if(var.vanillaTab){ Packet.send(var.packetId, 'vanilla_options', self.entryKey) }
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                    children:
+                      数量:
+                        type: Text
+                        attribute:
+                          x: 8
+                          y: 48
+                          width: 56
+                          texts: "self.parent.entry != none && !self.parent.entry['empty'] ? '&f' + self.parent.entry['amount'].round() : none"
+                          fontSize: 36
+                          through: true
+
+          购买卡片:
+            type: Texture
+            attribute:
+              x: 42
+              y: 716
+              width: 1116
+              height: 70
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 18
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            children:
+              购买提示:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 20
+                  width: 640
+                  texts: "var.buySlotsText"
+                  fontSize: 30
+                  through: true
+              购买数量输入:
+                type: TextBox
+                attribute:
+                  x: 700
+                  y: 14
+                  width: 120
+                  height: 42
+                  length: 8
+                  emptyText: ~数量=1
+                  fontSize: 38
+                  background: ~90,90,90,220
+                  shape: ~round_rect
+                  radius: 12
+                action:
+                  textChange: |-
+                    var.buyAmount = self.getContent()
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              购买槽位:
+                type: Texture
+                attribute:
+                  x: 840
+                  y: 12
+                  width: 150
+                  height: 46
+                  visible: var.canBuySlots
+                  normal: ~120,190,255,200
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0购买槽位"
+                  center: true
+                  fontSize: 34
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'buy_slots', var.buyAmount)
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+
+          快捷栏卡片:
+            type: Texture
+            attribute:
+              x: 42
+              y: 802
+              width: 1116
+              height: 84
+              normal: ~255,255,255,120
+              shape: ~round_rect
+              radius: 18
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            children:
+              快捷栏标题:
+                type: Text
+                attribute:
+                  x: 16
+                  y: 26
+                  texts: "~&f快捷栏(点击存入)"
+                  fontSize: 28
+              快捷栏网格:
+                type: HGrid
+                val: 快捷栏网格
+                attribute:
+                  x: 320
+                  y: 8
+                  width: 780
+                  height: 72
+                  column: 9
+                  spaceBetweenX: 12
+                  spaceBetweenY: 12
+                children:
+                  物品图标:
+                    type: Slot
+                    attribute:
+                      entryKey: 0
+                      entry: var.hotbar[self.entryKey]
+                      slotType: ~Icon
+                      itemScale: 0.76
+                      width: 68
+                      height: 68
+                      normal: "~95,95,95,255"
+                      hover: ~Frosted:0;255,255,255,255
+                      shape: ~round_rect
+                      radius: 16
+                      seticon: "self.setItemIcon(var.hotbarJsons[self.entryKey])"
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'store', self.entryKey)
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                    children:
+                      数量:
+                        type: Text
+                        attribute:
+                          x: 8
+                          y: 44
+                          width: 52
+                          texts: "self.parent.entry != none && !self.parent.entry['empty'] ? '&f' + self.parent.entry['amount'].round() : none"
+                          fontSize: 32
+                          through: true
+          背包物品信息:
+            type: Texture
+            attribute:
+              x: 350
+              y: 300
+              width: 500
+              height: 180
+              visible: var.vanillaInfo != none && var.vanillaInfo['visible']
+              normal: ~40,40,40,245
+              shape: ~round_rect
+              radius: 18
+              texts: "var.vanillaInfo != none && var.vanillaInfo['visible'] ? '&f物品信息  数量: ' + var.vanillaInfo['amount'].round() : none"
+              center: true
+              fontSize: 30
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'refresh')
+          背包物品选项:
+            type: Texture
+            attribute:
+              x: 400
+              y: 300
+              width: 400
+              height: 240
+              visible: var.vanillaOptions != none && var.vanillaOptions['visible']
+              normal: ~40,40,40,245
+              shape: ~round_rect
+              radius: 18
+              texts: "~&f背包物品操作"
+              center: true
+              fontSize: 30
+            children:
+              存入按钮:
+                type: Texture
+                attribute:
+                  x: 30
+                  y: 70
+                  width: 150
+                  height: 54
+                  normal: ~120,190,255,220
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 12
+                  texts: "~&0存入"
+                  center: true
+                  fontSize: 28
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'vanilla_store', var.vanillaOptions['slot'])
+              销毁按钮:
+                type: Texture
+                attribute:
+                  x: 220
+                  y: 70
+                  width: 150
+                  height: 54
+                  normal: ~255,100,100,220
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 12
+                  texts: "~&f销毁"
+                  center: true
+                  fontSize: 28
+                action:
+                  clickLeft: |-
+                    var.destroyConfirm = true
+              关闭按钮:
+                type: Texture
+                attribute:
+                  x: 125
+                  y: 150
+                  width: 150
+                  height: 48
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 12
+                  texts: "~&0关闭"
+                  center: true
+                  fontSize: 26
+                 action:
+                   clickLeft: |-
+                     Packet.send(var.packetId, 'vanilla_options', -1)
+          销毁确认框:
+            type: Texture
+            attribute:
+              x: 320
+              y: 270
+              width: 560
+              height: 260
+              visible: var.destroyConfirm
+              normal: ~30,30,30,250
+              shape: ~round_rect
+              radius: 18
+              texts: "~&f确认销毁？需要二级密码"
+              center: true
+              fontSize: 28
+            children:
+               确认按钮:
+                type: Texture
+                attribute:
+                  x: 90
+                  y: 160
+                  width: 160
+                  height: 50
+                  normal: ~255,100,100,220
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  texts: "~&f确认"
+                  center: true
+                  fontSize: 28
+                 action:
+                   clickLeft: |-
+                     Packet.send(var.packetId, 'vanilla_destroy', var.vanillaOptions['slot'], 'true')
+                     var.destroyConfirm = false
+              取消按钮:
+                type: Texture
+                attribute:
+                  x: 310
+                  y: 160
+                  width: 160
+                  height: 50
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  texts: "~&0取消"
+                  center: true
+                  fontSize: 28
+                 action:
+                   clickLeft: |-
+                     var.destroyConfirm = false
+                     Packet.send(var.packetId, 'vanilla_options', -1)
+           二级密码面板:
+             type: Texture
+             attribute:
+               x: 300
+               y: 240
+               width: 600
+               height: 300
+               visible: var.passwordPanel != none && var.passwordPanel['visible']
+               normal: ~30,30,30,250
+               shape: ~round_rect
+               radius: 18
+               texts: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set' ? '~&f设置二级密码' : (var.passwordPanel != none && var.passwordPanel['mode'] == 'clear' ? '~&f清除二级密码' : '~&f解锁二级密码')"
+               center: true
+               fontSize: 28
+             children:
+               当前密码:
+                 type: TextBox
+                 attribute:
+                   x: 40
+                   y: 72
+                   width: 520
+                   height: 42
+                   length: 64
+                   emptyText: ~当前密码（设置新密码时已有密码必填）
+                   fontSize: 22
+                   background: ~90,90,90,230
+                   shape: ~round_rect
+                   radius: 12
+                 action:
+                   textChange: |-
+                     var.passwordCurrent = self.getContent()
+               新密码:
+                 type: TextBox
+                 attribute:
+                   x: 40
+                   y: 122
+                   width: 520
+                   height: 42
+                   length: 64
+                   visible: var.passwordPanel != none && var.passwordPanel['mode'] == 'set'
+                   emptyText: ~新密码
+                   fontSize: 22
+                   background: ~90,90,90,230
+                   shape: ~round_rect
+                   radius: 12
+                 action:
+                   textChange: |-
+                     var.passwordNew = self.getContent()
+               提交:
+                 type: Texture
+                 attribute:
+                   x: 80
+                   y: 205
+                   width: 180
+                   height: 48
+                   normal: ~120,190,255,220
+                   hover: ~Frosted:0;255,255,255,240
+                   shape: ~round_rect
+                   radius: 12
+                   texts: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set' ? '~&0设置' : (var.passwordPanel != none && var.passwordPanel['mode'] == 'clear' ? '~&0清除' : '~&0解锁')"
+                   center: true
+                   fontSize: 25
+                 action:
+                   clickLeft: |-
+                     if(var.passwordPanel['mode'] == 'set'){
+                       Packet.send(var.packetId, 'password_set', var.passwordCurrent, var.passwordNew)
+                     }else if(var.passwordPanel['mode'] == 'clear'){
+                       Packet.send(var.packetId, 'password_clear', var.passwordCurrent)
+                     }else{
+                       Packet.send(var.packetId, 'password_unlock', var.passwordCurrent)
+                     }
+               取消:
+                 type: Texture
+                 attribute:
+                   x: 340
+                   y: 205
+                   width: 180
+                   height: 48
+                   normal: ~255,255,255,150
+                   hover: ~Frosted:0;255,255,255,240
+                   shape: ~round_rect
+                   radius: 12
+                   texts: "~&0取消"
+                   center: true
+                   fontSize: 25
+                 action:
+                   clickLeft: |-
+                     var.passwordPanel['visible'] = false
+                     Packet.send(var.packetId, 'password_panel_close')
+               清除密码:
+                 type: Texture
+                 attribute:
+                   x: 210
+                   y: 255
+                   width: 180
+                   height: 34
+                   visible: var.passwordPanel != none && var.passwordPanel['mode'] != 'set'
+                   normal: ~255,170,170,180
+                   hover: ~Frosted:0;255,255,255,240
+                   shape: ~round_rect
+                   radius: 10
+                   texts: "~&0清除密码"
+                   center: true
+                   fontSize: 20
+                 action:
+                   clickLeft: |-
+                     Packet.send(var.packetId, 'password_clear', var.passwordCurrent)

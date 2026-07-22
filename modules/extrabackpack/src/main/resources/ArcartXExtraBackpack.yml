@@ -1,0 +1,58 @@
+settings:
+  debug: false
+
+ui:
+  register-ui-on-enable: true
+  overwrite-ui-files: false
+
+storage:
+  mode: "sqlite"
+  sqlite:
+    file: "extrabackpack.db"
+  mysql:
+    host: "127.0.0.1"
+    port: 3306
+    database: "arcartxsuite"
+    username: "root"
+    password: ""
+  pool-size: 4
+
+extra-backpack:
+  enabled: false
+  categories:
+    equipment:
+      display-name: "装备"
+      priority: 10
+      slots:
+        initial: 9
+        max: 27
+      price:
+        currency: "points"
+        per-slot: 100
+      match:
+        nbt:
+          path: "pdc:arcartx:item_category"
+          values: ["equipment", "weapon", "armor"]
+    material:
+      display-name: "材料"
+      priority: 20
+      slots:
+        initial: 9
+        max: 27
+      price:
+        currency: "points"
+        per-slot: 80
+      match:
+        nbt:
+          path: "pdc:arcartx:item_category"
+          values: ["material"]
+    other:
+      display-name: "杂物"
+      priority: 9999
+      default: true
+      slots:
+        initial: 9
+        max: 27
+      price:
+        currency: "points"
+        per-slot: 60

@@ -51,7 +51,7 @@ attack-target:
       # Bukkit EntityType 黑名单，例如 ZOMBIE、PLAYER、ARMOR_STAND。
       entity-types: []
     entitytracker-link:
-      # true 时，ArcartXEntityTracker.yml 中 enabled=true 的 Boss 默认不触发 target HUD。
+      # true 时，bosses 中 enabled=true 的 Boss 默认不触发 target HUD。
       ignore-configured-bosses: true
     title-format: "&c{display_name}"
     subtitle-format: "&7{entity_type_name} &8| &c{health}/{max_health} &8| &f{distance_text}"

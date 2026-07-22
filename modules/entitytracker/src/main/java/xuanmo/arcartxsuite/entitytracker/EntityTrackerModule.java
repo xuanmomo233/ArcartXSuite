@@ -224,7 +224,14 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             targetRuntimeUiIds = List.copyOf(resolvedTargetUiIds);
             PluginConfiguration bossConf = configuration;
             targetService = new EntityTargetHudService(
-                plugin, logger, () -> bossConf, targetConfiguration, packetBridge, targetRuntimeUiIds
+                plugin,
+                logger,
+                () -> bossConf,
+                targetConfiguration,
+                packetBridge,
+                targetRuntimeUiIds,
+                entityUuid -> bossService != null
+                    && bossService.isTrackedConfiguredBoss(entityUuid)
             );
             targetService.start();
         }
@@ -519,7 +526,6 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 
 
 

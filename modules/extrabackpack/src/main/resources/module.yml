@@ -1,0 +1,11 @@
+id: extrabackpack
+name: ExtraBackpack
+version: 1.0.0
+main: xuanmo.arcartxsuite.extrabackpack.ExtraBackpackModule
+api-version: 1.0
+
+depends: []
+softdepends: [warehouse]
+external-depends:
+
+external-softdepends:

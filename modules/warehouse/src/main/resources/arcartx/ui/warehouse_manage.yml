@@ -57,6 +57,18 @@ ui:
       var.showcaseEnabled = packet['showcaseEnabled']
       var.maxManageCount = packet['maxManageCount']
       var.maxMemberCount = packet['maxMemberCount']
+      // 两个列表按实际数量动态创建（不写死），只增不减：新建共享仓库/加成员时数量变大就补建；
+      // 删除的项因模板绑定 visible:self.entry!=none 自动隐藏，不 remove、不重建，不闪。模板为索引 0。
+      while(val.共享列表.childrenCount() < var.maxManageCount.round()){
+        key = val.共享列表.childrenCount().round()
+        项 = val.共享列表['项'].copy('项' + key)
+        项.entryKey = key
+      }
+      while(val.成员列表.childrenCount() < var.maxMemberCount.round()){
+        key = val.成员列表.childrenCount().round()
+        项 = val.成员列表['项'].copy('项' + key)
+        项.entryKey = key
+      }
   action:
     open: |-
       var.packetId = 'AXS_WAREHOUSE'
@@ -390,13 +402,6 @@ controls:
                     attribute:
                       width: 370
                       spaceBetween: 10
-                    action:
-                      # 静态创建：个人+共享仓库列表，预建 32 个；界面内新建/删除共享仓库时，由 visible:self.entry!=none 绑定自动显示/隐藏，update 不再 copy。
-                      create: |-
-                        for(i in range(1,31)){
-                          项 = self['项'].copy('项' + i.round())
-                          项.entryKey = i.round()
-                        }
                     children:
                       项:
                         type: Texture
@@ -925,13 +930,6 @@ controls:
                     attribute:
                       width: 510
                       spaceBetween: 10
-                    action:
-                      # 静态创建：成员上限最高 12（vip），预建 16 个留余量；增删成员由 visible:self.entry!=none 绑定自动显示/隐藏。
-                      create: |-
-                        for(i in range(1,15)){
-                          项 = self['项'].copy('项' + i.round())
-                          项.entryKey = i.round()
-                        }
                     children:
                       项:
                         type: Texture
