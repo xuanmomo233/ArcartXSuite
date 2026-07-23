@@ -2,6 +2,8 @@
 extra-backpack:
   disabled: "&c额外背包功能未启用。"
   operation-failed: "操作失败，请查看控制台。"
+  ui-required: "请先打开额外背包界面。"
+  action-token-invalid: "&c操作令牌无效，请刷新额外背包界面后重试。"
   page-full: "&c该分类页已满，部分物品未能存入。"
   buy-invalid: "&c请输入有效的购买数量。"
   buy-not-configured: "&c该分类页未配置槽位价格，无法购买。"

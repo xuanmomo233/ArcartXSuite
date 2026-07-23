@@ -197,4 +197,14 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
             return service.handleClientPacket(player, packetId, data, passwordAccess);
         };
     }
+
+    @Override
+    protected @Nullable String packetOwnershipPacketId() {
+        return "AXS_BACKPACK";
+    }
+
+    @Override
+    protected @Nullable String packetGuardModuleKey() {
+        return "extrabackpack";
+    }
 }

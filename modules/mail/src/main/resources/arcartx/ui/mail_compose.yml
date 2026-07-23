@@ -18,6 +18,7 @@ ui:
   action:
     load: |-
       var.sessionId = none
+      var.actionToken = ''
       var.baseFee = '0'
       var.vaultTaxRate = '0'
       var.allowVault = true
@@ -38,8 +39,10 @@ ui:
   # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
   packetHandler:
     init: |-
-      var.sessionId = packet['session_id']
-      var.baseFee = packet['base_fee']
+       var.sessionId = packet['session_id']
+       var.actionToken = packet['action_token']
+       var.baseFee = packet['base_fee']
+       var.actionToken = packet['action_token']
       var.vaultTaxRate = packet['vault_tax_rate']
       var.allowVault = packet['allow_vault']
       var.quoteSuccess = packet['quote_success']
@@ -423,7 +426,7 @@ controls:
                     color: ~0,0,0,255
                 action:
                   clickLeft: |-
-                    Packet.send('AXS_MAIL', 'compose-send', var.sessionId, var.composeRecipient, var.composeSubject, var.composeBody, var.composeVault)
+                     Packet.send('AXS_MAIL', 'compose-send', var.sessionId, var.composeRecipient, var.composeSubject, var.composeBody, var.composeVault, var.actionToken)
               返回收件箱按钮:
                 type: Texture
                 attribute:

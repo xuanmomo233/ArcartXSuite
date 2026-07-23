@@ -72,6 +72,8 @@ player:
 # ── player operation feedback ─────────────────────────
   player-offline: "玩家不在线。"
   ui-not-registered: "仓库存取 UI 尚未注册。"
+  ui-required: "请先打开对应的仓库界面。"
+  action-token-invalid: "&c操作令牌无效，请刷新仓库界面后重试。"
   opened: "已打开仓库。"
   open-failed: "打开仓库失败，请查看控制台。"
   preview-opened: "已打开仓库预览。"

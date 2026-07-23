@@ -250,6 +250,20 @@ public abstract class AbstractAXSModule implements AXSModule {
     }
 
     /**
+     * Packet ID owned by this module for centralized route-layer guarding.
+     */
+    protected @Nullable String packetOwnershipPacketId() {
+        return null;
+    }
+
+    /**
+     * Canonical PacketGuard module key for the owned packet.
+     */
+    protected @Nullable String packetGuardModuleKey() {
+        return null;
+    }
+
+    /**
      * 创建客户端初始化完成处理器。返回 null 表示不需要客户端初始化通知。
      */
     @Nullable
@@ -353,7 +367,12 @@ public abstract class AbstractAXSModule implements AXSModule {
             // 7. 注册客户端包处理器
             ClientPacketHandler packetHandler = createPacketHandler();
             if (packetHandler != null) {
-                context.registerClientPacketHandler(packetHandler, packetHandlerPriority());
+                context.registerClientPacketHandler(
+                    packetHandler,
+                    packetHandlerPriority(),
+                    packetOwnershipPacketId(),
+                    packetGuardModuleKey()
+                );
             }
 
             // 8. 注册客户端初始化处理器
@@ -744,5 +763,4 @@ public abstract class AbstractAXSModule implements AXSModule {
         return null;
     }
 }
-
 

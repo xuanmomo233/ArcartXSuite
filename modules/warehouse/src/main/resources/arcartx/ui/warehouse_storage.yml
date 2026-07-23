@@ -22,6 +22,7 @@ ui:
   packetHandler:
     update: |-
       var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.ownerType = packet['ownerType']
       var.ownerId = packet['ownerId']
       var.warehouseId = packet['warehouseId']
@@ -57,23 +58,46 @@ ui:
       var.maxPersonalCount = packet['maxPersonalCount']
       var.maxSharedCount = packet['maxSharedCount']
       var.maxCategoryCount = packet['maxCategoryCount']
-      // 三个列表按 packet 实际数量动态创建（不写死份数），只增不减：数量变大时补建新控件，
-      // 删减的项因模板绑定 visible:self.entry!=none 自动隐藏；不 remove、不重建，因此不闪。模板为索引 0。
-      while(val.个人仓库列表.childrenCount() < var.maxPersonalCount.round()){
-        key = val.个人仓库列表.childrenCount().round()
-        项 = val.个人仓库列表['项'].copy('项' + key)
-        项.entryKey = key
-      }
-      while(val.共享仓库列表.childrenCount() < var.maxSharedCount.round()){
-        key = val.共享仓库列表.childrenCount().round()
-        项 = val.共享仓库列表['项'].copy('项' + key)
-        项.entryKey = key
-      }
-      while(val.分类列表.childrenCount() < var.maxCategoryCount.round()){
-        key = val.分类列表.childrenCount().round()
-        项 = val.分类列表['项'].copy('项' + key)
-        项.entryKey = key
-      }
+      // 模板保留在索引 0，只有复制出来的控件才是数据行。
+      个人仓库数 = var.maxPersonalCount.round()
+      现有个人仓库数 = val.个人仓库列表.childrenCount() - 1
+      if(现有个人仓库数 != 个人仓库数){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.个人仓库列表.childrenCount() > 1){
+          val.个人仓库列表.get(1).remove()
+        }
+        if(个人仓库数 > 0){
+          for(序号 in range(0, 个人仓库数 - 1)){
+            项 = val.个人仓库列表['项'].copy('个人仓库项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
+      共享仓库数 = var.maxSharedCount.round()
+      现有共享仓库数 = val.共享仓库列表.childrenCount() - 1
+      if(现有共享仓库数 != 共享仓库数){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.共享仓库列表.childrenCount() > 1){
+          val.共享仓库列表.get(1).remove()
+        }
+        if(共享仓库数 > 0){
+          for(序号 in range(0, 共享仓库数 - 1)){
+            项 = val.共享仓库列表['项'].copy('共享仓库项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
+      分类数 = var.maxCategoryCount.round()
+      现有分类数 = val.分类列表.childrenCount() - 1
+      if(现有分类数 != 分类数){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.分类列表.childrenCount() > 1){
+          val.分类列表.get(1).remove()
+        }
+        if(分类数 > 0){
+          for(序号 in range(0, 分类数 - 1)){
+            项 = val.分类列表['项'].copy('分类项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
       var.renderBackpackAmounts()
       var.itemJsons = {}
       if(var.slots != none){
@@ -86,14 +110,21 @@ ui:
           }
         }
       }
-      // 仓库网格按当前页实际槽位数(slotCount)动态创建，只增不减；不写死数量、不 remove 重建。模板为索引 0。
-      while(val.仓库网格.childrenCount() < var.slotCount.round()){
-        key = val.仓库网格.childrenCount().round()
-        slot = val.仓库网格['物品图标'].copy('物品图标' + key)
-        slot.entryKey = key
-      }
-      for(i in range(0, var.slotCount.round())){
-        icon = val.仓库网格.get(i.round())
+      仓库槽位数 = var.slotCount.round()
+      现有仓库槽位数 = val.仓库网格.childrenCount() - 1
+      if(现有仓库槽位数 != 仓库槽位数){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.仓库网格.childrenCount() > 1){
+          val.仓库网格.get(1).remove()
+        }
+        if(仓库槽位数 > 0){
+          for(序号 in range(0, 仓库槽位数 - 1)){
+            slot = val.仓库网格['物品图标'].copy('仓库物品图标_' + var.刷新轮次 + '_' + 序号.round())
+            slot.entryKey = 序号.round()
+          }
+        }
+      for(i in range(0, 仓库槽位数)){
+        icon = val.仓库网格.get((i + 1).round())
         if(icon != none){
           icon.seticon()
         }
@@ -148,6 +179,7 @@ ui:
       var.maxPersonalCount = 0
       var.maxSharedCount = 0
       var.maxCategoryCount = 0
+      var.刷新轮次 = 0
       var.renderBackpackAmounts = -> {
         if(val.背包网格 != none){
           for(raw in range(9,44)){
@@ -738,7 +770,7 @@ controls:
                   fontSize: 34
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'warehouse_upgrade')
+                    Packet.send(var.packetId, 'warehouse_upgrade', var.actionToken)
                 effect:
                   stroke:
                     width: 2

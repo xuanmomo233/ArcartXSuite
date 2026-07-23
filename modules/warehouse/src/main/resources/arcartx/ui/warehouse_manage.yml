@@ -22,6 +22,7 @@ ui:
   packetHandler:
     update: |-
       var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.ownerType = packet['ownerType']
       var.ownerId = packet['ownerId']
       var.warehouseId = packet['warehouseId']
@@ -57,18 +58,32 @@ ui:
       var.showcaseEnabled = packet['showcaseEnabled']
       var.maxManageCount = packet['maxManageCount']
       var.maxMemberCount = packet['maxMemberCount']
-      // 两个列表按实际数量动态创建（不写死），只增不减：新建共享仓库/加成员时数量变大就补建；
-      // 删除的项因模板绑定 visible:self.entry!=none 自动隐藏，不 remove、不重建，不闪。模板为索引 0。
-      while(val.共享列表.childrenCount() < var.maxManageCount.round()){
-        key = val.共享列表.childrenCount().round()
-        项 = val.共享列表['项'].copy('项' + key)
-        项.entryKey = key
-      }
-      while(val.成员列表.childrenCount() < var.maxMemberCount.round()){
-        key = val.成员列表.childrenCount().round()
-        项 = val.成员列表['项'].copy('项' + key)
-        项.entryKey = key
-      }
+      共享数 = var.maxManageCount.round()
+      现有共享数 = val.共享列表.childrenCount() - 1
+      if(现有共享数 != 共享数){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.共享列表.childrenCount() > 1){
+          val.共享列表.get(1).remove()
+        }
+        if(共享数 > 0){
+          for(序号 in range(0, 共享数 - 1)){
+            项 = val.共享列表['项'].copy('共享项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
+      成员数 = var.maxMemberCount.round()
+      现有成员数 = val.成员列表.childrenCount() - 1
+      if(现有成员数 != 成员数){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.成员列表.childrenCount() > 1){
+          val.成员列表.get(1).remove()
+        }
+        if(成员数 > 0){
+          for(序号 in range(0, 成员数 - 1)){
+            项 = val.成员列表['项'].copy('成员项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
   action:
     open: |-
       var.packetId = 'AXS_WAREHOUSE'
@@ -115,6 +130,7 @@ ui:
       var.autoPickupNotify = true
       var.maxManageCount = 0
       var.maxMemberCount = 0
+      var.刷新轮次 = 0
       Packet.send(var.packetId, 'refresh')
 
 controls:
@@ -248,7 +264,7 @@ controls:
                   fontSize: 30
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'toggle_auto_pickup')
+                    Packet.send(var.packetId, 'toggle_auto_pickup', var.actionToken)
                 effect:
                   stroke:
                     width: 2
@@ -269,7 +285,7 @@ controls:
                   fontSize: 30
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'toggle_auto_mythic')
+                    Packet.send(var.packetId, 'toggle_auto_mythic', var.actionToken)
                 effect:
                   stroke:
                     width: 2
@@ -290,7 +306,7 @@ controls:
                   fontSize: 30
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'toggle_auto_notify')
+                    Packet.send(var.packetId, 'toggle_auto_notify', var.actionToken)
                 effect:
                   stroke:
                     width: 2
@@ -354,7 +370,7 @@ controls:
                   fontSize: 34
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'shared_create', var.sharedName)
+                    Packet.send(var.packetId, 'shared_create', var.sharedName, var.actionToken)
                 effect:
                   stroke:
                     width: 2
@@ -501,7 +517,7 @@ controls:
                 action:
                   clickLeft: |-
                     if(var.deleteConfirm){
-                      Packet.send(var.packetId, 'shared_delete', var.ownerId, var.deletePassword)
+                    Packet.send(var.packetId, 'shared_delete', var.ownerId, var.deletePassword, var.actionToken)
                     }else{
                       var.deleteConfirm = true
                       var.deletePassword = none
@@ -559,9 +575,9 @@ controls:
                 action:
                   clickLeft: |-
                     if(var.ownerType == 'shared'){
-                      Packet.send(var.packetId, 'shared_showcase_toggle', var.ownerId)
+                    Packet.send(var.packetId, 'shared_showcase_toggle', var.ownerId, var.actionToken)
                     }else{
-                      Packet.send(var.packetId, 'personal_showcase_toggle', var.warehouseId)
+                    Packet.send(var.packetId, 'personal_showcase_toggle', var.warehouseId, var.actionToken)
                     }
                 effect:
                   stroke:
@@ -605,9 +621,9 @@ controls:
                 action:
                   clickLeft: |-
                     if(var.ownerType == 'shared'){
-                      Packet.send(var.packetId, 'shared_rename', var.ownerId, var.renameName)
+                    Packet.send(var.packetId, 'shared_rename', var.ownerId, var.renameName, var.actionToken)
                     }else{
-                      Packet.send(var.packetId, 'personal_rename', var.warehouseId, var.renameName)
+                    Packet.send(var.packetId, 'personal_rename', var.warehouseId, var.renameName, var.actionToken)
                     }
                 effect:
                   stroke:
@@ -699,7 +715,7 @@ controls:
                     if(var.hasPassword){
                       Packet.send(var.packetId, 'password_unlock', var.passwordText)
                     }else{
-                      Packet.send(var.packetId, 'password_set', var.passwordText)
+                    Packet.send(var.packetId, 'password_set', var.passwordText, var.actionToken)
                     }
                 effect:
                   stroke:
@@ -721,7 +737,7 @@ controls:
                   fontSize: 34
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'password_lock')
+                    Packet.send(var.packetId, 'password_lock', var.actionToken)
                 effect:
                   stroke:
                     width: 2
@@ -743,7 +759,7 @@ controls:
                 action:
                   clickLeft: |-
                     if(var.canUpgrade){
-                      Packet.send(var.packetId, 'warehouse_upgrade')
+                    Packet.send(var.packetId, 'warehouse_upgrade', var.actionToken)
                     }
                 effect:
                   stroke:
@@ -850,7 +866,7 @@ controls:
                   fontSize: 34
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'shared_invite', var.ownerId, var.memberName, var.memberRole)
+                    Packet.send(var.packetId, 'shared_invite', var.ownerId, var.memberName, var.memberRole, var.actionToken)
                 effect:
                   stroke:
                     width: 2
@@ -871,7 +887,7 @@ controls:
                   fontSize: 34
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'shared_remove', var.ownerId, var.memberName)
+                    Packet.send(var.packetId, 'shared_remove', var.ownerId, var.memberName, var.actionToken)
                 effect:
                   stroke:
                     width: 2
@@ -892,7 +908,7 @@ controls:
                   fontSize: 34
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'shared_transfer', var.ownerId, var.memberName)
+                    Packet.send(var.packetId, 'shared_transfer', var.ownerId, var.memberName, var.actionToken)
                 effect:
                   stroke:
                     width: 2

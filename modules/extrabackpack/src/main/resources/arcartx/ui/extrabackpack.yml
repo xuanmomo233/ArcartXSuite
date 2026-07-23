@@ -25,6 +25,7 @@ ui:
   packetHandler:
     update: |-
       var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.activeCategory = packet['activeCategory']
       var.categories = packet['categories']
       var.categoryCount = packet['categoryCount']
@@ -77,27 +78,41 @@ ui:
           }
         }
       }
-      // 分类标签按实际数量动态创建（只增不减）。模板为索引 0。
-      while(val.分类标签行.childrenCount() < var.categoryCount.round()){
-        key = val.分类标签行.childrenCount().round()
-        项 = val.分类标签行['项'].copy('项' + key)
-        项.entryKey = key
-      }
-      // 分类页槽位按当前页实际容量动态创建（只增不减）。模板为索引 0。
-      while(val.背包网格.childrenCount() < var.slotCount.round()){
-        key = val.背包网格.childrenCount().round()
-        slot = val.背包网格['物品图标'].copy('物品图标' + key)
-        slot.entryKey = key
-      }
-      for(i in range(0, var.slotCount.round())){
-        icon = val.背包网格.get(i.round())
+      分类数 = var.categoryCount.round()
+      现有分类数 = val.分类标签行.childrenCount() - 1
+      if(现有分类数 != 分类数){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.分类标签行.childrenCount() > 1){
+          val.分类标签行.get(1).remove()
+        }
+        if(分类数 > 0){
+          for(序号 in range(0, 分类数 - 1)){
+            项 = val.分类标签行['项'].copy('分类项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
+      槽位数 = var.slotCount.round()
+      现有槽位数 = val.背包网格.childrenCount() - 1
+      if(现有槽位数 != 槽位数){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.背包网格.childrenCount() > 1){
+          val.背包网格.get(1).remove()
+        }
+        if(槽位数 > 0){
+          for(序号 in range(0, 槽位数 - 1)){
+            slot = val.背包网格['物品图标'].copy('背包物品图标_' + var.刷新轮次 + '_' + 序号.round())
+            slot.entryKey = 序号.round()
+          }
+        }
+      for(i in range(0, 槽位数)){
+        icon = val.背包网格.get((i + 1).round())
         if(icon != none){
           icon.seticon()
         }
       }
       // 快捷栏 9 格静态创建（数量固定）。模板为索引 0。
       for(i in range(0, 9)){
-        icon = val.快捷栏网格.get(i.round())
+        icon = val.快捷栏网格.get((i + 1).round())
         if(icon != none){
           icon.seticon()
         }
@@ -131,9 +146,10 @@ ui:
       var.buySlotsText = none
       var.buyAmount = 1
       var.air = '{"id": "minecraft:air","Count":1b}'
+      var.刷新轮次 = 0
       // 快捷栏 9 格在构建时静态创建（数量固定，模板为索引 0）。
-      for(i in range(1, 9)){
-        slot = val.快捷栏网格['物品图标'].copy('物品图标' + i.round())
+      for(i in range(0, 8)){
+        slot = val.快捷栏网格['物品图标'].copy('快捷栏物品图标_' + i.round())
         slot.entryKey = i.round()
       }
     open: |-
@@ -280,7 +296,7 @@ controls:
                     type: Slot
                     attribute:
                       entryKey: 0
-                       entry: var.vanillaTab ? var.vanillaSlots[self.entryKey] : var.slots[self.entryKey]
+                      entry: "var.vanillaTab ? var.vanillaSlots[self.entryKey] : var.slots[self.entryKey]"
                       visible: self.entry != none
                       slotType: ~Icon
                       itemScale: 0.76
@@ -290,12 +306,12 @@ controls:
                       hover: ~Frosted:0;255,255,255,255
                       shape: ~round_rect
                       radius: 16
-                       seticon: "self.setItemIcon(var.vanillaTab ? var.vanillaJsons[self.entryKey] : var.itemJsons[self.entryKey])"
-                     action:
-                       clickLeft: |-
-                         Packet.send(var.packetId, var.vanillaTab ? 'vanilla_info' : 'withdraw', self.entryKey)
-                       clickRight: |-
-                         if(var.vanillaTab){ Packet.send(var.packetId, 'vanilla_options', self.entryKey) }
+                      seticon: "self.setItemIcon(var.vanillaTab ? var.vanillaJsons[self.entryKey] : var.itemJsons[self.entryKey])"
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, var.vanillaTab ? 'vanilla_info' : 'withdraw', self.entryKey)
+                      clickRight: |-
+                        if(var.vanillaTab){ Packet.send(var.packetId, 'vanilla_options', self.entryKey) }
                     effect:
                       stroke:
                         width: 2
@@ -372,7 +388,7 @@ controls:
                   fontSize: 34
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'buy_slots', var.buyAmount)
+                    Packet.send(var.packetId, 'buy_slots', var.buyAmount, var.actionToken)
                 effect:
                   stroke:
                     width: 2
@@ -523,9 +539,9 @@ controls:
                   texts: "~&0关闭"
                   center: true
                   fontSize: 26
-                 action:
-                   clickLeft: |-
-                     Packet.send(var.packetId, 'vanilla_options', -1)
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'vanilla_options', -1)
           销毁确认框:
             type: Texture
             attribute:
@@ -541,7 +557,7 @@ controls:
               center: true
               fontSize: 28
             children:
-               确认按钮:
+              确认按钮:
                 type: Texture
                 attribute:
                   x: 90
@@ -554,10 +570,10 @@ controls:
                   texts: "~&f确认"
                   center: true
                   fontSize: 28
-                 action:
-                   clickLeft: |-
-                     Packet.send(var.packetId, 'vanilla_destroy', var.vanillaOptions['slot'], 'true')
-                     var.destroyConfirm = false
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'vanilla_destroy', var.vanillaOptions['slot'], 'true', var.actionToken)
+                    var.destroyConfirm = false
               取消按钮:
                 type: Texture
                 attribute:
@@ -571,114 +587,114 @@ controls:
                   texts: "~&0取消"
                   center: true
                   fontSize: 28
-                 action:
-                   clickLeft: |-
-                     var.destroyConfirm = false
-                     Packet.send(var.packetId, 'vanilla_options', -1)
-           二级密码面板:
-             type: Texture
-             attribute:
-               x: 300
-               y: 240
-               width: 600
-               height: 300
-               visible: var.passwordPanel != none && var.passwordPanel['visible']
-               normal: ~30,30,30,250
-               shape: ~round_rect
-               radius: 18
-               texts: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set' ? '~&f设置二级密码' : (var.passwordPanel != none && var.passwordPanel['mode'] == 'clear' ? '~&f清除二级密码' : '~&f解锁二级密码')"
-               center: true
-               fontSize: 28
-             children:
-               当前密码:
-                 type: TextBox
-                 attribute:
-                   x: 40
-                   y: 72
-                   width: 520
-                   height: 42
-                   length: 64
-                   emptyText: ~当前密码（设置新密码时已有密码必填）
-                   fontSize: 22
-                   background: ~90,90,90,230
-                   shape: ~round_rect
-                   radius: 12
-                 action:
-                   textChange: |-
-                     var.passwordCurrent = self.getContent()
-               新密码:
-                 type: TextBox
-                 attribute:
-                   x: 40
-                   y: 122
-                   width: 520
-                   height: 42
-                   length: 64
-                   visible: var.passwordPanel != none && var.passwordPanel['mode'] == 'set'
-                   emptyText: ~新密码
-                   fontSize: 22
-                   background: ~90,90,90,230
-                   shape: ~round_rect
-                   radius: 12
-                 action:
-                   textChange: |-
-                     var.passwordNew = self.getContent()
-               提交:
-                 type: Texture
-                 attribute:
-                   x: 80
-                   y: 205
-                   width: 180
-                   height: 48
-                   normal: ~120,190,255,220
-                   hover: ~Frosted:0;255,255,255,240
-                   shape: ~round_rect
-                   radius: 12
-                   texts: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set' ? '~&0设置' : (var.passwordPanel != none && var.passwordPanel['mode'] == 'clear' ? '~&0清除' : '~&0解锁')"
-                   center: true
-                   fontSize: 25
-                 action:
-                   clickLeft: |-
-                     if(var.passwordPanel['mode'] == 'set'){
-                       Packet.send(var.packetId, 'password_set', var.passwordCurrent, var.passwordNew)
-                     }else if(var.passwordPanel['mode'] == 'clear'){
-                       Packet.send(var.packetId, 'password_clear', var.passwordCurrent)
-                     }else{
-                       Packet.send(var.packetId, 'password_unlock', var.passwordCurrent)
-                     }
-               取消:
-                 type: Texture
-                 attribute:
-                   x: 340
-                   y: 205
-                   width: 180
-                   height: 48
-                   normal: ~255,255,255,150
-                   hover: ~Frosted:0;255,255,255,240
-                   shape: ~round_rect
-                   radius: 12
-                   texts: "~&0取消"
-                   center: true
-                   fontSize: 25
-                 action:
-                   clickLeft: |-
-                     var.passwordPanel['visible'] = false
-                     Packet.send(var.packetId, 'password_panel_close')
-               清除密码:
-                 type: Texture
-                 attribute:
-                   x: 210
-                   y: 255
-                   width: 180
-                   height: 34
-                   visible: var.passwordPanel != none && var.passwordPanel['mode'] != 'set'
-                   normal: ~255,170,170,180
-                   hover: ~Frosted:0;255,255,255,240
-                   shape: ~round_rect
-                   radius: 10
-                   texts: "~&0清除密码"
-                   center: true
-                   fontSize: 20
-                 action:
-                   clickLeft: |-
-                     Packet.send(var.packetId, 'password_clear', var.passwordCurrent)
+                action:
+                  clickLeft: |-
+                    var.destroyConfirm = false
+                    Packet.send(var.packetId, 'vanilla_options', -1)
+          二级密码面板:
+            type: Texture
+            attribute:
+              x: 300
+              y: 240
+              width: 600
+              height: 300
+              visible: var.passwordPanel != none && var.passwordPanel['visible']
+              normal: ~30,30,30,250
+              shape: ~round_rect
+              radius: 18
+              texts: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set' ? '~&f设置二级密码' : (var.passwordPanel != none && var.passwordPanel['mode'] == 'clear' ? '~&f清除二级密码' : '~&f解锁二级密码')"
+              center: true
+              fontSize: 28
+            children:
+              当前密码:
+                type: TextBox
+                attribute:
+                  x: 40
+                  y: 72
+                  width: 520
+                  height: 42
+                  length: 64
+                  emptyText: ~当前密码（设置新密码时已有密码必填）
+                  fontSize: 22
+                  background: ~90,90,90,230
+                  shape: ~round_rect
+                  radius: 12
+                action:
+                  textChange: |-
+                    var.passwordCurrent = self.getContent()
+              新密码:
+                type: TextBox
+                attribute:
+                  x: 40
+                  y: 122
+                  width: 520
+                  height: 42
+                  length: 64
+                  visible: var.passwordPanel != none && var.passwordPanel['mode'] == 'set'
+                  emptyText: ~新密码
+                  fontSize: 22
+                  background: ~90,90,90,230
+                  shape: ~round_rect
+                  radius: 12
+                action:
+                  textChange: |-
+                    var.passwordNew = self.getContent()
+              提交:
+                type: Texture
+                attribute:
+                  x: 80
+                  y: 205
+                  width: 180
+                  height: 48
+                  normal: ~120,190,255,220
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 12
+                  texts: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set' ? '~&0设置' : (var.passwordPanel != none && var.passwordPanel['mode'] == 'clear' ? '~&0清除' : '~&0解锁')"
+                  center: true
+                  fontSize: 25
+                action:
+                  clickLeft: |-
+                    if(var.passwordPanel['mode'] == 'set'){
+                    Packet.send(var.packetId, 'password_set', var.passwordCurrent, var.passwordNew, var.actionToken)
+                    }else if(var.passwordPanel['mode'] == 'clear'){
+                    Packet.send(var.packetId, 'password_clear', var.passwordCurrent, var.actionToken)
+                    }else{
+                      Packet.send(var.packetId, 'password_unlock', var.passwordCurrent)
+                    }
+              取消:
+                type: Texture
+                attribute:
+                  x: 340
+                  y: 205
+                  width: 180
+                  height: 48
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 12
+                  texts: "~&0取消"
+                  center: true
+                  fontSize: 25
+                action:
+                  clickLeft: |-
+                    var.passwordPanel['visible'] = false
+                    Packet.send(var.packetId, 'password_panel_close')
+              清除密码:
+                type: Texture
+                attribute:
+                  x: 210
+                  y: 255
+                  width: 180
+                  height: 34
+                  visible: var.passwordPanel != none && var.passwordPanel['mode'] != 'set'
+                  normal: ~255,170,170,180
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 10
+                  texts: "~&0清除密码"
+                  center: true
+                  fontSize: 20
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'password_clear', var.passwordCurrent, var.actionToken)

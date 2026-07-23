@@ -22,6 +22,7 @@ ui:
   packetHandler:
     update: |-
       var.packetId = packet['packetId']
+      var.actionToken = packet['action_token']
       var.warehouseName = packet['warehouseName']
       var.balances = packet['balances']
       var.balanceTexts = packet['balanceTexts']
@@ -34,23 +35,45 @@ ui:
       var.maxBalanceCount = packet['maxBalanceCount']
       var.maxProductCount = packet['maxProductCount']
       var.maxFixedCount = packet['maxFixedCount']
-      // 三个列表按实际数量动态创建（不写死），只增不减：开定期/领取时数量变化时补建；
-      // 删减的项因模板绑定 visible:self.entry!=none 自动隐藏，不 remove、不重建，不闪。模板为索引 0。
-      while(val.余额列表.childrenCount() < var.maxBalanceCount.round()){
-        key = val.余额列表.childrenCount().round()
-        项 = val.余额列表['项'].copy('项' + key)
-        项.entryKey = key
-      }
-      while(val.产品列表.childrenCount() < var.maxProductCount.round()){
-        key = val.产品列表.childrenCount().round()
-        项 = val.产品列表['项'].copy('项' + key)
-        项.entryKey = key
-      }
-      while(val.定期列表.childrenCount() < var.maxFixedCount.round()){
-        key = val.定期列表.childrenCount().round()
-        项 = val.定期列表['项'].copy('项' + key)
-        项.entryKey = key
-      }
+      余额数 = var.maxBalanceCount.round()
+      现有余额数 = val.余额列表.childrenCount() - 1
+      if(现有余额数 != 余额数){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.余额列表.childrenCount() > 1){
+          val.余额列表.get(1).remove()
+        }
+        if(余额数 > 0){
+          for(序号 in range(0, 余额数 - 1)){
+            项 = val.余额列表['项'].copy('余额项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
+      产品数 = var.maxProductCount.round()
+      现有产品数 = val.产品列表.childrenCount() - 1
+      if(现有产品数 != 产品数){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.产品列表.childrenCount() > 1){
+          val.产品列表.get(1).remove()
+        }
+        if(产品数 > 0){
+          for(序号 in range(0, 产品数 - 1)){
+            项 = val.产品列表['项'].copy('产品项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
+      定期数 = var.maxFixedCount.round()
+      现有定期数 = val.定期列表.childrenCount() - 1
+      if(现有定期数 != 定期数){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.定期列表.childrenCount() > 1){
+          val.定期列表.get(1).remove()
+        }
+        if(定期数 > 0){
+          for(序号 in range(0, 定期数 - 1)){
+            项 = val.定期列表['项'].copy('定期项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
   action:
     load: |-
       var.packetId = 'AXS_WAREHOUSE'
@@ -70,6 +93,7 @@ ui:
       var.maxBalanceCount = 0
       var.maxProductCount = 0
       var.maxFixedCount = 0
+      var.刷新轮次 = 0
     open: |-
       Packet.send(var.packetId, 'refresh')
 
@@ -224,7 +248,7 @@ controls:
                   fontSize: 34
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'bank_deposit', var.selectedCurrency, var.bankAmount)
+                    Packet.send(var.packetId, 'bank_deposit', var.selectedCurrency, var.bankAmount, var.actionToken)
                 effect:
                   stroke:
                     width: 2
@@ -245,7 +269,7 @@ controls:
                   fontSize: 34
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'bank_withdraw', var.selectedCurrency, var.bankAmount)
+                    Packet.send(var.packetId, 'bank_withdraw', var.selectedCurrency, var.bankAmount, var.actionToken)
                 effect:
                   stroke:
                     width: 2
@@ -390,7 +414,7 @@ controls:
                   fontSize: 34
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'fixed_create', var.selectedProduct, var.bankAmount)
+                    Packet.send(var.packetId, 'fixed_create', var.selectedProduct, var.bankAmount, var.actionToken)
                 effect:
                   stroke:
                     width: 2
@@ -527,5 +551,4 @@ controls:
                             color: ~0,0,0,255
                         action:
                           clickLeft: |-
-                            Packet.send(var.packetId, 'fixed_claim', self.entry['id'])
-
+                            Packet.send(var.packetId, 'fixed_claim', self.entry['id'], var.actionToken)

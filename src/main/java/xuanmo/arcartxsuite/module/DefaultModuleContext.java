@@ -384,6 +384,16 @@ final class DefaultModuleContext implements ModuleContext {
     }
 
     @Override
+    public void registerClientPacketHandler(
+        ClientPacketHandler handler,
+        int priority,
+        String packetId,
+        String guardModule
+    ) {
+        registry.registerClientPacketHandler(moduleId, handler, priority, packetId, guardModule);
+    }
+
+    @Override
     public void registerClientInitializedHandler(ClientInitializedHandler handler) {
         registry.registerClientInitializedHandler(moduleId, handler);
     }

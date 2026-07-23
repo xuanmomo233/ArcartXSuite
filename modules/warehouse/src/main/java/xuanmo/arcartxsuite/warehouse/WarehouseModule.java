@@ -263,6 +263,16 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
             service != null && service.handleClientPacket(player, packetId, data);
     }
 
+    @Override
+    protected @Nullable String packetOwnershipPacketId() {
+        return configuration == null ? null : configuration.ui().packetId();
+    }
+
+    @Override
+    protected @Nullable String packetGuardModuleKey() {
+        return "warehouse";
+    }
+
     public WarehouseService getService() {
         return service;
     }
@@ -288,4 +298,3 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-

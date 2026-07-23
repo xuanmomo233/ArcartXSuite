@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -90,6 +91,9 @@ import java.util.logging.Logger;
  */
 public final class WarehouseService implements Listener {
 
+    private record TokenLease(UUID playerUuid, String uiId) {
+    }
+
     private final MessageProvider messages;
 
     private static final String PREFIX = ChatColor.DARK_AQUA + "◆ " + ChatColor.GOLD + "ArcartXSuite " + ChatColor.GRAY + "| " + ChatColor.RESET;
@@ -142,6 +146,14 @@ public final class WarehouseService implements Listener {
     private Supplier<EventBusCapability> eventBusProvider;
     /** 玩家上次展示仓库的时间戳（毫秒），用于冷却控制。 */
     private final ConcurrentMap<UUID, Long> showcaseCooldowns = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, String> storageActionTokens = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, String> manageActionTokens = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, String> bankActionTokens = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, Object> actionTokenLocks = new ConcurrentHashMap<>();
+    private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
+    private final ThreadLocal<Set<UUID>> committedActionTokens =
+        ThreadLocal.withInitial(HashSet::new);
+    private final ThreadLocal<TokenLease> activeActionToken = new ThreadLocal<>();
     private String storageRuntimeUiId = "";
     private String manageRuntimeUiId = "";
     private String bankRuntimeUiId = "";
@@ -525,9 +537,13 @@ public final class WarehouseService implements Listener {
         }
         String action = data == null || data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
         debug("IN player=" + player.getName() + " packetId=" + packetId + " action=" + action + " data=" + data);
-        // guard injected via field
-        if (packetGuard != null && !packetGuard.allow(player, "warehouse", action, configuration.debug())) {
-            debug("IN-BLOCKED player=" + player.getName() + " action=" + action + " reason=packet-guard");
+        if (!isUiOpenForAction(player, action)) {
+            sendMessage(player, false, message("player.ui-required"));
+            return true;
+        }
+        TokenLease tokenLease = beginActionToken(player, action, data);
+        if (requiresActionToken(action) && tokenLease == null) {
+            sendMessage(player, false, message("player.action-token-invalid"));
             return true;
         }
         try {
@@ -599,6 +615,8 @@ public final class WarehouseService implements Listener {
             } catch (Exception refreshException) {
                 this.logger.warning("刷新仓库 UI 失败: " + refreshException.getMessage());
             }
+        } finally {
+            finishActionToken(player, tokenLease);
         }
         return true;
     }
@@ -789,6 +807,12 @@ public final class WarehouseService implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         UUID playerUuid = event.getPlayer().getUniqueId();
         viewStates.remove(playerUuid);
+        storageActionTokens.remove(playerUuid);
+        manageActionTokens.remove(playerUuid);
+        bankActionTokens.remove(playerUuid);
+        actionTokensInFlight.remove(playerUuid);
+        committedActionTokens.get().remove(playerUuid);
+        actionTokenLocks.remove(playerUuid);
         releaseSharedLocks(playerUuid);
     }
 
@@ -852,9 +876,18 @@ public final class WarehouseService implements Listener {
             "bank"
         );
         if (packetBridge != null) {
-            packetBridge.registerUiCloseCallback(storageRuntimeUiId, this::handleUiClosed);
-            packetBridge.registerUiCloseCallback(manageRuntimeUiId, this::handleUiClosed);
-            packetBridge.registerUiCloseCallback(bankRuntimeUiId, this::handleUiClosed);
+            packetBridge.registerUiCloseCallback(
+                storageRuntimeUiId,
+                player -> handleUiClosed(player, storageRuntimeUiId)
+            );
+            packetBridge.registerUiCloseCallback(
+                manageRuntimeUiId,
+                player -> handleUiClosed(player, manageRuntimeUiId)
+            );
+            packetBridge.registerUiCloseCallback(
+                bankRuntimeUiId,
+                player -> handleUiClosed(player, bankRuntimeUiId)
+            );
         }
     }
 
@@ -899,7 +932,9 @@ public final class WarehouseService implements Listener {
         if (state(player).sharedEditMode() && !acquireCurrentSharedLock(player, state(player))) {
             state(player).setSharedEditMode(false);
         }
-        packetBridge.openUi(player, storageRuntimeUiId);
+        if (packetBridge.openUi(player, storageRuntimeUiId)) {
+            issueActionToken(player, storageRuntimeUiId);
+        }
     }
 
     /**
@@ -908,7 +943,9 @@ public final class WarehouseService implements Listener {
     private void openManage(Player player) throws Exception {
         ensureEntitlements(player);
         ensureCurrentWarehouse(player, state(player));
-        packetBridge.openUi(player, manageRuntimeUiId);
+        if (packetBridge.openUi(player, manageRuntimeUiId)) {
+            issueActionToken(player, manageRuntimeUiId);
+        }
     }
 
     /**
@@ -917,7 +954,9 @@ public final class WarehouseService implements Listener {
     private void openBank(Player player) throws Exception {
         ensureEntitlements(player);
         ensureCurrentWarehouse(player, state(player));
-        packetBridge.openUi(player, bankRuntimeUiId);
+        if (packetBridge.openUi(player, bankRuntimeUiId)) {
+            issueActionToken(player, bankRuntimeUiId);
+        }
     }
 
     /**
@@ -958,7 +997,178 @@ public final class WarehouseService implements Listener {
         }
     }
 
+    private boolean isUiOpenForAction(Player player, String action) {
+        if ("withdraw".equals(action)
+            || "withdraw_all".equals(action)
+            || "deposit_slot".equals(action)
+            || "deposit_all_backpack".equals(action)
+            || "shared_mode".equals(action)) {
+            return packetBridge != null
+                && packetBridge.isUiOpen(player, storageRuntimeUiId);
+        }
+        if ("bank_deposit".equals(action)
+            || "bank_withdraw".equals(action)
+            || "fixed_create".equals(action)
+            || "fixed_claim".equals(action)) {
+            return packetBridge != null
+                && packetBridge.isUiOpen(player, bankRuntimeUiId);
+        }
+        if ("warehouse_upgrade".equals(action)) {
+            return packetBridge != null
+                && (packetBridge.isUiOpen(player, storageRuntimeUiId)
+                    || packetBridge.isUiOpen(player, manageRuntimeUiId));
+        }
+        if ("shared_create".equals(action)
+            || "shared_rename".equals(action)
+            || "shared_showcase_toggle".equals(action)
+            || "personal_rename".equals(action)
+            || "personal_showcase_toggle".equals(action)
+            || "shared_delete".equals(action)
+            || "shared_invite".equals(action)
+            || "shared_remove".equals(action)
+            || "shared_transfer".equals(action)
+            || "shared_transfer_confirm".equals(action)
+            || "shared_transfer_reject".equals(action)
+            || "toggle_auto_pickup".equals(action)
+            || "toggle_auto_mythic".equals(action)
+            || "toggle_auto_notify".equals(action)) {
+            return packetBridge != null
+                && packetBridge.isUiOpen(player, manageRuntimeUiId);
+        }
+        if ("password_set".equals(action)
+            || "password_unlock".equals(action)
+            || "password_lock".equals(action)) {
+            return packetBridge != null
+                && (packetBridge.isUiOpen(player, storageRuntimeUiId)
+                    || packetBridge.isUiOpen(player, manageRuntimeUiId)
+                    || packetBridge.isUiOpen(player, bankRuntimeUiId));
+        }
+        return true;
+    }
+
+    private boolean requiresActionToken(String action) {
+        return "bank_deposit".equals(action)
+            || "bank_withdraw".equals(action)
+            || "fixed_create".equals(action)
+            || "fixed_claim".equals(action)
+            || "warehouse_upgrade".equals(action)
+            || "shared_create".equals(action)
+            || "shared_delete".equals(action)
+            || "shared_rename".equals(action)
+            || "personal_rename".equals(action)
+            || "shared_transfer".equals(action)
+            || "shared_transfer_confirm".equals(action)
+            || "shared_transfer_reject".equals(action)
+            || "shared_invite".equals(action)
+            || "shared_remove".equals(action)
+            || "shared_showcase_toggle".equals(action)
+            || "personal_showcase_toggle".equals(action)
+            || "toggle_auto_pickup".equals(action)
+            || "toggle_auto_mythic".equals(action)
+            || "toggle_auto_notify".equals(action)
+            || "password_set".equals(action)
+            || "password_lock".equals(action);
+    }
+
+    private TokenLease beginActionToken(Player player, String action, List<String> data) {
+        if (!requiresActionToken(action)) {
+            return null;
+        }
+        String supplied = data == null || data.isEmpty()
+            ? ""
+            : safe(data.get(data.size() - 1));
+        if (supplied.isBlank()) {
+            return null;
+        }
+        List<String> candidateUiIds = tokenUiCandidates(action);
+        for (String uiId : candidateUiIds) {
+            if (!packetBridge.isUiOpen(player, uiId)) {
+                continue;
+            }
+            ConcurrentMap<UUID, String> tokens = tokenMap(uiId);
+            UUID uuid = player.getUniqueId();
+            Object lock = actionTokenLocks.computeIfAbsent(uuid, ignored -> new Object());
+            synchronized (lock) {
+                String expected = tokens.get(uuid);
+                if (expected == null || !expected.equals(supplied) || !actionTokensInFlight.add(uuid)) {
+                    continue;
+                }
+                TokenLease lease = new TokenLease(uuid, uiId);
+                activeActionToken.set(lease);
+                return lease;
+            }
+        }
+        return null;
+    }
+
+    private void finishActionToken(Player player, TokenLease lease) {
+        if (lease == null) {
+            return;
+        }
+        UUID uuid = lease.playerUuid();
+        Object lock = actionTokenLocks.computeIfAbsent(uuid, ignored -> new Object());
+        synchronized (lock) {
+            actionTokensInFlight.remove(uuid);
+            committedActionTokens.get().remove(uuid);
+            activeActionToken.remove();
+        }
+    }
+
+    private void markActionCommitted(Player player) {
+        if (player != null) {
+            UUID uuid = player.getUniqueId();
+            committedActionTokens.get().add(uuid);
+            TokenLease lease = activeActionToken.get();
+            if (lease != null && lease.playerUuid().equals(uuid)) {
+                tokenMap(lease.uiId()).put(uuid, UUID.randomUUID().toString());
+            }
+        }
+    }
+
+    private void issueActionToken(Player player, String uiId) {
+        if (player != null && uiId != null && !uiId.isBlank()) {
+            tokenMap(uiId).put(player.getUniqueId(), UUID.randomUUID().toString());
+        }
+    }
+
+    private void invalidateActionToken(Player player, String uiId) {
+        if (player != null && uiId != null && !uiId.isBlank()) {
+            tokenMap(uiId).remove(player.getUniqueId());
+        }
+    }
+
+    private ConcurrentMap<UUID, String> tokenMap(String uiId) {
+        if (storageRuntimeUiId.equals(uiId)) {
+            return storageActionTokens;
+        }
+        if (manageRuntimeUiId.equals(uiId)) {
+            return manageActionTokens;
+        }
+        return bankActionTokens;
+    }
+
+    private List<String> tokenUiCandidates(String action) {
+        if ("bank_deposit".equals(action)
+            || "bank_withdraw".equals(action)
+            || "fixed_create".equals(action)
+            || "fixed_claim".equals(action)) {
+            return List.of(bankRuntimeUiId);
+        }
+        if ("warehouse_upgrade".equals(action)) {
+            return List.of(storageRuntimeUiId, manageRuntimeUiId);
+        }
+        return List.of(manageRuntimeUiId);
+    }
+
     private void handleUiClosed(Player player) {
+        invalidateActionToken(player, storageRuntimeUiId);
+        invalidateActionToken(player, manageRuntimeUiId);
+        invalidateActionToken(player, bankRuntimeUiId);
+        handleUiClosed(player, null);
+    }
+
+    private void handleUiClosed(Player player, String uiId) {
+        invalidateActionToken(player, uiId);
         if (player == null) {
             return;
         }
@@ -1008,6 +1218,7 @@ public final class WarehouseService implements Listener {
             ? repository.loadSlot(state.ownerType(), state.ownerId(), state.warehouseId(), state.selectedSlot()).orElse(null)
             : null;
         packet.put("ui", "storage");
+        packet.put("action_token", storageActionTokens.getOrDefault(player.getUniqueId(), ""));
         packet.put("slots", slots);
         packet.put("slotCount", pageSize);
         packet.put("selectedSlot", selectedDisplaySlot);
@@ -1078,6 +1289,7 @@ public final class WarehouseService implements Listener {
         Map<String, Object> sharedMembers = sharedMemberPacket(player, state);
         Map<String, Object> searchResults = searchResultPacket(state);
         packet.put("ui", "manage");
+        packet.put("action_token", manageActionTokens.getOrDefault(player.getUniqueId(), ""));
         putCapacityFields(player, state, packet);
         packet.put("sharedMembers", sharedMembers);
         packet.put("sharedMemberTexts", fieldMap(sharedMembers, "text"));
@@ -1108,6 +1320,7 @@ public final class WarehouseService implements Listener {
         Map<String, Object> products = depositProductPacket(player);
         Map<String, Object> fixedDeposits = fixedDepositPacket(player);
         packet.put("ui", "bank");
+        packet.put("action_token", bankActionTokens.getOrDefault(player.getUniqueId(), ""));
         packet.put("balances", balances);
         packet.put("balanceTexts", fieldMap(balances, "text"));
         packet.put("products", products);
@@ -1310,6 +1523,7 @@ public final class WarehouseService implements Listener {
                 sendMessage(player, true, message("player.deposit-notify", state.autoPickupNotify() ? message("player.enabled") : message("player.disabled")));
             }
         }
+        markActionCommitted(player);
         refreshBoth(player);
     }
 
@@ -1644,6 +1858,7 @@ public final class WarehouseService implements Listener {
             throw exception;
         }
         sendMessage(player, true, message("player.bank-deposit-success", formatCurrency(normalized, amount)));
+        markActionCommitted(player);
         refreshBoth(player);
     }
 
@@ -1684,6 +1899,7 @@ public final class WarehouseService implements Listener {
             return;
         }
         sendMessage(player, true, message("player.bank-withdraw-success", formatCurrency(normalized, amount)));
+        markActionCommitted(player);
         refreshBoth(player);
     }
 
@@ -1739,6 +1955,7 @@ public final class WarehouseService implements Listener {
             throw exception;
         }
         sendMessage(player, true, message("player.fixed-deposit-created"));
+        markActionCommitted(player);
         refreshBoth(player);
     }
 
@@ -1773,6 +1990,7 @@ public final class WarehouseService implements Listener {
             return;
         }
         sendMessage(player, true, message("player.fixed-deposit-claimed", formatCurrency(deposit.currencyId(), payout.get())));
+        markActionCommitted(player);
         refreshBoth(player);
     }
 
@@ -1813,6 +2031,7 @@ public final class WarehouseService implements Listener {
             throw exception;
         }
         sendMessage(player, true, cost == null ? message("player.shared-created") : message("player.shared-created-cost", formatCurrency(cost.currencyId(), cost.amount())));
+        markActionCommitted(player);
         refreshBoth(player);
     }
 
@@ -1848,6 +2067,7 @@ public final class WarehouseService implements Listener {
             state.setSelectedSlot(-1);
         }
         sendMessage(player, true, message("player.shared-deleted"));
+        markActionCommitted(player);
         refreshBoth(player);
     }
 
@@ -1868,6 +2088,7 @@ public final class WarehouseService implements Listener {
         }
         repository.updateSharedWarehouseName(sharedId, name, System.currentTimeMillis());
         sendMessage(player, true, message("player.shared-name-updated", name));
+        markActionCommitted(player);
         refreshBoth(player);
     }
 
@@ -1883,6 +2104,7 @@ public final class WarehouseService implements Listener {
         boolean newValue = !shared.get().showcaseEnabled();
         repository.updateSharedWarehouseShowcase(sharedId, newValue, System.currentTimeMillis());
         sendMessage(player, true, message("player.shared-showcase-updated", newValue ? message("player.enabled") : message("player.disabled")));
+        markActionCommitted(player);
         refreshBoth(player);
     }
 
@@ -1901,6 +2123,7 @@ public final class WarehouseService implements Listener {
         }
         repository.updatePersonalWarehouseName(player.getUniqueId(), warehouseId, name, System.currentTimeMillis());
         sendMessage(player, true, message("player.warehouse-name-updated", name));
+        markActionCommitted(player);
         refreshBoth(player);
     }
 
@@ -1914,6 +2137,7 @@ public final class WarehouseService implements Listener {
         boolean newValue = !record.showcaseEnabled();
         repository.updatePersonalWarehouseShowcase(player.getUniqueId(), warehouseId, newValue, System.currentTimeMillis());
         sendMessage(player, true, message("player.showcase-updated", newValue ? message("player.enabled") : message("player.disabled")));
+        markActionCommitted(player);
         refreshBoth(player);
     }
 
@@ -1954,6 +2178,7 @@ public final class WarehouseService implements Listener {
         };
         repository.upsertSharedMember(sharedId, target.getUniqueId(), normalizedRole, System.currentTimeMillis());
         sendMessage(player, true, message("player.shared-member-updated"));
+        markActionCommitted(player);
         refreshBoth(player);
     }
 
@@ -1980,6 +2205,7 @@ public final class WarehouseService implements Listener {
         repository.removeSharedMember(sharedId, target.getUniqueId());
         releaseSharedLocks(target.getUniqueId());
         sendMessage(player, true, message("player.shared-member-removed"));
+        markActionCommitted(player);
         refreshBoth(player);
     }
 
@@ -2043,6 +2269,7 @@ public final class WarehouseService implements Listener {
                 && sharedId.equals(targetState.ownerId())) {
                 targetState.setSharedEditMode(false);
             }
+            markActionCommitted(player);
             refreshBoth(player);
             return ActionResult.success(message("player.transfer-confirmed"));
         } catch (Exception exception) { return ActionResult.failure(message("player.transfer-confirm-failed", exception.getMessage())); }
@@ -2053,6 +2280,7 @@ public final class WarehouseService implements Listener {
             Optional<PendingTransfer> pending = repository.loadPendingTransfer(sharedId);
             if (pending.isEmpty() || !pending.get().targetUuid().equals(player.getUniqueId())) return ActionResult.failure(message("player.transfer-none"));
             repository.deletePendingTransfer(sharedId);
+            markActionCommitted(player);
             return ActionResult.success(message("player.transfer-rejected"));
         } catch (Exception exception) { return ActionResult.failure(message("player.transfer-reject-failed", exception.getMessage())); }
     }
@@ -2099,6 +2327,7 @@ public final class WarehouseService implements Listener {
         if (onlineTarget != null) {
             sendMessage(onlineTarget, true, message("player.transfer-received"));
         }
+        markActionCommitted(player);
         refreshBoth(player);
         return;
     }
@@ -2525,6 +2754,7 @@ public final class WarehouseService implements Listener {
             throw exception;
         }
         sendMessage(player, true, message("player.upgrade-success", next.level(), next.capacity()));
+        markActionCommitted(player);
         refreshBoth(player);
     }
 
@@ -2560,6 +2790,7 @@ public final class WarehouseService implements Listener {
             throw exception;
         }
         sendMessage(player, true, message("player.shared-upgrade-success", next.level(), next.capacity()));
+        markActionCommitted(player);
         refreshBoth(player);
     }
 

@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -73,6 +74,9 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
 
     private String runtimeUiId = "";
     private String registeredUiId = "";
+    private final ConcurrentMap<UUID, String> actionTokens = new ConcurrentHashMap<>();
+    private final ThreadLocal<Set<UUID>> committedActionTokens =
+        ThreadLocal.withInitial(java.util.HashSet::new);
 
     /** 玩家内存态背包：分类 ID → 该页槽位物品数组（数组长度=当前容量）。 */
     private final ConcurrentMap<UUID, Map<String, ItemStack[]>> backpacks = new ConcurrentHashMap<>();
@@ -438,6 +442,7 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
             vanillaOptionSlots.remove(uuid);
             passwordPanelModes.remove(uuid);
             pendingDestroySlots.remove(uuid);
+            actionTokens.remove(uuid);
         }
         playerLocks.remove(uuid);
     }
@@ -621,10 +626,20 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
             return false;
         }
         String action = data == null || data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
-        if (packetGuard != null && !packetGuard.allow(player, "backpack", action, configuration.debug())) {
+        if (requiresOpenUi(action)
+            && (packetBridge == null || !packetBridge.isUiOpen(player, runtimeUiId))) {
+            sendMessage(player, false, message("extra-backpack.ui-required"));
             return true;
         }
         synchronized (playerLock(player.getUniqueId())) {
+            boolean tokenized = requiresActionToken(action);
+            String suppliedToken = data == null || data.isEmpty()
+                ? "" : safe(data.get(data.size() - 1));
+            if (tokenized && (suppliedToken.isBlank()
+                || !suppliedToken.equals(actionTokens.get(player.getUniqueId())))) {
+                sendMessage(player, false, message("extra-backpack.action-token-invalid"));
+                return true;
+            }
             try {
                 switch (action) {
                     case "open", "refresh" -> refresh(player);
@@ -654,6 +669,9 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
                     case "close" -> handleUiClosed(player);
                     default -> refresh(player);
                 }
+                if (tokenized) {
+                    committedActionTokens.get().remove(player.getUniqueId());
+                }
             } catch (Exception exception) {
                 logger.warning("处理额外背包客户端包失败: " + exception.getMessage());
                 sendMessage(player, false, message("extra-backpack.operation-failed"));
@@ -667,7 +685,9 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
             return;
         }
         pages(player);
-        packetBridge.openUi(player, runtimeUiId);
+        if (packetBridge.openUi(player, runtimeUiId)) {
+            actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
+        }
     }
 
     private void setCategory(Player player, String categoryId) throws Exception {
@@ -802,6 +822,7 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
         pendingDestroySlots.remove(player.getUniqueId());
         passwordPanelModes.remove(player.getUniqueId());
         sendMessage(player, true, message("extra-backpack.destroy-success"));
+        markActionCommitted(player);
         refresh(player);
     }
 
@@ -822,6 +843,7 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
             return;
         }
         sendMessage(player, true, message("extra-backpack.password-set-success"));
+        markActionCommitted(player);
         passwordPanelModes.remove(player.getUniqueId());
         Integer pending = pendingDestroySlots.get(player.getUniqueId());
         if (pending != null) {
@@ -872,6 +894,7 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
             return;
         }
         sendMessage(player, true, message("extra-backpack.password-cleared"));
+        markActionCommitted(player);
         passwordPanelModes.remove(player.getUniqueId());
         refresh(player);
     }
@@ -977,10 +1000,39 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
         }
         pages.put(category.id(), newPage);
         sendMessage(player, true, message("extra-backpack.buy-success", actual, newCapacity));
+        markActionCommitted(player);
         refresh(player);
     }
 
+    private boolean requiresOpenUi(String action) {
+        return "withdraw".equals(action)
+            || "withdraw_all".equals(action)
+            || "store".equals(action)
+            || "buy_slots".equals(action)
+            || "vanilla_store".equals(action)
+            || "vanilla_destroy".equals(action)
+            || "password_set".equals(action)
+            || "password_unlock".equals(action)
+            || "password_clear".equals(action);
+    }
+
+    private boolean requiresActionToken(String action) {
+        return "buy_slots".equals(action)
+            || "vanilla_destroy".equals(action)
+            || "password_set".equals(action)
+            || "password_clear".equals(action);
+    }
+
+    private void markActionCommitted(Player player) {
+        if (player != null) {
+            UUID uuid = player.getUniqueId();
+            committedActionTokens.get().add(uuid);
+            actionTokens.put(uuid, UUID.randomUUID().toString());
+        }
+    }
+
     private void handleUiClosed(Player player) {
+        actionTokens.remove(player.getUniqueId());
         try {
             persist(player.getUniqueId());
         } catch (Exception exception) {
@@ -1007,6 +1059,7 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
 
         Map<String, Object> packet = new LinkedHashMap<>();
         packet.put("packetId", "AXS_BACKPACK");
+        packet.put("action_token", actionTokens.getOrDefault(uuid, ""));
         packet.put("activeCategory", categoryId);
         boolean vanillaTab = VANILLA_CATEGORY_ID.equals(categoryId);
         packet.put("vanillaTab", vanillaTab);

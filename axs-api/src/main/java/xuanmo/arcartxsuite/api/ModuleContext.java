@@ -252,6 +252,23 @@ public interface ModuleContext {
     void registerClientPacketHandler(ClientPacketHandler handler, int priority);
 
     /**
+     * Registers a packet handler with optional route-layer ownership metadata.
+     *
+     * @param handler packet handler
+     * @param priority handler priority
+     * @param packetId owned packet ID, or {@code null} for legacy registration
+     * @param guardModule canonical PacketGuard module key, or {@code null} for the module ID
+     */
+    default void registerClientPacketHandler(
+        ClientPacketHandler handler,
+        int priority,
+        String packetId,
+        String guardModule
+    ) {
+        registerClientPacketHandler(handler, priority);
+    }
+
+    /**
      * 注册客户端初始化完成处理器。
      *
      * @param handler 初始化处理器

@@ -580,7 +580,8 @@ public final class MailService implements Listener {
                         calculateComposeQuote(configuration.playerSend(), Map.of(), 0),
                         effectiveAttachmentSlots(inventory),
                         0,
-                        composePasswordPanels.contains(player.getUniqueId())
+                        composePasswordPanels.contains(player.getUniqueId()),
+                        session.actionToken()
                     )
                 );
             }
@@ -953,8 +954,14 @@ public final class MailService implements Listener {
             return false;
         }
 
-        String action = data == null || data.isEmpty() ? "" : safe(data.get(0)).toLowerCase(Locale.ROOT);
-        if (packetGuard != null && !packetGuard.allow(player, "mail", action, configuration.debug())) {
+        String action = data == null || data.isEmpty() ? "refresh" : safe(data.get(0)).toLowerCase(Locale.ROOT);
+        String requiredUi = requiredUiForAction(action);
+        if (requiredUi != null
+            && (bridge == null || !bridge.isUiOpen(player, requiredUi))) {
+            sendPlayerResult(
+                player,
+                MailOperationResult.failure(message("player.ui-required"))
+            );
             return true;
         }
         switch (action) {
@@ -1676,6 +1683,27 @@ public final class MailService implements Listener {
         if (session == null) {
             return MailOperationResult.failure(message("player.compose-session-missing"));
         }
+        String suppliedToken = data == null || data.size() <= 6 ? "" : safe(data.get(6));
+        synchronized (session) {
+            if (session.tokenInFlight
+                || suppliedToken.isBlank()
+                || !suppliedToken.equals(session.actionToken())) {
+                return MailOperationResult.failure(message("player.compose-token-invalid"));
+            }
+            session.tokenInFlight = true;
+            MailOperationResult result = handleComposeSendInternal(player, data);
+            if (!result.success()) {
+                session.tokenInFlight = false;
+            }
+            return result;
+        }
+    }
+
+    private MailOperationResult handleComposeSendInternal(Player player, List<String> data) {
+        ComposeSession session = composeSessions.get(player.getUniqueId());
+        if (session == null) {
+            return MailOperationResult.failure(message("player.compose-session-missing"));
+        }
         if (!session.sessionId().toString().equalsIgnoreCase(safe(data.get(1)))) {
             return MailOperationResult.failure(message("player.compose-session-expired"));
         }
@@ -1882,6 +1910,23 @@ public final class MailService implements Listener {
             MailSendQuote.failure(message("player.compose-password-invalid"), configuration.playerSend().feeCurrency())
         );
         return MailOperationResult.failure(message("player.compose-password-invalid"));
+    }
+
+    private String requiredUiForAction(String action) {
+        if ("compose-send".equals(action) || "password-unlock".equals(action)) {
+            return composeUiId;
+        }
+        if ("claim".equals(action)
+            || "delete".equals(action)
+            || "claimall".equals(action)
+            || "deleteall".equals(action)
+            || "cdk".equals(action)) {
+            return inboxUiId;
+        }
+        if (action.startsWith("admin-")) {
+            return adminUiId;
+        }
+        return null;
     }
 
     private MailSendQuote calculateCurrentComposeQuote(Player player) {
@@ -2270,7 +2315,8 @@ public final class MailService implements Listener {
                     quote,
                     maxAttachments,
                     attachmentCount,
-                    composePasswordPanels.contains(player.getUniqueId())
+                    composePasswordPanels.contains(player.getUniqueId()),
+                    session == null ? null : session.actionToken()
                 )
             );
         }
@@ -2650,12 +2696,15 @@ public final class MailService implements Listener {
         private final UUID sessionId;
         private final UUID playerUuid;
         private final Inventory inventory;
+        private final String actionToken;
+        private boolean tokenInFlight;
         private boolean sent;
 
         private ComposeSession(UUID sessionId, UUID playerUuid, Inventory inventory, boolean sent) {
             this.sessionId = sessionId;
             this.playerUuid = playerUuid;
             this.inventory = inventory;
+            this.actionToken = UUID.randomUUID().toString();
             this.sent = sent;
         }
 
@@ -2669,6 +2718,10 @@ public final class MailService implements Listener {
 
         public Inventory inventory() {
             return inventory;
+        }
+
+        public String actionToken() {
+            return actionToken;
         }
 
         public boolean sent() {

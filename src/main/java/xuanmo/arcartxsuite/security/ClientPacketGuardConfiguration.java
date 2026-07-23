@@ -56,15 +56,23 @@ public record ClientPacketGuardConfiguration(
     public ClientPacketGuardRule resolve(String module, String action) {
         String normalizedModule = normalizeKey(module);
         String normalizedAction = normalizeKey(action);
-        Map<String, ClientPacketGuardRule> perActionRules = actionRules.get(normalizedModule);
+        Map<String, ClientPacketGuardRule> perActionRules = rulesForModule(actionRules, normalizedModule);
         if (perActionRules != null) {
             ClientPacketGuardRule actionRule = perActionRules.get(normalizedAction);
             if (actionRule != null) {
                 return actionRule;
             }
         }
-        ClientPacketGuardRule moduleRule = moduleRules.get(normalizedModule);
+        ClientPacketGuardRule moduleRule = rulesForModule(moduleRules, normalizedModule);
         return moduleRule == null ? defaults : moduleRule;
+    }
+
+    private static <T> T rulesForModule(Map<String, T> rules, String module) {
+        T result = rules.get(module);
+        if (result == null && "extrabackpack".equals(module)) {
+            result = rules.get("backpack");
+        }
+        return result;
     }
 
     private static LinkedHashMap<String, ClientPacketGuardRule> buildModuleRules(
@@ -292,4 +300,3 @@ public record ClientPacketGuardConfiguration(
         return trimmed.isEmpty() ? fallback : trimmed;
     }
 }
-

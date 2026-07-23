@@ -32,7 +32,8 @@ public final class MailComposePacketFactory {
             quote,
             maxAttachments,
             attachmentCount,
-            false
+            false,
+            null
         );
     }
 
@@ -53,8 +54,36 @@ public final class MailComposePacketFactory {
             quote,
             maxAttachments,
             attachmentCount,
-            false
+            false,
+            null
         );
+    }
+
+    public static Map<String, Object> buildInit(
+        UUID sessionId,
+        MailModuleConfiguration configuration,
+        CurrencyBridgeAPI currencyBridgeManager,
+        MessageProvider messages,
+        MailSendQuote quote,
+        int maxAttachments,
+        int attachmentCount,
+        boolean passwordPanelVisible,
+        String actionToken
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("session_id", sessionId.toString());
+        payload.put("action_token", actionToken == null ? "" : actionToken);
+        payload.put("subject_max", configuration.playerSend().subjectMaxLength());
+        payload.put("body_max", configuration.playerSend().bodyMaxLength());
+        payload.put("max_attachments", Math.max(0, maxAttachments));
+        payload.put("attachment_count", Math.max(0, attachmentCount));
+        payload.put("fee_currency", configuration.playerSend().feeCurrency());
+        payload.put("currencies", currencies(currencyBridgeManager, messages));
+        payload.put("vault_tax_rate", trimRate(configuration.playerSend().vaultTaxRate()));
+        payload.put("allow_vault", configuration.playerSend().allowVaultAttachment());
+        payload.put("password_panel", passwordPanel(passwordPanelVisible));
+        applyQuote(payload, configuration, currencyBridgeManager, messages, quote);
+        return payload;
     }
 
     public static Map<String, Object> buildInit(
@@ -67,19 +96,17 @@ public final class MailComposePacketFactory {
         int attachmentCount,
         boolean passwordPanelVisible
     ) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("session_id", sessionId.toString());
-        payload.put("subject_max", configuration.playerSend().subjectMaxLength());
-        payload.put("body_max", configuration.playerSend().bodyMaxLength());
-        payload.put("max_attachments", Math.max(0, maxAttachments));
-        payload.put("attachment_count", Math.max(0, attachmentCount));
-        payload.put("fee_currency", configuration.playerSend().feeCurrency());
-        payload.put("currencies", currencies(currencyBridgeManager, messages));
-        payload.put("vault_tax_rate", trimRate(configuration.playerSend().vaultTaxRate()));
-        payload.put("allow_vault", configuration.playerSend().allowVaultAttachment());
-        payload.put("password_panel", passwordPanel(passwordPanelVisible));
-        applyQuote(payload, configuration, currencyBridgeManager, messages, quote);
-        return payload;
+        return buildInit(
+            sessionId,
+            configuration,
+            currencyBridgeManager,
+            messages,
+            quote,
+            maxAttachments,
+            attachmentCount,
+            passwordPanelVisible,
+            null
+        );
     }
 
     public static Map<String, Object> buildQuote(
@@ -96,7 +123,8 @@ public final class MailComposePacketFactory {
             quote,
             maxAttachments,
             attachmentCount,
-            false
+            false,
+            null
         );
     }
 
@@ -115,8 +143,30 @@ public final class MailComposePacketFactory {
             quote,
             maxAttachments,
             attachmentCount,
-            false
+            false,
+            null
         );
+    }
+
+    public static Map<String, Object> buildQuote(
+        MailModuleConfiguration configuration,
+        CurrencyBridgeAPI currencyBridgeManager,
+        MessageProvider messages,
+        MailSendQuote quote,
+        int maxAttachments,
+        int attachmentCount,
+        boolean passwordPanelVisible,
+        String actionToken
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("action_token", actionToken == null ? "" : actionToken);
+        payload.put("max_attachments", Math.max(0, maxAttachments));
+        payload.put("attachment_count", Math.max(0, attachmentCount));
+        payload.put("vault_tax_rate", trimRate(configuration.playerSend().vaultTaxRate()));
+        payload.put("allow_vault", configuration.playerSend().allowVaultAttachment());
+        payload.put("password_panel", passwordPanel(passwordPanelVisible));
+        applyQuote(payload, configuration, currencyBridgeManager, messages, quote);
+        return payload;
     }
 
     public static Map<String, Object> buildQuote(
@@ -128,14 +178,16 @@ public final class MailComposePacketFactory {
         int attachmentCount,
         boolean passwordPanelVisible
     ) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("max_attachments", Math.max(0, maxAttachments));
-        payload.put("attachment_count", Math.max(0, attachmentCount));
-        payload.put("vault_tax_rate", trimRate(configuration.playerSend().vaultTaxRate()));
-        payload.put("allow_vault", configuration.playerSend().allowVaultAttachment());
-        payload.put("password_panel", passwordPanel(passwordPanelVisible));
-        applyQuote(payload, configuration, currencyBridgeManager, messages, quote);
-        return payload;
+        return buildQuote(
+            configuration,
+            currencyBridgeManager,
+            messages,
+            quote,
+            maxAttachments,
+            attachmentCount,
+            passwordPanelVisible,
+            null
+        );
     }
 
     private static Map<String, Object> passwordPanel(boolean visible) {

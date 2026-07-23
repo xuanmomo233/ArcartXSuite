@@ -146,6 +146,8 @@ player:
   compose-password-unavailable: "&c二级密码服务不可用，当前无法寄信。"
   compose-password-required: "&c请先解锁二级密码后再寄信。"
   compose-password-invalid: "&c二级密码错误，请重试。"
+  ui-required: "&c请先打开对应的邮箱界面。"
+  compose-token-invalid: "&c写信操作令牌无效，请刷新写信界面后重试。"
   compose-password-unlocked: "&a二级密码已解锁，请重新点击发送邮件。"
   compose-disabled: "&c当前服务器已关闭玩家寄信。"
   compose-no-permission: "&c你没有寄信权限。"

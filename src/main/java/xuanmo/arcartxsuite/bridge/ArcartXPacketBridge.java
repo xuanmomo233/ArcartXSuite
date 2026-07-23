@@ -13,9 +13,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
@@ -45,19 +49,25 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
     private Class<?> uiCallbackInterface;
     private Method callDataPlayerMethod;
     private final ConcurrentMap<String, Object> uiAdapters = new ConcurrentHashMap<>();
-    private final ConcurrentMap<String, Consumer<Player>> closeCallbacks = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, CopyOnWriteArrayList<Consumer<Player>>> closeCallbacks = new ConcurrentHashMap<>();
+    private final ConcurrentMap<java.util.UUID, Set<String>> openUiIds = new ConcurrentHashMap<>();
     private final Set<String> closeCallbackRegisteredUiIds = ConcurrentHashMap.newKeySet();
     private final Set<Object> oneShotCallbacks = ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<String, List<Object>> callbackKeepAlive = new ConcurrentHashMap<>();
     private boolean unsafeFallbackWarned;
     private boolean openCallbackFallbackWarned;
     private int successfulUiRegistrationCount;
+    private Listener lifecycleListener;
 
     public ArcartXPacketBridge(JavaPlugin plugin) {
         this.plugin = plugin;
     }
 
     public boolean initialize() {
+        if (lifecycleListener != null) {
+            org.bukkit.event.HandlerList.unregisterAll(lifecycleListener);
+            lifecycleListener = null;
+        }
         available = false;
         uiRegistry = null;
         registerMethod = null;
@@ -79,6 +89,7 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
         callDataPlayerMethod = null;
         uiAdapters.clear();
         closeCallbacks.clear();
+        openUiIds.clear();
         closeCallbackRegisteredUiIds.clear();
         oneShotCallbacks.clear();
         callbackKeepAlive.clear();
@@ -91,6 +102,13 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
             xuanmo.arcartxsuite.module.AxsLog.logger().severe("arcartxsuite 需要 ArcartX。");
             return false;
         }
+        lifecycleListener = new Listener() {
+            @EventHandler
+            public void onPlayerQuit(PlayerQuitEvent event) {
+                openUiIds.remove(event.getPlayer().getUniqueId());
+            }
+        };
+        plugin.getServer().getPluginManager().registerEvents(lifecycleListener, plugin);
 
         try {
             ClassLoader classLoader = arcartX.getClass().getClassLoader();
@@ -144,9 +162,14 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
         getArcartXHandlerMethod = null;
         uiAdapters.clear();
         closeCallbacks.clear();
+        openUiIds.clear();
         closeCallbackRegisteredUiIds.clear();
         oneShotCallbacks.clear();
         callbackKeepAlive.clear();
+        if (lifecycleListener != null) {
+            org.bukkit.event.HandlerList.unregisterAll(lifecycleListener);
+            lifecycleListener = null;
+        }
         unsafeFallbackWarned = false;
         openCallbackFallbackWarned = false;
     }
@@ -218,6 +241,7 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
             RegistryCallResult result = invokeRegistryMethod(unregisterMethod, uiId);
             uiAdapters.remove(uiId);
             closeCallbacks.remove(uiId);
+            openUiIds.values().forEach(openIds -> openIds.remove(uiId));
             closeCallbackRegisteredUiIds.remove(uiId);
             callbackKeepAlive.remove(uiId);
             if (!result.success() && result.exceptionThrown()) {
@@ -230,7 +254,12 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
     }
 
     public boolean openUi(Player player, String uiId) {
-        return invokeBridgeMethod(openMethod, player, uiId);
+        boolean success = invokeBridgeMethod(openMethod, player, uiId);
+        if (success) {
+            markUiOpen(player, uiId);
+            ensureCloseCallback(uiId);
+        }
+        return success;
     }
 
     public boolean openUiWithCallback(Player player, String uiId, Runnable callback) {
@@ -238,7 +267,12 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
             warnOpenCallbackFallback("open");
             return false;
         }
-        return invokeOpenCallbackBridgeMethod("open", openWithCallbackMethod, player, uiId, callback);
+        boolean success = invokeOpenCallbackBridgeMethod("open", openWithCallbackMethod, player, uiId, callback);
+        if (success) {
+            markUiOpen(player, uiId);
+            ensureCloseCallback(uiId);
+        }
+        return success;
     }
 
     public boolean openUiUnsafe(Player player, String uiId) {
@@ -246,7 +280,12 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
             warnUnsafeFallback("openUnsafe");
             return openUi(player, uiId);
         }
-        return invokeUnsafeBridgeMethod("openUnsafe", openUnsafeMethod, player, uiId);
+        boolean success = invokeUnsafeBridgeMethod("openUnsafe", openUnsafeMethod, player, uiId);
+        if (success) {
+            markUiOpen(player, uiId);
+            ensureCloseCallback(uiId);
+        }
+        return success;
     }
 
     public boolean openUiUnsafeWithCallback(Player player, String uiId, Runnable callback) {
@@ -254,11 +293,20 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
             warnOpenCallbackFallback("openUnsafe");
             return false;
         }
-        return invokeOpenCallbackBridgeMethod("openUnsafe", openUnsafeWithCallbackMethod, player, uiId, callback);
+        boolean success = invokeOpenCallbackBridgeMethod("openUnsafe", openUnsafeWithCallbackMethod, player, uiId, callback);
+        if (success) {
+            markUiOpen(player, uiId);
+            ensureCloseCallback(uiId);
+        }
+        return success;
     }
 
     public boolean closeUi(Player player, String uiId) {
-        return invokeBridgeMethod(closeMethod, player, uiId);
+        boolean success = invokeBridgeMethod(closeMethod, player, uiId);
+        if (success) {
+            markUiClosed(player, uiId);
+        }
+        return success;
     }
 
     public boolean closeUiUnsafe(Player player, String uiId) {
@@ -266,7 +314,19 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
             warnUnsafeFallback("closeUnsafe");
             return closeUi(player, uiId);
         }
-        return invokeUnsafeBridgeMethod("closeUnsafe", closeUnsafeMethod, player, uiId);
+        boolean success = invokeUnsafeBridgeMethod("closeUnsafe", closeUnsafeMethod, player, uiId);
+        if (success) {
+            markUiClosed(player, uiId);
+        }
+        return success;
+    }
+
+    public boolean isUiOpen(Player player, String uiId) {
+        if (player == null || uiId == null || uiId.isBlank()) {
+            return false;
+        }
+        Set<String> openIds = openUiIds.get(player.getUniqueId());
+        return openIds != null && openIds.contains(uiId);
     }
 
     public boolean sendPacket(Player player, String uiId, String handlerName, Object payload) {
@@ -334,20 +394,42 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
             return false;
         }
 
-        closeCallbacks.put(uiId, callback);
+        closeCallbacks.computeIfAbsent(uiId, ignored -> new CopyOnWriteArrayList<>()).addIfAbsent(callback);
+        if (ensureCloseCallback(uiId)) {
+            return true;
+        }
+        CopyOnWriteArrayList<Consumer<Player>> callbacks = closeCallbacks.get(uiId);
+        if (callbacks != null) {
+            callbacks.remove(callback);
+            if (callbacks.isEmpty()) {
+                closeCallbacks.remove(uiId, callbacks);
+            }
+        }
+        return false;
+    }
+
+    private boolean ensureCloseCallback(String uiId) {
+        if (!available || uiId == null || uiId.isBlank()) {
+            return false;
+        }
         if (closeCallbackRegisteredUiIds.contains(uiId)) {
             return true;
+        }
+        if (closeCallbackType == null || uiCallbackInterface == null || callDataPlayerMethod == null) {
+            return false;
         }
 
         Object adapter = uiAdapter(uiId);
         if (adapter == null) {
-            closeCallbacks.remove(uiId, callback);
             return false;
         }
-
-        Method registerCallBackMethod = findMethod(adapter.getClass(), "registerCallBack", closeCallbackType.getClass(), uiCallbackInterface);
+        Method registerCallBackMethod = findMethod(
+            adapter.getClass(),
+            "registerCallBack",
+            closeCallbackType.getClass(),
+            uiCallbackInterface
+        );
         if (registerCallBackMethod == null) {
-            closeCallbacks.remove(uiId, callback);
             return false;
         }
 
@@ -360,12 +442,28 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
                 if (!(rawPlayer instanceof Player player)) {
                     return null;
                 }
-                Consumer<Player> currentCallback = closeCallbacks.get(uiId);
-                if (currentCallback != null && plugin.isEnabled()) {
-                    plugin.getServer().getScheduler().runTask(plugin, () -> currentCallback.accept(player));
+                markUiClosed(player, uiId);
+                CopyOnWriteArrayList<Consumer<Player>> callbacks = closeCallbacks.get(uiId);
+                if (callbacks != null && plugin.isEnabled()) {
+                    List<Consumer<Player>> snapshot = List.copyOf(callbacks);
+                    plugin.getServer().getScheduler().runTask(
+                        plugin,
+                        () -> snapshot.forEach(callback -> {
+                            try {
+                                callback.accept(player);
+                            } catch (RuntimeException exception) {
+                                xuanmo.arcartxsuite.module.AxsLog.logger().warning(
+                                    "ArcartX UI 关闭回调执行失败(" + uiId + "): "
+                                        + describeInvocationFailure(exception)
+                                );
+                            }
+                        })
+                    );
                 }
             } catch (ReflectiveOperationException | RuntimeException exception) {
-                xuanmo.arcartxsuite.module.AxsLog.logger().warning("ArcartX UI 关闭回调处理失败(" + uiId + "): " + describeInvocationFailure(exception));
+                xuanmo.arcartxsuite.module.AxsLog.logger().warning(
+                    "ArcartX UI 关闭回调处理失败(" + uiId + "): " + describeInvocationFailure(exception)
+                );
             }
             return null;
         };
@@ -375,16 +473,39 @@ public final class ArcartXPacketBridge implements PacketBridgeAPI {
             new Class<?>[]{uiCallbackInterface},
             handler
         );
-
         try {
             registerCallBackMethod.invoke(adapter, closeCallbackType, proxy);
-            callbackKeepAlive.computeIfAbsent(uiId, ignored -> Collections.synchronizedList(new ArrayList<>())).add(proxy);
+            callbackKeepAlive.computeIfAbsent(
+                uiId,
+                ignored -> Collections.synchronizedList(new ArrayList<>())
+            ).add(proxy);
             closeCallbackRegisteredUiIds.add(uiId);
             return true;
         } catch (IllegalArgumentException | ReflectiveOperationException exception) {
-            closeCallbacks.remove(uiId, callback);
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning("注册 ArcartX UI CLOSE 回调失败(" + uiId + "): " + describeInvocationFailure(exception));
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning(
+                "注册 ArcartX UI CLOSE 回调失败(" + uiId + "): " + describeInvocationFailure(exception)
+            );
             return false;
+        }
+    }
+
+    private void markUiOpen(Player player, String uiId) {
+        if (player == null || uiId == null || uiId.isBlank()) {
+            return;
+        }
+        openUiIds.computeIfAbsent(player.getUniqueId(), ignored -> ConcurrentHashMap.newKeySet()).add(uiId);
+    }
+
+    private void markUiClosed(Player player, String uiId) {
+        if (player == null || uiId == null || uiId.isBlank()) {
+            return;
+        }
+        Set<String> openIds = openUiIds.get(player.getUniqueId());
+        if (openIds != null) {
+            openIds.remove(uiId);
+            if (openIds.isEmpty()) {
+                openUiIds.remove(player.getUniqueId(), openIds);
+            }
         }
     }
 

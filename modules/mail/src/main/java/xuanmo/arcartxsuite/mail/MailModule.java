@@ -218,6 +218,16 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             service != null && service.handleClientPacket(player, packetId, data);
     }
 
+    @Override
+    protected @Nullable String packetOwnershipPacketId() {
+        return "AXS_MAIL";
+    }
+
+    @Override
+    protected @Nullable String packetGuardModuleKey() {
+        return "mail";
+    }
+
     public MailService getService() {
         return service;
     }
@@ -254,5 +264,4 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 

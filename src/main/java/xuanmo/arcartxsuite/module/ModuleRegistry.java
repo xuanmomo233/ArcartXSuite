@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -1063,7 +1064,17 @@ public final class ModuleRegistry {
      * 注册客户端包处理器（由 DefaultModuleContext 调用）。
      */
     void registerClientPacketHandler(String moduleId, ClientPacketHandler handler, int priority) {
-        packetHandlers.add(new PrioritizedPacketHandler(moduleId, handler, priority));
+        registerClientPacketHandler(moduleId, handler, priority, null, null);
+    }
+
+    void registerClientPacketHandler(
+        String moduleId,
+        ClientPacketHandler handler,
+        int priority,
+        String packetId,
+        String guardModule
+    ) {
+        packetHandlers.add(new PrioritizedPacketHandler(moduleId, handler, priority, packetId, guardModule));
         packetHandlers.sort(Comparator.comparingInt(PrioritizedPacketHandler::priority));
     }
 
@@ -1095,8 +1106,18 @@ public final class ModuleRegistry {
      * @return true 表示包已被某个处理器消费
      */
     public boolean routeClientPacket(Player player, String packetId, List<String> data) {
+        String action = data == null || data.isEmpty() || data.get(0) == null
+            ? "refresh"
+            : data.get(0).trim().toLowerCase(Locale.ROOT);
         for (PrioritizedPacketHandler ph : packetHandlers) {
             try {
+                if (packetGuard != null
+                    && (ph.packetId() == null || ph.packetId().equalsIgnoreCase(packetId))) {
+                    String guardModule = ph.guardModule() == null ? ph.moduleId() : ph.guardModule();
+                    if (!packetGuard.allow(player, guardModule, action, false)) {
+                        return true;
+                    }
+                }
                 if (ph.handler().handleClientPacket(player, packetId, data)) {
                     return true;
                 }
@@ -1286,7 +1307,13 @@ public final class ModuleRegistry {
     /**
      * 带优先级的客户端包处理器包装。
      */
-    record PrioritizedPacketHandler(String moduleId, ClientPacketHandler handler, int priority) {
+    record PrioritizedPacketHandler(
+        String moduleId,
+        ClientPacketHandler handler,
+        int priority,
+        String packetId,
+        String guardModule
+    ) {
     }
 
     record PrioritizedInitializedHandler(String moduleId, ClientInitializedHandler handler) {
