@@ -88,6 +88,29 @@ currencies:
     withdraw-command: ""
     deposit-command: ""
 
+# ========== 统一二级密码（本体管控）==========
+# 由本体统一提供的全服二级密码服务，warehouse / extrabackpack 等模块共用同一个密码。
+# 存储：默认独立 SQLite（plugins/ArcartX-Suite/secondary-password.db）；跨服群组可切换 MySQL 共享同一份密码。
+# 密码以 PBKDF2 加盐哈希存储，不存明文。
+# 设置 / 解锁 / 清除：推荐在模块 UI 中输入；也可用后备命令 /axs password set|unlock|clear。
+# 未设置密码时视为无需验证；数据库异常时相关操作会被安全拒绝（fail-closed）。
+security:
+  secondary-password:
+    # 验证成功后的解锁有效期（秒），超时后需重新输入密码。默认 1800（30 分钟）。
+    # 注意：解锁会话保存在各子服内存中，跨服共享的只是密码本身，切换子服后需重新解锁。
+    unlock-timeout-seconds: 1800
+    storage:
+      # 存储模式：sqlite（单服，默认）/ mysql（跨服群组共享密码，各子服填同一个库）。
+      mode: "sqlite"
+      mysql:
+        host: "127.0.0.1"
+        port: 3306
+        database: "arcartxsuite"
+        username: "root"
+        password: ""
+      # MySQL 连接池大小（sqlite 固定为 1，此项无效）。
+      pool-size: 4
+
 # ========== 跨服传输（全模块共用）==========
 # 各模块在 ArcartX*.yml 的 cross-server.enabled 开启后接入此配置。
 # Redis 与 BungeeCord/Velocity Forward 可同时启用（双发 + 入站去重）。
@@ -610,9 +633,4 @@ modules:
     # Lottery 抽奖系统
     # 功能：CS 开箱动画、原神祈愿卡池（单抽 / 十连）、保底机制（大小保底）、磨损度系统（影响物品外观价值）。
 
-
-
-security:
-  secondary-password:
-    unlock-timeout-seconds: 1800
 

@@ -41,7 +41,7 @@ ui:
 
       for(i in range(0, var.maxNpcCount)){
         key = i.round()
-        ni = val.selector_list['选择器项'].copy('选择器项' + key)
+        ni = val.selector_list['选择器模板'].copy('选择器模板' + key)
         ni.entryKey = key
       }
     close: |-

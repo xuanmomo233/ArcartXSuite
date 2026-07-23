@@ -4,20 +4,23 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.logging.Logger;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess;
+import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
+import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 
 /** Core-owned persistent secondary-password service. */
 public final class SecondaryPasswordService implements SecondaryPasswordAccess, AutoCloseable {
@@ -26,29 +29,19 @@ public final class SecondaryPasswordService implements SecondaryPasswordAccess, 
     private static final int HASH_BITS = 256;
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    private final String jdbcUrl;
+    private final Repository repository;
     private final long unlockTimeoutMillis;
     private final ConcurrentMap<UUID, Long> unlockedUntil = new ConcurrentHashMap<>();
 
-    public SecondaryPasswordService(java.io.File dataFolder, long unlockTimeoutSeconds) throws SQLException {
-        if (!dataFolder.exists() && !dataFolder.mkdirs()) {
-            throw new SQLException("Unable to create core data folder: " + dataFolder);
-        }
-        this.jdbcUrl = "jdbc:sqlite:" + new java.io.File(dataFolder, "secondary-password.db").getAbsolutePath();
+    public SecondaryPasswordService(java.io.File dataFolder, long unlockTimeoutSeconds,
+                                    StorageDescriptor descriptor, Logger logger) throws SQLException {
         this.unlockTimeoutMillis = Math.max(1L, unlockTimeoutSeconds) * 1000L;
-        initializeSchema();
+        this.repository = new Repository(dataFolder, descriptor, logger);
+        repository.initialize();
     }
 
     private Connection connection() throws SQLException {
-        return DriverManager.getConnection(jdbcUrl);
-    }
-
-    private void initializeSchema() throws SQLException {
-        try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(
-            "CREATE TABLE IF NOT EXISTS axs_secondary_password ("
-                + "player_uuid TEXT PRIMARY KEY, salt TEXT NOT NULL, hash TEXT NOT NULL, updated_at INTEGER NOT NULL)")) {
-            statement.executeUpdate();
-        }
+        return repository.open();
     }
 
     @Override
@@ -113,9 +106,12 @@ public final class SecondaryPasswordService implements SecondaryPasswordAccess, 
             byte[] salt = new byte[SALT_BYTES];
             RANDOM.nextBytes(salt);
             byte[] hash = derive(newPassword, salt);
-            try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(
-                "INSERT INTO axs_secondary_password(player_uuid,salt,hash,updated_at) VALUES(?,?,?,?) "
-                    + "ON CONFLICT(player_uuid) DO UPDATE SET salt=excluded.salt,hash=excluded.hash,updated_at=excluded.updated_at")) {
+            String upsert = repository.isMysqlDialect()
+                ? "INSERT INTO axs_secondary_password(player_uuid,salt,hash,updated_at) VALUES(?,?,?,?) "
+                    + "ON DUPLICATE KEY UPDATE salt=VALUES(salt),hash=VALUES(hash),updated_at=VALUES(updated_at)"
+                : "INSERT INTO axs_secondary_password(player_uuid,salt,hash,updated_at) VALUES(?,?,?,?) "
+                    + "ON CONFLICT(player_uuid) DO UPDATE SET salt=excluded.salt,hash=excluded.hash,updated_at=excluded.updated_at";
+            try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(upsert)) {
                 statement.setString(1, uuid.toString());
                 statement.setString(2, Base64.getEncoder().encodeToString(salt));
                 statement.setString(3, Base64.getEncoder().encodeToString(hash));
@@ -182,7 +178,40 @@ public final class SecondaryPasswordService implements SecondaryPasswordAccess, 
     @Override
     public void close() {
         unlockedUntil.clear();
+        repository.shutdown();
     }
 
     private record StoredPassword(String salt, String hash) {}
+
+    private static final class Repository extends AbstractModuleRepository {
+
+        private Repository(java.io.File dataFolder, StorageDescriptor descriptor, Logger logger) {
+            super("AXS-SecondaryPassword", dataFolder, descriptor, logger);
+        }
+
+        private Connection open() throws SQLException {
+            return getConnection();
+        }
+
+        private boolean isMysqlDialect() {
+            return isMysql();
+        }
+
+        @Override
+        protected void onInitialize(Connection connection) throws SQLException {
+            String ddl = isMysql()
+                ? "CREATE TABLE IF NOT EXISTS axs_secondary_password ("
+                    + "player_uuid VARCHAR(36) PRIMARY KEY, salt TEXT NOT NULL, hash TEXT NOT NULL, updated_at BIGINT NOT NULL)"
+                : "CREATE TABLE IF NOT EXISTS axs_secondary_password ("
+                    + "player_uuid TEXT PRIMARY KEY, salt TEXT NOT NULL, hash TEXT NOT NULL, updated_at INTEGER NOT NULL)";
+            try (PreparedStatement statement = connection.prepareStatement(ddl)) {
+                statement.executeUpdate();
+            }
+        }
+
+        @Override
+        protected List<String> playerDataTables() {
+            return List.of("axs_secondary_password");
+        }
+    }
 }
