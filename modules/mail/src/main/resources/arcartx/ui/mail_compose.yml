@@ -39,10 +39,9 @@ ui:
   # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
   packetHandler:
     init: |-
-       var.sessionId = packet['session_id']
-       var.actionToken = packet['action_token']
-       var.baseFee = packet['base_fee']
-       var.actionToken = packet['action_token']
+      var.sessionId = packet['session_id']
+      var.actionToken = packet['action_token']
+      var.baseFee = packet['base_fee']
       var.vaultTaxRate = packet['vault_tax_rate']
       var.allowVault = packet['allow_vault']
       var.quoteSuccess = packet['quote_success']
