@@ -12,14 +12,18 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.battlepass.packet.BattlePassPacketHandler;
+import xuanmo.arcartxsuite.battlepass.service.BattlePassService;
 
 public final class BattlePassPlayerCommand implements TabExecutor {
 
     private final Supplier<BattlePassPacketHandler> packetHandlerSupplier;
+    private final Supplier<BattlePassService> serviceSupplier;
     private final MessageProvider messages;
 
-    public BattlePassPlayerCommand(Supplier<BattlePassPacketHandler> packetHandlerSupplier, MessageProvider messages) {
+    public BattlePassPlayerCommand(Supplier<BattlePassPacketHandler> packetHandlerSupplier,
+                                    Supplier<BattlePassService> serviceSupplier, MessageProvider messages) {
         this.packetHandlerSupplier = packetHandlerSupplier;
+        this.serviceSupplier = serviceSupplier;
         this.messages = messages;
     }
 
@@ -37,10 +41,12 @@ public final class BattlePassPlayerCommand implements TabExecutor {
             return true;
         }
 
-        String sub = args.length > 0 ? args[0].toLowerCase() : "open";
+        String sub = args.length > 0 ? args[0].toLowerCase(java.util.Locale.ROOT) : "open";
         switch (sub) {
             case "open", "" -> handler.openMain(player);
             case "tasks" -> handler.openTasks(player);
+            case "rewards" -> handler.openRewards(player);
+            case "claim" -> handleClaim(player, args, label);
             case "help" -> sendHelp(player, label);
             default -> {
                 player.sendMessage(fullMsg("player.unknown-subcommand", label));
@@ -56,7 +62,7 @@ public final class BattlePassPlayerCommand implements TabExecutor {
         if (args.length == 1) {
             String prefix = args[0].toLowerCase();
             List<String> completions = new ArrayList<>();
-            for (String cmd : List.of("open", "tasks", "help")) {
+            for (String cmd : List.of("open", "tasks", "rewards", "claim", "help")) {
                 if (cmd.startsWith(prefix)) completions.add(cmd);
             }
             return completions;
@@ -64,10 +70,34 @@ public final class BattlePassPlayerCommand implements TabExecutor {
         return null;
     }
 
+    private void handleClaim(Player player, String[] args, String label) {
+        BattlePassService service = serviceSupplier.get();
+        if (service == null) {
+            player.sendMessage(fullMsg("player.module-down"));
+            return;
+        }
+        int level;
+        try {
+            level = Integer.parseInt(args.length > 1 ? args[1] : "");
+        } catch (NumberFormatException e) {
+            player.sendMessage(fullMsg("claim.usage", label));
+            return;
+        }
+        String key = switch (service.claimRewards(player, level)) {
+            case SUCCESS -> "claim.success";
+            case LEVEL_NOT_REACHED -> "claim.level-not-reached";
+            case ALREADY_CLAIMED -> "claim.already-claimed";
+            case NOT_FOUND -> "claim.none";
+        };
+        player.sendMessage(fullMsg(key, level));
+    }
+
     private void sendHelp(Player player, String label) {
         player.sendMessage(plainMsg("player.help-title"));
         player.sendMessage(plainMsg("player.help-open", label));
         player.sendMessage(plainMsg("player.help-tasks", label));
+        player.sendMessage(plainMsg("player.help-rewards", label));
+        player.sendMessage(plainMsg("player.help-claim", label));
         player.sendMessage(plainMsg("player.help-help", label));
     }
 

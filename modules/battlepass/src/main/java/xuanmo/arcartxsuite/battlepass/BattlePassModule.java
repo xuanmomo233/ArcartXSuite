@@ -33,6 +33,8 @@ import xuanmo.arcartxsuite.battlepass.storage.JdbcBattlePassRepository;
 
 public final class BattlePassModule extends AbstractAXSModule implements ModuleCommandHandler {
 
+    private static final String MODULE_VERSION = "1.3.2";
+
     private static final String MAIN_UI_RESOURCE_PATH = "arcartx/ui/battlepass_main.yml";
     private static final String MAIN_UI_FILE_PATH = "ui/battlepass_main.yml";
     private static final String TASKS_UI_RESOURCE_PATH = "arcartx/ui/battlepass_tasks.yml";
@@ -40,6 +42,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
     private BattlePassModuleConfiguration configuration;
     private BattlePassService service;
+    private JdbcBattlePassRepository repository;
     private BattlePassAdminCommand adminCommand;
     private BattlePassPacketHandler packetHandler;
 
@@ -47,7 +50,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("battlepass")
             .name("BattlePass")
-            .version("1.1.0")
+            .version(MODULE_VERSION)
             .mainClass(getClass().getName())
             .build();
     }
@@ -121,10 +124,6 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         if (!tasksDir.exists()) {
             tasksDir.mkdirs();
         }
-        File[] existing = tasksDir.listFiles((dir, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
-        if (existing != null && existing.length > 0) {
-            return;
-        }
         for (String taskFile : new String[]{"daily.yml", "weekly.yml", "season.yml"}) {
             File target = new File(tasksDir, taskFile);
             if (!target.exists()) {
@@ -138,6 +137,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         File moduleDataFolder = dataFolder;
         JdbcBattlePassRepository repo = new JdbcBattlePassRepository(
             moduleDataFolder, configuration.storage(), logger);
+        repository = repo;
 
         UiBinding mainBinding = registerModuleUi(MAIN_UI_FILE_PATH, configuration.ui().mainId(), true);
         UiBinding tasksBinding = registerModuleUi(TASKS_UI_FILE_PATH, configuration.ui().tasksId(), true);
@@ -173,7 +173,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             }
         });
 
-        adminCommand = new BattlePassAdminCommand(() -> service, this::msg);
+        adminCommand = new BattlePassAdminCommand(() -> service, this::msg, MODULE_VERSION);
         logger.fine("BattlePass 模块已载入 | 赛季=" + configuration.season().seasonId()
             + " | 跨服=" + (configuration.crossServer().enabled() ? "ON" : "OFF"));
     }
@@ -184,13 +184,28 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             service.shutdown();
             service = null;
         }
+        if (repository != null) {
+            try {
+                repository.shutdown();
+            } catch (Exception e) {
+                logger.warning("BattlePass 仓储关闭失败: " + e.getMessage());
+            }
+            repository = null;
+        }
+        packetHandler = null;
+        adminCommand = null;
         configuration = null;
+    }
+
+    @Override
+    protected @NotNull List<org.bukkit.event.Listener> createListeners() {
+        return List.of(new xuanmo.arcartxsuite.battlepass.listener.BattlePassPlayerListener(plugin, () -> service));
     }
 
     @Override
     protected @NotNull Map<String, TabExecutor> commandBindings() {
         BattlePassPlayerCommand cmd = new BattlePassPlayerCommand(
-            () -> packetHandler, messages());
+            () -> packetHandler, () -> service, messages());
         Map<String, TabExecutor> map = new LinkedHashMap<>();
         map.put("bp", cmd);
         map.put("battlepass", cmd);
@@ -213,7 +228,8 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             packetGuard,
             service,
             mainUiId != null ? mainUiId : configuration.ui().mainId(),
-            tasksUiId != null ? tasksUiId : configuration.ui().tasksId()
+            tasksUiId != null ? tasksUiId : configuration.ui().tasksId(),
+            this::msg
         );
         return packetHandler;
     }
@@ -238,7 +254,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
     // ─── 辅助方法 ────────────────────────────────────────────
 
-    private String msg(String key, Object... args) {
+    private String msg(String key, Object[] args) {
         MessageProvider mp = messages();
         if (mp == null) return key;
         String prefix = mp.get("prefix");

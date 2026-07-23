@@ -33,6 +33,8 @@ ui:
       var.composeSubject = none
       var.composeBody = none
       var.composeVault = '0'
+      var.passwordPanelVisible = false
+      var.passwordText = ''
   # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
   packetHandler:
     init: |-
@@ -52,6 +54,8 @@ ui:
       var.composeSubject = none
       var.composeBody = none
       var.composeVault = '0'
+      var.passwordPanelVisible = packet['password_panel'] != none && packet['password_panel']['visible']
+      var.passwordText = ''
     update: |-
       var.baseFee = packet['base_fee']
       var.vaultTaxRate = packet['vault_tax_rate']
@@ -62,6 +66,7 @@ ui:
       var.totalFee = packet['total_fee']
       var.maxAttachments = packet['max_attachments']
       var.attachmentCount = packet['attachment_count']
+      var.passwordPanelVisible = packet['password_panel'] != none && packet['password_panel']['visible']
 
 # controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
 
@@ -332,6 +337,68 @@ controls:
               fontSize: 49
               width: 880
               texts: "'&7邮件总费用: &0' + var.totalFee + '金币' + '   &7物品手续费: &0' + var.itemFee + '金币' + (var.quoteMessage == none ? none : '   &7提示: &0' + var.quoteMessage)"
+          二级密码面板:
+            type: Texture
+            attribute:
+              x: 850
+              y: 590
+              width: 472
+              height: 104
+              normal: ~110,110,110,255
+              shape: ~round_rect
+              radius: 14
+              visible: var.passwordPanelVisible
+            effect:
+              stroke:
+                width: 2
+                color: ~0,0,0,255
+            children:
+              二级密码提示:
+                type: Text
+                attribute:
+                  x: 16
+                  y: 10
+                  fontSize: 36
+                  texts: "~&f请输入二级密码解锁后重试"
+              二级密码输入框:
+                type: TextBox
+                attribute:
+                  x: 16
+                  y: 50
+                  width: 300
+                  height: 32
+                  length: 64
+                  emptyText: ~输入二级密码
+                  fontSize: 40
+                  background: ~130,130,130,255
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  textChange: |-
+                    var.passwordText = self.getContent()
+              二级密码确认按钮:
+                type: Texture
+                attribute:
+                  x: 328
+                  y: 50
+                  width: 128
+                  height: 32
+                  normal: ~150,150,150,255
+                  shape: ~round_rect
+                  radius: 10
+                  texts: "~&0解锁"
+                  center: true
+                  fontSize: 40
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_MAIL', 'password-unlock', var.passwordText)
+                    var.passwordText = ''
           底部按钮区:
             type: HStack
             attribute:

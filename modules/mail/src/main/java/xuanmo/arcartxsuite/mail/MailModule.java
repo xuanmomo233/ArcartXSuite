@@ -22,6 +22,7 @@ import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.mail.command.MailAdminCommand;
 import xuanmo.arcartxsuite.mail.command.MailPlayerCommand;
@@ -141,7 +142,8 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             plugin, logger, dataFolder, configuration,
             mailRepo,
             packetBridge, packetGuard, uiExporter, presetWriter, null,
-            currencyManager, crossServer, messages()
+            currencyManager, crossServer, messages(),
+            () -> getCapability(SecondaryPasswordAccess.class)
         );
         service.start();
         adminCommand = new MailAdminCommand(() -> service, messages());
@@ -252,6 +254,5 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }
 }
-
 
 

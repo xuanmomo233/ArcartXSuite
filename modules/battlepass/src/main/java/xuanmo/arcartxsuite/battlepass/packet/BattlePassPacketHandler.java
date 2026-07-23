@@ -14,6 +14,7 @@ import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress;
+import xuanmo.arcartxsuite.battlepass.model.BattlePassReward;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassTask;
 import xuanmo.arcartxsuite.battlepass.model.PlayerTaskInstance;
 import xuanmo.arcartxsuite.battlepass.service.BattlePassService;
@@ -28,16 +29,19 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     private final BattlePassService service;
     private final String mainUiId;
     private final String tasksUiId;
+    private final java.util.function.BiFunction<String, Object[], String> messageResolver;
 
     public BattlePassPacketHandler(JavaPlugin plugin, PacketBridgeAPI packetBridge,
                                     PacketGuardAPI packetGuard, BattlePassService service,
-                                    String mainUiId, String tasksUiId) {
+                                    String mainUiId, String tasksUiId,
+                                    java.util.function.BiFunction<String, Object[], String> messageResolver) {
         this.plugin = plugin;
         this.packetBridge = packetBridge;
         this.packetGuard = packetGuard;
         this.service = service;
         this.mainUiId = mainUiId;
         this.tasksUiId = tasksUiId;
+        this.messageResolver = messageResolver;
     }
 
     @Override
@@ -49,10 +53,32 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         switch (action) {
             case "open_main" -> pushMainData(player);
             case "open_tasks" -> pushTasksData(player);
+            case "open_rewards" -> pushRewardsData(player);
+            case "claim" -> handleClaim(player, data);
             case "refresh" -> pushMainData(player);
             default -> pushMainData(player);
         }
         return true;
+    }
+
+    private void handleClaim(Player player, List<String> data) {
+        int level;
+        try {
+            level = Integer.parseInt(safe(data.size() > 1 ? data.get(1) : ""));
+        } catch (NumberFormatException e) {
+            return;
+        }
+        BattlePassService.ClaimResult result = service.claimRewards(player, level);
+        String key = switch (result) {
+            case SUCCESS -> "claim.success";
+            case LEVEL_NOT_REACHED -> "claim.level-not-reached";
+            case ALREADY_CLAIMED -> "claim.already-claimed";
+            case NOT_FOUND -> "claim.none";
+        };
+        if (messageResolver != null) {
+            player.sendMessage(messageResolver.apply(key, new Object[]{String.valueOf(level)}));
+        }
+        pushRewardsData(player);
     }
 
     public void openMain(Player player) {
@@ -73,6 +99,64 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
                 pushTasksData(player);
             }
         }, 2L);
+    }
+
+    public void openRewards(Player player) {
+        if (packetBridge == null) return;
+        packetBridge.openUi(player, mainUiId);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (player.isOnline()) {
+                pushMainData(player);
+                pushRewardsData(player);
+            }
+        }, 2L);
+    }
+
+    private void pushRewardsData(Player player) {
+        if (packetBridge == null) return;
+        BattlePassPlayerProgress progress = service.getProgress(player);
+
+        List<BattlePassReward> sorted = new ArrayList<>(service.configuration().rewards());
+        sorted.sort(java.util.Comparator.comparingInt(BattlePassReward::level)
+            .thenComparingInt(r -> r.tier().ordinal()));
+
+        Map<String, Map<String, String>> rewardsMap = new LinkedHashMap<>();
+        int idx = 0;
+        for (BattlePassReward reward : sorted) {
+            boolean tierUnlocked = switch (reward.tier()) {
+                case FREE -> true;
+                case PREMIUM -> progress.unlockedPremium();
+                case DELUXE -> progress.unlockedDeluxe();
+            };
+            boolean levelReached = progress.currentLevel() >= reward.level();
+            boolean claimed = progress.claimedRewards().contains(reward.rewardId());
+
+            Map<String, String> entry = new HashMap<>();
+            entry.put("level", String.valueOf(reward.level()));
+            entry.put("tier", reward.tier().name());
+            entry.put("tierDisplay", rewardTierDisplay(reward.tier()));
+            entry.put("claimed", String.valueOf(claimed));
+            entry.put("claimable", String.valueOf(!claimed && levelReached && tierUnlocked));
+            entry.put("locked", String.valueOf(!tierUnlocked));
+            entry.put("levelReached", String.valueOf(levelReached));
+            rewardsMap.put(String.valueOf(idx++), entry);
+        }
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("packetId", PACKET_ID);
+        payload.put("rewards", rewardsMap);
+        payload.put("rewardCount", String.valueOf(rewardsMap.size()));
+        payload.put("currentLevel", String.valueOf(progress.currentLevel()));
+
+        packetBridge.sendPacket(player, mainUiId, "rewards", payload);
+    }
+
+    private static String rewardTierDisplay(BattlePassReward.RewardTier tier) {
+        return switch (tier) {
+            case FREE -> "&7免费";
+            case PREMIUM -> "&6高级";
+            case DELUXE -> "&5典藏";
+        };
     }
 
     private void pushMainData(Player player) {

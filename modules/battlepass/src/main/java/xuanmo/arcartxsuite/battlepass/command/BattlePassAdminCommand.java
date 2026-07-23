@@ -17,10 +17,14 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
 
     private final Supplier<BattlePassService> serviceProvider;
     private final java.util.function.BiFunction<String, Object[], String> messageResolver;
+    private final String moduleVersion;
 
-    public BattlePassAdminCommand(Supplier<BattlePassService> serviceProvider, java.util.function.BiFunction<String, Object[], String> messageResolver) {
+    public BattlePassAdminCommand(Supplier<BattlePassService> serviceProvider,
+                                   java.util.function.BiFunction<String, Object[], String> messageResolver,
+                                   String moduleVersion) {
         this.serviceProvider = serviceProvider;
         this.messageResolver = messageResolver;
+        this.moduleVersion = moduleVersion;
     }
 
     @Override
@@ -67,7 +71,7 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
     }
 
     private void sendHelp(CommandSender sender, String cmd) {
-        sender.sendMessage(msg("admin.help.title", "1.0.0"));
+        sender.sendMessage(msg("admin.help.title", moduleVersion));
         sender.sendMessage(msg("admin.help.status", cmd));
         sender.sendMessage(msg("admin.help.reload", cmd));
         sender.sendMessage(msg("admin.help.season", cmd));

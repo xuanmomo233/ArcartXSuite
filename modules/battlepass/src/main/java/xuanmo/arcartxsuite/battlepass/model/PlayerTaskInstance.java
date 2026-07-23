@@ -22,7 +22,7 @@ public record PlayerTaskInstance(
 
     public PlayerTaskInstance(UUID playerUuid, String templateId, BattlePassTask.TaskCategory category,
                                int targetCount, LocalDate assignedDate) {
-        this(playerUuid, playerUuid + "|" + templateId + "|" + assignedDate, templateId, category,
+        this(playerUuid, playerUuid + "|" + category + "|" + templateId + "|" + assignedDate, templateId, category,
              targetCount, 0, false, assignedDate, 0);
     }
 

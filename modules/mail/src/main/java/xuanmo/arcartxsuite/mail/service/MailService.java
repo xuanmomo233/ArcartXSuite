@@ -21,6 +21,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
+import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.OfflinePlayer;
@@ -52,6 +53,7 @@ import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI.CurrencyBridge;
 import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
+import xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionServices;
 import xuanmo.arcartxsuite.mail.config.MailModuleConfiguration;
@@ -129,11 +131,13 @@ public final class MailService implements Listener {
     private final CurrencyBridgeAPI currencyBridgeManager;
     private final CrossServerAPI crossServer;
     private final MessageProvider messages;
+    private final Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier;
     private final Map<String, MailPresetDefinition> presets = new ConcurrentHashMap<>();
     private final Map<UUID, Long> selectedMailIds = new ConcurrentHashMap<>();
     private final Map<UUID, MailInboxQuery> inboxQueries = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> logPages = new ConcurrentHashMap<>();
     private final Map<UUID, ComposeSession> composeSessions = new ConcurrentHashMap<>();
+    private final Set<UUID> composePasswordPanels = ConcurrentHashMap.newKeySet();
     private final Map<UUID, AdminEditSession> adminEditSessions = new ConcurrentHashMap<>();
     private final Map<UUID, CdkPreviewState> cdkPreviewStates = new ConcurrentHashMap<>();
     private final Set<UUID> inboxViewers = ConcurrentHashMap.newKeySet();
@@ -165,7 +169,7 @@ public final class MailService implements Listener {
         CrossServerAPI crossServer
     ) {
         this(plugin, logger, plugin.getDataFolder(), configuration, repository, bridge, packetGuard,
-            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null);
+            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null);
     }
 
     public MailService(
@@ -183,7 +187,7 @@ public final class MailService implements Listener {
         CrossServerAPI crossServer
     ) {
         this(plugin, logger, baseDataDir, configuration, repository, bridge, packetGuard,
-            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null);
+            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null);
     }
 
     public MailService(
@@ -201,6 +205,40 @@ public final class MailService implements Listener {
         CrossServerAPI crossServer,
         MessageProvider messages
     ) {
+        this(
+            plugin,
+            logger,
+            baseDataDir,
+            configuration,
+            repository,
+            bridge,
+            packetGuard,
+            uiResourceExporter,
+            bundledResourceWriter,
+            signalDispatcher,
+            currencyBridgeManager,
+            crossServer,
+            messages,
+            null
+        );
+    }
+
+    public MailService(
+        JavaPlugin plugin,
+        Logger logger,
+        File baseDataDir,
+        MailModuleConfiguration configuration,
+        MailRepository repository,
+        PacketBridgeAPI bridge,
+        PacketGuardAPI packetGuard,
+        UiResourceExporter uiResourceExporter,
+        BundledResourceWriter bundledResourceWriter,
+        BiConsumer<String, Player> signalDispatcher,
+        CurrencyBridgeAPI currencyBridgeManager,
+        CrossServerAPI crossServer,
+        MessageProvider messages,
+        Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier
+    ) {
         this.plugin = plugin;
         this.logger = logger;
         this.baseDataDir = baseDataDir;
@@ -214,6 +252,7 @@ public final class MailService implements Listener {
         this.currencyBridgeManager = currencyBridgeManager;
         this.crossServer = crossServer;
         this.messages = messages;
+        this.secondaryPasswordSupplier = secondaryPasswordSupplier;
     }
 
     private String message(String key, Object... args) {
@@ -276,6 +315,7 @@ public final class MailService implements Listener {
         }
 
         composeSessions.clear();
+        composePasswordPanels.clear();
         adminEditSessions.clear();
         selectedMailIds.clear();
         inboxQueries.clear();
@@ -511,6 +551,7 @@ public final class MailService implements Listener {
         }
 
         ComposeSession previous = composeSessions.remove(player.getUniqueId());
+        composePasswordPanels.remove(player.getUniqueId());
         if (previous != null && !previous.sent()) {
             returnComposeItems(player, previous);
         }
@@ -538,7 +579,8 @@ public final class MailService implements Listener {
                         messages,
                         calculateComposeQuote(configuration.playerSend(), Map.of(), 0),
                         effectiveAttachmentSlots(inventory),
-                        0
+                        0,
+                        composePasswordPanels.contains(player.getUniqueId())
                     )
                 );
             }
@@ -787,6 +829,7 @@ public final class MailService implements Listener {
         Player player = event.getPlayer();
         UUID playerUuid = player.getUniqueId();
         ComposeSession session = composeSessions.remove(playerUuid);
+        composePasswordPanels.remove(playerUuid);
         if (session != null && !session.sent()) {
             returnComposeItems(player, session);
         }
@@ -811,6 +854,7 @@ public final class MailService implements Listener {
         ComposeSession session = composeSessions.get(player.getUniqueId());
         if (session != null && event.getInventory() == session.inventory()) {
             composeSessions.remove(player.getUniqueId());
+            composePasswordPanels.remove(player.getUniqueId());
             if (!session.sent()) {
                 returnComposeItems(player, session);
                 player.sendMessage(MESSAGE_PREFIX + ChatColor.YELLOW + message("player.compose-attachments-returned"));
@@ -948,6 +992,10 @@ public final class MailService implements Listener {
                 } else {
                     sendPlayerResult(player, handleComposeSend(player, data));
                 }
+                return true;
+            }
+            case "password-unlock" -> {
+                sendPlayerResult(player, handlePasswordUnlock(player, data));
                 return true;
             }
             case "claim" -> {
@@ -1632,6 +1680,19 @@ public final class MailService implements Listener {
             return MailOperationResult.failure(message("player.compose-session-expired"));
         }
 
+        SecondaryPasswordAccess passwordAccess = secondaryPasswordAccess();
+        if (passwordAccess == null) {
+            MailOperationResult result = MailOperationResult.failure(message("player.compose-password-unavailable"));
+            pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+            return result;
+        }
+        if (passwordAccess.isPasswordSet(player) && !passwordAccess.isUnlocked(player)) {
+            composePasswordPanels.add(player.getUniqueId());
+            MailOperationResult result = MailOperationResult.failure(message("player.compose-password-required"));
+            pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+            return result;
+        }
+
         if (!configuration.playerSend().enabled()) {
             MailOperationResult result = MailOperationResult.failure(message("player.compose-disabled"));
             pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
@@ -1782,6 +1843,7 @@ public final class MailService implements Listener {
             session.sent = true;
             session.inventory().clear();
             composeSessions.remove(player.getUniqueId());
+            composePasswordPanels.remove(player.getUniqueId());
             player.closeInventory();
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (player.isOnline()) {
@@ -1794,6 +1856,49 @@ public final class MailService implements Listener {
             MailOperationResult result = MailOperationResult.failure(message("player.mail-send-failed"));
             pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
             return result;
+        }
+    }
+
+    private MailOperationResult handlePasswordUnlock(Player player, List<String> data) {
+        if (!composeSessions.containsKey(player.getUniqueId())) {
+            return MailOperationResult.failure(message("player.compose-session-missing"));
+        }
+
+        SecondaryPasswordAccess passwordAccess = secondaryPasswordAccess();
+        if (passwordAccess == null) {
+            return MailOperationResult.failure(message("player.compose-password-unavailable"));
+        }
+
+        String password = data != null && data.size() >= 2 ? safe(data.get(1)) : "";
+        if (!passwordAccess.isPasswordSet(player) || passwordAccess.verify(player, password)) {
+            composePasswordPanels.remove(player.getUniqueId());
+            pushComposeQuote(player, calculateCurrentComposeQuote(player));
+            return MailOperationResult.success(message("player.compose-password-unlocked"));
+        }
+
+        composePasswordPanels.add(player.getUniqueId());
+        pushComposeQuote(
+            player,
+            MailSendQuote.failure(message("player.compose-password-invalid"), configuration.playerSend().feeCurrency())
+        );
+        return MailOperationResult.failure(message("player.compose-password-invalid"));
+    }
+
+    private MailSendQuote calculateCurrentComposeQuote(Player player) {
+        ComposeSession session = composeSessions.get(player.getUniqueId());
+        int attachmentCount = session == null ? 0 : collectComposeItems(session.inventory()).size();
+        return calculateComposeQuote(configuration.playerSend(), Map.of(), attachmentCount);
+    }
+
+    private SecondaryPasswordAccess secondaryPasswordAccess() {
+        if (secondaryPasswordSupplier == null) {
+            return null;
+        }
+        try {
+            return secondaryPasswordSupplier.get();
+        } catch (RuntimeException exception) {
+            logger.warning("Mail secondary password capability unavailable: " + exception.getMessage());
+            return null;
         }
     }
 
@@ -2158,7 +2263,15 @@ public final class MailService implements Listener {
                 player,
                 composeUiId,
                 "update",
-                MailComposePacketFactory.buildQuote(configuration, currencyBridgeManager, messages, quote, maxAttachments, attachmentCount)
+                MailComposePacketFactory.buildQuote(
+                    configuration,
+                    currencyBridgeManager,
+                    messages,
+                    quote,
+                    maxAttachments,
+                    attachmentCount,
+                    composePasswordPanels.contains(player.getUniqueId())
+                )
             );
         }
     }

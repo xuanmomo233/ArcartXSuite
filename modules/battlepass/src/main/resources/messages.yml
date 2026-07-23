@@ -29,6 +29,8 @@ claim:
   already-claimed: '&c该等级奖励已领取。'
   level-not-reached: '&c尚未达到该等级。'
   premium-required: '&c需要激活进阶版战令。'
+  none: '&c该等级没有可领取的奖励。'
+  usage: '&c用法: /{0} claim <等级>'
 admin:
   season-unimplemented: "&6===== 战令模块状态 ===== 赛季管理暂未实现。"
   service-unavailable-status: "&6===== 战令模块状态 ===== 服务未就绪。"
@@ -57,7 +59,11 @@ admin:
 
 player:
   only-player: "&c该命令仅限玩家使用。"
+  module-down: "&c战令模块未就绪，请稍后再试。"
+  unknown-subcommand: "&c未知子命令，使用 /{0} help 查看帮助。"
   help-title: "&6==== BattlePass 命令 ===="
   help-open: "&e/{0} &f— 打开战令主界面"
   help-tasks: "&e/{0} tasks&f— 打开任务列表"
+  help-rewards: "&e/{0} rewards&f— 打开奖励面板"
+  help-claim: "&e/{0} claim <等级>&f— 领取指定等级奖励"
   help-help: "&e/{0} help&f— 显示帮助"

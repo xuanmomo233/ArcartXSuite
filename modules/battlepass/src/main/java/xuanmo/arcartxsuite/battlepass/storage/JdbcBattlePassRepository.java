@@ -39,7 +39,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
 
     @Override
     protected java.util.List<String> playerDataTables() {
-        return java.util.List.of("bp_player_progress", "bp_task_progress", "bp_claimed_rewards");
+        return java.util.List.of("bp_player_progress", "bp_task_progress", "bp_claimed_rewards", "bp_player_tasks");
     }
 
     private void createTables(Connection conn) throws SQLException {
@@ -159,14 +159,14 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
         }
     }
 
-    private void ensureIndexes(Connection conn) throws SQLException {
-        try (Statement stmt = conn.createStatement()) {
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_bp_progress_season ON bp_player_progress(season_id)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_bp_task_season ON bp_task_progress(season_id)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_bp_reward_season ON bp_claimed_rewards(season_id)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_bp_ptask_season ON bp_player_tasks(season_id)");
-            stmt.execute("CREATE INDEX IF NOT EXISTS idx_bp_ptask_template ON bp_player_tasks(template_id)");
-        }
+    private void ensureIndexes(Connection conn) {
+        // MySQL 不支持 CREATE INDEX IF NOT EXISTS，重复创建时静默忽略
+        String prefix = "sqlite".equalsIgnoreCase(configuration.mode()) ? "CREATE INDEX IF NOT EXISTS " : "CREATE INDEX ";
+        tryExecute(conn, prefix + "idx_bp_progress_season ON bp_player_progress(season_id)");
+        tryExecute(conn, prefix + "idx_bp_task_season ON bp_task_progress(season_id)");
+        tryExecute(conn, prefix + "idx_bp_reward_season ON bp_claimed_rewards(season_id)");
+        tryExecute(conn, prefix + "idx_bp_ptask_season ON bp_player_tasks(season_id)");
+        tryExecute(conn, prefix + "idx_bp_ptask_template ON bp_player_tasks(template_id)");
     }
 
     @Override
@@ -376,7 +376,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
     public int countActivePlayers(String seasonId) throws SQLException {
         try (Connection connection = getConnection();
              PreparedStatement stmt = connection.prepareStatement(
-                 "SELECT COUNT(DISTINCT player_uuid) FROM bp_player_progress WHERE season_id = ? AND current_level > 1"
+                 "SELECT COUNT(DISTINCT player_uuid) FROM bp_player_progress WHERE season_id = ?"
              )) {
             stmt.setString(1, seasonId);
             try (ResultSet rs = stmt.executeQuery()) {

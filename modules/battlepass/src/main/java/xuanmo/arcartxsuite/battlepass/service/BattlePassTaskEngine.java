@@ -15,6 +15,7 @@ public final class BattlePassTaskEngine {
     private final BattlePassService service;
     private final BattlePassModuleConfiguration configuration;
     private final List<String> subscriptionIds = new ArrayList<>();
+    private EventBusCapability eventBus;
     private volatile boolean active;
 
     public BattlePassTaskEngine(BattlePassService service, BattlePassModuleConfiguration configuration) {
@@ -24,7 +25,7 @@ public final class BattlePassTaskEngine {
 
     public void start(Supplier<EventBusCapability> eventBusProvider) {
         if (active) return;
-        EventBusCapability eventBus = eventBusProvider != null ? eventBusProvider.get() : null;
+        eventBus = eventBusProvider != null ? eventBusProvider.get() : null;
         if (eventBus == null) return;
         active = true;
 
@@ -43,6 +44,14 @@ public final class BattlePassTaskEngine {
 
     public void shutdown() {
         active = false;
+        if (eventBus != null) {
+            for (String subId : subscriptionIds) {
+                try {
+                    eventBus.unsubscribe(subId);
+                } catch (RuntimeException ignored) {}
+            }
+            eventBus = null;
+        }
         subscriptionIds.clear();
     }
 
