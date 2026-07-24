@@ -1,5 +1,7 @@
 package xuanmo.arcartxsuite.config.diagnostic;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -40,6 +42,9 @@ public final class MigrationOperationExecutor {
     }
 
     private static boolean renameSibling(YamlConfiguration configuration, String from, String to) {
+        if (containsWildcard(from)) {
+            return renameWithWildcards(configuration, from, to);
+        }
         if (!configuration.isSet(from)) {
             return false;
         }
@@ -47,6 +52,102 @@ public final class MigrationOperationExecutor {
         configuration.set(to, value);
         configuration.set(from, null);
         return true;
+    }
+
+    private static boolean containsWildcard(String path) {
+        return path != null && path.indexOf('*') >= 0;
+    }
+
+    /**
+     * 支持含 {@code *} 通配符的批量重命名。
+     * <p>
+     * 例如 {@code from="tasks.daily.*.xp-reward", to="tasks.daily.*.base-xp-reward"}
+     * 会遍历 {@code tasks.daily} 下所有子键，将各自的 {@code xp-reward} 重命名为 {@code base-xp-reward}。
+     * <p>
+     * 要求 {@code from} 和 {@code to} 的路径段数相同，且通配符出现位置一致。
+     */
+    private static boolean renameWithWildcards(YamlConfiguration configuration, String from, String to) {
+        String[] fromParts = from.split("\\.");
+        String[] toParts = to.split("\\.");
+        if (fromParts.length != toParts.length) {
+            return false;
+        }
+        // 收集 from 中通配符位置
+        List<Integer> wildcardIndices = new ArrayList<>();
+        for (int i = 0; i < fromParts.length; i++) {
+            if ("*".equals(fromParts[i])) {
+                wildcardIndices.add(i);
+            }
+        }
+        // 遍历配置树，找到所有匹配 from 模式的具体路径
+        List<String> matchedPaths = collectMatchingPaths(configuration, fromParts, 0, "");
+        if (matchedPaths.isEmpty()) {
+            return false;
+        }
+        boolean changed = false;
+        for (String matchedPath : matchedPaths) {
+            String[] matchedParts = matchedPath.split("\\.");
+            // 用通配符位置的实际值替换 to 中的 *
+            String[] resolvedToParts = toParts.clone();
+            for (int wi : wildcardIndices) {
+                resolvedToParts[wi] = matchedParts[wi];
+            }
+            String resolvedTo = String.join(".", resolvedToParts);
+            if (configuration.isSet(matchedPath)) {
+                Object value = configuration.get(matchedPath);
+                configuration.set(resolvedTo, value);
+                configuration.set(matchedPath, null);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    /**
+     * 递归遍历配置树，收集所有匹配给定通配符模式的具体路径。
+     *
+     * @param section  当前层级的 ConfigurationSection
+     * @param pattern  路径模式按 {@code .} 分割后的数组
+     * @param depth    当前匹配到第几层
+     * @param prefix   已匹配的路径前缀
+     * @return 所有匹配的具体路径列表
+     */
+    private static List<String> collectMatchingPaths(ConfigurationSection section, String[] pattern, int depth, String prefix) {
+        List<String> results = new ArrayList<>();
+        if (depth >= pattern.length) {
+            return results;
+        }
+        String segment = pattern[depth];
+        boolean isLast = depth == pattern.length - 1;
+
+        if ("*".equals(segment)) {
+            // 通配符：遍历当前 section 的所有子键
+            for (String key : section.getKeys(false)) {
+                String childPath = prefix.isEmpty() ? key : prefix + "." + key;
+                if (isLast) {
+                    results.add(childPath);
+                } else {
+                    ConfigurationSection child = section.getConfigurationSection(key);
+                    if (child != null) {
+                        results.addAll(collectMatchingPaths(child, pattern, depth + 1, childPath));
+                    }
+                }
+            }
+        } else {
+            // 精确匹配
+            if (isLast) {
+                if (section.isSet(segment)) {
+                    results.add(prefix.isEmpty() ? segment : prefix + "." + segment);
+                }
+            } else {
+                ConfigurationSection child = section.getConfigurationSection(segment);
+                if (child != null) {
+                    String childPath = prefix.isEmpty() ? segment : prefix + "." + segment;
+                    results.addAll(collectMatchingPaths(child, pattern, depth + 1, childPath));
+                }
+            }
+        }
+        return results;
     }
 
     private static boolean removePath(YamlConfiguration configuration, String path) {
