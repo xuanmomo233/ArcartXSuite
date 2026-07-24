@@ -33,7 +33,7 @@ ui:
       var.rarityColors[none] = '128,128,128,255'
     open: |-
       var.random = 0.8 + math.random() * 0.01
-      Packet.send(var.packetId, 'open_case')
+      Packet.send(var.packetId, 'open_case', packet['action_token'])
       var.V = TwoLerp(1, 3, 0.5, 2000, 6000)
       val.Scroll.moveX = 0.0005
       val.开箱动画.visible = true

@@ -428,7 +428,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'claim', self.parent.entry['level'])
+                                  Packet.send(var.packetId, 'claim', self.parent.entry['level'], packet['action_token'])
                             children:
                               领取文字:
                                 type: Text

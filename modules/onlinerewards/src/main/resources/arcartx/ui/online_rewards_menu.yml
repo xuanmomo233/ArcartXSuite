@@ -342,9 +342,9 @@ controls:
             action:
               clickLeft: |-
                 if(var.selectedAction == 'signin'){
-                  Packet.send(var.packetId, 'signin')
+                  Packet.send(var.packetId, 'signin', packet['action_token'])
                 }elif(var.selectedAction == 'makeup'){
-                  Packet.send(var.packetId, 'makeup', var.selectedDateText)
+                  Packet.send(var.packetId, 'makeup', var.selectedDateText, packet['action_token'])
                 }
 
           日历标题:

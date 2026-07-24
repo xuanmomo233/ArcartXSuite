@@ -527,7 +527,7 @@ controls:
                 color: ~255,240,200,200
             action:
               click: |-
-                Packet.send(var.packetId, 'pull', 1)
+                      Packet.send(var.packetId, 'pull', 1, packet['action_token'])
             children:
               祈愿1次文字:
                 type: Text
@@ -567,7 +567,7 @@ controls:
                 color: ~255,240,200,200
             action:
               click: |-
-                Packet.send(var.packetId, 'pull', 10)
+                      Packet.send(var.packetId, 'pull', 10, packet['action_token'])
             children:
               祈愿10次文字:
                 type: Text

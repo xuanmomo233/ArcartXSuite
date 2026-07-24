@@ -13,7 +13,6 @@ import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -27,6 +26,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.util.AttributeResolver;
 import xuanmo.arcartxsuite.api.capability.TabRefreshable;
 import xuanmo.arcartxsuite.essentials.config.EssentialsConfiguration;
 import java.util.logging.Logger;
@@ -127,7 +127,7 @@ public final class PlayerManagementService implements Listener {
     // ─── Heal / Feed ───
 
     public void heal(Player target) {
-        target.setHealth(target.getAttribute(Attribute.GENERIC_MAX_HEALTH).getValue());
+        target.setHealth(AttributeResolver.getMaxHealth(target));
         target.setFireTicks(0);
         target.sendMessage(prefix() + config.messages().heal());
     }

@@ -11,8 +11,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import org.bukkit.Location;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.Player;
+import xuanmo.arcartxsuite.api.util.AttributeResolver;
 
 public final class EventPacketContext {
 
@@ -351,10 +351,7 @@ public final class EventPacketContext {
         }
 
         private static double resolveMaxHealth(Player player) {
-            if (player.getAttribute(Attribute.GENERIC_MAX_HEALTH) != null) {
-                return Objects.requireNonNull(player.getAttribute(Attribute.GENERIC_MAX_HEALTH)).getValue();
-            }
-            return 20.0D;
+            return AttributeResolver.getMaxHealth(player);
         }
 
         private static BigDecimal decimal(double value) {

@@ -651,7 +651,7 @@ controls:
             action:
               clickLeft: |-
                 if (var.detailCanUnlock) {
-                  Packet.send(var.packetId, 'unlock_anchor', var.detailSelectedId)
+                         Packet.send(var.packetId, 'unlock_anchor', var.detailSelectedId, packet['action_token'])
                 }
             children:
               解锁按钮文字:
@@ -676,7 +676,7 @@ controls:
             action:
               clickLeft: |-
                 if (var.detailCanTeleport) {
-                  Packet.send(var.packetId, 'teleport_anchor', var.detailSelectedId)
+                  Packet.send(var.packetId, 'teleport_anchor', var.detailSelectedId, packet['action_token'])
                 }
             children:
               传送按钮文字:
@@ -732,7 +732,7 @@ controls:
             action:
               clickLeft: |-
                 if (var.detailCanDeleteWaypoint) {
-                  Packet.send(var.packetId, 'delete_waypoint', var.detailSelectedId)
+                  Packet.send(var.packetId, 'delete_waypoint', var.detailSelectedId, packet['action_token'])
                 }
             children:
               删除按钮文字:
@@ -757,7 +757,7 @@ controls:
             action:
               clickLeft: |-
                 if (var.canCreateWaypoint) {
-                  Packet.send(var.packetId, 'create_waypoint')
+                  Packet.send(var.packetId, 'create_waypoint', packet['action_token'])
                 }
             children:
               创建按钮文字:

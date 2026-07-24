@@ -11,13 +11,13 @@ import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
+import xuanmo.arcartxsuite.api.util.AttributeResolver;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
@@ -545,9 +545,7 @@ public final class PropService implements Listener {
         if (player == null) {
             return;
         }
-        Attribute attribute = Attribute.GENERIC_MAX_HEALTH;
-        var maxHealthAttribute = player.getAttribute(attribute);
-        double maxHealth = maxHealthAttribute == null ? player.getHealth() : maxHealthAttribute.getValue();
+        double maxHealth = AttributeResolver.getMaxHealth(player);
         player.setHealth(Math.min(maxHealth, Math.max(0.0D, player.getHealth() + delta)));
     }
 
@@ -555,7 +553,7 @@ public final class PropService implements Listener {
         if (player == null) {
             return;
         }
-        var maxHealthAttribute = player.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        var maxHealthAttribute = AttributeResolver.getMaxHealthAttribute(player);
         if (maxHealthAttribute == null) {
             return;
         }

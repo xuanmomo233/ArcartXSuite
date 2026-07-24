@@ -10,12 +10,12 @@ import java.util.UUID;
 import org.bukkit.Location;
 import org.bukkit.Server;
 import org.bukkit.World;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
+import xuanmo.arcartxsuite.api.util.AttributeResolver;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDefinition;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRankingRewardsSettings;
 import xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration;
@@ -313,7 +313,7 @@ public final class BossSession {
         } catch (Exception | LinkageError ignored) {
             // MythicMobs 重载或暂时不可用时，回退到 Bukkit 实体属性。
         }
-        AttributeInstance attribute = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
+        AttributeInstance attribute = AttributeResolver.getMaxHealthAttribute(entity);
         if (attribute == null) {
             return Math.max(entity.getHealth(), 1.0D);
         }

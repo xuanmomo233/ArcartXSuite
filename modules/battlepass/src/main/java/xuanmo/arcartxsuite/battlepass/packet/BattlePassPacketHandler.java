@@ -6,6 +6,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -30,6 +33,8 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     private final String mainUiId;
     private final String tasksUiId;
     private final java.util.function.BiFunction<String, Object[], String> messageResolver;
+    private final Map<UUID, String> actionTokens = new ConcurrentHashMap<>();
+    private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
 
     public BattlePassPacketHandler(JavaPlugin plugin, PacketBridgeAPI packetBridge,
                                     PacketGuardAPI packetGuard, BattlePassService service,
@@ -62,13 +67,28 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     }
 
     private void handleClaim(Player player, List<String> data) {
+        UUID uuid = player.getUniqueId();
+        String supplied = data.size() > 2 ? safe(data.get(data.size() - 1)) : "";
+        String expected = actionTokens.get(uuid);
+        if (expected == null || supplied.isBlank() || !expected.equals(supplied)
+            || !actionTokensInFlight.add(uuid)
+            || packetBridge == null || !packetBridge.isUiOpen(player, mainUiId)) {
+            actionTokensInFlight.remove(uuid);
+            return;
+        }
         int level;
         try {
             level = Integer.parseInt(safe(data.size() > 1 ? data.get(1) : ""));
         } catch (NumberFormatException e) {
+            actionTokensInFlight.remove(uuid);
             return;
         }
-        BattlePassService.ClaimResult result = service.claimRewards(player, level);
+        BattlePassService.ClaimResult result;
+        try {
+            result = service.claimRewards(player, level);
+        } finally {
+            actionTokensInFlight.remove(uuid);
+        }
         String key = switch (result) {
             case SUCCESS -> "claim.success";
             case LEVEL_NOT_REACHED -> "claim.level-not-reached";
@@ -78,12 +98,16 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         if (messageResolver != null) {
             player.sendMessage(messageResolver.apply(key, new Object[]{String.valueOf(level)}));
         }
+        if (result == BattlePassService.ClaimResult.SUCCESS) {
+            actionTokens.put(uuid, UUID.randomUUID().toString());
+        }
         pushRewardsData(player);
     }
 
     public void openMain(Player player) {
         if (packetBridge == null) return;
         packetBridge.openUi(player, mainUiId);
+        actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (player.isOnline()) {
                 pushMainData(player);
@@ -104,6 +128,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     public void openRewards(Player player) {
         if (packetBridge == null) return;
         packetBridge.openUi(player, mainUiId);
+        actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (player.isOnline()) {
                 pushMainData(player);
@@ -147,6 +172,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         payload.put("rewards", rewardsMap);
         payload.put("rewardCount", String.valueOf(rewardsMap.size()));
         payload.put("currentLevel", String.valueOf(progress.currentLevel()));
+        payload.put("action_token", actionTokens.getOrDefault(player.getUniqueId(), ""));
 
         packetBridge.sendPacket(player, mainUiId, "rewards", payload);
     }

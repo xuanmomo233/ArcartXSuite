@@ -22,6 +22,12 @@ public final class MapUiPacketHandler {
         if (!target.allowClientPacket(player, action)) {
             return true;
         }
+        boolean tokenized = switch (action) {
+            case "unlock_anchor", "teleport_anchor", "create_waypoint", "delete_waypoint" -> true;
+            default -> false;
+        };
+        if (tokenized && !target.beginActionToken(player, action, data)) return true;
+        boolean committed = false;
         switch (action) {
             case "refresh" -> target.refresh(player);
             case "open_world" -> {
@@ -54,14 +60,14 @@ public final class MapUiPacketHandler {
             }
             case "unlock_anchor" -> {
                 if (hasValue(data, 1)) {
-                    target.unlockAnchor(player, data.get(1));
+                    committed = target.unlockAnchor(player, data.get(1));
                 } else {
                     target.refresh(player);
                 }
             }
             case "teleport_anchor" -> {
                 if (hasValue(data, 1)) {
-                    target.teleportAnchor(player, data.get(1));
+                    committed = target.teleportAnchor(player, data.get(1));
                 } else {
                     target.refresh(player);
                 }
@@ -88,10 +94,10 @@ public final class MapUiPacketHandler {
                 }
             }
             case "clear_track" -> target.clearTrack(player);
-            case "create_waypoint" -> target.createWaypoint(player);
+            case "create_waypoint" -> committed = target.createWaypoint(player);
             case "delete_waypoint" -> {
                 if (hasValue(data, 1)) {
-                    target.deleteWaypoint(player, data.get(1));
+                    committed = target.deleteWaypoint(player, data.get(1));
                 } else {
                     target.refresh(player);
                 }
@@ -99,6 +105,7 @@ public final class MapUiPacketHandler {
             case "open_menu" -> target.openMenu(player, hasValue(data, 1) ? data.get(1) : "");
             default -> target.refresh(player);
         }
+        if (tokenized) target.finishActionToken(player, committed);
         return true;
     }
 
@@ -125,9 +132,9 @@ public final class MapUiPacketHandler {
 
         void selectExternalTarget(Player player, String targetId);
 
-        void unlockAnchor(Player player, String anchorId);
+        boolean unlockAnchor(Player player, String anchorId);
 
-        void teleportAnchor(Player player, String anchorId);
+        boolean teleportAnchor(Player player, String anchorId);
 
         void trackAnchor(Player player, String anchorId);
 
@@ -137,8 +144,12 @@ public final class MapUiPacketHandler {
 
         void clearTrack(Player player);
 
-        void createWaypoint(Player player);
+        boolean createWaypoint(Player player);
 
-        void deleteWaypoint(Player player, String waypointId);
+        boolean deleteWaypoint(Player player, String waypointId);
+
+        boolean beginActionToken(Player player, String action, List<String> data);
+
+        void finishActionToken(Player player, boolean committed);
     }
 }

@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.tab.placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.util.AttributeResolver;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
@@ -45,7 +46,7 @@ public final class TabPlayerFallbackExpansion extends PlaceholderExpansion {
             case "y" -> String.valueOf(player.getLocation().getBlockY());
             case "z" -> String.valueOf(player.getLocation().getBlockZ());
             case "health" -> String.valueOf(player.getHealth());
-            case "max_health" -> String.valueOf(player.getMaxHealth());
+            case "max_health" -> String.valueOf(AttributeResolver.getMaxHealth(player));
             case "ping" -> String.valueOf(player.getPing());
             case "gamemode" -> player.getGameMode().name().toLowerCase();
             case "scoreboardteam", "scoreboard_team" -> player.getScoreboard().getEntryTeam(player.getName()) != null

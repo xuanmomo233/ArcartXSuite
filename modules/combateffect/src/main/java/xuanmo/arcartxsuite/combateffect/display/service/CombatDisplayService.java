@@ -20,6 +20,7 @@ import xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageEvent;
 import xuanmo.arcartxsuite.api.attribute.AttributeHealEvent;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
+import xuanmo.arcartxsuite.api.util.AttributeResolver;
 import xuanmo.arcartxsuite.combateffect.display.config.CombatDisplayConfiguration;
 import java.util.logging.Logger;
 
@@ -316,7 +317,7 @@ public final class CombatDisplayService {
         double displayAmount = healAmount;
         if (configuration.mythicHealExactMode()) {
             double currentHealth = player.getHealth();
-            double maxHealth = Objects.requireNonNull(player.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH)).getValue();
+            double maxHealth = AttributeResolver.getMaxHealth(player);
             displayAmount = Math.min(currentHealth + healAmount, maxHealth) - currentHealth;
         }
         if (displayAmount <= configuration.mythicHealMinAmount()) {

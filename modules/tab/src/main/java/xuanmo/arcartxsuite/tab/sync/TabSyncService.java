@@ -14,7 +14,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import xuanmo.arcartxsuite.tab.config.UiTarget;
 import org.bukkit.Bukkit;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.Player;
 import org.bukkit.scoreboard.Team;
 import org.bukkit.event.EventHandler;
@@ -23,6 +22,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitTask;
+import xuanmo.arcartxsuite.api.util.AttributeResolver;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
@@ -1751,8 +1751,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
     }
 
     private static double resolveMaxHealth(Player player) {
-        var attribute = player.getAttribute(Attribute.GENERIC_MAX_HEALTH);
-        return attribute != null ? attribute.getValue() : 20.0D;
+        return AttributeResolver.getMaxHealth(player);
     }
 
     private static String formatNumber(double value) {

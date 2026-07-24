@@ -505,7 +505,7 @@ controls:
                         action:
                           clickLeft: |-
                             if(self.entry != none && self.entry['canBuyNow']){
-                              Packet.send(var.packetId, 'auction_buy', self.entry['id'])
+                            Packet.send(var.packetId, 'auction_buy', self.entry['id'], packet['action_token'])
                             }
                         effect:
                           stroke:
@@ -595,7 +595,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'auction_buy', self.parent.parent.entry['id'])
+                                Packet.send(var.packetId, 'auction_buy', self.parent.parent.entry['id'], packet['action_token'])
                             effect:
                               stroke:
                                 width: 1
@@ -624,7 +624,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'auction_bid', self.parent.parent.entry['id'], self.parent.parent.entry['minBid'])
+                                Packet.send(var.packetId, 'auction_bid', self.parent.parent.entry['id'], self.parent.parent.entry['minBid'], packet['action_token'])
                             children:
                               文字:
                                 type: Text
@@ -674,7 +674,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'auction_cancel', self.parent.parent.entry['id'])
+                                Packet.send(var.packetId, 'auction_cancel', self.parent.parent.entry['id'], packet['action_token'])
                             effect:
                               stroke:
                                 width: 1

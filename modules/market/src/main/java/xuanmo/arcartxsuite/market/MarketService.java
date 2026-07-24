@@ -7,6 +7,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -52,6 +54,8 @@ public class MarketService {
     private final Logger logger;
     private final CrossServerAPI crossServer;
     private final MessageProvider messages;
+    private final Map<String, Map<UUID, String>> actionTokens = new ConcurrentHashMap<>();
+    private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
 
     private static final int AUCTION_PAGE_SIZE = 20;
     private static final String AUCTION_SELL_UI_ID = "AXS:market_auction_sell";
@@ -175,6 +179,7 @@ public class MarketService {
         if (duration <= 0) duration = config.auction().defaultDurationSeconds();
         var result = auctionService.createListing(player, item, buyNowPrice, startingBid, currency, duration);
         if (result.success()) {
+            rotateToken(player, config.ui().auctionId());
             player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().auctionListed()));
             dispatchSignal("market_listing_created", player, Map.of(
                 "price", String.valueOf(buyNowPrice),
@@ -193,6 +198,7 @@ public class MarketService {
         if (auctionService == null) return;
         boolean success = auctionService.cancelListing(player, listingId);
         if (success) {
+            rotateToken(player, config.ui().auctionId());
             player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().auctionCancelled()));
         } else {
             player.sendMessage(messages.get("player.cancel-failed"));
@@ -213,6 +219,7 @@ public class MarketService {
         }
         var result = shopService.buy(player, shopId, itemId, amount);
         if (result.success()) {
+            rotateToken(player, config.ui().shopId());
             player.sendMessage(ChatColor.translateAlternateColorCodes('&',
                 config.messages().shopBought().replace("%amount%",
                     currencyManager.format(result.currency(), BigDecimal.valueOf(result.totalPrice())))));
@@ -230,6 +237,7 @@ public class MarketService {
         }
         var result = recycleService.recycleBatch(player);
         if (result.success()) {
+            rotateToken(player, config.ui().recycleId());
             player.sendMessage(ChatColor.translateAlternateColorCodes('&',
                 config.messages().recycleSuccess().replace("%amount%",
                     formatRecycleEarnings(result.earningsByCurrency()))));
@@ -242,22 +250,27 @@ public class MarketService {
 
     public void openAuctionUi(Player player) {
         packetBridge.openUi(player, config.ui().auctionId());
+        issueActionToken(player, config.ui().auctionId());
     }
 
     public void openAuctionSellUi(Player player) {
         packetBridge.openUi(player, AUCTION_SELL_UI_ID);
+        issueActionToken(player, AUCTION_SELL_UI_ID);
     }
 
     public void openShopListUi(Player player) {
         packetBridge.openUi(player, config.ui().shopId());
+        issueActionToken(player, config.ui().shopId());
     }
 
     public void openShopUi(Player player, String shopId) {
         packetBridge.openUi(player, config.ui().shopId());
+        issueActionToken(player, config.ui().shopId());
     }
 
     public void openRecycleUi(Player player) {
         packetBridge.openUi(player, config.ui().recycleId());
+        issueActionToken(player, config.ui().recycleId());
     }
 
     public void openHistoryUi(Player player) {
@@ -281,6 +294,7 @@ public class MarketService {
 
         // data[0] = action, 后续字段为参数
         String action = data.get(0);
+        if (requiresActionToken(action) && !beginActionToken(player, action, data)) return true;
         switch (action) {
             case "auction_list" -> handleAuctionListPacket(player, data);
             case "auction_buy" -> handleAuctionBuyPacket(player, data);
@@ -297,6 +311,9 @@ public class MarketService {
             case "recycle_preview" -> handleRecyclePreviewPacket(player);
             case "history_list" -> handleHistoryListPacket(player, data);
             default -> { return false; }
+        }
+        if (requiresActionToken(action)) {
+            actionTokensInFlight.remove(player.getUniqueId());
         }
         return true;
     }
@@ -362,6 +379,7 @@ public class MarketService {
             player.sendMessage(ChatColor.RED + result.error());
             return;
         }
+        rotateToken(player, AUCTION_SELL_UI_ID);
         player.sendMessage(ChatColor.translateAlternateColorCodes((char) 38, config.messages().auctionListed()));
         openAuctionUi(player);
         handleAuctionListPacket(player, List.of("auction_list", "0", "all", ""));
@@ -408,6 +426,7 @@ public class MarketService {
         if (listingId <= 0) return;
         var result = auctionService.buyNow(player, listingId);
         if (result.success()) {
+            rotateToken(player, config.ui().auctionId());
             player.sendMessage(ChatColor.translateAlternateColorCodes('&', config.messages().auctionBought()));
             // 触发信号
             dispatchSignal("market_purchase", player, Map.of(
@@ -436,6 +455,7 @@ public class MarketService {
         if (listingId <= 0 || amount <= 0) return;
         var result = auctionService.placeBid(player, listingId, amount);
         if (result.success()) {
+            rotateToken(player, config.ui().auctionId());
             player.sendMessage(ChatColor.translateAlternateColorCodes('&',
                 config.messages().auctionBidPlaced().replace("%amount%", String.valueOf(result.amount()))));
         } else {
@@ -520,7 +540,57 @@ public class MarketService {
 
     private void sendUiPacket(Player player, String uiId, String handler, Map<String, Object> packet) {
         if (packetBridge == null) return;
+        if (requiresUiToken(uiId)) {
+            packet.put("action_token", tokenMap(uiId).getOrDefault(player.getUniqueId(), ""));
+        }
         packetBridge.sendPacket(player, uiId, handler, packet);
+    }
+
+    private boolean requiresActionToken(String action) {
+        return switch (action) {
+            case "auction_buy", "auction_bid", "auction_cancel", "auction_list_create",
+                "shop_buy", "recycle_all", "recycle_single" -> true;
+            default -> false;
+        };
+    }
+
+    private boolean requiresUiToken(String uiId) {
+        return uiId.equals(config.ui().auctionId()) || uiId.equals(AUCTION_SELL_UI_ID)
+            || uiId.equals(config.ui().shopId()) || uiId.equals(config.ui().recycleId());
+    }
+
+    private Map<UUID, String> tokenMap(String uiId) {
+        return actionTokens.computeIfAbsent(uiId, ignored -> new ConcurrentHashMap<>());
+    }
+
+    private void issueActionToken(Player player, String uiId) {
+        tokenMap(uiId).put(player.getUniqueId(), UUID.randomUUID().toString());
+    }
+
+    private void rotateToken(Player player, String uiId) {
+        issueActionToken(player, uiId);
+    }
+
+    private boolean beginActionToken(Player player, String action, List<String> data) {
+        String uiId = switch (action) {
+            case "auction_list_create" -> AUCTION_SELL_UI_ID;
+            case "shop_buy" -> config.ui().shopId();
+            case "recycle_all", "recycle_single" -> config.ui().recycleId();
+            default -> config.ui().auctionId();
+        };
+        int index = switch (action) {
+            case "auction_buy", "auction_cancel" -> 2;
+            case "auction_bid" -> 3;
+            case "auction_list_create" -> 6;
+            case "shop_buy" -> 4;
+            case "recycle_single" -> 2;
+            default -> 1;
+        };
+        String supplied = data.size() > index ? data.get(index) : "";
+        return packetBridge != null && packetBridge.isUiOpen(player, uiId)
+            && tokenMap(uiId).get(player.getUniqueId()) != null
+            && tokenMap(uiId).get(player.getUniqueId()).equals(supplied)
+            && actionTokensInFlight.add(player.getUniqueId());
     }
 
     private Map<String, Object> buildAuctionSellPacket(Player player) {

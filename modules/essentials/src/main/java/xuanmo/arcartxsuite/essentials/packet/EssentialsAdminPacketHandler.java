@@ -15,6 +15,7 @@ import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.util.AttributeResolver;
 import xuanmo.arcartxsuite.essentials.service.PlayerManagementService;
 import xuanmo.arcartxsuite.essentials.service.TeleportService;
 import xuanmo.arcartxsuite.essentials.storage.EssentialsRepository;
@@ -187,7 +188,7 @@ public final class EssentialsAdminPacketHandler implements ClientPacketHandler {
         for (Player p : Bukkit.getOnlinePlayers()) {
             Map<String, Object> info = new HashMap<>();
             info.put("name", p.getName());
-            info.put("health", String.format("%.0f/%.0f", p.getHealth(), p.getAttribute(org.bukkit.attribute.Attribute.GENERIC_MAX_HEALTH).getValue()));
+            info.put("health", String.format("%.0f/%.0f", p.getHealth(), AttributeResolver.getMaxHealth(p)));
             info.put("isFlying", String.valueOf(playerService.isFlyEnabled(p.getUniqueId())));
             info.put("isGod", String.valueOf(playerService.isGodEnabled(p.getUniqueId())));
             info.put("world", p.getWorld().getName());

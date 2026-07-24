@@ -3,11 +3,11 @@ package xuanmo.arcartxsuite.api.combat;
 import java.util.Locale;
 import java.util.Optional;
 import org.bukkit.ChatColor;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import xuanmo.arcartxsuite.api.util.AttributeResolver;
 
 public final class EntityCombatMetadata {
 
@@ -109,8 +109,7 @@ public final class EntityCombatMetadata {
             } catch (Exception ignored) {}
         }
         if (entity != null) {
-            AttributeInstance attr = entity.getAttribute(Attribute.GENERIC_MAX_HEALTH);
-            if (attr != null) return attr.getValue();
+            return AttributeResolver.getMaxHealth(entity);
         }
         return 20.0;
     }

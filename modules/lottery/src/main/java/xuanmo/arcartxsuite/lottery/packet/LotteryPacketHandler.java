@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -36,6 +37,9 @@ public class LotteryPacketHandler implements ClientPacketHandler {
     private final PacketBridgeAPI packetBridge;
     private final JavaPlugin plugin;
     private final Map<UUID, Integer> playerPoolIndex = new ConcurrentHashMap<>();
+    private final Map<UUID, String> gachaTokens = new ConcurrentHashMap<>();
+    private final Map<UUID, String> caseTokens = new ConcurrentHashMap<>();
+    private final Map<UUID, Object> tokenLocks = new ConcurrentHashMap<>();
 
     public LotteryPacketHandler(@NotNull LotteryService service, @NotNull PacketBridgeAPI packetBridge,
                                 @NotNull JavaPlugin plugin) {
@@ -84,6 +88,8 @@ public class LotteryPacketHandler implements ClientPacketHandler {
     }
 
     private void handlePull(Player player, List<String> data) {
+        UUID uuid = player.getUniqueId();
+        if (!acquireToken(player, GACHA_PACKET_ID, data, 2)) return;
         int count = 1;
         if (data.size() > 1) {
             try {
@@ -96,27 +102,37 @@ public class LotteryPacketHandler implements ClientPacketHandler {
 
         PoolDefinition pool = getPoolAtIndex(player, getCurrentIndex(player));
         if (pool == null || pool.type() != PoolType.GACHA || pool.gacha() == null) {
+            releaseToken(uuid);
             pushGachaData(player, getCurrentIndex(player));
             return;
         }
 
         try {
-            service.pullGacha(player, pool.id(), count);
+            var result = service.pullGacha(player, pool.id(), count);
+            if (result != null && result.items() != null && !result.items().isEmpty()) {
+                gachaTokens.put(uuid, UUID.randomUUID().toString());
+            }
         } finally {
+            releaseToken(uuid);
             pushGachaData(player, getCurrentIndex(player));
         }
     }
 
     private void handleOpenCase(Player player, List<String> data) {
+        UUID uuid = player.getUniqueId();
+        if (!acquireToken(player, CASE_PACKET_ID, data, 1)) return;
         PoolDefinition pool = getPoolAtIndex(player, getCurrentIndex(player));
         if (pool == null || pool.type() != PoolType.CASE || pool.caseConfig() == null) {
+            releaseToken(uuid);
             pushCaseData(player, getCurrentIndex(player));
             return;
         }
 
         try {
-            service.openCase(player, pool.id());
+            var result = service.openCase(player, pool.id());
+            if (result != null) caseTokens.put(uuid, UUID.randomUUID().toString());
         } finally {
+            releaseToken(uuid);
             pushCaseData(player, getCurrentIndex(player));
         }
     }
@@ -180,6 +196,8 @@ public class LotteryPacketHandler implements ClientPacketHandler {
         }
         payload.put("poolList", poolList);
         payload.put("currentPoolIndex", poolIndex);
+        gachaTokens.putIfAbsent(player.getUniqueId(), UUID.randomUUID().toString());
+        payload.put("action_token", gachaTokens.get(player.getUniqueId()));
 
         packetBridge.sendPacket(player, GACHA_UI_FILE, "update", payload);
     }
@@ -196,7 +214,26 @@ public class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("poolDescription", "");
         payload.put("poolList", pools.stream().map(PoolDefinition::displayName).toList());
         payload.put("currentPoolIndex", poolIndex);
+        caseTokens.putIfAbsent(player.getUniqueId(), UUID.randomUUID().toString());
+        payload.put("action_token", caseTokens.get(player.getUniqueId()));
         packetBridge.sendPacket(player, CASE_UI_FILE, "update", payload);
+    }
+
+    private boolean acquireToken(Player player, String packetId, List<String> data, int tokenIndex) {
+        UUID uuid = player.getUniqueId();
+        Map<UUID, String> tokens = CASE_PACKET_ID.equals(packetId) ? caseTokens : gachaTokens;
+        String supplied = data.size() > tokenIndex ? data.get(tokenIndex) : "";
+        synchronized (tokenLocks.computeIfAbsent(uuid, ignored -> new Object())) {
+            String expected = tokens.get(uuid);
+            return expected != null && supplied != null && expected.equals(supplied)
+                && tokensInFlight.add(uuid);
+        }
+    }
+
+    private final Set<UUID> tokensInFlight = ConcurrentHashMap.newKeySet();
+
+    private void releaseToken(UUID uuid) {
+        tokensInFlight.remove(uuid);
     }
 
     private String buildGuaranteeText(PoolDefinition pool) {

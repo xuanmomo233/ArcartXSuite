@@ -93,6 +93,8 @@ public class OnlineRewardsService implements Listener {
     private final Map<UUID, OnlineRewardsPlayerState> dirtyStates = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> calendarMonthOffsets = new ConcurrentHashMap<>();
     private final Map<UUID, LocalDate> selectedCalendarDates = new ConcurrentHashMap<>();
+    private final Map<UUID, String> actionTokens = new ConcurrentHashMap<>();
+    private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
     private final EnumMap<OnlineRewardsLeaderboardScope, List<OnlineRewardsLeaderboardEntry>> leaderboardCache =
         new EnumMap<>(OnlineRewardsLeaderboardScope.class);
 
@@ -248,6 +250,7 @@ public class OnlineRewardsService implements Listener {
 
         attachPlayerState(player);
         packetBridge.openUiAll(player, runtimeMenuUiIds);
+        actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
         sendMenuPacket(player, "init");
         return new OnlineRewardsOperationResult(true, "已打开在线奖励界面。");
     }
@@ -292,14 +295,20 @@ public class OnlineRewardsService implements Listener {
                 refreshMenu(player);
             }
             case "makeup" -> {
+                if (!acquireActionToken(player, data, 2)) return true;
                 OnlineRewardsOperationResult result = data != null && data.size() >= 2
                     ? makeupSignIn(player, data.get(1))
                     : new OnlineRewardsOperationResult(false, configuration.signIn().makeup().invalidDateMessage());
+                actionTokensInFlight.remove(player.getUniqueId());
+                if (result.success()) actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
                 player.sendMessage((result.success() ? "§a" : "§c") + result.message());
                 refreshMenu(player);
             }
             case "signin" -> {
+                if (!acquireActionToken(player, data, 1)) return true;
                 OnlineRewardsOperationResult result = signIn(player);
+                actionTokensInFlight.remove(player.getUniqueId());
+                if (result.success()) actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
                 player.sendMessage((result.success() ? "§a" : "§c") + result.message());
                 refreshMenu(player);
             }
@@ -547,6 +556,8 @@ public class OnlineRewardsService implements Listener {
         dirtyStates.remove(playerUuid);
         calendarMonthOffsets.remove(playerUuid);
         selectedCalendarDates.remove(playerUuid);
+        actionTokens.remove(playerUuid);
+        actionTokensInFlight.remove(playerUuid);
         refreshLeaderboardSnapshots();
     }
 
@@ -747,12 +758,21 @@ public class OnlineRewardsService implements Listener {
         Map<String, Object> payload = OnlineRewardsMenuPacketFactory.build(configuration, snapshot, buildCalendarView(player, snapshot.state()));
         payload.put("serverSignInGoalCurrent", todaySignInCount());
         payload.put("serverSignInGoalNext", nextServerSignInGoalRequired());
+        payload.put("action_token", actionTokens.getOrDefault(player.getUniqueId(), ""));
         packetBridge.sendPacketToAll(
             player,
             runtimeMenuUiIds,
             handlerName,
             payload
         );
+    }
+
+    private boolean acquireActionToken(Player player, List<String> data, int tokenIndex) {
+        UUID uuid = player.getUniqueId();
+        String supplied = data != null && data.size() > tokenIndex ? data.get(tokenIndex) : "";
+        String expected = actionTokens.get(uuid);
+        return packetBridge != null && packetBridge.isUiOpen(player, runtimeMenuUiId())
+            && expected != null && expected.equals(supplied) && actionTokensInFlight.add(uuid);
     }
 
     private OnlineRewardsPlayerState loadState(UUID playerUuid) {
@@ -1540,4 +1560,3 @@ public class OnlineRewardsService implements Listener {
         }
     }
 }
-

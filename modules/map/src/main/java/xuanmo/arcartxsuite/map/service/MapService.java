@@ -77,6 +77,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private final Set<UUID> openedHudPlayers = ConcurrentHashMap.newKeySet();
     private final Set<UUID> defaultUnlocksEnsured = ConcurrentHashMap.newKeySet();
     private final ConcurrentMap<UUID, CachedPlayerMapData> playerDataCache = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, String> actionTokens = new ConcurrentHashMap<>();
+    private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
 
     private record CachedPlayerMapData(Set<String> unlockedAnchors, List<MapWaypoint> waypoints) {
     }
@@ -298,6 +300,24 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     @Override
+    public boolean beginActionToken(Player player, String action, List<String> data) {
+        UUID uuid = player.getUniqueId();
+        int tokenIndex = "create_waypoint".equals(action) ? 1 : 2;
+        String supplied = data != null && data.size() > tokenIndex ? data.get(tokenIndex) : "";
+        return bridge != null && bridge.isUiOpen(player, menuUiId)
+            && actionTokens.get(uuid) != null
+            && actionTokens.get(uuid).equals(supplied)
+            && actionTokensInFlight.add(uuid);
+    }
+
+    @Override
+    public void finishActionToken(Player player, boolean committed) {
+        UUID uuid = player.getUniqueId();
+        actionTokensInFlight.remove(uuid);
+        if (committed) actionTokens.put(uuid, UUID.randomUUID().toString());
+    }
+
+    @Override
     public void refresh(Player player) {
         sync(player, false);
     }
@@ -367,15 +387,17 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     @Override
-    public void unlockAnchor(Player player, String anchorId) {
+    public boolean unlockAnchor(Player player, String anchorId) {
         MapOperationResult result = unlockAnchorInternal(player, anchorId);
         sendPlayerResult(player, result);
+        return result.success();
     }
 
     @Override
-    public void teleportAnchor(Player player, String anchorId) {
+    public boolean teleportAnchor(Player player, String anchorId) {
         MapOperationResult result = teleportAnchorInternal(player, anchorId);
         sendPlayerResult(player, result);
+        return result.success();
     }
 
     @Override
@@ -402,13 +424,17 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     }
 
     @Override
-    public void createWaypoint(Player player) {
-        sendPlayerResult(player, createWaypointInternal(player));
+    public boolean createWaypoint(Player player) {
+        MapOperationResult result = createWaypointInternal(player);
+        sendPlayerResult(player, result);
+        return result.success();
     }
 
     @Override
-    public void deleteWaypoint(Player player, String waypointId) {
-        sendPlayerResult(player, deleteWaypointInternal(player, waypointId));
+    public boolean deleteWaypoint(Player player, String waypointId) {
+        MapOperationResult result = deleteWaypointInternal(player, waypointId);
+        sendPlayerResult(player, result);
+        return result.success();
     }
 
     @EventHandler
@@ -419,6 +445,8 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         externalTargets.remove(uuid);
         openedHudPlayers.remove(uuid);
         playerDataCache.remove(uuid);
+        actionTokens.remove(uuid);
+        actionTokensInFlight.remove(uuid);
     }
 
     private MapOperationResult openMenuInternal(Player player, String worldId, boolean pushInitPacket) {
@@ -863,7 +891,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             return;
         }
         MapSnapshotBuilder.BuildResult snapshot = buildSnapshot(player);
-        bridge.sendPacket(player, menuUiId, initPacket ? "init" : "update", buildMenuPayload(snapshot.menu()));
+        if (initPacket) actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
+        Map<String, Object> payload = buildMenuPayload(snapshot.menu());
+        payload.put("action_token", actionTokens.getOrDefault(player.getUniqueId(), ""));
+        bridge.sendPacket(player, menuUiId, initPacket ? "init" : "update", payload);
     }
 
     private void syncHud(Player player, boolean initPacket) {

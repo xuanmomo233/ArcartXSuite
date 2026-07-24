@@ -489,7 +489,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'shop_buy', var.shopId, self.parent.entry['key'], var.quantity)
+                                Packet.send(var.packetId, 'shop_buy', var.shopId, self.parent.entry['key'], var.quantity, packet['action_token'])
                             effect:
                               stroke:
                                 width: 1
