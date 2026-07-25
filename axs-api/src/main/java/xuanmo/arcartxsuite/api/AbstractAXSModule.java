@@ -503,6 +503,12 @@ public abstract class AbstractAXSModule implements AXSModule {
         return context.createAdyeshachNpcBridge();
     }
 
+    /** 创建新的 ArcartX 音效播放器桥接实例 */
+    @NotNull
+    protected xuanmo.arcartxsuite.api.bridge.SoundPlayerBridgeAPI createSoundPlayerBridge() {
+        return context.createSoundPlayerBridge();
+    }
+
     /** 导出模块内置资源到目标文件 */
     protected void exportResource(String resourcePath, File target, boolean overwrite) {
         context.exportResource(resourcePath, target, overwrite);

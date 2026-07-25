@@ -37,6 +37,7 @@ import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.bridge.ArcartXWaypointBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXWorldTextureService;
 import xuanmo.arcartxsuite.bridge.AdyeshachNpcBridge;
+import xuanmo.arcartxsuite.bridge.ArcartXSoundPlayerBridge;
 import xuanmo.arcartxsuite.crossserver.CrossServerService;
 import xuanmo.arcartxsuite.keybind.KeybindService;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
@@ -314,6 +315,11 @@ final class DefaultModuleContext implements ModuleContext {
     @Override
     public xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI createAdyeshachNpcBridge() {
         return new AdyeshachNpcBridge(plugin);
+    }
+
+    @Override
+    public xuanmo.arcartxsuite.api.bridge.SoundPlayerBridgeAPI createSoundPlayerBridge() {
+        return new ArcartXSoundPlayerBridge(plugin);
     }
 
     // ─── 新增：事件与命令注册 ────────────────────────────────

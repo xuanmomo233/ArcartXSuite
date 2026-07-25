@@ -17,6 +17,8 @@ import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.conversation.cinematic.CinematicConfiguration;
+import xuanmo.arcartxsuite.conversation.cinematic.CinematicService;
 import xuanmo.arcartxsuite.conversation.command.ConversationAdminCommand;
 import xuanmo.arcartxsuite.conversation.config.ConversationModuleConfiguration;
 import xuanmo.arcartxsuite.conversation.service.ConversationService;
@@ -29,10 +31,14 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
     private static final String DIALOG_UI_FILE_PATH = "ui/conversation_dialog.yml";
     private static final String SELECTOR_UI_RESOURCE_PATH = "arcartx/ui/conversation_selector.yml";
     private static final String SELECTOR_UI_FILE_PATH = "ui/conversation_selector.yml";
+    private static final String LETTERBOX_UI_RESOURCE_PATH = "arcartx/ui/conversation_letterbox.yml";
+    private static final String LETTERBOX_UI_FILE_PATH = "ui/conversation_letterbox.yml";
+    private static final String DEFAULT_LETTERBOX_UI_ID = "AXS:conversation_letterbox";
 
     private ConversationModuleConfiguration configuration;
     private ConversationService service;
     private ConversationAdminCommand adminCommand;
+    private CinematicService cinematicService;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -61,7 +67,9 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
             ValidationRule.of("interaction.enabled", ValueType.BOOLEAN),
             ValidationRule.of("interaction.scan-range", ValueType.DOUBLE).withRange(1.0, 128.0),
             ValidationRule.of("interaction.scan-period-ticks", ValueType.INT).withRange(1, 200),
-            ValidationRule.of("interaction.open-cooldown-ms", ValueType.LONG).withRange(0L, 60000L)
+            ValidationRule.of("interaction.open-cooldown-ms", ValueType.LONG).withRange(0L, 60000L),
+            ValidationRule.of("cinematic.enabled", ValueType.BOOLEAN),
+            ValidationRule.of("cinematic.letterbox-ui-id", ValueType.STRING)
         );
     }
 
@@ -70,6 +78,7 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         Map<String, String> mappings = new LinkedHashMap<>();
         mappings.put(DIALOG_UI_RESOURCE_PATH, DIALOG_UI_FILE_PATH);
         mappings.put(SELECTOR_UI_RESOURCE_PATH, SELECTOR_UI_FILE_PATH);
+        mappings.put(LETTERBOX_UI_RESOURCE_PATH, LETTERBOX_UI_FILE_PATH);
         return mappings;
     }
 
@@ -119,9 +128,39 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
             createAdyeshachNpcBridge()
         );
         service.start();
-        adminCommand = new ConversationAdminCommand(() -> service, () -> service == null ? null : service.npcBridge(), messages());
 
-        registerCapability(InteractionState.class, player -> service != null && service.isPlayerInteracting(player));
+        // 电影序列服务
+        CinematicConfiguration cinematicConfig = CinematicConfiguration.load(
+            YamlConfiguration.loadConfiguration(new File(dataFolder, configFileName())));
+        java.util.List<String> letterboxRuntimeUiIds = new java.util.ArrayList<>();
+        for (String candidateUiId : configuration.cinematic().letterboxUiIds()) {
+            UiBinding letterboxBinding = registerModuleUi(
+                LETTERBOX_UI_RESOURCE_PATH,
+                LETTERBOX_UI_FILE_PATH,
+                candidateUiId,
+                configuration.registerUiOnEnable()
+            );
+            if (letterboxBinding.registeredUiId() != null) {
+                letterboxRuntimeUiIds.add(letterboxBinding.runtimeUiId());
+            }
+        }
+        cinematicService = new CinematicService(
+            plugin, logger, cinematicConfig,
+            createAdyeshachNpcBridge(), packetBridge,
+            createSoundPlayerBridge(),
+            getCapability(xuanmo.arcartxsuite.api.capability.SubtitlePlayable.class),
+            java.util.List.copyOf(letterboxRuntimeUiIds)
+        );
+        cinematicService.setDebug(configuration.debug());
+
+        adminCommand = new ConversationAdminCommand(
+            () -> service, () -> service == null ? null : service.npcBridge(),
+            () -> cinematicService, messages());
+
+        registerCapability(InteractionState.class, player ->
+            (service != null && service.isPlayerInteracting(player))
+            || (cinematicService != null && cinematicService.isPlaying(player))
+        );
 
         // 注册宿主全局按键回调（优先级 50，拾取优先于对话）
         registerKeybindHandler("AXS_INTERACT", 50, (player, keyName) -> {
@@ -145,6 +184,10 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
 
     @Override
     protected void stopService() {
+        if (cinematicService != null) {
+            cinematicService.shutdown();
+            cinematicService = null;
+        }
         if (service != null) {
             service.shutdown();
             service = null;
@@ -168,8 +211,24 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         };
     }
 
+    @Override
+    protected java.util.@NotNull List<org.bukkit.event.Listener> createListeners() {
+        return java.util.List.of(new org.bukkit.event.Listener() {
+            @org.bukkit.event.EventHandler
+            public void onQuit(org.bukkit.event.player.PlayerQuitEvent event) {
+                if (cinematicService != null) {
+                    cinematicService.onPlayerQuit(event.getPlayer());
+                }
+            }
+        });
+    }
+
     public ConversationService getService() {
         return service;
+    }
+
+    public CinematicService getCinematicService() {
+        return cinematicService;
     }
 
     // ─── ModuleCommandHandler ───────────────────────────────
@@ -181,7 +240,7 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
 
     @Override
     public List<String> actions() {
-        return adminCommand != null ? adminCommand.actions() : List.of("help", "status", "adyeshach");
+        return adminCommand != null ? adminCommand.actions() : List.of("help", "status", "adyeshach", "cinematic");
     }
 
     @Override

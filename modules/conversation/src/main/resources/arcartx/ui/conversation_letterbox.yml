@@ -1,0 +1,62 @@
+# AXS 资源说明
+# 用途: Conversation 模块电影序列 letterbox 黑边 HUD，播放时在屏幕上下显示黑边。
+# 前置依赖: ArcartX；Conversation 模块启用后会自动注册或导出。
+# 启用开关: config.yml -> modules.conversation.enabled
+# 关联文件: ArcartXConversation.yml
+# 重载命令: /axs conversation reload
+# 服务端 sync 字段:
+#   visible (boolean)
+# 客户端回包: 无
+ui:
+  isHud: true
+  defaultOpen: false
+  through: true
+  show: true
+  screenScale: true
+  level: 50
+  packetHandler:
+    sync: |-
+      var.letterboxVisible = packet['visible']
+    close: |-
+      var.letterboxVisible = false
+  action:
+    load: |-
+      var.letterboxVisible = false
+controls:
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~stretch_all
+      width: 1920
+      height: 1080
+    children:
+      上黑边:
+        type: Texture
+        attribute:
+          point: ~top_center
+          x: 0
+          y: 0
+          width: 1920
+          height: 0
+          normal: ~0,0,0,255
+          visible: var.letterboxVisible == true
+        action:
+          enter: |-
+            self.height = 0
+          load: |-
+            self.height = 0
+      下黑边:
+        type: Texture
+        attribute:
+          point: ~bottom_center
+          x: 0
+          y: 0
+          width: 1920
+          height: 0
+          normal: ~0,0,0,255
+          visible: var.letterboxVisible == true
+        action:
+          enter: |-
+            self.height = 0
+          load: |-
+            self.height = 0

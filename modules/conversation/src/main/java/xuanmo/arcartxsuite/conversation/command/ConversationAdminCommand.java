@@ -7,11 +7,13 @@ import java.util.Optional;
 import java.util.function.Supplier;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
+import xuanmo.arcartxsuite.conversation.cinematic.CinematicService;
 import xuanmo.arcartxsuite.conversation.service.ConversationService;
 
 /**
@@ -21,20 +23,24 @@ import xuanmo.arcartxsuite.conversation.service.ConversationService;
  */
 public final class ConversationAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "adyeshach");
+    private static final List<String> ACTIONS = List.of("help", "status", "adyeshach", "cinematic");
     private static final List<String> ADYESHACH_ACTIONS = List.of("setModel", "setAnimation", "playAnimation");
+    private static final List<String> CINEMATIC_ACTIONS = List.of("play", "stop", "list");
 
     private final Supplier<ConversationService> serviceProvider;
     private final Supplier<AdyeshachNpcBridgeAPI> npcBridgeProvider;
+    private final Supplier<CinematicService> cinematicServiceProvider;
     private final MessageProvider messages;
 
     public ConversationAdminCommand(
         Supplier<ConversationService> serviceProvider,
         Supplier<AdyeshachNpcBridgeAPI> npcBridgeProvider,
+        Supplier<CinematicService> cinematicServiceProvider,
         MessageProvider messages
     ) {
         this.serviceProvider = serviceProvider;
         this.npcBridgeProvider = npcBridgeProvider;
+        this.cinematicServiceProvider = cinematicServiceProvider;
         this.messages = messages;
     }
 
@@ -65,6 +71,7 @@ public final class ConversationAdminCommand implements ModuleCommandHandler {
             case "help" -> sendHelp(sender, label);
             case "status" -> sendStatus(sender);
             case "adyeshach" -> handleAdyeshach(sender, label, args);
+            case "cinematic" -> handleCinematic(sender, label, args);
             default -> sender.sendMessage(fullMsg("common.unknown", label));
         }
         return true;
@@ -77,6 +84,15 @@ public final class ConversationAdminCommand implements ModuleCommandHandler {
         }
         if (args.length == 3 && "adyeshach".equalsIgnoreCase(args[1])) {
             return filter(ADYESHACH_ACTIONS, args[2]);
+        }
+        if (args.length == 3 && "cinematic".equalsIgnoreCase(args[1])) {
+            return filter(CINEMATIC_ACTIONS, args[2]);
+        }
+        if (args.length == 4 && "cinematic".equalsIgnoreCase(args[1]) && "play".equalsIgnoreCase(args[2])) {
+            CinematicService svc = cinematicServiceProvider.get();
+            if (svc != null) {
+                return filter(svc.sequenceIds(), args[3]);
+            }
         }
         return List.of();
     }
@@ -227,6 +243,119 @@ public final class ConversationAdminCommand implements ModuleCommandHandler {
         }
     }
 
+    // ─── cinematic 子命令 ────────────────────────────────
+
+    private void handleCinematic(CommandSender sender, String label, String[] args) {
+        if (args.length < 3) {
+            sendCinematicHelp(sender, label);
+            return;
+        }
+        String sub = args[2].toLowerCase(Locale.ROOT);
+        switch (sub) {
+            case "play" -> handleCinematicPlay(sender, args);
+            case "stop" -> handleCinematicStop(sender);
+            case "list" -> handleCinematicList(sender);
+            default -> sendCinematicHelp(sender, label);
+        }
+    }
+
+    /**
+     * /axs conversation cinematic play <sequenceId> [playerName]
+     */
+    private void handleCinematicPlay(CommandSender sender, String[] args) {
+        if (args.length < 4) {
+            sender.sendMessage(fullMsg("cinematic.play.usage"));
+            return;
+        }
+        String sequenceId = args[3];
+        Player target;
+        if (args.length >= 5) {
+            target = sender.getServer().getPlayer(args[4]);
+            if (target == null) {
+                sender.sendMessage(fullMsg("cinematic.play.player-not-found", args[4]));
+                return;
+            }
+        } else {
+            if (!(sender instanceof Player)) {
+                sender.sendMessage(fullMsg("cinematic.play.console-needs-player"));
+                return;
+            }
+            target = (Player) sender;
+        }
+
+        CinematicService svc = cinematicServiceProvider.get();
+        if (svc == null) {
+            sender.sendMessage(fullMsg("cinematic.service-unavailable"));
+            return;
+        }
+        if (!svc.hasSequence(sequenceId)) {
+            sender.sendMessage(fullMsg("cinematic.play.not-found", sequenceId));
+            return;
+        }
+        if (svc.isPlaying(target)) {
+            sender.sendMessage(fullMsg("cinematic.play.already-playing", target.getName()));
+            return;
+        }
+        boolean ok = svc.play(target, sequenceId);
+        if (ok) {
+            sender.sendMessage(fullMsg("cinematic.play.success", sequenceId, target.getName()));
+        } else {
+            sender.sendMessage(fullMsg("cinematic.play.failed"));
+        }
+    }
+
+    /**
+     * /axs conversation cinematic stop [playerName]
+     */
+    private void handleCinematicStop(CommandSender sender) {
+        Player target;
+        if (sender instanceof Player p) {
+            target = p;
+        } else {
+            sender.sendMessage(fullMsg("cinematic.play.console-needs-player"));
+            return;
+        }
+        CinematicService svc = cinematicServiceProvider.get();
+        if (svc == null) {
+            sender.sendMessage(fullMsg("cinematic.service-unavailable"));
+            return;
+        }
+        if (!svc.isPlaying(target)) {
+            sender.sendMessage(fullMsg("cinematic.stop.not-playing"));
+            return;
+        }
+        svc.stop(target);
+        sender.sendMessage(fullMsg("cinematic.stop.success", target.getName()));
+    }
+
+    /**
+     * /axs conversation cinematic list
+     */
+    private void handleCinematicList(CommandSender sender) {
+        CinematicService svc = cinematicServiceProvider.get();
+        if (svc == null) {
+            sender.sendMessage(fullMsg("cinematic.service-unavailable"));
+            return;
+        }
+        var sequences = svc.sequences();
+        if (sequences.isEmpty()) {
+            sender.sendMessage(fullMsg("cinematic.list.empty"));
+            return;
+        }
+        sender.sendMessage(fullMsg("cinematic.list.title"));
+        for (var entry : sequences.entrySet()) {
+            sender.sendMessage(fullMsg("cinematic.list.entry", entry.getKey(), entry.getValue().name(), entry.getValue().actionCount()));
+        }
+        sender.sendMessage(fullMsg("cinematic.list.active", svc.activeCount()));
+    }
+
+    private void sendCinematicHelp(CommandSender sender, String label) {
+        sender.sendMessage(fullMsg("cinematic.help.title"));
+        sender.sendMessage(fullMsg("cinematic.help.play"));
+        sender.sendMessage(fullMsg("cinematic.help.stop"));
+        sender.sendMessage(fullMsg("cinematic.help.list"));
+    }
+
     // ─── help / status ───────────────────────────────
 
     private void sendHelp(CommandSender sender, String label) {
@@ -236,6 +365,7 @@ public final class ConversationAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("help.setmodel", cmd));
         sender.sendMessage(fullMsg("help.setanimation", cmd));
         sender.sendMessage(fullMsg("help.playanimation", cmd));
+        sender.sendMessage(fullMsg("help.cinematic", cmd));
     }
 
     private void sendAdyeshachHelp(CommandSender sender, String label) {
@@ -257,6 +387,10 @@ public final class ConversationAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("status.key-event", flag(svc.keyPressEventReady())));
         sender.sendMessage(fullMsg("status.selector-ui", flag(svc.selectorUiReady())));
         sender.sendMessage(fullMsg("status.active-count", svc.activeConversationCount()));
+        CinematicService cinematicSvc = cinematicServiceProvider.get();
+        if (cinematicSvc != null) {
+            sender.sendMessage(fullMsg("status.cinematic-active", cinematicSvc.activeCount()));
+        }
         if (!svc.interactionReady()) {
             sender.sendMessage(fullMsg("status.disabled-reason", svc.interactionDisabledReason()));
         }

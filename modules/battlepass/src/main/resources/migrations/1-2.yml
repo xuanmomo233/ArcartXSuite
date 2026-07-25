@@ -1,7 +1,22 @@
-rename:
-  - from: "tasks.daily.*.xp-reward"
-    to: "tasks.daily.*.base-xp-reward"
-  - from: "tasks.weekly.*.xp-reward"
-    to: "tasks.weekly.*.base-xp-reward"
-  - from: "tasks.season.*.xp-reward"
-    to: "tasks.season.*.base-xp-reward"
+# BattlePass 配置迁移: 1 -> 2
+# 任务模板从主配置拆分为外部文件 (tasks/daily.yml, tasks/weekly.yml, tasks/season.yml)
+# 主配置中内联的 tasks.daily / tasks.weekly / tasks.season 任务定义段需要移除
+# 任务文件中 xp-reward → base-xp-reward 的重命名由 Java 代码向后兼容处理
+# (BattlePassModuleConfiguration.parseTask 已支持 getInt("base-xp-reward", getInt("xp-reward", 0)))
+
+from-version: 1
+to-version: 2
+description: "任务模板外部化，移除主配置内联任务定义"
+
+operations:
+  # 移除旧版内联在主配置中的任务段（已拆分为 tasks/ 目录下独立文件）
+  - type: remove
+    path: tasks.daily
+  - type: remove
+    path: tasks.weekly
+  - type: remove
+    path: tasks.season
+  # 补充新增的 tasks-directory 字段
+  - type: set-if-missing
+    path: tasks.tasks-directory
+    value: "tasks"

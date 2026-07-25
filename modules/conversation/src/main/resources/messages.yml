@@ -22,6 +22,7 @@ help:
   setmodel: "&7{0} adyeshach setModel <名称> <modelID> <scale>&f - 设置模型"
   setanimation: "&7{0} adyeshach setAnimation <名称> <state> <animName>&f - 设置默认动画状态"
   playanimation: "&7{0} adyeshach playAnimation <名称> <动画名> <速度> [过渡ms] [持续ms]&f - 一次性播放动画"
+  cinematic: "&7{0} cinematic play/stop/list&f - 电影序列管理"
 
 # ── status ────────────────────────────────────────────
 status:
@@ -31,6 +32,7 @@ status:
   key-event: "&7按键事件: {0}"
   selector-ui: "&7Selector UI: {0}"
   active-count: "&7对话中: &f{0}"
+  cinematic-active: "&7电影序列播放中: &f{0}"
   disabled-reason: "&e降级原因: &c{0}"
 
 # ── adyeshach ─────────────────────────────────────────
@@ -58,3 +60,28 @@ adyeshach:
     invalid-keep: "&c无效的持续时间: {0}"
     success: "&a已为 NPC \"{0}\" 播放动画 {1} (speed={2}, transition={3}ms, keep={4}ms)。"
     failed: "&c播放动画失败，请检查控制台日志。"
+
+# ── cinematic ─────────────────────────────────────────
+cinematic:
+  help:
+    title: "&6电影序列操作"
+    play: "&e  play <序列ID> [玩家名]&f - 播放电影序列"
+    stop: "&e  stop&f - 停止当前播放"
+    list: "&e  list&f - 列出所有序列"
+  play:
+    usage: "&e用法: /axs conversation cinematic play <序列ID> [玩家名]"
+    player-not-found: "&c未找到玩家: {0}"
+    console-needs-player: "&c控制台执行时必须指定玩家名。"
+    not-found: "&c未找到序列: {0}"
+    already-playing: "&c玩家 {0} 正在播放序列中。"
+    success: "&a开始播放序列 \"{0}\" 给 {1}。"
+    failed: "&c播放失败，请检查控制台日志。"
+  stop:
+    not-playing: "&c你当前没有在播放序列。"
+    success: "&a已停止 {0} 的序列播放。"
+  list:
+    title: "&6电影序列列表"
+    entry: "&7  {0}&f - {1} &8({2} 个动作)"
+    empty: "&7没有已定义的电影序列。"
+    active: "&7当前播放中: &f{0}"
+  service-unavailable: "&c电影序列服务未启动。"

@@ -104,6 +104,10 @@ public interface ModuleContext {
     @ApiStability.Internal
     @NotNull xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI createAdyeshachNpcBridge();
 
+    /** 创建新的 ArcartX 音效播放器桥接实例（模块独立管理生命周期） */
+    @ApiStability.Internal
+    @NotNull xuanmo.arcartxsuite.api.bridge.SoundPlayerBridgeAPI createSoundPlayerBridge();
+
     // ─── 模块间通信 ───────────────────────────────────────────
 
     /**

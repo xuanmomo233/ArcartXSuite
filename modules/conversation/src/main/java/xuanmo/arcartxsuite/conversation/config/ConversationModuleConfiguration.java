@@ -10,6 +10,7 @@ public record ConversationModuleConfiguration(
     ThemeConfiguration themeConfig,
     ClientConfiguration clientConfig,
     InteractionConfiguration interactionConfig,
+    CinematicBasicConfiguration cinematicConfig,
     List<NpcAppearanceEntry> npcAppearances
 ) {
 
@@ -27,6 +28,8 @@ public record ConversationModuleConfiguration(
     private static final long DEFAULT_OPEN_COOLDOWN_MS = 350L;
     private static final long DEFAULT_REPLY_DEBOUNCE_MS = 250L;
     private static final long DEFAULT_SUPPRESS_REOPEN_MS = 500L;
+    private static final String DEFAULT_LETTERBOX_UI_ID = "AXS:conversation_letterbox";
+    private static final boolean DEFAULT_CINEMATIC_ENABLED = true;
 
     public static ConversationModuleConfiguration load(FileConfiguration configuration) {
         ConfigurationSection debugSection = configuration.getConfigurationSection("debug");
@@ -39,11 +42,14 @@ public record ConversationModuleConfiguration(
             themeSection == null ? DEFAULT_THEME_NAME : string(themeSection.getString("name"), DEFAULT_THEME_NAME)
         );
 
+        ConfigurationSection cinematicSection = configuration.getConfigurationSection("cinematic");
+
         ConfigurationSection clientSection = configuration.getConfigurationSection("client");
         ClientConfiguration client = new ClientConfiguration(
             clientSection == null ? DEFAULT_PACKET_ID : string(clientSection.getString("packet-id"), DEFAULT_PACKET_ID),
             UiIdParser.readUiIds(clientSection, "dialog-ui-id", DEFAULT_DIALOG_UI_ID),
             UiIdParser.readUiIds(clientSection, "selector-ui-id", DEFAULT_SELECTOR_UI_ID),
+            UiIdParser.readUiIds(cinematicSection, "letterbox-ui-id", DEFAULT_LETTERBOX_UI_ID),
             clientSection == null || clientSection.getBoolean("register-ui-on-enable", DEFAULT_REGISTER_UI_ON_ENABLE),
             clientSection != null && clientSection.getBoolean("overwrite-ui-files", DEFAULT_OVERWRITE_UI_FILES)
         );
@@ -59,9 +65,14 @@ public record ConversationModuleConfiguration(
             readNonNegativeLong(interactionSection, "suppress-reopen-ms", DEFAULT_SUPPRESS_REOPEN_MS)
         );
 
+        CinematicBasicConfiguration cinematic = new CinematicBasicConfiguration(
+            cinematicSection == null || cinematicSection.getBoolean("enabled", DEFAULT_CINEMATIC_ENABLED),
+            UiIdParser.readUiIds(cinematicSection, "letterbox-ui-id", DEFAULT_LETTERBOX_UI_ID)
+        );
+
         List<NpcAppearanceEntry> npcAppearances = NpcAppearanceEntry.loadList(configuration);
 
-        return new ConversationModuleConfiguration(debug, theme, client, interaction, npcAppearances);
+        return new ConversationModuleConfiguration(debug, theme, client, interaction, cinematic, npcAppearances);
     }
 
     public boolean debug() {
@@ -110,6 +121,10 @@ public record ConversationModuleConfiguration(
 
     public InteractionConfiguration interaction() {
         return interactionConfig;
+    }
+
+    public CinematicBasicConfiguration cinematic() {
+        return cinematicConfig;
     }
 
 
@@ -191,12 +206,14 @@ public record ConversationModuleConfiguration(
         String packetId,
         List<String> dialogUiIds,
         List<String> selectorUiIds,
+        List<String> letterboxUiIds,
         boolean registerUiOnEnable,
         boolean overwriteUiFiles
     ) {
         /** 向后兼容 */
         public String dialogUiId() { return dialogUiIds.isEmpty() ? "" : dialogUiIds.get(0); }
         public String selectorUiId() { return selectorUiIds.isEmpty() ? "" : selectorUiIds.get(0); }
+        public String letterboxUiId() { return letterboxUiIds.isEmpty() ? "" : letterboxUiIds.get(0); }
     }
 
     public record InteractionConfiguration(
@@ -208,6 +225,13 @@ public record ConversationModuleConfiguration(
         long replyDebounceMs,
         long suppressReopenMs
     ) {
+    }
+
+    public record CinematicBasicConfiguration(
+        boolean enabled,
+        List<String> letterboxUiIds
+    ) {
+        public String letterboxUiId() { return letterboxUiIds.isEmpty() ? "" : letterboxUiIds.get(0); }
     }
 
 }
