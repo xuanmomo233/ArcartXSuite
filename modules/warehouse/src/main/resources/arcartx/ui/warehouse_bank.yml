@@ -48,6 +48,7 @@ ui:
             项.entryKey = 序号.round()
           }
         }
+      }
       产品数 = var.maxProductCount.round()
       现有产品数 = val.产品列表.childrenCount() - 1
       if(现有产品数 != 产品数){
@@ -61,6 +62,7 @@ ui:
             项.entryKey = 序号.round()
           }
         }
+      }
       定期数 = var.maxFixedCount.round()
       现有定期数 = val.定期列表.childrenCount() - 1
       if(现有定期数 != 定期数){
@@ -74,6 +76,7 @@ ui:
             项.entryKey = 序号.round()
           }
         }
+      }
   action:
     load: |-
       var.packetId = 'AXS_WAREHOUSE'

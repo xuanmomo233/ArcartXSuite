@@ -55,6 +55,7 @@ ui:
       var.canUpgrade = packet['canUpgrade']
       var.nextUpgradeText = packet['nextUpgradeText']
       var.slotCount = packet['slotCount']
+      var.pageSize = packet['pageSize']
       var.maxPersonalCount = packet['maxPersonalCount']
       var.maxSharedCount = packet['maxSharedCount']
       var.maxCategoryCount = packet['maxCategoryCount']
@@ -72,6 +73,7 @@ ui:
             项.entryKey = 序号.round()
           }
         }
+      }
       共享仓库数 = var.maxSharedCount.round()
       现有共享仓库数 = val.共享仓库列表.childrenCount() - 1
       if(现有共享仓库数 != 共享仓库数){
@@ -85,6 +87,7 @@ ui:
             项.entryKey = 序号.round()
           }
         }
+      }
       分类数 = var.maxCategoryCount.round()
       现有分类数 = val.分类列表.childrenCount() - 1
       if(现有分类数 != 分类数){
@@ -98,19 +101,20 @@ ui:
             项.entryKey = 序号.round()
           }
         }
+      }
       var.renderBackpackAmounts()
       var.itemJsons = {}
       if(var.slots != none){
         for(key in var.slots.keys()){
           json = packet['slotItemJson' + key]
-          if(json != none && json != none){
+          if(json != none){
             var.itemJsons[key] = json
           } else {
             var.itemJsons[key] = var.air
           }
         }
       }
-      仓库槽位数 = var.slotCount.round()
+      仓库槽位数 = var.pageSize.round()
       现有仓库槽位数 = val.仓库网格.childrenCount() - 1
       if(现有仓库槽位数 != 仓库槽位数){
         var.刷新轮次 = var.刷新轮次 + 1
@@ -123,6 +127,7 @@ ui:
             slot.entryKey = 序号.round()
           }
         }
+      }
       for(i in range(0, 仓库槽位数)){
         icon = val.仓库网格.get((i + 1).round())
         if(icon != none){
@@ -166,6 +171,7 @@ ui:
       var.canUpgrade = false
       var.nextUpgradeText = none
       var.slotCount = 0
+      var.pageSize = 0
       var.amount = 1
       var.passwordText = none
       var.categoryScrollRatio = 0

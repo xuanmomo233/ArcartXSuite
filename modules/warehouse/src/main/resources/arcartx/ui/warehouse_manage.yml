@@ -71,6 +71,7 @@ ui:
             项.entryKey = 序号.round()
           }
         }
+      }
       成员数 = var.maxMemberCount.round()
       现有成员数 = val.成员列表.childrenCount() - 1
       if(现有成员数 != 成员数){
@@ -84,6 +85,7 @@ ui:
             项.entryKey = 序号.round()
           }
         }
+      }
   action:
     open: |-
       var.packetId = 'AXS_WAREHOUSE'
