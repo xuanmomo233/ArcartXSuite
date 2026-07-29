@@ -144,6 +144,11 @@ public final class SecondaryPasswordService implements SecondaryPasswordAccess, 
         }
     }
 
+    @Override
+    public synchronized void lock(@NotNull Player player) {
+        unlockedUntil.remove(player.getUniqueId());
+    }
+
     public boolean setPassword(@NotNull Player player, @NotNull String oldPassword, @NotNull String newPassword) {
         return set(player, oldPassword, newPassword);
     }

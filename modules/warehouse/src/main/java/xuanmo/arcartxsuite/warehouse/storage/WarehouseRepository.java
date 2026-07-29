@@ -80,6 +80,9 @@ public interface WarehouseRepository {
 
     List<SharedWarehouseRecord> loadSharedWarehouses(UUID playerUuid) throws SQLException;
 
+    /** 按共享仓库 ID 查询单条记录（含成员角色），避免加载全部列表。 */
+    Optional<SharedWarehouseRecord> loadSharedWarehouse(UUID playerUuid, String sharedId) throws SQLException;
+
     List<SharedWarehouseRecord> loadSharedWarehousesByOwner(UUID ownerUuid) throws SQLException;
 
     List<SharedMemberRecord> loadSharedMembers(String sharedId) throws SQLException;

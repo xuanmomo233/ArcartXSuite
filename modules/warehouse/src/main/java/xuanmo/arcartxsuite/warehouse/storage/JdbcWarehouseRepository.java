@@ -756,6 +756,37 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
     }
 
     @Override
+    public Optional<SharedWarehouseRecord> loadSharedWarehouse(UUID playerUuid, String sharedId) throws SQLException {
+        String sql = """
+            SELECT s.id, s.owner_uuid, s.name, s.level, s.capacity, s.created_at, s.updated_at, m.role, s.showcase_enabled
+            FROM warehouse_shared s
+            JOIN warehouse_shared_members m ON s.id = m.shared_id
+            WHERE m.player_uuid = ? AND s.id = ?
+            """;
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerUuid.toString());
+            statement.setString(2, sharedId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return Optional.of(new SharedWarehouseRecord(
+                        resultSet.getString("id"),
+                        UUID.fromString(resultSet.getString("owner_uuid")),
+                        resultSet.getString("name"),
+                        resultSet.getInt("level"),
+                        resultSet.getLong("capacity"),
+                        resultSet.getLong("created_at"),
+                        resultSet.getLong("updated_at"),
+                        resultSet.getString("role"),
+                        resultSet.getBoolean("showcase_enabled")
+                    ));
+                }
+                return Optional.empty();
+            }
+        }
+    }
+
+    @Override
     public List<SharedWarehouseRecord> loadSharedWarehousesByOwner(UUID ownerUuid) throws SQLException {
         try (Connection connection = connection();
              PreparedStatement statement = connection.prepareStatement(

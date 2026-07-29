@@ -36,4 +36,11 @@ public interface SecondaryPasswordAccess {
      * Clears the player's password after verifying the current password.
      */
     boolean clear(@NotNull Player player, @NotNull String currentPassword);
+
+    /**
+     * Locks the player's current secondary-password session, requiring re-verification.
+     */
+    default void lock(@NotNull Player player) {
+        // Default no-op for implementations that do not support session locking.
+    }
 }

@@ -316,7 +316,7 @@ controls:
                     if(var.hasPassword){
                       Packet.send(var.packetId, 'password_unlock', var.passwordText)
                     }else{
-                      Packet.send(var.packetId, 'password_set', var.passwordText)
+                      Packet.send(var.packetId, 'password_set', var.passwordText, var.actionToken)
                     }
                 effect:
                   stroke:

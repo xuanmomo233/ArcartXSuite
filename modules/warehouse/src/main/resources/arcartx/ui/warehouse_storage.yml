@@ -986,7 +986,7 @@ controls:
                 type: TextBox
                 attribute:
                   x: 865
-                  y: 34 - 120
+                  y: 34
                   width: 205
                   height: 35
                   length: 32
@@ -1006,7 +1006,7 @@ controls:
                 type: Texture
                 attribute:
                   x: 1080
-                  y: 22 - 120
+                  y: 22
                   width: 92
                   height: 48
                   normal: ~255,255,255,150
@@ -1028,7 +1028,7 @@ controls:
                 type: Texture
                 attribute:
                   x: 1200
-                  y: 22 - 120
+                  y: 22
                   width: 92
                   height: 48
                   normal: ~255,255,255,150

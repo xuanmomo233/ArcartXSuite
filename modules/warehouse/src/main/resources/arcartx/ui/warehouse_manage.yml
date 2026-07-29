@@ -87,7 +87,7 @@ ui:
         }
       }
   action:
-    open: |-
+    load: |-
       var.packetId = 'AXS_WAREHOUSE'
       var.ownerType = 'personal'
       var.ownerId = none
@@ -133,6 +133,7 @@ ui:
       var.maxManageCount = 0
       var.maxMemberCount = 0
       var.刷新轮次 = 0
+    open: |-
       Packet.send(var.packetId, 'refresh')
 
 controls:
