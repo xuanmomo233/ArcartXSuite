@@ -62,6 +62,7 @@ import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.util.ItemSerializer;
+import xuanmo.arcartxsuite.api.capability.PickupInterceptor;
 import xuanmo.arcartxsuite.api.capability.PickupNotifiable;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
@@ -136,6 +137,7 @@ public final class WarehouseService implements Listener {
     private final ItemMatcherAPI itemMatcherSupport;
     private final CurrencyBridgeAPI currencyBridgeManager;
     private final Supplier<PickupNotifiable> pickupNotifiableSupplier;
+    private Supplier<PickupInterceptor> pickupInterceptorSupplier = () -> null;
     private final Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier;
     /** 玩家当前 UI 视图状态（ownerType / warehouseId / page / search 等）。 */
     private final ConcurrentMap<UUID, ViewState> viewStates = new ConcurrentHashMap<>();
@@ -248,6 +250,11 @@ public final class WarehouseService implements Listener {
      */
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
         this.eventBusProvider = eventBusProvider;
+    }
+
+    /** 设置拾取拦截器供应者（由 WarehouseModule 注入，可为 null）。 */
+    public void setPickupInterceptorProvider(Supplier<PickupInterceptor> provider) {
+        this.pickupInterceptorSupplier = provider == null ? () -> null : provider;
     }
 
     public void start() throws Exception {
@@ -827,6 +834,12 @@ public final class WarehouseService implements Listener {
         if (!(event.getEntity() instanceof Player player) || !player.isOnline()) {
             return;
         }
+        // 若 Pickup 扫描模式已接管该玩家的拾取流程，则跳过自动入库，
+        // 让扫描面板正常展示掉落物，由玩家按键交互后再走 depositToPersonalWarehouse。
+        PickupInterceptor interceptor = pickupInterceptorSupplier.get();
+        if (interceptor != null && interceptor.isAutoPickupIntercepted(player.getUniqueId())) {
+            return;
+        }
         ViewState state = viewStates.get(player.getUniqueId());
         boolean pickup = state != null ? state.autoPickup() : configuration.pickup().autoStoreOnPickup();
         if (!pickup) {
@@ -844,11 +857,17 @@ public final class WarehouseService implements Listener {
                 event.getItem().remove();
             }
             boolean notify = state != null ? state.autoPickupNotify() : configuration.pickup().notifyOnAutoStore();
-            if (notify) {
-                // 如果 Pickup 通知模式已为该玩家提供 HUD 提示，则跳过聊天栏消息
+            if (notify && result.storedAmount() > 0) {
                 PickupNotifiable pickupNotifiable = pickupNotifiableSupplier.get();
-                boolean hudActive = pickupNotifiable != null && pickupNotifiable.isNotificationActive(player.getUniqueId());
-                if (!hudActive) {
+                boolean hudNotified = false;
+                if (pickupNotifiable != null && pickupNotifiable.isNotificationActive(player.getUniqueId())) {
+                    // 通知模式 HUD 活跃：通过 notifyPickup 主动推送 HUD 提示
+                    // 使用存入数量构造展示用 ItemStack，避免 stack 此时 amount=0 导致 itemJson 错误
+                    ItemStack displayStack = stack.clone();
+                    displayStack.setAmount((int) Math.min(result.storedAmount(), Integer.MAX_VALUE));
+                    hudNotified = pickupNotifiable.notifyPickup(player, displayStack, (int) Math.min(result.storedAmount(), Integer.MAX_VALUE));
+                }
+                if (!hudNotified) {
                     player.sendMessage(PREFIX + ChatColor.GREEN + message("player.auto-deposited", result.storedAmount()));
                 }
             }

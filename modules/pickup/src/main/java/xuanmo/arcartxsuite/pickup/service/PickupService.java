@@ -17,6 +17,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -31,6 +32,8 @@ public final class PickupService implements Listener {
     private static final long PREOPEN_DELAY_TICKS = 5L;
     private static final long OPENED_PACKET_DELAY_TICKS = 1L;
     private static final long FALLBACK_OPEN_PACKET_DELAY_TICKS = 40L;
+    /** 玩家进服后延迟多少 tick 尝试打开 HUD（等待客户端 HUD 体系就绪） */
+    private static final long JOIN_OPEN_DELAY_TICKS = 40L;
 
     private final JavaPlugin plugin;
     private final Logger logger;
@@ -117,6 +120,59 @@ public final class PickupService implements Listener {
         return !disabledPlayers.contains(playerId);
     }
 
+    /**
+     * 客户端初始化完成回调：为该玩家打开常驻通知 HUD。
+     * 由 PickupModule#createInitializedHandler() 调用，
+     * 覆盖「插件启动后才进服」的玩家。
+     */
+    public void onClientInitialized(Player player) {
+        if (!active || player == null || !player.isOnline()) {
+            return;
+        }
+        ensureUiOpen(player);
+    }
+
+    /**
+     * 主动推送一条拾取通知（供 Warehouse 自动入库后补发 HUD 提示）。
+     * <p>
+     * Warehouse 在 LOWEST 优先级取消了 EntityPickupItemEvent，
+     * 本类的监听器带 ignoreCancelled = true 因此不会触发，需要由此方法补发。
+     *
+     * @param player    目标玩家
+     * @param itemStack 物品原型（不会被修改）
+     * @param amount    实际获得数量
+     * @return true 表示已排入推送流程
+     */
+    public boolean notifyPickup(Player player, ItemStack itemStack, int amount) {
+        if (!active || player == null || !player.isOnline() || itemStack == null) {
+            return false;
+        }
+        if (amount <= 0 || itemStack.getType() == Material.AIR) {
+            return false;
+        }
+        UUID playerId = player.getUniqueId();
+        if (disabledPlayers.contains(playerId)) {
+            return false;
+        }
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("itemJson", itemStackBridge.itemToJson(itemStack).orElse(""));
+        payload.put("amount", amount);
+
+        if (openedPlayers.contains(playerId)) {
+            scheduleSend(player, payload, OPENED_PACKET_DELAY_TICKS);
+            return true;
+        }
+
+        Map<String, Object> queuedPayload = enqueuePickup(playerId, payload);
+        if (!ensureUiOpen(player)) {
+            removeQueuedPayload(playerId, queuedPayload);
+            logPickupPacket(player, payload, false);
+            return false;
+        }
+        return true;
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityPickupItem(EntityPickupItemEvent event) {
         if (!(event.getEntity() instanceof Player player) || !player.isOnline()) {
@@ -153,6 +209,22 @@ public final class PickupService implements Listener {
         eventPayload.put("material", itemStack.getType().name());
         eventPayload.put("amount", String.valueOf(itemStack.getAmount()));
         eventBus.publish("axs.pickup.item_pickup", player, eventPayload);
+    }
+
+    /**
+     * 玩家进服时打开常驻通知 HUD。
+     * <p>
+     * 延迟到客户端 HUD 体系就绪后再发包；onClientInitialized 作为更可靠的
+     * 补充入口存在，二者通过 openedPlayers/openingPlayers 去重。
+     */
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        Player player = event.getPlayer();
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (active && player.isOnline()) {
+                ensureUiOpen(player);
+            }
+        }, JOIN_OPEN_DELAY_TICKS);
     }
 
     @EventHandler

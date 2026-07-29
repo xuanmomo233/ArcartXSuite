@@ -5,8 +5,11 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
@@ -19,6 +22,7 @@ import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.PickupNotifiable;
+import xuanmo.arcartxsuite.api.capability.PickupInterceptor;
 import xuanmo.arcartxsuite.api.capability.WarehouseAutoDepositable;
 import xuanmo.arcartxsuite.pickup.command.PickupPlayerCommand;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration;
@@ -129,8 +133,17 @@ public final class PickupModule extends AbstractAXSModule {
         notificationService.start();
 
         // 注册通知能力，让 warehouse 等模块知道该玩家已有 HUD 拾取通知
-        registerCapability(PickupNotifiable.class,
-            playerId -> notificationService != null && notificationService.isEnabled(playerId));
+        // 并可通过 notifyPickup 主动推送 HUD 提示（仓库自动入库后补发）
+        registerCapability(PickupNotifiable.class, new PickupNotifiable() {
+            @Override
+            public boolean isNotificationActive(UUID playerId) {
+                return notificationService != null && notificationService.isEnabled(playerId);
+            }
+            @Override
+            public boolean notifyPickup(Player player, ItemStack itemStack, int amount) {
+                return notificationService != null && notificationService.notifyPickup(player, itemStack, amount);
+            }
+        });
 
         logger.fine(
             "Pickup 通知模式已载入，max-visible=" + configuration.maxVisible()
@@ -167,6 +180,10 @@ public final class PickupModule extends AbstractAXSModule {
             messages()
         );
         scannerService.start();
+
+        // 注册拾取拦截能力，让 Warehouse 等模块知道扫描模式已接管拾取流程
+        registerCapability(PickupInterceptor.class,
+            playerId -> scannerService != null && scannerService.isEnabled(playerId));
 
         // 注册宿主全局按键回调（优先级 10，拾取优先于对话）
         registerKeybindHandler("AXS_INTERACT", 10, (player, keyName) ->
@@ -210,6 +227,9 @@ public final class PickupModule extends AbstractAXSModule {
         return player -> {
             if (scannerService != null) {
                 scannerService.onClientInitialized(player);
+            }
+            if (notificationService != null) {
+                notificationService.onClientInitialized(player);
             }
         };
     }

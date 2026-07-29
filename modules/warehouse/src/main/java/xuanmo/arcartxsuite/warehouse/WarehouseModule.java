@@ -186,6 +186,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
             () -> getCapability(xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess.class)
         );
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+        service.setPickupInterceptorProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.PickupInterceptor.class));
         service.start();
 
         adminCommand = new WarehouseAdminCommand(() -> service, messages());
