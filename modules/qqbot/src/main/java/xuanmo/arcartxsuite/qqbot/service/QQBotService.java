@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.qqbot.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.List;
 import java.util.Map;
@@ -85,7 +86,7 @@ public final class QQBotService implements Listener {
     public void start() {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         // 定时清理过期验证码
-        cleanupTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
+        cleanupTask = AxsScheduler.runAsyncTimer(plugin, () -> {
             bindService.cleanupExpiredCodes();
             // 清理已处理消息 ID 缓存
             processedMessageIds.clear();
@@ -227,7 +228,7 @@ public final class QQBotService implements Listener {
 
             String colored = ChatColor.translateAlternateColorCodes('&', formatted);
             // 在主线程广播
-            Bukkit.getScheduler().runTask(plugin, () ->
+            AxsScheduler.runTask(plugin, () ->
                 Bukkit.broadcastMessage(colored));
 
             // 通知 UI 服务
@@ -326,7 +327,7 @@ public final class QQBotService implements Listener {
             if (binding == null) continue;
             Player player = Bukkit.getPlayerExact(binding.playerName());
             if (player == null || !player.isOnline()) continue;
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            AxsScheduler.runTask(plugin, () -> {
                 player.sendTitle("", messages.get("player.at-title", nick), 10, 70, 20);
                 player.sendMessage(messages.get("player.at-message", nick));
             });
@@ -414,7 +415,7 @@ public final class QQBotService implements Listener {
                         .replace("{reason}", mc.syncBanReason())
                         .trim()
                         .replaceAll("\\s+", " ");
-                    Bukkit.getScheduler().runTask(plugin, () ->
+                    AxsScheduler.runTask(plugin, () ->
                         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
                     logger.info("[QQBot] 禁言同步: QQ " + bannedQq + " → 封禁玩家 " + playerName
                         + " (" + durationStr + ")");

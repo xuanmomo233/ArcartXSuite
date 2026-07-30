@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.market.shop;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.math.BigDecimal;
@@ -61,7 +62,7 @@ public class ShopService {
 
     public void start() {
         loadShops();
-        refreshTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::refreshStocks, config.refreshIntervalTicks(), config.refreshIntervalTicks());
+        refreshTask = AxsScheduler.runAsyncTimer(plugin, this::refreshStocks, config.refreshIntervalTicks(), config.refreshIntervalTicks());
         logger.info("[Market-Shop] 系统商店已加载 " + shops.size() + " 个商店");
     }
 

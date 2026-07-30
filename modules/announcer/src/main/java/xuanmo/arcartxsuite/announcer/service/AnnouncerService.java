@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.announcer.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -111,7 +112,7 @@ public final class AnnouncerService implements Listener {
             delivery -> handleRemotePayload(delivery.payload())
         );
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        broadcastTask = Bukkit.getScheduler().runTaskTimer(
+        broadcastTask = AxsScheduler.runTaskTimer(
             plugin,
             this::tickBroadcast,
             1L,
@@ -331,7 +332,7 @@ public final class AnnouncerService implements Listener {
         if (envelope == null) return;
         if (crossServer.nodeId().equals(envelope.originNode())) return;
         if (!recentDedupeKeys.add(envelope.dedupeKey())) return;
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        AxsScheduler.runTask(plugin, () -> {
             if (envelope.immediate()) {
                 broadcastManualDisplay(envelope.text());
             } else {
@@ -422,7 +423,7 @@ public final class AnnouncerService implements Listener {
     }
 
     private void scheduleDisplayPacket(Player player, AnnouncerDisplay display, String reason, boolean variablesSent) {
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        AxsScheduler.runTask(plugin, () -> {
             if (!player.isOnline() || !bridge.isAvailable() || !openedPlayers.contains(player.getUniqueId())) {
                 return;
             }

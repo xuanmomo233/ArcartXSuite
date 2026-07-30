@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.market.auction;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -65,7 +66,7 @@ public class AuctionService {
     }
 
     public void start(long intervalTicks) {
-        schedulerTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::processExpired, intervalTicks, intervalTicks);
+        schedulerTask = AxsScheduler.runAsyncTimer(plugin, this::processExpired, intervalTicks, intervalTicks);
         logger.info("[Market-Auction] 拍卖行服务已启动，到期检查间隔: " + intervalTicks + " ticks");
     }
 
@@ -515,7 +516,7 @@ public class AuctionService {
         List<AuctionListing> expired = repository.getExpiredListings();
         int count = expired.size();
         for (AuctionListing listing : expired) {
-            Bukkit.getScheduler().runTask(plugin, () -> processExpiredListing(listing));
+            AxsScheduler.runTask(plugin, () -> processExpiredListing(listing));
         }
         return count;
     }
@@ -526,7 +527,7 @@ public class AuctionService {
         try {
             List<AuctionListing> expired = repository.getExpiredListings();
             for (AuctionListing listing : expired) {
-                Bukkit.getScheduler().runTask(plugin, () -> processExpiredListing(listing));
+                AxsScheduler.runTask(plugin, () -> processExpiredListing(listing));
             }
         } catch (Exception e) {
             logger.log(Level.SEVERE, "[Market-Auction] 到期处理异常", e);
@@ -592,7 +593,7 @@ public class AuctionService {
         if (Bukkit.isPrimaryThread()) {
             task.run();
         } else {
-            Bukkit.getScheduler().runTask(plugin, task);
+            AxsScheduler.runTask(plugin, task);
         }
     }
 

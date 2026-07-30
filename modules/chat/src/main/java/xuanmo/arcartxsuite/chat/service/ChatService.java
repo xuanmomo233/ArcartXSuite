@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.chat.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -171,7 +172,7 @@ public final class ChatService implements Listener {
             state(player.getUniqueId());
             currentMute(player.getUniqueId());
         }
-        cleanupTask = Bukkit.getScheduler().runTaskTimer(plugin, this::runCleanup, CLEANUP_PERIOD_TICKS, CLEANUP_PERIOD_TICKS);
+        cleanupTask = AxsScheduler.runTaskTimer(plugin, this::runCleanup, CLEANUP_PERIOD_TICKS, CLEANUP_PERIOD_TICKS);
         scheduleCloudRefresh();
         broadcastCompletionPlayerList();
     }
@@ -521,7 +522,7 @@ public final class ChatService implements Listener {
     private void dispatchOrDeferToPaper(Player player, String message) {
         if (paperChatEventRegistered) {
             if (!paperChatEventObserved) {
-                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                AxsScheduler.runTaskLater(plugin, () -> {
                     if (!paperChatEventObserved) {
                         scheduleChatMessage(player, message);
                     }
@@ -1060,7 +1061,11 @@ public final class ChatService implements Listener {
 
         // Strategy 2: NMS ClientboundCustomChatCompletionsPacket (Spigot / Mohist 1.19.1+)
         try {
-            Class<?> packetClass = Class.forName("net.minecraft.network.protocol.game.ClientboundCustomChatCompletionsPacket");
+            Class<?> packetClass = tryLoadClass(
+                "net.minecraft.network.protocol.game.ClientboundCustomChatCompletionsPacket",
+                "net.minecraft.class_2797" // Mohist/Arclight SRG 映射名
+            );
+            if (packetClass == null) throw new ClassNotFoundException("ClientboundCustomChatCompletionsPacket");
             Class<?> actionEnum = null;
             for (Class<?> inner : packetClass.getDeclaredClasses()) {
                 if (inner.isEnum()) { actionEnum = inner; break; }
@@ -1092,6 +1097,15 @@ public final class ChatService implements Listener {
     @FunctionalInterface
     private interface NmsPacketSender {
         void send(Player player, Object packet) throws Exception;
+    }
+
+    private static Class<?> tryLoadClass(String... names) {
+        for (String name : names) {
+            try {
+                return Class.forName(name);
+            } catch (ClassNotFoundException ignored) {}
+        }
+        return null;
     }
 
     private static java.lang.reflect.Method findCraftPlayerGetHandle() {
@@ -1166,7 +1180,7 @@ public final class ChatService implements Listener {
             return;
         }
         // Delay 1 tick: client may not be ready to receive chat completions during PlayerJoinEvent
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        AxsScheduler.runTaskLater(plugin, () -> {
             try {
                 if (join) {
                     if (!player.isOnline()) return;
@@ -1208,7 +1222,7 @@ public final class ChatService implements Listener {
         if (!configuration.functions().mentionEnabled()) {
             return;
         }
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        AxsScheduler.runTaskLater(plugin, () -> {
             try {
                 List<String> names = new ArrayList<>();
                 for (Player online : Bukkit.getOnlinePlayers()) {
@@ -1226,7 +1240,7 @@ public final class ChatService implements Listener {
     }
 
     private void scheduleChatMessage(Player player, String message) {
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        AxsScheduler.runTask(plugin, () -> {
             ChatOperationResult result = handleChatMessage(player, message);
             if (!result.success() && !result.cardNotified()) {
                 player.sendMessage(PREFIX + ChatColor.RED + result.message());
@@ -1564,8 +1578,8 @@ public final class ChatService implements Listener {
             return;
         }
         long periodTicks = Math.max(1200L, configuration.filter().cloudRefreshMinutes() * 60L * 20L);
-        cloudRefreshTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::refreshCloudWords, 20L, periodTicks);
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, this::refreshCloudWords);
+        cloudRefreshTask = AxsScheduler.runAsyncTimer(plugin, this::refreshCloudWords, 20L, periodTicks);
+        AxsScheduler.runAsync(plugin, this::refreshCloudWords);
     }
 
     private void refreshCloudWords() {

@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.qqbot.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -90,7 +91,7 @@ public final class QQBotUiService {
         if (bindUiId == null) return;
         packetBridge.openUi(player, bindUiId);
 
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        AxsScheduler.runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
             QQBotBinding binding = repository.findByPlayerName(player.getName());
             Map<String, Object> payload = new HashMap<>();
@@ -115,7 +116,7 @@ public final class QQBotUiService {
         if (adminUiId == null) return;
         packetBridge.openUi(player, adminUiId);
 
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        AxsScheduler.runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
             Map<String, Object> payload = new HashMap<>();
             payload.put("packetId", ADMIN_PACKET_ID);
@@ -271,7 +272,7 @@ public final class QQBotUiService {
         String formatted = "[游戏] " + displayName + ": " + message;
 
         // 需要通过 QQBotService 发送，这里仅做回调
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        AxsScheduler.runTask(plugin, () -> {
             if (sendToGroupCallback != null) {
                 sendToGroupCallback.accept(formatted);
             }
@@ -330,7 +331,7 @@ public final class QQBotUiService {
             logger.info("[QQBot/Admin UI] " + player.getName() + " 执行命令: " + command);
         }
         String cmd = command;
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        AxsScheduler.runTask(plugin, () -> {
             try {
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
                 Map<String, Object> payload = new HashMap<>();

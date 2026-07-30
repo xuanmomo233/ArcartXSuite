@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.security.protection;
 
 import xuanmo.arcartxsuite.security.NativeBridge;
+import xuanmo.arcartxsuite.util.HashUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -156,6 +157,7 @@ public final class ProtectionInit {
             ProtectionInit.class,
             ProtectedClassLoader.class,
             ProtectionEnvironment.class,
+            HashUtils.class,
         };
         for (Class<?> c : boot) {
             m.put(c.getName(), c);

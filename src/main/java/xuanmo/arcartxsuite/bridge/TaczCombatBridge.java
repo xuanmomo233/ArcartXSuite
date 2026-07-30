@@ -6,6 +6,7 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Entity;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -33,12 +34,12 @@ public final class TaczCombatBridge {
     private boolean active;
 
     // Forge 反射缓存
-    private Method getHurtEntityMethod;
-    private Method getAttackerMethod;
-    private Method getBaseAmountMethod;
-    private Method isHeadShotMethod;
-    private Method getGunIdMethod;
-    private Method getBukkitEntityMethod;
+    private volatile Method getHurtEntityMethod;
+    private volatile Method getAttackerMethod;
+    private volatile Method getBaseAmountMethod;
+    private volatile Method isHeadShotMethod;
+    private volatile Method getGunIdMethod;
+    private volatile Method getBukkitEntityMethod;
 
     private TaczCombatBridge(JavaPlugin plugin, boolean debug, ClassLoader modClassLoader) {
         this.plugin = plugin;
@@ -227,7 +228,7 @@ public final class TaczCombatBridge {
             if (Bukkit.isPrimaryThread()) {
                 fireEvent.run();
             } else {
-                Bukkit.getScheduler().runTask(plugin, fireEvent);
+                AxsScheduler.runTask(plugin, fireEvent);
             }
         } catch (Exception e) {
             if (debug) {

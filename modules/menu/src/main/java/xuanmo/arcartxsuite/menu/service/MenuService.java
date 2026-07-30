@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.menu.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.io.IOException;
@@ -186,7 +187,7 @@ public final class MenuService {
         }
         if (openUi) {
             packetBridge.openUi(player, runtimeUiId);
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            AxsScheduler.runTaskLater(plugin, () -> {
                 if (player.isOnline()) {
                     pushPayload(player, session, definition, true);
                 }

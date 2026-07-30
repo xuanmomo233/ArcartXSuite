@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.combateffect.display.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -396,7 +397,7 @@ public final class CombatDisplayService {
             sendDamageToViewer(attacker, target, configId, amount);
             return;
         }
-        BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> flushMergedDamage(key), configuration.damageMergeWindowTicks());
+        BukkitTask task = AxsScheduler.runTaskLater(plugin, () -> flushMergedDamage(key), configuration.damageMergeWindowTicks());
         damageMergeBuffer.put(key, new MergeEntry(attacker, target, configId, amount, task));
     }
 
@@ -426,7 +427,7 @@ public final class CombatDisplayService {
             sendToViewers(target, configId, amount);
             return;
         }
-        BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> flushMergedHeal(key), configuration.healMergeWindowTicks());
+        BukkitTask task = AxsScheduler.runTaskLater(plugin, () -> flushMergedHeal(key), configuration.healMergeWindowTicks());
         healMergeBuffer.put(key, new HealMergeEntry(target, configId, amount, task));
     }
 

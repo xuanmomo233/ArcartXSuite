@@ -47,6 +47,8 @@ public final class ByteArrayModuleClassLoader extends ClassLoader {
     // className(FQN, dotted) -> .enc 数据
     private final Map<String, byte[]> encryptedClasses = new HashMap<>();
 
+    private final ClassLoader serverClassLoader;
+
     public ByteArrayModuleClassLoader(String moduleId, byte[] jarBytes, ClassLoader parent) {
         this(moduleId, jarBytes, null, parent);
     }
@@ -58,6 +60,7 @@ public final class ByteArrayModuleClassLoader extends ClassLoader {
         this.jarBytes = jarBytes == null ? null : jarBytes.clone();
 
         this.moduleSeed = (moduleSeed != null && moduleSeed.length == 32) ? moduleSeed.clone() : null;
+        this.serverClassLoader = detectServerClassLoader(parent);
         try {
             indexEntries();
         } finally {
@@ -90,6 +93,45 @@ public final class ByteArrayModuleClassLoader extends ClassLoader {
 
     public String moduleId() {
         return moduleId;
+    }
+
+    @Override
+    protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+        if (serverClassLoader != null && shouldPreferServerLoader(name)) {
+            try {
+                Class<?> clazz = serverClassLoader.loadClass(name);
+                if (resolve) resolveClass(clazz);
+                return clazz;
+            } catch (ClassNotFoundException ignored) {
+                // 回退到正常委托链
+            }
+        }
+        return super.loadClass(name, resolve);
+    }
+
+    private static boolean shouldPreferServerLoader(String name) {
+        return name.startsWith("org.bukkit.")
+            || name.startsWith("org.spigotmc.")
+            || name.startsWith("net.minecraft.")
+            || name.startsWith("com.mojang.")
+            || name.startsWith("io.papermc.");
+    }
+
+    private static ClassLoader detectServerClassLoader(ClassLoader parent) {
+        ClassLoader loader = parent;
+        while (loader != null) {
+            try {
+                loader.loadClass("org.bukkit.Server");
+                return loader;
+            } catch (ClassNotFoundException ignored) {
+                loader = loader.getParent();
+            }
+        }
+        try {
+            return org.bukkit.Bukkit.getServer().getClass().getClassLoader();
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     @Override

@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.market;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.io.IOException;
@@ -286,7 +287,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             if (org.bukkit.Bukkit.isPrimaryThread()) {
                 current.handleClientPacket(player, packetId, data);
             } else {
-                org.bukkit.Bukkit.getScheduler().runTask(plugin,
+                AxsScheduler.runTask(plugin,
                     () -> current.handleClientPacket(player, packetId, data));
             }
             return true;

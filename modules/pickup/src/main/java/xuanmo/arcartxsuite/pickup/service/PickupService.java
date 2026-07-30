@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.pickup.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -68,9 +69,9 @@ public final class PickupService implements Listener {
     public void start() {
         active = true;
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        Bukkit.getScheduler().runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS);
+        AxsScheduler.runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS);
         // reload 后 ArcartX 客户端重建 HUD 可能需要更长时间，安排二次确认重试
-        Bukkit.getScheduler().runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS + FALLBACK_OPEN_PACKET_DELAY_TICKS);
+        AxsScheduler.runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS + FALLBACK_OPEN_PACKET_DELAY_TICKS);
     }
 
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
@@ -220,7 +221,7 @@ public final class PickupService implements Listener {
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        AxsScheduler.runTaskLater(plugin, () -> {
             if (active && player.isOnline()) {
                 ensureUiOpen(player);
             }
@@ -256,7 +257,7 @@ public final class PickupService implements Listener {
 
         if (bridge.openUi(player, uiId)) {
             logOpenMode(player, "fallback-delay");
-            Bukkit.getScheduler().runTaskLater(plugin, () -> handleUiOpened(player), FALLBACK_OPEN_PACKET_DELAY_TICKS);
+            AxsScheduler.runTaskLater(plugin, () -> handleUiOpened(player), FALLBACK_OPEN_PACKET_DELAY_TICKS);
             return true;
         }
 
@@ -312,7 +313,7 @@ public final class PickupService implements Listener {
     }
 
     private void scheduleSend(Player player, Map<String, Object> payload, long delayTicks) {
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        AxsScheduler.runTaskLater(plugin, () -> {
             if (!active || !player.isOnline() || !bridge.isAvailable()) {
                 return;
             }

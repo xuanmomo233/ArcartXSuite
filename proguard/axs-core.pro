@@ -25,6 +25,8 @@
 -keep class xuanmo.arcartxsuite.security.protection.JvmAntiDebug$* { *; }
 -keep class xuanmo.arcartxsuite.security.protection.ProtectionEnvironment { *; }
 -keep class xuanmo.arcartxsuite.security.protection.ProtectionEnvironment$* { *; }
+-keep class xuanmo.arcartxsuite.util.HashUtils { *; }
+-keep class xuanmo.arcartxsuite.util.HashUtils$* { *; }
 
 # ─── Suite-core 契约接口（明文、版本化，宿主薄壳与业务核心唯一耦合点） ──
 # 宿主薄壳直接引用本接口，必须保留全限定名与成员（且 encrypt-jar 保持明文）。

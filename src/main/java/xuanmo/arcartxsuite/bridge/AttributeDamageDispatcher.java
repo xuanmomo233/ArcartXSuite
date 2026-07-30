@@ -50,6 +50,7 @@ final class AttributeDamageDispatcher {
     private volatile Method apAttributeHandleGetDamage;
     // MythicLib DamageMetadata.getDamage 缓存
     private volatile Method mythicLibDamageMetadataGetDamage;
+    private final Object methodCacheLock = new Object();
 
     AttributeDamageDispatcher(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -193,7 +194,11 @@ final class AttributeDamageDispatcher {
             Object handle = getAttributeHandle.invoke(event);
             if (handle == null) return;
             if (apAttributeHandleGetDamage == null) {
-                apAttributeHandleGetDamage = handle.getClass().getMethod("getDamage", LivingEntity.class);
+                synchronized (methodCacheLock) {
+                    if (apAttributeHandleGetDamage == null) {
+                        apAttributeHandleGetDamage = handle.getClass().getMethod("getDamage", LivingEntity.class);
+                    }
+                }
             }
             Object rawDamage = apAttributeHandleGetDamage.invoke(handle, attacker);
             double damage = rawDamage instanceof Number n ? n.doubleValue() : 0.0D;
@@ -236,16 +241,24 @@ final class AttributeDamageDispatcher {
             Object handler = getHandler.invoke(event);
             if (handler == null) return;
             if (craneHandlerGetEntity == null) {
-                craneHandlerGetEntity = handler.getClass().getMethod("getEntity");
+                synchronized (methodCacheLock) {
+                    if (craneHandlerGetEntity == null) {
+                        craneHandlerGetEntity = handler.getClass().getMethod("getEntity");
+                    }
+                }
             }
             Object rawTarget = craneHandlerGetEntity.invoke(handler);
             if (!(rawTarget instanceof LivingEntity target)) return;
 
             double damage = 0.0D;
             if (craneHandlerGetDamage == null) {
-                try {
-                    craneHandlerGetDamage = handler.getClass().getMethod("getDamage", LivingEntity.class);
-                } catch (NoSuchMethodException ignored) {
+                synchronized (methodCacheLock) {
+                    if (craneHandlerGetDamage == null) {
+                        try {
+                            craneHandlerGetDamage = handler.getClass().getMethod("getDamage", LivingEntity.class);
+                        } catch (NoSuchMethodException ignored) {
+                        }
+                    }
                 }
             }
             if (craneHandlerGetDamage != null) {
@@ -253,7 +266,11 @@ final class AttributeDamageDispatcher {
                 if (rawDamage instanceof Number n) damage = n.doubleValue();
             } else {
                 if (craneHandlerGetEvent == null) {
-                    craneHandlerGetEvent = handler.getClass().getMethod("getEvent");
+                    synchronized (methodCacheLock) {
+                        if (craneHandlerGetEvent == null) {
+                            craneHandlerGetEvent = handler.getClass().getMethod("getEvent");
+                        }
+                    }
                 }
                 Object rawEvent = craneHandlerGetEvent.invoke(handler);
                 if (rawEvent instanceof org.bukkit.event.entity.EntityDamageEvent de) {
@@ -264,9 +281,13 @@ final class AttributeDamageDispatcher {
 
             Player attacker = null;
             if (craneHandlerGetAttacker == null) {
-                try {
-                    craneHandlerGetAttacker = handler.getClass().getMethod("getAttacker");
-                } catch (NoSuchMethodException ignored) {
+                synchronized (methodCacheLock) {
+                    if (craneHandlerGetAttacker == null) {
+                        try {
+                            craneHandlerGetAttacker = handler.getClass().getMethod("getAttacker");
+                        } catch (NoSuchMethodException ignored) {
+                        }
+                    }
                 }
             }
             if (craneHandlerGetAttacker != null) {
@@ -311,16 +332,24 @@ final class AttributeDamageDispatcher {
             Object handler = getHandler.invoke(event);
             if (handler == null) return;
             if (craneHealHandlerGetEntity == null) {
-                craneHealHandlerGetEntity = handler.getClass().getMethod("getEntity");
+                synchronized (methodCacheLock) {
+                    if (craneHealHandlerGetEntity == null) {
+                        craneHealHandlerGetEntity = handler.getClass().getMethod("getEntity");
+                    }
+                }
             }
             Object rawTarget = craneHealHandlerGetEntity.invoke(handler);
             if (!(rawTarget instanceof LivingEntity target)) return;
 
             double heal = 0.0D;
             if (craneHealHandlerGetHeal == null) {
-                try {
-                    craneHealHandlerGetHeal = handler.getClass().getMethod("getHeal", LivingEntity.class);
-                } catch (NoSuchMethodException ignored) {
+                synchronized (methodCacheLock) {
+                    if (craneHealHandlerGetHeal == null) {
+                        try {
+                            craneHealHandlerGetHeal = handler.getClass().getMethod("getHeal", LivingEntity.class);
+                        } catch (NoSuchMethodException ignored) {
+                        }
+                    }
                 }
             }
             if (craneHealHandlerGetHeal != null) {
@@ -328,7 +357,11 @@ final class AttributeDamageDispatcher {
                 if (rawHeal instanceof Number n) heal = n.doubleValue();
             } else {
                 if (craneHealHandlerGetEvent == null) {
-                    craneHealHandlerGetEvent = handler.getClass().getMethod("getEvent");
+                    synchronized (methodCacheLock) {
+                        if (craneHealHandlerGetEvent == null) {
+                            craneHealHandlerGetEvent = handler.getClass().getMethod("getEvent");
+                        }
+                    }
                 }
                 Object rawEvent = craneHealHandlerGetEvent.invoke(handler);
                 if (rawEvent instanceof EntityRegainHealthEvent he) {
@@ -339,9 +372,13 @@ final class AttributeDamageDispatcher {
 
             Player source = null;
             if (craneHealHandlerGetSource == null) {
-                try {
-                    craneHealHandlerGetSource = handler.getClass().getMethod("getSource");
-                } catch (NoSuchMethodException ignored) {
+                synchronized (methodCacheLock) {
+                    if (craneHealHandlerGetSource == null) {
+                        try {
+                            craneHealHandlerGetSource = handler.getClass().getMethod("getSource");
+                        } catch (NoSuchMethodException ignored) {
+                        }
+                    }
                 }
             }
             if (craneHealHandlerGetSource != null) {
@@ -401,7 +438,11 @@ final class AttributeDamageDispatcher {
                 } else {
                     // getDamage() returns DamageMetadata, try getDamage() on it
                     if (mythicLibDamageMetadataGetDamage == null) {
-                        mythicLibDamageMetadataGetDamage = rawDamage.getClass().getMethod("getDamage");
+                        synchronized (methodCacheLock) {
+                            if (mythicLibDamageMetadataGetDamage == null) {
+                                mythicLibDamageMetadataGetDamage = rawDamage.getClass().getMethod("getDamage");
+                            }
+                        }
                     }
                     Object rawValue = mythicLibDamageMetadataGetDamage.invoke(rawDamage);
                     damage = rawValue instanceof Number n2 ? n2.doubleValue() : 0.0D;

@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.entitytracker.boss.tracker;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import io.lumine.mythic.bukkit.MythicBukkit;
 import io.lumine.mythic.bukkit.events.MythicMobDeathEvent;
@@ -54,6 +55,7 @@ public final class BossTrackerService implements Listener {
     private static final long HYBRID_WARMUP_RESCAN_INTERVAL_TICKS = 20L;
     private static final int HYBRID_WARMUP_RESCAN_ATTEMPTS = 6;
     private static final long HYBRID_PERSISTENT_RESCAN_INTERVAL_TICKS = 100L;
+    private static final int HYBRID_PERSISTENT_EMPTY_THRESHOLD = 10; // 连续 N 次未发现遗漏则降频
 
     private final JavaPlugin plugin;
     private final Logger logger;
@@ -74,6 +76,8 @@ public final class BossTrackerService implements Listener {
     private BukkitTask hybridWarmupRescanTask;
     private BukkitTask hybridPersistentRescanTask;
     private int hybridWarmupRescanAttempts;
+    private int hybridPersistentEmptyStreak;
+    private long hybridPersistentCurrentInterval = HYBRID_PERSISTENT_RESCAN_INTERVAL_TICKS;
     private long nextSpawnOrder = 0L;
     private xuanmo.arcartxsuite.api.attribute.AttributeDamageListener attributeDamageListener;
 
@@ -172,7 +176,7 @@ public final class BossTrackerService implements Listener {
     public void start() {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         restoreTrackedBosses("启动扫描", true);
-        refreshTask = Bukkit.getScheduler().runTaskTimer(
+        refreshTask = AxsScheduler.runTaskTimer(
             plugin,
             this::refreshViewers,
             configuration.refreshIntervalTicks(),
@@ -482,7 +486,7 @@ public final class BossTrackerService implements Listener {
         if (queuedRefreshTask != null) {
             return;
         }
-        queuedRefreshTask = Bukkit.getScheduler().runTask(plugin, () -> {
+        queuedRefreshTask = AxsScheduler.runTask(plugin, () -> {
             queuedRefreshTask = null;
             refreshViewers();
         });
@@ -494,7 +498,7 @@ public final class BossTrackerService implements Listener {
         }
 
         hybridWarmupRescanAttempts = 0;
-        hybridWarmupRescanTask = Bukkit.getScheduler().runTaskTimer(
+        hybridWarmupRescanTask = AxsScheduler.runTaskTimer(
             plugin,
             () -> {
                 hybridWarmupRescanAttempts++;
@@ -512,18 +516,50 @@ public final class BossTrackerService implements Listener {
             HYBRID_WARMUP_RESCAN_INTERVAL_TICKS
         );
 
-        hybridPersistentRescanTask = Bukkit.getScheduler().runTaskTimer(
+        hybridPersistentEmptyStreak = 0;
+        hybridPersistentCurrentInterval = HYBRID_PERSISTENT_RESCAN_INTERVAL_TICKS;
+        hybridPersistentRescanTask = AxsScheduler.runTaskTimer(
             plugin,
             () -> {
                 int restoredCount = restoreTrackedBosses("Mohist 持续补扫", false);
                 if (restoredCount > 0) {
                     this.logger.info("Mohist 持续补扫恢复了 " + restoredCount + " 个遗漏的 MythicMobs Boss。");
                     requestRefresh();
+                    hybridPersistentEmptyStreak = 0;
+                } else {
+                    hybridPersistentEmptyStreak++;
+                    if (hybridPersistentEmptyStreak == HYBRID_PERSISTENT_EMPTY_THRESHOLD) {
+                        // 连续 N 次未发现遗漏，降低补扫频率到 5 倍间隔
+                        long newInterval = HYBRID_PERSISTENT_RESCAN_INTERVAL_TICKS * 5;
+                        if (newInterval != hybridPersistentCurrentInterval) {
+                            hybridPersistentCurrentInterval = newInterval;
+                            if (hybridPersistentRescanTask != null) {
+                                hybridPersistentRescanTask.cancel();
+                                hybridPersistentRescanTask = AxsScheduler.runTaskTimer(
+                                    plugin,
+                                    this::runPersistentRescan,
+                                    newInterval,
+                                    newInterval
+                                );
+                            }
+                            this.logger.info("Mohist 持续补扫：连续 " + HYBRID_PERSISTENT_EMPTY_THRESHOLD
+                                + " 次未发现遗漏，降频至 " + newInterval + " ticks。");
+                        }
+                    }
                 }
             },
             HYBRID_PERSISTENT_RESCAN_INTERVAL_TICKS,
             HYBRID_PERSISTENT_RESCAN_INTERVAL_TICKS
         );
+    }
+
+    private void runPersistentRescan() {
+        int restoredCount = restoreTrackedBosses("Mohist 持续补扫", false);
+        if (restoredCount > 0) {
+            this.logger.info("Mohist 持续补扫恢复了 " + restoredCount + " 个遗漏的 MythicMobs Boss。");
+            requestRefresh();
+            hybridPersistentEmptyStreak = 0;
+        }
     }
 
     private int restoreTrackedBosses(String reason, boolean logWhenEmpty) {

@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.questgps.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.List;
 import java.util.Locale;
@@ -80,13 +81,13 @@ public final class QuestGpsNavigationService {
         }
         if (chemdahNavigationEnabled()) {
             int interval = Math.max(5, configuration.navigation().marker().pathUpdateTicks());
-            chemdahRefreshTaskId = Bukkit.getScheduler().runTaskTimer(plugin, this::refreshChemdahTrackingPositions, interval, interval).getTaskId();
+            chemdahRefreshTaskId = AxsScheduler.runTaskTimer(plugin, this::refreshChemdahTrackingPositions, interval, interval).getTaskId();
         }
     }
 
     public void shutdown() {
         if (chemdahRefreshTaskId >= 0) {
-            Bukkit.getScheduler().cancelTask(chemdahRefreshTaskId);
+            AxsScheduler.cancelTask(chemdahRefreshTaskId);
             chemdahRefreshTaskId = -1;
         }
         if (markerService != null) {

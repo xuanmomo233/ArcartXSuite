@@ -9,6 +9,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.account.AccountType;
 import xuanmo.arcartxsuite.api.account.AccountTypeService;
+import xuanmo.arcartxsuite.bridge.ServerPlatform;
 import xuanmo.arcartxsuite.util.ReflectionCache;
 
 import java.lang.reflect.Field;
@@ -34,6 +35,15 @@ public final class ChatSignBypassService implements Listener {
         "chatMessageValidator",
         "chatDecorator",
     };
+    // Mohist/Arclight SRG 映射字段名（Forge 重映射后的名称）
+    private static final String[] SERVER_PLAYER_FIELDS_SRG = {
+        "f_244316_", // chatSession (SRG)
+        "f_244317_", // remoteChatSession (SRG)
+    };
+    private static final String[] CONNECTION_FIELDS_SRG = {
+        "f_244237_", // chatMessageValidator (SRG)
+        "f_244238_", // chatDecorator (SRG)
+    };
 
     private final JavaPlugin plugin;
     private final Logger logger;
@@ -42,8 +52,10 @@ public final class ChatSignBypassService implements Listener {
     private final AccountTypeService accountTypeService;
     private final ReflectionCache reflectionCache;
     private boolean paperDetected;
+    private boolean hybridServer;
     private volatile boolean reflectionSuccessLogged;
     private volatile boolean skipLogged;
+    private volatile boolean hybridWarningLogged;
 
     public ChatSignBypassService(JavaPlugin plugin, boolean enabled,
                                  boolean onlyForNonPremium, AccountTypeService accountTypeService) {
@@ -65,6 +77,7 @@ public final class ChatSignBypassService implements Listener {
             return;
         }
         detectPaper();
+        detectHybrid();
         Bukkit.getPluginManager().registerEvents(this, plugin);
         // 对当前在线玩家立即生效（热重载场景）
         for (Player player : Bukkit.getOnlinePlayers()) {
@@ -98,6 +111,14 @@ public final class ChatSignBypassService implements Listener {
         }
         if (!paperDetected) {
             logger.warning("当前不是 Paper 服务端，聊天签名绕过可能无效。");
+        }
+    }
+
+    private void detectHybrid() {
+        ServerPlatform platform = ServerPlatform.detect(Bukkit.getServer());
+        hybridServer = platform.hybridServer();
+        if (hybridServer) {
+            logger.info("检测到混合端 " + platform.displayName() + "，聊天签名绕过将额外尝试 SRG 映射字段名。");
         }
     }
 
@@ -148,33 +169,40 @@ public final class ChatSignBypassService implements Listener {
             Object handle = getHandle.invoke(player);
 
             // 1. 尝试清除 ServerPlayer 上的聊天会话字段
-            boolean playerFieldCleared = false;
-            for (String fieldName : SERVER_PLAYER_FIELDS) {
-                if (trySetField(handle, fieldName, null)) {
-                    playerFieldCleared = true;
-                    break;
-                }
-            }
+            boolean playerFieldCleared = tryClearFields(handle, SERVER_PLAYER_FIELDS)
+                || (hybridServer && tryClearFields(handle, SERVER_PLAYER_FIELDS_SRG));
 
             // 2. 尝试清除 ServerGamePacketListenerImpl 上的签名字段
             // ServerPlayer.connection -> ServerGamePacketListenerImpl
             Field connectionField = reflectionCache.field(handle.getClass(), "connection");
             Object connection = connectionField.get(handle);
-            boolean connectionFieldCleared = false;
-            for (String fieldName : CONNECTION_FIELDS) {
-                if (trySetField(connection, fieldName, null)) {
-                    connectionFieldCleared = true;
-                    break;
-                }
-            }
+            boolean connectionFieldCleared = tryClearFields(connection, CONNECTION_FIELDS)
+                || (hybridServer && tryClearFields(connection, CONNECTION_FIELDS_SRG));
 
             if ((playerFieldCleared || connectionFieldCleared) && !reflectionSuccessLogged) {
                 reflectionSuccessLogged = true;
                 logger.fine("已绕过 " + player.getName() + " 的聊天签名验证（后续同类型日志将抑制）。");
             }
+
+            if (!playerFieldCleared && !connectionFieldCleared && !hybridWarningLogged) {
+                hybridWarningLogged = true;
+                logger.warning("聊天签名绕过：未能清除玩家 " + player.getName()
+                    + " 的任何签名字段。"
+                    + (hybridServer ? "（混合端 SRG 映射字段名也可能不匹配）" : "（字段名可能不匹配当前版本）")
+                    + " 非正版玩家可能仍无法发送聊天消息。后续同类日志将抑制。");
+            }
         } catch (Exception e) {
             logger.warning("聊天签名绕过反射失败: " + e.getMessage());
         }
+    }
+
+    private boolean tryClearFields(Object target, String[] fieldNames) {
+        for (String fieldName : fieldNames) {
+            if (trySetField(target, fieldName, null)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean trySetField(Object target, String fieldName, Object value) {

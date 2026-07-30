@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.qqbot.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
@@ -269,7 +270,7 @@ public final class QQBotCommandRouter {
             // 解绑后自动移除白名单
             if (config.whitelist().enabled() && config.whitelist().autoRemoveOnUnbind()) {
                 String wlCmd = config.whitelist().removeCommand().replace("{name}", result.message());
-                Bukkit.getScheduler().runTask(plugin, () ->
+                AxsScheduler.runTask(plugin, () ->
                     Bukkit.dispatchCommand(Bukkit.getConsoleSender(), wlCmd));
             }
         } else {
@@ -318,7 +319,7 @@ public final class QQBotCommandRouter {
             playerName = binding.playerName();
         }
         String cmd = config.whitelist().addCommand().replace("{name}", playerName);
-        Bukkit.getScheduler().runTask(plugin, () ->
+        AxsScheduler.runTask(plugin, () ->
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
         reply(event, config.messages().whitelistAdded().replace("{name}", playerName));
     }
@@ -344,7 +345,7 @@ public final class QQBotCommandRouter {
             playerName = binding.playerName();
         }
         String cmd = config.whitelist().removeCommand().replace("{name}", playerName);
-        Bukkit.getScheduler().runTask(plugin, () ->
+        AxsScheduler.runTask(plugin, () ->
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
         reply(event, config.messages().whitelistRemoved().replace("{name}", playerName));
     }
@@ -369,7 +370,7 @@ public final class QQBotCommandRouter {
     private void handleBuiltinCommand(OneBotEvent event, String builtinId, String args) {
         switch (builtinId) {
             case "online-list" -> {
-                Bukkit.getScheduler().runTask(plugin, () -> {
+                AxsScheduler.runTask(plugin, () -> {
                     var players = Bukkit.getOnlinePlayers();
                     EssentialsQueryable ess = essentialsProvider != null ? essentialsProvider.get() : null;
                     StringBuilder sb = new StringBuilder();
@@ -394,7 +395,7 @@ public final class QQBotCommandRouter {
             }
             case "server-status" -> {
                 // 必须在主线程获取实体/区块数据
-                Bukkit.getScheduler().runTask(plugin, () -> {
+                AxsScheduler.runTask(plugin, () -> {
                     double[] tps = getServerTps();
                     Runtime rt = Runtime.getRuntime();
                     long maxMem = rt.maxMemory() / 1024 / 1024;
@@ -536,7 +537,7 @@ public final class QQBotCommandRouter {
         var ac = config.announce();
         String gameMsg = org.bukkit.ChatColor.translateAlternateColorCodes('&',
             ac.gameFormat().replace("{content}", content));
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        AxsScheduler.runTask(plugin, () -> {
             Bukkit.broadcastMessage(gameMsg);
             if (ac.titleEnabled()) {
                 String title = org.bukkit.ChatColor.translateAlternateColorCodes('&', ac.titleText());
@@ -567,7 +568,7 @@ public final class QQBotCommandRouter {
         String cmd = config.moderation().kickCommand()
             .replace("{name}", name)
             .replace("{reason}", reason);
-        Bukkit.getScheduler().runTask(plugin, () ->
+        AxsScheduler.runTask(plugin, () ->
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
         reply(event, "已踢出玩家: " + name + "（原因: " + reason + "）");
     }
@@ -587,7 +588,7 @@ public final class QQBotCommandRouter {
         String cmd = config.moderation().banCommand()
             .replace("{name}", name)
             .replace("{reason}", reason);
-        Bukkit.getScheduler().runTask(plugin, () ->
+        AxsScheduler.runTask(plugin, () ->
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd));
         reply(event, "已封禁玩家: " + name + "（原因: " + reason + "）");
     }
@@ -598,7 +599,7 @@ public final class QQBotCommandRouter {
             return;
         }
         String command = cmd.command().replace("{args}", args);
-        Bukkit.getScheduler().runTask(plugin, () ->
+        AxsScheduler.runTask(plugin, () ->
             Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command));
         reply(event, config.messages().commandExecuted().replace("{command}", command));
     }
@@ -615,7 +616,7 @@ public final class QQBotCommandRouter {
             return;
         }
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        AxsScheduler.runTask(plugin, () -> {
             try {
                 String format = cmd.format().replace("{name}", player.getName());
                 List<String> placeholders = cmd.placeholders();
@@ -672,7 +673,7 @@ public final class QQBotCommandRouter {
             logger.info("[QQBot/Admin] QQ=" + qqId + " 执行控制台命令: " + commandLine);
         }
         String cmd = commandLine;
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        AxsScheduler.runTask(plugin, () -> {
             try {
                 boolean dispatched = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd);
                 if (dispatched) {

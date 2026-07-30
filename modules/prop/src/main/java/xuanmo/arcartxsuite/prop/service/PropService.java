@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.prop.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -207,7 +208,7 @@ public final class PropService implements Listener {
                 definition.bindingId(),
                 keyMappingConfiguration.category(),
                 definition.defaultKey(),
-                player -> Bukkit.getScheduler().runTask(plugin, () -> handleKeyPress(player, definition))
+                player -> AxsScheduler.runTask(plugin, () -> handleKeyPress(player, definition))
             );
             if (success) {
                 registeredBindingIds.add(definition.bindingId());
@@ -480,7 +481,7 @@ public final class PropService implements Listener {
         if (player == null) {
             return;
         }
-        Bukkit.getScheduler().runTaskLater(plugin, () -> synchronizeConfiguredSlots(player), Math.max(0L, delayTicks));
+        AxsScheduler.runTaskLater(plugin, () -> synchronizeConfiguredSlots(player), Math.max(0L, delayTicks));
     }
 
     private void synchronizeConfiguredSlots(Player player) {

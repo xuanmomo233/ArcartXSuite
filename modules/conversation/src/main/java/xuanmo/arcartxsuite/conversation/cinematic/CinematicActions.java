@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.conversation.cinematic;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.List;
 import java.util.Map;
@@ -87,7 +88,7 @@ public final class CinematicActions {
                 double progress = (double) frame / finalFrames;
                 double[] pos = interpolatePath(points, progress);
                 long delay = (long) frame * ticksPerFrame;
-                Bukkit.getScheduler().runTaskLater(JavaPlugin.getProvidingPlugin(CinematicActions.class), () -> {
+                AxsScheduler.runTaskLater(JavaPlugin.getProvidingPlugin(CinematicActions.class), () -> {
                     if (!player.isOnline()) return;
                     player.teleport(new Location(finalWorld, pos[0], pos[1], pos[2],
                         (float) pos[3], (float) pos[4]));

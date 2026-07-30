@@ -34,18 +34,46 @@ public final class ReflectionCache {
         if (cached != null) {
             return cached;
         }
+        // 1. 优先使用指定 classLoader
         try {
             Class<?> clazz = Class.forName(className, true, primaryLoader);
             classCache.put(className, clazz);
             return clazz;
         } catch (ClassNotFoundException e) {
+            // 2. 回退到当前线程上下文 ClassLoader
             ClassLoader fallback = Thread.currentThread().getContextClassLoader();
             if (fallback != null && fallback != primaryLoader) {
-                Class<?> clazz = Class.forName(className, true, fallback);
-                classCache.put(className, clazz);
-                return clazz;
+                try {
+                    Class<?> clazz = Class.forName(className, true, fallback);
+                    classCache.put(className, clazz);
+                    return clazz;
+                } catch (ClassNotFoundException ignored) {}
+            }
+            // 3. 第三级回退：服务端 ClassLoader（用于加载 NMS/CraftBukkit 类）
+            ClassLoader serverLoader = getServerClassLoader();
+            if (serverLoader != null && serverLoader != primaryLoader && serverLoader != fallback) {
+                try {
+                    Class<?> clazz = Class.forName(className, true, serverLoader);
+                    classCache.put(className, clazz);
+                    return clazz;
+                } catch (ClassNotFoundException ignored) {}
             }
             throw e;
+        }
+    }
+
+    private static volatile ClassLoader cachedServerClassLoader;
+
+    private static ClassLoader getServerClassLoader() {
+        if (cachedServerClassLoader != null) {
+            return cachedServerClassLoader;
+        }
+        try {
+            ClassLoader loader = org.bukkit.Bukkit.getServer().getClass().getClassLoader();
+            cachedServerClassLoader = loader;
+            return loader;
+        } catch (Exception ignored) {
+            return null;
         }
     }
 

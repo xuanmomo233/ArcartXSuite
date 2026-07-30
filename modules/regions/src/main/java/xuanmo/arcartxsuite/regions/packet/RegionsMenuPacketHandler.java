@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.regions.packet;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -67,7 +68,7 @@ public final class RegionsMenuPacketHandler implements ClientPacketHandler {
     public void openMenu(Player player) {
         if (packetBridge == null) return;
         packetBridge.openUi(player, uiId);
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        AxsScheduler.runTaskLater(plugin, () -> {
             if (player.isOnline()) {
                 pushData(player, "current");
             }

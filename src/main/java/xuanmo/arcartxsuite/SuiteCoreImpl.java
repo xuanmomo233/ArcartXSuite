@@ -40,7 +40,9 @@ import xuanmo.arcartxsuite.security.ClientPacketGuardConfiguration;
 import xuanmo.arcartxsuite.security.MohistCompat;
 import xuanmo.arcartxsuite.security.NativeBridge;
 import xuanmo.arcartxsuite.security.protection.ProtectionInit;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import xuanmo.arcartxsuite.api.util.TemporaryOpExecutor;
+import xuanmo.arcartxsuite.bridge.AxsFakeOp;
 import xuanmo.arcartxsuite.security.SecondaryPasswordService;
 
 /**
@@ -150,11 +152,14 @@ public final class SuiteCoreImpl implements SuiteCore {
         );
         TemporaryOpExecutor.reconcile();
         try {
-            TemporaryOpExecutor.setProxyFactory(
-                new xuanmo.arcartxsuite.bridge.ByteBuddyOpProxyFactory(getLogger())
-            );
+            AxsFakeOp fakeOp = new AxsFakeOp(getLogger());
+            if (fakeOp.available()) {
+                TemporaryOpExecutor.setFakeOpExecutor(fakeOp::execute);
+            } else {
+                getLogger().info("AxsFakeOp 不可用，临时 OP 将使用 setOp 降级方式。");
+            }
         } catch (RuntimeException exception) {
-            getLogger().warning("ByteBuddy 代理工厂注入失败，将使用 setOp 降级方式: " + exception.getMessage());
+            getLogger().warning("AxsFakeOp 初始化失败，将使用 setOp 降级方式: " + exception.getMessage());
         }
         ensureRootConfigExists();
         reloadConfig();
@@ -279,7 +284,7 @@ public final class SuiteCoreImpl implements SuiteCore {
         // 9. 云端模块同步（异步，不阻塞启动；只要配置了 qq+password 就自动连接）
         cloudModuleService = new CloudModuleService(this, moduleRegistry);
         cloudModuleService.syncModules().thenRun(() -> {
-            Bukkit.getScheduler().runTask(host, () ->
+            AxsScheduler.runTask(host, () ->
                 consoleInfo("[Cloud] 云端模块同步完成")
             );
         });

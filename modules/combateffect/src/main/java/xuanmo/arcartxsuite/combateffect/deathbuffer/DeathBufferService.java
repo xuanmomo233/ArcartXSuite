@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.combateffect.deathbuffer;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -196,7 +197,7 @@ public final class DeathBufferService implements Listener {
         dispatchDeathPackets(victim, killer);
 
         // 调度延迟任务：缓冲结束后执行真正死亡
-        BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        BukkitTask task = AxsScheduler.runTaskLater(plugin, () -> {
             exitBuffer(victim);
         }, config.durationTicks());
 

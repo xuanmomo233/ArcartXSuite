@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.conversation.cinematic;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -165,7 +166,7 @@ public final class CinematicService {
         }
 
         CinematicAction action = session.sequence().actions().get(actionIndex);
-        BukkitTask task = Bukkit.getScheduler().runTask(plugin, () -> {
+        BukkitTask task = AxsScheduler.runTask(plugin, () -> {
             if (session.cancelled() || !player.isOnline()) {
                 finishSession(player, session);
                 return;
@@ -185,7 +186,7 @@ public final class CinematicService {
 
             long delayMs = action.delayAfterMs();
             long delayTicks = Math.max(1L, delayMs / 50L);
-            BukkitTask nextTask = Bukkit.getScheduler().runTaskLater(plugin, () ->
+            BukkitTask nextTask = AxsScheduler.runTaskLater(plugin, () ->
                 scheduleNextAction(player, session, actionIndex + 1), delayTicks);
             session.setPendingTask(nextTask);
         });

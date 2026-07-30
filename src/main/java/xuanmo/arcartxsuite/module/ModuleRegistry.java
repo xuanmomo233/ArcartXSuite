@@ -228,7 +228,18 @@ public final class ModuleRegistry {
         }
 
         // 3. 拓扑排序
-        List<String> sorted = topologicalSort(authorized);
+        List<String> cyclicModules = new ArrayList<>();
+        List<String> sorted = topologicalSort(authorized, cyclicModules);
+
+        // 3.1 将循环依赖的模块标记为失败
+        for (String cyclicId : cyclicModules) {
+            LOGGER.warning("模块 " + cyclicId + " 因循环依赖被标记为失败，不予加载。");
+            failedModules.add(cyclicId);
+            DiscoveredModule dm = authorized.get(cyclicId);
+            if (dm != null) {
+                skippedModules.add(dm.descriptor.name());
+            }
+        }
 
         // 4. 按序加载与启用
         for (String id : sorted) {
@@ -631,8 +642,8 @@ public final class ModuleRegistry {
         if (loaded == null || !(loaded.classLoader() instanceof ByteArrayModuleClassLoader)) {
             return null;
         }
-        byte[] bytes = loaded.jarBytes();
-        byte[] seed = loaded.moduleSeed();
+        byte[] bytes = loaded.jarBytesDirect();
+        byte[] seed = loaded.moduleSeedDirect();
         if (bytes == null) {
             return null;
         }
@@ -829,7 +840,7 @@ public final class ModuleRegistry {
         migratables.clear();
     }
 
-    private List<String> topologicalSort(Map<String, DiscoveredModule> modules) {
+    private List<String> topologicalSort(Map<String, DiscoveredModule> modules, List<String> cyclicModules) {
         Map<String, Set<String>> dependencyGraph = new HashMap<>();
         for (Map.Entry<String, DiscoveredModule> entry : modules.entrySet()) {
             Set<String> deps = new HashSet<>();
@@ -851,15 +862,18 @@ public final class ModuleRegistry {
         Set<String> visiting = new HashSet<>();
         for (String id : dependencyGraph.keySet()) {
             if (!visited.contains(id)) {
-                topologicalVisit(id, dependencyGraph, visited, visiting, sorted);
+                topologicalVisit(id, dependencyGraph, visited, visiting, sorted, cyclicModules);
             }
         }
         return sorted;
     }
 
-    private void topologicalVisit(String id, Map<String, Set<String>> graph, Set<String> visited, Set<String> visiting, List<String> sorted) {
+    private void topologicalVisit(String id, Map<String, Set<String>> graph, Set<String> visited, Set<String> visiting, List<String> sorted, List<String> cyclicModules) {
         if (visiting.contains(id)) {
             LOGGER.warning("检测到模块循环依赖: " + id + "，已强制打断。");
+            if (!cyclicModules.contains(id)) {
+                cyclicModules.add(id);
+            }
             return;
         }
         if (visited.contains(id)) {
@@ -869,7 +883,7 @@ public final class ModuleRegistry {
         Set<String> deps = graph.get(id);
         if (deps != null) {
             for (String dep : deps) {
-                topologicalVisit(dep, graph, visited, visiting, sorted);
+                topologicalVisit(dep, graph, visited, visiting, sorted, cyclicModules);
             }
         }
         visiting.remove(id);

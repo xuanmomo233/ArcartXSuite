@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.essentials.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.sql.SQLException;
 import java.util.List;
@@ -51,7 +52,7 @@ public final class TeleportService implements Listener {
     public void shutdown() {
         HandlerList.unregisterAll(this);
         for (int taskId : warmups.values()) {
-            Bukkit.getScheduler().cancelTask(taskId);
+            AxsScheduler.cancelTask(taskId);
         }
         warmups.clear();
         pendingTpa.clear();
@@ -198,7 +199,7 @@ public final class TeleportService implements Listener {
             : config.messages().tpaReceived().replace("{player}", sender.getName())));
 
         // 自动过期
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        AxsScheduler.runTaskLater(plugin, () -> {
             TpaRequest req = pendingTpa.get(targetUuid);
             if (req != null && req.sender().equals(sender.getUniqueId())) {
                 pendingTpa.remove(targetUuid);
@@ -272,7 +273,7 @@ public final class TeleportService implements Listener {
             .replace("{seconds}", String.valueOf(delay)));
 
         Location startLoc = player.getLocation().clone();
-        int taskId = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        int taskId = AxsScheduler.runTaskLater(plugin, () -> {
             warmups.remove(player.getUniqueId());
             if (player.isOnline()) {
                 executeTeleport(player, target, successMessage);
@@ -317,7 +318,7 @@ public final class TeleportService implements Listener {
 
         if (event.getTo() != null && !event.getFrom().getBlock().equals(event.getTo().getBlock())) {
             int taskId = warmups.remove(uuid);
-            Bukkit.getScheduler().cancelTask(taskId);
+            AxsScheduler.cancelTask(taskId);
             player.sendMessage(prefix() + config.messages().teleportCancelled());
         }
     }
@@ -327,7 +328,7 @@ public final class TeleportService implements Listener {
         UUID uuid = event.getPlayer().getUniqueId();
         pendingTpa.remove(uuid);
         Integer taskId = warmups.remove(uuid);
-        if (taskId != null) Bukkit.getScheduler().cancelTask(taskId);
+        if (taskId != null) AxsScheduler.cancelTask(taskId);
     }
 
     private String prefix() {

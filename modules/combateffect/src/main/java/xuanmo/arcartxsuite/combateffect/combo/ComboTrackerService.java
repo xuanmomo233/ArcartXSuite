@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.combateffect.combo;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.Map;
 import java.util.UUID;
@@ -184,7 +185,7 @@ public final class ComboTrackerService implements Listener {
             oldTask.cancel();
         }
         long timeoutTicks = Math.max(1, config.timeoutMs() / 50);
-        BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        BukkitTask task = AxsScheduler.runTaskLater(plugin, () -> {
             ComboState removed = comboStates.remove(playerId);
             resetTasks.remove(playerId);
             // 重置时同步变量为 0

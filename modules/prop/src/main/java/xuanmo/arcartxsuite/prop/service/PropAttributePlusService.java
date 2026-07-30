@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.prop.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.List;
 import java.util.Locale;
@@ -44,7 +45,7 @@ public final class PropAttributePlusService {
         activeSources.computeIfAbsent(player.getUniqueId(), ignored -> ConcurrentHashMap.newKeySet()).add(sourceId);
 
         long removeDelayTicks = Math.max(1L, durationSeconds) * 20L;
-        Bukkit.getScheduler().runTaskLater(
+        AxsScheduler.runTaskLater(
             plugin,
             () -> removeSource(player.getUniqueId(), sourceId),
             removeDelayTicks

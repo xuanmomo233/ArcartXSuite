@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.entitytracker.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -115,14 +116,14 @@ public final class BossKillRecordingService implements Listener {
                 location,
                 session.getSpawnedAt()
             ));
-            Bukkit.getScheduler().runTaskLater(
+            AxsScheduler.runTaskLater(
                 plugin,
                 () -> finalizeDeath(entityUuid, session, settlement, location),
                 2L
             );
             return;
         }
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        AxsScheduler.runAsync(plugin, () -> {
             try {
                 persistRecord(session, settlement, location, List.of());
             } catch (Exception exception) {
@@ -276,7 +277,7 @@ public final class BossKillRecordingService implements Listener {
         if (!recording.enabled()) {
             return;
         }
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        AxsScheduler.runAsync(plugin, () -> {
             try {
                 int removed = killRecordDao.deleteOlderThanDays(recording.retentionDays());
                 if (removed > 0) {

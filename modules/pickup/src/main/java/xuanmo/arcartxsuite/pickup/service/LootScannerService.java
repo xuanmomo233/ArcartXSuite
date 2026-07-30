@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.pickup.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -108,11 +109,11 @@ public final class LootScannerService implements Listener {
         active = true;
         Bukkit.getPluginManager().registerEvents(this, plugin);
         ScannerConfig scannerConfig = configuration.scanner();
-        scanTask = Bukkit.getScheduler().runTaskTimer(
+        scanTask = AxsScheduler.runTaskTimer(
             plugin, this::scanTick, PREOPEN_DELAY_TICKS, scannerConfig.scanIntervalTicks()
         );
         // reload 场景：为已在线玩家重新打开 HUD
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        AxsScheduler.runTaskLater(plugin, () -> {
             for (Player player : Bukkit.getOnlinePlayers()) {
                 openHudForPlayer(player);
             }
@@ -515,7 +516,7 @@ public final class LootScannerService implements Listener {
             hudOpenPlayers.add(playerId);
             debug("HUD_OPEN player=" + player.getName());
             // 打开后稍延迟推送当前状态
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            AxsScheduler.runTaskLater(plugin, () -> {
                 if (player.isOnline() && hudOpenPlayers.contains(playerId)) {
                     scanForPlayer(player);
                 }

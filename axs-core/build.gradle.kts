@@ -33,7 +33,6 @@ dependencies {
     implementation("com.mysql:mysql-connector-j:8.4.0")
     implementation("at.favre.lib:bcrypt:0.10.2")
     implementation("redis.clients:jedis:5.2.0")
-    implementation("net.bytebuddy:byte-buddy:1.14.18")
     implementation("com.belerweb:pinyin4j:2.5.1")
     implementation("com.google.code.gson:gson:2.11.0")
     implementation("org.java-websocket:Java-WebSocket:1.5.7")

@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.afkreward.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.time.LocalDate;
 import java.time.DayOfWeek;
@@ -1043,7 +1044,7 @@ public final class AfkRewardService {
 
     public List<AfkRewardRepository.PlayerStats> getLeaderboard() {
         if (System.currentTimeMillis() - leaderboardLastUpdate > 60000) {
-            Bukkit.getScheduler().runTaskAsynchronously(plugin, this::refreshLeaderboard);
+            AxsScheduler.runAsync(plugin, this::refreshLeaderboard);
         }
         return leaderboardCache;
     }

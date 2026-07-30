@@ -65,11 +65,11 @@ public final class MigrationLoader {
         }
         // 阶段 A：通过列出 minVersion..maxVersion 范围内可能的文件名探测；
         // 由于无法在加密 axb 列表中扫描目录，调用方在阶段 B 可显式声明版本表。
-        // 这里先尝试 0-1, 1-2, ... 直到连续 5 次未命中。
+        // 这里先尝试 0-1, 1-2, ... 直到连续 3 次未命中。
         List<ConfigMigrationDescriptor> all = new ArrayList<>();
         int from = 0;
         int missesInRow = 0;
-        while (missesInRow < 5 && from < 1000) {
+        while (missesInRow < 3 && from < 1000) {
             String path = migrationFolder.replace('\\', '/');
             if (!path.endsWith("/")) {
                 path = path + "/";

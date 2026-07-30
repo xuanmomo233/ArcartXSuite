@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.tab.sync;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -129,7 +130,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
             this.logger.fine("ArcartXTab 跨服通道已启用");
         }
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        refreshTask = Bukkit.getScheduler().runTaskTimer(
+        refreshTask = AxsScheduler.runTaskTimer(
             plugin,
             this::refresh,
             configuration.refreshIntervalTicks(),
@@ -394,7 +395,7 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
         if (flushTask != null) {
             return;
         }
-        flushTask = Bukkit.getScheduler().runTask(plugin, () -> {
+        flushTask = AxsScheduler.runTask(plugin, () -> {
             flushTask = null;
             flushPendingRefreshes(reason);
         });

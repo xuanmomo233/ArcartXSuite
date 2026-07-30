@@ -13,6 +13,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import xuanmo.arcartxsuite.SuiteCoreImpl;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.cloud.CloudModuleService;
@@ -441,7 +442,7 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         final java.util.UUID finalUuid = uuid;
         final String fPlayerScope = playerScope;
         final String fModuleScope = moduleScope;
-        org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(plugin.host(), () -> {
+        AxsScheduler.runAsync(plugin.host(), () -> {
             Map<String, Integer> results;
             if (allPlayers) {
                 results = allModules
@@ -454,7 +455,7 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
             }
             // 记录审计日志
             writePurgeAuditLog(fPlayerScope, fModuleScope, results);
-            org.bukkit.Bukkit.getScheduler().runTask(plugin.host(), () -> {
+            AxsScheduler.runTask(plugin.host(), () -> {
                 if (results.isEmpty()) {
                     sender.sendMessage(PREFIX + ChatColor.YELLOW + "没有模块注册数据清除能力。");
                 } else {
@@ -548,7 +549,7 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         sender.sendMessage(PREFIX + ChatColor.GRAY + "目标模块: " + ChatColor.YELLOW + String.join(", ", targetIds));
 
         // 异步执行，防范耗时搬迁阻碍 Bukkit 主线程 TPS
-        org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(plugin.host(), () -> {
+        AxsScheduler.runAsync(plugin.host(), () -> {
             for (String id : targetIds) {
                 Optional<xuanmo.arcartxsuite.api.capability.DatabaseMigratable> opt = registry.getMigratable(id);
                 if (opt.isEmpty()) {
@@ -609,7 +610,7 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         }
         sender.sendMessage(PREFIX + ChatColor.GRAY + "正在从云端同步授权模块列表...");
         cloudService.forceSyncModules().thenAccept(ok ->
-            Bukkit.getScheduler().runTask(plugin.host(), () ->
+            AxsScheduler.runTask(plugin.host(), () ->
                 sender.sendMessage(PREFIX + (ok
                     ? ChatColor.GREEN + "同步完成。新授权的云端模块已自动加载，已撤销的模块已卸载。"
                     : ChatColor.RED + "同步失败，请查看控制台日志。"))
@@ -639,7 +640,7 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
 
         if ("all".equals(target)) {
             cloudService.updateAllModules().thenAccept(ok ->
-                Bukkit.getScheduler().runTask(plugin.host(), () ->
+                AxsScheduler.runTask(plugin.host(), () ->
                     sender.sendMessage(PREFIX + (ok
                         ? ChatColor.GREEN + "所有云端模块更新完成。"
                         : ChatColor.YELLOW + "部分云端模块更新失败，请查看控制台日志。"))
@@ -647,7 +648,7 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
             );
         } else {
             cloudService.updateModule(target).thenAccept(ok ->
-                Bukkit.getScheduler().runTask(plugin.host(), () ->
+                AxsScheduler.runTask(plugin.host(), () ->
                     sender.sendMessage(PREFIX + (ok
                         ? ChatColor.GREEN + "模块 " + target + " 更新成功并已加载。"
                         : ChatColor.RED + "模块 " + target + " 更新失败，请查看控制台日志。"))
@@ -681,7 +682,7 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         if (Bukkit.isPrimaryThread()) {
             sender.sendMessage(message);
         } else {
-            Bukkit.getScheduler().runTask(plugin.host(), () -> sender.sendMessage(message));
+            AxsScheduler.runTask(plugin.host(), () -> sender.sendMessage(message));
         }
     }
 }

@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.loginview.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.sql.SQLException;
 import java.time.Instant;
@@ -142,7 +143,7 @@ public final class LoginViewService implements Listener {
         }
         // 每小时清理一次过期 session
         long cleanupInterval = 20L * 60 * 60;
-        cleanupTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
+        cleanupTask = AxsScheduler.runAsyncTimer(plugin, () -> {
             if (!started) {
                 return;
             }
@@ -409,7 +410,7 @@ public final class LoginViewService implements Listener {
         if (result.success()) {
             sendResult(player, color("&a" + result.message()), true);
             // 绑定成功后刷新面板（切换为已绑定状态）
-            Bukkit.getScheduler().runTaskLater(plugin, () -> openFor(player, true), 5L);
+            AxsScheduler.runTaskLater(plugin, () -> openFor(player, true), 5L);
         } else {
             sendResult(player, color("&c" + result.message()), false);
         }
@@ -512,7 +513,7 @@ public final class LoginViewService implements Listener {
         teleportToSpawnIfEnabled(player);
         if (configuration.ui().closeOnLogin()) {
             packetBridge.sendPacket(player, uiId, "close", Map.of("message", message));
-            Bukkit.getScheduler().runTaskLater(plugin, () -> packetBridge.closeUiUnsafe(player, uiId), 2L);
+            AxsScheduler.runTaskLater(plugin, () -> packetBridge.closeUiUnsafe(player, uiId), 2L);
         }
         // 持久化 session，支持重启/重连后免重新登录
         int ttl = configuration.security().sessionTtlMinutes();
@@ -553,7 +554,7 @@ public final class LoginViewService implements Listener {
         int attempts = failedAttempts.merge(player.getUniqueId(), 1, Integer::sum);
         sendResult(player, color(configuration.messages().wrongPassword()) + " (" + attempts + "/" + configuration.security().maxAttempts() + ")", false);
         if (attempts >= configuration.security().maxAttempts() && configuration.security().kickOnMaxAttempts()) {
-            Bukkit.getScheduler().runTask(plugin, () -> player.kickPlayer(color(configuration.messages().kicked())));
+            AxsScheduler.runTask(plugin, () -> player.kickPlayer(color(configuration.messages().kicked())));
         }
     }
 
@@ -587,7 +588,7 @@ public final class LoginViewService implements Listener {
         }
         long delay = configuration.ui().openDelayTicks();
         prewarmAccountType(player, () ->
-            Bukkit.getScheduler().runTaskLater(plugin, () -> openFor(player), delay));
+            AxsScheduler.runTaskLater(plugin, () -> openFor(player), delay));
     }
 
     /**
@@ -603,10 +604,10 @@ public final class LoginViewService implements Listener {
         }
         UUID playerId = player.getUniqueId();
         String playerName = player.getName();
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        AxsScheduler.runAsync(plugin, () -> {
             accountTypeService.resolveBlocking(playerId, playerName);
             if (callback != null) {
-                Bukkit.getScheduler().runTask(plugin, callback);
+                AxsScheduler.runTask(plugin, callback);
             }
         });
     }

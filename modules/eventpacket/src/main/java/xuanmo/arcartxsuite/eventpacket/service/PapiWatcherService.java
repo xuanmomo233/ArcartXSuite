@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.eventpacket.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.math.BigDecimal;
 import java.sql.SQLException;
@@ -69,7 +70,7 @@ public final class PapiWatcherService {
 
     public void start() {
         shutdown();
-        task = Bukkit.getScheduler().runTaskTimer(
+        task = AxsScheduler.runTaskTimer(
             plugin,
             this::tick,
             configuration.refreshIntervalTicks(),

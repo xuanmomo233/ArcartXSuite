@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.lottery.packet;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -72,7 +73,7 @@ public class LotteryPacketHandler implements ClientPacketHandler {
             }
         };
         if (Bukkit.isPrimaryThread()) operation.run();
-        else Bukkit.getScheduler().runTask(plugin, operation);
+        else AxsScheduler.runTask(plugin, operation);
         return true;
     }
 

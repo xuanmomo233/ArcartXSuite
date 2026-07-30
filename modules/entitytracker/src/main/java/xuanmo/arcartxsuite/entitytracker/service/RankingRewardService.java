@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.entitytracker.service;
 
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRankRewardDefinition;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRankingRewardsSettings;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDefinition;
@@ -198,7 +199,7 @@ public class RankingRewardService {
         }
 
         try {
-            return Bukkit.getScheduler().callSyncMethod(plugin, () ->
+            return AxsScheduler.callSyncMethod(plugin, () ->
                 actionExecutor.executeActions(
                     rewardDef.actions(), target, variables, rewardSettings.inventoryFullStrategy()
                 )

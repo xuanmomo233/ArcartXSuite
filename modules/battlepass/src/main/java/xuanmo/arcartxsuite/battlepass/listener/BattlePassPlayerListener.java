@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.battlepass.listener;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
@@ -29,7 +30,7 @@ public final class BattlePassPlayerListener implements Listener {
         BattlePassService service = serviceSupplier.get();
         if (service == null) return;
         Player player = event.getPlayer();
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        AxsScheduler.runAsync(plugin, () -> {
             if (player.isOnline()) {
                 service.preload(player);
             }
@@ -41,6 +42,6 @@ public final class BattlePassPlayerListener implements Listener {
         BattlePassService service = serviceSupplier.get();
         if (service == null) return;
         java.util.UUID uuid = event.getPlayer().getUniqueId();
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> service.handleQuit(uuid));
+        AxsScheduler.runAsync(plugin, () -> service.handleQuit(uuid));
     }
 }

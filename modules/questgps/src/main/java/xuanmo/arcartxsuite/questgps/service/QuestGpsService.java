@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.questgps.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import ink.ptms.chemdah.api.ChemdahAPI;
 import ink.ptms.chemdah.core.PlayerProfile;
@@ -287,7 +288,7 @@ public final class QuestGpsService implements Listener {
             return;
         }
 
-        template.acceptTo(profile).whenComplete((result, throwable) -> Bukkit.getScheduler().runTask(plugin, () -> {
+        template.acceptTo(profile).whenComplete((result, throwable) -> AxsScheduler.runTask(plugin, () -> {
             if (throwable != null) {
                 player.sendMessage(PREFIX + message("player.accept-failed"));
                 this.logger.log(Level.WARNING, "QuestGPS: 接取任务失败: " + definition.id(), throwable);
@@ -331,7 +332,7 @@ public final class QuestGpsService implements Listener {
             return;
         }
 
-        activeQuest.failQuestFuture().whenComplete((success, throwable) -> Bukkit.getScheduler().runTask(plugin, () -> {
+        activeQuest.failQuestFuture().whenComplete((success, throwable) -> AxsScheduler.runTask(plugin, () -> {
             if (throwable != null || success == null || !success) {
                 player.sendMessage(PREFIX + message("player.abandon-failed"));
                 if (throwable != null) {

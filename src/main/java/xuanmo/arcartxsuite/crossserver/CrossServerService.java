@@ -13,6 +13,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import org.bukkit.Bukkit;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.messaging.PluginMessageListener;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -270,7 +271,7 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
                 envelope.messageId(),
                 envelope.payload()
             );
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            AxsScheduler.runTask(plugin, () -> {
                 if (!registration.closed) {
                     registration.consumer.accept(delivery);
                 }
@@ -318,10 +319,37 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
             );
             return;
         }
-        Player carrier = Bukkit.getOnlinePlayers().stream().findFirst().orElse(null);
-        if (carrier == null) {
+        byte[] message = buildProxyMessage(payloadBytes);
+        if (message == null) {
             return;
         }
+        // 尝试最多 3 个不同的在线玩家作为消息载体
+        Player[] players = Bukkit.getOnlinePlayers().toArray(new Player[0]);
+        if (players.length == 0) {
+            return;
+        }
+        int maxAttempts = Math.min(3, players.length);
+        for (int i = 0; i < maxAttempts; i++) {
+            Player carrier = players[i];
+            if (!carrier.isOnline()) {
+                continue;
+            }
+            try {
+                carrier.sendPluginMessage(plugin, BUNGEE_CHANNEL, message);
+                return;
+            } catch (Exception exception) {
+                xuanmo.arcartxsuite.module.AxsLog.logger().warning(
+                    "[CrossServer] Proxy 发布失败(尝试 " + (i + 1) + "/" + maxAttempts
+                        + " 玩家=" + carrier.getName() + "): " + exception.getMessage()
+                );
+            }
+        }
+        xuanmo.arcartxsuite.module.AxsLog.logger().warning(
+            "[CrossServer] 模块 " + moduleId + " Proxy 发布失败：所有候选玩家均发送失败。"
+        );
+    }
+
+    private byte[] buildProxyMessage(byte[] payloadBytes) {
         try {
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
             try (DataOutputStream output = new DataOutputStream(buffer)) {
@@ -331,9 +359,12 @@ public final class CrossServerService implements CrossServerAPI, PluginMessageLi
                 output.writeShort(payloadBytes.length);
                 output.write(payloadBytes);
             }
-            carrier.sendPluginMessage(plugin, BUNGEE_CHANNEL, buffer.toByteArray());
+            return buffer.toByteArray();
         } catch (Exception exception) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning("[CrossServer] Proxy 发布失败: " + exception.getMessage());
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning(
+                "[CrossServer] Proxy 消息构建失败: " + exception.getMessage()
+            );
+            return null;
         }
     }
 

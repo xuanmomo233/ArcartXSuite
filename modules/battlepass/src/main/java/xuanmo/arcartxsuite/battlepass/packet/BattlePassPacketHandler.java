@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.battlepass.packet;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -108,7 +109,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         if (packetBridge == null) return;
         packetBridge.openUi(player, mainUiId);
         actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        AxsScheduler.runTaskLater(plugin, () -> {
             if (player.isOnline()) {
                 pushMainData(player);
             }
@@ -118,7 +119,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     public void openTasks(Player player) {
         if (packetBridge == null) return;
         packetBridge.openUi(player, tasksUiId);
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        AxsScheduler.runTaskLater(plugin, () -> {
             if (player.isOnline()) {
                 pushTasksData(player);
             }
@@ -129,7 +130,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         if (packetBridge == null) return;
         packetBridge.openUi(player, mainUiId);
         actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+        AxsScheduler.runTaskLater(plugin, () -> {
             if (player.isOnline()) {
                 pushMainData(player);
                 pushRewardsData(player);

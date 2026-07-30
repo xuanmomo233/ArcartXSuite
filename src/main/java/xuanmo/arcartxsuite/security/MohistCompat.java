@@ -25,25 +25,27 @@ public final class MohistCompat {
 
     private static final Logger LOGGER = Logger.getLogger("AXS-MohistCompat");
 
-    private static volatile Boolean mohistDetected;
+    private static volatile Boolean hybridDetected;
 
     private MohistCompat() {}
 
     /**
-     * 检测当前是否运行在 Mohist 服务端。
+     * 检测当前是否运行在混合端（Mohist/Arclight/CatServer/Magma）。
+     * 这些混合端存在类似的 ClassLoader 问题，资源加载回退策略均适用。
      */
     public static boolean isMohist() {
-        if (mohistDetected == null) {
+        if (hybridDetected == null) {
             synchronized (MohistCompat.class) {
-                if (mohistDetected == null) {
-                    mohistDetected = detectMohist();
+                if (hybridDetected == null) {
+                    hybridDetected = detectHybrid();
                 }
             }
         }
-        return mohistDetected;
+        return hybridDetected;
     }
 
-    private static boolean detectMohist() {
+    private static boolean detectHybrid() {
+        // Mohist
         try {
             Class.forName("com.mohistmc.MohistMC");
             return true;
@@ -52,8 +54,32 @@ public final class MohistCompat {
             Class.forName("com.mohistmc.api.ServerAPI");
             return true;
         } catch (ClassNotFoundException ignored) {}
+        // Arclight
+        try {
+            Class.forName("io.izzel.arclight.ArclightLauncher");
+            return true;
+        } catch (ClassNotFoundException ignored) {}
+        try {
+            Class.forName("io.izzel.arclight.server.ArclightServer");
+            return true;
+        } catch (ClassNotFoundException ignored) {}
+        // CatServer
+        try {
+            Class.forName("catserver.server.CatServerLaunch");
+            return true;
+        } catch (ClassNotFoundException ignored) {}
+        // Magma
+        try {
+            Class.forName("org.magmafoundation.magma.MagmaLaunch");
+            return true;
+        } catch (ClassNotFoundException ignored) {}
         String version = org.bukkit.Bukkit.getVersion();
-        return version != null && version.toLowerCase().contains("mohist");
+        if (version != null) {
+            String lower = version.toLowerCase();
+            return lower.contains("mohist") || lower.contains("arclight")
+                || lower.contains("catserver") || lower.contains("magma");
+        }
+        return false;
     }
 
     /**

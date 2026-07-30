@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.title.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.io.IOException;
@@ -174,7 +175,7 @@ public class TitleService {
             preloadPlayer(player);
         }
 
-        expirationTask = Bukkit.getScheduler().runTaskTimer(
+        expirationTask = AxsScheduler.runTaskTimer(
             plugin,
             this::tickExpirationCleanup,
             configuration.expirationCleanupIntervalTicks(),
@@ -233,12 +234,12 @@ public class TitleService {
         if (player == null) {
             return;
         }
-        ensureLoadedAsync(player.getUniqueId()).whenComplete((state, throwable) -> Bukkit.getScheduler().runTask(plugin, () -> {
+        ensureLoadedAsync(player.getUniqueId()).whenComplete((state, throwable) -> AxsScheduler.runTask(plugin, () -> {
             if (throwable != null || !player.isOnline()) {
                 return;
             }
             syncExternalAttributes(player, state);
-            Bukkit.getScheduler().runTaskLater(
+            AxsScheduler.runTaskLater(
                 plugin,
                 () -> {
                     if (!player.isOnline()) {
@@ -756,7 +757,7 @@ public class TitleService {
     }
 
     private void withLoadedState(Player player, Consumer<PlayerTitleState> consumer, Consumer<Throwable> errorConsumer) {
-        ensureLoadedAsync(player.getUniqueId()).whenComplete((state, throwable) -> Bukkit.getScheduler().runTask(plugin, () -> {
+        ensureLoadedAsync(player.getUniqueId()).whenComplete((state, throwable) -> AxsScheduler.runTask(plugin, () -> {
             if (throwable != null) {
                 errorConsumer.accept(throwable);
                 return;
@@ -856,7 +857,7 @@ public class TitleService {
         if (player == null || !player.isOnline()) {
             return;
         }
-        Bukkit.getScheduler().runTask(plugin, () -> refreshMenu(player));
+        AxsScheduler.runTask(plugin, () -> refreshMenu(player));
     }
 
     private void syncExternalAttributes(Player player, PlayerTitleState state) {
@@ -882,7 +883,7 @@ public class TitleService {
         if (player == null || !player.isOnline()) {
             return;
         }
-        Bukkit.getScheduler().runTask(
+        AxsScheduler.runTask(
             plugin,
             () -> withLoadedState(player, state -> syncExternalAttributes(player, state), exception -> { })
         );

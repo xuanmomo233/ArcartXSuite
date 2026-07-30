@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.essentials.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -60,14 +61,14 @@ public final class PlayerManagementService implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         int timeout = config.player().afkTimeout();
         if (timeout > 0) {
-            afkTaskId = Bukkit.getScheduler().runTaskTimer(plugin, this::checkAfk, 200L, 200L).getTaskId();
+            afkTaskId = AxsScheduler.runTaskTimer(plugin, this::checkAfk, 200L, 200L).getTaskId();
         }
     }
 
     public void shutdown() {
         HandlerList.unregisterAll(this);
         if (afkTaskId != -1) {
-            Bukkit.getScheduler().cancelTask(afkTaskId);
+            AxsScheduler.cancelTask(afkTaskId);
             afkTaskId = -1;
         }
         flyEnabled.clear();

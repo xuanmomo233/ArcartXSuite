@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.onlinerewards.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.io.IOException;
@@ -178,7 +179,7 @@ public class OnlineRewardsService implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         refreshLeaderboardSnapshots();
         scheduleSyncForOnlinePlayers();
-        minuteTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickOnlinePlayers, 20L, 1200L);
+        minuteTask = AxsScheduler.runTaskTimer(plugin, this::tickOnlinePlayers, 20L, 1200L);
         crossServerChannel = crossServer.openChannel(
             "onlinerewards",
             configuration.crossServer(),
@@ -217,7 +218,7 @@ public class OnlineRewardsService implements Listener {
         if (player == null || !player.isOnline()) {
             return;
         }
-        Bukkit.getScheduler().runTaskLater(plugin, () -> syncPlayer(player), configuration.clientSyncDelayTicks());
+        AxsScheduler.runTaskLater(plugin, () -> syncPlayer(player), configuration.clientSyncDelayTicks());
     }
 
     public int cachedPlayerCount() {
@@ -962,7 +963,7 @@ public class OnlineRewardsService implements Listener {
         String rawUuid = message.substring("refresh:".length()).trim();
         try {
             UUID playerUuid = UUID.fromString(rawUuid);
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            AxsScheduler.runTask(plugin, () -> {
                 Player player = Bukkit.getPlayer(playerUuid);
                 if (player == null || !player.isOnline()) {
                     return;

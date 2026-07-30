@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.eventpacket.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,7 +33,7 @@ public final class ScheduledCommandService {
             if (!task.enabled() || task.intervalSeconds() <= 0) continue;
             long intervalTicks = task.intervalSeconds() * 20L;
             long delayTicks = task.delaySeconds() * 20L;
-            BukkitTask bt = Bukkit.getScheduler().runTaskTimer(plugin, () -> executeTask(task), delayTicks, intervalTicks);
+            BukkitTask bt = AxsScheduler.runTaskTimer(plugin, () -> executeTask(task), delayTicks, intervalTicks);
             runningTasks.add(bt);
         }
         if (!runningTasks.isEmpty()) {

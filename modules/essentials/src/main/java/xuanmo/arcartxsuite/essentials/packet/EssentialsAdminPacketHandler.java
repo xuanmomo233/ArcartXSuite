@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.essentials.packet;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -91,7 +92,7 @@ public final class EssentialsAdminPacketHandler implements ClientPacketHandler {
                 if (target != null) {
                     String reason = hasValue(data, 2) ? data.get(2) : "被管理员踢出";
                     target.kickPlayer(ChatColor.RED + reason);
-                    Bukkit.getScheduler().runTaskLater(plugin, () -> pushAdminData(player, "players"), 5L);
+                    AxsScheduler.runTaskLater(plugin, () -> pushAdminData(player, "players"), 5L);
                 }
             }
             case "ban" -> {

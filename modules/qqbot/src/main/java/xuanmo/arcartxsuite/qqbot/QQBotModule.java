@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.qqbot;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.util.List;
@@ -185,7 +186,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         final OneBotClient obc = oneBotClient;
         final String wsUrl = configuration.onebot().wsUrl();
         final boolean autoStartSnowLuma = configuration.onebot().snowluma().autoStart();
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        AxsScheduler.runAsync(plugin, () -> {
             if (closed) return;                       // 已关闭：不再拉起进程
             slm.init();
             boolean running = slm.getStatus() == xuanmo.arcartxsuite.qqbot.process.SnowLumaProcessManager.Status.RUNNING;
@@ -310,7 +311,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         service.setGroupMessageListener((nick, message, groupId) -> {
             uiSvc.cacheGroupMessage(nick, message, groupId);
             // 广播通知到所有在线玩家
-            Bukkit.getScheduler().runTask(plugin, () ->
+            AxsScheduler.runTask(plugin, () ->
                 uiSvc.broadcastNotification(nick, message));
         });
 
@@ -376,7 +377,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
 
         // 20. 红包过期退款定时器（每小时检查一次）
         if (configuration.signin().enabled()) {
-            Bukkit.getScheduler().runTaskTimerAsynchronously(plugin,
+            AxsScheduler.runAsyncTimer(plugin,
                 () -> signInService.refundExpiredRedPackets(), 72000L, 72000L);
         }
     }

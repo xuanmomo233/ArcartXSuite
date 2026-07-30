@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.battlepass.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -67,8 +68,8 @@ public final class BattlePassService {
     public void start() {
         active = true;
         taskEngine.start(eventBusProvider);
-        saveTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::flushDirtyProgress, 1200L, 1200L);
-        resetTask = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::checkResets, 6000L, 6000L);
+        saveTask = AxsScheduler.runAsyncTimer(plugin, this::flushDirtyProgress, 1200L, 1200L);
+        resetTask = AxsScheduler.runAsyncTimer(plugin, this::checkResets, 6000L, 6000L);
     }
 
     public void shutdown() {
@@ -271,7 +272,7 @@ public final class BattlePassService {
 
     /** 领取成功后立即异步落盘，缩小崩服重复领取窗口。 */
     private void persistClaimAsync(UUID uuid, String rewardId) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        AxsScheduler.runAsync(plugin, () -> {
             try {
                 repository.saveClaimedReward(uuid, configuration.season().seasonId(), rewardId);
             } catch (SQLException e) {
@@ -375,7 +376,7 @@ public final class BattlePassService {
             boolean weeklyNeedsReset = progress.lastWeeklyResetDate() == null
                 || ChronoUnit.DAYS.between(progress.lastWeeklyResetDate(), today) >= 7;
             if (dailyNeedsReset || weeklyNeedsReset) {
-                Bukkit.getScheduler().runTask(plugin, () -> performReset(uuid, dailyNeedsReset, weeklyNeedsReset));
+                AxsScheduler.runTask(plugin, () -> performReset(uuid, dailyNeedsReset, weeklyNeedsReset));
             }
         }
     }

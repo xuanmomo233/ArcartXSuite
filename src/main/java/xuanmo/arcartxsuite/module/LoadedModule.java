@@ -71,6 +71,14 @@ final class LoadedModule {
         return moduleSeed == null ? null : moduleSeed.clone();
     }
 
+    byte[] jarBytesDirect() {
+        return jarBytes;
+    }
+
+    byte[] moduleSeedDirect() {
+        return moduleSeed;
+    }
+
     boolean isEnabled() {
         return enabled;
     }

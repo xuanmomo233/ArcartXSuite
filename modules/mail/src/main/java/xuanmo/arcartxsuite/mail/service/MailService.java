@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.mail.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.io.File;
 import java.io.IOException;
@@ -282,8 +283,7 @@ public final class MailService implements Listener {
             touchProfile(player, false);
         }
 
-        cleanupTask = Bukkit.getScheduler()
-            .runTaskTimer(plugin, this::runCleanup, configuration.retention().cleanupIntervalTicks(), configuration.retention().cleanupIntervalTicks());
+        cleanupTask = AxsScheduler.runTaskTimer(plugin, this::runCleanup, configuration.retention().cleanupIntervalTicks(), configuration.retention().cleanupIntervalTicks());
         crossServerChannel = crossServer.openChannel(
             "mail",
             configuration.crossServer(),
@@ -449,7 +449,7 @@ public final class MailService implements Listener {
         adminEditSessions.put(player.getUniqueId(), session);
         player.openInventory(inventory);
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        AxsScheduler.runTask(plugin, () -> {
             if (player.isOnline()) {
                 sendAdminPresetList(player);
             }
@@ -566,7 +566,7 @@ public final class MailService implements Listener {
         composeSessions.put(player.getUniqueId(), session);
         player.openInventory(inventory);
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        AxsScheduler.runTask(plugin, () -> {
             if (player.isOnline()) {
                 bridge.sendPacket(
                     player,
@@ -1425,7 +1425,7 @@ public final class MailService implements Listener {
         String rawUuid = message.substring("refresh:".length()).trim();
         try {
             UUID playerUuid = UUID.fromString(rawUuid);
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            AxsScheduler.runTask(plugin, () -> {
                 Player player = Bukkit.getPlayer(playerUuid);
                 if (player != null && player.isOnline()) {
                     refreshPlayerViews(player, false);
@@ -1873,7 +1873,7 @@ public final class MailService implements Listener {
             composeSessions.remove(player.getUniqueId());
             composePasswordPanels.remove(player.getUniqueId());
             player.closeInventory();
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            AxsScheduler.runTask(plugin, () -> {
                 if (player.isOnline()) {
                     openInbox(player);
                 }
@@ -2323,7 +2323,7 @@ public final class MailService implements Listener {
     }
 
     private void scheduleComposeQuoteRefresh(Player player) {
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        AxsScheduler.runTask(plugin, () -> {
             if (player == null || !player.isOnline()) {
                 return;
             }
@@ -2836,7 +2836,7 @@ public final class MailService implements Listener {
     }
 
     private void scheduleAdminAttachmentCountRefresh(Player player) {
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        AxsScheduler.runTask(plugin, () -> {
             if (player == null || !player.isOnline()) return;
             AdminEditSession session = adminEditSessions.get(player.getUniqueId());
             if (session == null) return;

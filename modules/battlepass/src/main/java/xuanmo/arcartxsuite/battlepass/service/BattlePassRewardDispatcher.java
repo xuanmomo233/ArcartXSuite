@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.battlepass.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.Map;
 import java.util.logging.Logger;
@@ -32,7 +33,7 @@ public final class BattlePassRewardDispatcher {
     private void dispatchCommand(Player player, String command) {
         if (command == null || command.isEmpty()) return;
         String formatted = command.replace("{player}", player.getName());
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        AxsScheduler.runTask(plugin, () -> {
             try {
                 Bukkit.dispatchCommand(Bukkit.getConsoleSender(), formatted);
             } catch (Exception e) {

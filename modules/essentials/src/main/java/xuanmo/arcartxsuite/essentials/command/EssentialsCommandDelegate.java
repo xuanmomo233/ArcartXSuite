@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.essentials.command;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -529,7 +530,7 @@ public final class EssentialsCommandDelegate {
             });
         seat.addPassenger(player);
         player.sendMessage(prefix() + configuration.messages().sitDown());
-        BukkitTask monitorTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+        BukkitTask monitorTask = AxsScheduler.runTaskTimer(plugin, () -> {
             if (!seat.isValid() || seat.getPassengers().isEmpty()) {
                 seat.remove(); cancelPoseTask(player.getUniqueId());
             }
@@ -546,7 +547,7 @@ public final class EssentialsCommandDelegate {
             });
         bed.addPassenger(player);
         player.sendMessage(prefix() + configuration.messages().layDown());
-        BukkitTask monitorTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+        BukkitTask monitorTask = AxsScheduler.runTaskTimer(plugin, () -> {
             if (!bed.isValid() || bed.getPassengers().isEmpty()) {
                 bed.remove(); cancelPoseTask(player.getUniqueId());
             }

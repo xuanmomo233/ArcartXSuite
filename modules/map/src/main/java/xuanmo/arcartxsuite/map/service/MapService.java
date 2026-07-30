@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.map.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -194,7 +195,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             return;
         }
         long delay = configuration.join().showHudDelayTicks();
-        Bukkit.getScheduler().runTaskLater(
+        AxsScheduler.runTaskLater(
             plugin,
             () -> {
                 if (player.isOnline()) {

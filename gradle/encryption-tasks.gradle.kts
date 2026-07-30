@@ -58,7 +58,9 @@ tasks.register<Exec>("encryptCoreJar") {
             "xuanmo.arcartxsuite.security.NativeBridge," +
             "xuanmo.arcartxsuite.security.protection.ProtectionInit," +
             "xuanmo.arcartxsuite.security.protection.ProtectedClassLoader," +
-            "xuanmo.arcartxsuite.security.protection.JvmAntiDebug",
+            "xuanmo.arcartxsuite.security.protection.JvmAntiDebug," +
+            "xuanmo.arcartxsuite.security.protection.ProtectionEnvironment," +
+            "xuanmo.arcartxsuite.util.HashUtils",
         // 仅加密插件自身代码；shaded 第三方库保持明文，api/auth 排除（模块依赖 / 独立进程入口）
         "--encrypt-prefixes", "xuanmo.arcartxsuite.",
         "--keep-prefixes", "xuanmo.arcartxsuite.api.,xuanmo.arcartxsuite.auth.",

@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.prop.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.List;
 import java.util.Locale;
@@ -62,7 +63,7 @@ public final class PropSymphonyService {
             applied = true;
 
             long removeDelayTicks = Math.max(1L, durationSeconds) * 20L;
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            AxsScheduler.runTaskLater(plugin, () -> {
                 ConcurrentMap<String, String> current = activeModifiers.get(playerUuid);
                 if (current != null && current.remove(sourceKey) != null) {
                     Player online = Bukkit.getPlayer(playerUuid);

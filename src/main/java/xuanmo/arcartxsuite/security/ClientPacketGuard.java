@@ -11,6 +11,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import xuanmo.arcartxsuite.api.security.ClientPacketGuardMode;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 
@@ -38,7 +39,7 @@ public final class ClientPacketGuard implements PacketGuardAPI {
         if (plugin == null || !configuration.enabled()) {
             return;
         }
-        cleanupTask = Bukkit.getScheduler().runTaskTimer(
+        cleanupTask = AxsScheduler.runTaskTimer(
             plugin,
             this::cleanup,
             configuration.cleanupIntervalTicks(),

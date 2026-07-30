@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.qqbot.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.List;
 import java.util.logging.Logger;
@@ -48,7 +49,7 @@ public final class QQBotMonitorService {
         if (!mc.enabled()) return;
         long intervalTicks = Math.max(20L, mc.checkIntervalSeconds() * 20L);
         // TPS 读取在主线程更安全；内存读取无线程要求
-        task = Bukkit.getScheduler().runTaskTimer(plugin, this::check, intervalTicks, intervalTicks);
+        task = AxsScheduler.runTaskTimer(plugin, this::check, intervalTicks, intervalTicks);
         logger.info("[QQBot] 服务器监控告警已启用 | TPS阈值=" + mc.tpsThreshold()
             + " | 内存阈值=" + mc.memoryThresholdPercent() + "%"
             + " | 检测间隔=" + mc.checkIntervalSeconds() + "s");

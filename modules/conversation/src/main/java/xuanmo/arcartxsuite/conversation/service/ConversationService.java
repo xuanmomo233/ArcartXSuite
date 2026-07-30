@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.conversation.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import ink.ptms.adyeshach.core.entity.EntityInstance;
 import ink.ptms.chemdah.api.ChemdahAPI;
@@ -386,7 +387,7 @@ public final class ConversationService implements Listener {
         keybindsRegistered = true;
         keyPressEventReady = true;
 
-        scanTask = Bukkit.getScheduler().runTaskTimer(
+        scanTask = AxsScheduler.runTaskTimer(
             plugin,
             this::scanNearbyCandidates,
             1L,
@@ -512,7 +513,7 @@ public final class ConversationService implements Listener {
             return;
         }
         try {
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            AxsScheduler.runTask(plugin, () -> {
                 if (plugin.isEnabled()) {
                     task.run();
                 }
@@ -1463,7 +1464,7 @@ public final class ConversationService implements Listener {
                 + " 次尝试后仍有 " + stillPending.size() + " 个 NPC 未找到，将在 "
                 + NPC_APPEARANCE_RETRY_INTERVAL_TICKS + " tick 后重试。");
         }
-        npcAppearanceRetryTask = Bukkit.getScheduler().runTaskLater(
+        npcAppearanceRetryTask = AxsScheduler.runTaskLater(
             plugin,
             () -> applyNpcAppearancesAttempt(stillPending, attempt + 1),
             NPC_APPEARANCE_RETRY_INTERVAL_TICKS

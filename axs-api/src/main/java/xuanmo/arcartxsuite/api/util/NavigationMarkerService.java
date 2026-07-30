@@ -86,7 +86,7 @@ public final class NavigationMarkerService {
         pathfinder = new NavigationPathfinder(config.pathMaxIterations());
 
         int ticks = Math.max(1, config.pathUpdateTicks());
-        updateTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickUpdate, ticks, ticks);
+        updateTask = AxsScheduler.runTaskTimer(plugin, this::tickUpdate, ticks, ticks);
 
         logger.info("导航标记已启动: model=" + config.modelId() + " scale=" + config.scale()
             + " interval=" + config.pathInterval() + " maxMarkers=" + config.pathMaxMarkers()
@@ -134,7 +134,7 @@ public final class NavigationMarkerService {
                 + " goal=(" + x + "," + y + "," + z + ")");
         }
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        AxsScheduler.runTask(plugin, () -> {
             if (!player.isOnline()) return;
             computeAndApplyPath(player, state);
         });
@@ -177,7 +177,7 @@ public final class NavigationMarkerService {
             if (state.cancelled) continue;
             final Player p = player;
             final PlayerPathState s = state;
-            Bukkit.getScheduler().runTask(plugin, () -> {
+            AxsScheduler.runTask(plugin, () -> {
                 if (p.isOnline() && !s.cancelled) {
                     computeAndApplyPath(p, s);
                 }
@@ -201,13 +201,13 @@ public final class NavigationMarkerService {
 
         if (playerLoc.getWorld() == null || goal.getWorld() == null
             || !playerLoc.getWorld().equals(goal.getWorld())) {
-            Bukkit.getScheduler().runTask(plugin, () -> removeExcessMarkers(player, state, 0));
+            AxsScheduler.runTask(plugin, () -> removeExcessMarkers(player, state, 0));
             return;
         }
 
         double distance = playerLoc.distance(goal);
         if (distance > config.pathMaxDistance()) {
-            Bukkit.getScheduler().runTask(plugin, () -> removeExcessMarkers(player, state, 0));
+            AxsScheduler.runTask(plugin, () -> removeExcessMarkers(player, state, 0));
             return;
         }
 
@@ -231,7 +231,7 @@ public final class NavigationMarkerService {
             finalPoints.add(loc);
         }
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        AxsScheduler.runTask(plugin, () -> {
             if (!player.isOnline() || state.cancelled) return;
             applyPathMarkers(player, state, finalPoints);
         });
@@ -255,7 +255,7 @@ public final class NavigationMarkerService {
                 state.markerEntities.add(entity);
 
                 final Object ent = entity;
-                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                AxsScheduler.runTaskLater(plugin, () -> {
                     if (!player.isOnline()) return;
                     npcBridge.applyModelForPlayer(player, ent, config.modelId(), config.scale());
                     if (config.animation() != null && !config.animation().isBlank()) {

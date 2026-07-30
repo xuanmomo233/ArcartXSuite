@@ -1,4 +1,5 @@
 package xuanmo.arcartxsuite.menu.service;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -45,7 +46,7 @@ public final class MenuActionExecutor {
                 if (command.isBlank()) {
                     yield false;
                 }
-                Bukkit.getScheduler().runTask(plugin, () -> player.performCommand(command));
+                AxsScheduler.runTask(plugin, () -> player.performCommand(command));
                 yield menuService.configuration().settings().closeOnAction();
             }
             case PLAYER_OP -> {
@@ -53,7 +54,7 @@ public final class MenuActionExecutor {
                 if (command.isBlank()) {
                     yield false;
                 }
-                Bukkit.getScheduler().runTask(
+                AxsScheduler.runTask(
                 plugin,
                 () -> TemporaryOpExecutor.execute(player, command)
             );
@@ -64,7 +65,7 @@ public final class MenuActionExecutor {
                 if (command.isBlank()) {
                     yield false;
                 }
-                Bukkit.getScheduler().runTask(plugin, () -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command));
+                AxsScheduler.runTask(plugin, () -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command));
                 yield menuService.configuration().settings().closeOnAction();
             }
             case MESSAGE -> {
@@ -78,7 +79,7 @@ public final class MenuActionExecutor {
                 if (menuId.isBlank()) {
                     yield false;
                 }
-                Bukkit.getScheduler().runTask(plugin, () -> menuService.openMenu(player, menuId, 0));
+                AxsScheduler.runTask(plugin, () -> menuService.openMenu(player, menuId, 0));
                 yield false;
             }
             case CLOSE -> {
