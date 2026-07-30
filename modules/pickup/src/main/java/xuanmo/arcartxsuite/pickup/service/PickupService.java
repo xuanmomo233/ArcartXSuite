@@ -4,11 +4,11 @@ import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -42,11 +42,11 @@ public final class PickupService implements Listener {
     private final PacketBridgeAPI bridge;
     private final ItemBridgeAPI itemStackBridge;
     private final String uiId;
-    private final Set<UUID> openedPlayers = new HashSet<>();
-    private final Set<UUID> openingPlayers = new HashSet<>();
-    private final Map<UUID, Deque<Map<String, Object>>> pendingPickups = new HashMap<>();
+    private final Set<UUID> openedPlayers = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> openingPlayers = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, Deque<Map<String, Object>>> pendingPickups = new ConcurrentHashMap<>();
     /** 手动关闭拾取通知的玩家集合 */
-    private final Set<UUID> disabledPlayers = new HashSet<>();
+    private final Set<UUID> disabledPlayers = ConcurrentHashMap.newKeySet();
     private Supplier<EventBusCapability> eventBusProvider;
     private boolean active;
 

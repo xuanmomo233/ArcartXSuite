@@ -8,6 +8,6 @@ depends: []
 softdepends:
   - chat
 external-depends:
+  - PlaceholderAPI
 
 external-softdepends:
-  - PlaceholderAPI

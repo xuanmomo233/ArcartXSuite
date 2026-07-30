@@ -1,5 +1,7 @@
 package xuanmo.arcartxsuite.combateffect.combo;
 import xuanmo.arcartxsuite.api.util.AxsScheduler;
+import xuanmo.arcartxsuite.combateffect.chronos.ChronosHook;
+import xuanmo.arcartxsuite.combateffect.chronos.ChronosHookFactory;
 
 import java.util.Map;
 import java.util.UUID;
@@ -8,7 +10,6 @@ import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
@@ -17,8 +18,6 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
-import priv.seventeen.artist.arcartx.chronos.api.ChronosAPI;
-import priv.seventeen.artist.arcartx.chronos.api.event.PlayerEnterStateEvent;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
@@ -52,10 +51,10 @@ public final class ComboTrackerService implements Listener {
 
     private Listener quitCleanupListener;
 
-    // Chronos
+    // Chronos（通过 ChronosHook 隔离，Chronos 未装时 chronosHook 为 null）
     private boolean chronosHooked;
+    private ChronosHook chronosHook;
     private Listener chronosListener;
-    private ChronosAPI chronosApi;
 
     public ComboTrackerService(
         JavaPlugin plugin,
@@ -263,55 +262,20 @@ public final class ComboTrackerService implements Listener {
         }
     }
 
-    // ========== Chronos 集成 ==========
+    // ========== Chronos 集成（通过 ChronosHook 隔离）==========
 
     private boolean initChronos() {
-        try {
-            org.bukkit.plugin.Plugin chronos = Bukkit.getPluginManager().getPlugin("Chronos");
-            if (chronos == null || !chronos.isEnabled()) {
-                return false;
-            }
-            chronosApi = ChronosAPI.getInstanceAPI();
-            if (chronosApi == null) {
-                return false;
-            }
-
-            // 注册 PlayerEnterStateEvent 监听
-            chronosListener = new Listener() {};
-            Bukkit.getPluginManager().registerEvent(
-                PlayerEnterStateEvent.class,
-                chronosListener,
-                EventPriority.MONITOR,
-                (listener, event) -> handleChronosStateEnter(event),
-                plugin,
-                true
-            );
-            return true;
-        } catch (Exception | LinkageError exception) {
-            if (config.debug()) {
-                logger.warning("ComboTracker Chronos 初始化失败: " + exception.getMessage());
-            }
+        // 通过工厂延迟加载 ChronosHook，Chronos 未装时返回 null（不触发 ChronosAPI 类加载）
+        chronosHook = ChronosHookFactory.tryCreate(plugin, logger, config.debug());
+        if (chronosHook == null) {
             return false;
         }
-    }
-
-    private void handleChronosStateEnter(Event event) {
-        if (!(event instanceof PlayerEnterStateEvent enterEvent)) {
-            return;
-        }
-        try {
-            Player player = enterEvent.getPlayer();
-            // 检查状态组是否在配置的 combo 组中
-            String group = chronosApi.getPlayerStateGroupId(player);
-            if (group == null || !config.chronosGroups().contains(group)) {
-                return;
-            }
-            incrementCombo(player);
-        } catch (Exception | LinkageError exception) {
-            if (config.debug()) {
-                logger.warning("ComboTracker 处理 Chronos 事件失败: " + exception.getMessage());
-            }
-        }
+        // 注册 combo 监听：状态组匹配时累加 combo
+        chronosListener = chronosHook.registerComboListener(
+            config.chronosGroups(),
+            player -> incrementCombo(player)
+        );
+        return true;
     }
 
     // ========== 内部类 ==========

@@ -108,6 +108,7 @@ final class AttributeDamageDispatcher {
         }
         registeredListeners.clear();
         healListeners.clear();
+        listeners.clear();
     }
 
     // ─── AttributePlus ─────────────────────────────────────────

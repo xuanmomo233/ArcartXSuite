@@ -8,6 +8,6 @@ depends: []
 softdepends: []
 external-depends:
   - Chemdah
-external-softdepends:
   - Adyeshach
+external-softdepends:
 

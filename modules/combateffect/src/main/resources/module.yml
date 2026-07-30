@@ -7,6 +7,8 @@ api-version: 1.0
 depends: []
 softdepends: []
 external-depends:
+  - ArcartX
 
 external-softdepends:
+  - ArcartX_Chronos_Plugin
 

@@ -15,6 +15,7 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.lang.reflect.Field;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -25,6 +26,7 @@ import org.bukkit.entity.Player;
 public final class TemporaryOpExecutor {
 
     private static final Object LEDGER_LOCK = new Object();
+    private static final ConcurrentHashMap<UUID, Object> PLAYER_LOCKS = new ConcurrentHashMap<>();
     private static final Set<String> BLOCKED_COMMANDS = Set.of(
         "op", "deop", "stop", "restart", "reload", "rl", "whitelist",
         "ban", "ban-ip", "pardon", "kick", "pex", "lp", "luckperms",
@@ -105,29 +107,34 @@ public final class TemporaryOpExecutor {
             return Bukkit.dispatchCommand(player, normalizedCommand);
         }
 
-        boolean tracked = trackBeforeElevation(player);
-        if (!tracked && initialized) {
-            return false;
-        }
-        boolean usedSilentOp = setOpSilently(player, true);
-        try {
-            boolean result = Bukkit.dispatchCommand(player, normalizedCommand);
-            if (initialized) {
-                logger.fine("临时 OP: player=" + player.getName() + " command=" + sanitizeForLog(normalizedCommand));
+        // 玩家级锁：防止多线程同时为同一玩家执行临时 OP 导致竞态
+        // （线程A恢复op=false时线程B还在以OP权限执行命令）
+        Object playerLock = PLAYER_LOCKS.computeIfAbsent(player.getUniqueId(), k -> new Object());
+        synchronized (playerLock) {
+            boolean tracked = trackBeforeElevation(player);
+            if (!tracked && initialized) {
+                return false;
             }
-            return result;
-        } finally {
-            boolean restored = false;
+            boolean usedSilentOp = setOpSilently(player, true);
             try {
-                setOpSilently(player, false, usedSilentOp);
-                restored = true;
-            } catch (RuntimeException exception) {
-                logger.log(Level.WARNING,
-                    "恢复临时 OP 失败，台账将保留以便下次启动清理: " + player.getName(),
-                    exception);
-            }
-            if (tracked && restored) {
-                untrackAfterRestoration(player.getUniqueId());
+                boolean result = Bukkit.dispatchCommand(player, normalizedCommand);
+                if (initialized) {
+                    logger.fine("临时 OP: player=" + player.getName() + " command=" + sanitizeForLog(normalizedCommand));
+                }
+                return result;
+            } finally {
+                boolean restored = false;
+                try {
+                    setOpSilently(player, false, usedSilentOp);
+                    restored = true;
+                } catch (RuntimeException exception) {
+                    logger.log(Level.WARNING,
+                        "恢复临时 OP 失败，台账将保留以便下次启动清理: " + player.getName(),
+                        exception);
+                }
+                if (tracked && restored) {
+                    untrackAfterRestoration(player.getUniqueId());
+                }
             }
         }
     }
@@ -158,11 +165,9 @@ public final class TemporaryOpExecutor {
                 opField.setBoolean(player, value);
                 player.recalculatePermissions();
                 if (player.isOp() == value) return true;
-                silentOpAvailable = false;
-                logger.fine("TemporaryOpExecutor: Silent OP 验证失败（isOp 未生效），降级到标准 setOp。");
+                logger.fine("TemporaryOpExecutor: Silent OP 验证失败（isOp 未生效），本次降级到标准 setOp。");
             } catch (Exception e) {
-                silentOpAvailable = false;
-                logger.fine("TemporaryOpExecutor: Silent OP 反射失败，降级到标准 setOp: " + e.getMessage());
+                logger.fine("TemporaryOpExecutor: Silent OP 反射失败，本次降级到标准 setOp: " + e.getMessage());
             }
         }
         player.setOp(value);
@@ -175,9 +180,7 @@ public final class TemporaryOpExecutor {
                 opField.setBoolean(player, value);
                 player.recalculatePermissions();
                 if (player.isOp() == value) return;
-                silentOpAvailable = false;
-            } catch (Exception e) {
-                silentOpAvailable = false;
+            } catch (Exception ignored) {
             }
         }
         player.setOp(value);

@@ -175,13 +175,10 @@ public final class NavigationMarkerService {
             }
             PlayerPathState state = entry.getValue();
             if (state.cancelled) continue;
-            final Player p = player;
-            final PlayerPathState s = state;
-            AxsScheduler.runTask(plugin, () -> {
-                if (p.isOnline() && !s.cancelled) {
-                    computeAndApplyPath(p, s);
-                }
-            });
+            // tickUpdate 本身已在定时任务（主线程）中运行，无需嵌套调度
+            if (player.isOnline() && !state.cancelled) {
+                computeAndApplyPath(player, state);
+            }
         }
     }
 
@@ -201,13 +198,13 @@ public final class NavigationMarkerService {
 
         if (playerLoc.getWorld() == null || goal.getWorld() == null
             || !playerLoc.getWorld().equals(goal.getWorld())) {
-            AxsScheduler.runTask(plugin, () -> removeExcessMarkers(player, state, 0));
+            removeExcessMarkers(player, state, 0);
             return;
         }
 
         double distance = playerLoc.distance(goal);
         if (distance > config.pathMaxDistance()) {
-            AxsScheduler.runTask(plugin, () -> removeExcessMarkers(player, state, 0));
+            removeExcessMarkers(player, state, 0);
             return;
         }
 
@@ -231,10 +228,9 @@ public final class NavigationMarkerService {
             finalPoints.add(loc);
         }
 
-        AxsScheduler.runTask(plugin, () -> {
-            if (!player.isOnline() || state.cancelled) return;
-            applyPathMarkers(player, state, finalPoints);
-        });
+        // 已在主线程中，无需嵌套调度
+        if (!player.isOnline() || state.cancelled) return;
+        applyPathMarkers(player, state, finalPoints);
     }
 
     private void applyPathMarkers(Player player, PlayerPathState state, List<Location> points) {

@@ -6,5 +6,6 @@ api-version: 1.0
 
 depends: []
 softdepends: []
-external-depends: []
+external-depends:
+  - PlaceholderAPI
 external-softdepends: []

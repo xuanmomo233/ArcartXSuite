@@ -1,5 +1,7 @@
 package xuanmo.arcartxsuite.combateffect.deathbuffer;
 import xuanmo.arcartxsuite.api.util.AxsScheduler;
+import xuanmo.arcartxsuite.combateffect.chronos.ChronosHook;
+import xuanmo.arcartxsuite.combateffect.chronos.ChronosHookFactory;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,13 +47,13 @@ public final class DeathBufferService implements Listener {
 
     private final ConcurrentHashMap<UUID, BufferState> bufferedPlayers = new ConcurrentHashMap<>();
 
-    // ArcartX 视觉桥接
+    // ArcartX 视觉桥接（ArcartX 是硬依赖，可直接引用）
     private boolean arcartxVisualAvailable;
     private ArcartXEntityManager entityManager;
 
-    // Chronos API
+    // Chronos（通过 ChronosHook 隔离，未装时为 null）
     private boolean chronosAvailable;
-    private priv.seventeen.artist.arcartx.chronos.api.ChronosAPI chronosApi;
+    private ChronosHook chronosHook;
 
     public DeathBufferService(
         JavaPlugin plugin,
@@ -312,13 +314,8 @@ public final class DeathBufferService implements Listener {
     }
 
     private void applyChronosDeathState(Player player) {
-        try {
-            chronosApi.tryEnterControlledState(player, config.chronosStateId(), config.durationMs());
-        } catch (Exception | LinkageError exception) {
-            if (config.debug()) {
-                logger.warning("DeathBuffer Chronos 状态设置失败: " + exception.getMessage());
-            }
-        }
+        if (chronosHook == null) return;
+        chronosHook.tryEnterControlledState(player, config.chronosStateId(), config.durationMs());
     }
 
     // ========== 包分发 ==========
@@ -390,19 +387,9 @@ public final class DeathBufferService implements Listener {
         if (!config.chronosEnabled()) {
             return;
         }
-        try {
-            org.bukkit.plugin.Plugin chronos = Bukkit.getPluginManager().getPlugin("Chronos");
-            if (chronos == null || !chronos.isEnabled()) {
-                return;
-            }
-            chronosApi = priv.seventeen.artist.arcartx.chronos.api.ChronosAPI.getInstanceAPI();
-            if (chronosApi == null) {
-                return;
-            }
-            chronosAvailable = true;
-        } catch (Exception | LinkageError exception) {
-            logger.warning("DeathBuffer 初始化 Chronos 桥接失败: " + exception.getMessage());
-        }
+        // 通过工厂延迟加载 ChronosHook，Chronos 未装时返回 null（不触发 ChronosAPI 类加载）
+        chronosHook = ChronosHookFactory.tryCreate(plugin, logger, config.debug());
+        chronosAvailable = chronosHook != null;
     }
 
     private ArcartXPlayer getArcartXPlayer(Player player) {
