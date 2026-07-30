@@ -1,32 +1,34 @@
 package xuanmo.arcartxsuite.combateffect.trigger;
 
-import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Event;
+import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
-import org.bukkit.plugin.EventExecutor;
 import org.bukkit.plugin.java.JavaPlugin;
+import priv.seventeen.artist.arcartx.event.client.ClientKeyGroupPressEvent;
+import priv.seventeen.artist.arcartx.event.client.ClientKeyPressEvent;
+import priv.seventeen.artist.arcartx.event.client.ClientKeyReleaseEvent;
+import priv.seventeen.artist.arcartx.event.client.ClientSimpleKeyPressEvent;
+import priv.seventeen.artist.arcartx.event.client.ClientSimpleKeyReleaseEvent;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.combateffect.packet.config.CombatEffectPacketConfiguration;
 import xuanmo.arcartxsuite.combateffect.packet.config.PacketDefinition;
 
 /**
- * 反射监听 ArcartX 按键事件，匹配 trigger:keybind 的包定义并发送 UI 包。
+ * 监听 ArcartX 按键事件，匹配 trigger:keybind 的包定义并发送 UI 包。
  */
-public final class KeybindTriggerService {
+public final class KeybindTriggerService implements Listener {
 
     private final JavaPlugin plugin;
     private final CombatEffectPacketConfiguration configuration;
     private final PacketBridgeAPI packetBridge;
     private final Logger logger;
-    private final Listener dummyListener = new Listener() {};
     private boolean registered;
 
     // cooldown
@@ -49,71 +51,42 @@ public final class KeybindTriggerService {
             logger.info("KeybindTriggerService: ArcartX 未安装，按键触发器未启用");
             return false;
         }
-        try {
-            registerKeyEvent("priv.seventeen.artist.arcartx.event.client.ClientKeyPressEvent", "client", true);
-            registerKeyEvent("priv.seventeen.artist.arcartx.event.client.ClientKeyReleaseEvent", "client", false);
-            registerKeyEvent("priv.seventeen.artist.arcartx.event.client.ClientSimpleKeyPressEvent", "simple", true);
-            registerKeyEvent("priv.seventeen.artist.arcartx.event.client.ClientSimpleKeyReleaseEvent", "simple", false);
-            registerGroupEvent("priv.seventeen.artist.arcartx.event.client.ClientKeyGroupPressEvent");
-            registered = true;
-            logger.info("KeybindTriggerService: 已注册 ArcartX 按键事件监听");
-            return true;
-        } catch (ClassNotFoundException e) {
-            logger.warning("KeybindTriggerService: ArcartX 按键事件类未找到 — " + e.getMessage());
-            return false;
-        } catch (Exception e) {
-            logger.warning("KeybindTriggerService: 注册失败 — " + e.getMessage());
-            return false;
-        }
+        Bukkit.getPluginManager().registerEvents(this, plugin);
+        registered = true;
+        logger.info("KeybindTriggerService: 已注册 ArcartX 按键事件监听");
+        return true;
     }
 
     public void shutdown() {
         if (registered) {
-            HandlerList.unregisterAll(dummyListener);
+            HandlerList.unregisterAll(this);
             registered = false;
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private void registerKeyEvent(String className, String keyType, boolean isPress) throws Exception {
-        Class<? extends Event> eventClass = (Class<? extends Event>) Class.forName(className);
-        Method getPlayer = eventClass.getMethod("getPlayer");
-        Method getKeyName = eventClass.getMethod("getKeyName");
-
-        EventExecutor executor = (listener, event) -> {
-            if (!eventClass.isInstance(event)) return;
-            try {
-                Player player = (Player) getPlayer.invoke(event);
-                String keyName = (String) getKeyName.invoke(event);
-                handleKeybind(player, keyName, isPress, keyType);
-            } catch (Exception e) {
-                if (configuration.debug()) {
-                    logger.warning("KeybindTriggerService 事件处理异常: " + e.getMessage());
-                }
-            }
-        };
-        Bukkit.getPluginManager().registerEvent(eventClass, dummyListener, EventPriority.MONITOR, executor, plugin, true);
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onKeyPress(ClientKeyPressEvent event) {
+        handleKeybind(event.getPlayer(), event.getKeyName(), true, "client");
     }
 
-    @SuppressWarnings("unchecked")
-    private void registerGroupEvent(String className) throws Exception {
-        Class<? extends Event> eventClass = (Class<? extends Event>) Class.forName(className);
-        Method getPlayer = eventClass.getMethod("getPlayer");
-        Method getGroupId = eventClass.getMethod("getGroupID");
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onKeyRelease(ClientKeyReleaseEvent event) {
+        handleKeybind(event.getPlayer(), event.getKeyName(), false, "client");
+    }
 
-        EventExecutor executor = (listener, event) -> {
-            if (!eventClass.isInstance(event)) return;
-            try {
-                Player player = (Player) getPlayer.invoke(event);
-                String groupId = (String) getGroupId.invoke(event);
-                handleKeybind(player, groupId, true, "group");
-            } catch (Exception e) {
-                if (configuration.debug()) {
-                    logger.warning("KeybindTriggerService 按键组处理异常: " + e.getMessage());
-                }
-            }
-        };
-        Bukkit.getPluginManager().registerEvent(eventClass, dummyListener, EventPriority.MONITOR, executor, plugin, true);
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onSimpleKeyPress(ClientSimpleKeyPressEvent event) {
+        handleKeybind(event.getPlayer(), event.getKeyName(), true, "simple");
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onSimpleKeyRelease(ClientSimpleKeyReleaseEvent event) {
+        handleKeybind(event.getPlayer(), event.getKeyName(), false, "simple");
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onKeyGroupPress(ClientKeyGroupPressEvent event) {
+        handleKeybind(event.getPlayer(), event.getGroupID(), true, "group");
     }
 
     private void handleKeybind(Player player, String keyName, boolean isPress, String keyType) {

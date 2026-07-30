@@ -1,8 +1,7 @@
 package xuanmo.arcartxsuite.eventpacket.listener;
 
-import java.util.ArrayList;
+import java.lang.reflect.Method;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
@@ -11,10 +10,8 @@ import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
+import org.bukkit.plugin.EventExecutor;
 import org.bukkit.plugin.Plugin;
-import ink.ptms.chemdah.core.PlayerProfile;
-import ink.ptms.chemdah.core.quest.Quest;
-import ink.ptms.chemdah.core.quest.Task;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketContext;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketTrigger;
 import xuanmo.arcartxsuite.eventpacket.service.EventPacketDispatchService;
@@ -22,15 +19,14 @@ import xuanmo.arcartxsuite.eventpacket.service.EventPacketDispatchService;
 /**
  * Chemdah 事件桥接器。
  * <p>
- * 事件类通过反射加载（因为 Chemdah 事件继承 BukkitProxyEvent，编译时不可见），
- * 但数据提取使用直接 API 调用（PlayerProfile、Quest、Task 等在 compileOnly jar 中可用）。
+ * Chemdah 事件类继承 taboolib BukkitProxyEvent（编译时不可用），需通过反射注册监听。
  */
 public final class ChemdahEventBridge {
 
     private final Plugin plugin;
     private final Logger logger;
     private final EventPacketDispatchService dispatchService;
-    private final List<Listener> registeredListeners = new ArrayList<>();
+    private final java.util.List<Listener> registeredListeners = new java.util.ArrayList<>();
 
     public ChemdahEventBridge(Plugin plugin, Logger logger, EventPacketDispatchService dispatchService) {
         this.plugin = plugin;
@@ -45,21 +41,14 @@ public final class ChemdahEventBridge {
             return;
         }
         ClassLoader cl = chemdah.getClass().getClassLoader();
-
-        registerQuestEvent(cl, "ink.ptms.chemdah.api.event.collect.QuestEvents$Accept$Post", EventPacketTrigger.QUEST_ACCEPT);
-        registerQuestEvent(cl, "ink.ptms.chemdah.api.event.collect.QuestEvents$Complete$Post", EventPacketTrigger.QUEST_COMPLETE);
-        registerQuestEvent(cl, "ink.ptms.chemdah.api.event.collect.QuestEvents$Fail$Post", EventPacketTrigger.QUEST_FAIL);
-
+        registerQuestLifecycleEvent(cl, "ink.ptms.chemdah.api.event.collect.QuestEvents$Accept$Post", EventPacketTrigger.QUEST_ACCEPT);
+        registerQuestLifecycleEvent(cl, "ink.ptms.chemdah.api.event.collect.QuestEvents$Complete$Post", EventPacketTrigger.QUEST_COMPLETE);
+        registerQuestLifecycleEvent(cl, "ink.ptms.chemdah.api.event.collect.QuestEvents$Fail$Post", EventPacketTrigger.QUEST_FAIL);
         registerObjectiveEvent(cl, "ink.ptms.chemdah.api.event.collect.ObjectiveEvents$Complete$Post", EventPacketTrigger.OBJECTIVE_COMPLETE);
         registerObjectiveEvent(cl, "ink.ptms.chemdah.api.event.collect.ObjectiveEvents$Continue$Post", EventPacketTrigger.OBJECTIVE_CONTINUE);
         registerObjectiveEvent(cl, "ink.ptms.chemdah.api.event.collect.ObjectiveEvents$Restart$Post", EventPacketTrigger.OBJECTIVE_RESTART);
-
         registerLevelChangeEvent(cl);
-
-        int count = registeredListeners.size();
-        if (count > 0) {
-            logger.info("EventPacket ChemdahBridge 已注册 " + count + " 个 Chemdah 事件监听器");
-        }
+        logger.info("EventPacket ChemdahBridge 已注册 Chemdah 事件监听器");
     }
 
     public void unregister() {
@@ -70,135 +59,79 @@ public final class ChemdahEventBridge {
     }
 
     @SuppressWarnings("unchecked")
-    private void registerQuestEvent(ClassLoader cl, String className, EventPacketTrigger trigger) {
+    private void registerQuestLifecycleEvent(ClassLoader cl, String className, EventPacketTrigger trigger) {
         try {
-            Class<?> rawEventClass = Class.forName(className, true, cl);
-            if (!Event.class.isAssignableFrom(rawEventClass)) return;
-            Class<? extends Event> eventClass = (Class<? extends Event>) rawEventClass;
+            Class<?> rawClass = Class.forName(className, true, cl);
+            if (!Event.class.isAssignableFrom(rawClass)) return;
+            Class<? extends Event> eventClass = (Class<? extends Event>) rawClass;
+            Method getPlayerProfile = rawClass.getMethod("getPlayerProfile");
+            Method getQuest = rawClass.getMethod("getQuest");
             Listener listener = new Listener() {};
-            Bukkit.getPluginManager().registerEvent(
-                eventClass, listener, EventPriority.MONITOR,
-                (ignored, event) -> handleQuestEvent(event, trigger),
-                plugin, true
-            );
+            EventExecutor executor = (l, e) -> handleQuestEvent(e, getPlayerProfile, getQuest, trigger);
+            Bukkit.getPluginManager().registerEvent(eventClass, listener, EventPriority.MONITOR, executor, plugin, true);
             registeredListeners.add(listener);
         } catch (Exception | LinkageError e) {
             logger.warning("EventPacket ChemdahBridge 注册任务事件失败(" + className + "): " + e.getMessage());
         }
     }
 
-    private void handleQuestEvent(Event event, EventPacketTrigger trigger) {
-        try {
-            var getProfile = event.getClass().getMethod("getPlayerProfile");
-            var getQuest = event.getClass().getMethod("getQuest");
-            PlayerProfile profile = (PlayerProfile) getProfile.invoke(event);
-            Quest quest = (Quest) getQuest.invoke(event);
-            if (profile == null || quest == null) return;
-            Player player = profile.getPlayer();
-            if (player == null || !player.isOnline()) return;
-            String questId = quest.getId();
-            Map<String, String> variables = new LinkedHashMap<>();
-            variables.put("quest_id", questId);
-            dispatchService.dispatchAll(trigger, player,
-                EventPacketContext.fromVariables(trigger, player, questId, variables));
-        } catch (Exception | LinkageError e) {
-            logger.warning("EventPacket ChemdahBridge 处理任务事件失败: " + e.getMessage());
-        }
-    }
-
     @SuppressWarnings("unchecked")
     private void registerObjectiveEvent(ClassLoader cl, String className, EventPacketTrigger trigger) {
         try {
-            Class<?> rawEventClass = Class.forName(className, true, cl);
-            if (!Event.class.isAssignableFrom(rawEventClass)) return;
-            Class<? extends Event> eventClass = (Class<? extends Event>) rawEventClass;
+            Class<?> rawClass = Class.forName(className, true, cl);
+            if (!Event.class.isAssignableFrom(rawClass)) return;
+            Class<? extends Event> eventClass = (Class<? extends Event>) rawClass;
+            Method getPlayerProfile = rawClass.getMethod("getPlayerProfile");
+            Method getQuest = rawClass.getMethod("getQuest");
+            Method getTask = rawClass.getMethod("getTask");
+            Method getObjective = rawClass.getMethod("getObjective");
             Listener listener = new Listener() {};
-            Bukkit.getPluginManager().registerEvent(
-                eventClass, listener, EventPriority.MONITOR,
-                (ignored, event) -> handleObjectiveEvent(event, trigger),
-                plugin, true
-            );
+            EventExecutor executor = (l, e) -> handleObjectiveEvent(e, getPlayerProfile, getQuest, getTask, getObjective, trigger);
+            Bukkit.getPluginManager().registerEvent(eventClass, listener, EventPriority.MONITOR, executor, plugin, true);
             registeredListeners.add(listener);
         } catch (Exception | LinkageError e) {
-            logger.warning("EventPacket ChemdahBridge 注册目标事件失败(" + trigger.configValue() + "): " + e.getMessage());
-        }
-    }
-
-    private void handleObjectiveEvent(Event event, EventPacketTrigger trigger) {
-        try {
-            var getProfile = event.getClass().getMethod("getPlayerProfile");
-            var getQuest = event.getClass().getMethod("getQuest");
-            var getTask = event.getClass().getMethod("getTask");
-            var getObjective = event.getClass().getMethod("getObjective");
-            PlayerProfile profile = (PlayerProfile) getProfile.invoke(event);
-            Quest quest = (Quest) getQuest.invoke(event);
-            Task task = (Task) getTask.invoke(event);
-            Object objective = getObjective.invoke(event);
-            if (profile == null || quest == null || task == null) return;
-            Player player = profile.getPlayer();
-            if (player == null || !player.isOnline()) return;
-            String questId = quest.getId();
-            String taskId = task.getId();
-            String objectiveName = "";
-            String objectiveType = "";
-            if (objective != null) {
-                objectiveType = objective.getClass().getSimpleName();
-                try {
-                    var getName = objective.getClass().getMethod("getName");
-                    Object nameResult = getName.invoke(objective);
-                    objectiveName = nameResult != null ? String.valueOf(nameResult) : "";
-                } catch (ReflectiveOperationException ignored) {}
-            }
-            Map<String, String> variables = new LinkedHashMap<>();
-            variables.put("quest_id", questId);
-            variables.put("task_id", taskId);
-            variables.put("objective_type", objectiveType);
-            variables.put("objective_name", objectiveName);
-            dispatchService.dispatchAll(trigger, player,
-                EventPacketContext.fromVariables(trigger, player, questId, variables));
-        } catch (Exception | LinkageError e) {
-            logger.warning("EventPacket ChemdahBridge 处理目标事件失败(" + trigger.configValue() + "): " + e.getMessage());
+            logger.warning("EventPacket ChemdahBridge 注册目标事件失败(" + className + "): " + e.getMessage());
         }
     }
 
     @SuppressWarnings("unchecked")
     private void registerLevelChangeEvent(ClassLoader cl) {
         try {
-            Class<?> rawEventClass = Class.forName("ink.ptms.chemdah.api.event.collect.PlayerEvents$LevelChange", true, cl);
-            if (!Event.class.isAssignableFrom(rawEventClass)) return;
-            Class<? extends Event> eventClass = (Class<? extends Event>) rawEventClass;
+            Class<?> rawClass = Class.forName("ink.ptms.chemdah.api.event.collect.PlayerEvents$LevelChange", true, cl);
+            if (!Event.class.isAssignableFrom(rawClass)) return;
+            Class<? extends Event> eventClass = (Class<? extends Event>) rawClass;
+            Method getPlayer = rawClass.getMethod("getPlayer");
+            Method getOption = rawClass.getMethod("getOption");
+            Method getOldLevel = rawClass.getMethod("getOldLevel");
+            Method getNewLevel = rawClass.getMethod("getNewLevel");
+            Method getOldExperience = rawClass.getMethod("getOldExperience");
+            Method getNewExperience = rawClass.getMethod("getNewExperience");
             Listener listener = new Listener() {};
-            Bukkit.getPluginManager().registerEvent(
-                eventClass, listener, EventPriority.MONITOR,
-                (ignored, event) -> handleLevelChangeEvent(event),
-                plugin, true
-            );
+            EventExecutor executor = (l, e) -> handleLevelChange(e, getPlayer, getOption, getOldLevel, getNewLevel, getOldExperience, getNewExperience);
+            Bukkit.getPluginManager().registerEvent(eventClass, listener, EventPriority.MONITOR, executor, plugin, true);
             registeredListeners.add(listener);
         } catch (Exception | LinkageError e) {
             logger.warning("EventPacket ChemdahBridge 注册等级变化事件失败: " + e.getMessage());
         }
     }
 
-    private void handleLevelChangeEvent(Event event) {
+    private void handleLevelChange(Event event, Method getPlayer, Method getOption,
+            Method getOldLevel, Method getNewLevel, Method getOldExperience, Method getNewExperience) {
         try {
-            var getPlayer = event.getClass().getMethod("getPlayer");
-            var getOption = event.getClass().getMethod("getOption");
-            var getOldLevel = event.getClass().getMethod("getOldLevel");
-            var getNewLevel = event.getClass().getMethod("getNewLevel");
-            var getOldExperience = event.getClass().getMethod("getOldExperience");
-            var getNewExperience = event.getClass().getMethod("getNewExperience");
             Object rawPlayer = getPlayer.invoke(event);
             if (!(rawPlayer instanceof Player player) || !player.isOnline()) return;
-            Object rawOption = getOption.invoke(event);
+            Object option = getOption.invoke(event);
             String optionId = "";
-            if (rawOption != null) {
-                var getOptionId = rawOption.getClass().getMethod("getId");
-                optionId = String.valueOf(getOptionId.invoke(rawOption));
+            if (option != null) {
+                try {
+                    Object id = option.getClass().getMethod("getId").invoke(option);
+                    if (id instanceof String s) optionId = s;
+                } catch (ReflectiveOperationException ignored) {}
             }
-            int oldLevel = toInt(getOldLevel.invoke(event));
-            int newLevel = toInt(getNewLevel.invoke(event));
-            int oldExp = toInt(getOldExperience.invoke(event));
-            int newExp = toInt(getNewExperience.invoke(event));
+            int oldLevel = ((Number) getOldLevel.invoke(event)).intValue();
+            int newLevel = ((Number) getNewLevel.invoke(event)).intValue();
+            int oldExp = ((Number) getOldExperience.invoke(event)).intValue();
+            int newExp = ((Number) getNewExperience.invoke(event)).intValue();
             Map<String, String> variables = new LinkedHashMap<>();
             variables.put("level_option", optionId);
             variables.put("old_level", String.valueOf(oldLevel));
@@ -213,8 +146,53 @@ public final class ChemdahEventBridge {
         }
     }
 
-    private static int toInt(Object value) {
-        if (value instanceof Number number) return number.intValue();
-        return 0;
+    private void handleQuestEvent(Event event, Method getPlayerProfile, Method getQuest, EventPacketTrigger trigger) {
+        try {
+            Object profile = getPlayerProfile.invoke(event);
+            Object quest = getQuest.invoke(event);
+            if (profile == null || quest == null) return;
+            Player player = (Player) profile.getClass().getMethod("getPlayer").invoke(profile);
+            if (player == null || !player.isOnline()) return;
+            String questId = (String) quest.getClass().getMethod("getId").invoke(quest);
+            Map<String, String> variables = new LinkedHashMap<>();
+            variables.put("quest_id", questId);
+            dispatchService.dispatchAll(trigger, player,
+                EventPacketContext.fromVariables(trigger, player, questId, variables));
+        } catch (Exception | LinkageError e) {
+            logger.warning("EventPacket ChemdahBridge 处理任务事件失败: " + e.getMessage());
+        }
+    }
+
+    private void handleObjectiveEvent(Event event, Method getPlayerProfile, Method getQuest,
+            Method getTask, Method getObjective, EventPacketTrigger trigger) {
+        try {
+            Object profile = getPlayerProfile.invoke(event);
+            Object quest = getQuest.invoke(event);
+            Object task = getTask.invoke(event);
+            if (profile == null || quest == null || task == null) return;
+            Player player = (Player) profile.getClass().getMethod("getPlayer").invoke(profile);
+            if (player == null || !player.isOnline()) return;
+            String questId = (String) quest.getClass().getMethod("getId").invoke(quest);
+            String taskId = (String) task.getClass().getMethod("getId").invoke(task);
+            String objectiveName = "";
+            String objectiveType = "";
+            Object objective = getObjective.invoke(event);
+            if (objective != null) {
+                objectiveType = objective.getClass().getSimpleName();
+                try {
+                    Object name = objective.getClass().getMethod("getName").invoke(objective);
+                    if (name instanceof String s) objectiveName = s;
+                } catch (ReflectiveOperationException ignored) {}
+            }
+            Map<String, String> variables = new LinkedHashMap<>();
+            variables.put("quest_id", questId);
+            variables.put("task_id", taskId);
+            variables.put("objective_type", objectiveType);
+            variables.put("objective_name", objectiveName);
+            dispatchService.dispatchAll(trigger, player,
+                EventPacketContext.fromVariables(trigger, player, questId, variables));
+        } catch (Exception | LinkageError e) {
+            logger.warning("EventPacket ChemdahBridge 处理目标事件失败(" + trigger.configValue() + "): " + e.getMessage());
+        }
     }
 }

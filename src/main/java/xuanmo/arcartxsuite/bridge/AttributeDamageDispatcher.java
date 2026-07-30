@@ -1,5 +1,7 @@
 package xuanmo.arcartxsuite.bridge;
 
+import io.lumine.mythic.lib.api.event.AttackUnregisteredEvent;
+import io.lumine.mythic.lib.damage.DamageMetadata;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -8,13 +10,17 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
+import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityRegainHealthEvent;
+import org.bukkit.plugin.EventExecutor;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import priv.seventeen.artist.symphony.api.event.SymphonyDamageEvent;
+import priv.seventeen.artist.symphony.api.event.SymphonyHealEvent;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageEvent;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageListener;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageEvent.Source;
@@ -46,12 +52,7 @@ final class AttributeDamageDispatcher {
     private volatile Method craneHealHandlerGetHeal;
     private volatile Method craneHealHandlerGetEvent;
     private volatile Method craneHealHandlerGetSource;
-    // AttributePlus AttributeHandle.getDamage 缓存
-    private volatile Method apAttributeHandleGetDamage;
-    // MythicLib DamageMetadata.getDamage 缓存
-    private volatile Method mythicLibDamageMetadataGetDamage;
     private final Object methodCacheLock = new Object();
-
     AttributeDamageDispatcher(JavaPlugin plugin) {
         this.plugin = plugin;
     }
@@ -393,67 +394,33 @@ final class AttributeDamageDispatcher {
 
     // ─── MythicLib ─────────────────────────────────────────────
 
-    @SuppressWarnings("unchecked")
     private void registerMythicLib() {
         Plugin mythicLib = Bukkit.getPluginManager().getPlugin("MythicLib");
         if (mythicLib == null || !mythicLib.isEnabled()) return;
-        try {
-            ClassLoader cl = mythicLib.getClass().getClassLoader();
-            Class<?> rawClass = Class.forName(
-                "io.lumine.mythic.lib.api.event.AttackUnregisteredEvent", true, cl
-            );
-            if (!Event.class.isAssignableFrom(rawClass)) return;
-            Class<? extends Event> eventClass = (Class<? extends Event>) rawClass;
-            Method getEntity = rawClass.getMethod("getEntity");
-            Method toBukkit = rawClass.getMethod("toBukkit");
-            Method getDamage = rawClass.getMethod("getDamage");
-            Listener listener = new Listener() {};
-            Bukkit.getPluginManager().registerEvent(
-                eventClass, listener, EventPriority.MONITOR,
-                (l, e) -> dispatchMythicLib(e, rawClass, getEntity, toBukkit, getDamage),
-                plugin, true
-            );
-            registeredListeners.add(listener);
-        } catch (ReflectiveOperationException ignored) {
-        }
+        Listener listener = new MythicLibDamageListener();
+        Bukkit.getPluginManager().registerEvents(listener, plugin);
+        registeredListeners.add(listener);
     }
 
-    private void dispatchMythicLib(
-        Event event, Class<?> eventClass,
-        Method getEntity, Method toBukkit, Method getDamage
-    ) {
-        if (!eventClass.isInstance(event)) return;
-        try {
-            Object rawTarget = getEntity.invoke(event);
-            if (!(rawTarget instanceof Entity target)) return;
-
-            double damage;
-            Object bukkitEvent = toBukkit.invoke(event);
-            if (bukkitEvent instanceof org.bukkit.event.entity.EntityDamageEvent de) {
-                damage = de.getFinalDamage();
-            } else {
-                Object rawDamage = getDamage.invoke(event);
-                if (rawDamage instanceof Number n) {
-                    damage = n.doubleValue();
+    private final class MythicLibDamageListener implements Listener {
+        @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+        public void onAttackUnregistered(AttackUnregisteredEvent event) {
+            try {
+                Entity target = event.getEntity();
+                if (target == null) return;
+                double damage;
+                if (event.toBukkit() != null) {
+                    damage = event.toBukkit().getFinalDamage();
                 } else {
-                    // getDamage() returns DamageMetadata, try getDamage() on it
-                    if (mythicLibDamageMetadataGetDamage == null) {
-                        synchronized (methodCacheLock) {
-                            if (mythicLibDamageMetadataGetDamage == null) {
-                                mythicLibDamageMetadataGetDamage = rawDamage.getClass().getMethod("getDamage");
-                            }
-                        }
-                    }
-                    Object rawValue = mythicLibDamageMetadataGetDamage.invoke(rawDamage);
-                    damage = rawValue instanceof Number n2 ? n2.doubleValue() : 0.0D;
+                    DamageMetadata meta = event.getDamage();
+                    damage = meta != null ? meta.getDamage() : 0.0D;
                 }
+                if (damage <= 0.0D) return;
+                Player attacker = target instanceof LivingEntity le ? resolveMythicLibAttacker(le) : null;
+                dispatch(new AttributeDamageEvent(attacker, target, damage, Source.MYTHIC_LIB));
+            } catch (RuntimeException e) {
+                xuanmo.arcartxsuite.module.AxsLog.logger().warning("[AttributeDamageDispatcher] MythicLib dispatch failed: " + e.getMessage());
             }
-            if (damage <= 0.0D) return;
-
-            Player attacker = target instanceof LivingEntity le ? resolveMythicLibAttacker(le) : null;
-            dispatch(new AttributeDamageEvent(attacker, target, damage, Source.MYTHIC_LIB));
-        } catch (ReflectiveOperationException e) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning("[AttributeDamageDispatcher] MythicLib dispatch failed: " + e.getMessage());
         }
     }
 
@@ -468,95 +435,53 @@ final class AttributeDamageDispatcher {
 
     // ─── Symphony ──────────────────────────────────────────────
 
-    @SuppressWarnings("unchecked")
     private void registerSymphony() {
         Plugin symphony = Bukkit.getPluginManager().getPlugin("Symphony");
         if (symphony == null || !symphony.isEnabled()) return;
-        try {
-            ClassLoader cl = symphony.getClass().getClassLoader();
-            Class<?> rawClass = Class.forName(
-                "priv.seventeen.artist.symphony.api.event.SymphonyDamageEvent", true, cl
-            );
-            if (!Event.class.isAssignableFrom(rawClass)) return;
-            Class<? extends Event> eventClass = (Class<? extends Event>) rawClass;
-            Method getAttacker = rawClass.getMethod("getAttacker");
-            Method getVictim = rawClass.getMethod("getVictim");
-            Method getFinalDamage = rawClass.getMethod("getFinalDamage");
-            Listener listener = new Listener() {};
-            Bukkit.getPluginManager().registerEvent(
-                eventClass, listener, EventPriority.MONITOR,
-                (l, e) -> dispatchSymphony(e, rawClass, getAttacker, getVictim, getFinalDamage),
-                plugin, true
-            );
-            registeredListeners.add(listener);
-        } catch (ReflectiveOperationException ignored) {
-        }
+        Listener listener = new SymphonyDamageListener();
+        Bukkit.getPluginManager().registerEvents(listener, plugin);
+        registeredListeners.add(listener);
     }
 
-    private void dispatchSymphony(
-        Event event, Class<?> eventClass,
-        Method getAttacker, Method getVictim, Method getFinalDamage
-    ) {
-        if (!eventClass.isInstance(event)) return;
-        try {
-            Object rawAttacker = getAttacker.invoke(event);
-            Object rawVictim = getVictim.invoke(event);
-            if (!(rawVictim instanceof Entity target)) return;
-            Player attacker = null;
-            if (rawAttacker instanceof Player p) attacker = p;
-            Object rawDamage = getFinalDamage.invoke(event);
-            double damage = rawDamage instanceof Number n ? n.doubleValue() : 0.0D;
-            if (damage <= 0.0D) return;
-            dispatch(new AttributeDamageEvent(attacker, target, damage, Source.SYMPHONY));
-        } catch (ReflectiveOperationException e) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning("[AttributeDamageDispatcher] Symphony damage dispatch failed: " + e.getMessage());
+    private final class SymphonyDamageListener implements Listener {
+        @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+        public void onSymphonyDamage(SymphonyDamageEvent event) {
+            try {
+                LivingEntity target = event.getVictim();
+                if (target == null) return;
+                Player attacker = event.getAttacker() instanceof Player p ? p : null;
+                double damage = event.getFinalDamage();
+                if (damage <= 0.0D) return;
+                dispatch(new AttributeDamageEvent(attacker, target, damage, Source.SYMPHONY));
+            } catch (RuntimeException e) {
+                xuanmo.arcartxsuite.module.AxsLog.logger().warning("[AttributeDamageDispatcher] Symphony damage dispatch failed: " + e.getMessage());
+            }
         }
     }
 
     // ─── Symphony Heal ─────────────────────────────────────────
 
-    @SuppressWarnings("unchecked")
     private void registerSymphonyHeal() {
         Plugin symphony = Bukkit.getPluginManager().getPlugin("Symphony");
         if (symphony == null || !symphony.isEnabled()) return;
-        try {
-            ClassLoader cl = symphony.getClass().getClassLoader();
-            Class<?> rawClass = Class.forName(
-                "priv.seventeen.artist.symphony.api.event.SymphonyHealEvent", true, cl
-            );
-            if (!Event.class.isAssignableFrom(rawClass)) return;
-            Class<? extends Event> eventClass = (Class<? extends Event>) rawClass;
-            Method getSource = rawClass.getMethod("getSource");
-            Method getTarget = rawClass.getMethod("getTarget");
-            Method getAmount = rawClass.getMethod("getAmount");
-            Listener listener = new Listener() {};
-            Bukkit.getPluginManager().registerEvent(
-                eventClass, listener, EventPriority.MONITOR,
-                (l, e) -> dispatchSymphonyHeal(e, rawClass, getSource, getTarget, getAmount),
-                plugin, true
-            );
-            registeredListeners.add(listener);
-        } catch (ReflectiveOperationException ignored) {
-        }
+        Listener listener = new SymphonyHealListener();
+        Bukkit.getPluginManager().registerEvents(listener, plugin);
+        registeredListeners.add(listener);
     }
 
-    private void dispatchSymphonyHeal(
-        Event event, Class<?> eventClass,
-        Method getSource, Method getTarget, Method getAmount
-    ) {
-        if (!eventClass.isInstance(event)) return;
-        try {
-            Object rawSource = getSource.invoke(event);
-            Object rawTarget = getTarget.invoke(event);
-            if (!(rawTarget instanceof LivingEntity target)) return;
-            Player source = null;
-            if (rawSource instanceof Player p) source = p;
-            Object rawAmount = getAmount.invoke(event);
-            double amount = rawAmount instanceof Number n ? n.doubleValue() : 0.0D;
-            if (amount <= 0.0D) return;
-            dispatchHeal(new AttributeHealEvent(source, target, amount, SourceType.SYMPHONY));
-        } catch (ReflectiveOperationException e) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning("[AttributeDamageDispatcher] Symphony heal dispatch failed: " + e.getMessage());
+    private final class SymphonyHealListener implements Listener {
+        @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+        public void onSymphonyHeal(SymphonyHealEvent event) {
+            try {
+                LivingEntity target = event.getTarget();
+                if (target == null) return;
+                Player source = event.getSource() instanceof Player p ? p : null;
+                double amount = event.getAmount();
+                if (amount <= 0.0D) return;
+                dispatchHeal(new AttributeHealEvent(source, target, amount, SourceType.SYMPHONY));
+            } catch (RuntimeException e) {
+                xuanmo.arcartxsuite.module.AxsLog.logger().warning("[AttributeDamageDispatcher] Symphony heal dispatch failed: " + e.getMessage());
+            }
         }
     }
 
@@ -589,6 +514,9 @@ final class AttributeDamageDispatcher {
         }
     }
 
+    // AttributePlus AttributeHandle.getDamage 缓存
+    private volatile Method apAttributeHandleGetDamage;
+
     private static Class<?> tryLoadClass(String name, ClassLoader cl) {
         try {
             return Class.forName(name, true, cl);
@@ -596,4 +524,5 @@ final class AttributeDamageDispatcher {
             return null;
         }
     }
+
 }
