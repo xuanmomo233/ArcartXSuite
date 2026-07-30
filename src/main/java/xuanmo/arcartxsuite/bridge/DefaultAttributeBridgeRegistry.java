@@ -27,11 +27,20 @@ public final class DefaultAttributeBridgeRegistry implements AttributeBridgeRegi
     private boolean symphonyEnabled = true;
 
     public DefaultAttributeBridgeRegistry(JavaPlugin plugin) {
-        this.attributePlusBridge = new DefaultAttributePlusBridge(plugin);
-        this.craneAttributeBridge = new DefaultCraneAttributeBridge(plugin);
-        this.mythicLibBridge = new DefaultMythicLibBridge(plugin);
-        this.symphonyBridge = new DefaultSymphonyBridge(plugin);
-        this.damageDispatcher = new AttributeDamageDispatcher(plugin);
+        this.attributePlusBridge = safeCreate(() -> new DefaultAttributePlusBridge(plugin), "AttributePlus");
+        this.craneAttributeBridge = safeCreate(() -> new DefaultCraneAttributeBridge(plugin), "CraneAttribute");
+        this.mythicLibBridge = safeCreate(() -> new DefaultMythicLibBridge(plugin), "MythicLib");
+        this.symphonyBridge = safeCreate(() -> new DefaultSymphonyBridge(plugin), "Symphony");
+        this.damageDispatcher = safeCreate(() -> new AttributeDamageDispatcher(plugin), "AttributeDamageDispatcher");
+    }
+
+    private <T> T safeCreate(java.util.function.Supplier<T> supplier, String name) {
+        try {
+            return supplier.get();
+        } catch (NoClassDefFoundError e) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning(name + " 桥接类加载失败（插件未安装?）: " + e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -46,15 +55,17 @@ public final class DefaultAttributeBridgeRegistry implements AttributeBridgeRegi
     }
 
     public void initialize() {
-        if (attributePlusEnabled) attributePlusBridge.initialize();
-        if (craneAttributeEnabled) craneAttributeBridge.initialize();
-        if (mythicLibEnabled) mythicLibBridge.initialize();
-        if (symphonyEnabled) symphonyBridge.initialize();
-        damageDispatcher.initialize(attributePlusEnabled, craneAttributeEnabled, mythicLibEnabled, symphonyEnabled);
+        if (attributePlusEnabled && attributePlusBridge != null) attributePlusBridge.initialize();
+        if (craneAttributeEnabled && craneAttributeBridge != null) craneAttributeBridge.initialize();
+        if (mythicLibEnabled && mythicLibBridge != null) mythicLibBridge.initialize();
+        if (symphonyEnabled && symphonyBridge != null) symphonyBridge.initialize();
+        if (damageDispatcher != null) {
+            damageDispatcher.initialize(attributePlusEnabled, craneAttributeEnabled, mythicLibEnabled, symphonyEnabled);
+        }
     }
 
     public void shutdown() {
-        damageDispatcher.shutdown();
+        if (damageDispatcher != null) damageDispatcher.shutdown();
     }
 
     @Override public AttributePlusBridge attributePlus() { return attributePlusBridge; }
@@ -64,35 +75,35 @@ public final class DefaultAttributeBridgeRegistry implements AttributeBridgeRegi
 
     @Override
     public boolean hasDamageSource() {
-        return attributePlusBridge.available()
-            || craneAttributeBridge.available()
-            || mythicLibBridge.available()
-            || symphonyBridge.available();
+        return (attributePlusBridge != null && attributePlusBridge.available())
+            || (craneAttributeBridge != null && craneAttributeBridge.available())
+            || (mythicLibBridge != null && mythicLibBridge.available())
+            || (symphonyBridge != null && symphonyBridge.available());
     }
 
     @Override
     public boolean hasHealSource() {
-        return craneAttributeBridge.available()
-            || symphonyBridge.available();
+        return (craneAttributeBridge != null && craneAttributeBridge.available())
+            || (symphonyBridge != null && symphonyBridge.available());
     }
 
     @Override
     public void registerHealListener(AttributeHealListener listener) {
-        damageDispatcher.registerHealListener(listener);
+        if (damageDispatcher != null) damageDispatcher.registerHealListener(listener);
     }
 
     @Override
     public void unregisterHealListener(AttributeHealListener listener) {
-        damageDispatcher.unregisterHealListener(listener);
+        if (damageDispatcher != null) damageDispatcher.unregisterHealListener(listener);
     }
 
     @Override
     public void registerDamageListener(AttributeDamageListener listener) {
-        damageDispatcher.registerListener(listener);
+        if (damageDispatcher != null) damageDispatcher.registerListener(listener);
     }
 
     @Override
     public void unregisterDamageListener(AttributeDamageListener listener) {
-        damageDispatcher.unregisterListener(listener);
+        if (damageDispatcher != null) damageDispatcher.unregisterListener(listener);
     }
 }

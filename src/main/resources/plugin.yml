@@ -20,6 +20,8 @@ softdepend:
   - Rondo
   - NeigeItems
   - AuthMe
+  - Symphony
+  - Overture
 commands:
   ess:
     description: Essentials 玩家命令（/axs essentials 缩写）

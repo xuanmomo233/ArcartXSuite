@@ -17,17 +17,26 @@ public final class DefaultItemSourceRegistry implements ItemSourceRegistry {
     private final MmoItemsBridge mmoItemsBridge;
 
     public DefaultItemSourceRegistry(JavaPlugin plugin) {
-        this.mythicItemBridge = new MythicItemBridge(plugin);
-        this.neigeItemsBridge = new NeigeItemsBridge(plugin);
-        this.overtureItemBridge = new OvertureItemBridge(plugin);
-        this.mmoItemsBridge = new MmoItemsBridge(plugin);
+        this.mythicItemBridge = safeCreate(() -> new MythicItemBridge(plugin), "MythicMobs");
+        this.neigeItemsBridge = safeCreate(() -> new NeigeItemsBridge(plugin), "NeigeItems");
+        this.overtureItemBridge = safeCreate(() -> new OvertureItemBridge(plugin), "Overture");
+        this.mmoItemsBridge = safeCreate(() -> new MmoItemsBridge(plugin), "MMOItems");
+    }
+
+    private <T> T safeCreate(java.util.function.Supplier<T> supplier, String name) {
+        try {
+            return supplier.get();
+        } catch (NoClassDefFoundError e) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().warning(name + " 桥接类加载失败（插件未安装?）: " + e.getMessage());
+            return null;
+        }
     }
 
     public void initialize() {
-        mythicItemBridge.initialize();
-        neigeItemsBridge.initialize();
-        overtureItemBridge.initialize();
-        mmoItemsBridge.initialize();
+        if (mythicItemBridge != null) mythicItemBridge.initialize();
+        if (neigeItemsBridge != null) neigeItemsBridge.initialize();
+        if (overtureItemBridge != null) overtureItemBridge.initialize();
+        if (mmoItemsBridge != null) mmoItemsBridge.initialize();
     }
 
     public void shutdown() {
@@ -38,70 +47,70 @@ public final class DefaultItemSourceRegistry implements ItemSourceRegistry {
 
     @Override
     public String mythicItemId(ItemStack itemStack) {
-        return mythicItemBridge.mythicItemId(itemStack);
+        return mythicItemBridge != null ? mythicItemBridge.mythicItemId(itemStack) : "";
     }
 
     @Override
     public String neigeItemId(ItemStack itemStack) {
-        return neigeItemsBridge.neigeItemId(itemStack);
+        return neigeItemsBridge != null ? neigeItemsBridge.neigeItemId(itemStack) : "";
     }
 
     @Override
     public String overtureItemId(ItemStack itemStack) {
-        return overtureItemBridge.overtureItemId(itemStack);
+        return overtureItemBridge != null ? overtureItemBridge.overtureItemId(itemStack) : "";
     }
 
     @Override
     public boolean isMythicItem(ItemStack itemStack) {
-        return mythicItemBridge.isMythicItem(itemStack);
+        return mythicItemBridge != null && mythicItemBridge.isMythicItem(itemStack);
     }
 
     @Override
     public boolean isOvertureItem(ItemStack itemStack) {
-        return overtureItemBridge.isOvertureItem(itemStack);
+        return overtureItemBridge != null && overtureItemBridge.isOvertureItem(itemStack);
     }
 
     // ─── 物品生成 ─────────────────────────────────────────────────
 
     @Override
     public ItemStack generateMythicItem(String itemId, int amount) {
-        return mythicItemBridge.getItemStack(itemId, amount);
+        return mythicItemBridge != null ? mythicItemBridge.getItemStack(itemId, amount) : null;
     }
 
     @Override
     public ItemStack generateNeigeItem(String itemId, int amount) {
-        return neigeItemsBridge.getItemStack(itemId, amount);
+        return neigeItemsBridge != null ? neigeItemsBridge.getItemStack(itemId, amount) : null;
     }
 
     @Override
     public ItemStack generateOvertureItem(String itemId, Player player, int amount) {
-        return overtureItemBridge.generateItem(itemId, player, amount);
+        return overtureItemBridge != null ? overtureItemBridge.generateItem(itemId, player, amount) : null;
     }
 
     @Override
     public ItemStack generateMmoItem(String typeId, String itemId, int amount) {
-        return mmoItemsBridge.getItemStack(typeId, itemId, amount);
+        return mmoItemsBridge != null ? mmoItemsBridge.getItemStack(typeId, itemId, amount) : null;
     }
 
     // ─── 可用性查询 ───────────────────────────────────────────────
 
     @Override
     public boolean mythicBridgeAvailable() {
-        return mythicItemBridge.isAvailable();
+        return mythicItemBridge != null && mythicItemBridge.isAvailable();
     }
 
     @Override
     public boolean neigeBridgeAvailable() {
-        return neigeItemsBridge.isAvailable();
+        return neigeItemsBridge != null && neigeItemsBridge.isAvailable();
     }
 
     @Override
     public boolean overtureBridgeAvailable() {
-        return overtureItemBridge.isAvailable();
+        return overtureItemBridge != null && overtureItemBridge.isAvailable();
     }
 
     @Override
     public boolean mmoBridgeAvailable() {
-        return mmoItemsBridge.isAvailable();
+        return mmoItemsBridge != null && mmoItemsBridge.isAvailable();
     }
 }
