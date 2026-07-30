@@ -42,7 +42,6 @@ import xuanmo.arcartxsuite.security.NativeBridge;
 import xuanmo.arcartxsuite.security.protection.ProtectionInit;
 import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import xuanmo.arcartxsuite.api.util.TemporaryOpExecutor;
-import xuanmo.arcartxsuite.bridge.AxsFakeOp;
 import xuanmo.arcartxsuite.security.SecondaryPasswordService;
 
 /**
@@ -151,16 +150,6 @@ public final class SuiteCoreImpl implements SuiteCore {
             getLogger()
         );
         TemporaryOpExecutor.reconcile();
-        try {
-            AxsFakeOp fakeOp = new AxsFakeOp(getLogger());
-            if (fakeOp.available()) {
-                TemporaryOpExecutor.setFakeOpExecutor(fakeOp::execute);
-            } else {
-                getLogger().info("AxsFakeOp 不可用，临时 OP 将使用 setOp 降级方式。");
-            }
-        } catch (RuntimeException exception) {
-            getLogger().warning("AxsFakeOp 初始化失败，将使用 setOp 降级方式: " + exception.getMessage());
-        }
         ensureRootConfigExists();
         reloadConfig();
         printStartupBanner();

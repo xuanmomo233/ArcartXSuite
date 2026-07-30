@@ -269,19 +269,24 @@ public final class AxsScheduler {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static <T> Future<T> foliaCallSyncMethod(Plugin plugin, Callable<T> task) {
+        java.util.concurrent.CompletableFuture<T> future = new java.util.concurrent.CompletableFuture<>();
         try {
             Object scheduler = Bukkit.class.getMethod("getGlobalRegionScheduler").invoke(null);
             Consumer<Object> consumer = t -> {
-                try { task.call(); } catch (Exception ignored) {}
+                try {
+                    future.complete(task.call());
+                } catch (Exception e) {
+                    future.completeExceptionally(e);
+                }
             };
             Method runMethod = scheduler.getClass().getMethod("run", Plugin.class, Consumer.class);
-            Object handle = runMethod.invoke(scheduler, plugin, consumer);
-            return (Future<T>) handle;
+            runMethod.invoke(scheduler, plugin, consumer);
+            return future;
         } catch (Exception e) {
             Bukkit.getLogger().log(Level.SEVERE, "[AXS] Failed to invoke Folia callSyncMethod", e);
-            return null;
+            future.completeExceptionally(e);
+            return future;
         }
     }
 }

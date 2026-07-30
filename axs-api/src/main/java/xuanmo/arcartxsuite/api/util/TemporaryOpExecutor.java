@@ -15,12 +15,11 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.lang.reflect.Field;
 import java.util.UUID;
-import java.util.function.BiFunction;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
-import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 public final class TemporaryOpExecutor {
@@ -40,8 +39,11 @@ public final class TemporaryOpExecutor {
     private static Logger logger = FALLBACK_LOGGER;
     private static boolean initialized;
     private static boolean warnedUninitialized;
-    private static volatile BiFunction<Player, String, Boolean> fakeOpExecutor;
-    private static volatile boolean fakeOpModeEnabled = true;
+
+    // ── Silent OP 反射（避免 setOp 写 ops.json 文件和触发平台事件）──
+    private static volatile boolean silentOpInitialized;
+    private static volatile boolean silentOpAvailable;
+    private static Field opField;
 
     private TemporaryOpExecutor() {
     }
@@ -55,30 +57,6 @@ public final class TemporaryOpExecutor {
             warnedUninitialized = false;
             PENDING_PLAYERS.clear();
         }
-    }
-
-    /**
-     * 注入 NMS FakeOp 执行器（由 axs-core 的 AxsFakeOp 调用）。
-     * <p>
-     * 注入后 {@link #execute} 会优先使用 NMS 临时 OP 执行命令，
-     * 不需要 ByteBuddy 动态代理。如果执行器不可用，自动降级到 setOp 方式。
-     *
-     * @param executor FakeOp 执行器，null 清除
-     */
-    public static void setFakeOpExecutor(BiFunction<Player, String, Boolean> executor) {
-        fakeOpExecutor = executor;
-        if (executor != null) {
-            logger.info("TemporaryOpExecutor: 已启用 NMS FakeOp 模式。");
-        }
-    }
-
-    /**
-     * 设置是否启用代理模式。
-     *
-     * @param enabled true 启用代理优先模式（默认），false 强制使用 setOp 方式
-     */
-    public static void setFakeOpModeEnabled(boolean enabled) {
-        fakeOpModeEnabled = enabled;
     }
 
     public static void reconcile() {
@@ -127,40 +105,21 @@ public final class TemporaryOpExecutor {
             return Bukkit.dispatchCommand(player, normalizedCommand);
         }
 
-        // 优先使用 NMS FakeOp 模式（不生成代理类，直接 NMS 临时 OP）
-        if (fakeOpModeEnabled && fakeOpExecutor != null) {
-            try {
-                Boolean result = fakeOpExecutor.apply(player, normalizedCommand);
-                if (result != null && result) {
-                    if (initialized) {
-                        logger.fine("临时 OP (fakeop): player=" + player.getName() + " command=" + sanitizeForLog(normalizedCommand));
-                    }
-                    return true;
-                }
-            } catch (RuntimeException exception) {
-                logger.warning("TemporaryOpExecutor: NMS FakeOp 执行失败，降级到 setOp 方式 - " + exception.getMessage());
-            }
-        }
-
-        // 降级：setOp 方式 + 台账
-        return executeViaSetOp(player, normalizedCommand);
-    }
-
-    /**
-     * 降级方式：setOp(true) -> dispatchCommand -> setOp(false) + 台账。
-     */
-    private static boolean executeViaSetOp(Player player, String command) {
         boolean tracked = trackBeforeElevation(player);
         if (!tracked && initialized) {
             return false;
         }
+        boolean usedSilentOp = setOpSilently(player, true);
         try {
-            player.setOp(true);
-            return Bukkit.dispatchCommand(player, command);
+            boolean result = Bukkit.dispatchCommand(player, normalizedCommand);
+            if (initialized) {
+                logger.fine("临时 OP: player=" + player.getName() + " command=" + sanitizeForLog(normalizedCommand));
+            }
+            return result;
         } finally {
             boolean restored = false;
             try {
-                player.setOp(false);
+                setOpSilently(player, false, usedSilentOp);
                 restored = true;
             } catch (RuntimeException exception) {
                 logger.log(Level.WARNING,
@@ -171,6 +130,57 @@ public final class TemporaryOpExecutor {
                 untrackAfterRestoration(player.getUniqueId());
             }
         }
+    }
+
+    private static void initSilentOp() {
+        if (silentOpInitialized) return;
+        synchronized (TemporaryOpExecutor.class) {
+            if (silentOpInitialized) return;
+            try {
+                String pkg = Bukkit.getServer().getClass().getPackage().getName();
+                Class<?> craftHumanEntityClass = Class.forName(pkg + ".entity.CraftHumanEntity");
+                opField = craftHumanEntityClass.getDeclaredField("op");
+                opField.setAccessible(true);
+                silentOpAvailable = true;
+                logger.fine("TemporaryOpExecutor: Silent OP 已启用（反射 CraftHumanEntity.op）。");
+            } catch (Exception e) {
+                silentOpAvailable = false;
+                logger.fine("TemporaryOpExecutor: Silent OP 不可用，将使用标准 setOp: " + e.getMessage());
+            }
+            silentOpInitialized = true;
+        }
+    }
+
+    private static boolean setOpSilently(Player player, boolean value) {
+        initSilentOp();
+        if (silentOpAvailable) {
+            try {
+                opField.setBoolean(player, value);
+                player.recalculatePermissions();
+                if (player.isOp() == value) return true;
+                silentOpAvailable = false;
+                logger.fine("TemporaryOpExecutor: Silent OP 验证失败（isOp 未生效），降级到标准 setOp。");
+            } catch (Exception e) {
+                silentOpAvailable = false;
+                logger.fine("TemporaryOpExecutor: Silent OP 反射失败，降级到标准 setOp: " + e.getMessage());
+            }
+        }
+        player.setOp(value);
+        return false;
+    }
+
+    private static void setOpSilently(Player player, boolean value, boolean usedSilentOp) {
+        if (usedSilentOp && silentOpAvailable) {
+            try {
+                opField.setBoolean(player, value);
+                player.recalculatePermissions();
+                if (player.isOp() == value) return;
+                silentOpAvailable = false;
+            } catch (Exception e) {
+                silentOpAvailable = false;
+            }
+        }
+        player.setOp(value);
     }
 
     private static boolean isAllowedCommand(Player player, String command) {
