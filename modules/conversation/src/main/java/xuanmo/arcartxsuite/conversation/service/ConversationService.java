@@ -86,6 +86,7 @@ public final class ConversationService implements Listener {
     private BukkitTask scanTask;
     private BukkitTask npcAppearanceRetryTask;
     private Listener chemdahReleasedListener;
+    private Class<? extends Event> chemdahReleasedEventClass;
     private boolean selectorUiReady;
     private boolean keybindBridgeReady;
     private boolean keybindsRegistered;
@@ -438,6 +439,7 @@ public final class ConversationService implements Listener {
                 return false;
             }
             Class<? extends Event> eventClass = (Class<? extends Event>) rawEventClass;
+            chemdahReleasedEventClass = eventClass;
             chemdahReleasedListener = new Listener() {};
             Bukkit.getPluginManager().registerEvent(
                 eventClass, chemdahReleasedListener, EventPriority.MONITOR,
@@ -457,9 +459,17 @@ public final class ConversationService implements Listener {
         }
         HandlerList.unregisterAll(chemdahReleasedListener);
         chemdahReleasedListener = null;
+        chemdahReleasedEventClass = null;
     }
 
     private void handleChemdahReleasedEvent(Event event) {
+        // Chemdah 事件均继承自 TabooLib BukkitProxyEvent，共享同一个 HandlerList，
+        // 因此注册 PlayerEvents.Released 监听后，TemplateEvents.Load 等其它子类事件也会触发本回调。
+        // 这里严格按运行时类型过滤，只处理真正的 Released 事件，避免对无 getPlayer() 的事件误反射。
+        Class<? extends Event> expected = chemdahReleasedEventClass;
+        if (expected == null || event.getClass() != expected) {
+            return;
+        }
         try {
             var getPlayer = event.getClass().getMethod("getPlayer");
             Object rawPlayer = getPlayer.invoke(event);

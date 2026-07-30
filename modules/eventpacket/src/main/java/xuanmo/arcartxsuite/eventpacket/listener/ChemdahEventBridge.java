@@ -67,7 +67,12 @@ public final class ChemdahEventBridge {
             Method getPlayerProfile = rawClass.getMethod("getPlayerProfile");
             Method getQuest = rawClass.getMethod("getQuest");
             Listener listener = new Listener() {};
-            EventExecutor executor = (l, e) -> handleQuestEvent(e, getPlayerProfile, getQuest, trigger);
+            // Chemdah 事件均继承自 TabooLib BukkitProxyEvent，共享同一个 HandlerList，
+            // 注册后其它 BukkitProxyEvent 子类事件也会触发本回调，需严格按运行时类型过滤。
+            EventExecutor executor = (l, e) -> {
+                if (e.getClass() != eventClass) return;
+                handleQuestEvent(e, getPlayerProfile, getQuest, trigger);
+            };
             Bukkit.getPluginManager().registerEvent(eventClass, listener, EventPriority.MONITOR, executor, plugin, true);
             registeredListeners.add(listener);
         } catch (Exception | LinkageError e) {
@@ -86,7 +91,11 @@ public final class ChemdahEventBridge {
             Method getTask = rawClass.getMethod("getTask");
             Method getObjective = rawClass.getMethod("getObjective");
             Listener listener = new Listener() {};
-            EventExecutor executor = (l, e) -> handleObjectiveEvent(e, getPlayerProfile, getQuest, getTask, getObjective, trigger);
+            // 同上：BukkitProxyEvent 共享 HandlerList，严格按运行时类型过滤。
+            EventExecutor executor = (l, e) -> {
+                if (e.getClass() != eventClass) return;
+                handleObjectiveEvent(e, getPlayerProfile, getQuest, getTask, getObjective, trigger);
+            };
             Bukkit.getPluginManager().registerEvent(eventClass, listener, EventPriority.MONITOR, executor, plugin, true);
             registeredListeners.add(listener);
         } catch (Exception | LinkageError e) {
@@ -107,7 +116,11 @@ public final class ChemdahEventBridge {
             Method getOldExperience = rawClass.getMethod("getOldExperience");
             Method getNewExperience = rawClass.getMethod("getNewExperience");
             Listener listener = new Listener() {};
-            EventExecutor executor = (l, e) -> handleLevelChange(e, getPlayer, getOption, getOldLevel, getNewLevel, getOldExperience, getNewExperience);
+            // 同上：BukkitProxyEvent 共享 HandlerList，严格按运行时类型过滤。
+            EventExecutor executor = (l, e) -> {
+                if (e.getClass() != eventClass) return;
+                handleLevelChange(e, getPlayer, getOption, getOldLevel, getNewLevel, getOldExperience, getNewExperience);
+            };
             Bukkit.getPluginManager().registerEvent(eventClass, listener, EventPriority.MONITOR, executor, plugin, true);
             registeredListeners.add(listener);
         } catch (Exception | LinkageError e) {

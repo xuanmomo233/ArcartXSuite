@@ -479,6 +479,10 @@ public final class QuestGpsService implements Listener {
             Bukkit.getPluginManager().registerEvent(
                 eventClass, listener, EventPriority.MONITOR,
                 (ignored, event) -> {
+                    // Chemdah 事件均继承自 TabooLib BukkitProxyEvent，共享同一个 HandlerList，
+                    // 注册 PluginReloadEvent.Quest 监听后，其它 BukkitProxyEvent 子类事件也会触发本回调。
+                    // 严格按运行时类型过滤，只处理真正的 Quest 重载事件。
+                    if (event.getClass() != eventClass) return;
                     for (Player player : Bukkit.getOnlinePlayers()) {
                         refreshViewer(player);
                     }
@@ -505,7 +509,12 @@ public final class QuestGpsService implements Listener {
             Listener listener = new Listener() {};
             Bukkit.getPluginManager().registerEvent(
                 eventClass, listener, EventPriority.MONITOR,
-                (ignored, event) -> handleChemdahQuestLifecycleEvent(event, lifecycle, clearTracking),
+                (ignored, event) -> {
+                    // 同上：BukkitProxyEvent 共享 HandlerList，需严格按运行时类型过滤，
+                    // 避免 MythicReloadEvent 等无关事件误触发并反射调用不存在的 getPlayerProfile()。
+                    if (event.getClass() != eventClass) return;
+                    handleChemdahQuestLifecycleEvent(event, lifecycle, clearTracking);
+                },
                 plugin, true
             );
             chemdahEventListeners.add(listener);
