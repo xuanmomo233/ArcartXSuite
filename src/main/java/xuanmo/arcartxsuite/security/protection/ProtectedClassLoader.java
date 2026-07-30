@@ -49,12 +49,30 @@ public final class ProtectedClassLoader extends ClassLoader {
     private final ThreadLocal<byte[]> readBuffer = ThreadLocal.withInitial(() -> new byte[8192]);
     private volatile boolean protectionActive = true;
 
+    /**
+     * 宿主 PluginClassLoader 的反向引用，用于在 originalParent（AppClassLoader 系）
+     * 找不到某类时回退到 PluginClassLoader，利用其跨插件类查找能力加载其他插件
+     * 提供的类（如 ArcartX 插件的 {@code KeyCallBack}）。
+     * <p>本加载器被注入为 PluginClassLoader 的 parent，故无法通过 {@link #getParent()}
+     * 访问 PluginClassLoader；必须显式持有该引用。
+     */
+    private final ClassLoader pluginClassLoader;
+
+    /**
+     * 防循环标志：当本加载器回退委托给 PluginClassLoader 时置为 true。
+     * <p>PluginClassLoader.loadClass 是 parent-first，会先回调本加载器（其 parent）；
+     * 此时本加载器检测到标志为 true，不再回退到 PluginClassLoader，直接抛出
+     * ClassNotFoundException，让 PluginClassLoader 自行 findClass 完成跨插件查找。
+     */
+    private final ThreadLocal<Boolean> delegatingToPlugin = ThreadLocal.withInitial(() -> Boolean.FALSE);
+
     public ProtectedClassLoader(ClassLoader originalParent, JarFile protectedJar,
-                                Map<String, Class<?>> capturedClasses) {
+                                Map<String, Class<?>> capturedClasses, ClassLoader pluginClassLoader) {
         super(originalParent);
         this.protectedJar = protectedJar;
         this.capturedClasses = capturedClasses != null
                 ? new ConcurrentHashMap<>(capturedClasses) : new ConcurrentHashMap<>();
+        this.pluginClassLoader = pluginClassLoader;
         String prefix;
         try {
             prefix = "jar:" + new java.io.File(protectedJar.getName()).toURI().toURL() + "!/";
@@ -80,6 +98,7 @@ public final class ProtectedClassLoader extends ClassLoader {
             if (c == null) c = capturedClasses.get(name);
 
             if (c == null) {
+                // 1. 本 JAR 内的类（加密或明文）—— 本加载器的权威来源，优先于 parent
                 JarEntry enc = protectedJar.getJarEntry(encEntryPath(name));
                 if (enc != null) {
                     c = defineEncrypted(name, enc);
@@ -87,8 +106,30 @@ public final class ProtectedClassLoader extends ClassLoader {
                     JarEntry plain = protectedJar.getJarEntry(classEntryPath(name));
                     if (plain != null) {
                         c = definePlain(name, plain);
+                    }
+                }
+            }
+
+            if (c == null) {
+                // 2. 委托 originalParent（AppClassLoader 系，提供 JDK/Bukkit API）
+                try {
+                    c = getParent().loadClass(name);
+                } catch (ClassNotFoundException parentEx) {
+                    // 3. originalParent 找不到（典型场景：其他 Bukkit 插件提供的类，
+                    //    如 ArcartX 插件的 KeyCallBack）。回退到 PluginClassLoader，
+                    //    利用其跨插件类查找能力。
+                    //    防循环：PluginClassLoader.loadClass 是 parent-first，会先回调本加载器；
+                    //    此时 delegatingToPlugin 标志为 true，本加载器不再回退，直接抛出，
+                    //    让 PluginClassLoader 自行 findClass 完成跨插件查找。
+                    if (pluginClassLoader != null && !delegatingToPlugin.get()) {
+                        delegatingToPlugin.set(Boolean.TRUE);
+                        try {
+                            c = pluginClassLoader.loadClass(name);
+                        } finally {
+                            delegatingToPlugin.remove();
+                        }
                     } else {
-                        c = getParent().loadClass(name);
+                        throw parentEx;
                     }
                 }
             }

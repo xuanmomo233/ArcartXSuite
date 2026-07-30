@@ -99,7 +99,10 @@ public final class ProtectionInit {
             JarFile jar = new JarFile(jarPath);
             Map<String, Class<?>> captured = captureBootstrapClasses(pluginMainClass, pluginCL, jar);
             ClassLoader originalParent = pluginCL.getParent();
-            ProtectedClassLoader pcl = new ProtectedClassLoader(originalParent, jar, captured);
+            // 传入 pluginCL 作为反向引用：ProtectedClassLoader 在 originalParent 找不到类时
+            // 回退到 PluginClassLoader，利用其跨插件类查找能力加载其他插件提供的类
+            // （如 ArcartX 插件的 KeyCallBack）。否则注入为 parent 后会切断跨插件可见性。
+            ProtectedClassLoader pcl = new ProtectedClassLoader(originalParent, jar, captured, pluginCL);
 
             if (!installAsParent(pluginCL, pcl)) {
                 LOGGER.severe("[Protection] 无法将 ProtectedClassLoader 注入 PluginClassLoader（parent 替换失败），"
