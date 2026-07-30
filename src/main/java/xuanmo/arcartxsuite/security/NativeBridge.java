@@ -86,18 +86,69 @@ public final class NativeBridge {
             }
         }
 
-        Path tempDir = Files.createTempDirectory("axs_native");
+        // 临时目录选择策略：
+        // 1) 优先使用系统属性 axs.native.tmpdir 指定的目录（运维可显式指定到受保护路径）；
+        // 2) 回退到系统 temp 下带随机后缀的子目录，并设置 0700 权限，避免明文 native 被其他用户读取。
+        //    静态块阶段 plugin 实例尚未创建，无法使用 plugin.getDataFolder()，故不依赖插件数据目录。
+        Path tempDir = resolveSecureTempDir();
         Path tempFile = tempDir.resolve(libName);
         Files.write(tempFile, libBytes);
+        applyOwnerOnlyPermissions(tempDir, tempFile);
         System.load(tempFile.toAbsolutePath().toString());
         java.util.Arrays.fill(libBytes, (byte) 0);
-        // 注册 shutdown hook 确保临时文件在 JVM 退出时被清理
+        // 加载完成后立即删除明文文件：Windows/Linux 上已加载的库句柄保留内存映射，
+        // 文件可安全删除，最大程度缩短明文 native 在磁盘上的暴露窗口。
+        try {
+            Files.deleteIfExists(tempFile);
+        } catch (IOException ignored) {
+            // 某些 JVM/OS 可能锁定文件，回退到 shutdown hook 清理。
+        }
+        // 注册 shutdown hook 确保临时目录在 JVM 退出时被清理（文件若已删除则只清空目录）
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {
                 Files.deleteIfExists(tempFile);
                 Files.deleteIfExists(tempDir);
             } catch (IOException ignored) {}
         }, "axs-native-cleanup"));
+    }
+
+    /**
+     * 解析 native 临时目录。优先使用系统属性 {@code axs.native.tmpdir}，
+     * 否则在系统 temp 下创建带随机后缀的子目录。
+     */
+    private static Path resolveSecureTempDir() throws IOException {
+        String override = System.getProperty("axs.native.tmpdir");
+        if (override != null && !override.isBlank()) {
+            Path base = java.nio.file.Paths.get(override);
+            Files.createDirectories(base);
+            return base;
+        }
+        // 带随机后缀的子目录，避免被其他进程预测路径
+        String suffix = java.lang.Long.toHexString(java.util.concurrent.ThreadLocalRandom.current().nextLong());
+        Path tempDir = java.nio.file.Files.createTempDirectory("axs_native_" + suffix);
+        return tempDir;
+    }
+
+    /**
+     * 尽力设置目录与文件为仅属主可读写（0700/0600）。
+     * Windows 上 setPosixFilePermissions 是 no-op（NTFS 不支持 POSIX 权限），依赖 temp 目录默认 ACL 即可。
+     */
+    private static void applyOwnerOnlyPermissions(Path dir, Path file) {
+        try {
+            java.util.Set<java.nio.file.attribute.PosixFilePermission> dirPerms =
+                java.util.EnumSet.of(
+                    java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                    java.nio.file.attribute.PosixFilePermission.OWNER_WRITE,
+                    java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE);
+            java.nio.file.Files.setPosixFilePermissions(dir, dirPerms);
+            java.util.Set<java.nio.file.attribute.PosixFilePermission> filePerms =
+                java.util.EnumSet.of(
+                    java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                    java.nio.file.attribute.PosixFilePermission.OWNER_WRITE);
+            java.nio.file.Files.setPosixFilePermissions(file, filePerms);
+        } catch (UnsupportedOperationException | IOException ignored) {
+            // 非 POSIX 文件系统（如 Windows）忽略，依赖系统 temp 默认权限
+        }
     }
 
     private static byte[] readAll(InputStream in) throws IOException {

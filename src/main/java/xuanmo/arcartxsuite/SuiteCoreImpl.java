@@ -217,7 +217,8 @@ public final class SuiteCoreImpl implements SuiteCore {
             keybindService,
             bridgeLifecycleManager.taczCombatBridge(),
             crossServerService,
-            placeholderResolver
+            placeholderResolver,
+            bridgeLifecycleManager.worldTextureBridge()
         );
         moduleRegistry.attachCore(this);
         try {

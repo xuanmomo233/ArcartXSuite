@@ -92,7 +92,13 @@ public final class ClientPacketGuard implements PacketGuardAPI {
         boolean debugLogging,
         FeedbackSink feedbackSink
     ) {
-        if (playerId == null || !configuration.enabled()) {
+        if (playerId == null) {
+            // 与公开重载 allow(Player,...) 在 player==null 时返回 false 保持一致：
+            // null playerId 视为非法调用方，拒绝放行，避免未来直接传 UUID 的调用方绕过 guard。
+            return false;
+        }
+        if (!configuration.enabled()) {
+            // guard 未启用时放行（与原语义一致）
             return true;
         }
 

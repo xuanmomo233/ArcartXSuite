@@ -306,8 +306,7 @@ public final class ProtectionInit {
     // ─── 完整性校验 ─────────────────────────────────────────────
 
     private static boolean verifyJarIntegrity(String jarPath) throws Exception {
-        JarFile jar = new JarFile(jarPath);
-        try {
+        try (JarFile jar = new JarFile(jarPath)) {
             // 读取 PROTECTION.MF
             var pmfEntry = jar.getJarEntry("META-INF/PROTECTION.MF");
             if (pmfEntry == null) {
@@ -336,8 +335,6 @@ public final class ProtectionInit {
 
             // 调用 native 验证 Ed25519 签名（公钥编译时嵌入 native）
             return NativeBridge.n7(computedRoot, signature);
-        } finally {
-            jar.close();
         }
     }
 

@@ -42,6 +42,7 @@ import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PropBridgeAPI;
+import xuanmo.arcartxsuite.bridge.ArcartXWorldTextureService;
 import xuanmo.arcartxsuite.bridge.DefaultAttributeBridgeRegistry;
 import xuanmo.arcartxsuite.bridge.DefaultAriaBridge;
 import xuanmo.arcartxsuite.bridge.DefaultItemSourceRegistry;
@@ -75,6 +76,7 @@ public final class ModuleRegistry {
     private final CrossServerService crossServerService;
     private final ModuleSignatureVerifier signatureVerifier;
     private final PlaceholderResolverAPI placeholderResolver;
+    private final ArcartXWorldTextureService worldTextureBridge;
 
     // ─── 全局桥接单例 ──────────────────────────────────────────
     private DefaultItemSourceRegistry itemSourceRegistry;
@@ -113,7 +115,8 @@ public final class ModuleRegistry {
         KeybindService keybindService,
         TaczCombatBridge taczCombatBridge,
         CrossServerService crossServerService,
-        PlaceholderResolverAPI placeholderResolver
+        PlaceholderResolverAPI placeholderResolver,
+        ArcartXWorldTextureService worldTextureBridge
     ) {
         this.plugin = plugin;
         this.modulesDir = modulesDir;
@@ -126,6 +129,7 @@ public final class ModuleRegistry {
         this.taczCombatBridge = taczCombatBridge;
         this.crossServerService = crossServerService;
         this.placeholderResolver = placeholderResolver;
+        this.worldTextureBridge = worldTextureBridge;
         List<String> sigPubKeys = plugin.getConfig().getStringList("module-signature-public-keys");
         if (plugin.getConfig().contains("module-signature-public-key")) {
             LOGGER.warning("[ModuleSignature] Legacy setting module-signature-public-key is no longer supported; use module-signature-public-keys (list). The legacy value will be ignored.");
@@ -231,14 +235,10 @@ public final class ModuleRegistry {
         List<String> cyclicModules = new ArrayList<>();
         List<String> sorted = topologicalSort(authorized, cyclicModules);
 
-        // 3.1 将循环依赖的模块标记为失败
+        // 3.1 将循环依赖的模块标记为失败（仅计入 failedModules，避免与 skippedModules 重复统计）
         for (String cyclicId : cyclicModules) {
             LOGGER.warning("模块 " + cyclicId + " 因循环依赖被标记为失败，不予加载。");
             failedModules.add(cyclicId);
-            DiscoveredModule dm = authorized.get(cyclicId);
-            if (dm != null) {
-                skippedModules.add(dm.descriptor.name());
-            }
         }
 
         // 4. 按序加载与启用
@@ -425,8 +425,13 @@ public final class ModuleRegistry {
                 return false;
             }
             for (String externalPlugin : descriptor.externalDepends()) {
-                if (Bukkit.getPluginManager().getPlugin(externalPlugin) == null) {
+                org.bukkit.plugin.Plugin dep = Bukkit.getPluginManager().getPlugin(externalPlugin);
+                if (dep == null) {
                     LOGGER.warning(descriptor.name() + " 模块需要 " + externalPlugin + " 插件，已跳过加载。");
+                    return false;
+                }
+                if (!dep.isEnabled()) {
+                    LOGGER.warning(descriptor.name() + " 模块依赖的外部插件 " + externalPlugin + " 已安装但未启用，已跳过加载。");
                     return false;
                 }
             }
@@ -669,10 +674,15 @@ public final class ModuleRegistry {
         File jarFile = dm.jarFile;
         byte[] jarBytes = dm.jarBytes;
 
-        // 检查外部插件依赖
+        // 检查外部插件依赖（必须存在且已启用，避免加载后因依赖未启用而 NoClassDefFoundError）
         for (String externalPlugin : descriptor.externalDepends()) {
-            if (Bukkit.getPluginManager().getPlugin(externalPlugin) == null) {
+            org.bukkit.plugin.Plugin dep = Bukkit.getPluginManager().getPlugin(externalPlugin);
+            if (dep == null) {
                 LOGGER.warning(descriptor.name() + " 模块需要 " + externalPlugin + " 插件，已跳过加载。");
+                return false;
+            }
+            if (!dep.isEnabled()) {
+                LOGGER.warning(descriptor.name() + " 模块依赖的外部插件 " + externalPlugin + " 已安装但未启用，已跳过加载。");
                 return false;
             }
         }
@@ -717,6 +727,7 @@ public final class ModuleRegistry {
             clientBridge,
             itemStackBridge,
             propBridge,
+            worldTextureBridge,
             packetGuard,
             this,
             classLoader,
@@ -1003,6 +1014,11 @@ public final class ModuleRegistry {
             ariaBridge.initialize();
         }
         return ariaBridge;
+    }
+
+    /** 获取宿主单例 WorldTexture 桥接（由 BridgeLifecycleManager 统一管理生命周期） */
+    public ArcartXWorldTextureService worldTextureBridge() {
+        return worldTextureBridge;
     }
 
     /** 获取统一条件评估器 */

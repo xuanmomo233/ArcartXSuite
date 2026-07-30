@@ -35,7 +35,6 @@ import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderExpansionRegistry;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.bridge.ArcartXWaypointBridge;
-import xuanmo.arcartxsuite.bridge.ArcartXWorldTextureService;
 import xuanmo.arcartxsuite.bridge.AdyeshachNpcBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXSoundPlayerBridge;
 import xuanmo.arcartxsuite.crossserver.CrossServerService;
@@ -67,6 +66,7 @@ final class DefaultModuleContext implements ModuleContext {
     private final TaczCombatBridge taczCombatBridge;
     private final CrossServerService crossServerService;
 
+
     // 模块注册的资源（onDisable 时自动清理）
     private final List<Listener> registeredListeners = new ArrayList<>();
     private final List<String> registeredCommandNames = new ArrayList<>();
@@ -82,6 +82,7 @@ final class DefaultModuleContext implements ModuleContext {
         ClientBridgeAPI clientBridge,
         ItemBridgeAPI itemStackBridge,
         PropBridgeAPI propBridge,
+        xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI worldTextureBridge,
         ClientPacketGuard packetGuard,
         ModuleRegistry registry,
         ClassLoader moduleClassLoader,
@@ -99,8 +100,7 @@ final class DefaultModuleContext implements ModuleContext {
         this.clientBridge = clientBridge;
         this.itemStackBridge = itemStackBridge;
         this.propBridge = propBridge;
-        this.worldTextureBridge = new ArcartXWorldTextureService(plugin);
-        this.worldTextureBridge.initialize();
+        this.worldTextureBridge = worldTextureBridge;
         this.packetGuard = packetGuard;
         this.registry = registry;
         this.moduleClassLoader = moduleClassLoader;

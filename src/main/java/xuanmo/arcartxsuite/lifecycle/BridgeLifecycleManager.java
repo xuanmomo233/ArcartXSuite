@@ -5,6 +5,7 @@ import xuanmo.arcartxsuite.bridge.ArcartXClientBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXItemStackBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXPacketBridge;
 import xuanmo.arcartxsuite.bridge.ArcartXPropBridge;
+import xuanmo.arcartxsuite.bridge.ArcartXWorldTextureService;
 import xuanmo.arcartxsuite.bridge.TaczCombatBridge;
 
 /**
@@ -20,6 +21,7 @@ public final class BridgeLifecycleManager {
     private final ArcartXClientBridge clientBridge;
     private final ArcartXItemStackBridge itemStackBridge;
     private final ArcartXPropBridge propBridge;
+    private final ArcartXWorldTextureService worldTextureBridge;
     private TaczCombatBridge taczCombatBridge;
 
     public BridgeLifecycleManager(JavaPlugin plugin) {
@@ -28,6 +30,7 @@ public final class BridgeLifecycleManager {
         this.clientBridge = new ArcartXClientBridge(plugin);
         this.itemStackBridge = new ArcartXItemStackBridge(plugin);
         this.propBridge = new ArcartXPropBridge(plugin);
+        this.worldTextureBridge = new ArcartXWorldTextureService(plugin);
     }
 
     /** 初始化全部桥接。返回 false 表示 packetBridge 初始化失败，应中止启动。 */
@@ -38,6 +41,7 @@ public final class BridgeLifecycleManager {
         clientBridge.initialize();
         itemStackBridge.initialize();
         propBridge.initialize();
+        worldTextureBridge.initialize();
         taczCombatBridge = TaczCombatBridge.tryInitialize(plugin, taczEnabled, taczDebug);
         return true;
     }
@@ -67,6 +71,10 @@ public final class BridgeLifecycleManager {
 
     public ArcartXPropBridge propBridge() {
         return propBridge;
+    }
+
+    public ArcartXWorldTextureService worldTextureBridge() {
+        return worldTextureBridge;
     }
 
     public TaczCombatBridge taczCombatBridge() {
