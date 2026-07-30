@@ -21,6 +21,9 @@ subprojects {
         maven("https://repo.papermc.io/repository/maven-public/")
         maven("https://oss.sonatype.org/content/repositories/snapshots/")
         maven("https://repo.md-5.net/repository/public/")
+        maven("https://jitpack.io")
+        maven("https://repo.codemc.org/repository/maven-public/")
+        maven("https://repo.rosewooddev.io/repository/public/")
     }
 
     afterEvaluate {

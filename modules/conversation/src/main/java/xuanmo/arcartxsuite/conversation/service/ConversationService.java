@@ -1,11 +1,11 @@
 package xuanmo.arcartxsuite.conversation.service;
 
+import ink.ptms.adyeshach.core.entity.EntityInstance;
 import ink.ptms.chemdah.api.ChemdahAPI;
 import ink.ptms.chemdah.api.event.collect.PluginReloadEvent;
 import ink.ptms.chemdah.core.conversation.Conversation;
 import ink.ptms.chemdah.core.conversation.Session;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import ink.ptms.chemdah.core.conversation.trigger.TriggerAdyeshachKt;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -85,7 +85,6 @@ public final class ConversationService implements Listener {
     private BukkitTask scanTask;
     private BukkitTask npcAppearanceRetryTask;
     private Listener chemdahReleasedListener;
-    private Method openConversationMethod;
     private boolean selectorUiReady;
     private boolean keybindBridgeReady;
     private boolean keybindsRegistered;
@@ -423,6 +422,7 @@ public final class ConversationService implements Listener {
 
         Plugin chemdah = Bukkit.getPluginManager().getPlugin("Chemdah");
         if (chemdah == null) {
+            logger.fine("Conversation: 未检测到 Chemdah 插件，对话释放清理监听已停用。");
             return false;
         }
 
@@ -430,28 +430,21 @@ public final class ConversationService implements Listener {
             ClassLoader classLoader = chemdah.getClass().getClassLoader();
             Class<?> rawEventClass = Class.forName(
                 "ink.ptms.chemdah.api.event.collect.PlayerEvents$Released",
-                true,
-                classLoader
+                true, classLoader
             );
             if (!Event.class.isAssignableFrom(rawEventClass)) {
                 this.logger.warning("Chemdah PlayerEvents.Released 不是 Bukkit Event，已跳过对话释放清理监听。");
                 return false;
             }
-
             Class<? extends Event> eventClass = (Class<? extends Event>) rawEventClass;
-            Method getPlayerMethod = rawEventClass.getMethod("getPlayer");
-            chemdahReleasedListener = new Listener() {
-            };
+            chemdahReleasedListener = new Listener() {};
             Bukkit.getPluginManager().registerEvent(
-                eventClass,
-                chemdahReleasedListener,
-                EventPriority.MONITOR,
-                (listener, event) -> handleChemdahReleasedEvent(event, rawEventClass, getPlayerMethod),
-                plugin,
-                true
+                eventClass, chemdahReleasedListener, EventPriority.MONITOR,
+                (listener, event) -> handleChemdahReleasedEvent(event),
+                plugin, true
             );
             return true;
-        } catch (ReflectiveOperationException | RuntimeException exception) {
+        } catch (Exception | LinkageError exception) {
             this.logger.warning("注册 Chemdah PlayerEvents.Released 监听失败: " + describeThrowable(exception));
             return false;
         }
@@ -465,16 +458,14 @@ public final class ConversationService implements Listener {
         chemdahReleasedListener = null;
     }
 
-    private void handleChemdahReleasedEvent(Event event, Class<?> releasedEventClass, Method getPlayerMethod) {
-        if (!releasedEventClass.isInstance(event)) {
-            return;
-        }
+    private void handleChemdahReleasedEvent(Event event) {
         try {
-            Object rawPlayer = getPlayerMethod.invoke(event);
+            var getPlayer = event.getClass().getMethod("getPlayer");
+            Object rawPlayer = getPlayer.invoke(event);
             if (rawPlayer instanceof Player player) {
                 cleanupPlayerState(player, "chemdah-released");
             }
-        } catch (ReflectiveOperationException | RuntimeException exception) {
+        } catch (Exception | LinkageError exception) {
             this.logger.warning("处理 Chemdah PlayerEvents.Released 失败: " + describeThrowable(exception));
         }
     }
@@ -884,41 +875,27 @@ public final class ConversationService implements Listener {
     private boolean initializeConversationOpener() {
         Plugin chemdah = Bukkit.getPluginManager().getPlugin("Chemdah");
         if (chemdah == null) {
+            logger.fine("Conversation: 未检测到 Chemdah 插件，对话触发器已停用。");
             return false;
         }
-        try {
-            ClassLoader classLoader = chemdah.getClass().getClassLoader();
-            Class<?> triggerClass = Class.forName(
-                "ink.ptms.chemdah.core.conversation.trigger.TriggerAdyeshachKt",
-                true,
-                classLoader
-            );
-            for (Method method : triggerClass.getMethods()) {
-                if (!method.getName().equals("openConversation") || method.getParameterCount() != 3) {
-                    continue;
-                }
-                Class<?>[] parameterTypes = method.getParameterTypes();
-                if (Player.class.isAssignableFrom(parameterTypes[1]) && wrap(parameterTypes[2]).equals(Boolean.class)) {
-                    openConversationMethod = method;
-                    return true;
-                }
-            }
-            this.logger.warning("未找到 Chemdah TriggerAdyeshachKt.openConversation，已禁用按键增强。");
-            return false;
-        } catch (ReflectiveOperationException exception) {
-            this.logger.warning("初始化 Chemdah Adyeshach 对话打开器失败: " + exception.getMessage());
+        if (!npcBridge.isAvailable()) {
+            logger.fine("Conversation: Adyeshach 不可用，对话触发器已停用。");
             return false;
         }
+        return true;
     }
 
     private CompletableFuture<?> invokeOpenConversation(Object conversationEntity, Player player) {
-        if (!conversationOpenerReady || openConversationMethod == null || conversationEntity == null || player == null) {
+        if (!conversationOpenerReady || conversationEntity == null || player == null) {
             return null;
         }
         try {
-            Object result = openConversationMethod.invoke(null, conversationEntity, player, Boolean.FALSE);
-            return result instanceof CompletableFuture<?> future ? future : null;
-        } catch (IllegalArgumentException | ReflectiveOperationException exception) {
+            return TriggerAdyeshachKt.openConversation(
+                (EntityInstance) conversationEntity,
+                player,
+                false
+            );
+        } catch (RuntimeException | LinkageError exception) {
             this.logger.warning("调用 Chemdah Adyeshach 对话打开器失败: " + describeThrowable(exception));
             return null;
         }
@@ -1126,13 +1103,10 @@ public final class ConversationService implements Listener {
     }
 
     static String describeThrowable(Throwable throwable) {
-        Throwable cause = throwable instanceof InvocationTargetException invocationTargetException
-            ? invocationTargetException.getCause()
-            : throwable;
-        if (cause == null || cause.getMessage() == null || cause.getMessage().isBlank()) {
+        if (throwable == null || throwable.getMessage() == null || throwable.getMessage().isBlank()) {
             return throwable.getClass().getSimpleName();
         }
-        return cause.getClass().getSimpleName() + ": " + cause.getMessage();
+        return throwable.getClass().getSimpleName() + ": " + throwable.getMessage();
     }
 
     private static String describeSession(Session session) {
@@ -1147,37 +1121,6 @@ public final class ConversationService implements Listener {
             return "null";
         }
         return session.getClass().getSimpleName() + "@" + Integer.toHexString(System.identityHashCode(session));
-    }
-
-    private static Class<?> wrap(Class<?> type) {
-        if (!type.isPrimitive()) {
-            return type;
-        }
-        if (type == boolean.class) {
-            return Boolean.class;
-        }
-        if (type == byte.class) {
-            return Byte.class;
-        }
-        if (type == char.class) {
-            return Character.class;
-        }
-        if (type == double.class) {
-            return Double.class;
-        }
-        if (type == float.class) {
-            return Float.class;
-        }
-        if (type == int.class) {
-            return Integer.class;
-        }
-        if (type == long.class) {
-            return Long.class;
-        }
-        if (type == short.class) {
-            return Short.class;
-        }
-        return Void.class;
     }
 
     private record NpcCandidate(

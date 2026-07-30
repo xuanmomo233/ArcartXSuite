@@ -23,6 +23,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
@@ -30,6 +31,7 @@ import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI.CurrencyBridge;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
+import xuanmo.arcartxsuite.api.util.NavigationMarkerService;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.AnchorDefinition;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.CurrencyCost;
@@ -70,7 +72,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
     private final ItemSourceRegistry itemSourceRegistry;
     private final ItemMatcherAPI itemMatcherSupport;
     private final WaypointBridgeAPI waypointBridge;
+    private final AdyeshachNpcBridgeAPI npcBridge;
     private final MessageProvider messages;
+    private NavigationMarkerService markerService;
     private final ConcurrentMap<UUID, MapPlayerViewState> viewStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, MapNavigationState> navigationStates = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, ConcurrentMap<String, MapExternalTarget>> externalTargets = new ConcurrentHashMap<>();
@@ -98,7 +102,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         WaypointBridgeAPI waypointBridge
     ) {
         this(plugin, logger, packetGuard, configuration, repository, bridge, menuUiId, hudUiId,
-            itemSourceRegistry, itemMatcherSupport, currencyBridgeManager, waypointBridge, null);
+            itemSourceRegistry, itemMatcherSupport, currencyBridgeManager, waypointBridge, null, null);
     }
 
     public MapService(
@@ -114,6 +118,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         ItemMatcherAPI itemMatcherSupport,
         CurrencyBridgeAPI currencyBridgeManager,
         WaypointBridgeAPI waypointBridge,
+        AdyeshachNpcBridgeAPI npcBridge,
         MessageProvider messages
     ) {
         this.plugin = plugin;
@@ -129,6 +134,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         this.itemSourceRegistry = itemSourceRegistry;
         this.itemMatcherSupport = itemMatcherSupport;
         this.waypointBridge = waypointBridge;
+        this.npcBridge = npcBridge;
         this.messages = messages;
     }
 
@@ -141,6 +147,15 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         if (configuration.navigation().enabled()) {
             waypointBridge.initialize("Map 导航");
         }
+        if (configuration.navigation().marker().enabled() && npcBridge != null) {
+            npcBridge.setDebug(configuration.debug());
+            npcBridge.initialize();
+            markerService = new NavigationMarkerService(
+                plugin, npcBridge, configuration.navigation().marker(), logger,
+                configuration.debug(), "map_path_"
+            );
+            markerService.start();
+        }
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -151,6 +166,10 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             if (bridge != null && !hudUiId.isBlank()) {
                 bridge.closeUi(player, hudUiId);
             }
+        }
+        if (markerService != null) {
+            markerService.shutdown();
+            markerService = null;
         }
         repository.close();
         waypointBridge.shutdown();
@@ -597,6 +616,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             player.getUniqueId(),
             new MapNavigationState(true, TargetType.ANCHOR, anchor.worldId(), anchor.id(), waypointId, anchor.displayName(), "map")
         );
+        if (markerService != null) {
+            markerService.showMarker(player, anchor.worldId(), anchor.x(), anchor.y(), anchor.z());
+        }
         sync(player, false);
         return MapOperationResult.success(message("player.anchor-navigation-started", anchor.displayName()));
     }
@@ -634,6 +656,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
                 "map"
             )
         );
+        if (markerService != null) {
+            markerService.showMarker(player, normalizeId(waypoint.world()), waypoint.x(), waypoint.y(), waypoint.z());
+        }
         sync(player, false);
         return MapOperationResult.success(message("player.waypoint-navigation-started", waypoint.name()));
     }
@@ -673,6 +698,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         );
         state(player).selectWorld(normalizeId(target.worldId()));
         state(player).selectExternalTarget(normalizeId(target.targetId()));
+        if (markerService != null) {
+            markerService.showMarker(player, normalizeId(target.worldId()), target.x(), target.y(), target.z());
+        }
         sync(player, false);
         return MapOperationResult.success(message("player.target-navigation-started", target.title()));
     }
@@ -1253,6 +1281,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         MapNavigationState state = navigationStates.remove(player.getUniqueId());
         if (state != null && state.active()) {
             waypointBridge.removeWaypoint(player, state.waypointId(), false);
+        }
+        if (markerService != null) {
+            markerService.hideMarker(player);
         }
     }
 

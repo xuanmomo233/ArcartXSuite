@@ -1,25 +1,14 @@
 package xuanmo.arcartxsuite.combateffect.packet.config;
 
-import java.lang.reflect.Method;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import xuanmo.arcartxsuite.api.combat.EntityCombatMetadata;
 
 public final class CombatPacketContext {
-
-    // MythicMobs 反射缓存
-    private static volatile boolean mythicReflectionInitialized;
-    private static volatile boolean mythicUnavailable;
-    private static Method mythicInstMethod;
-    private static Method mythicGetMobManagerMethod;
-    private static Method mythicGetActiveMobMethod;
-    private static Method mythicGetMobTypeMethod;
-    private static Method mythicGetInternalNameMethod;
 
     private final Player attacker;
     private final LivingEntity target;
@@ -109,73 +98,6 @@ public final class CombatPacketContext {
     }
 
     private static String resolveMythicMobId(LivingEntity entity) {
-        if (mythicUnavailable) {
-            return "";
-        }
-        try {
-            initMythicReflection();
-            if (mythicUnavailable) {
-                return "";
-            }
-            Object mythicBukkit = mythicInstMethod.invoke(null);
-            Object mobManager = mythicGetMobManagerMethod.invoke(mythicBukkit);
-            Object activeMob = mythicGetActiveMobMethod.invoke(mobManager, entity.getUniqueId());
-            if (activeMob == null) {
-                return "";
-            }
-            // Handle Optional return from newer MythicMobs API
-            if (activeMob instanceof Optional<?> opt) {
-                if (opt.isEmpty()) return "";
-                activeMob = opt.get();
-            }
-            ensureMobTypeMethods(activeMob);
-            if (mythicGetMobTypeMethod == null) return "";
-            Object mobType = mythicGetMobTypeMethod.invoke(activeMob);
-            if (mobType == null) return "";
-            if (mythicGetInternalNameMethod == null) return "";
-            Object internalName = mythicGetInternalNameMethod.invoke(mobType);
-            return internalName instanceof String s ? s : "";
-        } catch (Exception ignored) {
-            return "";
-        }
-    }
-
-    private static void initMythicReflection() {
-        if (mythicReflectionInitialized) {
-            return;
-        }
-        synchronized (CombatPacketContext.class) {
-            if (mythicReflectionInitialized) {
-                return;
-            }
-            try {
-                Class<?> mythicBukkitClass = Class.forName("io.lumine.mythic.bukkit.MythicBukkit");
-                mythicInstMethod = mythicBukkitClass.getMethod("inst");
-                mythicGetMobManagerMethod = mythicBukkitClass.getMethod("getMobManager");
-                Object inst = mythicInstMethod.invoke(null);
-                Object mm = mythicGetMobManagerMethod.invoke(inst);
-                mythicGetActiveMobMethod = mm.getClass().getMethod("getActiveMob", UUID.class);
-                // 需要从实际返回的 ActiveMob 实例上获取方法，这里先用返回类型探测
-                Class<?> activeMobReturnType = mythicGetActiveMobMethod.getReturnType();
-                // 如果返回类型是 Optional，获取其泛型参数的实际类型的方法
-                // 为了兼容性，延迟到第一次实际调用时解析 getMobType/getInternalName
-                mythicReflectionInitialized = true;
-            } catch (Exception exception) {
-                mythicUnavailable = true;
-                mythicReflectionInitialized = true;
-            }
-        }
-    }
-
-    private static void ensureMobTypeMethods(Object activeMob) throws Exception {
-        if (mythicGetMobTypeMethod == null) {
-            mythicGetMobTypeMethod = activeMob.getClass().getMethod("getMobType");
-        }
-        if (mythicGetInternalNameMethod == null) {
-            Object mobType = mythicGetMobTypeMethod.invoke(activeMob);
-            if (mobType != null) {
-                mythicGetInternalNameMethod = mobType.getClass().getMethod("getInternalName");
-            }
-        }
+        return EntityCombatMetadata.resolveMythicMobId(entity);
     }
 }

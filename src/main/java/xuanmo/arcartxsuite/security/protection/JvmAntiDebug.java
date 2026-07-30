@@ -162,8 +162,7 @@ public final class JvmAntiDebug {
         try {
             List<String> args = ManagementFactory.getRuntimeMXBean().getInputArguments();
             for (String arg : args) {
-                if (arg.contains("-agentlib:jdwp") || arg.contains("-Xrunjdwp")
-                        || arg.contains("-agentpath:") || arg.contains("-javaagent:")) {
+                if (arg.contains("-agentlib:jdwp") || arg.contains("-Xrunjdwp")) {
                     return true;
                 }
             }

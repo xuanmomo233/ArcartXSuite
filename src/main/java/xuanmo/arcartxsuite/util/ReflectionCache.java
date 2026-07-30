@@ -154,19 +154,32 @@ public final class ReflectionCache {
         fieldCache.clear();
     }
 
-    private record MethodKey(Class<?> clazz, String name, Class<?>[] parameterTypes) {
+    private static final class MethodKey {
+        private final Class<?> clazz;
+        private final String name;
+        private final Class<?>[] parameterTypes;
+        private final int hash;
+
+        MethodKey(Class<?> clazz, String name, Class<?>[] parameterTypes) {
+            this.clazz = clazz;
+            this.name = name;
+            this.parameterTypes = parameterTypes;
+            this.hash = 31 * (31 * clazz.hashCode() + name.hashCode()) + Arrays.hashCode(parameterTypes);
+        }
+
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
             if (!(o instanceof MethodKey other)) return false;
-            return clazz.equals(other.clazz)
+            return hash == other.hash
+                && clazz.equals(other.clazz)
                 && name.equals(other.name)
                 && Arrays.equals(parameterTypes, other.parameterTypes);
         }
 
         @Override
         public int hashCode() {
-            return 31 * (31 * clazz.hashCode() + name.hashCode()) + Arrays.hashCode(parameterTypes);
+            return hash;
         }
     }
 

@@ -118,8 +118,6 @@ public final class ChemdahTrackerBridge {
 
   private boolean probeAvailability() {
     try {
-      Class.forName("ink.ptms.chemdah.api.ChemdahTrackAPI");
-      Class.forName("ink.ptms.chemdah.core.quest.addon.tracker.QuestTrackingSession");
       return ChemdahTrackAPI.INSTANCE != null;
     } catch (Throwable ignored) {
       return false;

@@ -87,12 +87,17 @@ public final class NativeBridge {
         }
 
         Path tempDir = Files.createTempDirectory("axs_native");
-        tempDir.toFile().deleteOnExit();
         Path tempFile = tempDir.resolve(libName);
-        tempFile.toFile().deleteOnExit();
         Files.write(tempFile, libBytes);
         System.load(tempFile.toAbsolutePath().toString());
         java.util.Arrays.fill(libBytes, (byte) 0);
+        // 注册 shutdown hook 确保临时文件在 JVM 退出时被清理
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                Files.deleteIfExists(tempFile);
+                Files.deleteIfExists(tempDir);
+            } catch (IOException ignored) {}
+        }, "axs-native-cleanup"));
     }
 
     private static byte[] readAll(InputStream in) throws IOException {

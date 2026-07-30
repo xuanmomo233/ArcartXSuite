@@ -5,7 +5,6 @@ import ink.ptms.chemdah.core.PlayerProfile;
 import ink.ptms.chemdah.core.quest.AcceptResult;
 import ink.ptms.chemdah.core.quest.Quest;
 import ink.ptms.chemdah.core.quest.Template;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -461,112 +460,71 @@ public final class QuestGpsService implements Listener {
     private void registerChemdahEventListeners() {
         org.bukkit.plugin.Plugin chemdah = Bukkit.getPluginManager().getPlugin("Chemdah");
         if (chemdah == null) {
+            logger.fine("QuestGPS: 未检测到 Chemdah 插件，Chemdah 任务事件监听已停用。");
             return;
         }
-        registerChemdahQuestLifecycleEvent(chemdah, "ink.ptms.chemdah.api.event.collect.QuestEvents$Accept$Post", Lifecycle.ACCEPTED, false);
-        registerChemdahQuestLifecycleEvent(chemdah, "ink.ptms.chemdah.api.event.collect.QuestEvents$Fail$Post", Lifecycle.ABANDONED, true);
-        registerChemdahQuestLifecycleEvent(chemdah, "ink.ptms.chemdah.api.event.collect.QuestEvents$Complete$Post", Lifecycle.COMPLETED, true);
+        ClassLoader cl = chemdah.getClass().getClassLoader();
+        registerChemdahQuestLifecycleEvent(cl, "ink.ptms.chemdah.api.event.collect.QuestEvents$Accept$Post", Lifecycle.ACCEPTED, false);
+        registerChemdahQuestLifecycleEvent(cl, "ink.ptms.chemdah.api.event.collect.QuestEvents$Fail$Post", Lifecycle.ABANDONED, true);
+        registerChemdahQuestLifecycleEvent(cl, "ink.ptms.chemdah.api.event.collect.QuestEvents$Complete$Post", Lifecycle.COMPLETED, true);
         try {
             Class<?> rawEventClass = Class.forName(
                 "ink.ptms.chemdah.api.event.collect.PluginReloadEvent$Quest",
-                true,
-                chemdah.getClass().getClassLoader()
+                true, cl
             );
-            if (!Event.class.isAssignableFrom(rawEventClass)) {
-                return;
-            }
+            if (!Event.class.isAssignableFrom(rawEventClass)) return;
             Class<? extends Event> eventClass = (Class<? extends Event>) rawEventClass;
-            Listener listener = new Listener() {
-            };
+            Listener listener = new Listener() {};
             Bukkit.getPluginManager().registerEvent(
-                eventClass,
-                listener,
-                EventPriority.MONITOR,
+                eventClass, listener, EventPriority.MONITOR,
                 (ignored, event) -> {
                     for (Player player : Bukkit.getOnlinePlayers()) {
                         refreshViewer(player);
                     }
                 },
-                plugin,
-                true
+                plugin, true
             );
             chemdahEventListeners.add(listener);
-        } catch (ReflectiveOperationException exception) {
+        } catch (Exception | LinkageError exception) {
             this.logger.warning("QuestGPS: 注册 Chemdah 重载事件失败: " + exception.getMessage());
         }
     }
 
     @SuppressWarnings("unchecked")
     private void registerChemdahQuestLifecycleEvent(
-        org.bukkit.plugin.Plugin chemdah,
+        ClassLoader cl,
         String className,
         Lifecycle lifecycle,
         boolean clearTracking
     ) {
         try {
-            Class<?> rawEventClass = Class.forName(className, true, chemdah.getClass().getClassLoader());
-            if (!Event.class.isAssignableFrom(rawEventClass)) {
-                return;
-            }
+            Class<?> rawEventClass = Class.forName(className, true, cl);
+            if (!Event.class.isAssignableFrom(rawEventClass)) return;
             Class<? extends Event> eventClass = (Class<? extends Event>) rawEventClass;
-            Method getPlayerProfile = rawEventClass.getMethod("getPlayerProfile");
-            Method getQuest = rawEventClass.getMethod("getQuest");
-            Method getQuestId = Class.forName("ink.ptms.chemdah.core.quest.Quest", true, chemdah.getClass().getClassLoader()).getMethod("getId");
-            Listener listener = new Listener() {
-            };
+            Listener listener = new Listener() {};
             Bukkit.getPluginManager().registerEvent(
-                eventClass,
-                listener,
-                EventPriority.MONITOR,
-                (ignored, event) -> handleChemdahQuestLifecycleEvent(
-                    event,
-                    rawEventClass,
-                    getPlayerProfile,
-                    getQuest,
-                    getQuestId,
-                    lifecycle,
-                    clearTracking
-                ),
-                plugin,
-                true
+                eventClass, listener, EventPriority.MONITOR,
+                (ignored, event) -> handleChemdahQuestLifecycleEvent(event, lifecycle, clearTracking),
+                plugin, true
             );
             chemdahEventListeners.add(listener);
-        } catch (ReflectiveOperationException exception) {
+        } catch (Exception | LinkageError exception) {
             this.logger.warning("QuestGPS: 注册 Chemdah 任务事件失败(" + className + "): " + exception.getMessage());
         }
     }
 
     private void handleChemdahQuestLifecycleEvent(
         Event event,
-        Class<?> expectedEventClass,
-        Method getPlayerProfile,
-        Method getQuest,
-        Method getQuestId,
         Lifecycle lifecycle,
         boolean clearTracking
     ) {
-        if (!expectedEventClass.isInstance(event)) {
-            if (configuration.debug()) {
-                this.logger.fine(
-                    "QuestGPS: 忽略非匹配 Chemdah 任务事件: expected="
-                        + expectedEventClass.getName()
-                        + ", actual="
-                        + event.getClass().getName()
-                );
-            }
-            return;
-        }
         try {
-            Object rawProfile = invokeCompatible(getPlayerProfile, event);
-            Object rawQuest = invokeCompatible(getQuest, event);
-            Object rawQuestId = invokeCompatible(getQuestId, rawQuest);
-            if (rawProfile == null || rawQuest == null || rawQuestId == null) {
-                return;
-            }
-            String questId = String.valueOf(rawQuestId);
-            if (!(rawProfile instanceof PlayerProfile profile)) {
-                return;
-            }
+            var getPlayerProfile = event.getClass().getMethod("getPlayerProfile");
+            var getQuest = event.getClass().getMethod("getQuest");
+            PlayerProfile profile = (PlayerProfile) getPlayerProfile.invoke(event);
+            Quest quest = (Quest) getQuest.invoke(event);
+            if (profile == null || quest == null) return;
+            String questId = quest.getId();
             Player player = profile.getPlayer();
             if (player != null && clearTracking && navigationService.removeOnFinish()) {
                 clearTrackForQuest(player, questId);
@@ -579,7 +537,7 @@ public final class QuestGpsService implements Listener {
                 publishQuestCompleted(player, questId, definition);
             }
             refreshByProfile(profile);
-        } catch (ReflectiveOperationException | RuntimeException exception) {
+        } catch (Exception | LinkageError exception) {
             this.logger.warning("QuestGPS: 处理 Chemdah 任务事件失败: " + exception.getMessage());
         }
     }
@@ -605,24 +563,6 @@ public final class QuestGpsService implements Listener {
         } catch (Exception exception) {
             logger.warning("QuestGPS EventBus 发布失败: " + exception.getMessage());
         }
-    }
-
-    static Object invokeCompatible(Method method, Object target) throws ReflectiveOperationException {
-        if (method == null || target == null) {
-            return null;
-        }
-        Method actualMethod = method;
-        if (!method.getDeclaringClass().isInstance(target)) {
-            try {
-                actualMethod = target.getClass().getMethod(method.getName(), method.getParameterTypes());
-            } catch (NoSuchMethodException ignored) {
-                return null;
-            }
-            if (!actualMethod.getDeclaringClass().isInstance(target)) {
-                return null;
-            }
-        }
-        return actualMethod.invoke(target);
     }
 
     private void afterTrackChanged(Player player, String questId) {

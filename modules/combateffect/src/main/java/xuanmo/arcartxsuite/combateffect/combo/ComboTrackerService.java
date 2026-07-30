@@ -1,6 +1,5 @@
 package xuanmo.arcartxsuite.combateffect.combo;
 
-import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,6 +16,8 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
+import priv.seventeen.artist.arcartx.chronos.api.ChronosAPI;
+import priv.seventeen.artist.arcartx.chronos.api.event.PlayerEnterStateEvent;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
@@ -50,11 +51,10 @@ public final class ComboTrackerService implements Listener {
 
     private Listener quitCleanupListener;
 
-    // Chronos 反射
+    // Chronos
     private boolean chronosHooked;
     private Listener chronosListener;
-    private Method chronosGetPlayerStateGroupIdMethod;
-    private Object chronosApiInstance;
+    private ChronosAPI chronosApi;
 
     public ComboTrackerService(
         JavaPlugin plugin,
@@ -264,42 +264,29 @@ public final class ComboTrackerService implements Listener {
 
     // ========== Chronos 集成 ==========
 
-    @SuppressWarnings("unchecked")
     private boolean initChronos() {
         try {
             org.bukkit.plugin.Plugin chronos = Bukkit.getPluginManager().getPlugin("Chronos");
             if (chronos == null || !chronos.isEnabled()) {
                 return false;
             }
-            ClassLoader cl = chronos.getClass().getClassLoader();
-            Class<?> chronosApiClass = Class.forName("priv.seventeen.artist.chronos.api.ChronosAPI", true, cl);
-            Method getInstanceMethod = chronosApiClass.getMethod("getInstanceAPI");
-            chronosApiInstance = getInstanceMethod.invoke(null);
-            if (chronosApiInstance == null) {
+            chronosApi = ChronosAPI.getInstanceAPI();
+            if (chronosApi == null) {
                 return false;
             }
-            chronosGetPlayerStateGroupIdMethod = chronosApiClass.getMethod("getPlayerStateGroupId", Player.class);
 
             // 注册 PlayerEnterStateEvent 监听
-            Class<?> eventClass = Class.forName(
-                "priv.seventeen.artist.chronos.api.event.PlayerEnterStateEvent", true, cl
-            );
-            if (!Event.class.isAssignableFrom(eventClass)) {
-                return false;
-            }
-
-            Method getPlayerMethod = eventClass.getMethod("getPlayer");
             chronosListener = new Listener() {};
             Bukkit.getPluginManager().registerEvent(
-                (Class<? extends Event>) eventClass,
+                PlayerEnterStateEvent.class,
                 chronosListener,
                 EventPriority.MONITOR,
-                (listener, event) -> handleChronosStateEnter(event, eventClass, getPlayerMethod),
+                (listener, event) -> handleChronosStateEnter(event),
                 plugin,
                 true
             );
             return true;
-        } catch (Exception exception) {
+        } catch (Exception | LinkageError exception) {
             if (config.debug()) {
                 logger.warning("ComboTracker Chronos 初始化失败: " + exception.getMessage());
             }
@@ -307,22 +294,19 @@ public final class ComboTrackerService implements Listener {
         }
     }
 
-    private void handleChronosStateEnter(Event event, Class<?> eventClass, Method getPlayerMethod) {
-        if (!eventClass.isInstance(event)) {
+    private void handleChronosStateEnter(Event event) {
+        if (!(event instanceof PlayerEnterStateEvent enterEvent)) {
             return;
         }
         try {
-            Object rawPlayer = getPlayerMethod.invoke(event);
-            if (!(rawPlayer instanceof Player player)) {
-                return;
-            }
+            Player player = enterEvent.getPlayer();
             // 检查状态组是否在配置的 combo 组中
-            String group = (String) chronosGetPlayerStateGroupIdMethod.invoke(chronosApiInstance, player);
+            String group = chronosApi.getPlayerStateGroupId(player);
             if (group == null || !config.chronosGroups().contains(group)) {
                 return;
             }
             incrementCombo(player);
-        } catch (Exception exception) {
+        } catch (Exception | LinkageError exception) {
             if (config.debug()) {
                 logger.warning("ComboTracker 处理 Chronos 事件失败: " + exception.getMessage());
             }

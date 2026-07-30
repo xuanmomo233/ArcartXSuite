@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.questgps.chemdah;
 
-import java.lang.reflect.Method;
+import ink.ptms.chemdah.core.quest.Task;
+import ink.ptms.chemdah.core.quest.Template;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -20,16 +21,23 @@ public final class ChemdahConfigAccessor {
             return null;
         }
         try {
-            Method method = holder.getClass().getMethod("getConfig");
-            Object config = method.invoke(holder);
-            if (config instanceof ConfigurationSection section) {
-                return section;
+            Object config = null;
+            if (holder instanceof Template template) {
+                config = template.getConfig();
+            } else if (holder instanceof Task task) {
+                config = task.getConfig();
+            } else if (holder instanceof ConfigurationSection direct) {
+                return direct;
             }
             if (config == null) {
                 return null;
             }
-            Method valuesMethod = config.getClass().getMethod("getValues", boolean.class);
-            Object values = valuesMethod.invoke(config, true);
+            if (config instanceof ConfigurationSection section) {
+                return section;
+            }
+            // Chemdah taboolib ConfigurationSection -> Bukkit ConfigurationSection conversion
+            var getValues = config.getClass().getMethod("getValues", boolean.class);
+            Object values = getValues.invoke(config, true);
             if (!(values instanceof Map<?, ?> map)) {
                 return null;
             }
@@ -52,7 +60,7 @@ public final class ChemdahConfigAccessor {
                 memory.set(path, value);
             }
             return memory;
-        } catch (ReflectiveOperationException ignored) {
+        } catch (Exception | LinkageError ignored) {
             return null;
         }
     }

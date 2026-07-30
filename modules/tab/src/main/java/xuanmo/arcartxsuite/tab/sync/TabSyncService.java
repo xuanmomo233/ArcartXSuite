@@ -15,6 +15,7 @@ import java.util.regex.Pattern;
 import xuanmo.arcartxsuite.tab.config.UiTarget;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.scoreboard.Team;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
@@ -1684,41 +1685,33 @@ public final class TabSyncService implements Listener, TabRefreshRequester, xuan
 
     private static String resolveVaultPrimaryGroup(Player player) {
         try {
-            Class<?> permissionClass = Class.forName("net.milkbowl.vault.permission.Permission");
-            org.bukkit.plugin.RegisteredServiceProvider<?> provider =
-                Bukkit.getServicesManager().getRegistration(permissionClass);
+            RegisteredServiceProvider<net.milkbowl.vault.permission.Permission> provider =
+                Bukkit.getServicesManager().getRegistration(net.milkbowl.vault.permission.Permission.class);
             if (provider == null) {
                 return null;
             }
-            Object permission = provider.getProvider();
-            java.lang.reflect.Method getPrimaryGroup = permission.getClass()
-                .getMethod("getPrimaryGroup", org.bukkit.World.class, String.class);
-            String group = (String) getPrimaryGroup.invoke(permission, player.getWorld(), player.getName());
+            net.milkbowl.vault.permission.Permission permission = provider.getProvider();
+            String group = permission.getPrimaryGroup(player.getWorld(), player.getName());
             if (group != null && !group.isBlank()) {
                 return group.toLowerCase(Locale.ROOT);
             }
-        } catch (ReflectiveOperationException ignored) {
+        } catch (Exception | LinkageError ignored) {
         }
         return null;
     }
 
     private static String resolveLuckPermsPrimaryGroup(Player player) {
         try {
-            Class<?> providerClass = Class.forName("net.luckperms.api.LuckPermsProvider");
-            java.lang.reflect.Method get = providerClass.getMethod("get");
-            Object api = get.invoke(null);
-            java.lang.reflect.Method getUserManager = api.getClass().getMethod("getUserManager");
-            Object userManager = getUserManager.invoke(api);
-            java.lang.reflect.Method getUser = userManager.getClass().getMethod("getUser", UUID.class);
-            Object user = getUser.invoke(userManager, player.getUniqueId());
+            net.luckperms.api.LuckPerms api = net.luckperms.api.LuckPermsProvider.get();
+            net.luckperms.api.model.user.UserManager userManager = api.getUserManager();
+            net.luckperms.api.model.user.User user = userManager.getUser(player.getUniqueId());
             if (user != null) {
-                java.lang.reflect.Method getPrimaryGroup = user.getClass().getMethod("getPrimaryGroup");
-                String group = (String) getPrimaryGroup.invoke(user);
+                String group = user.getPrimaryGroup();
                 if (group != null && !group.isBlank()) {
                     return group.toLowerCase(Locale.ROOT);
                 }
             }
-        } catch (ReflectiveOperationException ignored) {
+        } catch (Exception | LinkageError ignored) {
         }
         return null;
     }

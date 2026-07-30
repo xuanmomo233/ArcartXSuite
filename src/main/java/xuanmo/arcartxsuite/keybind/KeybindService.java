@@ -1,6 +1,5 @@
 package xuanmo.arcartxsuite.keybind;
 
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -10,44 +9,29 @@ import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Event;
+import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
-import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import priv.seventeen.artist.arcartx.event.client.ClientKeyPressEvent;
 import xuanmo.arcartxsuite.api.KeybindHandler;
 import xuanmo.arcartxsuite.api.bridge.PropBridgeAPI;
 import xuanmo.arcartxsuite.bridge.ArcartXKeyBindBridge;
 
-/**
- * 宿主级全局按键服务。
- * <p>
- * 从 config.yml keybinds 节读取按键定义，通过 {@link PropBridgeAPI} 统一注册到 ArcartX 客户端，
- * 并监听 {@code ClientKeyPressEvent} 将按键回调按优先级分发给模块注册的 {@link KeybindHandler}。
- */
-public final class KeybindService {
+public final class KeybindService implements Listener {
 
     private final JavaPlugin plugin;
-
-    /** keyName → 按优先级排序的处理器列表 */
     private final Map<String, CopyOnWriteArrayList<PrioritizedHandler>> handlers = new ConcurrentHashMap<>();
-    /** 已成功注册的按键名 */
     private final List<String> registeredKeys = new ArrayList<>();
-    /** 3 参数版本按键桥接（注册后通过 ClientKeyPressEvent 触发） */
     private final ArcartXKeyBindBridge keyBindBridge;
-    /** ClientKeyPressEvent 监听器 */
-    private Listener keyPressListener;
+    private boolean listenerRegistered;
 
     public KeybindService(JavaPlugin plugin, PropBridgeAPI propBridge) {
         this.plugin = plugin;
         this.keyBindBridge = new ArcartXKeyBindBridge(plugin);
     }
 
-    /**
-     * 从 config.yml 读取 keybinds 节并注册所有按键。
-     * 在 {@code onEnable} 桥接初始化完成后、模块加载前调用。
-     */
     public void initialize(FileConfiguration config) {
         ConfigurationSection keybindsSection = config.getConfigurationSection("keybinds");
         if (keybindsSection == null) {
@@ -80,13 +64,9 @@ public final class KeybindService {
             }
         }
 
-        // 注册 ClientKeyPressEvent 监听分发按键事件
         registerClientKeyPressListener();
     }
 
-    /**
-     * 注销所有已注册的按键并清理处理器。
-     */
     public void shutdown() {
         unregisterClientKeyPressListener();
         for (String keyName : registeredKeys) {
@@ -97,68 +77,33 @@ public final class KeybindService {
         keyBindBridge.shutdown();
     }
 
-    @SuppressWarnings("unchecked")
     private void registerClientKeyPressListener() {
         unregisterClientKeyPressListener();
-        Plugin arcartX = Bukkit.getPluginManager().getPlugin("ArcartX");
-        if (arcartX == null) {
+        if (Bukkit.getPluginManager().getPlugin("ArcartX") == null) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning("[Keybind] ArcartX 未加载，ClientKeyPressEvent 监听未注册。");
             return;
         }
-        try {
-            ClassLoader classLoader = arcartX.getClass().getClassLoader();
-            Class<?> rawEventClass = Class.forName(
-                "priv.seventeen.artist.arcartx.event.client.ClientKeyPressEvent",
-                true, classLoader
-            );
-            if (!Event.class.isAssignableFrom(rawEventClass)) {
-                xuanmo.arcartxsuite.module.AxsLog.logger().warning("[Keybind] ClientKeyPressEvent 不是 Bukkit Event。");
-                return;
-            }
-            Class<? extends Event> eventClass = (Class<? extends Event>) rawEventClass;
-            Method getPlayerMethod = rawEventClass.getMethod("getPlayer");
-            Method getKeyNameMethod = rawEventClass.getMethod("getKeyName");
-            keyPressListener = new Listener() { };
-            Bukkit.getPluginManager().registerEvent(
-                eventClass, keyPressListener, EventPriority.MONITOR,
-                (listener, event) -> handleKeyPressEvent(event, rawEventClass, getPlayerMethod, getKeyNameMethod),
-                plugin, true
-            );
-            xuanmo.arcartxsuite.module.AxsLog.logger().info("[Keybind] ClientKeyPressEvent 监听注册成功。");
-        } catch (ReflectiveOperationException exception) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning("[Keybind] 注册 ClientKeyPressEvent 监听失败: " + exception.getMessage());
-        }
+        Bukkit.getPluginManager().registerEvents(this, plugin);
+        listenerRegistered = true;
+        xuanmo.arcartxsuite.module.AxsLog.logger().info("[Keybind] ClientKeyPressEvent 监听注册成功。");
     }
 
     private void unregisterClientKeyPressListener() {
-        if (keyPressListener != null) {
-            HandlerList.unregisterAll(keyPressListener);
-            keyPressListener = null;
+        if (listenerRegistered) {
+            HandlerList.unregisterAll(this);
+            listenerRegistered = false;
         }
     }
 
-    private void handleKeyPressEvent(Event event, Class<?> eventClass, Method getPlayerMethod, Method getKeyNameMethod) {
-        if (!eventClass.isInstance(event)) {
-            return;
-        }
-        try {
-            Object rawPlayer = getPlayerMethod.invoke(event);
-            Object rawKeyName = getKeyNameMethod.invoke(event);
-            if (rawPlayer instanceof Player player && rawKeyName instanceof String keyName) {
-                dispatch(player, keyName);
-            }
-        } catch (ReflectiveOperationException exception) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning("[Keybind] 处理 ClientKeyPressEvent 失败: " + exception.getMessage());
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onClientKeyPress(ClientKeyPressEvent event) {
+        Player player = event.getPlayer();
+        String keyName = event.getKeyName();
+        if (player != null && keyName != null) {
+            dispatch(player, keyName);
         }
     }
 
-    /**
-     * 模块注册按键处理器。
-     *
-     * @param keyName  按键名（须与 config.yml keybinds 中的 name 匹配）
-     * @param priority 优先级（越小越先）
-     * @param handler  处理器
-     */
     public void registerHandler(String keyName, int priority, KeybindHandler handler) {
         if (keyName == null || keyName.isBlank() || handler == null) {
             return;
@@ -170,11 +115,6 @@ public final class KeybindService {
         list.sort(null);
     }
 
-    /**
-     * 移除指定模块的按键处理器。
-     *
-     * @param handler 要移除的处理器实例
-     */
     public void unregisterHandler(KeybindHandler handler) {
         if (handler == null) {
             return;
@@ -184,7 +124,6 @@ public final class KeybindService {
         }
     }
 
-    /** 按优先级分发给处理器，任一返回 true 即停止。确保在主线程执行。 */
     private void dispatch(Player player, String keyName) {
         if (Bukkit.isPrimaryThread()) {
             doDispatch(player, keyName);
@@ -209,7 +148,6 @@ public final class KeybindService {
         }
     }
 
-    /** 已注册的按键名列表（调试用） */
     public List<String> registeredKeyNames() {
         return List.copyOf(registeredKeys);
     }

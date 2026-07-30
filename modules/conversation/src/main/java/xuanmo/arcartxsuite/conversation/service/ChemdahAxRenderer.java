@@ -2,8 +2,6 @@ package xuanmo.arcartxsuite.conversation.service;
 
 import ink.ptms.chemdah.core.conversation.PlayerReply;
 import ink.ptms.chemdah.core.conversation.Session;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -538,12 +536,13 @@ final class ChemdahAxRenderer {
 
     private static boolean readSessionBoolean(Session session, String methodName, boolean fallback) {
         try {
-            Method method = session.getClass().getMethod(methodName);
-            Object value = method.invoke(session);
-            return value instanceof Boolean booleanValue ? booleanValue : fallback;
-        } catch (NoSuchMethodException ignored) {
+            if ("isClosed".equals(methodName)) {
+                return session.isClosed();
+            } else if ("isValid".equals(methodName)) {
+                return session.isValid();
+            }
             return fallback;
-        } catch (IllegalAccessException | InvocationTargetException | RuntimeException ignored) {
+        } catch (Exception | LinkageError ignored) {
             return fallback;
         }
     }

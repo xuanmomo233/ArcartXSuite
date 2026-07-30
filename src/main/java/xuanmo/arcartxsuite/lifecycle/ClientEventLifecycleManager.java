@@ -1,31 +1,23 @@
 package xuanmo.arcartxsuite.lifecycle;
 
-import java.lang.reflect.Method;
 import java.util.List;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Event;
+import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
-import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import priv.seventeen.artist.arcartx.event.client.ClientCustomPacketEvent;
+import priv.seventeen.artist.arcartx.event.client.ClientInitializedEvent;
 import xuanmo.arcartxsuite.module.ModuleRegistry;
-import xuanmo.arcartxsuite.util.ReflectionCache;
 
-/**
- * ArcartX 客户端事件转发生命周期管理器。
- * <p>
- * 监听 `ClientCustomPacketEvent` 与 `ClientInitializedEvent$End`，
- * 将事件路由到 {@link ModuleRegistry} 中已加载的模块。
- */
-public final class ClientEventLifecycleManager {
+public final class ClientEventLifecycleManager implements Listener {
 
     private final JavaPlugin plugin;
     private final Supplier<ModuleRegistry> registrySupplier;
-    private Listener clientCustomPacketListener;
-    private Listener clientInitializedListener;
+    private boolean registered;
 
     public ClientEventLifecycleManager(JavaPlugin plugin, Supplier<ModuleRegistry> registrySupplier) {
         this.plugin = plugin;
@@ -33,148 +25,42 @@ public final class ClientEventLifecycleManager {
     }
 
     public void start() {
-        registerClientCustomPacketListener();
-        registerClientInitializedListener();
+        if (registered) return;
+        plugin.getServer().getPluginManager().registerEvents(this, plugin);
+        registered = true;
     }
 
     public void stop() {
-        unregisterClientCustomPacketListener();
-        unregisterClientInitializedListener();
+        if (!registered) return;
+        HandlerList.unregisterAll(this);
+        registered = false;
     }
 
-    @SuppressWarnings("unchecked")
-    private void registerClientCustomPacketListener() {
-        unregisterClientCustomPacketListener();
-
-        Plugin arcartX = Bukkit.getPluginManager().getPlugin("ArcartX");
-        if (arcartX == null) {
-            return;
-        }
-
-        try {
-            ReflectionCache arcartXReflection = new ReflectionCache(arcartX.getClass().getClassLoader());
-            Class<?> rawEventClass = arcartXReflection.forName("priv.seventeen.artist.arcartx.event.client.ClientCustomPacketEvent");
-            if (!Event.class.isAssignableFrom(rawEventClass)) {
-                xuanmo.arcartxsuite.module.AxsLog.logger().warning("ArcartX ClientCustomPacketEvent 不是 Bukkit Event，已跳过监听。");
-                return;
-            }
-            Class<? extends Event> eventClass = (Class<? extends Event>) rawEventClass;
-            Method getPlayerMethod = arcartXReflection.method(rawEventClass, "getPlayer");
-            Method getIdMethod = arcartXReflection.method(rawEventClass, "getId");
-            Method getDataMethod = arcartXReflection.method(rawEventClass, "getData");
-
-            clientCustomPacketListener = new Listener() {};
-            plugin.getServer().getPluginManager().registerEvent(
-                eventClass,
-                clientCustomPacketListener,
-                EventPriority.MONITOR,
-                (listener, event) -> dispatchClientCustomPacket(event, rawEventClass, getPlayerMethod, getIdMethod, getDataMethod),
-                plugin,
-                true
-            );
-        } catch (ReflectiveOperationException exception) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning("注册 ArcartX 客户端自定义包监听失败: " + exception.getMessage());
-        }
-    }
-
-    private void unregisterClientCustomPacketListener() {
-        if (clientCustomPacketListener == null) {
-            return;
-        }
-        HandlerList.unregisterAll(clientCustomPacketListener);
-        clientCustomPacketListener = null;
-    }
-
-    private void dispatchClientCustomPacket(
-        Event event,
-        Class<?> eventClass,
-        Method getPlayerMethod,
-        Method getIdMethod,
-        Method getDataMethod
-    ) {
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onClientCustomPacket(ClientCustomPacketEvent event) {
         ModuleRegistry registry = registrySupplier.get();
-        if (!eventClass.isInstance(event) || registry == null) {
-            return;
-        }
-        try {
-            Object rawPlayer = getPlayerMethod.invoke(event);
-            Object rawId = getIdMethod.invoke(event);
-            Object rawData = getDataMethod.invoke(event);
-            if (!(rawPlayer instanceof Player player) || !(rawId instanceof String packetId)) {
-                return;
-            }
-            List<String> data = rawData instanceof List<?> rawList
-                ? rawList.stream().map(String::valueOf).toList()
-                : List.of();
-            Runnable route = () -> registry.routeClientPacket(player, packetId, data);
-            if (Bukkit.isPrimaryThread()) {
-                route.run();
-            } else {
-                Bukkit.getScheduler().runTask(plugin, route);
-            }
-        } catch (ReflectiveOperationException ignored) {
-            // ArcartX API 不兼容时已记录在注册阶段
+        if (registry == null) return;
+        Player player = event.getPlayer();
+        String packetId = event.getId();
+        List<String> data = event.getData();
+        Runnable route = () -> registry.routeClientPacket(player, packetId, data);
+        if (Bukkit.isPrimaryThread()) {
+            route.run();
+        } else {
+            Bukkit.getScheduler().runTask(plugin, route);
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private void registerClientInitializedListener() {
-        unregisterClientInitializedListener();
-
-        Plugin arcartX = Bukkit.getPluginManager().getPlugin("ArcartX");
-        if (arcartX == null) {
-            return;
-        }
-
-        try {
-            ReflectionCache arcartXReflection = new ReflectionCache(arcartX.getClass().getClassLoader());
-            Class<?> rawEventClass = arcartXReflection.forName("priv.seventeen.artist.arcartx.event.client.ClientInitializedEvent$End");
-            if (!Event.class.isAssignableFrom(rawEventClass)) {
-                xuanmo.arcartxsuite.module.AxsLog.logger().warning("ArcartX ClientInitializedEvent$End 不是 Bukkit Event，已跳过监听。");
-                return;
-            }
-            Class<? extends Event> eventClass = (Class<? extends Event>) rawEventClass;
-            Method getPlayerMethod = arcartXReflection.method(rawEventClass, "getPlayer");
-
-            clientInitializedListener = new Listener() {};
-            plugin.getServer().getPluginManager().registerEvent(
-                eventClass,
-                clientInitializedListener,
-                EventPriority.MONITOR,
-                (listener, event) -> dispatchClientInitialized(event, rawEventClass, getPlayerMethod),
-                plugin,
-                true
-            );
-        } catch (ReflectiveOperationException exception) {
-            xuanmo.arcartxsuite.module.AxsLog.logger().warning("注册 ArcartX 客户端初始化监听失败: " + exception.getMessage());
-        }
-    }
-
-    private void unregisterClientInitializedListener() {
-        if (clientInitializedListener == null) {
-            return;
-        }
-        HandlerList.unregisterAll(clientInitializedListener);
-        clientInitializedListener = null;
-    }
-
-    private void dispatchClientInitialized(Event event, Class<?> eventClass, Method getPlayerMethod) {
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onClientInitialized(ClientInitializedEvent.End event) {
         ModuleRegistry registry = registrySupplier.get();
-        if (!eventClass.isInstance(event) || registry == null) {
-            return;
-        }
-        try {
-            Object rawPlayer = getPlayerMethod.invoke(event);
-            if (rawPlayer instanceof Player player) {
-                Runnable route = () -> registry.routeClientInitialized(player);
-                if (Bukkit.isPrimaryThread()) {
-                    route.run();
-                } else {
-                    Bukkit.getScheduler().runTask(plugin, route);
-                }
-            }
-        } catch (ReflectiveOperationException ignored) {
-            // 已在注册阶段告警
+        if (registry == null) return;
+        Player player = event.getPlayer();
+        Runnable route = () -> registry.routeClientInitialized(player);
+        if (Bukkit.isPrimaryThread()) {
+            route.run();
+        } else {
+            Bukkit.getScheduler().runTask(plugin, route);
         }
     }
 }

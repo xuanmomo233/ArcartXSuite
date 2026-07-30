@@ -1,8 +1,12 @@
 package xuanmo.arcartxsuite.bridge;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.Locale;
+import net.Indyuce.mmoitems.MMOItems;
+import net.Indyuce.mmoitems.api.Type;
+import net.Indyuce.mmoitems.api.item.mmoitem.MMOItem;
+import net.Indyuce.mmoitems.api.item.build.ItemStackBuilder;
+import net.Indyuce.mmoitems.manager.ItemManager;
+import net.Indyuce.mmoitems.manager.TypeManager;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -12,14 +16,8 @@ public final class MmoItemsBridge {
     private final JavaPlugin plugin;
 
     private boolean available;
-    private Object mmoItemsPlugin;
-    private Object typeRegistry;
-    private Object itemRegistry;
-    private Method typeRegistryGetMethod;
-    private Method itemRegistryGetItemMethod;
-    private Method itemRegistryGetMmoItemMethod;
-    private Method mmoItemNewBuilderMethod;
-    private Method builderBuildMethod;
+    private TypeManager typeManager;
+    private ItemManager itemManager;
 
     public MmoItemsBridge(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -27,14 +25,8 @@ public final class MmoItemsBridge {
 
     public void initialize() {
         available = false;
-        mmoItemsPlugin = null;
-        typeRegistry = null;
-        itemRegistry = null;
-        typeRegistryGetMethod = null;
-        itemRegistryGetItemMethod = null;
-        itemRegistryGetMmoItemMethod = null;
-        mmoItemNewBuilderMethod = null;
-        builderBuildMethod = null;
+        typeManager = null;
+        itemManager = null;
 
         Plugin mmoItems = plugin.getServer().getPluginManager().getPlugin("MMOItems");
         if (mmoItems == null) {
@@ -42,23 +34,14 @@ public final class MmoItemsBridge {
         }
 
         try {
-            ClassLoader classLoader = mmoItems.getClass().getClassLoader();
-            Class<?> pluginClass = Class.forName("net.Indyuce.mmoitems.MMOItems", true, classLoader);
-            Field pluginField = pluginClass.getField("plugin");
-            mmoItemsPlugin = pluginField.get(null);
-            typeRegistry = pluginClass.getMethod("getTypes").invoke(mmoItemsPlugin);
-            itemRegistry = invokeNoArgsIfPresent(pluginClass, mmoItemsPlugin, "getItems");
-            if (itemRegistry == null) {
-                itemRegistry = invokeNoArgsIfPresent(pluginClass, mmoItemsPlugin, "getItemManager");
-            }
-            if (typeRegistry == null || itemRegistry == null) {
+            MMOItems mmoPlugin = MMOItems.plugin;
+            if (mmoPlugin == null) {
                 return;
             }
-            typeRegistryGetMethod = typeRegistry.getClass().getMethod("get", String.class);
-            itemRegistryGetItemMethod = findMethod(itemRegistry.getClass(), "getItem", 2);
-            itemRegistryGetMmoItemMethod = findMethod(itemRegistry.getClass(), "getMMOItem", 3);
-            available = typeRegistryGetMethod != null && (itemRegistryGetItemMethod != null || itemRegistryGetMmoItemMethod != null);
-        } catch (ReflectiveOperationException exception) {
+            typeManager = mmoPlugin.getTypes();
+            itemManager = mmoPlugin.getItems();
+            available = typeManager != null && itemManager != null;
+        } catch (Exception | LinkageError exception) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning("初始化 MMOItems 物品桥接失败: " + exception.getMessage());
         }
     }
@@ -68,81 +51,38 @@ public final class MmoItemsBridge {
     }
 
     public ItemStack getItemStack(String typeId, String itemId, int amount) {
-        if (!available || typeRegistry == null || itemRegistry == null || blank(typeId) || blank(itemId)) {
+        if (!available || typeManager == null || itemManager == null || blank(typeId) || blank(itemId)) {
             return null;
         }
         try {
-            Object type = typeRegistryGetMethod.invoke(typeRegistry, normalize(typeId));
+            Type type = typeManager.get(normalize(typeId));
             if (type == null) {
-                type = typeRegistryGetMethod.invoke(typeRegistry, typeId.trim());
+                type = typeManager.get(typeId.trim());
             }
             if (type == null) {
                 return null;
             }
-            ItemStack direct = resolveDirectItem(type, itemId);
+            // 先尝试直接获取 ItemStack
+            ItemStack direct = itemManager.getItem(type, itemId);
             if (direct != null && !direct.getType().isAir()) {
                 ItemStack cloned = direct.clone();
                 cloned.setAmount(Math.max(1, amount));
                 return cloned;
             }
-        } catch (ReflectiveOperationException exception) {
-            return null;
-        }
-        return null;
-    }
-
-    private ItemStack resolveDirectItem(Object type, String itemId) throws ReflectiveOperationException {
-        if (itemRegistryGetItemMethod != null) {
-            Object raw = itemRegistryGetItemMethod.invoke(itemRegistry, type, itemId);
-            if (raw instanceof ItemStack itemStack) {
-                return itemStack;
+            // 回退到 MMOItem -> builder -> build
+            MMOItem mmoItem = itemManager.getMMOItem(type, itemId);
+            if (mmoItem == null) {
+                return null;
             }
-            ItemStack built = tryBuildFromMmoItem(raw);
-            if (built != null) {
-                return built;
+            ItemStackBuilder builder = mmoItem.newBuilder();
+            ItemStack built = builder.build();
+            if (built == null || built.getType().isAir()) {
+                return null;
             }
-        }
-        if (itemRegistryGetMmoItemMethod != null) {
-            Object raw = itemRegistryGetMmoItemMethod.invoke(itemRegistry, type, itemId, null);
-            return tryBuildFromMmoItem(raw);
-        }
-        return null;
-    }
-
-    private ItemStack tryBuildFromMmoItem(Object raw) throws ReflectiveOperationException {
-        if (raw == null) {
-            return null;
-        }
-        if (raw instanceof ItemStack itemStack) {
-            return itemStack;
-        }
-        if (mmoItemNewBuilderMethod == null) {
-            mmoItemNewBuilderMethod = findMethod(raw.getClass(), "newBuilder", 0);
-        }
-        Object builder = mmoItemNewBuilderMethod == null ? null : mmoItemNewBuilderMethod.invoke(raw);
-        if (builder == null) {
-            return null;
-        }
-        if (builderBuildMethod == null) {
-            builderBuildMethod = findMethod(builder.getClass(), "build", 0);
-        }
-        Object built = builderBuildMethod == null ? null : builderBuildMethod.invoke(builder);
-        return built instanceof ItemStack itemStack ? itemStack : null;
-    }
-
-    private static Method findMethod(Class<?> type, String name, int parameterCount) {
-        for (Method method : type.getMethods()) {
-            if (method.getName().equals(name) && method.getParameterCount() == parameterCount) {
-                return method;
-            }
-        }
-        return null;
-    }
-
-    private static Object invokeNoArgsIfPresent(Class<?> type, Object instance, String name) {
-        try {
-            return type.getMethod(name).invoke(instance);
-        } catch (ReflectiveOperationException ignored) {
+            ItemStack cloned = built.clone();
+            cloned.setAmount(Math.max(1, amount));
+            return cloned;
+        } catch (Exception | LinkageError exception) {
             return null;
         }
     }

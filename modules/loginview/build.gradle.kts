@@ -13,6 +13,7 @@ dependencies {
     compileOnly("me.clip:placeholderapi:2.11.7")
     compileOnly("com.zaxxer:HikariCP:5.1.0")
     compileOnly("at.favre.lib:bcrypt:0.10.2")
+    compileOnly("fr.xephi:authme:5.6.0")
 }
 
 sourceSets {

@@ -75,11 +75,26 @@ public record MapModuleConfiguration(
         );
 
         ConfigurationSection navigationSection = configuration.getConfigurationSection("navigation");
+        ConfigurationSection markerSection = navigationSection == null ? null : navigationSection.getConfigurationSection("marker");
+        MarkerConfiguration marker = new MarkerConfiguration(
+            markerSection == null || markerSection.getBoolean("enabled", false),
+            string(markerSection == null ? null : markerSection.getString("model-id"), "nav_beacon"),
+            markerSection == null ? 1.0 : markerSection.getDouble("scale", 1.0),
+            string(markerSection == null ? null : markerSection.getString("default-state"), "idle"),
+            string(markerSection == null ? null : markerSection.getString("animation"), "rotate"),
+            markerSection == null ? 2.0 : markerSection.getDouble("y-offset", 2.0),
+            markerSection == null ? 3.0 : markerSection.getDouble("path-interval", 3.0),
+            markerSection == null ? 20 : markerSection.getInt("path-max-markers", 20),
+            markerSection == null ? 10 : markerSection.getInt("path-update-ticks", 10),
+            markerSection == null ? 64.0 : markerSection.getDouble("path-max-distance", 64.0),
+            markerSection == null ? 2000 : markerSection.getInt("path-max-iterations", 2000)
+        );
         NavigationConfiguration navigation = new NavigationConfiguration(
             navigationSection == null || navigationSection.getBoolean("enabled", true),
             string(navigationSection == null ? null : navigationSection.getString("waypoint-style-id"), "default"),
             string(navigationSection == null ? null : navigationSection.getString("anchor-id-prefix"), "AXS-map-anchor-"),
-            string(navigationSection == null ? null : navigationSection.getString("waypoint-id-prefix"), "AXS-map-track-")
+            string(navigationSection == null ? null : navigationSection.getString("waypoint-id-prefix"), "AXS-map-track-"),
+            marker
         );
 
         Map<String, WorldDefinition> worlds = loadWorlds(configuration.getConfigurationSection("worlds"));
@@ -468,8 +483,28 @@ public record MapModuleConfiguration(
         boolean enabled,
         String waypointStyleId,
         String anchorIdPrefix,
-        String waypointIdPrefix
+        String waypointIdPrefix,
+        MarkerConfiguration marker
     ) {
+    }
+
+    public record MarkerConfiguration(
+        boolean enabled,
+        String modelId,
+        double scale,
+        String defaultState,
+        String animation,
+        double yOffset,
+        double pathInterval,
+        int pathMaxMarkers,
+        int pathUpdateTicks,
+        double pathMaxDistance,
+        int pathMaxIterations
+    ) implements xuanmo.arcartxsuite.api.util.NavigationMarkerConfig {
+        public static MarkerConfiguration defaults() {
+            return new MarkerConfiguration(false, "nav_beacon", 1.0, "idle", "rotate", 2.0,
+                3.0, 20, 10, 64.0, 2000);
+        }
     }
 
     public record WorldDefinition(

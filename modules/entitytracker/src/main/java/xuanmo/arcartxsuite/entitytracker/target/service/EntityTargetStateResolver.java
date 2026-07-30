@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.entitytracker.target.service;
 
+import io.lumine.mythic.core.mobs.ActiveMob;
 import java.text.DecimalFormat;
 import java.util.Optional;
 import java.util.function.Function;
@@ -69,7 +70,7 @@ public final class EntityTargetStateResolver {
         }
 
         int distance = (int) Math.round(Math.sqrt(Math.max(0.0D, distanceSquared)));
-        Object activeMob = EntityCombatMetadata.resolveActiveMob(target);
+        ActiveMob activeMob = EntityCombatMetadata.resolveActiveMob(target);
         String mythicMobId = nullToEmpty(EntityCombatMetadata.resolveMythicMobIdFrom(activeMob));
         double maxHealth = EntityCombatMetadata.resolveMaxHealth(target, activeMob);
         double health = EntityCombatMetadata.resolveCurrentHealth(target, maxHealth, activeMob);

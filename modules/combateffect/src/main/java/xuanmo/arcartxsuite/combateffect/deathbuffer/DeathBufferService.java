@@ -1,6 +1,5 @@
 package xuanmo.arcartxsuite.combateffect.deathbuffer;
 
-import java.lang.reflect.Method;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
@@ -17,6 +16,9 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
+import priv.seventeen.artist.arcartx.api.ArcartXAPI;
+import priv.seventeen.artist.arcartx.core.entity.ArcartXEntityManager;
+import priv.seventeen.artist.arcartx.core.entity.data.ArcartXPlayer;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
 import xuanmo.arcartxsuite.combateffect.packet.config.CombatEffectPacketConfiguration;
@@ -42,20 +44,13 @@ public final class DeathBufferService implements Listener {
 
     private final ConcurrentHashMap<UUID, BufferState> bufferedPlayers = new ConcurrentHashMap<>();
 
-    // ArcartX 反射缓存
+    // ArcartX 视觉桥接
     private boolean arcartxVisualAvailable;
-    private Method getEntityManagerMethod;
-    private Method getArcartXPlayerMethod;
-    private Method enableShaderMethod;
-    private Method disableShaderMethod;
-    private Method setThirdPersonMethod;
-    private Method setCameraFromPresetMethod;
-    private Method stopSceneCameraMethod;
+    private ArcartXEntityManager entityManager;
 
-    // Chronos 反射缓存
+    // Chronos API
     private boolean chronosAvailable;
-    private Method chronosTryEnterControlledStateMethod;
-    private Object chronosApiInstance;
+    private priv.seventeen.artist.arcartx.chronos.api.ChronosAPI chronosApi;
 
     public DeathBufferService(
         JavaPlugin plugin,
@@ -259,26 +254,26 @@ public final class DeathBufferService implements Listener {
             return;
         }
         try {
-            Object axPlayer = getArcartXPlayer(player);
+            ArcartXPlayer axPlayer = getArcartXPlayer(player);
             if (axPlayer == null) {
                 return;
             }
 
             // Shader 效果（灰度/模糊）
             if (!config.shader().isBlank()) {
-                enableShaderMethod.invoke(axPlayer, config.shader());
+                axPlayer.enableShader(config.shader());
             }
 
             // 第三人称相机
             if (config.thirdPersonCamera()) {
-                setThirdPersonMethod.invoke(axPlayer, true);
+                axPlayer.setThirdPerson(true);
             }
 
             // 预设相机
             if (!config.cameraPreset().isBlank()) {
-                setCameraFromPresetMethod.invoke(axPlayer, config.cameraPreset());
+                axPlayer.setCameraFromPreset(config.cameraPreset());
             }
-        } catch (Exception exception) {
+        } catch (RuntimeException exception) {
             if (config.debug()) {
                 logger.warning("DeathBuffer ArcartX 视觉效果应用失败: " + exception.getMessage());
             }
@@ -295,20 +290,20 @@ public final class DeathBufferService implements Listener {
             return;
         }
         try {
-            Object axPlayer = getArcartXPlayer(player);
+            ArcartXPlayer axPlayer = getArcartXPlayer(player);
             if (axPlayer == null) {
                 return;
             }
             if (!config.shader().isBlank()) {
-                disableShaderMethod.invoke(axPlayer);
+                axPlayer.disableShader();
             }
             if (config.thirdPersonCamera()) {
-                setThirdPersonMethod.invoke(axPlayer, false);
+                axPlayer.setThirdPerson(false);
             }
-            if (!config.cameraPreset().isBlank() && stopSceneCameraMethod != null) {
-                stopSceneCameraMethod.invoke(axPlayer);
+            if (!config.cameraPreset().isBlank()) {
+                axPlayer.stopSceneCamera();
             }
-        } catch (Exception exception) {
+        } catch (RuntimeException exception) {
             if (config.debug()) {
                 logger.warning("DeathBuffer ArcartX 视觉清除失败: " + exception.getMessage());
             }
@@ -317,10 +312,8 @@ public final class DeathBufferService implements Listener {
 
     private void applyChronosDeathState(Player player) {
         try {
-            chronosTryEnterControlledStateMethod.invoke(
-                chronosApiInstance, player, config.chronosStateId(), config.durationMs()
-            );
-        } catch (Exception exception) {
+            chronosApi.tryEnterControlledState(player, config.chronosStateId(), config.durationMs());
+        } catch (Exception | LinkageError exception) {
             if (config.debug()) {
                 logger.warning("DeathBuffer Chronos 状态设置失败: " + exception.getMessage());
             }
@@ -381,29 +374,12 @@ public final class DeathBufferService implements Listener {
             if (arcartX == null || !arcartX.isEnabled()) {
                 return;
             }
-            ClassLoader cl = arcartX.getClass().getClassLoader();
-            Class<?> apiClass = Class.forName("priv.seventeen.artist.arcartx.api.ArcartXAPI", true, cl);
-            getEntityManagerMethod = apiClass.getMethod("getEntityManager");
-            Object entityManager = getEntityManagerMethod.invoke(null);
+            entityManager = ArcartXAPI.getEntityManager();
             if (entityManager == null) {
                 return;
             }
-            getArcartXPlayerMethod = entityManager.getClass().getMethod("getArcartXPlayer", Player.class);
-
-            // 获取 ArcartXPlayer 类的方法
-            Class<?> axPlayerClass = Class.forName("priv.seventeen.artist.arcartx.api.entity.ArcartXPlayer", true, cl);
-            enableShaderMethod = axPlayerClass.getMethod("enableShader", String.class);
-            disableShaderMethod = axPlayerClass.getMethod("disableShader");
-            setThirdPersonMethod = axPlayerClass.getMethod("setThirdPerson", boolean.class);
-            setCameraFromPresetMethod = axPlayerClass.getMethod("setCameraFromPreset", String.class);
-            try {
-                stopSceneCameraMethod = axPlayerClass.getMethod("stopSceneCamera");
-            } catch (NoSuchMethodException ignored) {
-                stopSceneCameraMethod = null;
-            }
-
             arcartxVisualAvailable = true;
-        } catch (Exception exception) {
+        } catch (RuntimeException exception) {
             logger.warning("DeathBuffer 初始化 ArcartX 视觉桥接失败: " + exception.getMessage());
         }
     }
@@ -418,30 +394,23 @@ public final class DeathBufferService implements Listener {
             if (chronos == null || !chronos.isEnabled()) {
                 return;
             }
-            ClassLoader cl = chronos.getClass().getClassLoader();
-            Class<?> chronosApiClass = Class.forName("priv.seventeen.artist.chronos.api.ChronosAPI", true, cl);
-            Method getInstanceMethod = chronosApiClass.getMethod("getInstanceAPI");
-            chronosApiInstance = getInstanceMethod.invoke(null);
-            if (chronosApiInstance == null) {
+            chronosApi = priv.seventeen.artist.arcartx.chronos.api.ChronosAPI.getInstanceAPI();
+            if (chronosApi == null) {
                 return;
             }
-            chronosTryEnterControlledStateMethod = chronosApiClass.getMethod(
-                "tryEnterControlledState", Player.class, String.class, long.class
-            );
             chronosAvailable = true;
-        } catch (Exception exception) {
+        } catch (Exception | LinkageError exception) {
             logger.warning("DeathBuffer 初始化 Chronos 桥接失败: " + exception.getMessage());
         }
     }
 
-    private Object getArcartXPlayer(Player player) {
+    private ArcartXPlayer getArcartXPlayer(Player player) {
+        if (entityManager == null) {
+            return null;
+        }
         try {
-            Object entityManager = getEntityManagerMethod.invoke(null);
-            if (entityManager == null) {
-                return null;
-            }
-            return getArcartXPlayerMethod.invoke(entityManager, player);
-        } catch (Exception exception) {
+            return entityManager.getPlayer(player);
+        } catch (RuntimeException exception) {
             return null;
         }
     }

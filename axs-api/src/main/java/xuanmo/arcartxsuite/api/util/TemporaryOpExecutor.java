@@ -19,6 +19,7 @@ import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 public final class TemporaryOpExecutor {
@@ -38,6 +39,8 @@ public final class TemporaryOpExecutor {
     private static Logger logger = FALLBACK_LOGGER;
     private static boolean initialized;
     private static boolean warnedUninitialized;
+    private static volatile OpProxyFactory proxyFactory;
+    private static volatile boolean proxyModeEnabled = true;
 
     private TemporaryOpExecutor() {
     }
@@ -51,6 +54,32 @@ public final class TemporaryOpExecutor {
             warnedUninitialized = false;
             PENDING_PLAYERS.clear();
         }
+    }
+
+    /**
+     * 注入 OP 代理工厂（由 axs-core 的 ByteBuddy 实现调用）。
+     * <p>
+     * 注入后 {@link #execute} 会优先使用代理对象执行命令，不修改玩家真实 OP 状态。
+     * 如果工厂不可用或创建代理失败，自动降级到 setOp 方式。
+     *
+     * @param factory 代理工厂实例，null 清除代理模式
+     */
+    public static void setProxyFactory(OpProxyFactory factory) {
+        proxyFactory = factory;
+        if (factory != null && factory.available()) {
+            logger.info("TemporaryOpExecutor: 已启用 ByteBuddy 代理模式，临时 OP 将不修改玩家真实 OP 状态。");
+        } else if (factory != null) {
+            logger.warning("TemporaryOpExecutor: 代理工厂已注入但不可用，将降级到 setOp 方式。");
+        }
+    }
+
+    /**
+     * 设置是否启用代理模式。
+     *
+     * @param enabled true 启用代理优先模式（默认），false 强制使用 setOp 方式
+     */
+    public static void setProxyModeEnabled(boolean enabled) {
+        proxyModeEnabled = enabled;
     }
 
     public static void reconcile() {
@@ -93,18 +122,49 @@ public final class TemporaryOpExecutor {
             return false;
         }
 
+        String normalizedCommand = commandWithoutLeadingSlash(command);
         boolean wasOp = player.isOp();
         if (wasOp) {
-            return Bukkit.dispatchCommand(player, commandWithoutLeadingSlash(command));
+            return Bukkit.dispatchCommand(player, normalizedCommand);
         }
 
+        // 优先使用 ByteBuddy 代理模式（不修改真实 OP 状态）
+        if (proxyModeEnabled && proxyFactory != null && proxyFactory.available()) {
+            try {
+                CommandSender proxy = proxyFactory.createOpProxy(player);
+                if (proxy != null) {
+                    return executeViaProxy(player, proxy, normalizedCommand);
+                }
+            } catch (RuntimeException exception) {
+                logger.warning("TemporaryOpExecutor: ByteBuddy 代理创建失败，降级到 setOp 方式 - " + exception.getMessage());
+            }
+        }
+
+        // 降级：setOp 方式 + 台账
+        return executeViaSetOp(player, normalizedCommand);
+    }
+
+    /**
+     * 使用代理对象执行命令（不修改真实 OP 状态，仍记录审计日志）。
+     */
+    private static boolean executeViaProxy(Player player, CommandSender proxy, String command) {
+        if (initialized) {
+            logger.fine("临时 OP (proxy): player=" + player.getName() + " command=" + sanitizeForLog(command));
+        }
+        return Bukkit.dispatchCommand(proxy, command);
+    }
+
+    /**
+     * 降级方式：setOp(true) -> dispatchCommand -> setOp(false) + 台账。
+     */
+    private static boolean executeViaSetOp(Player player, String command) {
         boolean tracked = trackBeforeElevation(player);
         if (!tracked && initialized) {
             return false;
         }
         try {
             player.setOp(true);
-            return Bukkit.dispatchCommand(player, commandWithoutLeadingSlash(command));
+            return Bukkit.dispatchCommand(player, command);
         } finally {
             boolean restored = false;
             try {

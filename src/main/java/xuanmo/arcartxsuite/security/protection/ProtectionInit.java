@@ -388,12 +388,14 @@ public final class ProtectionInit {
     private static void triggerTamperResponse() {
         // 延迟 5-30 秒后降级（避免二分法定位检测点）
         int delay = 5 + (int)(Math.random() * 25);
-        new Thread(() -> {
+        Thread t = new Thread(() -> {
             try { Thread.sleep(delay * 1000L); } catch (InterruptedException ignored) {}
             if (protectedLoader != null) {
                 protectedLoader.deactivate();
             }
-        }, "axs-gc-finalize").start();
+        }, "axs-gc-finalize");
+        t.setDaemon(true);
+        t.start();
     }
 
     // ─── 工具方法 ───────────────────────────────────────────────

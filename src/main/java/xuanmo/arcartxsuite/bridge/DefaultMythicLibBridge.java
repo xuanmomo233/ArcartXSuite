@@ -54,6 +54,7 @@ public final class DefaultMythicLibBridge implements MythicLibBridge {
 
         Plugin mythicLib = Bukkit.getPluginManager().getPlugin(PLUGIN_NAME);
         if (mythicLib == null || !mythicLib.isEnabled()) {
+            xuanmo.arcartxsuite.module.AxsLog.logger().fine("[MythicLib] 未检测到 MythicLib 插件，MythicLib 属性桥接已停用。");
             return;
         }
 

@@ -149,6 +149,13 @@ public final class SuiteCoreImpl implements SuiteCore {
             getLogger()
         );
         TemporaryOpExecutor.reconcile();
+        try {
+            TemporaryOpExecutor.setProxyFactory(
+                new xuanmo.arcartxsuite.bridge.ByteBuddyOpProxyFactory(getLogger())
+            );
+        } catch (RuntimeException exception) {
+            getLogger().warning("ByteBuddy 代理工厂注入失败，将使用 setOp 降级方式: " + exception.getMessage());
+        }
         ensureRootConfigExists();
         reloadConfig();
         printStartupBanner();

@@ -4,6 +4,8 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
@@ -46,6 +48,9 @@ public final class DefaultAriaBridge implements AriaBridge {
     private Method newSetValue;
     private Constructor<?> newJavaObjectMirrorCtor;
     private Constructor<?> newObjectValueCtor;
+
+    // unwrap 方法缓存：按值类型类名缓存 Method，避免每次 eval 都做 getMethod 查找
+    private final ConcurrentMap<String, Method> unwrapMethodCache = new ConcurrentHashMap<>();
 
     public DefaultAriaBridge(JavaPlugin plugin) {
     }
@@ -234,16 +239,18 @@ public final class DefaultAriaBridge implements AriaBridge {
         if (result == null) {
             return null;
         }
-        String typeName = result.getClass().getSimpleName();
+        Class<?> resultClass = result.getClass();
+        String typeName = resultClass.getSimpleName();
         switch (typeName) {
             case "NoneValue" -> {
                 return null;
             }
             case "NumberValue" -> {
-                double number = ((Number) result.getClass()
-                    .getMethod("numberValue")
-                    .invoke(result))
-                    .doubleValue();
+                Method numberValue = unwrapMethodCache.computeIfAbsent("NumberValue", k -> {
+                    try { return resultClass.getMethod("numberValue"); }
+                    catch (NoSuchMethodException e) { throw new RuntimeException(e); }
+                });
+                double number = ((Number) numberValue.invoke(result)).doubleValue();
                 if (number == Math.rint(number)
                     && !Double.isInfinite(number)) {
                     return (long) number;
@@ -251,13 +258,26 @@ public final class DefaultAriaBridge implements AriaBridge {
                 return number;
             }
             case "StringValue" -> {
-                return result.getClass().getMethod("stringValue").invoke(result);
+                Method stringValue = unwrapMethodCache.computeIfAbsent("StringValue", k -> {
+                    try { return resultClass.getMethod("stringValue"); }
+                    catch (NoSuchMethodException e) { throw new RuntimeException(e); }
+                });
+                return stringValue.invoke(result);
             }
             case "BooleanValue" -> {
-                return result.getClass().getMethod("booleanValue").invoke(result);
+                Method booleanValue = unwrapMethodCache.computeIfAbsent("BooleanValue", k -> {
+                    try { return resultClass.getMethod("booleanValue"); }
+                    catch (NoSuchMethodException e) { throw new RuntimeException(e); }
+                });
+                return booleanValue.invoke(result);
             }
             default -> {
-                return result.getClass().getMethod("jvmValue").invoke(result);
+                Method jvmValue = unwrapMethodCache.get(typeName);
+                if (jvmValue == null) {
+                    jvmValue = resultClass.getMethod("jvmValue");
+                    unwrapMethodCache.put(typeName, jvmValue);
+                }
+                return jvmValue.invoke(result);
             }
         }
     }

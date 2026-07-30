@@ -140,6 +140,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             packetBridge, menuBinding.runtimeUiId(), hudBinding.runtimeUiId(),
             itemSourceRegistry, itemMatcher, currencyManager,
             createWaypointBridge(),
+            createAdyeshachNpcBridge(),
             messages()
         );
         service.start();

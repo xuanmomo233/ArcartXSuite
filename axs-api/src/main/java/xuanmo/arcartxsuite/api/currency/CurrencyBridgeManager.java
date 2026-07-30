@@ -1,8 +1,6 @@
 package xuanmo.arcartxsuite.api.currency;
 
-import java.lang.reflect.Method;
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.Collection;
 import java.util.Collections;
@@ -13,7 +11,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.RegisteredServiceProvider;
@@ -138,10 +135,7 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
 
     private final class VaultCurrencyBridge extends AbstractCurrencyBridge {
 
-        private Object economy;
-        private Method balanceMethod;
-        private Method withdrawMethod;
-        private Method depositMethod;
+        private net.milkbowl.vault.economy.Economy economy;
         private String unavailableReason = "";
 
         private VaultCurrencyBridge(CurrencyDefinition definition) {
@@ -151,10 +145,10 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
 
         @Override
         public boolean available() {
-            if (!isReady()) {
+            if (economy == null) {
                 initializeVault();
             }
-            return isReady();
+            return economy != null;
         }
 
         @Override
@@ -168,32 +162,24 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 return BigDecimal.ZERO;
             }
             try {
-                Object value = invokeEconomyMethod(balanceMethod, player, BigDecimal.ZERO);
-                return convertToBigDecimal(value);
-            } catch (ReflectiveOperationException | AmountRangeException exception) {
+                return BigDecimal.valueOf(economy.getBalance(player));
+            } catch (Exception | LinkageError exception) {
                 return BigDecimal.ZERO;
             }
         }
 
         @Override
         public CurrencyTransactionResult withdraw(Player player, BigDecimal amount) {
-            return invokeEconomyTransaction(withdrawMethod, player, amount, "扣款失败。");
+            return invokeEconomyTransaction(player, amount, "扣款失败。", true);
         }
 
         @Override
         public CurrencyTransactionResult deposit(Player player, BigDecimal amount) {
-            return invokeEconomyTransaction(depositMethod, player, amount, "入账失败。");
-        }
-
-        private boolean isReady() {
-            return economy != null
-                && balanceMethod != null
-                && withdrawMethod != null
-                && depositMethod != null;
+            return invokeEconomyTransaction(player, amount, "入账失败。", false);
         }
 
         private void initializeVault() {
-            if (isReady()) {
+            if (economy != null) {
                 return;
             }
             Plugin vault = Bukkit.getPluginManager().getPlugin("Vault");
@@ -202,32 +188,20 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 return;
             }
             try {
-                ClassLoader classLoader = vault.getClass().getClassLoader();
-                Class<?> economyClass = Class.forName(
-                    "net.milkbowl.vault.economy.Economy",
-                    true,
-                    classLoader
-                );
-                RegisteredServiceProvider<?> registration = Bukkit.getServicesManager().getRegistration(economyClass);
+                RegisteredServiceProvider<net.milkbowl.vault.economy.Economy> registration =
+                    Bukkit.getServicesManager().getRegistration(net.milkbowl.vault.economy.Economy.class);
                 if (registration == null || registration.getProvider() == null) {
                     unavailableReason = "Vault Economy 服务未注册";
                     return;
                 }
                 economy = registration.getProvider();
-                balanceMethod = findEconomyMethod(economy.getClass(), "getBalance");
-                withdrawMethod = findEconomyMethod(economy.getClass(), "withdrawPlayer");
-                depositMethod = findEconomyMethod(economy.getClass(), "depositPlayer");
-                if (!isReady()) {
-                    unavailableReason = "未找到兼容的 Vault Economy 方法";
-                } else {
-                    unavailableReason = "";
-                }
-            } catch (ClassNotFoundException exception) {
-                unavailableReason = "Vault API 类不可用";
+                unavailableReason = "";
+            } catch (Exception | LinkageError exception) {
+                unavailableReason = "Vault API 初始化失败: " + exception.getMessage();
             }
         }
 
-        private CurrencyTransactionResult invokeEconomyTransaction(Method method, Player player, BigDecimal amount, String defaultMessage) {
+        private CurrencyTransactionResult invokeEconomyTransaction(Player player, BigDecimal amount, String defaultMessage, boolean isWithdraw) {
             if (!available()) {
                 return CurrencyTransactionResult.failure(unavailableReason());
             }
@@ -235,40 +209,22 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 return CurrencyTransactionResult.failure("金额必须大于 0。");
             }
             try {
-                Object response = invokeEconomyMethod(method, player, normalize(amount));
-                return transactionSucceeded(response)
+                double value = normalize(amount).doubleValue();
+                net.milkbowl.vault.economy.EconomyResponse response = isWithdraw
+                    ? economy.withdrawPlayer(player, value)
+                    : economy.depositPlayer(player, value);
+                return response.transactionSuccess()
                     ? CurrencyTransactionResult.ok()
-                    : CurrencyTransactionResult.failure(resolveTransactionMessage(response, defaultMessage));
-            } catch (AmountRangeException exception) {
-                return CurrencyTransactionResult.failure(RANGE_FAILURE);
-            } catch (ReflectiveOperationException exception) {
+                    : CurrencyTransactionResult.failure(response.errorMessage != null && !response.errorMessage.isBlank() ? response.errorMessage : defaultMessage);
+            } catch (Exception | LinkageError exception) {
                 return CurrencyTransactionResult.failure(defaultMessage);
             }
-        }
-
-        private Object invokeEconomyMethod(Method method, Player player, BigDecimal amount) throws ReflectiveOperationException, AmountRangeException {
-            Class<?>[] parameterTypes = method.getParameterTypes();
-            if (parameterTypes.length == 1) {
-                return method.invoke(economy, resolveFirstArgument(method, player));
-            }
-            if (parameterTypes.length == 2) {
-                return method.invoke(economy, resolveFirstArgument(method, player), castNumeric(parameterTypes[1], amount));
-            }
-            return method.invoke(
-                economy,
-                resolveFirstArgument(method, player),
-                player.getWorld().getName(),
-                castNumeric(parameterTypes[2], amount)
-            );
         }
     }
 
     private final class PlayerPointsBridge extends AbstractCurrencyBridge {
 
-        private Object api;
-        private Method lookMethod;
-        private Method takeMethod;
-        private Method giveMethod;
+        private org.black_ixx.playerpoints.PlayerPointsAPI api;
         private String unavailableReason = "";
 
         private PlayerPointsBridge(CurrencyDefinition definition) {
@@ -278,7 +234,7 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
 
         @Override
         public boolean available() {
-            return api != null && lookMethod != null && takeMethod != null && giveMethod != null;
+            return api != null;
         }
 
         @Override
@@ -292,21 +248,20 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 return BigDecimal.ZERO;
             }
             try {
-                Object raw = lookMethod.invoke(api, resolvePlayerArgument(lookMethod, player));
-                return convertToBigDecimal(raw);
-            } catch (ReflectiveOperationException exception) {
+                return BigDecimal.valueOf(api.look(player.getUniqueId()));
+            } catch (Exception | LinkageError exception) {
                 return BigDecimal.ZERO;
             }
         }
 
         @Override
         public CurrencyTransactionResult withdraw(Player player, BigDecimal amount) {
-            return invokePointsTransaction(takeMethod, player, amount, "扣除点券失败。");
+            return invokePointsTransaction(player, amount, "扣除点券失败。", true);
         }
 
         @Override
         public CurrencyTransactionResult deposit(Player player, BigDecimal amount) {
-            return invokePointsTransaction(giveMethod, player, amount, "发放点券失败。");
+            return invokePointsTransaction(player, amount, "发放点券失败。", false);
         }
 
         private void initializePlayerPoints() {
@@ -316,26 +271,21 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 return;
             }
             try {
-                try {
-                    api = playerPoints.getClass().getMethod("getAPI").invoke(playerPoints);
-                } catch (NoSuchMethodException exception) {
-                    Class<?> mainClass = Class.forName("org.black_ixx.playerpoints.PlayerPoints");
-                    Method getInstanceMethod = mainClass.getMethod("getInstance");
-                    Object instance = getInstanceMethod.invoke(null);
-                    api = mainClass.getMethod("getAPI").invoke(instance);
+                if (playerPoints instanceof org.black_ixx.playerpoints.PlayerPoints pp) {
+                    api = pp.getAPI();
+                } else {
+                    org.black_ixx.playerpoints.PlayerPoints pp = org.black_ixx.playerpoints.PlayerPoints.getInstance();
+                    api = pp.getAPI();
                 }
-                lookMethod = findPointsMethod(api.getClass(), "look");
-                takeMethod = findPointsMethod(api.getClass(), "take");
-                giveMethod = findPointsMethod(api.getClass(), "give");
-                if (!available()) {
-                    unavailableReason = "未找到兼容的 PlayerPoints API 方法";
+                if (api == null) {
+                    unavailableReason = "PlayerPoints API 不可用";
                 }
-            } catch (ReflectiveOperationException exception) {
-                unavailableReason = "PlayerPoints API 初始化失败";
+            } catch (Exception | LinkageError exception) {
+                unavailableReason = "PlayerPoints API 初始化失败: " + exception.getMessage();
             }
         }
 
-        private CurrencyTransactionResult invokePointsTransaction(Method method, Player player, BigDecimal amount, String defaultMessage) {
+        private CurrencyTransactionResult invokePointsTransaction(Player player, BigDecimal amount, String defaultMessage, boolean isTake) {
             if (!available()) {
                 return CurrencyTransactionResult.failure(unavailableReason());
             }
@@ -352,10 +302,11 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 return CurrencyTransactionResult.failure("金额必须大于 0。");
             }
             try {
-                Object raw = method.invoke(api, resolvePlayerArgument(method, player), points);
-                boolean success = raw instanceof Boolean booleanValue ? booleanValue : true;
+                boolean success = isTake
+                    ? api.take(player.getUniqueId(), points)
+                    : api.give(player.getUniqueId(), points);
                 return success ? CurrencyTransactionResult.ok() : CurrencyTransactionResult.failure(defaultMessage);
-            } catch (ReflectiveOperationException exception) {
+            } catch (Exception | LinkageError exception) {
                 return CurrencyTransactionResult.failure(defaultMessage);
             }
         }
@@ -363,10 +314,7 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
 
     private final class XConomyCurrencyBridge extends AbstractCurrencyBridge {
 
-        private Object api;
-        private Method getPlayerDataMethod;
-        private Method getBalanceMethod;
-        private Method changePlayerBalanceMethod;
+        private me.yic.xconomy.api.XConomyAPI api;
         private String unavailableReason = "";
 
         private XConomyCurrencyBridge(CurrencyDefinition definition) {
@@ -376,10 +324,7 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
 
         @Override
         public boolean available() {
-            return api != null
-                && getPlayerDataMethod != null
-                && getBalanceMethod != null
-                && changePlayerBalanceMethod != null;
+            return api != null;
         }
 
         @Override
@@ -393,13 +338,13 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 return BigDecimal.ZERO;
             }
             try {
-                Object playerData = getPlayerDataMethod.invoke(api, player.getUniqueId());
+                me.yic.xconomy.data.syncdata.PlayerData playerData = api.getPlayerData(player.getUniqueId());
                 if (playerData == null) {
                     return BigDecimal.ZERO;
                 }
-                Object balance = getBalanceMethod.invoke(playerData);
-                return balance instanceof BigDecimal decimal ? decimal : BigDecimal.ZERO;
-            } catch (ReflectiveOperationException exception) {
+                BigDecimal balance = playerData.getBalance();
+                return balance != null ? balance : BigDecimal.ZERO;
+            } catch (Exception | LinkageError exception) {
                 return BigDecimal.ZERO;
             }
         }
@@ -427,8 +372,7 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 return CurrencyTransactionResult.failure("金额必须大于 0。");
             }
             try {
-                int result = (Integer) changePlayerBalanceMethod.invoke(
-                    api,
+                int result = api.changePlayerBalance(
                     player.getUniqueId(),
                     player.getName(),
                     normalize(amount),
@@ -442,30 +386,21 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                     case 3 -> CurrencyTransactionResult.failure(RANGE_FAILURE);
                     default -> CurrencyTransactionResult.failure(defaultMessage);
                 };
-            } catch (ReflectiveOperationException | ClassCastException exception) {
+            } catch (Exception | LinkageError exception) {
                 return CurrencyTransactionResult.failure(defaultMessage);
             }
         }
 
         private void initializeXConomy() {
-            try {
-                Class<?> apiClass = Class.forName("me.yic.xconomy.api.XConomyAPI");
-                api = apiClass.getConstructor().newInstance();
-                getPlayerDataMethod = apiClass.getMethod("getPlayerData", UUID.class);
-                getBalanceMethod = getPlayerDataMethod.getReturnType()
-                    .getMethod("getBalance");
-                changePlayerBalanceMethod = apiClass.getMethod(
-                    "changePlayerBalance",
-                    UUID.class,
-                    String.class,
-                    BigDecimal.class,
-                    Boolean.class,
-                    String.class
-                );
-            } catch (ClassNotFoundException exception) {
+            Plugin xconomy = Bukkit.getPluginManager().getPlugin("XConomy");
+            if (xconomy == null) {
                 unavailableReason = "XConomy 未安装";
-            } catch (ReflectiveOperationException exception) {
-                unavailableReason = "XConomy API 初始化失败";
+                return;
+            }
+            try {
+                api = new me.yic.xconomy.api.XConomyAPI();
+            } catch (Exception | LinkageError exception) {
+                unavailableReason = "XConomy API 初始化失败: " + exception.getMessage();
             }
         }
     }
@@ -560,17 +495,11 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
     private final class RondoCurrencyBridge extends AbstractCurrencyBridge {
 
         // Rondo 原生 API（多货币场景使用）
-        private Object rondoApiInstance;
-        private Method rondoGetBalanceMethod;
-        private Method rondoWithdrawMethod;
-        private Method rondoDepositMethod;
+        private priv.seventeen.artist.rondo.api.RondoAPI rondoApi;
         private String rondoUnavailableReason = "";
 
         // Vault 回退（Rondo 是 Vault 提供者时，单货币走 Vault 更可靠）
-        private Object vaultEconomy;
-        private Method vaultBalanceMethod;
-        private Method vaultWithdrawMethod;
-        private Method vaultDepositMethod;
+        private net.milkbowl.vault.economy.Economy vaultEconomy;
         private String vaultUnavailableReason = "";
 
         private RondoCurrencyBridge(CurrencyDefinition definition) {
@@ -581,15 +510,7 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
 
         @Override
         public boolean available() {
-            return vaultAvailable() || rondoAvailable();
-        }
-
-        private boolean vaultAvailable() {
-            return vaultEconomy != null && vaultBalanceMethod != null && vaultWithdrawMethod != null && vaultDepositMethod != null;
-        }
-
-        private boolean rondoAvailable() {
-            return rondoApiInstance != null && rondoGetBalanceMethod != null && rondoWithdrawMethod != null && rondoDepositMethod != null;
+            return vaultEconomy != null || rondoApi != null;
         }
 
         @Override
@@ -597,7 +518,6 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
             if (available()) {
                 return "";
             }
-            // 两者均不可用：优先返回 Vault 原因，其次 Rondo 原因
             if (!vaultUnavailableReason.isBlank()) {
                 return vaultUnavailableReason;
             }
@@ -608,19 +528,18 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
         public BigDecimal balance(Player player) {
             if (player == null) return BigDecimal.ZERO;
             // 优先 Vault（Rondo 作为 Vault 提供者时无需货币 ID 映射）
-            if (vaultEconomy != null && vaultBalanceMethod != null) {
+            if (vaultEconomy != null) {
                 try {
-                    Object value = invokeVaultEconomyMethod(vaultBalanceMethod, player, BigDecimal.ZERO);
-                    return convertToBigDecimal(value);
-                } catch (ReflectiveOperationException | AmountRangeException ignored) {
+                    return BigDecimal.valueOf(vaultEconomy.getBalance(player));
+                } catch (Exception | LinkageError ignored) {
                 }
             }
             // 回退 Rondo 原生
-            if (rondoApiInstance != null && rondoGetBalanceMethod != null) {
+            if (rondoApi != null) {
                 try {
-                    Object result = rondoGetBalanceMethod.invoke(rondoApiInstance, player.getUniqueId(), definition().id());
-                    return result instanceof BigDecimal bd ? bd : convertToBigDecimal(result);
-                } catch (ReflectiveOperationException ignored) {
+                    BigDecimal result = rondoApi.getBalance(player.getUniqueId(), definition().id());
+                    return result != null ? result : BigDecimal.ZERO;
+                } catch (Exception | LinkageError ignored) {
                 }
             }
             return BigDecimal.ZERO;
@@ -628,39 +547,41 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
 
         @Override
         public CurrencyTransactionResult withdraw(Player player, BigDecimal amount) {
-            return invokeTransaction(vaultWithdrawMethod, rondoWithdrawMethod, player, amount, "扣款失败。");
+            return invokeTransaction(player, amount, "扣款失败。", true);
         }
 
         @Override
         public CurrencyTransactionResult deposit(Player player, BigDecimal amount) {
-            return invokeTransaction(vaultDepositMethod, rondoDepositMethod, player, amount, "入账失败。");
+            return invokeTransaction(player, amount, "入账失败。", false);
         }
 
         private CurrencyTransactionResult invokeTransaction(
-            Method vaultMethod, Method rondoMethod, Player player, BigDecimal amount, String defaultMessage
+            Player player, BigDecimal amount, String defaultMessage, boolean isWithdraw
         ) {
             if (player == null || amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
                 return CurrencyTransactionResult.failure("金额必须大于 0。");
             }
             // 优先 Vault
-            if (vaultEconomy != null && vaultMethod != null) {
+            if (vaultEconomy != null) {
                 try {
-                    Object response = invokeVaultEconomyMethod(vaultMethod, player, normalize(amount));
-                    return transactionSucceeded(response)
+                    double value = normalize(amount).doubleValue();
+                    net.milkbowl.vault.economy.EconomyResponse response = isWithdraw
+                        ? vaultEconomy.withdrawPlayer(player, value)
+                        : vaultEconomy.depositPlayer(player, value);
+                    return response.transactionSuccess()
                         ? CurrencyTransactionResult.ok()
-                        : CurrencyTransactionResult.failure(resolveTransactionMessage(response, defaultMessage));
-                } catch (AmountRangeException exception) {
-                    return CurrencyTransactionResult.failure(RANGE_FAILURE);
-                } catch (ReflectiveOperationException ignored) {
+                        : CurrencyTransactionResult.failure(response.errorMessage != null && !response.errorMessage.isBlank() ? response.errorMessage : defaultMessage);
+                } catch (Exception | LinkageError ignored) {
                 }
             }
             // 回退 Rondo 原生
-            if (rondoApiInstance != null && rondoMethod != null) {
+            if (rondoApi != null) {
                 try {
-                    Object result = rondoMethod.invoke(rondoApiInstance, player.getUniqueId(), definition().id(), normalize(amount), "ArcartXSuite");
-                    boolean success = result instanceof Boolean booleanValue ? booleanValue : true;
+                    boolean success = isWithdraw
+                        ? rondoApi.withdraw(player.getUniqueId(), definition().id(), normalize(amount), "ArcartXSuite")
+                        : rondoApi.deposit(player.getUniqueId(), definition().id(), normalize(amount), "ArcartXSuite");
                     return success ? CurrencyTransactionResult.ok() : CurrencyTransactionResult.failure("Rondo " + defaultMessage);
-                } catch (ReflectiveOperationException ignored) {
+                } catch (Exception | LinkageError ignored) {
                 }
             }
             return CurrencyTransactionResult.failure(defaultMessage);
@@ -673,24 +594,16 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 return;
             }
             try {
-                ClassLoader classLoader = vault.getClass().getClassLoader();
-                Class<?> economyClass = Class.forName(
-                    "net.milkbowl.vault.economy.Economy",
-                    true,
-                    classLoader
-                );
-                RegisteredServiceProvider<?> registration = Bukkit.getServicesManager().getRegistration(economyClass);
+                RegisteredServiceProvider<net.milkbowl.vault.economy.Economy> registration =
+                    Bukkit.getServicesManager().getRegistration(net.milkbowl.vault.economy.Economy.class);
                 if (registration == null || registration.getProvider() == null) {
                     vaultUnavailableReason = "Vault Economy 服务未注册";
                     return;
                 }
                 vaultEconomy = registration.getProvider();
-                vaultBalanceMethod = findEconomyMethod(vaultEconomy.getClass(), "getBalance");
-                vaultWithdrawMethod = findEconomyMethod(vaultEconomy.getClass(), "withdrawPlayer");
-                vaultDepositMethod = findEconomyMethod(vaultEconomy.getClass(), "depositPlayer");
-                vaultUnavailableReason = vaultAvailable() ? "" : "未找到兼容的 Vault Economy 方法";
-            } catch (ClassNotFoundException exception) {
-                vaultUnavailableReason = "Vault API 类不可用";
+                vaultUnavailableReason = "";
+            } catch (Exception | LinkageError exception) {
+                vaultUnavailableReason = "Vault API 初始化失败: " + exception.getMessage();
             }
         }
 
@@ -701,35 +614,14 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
                 return;
             }
             try {
-                ClassLoader classLoader = rondo.getClass().getClassLoader();
-                Class<?> rondoApiClass = Class.forName("priv.seventeen.artist.rondo.api.RondoAPI", true, classLoader);
-                rondoApiInstance = rondoApiClass.getField("INSTANCE").get(null);
-                rondoGetBalanceMethod = rondoApiClass.getMethod("getBalance", java.util.UUID.class, String.class);
-                rondoWithdrawMethod = rondoApiClass.getMethod("withdraw", java.util.UUID.class, String.class, BigDecimal.class, String.class);
-                rondoDepositMethod = rondoApiClass.getMethod("deposit", java.util.UUID.class, String.class, BigDecimal.class, String.class);
-            } catch (ReflectiveOperationException exception) {
+                rondoApi = priv.seventeen.artist.rondo.api.RondoAPI.INSTANCE;
+                if (rondoApi == null) {
+                    rondoUnavailableReason = "Rondo API 实例不可用";
+                }
+            } catch (Exception | LinkageError exception) {
                 rondoUnavailableReason = "Rondo API 初始化失败: " + exception.getMessage();
             }
         }
-
-        private Object invokeVaultEconomyMethod(Method method, Player player, BigDecimal amount) throws ReflectiveOperationException, AmountRangeException {
-            Class<?>[] parameterTypes = method.getParameterTypes();
-            if (parameterTypes.length == 1) {
-                return method.invoke(vaultEconomy, resolveFirstArgument(method, player));
-            }
-            if (parameterTypes.length == 2) {
-                return method.invoke(vaultEconomy, resolveFirstArgument(method, player), castNumeric(parameterTypes[1], amount));
-            }
-            return method.invoke(
-                vaultEconomy,
-                resolveFirstArgument(method, player),
-                player.getWorld().getName(),
-                castNumeric(parameterTypes[2], amount)
-            );
-        }
-    }
-
-    private static final class AmountRangeException extends Exception {
     }
 
     private static <T> Map<String, T> immutableCopy(Map<String, T> source) {
@@ -745,143 +637,6 @@ public final class CurrencyBridgeManager implements CurrencyBridgeAPI {
         } catch (IllegalArgumentException exception) {
             return RoundingMode.DOWN;
         }
-    }
-
-    private Method findEconomyMethod(Class<?> type, String name) {
-        for (Method method : type.getMethods()) {
-            if (!method.getName().equals(name) || method.getParameterCount() < 1) {
-                continue;
-            }
-            Class<?>[] parameterTypes = method.getParameterTypes();
-            if (parameterTypes.length == 1 && "getBalance".equals(name) && isPlayerType(parameterTypes[0])) {
-                return method;
-            }
-            if (parameterTypes.length == 2 && isPlayerType(parameterTypes[0]) && isNumericType(parameterTypes[1])) {
-                return method;
-            }
-            if (parameterTypes.length == 3 && isPlayerType(parameterTypes[0]) && parameterTypes[1] == String.class && isNumericType(parameterTypes[2])) {
-                return method;
-            }
-        }
-        return null;
-    }
-
-    private Method findPointsMethod(Class<?> type, String name) {
-        for (Method method : type.getMethods()) {
-            if (!method.getName().equals(name)) {
-                continue;
-            }
-            Class<?>[] parameterTypes = method.getParameterTypes();
-            if ("look".equals(name) && parameterTypes.length == 1 && (parameterTypes[0].getName().equals("java.util.UUID") || Player.class.isAssignableFrom(parameterTypes[0]))) {
-                return method;
-            }
-            if (!"look".equals(name) && parameterTypes.length == 2 && (parameterTypes[0].getName().equals("java.util.UUID") || Player.class.isAssignableFrom(parameterTypes[0])) && (parameterTypes[1] == int.class || parameterTypes[1] == Integer.class)) {
-                return method;
-            }
-        }
-        return null;
-    }
-
-    private Object resolveFirstArgument(Method method, Player player) {
-        Class<?>[] parameterTypes = method.getParameterTypes();
-        if (parameterTypes.length == 0) {
-            return null;
-        }
-        Class<?> first = parameterTypes[0];
-        if (Player.class.isAssignableFrom(first)) {
-            return player;
-        }
-        if (OfflinePlayer.class.isAssignableFrom(first)) {
-            return player;
-        }
-        return player.getName();
-    }
-
-    private Object resolvePlayerArgument(Method method, Player player) {
-        Class<?> parameterType = method.getParameterTypes()[0];
-        if (Player.class.isAssignableFrom(parameterType)) {
-            return player;
-        }
-        return player.getUniqueId();
-    }
-
-    private boolean transactionSucceeded(Object response) {
-        if (response == null) {
-            return true;
-        }
-        if (response instanceof Boolean booleanValue) {
-            return booleanValue;
-        }
-        try {
-            Object success = response.getClass().getMethod("transactionSuccess").invoke(response);
-            return !(success instanceof Boolean booleanValue) || booleanValue;
-        } catch (ReflectiveOperationException exception) {
-            return true;
-        }
-    }
-
-    private String resolveTransactionMessage(Object response, String defaultMessage) {
-        if (response == null) {
-            return defaultMessage;
-        }
-        try {
-            Object error = response.getClass().getField("errorMessage").get(response);
-            if (error != null && !String.valueOf(error).isBlank()) {
-                return String.valueOf(error);
-            }
-        } catch (ReflectiveOperationException ignored) {
-        }
-        return defaultMessage;
-    }
-
-    private static boolean isPlayerType(Class<?> type) {
-        return Player.class.isAssignableFrom(type) || OfflinePlayer.class.isAssignableFrom(type) || type == String.class;
-    }
-
-    private static boolean isNumericType(Class<?> type) {
-        return type == double.class || type == Double.class || type == int.class || type == Integer.class || type == long.class || type == Long.class;
-    }
-
-    private static Object castNumeric(Class<?> targetType, BigDecimal amount) throws AmountRangeException {
-        try {
-            if (targetType == int.class || targetType == Integer.class) {
-                return amount.intValueExact();
-            }
-            if (targetType == long.class || targetType == Long.class) {
-                return amount.longValueExact();
-            }
-            double value = amount.doubleValue();
-            if (!Double.isFinite(value) || BigDecimal.valueOf(value).compareTo(amount) != 0) {
-                throw new ArithmeticException();
-            }
-            return value;
-        } catch (ArithmeticException exception) {
-            throw new AmountRangeException();
-        }
-    }
-
-    private static BigDecimal convertToBigDecimal(Object rawValue) {
-        if (rawValue instanceof BigDecimal decimal) {
-            return decimal;
-        }
-        if (rawValue instanceof BigInteger integer) {
-            return new BigDecimal(integer);
-        }
-        if (rawValue instanceof Byte || rawValue instanceof Short
-            || rawValue instanceof Integer || rawValue instanceof Long) {
-            return BigDecimal.valueOf(((Number) rawValue).longValue());
-        }
-        if (rawValue instanceof Number number) {
-            try {
-                return new BigDecimal(number.toString());
-            } catch (NumberFormatException exception) {
-                return BigDecimal.ZERO;
-            }
-        }
-        if (rawValue != null) {
-            return parseNumericString(String.valueOf(rawValue));
-        }
-        return BigDecimal.ZERO;
     }
 
     private static BigDecimal parseNumericString(String rawValue) {

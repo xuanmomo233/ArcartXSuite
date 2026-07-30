@@ -36,6 +36,21 @@ final class AttributeDamageDispatcher {
     private final List<AttributeHealListener> healListeners = new CopyOnWriteArrayList<>();
     private final List<Listener> registeredListeners = new CopyOnWriteArrayList<>();
 
+    // CraneAttribute handler 方法缓存（首次事件触发时初始化，避免每次事件都做 getMethod 查找）
+    private volatile Method craneHandlerGetEntity;
+    private volatile Method craneHandlerGetDamage;
+    private volatile Method craneHandlerGetEvent;
+    private volatile Method craneHandlerGetAttacker;
+    // CraneAttribute heal handler 方法缓存
+    private volatile Method craneHealHandlerGetEntity;
+    private volatile Method craneHealHandlerGetHeal;
+    private volatile Method craneHealHandlerGetEvent;
+    private volatile Method craneHealHandlerGetSource;
+    // AttributePlus AttributeHandle.getDamage 缓存
+    private volatile Method apAttributeHandleGetDamage;
+    // MythicLib DamageMetadata.getDamage 缓存
+    private volatile Method mythicLibDamageMetadataGetDamage;
+
     AttributeDamageDispatcher(JavaPlugin plugin) {
         this.plugin = plugin;
     }
@@ -177,8 +192,10 @@ final class AttributeDamageDispatcher {
             if (!(rawAttacker instanceof Player attacker) || !(rawTarget instanceof LivingEntity target)) return;
             Object handle = getAttributeHandle.invoke(event);
             if (handle == null) return;
-            Method getDamage = handle.getClass().getMethod("getDamage", LivingEntity.class);
-            Object rawDamage = getDamage.invoke(handle, attacker);
+            if (apAttributeHandleGetDamage == null) {
+                apAttributeHandleGetDamage = handle.getClass().getMethod("getDamage", LivingEntity.class);
+            }
+            Object rawDamage = apAttributeHandleGetDamage.invoke(handle, attacker);
             double damage = rawDamage instanceof Number n ? n.doubleValue() : 0.0D;
             if (damage <= 0.0D) return;
             dispatch(new AttributeDamageEvent(attacker, target, damage, Source.ATTRIBUTE_PLUS));
@@ -218,18 +235,27 @@ final class AttributeDamageDispatcher {
         try {
             Object handler = getHandler.invoke(event);
             if (handler == null) return;
-            Method getEntity = handler.getClass().getMethod("getEntity");
-            Object rawTarget = getEntity.invoke(handler);
+            if (craneHandlerGetEntity == null) {
+                craneHandlerGetEntity = handler.getClass().getMethod("getEntity");
+            }
+            Object rawTarget = craneHandlerGetEntity.invoke(handler);
             if (!(rawTarget instanceof LivingEntity target)) return;
 
             double damage = 0.0D;
-            try {
-                Method getDamage = handler.getClass().getMethod("getDamage", LivingEntity.class);
-                Object rawDamage = getDamage.invoke(handler, target);
+            if (craneHandlerGetDamage == null) {
+                try {
+                    craneHandlerGetDamage = handler.getClass().getMethod("getDamage", LivingEntity.class);
+                } catch (NoSuchMethodException ignored) {
+                }
+            }
+            if (craneHandlerGetDamage != null) {
+                Object rawDamage = craneHandlerGetDamage.invoke(handler, target);
                 if (rawDamage instanceof Number n) damage = n.doubleValue();
-            } catch (NoSuchMethodException ignored) {
-                Method getEvent = handler.getClass().getMethod("getEvent");
-                Object rawEvent = getEvent.invoke(handler);
+            } else {
+                if (craneHandlerGetEvent == null) {
+                    craneHandlerGetEvent = handler.getClass().getMethod("getEvent");
+                }
+                Object rawEvent = craneHandlerGetEvent.invoke(handler);
                 if (rawEvent instanceof org.bukkit.event.entity.EntityDamageEvent de) {
                     damage = de.getFinalDamage();
                 }
@@ -237,8 +263,14 @@ final class AttributeDamageDispatcher {
             if (damage <= 0.0D) return;
 
             Player attacker = null;
-            if (handler.getClass().getMethod("getAttacker") != null) {
-                Object rawAttacker = handler.getClass().getMethod("getAttacker").invoke(handler);
+            if (craneHandlerGetAttacker == null) {
+                try {
+                    craneHandlerGetAttacker = handler.getClass().getMethod("getAttacker");
+                } catch (NoSuchMethodException ignored) {
+                }
+            }
+            if (craneHandlerGetAttacker != null) {
+                Object rawAttacker = craneHandlerGetAttacker.invoke(handler);
                 if (rawAttacker instanceof Player p) attacker = p;
             }
             dispatch(new AttributeDamageEvent(attacker, target, damage, Source.CRANE_ATTRIBUTE));
@@ -278,18 +310,27 @@ final class AttributeDamageDispatcher {
         try {
             Object handler = getHandler.invoke(event);
             if (handler == null) return;
-            Method getEntity = handler.getClass().getMethod("getEntity");
-            Object rawTarget = getEntity.invoke(handler);
+            if (craneHealHandlerGetEntity == null) {
+                craneHealHandlerGetEntity = handler.getClass().getMethod("getEntity");
+            }
+            Object rawTarget = craneHealHandlerGetEntity.invoke(handler);
             if (!(rawTarget instanceof LivingEntity target)) return;
 
             double heal = 0.0D;
-            try {
-                Method getHeal = handler.getClass().getMethod("getHeal", LivingEntity.class);
-                Object rawHeal = getHeal.invoke(handler, target);
+            if (craneHealHandlerGetHeal == null) {
+                try {
+                    craneHealHandlerGetHeal = handler.getClass().getMethod("getHeal", LivingEntity.class);
+                } catch (NoSuchMethodException ignored) {
+                }
+            }
+            if (craneHealHandlerGetHeal != null) {
+                Object rawHeal = craneHealHandlerGetHeal.invoke(handler, target);
                 if (rawHeal instanceof Number n) heal = n.doubleValue();
-            } catch (NoSuchMethodException ignored) {
-                Method getEvent = handler.getClass().getMethod("getEvent");
-                Object rawEvent = getEvent.invoke(handler);
+            } else {
+                if (craneHealHandlerGetEvent == null) {
+                    craneHealHandlerGetEvent = handler.getClass().getMethod("getEvent");
+                }
+                Object rawEvent = craneHealHandlerGetEvent.invoke(handler);
                 if (rawEvent instanceof EntityRegainHealthEvent he) {
                     heal = he.getAmount();
                 }
@@ -297,10 +338,15 @@ final class AttributeDamageDispatcher {
             if (heal <= 0.0D) return;
 
             Player source = null;
-            try {
-                Object rawSource = handler.getClass().getMethod("getSource").invoke(handler);
+            if (craneHealHandlerGetSource == null) {
+                try {
+                    craneHealHandlerGetSource = handler.getClass().getMethod("getSource");
+                } catch (NoSuchMethodException ignored) {
+                }
+            }
+            if (craneHealHandlerGetSource != null) {
+                Object rawSource = craneHealHandlerGetSource.invoke(handler);
                 if (rawSource instanceof Player p) source = p;
-            } catch (ReflectiveOperationException ignored) {
             }
             dispatchHeal(new AttributeHealEvent(source, target, heal, SourceType.CRANE_ATTRIBUTE));
         } catch (ReflectiveOperationException e) {
@@ -354,8 +400,10 @@ final class AttributeDamageDispatcher {
                     damage = n.doubleValue();
                 } else {
                     // getDamage() returns DamageMetadata, try getDamage() on it
-                    Method getDamageValue = rawDamage.getClass().getMethod("getDamage");
-                    Object rawValue = getDamageValue.invoke(rawDamage);
+                    if (mythicLibDamageMetadataGetDamage == null) {
+                        mythicLibDamageMetadataGetDamage = rawDamage.getClass().getMethod("getDamage");
+                    }
+                    Object rawValue = mythicLibDamageMetadataGetDamage.invoke(rawDamage);
                     damage = rawValue instanceof Number n2 ? n2.doubleValue() : 0.0D;
                 }
             }

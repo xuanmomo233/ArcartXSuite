@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -106,7 +107,11 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         }
         ensureQuestDefaults(questsDirectory);
         configuration = QuestGpsModuleConfiguration.load(yaml, logger, questsDirectory);
-        QuestGpsMysqlDatabase.registerIfNeeded(logger, configuration.database());
+        if (configuration.database().enabled() && Bukkit.getPluginManager().getPlugin("Chemdah") == null) {
+            logger.fine("QuestGPS: database.enabled=true 但未检测到 Chemdah 插件，MySQL 数据库注册已跳过。");
+        } else {
+            QuestGpsMysqlDatabase.registerIfNeeded(logger, configuration.database());
+        }
     }
 
     private void ensureQuestDefaults(File questsDirectory) {

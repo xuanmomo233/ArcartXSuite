@@ -616,7 +616,7 @@ public record QuestGpsModuleConfiguration(
         int pathUpdateTicks,
         double pathMaxDistance,
         int pathMaxIterations
-    ) {
+    ) implements xuanmo.arcartxsuite.api.util.NavigationMarkerConfig {
         public static MarkerDefaults defaults() {
             return new MarkerDefaults(true, "nav_beacon", 1.0, "idle", "rotate", 2.0,
                 3.0, 20, 10, 64.0, 2000);

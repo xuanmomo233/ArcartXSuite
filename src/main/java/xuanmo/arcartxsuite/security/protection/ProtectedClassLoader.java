@@ -2,13 +2,12 @@ package xuanmo.arcartxsuite.security.protection;
 
 import xuanmo.arcartxsuite.security.NativeBridge;
 import xuanmo.arcartxsuite.security.protection.ProtectionEnvironment;
+import xuanmo.arcartxsuite.util.HashUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.Map;
@@ -47,6 +46,7 @@ public final class ProtectedClassLoader extends ClassLoader {
     private final String jarUrlPrefix;
     private final Map<String, Class<?>> capturedClasses;
     private final ConcurrentHashMap<String, Class<?>> loadedClasses = new ConcurrentHashMap<>();
+    private final ThreadLocal<byte[]> readBuffer = ThreadLocal.withInitial(() -> new byte[8192]);
     private volatile boolean protectionActive = true;
 
     public ProtectedClassLoader(ClassLoader originalParent, JarFile protectedJar,
@@ -123,7 +123,7 @@ public final class ProtectedClassLoader extends ClassLoader {
         byte[] plain = null;
         try {
             byte[] encData = readEntry(entry);
-            byte[] classNameHash = sha256(name);
+            byte[] classNameHash = HashUtils.sha256(name);
             plain = NativeBridge.n6(classNameHash, encData);
             if (plain == null || plain.length == 0) {
                 throw new ClassNotFoundException("Decryption failed: " + name);
@@ -194,21 +194,12 @@ public final class ProtectedClassLoader extends ClassLoader {
     private byte[] readEntry(JarEntry entry) throws IOException {
         try (InputStream is = protectedJar.getInputStream(entry)) {
             ByteArrayOutputStream bos = new ByteArrayOutputStream((int) Math.max(64, entry.getSize()));
-            byte[] buf = new byte[8192];
+            byte[] buf = readBuffer.get();
             int n;
             while ((n = is.read(buf)) != -1) {
                 bos.write(buf, 0, n);
             }
             return bos.toByteArray();
-        }
-    }
-
-    private static byte[] sha256(String input) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            return md.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
         }
     }
 }

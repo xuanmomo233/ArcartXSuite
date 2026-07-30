@@ -1,20 +1,17 @@
 package xuanmo.arcartxsuite.bridge;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import org.bukkit.Bukkit;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import pers.neige.neigeitems.manager.ItemManager;
 
 public final class NeigeItemsBridge {
 
     private final JavaPlugin plugin;
 
     private boolean available;
-    private Object itemManager;
-    private Method getItemIdMethod;
-    private Method getItemStackMethod;
+    private ItemManager itemManager;
 
     public NeigeItemsBridge(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -23,8 +20,6 @@ public final class NeigeItemsBridge {
     public void initialize() {
         available = false;
         itemManager = null;
-        getItemIdMethod = null;
-        getItemStackMethod = null;
 
         Plugin neigeItems = Bukkit.getPluginManager().getPlugin("NeigeItems");
         if (neigeItems == null) {
@@ -32,14 +27,9 @@ public final class NeigeItemsBridge {
         }
 
         try {
-            ClassLoader classLoader = neigeItems.getClass().getClassLoader();
-            Class<?> itemManagerClass = Class.forName("pers.neige.neigeitems.manager.ItemManager", true, classLoader);
-            Field instanceField = itemManagerClass.getField("INSTANCE");
-            itemManager = instanceField.get(null);
-            getItemIdMethod = itemManagerClass.getMethod("getItemId", ItemStack.class);
-            getItemStackMethod = itemManagerClass.getMethod("getItemStack", String.class);
-            available = true;
-        } catch (Exception exception) {
+            itemManager = ItemManager.INSTANCE;
+            available = itemManager != null;
+        } catch (Exception | LinkageError exception) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning("初始化 NeigeItems 物品桥接失败: " + exception.getMessage());
         }
     }
@@ -53,26 +43,26 @@ public final class NeigeItemsBridge {
             return "";
         }
         try {
-            Object result = getItemIdMethod.invoke(itemManager, itemStack);
-            return result instanceof String value && !value.isBlank() ? value : "";
-        } catch (Exception exception) {
+            String value = itemManager.getItemId(itemStack);
+            return value != null && !value.isBlank() ? value : "";
+        } catch (Exception | LinkageError exception) {
             return "";
         }
     }
 
     public ItemStack getItemStack(String itemId, int amount) {
-        if (!available || itemManager == null || getItemStackMethod == null || itemId == null || itemId.isBlank()) {
+        if (!available || itemManager == null || itemId == null || itemId.isBlank()) {
             return null;
         }
         try {
-            Object raw = getItemStackMethod.invoke(itemManager, itemId);
-            if (!(raw instanceof ItemStack itemStack) || itemStack.getType().isAir()) {
+            ItemStack itemStack = itemManager.getItemStack(itemId);
+            if (itemStack == null || itemStack.getType().isAir()) {
                 return null;
             }
             ItemStack cloned = itemStack.clone();
             cloned.setAmount(Math.max(1, amount));
             return cloned;
-        } catch (Exception exception) {
+        } catch (Exception | LinkageError exception) {
             return null;
         }
     }

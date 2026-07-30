@@ -1,6 +1,5 @@
 package xuanmo.arcartxsuite.combateffect.trigger;
 
-import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -13,6 +12,10 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.EventExecutor;
 import org.bukkit.plugin.java.JavaPlugin;
+import priv.seventeen.artist.arcartx.chronos.api.ChronosAPI;
+import priv.seventeen.artist.arcartx.chronos.api.event.PlayerEnterStateEvent;
+import priv.seventeen.artist.arcartx.chronos.api.event.PlayerLeaveStateEvent;
+import priv.seventeen.artist.arcartx.chronos.api.event.PlayerControllerChangeEvent;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.combateffect.packet.config.CombatEffectPacketConfiguration;
 import xuanmo.arcartxsuite.combateffect.packet.config.PacketDefinition;
@@ -24,8 +27,6 @@ import xuanmo.arcartxsuite.combateffect.packet.config.PacketTrigger;
 public final class StateTriggerService {
 
     private static final String CHRONOS_PLUGIN_NAME = "ArcartX_Chronos_Plugin";
-    private static final String EVENT_PACKAGE = "priv.seventeen.artist.arcartx.chronos.api.event.";
-    private static final String API_CLASS = "priv.seventeen.artist.arcartx.chronos.api.ChronosAPI";
 
     private final JavaPlugin plugin;
     private final CombatEffectPacketConfiguration configuration;
@@ -34,9 +35,8 @@ public final class StateTriggerService {
     private final Listener dummyListener = new Listener() {};
     private boolean registered;
 
-    // ChronosAPI 反射缓存
-    private Object chronosApi;
-    private Method getPlayerControllerId;
+    // ChronosAPI
+    private ChronosAPI chronosApi;
 
     // cooldown
     private final ConcurrentHashMap<String, Long> cooldownMap = new ConcurrentHashMap<>();
@@ -62,16 +62,13 @@ public final class StateTriggerService {
         }
         try {
             initChronosApi();
-            registerStateEvent(EVENT_PACKAGE + "PlayerEnterStateEvent", true);
-            registerStateEvent(EVENT_PACKAGE + "PlayerLeaveStateEvent", false);
-            registerControllerEvent(EVENT_PACKAGE + "PlayerControllerChangeEvent");
+            registerStateEvent(PlayerEnterStateEvent.class, true);
+            registerStateEvent(PlayerLeaveStateEvent.class, false);
+            registerControllerEvent(PlayerControllerChangeEvent.class);
             registered = true;
             logger.info("StateTriggerService: 已注册 Chronos 状态/控制器事件监听");
             return true;
-        } catch (ClassNotFoundException e) {
-            logger.warning("StateTriggerService: Chronos 事件类未找到 — " + e.getMessage());
-            return false;
-        } catch (Exception e) {
+        } catch (Exception | LinkageError e) {
             logger.warning("StateTriggerService: 注册失败 — " + e.getMessage());
             return false;
         }
@@ -86,29 +83,21 @@ public final class StateTriggerService {
 
     private void initChronosApi() {
         try {
-            Class<?> apiClass = Class.forName(API_CLASS);
-            Method getInstance = apiClass.getMethod("getInstanceAPI");
-            chronosApi = getInstance.invoke(null);
-            getPlayerControllerId = apiClass.getMethod("getPlayerControllerId", Player.class);
-        } catch (Exception e) {
+            chronosApi = ChronosAPI.getInstanceAPI();
+        } catch (Exception | LinkageError e) {
             logger.fine("StateTriggerService: ChronosAPI 初始化失败（运行时查询控制器将不可用）— " + e.getMessage());
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private void registerStateEvent(String className, boolean isEnter) throws Exception {
-        Class<? extends Event> eventClass = (Class<? extends Event>) Class.forName(className);
-        Method getPlayer = eventClass.getMethod("getPlayer");
-        Method getStateId = eventClass.getMethod("getStateId");
-
+    private void registerStateEvent(Class<? extends Event> eventClass, boolean isEnter) {
         EventExecutor executor = (listener, event) -> {
             if (!eventClass.isInstance(event)) return;
             try {
-                Player player = (Player) getPlayer.invoke(event);
-                String stateId = (String) getStateId.invoke(event);
-                if (stateId == null) return;
-                String currentController = resolveControllerId(player);
-                handleState(player, stateId, isEnter, currentController);
+                if (event instanceof PlayerEnterStateEvent enterEvent) {
+                    handleState(enterEvent.getPlayer(), enterEvent.getStateId(), true, resolveControllerId(enterEvent.getPlayer()));
+                } else if (event instanceof PlayerLeaveStateEvent leaveEvent) {
+                    handleState(leaveEvent.getPlayer(), leaveEvent.getStateId(), false, resolveControllerId(leaveEvent.getPlayer()));
+                }
             } catch (Exception e) {
                 if (configuration.debug()) {
                     logger.warning("StateTriggerService 状态事件处理异常: " + e.getMessage());
@@ -118,18 +107,13 @@ public final class StateTriggerService {
         Bukkit.getPluginManager().registerEvent(eventClass, dummyListener, EventPriority.MONITOR, executor, plugin, true);
     }
 
-    @SuppressWarnings("unchecked")
-    private void registerControllerEvent(String className) throws Exception {
-        Class<? extends Event> eventClass = (Class<? extends Event>) Class.forName(className);
-        Method getPlayer = eventClass.getMethod("getPlayer");
-        Method getControllerId = eventClass.getMethod("getControllerId");
-
+    private void registerControllerEvent(Class<? extends Event> eventClass) {
         EventExecutor executor = (listener, event) -> {
             if (!eventClass.isInstance(event)) return;
             try {
-                Player player = (Player) getPlayer.invoke(event);
-                String controllerId = (String) getControllerId.invoke(event);
-                handleController(player, controllerId);
+                if (event instanceof PlayerControllerChangeEvent controllerEvent) {
+                    handleController(controllerEvent.getPlayer(), controllerEvent.getControllerId());
+                }
             } catch (Exception e) {
                 if (configuration.debug()) {
                     logger.warning("StateTriggerService 控制器事件处理异常: " + e.getMessage());
@@ -198,10 +182,10 @@ public final class StateTriggerService {
     }
 
     private String resolveControllerId(Player player) {
-        if (chronosApi == null || getPlayerControllerId == null) return null;
+        if (chronosApi == null) return null;
         try {
-            return (String) getPlayerControllerId.invoke(chronosApi, player);
-        } catch (Exception e) {
+            return chronosApi.getPlayerControllerId(player);
+        } catch (Exception | LinkageError e) {
             return null;
         }
     }

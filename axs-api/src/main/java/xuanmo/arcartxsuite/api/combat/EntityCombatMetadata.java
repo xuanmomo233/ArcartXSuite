@@ -1,7 +1,9 @@
 package xuanmo.arcartxsuite.api.combat;
 
+import io.lumine.mythic.bukkit.MythicBukkit;
+import io.lumine.mythic.core.mobs.ActiveMob;
 import java.util.Locale;
-import java.util.Optional;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.EntityType;
@@ -12,6 +14,22 @@ import xuanmo.arcartxsuite.api.util.AttributeResolver;
 public final class EntityCombatMetadata {
 
     private EntityCombatMetadata() {}
+
+    // ─── MythicMobs availability ─────────────────────────────
+    // compileOnly 依赖：运行时 MythicMobs 可能不存在，需懒检测避免 NoClassDefFoundError
+
+    private static volatile Boolean mythicAvailable;
+
+    private static boolean mythicAvailable() {
+        Boolean cached = mythicAvailable;
+        if (cached != null) {
+            return cached;
+        }
+        boolean present = Bukkit.getPluginManager().getPlugin("MythicBukkit") != null
+            || Bukkit.getPluginManager().getPlugin("MythicMobs") != null;
+        mythicAvailable = present;
+        return present;
+    }
 
     // ─── Display name ────────────────────────────────────────
 
@@ -56,57 +74,44 @@ public final class EntityCombatMetadata {
         return sb.toString();
     }
 
-    // ─── MythicMobs integration (reflection-based) ───────────
+    // ─── MythicMobs integration (direct API) ────────────────
 
     public static String normalizeMythicMobId(String mythicMobId) {
         return mythicMobId == null ? "" : mythicMobId.trim();
     }
 
     public static String resolveMythicMobId(LivingEntity entity) {
-        Object activeMob = resolveActiveMob(entity);
-        return nullToEmpty(resolveMythicMobIdFrom(activeMob));
+        if (!mythicAvailable()) return "";
+        ActiveMob activeMob = resolveActiveMob(entity);
+        return activeMob == null ? "" : nullToEmpty(resolveMythicMobIdFrom(activeMob));
     }
 
-    @SuppressWarnings("unchecked")
-    public static <T> T resolveActiveMob(LivingEntity entity) {
-        if (entity == null) return null;
+    public static ActiveMob resolveActiveMob(LivingEntity entity) {
+        if (entity == null || !mythicAvailable()) return null;
         try {
-            Class<?> mythicBukkitClass = Class.forName("io.lumine.mythic.bukkit.MythicBukkit");
-            Object mythicBukkit = mythicBukkitClass.getMethod("inst").invoke(null);
-            Object mobManager = mythicBukkitClass.getMethod("getMobManager").invoke(mythicBukkit);
-            Object result = mobManager.getClass()
-                .getMethod("getActiveMob", java.util.UUID.class)
-                .invoke(mobManager, entity.getUniqueId());
-            if (result instanceof Optional<?> opt) {
-                return opt.isPresent() ? (T) opt.get() : null;
-            }
-            return (T) result;
-        } catch (Exception ignored) {
+            return MythicBukkit.inst().getAPIHelper().getMythicMobInstance(entity);
+        } catch (Exception | LinkageError ignored) {
             return null;
         }
     }
 
-    public static String resolveMythicMobIdFrom(Object activeMob) {
+    public static String resolveMythicMobIdFrom(ActiveMob activeMob) {
         if (activeMob == null) return "";
         try {
-            // 优先 getType().getInternalName()（返回 MythicMob 对象）
-            Object mythicMobType = activeMob.getClass().getMethod("getType").invoke(activeMob);
-            if (mythicMobType != null) {
-                Object internalName = mythicMobType.getClass().getMethod("getInternalName").invoke(mythicMobType);
-                if (internalName instanceof String s && !s.isBlank()) return s;
+            if (activeMob.getType() != null && activeMob.getType().getInternalName() != null) {
+                return activeMob.getType().getInternalName();
             }
-        } catch (Exception ignored) {}
+        } catch (Exception | LinkageError ignored) {}
         return "";
     }
 
     // ─── Health resolution ───────────────────────────────────
 
-    public static double resolveMaxHealth(LivingEntity entity, Object activeMob) {
-        if (activeMob != null) {
+    public static double resolveMaxHealth(LivingEntity entity, ActiveMob activeMob) {
+        if (activeMob != null && activeMob.getEntity() != null) {
             try {
-                Object stat = activeMob.getClass().getMethod("getMaxHealth").invoke(activeMob);
-                if (stat instanceof Number n) return n.doubleValue();
-            } catch (Exception ignored) {}
+                return Math.max(activeMob.getEntity().getMaxHealth(), 1.0D);
+            } catch (Exception | LinkageError ignored) {}
         }
         if (entity != null) {
             return AttributeResolver.getMaxHealth(entity);
@@ -114,12 +119,11 @@ public final class EntityCombatMetadata {
         return 20.0;
     }
 
-    public static double resolveCurrentHealth(LivingEntity entity, double maxHealth, Object activeMob) {
-        if (activeMob != null) {
+    public static double resolveCurrentHealth(LivingEntity entity, double maxHealth, ActiveMob activeMob) {
+        if (activeMob != null && activeMob.getEntity() != null) {
             try {
-                Object stat = activeMob.getClass().getMethod("getHealth").invoke(activeMob);
-                if (stat instanceof Number n) return Math.min(n.doubleValue(), maxHealth);
-            } catch (Exception ignored) {}
+                return Math.max(0.0D, Math.min(activeMob.getEntity().getHealth(), maxHealth));
+            } catch (Exception | LinkageError ignored) {}
         }
         if (entity != null) {
             return Math.min(entity.getHealth(), maxHealth);

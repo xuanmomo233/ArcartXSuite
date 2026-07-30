@@ -1,22 +1,17 @@
 package xuanmo.arcartxsuite.bridge;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.Optional;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
+import priv.seventeen.artist.arcartx.nms.ItemBridge;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 
 public final class ArcartXItemStackBridge implements ItemBridgeAPI {
 
     private final JavaPlugin plugin;
-
     private boolean available;
-    private Object itemStackNms;
-    private Method item2jsonMethod;
-    private Method putDeepTagMethod;
+    private ItemBridge itemBridge;
     private boolean failureWarned;
 
     public ArcartXItemStackBridge(JavaPlugin plugin) {
@@ -25,9 +20,7 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
 
     public boolean initialize() {
         available = false;
-        itemStackNms = null;
-        item2jsonMethod = null;
-        putDeepTagMethod = null;
+        itemBridge = null;
         failureWarned = false;
 
         Plugin arcartX = plugin.getServer().getPluginManager().getPlugin("ArcartX");
@@ -36,33 +29,13 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
         }
 
         try {
-            ClassLoader classLoader = arcartX.getClass().getClassLoader();
-            Class<?> itemStackNmsClass = resolveItemBridgeClass(classLoader);
-            Object instance = resolveInstance(itemStackNmsClass);
-            Method method = findMethod(itemStackNmsClass, "item2json", ItemStack.class);
-            if (method == null) {
-                method = findMethod(itemStackNmsClass, "item2Json", ItemStack.class);
+            itemBridge = ItemBridge.INSTANCE;
+            if (itemBridge == null) {
+                throw new IllegalStateException("ItemBridge.INSTANCE 不可用。");
             }
-            if (method == null && instance != null) {
-                method = findMethod(instance.getClass(), "item2json", ItemStack.class);
-                if (method == null) {
-                    method = findMethod(instance.getClass(), "item2Json", ItemStack.class);
-                }
-            }
-            if (method == null) {
-                throw new NoSuchMethodException("ItemBridge.item2json/item2Json(ItemStack)");
-            }
-
-            itemStackNms = instance;
-            item2jsonMethod = method;
-            Method putDeepTag = findMethod(itemStackNmsClass, "putDeepTag", ItemStack.class, String.class, Object.class);
-            if (putDeepTag == null && instance != null) {
-                putDeepTag = findMethod(instance.getClass(), "putDeepTag", ItemStack.class, String.class, Object.class);
-            }
-            putDeepTagMethod = putDeepTag;
             available = true;
             return true;
-        } catch (ReflectiveOperationException exception) {
+        } catch (RuntimeException exception) {
             xuanmo.arcartxsuite.module.AxsLog.logger().warning("初始化 ArcartX ItemStack 桥接失败: " + exception.getMessage());
             return false;
         }
@@ -70,9 +43,7 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
 
     public void shutdown() {
         available = false;
-        itemStackNms = null;
-        item2jsonMethod = null;
-        putDeepTagMethod = null;
+        itemBridge = null;
         failureWarned = false;
     }
 
@@ -81,27 +52,19 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
     }
 
     public Optional<String> itemToJson(ItemStack itemStack) {
-        if (!available || item2jsonMethod == null || itemStack == null) {
+        if (!available || itemBridge == null || itemStack == null) {
             return Optional.empty();
         }
-
         try {
-            Object result = item2jsonMethod.invoke(
-                Modifier.isStatic(item2jsonMethod.getModifiers()) ? null : itemStackNms,
-                itemStack
-            );
-            if (result instanceof String json && !json.isBlank()) {
+            String json = itemBridge.item2json(itemStack);
+            if (json != null && !json.isBlank()) {
                 return Optional.of(json);
             }
             return Optional.empty();
-        } catch (IllegalAccessException | InvocationTargetException | IllegalArgumentException exception) {
+        } catch (RuntimeException exception) {
             if (!failureWarned) {
-                Throwable cause = exception instanceof InvocationTargetException invocationTargetException
-                    ? invocationTargetException.getCause()
-                    : exception;
                 xuanmo.arcartxsuite.module.AxsLog.logger().warning(
-                    "ArcartX ItemStack item2json 调用失败，将回退为纯文本拾取提示: "
-                        + (cause == null ? exception.getClass().getSimpleName() : cause.getMessage())
+                    "ArcartX ItemStack item2json 调用失败，将回退为纯文本拾取提示: " + exception.getMessage()
                 );
                 failureWarned = true;
             }
@@ -111,50 +74,14 @@ public final class ArcartXItemStackBridge implements ItemBridgeAPI {
 
     @Override
     public ItemStack putStringTag(ItemStack itemStack, String key, String value) {
-        if (!available || putDeepTagMethod == null || itemStack == null || key == null || value == null) {
+        if (!available || itemBridge == null || itemStack == null || key == null || value == null) {
             return itemStack;
         }
         try {
-            Object result = putDeepTagMethod.invoke(
-                Modifier.isStatic(putDeepTagMethod.getModifiers()) ? null : itemStackNms,
-                itemStack, key, value
-            );
-            if (result instanceof ItemStack stack) {
-                return stack;
-            }
+            ItemStack result = itemBridge.putDeepTag(itemStack, key, value);
+            return result != null ? result : itemStack;
+        } catch (RuntimeException exception) {
             return itemStack;
-        } catch (IllegalAccessException | InvocationTargetException | IllegalArgumentException exception) {
-            return itemStack;
-        }
-    }
-
-    private static Object resolveInstance(Class<?> itemStackNmsClass) throws ReflectiveOperationException {
-        try {
-            Object companion = itemStackNmsClass.getField("Companion").get(null);
-            if (companion != null) {
-                Method getInstanceMethod = companion.getClass().getMethod("getINSTANCE");
-                return getInstanceMethod.invoke(companion);
-            }
-        } catch (NoSuchFieldException ignored) {
-            // ignore
-        }
-
-        try {
-            return itemStackNmsClass.getField("INSTANCE").get(null);
-        } catch (NoSuchFieldException ignored) {
-            return null;
-        }
-    }
-
-    private static Class<?> resolveItemBridgeClass(ClassLoader classLoader) throws ClassNotFoundException {
-        return Class.forName("priv.seventeen.artist.arcartx.nms.ItemBridge", true, classLoader);
-    }
-
-    private static Method findMethod(Class<?> type, String name, Class<?>... parameterTypes) {
-        try {
-            return type.getMethod(name, parameterTypes);
-        } catch (NoSuchMethodException ignored) {
-            return null;
         }
     }
 }

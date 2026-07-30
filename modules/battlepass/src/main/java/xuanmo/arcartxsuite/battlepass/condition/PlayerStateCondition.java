@@ -26,11 +26,14 @@ public final class PlayerStateCondition implements TaskCondition {
 
     private boolean testChronosState(Player player) {
         try {
-            Class<?> chronosApi = Class.forName("priv.seventeen.artist.arcartx.chronos.api.ChronosAPI");
-            Object api = chronosApi.getMethod("getInstanceAPI").invoke(null);
-            String currentState = (String) chronosApi.getMethod("getPlayerStateId", Player.class).invoke(api, player);
+            priv.seventeen.artist.arcartx.chronos.api.ChronosAPI api =
+                priv.seventeen.artist.arcartx.chronos.api.ChronosAPI.getInstanceAPI();
+            if (api == null) {
+                return false;
+            }
+            String currentState = api.getPlayerStateId(player);
             return stateId.equals(currentState);
-        } catch (Exception e) {
+        } catch (Exception | LinkageError e) {
             return false;
         }
     }
