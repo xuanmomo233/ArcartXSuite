@@ -30,6 +30,7 @@ ui:
       var.maxBalanceCount = packet['maxBalanceCount']
       var.maxProductCount = packet['maxProductCount']
       var.maxFixedCount = packet['maxFixedCount']
+      var.selectedCurrency = packet['selectedCurrency']
       余额数 = var.maxBalanceCount.round()
       现有余额数 = val.余额列表.childrenCount() - 1
       if(现有余额数 != 余额数 - 1){
@@ -151,8 +152,8 @@ controls:
             attribute:
               x: 1335
               y: 42
-              width: 80
-              height: 50
+              width: 68
+              height: 42
               normal: ~255,255,255,150
               hover: ~Frosted:0;255,255,255,240
               shape: ~round_rect
@@ -172,8 +173,8 @@ controls:
             attribute:
               x: 1435
               y: 42
-              width: 80
-              height: 50
+              width: 68
+              height: 42
               normal: ~255,255,255,150
               hover: ~Frosted:0;255,255,255,240
               shape: ~round_rect
@@ -246,7 +247,7 @@ controls:
               存入:
                 type: Texture
                 attribute:
-                  x: 260
+                  x: 266
                   y: 82
                   width: 76
                   height: 42
@@ -320,9 +321,9 @@ controls:
               解锁:
                 type: Texture
                 attribute:
-                  x: 260
+                  x: 266
                   y: 150
-                  width: 94
+                  width: 76
                   height: 42
                   normal: ~255,255,255,150
                   hover: ~Frosted:0;255,255,255,240
@@ -346,9 +347,9 @@ controls:
               锁定:
                 type: Texture
                 attribute:
-                  x: 360
+                  x: 366
                   y: 150
-                  width: 94
+                  width: 76
                   height: 42
                   normal: ~255,255,255,150
                   hover: ~Frosted:0;255,255,255,240
@@ -420,7 +421,8 @@ controls:
                             color: ~0,0,0,255
                         action:
                           clickLeft: |-
-                            var.selectedCurrency = self.entry['id']
+                            var.selectedProduct = none
+                            Packet.send(var.packetId, 'select_currency', self.entry['id'])
 
           产品卡片:
             type: Texture
@@ -449,8 +451,8 @@ controls:
                 attribute:
                   x: 300
                   y: 22
-                  width: 160
-                  height: 50
+                  width: 134
+                  height: 42
                   normal: ~255,255,255,150
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect

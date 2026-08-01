@@ -598,6 +598,7 @@ public final class WarehouseService implements Listener {
                 case "withdraw_all" -> withdraw(player, parsePacketSlot(value(data, 1, "-1")), Long.MAX_VALUE, true);
                 case "bank_deposit" -> bankDeposit(player, value(data, 1, ""), parseDecimal(value(data, 2, "0")));
                 case "bank_withdraw" -> bankWithdraw(player, value(data, 1, ""), parseDecimal(value(data, 2, "0")));
+                case "select_currency" -> selectCurrency(player, value(data, 1, ""));
                 case "fixed_create" -> createFixedDeposit(player, value(data, 1, ""), parseDecimal(value(data, 2, "0")));
                 case "fixed_claim" -> claimFixedDeposit(player, value(data, 1, ""));
                 case "shared_create" -> createSharedWarehouse(player, value(data, 1, "共享仓库"));
@@ -1364,7 +1365,7 @@ public final class WarehouseService implements Listener {
     private Map<String, Object> buildBankPacket(Player player, ViewState state) throws Exception {
         Map<String, Object> packet = basePacket(player, state);
         Map<String, Object> balances = bankBalancePacket(player);
-        Map<String, Object> products = depositProductPacket(player);
+        Map<String, Object> products = depositProductPacket(player, state.selectedCurrency());
         Map<String, Object> fixedDeposits = fixedDepositPacket(player);
         packet.put("ui", "bank");
         packet.put("action_token", bankActionTokens.getOrDefault(player.getUniqueId(), ""));
@@ -1377,6 +1378,7 @@ public final class WarehouseService implements Listener {
         packet.put("maxBalanceCount", balances.size());
         packet.put("maxProductCount", products.size());
         packet.put("maxFixedCount", fixedDeposits.size());
+        packet.put("selectedCurrency", state.selectedCurrency());
         return packet;
     }
 
@@ -1445,6 +1447,17 @@ public final class WarehouseService implements Listener {
         state.setCategoryId(normalizeId(categoryId).isBlank() ? "all" : normalizeId(categoryId));
         state.setPage(1);
         clearFilteredSelection(state);
+        refreshBoth(player);
+    }
+
+    private void selectCurrency(Player player, String currencyId) throws Exception {
+        ViewState state = state(player);
+        String normalized = normalizeId(currencyId);
+        if (normalized.isBlank() || !configuration.bankCurrencies().contains(normalized)) {
+            refreshBoth(player);
+            return;
+        }
+        state.setSelectedCurrency(normalized);
         refreshBoth(player);
     }
 
@@ -2488,7 +2501,8 @@ public final class WarehouseService implements Listener {
         return viewStates.computeIfAbsent(player.getUniqueId(), ignored -> ViewState.initial(player,
             configuration.pickup().autoStoreOnPickup(),
             configuration.pickup().autoStoreMythicLoot(),
-            configuration.pickup().notifyOnAutoStore()));
+            configuration.pickup().notifyOnAutoStore(),
+            configuration.bankCurrencies().stream().findFirst().orElse("money")));
     }
 
     private List<WarehouseRecord> personalRecords(UUID playerUuid) throws Exception {
@@ -3031,7 +3045,7 @@ public final class WarehouseService implements Listener {
             rowMap.put("storageText", message("ui.shared-name", shared.name()));
             rowMap.put("manageText", message("ui.shared-entry", shared.name(), sharedRoleName(shared.viewerRole()), shared.level(), shared.capacity()));
             rowMap.put("capacity", shared.capacity());
-            rowMap.put("lockedBy", lockOwnerName(ViewState.shared(shared.id(), player, false, false, false)));
+            rowMap.put("lockedBy", lockOwnerName(ViewState.shared(shared.id(), player, false, false, false, "")));
             result.put(Integer.toString(idx), rowMap);
             idx++;
         }
@@ -3171,11 +3185,15 @@ public final class WarehouseService implements Listener {
         return result;
     }
 
-    private Map<String, Object> depositProductPacket(Player player) {
+    private Map<String, Object> depositProductPacket(Player player, String selectedCurrency) {
         Map<String, Object> result = new LinkedHashMap<>();
+        String currencyFilter = normalizeId(selectedCurrency);
         int idx = 0;
         for (DepositProductDefinition product : configuration.depositProducts().values()) {
             if (!canUseProduct(player, product)) {
+                continue;
+            }
+            if (!currencyFilter.isBlank() && !normalizeId(product.currencyId()).equals(currencyFilter)) {
                 continue;
             }
             Map<String, Object> row = new LinkedHashMap<>();
@@ -3719,9 +3737,10 @@ public final class WarehouseService implements Listener {
         private boolean previewMode;
         private UUID previewTargetUuid;
         private String previewWarehouseId;
+        private String selectedCurrency;
 
         private ViewState(String ownerType, String ownerId, String warehouseId, String categoryId, String search, int selectedSlot,
-                          boolean autoPickup, boolean autoPickupMythic, boolean autoPickupNotify) {
+                          boolean autoPickup, boolean autoPickupMythic, boolean autoPickupNotify, String selectedCurrency) {
             this.ownerType = ownerType;
             this.ownerId = ownerId;
             this.warehouseId = warehouseId;
@@ -3736,14 +3755,15 @@ public final class WarehouseService implements Listener {
             this.previewMode = false;
             this.previewTargetUuid = null;
             this.previewWarehouseId = null;
+            this.selectedCurrency = selectedCurrency;
         }
 
-        static ViewState initial(Player player, boolean autoPickup, boolean autoPickupMythic, boolean autoPickupNotify) {
-            return new ViewState(OWNER_PERSONAL, player.getUniqueId().toString(), "", "all", "", -1, autoPickup, autoPickupMythic, autoPickupNotify);
+        static ViewState initial(Player player, boolean autoPickup, boolean autoPickupMythic, boolean autoPickupNotify, String selectedCurrency) {
+            return new ViewState(OWNER_PERSONAL, player.getUniqueId().toString(), "", "all", "", -1, autoPickup, autoPickupMythic, autoPickupNotify, selectedCurrency);
         }
 
-        static ViewState shared(String sharedId, Player player, boolean autoPickup, boolean autoPickupMythic, boolean autoPickupNotify) {
-            return new ViewState(OWNER_SHARED, sharedId, sharedId, "all", "", -1, autoPickup, autoPickupMythic, autoPickupNotify);
+        static ViewState shared(String sharedId, Player player, boolean autoPickup, boolean autoPickupMythic, boolean autoPickupNotify, String selectedCurrency) {
+            return new ViewState(OWNER_SHARED, sharedId, sharedId, "all", "", -1, autoPickup, autoPickupMythic, autoPickupNotify, selectedCurrency);
         }
 
         static ViewState preview(UUID targetUuid, String warehouseId, String ownerType) {
@@ -3753,7 +3773,7 @@ public final class WarehouseService implements Listener {
                 effectiveOwnerId = warehouseId;
                 effectiveWarehouseId = warehouseId;
             }
-            ViewState state = new ViewState(ownerType, effectiveOwnerId, effectiveWarehouseId, "all", "", -1, false, false, false);
+            ViewState state = new ViewState(ownerType, effectiveOwnerId, effectiveWarehouseId, "all", "", -1, false, false, false, "");
             state.previewMode = true;
             state.previewTargetUuid = targetUuid;
             state.previewWarehouseId = warehouseId;
@@ -3774,6 +3794,7 @@ public final class WarehouseService implements Listener {
         boolean previewMode() { return previewMode; }
         UUID previewTargetUuid() { return previewTargetUuid; }
         String previewWarehouseId() { return previewWarehouseId; }
+        String selectedCurrency() { return selectedCurrency; }
         void setAutoPickup(boolean autoPickup) { this.autoPickup = autoPickup; }
         void setAutoPickupMythic(boolean autoPickupMythic) { this.autoPickupMythic = autoPickupMythic; }
         void setAutoPickupNotify(boolean autoPickupNotify) { this.autoPickupNotify = autoPickupNotify; }
@@ -3785,5 +3806,6 @@ public final class WarehouseService implements Listener {
         void setPage(int page) { this.page = page; }
         void setSelectedSlot(int selectedSlot) { this.selectedSlot = selectedSlot; }
         void setSharedEditMode(boolean sharedEditMode) { this.sharedEditMode = sharedEditMode; }
+        void setSelectedCurrency(String selectedCurrency) { this.selectedCurrency = selectedCurrency; }
     }
 }
