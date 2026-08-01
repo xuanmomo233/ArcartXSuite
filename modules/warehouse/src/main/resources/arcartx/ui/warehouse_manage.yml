@@ -118,6 +118,7 @@ ui:
       var.memberName = none
       var.memberRole = 'member'
       var.passwordText = none
+      var.actionToken = ''
       var.deleteConfirm = false
       var.deletePassword = none
       var.sharedListScrollRatio = 0
@@ -186,8 +187,8 @@ controls:
             attribute:
               x: 1335
               y: 42
-              width: 80
-              height: 50
+              width: 68
+              height: 42
               normal: ~255,255,255,150
               hover: ~Frosted:0;255,255,255,240
               shape: ~round_rect
@@ -207,8 +208,8 @@ controls:
             attribute:
               x: 1435
               y: 42
-              width: 80
-              height: 50
+              width: 68
+              height: 42
               normal: ~255,255,255,150
               hover: ~Frosted:0;255,255,255,240
               shape: ~round_rect
@@ -333,30 +334,42 @@ controls:
                   texts: "~&f仓库列表"
                   fontSize: 44
               新建名:
-                type: TextBox
+                type: Canvas
                 attribute:
                   x: 33
                   y: 82
                   width: 190
-                  height: 30
-                  length: 24
-                  emptyText: ~共享名
-                  fontSize: 36
-                  background: ~90,90,90,220
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-                action:
-                  textChange: |-
-                    var.sharedName = self.getContent()
+                  height: 42
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~90,90,90,220
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  输入框:
+                    type: TextBox
+                    attribute:
+                      x: 8
+                      y: 10
+                      width: 190
+                      height: 36
+                      length: 24
+                      emptyText: ~共享名
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.sharedName = self.getContent()
               创建:
                 type: Texture
                 attribute:
                   x: 250
-                  y: 70
+                  y: 82
                   width: 110
                   height: 42
                   normal: ~255,255,255,150
@@ -477,31 +490,43 @@ controls:
                   texts: "var.ownerType == 'shared' ? (var.deleteConfirm ? '&c输入二级密码后确认删除' : '&f点击删除后需要二级密码确认') : '&7请选择一个共享仓库'"
                   fontSize: 34
               删除密码:
-                type: TextBox
+                type: Canvas
                 attribute:
                   x: 34
                   y: 136
                   width: 270
-                  height: 30
+                  height: 42
                   visible: var.deleteConfirm
-                  length: 32
-                  emptyText: ~二级密码
-                  fontSize: 36
-                  background: ~90,90,90,220
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-                action:
-                  textChange: |-
-                    var.deletePassword = self.getContent()
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~90,90,90,220
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  输入框:
+                    type: TextBox
+                    attribute:
+                      x: 8
+                      y: 10
+                      width: 270
+                      height: 36
+                      length: 32
+                      emptyText: ~二级密码
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.deletePassword = self.getContent()
               删除按钮:
                 type: Texture
                 attribute:
                   x: 320
-                  y: 124
+                  y: 136
                   width: 140
                   height: 42
                   visible: var.ownerType == 'shared'
@@ -560,8 +585,8 @@ controls:
                 attribute:
                   x: 330
                   y: 84
-                  width: 90
-                  height: 34
+                  width: 111
+                  height: 42
                   visible: var.ownerType != none
                   normal: "var.showcaseEnabled ? '110,170,230,255' : '190,190,195,255'"
                   hover: ~Frosted:0;255,255,255,240
@@ -582,32 +607,44 @@ controls:
                     width: 2
                     color: ~0,0,0,255
               新名称:
-                type: TextBox
+                type: Canvas
                 attribute:
                   x: 34
                   y: 126
                   width: 270
-                  height: 30
-                  length: 24
-                  emptyText: ~新名称
-                  fontSize: 36
-                  background: ~90,90,90,220
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-                action:
-                  textChange: |-
-                    var.renameName = self.getContent()
+                  height: 42
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~90,90,90,220
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  输入框:
+                    type: TextBox
+                    attribute:
+                      x: 8
+                      y: 10
+                      width: 270
+                      height: 36
+                      length: 24
+                      emptyText: ~新名称
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.renameName = self.getContent()
               改名按钮:
                 type: Texture
                 attribute:
                   x: 330
                   y: 126
-                  width: 90
-                  height: 34
+                  width: 111
+                  height: 42
                   visible: var.ownerType != none
                   normal: ~255,255,255,150
                   hover: ~Frosted:0;255,255,255,240
@@ -675,32 +712,44 @@ controls:
                   texts: "var.unlocked ? '&a二级密码已解锁' : '&c扩充和增加成员需要二级密码验证'"
                   fontSize: 30
               密码输入:
-                type: TextBox
+                type: Canvas
                 attribute:
                   x: 34
                   y: 196
                   width: 190
-                  height: 30
-                  length: 32
-                  emptyText: ~二级密码
-                  fontSize: 36
-                  background: ~90,90,90,220
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-                action:
-                  textChange: |-
-                    var.passwordText = self.getContent()
+                  height: 42
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~90,90,90,220
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  输入框:
+                    type: TextBox
+                    attribute:
+                      x: 8
+                      y: 10
+                      width: 190
+                      height: 36
+                      length: 32
+                      emptyText: ~二级密码
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.passwordText = self.getContent()
               解锁:
                 type: Texture
                 attribute:
                   x: 250
-                  y: 185
-                  width: 92
-                  height: 48
+                  y: 196
+                  width: 80
+                  height: 42
                   normal: ~255,255,255,150
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
@@ -723,9 +772,9 @@ controls:
                 type: Texture
                 attribute:
                   x: 366
-                  y: 185
-                  width: 92
-                  height: 48
+                  y: 196
+                  width: 80
+                  height: 42
                   normal: ~255,255,255,150
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
@@ -745,8 +794,8 @@ controls:
                 attribute:
                   x: 24
                   y: 250
-                  width: 450
-                  height: 50
+                  width: 378
+                  height: 42
                   normal: "var.canUpgrade && var.unlocked ? '100,185,120,255' : '90,90,95,255'"
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
@@ -787,30 +836,42 @@ controls:
                   texts: "~&f成员管理"
                   fontSize: 44
               成员名:
-                type: TextBox
+                type: Canvas
                 attribute:
                   x: 36
                   y: 82
                   width: 210
-                  height: 30
-                  length: 24
-                  emptyText: ~成员名
-                  fontSize: 36
-                  background: ~90,90,90,220
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-                action:
-                  textChange: |-
-                    var.memberName = self.getContent()
+                  height: 42
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~90,90,90,220
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  输入框:
+                    type: TextBox
+                    attribute:
+                      x: 8
+                      y: 10
+                      width: 210
+                      height: 36
+                      length: 24
+                      emptyText: ~成员名
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.memberName = self.getContent()
               存取:
                 type: Texture
                 attribute:
                   x: 270
-                  y: 70
+                  y: 82
                   width: 110
                   height: 42
                   normal: "var.memberRole == 'member' ? '110,170,230,255' : '255,255,255,150'"
@@ -831,7 +892,7 @@ controls:
                 type: Texture
                 attribute:
                   x: 396
-                  y: 70
+                  y: 82
                   width: 110
                   height: 42
                   normal: "var.memberRole == 'viewer' ? '120,190,255,255' : '150,150,150,255'"
@@ -851,10 +912,10 @@ controls:
               邀请:
                 type: Texture
                 attribute:
-                  x: 24
+                  x: 36
                   y: 154
-                  width: 160
-                  height: 50
+                  width: 134
+                  height: 42
                   normal: "var.unlocked ? '220,220,220,255' : '130,130,130,255'"
                   hover: ~Frosted:0;200,200,200,255
                   shape: ~round_rect
@@ -872,10 +933,10 @@ controls:
               移除:
                 type: Texture
                 attribute:
-                  x: 198
+                  x: 204
                   y: 154
-                  width: 160
-                  height: 50
+                  width: 134
+                  height: 42
                   normal: ~200,50,50,255
                   hover: ~Frosted:0;255,0,0,255
                   shape: ~round_rect
@@ -895,8 +956,8 @@ controls:
                 attribute:
                   x: 372
                   y: 154
-                  width: 162
-                  height: 50
+                  width: 136
+                  height: 42
                   normal: "var.unlocked ? '220,210,140,255' : '130,130,130,255'"
                   hover: ~Frosted:0;200,200,200,255
                   shape: ~round_rect

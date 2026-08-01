@@ -85,6 +85,7 @@ ui:
       var.unlocked = false
       var.hasPassword = false
       var.passwordText = none
+      var.actionToken = ''
       var.selectedCurrency = 'money'
       var.selectedProduct = none
       var.bankAmount = none
@@ -211,32 +212,44 @@ controls:
                   texts: "~&f账户余额"
                   fontSize: 44
               金额:
-                type: TextBox
+                type: Canvas
                 attribute:
                   x: 24
                   y: 82
                   width: 220
-                  height: 50
-                  length: 18
-                  emptyText: ~金额
-                  fontSize: 36
-                  background: ~90,90,90,220
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-                action:
-                  textChange: |-
-                    var.bankAmount = self.getContent()
+                  height: 42
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~90,90,90,220
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  输入框:
+                    type: TextBox
+                    attribute:
+                      x: 8
+                      y: 10
+                      width: 220
+                      height: 36
+                      length: 18
+                      emptyText: ~金额
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.bankAmount = self.getContent()
               存入:
                 type: Texture
                 attribute:
                   x: 260
                   y: 82
-                  width: 90
-                  height: 50
+                  width: 76
+                  height: 42
                   normal: ~255,255,255,150
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
@@ -256,8 +269,8 @@ controls:
                 attribute:
                   x: 366
                   y: 82
-                  width: 90
-                  height: 50
+                  width: 76
+                  height: 42
                   normal: ~255,255,255,150
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
@@ -273,32 +286,44 @@ controls:
                     width: 2
                     color: ~0,0,0,255
               密码输入:
-                type: TextBox
+                type: Canvas
                 attribute:
                   x: 24
                   y: 150
                   width: 220
-                  height: 40
-                  length: 32
-                  emptyText: ~二级密码
-                  fontSize: 36
-                  background: ~90,90,90,220
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-                action:
-                  textChange: |-
-                    var.passwordText = self.getContent()
+                  height: 42
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      normal: ~90,90,90,220
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  输入框:
+                    type: TextBox
+                    attribute:
+                      x: 8
+                      y: 10
+                      width: 220
+                      height: 36
+                      length: 32
+                      emptyText: ~二级密码
+                      fontSize: 36
+                    action:
+                      textChange: |-
+                        var.passwordText = self.getContent()
               解锁:
                 type: Texture
                 attribute:
                   x: 260
                   y: 150
-                  width: 90
-                  height: 40
+                  width: 94
+                  height: 42
                   normal: ~255,255,255,150
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
@@ -323,8 +348,8 @@ controls:
                 attribute:
                   x: 360
                   y: 150
-                  width: 90
-                  height: 40
+                  width: 94
+                  height: 42
                   normal: ~255,255,255,150
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect

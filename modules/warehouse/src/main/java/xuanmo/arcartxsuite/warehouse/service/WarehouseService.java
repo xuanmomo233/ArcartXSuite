@@ -647,16 +647,38 @@ public final class WarehouseService implements Listener {
             long total = totalItems(playerUuid);
             long used = personalUsed(playerUuid);
             long capacity = personalCapacity(playerUuid);
+            List<WarehouseRecord> personal = repository.loadPersonalWarehouses(playerUuid);
             List<FixedDepositRecord> deposits = repository.loadFixedDeposits(playerUuid);
             List<SharedWarehouseRecord> shared = repository.loadSharedWarehouses(playerUuid);
             List<String> lines = new ArrayList<>();
             lines.add(ChatColor.GRAY + "玩家: " + ChatColor.WHITE + playerName);
             lines.add(ChatColor.GRAY + "个人仓库: " + ChatColor.WHITE + used + "/" + capacity + " 格，合计 " + total + " 件");
+            for (WarehouseRecord wh : personal) {
+                String name = wh.customName() == null || wh.customName().isBlank() ? wh.warehouseId() : wh.customName();
+                lines.add(ChatColor.DARK_GRAY + "  - " + ChatColor.WHITE + wh.warehouseId() + ChatColor.GRAY + " (" + name + ") Lv" + wh.level());
+            }
             lines.add(ChatColor.GRAY + "共享仓库: " + ChatColor.WHITE + shared.size() + " 个");
+            for (SharedWarehouseRecord sw : shared) {
+                String ownerTag = sw.ownerUuid().equals(playerUuid) ? "主人" : "成员";
+                lines.add(ChatColor.DARK_GRAY + "  - " + ChatColor.WHITE + sw.id() + ChatColor.GRAY + " (" + sw.name() + ") " + ownerTag);
+            }
             lines.add(ChatColor.GRAY + "定期存款: " + ChatColor.WHITE + deposits.stream().filter(d -> !d.claimed()).count() + " 笔未领取");
             callback.accept(lines);
         } catch (Exception exception) {
             errorCallback.accept("读取仓库信息失败: " + exception.getMessage());
+        }
+    }
+
+    /**
+     * 获取玩家个人仓库 ID 列表（用于管理员命令 tab 补全）。
+     */
+    public List<String> personalWarehouseIds(UUID playerUuid) {
+        try {
+            return repository.loadPersonalWarehouses(playerUuid).stream()
+                .map(WarehouseRecord::warehouseId)
+                .toList();
+        } catch (Exception exception) {
+            return List.of();
         }
     }
 
@@ -957,8 +979,9 @@ public final class WarehouseService implements Listener {
         if (state(player).sharedEditMode() && !acquireCurrentSharedLock(player, state(player))) {
             state(player).setSharedEditMode(false);
         }
-        if (packetBridge.openUi(player, storageRuntimeUiId)) {
-            issueActionToken(player, storageRuntimeUiId);
+        issueActionToken(player, storageRuntimeUiId);
+        if (!packetBridge.openUi(player, storageRuntimeUiId)) {
+            invalidateActionToken(player, storageRuntimeUiId);
         }
     }
 
@@ -968,8 +991,9 @@ public final class WarehouseService implements Listener {
     private void openManage(Player player) throws Exception {
         ensureEntitlements(player);
         ensureCurrentWarehouse(player, state(player));
-        if (packetBridge.openUi(player, manageRuntimeUiId)) {
-            issueActionToken(player, manageRuntimeUiId);
+        issueActionToken(player, manageRuntimeUiId);
+        if (!packetBridge.openUi(player, manageRuntimeUiId)) {
+            invalidateActionToken(player, manageRuntimeUiId);
         }
     }
 
@@ -979,8 +1003,9 @@ public final class WarehouseService implements Listener {
     private void openBank(Player player) throws Exception {
         ensureEntitlements(player);
         ensureCurrentWarehouse(player, state(player));
-        if (packetBridge.openUi(player, bankRuntimeUiId)) {
-            issueActionToken(player, bankRuntimeUiId);
+        issueActionToken(player, bankRuntimeUiId);
+        if (!packetBridge.openUi(player, bankRuntimeUiId)) {
+            invalidateActionToken(player, bankRuntimeUiId);
         }
     }
 
@@ -2210,6 +2235,11 @@ public final class WarehouseService implements Listener {
             refreshBoth(player);
             return;
         }
+        if (target.getUniqueId().equals(player.getUniqueId())) {
+            sendMessage(player, false, message("player.shared-invite-self"));
+            refreshBoth(player);
+            return;
+        }
         SharedPermissionTier tier = resolveSharedTier(player);
         if (repository.countSharedMembers(sharedId) >= tier.maxMembers()) {
             sendMessage(player, false, message("player.shared-member-limit"));
@@ -2254,7 +2284,7 @@ public final class WarehouseService implements Listener {
 
     /**
      * 将共享仓库所有权转让给现有 member 角色成员。
-     * 转让后原所有者变为 viewer，目标成员提升为 owner。
+     * 转让后原所有者变为 member，目标成员提升为 owner。
      */
     private boolean isRealPlayer(OfflinePlayer player) {
         return player != null && player.getUniqueId() != null
@@ -3017,8 +3047,12 @@ public final class WarehouseService implements Listener {
         if (shared.isEmpty() || !"owner".equalsIgnoreCase(shared.get().viewerRole())) {
             return result;
         }
+        UUID ownerUuid = shared.get().ownerUuid();
         int idx = 0;
         for (SharedMemberRecord member : repository.loadSharedMembers(state.ownerId())) {
+            if (member.playerUuid().equals(ownerUuid)) {
+                continue;
+            }
             OfflinePlayer offline = Bukkit.getOfflinePlayer(member.playerUuid());
             String memberName = offline.getName() != null
                 ? offline.getName() : member.playerUuid().toString();

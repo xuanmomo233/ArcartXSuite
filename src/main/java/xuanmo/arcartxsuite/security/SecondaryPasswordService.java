@@ -157,6 +157,26 @@ public final class SecondaryPasswordService implements SecondaryPasswordAccess, 
         return clear(player, password);
     }
 
+    /**
+     * 管理员免密清除指定玩家的二级密码。
+     *
+     * @param playerUuid 目标玩家 UUID
+     * @return true 表示已清除（或本就未设置）；false 表示数据库异常
+     */
+    public boolean clearPasswordByUuid(@NotNull UUID playerUuid) {
+        try {
+            try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(
+                "DELETE FROM axs_secondary_password WHERE player_uuid=?")) {
+                statement.setString(1, playerUuid.toString());
+                statement.executeUpdate();
+            }
+            unlockedUntil.remove(playerUuid);
+            return true;
+        } catch (SQLException exception) {
+            return false;
+        }
+    }
+
     private Optional<StoredPassword> load(UUID uuid) throws SQLException {
         try (Connection connection = connection(); PreparedStatement statement = connection.prepareStatement(
             "SELECT salt,hash FROM axs_secondary_password WHERE player_uuid=?")) {

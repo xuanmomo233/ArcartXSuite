@@ -1,5 +1,6 @@
-# AXPM Warehouse Storage
-# 纯色块风格虚拟仓库存取界面。
+# AXPM Warehouse Storage - 重制版布局
+# 使用三分区 Canvas + HStack 自动排列 + Grid 范式重写
+# 逻辑脚本(packetHandler/action/val引用/entryKey)与原版完全一致，仅重构布局结构
 
 ui:
   isHud: false
@@ -225,7 +226,7 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: "~95,95,95,220"
+              normal: ~95,95,95,220
               shape: ~round_rect
               radius: 28
             effect:
@@ -241,166 +242,174 @@ controls:
                 duration: 1200
                 color: ~255,255,255,110
                 width: 0.05
-          标题:
-            type: Text
+
+          标题区:
+            type: VStack
             attribute:
+              point: ~top_left
               x: 42
               y: 30
-              texts: "'&f' + var.warehouseName"
-              fontSize: 64
-          状态:
-            type: Text
+              spaceBetween: 0
+            children:
+              标题:
+                type: Text
+                attribute:
+                  texts: "'&f' + var.warehouseName"
+                  fontSize: 64
+              状态:
+                type: Text
+                attribute:
+                  width: 720
+                  texts: "var.readOnly ? '&c只读模式 ' + var.lockOwner : (var.unlocked ? '&a二级密码已解锁' : '&c二级密码未解锁')"
+                  fontSize: 38
+
+          顶部按钮栏:
+            type: HStack
             attribute:
-              x: 42
-              y: 90
-              width: 720
-              texts: "var.readOnly ? '&c只读模式 ' + var.lockOwner : (var.unlocked ? '&a二级密码已解锁' : '&c二级密码未解锁')"
-              fontSize: 38
-          共享只读:
-            type: Texture
-            attribute:
-              x: 1090
+              point: ~top_right
+              x: -42
               y: 42
-              width: 80
+              spaceBetween: 12
               height: 50
-              visible: var.ownerType == 'shared'
-              normal: "var.sharedEditMode ? '255,255,255,150' : '120,190,255,230'"
-              hover: ~Frosted:0;255,255,255,240
-              shape: ~round_rect
-              radius: 14
-              texts: "~&0只读"
-              center: true
-              fontSize: 34
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'shared_mode', 'readonly')
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-          共享存取:
-            type: Texture
-            attribute:
-              x: 1182
-              y: 42
-              width: 80
-              height: 50
-              visible: var.ownerType == 'shared'
-              normal: "var.sharedEditMode && !var.readOnly ? '120,190,255,230' : (var.sharedCanEdit ? '255,255,255,150' : '255,180,180,170')"
-              hover: ~Frosted:0;255,255,255,240
-              shape: ~round_rect
-              radius: 14
-              texts: "~&0存取"
-              center: true
-              fontSize: 34
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'shared_mode', 'edit')
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-          展示按钮:
-            type: Texture
-            attribute:
-              x: 1274
-              y: 42
-              width: 80
-              height: 50
-              normal: ~255,255,255,150
-              hover: ~Frosted:0;255,255,255,240
-              shape: ~round_rect
-              radius: 14
-              texts: "~&0展示"
-              center: true
-              fontSize: 34
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'showcase')
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-          银行按钮:
-            type: Texture
-            attribute:
-              x: 1366
-              y: 42
-              width: 80
-              height: 50
-              visible: var.ownerType != 'shared'
-              normal: ~255,255,255,150
-              hover: ~Frosted:0;255,255,255,240
-              shape: ~round_rect
-              radius: 14
-              texts: "~&0银行"
-              center: true
-              fontSize: 34
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'bank')
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-          管理按钮:
-            type: Texture
-            attribute:
-              x: 1458
-              y: 42
-              width: 80
-              height: 50
-              normal: ~255,255,255,150
-              hover: ~Frosted:0;255,255,255,240
-              shape: ~round_rect
-              radius: 14
-              texts: "~&0管理"
-              center: true
-              fontSize: 34
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'manage')
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-          刷新按钮:
-            type: Texture
-            attribute:
-              x: 1550
-              y: 42
-              width: 80
-              height: 50
-              normal: ~255,255,255,150
-              hover: ~Frosted:0;255,255,255,240
-              shape: ~round_rect
-              radius: 14
-              texts: "~&0刷新"
-              center: true
-              fontSize: 34
-            action:
-              clickLeft: |-
-                Packet.send(var.packetId, 'refresh')
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
+            children:
+              共享只读:
+                type: Texture
+                attribute:
+                  visible: var.ownerType == 'shared'
+                  width: 80
+                  height: 50
+                  normal: "var.sharedEditMode ? '255,255,255,150' : '120,190,255,230'"
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0只读"
+                  center: true
+                  fontSize: 34
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'shared_mode', 'readonly')
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              共享存取:
+                type: Texture
+                attribute:
+                  visible: var.ownerType == 'shared'
+                  width: 80
+                  height: 50
+                  normal: "var.sharedEditMode && !var.readOnly ? '120,190,255,230' : (var.sharedCanEdit ? '255,255,255,150' : '255,180,180,170')"
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0存取"
+                  center: true
+                  fontSize: 34
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'shared_mode', 'edit')
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              展示按钮:
+                type: Texture
+                attribute:
+                  width: 80
+                  height: 50
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0展示"
+                  center: true
+                  fontSize: 34
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'showcase')
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              银行按钮:
+                type: Texture
+                attribute:
+                  visible: var.ownerType != 'shared'
+                  width: 80
+                  height: 50
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0银行"
+                  center: true
+                  fontSize: 34
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'bank')
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              管理按钮:
+                type: Texture
+                attribute:
+                  width: 80
+                  height: 50
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0管理"
+                  center: true
+                  fontSize: 34
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'manage')
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              刷新按钮:
+                type: Texture
+                attribute:
+                  width: 80
+                  height: 50
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0刷新"
+                  center: true
+                  fontSize: 34
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'refresh')
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
 
           仓库切换卡片:
-            type: Texture
+            type: Canvas
             attribute:
+              point: ~top_left
               x: 292
               y: 112
               width: 1326
               height: 72
-              normal: ~255,255,255,120
-              shape: ~round_rect
-              radius: 20
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
             children:
+              卡片背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~255,255,255,120
+                  shape: ~round_rect
+                  radius: 20
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
               切换横向滑块:
                 type: Texture
                 val: 切换横向滑块
@@ -495,85 +504,110 @@ controls:
                                 color: ~0,0,0,255
 
           分类卡片:
-            type: Texture
+            type: Canvas
             attribute:
+              point: ~top_left
               x: 42
               y: 210
               width: 220
               height: 610
-              normal: ~255,255,255,120
-              shape: ~round_rect
-              radius: 24
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
             children:
-              搜索框:
-                type: TextBox
+              卡片背景:
+                type: Texture
                 attribute:
-                  x: 32
+                  point: ~stretch_all
+                  normal: ~255,255,255,120
+                  shape: ~round_rect
+                  radius: 24
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              搜索区:
+                type: VStack
+                attribute:
+                  point: ~top_center
                   y: 32
-                  width: 168
-                  height: 32
-                  length: 32
-                  emptyText: ~搜索
-                  fontSize: 36
-                  background: ~90,90,90,220
-                  shape: ~round_rect
-                  radius: 12
-                action:
-                  textChange: |-
-                    var.search = self.getContent()
-                  enter: |-
-                    Packet.send(var.packetId, 'search', var.search)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              搜索:
-                type: Texture
-                attribute:
-                  x: 20
-                  y: 78
-                  width: 84
-                  height: 42
-                  normal: ~255,255,255,150
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&0搜索"
-                  center: true
-                  fontSize: 32
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'search', var.search)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              重置:
-                type: Texture
-                attribute:
-                  x: 116
-                  y: 78
-                  width: 84
-                  height: 42
-                  normal: ~255,255,255,150
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&0重置"
-                  center: true
-                  fontSize: 32
-                action:
-                  clickLeft: |-
-                    var.search = none
-                    Packet.send(var.packetId, 'search', none)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                  spaceBetween: 8
+                  width: 176
+                children:
+                  搜索框:
+                    type: Canvas
+                    attribute:
+                      width: 176
+                      height: 42
+                    children:
+                      背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~90,90,90,220
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~0,0,0,255
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 10
+                          width: 176
+                          height: 36
+                          length: 32
+                          emptyText: ~搜索
+                          fontSize: 36
+                        action:
+                          textChange: |-
+                            var.search = self.getContent()
+                          enter: |-
+                            Packet.send(var.packetId, 'search', var.search)
+                  搜索按钮组:
+                    type: HStack
+                    attribute:
+                      spaceBetween: 8
+                      height: 42
+                    children:
+                      搜索:
+                        type: Texture
+                        attribute:
+                          width: 84
+                          height: 42
+                          normal: ~255,255,255,150
+                          hover: ~Frosted:0;255,255,255,240
+                          shape: ~round_rect
+                          radius: 12
+                          texts: "~&0搜索"
+                          center: true
+                          fontSize: 32
+                        action:
+                          clickLeft: |-
+                            Packet.send(var.packetId, 'search', var.search)
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~0,0,0,255
+                      重置:
+                        type: Texture
+                        attribute:
+                          width: 84
+                          height: 42
+                          normal: ~255,255,255,150
+                          hover: ~Frosted:0;255,255,255,240
+                          shape: ~round_rect
+                          radius: 12
+                          texts: "~&0重置"
+                          center: true
+                          fontSize: 32
+                        action:
+                          clickLeft: |-
+                            var.search = none
+                            Packet.send(var.packetId, 'search', none)
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~0,0,0,255
               分类纵向滑块:
                 type: Texture
                 val: 分类纵向滑块
@@ -590,7 +624,7 @@ controls:
                 attribute:
                   x: 20
                   y: 142
-                  width: 220
+                  width: 180
                   height: 440
                   moveY: "self.parent['分类纵向滑块'].getDragYRatio()"
                 action:
@@ -633,20 +667,25 @@ controls:
                             color: ~0,0,0,255
 
           仓库卡片:
-            type: Texture
+            type: Canvas
             attribute:
+              point: ~top_left
               x: 292
               y: 210
               width: 792
               height: 610
-              normal: ~255,255,255,120
-              shape: ~round_rect
-              radius: 24
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
             children:
+              卡片背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~255,255,255,120
+                  shape: ~round_rect
+                  radius: 24
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
               仓库网格:
                 type: HGrid
                 val: 仓库网格
@@ -699,48 +738,6 @@ controls:
                           texts: "self.parent.entry != none && !self.parent.entry['empty'] ? '&f' + self.parent.entry['amount'].round() : none"
                           fontSize: 36
                           through: true
-              上一页:
-                type: Texture
-                attribute:
-                  x: 550
-                  y: 540
-                  width: 92
-                  height: 48
-                  normal: ~255,255,255,150
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0上页"
-                  center: true
-                  fontSize: 34
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'page', var.page - 1)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              下一页:
-                type: Texture
-                attribute:
-                  x: 665
-                  y: 540
-                  width: 92
-                  height: 48
-                  normal: ~255,255,255,150
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0下页"
-                  center: true
-                  fontSize: 34
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'page', var.page + 1)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
               容量状态:
                 type: Text
                 attribute:
@@ -780,49 +777,102 @@ controls:
                   stroke:
                     width: 2
                     color: ~0,0,0,255
-          背包卡片:
-            type: Texture
-            attribute:
-              x: 1120
-              y: 210
-              width: 498
-              height: 610
-              normal: ~255,255,255,120
-              shape: ~round_rect
-              radius: 24
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
-            children:
-              背包标题:
-                type: Text
-                attribute:
-                  x: 24
-                  y: 20
-                  texts: "~&f背包"
-                  fontSize: 42
-              全部存入:
+              上一页:
                 type: Texture
                 attribute:
-                  x: 330
-                  y: 15
-                  width: 138
-                  height: 42
+                  x: 559
+                  y: 540
+                  width: 92
+                  height: 48
                   normal: ~255,255,255,150
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
-                  radius: 12
-                  texts: "~&0全部存入"
+                  radius: 14
+                  texts: "~&0上页"
                   center: true
-                  fontSize: 30
+                  fontSize: 34
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'deposit_all_backpack')
+                    Packet.send(var.packetId, 'page', var.page - 1)
                 effect:
                   stroke:
                     width: 2
                     color: ~0,0,0,255
+              下一页:
+                type: Texture
+                attribute:
+                  x: 665
+                  y: 540
+                  width: 92
+                  height: 48
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0下页"
+                  center: true
+                  fontSize: 34
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'page', var.page + 1)
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+
+          背包卡片:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 1120
+              y: 210
+              width: 498
+              height: 610
+            children:
+              卡片背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~255,255,255,120
+                  shape: ~round_rect
+                  radius: 24
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              背包标题区:
+                type: HStack
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 20
+                  spaceBetween: 260
+                  height: 42
+                children:
+                  背包标题:
+                    type: Text
+                    attribute:
+                      texts: "~&f背包"
+                      fontSize: 42
+                  全部存入:
+                    type: Texture
+                    attribute:
+                      width: 138
+                      height: 42
+                      normal: ~255,255,255,150
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 12
+                      texts: "~&0全部存入"
+                      center: true
+                      fontSize: 30
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'deposit_all_backpack')
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
               背包网格:
                 type: HGrid
                 val: 背包网格
@@ -874,184 +924,207 @@ controls:
                         color: ~0,0,0,255
 
           底部操作卡片:
-            type: Texture
+            type: Canvas
             attribute:
+              point: ~top_left
               x: 292
               y: 848
               width: 1326
               height: 140
-              normal: ~255,255,255,120
-              shape: ~round_rect
-              radius: 24
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
             children:
-              已选槽位:
-                type: Text
+              卡片背景:
+                type: Texture
                 attribute:
+                  point: ~stretch_all
+                  normal: ~255,255,255,120
+                  shape: ~round_rect
+                  radius: 24
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              操作行:
+                type: HStack
+                attribute:
+                  point: ~top_left
                   x: 26
                   y: 24
-                  width: 230
-                  texts: "'&f已选槽位: ' + (var.selectedSlot + 1).round()"
-                  fontSize: 48
-              数量输入:
-                type: TextBox
-                attribute:
-                  x: 200
-                  y: 34
-                  width: 168
-                  height: 35
-                  length: 32
-                  emptyText: ~数量=1
-                  fontSize: 48
-                  background: ~90,90,90,220
-                  shape: ~round_rect
-                  radius: 12
-                action:
-                  textChange: |-
-                    var.amount = self.getContent()
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              取出:
-                type: Texture
-                attribute:
-                  x: 400
-                  y: 22
-                  width: 110
+                  spaceBetween: 12
                   height: 48
-                  normal: ~255,255,255,150
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0取出"
-                  center: true
-                  fontSize: 38
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'withdraw', var.selectedSlot, var.amount)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              全部取出:
-                type: Texture
-                attribute:
-                  x: 540
-                  y: 22
-                  width: 140
-                  height: 48
-                  normal: ~255,255,255,150
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0全部取出"
-                  center: true
-                  fontSize: 34
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'withdraw_all', var.selectedSlot)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              存入:
-                type: Texture
-                attribute:
-                  x: 710
-                  y: 22
-                  width: 110
-                  height: 48
-                  normal: ~255,255,255,150
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0存入"
-                  center: true
-                  fontSize: 38
-                action:
-                  clickLeft: |-
-                    if(var.selectedBackpackSlot != -1){
-                      Packet.send(var.packetId, 'deposit_slot', var.selectedBackpackSlot, var.amount)
-                    }
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              密码输入:
-                type: TextBox
-                attribute:
-                  x: 865
-                  y: 34
-                  width: 205
-                  height: 35
-                  length: 32
-                  emptyText: ~点击输入二级密码
-                  fontSize: 48
-                  background: ~90,90,90,220
-                  shape: ~round_rect
-                  radius: 12
-                action:
-                  textChange: |-
-                    var.passwordText = self.getContent()
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              解锁:
-                type: Texture
-                attribute:
-                  x: 1080
-                  y: 22
-                  width: 92
-                  height: 48
-                  normal: ~255,255,255,150
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "var.hasPassword ? '&0解锁' : '&0设置'"
-                  center: true
-                  fontSize: 34
-                  visible: "!var.unlocked"
-                action:
-                  clickLeft: |-
-                    if(var.hasPassword){
-                      Packet.send(var.packetId, 'password_unlock', var.passwordText)
-                    }else{
-                      Packet.send(var.packetId, 'password_set', var.passwordText, var.actionToken)
-                    }
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
-              锁定:
-                type: Texture
-                attribute:
-                  x: 1200
-                  y: 22
-                  width: 92
-                  height: 48
-                  normal: ~255,255,255,150
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0锁定"
-                  center: true
-                  fontSize: 34
-                  visible: "var.unlocked"
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'password_lock', var.actionToken)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  已选槽位:
+                    type: Text
+                    attribute:
+                      width: 170
+                      texts: "'&f已选槽位: ' + (var.selectedSlot + 1).round()"
+                      fontSize: 48
+                  数量输入:
+                    type: Canvas
+                    attribute:
+                      width: 168
+                      height: 42
+                    children:
+                      背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~90,90,90,220
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~0,0,0,255
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 6
+                          width: 168
+                          height: 38
+                          length: 32
+                          emptyText: ~数量=1
+                          fontSize: 48
+                        action:
+                          textChange: |-
+                            var.amount = self.getContent()
+                  取出:
+                    type: Texture
+                    attribute:
+                      width: 96
+                      height: 42
+                      normal: ~255,255,255,150
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 14
+                      texts: "~&0取出"
+                      center: true
+                      fontSize: 38
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'withdraw', var.selectedSlot, var.amount)
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  全部取出:
+                    type: Texture
+                    attribute:
+                      width: 122
+                      height: 42
+                      normal: ~255,255,255,150
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 14
+                      texts: "~&0全部取出"
+                      center: true
+                      fontSize: 34
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'withdraw_all', var.selectedSlot)
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  存入:
+                    type: Texture
+                    attribute:
+                      width: 96
+                      height: 42
+                      normal: ~255,255,255,150
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 14
+                      texts: "~&0存入"
+                      center: true
+                      fontSize: 38
+                    action:
+                      clickLeft: |-
+                        if(var.selectedBackpackSlot != -1){
+                          Packet.send(var.packetId, 'deposit_slot', var.selectedBackpackSlot, var.amount)
+                        }
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  密码输入:
+                    type: Canvas
+                    attribute:
+                      width: 205
+                      height: 42
+                    children:
+                      背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~90,90,90,220
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~0,0,0,255
+                      输入框:
+                        type: TextBox
+                        attribute:
+                          x: 8
+                          y: 6
+                          width: 210
+                          height: 38
+                          length: 32
+                          emptyText: ~点击输入二级密码
+                          fontSize: 48
+                        action:
+                          textChange: |-
+                            var.passwordText = self.getContent()
+                  解锁:
+                    type: Texture
+                    attribute:
+                      width: 80
+                      height: 42
+                      normal: ~255,255,255,150
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 14
+                      texts: "var.hasPassword ? '&0解锁' : '&0设置'"
+                      center: true
+                      fontSize: 34
+                      visible: "!var.unlocked"
+                    action:
+                      clickLeft: |-
+                        if(var.hasPassword){
+                          Packet.send(var.packetId, 'password_unlock', var.passwordText)
+                        }else{
+                          Packet.send(var.packetId, 'password_set', var.passwordText, var.actionToken)
+                        }
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  锁定:
+                    type: Texture
+                    attribute:
+                      width: 80
+                      height: 42
+                      normal: ~255,255,255,150
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 14
+                      texts: "~&0锁定"
+                      center: true
+                      fontSize: 34
+                      visible: "var.unlocked"
+                    action:
+                      clickLeft: |-
+                        Packet.send(var.packetId, 'password_lock', var.actionToken)
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
               提示:
                 type: Text
                 attribute:
+                  point: ~top_left
                   x: 26
                   y: 88
                   width: 700

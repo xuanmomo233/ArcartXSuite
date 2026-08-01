@@ -64,10 +64,17 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
         }
         WarehouseService svc = serviceProvider.get();
         if (args.length == 4) {
-            if ("bank".equalsIgnoreCase(args[1]) && svc != null) return filter(new ArrayList<>(svc.currencyIds()), args[3]);
+            String action = args[1].toLowerCase(Locale.ROOT);
+            if ("bank".equalsIgnoreCase(action) && svc != null) return filter(new ArrayList<>(svc.currencyIds()), args[3]);
+            if ("delete".equalsIgnoreCase(action) || "view".equalsIgnoreCase(action)) {
+                org.bukkit.OfflinePlayer target = resolvePlayer(args[2]);
+                if (target != null && svc != null) return filter(svc.personalWarehouseIds(target.getUniqueId()), args[3]);
+                return List.of();
+            }
         }
-        if (args.length == 5 && "bank".equalsIgnoreCase(args[1])) {
-            return filter(List.of("set", "add", "take"), args[4]);
+        if (args.length == 5) {
+            if ("bank".equalsIgnoreCase(args[1])) return filter(List.of("set", "add", "take"), args[4]);
+            if ("delete".equalsIgnoreCase(args[1])) return filter(List.of("confirm"), args[4]);
         }
         return List.of();
     }

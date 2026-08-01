@@ -152,6 +152,7 @@ player:
   showcase-updated: "仓库展示已{0}。"
   secondary-required-add-member: "增加成员前请先解锁二级密码。"
   shared-invite-owner: "只有共享仓库主人可以邀请成员。"
+  shared-invite-self: "不能修改自己的所有者权限，如需转让请使用转让功能。"
   player-not-found: "该玩家不存在或从未进服。"
   shared-member-limit: "共享仓库成员已达上限。"
   shared-member-updated: "已更新共享成员。"

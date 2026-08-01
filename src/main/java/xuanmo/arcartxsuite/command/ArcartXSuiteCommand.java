@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
@@ -195,7 +196,15 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
             return auth.tabComplete(subArgs);
         }
         if ("password".equalsIgnoreCase(args[0])) {
-            return filter(List.of("set", "unlock", "clear"), args.length == 2 ? args[1] : "");
+            if (args.length == 2) {
+                return filter(List.of("set", "unlock", "clear"), args[1]);
+            }
+            if (args.length == 3 && "clear".equalsIgnoreCase(args[1]) && sender.hasPermission("arcartxsuite.admin")) {
+                List<String> playerOptions = new ArrayList<>();
+                org.bukkit.Bukkit.getOnlinePlayers().forEach(p -> playerOptions.add(p.getName()));
+                return filter(playerOptions, args[2]);
+            }
+            return List.of();
         }
         if ("config".equalsIgnoreCase(args[0])) {
             String[] subArgs = new String[args.length - 1];
@@ -233,7 +242,11 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " auth <子命令>" + ChatColor.GRAY + " - 多方认证管理 (status/setup/update/check)");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " migrate <module|all> <direction> [overwrite]" + ChatColor.GRAY + " - 跨数据库一键无损迁移 (SQLite ↔ MySQL)");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " purge <玩家名|all> [模块ID|all]" + ChatColor.GRAY + " - 清除玩家模块数据 (控制台专用，10秒二次确认)");
-        sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " password <set|unlock|clear> ..." + ChatColor.GRAY + " - 管理统一二级密码");
+        if (sender.hasPermission("arcartxsuite.admin")) {
+            sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " password <set <新密码> [旧密码]|unlock <密码>|clear <密码|玩家名>>" + ChatColor.GRAY + " - 管理统一二级密码");
+        } else {
+            sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " password <set <新密码> [旧密码]|unlock <密码>|clear <当前密码>>" + ChatColor.GRAY + " - 管理统一二级密码");
+        }
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " diagnostic" + ChatColor.GRAY + " - 生成诊断包到 diagnostics/ 目录");
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "/" + label + " <module> [action]" + ChatColor.GRAY + " - 调用模块命令");
         ModuleRegistry registry = plugin.getModuleRegistry();
@@ -258,7 +271,11 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
             return true;
         }
         if (args.length < 2) {
-            sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /axs password <set|unlock|clear> ...");
+            if (sender.hasPermission("arcartxsuite.admin")) {
+                sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /axs password <set <新密码> [旧密码]|unlock <密码>|clear <密码|玩家名>>");
+            } else {
+                sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /axs password <set <新密码> [旧密码]|unlock <密码>|clear <当前密码>>");
+            }
             return true;
         }
         String action = args[1].toLowerCase(Locale.ROOT);
@@ -283,11 +300,29 @@ public final class ArcartXSuiteCommand implements CommandExecutor, TabCompleter 
         }
         if ("clear".equals(action)) {
             if (args.length < 3) {
-                sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /axs password clear <当前密码>");
+                if (sender.hasPermission("arcartxsuite.admin")) {
+                    sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /axs password clear <当前密码>" + ChatColor.GRAY + " (清除自己) 或 " + ChatColor.YELLOW + "/axs password clear <玩家名>" + ChatColor.GRAY + " (管理员清除指定玩家)");
+                } else {
+                    sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /axs password clear <当前密码>");
+                }
                 return true;
             }
+            // 管理员模式：有 admin 权限且参数匹配一个玩家
+            if (sender.hasPermission("arcartxsuite.admin")) {
+                org.bukkit.OfflinePlayer target = Bukkit.getOfflinePlayer(args[2]);
+                if (target != null && (target.hasPlayedBefore() || target.isOnline())) {
+                    boolean ok = service.clearPasswordByUuid(target.getUniqueId());
+                    sender.sendMessage(PREFIX + (ok ? ChatColor.GREEN + "已清除玩家 " + args[2] + " 的二级密码。" : ChatColor.RED + "清除失败，请查看控制台。"));
+                    return true;
+                }
+            }
+            // 玩家模式：清除自己的密码，需验证
             boolean ok = service.clearPassword(player, args[2]);
-            sender.sendMessage(PREFIX + (ok ? ChatColor.GREEN + "二级密码已清除。" : ChatColor.RED + "当前密码验证失败。"));
+            if (!service.isPasswordSet(player)) {
+                sender.sendMessage(PREFIX + ChatColor.RED + "你还未设置二级密码。");
+            } else {
+                sender.sendMessage(PREFIX + (ok ? ChatColor.GREEN + "二级密码已清除。" : ChatColor.RED + "当前密码验证失败。"));
+            }
             return true;
         }
         sender.sendMessage(PREFIX + ChatColor.YELLOW + "用法: /axs password <set|unlock|clear> ...");
