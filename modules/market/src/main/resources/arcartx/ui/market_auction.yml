@@ -408,7 +408,7 @@ controls:
                       分类项:
                         type: Texture
                         attribute:
-                          entryKey: 0
+                          entryKey: 0.round()
                           entry: var.categories[self.entryKey]
                           visible: self.entry != none
                           width: 190
@@ -493,7 +493,7 @@ controls:
                       物品行:
                         type: Texture
                         attribute:
-                          entryKey: 0
+                          entryKey: 0.round()
                           entry: var.listings[self.entryKey]
                           visible: self.entry != none
                           width: 1148
@@ -515,7 +515,7 @@ controls:
                           物品图标:
                             type: Slot
                             attribute:
-                              entryKey: 0
+                              entryKey: 0.round()
                               slotType: ~Icon
                               itemScale: 0.72
                               x: 8

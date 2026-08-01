@@ -245,7 +245,7 @@ controls:
                   项:
                     type: Texture
                     attribute:
-                      entryKey: 0
+                      entryKey: 0.round()
                       entry: var.categories[self.entryKey]
                       visible: self.entry != none
                       width: 180
@@ -295,7 +295,7 @@ controls:
                   物品图标:
                     type: Slot
                     attribute:
-                      entryKey: 0
+                      entryKey: 0.round()
                       entry: "var.vanillaTab ? var.vanillaSlots[self.entryKey] : var.slots[self.entryKey]"
                       visible: self.entry != none
                       slotType: ~Icon
@@ -431,7 +431,7 @@ controls:
                   物品图标:
                     type: Slot
                     attribute:
-                      entryKey: 0
+                      entryKey: 0.round()
                       entry: var.hotbar[self.entryKey]
                       slotType: ~Icon
                       itemScale: 0.76

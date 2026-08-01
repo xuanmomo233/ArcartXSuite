@@ -247,7 +247,7 @@ controls:
                       商店项:
                         type: Texture
                         attribute:
-                          entryKey: 0
+                          entryKey: 0.round()
                           entry: var.shops[self.entryKey]
                           visible: self.entry != none
                           width: 200
@@ -321,7 +321,7 @@ controls:
                       商品项:
                         type: Texture
                         attribute:
-                          entryKey: 0
+                          entryKey: 0.round()
                           entry: var.items[self.entryKey]
                           visible: self.entry != none
                           width: 1038
@@ -338,7 +338,7 @@ controls:
                           商品图标:
                             type: Slot
                             attribute:
-                              entryKey: 0
+                              entryKey: 0.round()
                               slotType: ~Icon
                               itemScale: 0.68
                               x: 8

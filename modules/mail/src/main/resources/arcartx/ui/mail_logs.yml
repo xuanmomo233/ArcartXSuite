@@ -211,7 +211,7 @@ controls:
                   日志项目:
                     type: Texture
                     attribute:
-                      entryKey: 0
+                      entryKey: 0.round()
                       entry: var.logs[self.entryKey]
                       width: 1300
                       height: 98

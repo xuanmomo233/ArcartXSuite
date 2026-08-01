@@ -359,7 +359,7 @@ controls:
                       项:
                         type: Texture
                         attribute:
-                          entryKey: 0
+                          entryKey: 0.round()
                           entry: var.balances[self.entryKey]
                           visible: self.entry != none
                           width: 450
@@ -459,7 +459,7 @@ controls:
                       项:
                         type: Texture
                         attribute:
-                          entryKey: 0
+                          entryKey: 0.round()
                           entry: var.products[self.entryKey]
                           visible: self.entry != none
                           width: 450
@@ -537,7 +537,7 @@ controls:
                       项:
                         type: Texture
                         attribute:
-                          entryKey: 0
+                          entryKey: 0.round()
                           entry: var.fixedDeposits[self.entryKey]
                           visible: self.entry != none
                           width: 450

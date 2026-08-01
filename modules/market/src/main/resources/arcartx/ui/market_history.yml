@@ -212,7 +212,7 @@ controls:
                       记录行:
                         type: Texture
                         attribute:
-                          entryKey: 0
+                          entryKey: 0.round()
                           entry: var.records[self.entryKey]
                           visible: self.entry != none
                           width: 1196
@@ -228,7 +228,7 @@ controls:
                           物品图标:
                             type: Slot
                             attribute:
-                              entryKey: 0
+                              entryKey: 0.round()
                               slotType: ~Icon
                               itemScale: 0.64
                               x: 8

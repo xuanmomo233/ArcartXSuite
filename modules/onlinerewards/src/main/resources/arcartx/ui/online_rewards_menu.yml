@@ -430,7 +430,7 @@ controls:
               日历模板:
                 type: Texture
                 attribute:
-                  entryKey: 0
+                  entryKey: 0.round()
                   entry: var.calendarRows[self.entryKey]
                   width: 52
                   height: 38
@@ -748,7 +748,7 @@ controls:
                   阶段奖励项:
                     type: Texture
                     attribute:
-                      entryKey: 0
+                      entryKey: 0.round()
                       entry: var.rewardRows[self.entryKey]
                       width: 500
                       height: 64
@@ -835,7 +835,7 @@ controls:
                   周期奖励项:
                     type: Texture
                     attribute:
-                      entryKey: 0
+                      entryKey: 0.round()
                       entry: var.periodicRewardRows[self.entryKey]
                       width: 500
                       height: 52
@@ -922,7 +922,7 @@ controls:
                   签到奖励项:
                     type: Texture
                     attribute:
-                      entryKey: 0
+                      entryKey: 0.round()
                       entry: var.signInRewardRows[self.entryKey]
                       width: 500
                       height: 48

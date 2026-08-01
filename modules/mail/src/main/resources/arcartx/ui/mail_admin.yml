@@ -272,7 +272,7 @@ controls:
                   预设行:
                     type: Texture
                     attribute:
-                      entryKey: 0
+                      entryKey: 0.round()
                       entry: var.presets[self.entryKey]
                       width: 1460
                       height: 52

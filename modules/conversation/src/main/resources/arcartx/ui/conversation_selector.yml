@@ -175,7 +175,7 @@ controls:
                   选择器模板:
                     type: Texture
                     attribute:
-                      entryKey: 0
+                      entryKey: 0.round()
                       entry: var.npcRows[self.entryKey]
                       visible: self.entry != none
                       width: 392

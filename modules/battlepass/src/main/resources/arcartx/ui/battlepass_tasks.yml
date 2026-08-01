@@ -223,7 +223,7 @@ controls:
                           任务项:
                             type: Texture
                             attribute:
-                              entryKey: 0
+                              entryKey: 0.round()
                               entry: var.dailyTasks[self.entryKey]
                               visible: self.entry != none
                               width: 728
@@ -311,7 +311,7 @@ controls:
                           任务项:
                             type: Texture
                             attribute:
-                              entryKey: 0
+                              entryKey: 0.round()
                               entry: var.weeklyTasks[self.entryKey]
                               visible: self.entry != none
                               width: 728
@@ -399,7 +399,7 @@ controls:
                           任务项:
                             type: Texture
                             attribute:
-                              entryKey: 0
+                              entryKey: 0.round()
                               entry: var.seasonTasks[self.entryKey]
                               visible: self.entry != none
                               width: 728

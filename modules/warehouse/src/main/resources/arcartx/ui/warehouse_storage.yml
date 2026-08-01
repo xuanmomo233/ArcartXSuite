@@ -450,7 +450,7 @@ controls:
                           项:
                             type: Texture
                             attribute:
-                              entryKey: 0
+                              entryKey: 0.round()
                               entry: var.personalWarehouses[self.entryKey]
                               visible: self.entry != none
                               width: 170
@@ -479,7 +479,7 @@ controls:
                           项:
                             type: Texture
                             attribute:
-                              entryKey: 0
+                              entryKey: 0.round()
                               entry: var.sharedWarehouses[self.entryKey]
                               visible: self.entry != none
                               width: 190
@@ -617,7 +617,7 @@ controls:
                       项:
                         type: Texture
                         attribute:
-                          entryKey: 0
+                          entryKey: 0.round()
                           entry: var.categories[self.entryKey]
                           visible: self.entry != none
                           width: 180
@@ -667,7 +667,7 @@ controls:
                   物品图标:
                     type: Slot
                     attribute:
-                      entryKey: 0
+                      entryKey: 0.round()
                       entry: var.slots[self.entryKey]
                       visible: self.entry != none
                       slotType: ~Icon
@@ -855,7 +855,7 @@ controls:
                       itemScale: 0.72
                       through: false
                       lock: true
-                      entryKey: 9
+                      entryKey: 9.round()
                       width: 62
                       height: 62
                       normal: "self.entryKey == var.selectedBackpackSlot ? '120,190,255,255' : 'Frosted:0;95,95,95,255'"

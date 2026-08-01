@@ -221,7 +221,7 @@ controls:
                   菜单按钮:
                     type: Texture
                     attribute:
-                      entryKey: 0
+                      entryKey: 0.round()
                       entry: var.buttonRows[self.entryKey]
                       visible: self.entry != none
                       through: false
@@ -335,7 +335,7 @@ controls:
                   页脚按钮:
                     type: Texture
                     attribute:
-                      entryKey: 0
+                      entryKey: 0.round()
                       entry: var.footerRows[self.entryKey]
                       visible: self.entry != none
                       width: 180

@@ -324,7 +324,7 @@ controls:
                   邮件项目:
                     type: Texture
                     attribute:
-                      entryKey: 0
+                      entryKey: 0.round()
                       entry: var.messages[self.entryKey]
                       width: 632
                       height: 96

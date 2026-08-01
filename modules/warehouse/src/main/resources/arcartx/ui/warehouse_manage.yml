@@ -425,7 +425,7 @@ controls:
                       项:
                         type: Texture
                         attribute:
-                          entryKey: 0
+                          entryKey: 0.round()
                           entry: var.manageWarehouses[self.entryKey]
                           visible: self.entry != none
                           width: 370
@@ -953,7 +953,7 @@ controls:
                       项:
                         type: Texture
                         attribute:
-                          entryKey: 0
+                          entryKey: 0.round()
                           entry: var.sharedMembers[self.entryKey]
                           visible: self.entry != none
                           width: 510
