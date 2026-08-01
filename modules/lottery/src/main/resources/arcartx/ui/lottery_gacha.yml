@@ -15,9 +15,11 @@ ui:
       var.poolName = packet['poolName']
       var.poolType = packet['poolType']
       var.poolBanner = packet['poolBanner']
+      var.poolDescription = packet['poolDescription']
       var.upItemName = packet['upItemName']
       var.upItemStar = packet['upItemStar']
       var.upItemDesc = packet['upItemDesc']
+      var.upItemIcon = packet['upItemIcon']
       var.guaranteeDesc = packet['guaranteeDesc']
       var.remainingTime = packet['remainingTime']
       var.fateCount = packet['fateCount']
@@ -27,14 +29,17 @@ ui:
       var.pity5 = packet['pity5']
       var.poolList = packet['poolList']
       var.currentPoolIndex = packet['currentPoolIndex']
+      var.actionToken = packet['action_token']
     update: |-
       var.packetId = packet['packetId']
       var.poolName = packet['poolName']
       var.poolType = packet['poolType']
       var.poolBanner = packet['poolBanner']
+      var.poolDescription = packet['poolDescription']
       var.upItemName = packet['upItemName']
       var.upItemStar = packet['upItemStar']
       var.upItemDesc = packet['upItemDesc']
+      var.upItemIcon = packet['upItemIcon']
       var.guaranteeDesc = packet['guaranteeDesc']
       var.remainingTime = packet['remainingTime']
       var.fateCount = packet['fateCount']
@@ -44,15 +49,63 @@ ui:
       var.pity5 = packet['pity5']
       var.poolList = packet['poolList']
       var.currentPoolIndex = packet['currentPoolIndex']
+      var.actionToken = packet['action_token']
+    history: |-
+      var.historyPoolName = packet['historyPoolName']
+      var.historyCount = packet['historyCount']
+      var.historyRows = packet['historyRows']
+      var.showHistory = true
+      while(val.历史列表.childrenCount() > 1){
+        val.历史列表.get(1).remove()
+      }
+      for(i in range(0, var.historyCount)){
+        key = i.round()
+        e = val.历史列表['历史项'].copy('历史项' + key)
+        e.entryKey = key
+      }
+    details: |-
+      var.detailPoolName = packet['detailPoolName']
+      var.detailPity5 = packet['detailPity5']
+      var.detailPity4 = packet['detailPity4']
+      var.detailBase5Rate = packet['detailBase5Rate']
+      var.detailBase4Rate = packet['detailBase4Rate']
+      var.detailUpRate = packet['detailUpRate']
+      var.detailGuaranteeDesc = packet['detailGuaranteeDesc']
+      var.detailCount = packet['detailCount']
+      var.detailRows = packet['detailRows']
+      var.showDetails = true
+      while(val.详情列表.childrenCount() > 1){
+        val.详情列表.get(1).remove()
+      }
+      for(i in range(0, var.detailCount)){
+        key = i.round()
+        e = val.详情列表['详情项'].copy('详情项' + key)
+        e.entryKey = key
+      }
+    exchange: |-
+      var.exchangeStardust = packet['exchangeStardust']
+      var.exchangeCount = packet['exchangeCount']
+      var.exchangeRows = packet['exchangeRows']
+      var.showExchange = true
+      while(val.兑换列表.childrenCount() > 1){
+        val.兑换列表.get(1).remove()
+      }
+      for(i in range(0, var.exchangeCount)){
+        key = i.round()
+        e = val.兑换列表['兑换项'].copy('兑换项' + key)
+        e.entryKey = key
+      }
   action:
     load: |-
       var.packetId = 'AXS_LOTTERY_GACHA'
       var.poolName = '等待同步'
       var.poolType = none
       var.poolBanner = none
+      var.poolDescription = ''
       var.upItemName = none
       var.upItemStar = 5
       var.upItemDesc = none
+      var.upItemIcon = ''
       var.guaranteeDesc = none
       var.remainingTime = none
       var.fateCount = 0
@@ -70,9 +123,15 @@ ui:
       var.rarityColors['LEGENDARY'] = '235,75,75,255'
       var.rarityColors['MYTHIC']    = '255,215,0,255'
       var.rarityColors[none] = '128,128,128,255'
+      var.showHistory = false
+      var.showDetails = false
+      var.showExchange = false
       val.祈愿界面.visible = true
       val.单抽结果.visible = false
       val.十连结果.visible = false
+      val.历史面板.visible = false
+      val.详情面板.visible = false
+      val.兑换面板.visible = false
     open: |-
       val.祈愿界面.visible = true
       val.单抽结果.visible = false
@@ -527,7 +586,7 @@ controls:
                 color: ~255,240,200,200
             action:
               click: |-
-                      Packet.send(var.packetId, 'pull', 1, packet['action_token'])
+                      Packet.send(var.packetId, 'pull', 1, var.actionToken)
             children:
               祈愿1次文字:
                 type: Text
@@ -567,7 +626,7 @@ controls:
                 color: ~255,240,200,200
             action:
               click: |-
-                      Packet.send(var.packetId, 'pull', 10, packet['action_token'])
+                      Packet.send(var.packetId, 'pull', 10, var.actionToken)
             children:
               祈愿10次文字:
                 type: Text
@@ -774,3 +833,301 @@ controls:
                   fontSize: 32
                   texts: "~确认"
                   through: true
+
+      历史面板:
+        type: Adaptive
+        val: 历史面板
+        attribute:
+          width: 1920
+          height: 1080
+          point: ~stretch_all
+          visible: false
+        children:
+          历史遮罩:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~0,0,0,220
+          历史主面板:
+            type: Canvas
+            attribute:
+              width: 800
+              height: 600
+              point: ~middle_center
+            children:
+              历史标题:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 20
+                  fontSize: 48
+                  texts: "~祈愿历史"
+              历史列表:
+                type: VScroll
+                val: 历史列表
+                attribute:
+                  point: ~middle_center
+                  y: 20
+                  width: 720
+                  height: 460
+                children:
+                  历史项:
+                    type: Canvas
+                    attribute:
+                      width: 720
+                      height: 60
+                    children:
+                      历史时间:
+                        type: Text
+                        attribute:
+                          x: 10
+                          y: 18
+                          fontSize: 24
+                          texts: "self.entry != none ? ('&7' + self.entry['timeText']) : ''"
+                      历史内容:
+                        type: Text
+                        attribute:
+                          x: 200
+                          y: 18
+                          fontSize: 24
+                          texts: "self.entry != none ? ('&f' + self.entry['summary']) : ''"
+              历史关闭:
+                type: Slot
+                attribute:
+                  width: 160
+                  height: 50
+                  point: ~bottom_center
+                  y: -20
+                  normal: ~160,80,80,220
+                  hover: ~200,100,100,240
+                  shape: ~round_rect
+                  radius: 12
+                action:
+                  click: |-
+                    val.历史面板.visible = false
+                    val.祈愿界面.visible = true
+                children:
+                  历史关闭文字:
+                    type: Text
+                    attribute:
+                      x: 80
+                      y: 12
+                      center: true
+                      fontSize: 32
+                      texts: "~关闭"
+                      through: true
+
+      详情面板:
+        type: Adaptive
+        val: 详情面板
+        attribute:
+          width: 1920
+          height: 1080
+          point: ~stretch_all
+          visible: false
+        children:
+          详情遮罩:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~0,0,0,220
+          详情主面板:
+            type: Canvas
+            attribute:
+              width: 900
+              height: 700
+              point: ~middle_center
+            children:
+              详情标题:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 20
+                  fontSize: 48
+                  texts: "~卡池详情"
+              详情信息:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 80
+                  fontSize: 28
+                  texts: "var.detailPoolName + '  |  5星保底:' + var.detailPity5 + '  |  4星保底:' + var.detailPity4 + '  |  5星概率:' + var.detailBase5Rate + '%  |  4星概率:' + var.detailBase4Rate + '%  |  UP概率:' + var.detailUpRate + '%'"
+              UP物品图标:
+                type: Slot
+                attribute:
+                  width: 40
+                  height: 40
+                  point: ~top_left
+                  x: 30
+                  y: 120
+                  slotType: ~Icon
+                  itemScale: 0.8
+                  visible: "var.upItemIcon != '' and var.upItemIcon != none"
+                  through: true
+                action:
+                  tick: |-
+                    if(var.upItemIcon != '' and var.upItemIcon != none){
+                      self.setItemIcon(var.upItemIcon)
+                    }
+              卡池描述:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 80
+                  y: 125
+                  width: 790
+                  fontSize: 22
+                  lineSpace: 26
+                  visible: "var.poolDescription != '' and var.poolDescription != none"
+                  texts: "var.poolDescription != none ? var.poolDescription : ''"
+                  through: true
+              详情列表:
+                type: VScroll
+                val: 详情列表
+                attribute:
+                  point: ~middle_center
+                  y: 20
+                  width: 820
+                  height: 480
+                children:
+                  详情项:
+                    type: Canvas
+                    attribute:
+                      width: 820
+                      height: 50
+                    children:
+                      详情物品名:
+                        type: Text
+                        attribute:
+                          x: 10
+                          y: 12
+                          fontSize: 24
+                          texts: "self.entry != none ? ('&f' + self.entry['name']) : ''"
+                      详情稀有度:
+                        type: Text
+                        attribute:
+                          x: 400
+                          y: 12
+                          fontSize: 24
+                          texts: "self.entry != none ? ('&7稀有度: ' + self.entry['rarity']) : ''"
+                      详情权重:
+                        type: Text
+                        attribute:
+                          x: 600
+                          y: 12
+                          fontSize: 24
+                          texts: "self.entry != none ? ('&7权重: ' + self.entry['weight']) : ''"
+              详情关闭:
+                type: Slot
+                attribute:
+                  width: 160
+                  height: 50
+                  point: ~bottom_center
+                  y: -20
+                  normal: ~160,80,80,220
+                  hover: ~200,100,100,240
+                  shape: ~round_rect
+                  radius: 12
+                action:
+                  click: |-
+                    val.详情面板.visible = false
+                    val.祈愿界面.visible = true
+                children:
+                  详情关闭文字:
+                    type: Text
+                    attribute:
+                      x: 80
+                      y: 12
+                      center: true
+                      fontSize: 32
+                      texts: "~关闭"
+                      through: true
+
+      兑换面板:
+        type: Adaptive
+        val: 兑换面板
+        attribute:
+          width: 1920
+          height: 1080
+          point: ~stretch_all
+          visible: false
+        children:
+          兑换遮罩:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~0,0,0,220
+          兑换主面板:
+            type: Canvas
+            attribute:
+              width: 800
+              height: 600
+              point: ~middle_center
+            children:
+              兑换标题:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 20
+                  fontSize: 48
+                  texts: "~尘辉兑换"
+              兑换余额:
+                type: Text
+                attribute:
+                  point: ~top_center
+                  y: 80
+                  fontSize: 28
+                  texts: "~&e星尘余额: &f0"
+              兑换提示:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  fontSize: 32
+                  texts: "~&7兑换功能开发中..."
+              兑换列表:
+                type: VScroll
+                val: 兑换列表
+                attribute:
+                  point: ~middle_center
+                  y: 20
+                  width: 720
+                  height: 400
+                children:
+                  兑换项:
+                    type: Canvas
+                    attribute:
+                      width: 720
+                      height: 60
+                    children:
+                      兑换物品名:
+                        type: Text
+                        attribute:
+                          x: 10
+                          y: 18
+                          fontSize: 24
+                          texts: "self.entry != none ? ('&f' + self.entry['name']) : ''"
+              兑换关闭:
+                type: Slot
+                attribute:
+                  width: 160
+                  height: 50
+                  point: ~bottom_center
+                  y: -20
+                  normal: ~160,80,80,220
+                  hover: ~200,100,100,240
+                  shape: ~round_rect
+                  radius: 12
+                action:
+                  click: |-
+                    val.兑换面板.visible = false
+                    val.祈愿界面.visible = true
+                children:
+                  兑换关闭文字:
+                    type: Text
+                    attribute:
+                      x: 80
+                      y: 12
+                      center: true
+                      fontSize: 32
+                      texts: "~关闭"
+                      through: true

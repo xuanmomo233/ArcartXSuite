@@ -51,7 +51,7 @@ ui:
       while(val.world_entry.childrenCount() > 1){
         val.world_entry.get(1).remove()
       }
-      for(i in range(0, var.maxWorldCount)){
+      for(i in range(1, var.maxWorldCount - 1)){
         key = i.round()
         e = val.world_entry['地图项目'].copy('地图项目' + key)
         e.entryKey = key
@@ -59,7 +59,7 @@ ui:
       while(val.anchor_row.childrenCount() > 1){
         val.anchor_row.get(1).remove()
       }
-      for(i in range(0, var.maxAnchorCount)){
+      for(i in range(1, var.maxAnchorCount - 1)){
         key = i.round()
         e = val.anchor_row['地图项目'].copy('地图项目' + key)
         e.entryKey = key
@@ -67,7 +67,7 @@ ui:
       while(val.waypoint_row.childrenCount() > 1){
         val.waypoint_row.get(1).remove()
       }
-      for(i in range(0, var.maxWaypointCount)){
+      for(i in range(1, var.maxWaypointCount - 1)){
         key = i.round()
         e = val.waypoint_row['地图项目'].copy('地图项目' + key)
         e.entryKey = key
@@ -75,7 +75,7 @@ ui:
       while(val.external_row.childrenCount() > 1){
         val.external_row.get(1).remove()
       }
-      for(i in range(0, var.maxExternalCount)){
+      for(i in range(1, var.maxExternalCount - 1)){
         key = i.round()
         e = val.external_row['地图项目'].copy('地图项目' + key)
         e.entryKey = key
@@ -117,7 +117,7 @@ ui:
       while(val.world_entry.childrenCount() > 1){
         val.world_entry.get(1).remove()
       }
-      for(i in range(0, var.maxWorldCount)){
+      for(i in range(1, var.maxWorldCount - 1)){
         key = i.round()
         e = val.world_entry['地图项目'].copy('地图项目' + key)
         e.entryKey = key
@@ -125,7 +125,7 @@ ui:
       while(val.anchor_row.childrenCount() > 1){
         val.anchor_row.get(1).remove()
       }
-      for(i in range(0, var.maxAnchorCount)){
+      for(i in range(1, var.maxAnchorCount - 1)){
         key = i.round()
         e = val.anchor_row['地图项目'].copy('地图项目' + key)
         e.entryKey = key
@@ -133,7 +133,7 @@ ui:
       while(val.waypoint_row.childrenCount() > 1){
         val.waypoint_row.get(1).remove()
       }
-      for(i in range(0, var.maxWaypointCount)){
+      for(i in range(1, var.maxWaypointCount - 1)){
         key = i.round()
         e = val.waypoint_row['地图项目'].copy('地图项目' + key)
         e.entryKey = key
@@ -141,7 +141,7 @@ ui:
       while(val.external_row.childrenCount() > 1){
         val.external_row.get(1).remove()
       }
-      for(i in range(0, var.maxExternalCount)){
+      for(i in range(1, var.maxExternalCount - 1)){
         key = i.round()
         e = val.external_row['地图项目'].copy('地图项目' + key)
         e.entryKey = key

@@ -24,7 +24,7 @@ ui:
       while(val.鱼类列表.childrenCount() > 1){
         val.鱼类列表.get(1).remove()
       }
-      for(i in range(0, var.maxFishCount)){
+      for(i in range(1, var.maxFishCount - 1)){
         key = i.round()
         e = val.鱼类列表['鱼条目'].copy('鱼条目' + key)
         e.entryKey = key
@@ -42,7 +42,7 @@ ui:
       while(val.鱼类列表.childrenCount() > 1){
         val.鱼类列表.get(1).remove()
       }
-      for(i in range(0, var.maxFishCount)){
+      for(i in range(1, var.maxFishCount - 1)){
         key = i.round()
         e = val.鱼类列表['鱼条目'].copy('鱼条目' + key)
         e.entryKey = key

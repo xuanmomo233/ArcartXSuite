@@ -562,7 +562,7 @@ public final class MailService implements Listener {
         ComposeInventoryHolder holder = new ComposeInventoryHolder();
         Inventory inventory = Bukkit.createInventory(holder, 27, configuration.ui().composeInventoryTitle());
         holder.inventory = inventory;
-        ComposeSession session = new ComposeSession(UUID.randomUUID(), player.getUniqueId(), inventory, false);
+        ComposeSession session = new ComposeSession(UUID.randomUUID(), player.getUniqueId(), inventory, false, configuration.playerSend().feeCurrency());
         composeSessions.put(player.getUniqueId(), session);
         player.openInventory(inventory);
 
@@ -577,7 +577,7 @@ public final class MailService implements Listener {
                         configuration,
                         currencyBridgeManager,
                         messages,
-                        calculateComposeQuote(configuration.playerSend(), Map.of(), 0),
+                        calculateComposeQuote(configuration.playerSend(), Map.of(), 0, configuration.playerSend().feeCurrency()),
                         effectiveAttachmentSlots(inventory),
                         0,
                         composePasswordPanels.contains(player.getUniqueId()),
@@ -980,6 +980,19 @@ public final class MailService implements Listener {
                 }
                 return true;
             }
+            case "filter" -> {
+                if (data != null && data.size() >= 2) {
+                    MailInboxFilter filter = MailInboxFilter.parse(data.get(1));
+                    MailInboxQuery currentQuery = inboxQueries.get(player.getUniqueId());
+                    if (currentQuery != null) {
+                        inboxQueries.put(player.getUniqueId(), currentQuery.withFilter(filter));
+                    } else {
+                        inboxQueries.put(player.getUniqueId(), new MailInboxQuery(filter, 1, INBOX_PAGE_SIZE));
+                    }
+                    refreshInbox(player, false);
+                }
+                return true;
+            }
             case "select" -> {
                 if (data != null && data.size() >= 2) {
                     long mailId = parseLong(data.get(1), -1L);
@@ -998,6 +1011,17 @@ public final class MailService implements Listener {
                     sendPlayerResult(player, MailOperationResult.failure(message("player.compose-args-incomplete")));
                 } else {
                     sendPlayerResult(player, handleComposeSend(player, data));
+                }
+                return true;
+            }
+            case "change-fee-currency" -> {
+                if (data != null && data.size() >= 2) {
+                    String currencyId = safe(data.get(1));
+                    ComposeSession session = composeSessions.get(player.getUniqueId());
+                    if (session != null && currencyId != null && !currencyId.isBlank()) {
+                        session.setFeeCurrency(currencyId);
+                        pushComposeQuote(player, calculateCurrentComposeQuote(player));
+                    }
                 }
                 return true;
             }
@@ -1260,7 +1284,8 @@ public final class MailService implements Listener {
     static MailSendQuote calculateComposeQuote(
         MailPlayerSendConfiguration configuration,
         Map<String, BigDecimal> attachmentAmounts,
-        int itemAttachmentCount
+        int itemAttachmentCount,
+        String feeCurrencyOverride
     ) {
         Map<String, BigDecimal> normalizedAttachmentAmounts = new LinkedHashMap<>();
         Map<String, BigDecimal> attachmentTaxes = new LinkedHashMap<>();
@@ -1280,10 +1305,13 @@ public final class MailService implements Listener {
         BigDecimal baseFee = normalizeAmount(BigDecimal.valueOf(configuration.baseFee()));
         BigDecimal itemFee = normalizeAmount(BigDecimal.valueOf(configuration.itemFee()).multiply(BigDecimal.valueOf(Math.max(0, itemAttachmentCount))));
         BigDecimal totalFee = normalizeAmount(baseFee.add(itemFee));
+        String effectiveFeeCurrency = feeCurrencyOverride != null && !feeCurrencyOverride.isBlank()
+            ? normalizeCurrencyId(feeCurrencyOverride)
+            : normalizeCurrencyId(configuration.feeCurrency());
         return new MailSendQuote(
             true,
             "",
-            normalizeCurrencyId(configuration.feeCurrency()),
+            effectiveFeeCurrency,
             baseFee,
             itemFee,
             totalFee,
@@ -1711,24 +1739,24 @@ public final class MailService implements Listener {
         SecondaryPasswordAccess passwordAccess = secondaryPasswordAccess();
         if (passwordAccess == null) {
             MailOperationResult result = MailOperationResult.failure(message("player.compose-password-unavailable"));
-            pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+            pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
             return result;
         }
         if (passwordAccess.isPasswordSet(player) && !passwordAccess.isUnlocked(player)) {
             composePasswordPanels.add(player.getUniqueId());
             MailOperationResult result = MailOperationResult.failure(message("player.compose-password-required"));
-            pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+            pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
             return result;
         }
 
         if (!configuration.playerSend().enabled()) {
             MailOperationResult result = MailOperationResult.failure(message("player.compose-disabled"));
-            pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+            pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
             return result;
         }
         if (configuration.playerSend().requirePermission() && !player.hasPermission("arcartxsuite.mail.send")) {
             MailOperationResult result = MailOperationResult.failure(message("player.compose-no-permission"));
-            pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+            pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
             return result;
         }
 
@@ -1737,23 +1765,23 @@ public final class MailService implements Listener {
         String body = crop(data.get(4), configuration.playerSend().bodyMaxLength());
         if (recipientInput.isBlank()) {
             MailOperationResult result = MailOperationResult.failure(message("player.recipient-required"));
-            pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+            pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
             return result;
         }
         if (subject.isBlank()) {
             MailOperationResult result = MailOperationResult.failure(message("player.subject-required"));
-            pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+            pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
             return result;
         }
         if (containsBlockedText(subject) || containsBlockedText(body)) {
             MailOperationResult result = MailOperationResult.failure(message("player.body-blocked"));
-            pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+            pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
             return result;
         }
         int maxAttachmentSlots = effectiveAttachmentSlots(session.inventory());
         if (hasItemsOutsideAttachmentSlots(session.inventory(), maxAttachmentSlots)) {
             MailOperationResult result = MailOperationResult.failure(message("player.attachment-slot-limit", maxAttachmentSlots));
-            pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+            pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
             return result;
         }
 
@@ -1761,18 +1789,18 @@ public final class MailService implements Listener {
             RecipientResolution recipient = resolveRecipient(recipientInput);
             if (recipient == null) {
                 MailOperationResult result = MailOperationResult.failure(message("player.recipient-not-found", recipientInput));
-                pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+                pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
                 return result;
             }
             if (!configuration.playerSend().allowSelfSend() && player.getUniqueId().equals(recipient.playerUuid())) {
                 MailOperationResult result = MailOperationResult.failure(message("player.compose-self-not-allowed"));
-                pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+                pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
                 return result;
             }
             boolean recipientOnline = isPlayerOnline(recipient.playerUuid());
             if (!recipientOnline && !configuration.playerSend().allowOfflineSend()) {
                 MailOperationResult result = MailOperationResult.failure(message("player.compose-offline-not-allowed"));
-                pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+                pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
                 return result;
             }
 
@@ -1784,7 +1812,7 @@ public final class MailService implements Listener {
                     MailOperationResult result = MailOperationResult.failure(
                         message("player.compose-cooldown", TIME_FORMATTER.format(nextAvailableAt))
                     );
-                    pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+                    pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
                     return result;
                 }
             }
@@ -1792,19 +1820,19 @@ public final class MailService implements Listener {
             List<ItemStack> attachmentItems = collectComposeItems(session.inventory());
             MailOperationResult attachmentValidation = validateAttachmentItems(attachmentItems);
             if (!attachmentValidation.success()) {
-                pushComposeQuote(player, MailSendQuote.failure(attachmentValidation.message(), configuration.playerSend().feeCurrency()));
+                pushComposeQuote(player, MailSendQuote.failure(attachmentValidation.message(), session.feeCurrency()));
                 return attachmentValidation;
             }
 
             BigDecimal vaultAmount = parseCurrencyAmount(data.get(5));
             if (vaultAmount == null) {
                 MailOperationResult result = MailOperationResult.failure(message("player.currency-amount-invalid"));
-                pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+                pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
                 return result;
             }
             if (vaultAmount.compareTo(BigDecimal.ZERO) > 0 && !configuration.playerSend().allowVaultAttachment()) {
                 MailOperationResult result = MailOperationResult.failure(message("player.currency-attachment-disabled"));
-                pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+                pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
                 return result;
             }
 
@@ -1812,12 +1840,12 @@ public final class MailService implements Listener {
             if (vaultAmount.compareTo(BigDecimal.ZERO) > 0) {
                 attachmentAmounts.put("money", vaultAmount);
             }
-            MailSendQuote quote = calculateComposeQuote(configuration.playerSend(), attachmentAmounts, attachmentItems.size());
+            MailSendQuote quote = calculateComposeQuote(configuration.playerSend(), attachmentAmounts, attachmentItems.size(), session.feeCurrency());
             pushComposeQuote(player, quote);
 
             MailOperationResult paymentValidation = validateSenderPayment(player, quote);
             if (!paymentValidation.success()) {
-                pushComposeQuote(player, MailSendQuote.failure(paymentValidation.message(), configuration.playerSend().feeCurrency()));
+                pushComposeQuote(player, MailSendQuote.failure(paymentValidation.message(), session.feeCurrency()));
                 return paymentValidation;
             }
 
@@ -1827,7 +1855,7 @@ public final class MailService implements Listener {
             } catch (IOException exception) {
                 this.logger.warning("序列化玩家邮件附件失败: " + exception.getMessage());
                 MailOperationResult result = MailOperationResult.failure(message("player.attachment-save-failed"));
-                pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+                pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
                 return result;
             }
             Instant now = Instant.now();
@@ -1855,14 +1883,14 @@ public final class MailService implements Listener {
             Map<String, BigDecimal> charged = chargeSender(player, quote);
             if (charged.isEmpty() && requiredCurrencyTotal(quote).values().stream().anyMatch(amount -> amount.compareTo(BigDecimal.ZERO) > 0)) {
                 MailOperationResult result = MailOperationResult.failure(message("player.charge-failed"));
-                pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+                pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
                 return result;
             }
 
             MailOperationResult sendResult = sendMailInternal(recipient.playerUuid(), "compose-send", mail, true);
             if (!sendResult.success()) {
                 refundSender(player, charged);
-                pushComposeQuote(player, MailSendQuote.failure(sendResult.message(), configuration.playerSend().feeCurrency()));
+                pushComposeQuote(player, MailSendQuote.failure(sendResult.message(), session.feeCurrency()));
                 return sendResult;
             }
 
@@ -1882,13 +1910,14 @@ public final class MailService implements Listener {
         } catch (Exception exception) {
             this.logger.warning("发送玩家邮件失败: " + exception.getMessage());
             MailOperationResult result = MailOperationResult.failure(message("player.mail-send-failed"));
-            pushComposeQuote(player, MailSendQuote.failure(result.message(), configuration.playerSend().feeCurrency()));
+            pushComposeQuote(player, MailSendQuote.failure(result.message(), session.feeCurrency()));
             return result;
         }
     }
 
     private MailOperationResult handlePasswordUnlock(Player player, List<String> data) {
-        if (!composeSessions.containsKey(player.getUniqueId())) {
+        ComposeSession session = composeSessions.get(player.getUniqueId());
+        if (session == null) {
             return MailOperationResult.failure(message("player.compose-session-missing"));
         }
 
@@ -1907,20 +1936,21 @@ public final class MailService implements Listener {
         composePasswordPanels.add(player.getUniqueId());
         pushComposeQuote(
             player,
-            MailSendQuote.failure(message("player.compose-password-invalid"), configuration.playerSend().feeCurrency())
+            MailSendQuote.failure(message("player.compose-password-invalid"), session.feeCurrency())
         );
         return MailOperationResult.failure(message("player.compose-password-invalid"));
     }
 
     private String requiredUiForAction(String action) {
-        if ("compose-send".equals(action) || "password-unlock".equals(action)) {
+        if ("compose-send".equals(action) || "password-unlock".equals(action) || "change-fee-currency".equals(action)) {
             return composeUiId;
         }
         if ("claim".equals(action)
             || "delete".equals(action)
             || "claimall".equals(action)
             || "deleteall".equals(action)
-            || "cdk".equals(action)) {
+            || "cdk".equals(action)
+            || "filter".equals(action)) {
             return inboxUiId;
         }
         if (action.startsWith("admin-")) {
@@ -1932,7 +1962,7 @@ public final class MailService implements Listener {
     private MailSendQuote calculateCurrentComposeQuote(Player player) {
         ComposeSession session = composeSessions.get(player.getUniqueId());
         int attachmentCount = session == null ? 0 : collectComposeItems(session.inventory()).size();
-        return calculateComposeQuote(configuration.playerSend(), Map.of(), attachmentCount);
+        return calculateComposeQuote(configuration.playerSend(), Map.of(), attachmentCount, session != null ? session.feeCurrency() : configuration.playerSend().feeCurrency());
     }
 
     private SecondaryPasswordAccess secondaryPasswordAccess() {
@@ -2332,7 +2362,7 @@ public final class MailService implements Listener {
                 return;
             }
             int attachmentCount = collectComposeItems(session.inventory()).size();
-            pushComposeQuote(player, calculateComposeQuote(configuration.playerSend(), Map.of(), attachmentCount));
+            pushComposeQuote(player, calculateComposeQuote(configuration.playerSend(), Map.of(), attachmentCount, session.feeCurrency()));
         });
     }
 
@@ -2699,13 +2729,15 @@ public final class MailService implements Listener {
         private final String actionToken;
         private boolean tokenInFlight;
         private boolean sent;
+        private String feeCurrency;
 
-        private ComposeSession(UUID sessionId, UUID playerUuid, Inventory inventory, boolean sent) {
+        private ComposeSession(UUID sessionId, UUID playerUuid, Inventory inventory, boolean sent, String feeCurrency) {
             this.sessionId = sessionId;
             this.playerUuid = playerUuid;
             this.inventory = inventory;
             this.actionToken = UUID.randomUUID().toString();
             this.sent = sent;
+            this.feeCurrency = feeCurrency;
         }
 
         public UUID sessionId() {
@@ -2726,6 +2758,14 @@ public final class MailService implements Listener {
 
         public boolean sent() {
             return sent;
+        }
+
+        public String feeCurrency() {
+            return feeCurrency;
+        }
+
+        public void setFeeCurrency(String feeCurrency) {
+            this.feeCurrency = feeCurrency;
         }
     }
 

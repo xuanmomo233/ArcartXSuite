@@ -13,6 +13,8 @@ public record PoolDefinition(
     @NotNull PoolType type,
     boolean enabled,
     @NotNull String displayName,
+    @NotNull String description,
+    @NotNull String upItemIcon,
     @NotNull CostConfig cost,
     @Nullable GachaPoolConfig gacha,
     @Nullable CasePoolConfig caseConfig
@@ -29,6 +31,8 @@ public record PoolDefinition(
         PoolType type = PoolType.valueOf(typeStr.toUpperCase());
         boolean enabled = section.getBoolean("enabled", true);
         String displayName = section.getString("display-name", id);
+        String description = section.getString("description", "");
+        String upItemIcon = section.getString("up-item-icon", "");
         CostConfig cost = CostConfig.load(section.getConfigurationSection("cost"));
 
         GachaPoolConfig gacha = null;
@@ -40,6 +44,6 @@ public record PoolDefinition(
             caseConfig = CasePoolConfig.load(section.getConfigurationSection("case"), logger);
         }
 
-        return new PoolDefinition(id, type, enabled, displayName, cost, gacha, caseConfig);
+        return new PoolDefinition(id, type, enabled, displayName, description, upItemIcon, cost, gacha, caseConfig);
     }
 }

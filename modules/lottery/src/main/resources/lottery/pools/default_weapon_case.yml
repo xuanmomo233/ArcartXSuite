@@ -2,6 +2,11 @@ id: "default_weapon_case"
 type: CASE
 enabled: true
 display-name: "常规武器箱"
+description: |-
+  常规武器箱
+  使用武器箱钥匙开启，可获得各种稀有度的武器皮肤。
+  包含从消费级到隐秘级的多款皮肤，更有罕见特殊级掉落！
+up-item-icon: '{"id":"minecraft:chest","Count":1b}'
 
 cost:
   mode: ITEM

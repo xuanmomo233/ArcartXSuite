@@ -36,6 +36,9 @@ ui:
       var.composeVault = '0'
       var.passwordPanelVisible = false
       var.passwordText = ''
+      var.currencies = none
+      var.feeCurrency = ''
+      var.totalFeeCurrency = ''
   # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
   packetHandler:
     init: |-
@@ -58,6 +61,22 @@ ui:
       var.composeVault = '0'
       var.passwordPanelVisible = packet['password_panel'] != none && packet['password_panel']['visible']
       var.passwordText = ''
+      var.currencies = packet['currencies']
+      var.feeCurrency = packet['fee_currency']
+      var.totalFeeCurrency = packet['total_fee_currency']
+      if(var.currencies != none){
+        while(val.currency_list.childrenCount() > 1){
+          val.currency_list.get(1).remove()
+        }
+        for(key in var.currencies.keys()){
+          entry = var.currencies[key]
+          if(entry != none && entry['available'] == true){
+            btn = val.currency_list['货币按钮'].copy('货币按钮' + key)
+            btn.currencyId = key
+            btn.currencyName = entry['display_name'] != none && entry['display_name'] != '' ? entry['display_name'] : key
+          }
+        }
+      }
     update: |-
       var.baseFee = packet['base_fee']
       var.vaultTaxRate = packet['vault_tax_rate']
@@ -69,6 +88,7 @@ ui:
       var.maxAttachments = packet['max_attachments']
       var.attachmentCount = packet['attachment_count']
       var.passwordPanelVisible = packet['password_panel'] != none && packet['password_panel']['visible']
+      var.totalFeeCurrency = packet['total_fee_currency']
 
 # controls 为主要可视控件区块，可在此调整布局、材质与文本绑定。
 
@@ -312,11 +332,55 @@ controls:
               y: 590
               fontSize: 49
               texts: "'&7标题文字上限: &0' + var.subjectMax.round() + '   &7正文文字上限: &0' + var.bodyMax.round()"
+          邮费货币标签:
+            type: Text
+            attribute:
+              x: 440
+              y: 632
+              fontSize: 49
+              texts: "~&7邮费货币"
+          货币选择栏:
+            val: currency_list
+            type: HStack
+            attribute:
+              x: 560
+              y: 632
+              spaceBetween: 8
+            children:
+              货币按钮:
+                type: Texture
+                attribute:
+                  width: 120
+                  height: 32
+                  normal: ~150,150,150,255
+                  shape: ~round_rect
+                  radius: 10
+                  texts: "self.currencyName != none ? self.currencyName : ''"
+                  center: true
+                  fontSize: 40
+                  currencyId: ''
+                  currencyName: ''
+                  visible: "self.currencyId != '' && self.currencyId != var.totalFeeCurrency"
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+                action:
+                  clickLeft: |-
+                    Packet.send('AXS_MAIL', 'change-fee-currency', self.currencyId)
+          当前货币显示:
+            type: Text
+            attribute:
+              x: 560
+              y: 632
+              fontSize: 49
+              texts: "(var.totalFeeCurrency != none && var.totalFeeCurrency != '' ? var.totalFeeCurrency : '金币')"
+              visible: "val.currency_list.childrenCount() <= 1"
           金币输入框:
             type: TextBox
             attribute:
               x: 440
-              y: 632
+              y: 672
               width: 400
               height: 30
               length: 24
@@ -335,10 +399,10 @@ controls:
             type: Text
             attribute:
               x: 440
-              y: 676
+              y: 716
               fontSize: 49
               width: 880
-              texts: "'&7邮件总费用: &0' + var.totalFee + '金币' + '   &7物品手续费: &0' + var.itemFee + '金币' + (var.quoteMessage == none ? none : '   &7提示: &0' + var.quoteMessage)"
+              texts: "'&7邮件总费用: &0' + var.totalFee + ' ' + (var.totalFeeCurrency != none && var.totalFeeCurrency != '' ? var.totalFeeCurrency : '金币') + '   &7物品手续费: &0' + var.itemFee + ' ' + (var.totalFeeCurrency != none && var.totalFeeCurrency != '' ? var.totalFeeCurrency : '金币') + (var.quoteMessage == none ? none : '   &7提示: &0' + var.quoteMessage)"
           二级密码面板:
             type: Texture
             attribute:
@@ -405,7 +469,7 @@ controls:
             type: HStack
             attribute:
               x: 440
-              y: 708
+              y: 748
               spaceBetween: 20
             children:
               发送按钮:

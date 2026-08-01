@@ -80,39 +80,39 @@ ui:
       }
       分类数 = var.categoryCount.round()
       现有分类数 = val.分类标签行.childrenCount() - 1
-      if(现有分类数 != 分类数){
+      if(现有分类数 != 分类数 - 1){
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.分类标签行.childrenCount() > 1){
           val.分类标签行.get(1).remove()
         }
-        if(分类数 > 0){
-          for(序号 in range(0, 分类数 - 1)){
+        if(分类数 > 1){
+          for(序号 in range(1, 分类数 - 1)){
             项 = val.分类标签行['项'].copy('分类项_' + var.刷新轮次 + '_' + 序号.round())
             项.entryKey = 序号.round()
           }
         }
       槽位数 = var.slotCount.round()
       现有槽位数 = val.背包网格.childrenCount() - 1
-      if(现有槽位数 != 槽位数){
+      if(现有槽位数 != 槽位数 - 1){
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.背包网格.childrenCount() > 1){
           val.背包网格.get(1).remove()
         }
-        if(槽位数 > 0){
-          for(序号 in range(0, 槽位数 - 1)){
+        if(槽位数 > 1){
+          for(序号 in range(1, 槽位数 - 1)){
             slot = val.背包网格['物品图标'].copy('背包物品图标_' + var.刷新轮次 + '_' + 序号.round())
             slot.entryKey = 序号.round()
           }
         }
-      for(i in range(0, 槽位数)){
-        icon = val.背包网格.get((i + 1).round())
+      for(i in range(0, 槽位数 - 1)){
+        icon = val.背包网格.get(i.round())
         if(icon != none){
           icon.seticon()
         }
       }
       // 快捷栏 9 格静态创建（数量固定）。模板为索引 0。
       for(i in range(0, 9)){
-        icon = val.快捷栏网格.get((i + 1).round())
+        icon = val.快捷栏网格.get(i.round())
         if(icon != none){
           icon.seticon()
         }
@@ -148,7 +148,7 @@ ui:
       var.air = '{"id": "minecraft:air","Count":1b}'
       var.刷新轮次 = 0
       // 快捷栏 9 格在构建时静态创建（数量固定，模板为索引 0）。
-      for(i in range(0, 8)){
+      for(i in range(1, 8)){
         slot = val.快捷栏网格['物品图标'].copy('快捷栏物品图标_' + i.round())
         slot.entryKey = i.round()
       }

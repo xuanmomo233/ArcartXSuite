@@ -38,7 +38,7 @@ ui:
       while(val.商店列表.childrenCount() > 1){
         val.商店列表.get(1).remove()
       }
-      for(i in range(0, var.maxShopCount)){
+      for(i in range(1, var.maxShopCount - 1)){
         key = i.round()
         e = val.商店列表['商店项'].copy('商店项' + key)
         e.entryKey = key
@@ -46,7 +46,7 @@ ui:
       while(val.商品列表.childrenCount() > 1){
         val.商品列表.get(1).remove()
       }
-      for(i in range(0, var.maxItemCount)){
+      for(i in range(1, var.maxItemCount - 1)){
         key = i.round()
         e = val.商品列表['商品项'].copy('商品项' + key)
         e.entryKey = key
@@ -76,7 +76,7 @@ ui:
       while(val.商店列表.childrenCount() > 1){
         val.商店列表.get(1).remove()
       }
-      for(i in range(0, var.maxShopCount)){
+      for(i in range(1, var.maxShopCount - 1)){
         key = i.round()
         e = val.商店列表['商店项'].copy('商店项' + key)
         e.entryKey = key
@@ -84,7 +84,7 @@ ui:
       while(val.商品列表.childrenCount() > 1){
         val.商品列表.get(1).remove()
       }
-      for(i in range(0, var.maxItemCount)){
+      for(i in range(1, var.maxItemCount - 1)){
         key = i.round()
         e = val.商品列表['商品项'].copy('商品项' + key)
         e.entryKey = key

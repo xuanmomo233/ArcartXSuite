@@ -204,7 +204,7 @@ public final class MailComposePacketFactory {
         MailSendQuote quote
     ) {
         MailSendQuote effectiveQuote = quote == null
-            ? MailService.calculateComposeQuote(configuration.playerSend(), Map.of(), 0)
+            ? MailService.calculateComposeQuote(configuration.playerSend(), Map.of(), 0, configuration.playerSend().feeCurrency())
             : quote;
         payload.put("quote_success", effectiveQuote.success());
         payload.put("quote_message", effectiveQuote.message());

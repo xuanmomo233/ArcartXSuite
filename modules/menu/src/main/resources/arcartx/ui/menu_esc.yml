@@ -38,7 +38,7 @@ ui:
       while(val.footer_rows.childrenCount() > 1){
         val.footer_rows.get(1).remove()
       }
-      for(i in range(0, var.buttonCount)){
+      for(i in range(1, var.buttonCount - 1)){
         key = i.round()
         mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
         mb.entryKey = key
@@ -46,7 +46,7 @@ ui:
           mb['图标'].seticon()
         }
       }
-      for(i in range(0, var.maxFooterCount)){
+      for(i in range(1, var.maxFooterCount - 1)){
         key = i.round()
         fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + key)
         fb.entryKey = key
@@ -71,7 +71,7 @@ ui:
       while(val.footer_rows.childrenCount() > 1){
         val.footer_rows.get(1).remove()
       }
-      for(i in range(0, var.buttonCount)){
+      for(i in range(1, var.buttonCount - 1)){
         key = i.round()
         mb = val.button_rows['菜单按钮'].copy('菜单按钮' + key)
         mb.entryKey = key
@@ -79,7 +79,7 @@ ui:
           mb['图标'].seticon()
         }
       }
-      for(i in range(0, var.maxFooterCount)){
+      for(i in range(1, var.maxFooterCount - 1)){
         key = i.round()
         fb = val.footer_rows['页脚按钮'].copy('页脚按钮' + key)
         fb.entryKey = key

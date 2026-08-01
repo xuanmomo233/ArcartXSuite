@@ -15,12 +15,14 @@ ui:
       var.poolDescription = packet['poolDescription']
       var.poolList = packet['poolList']
       var.currentPoolIndex = packet['currentPoolIndex']
+      var.actionToken = packet['action_token']
     update: |-
       var.packetId = packet['packetId']
       var.poolName = packet['poolName']
       var.poolDescription = packet['poolDescription']
       var.poolList = packet['poolList']
       var.currentPoolIndex = packet['currentPoolIndex']
+      var.actionToken = packet['action_token']
   action:
     load: |-
       var.rarityColors = {}
@@ -33,7 +35,7 @@ ui:
       var.rarityColors[none] = '128,128,128,255'
     open: |-
       var.random = 0.8 + math.random() * 0.01
-      Packet.send(var.packetId, 'open_case', packet['action_token'])
+      Packet.send(var.packetId, 'open_case', var.actionToken)
       var.V = TwoLerp(1, 3, 0.5, 2000, 6000)
       val.Scroll.moveX = 0.0005
       val.开箱动画.visible = true

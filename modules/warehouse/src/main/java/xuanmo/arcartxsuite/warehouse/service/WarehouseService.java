@@ -1226,7 +1226,7 @@ public final class WarehouseService implements Listener {
             Map<String, Object> row = item != null
                 ? slotPacket(item)
                 : emptySlotPacket(displaySlot);
-            String key = String.valueOf(displaySlot);
+            String key = Integer.toString(displaySlot);
             row.put("key", key);
             slots.put(key, row);
             if (item != null) {

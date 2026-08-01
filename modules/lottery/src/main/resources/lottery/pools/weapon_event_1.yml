@@ -2,6 +2,11 @@ id: "weapon_event_1"
 type: GACHA
 enabled: true
 display-name: "武器活动祈愿"
+description: |-
+  武器活动祈愿
+  在本祈愿中，5星武器「传说之刃」的获取概率将大幅提升！
+  5星保底80抽，4星保底10抽，UP武器概率75%，命定值上限2点。
+up-item-icon: '{"id":"minecraft:diamond_sword","Count":1b}'
 
 cost:
   mode: CURRENCY

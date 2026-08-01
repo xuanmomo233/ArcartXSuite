@@ -21,6 +21,8 @@ import xuanmo.arcartxsuite.lottery.config.PoolDefinition;
 import xuanmo.arcartxsuite.lottery.config.PoolType;
 import xuanmo.arcartxsuite.lottery.model.GachaResult;
 import xuanmo.arcartxsuite.lottery.model.PlayerGachaState;
+import xuanmo.arcartxsuite.lottery.model.PoolItem;
+import xuanmo.arcartxsuite.lottery.storage.LotteryRepository;
 
 /**
  * Lottery 模块客户端包处理器。
@@ -62,6 +64,9 @@ public class LotteryPacketHandler implements ClientPacketHandler {
                 case "switch_pool" -> handleSwitchPool(player, data);
                 case "pull" -> handlePull(player, data);
                 case "open_case" -> handleOpenCase(player, data);
+                case "history" -> handleHistory(player);
+                case "details" -> handleDetails(player);
+                case "exchange" -> handleExchange(player);
                 case "refresh" -> {
                     if (casePacket) pushCaseData(player, getCurrentIndex(player));
                     else pushGachaData(player, getCurrentIndex(player));
@@ -174,11 +179,11 @@ public class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("poolName", pool.displayName());
         payload.put("poolType", pool.type().name());
         payload.put("poolBanner", ""); // 暂无 banner 配置，留空
-        payload.put("poolDescription", "");
+        payload.put("poolDescription", pool.description());
         payload.put("upItemName", "");
         payload.put("upItemStar", 5);
         payload.put("upItemDesc", "");
-        payload.put("upItemIcon", ""); // 暂无 UP 物品图标配置，留空
+        payload.put("upItemIcon", pool.upItemIcon());
         payload.put("guaranteeDesc", buildGuaranteeText(pool));
         payload.put("remainingTime", ""); // 暂无限时配置，留空
         payload.put("fateCount", 0); // 暂无命运之契计数，留空
@@ -212,7 +217,7 @@ public class LotteryPacketHandler implements ClientPacketHandler {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("packetId", CASE_PACKET_ID);
         payload.put("poolName", pool.displayName());
-        payload.put("poolDescription", "");
+        payload.put("poolDescription", pool.description());
         payload.put("poolList", pools.stream().map(PoolDefinition::displayName).toList());
         payload.put("currentPoolIndex", poolIndex);
         caseTokens.putIfAbsent(player.getUniqueId(), UUID.randomUUID().toString());
@@ -235,6 +240,83 @@ public class LotteryPacketHandler implements ClientPacketHandler {
 
     private void releaseToken(UUID uuid) {
         tokensInFlight.remove(uuid);
+    }
+
+    private void handleHistory(Player player) {
+        if (packetBridge == null || !packetBridge.isAvailable()) return;
+        PoolDefinition pool = getPoolAtIndex(player, getCurrentIndex(player));
+        if (pool == null) return;
+
+        List<LotteryRepository.GachaLogEntry> entries =
+            service.getGachaHistory(player.getUniqueId(), pool.id(), 20);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("historyPoolName", pool.displayName());
+        payload.put("historyCount", entries.size());
+
+        Map<String, Object> rows = new LinkedHashMap<>();
+        for (int i = 0; i < entries.size(); i++) {
+            LotteryRepository.GachaLogEntry entry = entries.get(i);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("pullTime", entry.pullTime());
+            row.put("pullCount", entry.pullCount());
+            row.put("itemsJson", entry.itemsJson());
+            row.put("pityAtPull", entry.pityAtPull());
+            row.put("guaranteed", entry.guaranteed());
+            rows.put(Integer.toString(i), row);
+        }
+        payload.put("historyRows", rows);
+
+        packetBridge.sendPacket(player, GACHA_UI_FILE, "history", payload);
+    }
+
+    private void handleDetails(Player player) {
+        if (packetBridge == null || !packetBridge.isAvailable()) return;
+        PoolDefinition pool = getPoolAtIndex(player, getCurrentIndex(player));
+        if (pool == null || pool.gacha() == null) return;
+
+        GachaPoolConfig gacha = pool.gacha();
+
+        List<PoolItem> allItems = new ArrayList<>();
+        if (gacha.up5starItems() != null) allItems.addAll(gacha.up5starItems());
+        if (gacha.standard5starItems() != null) allItems.addAll(gacha.standard5starItems());
+        if (gacha.up4starItems() != null) allItems.addAll(gacha.up4starItems());
+        if (gacha.standard4starItems() != null) allItems.addAll(gacha.standard4starItems());
+        if (gacha.star3Items() != null) allItems.addAll(gacha.star3Items());
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("detailPoolName", pool.displayName());
+        payload.put("detailPity5", gacha.pity5star());
+        payload.put("detailPity4", gacha.pity4star());
+        payload.put("detailBase5Rate", gacha.base5starRate());
+        payload.put("detailBase4Rate", gacha.base4starRate());
+        payload.put("detailUpRate", gacha.upRate());
+        payload.put("detailGuaranteeDesc", buildGuaranteeText(pool));
+        payload.put("detailCount", allItems.size());
+
+        Map<String, Object> rows = new LinkedHashMap<>();
+        for (int i = 0; i < allItems.size(); i++) {
+            PoolItem item = allItems.get(i);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", item.name());
+            row.put("rarity", item.rarity() != null ? item.rarity() : "");
+            row.put("weight", item.weight());
+            rows.put(Integer.toString(i), row);
+        }
+        payload.put("detailRows", rows);
+
+        packetBridge.sendPacket(player, GACHA_UI_FILE, "details", payload);
+    }
+
+    private void handleExchange(Player player) {
+        if (packetBridge == null || !packetBridge.isAvailable()) return;
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("exchangeStardust", 0);
+        payload.put("exchangeCount", 0);
+        payload.put("exchangeRows", new LinkedHashMap<String, Object>());
+
+        packetBridge.sendPacket(player, GACHA_UI_FILE, "exchange", payload);
     }
 
     private String buildGuaranteeText(PoolDefinition pool) {

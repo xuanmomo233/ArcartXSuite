@@ -60,13 +60,13 @@ ui:
       var.maxMemberCount = packet['maxMemberCount']
       共享数 = var.maxManageCount.round()
       现有共享数 = val.共享列表.childrenCount() - 1
-      if(现有共享数 != 共享数){
+      if(现有共享数 != 共享数 - 1){
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.共享列表.childrenCount() > 1){
           val.共享列表.get(1).remove()
         }
-        if(共享数 > 0){
-          for(序号 in range(0, 共享数 - 1)){
+        if(共享数 > 1){
+          for(序号 in range(1, 共享数 - 1)){
             项 = val.共享列表['项'].copy('共享项_' + var.刷新轮次 + '_' + 序号.round())
             项.entryKey = 序号.round()
           }
@@ -74,13 +74,13 @@ ui:
       }
       成员数 = var.maxMemberCount.round()
       现有成员数 = val.成员列表.childrenCount() - 1
-      if(现有成员数 != 成员数){
+      if(现有成员数 != 成员数 - 1){
         var.刷新轮次 = var.刷新轮次 + 1
         while(val.成员列表.childrenCount() > 1){
           val.成员列表.get(1).remove()
         }
-        if(成员数 > 0){
-          for(序号 in range(0, 成员数 - 1)){
+        if(成员数 > 1){
+          for(序号 in range(1, 成员数 - 1)){
             项 = val.成员列表['项'].copy('成员项_' + var.刷新轮次 + '_' + 序号.round())
             项.entryKey = 序号.round()
           }

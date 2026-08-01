@@ -51,7 +51,7 @@ ui:
         val.reply_list.get(1).remove()
       }
 
-      for(i in range(0, var.replyCount)){
+      for(i in range(1, var.replyCount - 1)){
         key = i.round()
         ri = val.reply_list['回复模板'].copy('reply_' + i.round())
         ri.entryKey = key

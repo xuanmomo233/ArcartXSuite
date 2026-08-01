@@ -755,7 +755,7 @@ public final class FishingService {
             entry.put("caught", caught != null && caught.caughtCount() > 0);
             entry.put("maxSize", caught != null ? caught.maxSize() : 0);
             entry.put("count", caught != null ? caught.caughtCount() : 0);
-            fishDict.put(String.valueOf(idx), entry);
+            fishDict.put(Integer.toString(idx), entry);
             idx++;
         }
         payload.put("fishList", fishDict);

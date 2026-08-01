@@ -45,7 +45,7 @@ ui:
       while(val.记录列表.childrenCount() > 1){
         val.记录列表.get(1).remove()
       }
-      for(i in range(0, var.maxRecordCount)){
+      for(i in range(1, var.maxRecordCount - 1)){
         key = i.round()
         e = val.记录列表['记录行'].copy('记录行' + key)
         e.entryKey = key
@@ -69,7 +69,7 @@ ui:
       while(val.记录列表.childrenCount() > 1){
         val.记录列表.get(1).remove()
       }
-      for(i in range(0, var.maxRecordCount)){
+      for(i in range(1, var.maxRecordCount - 1)){
         key = i.round()
         e = val.记录列表['记录行'].copy('记录行' + key)
         e.entryKey = key

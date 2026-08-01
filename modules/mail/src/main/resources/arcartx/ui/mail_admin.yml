@@ -29,7 +29,7 @@ ui:
       while(val.preset_data.childrenCount() > 1){
         val.preset_data.get(1).remove()
       }
-      for(i in range(0, var.maxPresetCount)){
+      for(i in range(1, var.maxPresetCount - 1)){
         key = i.round()
         e = val.preset_data['预设行'].copy('预设行' + key)
         e.entryKey = key

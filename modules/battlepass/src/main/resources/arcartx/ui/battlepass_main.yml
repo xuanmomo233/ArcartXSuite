@@ -42,11 +42,12 @@ ui:
       var.rewards = packet['rewards']
       var.rewardCount = packet['rewardCount']
       var.currentLevel = packet['currentLevel']
+      var.actionToken = packet['action_token']
       var.showRewards = true
       while(val.奖励列表.childrenCount() > 1){
         val.奖励列表.get(1).remove()
       }
-      for(i in range(0, var.rewardCount)){
+      for(i in range(1, var.rewardCount - 1)){
         key = i.round()
         e = val.奖励列表['奖励项'].copy('奖励项' + key)
         e.entryKey = key
@@ -428,7 +429,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                  Packet.send(var.packetId, 'claim', self.parent.entry['level'], packet['action_token'])
+                                  Packet.send(var.packetId, 'claim', self.parent.entry['level'], var.actionToken)
                             children:
                               领取文字:
                                 type: Text

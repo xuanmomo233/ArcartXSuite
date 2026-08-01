@@ -13,6 +13,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.AbstractAXSModule;
+import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
@@ -58,11 +59,13 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     private static final String REWARD_HISTORY_UI_FILE_PATH = "ui/reward_history.yml";
 
     private PluginConfiguration configuration;
+    private File bossesDirectory;
     private EntityTargetHudConfiguration targetConfiguration;
     private BossTrackerService bossService;
     private EntityTargetHudService targetService;
     private RankingRewardService rewardService;
     private RankingRewardScheduler rewardScheduler;
+    private xuanmo.arcartxsuite.entitytracker.reward.RewardPacketHandler rewardPacketHandler;
     private CrossServerChannelConfig crossServerChannelConfig = CrossServerChannelConfig.disabled();
     private EntityTrackerNewFeaturesSettings newFeaturesSettings = EntityTrackerNewFeaturesSettings.defaults();
     private FileConfiguration moduleYaml;
@@ -143,6 +146,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             ? bossSection.getString("bosses-directory", "bosses") : "bosses";
         File bossesDirectory = new File(dataFolder, bossesDirRelative);
         ensureBossDefaults(bossesDirRelative);
+        this.bossesDirectory = bossesDirectory;
         configuration = PluginConfiguration.from(bossSection, bossesDirectory);
         targetConfiguration = EntityTargetHudConfiguration.load(yaml.getConfigurationSection("attack-target"));
         crossServerChannelConfig = CrossServerChannelConfigs.fromSection(yaml.getConfigurationSection("cross-server"));
@@ -342,6 +346,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             rewardScheduler = null;
         }
         rewardService = null;
+        rewardPacketHandler = null;
         rewardCommand = null;
 
         if (killRecordingService != null) {
@@ -363,7 +368,34 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         }
         moduleYaml = null;
         configuration = null;
+        bossesDirectory = null;
         targetConfiguration = null;
+    }
+
+    @Override
+    protected @Nullable ClientPacketHandler createPacketHandler() {
+        if (rewardService == null) return null;
+        String managerUiId = getModuleUiId(REWARD_MANAGER_UI_FILE_PATH);
+        String editorUiId = getModuleUiId(REWARD_EDITOR_UI_FILE_PATH);
+        String historyUiId = getModuleUiId(REWARD_HISTORY_UI_FILE_PATH);
+        rewardPacketHandler = new xuanmo.arcartxsuite.entitytracker.reward.RewardPacketHandler(
+            plugin, packetBridge, packetGuard,
+            rewardService, rewardScheduler,
+            () -> configuration,
+            managerUiId, editorUiId, historyUiId,
+            dataFolder, logger
+        );
+        return rewardPacketHandler;
+    }
+
+    @Override
+    protected @Nullable String packetOwnershipPacketId() {
+        return "AXS_ENTITY_TRACKER_REWARD";
+    }
+
+    @Override
+    protected @Nullable String packetGuardModuleKey() {
+        return "entitytracker";
     }
 
     @Override
@@ -419,7 +451,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
 
             // 创建服务实例
             rewardService = new RankingRewardService(
-                ds, actionExecutor, plugin, logger, () -> configuration
+                ds, actionExecutor, plugin, logger, () -> configuration, bossesDirectory
             );
             rewardScheduler = new RankingRewardScheduler(rewardService, plugin, logger);
             rewardCommand = new RankingRewardCommand(rewardService, rewardScheduler, plugin, logger, messages());

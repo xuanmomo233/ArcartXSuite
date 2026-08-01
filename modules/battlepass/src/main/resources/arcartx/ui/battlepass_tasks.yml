@@ -25,7 +25,7 @@ ui:
       while(val.每日任务列表.childrenCount() > 1){
         val.每日任务列表.get(1).remove()
       }
-      for(i in range(0, var.maxDailyCount)){
+      for(i in range(1, var.maxDailyCount - 1)){
         key = i.round()
         e = val.每日任务列表['任务项'].copy('任务项' + key)
         e.entryKey = key
@@ -33,7 +33,7 @@ ui:
       while(val.每周任务列表.childrenCount() > 1){
         val.每周任务列表.get(1).remove()
       }
-      for(i in range(0, var.maxWeeklyCount)){
+      for(i in range(1, var.maxWeeklyCount - 1)){
         key = i.round()
         e = val.每周任务列表['任务项'].copy('任务项' + key)
         e.entryKey = key
@@ -41,7 +41,7 @@ ui:
       while(val.赛季任务列表.childrenCount() > 1){
         val.赛季任务列表.get(1).remove()
       }
-      for(i in range(0, var.maxSeasonCount)){
+      for(i in range(1, var.maxSeasonCount - 1)){
         key = i.round()
         e = val.赛季任务列表['任务项'].copy('任务项' + key)
         e.entryKey = key
@@ -60,7 +60,7 @@ ui:
       while(val.每日任务列表.childrenCount() > 1){
         val.每日任务列表.get(1).remove()
       }
-      for(i in range(0, var.maxDailyCount)){
+      for(i in range(1, var.maxDailyCount - 1)){
         key = i.round()
         e = val.每日任务列表['任务项'].copy('任务项' + key)
         e.entryKey = key
@@ -68,7 +68,7 @@ ui:
       while(val.每周任务列表.childrenCount() > 1){
         val.每周任务列表.get(1).remove()
       }
-      for(i in range(0, var.maxWeeklyCount)){
+      for(i in range(1, var.maxWeeklyCount - 1)){
         key = i.round()
         e = val.每周任务列表['任务项'].copy('任务项' + key)
         e.entryKey = key
@@ -76,7 +76,7 @@ ui:
       while(val.赛季任务列表.childrenCount() > 1){
         val.赛季任务列表.get(1).remove()
       }
-      for(i in range(0, var.maxSeasonCount)){
+      for(i in range(1, var.maxSeasonCount - 1)){
         key = i.round()
         e = val.赛季任务列表['任务项'].copy('任务项' + key)
         e.entryKey = key

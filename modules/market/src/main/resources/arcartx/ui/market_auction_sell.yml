@@ -49,7 +49,7 @@ ui:
       while(val.货币列表.childrenCount() > 1){
         val.货币列表.get(1).remove()
       }
-      for(i in range(0, var.maxCurrencyCount)){
+      for(i in range(1, var.maxCurrencyCount - 1)){
         key = i.round()
         e = val.货币列表['货币项'].copy('货币项' + key)
         e.entryKey = key
@@ -91,7 +91,7 @@ ui:
       while(val.货币列表.childrenCount() > 1){
         val.货币列表.get(1).remove()
       }
-      for(i in range(0, var.maxCurrencyCount)){
+      for(i in range(1, var.maxCurrencyCount - 1)){
         key = i.round()
         e = val.货币列表['货币项'].copy('货币项' + key)
         e.entryKey = key

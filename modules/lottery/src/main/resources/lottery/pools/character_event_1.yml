@@ -2,6 +2,11 @@ id: "character_event_1"
 type: GACHA
 enabled: true
 display-name: "角色活动祈愿"
+description: |-
+  角色活动祈愿
+  在本祈愿中，5星角色「星辰」的获取概率将大幅提升！
+  5星保底90抽，4星保底10抽，UP角色概率50%。
+up-item-icon: '{"id":"minecraft:nether_star","Count":1b}'
 
 cost:
   mode: CURRENCY

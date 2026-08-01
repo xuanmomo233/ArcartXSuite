@@ -32,7 +32,7 @@ ui:
       while(val.logs_list.childrenCount() > 1){
         val.logs_list.get(1).remove()
       }
-      for(i in range(0, var.maxLogCount)){
+      for(i in range(1, var.maxLogCount - 1)){
         key = i.round()
         e = val.logs_list['日志项目'].copy('日志项目' + key)
         e.entryKey = key
@@ -46,7 +46,7 @@ ui:
       while(val.logs_list.childrenCount() > 1){
         val.logs_list.get(1).remove()
       }
-      for(i in range(0, var.maxLogCount)){
+      for(i in range(1, var.maxLogCount - 1)){
         key = i.round()
         e = val.logs_list['日志项目'].copy('日志项目' + key)
         e.entryKey = key

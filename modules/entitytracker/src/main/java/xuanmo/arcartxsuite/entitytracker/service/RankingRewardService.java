@@ -3,6 +3,9 @@ package xuanmo.arcartxsuite.entitytracker.service;
 import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRankRewardDefinition;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRankingRewardsSettings;
+import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardAction;
+import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardActionType;
+import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardMessageTarget;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDefinition;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossRankingRewardsSettings;
 import xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration;
@@ -14,12 +17,17 @@ import xuanmo.arcartxsuite.entitytracker.reward.RewardActionExecutor;
 import xuanmo.arcartxsuite.entitytracker.reward.RewardActionResult;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import javax.sql.DataSource;
+import java.io.File;
+import java.io.IOException;
 import java.sql.SQLException;
 import java.text.DecimalFormat;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,13 +51,15 @@ public class RankingRewardService {
     private final RewardActionExecutor actionExecutor;
     private final JavaPlugin plugin;
     private final java.util.function.Supplier<PluginConfiguration> configurationSupplier;
+    private final File bossesDirectory;
 
     public RankingRewardService(
         DataSource dataSource,
         RewardActionExecutor actionExecutor,
         JavaPlugin plugin,
         Logger logger,
-        java.util.function.Supplier<PluginConfiguration> configurationSupplier
+        java.util.function.Supplier<PluginConfiguration> configurationSupplier,
+        File bossesDirectory
     ) {
         this.recordDao = new RankingRewardRecordDao(dataSource, plugin);
         this.bestDamageDao = new PlayerBossBestDamageDao(dataSource, plugin);
@@ -57,6 +67,7 @@ public class RankingRewardService {
         this.plugin = plugin;
         this.logger = logger;
         this.configurationSupplier = configurationSupplier;
+        this.bossesDirectory = bossesDirectory;
     }
 
     /**
@@ -325,6 +336,330 @@ public class RankingRewardService {
                 throw new RuntimeException("获取奖励发放记录失败", e);
             }
         });
+    }
+
+    // ─── 配置管理接口（UI 用）──────────────────────────────
+
+    /**
+     * 聚合所有 Boss 指定周期类型的排行榜奖励配置列表。
+     *
+     * @param periodType "weekly" 或 "monthly"
+     * @return 配置列表，每项为 Map，包含 id / rankingTypeDisplay / rankStart / rankEnd / rewardName / rewardPreview / statusIcon
+     */
+    public List<Map<String, Object>> getConfigsForPeriod(String periodType) {
+        List<Map<String, Object>> configs = new ArrayList<>();
+        PluginConfiguration config = configurationSupplier.get();
+        if (config == null || config.bosses().isEmpty()) {
+            return configs;
+        }
+
+        for (Map.Entry<String, BossDefinition> entry : config.bosses().entrySet()) {
+            BossDefinition boss = entry.getValue();
+            if (!boss.enabled() || !boss.damageRanking().enabled()) {
+                continue;
+            }
+
+            BossRankingRewardsSettings rankingRewards = boss.damageRanking().rankingRewards();
+            BossDamageRankingRewardsSettings periodSettings = rankingRewards.forPeriod(periodType);
+            if (periodSettings.rankRewards().isEmpty()) {
+                continue;
+            }
+
+            for (Map.Entry<Integer, BossDamageRankRewardDefinition> rankEntry : periodSettings.rankRewards().entrySet()) {
+                int rank = rankEntry.getKey();
+                BossDamageRankRewardDefinition rewardDef = rankEntry.getValue();
+
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", boss.mythicMobId() + "-" + rank);
+                item.put("bossId", boss.mythicMobId());
+                item.put("rank", Integer.toString(rank));
+                item.put("rankingTypeDisplay", "Boss伤害");
+                item.put("rankStart", Integer.toString(rank));
+                item.put("rankEnd", Integer.toString(rank));
+                item.put("rewardName", buildRewardName(rewardDef));
+                item.put("rewardPreview", buildRewardPreview(rewardDef));
+                item.put("statusIcon", periodSettings.enabled() ? "&a启用" : "&c停用");
+                item.put("enabled", periodSettings.enabled());
+                configs.add(item);
+            }
+        }
+
+        return configs;
+    }
+
+    /**
+     * 切换指定 Boss + 周期类型的排行榜奖励启用状态。
+     *
+     * @param configId   格式: bossId-rank
+     * @param periodType "weekly" 或 "monthly"
+     * @return 操作结果消息
+     */
+    public String toggleConfig(String configId, String periodType) {
+        if (configId == null || configId.isBlank()) {
+            return "§c无效的配置 ID";
+        }
+
+        int dashIndex = configId.lastIndexOf('-');
+        if (dashIndex <= 0 || dashIndex >= configId.length() - 1) {
+            return "§c无法解析配置 ID: " + configId;
+        }
+        String bossId = configId.substring(0, dashIndex);
+
+        File bossFile = findBossFile(bossId);
+        if (bossFile == null || !bossFile.exists()) {
+            return "§c找不到 Boss 配置文件: " + bossId;
+        }
+
+        try {
+            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(bossFile);
+            String basePath = "damage-ranking.ranking-rewards." + periodType + ".enabled";
+            boolean currentEnabled = yaml.getBoolean(basePath, false);
+            yaml.set(basePath, !currentEnabled);
+            yaml.save(bossFile);
+
+            return (currentEnabled ? "§e已停用 " : "§a已启用 ") + bossId + " 的" + ("weekly".equals(periodType) ? "周" : "月") + "奖励";
+        } catch (Exception e) {
+            logger.severe("切换奖励配置失败: " + e.getMessage());
+            return "§c切换失败: " + e.getMessage();
+        }
+    }
+
+    /**
+     * 保存奖励配置到 Boss yml 文件。
+     *
+     * @param configId          配置 ID（可为空，新建时为空）
+     * @param rewardType        "weekly" 或 "monthly"
+     * @param rankingType       排行类型（如 "boss_damage"）
+     * @param bossId            Boss ID
+     * @param rankStart         起始名次
+     * @param rankEnd           结束名次
+     * @param rewardName        奖励名称
+     * @param rewardDescription 奖励描述
+     * @param rewardMoney       金钱奖励
+     * @param rewardDkp         DKP 奖励
+     * @return 操作结果消息
+     */
+    public String saveConfig(String configId, String rewardType, String rankingType, String bossId,
+                             int rankStart, int rankEnd, String rewardName, String rewardDescription,
+                             int rewardMoney, int rewardDkp) {
+        if (bossId == null || bossId.isBlank()) {
+            return "§c缺少 Boss ID";
+        }
+        if (rankStart < 1 || rankEnd < rankStart) {
+            return "§c名次范围无效";
+        }
+        if (!"weekly".equals(rewardType) && !"monthly".equals(rewardType)) {
+            return "§c奖励周期类型无效: " + rewardType;
+        }
+
+        File bossFile = findBossFile(bossId);
+        if (bossFile == null || !bossFile.exists()) {
+            return "§c找不到 Boss 配置文件: " + bossId;
+        }
+
+        try {
+            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(bossFile);
+            String ranksBasePath = "damage-ranking.ranking-rewards." + rewardType + ".ranks";
+
+            // 确保 enabled 字段存在
+            String enabledPath = "damage-ranking.ranking-rewards." + rewardType + ".enabled";
+            if (!yaml.contains(enabledPath)) {
+                yaml.set(enabledPath, true);
+            }
+
+            // 为名次范围内的每个名次写入奖励配置
+            for (int rank = rankStart; rank <= rankEnd; rank++) {
+                String rankPath = ranksBasePath + "." + rank + ".actions";
+                List<Map<String, Object>> actions = new ArrayList<>();
+
+                if (rewardMoney > 0) {
+                    Map<String, Object> action = new LinkedHashMap<>();
+                    action.put("type", "command");
+                    action.put("command", "points give {player} " + rewardMoney);
+                    actions.add(action);
+                }
+
+                if (rewardDkp > 0) {
+                    Map<String, Object> action = new LinkedHashMap<>();
+                    action.put("type", "command");
+                    action.put("command", "dkp give {player} " + rewardDkp);
+                    actions.add(action);
+                }
+
+                if (rewardName != null && !rewardName.isBlank()) {
+                    Map<String, Object> action = new LinkedHashMap<>();
+                    action.put("type", "message");
+                    action.put("target", "player");
+                    action.put("text", "&6" + rewardName);
+                    actions.add(action);
+                }
+
+                if (rewardDescription != null && !rewardDescription.isBlank()) {
+                    Map<String, Object> action = new LinkedHashMap<>();
+                    action.put("type", "message");
+                    action.put("target", "player");
+                    action.put("text", "&7" + rewardDescription);
+                    actions.add(action);
+                }
+
+                if (actions.isEmpty()) {
+                    yaml.set(rankPath, List.of());
+                } else {
+                    yaml.set(rankPath, actions);
+                }
+            }
+
+            yaml.save(bossFile);
+            return "§a配置保存成功: " + bossId + " " + ("weekly".equals(rewardType) ? "周" : "月") + "奖励 第" + rankStart + "-" + rankEnd + "名";
+        } catch (IOException e) {
+            logger.severe("保存奖励配置失败: " + e.getMessage());
+            return "§c保存失败: " + e.getMessage();
+        }
+    }
+
+    /**
+     * 重试发放失败的记录。
+     *
+     * @param recordId 记录 ID
+     * @return 操作结果消息
+     */
+    public String retryDistribution(int recordId) {
+        try {
+            RankingRewardRecord record = recordDao.findById(recordId).orElse(null);
+            if (record == null) {
+                return "§c找不到记录: " + recordId;
+            }
+            if (!"failed".equals(record.getStatus())) {
+                return "§e该记录状态为 " + record.getStatus() + "，无需重试";
+            }
+
+            PluginConfiguration config = configurationSupplier.get();
+            if (config == null) {
+                return "§c插件配置尚未加载";
+            }
+
+            BossDefinition boss = config.findBoss(record.getBossId());
+            if (boss == null) {
+                return "§c找不到 Boss 配置: " + record.getBossId();
+            }
+
+            BossRankingRewardsSettings rankingRewards = boss.damageRanking().rankingRewards();
+            BossDamageRankingRewardsSettings periodSettings = rankingRewards.forPeriod(record.getRewardType());
+            int rank = record.getRank() != null ? record.getRank() : 0;
+            BossDamageRankRewardDefinition rewardDef = periodSettings.rewardForRank(rank);
+            if (rewardDef.actions().isEmpty()) {
+                return "§c该名次无奖励配置";
+            }
+
+            // 解析目标玩家
+            OfflinePlayer target = resolvePlayer(record.getPlayerUuid());
+            if (target == null) {
+                return "§c无法解析玩家: " + record.getPlayerName();
+            }
+
+            // 构建变量上下文
+            Map<String, String> variables = new LinkedHashMap<>();
+            variables.put("player", record.getPlayerName());
+            variables.put("player_name", record.getPlayerName());
+            variables.put("player_uuid", record.getPlayerUuid());
+            variables.put("rank", String.valueOf(rank));
+            variables.put("boss_id", boss.mythicMobId());
+            variables.put("boss_display_name", boss.mythicMobId());
+            variables.put("period_type", record.getRewardType());
+            variables.put("period_type_display", "weekly".equals(record.getRewardType()) ? "周" : "月");
+
+            // 在主线程执行奖励动作
+            List<RewardActionResult> results = executeOnMainThread(rewardDef, target, variables, periodSettings);
+
+            boolean allSuccess = results.stream().allMatch(RewardActionResult::success);
+            String failureReason = results.stream()
+                .filter(r -> !r.success())
+                .map(r -> r.type() + ": " + r.message())
+                .reduce((a, b) -> a + "; " + b)
+                .orElse(null);
+
+            record.setStatus(allSuccess ? "success" : "failed");
+            record.setIssuedTime(LocalDateTime.now());
+            record.setFailureReason(failureReason);
+            record.setRetryCount((record.getRetryCount() != null ? record.getRetryCount() : 0) + 1);
+            recordDao.update(record);
+
+            return allSuccess
+                ? "§a重试成功: " + record.getPlayerName() + " 第" + rank + "名"
+                : "§c重试失败: " + failureReason;
+        } catch (SQLException e) {
+            logger.severe("重试发放失败: " + e.getMessage());
+            return "§c重试失败: " + e.getMessage();
+        }
+    }
+
+    // ─── 辅助方法 ──────────────────────────────────────────
+
+    /**
+     * 在 bosses 目录中查找指定 Boss 的 yml 文件。
+     */
+    private File findBossFile(String bossId) {
+        if (bossesDirectory == null || bossId == null || bossId.isBlank()) {
+            return null;
+        }
+        File ymlFile = new File(bossesDirectory, bossId + ".yml");
+        if (ymlFile.exists()) {
+            return ymlFile;
+        }
+        File yamlFile = new File(bossesDirectory, bossId + ".yaml");
+        if (yamlFile.exists()) {
+            return yamlFile;
+        }
+        // 大小写不敏感查找
+        File[] files = bossesDirectory.listFiles((dir, name) ->
+            name.equalsIgnoreCase(bossId + ".yml") || name.equalsIgnoreCase(bossId + ".yaml"));
+        if (files != null && files.length > 0) {
+            return files[0];
+        }
+        return null;
+    }
+
+    /**
+     * 根据奖励动作列表构建奖励名称摘要。
+     */
+    private static String buildRewardName(BossDamageRankRewardDefinition rewardDef) {
+        if (rewardDef.actions().isEmpty()) {
+            return "无奖励";
+        }
+        for (BossDamageRewardAction action : rewardDef.actions()) {
+            if (action.type() == BossDamageRewardActionType.MESSAGE && !action.text().isBlank()) {
+                return action.text();
+            }
+        }
+        return "第" + rewardDef.rank() + "名奖励";
+    }
+
+    /**
+     * 根据奖励动作列表构建奖励预览摘要。
+     */
+    private static String buildRewardPreview(BossDamageRankRewardDefinition rewardDef) {
+        if (rewardDef.actions().isEmpty()) {
+            return "无";
+        }
+        List<String> parts = new ArrayList<>();
+        for (BossDamageRewardAction action : rewardDef.actions()) {
+            switch (action.type()) {
+                case COMMAND -> {
+                    if (!action.command().isBlank()) {
+                        parts.add("指令");
+                    }
+                }
+                case NEIGE_ITEMS, MYTHIC_ITEMS, OVERTURE_ITEMS -> {
+                    if (!action.itemId().isBlank()) {
+                        parts.add("物品×" + action.amount());
+                    }
+                }
+                case MESSAGE -> parts.add("消息");
+                case MAIL -> parts.add("邮件");
+                case SIGNAL -> parts.add("信号");
+            }
+        }
+        return parts.isEmpty() ? "无" : String.join(", ", parts);
     }
 }
 
