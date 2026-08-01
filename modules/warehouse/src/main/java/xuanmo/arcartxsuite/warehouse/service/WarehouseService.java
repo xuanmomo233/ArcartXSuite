@@ -1182,6 +1182,11 @@ public final class WarehouseService implements Listener {
         if ("warehouse_upgrade".equals(action)) {
             return List.of(storageRuntimeUiId, manageRuntimeUiId);
         }
+        if ("password_set".equals(action)
+            || "password_unlock".equals(action)
+            || "password_lock".equals(action)) {
+            return List.of(storageRuntimeUiId, manageRuntimeUiId, bankRuntimeUiId);
+        }
         return List.of(manageRuntimeUiId);
     }
 

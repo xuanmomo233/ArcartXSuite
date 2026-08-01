@@ -4,12 +4,7 @@
 ui:
   isHud: false
   defaultOpen: false
-  hide:
-    - HUD
-    - online
-    - 聊天栏
-    - 纯色块HUD
-    - 纯色块HUD二改
+  hide: []
   through: false
   background: false
   escClose: true
@@ -767,9 +762,9 @@ controls:
                 type: Texture
                 attribute:
                   x: 424
-                  y: 528
+                  y: 540
                   width: 118
-                  height: 46
+                  height: 48
                   visible: var.canUpgrade
                   normal: ~120,190,255,200
                   hover: ~Frosted:0;255,255,255,240
@@ -1017,13 +1012,17 @@ controls:
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
                   radius: 14
-                  texts: "~&0解锁"
+                  texts: "var.hasPassword ? '&0解锁' : '&0设置'"
                   center: true
                   fontSize: 34
                   visible: "!var.unlocked"
                 action:
                   clickLeft: |-
-                    Packet.send(var.packetId, 'password_unlock', var.passwordText)
+                    if(var.hasPassword){
+                      Packet.send(var.packetId, 'password_unlock', var.passwordText)
+                    }else{
+                      Packet.send(var.packetId, 'password_set', var.passwordText, var.actionToken)
+                    }
                 effect:
                   stroke:
                     width: 2
@@ -1039,10 +1038,13 @@ controls:
                   hover: ~Frosted:0;255,255,255,240
                   shape: ~round_rect
                   radius: 14
-                  texts: "~&0密码请使用 /axs password"
+                  texts: "~&0锁定"
                   center: true
                   fontSize: 34
-                  visible: false
+                  visible: "var.unlocked"
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'password_lock', var.actionToken)
                 effect:
                   stroke:
                     width: 2

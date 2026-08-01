@@ -4,12 +4,7 @@
 ui:
   isHud: false
   defaultOpen: false
-  hide:
-    - HUD
-    - online
-    - 聊天栏
-    - 纯色块HUD
-    - 纯色块HUD二改
+  hide: []
   through: false
   background: false
   escClose: true
@@ -311,6 +306,7 @@ controls:
                   texts: "var.hasPassword ? '&0解锁' : '&0设置'"
                   center: true
                   fontSize: 34
+                  visible: "!var.unlocked"
                 action:
                   clickLeft: |-
                     if(var.hasPassword){
@@ -318,6 +314,28 @@ controls:
                     }else{
                       Packet.send(var.packetId, 'password_set', var.passwordText, var.actionToken)
                     }
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              锁定:
+                type: Texture
+                attribute:
+                  x: 360
+                  y: 150
+                  width: 90
+                  height: 40
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "~&0锁定"
+                  center: true
+                  fontSize: 34
+                  visible: "var.unlocked"
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'password_lock', var.actionToken)
                 effect:
                   stroke:
                     width: 2

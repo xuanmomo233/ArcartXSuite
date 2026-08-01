@@ -4,12 +4,7 @@
 ui:
   isHud: false
   defaultOpen: false
-  hide:
-    - HUD
-    - online
-    - 聊天栏
-    - 纯色块HUD
-    - 纯色块HUD二改
+  hide: []
   through: false
   background: false
   escClose: true
