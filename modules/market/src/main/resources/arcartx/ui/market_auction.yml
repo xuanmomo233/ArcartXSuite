@@ -30,9 +30,10 @@ ui:
       var.itemJsons = {}
       var.maxCategoryCount = packet['maxCategoryCount']
       var.maxListingCount = packet['maxListingCount']
+      var.actionToken = packet['action_token']
       for(key in var.listings.keys()){
         json = packet['itemJson' + key]
-        if(json != none && json != none){
+        if(json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
@@ -53,7 +54,11 @@ ui:
         key = i.round()
         e = val.物品列表['物品行'].copy('物品行' + key)
         e.entryKey = key
-        if(e['物品图标'] != none){
+      }
+      for(i in range(0, var.maxListingCount - 1)){
+        key = i.round()
+        e = val.物品列表.get(i.round())
+        if(e != none && e['物品图标'] != none){
           e['物品图标'].entryKey = key
           e['物品图标'].seticon()
         }
@@ -71,9 +76,10 @@ ui:
       var.itemJsons = {}
       var.maxCategoryCount = packet['maxCategoryCount']
       var.maxListingCount = packet['maxListingCount']
+      var.actionToken = packet['action_token']
       for(key in var.listings.keys()){
         json = packet['itemJson' + key]
-        if(json != none && json != none){
+        if(json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
@@ -94,7 +100,11 @@ ui:
         key = i.round()
         e = val.物品列表['物品行'].copy('物品行' + key)
         e.entryKey = key
-        if(e['物品图标'] != none){
+      }
+      for(i in range(0, var.maxListingCount - 1)){
+        key = i.round()
+        e = val.物品列表.get(i.round())
+        if(e != none && e['物品图标'] != none){
           e['物品图标'].entryKey = key
           e['物品图标'].seticon()
         }
@@ -505,7 +515,7 @@ controls:
                         action:
                           clickLeft: |-
                             if(self.entry != none && self.entry['canBuyNow']){
-                            Packet.send(var.packetId, 'auction_buy', self.entry['id'], packet['action_token'])
+                            Packet.send(var.packetId, 'auction_buy', self.entry['id'], var.actionToken)
                             }
                         effect:
                           stroke:
@@ -595,7 +605,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'auction_buy', self.parent.parent.entry['id'], packet['action_token'])
+                                Packet.send(var.packetId, 'auction_buy', self.parent.parent.entry['id'], var.actionToken)
                             effect:
                               stroke:
                                 width: 1
@@ -624,7 +634,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'auction_bid', self.parent.parent.entry['id'], self.parent.parent.entry['minBid'], packet['action_token'])
+                                Packet.send(var.packetId, 'auction_bid', self.parent.parent.entry['id'], self.parent.parent.entry['minBid'], var.actionToken)
                             children:
                               文字:
                                 type: Text
@@ -674,7 +684,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'auction_cancel', self.parent.parent.entry['id'], packet['action_token'])
+                                Packet.send(var.packetId, 'auction_cancel', self.parent.parent.entry['id'], var.actionToken)
                             effect:
                               stroke:
                                 width: 1

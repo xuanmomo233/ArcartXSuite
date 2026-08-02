@@ -74,10 +74,13 @@ ui:
       for(key in var.rKeys){
         item = val.reward_list['奖励模板'].copy('奖励项' + var.rIndex.round())
         item.entryKey = key
-        if(item['奖励图标'] != none){
+        var.rIndex = var.rIndex + 1
+      }
+      for(i in range(0, var.rIndex - 1)){
+        item = val.reward_list.get(i.round())
+        if(item != none && item['奖励图标'] != none){
           item['奖励图标'].seticon()
         }
-        var.rIndex = var.rIndex + 1
       }
     update: |-
       var.packetId = packet['packetId']
@@ -147,10 +150,13 @@ ui:
       for(key in var.rKeys){
         item = val.reward_list['奖励模板'].copy('奖励项' + var.rIndex.round())
         item.entryKey = key
-        if(item['奖励图标'] != none){
+        var.rIndex = var.rIndex + 1
+      }
+      for(i in range(0, var.rIndex - 1)){
+        item = val.reward_list.get(i.round())
+        if(item != none && item['奖励图标'] != none){
           item['奖励图标'].seticon()
         }
-        var.rIndex = var.rIndex + 1
       }
   action:
     load: |-

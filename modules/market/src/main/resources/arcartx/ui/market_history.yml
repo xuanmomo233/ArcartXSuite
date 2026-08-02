@@ -36,7 +36,7 @@ ui:
       var.maxRecordCount = packet['maxRecordCount']
       for(key in var.records.keys()){
         json = packet['historyItemJson' + key]
-        if(json != none && json != none){
+        if(json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
@@ -49,7 +49,14 @@ ui:
         key = i.round()
         e = val.记录列表['记录行'].copy('记录行' + key)
         e.entryKey = key
-        if(e['物品图标'] != none){ e['物品图标'].entryKey = key; e['物品图标'].seticon() }
+      }
+      for(i in range(0, var.maxRecordCount - 1)){
+        key = i.round()
+        e = val.记录列表.get(i.round())
+        if(e != none && e['物品图标'] != none){
+          e['物品图标'].entryKey = key
+          e['物品图标'].seticon()
+        }
       }
     update: |-
       var.packetId = packet['packetId']
@@ -60,7 +67,7 @@ ui:
       var.maxRecordCount = packet['maxRecordCount']
       for(key in var.records.keys()){
         json = packet['historyItemJson' + key]
-        if(json != none && json != none){
+        if(json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
@@ -73,7 +80,14 @@ ui:
         key = i.round()
         e = val.记录列表['记录行'].copy('记录行' + key)
         e.entryKey = key
-        if(e['物品图标'] != none){ e['物品图标'].entryKey = key; e['物品图标'].seticon() }
+      }
+      for(i in range(0, var.maxRecordCount - 1)){
+        key = i.round()
+        e = val.记录列表.get(i.round())
+        if(e != none && e['物品图标'] != none){
+          e['物品图标'].entryKey = key
+          e['物品图标'].seticon()
+        }
       }
   defaultOpen: false
 controls:

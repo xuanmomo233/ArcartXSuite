@@ -25,9 +25,10 @@ ui:
       var.recyclables = packet['recyclables']
       var.itemJsons = {}
       var.maxRecycleCount = packet['maxRecycleCount']
+      var.actionToken = packet['action_token']
       for(key in var.recyclables.keys()){
         json = packet['recycleItemJson' + key]
-        if(json != none && json != none){
+        if(json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
@@ -40,7 +41,14 @@ ui:
         key = i.round()
         e = val.回收列表['回收项'].copy('回收项' + key)
         e.entryKey = key
-        if(e['物品图标'] != none){ e['物品图标'].entryKey = key; e['物品图标'].seticon() }
+      }
+      for(i in range(0, var.maxRecycleCount - 1)){
+        key = i.round()
+        e = val.回收列表.get(i.round())
+        if(e != none && e['物品图标'] != none){
+          e['物品图标'].entryKey = key
+          e['物品图标'].seticon()
+        }
       }
     update: |-
       var.packetId = packet['packetId']
@@ -50,9 +58,10 @@ ui:
       var.recyclables = packet['recyclables']
       var.itemJsons = {}
       var.maxRecycleCount = packet['maxRecycleCount']
+      var.actionToken = packet['action_token']
       for(key in var.recyclables.keys()){
         json = packet['recycleItemJson' + key]
-        if(json != none && json != none){
+        if(json != none){
           var.itemJsons[key] = json
         } else {
           var.itemJsons[key] = var.emptyItemJson
@@ -65,7 +74,14 @@ ui:
         key = i.round()
         e = val.回收列表['回收项'].copy('回收项' + key)
         e.entryKey = key
-        if(e['物品图标'] != none){ e['物品图标'].entryKey = key; e['物品图标'].seticon() }
+      }
+      for(i in range(0, var.maxRecycleCount - 1)){
+        key = i.round()
+        e = val.回收列表.get(i.round())
+        if(e != none && e['物品图标'] != none){
+          e['物品图标'].entryKey = key
+          e['物品图标'].seticon()
+        }
       }
   action:
     open: |-
@@ -306,7 +322,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'recycle_single', self.parent.parent.entry['slot'] + '', packet['action_token'])
+                                Packet.send(var.packetId, 'recycle_single', self.parent.parent.entry['slot'] + '', var.actionToken)
                             effect:
                               stroke:
                                 width: 1
@@ -344,7 +360,7 @@ controls:
               radius: 14
             action:
               clickLeft: |-
-                  Packet.send(var.packetId, 'recycle_all', packet['action_token'])
+                  Packet.send(var.packetId, 'recycle_all', var.actionToken)
             effect:
               stroke:
                 width: 2

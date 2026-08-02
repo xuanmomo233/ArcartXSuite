@@ -87,6 +87,7 @@ ui:
       var.priceMin = packet['priceMin']
       var.priceMax = packet['priceMax']
       var.messageMaxLength = packet['messageMaxLength']
+      var.actionToken = packet['action_token']
 
       while(val.货币列表.childrenCount() > 1){
         val.货币列表.get(1).remove()
@@ -695,13 +696,10 @@ controls:
                   fontSize: 30
                 action:
                   clickLeft: |-
-                    if(var.selectedSlot == none){
-                      return
+                    if(var.selectedSlot != none && var.selectedPrice != none && var.selectedPrice != ''){
+                      msg = var.selectedMessage == none ? '' : var.selectedMessage
+                      Packet.send(var.packetId, 'auction_list_create', var.selectedSlot, var.selectedPrice, msg, var.selectedDuration.round(), var.selectedCurrency, var.actionToken)
                     }
-                    if(var.selectedPrice == none || var.selectedPrice == ''){
-                      return
-                    }
-                    Packet.send(var.packetId, 'auction_list_create', var.selectedSlot, var.selectedPrice, var.selectedMessage, var.selectedDuration, var.selectedCurrency, packet['action_token'])
                 effect:
                   stroke:
                     width: 2

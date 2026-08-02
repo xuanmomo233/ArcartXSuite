@@ -53,6 +53,7 @@ ui:
       var.maxSigninRewardCount = packet['maxSigninRewardCount']
       var.maxSelectedRewardCount = packet['maxSelectedRewardCount']
       var.calendarSignedCount = 0
+      var.actionToken = packet['action_token']
       if(var.calendarRows != none){
         for(k in var.calendarRows.keys()){
           row = var.calendarRows[k]
@@ -135,6 +136,7 @@ ui:
       var.maxSigninRewardCount = packet['maxSigninRewardCount']
       var.maxSelectedRewardCount = packet['maxSelectedRewardCount']
       var.calendarSignedCount = 0
+      var.actionToken = packet['action_token']
       if(var.calendarRows != none){
         for(k in var.calendarRows.keys()){
           row = var.calendarRows[k]
@@ -342,9 +344,9 @@ controls:
             action:
               clickLeft: |-
                 if(var.selectedAction == 'signin'){
-                  Packet.send(var.packetId, 'signin', packet['action_token'])
+                  Packet.send(var.packetId, 'signin', var.actionToken)
                 }elif(var.selectedAction == 'makeup'){
-                  Packet.send(var.packetId, 'makeup', var.selectedDateText, packet['action_token'])
+                  Packet.send(var.packetId, 'makeup', var.selectedDateText, var.actionToken)
                 }
 
           日历标题:
