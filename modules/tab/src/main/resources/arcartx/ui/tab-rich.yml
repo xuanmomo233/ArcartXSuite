@@ -34,15 +34,15 @@ ui:
         val.RichTAB遍历2.get(1).remove()
       }
       //与 tab.yml 同样使用伪判断绕过 ax 控件复制 BUG
-      while(i <= packet.size()){
+      while(i < packet.size()){
         if(val.player_row.width == 320){
-          ROW = val.player_row.copy('rich_player_' + var.RichTAB刷新轮次 + '_' + i)
+          ROW = val.player_row.copy('rich_player_' + var.RichTAB刷新轮次 + '_' + i.round)
           ROW['头部'].normal = 'PlayerSkin:' + packet.get(i).uuid
           ROW['名称文字'].texts = packet.get(i).name
           ROW['ping_text'].texts = packet.get(i).ping
           ROW.visible = true
-          i++
         }
+        i++
       }
       var.RichTAB单列数量 = math.ceil(server.server_online / val.RichTAB遍历.row)
       var.RichTAB第一列人数 = math.min(server.server_online, 15)
@@ -90,8 +90,8 @@ controls:
             action:
               create: |-
                 for(i in range(1, 119)){
-                  ROW = self['ROW'].copy('ROW' + i)
-                  ROW.ID = i
+                  ROW = self['ROW'].copy('ROW' + i.round)
+                  ROW.ID = i.round
                 }
             children:
               ROW:
@@ -103,7 +103,7 @@ controls:
                   height: 30
                   shape: ~round_rect
                   radius: 8
-                  ID: 0
+                  ID: 0.round()
                   normal: ~95,95,95,200
                   visible: var.RichTAB显示 && self.ID < server.server_online
           RichTAB遍历2:
