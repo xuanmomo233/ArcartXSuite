@@ -119,7 +119,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             }
         };
         MailService.BundledResourceWriter presetWriter = (resourcePath, target) -> {
-            try (java.io.InputStream input = openProtectedResource(resourcePath, moduleClassLoader())) {
+            try (java.io.InputStream input = openResource(resourcePath, moduleClassLoader())) {
                 if (input == null) {
                     throw new IOException("Bundled resource not found: " + resourcePath);
                 }

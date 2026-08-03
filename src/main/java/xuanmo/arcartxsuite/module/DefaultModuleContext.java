@@ -235,11 +235,11 @@ final class DefaultModuleContext implements ModuleContext {
     }
 
     @Override
-    public InputStream openProtectedResource(String resourcePath, ClassLoader loader) {
+    public InputStream openResource(String resourcePath, ClassLoader loader) {
         try {
-            return registry.openProtectedResource(moduleId, resourcePath, loader);
+            return registry.openResource(moduleId, resourcePath, loader);
         } catch (IOException exception) {
-            logger.warning("打开受保护资源失败: " + resourcePath + " | " + exception.getMessage());
+            logger.warning("打开资源失败: " + resourcePath + " | " + exception.getMessage());
             return null;
         }
     }
@@ -253,7 +253,7 @@ final class DefaultModuleContext implements ModuleContext {
         if (parent != null && !parent.exists()) {
             parent.mkdirs();
         }
-        try (InputStream input = openProtectedResource(resourcePath, moduleClassLoader)) {
+        try (InputStream input = openResource(resourcePath, moduleClassLoader)) {
             if (input == null) {
                 logger.warning("未找到资源: " + resourcePath);
                 return;
@@ -421,7 +421,7 @@ final class DefaultModuleContext implements ModuleContext {
         if (target.exists() && !overwrite) {
             return target;
         }
-        try (InputStream input = openProtectedResource(resourcePath, loader)) {
+        try (InputStream input = openResource(resourcePath, loader)) {
             if (input == null) {
                 throw new IOException("未找到 UI 资源: " + resourcePath);
             }
@@ -440,7 +440,7 @@ final class DefaultModuleContext implements ModuleContext {
         if (parent != null && !parent.exists()) {
             parent.mkdirs();
         }
-        try (InputStream input = openProtectedResource(resourcePath, loader)) {
+        try (InputStream input = openResource(resourcePath, loader)) {
             if (input == null) {
                 logger.warning("未找到配置资源: " + resourcePath);
                 return target;

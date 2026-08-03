@@ -1,8 +1,6 @@
-plugins {
+﻿plugins {
     id("java")
 }
-
-val protectedResourcesDir = layout.buildDirectory.dir("generated/protected-resources")
 
 dependencies {
     compileOnly(project(":axs-api"))
@@ -15,30 +13,9 @@ dependencies {
     compileOnly(files("../../libs/ArcartX-2.5.36.jar"))
 }
 
-sourceSets {
-    main {
-        resources {
-            setSrcDirs(listOf("src/main/resources", protectedResourcesDir))
-        }
-    }
-}
-
-val protectYamlResources by tasks.registering(ProtectYamlResourcesTask::class) {
-    sourceDir.set(layout.projectDirectory.dir("src/main/resources"))
-    outputDir.set(protectedResourcesDir)
-}
-
 tasks.compileJava {
     options.encoding = "UTF-8"
     options.release = 17
-}
-
-tasks.processResources {
-    dependsOn(protectYamlResources)
-    exclude { details ->
-        val path = details.relativePath.pathString
-        (path.endsWith(".yml") || path.endsWith(".yaml")) && path != "module.yml"
-    }
 }
 
 tasks.jar {

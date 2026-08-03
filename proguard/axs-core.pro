@@ -61,9 +61,9 @@
     public java.util.Map serialize();
 }
 
-# ─── 保留资源相关（排除加密的 .axb/.axl 二进制资源）─────────
--adaptresourcefilenames !**.axb,!**.axl,!**.yml,!**.yaml
--adaptresourcefilecontents !**.axb,!**.axl,!**.yml,!**.yaml
+# ─── 保留资源文件名/内容（不重命名 yml 等资源）─────────
+-adaptresourcefilenames !**.yml,!**.yaml
+-adaptresourcefilecontents !**.yml,!**.yaml
 
 # ─── 混淆字典（使用难以辨认的名称） ──────────────────────────
 -obfuscationdictionary dictionary.txt

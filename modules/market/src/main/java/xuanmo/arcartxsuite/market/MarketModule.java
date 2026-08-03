@@ -131,7 +131,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
                 messagesFileName(),
                 moduleClassLoader(),
                 logger,
-                resourcePath -> openProtectedResource(resourcePath, moduleClassLoader())),
+                resourcePath -> openResource(resourcePath, moduleClassLoader())),
             logger);
     }
 

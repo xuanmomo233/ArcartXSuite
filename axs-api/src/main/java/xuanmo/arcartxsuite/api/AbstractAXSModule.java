@@ -516,9 +516,9 @@ public abstract class AbstractAXSModule implements AXSModule {
         context.exportResource(resourcePath, target, overwrite);
     }
 
-    /** 从模块 Jar 中读取受保护的资源 */
-    protected InputStream openProtectedResource(String resourcePath, ClassLoader loader) {
-        return context.openProtectedResource(resourcePath, loader);
+    /** 从模块 Jar 中读取资源 */
+    protected InputStream openResource(String resourcePath, ClassLoader loader) {
+        return context.openResource(resourcePath, loader);
     }
 
     /** 从模块 Jar 导出配置文件到宿主数据目录 */
@@ -599,7 +599,7 @@ public abstract class AbstractAXSModule implements AXSModule {
      * 导出并加载外部化消息文件。
      * <p>
      * 与 {@link #ensureConfigExists()} 同样走 {@link ModuleContext#exportConfigResource}，
-     * 以便正确解密付费模块的加密资源（.axb / .axl）。文件落到
+     * 从模块 Jar 中读取资源并落到
      * {@code data/<moduleId>/<fileName>}，用户编辑后 reload 即可生效。
      */
     private void initMessages() {
@@ -611,7 +611,7 @@ public abstract class AbstractAXSModule implements AXSModule {
         File moduleDataFolder = context.dataFolder();
         File messagesFile = new File(moduleDataFolder, fileName);
         if (!messagesFile.exists()) {
-            // 走宿主导出（处理加密资源解密），目标相对 pluginDataFolder
+            // 走宿主导出（从模块 Jar 读取资源），目标相对 pluginDataFolder
             context.exportConfigResource(
                 fileName,
                 "data/" + moduleDataFolder.getName() + "/" + fileName,
@@ -621,7 +621,7 @@ public abstract class AbstractAXSModule implements AXSModule {
         }
         messages = new MessageProvider(
             moduleDataFolder, fileName, moduleClassLoader(), context.logger(),
-            resourcePath -> openProtectedResource(resourcePath, moduleClassLoader()));
+            resourcePath -> openResource(resourcePath, moduleClassLoader()));
         messages.load();
         context.logger().fine(descriptor().name() + " 已加载 " + messages.size() + " 条消息。");
     }

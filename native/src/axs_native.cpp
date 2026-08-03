@@ -42,8 +42,6 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     JNINativeMethod methods[] = {
         // 原有方法
         {"n0", "()I",         reinterpret_cast<void *>(nativeVersion)},
-        {"n1", "([B[B)[B",   reinterpret_cast<void *>(decryptResource)},
-        {"n2", "([B[B[B)[B", reinterpret_cast<void *>(unwrapResourceKey)},
         {"n3", "()I",         reinterpret_cast<void *>(environmentCheck)},
         {"n4", "([B[B)[B",   reinterpret_cast<void *>(decryptModule)},
         {"n10", "([B[B[B)[B", reinterpret_cast<void *>(decryptModuleVerified)},

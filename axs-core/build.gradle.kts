@@ -5,8 +5,6 @@ plugins {
     id("com.gradleup.shadow") version "8.3.5"
 }
 
-val protectedResourcesDir = layout.buildDirectory.dir("generated/protected-resources")
-
 repositories {
     mavenCentral()
     maven("https://hub.spigotmc.org/nexus/content/repositories/snapshots/")
@@ -49,14 +47,9 @@ sourceSets {
     main {
         java.setSrcDirs(listOf("../src/main/java"))
         resources {
-            setSrcDirs(listOf("../src/main/resources", protectedResourcesDir))
+            setSrcDirs(listOf("../src/main/resources"))
         }
     }
-}
-
-val protectYamlResources by tasks.registering(ProtectYamlResourcesTask::class) {
-    sourceDir.set(layout.projectDirectory.dir("../src/main/resources"))
-    outputDir.set(protectedResourcesDir)
 }
 
 val obfuscatedJar = layout.buildDirectory.file("libs/ArcartX-Suite-obfuscated.jar")
@@ -72,7 +65,6 @@ tasks {
     val skipNativeCheck = project.findProperty("skipNativeCheck") == "true"
 
     processResources {
-        dependsOn(protectYamlResources)
         doFirst {
             // jar 跨平台分发，只要包含任一平台的 native 库即可放行构建
             val expectedLibs = listOf("axs-native.dll", "libaxs-native.so", "libaxs-native.dylib", "axs-native.enc", "libaxs-native.enc", "libaxs-native.dylib.enc")
@@ -94,10 +86,6 @@ tasks {
                     logger.warn("[AXS-Protect] $msg")
                 }
             }
-        }
-        exclude { details ->
-            val path = details.relativePath.pathString
-            (path.endsWith(".yml") || path.endsWith(".yaml")) && path != "plugin.yml" && path != "config.yml"
         }
         inputs.property("version", version)
         val props = mapOf("version" to version)

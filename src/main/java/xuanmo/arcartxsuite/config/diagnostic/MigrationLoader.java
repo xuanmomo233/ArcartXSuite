@@ -58,13 +58,13 @@ public final class MigrationLoader {
         String ownerId,
         String migrationFolder,
         ClassLoader classLoader,
-        ProtectedResourceOpener opener
+        ResourceOpener opener
     ) {
         if (migrationFolder == null || migrationFolder.isBlank()) {
             return List.of();
         }
         // 阶段 A：通过列出 minVersion..maxVersion 范围内可能的文件名探测；
-        // 由于无法在加密 axb 列表中扫描目录，调用方在阶段 B 可显式声明版本表。
+        // 由于无法在 jar 资源中扫描目录，调用方在阶段 B 可显式声明版本表。
         // 这里先尝试 0-1, 1-2, ... 直到连续 3 次未命中。
         List<ConfigMigrationDescriptor> all = new ArrayList<>();
         int from = 0;
@@ -89,7 +89,7 @@ public final class MigrationLoader {
     }
 
     private static ConfigMigrationDescriptor tryLoad(
-        String ownerId, String resourcePath, ClassLoader classLoader, ProtectedResourceOpener opener) {
+        String ownerId, String resourcePath, ClassLoader classLoader, ResourceOpener opener) {
         try (InputStream input = opener.open(ownerId, resourcePath, classLoader)) {
             if (input == null) {
                 return null;
@@ -182,10 +182,10 @@ public final class MigrationLoader {
     }
 
     /**
-     * 资源打开钩子，便于 axs-core 根据 ownerId 路由到 {@code ProtectedResourceStore}。
+     * 资源打开钩子，便于 axs-core 根据 ownerId 路由到模块 ClassLoader 直接读取资源。
      */
     @FunctionalInterface
-    public interface ProtectedResourceOpener {
+    public interface ResourceOpener {
         /**
          * @param ownerId 调用方的逻辑 ID：可为 {@code "axs-core"} 表示宿主资源，
          *                或其他模块 ID。

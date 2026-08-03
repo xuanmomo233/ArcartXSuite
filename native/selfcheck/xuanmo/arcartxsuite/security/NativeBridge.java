@@ -12,8 +12,6 @@ package xuanmo.arcartxsuite.security;
  */
 public class NativeBridge {
     public static native int n0();                              // nativeVersion            ()I
-    public static native byte[] n1(byte[] a, byte[] b);         // decryptResource          ([B[B)[B
-    public static native byte[] n2(byte[] a, byte[] b, byte[] c); // unwrapResourceKey      ([B[B[B)[B
     public static native int n3();                              // environmentCheck         ()I
     public static native byte[] n4(byte[] a, byte[] b);         // decryptModule            ([B[B)[B
     public static native byte[] n10(byte[] a, byte[] b, byte[] c); // decryptModuleVerified ([B[B[B)[B

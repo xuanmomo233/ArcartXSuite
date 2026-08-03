@@ -9,7 +9,7 @@ static constexpr bool kHardenedBuild = (AXS_HARDENED != 0);
 static constexpr int GCM_IV_LEN  = 12;
 static constexpr int GCM_TAG_LEN = 16;
 
-// ─── AES-256-GCM 解密（复用 resource_decrypt 中的逻辑） ─────────
+// ─── AES-256-GCM 解密 ──────────────────────────────────────────
 
 static std::vector<unsigned char> aes_gcm_decrypt(
     const unsigned char *ciphertext, int ciphertext_len,

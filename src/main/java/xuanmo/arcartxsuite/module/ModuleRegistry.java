@@ -1092,8 +1092,11 @@ public final class ModuleRegistry {
         return config.contains("modules." + moduleId + ".enabled");
     }
 
-    public InputStream openProtectedResource(String moduleId, String resourcePath, ClassLoader loader) throws IOException {
-        return xuanmo.arcartxsuite.config.ProtectedResourceStore.open(resourcePath, loader);
+    public InputStream openResource(String moduleId, String resourcePath, ClassLoader loader) throws IOException {
+        ClassLoader effectiveLoader = loader != null ? loader : getClass().getClassLoader();
+        InputStream input = effectiveLoader.getResourceAsStream(resourcePath);
+        if (input != null) return input;
+        return xuanmo.arcartxsuite.security.MohistCompat.getResourceSafe(resourcePath, effectiveLoader);
     }
 
     void recordUiRegistration(String moduleId, String uiId) {

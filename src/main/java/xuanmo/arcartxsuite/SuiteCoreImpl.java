@@ -20,7 +20,6 @@ import xuanmo.arcartxsuite.api.config.ModuleConfigSpec;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.bootstrap.SuiteCore;
 import xuanmo.arcartxsuite.command.ArcartXSuiteCommand;
-import xuanmo.arcartxsuite.config.ProtectedResourceStore;
 import xuanmo.arcartxsuite.config.diagnostic.ConfigDiagnosisStore;
 import xuanmo.arcartxsuite.config.diagnostic.ConfigDiagnosticEngine;
 import xuanmo.arcartxsuite.config.diagnostic.RetentionCleaner;
@@ -339,18 +338,17 @@ public final class SuiteCoreImpl implements SuiteCore {
                 // 对于外部模块，优先走 ModuleRegistry
                 if (moduleRegistry != null && ownerId != null && !"axs-core".equalsIgnoreCase(ownerId)) {
                     try {
-                        InputStream input = moduleRegistry.openProtectedResource(ownerId, resourcePath, loader);
+                        InputStream input = moduleRegistry.openResource(ownerId, resourcePath, loader);
                         if (input != null) {
                             return input;
                         }
                     } catch (IOException ignored) {
-                        // 跳过，回退 ProtectedResourceStore
+                        // 跳过，回退直接读取
                     }
                 }
-                if (ProtectedResourceStore.exists(resourcePath, loader)) {
-                    return ProtectedResourceStore.open(resourcePath, loader);
-                }
                 ClassLoader effective = loader != null ? loader : host.getClass().getClassLoader();
+                InputStream input = effective.getResourceAsStream(resourcePath);
+                if (input != null) return input;
                 return MohistCompat.getResourceSafe(resourcePath, effective);
             },
             host.getClass().getClassLoader(),
@@ -577,9 +575,6 @@ public final class SuiteCoreImpl implements SuiteCore {
     }
 
     private InputStream openBundledResource(String resourcePath) throws IOException {
-        if (ProtectedResourceStore.exists(resourcePath)) {
-            return ProtectedResourceStore.open(resourcePath);
-        }
         InputStream input = getResource(resourcePath);
         if (input != null) return input;
         return MohistCompat.getResourceSafe(resourcePath, host.getClass().getClassLoader());

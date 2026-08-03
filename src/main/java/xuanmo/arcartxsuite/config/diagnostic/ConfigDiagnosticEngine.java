@@ -52,7 +52,7 @@ public final class ConfigDiagnosticEngine {
     private final File diagnosisRoot;
     private final File backupRoot;
     private final String sessionTimestamp;
-    private final MigrationLoader.ProtectedResourceOpener defaultsOpener;
+    private final MigrationLoader.ResourceOpener resourceOpener;
     private final ClassLoader hostClassLoader;
     private final Logger logger;
     private final Supplier<Set<String>> discoveredModuleIdsSupplier;
@@ -60,7 +60,7 @@ public final class ConfigDiagnosticEngine {
     public ConfigDiagnosticEngine(
         File pluginDataFolder,
         Instant sessionStart,
-        MigrationLoader.ProtectedResourceOpener defaultsOpener,
+        MigrationLoader.ResourceOpener resourceOpener,
         ClassLoader hostClassLoader,
         Logger logger,
         Supplier<Set<String>> discoveredModuleIdsSupplier
@@ -69,7 +69,7 @@ public final class ConfigDiagnosticEngine {
         this.sessionTimestamp = SESSION_TS.format(sessionStart);
         this.diagnosisRoot = new File(pluginDataFolder, "diagnosis/" + sessionTimestamp);
         this.backupRoot = new File(pluginDataFolder, "backup");
-        this.defaultsOpener = defaultsOpener;
+        this.resourceOpener = resourceOpener;
         this.hostClassLoader = hostClassLoader;
         this.logger = logger;
         this.discoveredModuleIdsSupplier = discoveredModuleIdsSupplier == null ? () -> Set.of() : discoveredModuleIdsSupplier;
@@ -108,7 +108,7 @@ public final class ConfigDiagnosticEngine {
         // 1. 加载默认值流
         byte[] defaultsBytes;
         YamlConfiguration defaults;
-        try (InputStream input = defaultsOpener.open(spec.ownerId(), sync.resourcePath(), cl)) {
+        try (InputStream input = resourceOpener.open(spec.ownerId(), sync.resourcePath(), cl)) {
             if (input == null) {
                 issues.add(new ConfigIssue(
                     spec.ownerId(), sync.resourcePath(), "",
@@ -273,7 +273,7 @@ public final class ConfigDiagnosticEngine {
         List<ConfigIssue> issues
     ) {
         List<ConfigMigrationDescriptor> descriptors = MigrationLoader.loadAll(
-            spec.ownerId(), spec.migrationFolder(), cl, defaultsOpener);
+            spec.ownerId(), spec.migrationFolder(), cl, resourceOpener);
         int applied = 0;
         int currentVersion = fromVersion;
         for (ConfigMigrationDescriptor descriptor : descriptors) {

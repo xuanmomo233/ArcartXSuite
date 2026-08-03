@@ -8,8 +8,6 @@ extern "C" {
 
 // ═══ 原有 NativeBridge 方法（云端模块解密） ═══════════════════════
 jint nativeVersion(JNIEnv *env, jclass clazz);
-jbyteArray decryptResource(JNIEnv *env, jclass clazz, jbyteArray encrypted, jbyteArray keyMaterial);
-jbyteArray unwrapResourceKey(JNIEnv *env, jclass clazz, jbyteArray wrappedKey, jbyteArray iv, jbyteArray material);
 jint environmentCheck(JNIEnv *env, jclass clazz);
 jbyteArray decryptModule(JNIEnv *env, jclass clazz, jbyteArray encryptedAxb, jbyteArray key);
 jbyteArray decryptModuleVerified(JNIEnv *env, jclass clazz, jbyteArray encryptedAxb, jbyteArray key, jbyteArray signature);

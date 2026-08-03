@@ -98,7 +98,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
                 messagesFileName(),
                 moduleClassLoader(),
                 logger,
-                resourcePath -> openProtectedResource(resourcePath, moduleClassLoader())));
+                resourcePath -> openResource(resourcePath, moduleClassLoader())));
         ensureDefaultMenus();
     }
 

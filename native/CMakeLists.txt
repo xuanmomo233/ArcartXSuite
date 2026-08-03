@@ -36,8 +36,6 @@ FetchContent_MakeAvailable(zlib)
 set(SOURCES
     # 原有模块
     src/axs_native.cpp
-    src/resource_decrypt.cpp
-    src/key_unwrap.cpp
     src/env_check.cpp
     src/module_decrypt.cpp
     # JAR 保护层新增

@@ -220,12 +220,6 @@ public final class NativeBridge {
     /** native 库版本号 */
     public static native int n0();
 
-    /** 解密受保护的资源（AES-256-GCM + GZIP） */
-    public static native byte[] n1(byte[] encrypted, byte[] keyMaterial);
-
-    /** 解包资源密钥（AES-256-GCM unwrap） */
-    public static native byte[] n2(byte[] wrappedKey, byte[] iv, byte[] material);
-
     /** 环境安全检查（反调试/反篡改） */
     public static native int n3();
 
