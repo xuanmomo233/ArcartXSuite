@@ -605,7 +605,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'auction_buy', self.parent.parent.entry['id'], var.actionToken)
+                                Packet.send(var.packetId, 'auction_buy', self.parent.entry['id'], var.actionToken)
                             effect:
                               stroke:
                                 width: 1
@@ -634,7 +634,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'auction_bid', self.parent.parent.entry['id'], self.parent.parent.entry['minBid'], var.actionToken)
+                                Packet.send(var.packetId, 'auction_bid', self.parent.entry['id'], self.parent.entry['minBid'], var.actionToken)
                             children:
                               文字:
                                 type: Text
@@ -659,7 +659,7 @@ controls:
                               radius: 8
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'auction_favorite', self.parent.parent.entry['id'])
+                                Packet.send(var.packetId, 'auction_favorite', self.parent.entry['id'])
                             children:
                               文字:
                                 type: Text
@@ -669,7 +669,7 @@ controls:
                                   through: true
                                   center: true
                                   fontSize: 28
-                                  texts: "self.parent.parent.entry['isFavorite'] ? '&e★' : '&7☆'"
+                                  texts: "self.parent.entry['isFavorite'] ? '&e★' : '&7☆'"
                           取消按钮:
                             type: Texture
                             attribute:
@@ -684,7 +684,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'auction_cancel', self.parent.parent.entry['id'], var.actionToken)
+                                Packet.send(var.packetId, 'auction_cancel', self.parent.entry['id'], var.actionToken)
                             effect:
                               stroke:
                                 width: 1
