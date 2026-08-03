@@ -659,7 +659,7 @@ controls:
                               radius: 8
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'auction_favorite', self.parent.entry['id'])
+                                Packet.send(var.packetId, 'auction_favorite', self.parent.entry['id'], var.currentCategory, var.search)
                             children:
                               文字:
                                 type: Text

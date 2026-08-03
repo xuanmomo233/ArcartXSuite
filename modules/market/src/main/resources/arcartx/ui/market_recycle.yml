@@ -322,7 +322,7 @@ controls:
                               radius: 10
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'recycle_single', self.parent.parent.entry['slot'] + '', var.actionToken)
+                                Packet.send(var.packetId, 'recycle_single', self.parent.entry['slot'] + '', var.actionToken)
                             effect:
                               stroke:
                                 width: 1
@@ -360,7 +360,7 @@ controls:
               radius: 14
             action:
               clickLeft: |-
-                  Packet.send(var.packetId, 'recycle_all', var.actionToken)
+                Packet.send(var.packetId, 'recycle_all', var.actionToken)
             effect:
               stroke:
                 width: 2

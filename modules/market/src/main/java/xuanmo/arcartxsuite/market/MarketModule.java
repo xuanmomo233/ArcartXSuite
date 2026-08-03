@@ -211,13 +211,12 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
         adminCommand = new MarketAdminCommand(() -> service, messages());
 
-        // 注册自动回收监听器
-        if (configuration.recycle().enabled() && configuration.recycle().allowAutoRecycle()) {
-            registerListener(new MarketEventListener(
-                () -> service != null ? service.getRecycleService() : null,
-                true
-            ));
-        }
+        // 注册事件监听器（自动回收 + 玩家退出清理 token）
+        registerListener(new MarketEventListener(
+            () -> service != null ? service.getRecycleService() : null,
+            configuration.recycle().enabled() && configuration.recycle().allowAutoRecycle(),
+            () -> service
+        ));
 
         logger.fine("Market 模块已载入 | 存储=" + configuration.storage().mode().toUpperCase()
             + " | 列表缓存=" + (configuration.redis().enabled() ? "启用" : "禁用")

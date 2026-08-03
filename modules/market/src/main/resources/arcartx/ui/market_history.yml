@@ -4,6 +4,7 @@
 
 ui:
   isHud: false
+  defaultOpen: false
   hide:
     - HUD
   itemSize: 16

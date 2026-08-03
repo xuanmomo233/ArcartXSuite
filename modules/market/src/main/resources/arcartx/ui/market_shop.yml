@@ -493,6 +493,7 @@ controls:
                               y: 8
                               width: 100
                               height: 52
+                              visible: "self.parent.entry != none && var.shopId != none"
                               normal: ~60,180,100,200
                               hover: ~Frosted:0;80,220,120,230
                               shape: ~round_rect

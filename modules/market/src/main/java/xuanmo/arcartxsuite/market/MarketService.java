@@ -109,6 +109,12 @@ public class MarketService {
         this.eventBusProvider = provider;
     }
 
+    /** 玩家退出时清理其 actionToken 与在飞行标记，避免内存累积。 */
+    public void clearPlayerState(UUID playerUuid) {
+        actionTokens.values().forEach(map -> map.remove(playerUuid));
+        actionTokensInFlight.remove(playerUuid);
+    }
+
     public void start(java.io.File dataFolder) throws Exception {
         // 初始化存储
         repository = new JdbcMarketRepository(config.storage(), logger, dataFolder);
@@ -279,6 +285,7 @@ public class MarketService {
 
     public void openMyListingsUi(Player player) {
         packetBridge.openUi(player, config.ui().auctionId());
+        issueActionToken(player, config.ui().auctionId());
     }
 
     // ─── 客户端包处理 ────────────────────────────────────────
@@ -474,7 +481,10 @@ public class MarketService {
         long listingId = data.size() > 1 ? parseLongSafe(data.get(1), 0) : 0;
         if (listingId <= 0) return;
         auctionService.toggleFavorite(player.getUniqueId(), listingId);
-        handleAuctionListPacket(player, List.of("auction_list", "0", "all", ""));
+        // 保留玩家当前分类与搜索条件（由客户端随包附带），避免收藏后列表跳回"全部"
+        String currentCategory = data.size() > 2 && data.get(2) != null ? data.get(2) : "all";
+        String currentSearch = data.size() > 3 && data.get(3) != null ? data.get(3) : "";
+        handleAuctionListPacket(player, List.of("auction_list", "0", currentCategory, currentSearch));
     }
 
     private void handleShopListPacket(Player player, List<String> data) {

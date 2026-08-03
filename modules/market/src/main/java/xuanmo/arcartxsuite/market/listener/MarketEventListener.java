@@ -6,20 +6,25 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
+import xuanmo.arcartxsuite.market.MarketService;
 import xuanmo.arcartxsuite.market.recycle.RecycleService;
 
 /**
- * 市场事件监听器（自动回收等）。
+ * 市场事件监听器（自动回收 + 玩家退出清理）。
  */
 public class MarketEventListener implements Listener {
 
     private final Supplier<RecycleService> recycleSupplier;
     private final boolean autoRecycleEnabled;
+    private final Supplier<MarketService> serviceSupplier;
 
-    public MarketEventListener(Supplier<RecycleService> recycleSupplier, boolean autoRecycleEnabled) {
+    public MarketEventListener(Supplier<RecycleService> recycleSupplier, boolean autoRecycleEnabled,
+                                Supplier<MarketService> serviceSupplier) {
         this.recycleSupplier = recycleSupplier;
         this.autoRecycleEnabled = autoRecycleEnabled;
+        this.serviceSupplier = serviceSupplier;
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -37,6 +42,14 @@ public class MarketEventListener implements Listener {
             event.setCancelled(true);
             service.recycle(player, item.clone());
             event.getItem().remove();
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onQuit(PlayerQuitEvent event) {
+        MarketService service = serviceSupplier.get();
+        if (service != null) {
+            service.clearPlayerState(event.getPlayer().getUniqueId());
         }
     }
 }
