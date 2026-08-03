@@ -50,6 +50,7 @@ public class MarketService {
     private final ItemSourceRegistry itemSourceRegistry;
     private final AuctionItemSerializer itemSerializer;
     private final @Nullable ItemBridgeAPI itemStackBridge;
+    private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private final @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier;
     private final Logger logger;
     private final CrossServerAPI crossServer;
@@ -79,6 +80,7 @@ public class MarketService {
                          PacketBridgeAPI packetBridge, CurrencyBridgeAPI currencyManager,
                          ItemSourceRegistry itemSourceRegistry, AuctionItemSerializer itemSerializer,
                          @Nullable ItemBridgeAPI itemStackBridge,
+                         xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge,
                          @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier,
                          Logger logger,
                          CrossServerAPI crossServer,
@@ -90,6 +92,7 @@ public class MarketService {
         this.itemSourceRegistry = itemSourceRegistry;
         this.itemSerializer = itemSerializer;
         this.itemStackBridge = itemStackBridge;
+        this.vanillaItemNameBridge = vanillaItemNameBridge;
         this.mailSupplier = mailSupplier;
         this.logger = logger;
         this.crossServer = crossServer;
@@ -138,7 +141,7 @@ public class MarketService {
         // 启动子服务
         if (config.auction().enabled()) {
             auctionService = new AuctionService(plugin, config.auction(), config.messages(),
-                repository, redisCache, crossServerPublisher, currencyManager, mailSupplier, itemSerializer, logger);
+                repository, redisCache, crossServerPublisher, currencyManager, mailSupplier, itemSerializer, logger, vanillaItemNameBridge);
             auctionService.start(config.schedulerIntervalTicks());
         }
 
@@ -961,10 +964,7 @@ public class MarketService {
 
     private String itemDisplayName(ItemStack item) {
         if (item == null) return "";
-        if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
-            return item.getItemMeta().getDisplayName();
-        }
-        return item.getType().name().toLowerCase().replace('_', ' ');
+        return vanillaItemNameBridge.resolveDisplayName(item);
     }
 
     private String formatPrice(double price) {

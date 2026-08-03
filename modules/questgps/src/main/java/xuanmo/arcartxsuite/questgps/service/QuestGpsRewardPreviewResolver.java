@@ -23,19 +23,22 @@ public final class QuestGpsRewardPreviewResolver {
     private final Logger logger;
     private final Function<ItemStack, Optional<String>> itemJsonSerializer;
     private final ItemSourceRegistry itemSourceRegistry;
+    private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
 
     public QuestGpsRewardPreviewResolver(
         JavaPlugin plugin,
         Logger logger,
         Supplier<TitleConfigQueryable> titleConfigurationProvider,
         Function<ItemStack, Optional<String>> itemJsonSerializer,
-        ItemSourceRegistry itemSourceRegistry
+        ItemSourceRegistry itemSourceRegistry,
+        xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this.plugin = plugin;
         this.titleConfigurationProvider = titleConfigurationProvider == null ? () -> null : titleConfigurationProvider;
         this.logger = logger;
         this.itemJsonSerializer = itemJsonSerializer == null ? item -> Optional.empty() : itemJsonSerializer;
         this.itemSourceRegistry = itemSourceRegistry;
+        this.vanillaItemNameBridge = vanillaItemNameBridge;
     }
 
     public List<ResolvedRewardPreview> resolve(
@@ -210,9 +213,12 @@ public final class QuestGpsRewardPreviewResolver {
         return itemStack;
     }
 
-    private static String resolveItemName(ItemStack itemStack) {
+    private String resolveItemName(ItemStack itemStack) {
         if (itemStack == null) {
             return "";
+        }
+        if (vanillaItemNameBridge != null) {
+            return vanillaItemNameBridge.resolveDisplayName(itemStack);
         }
         ItemMeta itemMeta = itemStack.getItemMeta();
         if (itemMeta != null && itemMeta.hasDisplayName()) {
@@ -221,7 +227,7 @@ public final class QuestGpsRewardPreviewResolver {
         return itemStack.getType().name();
     }
 
-    private static String resolveItemSummary(ItemStack itemStack) {
+    private String resolveItemSummary(ItemStack itemStack) {
         if (itemStack == null) {
             return "";
         }

@@ -136,6 +136,7 @@ public final class WarehouseService implements Listener {
     private final ItemSourceRegistry itemSourceRegistry;
     private final ItemMatcherAPI itemMatcherSupport;
     private final CurrencyBridgeAPI currencyBridgeManager;
+    private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private final Supplier<PickupNotifiable> pickupNotifiableSupplier;
     private Supplier<PickupInterceptor> pickupInterceptorSupplier = () -> null;
     private final Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier;
@@ -181,12 +182,13 @@ public final class WarehouseService implements Listener {
         Supplier<PickupNotifiable> pickupNotifiableSupplier,
         CrossServerAPI crossServerApi,
         CrossServerChannelConfig crossServerChannelConfig,
-        Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier
+        Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier,
+        xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this(plugin, logger, packetBridge, itemStackBridge, packetGuard, uiResourceExporter, configuration,
             repository, itemSourceRegistry, itemMatcherSupport, currencyBridgeManager,
             pickupNotifiableSupplier, crossServerApi, crossServerChannelConfig, null,
-            secondaryPasswordSupplier);
+            secondaryPasswordSupplier, vanillaItemNameBridge);
     }
 
     public WarehouseService(
@@ -205,7 +207,8 @@ public final class WarehouseService implements Listener {
         CrossServerAPI crossServerApi,
         CrossServerChannelConfig crossServerChannelConfig,
         MessageProvider messages,
-        Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier
+        Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier,
+        xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -224,6 +227,7 @@ public final class WarehouseService implements Listener {
         this.messages = messages;
         this.crossServerChannelConfig = crossServerChannelConfig == null
             ? CrossServerChannelConfig.disabled() : crossServerChannelConfig;
+        this.vanillaItemNameBridge = vanillaItemNameBridge;
     }
 
     public WarehouseService(
@@ -238,11 +242,12 @@ public final class WarehouseService implements Listener {
         ItemSourceRegistry itemSourceRegistry,
         ItemMatcherAPI itemMatcherSupport,
         CurrencyBridgeAPI currencyBridgeManager,
-        Supplier<PickupNotifiable> pickupNotifiableSupplier
+        Supplier<PickupNotifiable> pickupNotifiableSupplier,
+        xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this(plugin, logger, packetBridge, itemStackBridge, packetGuard, uiResourceExporter, configuration,
             repository, itemSourceRegistry, itemMatcherSupport, currencyBridgeManager,
-            pickupNotifiableSupplier, null, CrossServerChannelConfig.disabled(), null, null);
+            pickupNotifiableSupplier, null, CrossServerChannelConfig.disabled(), null, null, vanillaItemNameBridge);
     }
 
     /**
@@ -3312,6 +3317,9 @@ public final class WarehouseService implements Listener {
     }
 
     private String resolveDisplayName(ItemStack itemStack) {
+        if (vanillaItemNameBridge != null) {
+            return vanillaItemNameBridge.resolveDisplayName(itemStack);
+        }
         ItemMeta meta = itemStack.getItemMeta();
         if (meta != null && meta.hasDisplayName()) {
             return meta.getDisplayName();

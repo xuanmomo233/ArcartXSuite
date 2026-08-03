@@ -68,8 +68,7 @@ public record PickupModuleConfiguration(
      * @param pickupDelayTicks    掉落物落地后多久开始显示（ticks）
      * @param mergeSameItems       同类物品是否合并显示
      * @param interactUiId         交互 Menu 的 UI ID（按键打开的透明菜单）
-     * @param keybindName          拾取按键注册名（ArcartX 客户端按键 ID）
-     * @param keybindDefaultKey    拾取按键默认键位（GLFW 键名）
+     * @param keybindName          拾取按键注册名（ArcartX 客户端按键 ID，须与宿主 config.yml keybinds 节中的 name 一致）
      */
     public record ScannerConfig(
         String uiId,
@@ -83,8 +82,7 @@ public record PickupModuleConfiguration(
         int pickupDelayTicks,
         boolean mergeSameItems,
         String interactUiId,
-        String keybindName,
-        String keybindDefaultKey
+        String keybindName
     ) {
     }
 
@@ -147,8 +145,7 @@ public record PickupModuleConfiguration(
             Math.max(0, config.getInt("scanner.pickup-delay-ticks", 40)),
             config.getBoolean("scanner.merge-same-items", true),
             readString(config, "scanner.interact-ui-id", "AXS:loot_interact"),
-            readString(config, "scanner.keybind.name", "AXS_PICKUP_PICK"),
-            readString(config, "scanner.keybind.default-key", "F")
+            readString(config, "scanner.keybind.name", "AXS_PICKUP_PICK")
         );
 
         FilterConfig filter = loadFilter(config);

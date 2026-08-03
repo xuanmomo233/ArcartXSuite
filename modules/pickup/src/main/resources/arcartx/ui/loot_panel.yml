@@ -7,6 +7,9 @@ ui:
     update: |-
       var.count = packet['count']
       var.selectedIndex = packet['selectedIndex']
+      if(var.count == 0){
+        var.menuOpen = false
+      }
       var.item0Visible = packet['item0Visible']
       var.item0Amount = packet['item0Amount']
       var.item0ItemJson = packet['item0ItemJson']
@@ -34,10 +37,16 @@ ui:
       var.dirty = true
     select: |-
       var.selectedIndex = packet['selectedIndex']
+    open_interact: |-
+      var.menuOpen = true
+      Screen.open('AXS:loot_interact')
+    menu_closed: |-
+      var.menuOpen = false
   action:
     load: |-
       var.count = 0
       var.selectedIndex = 0
+      var.menuOpen = false
       var.dirty = false
       var.item0Visible = false
       var.item1Visible = false
@@ -92,13 +101,8 @@ ui:
         var.dirty = false
       }
 
-    keyPress: |-
-      if(Keyboard.isKeyDown(Keyboard.getKeyBindingKeyName("AXS_INTERACT")) && var.count > 0){
-        Screen.open('AXS:loot_interact')
-        Packet.send('pickup', 'open_menu')
-      }
     wheel: |-
-      if(var.count > 0){
+      if(var.count > 0 && !var.menuOpen){
         if(self.wheelValue > 0){
           var.selectedIndex = var.selectedIndex - 1
           if(var.selectedIndex < 0){
@@ -124,7 +128,7 @@ controls:
       height: 1080
     action:
       click: |-
-        if(client.pickup){
+        if(client.pickup && !var.menuOpen){
           Packet.send('pickup', 'pick')
         }
     children:
@@ -198,7 +202,7 @@ controls:
                       x: 44
                       y: 0
                       fontSize: 28
-                      texts: "var.item0Amount > 1 ? val.loot_slot_0.getSlotItemStack().getName() + ' &7x' + var.item0Amount.round() : val.loot_slot_0.getSlotItemStack().getName()"
+                      texts: "var.item0Visible && val.loot_slot_0.getSlotItemStack() != null ? (var.item0Amount > 1 ? val.loot_slot_0.getSlotItemStack().getName() + ' &7x' + var.item0Amount.round() : val.loot_slot_0.getSlotItemStack().getName()) : ''"
                       through: true
               物品条目1:
                 type: Canvas
@@ -238,7 +242,7 @@ controls:
                       x: 44
                       y: 0
                       fontSize: 28
-                      texts: "var.item1Amount > 1 ? val.loot_slot_1.getSlotItemStack().getName() + ' &7x' + var.item1Amount.round() : val.loot_slot_1.getSlotItemStack().getName()"
+                      texts: "var.item1Visible && val.loot_slot_1.getSlotItemStack() != null ? (var.item1Amount > 1 ? val.loot_slot_1.getSlotItemStack().getName() + ' &7x' + var.item1Amount.round() : val.loot_slot_1.getSlotItemStack().getName()) : ''"
                       through: true
               物品条目2:
                 type: Canvas
@@ -278,7 +282,7 @@ controls:
                       x: 44
                       y: 0
                       fontSize: 28
-                      texts: "var.item2Amount > 1 ? val.loot_slot_2.getSlotItemStack().getName() + ' &7x' + var.item2Amount.round() : val.loot_slot_2.getSlotItemStack().getName()"
+                      texts: "var.item2Visible && val.loot_slot_2.getSlotItemStack() != null ? (var.item2Amount > 1 ? val.loot_slot_2.getSlotItemStack().getName() + ' &7x' + var.item2Amount.round() : val.loot_slot_2.getSlotItemStack().getName()) : ''"
                       through: true
               物品条目3:
                 type: Canvas
@@ -318,7 +322,7 @@ controls:
                       x: 44
                       y: 0
                       fontSize: 28
-                      texts: "var.item3Amount > 1 ? val.loot_slot_3.getSlotItemStack().getName() + ' &7x' + var.item3Amount.round() : val.loot_slot_3.getSlotItemStack().getName()"
+                      texts: "var.item3Visible && val.loot_slot_3.getSlotItemStack() != null ? (var.item3Amount > 1 ? val.loot_slot_3.getSlotItemStack().getName() + ' &7x' + var.item3Amount.round() : val.loot_slot_3.getSlotItemStack().getName()) : ''"
                       through: true
               物品条目4:
                 type: Canvas
@@ -358,7 +362,7 @@ controls:
                       x: 44
                       y: 0
                       fontSize: 28
-                      texts: "var.item4Amount > 1 ? val.loot_slot_4.getSlotItemStack().getName() + ' &7x' + var.item4Amount.round() : val.loot_slot_4.getSlotItemStack().getName()"
+                      texts: "var.item4Visible && val.loot_slot_4.getSlotItemStack() != null ? (var.item4Amount > 1 ? val.loot_slot_4.getSlotItemStack().getName() + ' &7x' + var.item4Amount.round() : val.loot_slot_4.getSlotItemStack().getName()) : ''"
                       through: true
               物品条目5:
                 type: Canvas
@@ -398,7 +402,7 @@ controls:
                       x: 44
                       y: 0
                       fontSize: 28
-                      texts: "var.item5Amount > 1 ? val.loot_slot_5.getSlotItemStack().getName() + ' &7x' + var.item5Amount.round() : val.loot_slot_5.getSlotItemStack().getName()"
+                      texts: "var.item5Visible && val.loot_slot_5.getSlotItemStack() != null ? (var.item5Amount > 1 ? val.loot_slot_5.getSlotItemStack().getName() + ' &7x' + var.item5Amount.round() : val.loot_slot_5.getSlotItemStack().getName()) : ''"
                       through: true
               物品条目6:
                 type: Canvas
@@ -438,7 +442,7 @@ controls:
                       x: 44
                       y: 0
                       fontSize: 28
-                      texts: "var.item6Amount > 1 ? val.loot_slot_6.getSlotItemStack().getName() + ' &7x' + var.item6Amount.round() : val.loot_slot_6.getSlotItemStack().getName()"
+                      texts: "var.item6Visible && val.loot_slot_6.getSlotItemStack() != null ? (var.item6Amount > 1 ? val.loot_slot_6.getSlotItemStack().getName() + ' &7x' + var.item6Amount.round() : val.loot_slot_6.getSlotItemStack().getName()) : ''"
                       through: true
               物品条目7:
                 type: Canvas
@@ -478,5 +482,5 @@ controls:
                       x: 44
                       y: 0
                       fontSize: 28
-                      texts: "var.item7Amount > 1 ? val.loot_slot_7.getSlotItemStack().getName() + ' &7x' + var.item7Amount.round() : val.loot_slot_7.getSlotItemStack().getName()"
+                      texts: "var.item7Visible && val.loot_slot_7.getSlotItemStack() != null ? (var.item7Amount > 1 ? val.loot_slot_7.getSlotItemStack().getName() + ' &7x' + var.item7Amount.round() : val.loot_slot_7.getSlotItemStack().getName()) : ''"
                       through: true

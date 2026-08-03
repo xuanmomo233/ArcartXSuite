@@ -15,6 +15,7 @@ import xuanmo.arcartxsuite.api.bridge.ApiStability;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge;
 import xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
@@ -67,6 +68,17 @@ public interface ModuleContext {
     /** 获取全局物品来源注册表（统一 Mythic/Neige/Overture/MMOItems 桥接） */
     @ApiStability.Stable
     ItemSourceRegistry itemSourceRegistry();
+
+    /**
+     * 获取原版物品中文名称解析桥接（永不为 null）。
+     * <p>
+     * 用于显示原版物品名、入库搜索文本、聊天物品预览等场景，
+     * 避免各模块直接显示英文材质名。
+     *
+     * @since 1.3.3
+     */
+    @ApiStability.Stable
+    @NotNull VanillaItemNameBridge vanillaItemNameBridge();
 
     /** 获取全局物品匹配器 */
     @ApiStability.Stable

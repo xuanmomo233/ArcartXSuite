@@ -53,7 +53,7 @@ public final class PickupHudTemplateWriter {
             line(builder, 3, "var.entry" + index + "Visible = false");
             line(builder, 3, "var.entry" + index + "CreatedAt = 0");
             line(builder, 3, "var.entry" + index + "Amount = 0");
-            line(builder, 3, "var.entry" + index + "ItemJson = ''");
+            line(builder, 3, "var.entry" + index + "ItemJson = none");
             line(builder, 3, "var.entry" + index + "IconDirty = false");
         }
         line(builder, 2, "tick: |-");
@@ -65,7 +65,7 @@ public final class PickupHudTemplateWriter {
         }
         for (int index = 1; index <= maxVisible; index++) {
             line(builder, 3, "if(var.entry" + index + "IconDirty){");
-            line(builder, 4, "if(var.entry" + index + "ItemJson != ''){");
+            line(builder, 4, "if(var.entry" + index + "ItemJson != none){");
             line(builder, 5, "val.pickup_slot_" + index + ".setItemIcon(var.entry" + index + "ItemJson)");
             line(builder, 4, "}");
             line(builder, 4, "var.entry" + index + "IconDirty = false");
@@ -123,7 +123,7 @@ public final class PickupHudTemplateWriter {
             line(builder, 9, "normal: ~0,0,0,0");
             line(builder, 9, "hover: ~0,0,0,0");
             line(builder, 9, "itemScale: 0.85");
-            line(builder, 9, "visible: var.entry" + index + "ItemJson != ''");
+            line(builder, 9, "visible: var.entry" + index + "ItemJson != none");
 
             line(builder, 7, "text" + index + ":");
             line(builder, 8, "type: Text");

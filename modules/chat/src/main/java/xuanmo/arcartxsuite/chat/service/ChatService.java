@@ -43,6 +43,7 @@ import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge;
 import xuanmo.arcartxsuite.chat.config.ChatCardConfiguration;
 import xuanmo.arcartxsuite.chat.config.ChatChannelDefinition;
 import xuanmo.arcartxsuite.chat.config.ChatChannelMode;
@@ -93,6 +94,7 @@ public final class ChatService implements Listener {
     private final CrossServerAPI crossServer;
     private final PlaceholderResolverAPI placeholderResolver;
     private final MessageProvider messages;
+    private final VanillaItemNameBridge vanillaItemNameBridge;
 
     private CrossServerChannel crossServerChannel;
     private BukkitTask cleanupTask;
@@ -115,7 +117,7 @@ public final class ChatService implements Listener {
         PlaceholderResolverAPI placeholderResolver
     ) {
         this(plugin, logger, tabRefreshableProvider, configuration, repository, packetBridge, itemStackBridge,
-            completionUiId, crossServer, placeholderResolver, null);
+            completionUiId, crossServer, placeholderResolver, null, null);
     }
 
     public ChatService(
@@ -129,7 +131,8 @@ public final class ChatService implements Listener {
         String completionUiId,
         CrossServerAPI crossServer,
         PlaceholderResolverAPI placeholderResolver,
-        MessageProvider messages
+        MessageProvider messages,
+        VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this.plugin = Objects.requireNonNull(plugin);
         this.logger = logger;
@@ -142,6 +145,7 @@ public final class ChatService implements Listener {
         this.crossServer = Objects.requireNonNull(crossServer);
         this.placeholderResolver = placeholderResolver;
         this.messages = messages;
+        this.vanillaItemNameBridge = vanillaItemNameBridge;
         this.ioExecutor = Executors.newSingleThreadExecutor(runnable -> {
             Thread thread = new Thread(runnable, "AXS-Chat-IO");
             thread.setDaemon(true);
@@ -1680,7 +1684,10 @@ public final class ChatService implements Listener {
         }
     }
 
-    private static String resolveItemName(ItemStack itemStack) {
+    private String resolveItemName(ItemStack itemStack) {
+        if (vanillaItemNameBridge != null) {
+            return ChatColor.stripColor(vanillaItemNameBridge.resolveDisplayName(itemStack));
+        }
         ItemMeta itemMeta = itemStack.getItemMeta();
         if (itemMeta != null && itemMeta.hasDisplayName()) {
             return ChatColor.stripColor(itemMeta.getDisplayName());

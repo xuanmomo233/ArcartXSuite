@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.keybind;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,6 +28,8 @@ public final class KeybindService implements Listener {
     private final List<String> registeredKeys = new ArrayList<>();
     private final ArcartXKeyBindBridge keyBindBridge;
     private boolean listenerRegistered;
+    /** 被合并的按键 name → 实际注册到客户端的 name（键位重复时后注册的并入先注册的）。 */
+    private final Map<String, String> aliasByKeyName = new ConcurrentHashMap<>();
 
     public KeybindService(JavaPlugin plugin, PropBridgeAPI propBridge) {
         this.plugin = plugin;
@@ -44,6 +47,10 @@ public final class KeybindService implements Listener {
             return;
         }
 
+        // 按 config.yml 声明顺序注册；若某条目的 default-key 与先前已注册的条目相同，
+        // 则跳过本次注册（客户端只注册一个按键），并建立 alias：后注册的 name → 先注册的 name。
+        // 模块用自己配置里的 name 订阅，KeybindService 自动路由到实际注册的 name。
+        Map<String, String> registeredNameByKey = new HashMap<>();
         for (String key : keybindsSection.getKeys(false)) {
             ConfigurationSection entry = keybindsSection.getConfigurationSection(key);
             if (entry == null) {
@@ -56,9 +63,20 @@ public final class KeybindService implements Listener {
                 xuanmo.arcartxsuite.module.AxsLog.logger().warning("[Keybind] 跳过无效按键配置: keybinds." + key);
                 continue;
             }
+            String normalizedKey = defaultKey.toUpperCase();
+            String existingName = registeredNameByKey.get(normalizedKey);
+            if (existingName != null) {
+                aliasByKeyName.put(name.toUpperCase(), existingName.toUpperCase());
+                xuanmo.arcartxsuite.module.AxsLog.logger().info(
+                    "[Keybind] 按键 " + name + " 默认键位 " + defaultKey
+                        + " 与 " + existingName + " 相同，合并注册为 " + existingName
+                );
+                continue;
+            }
             boolean success = keyBindBridge.registerClientKeyBind(name, category, defaultKey);
             if (success) {
                 registeredKeys.add(name);
+                registeredNameByKey.put(normalizedKey, name);
                 xuanmo.arcartxsuite.module.AxsLog.logger().info("[Keybind] 已注册客户端按键: " + name + " (默认 " + defaultKey + ")");
             } else {
                 xuanmo.arcartxsuite.module.AxsLog.logger().warning("[Keybind] 注册客户端按键失败: " + name);
@@ -75,6 +93,7 @@ public final class KeybindService implements Listener {
         }
         registeredKeys.clear();
         handlers.clear();
+        aliasByKeyName.clear();
         keyBindBridge.shutdown();
     }
 
@@ -109,8 +128,10 @@ public final class KeybindService implements Listener {
         if (keyName == null || keyName.isBlank() || handler == null) {
             return;
         }
+        // 若该 name 因键位重复被合并到其他 name，则把 handler 挂到实际注册的 name 上。
+        String resolved = aliasByKeyName.getOrDefault(keyName.toUpperCase(), keyName.toUpperCase());
         CopyOnWriteArrayList<PrioritizedHandler> list = handlers.computeIfAbsent(
-            keyName.toUpperCase(), ignored -> new CopyOnWriteArrayList<>()
+            resolved, ignored -> new CopyOnWriteArrayList<>()
         );
         list.add(new PrioritizedHandler(priority, handler));
         list.sort(null);

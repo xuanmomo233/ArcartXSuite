@@ -30,6 +30,12 @@ public final class MailPresetLoader {
     }
 
     public static Map<String, MailPresetDefinition> loadPresets(File directory, Logger logger, int maxAttachments) throws IOException {
+        return loadPresets(directory, logger, maxAttachments, null);
+    }
+
+    /** 加载预设；传入桥接时物品附件的默认描述使用中文名。 */
+    public static Map<String, MailPresetDefinition> loadPresets(File directory, Logger logger, int maxAttachments,
+            xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge) throws IOException {
         Map<String, MailPresetDefinition> result = new LinkedHashMap<>();
         File[] files = directory.listFiles((dir, name) -> name.toLowerCase(Locale.ROOT).endsWith(".yml"));
         if (files == null) {
@@ -48,7 +54,7 @@ public final class MailPresetLoader {
             String subject = string(presetSection.getString("subject", displayName));
             String body = string(presetSection.getString("body", ""));
             Duration expiresAfter = Duration.ofDays(Math.max(1, presetSection.getLong("expires-after-days", 15L)));
-            List<MailAttachment> attachments = loadAttachments(presetSection, logger, maxAttachments, id);
+            List<MailAttachment> attachments = loadAttachments(presetSection, logger, maxAttachments, id, vanillaItemNameBridge);
             List<String> claimCommands = presetSection.getStringList("claim-commands");
             List<ScriptCondition> claimConditions = new ArrayList<>(
                 ScriptConditionsLoader.loadClaimConditions(presetSection)
@@ -89,7 +95,8 @@ public final class MailPresetLoader {
         return List.copyOf(cdks);
     }
 
-    private static List<MailAttachment> loadAttachments(ConfigurationSection presetSection, Logger logger, int maxAttachments, String presetId) {
+    private static List<MailAttachment> loadAttachments(ConfigurationSection presetSection, Logger logger, int maxAttachments, String presetId,
+            xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge) {
         java.util.ArrayList<MailAttachment> attachments = new java.util.ArrayList<>();
         double vaultAttachment = Math.max(0.0D, presetSection.getDouble("vault-attachment", 0.0D));
         if (vaultAttachment > 0.0D) {
@@ -142,7 +149,7 @@ public final class MailPresetLoader {
                         MailItemSerializer.serialize(itemStack),
                         "",
                         0.0D,
-                        resolveDescription(itemStack)
+                        resolveDescription(itemStack, vanillaItemNameBridge)
                     )
                 );
             } catch (IOException exception) {
@@ -262,9 +269,14 @@ public final class MailPresetLoader {
         return seconds + "s";
     }
 
-    private static String resolveDescription(ItemStack itemStack) {
-        ItemMeta itemMeta = itemStack.getItemMeta();
-        String name = itemMeta != null && itemMeta.hasDisplayName() ? itemMeta.getDisplayName() : itemStack.getType().name();
+    private static String resolveDescription(ItemStack itemStack, xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge bridge) {
+        String name;
+        if (bridge != null) {
+            name = bridge.resolveDisplayName(itemStack);
+        } else {
+            ItemMeta itemMeta = itemStack.getItemMeta();
+            name = itemMeta != null && itemMeta.hasDisplayName() ? itemMeta.getDisplayName() : itemStack.getType().name();
+        }
         return name + " x" + itemStack.getAmount();
     }
 

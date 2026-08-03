@@ -63,6 +63,11 @@ public final class PickupModule extends AbstractAXSModule {
     }
 
     @Override
+    protected int currentConfigVersion() {
+        return 2;
+    }
+
+    @Override
     protected String messagesFileName() {
         return "messages.yml";
     }
@@ -174,7 +179,7 @@ public final class PickupModule extends AbstractAXSModule {
         }
 
         scannerService = new LootScannerService(
-            plugin, logger, configuration, packetGuard, packetBridge, itemStackBridge,
+            plugin, logger, configuration, packetGuard, packetBridge, itemStackBridge, vanillaItemNameBridge,
             uiBinding.runtimeUiId(), interactBinding.runtimeUiId(),
             () -> getCapability(WarehouseAutoDepositable.class),
             messages()
@@ -186,7 +191,13 @@ public final class PickupModule extends AbstractAXSModule {
             playerId -> scannerService != null && scannerService.isEnabled(playerId));
 
         // 注册宿主全局按键回调（优先级 10，拾取优先于对话）
-        registerKeybindHandler("AXS_INTERACT", 10, (player, keyName) ->
+        // 使用配置的 keybindName，默认 AXS_INTERACT（宿主全局交互键）
+        String keybindName = configuration.scanner().keybindName();
+        if (keybindName == null || keybindName.isBlank()) {
+            keybindName = "AXS_INTERACT";
+        }
+        final String resolvedKeybindName = keybindName;
+        registerKeybindHandler(resolvedKeybindName, 10, (player, keyName) ->
             scannerService != null && scannerService.handleInteractKeyFromHost(player)
         );
 

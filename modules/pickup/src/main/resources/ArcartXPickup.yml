@@ -1,4 +1,4 @@
-config-version: 1
+config-version: 2
 # AXS Pickup
 # 作用: 拾取提示 HUD（通知模式）或掉落物交互拾取面板（扫描模式）。
 # 依赖: ArcartX。
@@ -53,10 +53,13 @@ scanner:
   merge-same-items: true
   # 交互 Menu 的 UI ID（按自定义交互键打开的透明菜单，用于捕获滚轮/按键输入）
   interact-ui-id: "AXS:loot_interact"
-  # 拾取按键绑定（注册为 ArcartX 自定义按键，玩家可在按键设置中修改）
+  # 拾取按键绑定：声明扫描模式订阅的客户端按键 ID。
+  # 该按键由宿主 config.yml 的 keybinds.pickup-pick 统一注册到 ArcartX 客户端，
+  # 玩家可在按键设置中修改。服务端通过此 name 订阅按键回调，按键触发后
+  # 由服务端发包通知客户端打开交互菜单（客户端无需感知按键 name）。
+  # 如需更换按键名，须同步修改宿主 config.yml 的 keybinds 节，否则按键无法注册。
   keybind:
     name: AXS_PICKUP_PICK
-    default-key: F
 
 # ========== 过滤系统（仅 scanner 模式生效）==========
 filter:

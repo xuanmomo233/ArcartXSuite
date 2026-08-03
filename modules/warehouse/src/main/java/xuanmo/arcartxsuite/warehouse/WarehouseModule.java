@@ -183,7 +183,8 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
             itemSourceRegistry, itemMatcher, currencyManager,
             () -> getCapability(PickupNotifiable.class),
             crossServer, crossServerChannelConfig, messages(),
-            () -> getCapability(xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess.class)
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess.class),
+            vanillaItemNameBridge
         );
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.setPickupInterceptorProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.PickupInterceptor.class));

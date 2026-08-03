@@ -68,6 +68,7 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
     private final ExtraBackpackRepository repository;
     private final CurrencyBridgeAPI currencyBridge;
     private final MessageProvider messages;
+    private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
 
     private static final String UI_RESOURCE_PATH = "arcartx/ui/extrabackpack.yml";
     private static final String UI_FILE_PATH = "ui/extrabackpack.yml";
@@ -99,7 +100,8 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
         ExtraBackpackConfiguration configuration,
         ExtraBackpackRepository repository,
         CurrencyBridgeAPI currencyBridge,
-        MessageProvider messages
+        MessageProvider messages,
+        xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -111,6 +113,7 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
         this.repository = repository;
         this.currencyBridge = currencyBridge;
         this.messages = messages;
+        this.vanillaItemNameBridge = vanillaItemNameBridge;
     }
 
     @FunctionalInterface
@@ -1232,10 +1235,13 @@ public final class ExtraBackpackService implements Listener, ExtraBackpackAccess
         String path = safe(rawPath).toLowerCase(Locale.ROOT);
         ItemMeta meta = stack.getItemMeta();
         if ("material".equals(path)) {
-            return stack.getType().name();
+            return vanillaItemNameBridge != null ? vanillaItemNameBridge.translate(stack.getType()) : stack.getType().name();
         }
         if ("display-name".equals(path) || "name".equals(path)) {
-            return meta != null && meta.hasDisplayName() ? meta.getDisplayName() : stack.getType().name();
+            if (meta != null && meta.hasDisplayName()) {
+                return meta.getDisplayName();
+            }
+            return vanillaItemNameBridge != null ? vanillaItemNameBridge.resolveDisplayName(stack) : stack.getType().name();
         }
         if ("custom-model-data".equals(path) && meta != null && meta.hasCustomModelData()) {
             return Integer.toString(meta.getCustomModelData());

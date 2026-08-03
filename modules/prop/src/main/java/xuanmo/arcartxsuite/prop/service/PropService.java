@@ -54,6 +54,7 @@ public final class PropService implements Listener {
     private final PropSymphonyService symphonyService;
     private Supplier<EventBusCapability> eventBusProvider;
     private final MessageProvider messages;
+    private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private final Set<String> registeredBindingIds = new LinkedHashSet<>();
 
     public PropService(
@@ -65,7 +66,8 @@ public final class PropService implements Listener {
         PropLanguageConfiguration languageConfiguration,
         Map<String, PropDefinition> definitionsByNormalizedId,
         xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge,
-        MessageProvider messages
+        MessageProvider messages,
+        xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -75,6 +77,7 @@ public final class PropService implements Listener {
         this.languageConfiguration = languageConfiguration;
         this.definitionsByNormalizedId = definitionsByNormalizedId;
         this.messages = messages;
+        this.vanillaItemNameBridge = vanillaItemNameBridge;
         this.attributePlusService = new PropAttributePlusService(plugin, attributeBridge.attributePlus());
         this.mythicLibService = new PropMythicLibService(plugin, this.logger, configuration.mythicLib(), attributeBridge.mythicLib());
         this.symphonyService = new PropSymphonyService(plugin, attributeBridge.symphony());
@@ -599,9 +602,12 @@ public final class PropService implements Listener {
         return ChatColor.translateAlternateColorCodes('&', rendered);
     }
 
-    private static String resolveDisplayName(ItemStack itemStack) {
+    private String resolveDisplayName(ItemStack itemStack) {
         if (itemStack == null) {
             return "§c未知道具";
+        }
+        if (vanillaItemNameBridge != null) {
+            return vanillaItemNameBridge.resolveDisplayName(itemStack);
         }
         ItemMeta itemMeta = itemStack.getItemMeta();
         if (itemMeta != null && itemMeta.hasDisplayName()) {

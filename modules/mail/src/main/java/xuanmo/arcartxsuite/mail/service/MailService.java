@@ -133,6 +133,7 @@ public final class MailService implements Listener {
     private final CrossServerAPI crossServer;
     private final MessageProvider messages;
     private final Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier;
+    private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private final Map<String, MailPresetDefinition> presets = new ConcurrentHashMap<>();
     private final Map<UUID, Long> selectedMailIds = new ConcurrentHashMap<>();
     private final Map<UUID, MailInboxQuery> inboxQueries = new ConcurrentHashMap<>();
@@ -167,28 +168,11 @@ public final class MailService implements Listener {
         BundledResourceWriter bundledResourceWriter,
         BiConsumer<String, Player> signalDispatcher,
         CurrencyBridgeAPI currencyBridgeManager,
-        CrossServerAPI crossServer
+        CrossServerAPI crossServer,
+        xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this(plugin, logger, plugin.getDataFolder(), configuration, repository, bridge, packetGuard,
-            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null);
-    }
-
-    public MailService(
-        JavaPlugin plugin,
-        Logger logger,
-        File baseDataDir,
-        MailModuleConfiguration configuration,
-        MailRepository repository,
-        PacketBridgeAPI bridge,
-        PacketGuardAPI packetGuard,
-        UiResourceExporter uiResourceExporter,
-        BundledResourceWriter bundledResourceWriter,
-        BiConsumer<String, Player> signalDispatcher,
-        CurrencyBridgeAPI currencyBridgeManager,
-        CrossServerAPI crossServer
-    ) {
-        this(plugin, logger, baseDataDir, configuration, repository, bridge, packetGuard,
-            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null);
+            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, vanillaItemNameBridge);
     }
 
     public MailService(
@@ -204,7 +188,27 @@ public final class MailService implements Listener {
         BiConsumer<String, Player> signalDispatcher,
         CurrencyBridgeAPI currencyBridgeManager,
         CrossServerAPI crossServer,
-        MessageProvider messages
+        xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
+    ) {
+        this(plugin, logger, baseDataDir, configuration, repository, bridge, packetGuard,
+            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, vanillaItemNameBridge);
+    }
+
+    public MailService(
+        JavaPlugin plugin,
+        Logger logger,
+        File baseDataDir,
+        MailModuleConfiguration configuration,
+        MailRepository repository,
+        PacketBridgeAPI bridge,
+        PacketGuardAPI packetGuard,
+        UiResourceExporter uiResourceExporter,
+        BundledResourceWriter bundledResourceWriter,
+        BiConsumer<String, Player> signalDispatcher,
+        CurrencyBridgeAPI currencyBridgeManager,
+        CrossServerAPI crossServer,
+        MessageProvider messages,
+        xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this(
             plugin,
@@ -220,7 +224,8 @@ public final class MailService implements Listener {
             currencyBridgeManager,
             crossServer,
             messages,
-            null
+            null,
+            vanillaItemNameBridge
         );
     }
 
@@ -238,7 +243,8 @@ public final class MailService implements Listener {
         CurrencyBridgeAPI currencyBridgeManager,
         CrossServerAPI crossServer,
         MessageProvider messages,
-        Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier
+        Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier,
+        xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -254,6 +260,7 @@ public final class MailService implements Listener {
         this.crossServer = crossServer;
         this.messages = messages;
         this.secondaryPasswordSupplier = secondaryPasswordSupplier;
+        this.vanillaItemNameBridge = vanillaItemNameBridge;
     }
 
     private String message(String key, Object... args) {
@@ -1347,7 +1354,7 @@ public final class MailService implements Listener {
             throw new IOException("无法创建邮件预设目录: " + directory.getAbsolutePath());
         }
         exportBundledPresetIfMissing(directory);
-        presets.putAll(MailPresetLoader.loadPresets(directory, this.logger, configuration.playerSend().maxAttachments()));
+        presets.putAll(MailPresetLoader.loadPresets(directory, this.logger, configuration.playerSend().maxAttachments(), vanillaItemNameBridge));
     }
 
     private void syncPresetCdks() throws Exception {
@@ -2688,8 +2695,13 @@ public final class MailService implements Listener {
     }
 
     private String resolveItemDescription(ItemStack itemStack) {
-        ItemMeta meta = itemStack.getItemMeta();
-        String name = meta != null && meta.hasDisplayName() ? meta.getDisplayName() : itemStack.getType().name();
+        String name;
+        if (vanillaItemNameBridge != null) {
+            name = vanillaItemNameBridge.resolveDisplayName(itemStack);
+        } else {
+            ItemMeta meta = itemStack.getItemMeta();
+            name = meta != null && meta.hasDisplayName() ? meta.getDisplayName() : itemStack.getType().name();
+        }
         return name + " x" + itemStack.getAmount();
     }
 

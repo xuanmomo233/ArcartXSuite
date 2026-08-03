@@ -143,7 +143,8 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             mailRepo,
             packetBridge, packetGuard, uiExporter, presetWriter, null,
             currencyManager, crossServer, messages(),
-            () -> getCapability(SecondaryPasswordAccess.class)
+            () -> getCapability(SecondaryPasswordAccess.class),
+            vanillaItemNameBridge
         );
         service.start();
         adminCommand = new MailAdminCommand(() -> service, messages());

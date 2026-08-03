@@ -6,6 +6,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration.FilterConfig;
 
 /**
@@ -17,9 +18,11 @@ import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration.FilterConfig;
 public final class LootFilterEngine {
 
     private final FilterConfig config;
+    private final VanillaItemNameBridge vanillaItemNameBridge;
 
-    public LootFilterEngine(FilterConfig config) {
+    public LootFilterEngine(FilterConfig config, VanillaItemNameBridge vanillaItemNameBridge) {
         this.config = config;
+        this.vanillaItemNameBridge = vanillaItemNameBridge;
     }
 
     /**
@@ -50,7 +53,7 @@ public final class LootFilterEngine {
 
         // 名称正则过滤
         if (!config.nameBlacklistRegex().isEmpty()) {
-            String displayName = stripColor(resolveDisplayName(itemStack));
+            String displayName = stripColor(vanillaItemNameBridge.resolveDisplayName(itemStack));
             for (Pattern pattern : config.nameBlacklistRegex()) {
                 if (pattern.matcher(displayName).find()) {
                     return false;
@@ -199,7 +202,7 @@ public final class LootFilterEngine {
         return nbtString.contains(keyPath);
     }
 
-    /** 解析物品显示名：优先取 ItemMeta 自定义名，否则返回材质名。 */
+    /** 解析物品显示名：优先取 ItemMeta 自定义名，否则通过桥接翻译原版中文名。 */
     private static String resolveDisplayName(ItemStack itemStack) {
         ItemMeta meta = itemStack.getItemMeta();
         if (meta != null && meta.hasDisplayName()) {

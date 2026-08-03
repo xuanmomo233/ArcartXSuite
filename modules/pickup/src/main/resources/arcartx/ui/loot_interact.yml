@@ -2,6 +2,7 @@
 # 打开后通过发包给服务端，由服务端发包更新 loot_panel HUD。
 ui:
   isHud: false
+  defaultOpen: false
   background: false
   escClose: true
   through: true

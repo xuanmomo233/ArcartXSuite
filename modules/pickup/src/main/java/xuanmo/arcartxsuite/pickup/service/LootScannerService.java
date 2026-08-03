@@ -32,6 +32,7 @@ import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration;
 import xuanmo.arcartxsuite.pickup.config.PickupModuleConfiguration.ScannerConfig;
 import xuanmo.arcartxsuite.pickup.filter.LootFilterEngine;
@@ -56,6 +57,7 @@ public final class LootScannerService implements Listener {
     private final PacketGuardAPI packetGuard;
     private final PacketBridgeAPI packetBridge;
     private final ItemBridgeAPI itemStackBridge;
+    private final VanillaItemNameBridge vanillaItemNameBridge;
     private final Supplier<WarehouseAutoDepositable> warehouseAutoDepositableSupplier;
     /** 过滤引擎：根据配置决定哪些物品应在面板中显示 */
     private final LootFilterEngine filterEngine;
@@ -86,6 +88,7 @@ public final class LootScannerService implements Listener {
         PacketGuardAPI packetGuard,
         PacketBridgeAPI packetBridge,
         ItemBridgeAPI itemStackBridge,
+        VanillaItemNameBridge vanillaItemNameBridge,
         String uiId,
         String interactUiId,
         Supplier<WarehouseAutoDepositable> warehouseAutoDepositableSupplier,
@@ -97,9 +100,10 @@ public final class LootScannerService implements Listener {
         this.packetGuard = packetGuard;
         this.packetBridge = packetBridge;
         this.itemStackBridge = itemStackBridge;
+        this.vanillaItemNameBridge = vanillaItemNameBridge;
         this.warehouseAutoDepositableSupplier = warehouseAutoDepositableSupplier == null ? () -> null : warehouseAutoDepositableSupplier;
         this.messages = messages;
-        this.filterEngine = new LootFilterEngine(configuration.filter());
+        this.filterEngine = new LootFilterEngine(configuration.filter(), vanillaItemNameBridge);
         this.uiId = uiId;
         this.interactUiId = interactUiId;
     }
@@ -142,27 +146,33 @@ public final class LootScannerService implements Listener {
     }
 
     /**
-     * 宿主按键回调入口：处理交互键（F），返回 true 表示已消费。
+     * 宿主按键回调入口：处理交互键，返回 true 表示已消费。
      * <p>
-     * loot_interact 的打开/拾取由客户端 loot_panel.yml 的 keyPress 直接处理（Screen.open / Packet.send）。
-     * 本方法仅用于事件消费判定：当玩家附近有可拾取物品时消费事件，阻止后续 handler（如 Conversation）处理。
+     * 由服务端主导菜单打开：当玩家附近有可拾取物品时，向客户端 loot_panel 发送 {@code open_interact} 包，
+     * 客户端收到后执行 {@code Screen.open('AXS:loot_interact')} 并标记 menuOpen。
+     * 这样客户端无需知道按键 name，按键注册/alias 路由完全由宿主 KeybindService 处理。
      */
     public boolean handleInteractKeyFromHost(Player player) {
         if (!active || player == null || !player.isOnline()) {
             return false;
         }
-        if (disabledPlayers.contains(player.getUniqueId())) {
+        UUID playerId = player.getUniqueId();
+        if (disabledPlayers.contains(playerId)) {
+            return false;
+        }
+        if (menuOpenPlayers.contains(playerId)) {
+            return true;
+        }
+
+        PlayerLootState lootState = playerStates.get(playerId);
+        if (lootState == null || lootState.visibleItems.isEmpty()) {
             return false;
         }
 
-        UUID playerId = player.getUniqueId();
-        PlayerLootState lootState = playerStates.get(playerId);
-
-        // 有物品 → 消费（客户端自行处理菜单打开/拾取）
-        if (lootState != null && !lootState.visibleItems.isEmpty()) {
-            return true;
-        }
-        return false;
+        // 服务端校验通过 → 通知客户端打开交互菜单
+        packetBridge.sendPacket(player, uiId, "open_interact", java.util.Map.of());
+        menuOpenPlayers.add(playerId);
+        return true;
     }
 
     /**
@@ -254,7 +264,11 @@ public final class LootScannerService implements Listener {
             case "open_menu" -> menuOpenPlayers.add(player.getUniqueId());
             case "scroll_up" -> handleScroll(player, -1);
             case "scroll_down" -> handleScroll(player, 1);
-            case "close_menu" -> menuOpenPlayers.remove(player.getUniqueId());
+            case "close_menu" -> {
+                menuOpenPlayers.remove(player.getUniqueId());
+                // 通知 loot_panel 菜单已关闭，恢复 HUD 交互
+                packetBridge.sendPacket(player, uiId, "menu_closed", java.util.Map.of());
+            }
             default -> {
                 // pick_0 ~ pick_7：点击指定条目拾取
                 if (action.startsWith("pick_")) {
@@ -433,6 +447,15 @@ public final class LootScannerService implements Listener {
             entries = mergeEntries(entries);
         }
 
+        // 周围无掉落物时自动关闭交互菜单（loot_interact）
+        if (entries.isEmpty() && menuOpenPlayers.contains(playerId)) {
+            menuOpenPlayers.remove(playerId);
+            packetBridge.closeUi(player, interactUiId);
+            // 通知 loot_panel 菜单已关闭，恢复 HUD 交互
+            packetBridge.sendPacket(player, uiId, "menu_closed", java.util.Map.of());
+            debug("MENU_AUTO_CLOSE player=" + player.getName() + " reason=no_items");
+        }
+
         PlayerLootState state = playerStates.computeIfAbsent(playerId, k -> new PlayerLootState());
         if (!entriesChanged(state.visibleItems, entries)) {
             return;
@@ -575,26 +598,10 @@ public final class LootScannerService implements Listener {
         }
     }
 
-    /** 解析物品显示名：优先取 ItemMeta 自定义名，其次将材质名转为首字母大写格式。 */
+    /** 解析物品显示名：优先取自定义名，其次通过桥接翻译原版物品中文名。 */
     private String resolveDisplayName(ItemStack itemStack) {
-        if (itemStack == null) return "Unknown";
-        ItemMeta meta = itemStack.getItemMeta();
-        if (meta != null && meta.hasDisplayName()) {
-            String name = meta.getDisplayName();
-            if (name != null && !name.isBlank()) {
-                return name;
-            }
-        }
-        Material material = itemStack.getType();
-        String[] parts = material.name().toLowerCase().split("_");
-        StringBuilder builder = new StringBuilder();
-        for (String part : parts) {
-            if (part.isBlank()) continue;
-            if (builder.length() > 0) builder.append(' ');
-            builder.append(Character.toUpperCase(part.charAt(0)));
-            if (part.length() > 1) builder.append(part.substring(1));
-        }
-        return builder.length() == 0 ? material.name() : builder.toString();
+        if (itemStack == null) return "空气";
+        return vanillaItemNameBridge.resolveDisplayName(itemStack);
     }
 
     /** 玩家的掉落物面板状态。 */

@@ -152,17 +152,31 @@ attribute-bridges:
 # default-key: 默认键位（GLFW 键名，如 F、G、H、KP_8 等）
 # category: 按键分类名（显示在按键设置界面）
 keybinds:
+  # 全局交互键，多模块按优先级订阅（数字越小越优先）：
+  #   - Pickup 扫描模式（优先级 10）：按下打开拾取交互菜单
+  #   - Conversation 对话（优先级 50）：按下确认/推进对话
+  # 拾取优先于对话，故扫描模式开启时此键归拾取。
   interact:
     name: AXS_INTERACT
     default-key: G
     category: ArcartXSuite
+  # 导航上一项键，Conversation 模块（优先级 10）订阅，
+  # 用于对话选项列表中向上移动选中项。
   navigate-prev:
     name: AXS_NAVIGATE_PREV
     default-key: UP
     category: ArcartXSuite
+  # 导航下一项键，Conversation 模块（优先级 10）订阅，
+  # 用于对话选项列表中向下移动选中项。
   navigate-next:
     name: AXS_NAVIGATE_NEXT
     default-key: DOWN
+    category: ArcartXSuite
+  # Pickup 扫描模式专用拾取键（按键打开 loot_interact 交互菜单）。
+  # 由宿主统一注册到客户端，pickup 模块通过 scanner.keybind.name 订阅此按键回调。
+  pickup-pick:
+    name: AXS_PICKUP_PICK
+    default-key: F
     category: ArcartXSuite
 
 # ========== Tacz 模组伤害兼容 ==========

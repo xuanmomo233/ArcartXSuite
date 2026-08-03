@@ -174,6 +174,11 @@ final class DefaultModuleContext implements ModuleContext {
     }
 
     @Override
+    public xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge() {
+        return registry.vanillaItemNameBridge();
+    }
+
+    @Override
     public ItemMatcherAPI itemMatcher() {
         return registry.itemMatcher();
     }

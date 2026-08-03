@@ -1,0 +1,6 @@
+from-version: 1
+to-version: 2
+description: "移除 scanner.keybind.default-key（dead field）。该字段自首次引入以来从未被代码使用，拾取按键的默认键位现由宿主 config.yml 的 keybinds.pickup-pick.default-key 统一注册。"
+operations:
+  - type: remove
+    path: scanner.keybind.default-key

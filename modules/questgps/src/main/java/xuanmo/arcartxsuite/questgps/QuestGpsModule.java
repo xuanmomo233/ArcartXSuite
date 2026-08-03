@@ -179,7 +179,8 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
             itemSourceRegistry,
             createWaypointBridge(),
             createAdyeshachNpcBridge(),
-            messages()
+            messages(),
+            vanillaItemNameBridge
         );
         service.setEventBusProvider(() -> getCapability(EventBusCapability.class));
         service.start();

@@ -113,7 +113,8 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
             configuration,
             repository,
             currencyManager,
-            messages()
+            messages(),
+            vanillaItemNameBridge
         );
         service.start();
         registerCapability(ExtraBackpackAccess.class, service);

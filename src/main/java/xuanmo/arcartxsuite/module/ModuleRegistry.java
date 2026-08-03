@@ -46,6 +46,7 @@ import xuanmo.arcartxsuite.bridge.ArcartXWorldTextureService;
 import xuanmo.arcartxsuite.bridge.DefaultAttributeBridgeRegistry;
 import xuanmo.arcartxsuite.bridge.DefaultAriaBridge;
 import xuanmo.arcartxsuite.bridge.DefaultItemSourceRegistry;
+import xuanmo.arcartxsuite.bridge.DefaultVanillaItemNameBridge;
 import xuanmo.arcartxsuite.bridge.TaczCombatBridge;
 import xuanmo.arcartxsuite.condition.DefaultScriptConditionEvaluator;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
@@ -85,6 +86,7 @@ public final class ModuleRegistry {
     private DefaultAttributeBridgeRegistry attributeBridgeRegistry;
     private DefaultAriaBridge ariaBridge;
     private ScriptConditionEvaluator scriptConditionEvaluator;
+    private DefaultVanillaItemNameBridge vanillaItemNameBridge;
     private AccountTypeServiceImpl accountTypeService;
 
     /** 按 id 排列的已加载模块，保持加载顺序 */
@@ -911,6 +913,11 @@ public final class ModuleRegistry {
         }
         itemSourceRegistry.initialize();
 
+        // 原版物品中文名称桥接（纯静态表，无外部依赖）
+        if (vanillaItemNameBridge == null) {
+            vanillaItemNameBridge = new DefaultVanillaItemNameBridge();
+        }
+
         // 物品匹配器
         itemMatcherSupport = new ItemMatcherSupport(
             itemSourceRegistry::mythicItemId,
@@ -990,6 +997,11 @@ public final class ModuleRegistry {
     /** 获取全局物品来源注册表 */
     public ItemSourceRegistry itemSourceRegistry() {
         return itemSourceRegistry;
+    }
+
+    /** 获取原版物品中文名称桥接 */
+    public DefaultVanillaItemNameBridge vanillaItemNameBridge() {
+        return vanillaItemNameBridge;
     }
 
     /** 获取全局物品匹配器 */

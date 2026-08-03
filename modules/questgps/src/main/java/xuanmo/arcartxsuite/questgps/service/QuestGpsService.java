@@ -98,7 +98,8 @@ public final class QuestGpsService implements Listener {
         xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry,
         xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI waypointBridge,
         xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI npcBridge,
-        MessageProvider messages
+        MessageProvider messages,
+        xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this.plugin = plugin;
         this.logger = logger;
@@ -117,7 +118,8 @@ public final class QuestGpsService implements Listener {
             this.logger,
             titleConfigurationProvider,
             itemStack -> itemStackBridge == null ? java.util.Optional.empty() : itemStackBridge.itemToJson(itemStack),
-            itemSourceRegistry
+            itemSourceRegistry,
+            vanillaItemNameBridge
         );
         ChemdahMetadataReader metadataReader = new ChemdahMetadataReader(this.logger);
         ChemdahRewardReader rewardReader = new ChemdahRewardReader(this.logger, rewardResolver);

@@ -45,6 +45,7 @@ public class AuctionService {
     private final @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier;
     private final AuctionItemSerializer itemSerializer;
     private final Logger logger;
+    private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private BukkitTask schedulerTask;
 
     public AuctionService(JavaPlugin plugin, AuctionConfiguration config, MessagesConfiguration messages,
@@ -52,7 +53,8 @@ public class AuctionService {
                           @Nullable Consumer<String> crossServerPublisher,
                           CurrencyBridgeAPI currencyManager,
                           @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier,
-                          AuctionItemSerializer itemSerializer, Logger logger) {
+                          AuctionItemSerializer itemSerializer, Logger logger,
+                          xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge) {
         this.plugin = plugin;
         this.config = config;
         this.messages = messages;
@@ -63,6 +65,7 @@ public class AuctionService {
         this.mailSupplier = mailSupplier;
         this.itemSerializer = itemSerializer;
         this.logger = logger;
+        this.vanillaItemNameBridge = vanillaItemNameBridge;
     }
 
     public void start(long intervalTicks) {
@@ -730,6 +733,9 @@ public class AuctionService {
     }
 
     private String getItemDisplayName(ItemStack item) {
+        if (vanillaItemNameBridge != null) {
+            return vanillaItemNameBridge.resolveDisplayName(item);
+        }
         if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
             return item.getItemMeta().getDisplayName();
         }
