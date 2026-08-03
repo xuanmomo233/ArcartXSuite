@@ -443,6 +443,15 @@ public final class ModuleRegistry {
                     return false;
                 }
             }
+            // 外部可选插件依赖：缺失仅提示，不影响校验通过
+            for (String externalPlugin : descriptor.externalSoftDepends()) {
+                org.bukkit.plugin.Plugin softDep = Bukkit.getPluginManager().getPlugin(externalPlugin);
+                if (softDep == null) {
+                    LOGGER.info(descriptor.name() + " 模块的可选外部插件 " + externalPlugin + " 未安装，相关功能将不可用。");
+                } else if (!softDep.isEnabled()) {
+                    LOGGER.info(descriptor.name() + " 模块的可选外部插件 " + externalPlugin + " 已安装但未启用，相关功能将不可用。");
+                }
+            }
             return signatureVerifier.verify(descriptor);
         } catch (Exception | LinkageError exception) {
             LOGGER.log(Level.SEVERE, "校验云端模块失败", exception);
@@ -694,6 +703,16 @@ public final class ModuleRegistry {
             if (!isModuleLoaded(depId)) {
                 LOGGER.warning(descriptor.name() + " 模块依赖 " + depId + " 未就绪，已跳过加载。");
                 return false;
+            }
+        }
+
+        // 检查外部可选插件依赖（缺失仅提示，不跳过加载；模块自行在运行时检测并降级）
+        for (String externalPlugin : descriptor.externalSoftDepends()) {
+            org.bukkit.plugin.Plugin softDep = Bukkit.getPluginManager().getPlugin(externalPlugin);
+            if (softDep == null) {
+                LOGGER.info(descriptor.name() + " 模块的可选外部插件 " + externalPlugin + " 未安装，相关功能将不可用。");
+            } else if (!softDep.isEnabled()) {
+                LOGGER.info(descriptor.name() + " 模块的可选外部插件 " + externalPlugin + " 已安装但未启用，相关功能将不可用。");
             }
         }
 
