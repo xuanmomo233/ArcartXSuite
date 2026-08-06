@@ -43,6 +43,25 @@ dependencies {
     testImplementation("me.clip:placeholderapi:2.11.7")
 }
 
+// modern 源集的依赖配置
+// modernCompileOnly：声明依赖（不可解析，类似 compileOnly）
+// modernCompileClasspath：可解析，供 compileModernJava 使用
+val modernCompileOnly by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = false
+}
+val modernCompileClasspath by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    extendsFrom(modernCompileOnly)
+}
+
+dependencies {
+    // modern 源集：用 1.21 spigot-api 编译跨版本兼容代码（如 PotionAccessorModern）
+    "modernCompileOnly"("org.spigotmc:spigot-api:1.21-R0.1-SNAPSHOT")
+    "modernCompileOnly"("org.jetbrains:annotations:24.1.0")
+}
+
 sourceSets {
     main {
         java.setSrcDirs(listOf("../src/main/java"))
@@ -50,12 +69,26 @@ sourceSets {
             setSrcDirs(listOf("../src/main/resources"))
         }
     }
+    // modern 源集：跨版本兼容代码，用 1.21 API 编译
+    // 编译产物合并进最终 jar，运行时按版本反射加载
+    val modern by creating {
+        java.setSrcDirs(listOf("../src/modern/java"))
+        compileClasspath += sourceSets.main.get().output
+        compileClasspath += modernCompileClasspath
+        runtimeClasspath += sourceSets.main.get().runtimeClasspath
+    }
 }
 
 val obfuscatedJar = layout.buildDirectory.file("libs/ArcartX-Suite-obfuscated.jar")
 
 tasks {
     compileJava {
+        options.encoding = "UTF-8"
+        options.release = 17
+        options.compilerArgs.add("-g:none")
+    }
+
+    named<JavaCompile>("compileModernJava") {
         options.encoding = "UTF-8"
         options.release = 17
         options.compilerArgs.add("-g:none")
@@ -97,6 +130,8 @@ tasks {
     jar {
         archiveBaseName.set("ArcartX-Suite")
         archiveClassifier.set("plain")
+        // 合并 modern 源集编译产物（跨版本兼容类）
+        from(sourceSets.named("modern").get().output)
     }
 
     named<ShadowJar>("shadowJar") {
@@ -104,6 +139,8 @@ tasks {
         archiveClassifier.set("unobf")
         destinationDirectory.set(layout.buildDirectory.dir("libs"))
         mergeServiceFiles()
+        // 合并 modern 源集编译产物
+        from(sourceSets.named("modern").get().output)
     }
 
     test {
@@ -138,6 +175,8 @@ val obfuscateCore by tasks.registering(ObfuscateJarTask::class) {
     coreJar.set(true)
     libraryJars.from(
         configurations.named("compileClasspath"),
+        // modern 源集用 1.21 spigot-api 编译，ProGuard 需要解析其方法引用
+        modernCompileClasspath,
         project(":axs-api").tasks.named("jar").map { (it as Jar).archiveFile }
     )
     configFiles.from(rootProject.file("proguard/axs-core.pro"))

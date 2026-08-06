@@ -566,12 +566,41 @@ public final class PropService implements Listener {
         player.setHealth(Math.min(maxHealth, Math.max(0.0D, player.getHealth() + delta)));
     }
 
+    // 1.20.2+ 重命名了部分 PotionEffectType 枚举，旧名在 1.21+ 可能无法通过 getByName 查找。
+    // 配置中可能仍使用旧名，此处做兼容映射（旧名 → 新名）。
+    private static final Map<String, String> LEGACY_POTION_EFFECT_NAMES = Map.ofEntries(
+        Map.entry("SLOW", "SLOWNESS"),
+        Map.entry("FAST_DIGGING", "HASTE"),
+        Map.entry("SLOW_DIGGING", "MINING_FATIGUE"),
+        Map.entry("INCREASE_DAMAGE", "STRENGTH"),
+        Map.entry("JUMP", "JUMP_BOOST"),
+        Map.entry("CONFUSION", "NAUSEA"),
+        Map.entry("HEAL", "INSTANT_HEAL"),
+        Map.entry("HARM", "INSTANT_DAMAGE"),
+        Map.entry("DAMAGE_RESISTANCE", "RESISTANCE")
+    );
+
+    private static PotionEffectType resolvePotionEffectType(String rawName) {
+        String upper = rawName.trim().toUpperCase(Locale.ROOT);
+        // 先直接查找（新版本名称优先）
+        PotionEffectType type = PotionEffectType.getByName(upper);
+        if (type != null) {
+            return type;
+        }
+        // 回退到旧名映射
+        String mapped = LEGACY_POTION_EFFECT_NAMES.get(upper);
+        if (mapped != null) {
+            return PotionEffectType.getByName(mapped);
+        }
+        return null;
+    }
+
     private static void applyPotion(Player player, int durationSeconds, String payload) {
         String[] split = payload.split(":", 2);
         if (split.length != 2) {
             return;
         }
-        PotionEffectType type = PotionEffectType.getByName(split[0].trim().toUpperCase(Locale.ROOT));
+        PotionEffectType type = resolvePotionEffectType(split[0]);
         if (type == null) {
             return;
         }

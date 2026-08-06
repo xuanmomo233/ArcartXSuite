@@ -43,6 +43,14 @@
 # 所有核心 bridge 均通过 xuanmo.arcartxsuite.api.bridge.* 接口暴露，并由宿主实现。
 # 模块不直接引用 xuanmo.arcartxsuite.bridge.* 下的任何实现类，核心 bridge 可完全混淆。
 
+# ─── 跨版本兼容：PotionAccessor 反射加载链 ──────────────────────
+# PotionAccessorFactory 通过 Class.forName 硬编码类名反射加载 PotionAccessorModern，
+# 故接口、Modern 实现、Factory 三者的全限定名必须保留，否则混淆后 Class.forName 失败。
+-keep class xuanmo.arcartxsuite.bridge.potion.PotionAccessor { *; }
+-keep class xuanmo.arcartxsuite.bridge.potion.PotionAccessorModern { *; }
+-keep class xuanmo.arcartxsuite.bridge.potion.PotionAccessorFactory { *; }
+-keep class xuanmo.arcartxsuite.bridge.potion.PotionAccessorLegacy { *; }
+
 
 # ─── Shadow 打包的第三方库不混淆 ─────────────────────────────
 -keep class com.zaxxer.hikari.** { *; }

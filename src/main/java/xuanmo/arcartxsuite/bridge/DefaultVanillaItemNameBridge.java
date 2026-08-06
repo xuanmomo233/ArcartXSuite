@@ -1,5 +1,6 @@
 package xuanmo.arcartxsuite.bridge;
 
+import java.util.HashMap;
 import java.util.Map;
 import org.bukkit.Material;
 import org.bukkit.enchantments.Enchantment;
@@ -9,8 +10,11 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.potion.PotionType;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge;
 import xuanmo.arcartxsuite.api.item.VanillaItemNameTable;
+import xuanmo.arcartxsuite.bridge.potion.PotionAccessor;
+import xuanmo.arcartxsuite.bridge.potion.PotionAccessorFactory;
 
 /**
  * 原版物品中文名称解析桥接默认实现。
@@ -63,35 +67,68 @@ public final class DefaultVanillaItemNameBridge implements VanillaItemNameBridge
         Map.entry("minecraft:swift_sneak", "迅捷潜行")
     );
 
-    // 药水 PotionType.name() → 效果中文名（不含载体后缀）
-    private static final Map<PotionType, String> POTION_EFFECTS = Map.ofEntries(
-        Map.entry(PotionType.NIGHT_VISION, "夜视"),
-        Map.entry(PotionType.INVISIBILITY, "隐身"),
-        Map.entry(PotionType.JUMP, "跳跃"),
-        Map.entry(PotionType.FIRE_RESISTANCE, "抗火"),
-        Map.entry(PotionType.SPEED, "迅捷"),
-        Map.entry(PotionType.SLOWNESS, "迟缓"),
-        Map.entry(PotionType.WATER_BREATHING, "水肺"),
-        Map.entry(PotionType.INSTANT_HEAL, "治疗"),
-        Map.entry(PotionType.INSTANT_DAMAGE, "伤害"),
-        Map.entry(PotionType.POISON, "剧毒"),
-        Map.entry(PotionType.REGEN, "再生"),
-        Map.entry(PotionType.WEAKNESS, "虚弱"),
-        Map.entry(PotionType.STRENGTH, "力量"),
-        Map.entry(PotionType.SLOW_FALLING, "缓降"),
-        Map.entry(PotionType.LUCK, "幸运"),
-        Map.entry(PotionType.TURTLE_MASTER, "神龟")
-    );
+    // 药水 PotionType → 效果中文名（不含载体后缀）
+    // 跨版本兼容：1.20.2+ 重命名了部分枚举（JUMP→LEAPING, SPEED→SWIFTNESS 等），
+    // 1.20.5+/1.21+ 移除了旧名。使用 valueOf 按名称查找，优先新名、回退旧名。
+    private static final Map<PotionType, String> POTION_EFFECTS = buildPotionEffects();
 
     // 基础药水（无效果）PotionType → 基础名（不含"药水"后缀）
-    private static final Map<PotionType, String> BASE_POTIONS = Map.of(
-        PotionType.WATER, "水瓶",
-        PotionType.MUNDANE, "平凡的药水",
-        PotionType.THICK, "浓稠的药水",
-        PotionType.AWKWARD, "粗制的药水"
-    );
+    private static final Map<PotionType, String> BASE_POTIONS = buildBasePotions();
+
+    /** 按名称查找 PotionType 枚举常量，依次尝试多个别名（兼容跨版本重命名），找不到返回 null */
+    private static @Nullable PotionType resolvePotionType(String... names) {
+        for (String name : names) {
+            try {
+                return PotionType.valueOf(name);
+            } catch (IllegalArgumentException ignored) {
+                // 当前版本不存在该枚举名，尝试下一个别名
+            }
+        }
+        return null;
+    }
+
+    /** 向 Map 中安全添加药水效果条目（枚举不存在时跳过） */
+    private static void putEffect(Map<PotionType, String> map, String displayName, String... names) {
+        PotionType type = resolvePotionType(names);
+        if (type != null) {
+            map.put(type, displayName);
+        }
+    }
+
+    private static Map<PotionType, String> buildPotionEffects() {
+        Map<PotionType, String> map = new HashMap<>();
+        putEffect(map, "夜视", "NIGHT_VISION");
+        putEffect(map, "隐身", "INVISIBILITY");
+        putEffect(map, "跳跃", "LEAPING", "JUMP");           // 1.20.2+ 重命名
+        putEffect(map, "抗火", "FIRE_RESISTANCE");
+        putEffect(map, "迅捷", "SWIFTNESS", "SPEED");         // 1.20.2+ 重命名
+        putEffect(map, "迟缓", "SLOWNESS", "SLOW");           // 1.20.2+ 重命名
+        putEffect(map, "水肺", "WATER_BREATHING");
+        putEffect(map, "治疗", "HEALING", "INSTANT_HEAL");    // 1.20.2+ 重命名
+        putEffect(map, "伤害", "HARMING", "INSTANT_DAMAGE");  // 1.20.2+ 重命名
+        putEffect(map, "剧毒", "POISON");
+        putEffect(map, "再生", "REGENERATION", "REGEN");      // 1.20.2+ 重命名
+        putEffect(map, "虚弱", "WEAKNESS");
+        putEffect(map, "力量", "STRENGTH");
+        putEffect(map, "缓降", "SLOW_FALLING");
+        putEffect(map, "幸运", "LUCK");
+        putEffect(map, "神龟", "TURTLE_MASTER");
+        return Map.copyOf(map);
+    }
+
+    private static Map<PotionType, String> buildBasePotions() {
+        Map<PotionType, String> map = new HashMap<>();
+        putEffect(map, "水瓶", "WATER");
+        putEffect(map, "平凡的药水", "MUNDANE");
+        putEffect(map, "浓稠的药水", "THICK");
+        putEffect(map, "粗制的药水", "AWKWARD");
+        return Map.copyOf(map);
+    }
 
     private volatile boolean available = true;
+
+    // 跨版本 PotionMeta 访问器（由 PotionAccessorFactory 按服务端版本选择实现）
+    private static final PotionAccessor POTION_ACCESSOR = PotionAccessorFactory.get();
 
     @Override
     public boolean isAvailable() {
@@ -160,18 +197,17 @@ public final class DefaultVanillaItemNameBridge implements VanillaItemNameBridge
         return null;
     }
 
+    /** 跨版本获取 PotionMeta 的基础 PotionType，委托给 PotionAccessor（按版本选择实现） */
+    private static @Nullable PotionType resolveBasePotionType(PotionMeta potionMeta) {
+        return POTION_ACCESSOR.getBasePotionType(potionMeta);
+    }
+
     /** 解析药水/药箭名称：按 PotionType + 载体类型拼名 */
     private static String resolvePotionName(Material material, ItemMeta meta) {
         if (meta == null || !(meta instanceof PotionMeta potionMeta)) {
             return null;
         }
-        PotionType potionType;
-        try {
-            potionType = potionMeta.getBasePotionData().getType();
-        } catch (NoSuchMethodError | NullPointerException ignored) {
-            // 跨版本兼容或无药水数据时回退
-            return null;
-        }
+        PotionType potionType = resolveBasePotionType(potionMeta);
         if (potionType == null) {
             return null;
         }
