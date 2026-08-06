@@ -168,6 +168,16 @@ public final class EventPacketContext {
         return renderNode(template, values);
     }
 
+    /**
+     * 构建用于条件评估的上下文变量表，以触发者自身作为接收者。
+     * <p>
+     * 返回的 Map 包含所有 {variable} 语法可用的变量名到字符串值的映射，
+     * 供 {@link xuanmo.arcartxsuite.api.condition.ScriptConditionKind#CONTEXT} 条件使用。
+     */
+    public Map<String, String> buildConditionVariables(Player subjectPlayer) {
+        return buildValues(EventPacketRecipient.SELF, subjectPlayer);
+    }
+
     private Map<String, String> buildValues(EventPacketRecipient recipientType, Player recipient) {
         Map<String, String> values = new LinkedHashMap<>();
 

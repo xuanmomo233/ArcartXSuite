@@ -224,7 +224,9 @@ public final class EventPacketDispatchService {
                 }
             }
         }
-        ScriptCondition failedCondition = ScriptConditionServices.evaluator().firstFailed(subject, rule.conditions());
+        ScriptCondition failedCondition = ScriptConditionServices.evaluator().firstFailed(
+            subject, rule.conditions(), context.buildConditionVariables(subject)
+        );
         if (failedCondition != null) {
             if (configuration.debug()) {
                 logger.info(

@@ -20,6 +20,10 @@ public record ScriptCondition(
         "^(%[^%]+%)\\s+(==|!=|>=|<=|>|<|contains|regex)\\s+(.+)$",
         Pattern.CASE_INSENSITIVE
     );
+    private static final Pattern INLINE_CONTEXT_PATTERN = Pattern.compile(
+        "^(\\{[^}]+\\})\\s+(==|!=|>=|<=|>|<|contains|regex)\\s+(.+)$",
+        Pattern.CASE_INSENSITIVE
+    );
     private static final Pattern INLINE_ARIA_PREFIX = Pattern.compile("^aria\\s*:\\s*(.+)$", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern INLINE_JS_PREFIX = Pattern.compile("^js\\s*:\\s*(.+)$", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
@@ -33,6 +37,11 @@ public record ScriptCondition(
 
     public static ScriptCondition js(String script, String raw) {
         return new ScriptCondition(ScriptConditionKind.JS, null, null, null, script, raw);
+    }
+
+    /** 上下文变量条件：左侧为 {variable}，右侧可为 {variable} 或字面量，评估时从变量表取值。 */
+    public static ScriptCondition context(String placeholder, ScriptConditionOperator operator, String value, String raw) {
+        return new ScriptCondition(ScriptConditionKind.CONTEXT, placeholder, operator, value, null, raw);
     }
 
     @Nullable
@@ -50,6 +59,15 @@ public record ScriptCondition(
         if (ariaMatcher.matches()) {
             String script = ariaMatcher.group(1).trim();
             return script.isBlank() ? null : aria(script, trimmed);
+        }
+        Matcher contextMatcher = INLINE_CONTEXT_PATTERN.matcher(trimmed);
+        if (contextMatcher.matches()) {
+            return context(
+                contextMatcher.group(1).trim(),
+                ScriptConditionOperator.parse(contextMatcher.group(2).trim()),
+                contextMatcher.group(3).trim(),
+                trimmed
+            );
         }
         Matcher papiMatcher = INLINE_PAPI_PATTERN.matcher(trimmed);
         if (!papiMatcher.matches()) {
@@ -151,6 +169,9 @@ public record ScriptCondition(
         if (kind == ScriptConditionKind.ARIA) {
             String payload = script == null ? "" : script;
             return "aria\t" + Base64.getEncoder().encodeToString(payload.getBytes(StandardCharsets.UTF_8));
+        }
+        if (kind == ScriptConditionKind.CONTEXT) {
+            return raw == null ? "" : raw;
         }
         String ph = placeholder == null ? "" : placeholder;
         String val = value == null ? "" : value;

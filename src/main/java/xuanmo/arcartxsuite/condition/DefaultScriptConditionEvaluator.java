@@ -56,6 +56,15 @@ public final class DefaultScriptConditionEvaluator
         @Nullable Player player,
         @NotNull List<ScriptCondition> conditions
     ) {
+        return firstFailed(player, conditions, null);
+    }
+
+    @Override
+    public @Nullable ScriptCondition firstFailed(
+        @Nullable Player player,
+        @NotNull List<ScriptCondition> conditions,
+        @Nullable Map<String, String> variables
+    ) {
         if (conditions == null || conditions.isEmpty()) {
             return null;
         }
@@ -63,7 +72,7 @@ public final class DefaultScriptConditionEvaluator
             return conditions.get(0);
         }
         for (ScriptCondition condition : conditions) {
-            if (!evaluate(player, condition)) {
+            if (!evaluate(player, condition, variables)) {
                 return condition;
             }
         }
@@ -100,11 +109,22 @@ public final class DefaultScriptConditionEvaluator
         Player player,
         ScriptCondition condition
     ) {
+        return evaluate(player, condition, null);
+    }
+
+    private boolean evaluate(
+        Player player,
+        ScriptCondition condition,
+        @Nullable Map<String, String> variables
+    ) {
         if (condition.kind() == ScriptConditionKind.ARIA) {
             return ariaScripts.evaluateCondition(player, condition.script());
         }
         if (condition.kind() == ScriptConditionKind.JS) {
             return javaScript.evaluateCondition(player, condition.script());
+        }
+        if (condition.kind() == ScriptConditionKind.CONTEXT) {
+            return evaluateContext(condition, variables);
         }
         String actual = placeholders.resolvePlaceholder(
             player,
@@ -114,6 +134,39 @@ public final class DefaultScriptConditionEvaluator
             ? ScriptConditionOperator.EQ
             : condition.operator();
         return operator.evaluate(actual, condition.value());
+    }
+
+    private boolean evaluateContext(
+        ScriptCondition condition,
+        @Nullable Map<String, String> variables
+    ) {
+        String actual = resolveContextValue(condition.placeholder(), variables);
+        String expected = resolveContextValue(condition.value(), variables);
+        ScriptConditionOperator operator = condition.operator() == null
+            ? ScriptConditionOperator.EQ
+            : condition.operator();
+        return operator.evaluate(actual, expected);
+    }
+
+    private static String resolveContextValue(
+        @Nullable String token,
+        @Nullable Map<String, String> variables
+    ) {
+        if (token == null) {
+            return "";
+        }
+        String trimmed = token.trim();
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            String key = trimmed.substring(1, trimmed.length() - 1).trim();
+            if (variables != null) {
+                String resolved = variables.get(key);
+                if (resolved != null) {
+                    return resolved;
+                }
+            }
+            return "";
+        }
+        return trimmed;
     }
 
     private static final class UnavailableAriaBridge implements AriaBridge {
