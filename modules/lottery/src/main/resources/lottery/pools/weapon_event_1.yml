@@ -27,7 +27,8 @@ gacha:
   shared-pity-group: "weapon_events"
 
   up-5star-items:
-    - id: "weapon_legend"
+    legend_blade:
+      id: "weapon_legend"
       name: "传说之刃"
       plugin-type: MYTHIC
       plugin-id: "LegendBlade"
@@ -35,7 +36,8 @@ gacha:
       weight: 1
 
   standard-5star-items:
-    - id: "weapon_epic"
+    epic_spear:
+      id: "weapon_epic"
       name: "史诗长枪"
       plugin-type: MYTHIC
       plugin-id: "EpicSpear"
@@ -43,7 +45,8 @@ gacha:
       weight: 1
 
   up-4star-items:
-    - id: "weapon_rare"
+    rare_dagger:
+      id: "weapon_rare"
       name: "稀有匕首"
       plugin-type: NEIGE
       plugin-id: "RareDagger"
@@ -51,7 +54,8 @@ gacha:
       weight: 1
 
   standard-4star-items:
-    - id: "weapon_common"
+    fine_staff:
+      id: "weapon_common"
       name: "精良法杖"
       plugin-type: NEIGE
       plugin-id: "FineStaff"
@@ -59,7 +63,8 @@ gacha:
       weight: 1
 
   star3-items:
-    - id: "material_iron"
+    material_iron:
+      id: "material_iron"
       name: "铁锭"
       plugin-type: PLAIN
       plugin-id: "minecraft:iron_ingot"

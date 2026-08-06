@@ -26,7 +26,8 @@ gacha:
   shared-pity-group: "character_events"
 
   up-5star-items:
-    - id: "character_star"
+    star_character:
+      id: "character_star"
       name: "星辰"
       plugin-type: MYTHIC
       plugin-id: "StarCharacter"
@@ -34,7 +35,8 @@ gacha:
       weight: 1
 
   standard-5star-items:
-    - id: "character_moon"
+    moon_character:
+      id: "character_moon"
       name: "月影"
       plugin-type: MYTHIC
       plugin-id: "MoonCharacter"
@@ -42,7 +44,8 @@ gacha:
       weight: 1
 
   up-4star-items:
-    - id: "weapon_sword"
+    star_sword:
+      id: "weapon_sword"
       name: "星光剑"
       plugin-type: NEIGE
       plugin-id: "StarSword"
@@ -50,7 +53,8 @@ gacha:
       weight: 1
 
   standard-4star-items:
-    - id: "weapon_bow"
+    wind_bow:
+      id: "weapon_bow"
       name: "风之弓"
       plugin-type: NEIGE
       plugin-id: "WindBow"
@@ -58,7 +62,8 @@ gacha:
       weight: 1
 
   star3-items:
-    - id: "material_common"
+    material_common:
+      id: "material_common"
       name: "普通材料"
       plugin-type: PLAIN
       plugin-id: "minecraft:stone"

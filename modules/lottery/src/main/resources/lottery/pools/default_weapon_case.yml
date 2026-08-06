@@ -40,7 +40,8 @@ case:
   stattrak-chance: 0.1
 
   items:
-    - id: "skin_ak47_redline"
+    skin_ak47_redline:
+      id: "skin_ak47_redline"
       name: "AK-47 | 红线"
       rarity: CLASSIFIED
       plugin-type: NEIGE
@@ -69,7 +70,8 @@ case:
           max: 1.00
           weight: 0.10
 
-    - id: "skin_awp_dragon"
+    skin_awp_dragon:
+      id: "skin_awp_dragon"
       name: "AWP | 巨龙传说"
       rarity: COVERT
       plugin-type: NEIGE
