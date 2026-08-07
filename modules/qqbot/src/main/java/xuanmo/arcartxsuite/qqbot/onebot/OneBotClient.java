@@ -22,6 +22,15 @@ import org.java_websocket.handshake.ServerHandshake;
  */
 public final class OneBotClient {
 
+    /** 断开原因：远端主动关闭 */
+    public static final String REASON_REMOTE_CLOSED = "远端关闭连接";
+    /** 断开原因：连接被拒绝（OneBot 服务未启动或地址端口错误） */
+    public static final String REASON_CONNECTION_REFUSED = "连接被拒绝（OneBot 服务未启动或地址端口错误）";
+    /** 断开原因：连接超时 */
+    public static final String REASON_TIMEOUT = "连接超时";
+    /** 断开原因：未知/其他 */
+    public static final String REASON_UNKNOWN = "连接断开";
+
     private final String wsUrl;
     private final String accessToken;
     private final int reconnectIntervalSeconds;
@@ -29,12 +38,12 @@ public final class OneBotClient {
     private final Logger logger;
     private final Consumer<OneBotEvent> eventHandler;
     private final Runnable onConnected;
-    private final Runnable onDisconnected;
+    private final Consumer<String> onDisconnected;
 
     private volatile WebSocketClient wsClient;
     private volatile boolean running = false;
     private volatile boolean connected = false;
-    private volatile boolean firstDisconnectLogged = false;
+    private volatile String lastErrorReason;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "OneBot-Client-Scheduler");
         t.setDaemon(true);
@@ -51,7 +60,7 @@ public final class OneBotClient {
      * @param logger                   日志器
      * @param eventHandler             事件回调处理器
      * @param onConnected              连接成功回调，可为 {@code null}
-     * @param onDisconnected           连接断开回调，可为 {@code null}
+     * @param onDisconnected           连接断开回调，参数为断开原因描述，可为 {@code null}
      */
     public OneBotClient(
         String wsUrl,
@@ -61,7 +70,7 @@ public final class OneBotClient {
         Logger logger,
         Consumer<OneBotEvent> eventHandler,
         Runnable onConnected,
-        Runnable onDisconnected
+        Consumer<String> onDisconnected
     ) {
         this.wsUrl = wsUrl;
         this.accessToken = accessToken;
@@ -185,7 +194,6 @@ public final class OneBotClient {
                 @Override
                 public void onOpen(ServerHandshake handshake) {
                     connected = true;
-                    firstDisconnectLogged = false;
                     logger.info("[OneBot] WebSocket 已连接: " + wsUrl);
                     if (onConnected != null) onConnected.run();
                     startHeartbeat();
@@ -205,21 +213,23 @@ public final class OneBotClient {
 
                 @Override
                 public void onClose(int code, String reason, boolean remote) {
+                    // 忽略重连过程中旧 client 的延迟回调，避免误报断开
+                    if (OneBotClient.this.wsClient != this) return;
                     connected = false;
-                    if (!firstDisconnectLogged) {
-                        logger.warning("[OneBot] WebSocket 断开: code=" + code + ", reason=" + reason);
-                        firstDisconnectLogged = true;
+                    String reasonText = resolveDisconnectReason(remote);
+                    if (onDisconnected != null) {
+                        try { onDisconnected.accept(reasonText); } catch (Exception ignored) {}
                     }
-                    if (onDisconnected != null) onDisconnected.run();
                     scheduleReconnect();
                 }
 
                 @Override
                 public void onError(Exception ex) {
-                    if (!firstDisconnectLogged) {
-                        logger.log(Level.WARNING, "[OneBot] WebSocket 错误: " + ex.getMessage(), ex);
-                        firstDisconnectLogged = true;
-                    }
+                    // 忽略重连过程中旧 client 的延迟回调
+                    if (OneBotClient.this.wsClient != this) return;
+                    lastErrorReason = ex.getMessage();
+                    // 堆栈降级为 FINE 调试级，默认不显示，开启 debug 时可查
+                    logger.log(Level.FINE, "[OneBot] WebSocket 异常详情", ex);
                 }
             };
             if (accessToken != null && !accessToken.isEmpty()) {
@@ -227,9 +237,32 @@ public final class OneBotClient {
             }
             wsClient.connect();
         } catch (Exception e) {
-            logger.log(Level.SEVERE, "[OneBot] 连接失败: " + e.getMessage(), e);
+            lastErrorReason = e.getMessage();
+            logger.log(Level.FINE, "[OneBot] 连接失败详情", e);
+            if (onDisconnected != null) {
+                try { onDisconnected.accept(resolveDisconnectReason(false)); } catch (Exception ignored) {}
+            }
             scheduleReconnect();
         }
+    }
+
+    /**
+     * 根据远端标志与最近一次异常信息推断断开原因描述。
+     *
+     * @param remote 是否由远端关闭
+     * @return 断开原因描述字符串
+     */
+    private String resolveDisconnectReason(boolean remote) {
+        if (remote) return REASON_REMOTE_CLOSED;
+        String err = lastErrorReason;
+        lastErrorReason = null;
+        if (err != null && !err.isEmpty()) {
+            if (err.contains("Connection refused")) return REASON_CONNECTION_REFUSED;
+            String lower = err.toLowerCase();
+            if (lower.contains("timeout") || lower.contains("timed out")) return REASON_TIMEOUT;
+            return REASON_UNKNOWN + ": " + err;
+        }
+        return REASON_UNKNOWN;
     }
 
     private void disconnect() {

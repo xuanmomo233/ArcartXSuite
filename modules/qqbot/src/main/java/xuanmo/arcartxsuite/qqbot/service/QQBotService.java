@@ -108,11 +108,17 @@ public final class QQBotService implements Listener {
         logger.info(ChatColor.GREEN + "[QQBot] OneBot 已连接 | client=" + (client != null) + " | 群数=" + config.groups().size());
     }
 
-    public void onBotDisconnected() {
+    public void onBotDisconnected(String reason) {
         connected = false;
         if (!disconnectWarned) {
-            logger.warning(ChatColor.RED + "[QQBot] OneBot 连接断开");
+            String wsUrl = config.onebot().wsUrl();
+            int interval = config.onebot().reconnectIntervalSeconds();
+            logger.warning(ChatColor.RED + "[QQBot] OneBot 连接断开 — " + reason
+                + "。请检查 OneBot 实现端(NapCat/Lagrange等)是否已启动、wsUrl(" + wsUrl
+                + ")配置是否正确。将在 " + interval + " 秒后自动重连。");
             disconnectWarned = true;
+        } else {
+            logger.warning(ChatColor.RED + "[QQBot] OneBot 重连失败 — " + reason);
         }
     }
 

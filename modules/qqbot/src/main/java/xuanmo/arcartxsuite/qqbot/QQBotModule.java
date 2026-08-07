@@ -146,7 +146,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             logger,
             event -> service.handleOneBotEvent(event),
             () -> service.onBotConnected(),
-            () -> service.onBotDisconnected()
+            reason -> service.onBotDisconnected(reason)
         );
 
         // 5. 注入 client + capability suppliers
