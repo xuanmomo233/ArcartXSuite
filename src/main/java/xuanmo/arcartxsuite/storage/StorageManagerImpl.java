@@ -89,7 +89,11 @@ public final class StorageManagerImpl implements StorageManager {
         String fileName = (sqliteFileName != null && !sqliteFileName.isBlank())
             ? sqliteFileName
             : (moduleId != null ? moduleId + ".db" : "axs_module.db");
-        File sqliteFile = new File(dataFolder, fileName);
+        // SQLite 文件放在模块数据子目录下（plugins/ArcartXSuite/data/<moduleId>/），
+        // 与旧自建模式路径保持一致，旧 .db 文件零迁移
+        String dirId = moduleId != null ? moduleId : "default";
+        File moduleDir = new File(dataFolder, "data" + File.separator + dirId);
+        File sqliteFile = new File(moduleDir, fileName);
         File parent = sqliteFile.getParentFile();
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             throw new SQLException("无法创建 SQLite 数据目录: " + parent.getAbsolutePath());
