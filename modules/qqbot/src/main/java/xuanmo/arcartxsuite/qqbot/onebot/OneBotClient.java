@@ -234,12 +234,15 @@ public final class OneBotClient {
 
                 @Override
                 public void run() {
-                    // 兜底：吞掉 java-websocket run() 线程逃逸的未捕获异常
-                    // （如 ConnectException 在 catch 块内部二次抛出），
-                    // 避免 ConnectException 堆栈经 ThreadGroup.uncaughtException
-                    // → System.err → Bukkit 日志重定向刷屏。
-                    // onError/onClose 已由库内部在 super.run() 中触发，
-                    // 重连逻辑不受影响。
+                    // 端口探测：在库线程内先检查 TCP 端口是否监听。
+                    // 不通则直接触发 onClose 断开回调 + 重连调度，
+                    // 不调用 super.run()，避免库内部 slf4j 打印 ConnectException 堆栈
+                    // （WebSocketImpl.closeConnection 的 log.error 无法在客户端侧拦截）。
+                    // 探测与连接在同一线程，竞态窗口极小。
+                    if (!probePort()) {
+                        onClose(-1, REASON_CONNECTION_REFUSED, false);
+                        return;
+                    }
                     try {
                         super.run();
                     } catch (Throwable t) {
@@ -279,6 +282,34 @@ public final class OneBotClient {
             return REASON_UNKNOWN + ": " + err;
         }
         return REASON_UNKNOWN;
+    }
+
+    /**
+     * 探测 OneBot WebSocket 服务端口是否可连。
+     * <p>
+     * 用独立 Socket 做一次 TCP connect（超时 1 秒），成功立即关闭。
+     * 用于在启动 java-websocket 线程前过滤掉"服务未启动"的情况，
+     * 避免库内部 slf4j 打印 ConnectException 堆栈刷屏。
+     *
+     * @return 端口可连返回 true；拒绝/超时/URL 解析失败返回 false
+     */
+    private boolean probePort() {
+        try {
+            URI uri = URI.create(wsUrl);
+            String host = uri.getHost();
+            int port = uri.getPort();
+            if (host == null || port <= 0) {
+                logger.log(Level.FINE, "[OneBot] 端口探测跳过：ws-url 缺少 host/port: " + wsUrl);
+                return true; // 无法解析时不拦截，交由后续 connect 正常处理
+            }
+            try (java.net.Socket probe = new java.net.Socket()) {
+                probe.connect(new java.net.InetSocketAddress(host, port), 1000);
+            }
+            return true;
+        } catch (Exception e) {
+            logger.log(Level.FINE, "[OneBot] 端口探测失败: " + e.getMessage());
+            return false;
+        }
     }
 
     private void disconnect() {
