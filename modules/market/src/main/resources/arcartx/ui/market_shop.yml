@@ -159,18 +159,18 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~32,32,42,238
+              normal: ~28,30,42,244
               shape: ~round_rect
               radius: 24
             effect:
               stroke:
                 width: 2
-                color: ~80,180,255,180
+                color: ~90,170,255,150
               shadow:
-                xOffset: 2
-                yOffset: 2
-                blur: 6
-                color: ~0,0,0,120
+                xOffset: 0
+                yOffset: 4
+                blur: 12
+                color: ~0,0,0,140
 
           标题:
             type: Text
@@ -190,31 +190,31 @@ controls:
           关闭按钮:
             type: Texture
             attribute:
-              x: 1310
-              y: 24
-              width: 56
-              height: 56
-              normal: ~180,60,60,200
-              hover: ~Frosted:0;220,80,80,230
+              x: 1322
+              y: 28
+              width: 48
+              height: 48
+              normal: ~180,70,70,210
+              hover: ~Frosted:0;220,90,90,230
               shape: ~round_rect
-              radius: 14
+              radius: 12
             action:
               clickLeft: |-
                 Screen.close()
             effect:
               stroke:
-                width: 2
-                color: ~255,120,120,120
+                width: 1
+                color: ~255,130,130,120
             children:
               文字:
                 type: Text
                 attribute:
-                  x: 28
-                  y: 14
+                  x: 24
+                  y: 9
                   through: true
                   center: true
-                  fontSize: 36
-                  texts: "~&fX"
+                  fontSize: 30
+                  texts: "~&f✕"
 
           # ── 左侧商店列表 ──────────────────────────────
           商店卡片:
@@ -224,13 +224,13 @@ controls:
               y: 110
               width: 240
               height: 720
-              normal: ~52,52,62,190
+              normal: ~42,45,58,220
               shape: ~round_rect
-              radius: 20
+              radius: 18
             effect:
               stroke:
                 width: 2
-                color: ~80,180,255,100
+                color: ~90,170,255,50
             children:
               商店标题:
                 type: Text
@@ -282,20 +282,33 @@ controls:
                           visible: self.entry != none
                           width: 200
                           height: 48
-                          normal: "self.entry != none && self.entry['id'] == var.shopId ? '80,160,255,220' : '70,70,80,200'"
+                          normal: "self.entry != none && self.entry['id'] == var.shopId ? '70,150,250,230' : '56,58,70,200'"
                           hover: ~Frosted:0;255,255,255,200
                           shape: ~round_rect
-                          radius: 14
+                          radius: 12
                           texts: "var.shopTexts[self.entryKey]"
                           center: true
-                          fontSize: 32
+                          fontSize: 28
                         action:
                           clickLeft: |-
                             Packet.send(var.packetId, 'shop_list', self.entry['id'])
                         effect:
                           stroke:
                             width: 1
-                            color: ~80,180,255,80
+                            color: ~90,170,255,50
+                        children:
+                          强调条:
+                            type: Texture
+                            attribute:
+                              x: 0
+                              y: 10
+                              width: 4
+                              height: 28
+                              visible: "self.parent.entry != none && self.parent.entry['id'] == var.shopId"
+                              normal: ~140,200,255,240
+                              shape: ~round_rect
+                              radius: 2
+                              through: true
 
           # ── 右侧商品区 ──────────────────────────────
           商品卡片:
@@ -305,32 +318,97 @@ controls:
               y: 110
               width: 1078
               height: 720
-              normal: ~52,52,62,190
+              normal: ~42,45,58,220
               shape: ~round_rect
-              radius: 20
+              radius: 18
             effect:
               stroke:
                 width: 2
-                color: ~80,180,255,100
+                color: ~90,170,255,50
             children:
+              # ── 数量工具栏（全局数量，左键±1 右键±10）──
+              数量标签:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 22
+                  texts: "~&7购买数量"
+                  fontSize: 24
+                  through: true
+              减按钮:
+                type: Texture
+                attribute:
+                  x: 130
+                  y: 14
+                  width: 36
+                  height: 36
+                  normal: ~56,58,70,220
+                  hover: ~Frosted:0;255,255,255,180
+                  shape: ~round_rect
+                  radius: 10
+                  center: true
+                  fontSize: 26
+                  texts: "~&f-"
+                  tip: "~左键 -1，右键 -10"
+                action:
+                  clickLeft: |-
+                    if(var.quantity > 1){
+                      var.quantity = var.quantity - 1
+                    }
+                  clickRight: |-
+                    if(var.quantity > 10){
+                      var.quantity = var.quantity - 10
+                    } else {
+                      var.quantity = 1
+                    }
+              数量文本:
+                type: Text
+                attribute:
+                  x: 183
+                  y: 22
+                  center: true
+                  texts: "~&7数量: &f{var.quantity.round()}"
+                  fontSize: 24
+                  through: true
+              加按钮:
+                type: Texture
+                attribute:
+                  x: 236
+                  y: 14
+                  width: 36
+                  height: 36
+                  normal: ~56,58,70,220
+                  hover: ~Frosted:0;255,255,255,180
+                  shape: ~round_rect
+                  radius: 10
+                  center: true
+                  fontSize: 26
+                  texts: "~&f+"
+                  tip: "~左键 +1，右键 +10"
+                action:
+                  clickLeft: |-
+                    var.quantity = var.quantity + 1
+                  clickRight: |-
+                    var.quantity = var.quantity + 10
+
               商品纵向滑块:
                 type: Texture
                 val: 商品纵向滑块
                 attribute:
                   x: 1062
-                  y: 10
+                  y: 64
                   width: 6
                   height: 50
                   normal: ~120,120,120,200
-                  maxDragY: 650
+                  maxDragY: 596
               商品滚动:
                 type: Scroll
                 val: 商品滚动
                 attribute:
                   x: 10
-                  y: 10
+                  y: 64
                   width: 1052
-                  height: 700
+                  height: 646
                   moveY: "self.parent['商品纵向滑块'].getDragYRatio()"
                 action:
                   wheel: |-
@@ -343,10 +421,12 @@ controls:
                 children:
                   商品列表:
                     val: 商品列表
-                    type: VStack
+                    type: HGrid
                     attribute:
-                      width: 1038
-                      spaceBetween: 8
+                      width: 1052
+                      column: 3
+                      spaceBetweenX: 16
+                      spaceBetweenY: 16
                     children:
                       商品项:
                         type: Texture
@@ -354,170 +434,83 @@ controls:
                           entryKey: 0.round()
                           entry: var.items[self.entryKey]
                           visible: self.entry != none
-                          width: 1038
-                          height: 68
-                          normal: ~62,62,74,205
-                          hover: ~Frosted:0;80,140,220,200
+                          width: 340
+                          height: 300
+                          normal: ~50,53,66,220
+                          hover: ~Frosted:0;90,150,230,220
                           shape: ~round_rect
-                          radius: 14
+                          radius: 16
                         effect:
                           stroke:
                             width: 1
-                            color: ~80,180,255,60
+                            color: ~90,170,255,40
                         children:
                           商品图标:
                             type: Slot
                             attribute:
                               entryKey: 0.round()
                               slotType: ~Icon
-                              itemScale: 0.68
-                              x: 8
-                              y: 4
-                              width: 60
-                              height: 60
-                              normal: ~45,47,56,205
+                              itemScale: 1.1
+                              x: 126
+                              y: 16
+                              width: 88
+                              height: 88
+                              normal: ~40,42,54,220
                               shape: ~round_rect
-                              radius: 10
+                              radius: 12
                               through: true
                               seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
                           名称:
                             type: Text
                             attribute:
-                              x: 80
-                              y: 10
-                              width: 280
+                              x: 170
+                              y: 116
+                              center: true
                               texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
-                              fontSize: 36
+                              fontSize: 28
                               through: true
                           价格:
                             type: Text
                             attribute:
-                              x: 80
-                              y: 40
-                              width: 200
+                              x: 170
+                              y: 148
+                              center: true
                               texts: "self.parent.entry != none ? '&e价格: &f' + self.parent.entry['price'] : none"
-                              fontSize: 22
+                              fontSize: 24
                               through: true
                           库存:
                             type: Text
                             attribute:
-                              x: 400
-                              y: 14
-                              width: 200
+                              x: 170
+                              y: 180
+                              center: true
                               texts: "self.parent.entry != none ? '&7库存: &f' + self.parent.entry['stock'] : none"
-                              fontSize: 28
+                              fontSize: 20
                               through: true
                           限购:
                             type: Text
                             attribute:
-                              x: 400
-                              y: 44
-                              width: 200
+                              x: 170
+                              y: 206
+                              center: true
                               texts: "self.parent.entry != none && self.parent.entry['limitText'] != none ? '&c' + self.parent.entry['limitText'] : none"
-                              fontSize: 22
+                              fontSize: 18
                               through: true
-                          数量选择:
-                            type: VStack
-                            attribute:
-                              x: 650
-                              y: 8
-                              width: 180
-                              height: 52
-                              spaceBetween: 4
-                            children:
-                              数量提示:
-                                type: Text
-                                attribute:
-                                  width: 180
-                                  height: 22
-                                  through: true
-                                  fontSize: 20
-                                  texts: "~&7数量: &f{var.quantity}"
-                              数量按钮:
-                                type: HStack
-                                attribute:
-                                  width: 180
-                                  height: 26
-                                  spaceBetween: 4
-                                children:
-                                  一份:
-                                    type: Texture
-                                    attribute:
-                                      width: 54
-                                      height: 26
-                                      normal: ~70,70,85,220
-                                      hover: ~Frosted:0;100,140,220,230
-                                    action:
-                                      clickLeft: |-
-                                        var.quantity = 1
-                                    children:
-                                      文字:
-                                        type: Text
-                                        attribute:
-                                          width: 54
-                                          height: 26
-                                          x: 27
-                                          y: 4
-                                          center: true
-                                          through: true
-                                          fontSize: 18
-                                          texts: "~&f1"
-                                  五份:
-                                    type: Texture
-                                    attribute:
-                                      width: 54
-                                      height: 26
-                                      normal: ~70,70,85,220
-                                      hover: ~Frosted:0;100,140,220,230
-                                    action:
-                                      clickLeft: |-
-                                        var.quantity = 5
-                                    children:
-                                      文字:
-                                        type: Text
-                                        attribute:
-                                          width: 54
-                                          height: 26
-                                          x: 27
-                                          y: 4
-                                          center: true
-                                          through: true
-                                          fontSize: 18
-                                          texts: "~&f5"
-                                  十份:
-                                    type: Texture
-                                    attribute:
-                                      width: 54
-                                      height: 26
-                                      normal: ~70,70,85,220
-                                      hover: ~Frosted:0;100,140,220,230
-                                    action:
-                                      clickLeft: |-
-                                        var.quantity = 10
-                                    children:
-                                      文字:
-                                        type: Text
-                                        attribute:
-                                          width: 54
-                                          height: 26
-                                          x: 27
-                                          y: 4
-                                          center: true
-                                          through: true
-                                          fontSize: 18
-                                          texts: "~&f10"
                           购买按钮:
                             type: Texture
                             attribute:
-                              x: 850
-                              y: 8
-                              width: 100
-                              height: 52
+                              x: 110
+                              y: 240
+                              width: 120
+                              height: 40
                               visible: "self.parent.entry != none && var.shopId != none"
                               normal: ~60,180,100,200
                               hover: ~Frosted:0;80,220,120,230
                               shape: ~round_rect
                               radius: 10
+                              center: true
+                              fontSize: 24
+                              texts: "var.quantity > 1 ? '&f购买 x' + var.quantity.round() : '&f购买'"
                             action:
                               clickLeft: |-
                                 Packet.send(var.packetId, 'shop_buy', var.shopId, self.parent.entry['key'], var.quantity, var.actionToken)
@@ -525,22 +518,11 @@ controls:
                               stroke:
                                 width: 1
                                 color: ~80,255,140,120
-                            children:
-                              文字:
-                                type: Text
-                                attribute:
-                                  x: 50
-                                  y: 14
-                                  through: true
-                                  center: true
-                                  fontSize: 28
-                                  texts: "~&f购买"
               空商品提示:
                 type: Text
                 attribute:
-                  point: ~middle_center
                   x: 539
-                  y: 360
+                  y: 380
                   center: true
                   fontSize: 36
                   visible: "var.items == none || var.items.keys().length == 0"
