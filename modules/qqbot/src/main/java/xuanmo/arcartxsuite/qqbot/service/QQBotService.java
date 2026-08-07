@@ -51,6 +51,11 @@ public final class QQBotService implements Listener {
     private BukkitTask cleanupTask;
     private volatile boolean connected;
     private volatile boolean disconnectWarned;
+    // 连续重连失败计数（连接成功后清零）。用于抑制刷屏：首次告警后，
+    // 每达到 RECONNECT_FAIL_LOG_INTERVAL 次才打印一次摘要。
+    private volatile int reconnectFailCount;
+    /** 首次告警后，每隔多少次重连失败才打印一次摘要（避免每 10 秒刷一条） */
+    private static final int RECONNECT_FAIL_LOG_INTERVAL = 6;
     private GroupMessageListener groupMessageListener;
     private final java.util.concurrent.CopyOnWriteArrayList<xuanmo.arcartxsuite.api.capability.QQBotNotifiable.QQGroupEventListener> eventListeners =
         new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -105,6 +110,7 @@ public final class QQBotService implements Listener {
     public void onBotConnected() {
         connected = true;
         disconnectWarned = false;
+        reconnectFailCount = 0;
         logger.info(ChatColor.GREEN + "[QQBot] OneBot 已连接 | client=" + (client != null) + " | 群数=" + config.groups().size());
     }
 
@@ -117,8 +123,18 @@ public final class QQBotService implements Listener {
                 + "。请检查 OneBot 实现端(NapCat/Lagrange等)是否已启动、wsUrl(" + wsUrl
                 + ")配置是否正确。将在 " + interval + " 秒后自动重连。");
             disconnectWarned = true;
-        } else {
-            logger.warning(ChatColor.RED + "[QQBot] OneBot 重连失败 — " + reason);
+            reconnectFailCount = 1;
+            return;
+        }
+        // 首次告警之后，每隔 RECONNECT_FAIL_LOG_INTERVAL 次才打印一次摘要，
+        // 避免每 reconnect-interval-seconds 秒刷一条日志。
+        reconnectFailCount++;
+        if (reconnectFailCount % RECONNECT_FAIL_LOG_INTERVAL == 0) {
+            int interval = config.onebot().reconnectIntervalSeconds();
+            long elapsed = (long) reconnectFailCount * interval;
+            logger.warning(ChatColor.RED + "[QQBot] OneBot 仍未连接 — 已连续重连失败 "
+                + reconnectFailCount + " 次（约 " + elapsed + " 秒），原因: " + reason
+                + "。启动 OneBot 实现端后可执行 /axs qqbot reload 立即重试。");
         }
     }
 
