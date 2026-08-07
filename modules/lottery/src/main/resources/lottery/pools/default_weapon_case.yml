@@ -42,6 +42,38 @@ case:  # 开箱机制参数
       base-weight: 2
 
   items:  # 武器皮肤物品池
+    skin_p250_sand:
+      id: "skin_p250_sand"  # 物品唯一标识
+      name: "P250 | 沙漠风暴"  # 物品显示名称
+      rarity: COMMON  # 稀有度等级（消费级）
+      plugin-type: NeigeItems  # 物品来源插件类型：NeigeItems
+      plugin-id: "P250_SandDune"  # 物品来源插件内部 ID
+      delivery: DIRECT  # 发放方式：DIRECT（直接发放）
+
+    skin_mp9_storm:
+      id: "skin_mp9_storm"
+      name: "MP9 | 风暴"
+      rarity: UNCOMMON  # 稀有度等级（工业级）
+      plugin-type: NeigeItems
+      plugin-id: "MP9_Storm"
+      delivery: DIRECT
+
+    skin_m4a4_cyber:
+      id: "skin_m4a4_cyber"
+      name: "M4A4 | 赛博危情"
+      rarity: RARE  # 稀有度等级（军规级）
+      plugin-type: NeigeItems
+      plugin-id: "M4A4_CyberSecurity"
+      delivery: DIRECT
+
+    skin_usps_printstream:
+      id: "skin_usps_printstream"
+      name: "USP-S | 印花集"
+      rarity: EPIC  # 稀有度等级（受限级）
+      plugin-type: NeigeItems
+      plugin-id: "USPS_Printstream"
+      delivery: DIRECT
+
     skin_ak47_redline:
       id: "skin_ak47_redline"  # 物品唯一标识
       name: "AK-47 | 红线"  # 物品显示名称
@@ -56,4 +88,12 @@ case:  # 开箱机制参数
       rarity: MYTHIC  # 神话级（金色）
       plugin-type: NeigeItems
       plugin-id: "AWP_DragonLore"
+      delivery: DIRECT
+
+    skin_karambit_fade:
+      id: "skin_karambit_fade"
+      name: "★ 爪子刀 | 渐变"
+      rarity: SPECIAL  # 特殊级（罕见特殊，刀/手套）
+      plugin-type: NeigeItems
+      plugin-id: "Karambit_Fade"
       delivery: DIRECT
