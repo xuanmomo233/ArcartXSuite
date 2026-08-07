@@ -231,6 +231,22 @@ public final class OneBotClient {
                     // 堆栈降级为 FINE 调试级，默认不显示，开启 debug 时可查
                     logger.log(Level.FINE, "[OneBot] WebSocket 异常详情", ex);
                 }
+
+                @Override
+                public void run() {
+                    // 兜底：吞掉 java-websocket run() 线程逃逸的未捕获异常
+                    // （如 ConnectException 在 catch 块内部二次抛出），
+                    // 避免 ConnectException 堆栈经 ThreadGroup.uncaughtException
+                    // → System.err → Bukkit 日志重定向刷屏。
+                    // onError/onClose 已由库内部在 super.run() 中触发，
+                    // 重连逻辑不受影响。
+                    try {
+                        super.run();
+                    } catch (Throwable t) {
+                        lastErrorReason = t.getMessage();
+                        logger.log(Level.FINE, "[OneBot] WebSocket run 线程异常兜底", t);
+                    }
+                }
             };
             if (accessToken != null && !accessToken.isEmpty()) {
                 wsClient.addHeader("Authorization", "Bearer " + accessToken);
