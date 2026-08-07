@@ -9,7 +9,7 @@ ui:
   closeDied: true  # 玩家死亡时自动关闭
   through: true  # 允许点击穿透到游戏世界
   screenScale: true  # 启用屏幕等比缩放
-  show: true  # 界面默认可见
+  show: false  # 由服务端 openUi/closeUi 控制显示，避免常驻
   packetHandler:
     # packetHandler: init
     # 包字段:
@@ -64,7 +64,7 @@ ui:
       var.barY = 0.5
       var.barHeight = 0.24
       var.progress = 0.5
-      var.state = 'playing'
+      var.state = none
       var.timeLeft = 600
       var.caughtSize = 0
       var.rarity = 'common'
@@ -103,6 +103,7 @@ controls:
           y: 240
           width: 140
           height: 600
+          visible: var.state != none
         children:
           轨道背景:
             type: Texture
@@ -152,6 +153,7 @@ controls:
           y: 240
           width: 48
           height: 600
+          visible: var.state != none
         children:
           进度条背景:
             type: Texture
@@ -180,13 +182,14 @@ controls:
           y: 160
           width: 500
           height: 60
+          visible: var.state != none
         children:
           鱼名称:
             type: Text
             attribute:
               x: 0
               y: 0
-              texts: "'&e' + var.fishName + ' &7(尺寸: ' + var.caughtSize + ')'"
+              texts: "'&e' + var.fishName + ' &7(尺寸: ' + var.caughtSize.round + ')'"
               fontSize: 40
 
           剩余时间:
