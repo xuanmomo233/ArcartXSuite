@@ -145,9 +145,16 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
     @Override
     protected void startService() throws Exception {
-        File moduleDataFolder = dataFolder;
-        JdbcBattlePassRepository repo = new JdbcBattlePassRepository(
-            moduleDataFolder, configuration.storage(), logger);
+        JdbcBattlePassRepository repo;
+        if (configuration.storage().hasOverride()) {
+            // 旧路径：模块自建连接池
+            repo = new JdbcBattlePassRepository(dataFolder, configuration.storage(), logger);
+        } else {
+            // 新路径：共享本体数据源
+            repo = new JdbcBattlePassRepository(storageManager, "battlepass",
+                configuration.storage().sqliteFileName(), logger);
+        }
+        repo.initialize();
         repository = repo;
 
         UiBinding mainBinding = registerModuleUi(MAIN_UI_FILE_PATH, configuration.ui().mainId(), true);

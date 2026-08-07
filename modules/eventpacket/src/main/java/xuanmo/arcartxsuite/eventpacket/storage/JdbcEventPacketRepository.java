@@ -11,7 +11,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
+import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketPersistenceDialect;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketStorageConfiguration;
 
@@ -24,7 +26,7 @@ import xuanmo.arcartxsuite.eventpacket.config.EventPacketStorageConfiguration;
  */
 public final class JdbcEventPacketRepository extends AbstractModuleRepository implements EventPacketRepository {
 
-    private final EventPacketStorageConfiguration configuration;
+    private final @Nullable EventPacketStorageConfiguration configuration;
 
     /**
      * 构造 JDBC 仓储实例。
@@ -36,6 +38,33 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
     public JdbcEventPacketRepository(File dataFolder, EventPacketStorageConfiguration configuration, Logger logger) {
         super("AXS-EventPacket", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;
+    }
+
+    /**
+     * 共享模式构造方法（1.4.0+）。
+     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
+     *
+     * @param storageManager 本体数据源管理器
+     * @param moduleId       模块 ID
+     * @param tablePrefix    表前缀
+     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
+     * @param logger         日志记录器
+     * @since 1.4.0
+     */
+    public JdbcEventPacketRepository(StorageManager storageManager, String moduleId,
+                                     String tablePrefix, String sqliteFileName, Logger logger) {
+        super("AXS-EventPacket", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
+        this.configuration = null;
+    }
+
+    /**
+     * 当前是否为 SQLite 方言（兼容共享模式与自建模式）。
+     *
+     * @return {@code true} 表示 SQLite
+     */
+    private boolean isSqlite() {
+        return isSharedMode() ? !isMysql()
+            : isSqlite();
     }
 
     @Override
@@ -88,7 +117,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
             statement.setString(2, ruleId);
             statement.setInt(3, Math.max(0, count));
             statement.setLong(4, System.currentTimeMillis());
-            if (configuration.dialect() == EventPacketPersistenceDialect.MYSQL) {
+            if (!isSqlite()) {
                 statement.setInt(5, Math.max(0, count));
                 statement.setLong(6, System.currentTimeMillis());
             }
@@ -105,7 +134,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
      */
     @Override
     public void incrementKillCount(UUID playerUuid, String ruleId) throws SQLException {
-        if (configuration.dialect() == EventPacketPersistenceDialect.SQLITE) {
+        if (isSqlite()) {
             try (Connection connection = connection();
                  PreparedStatement statement = connection.prepareStatement("""
                      INSERT INTO eventpacket_kill_progress (player_uuid, rule_id, kill_count, updated_at)
@@ -198,7 +227,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
             statement.setString(1, playerUuid.toString());
             statement.setString(2, ruleId);
             statement.setLong(3, System.currentTimeMillis());
-            if (configuration.dialect() == EventPacketPersistenceDialect.MYSQL) {
+            if (!isSqlite()) {
                 statement.setLong(4, System.currentTimeMillis());
             }
             statement.executeUpdate();
@@ -242,7 +271,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
 
     private void createTables(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            if (configuration.dialect() == EventPacketPersistenceDialect.SQLITE) {
+            if (isSqlite()) {
                 statement.execute("""
                     CREATE TABLE IF NOT EXISTS eventpacket_kill_progress (
                         player_uuid TEXT NOT NULL,
@@ -283,7 +312,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
     }
 
     private String killCountUpsertSql() {
-        if (configuration.dialect() == EventPacketPersistenceDialect.SQLITE) {
+        if (isSqlite()) {
             return """
                 INSERT INTO eventpacket_kill_progress (player_uuid, rule_id, kill_count, updated_at)
                 VALUES (?, ?, ?, ?)
@@ -302,7 +331,7 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
     }
 
     private String firedRuleUpsertSql() {
-        if (configuration.dialect() == EventPacketPersistenceDialect.SQLITE) {
+        if (isSqlite()) {
             return """
                 INSERT INTO eventpacket_fired_rules (player_uuid, rule_id, fired_at)
                 VALUES (?, ?, ?)

@@ -13,9 +13,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
+import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.MigrationResult;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.afkreward.config.AfkRewardConfiguration;
 
 /**
@@ -24,11 +26,47 @@ import xuanmo.arcartxsuite.afkreward.config.AfkRewardConfiguration;
  */
 public final class AfkRewardRepository extends AbstractModuleRepository {
 
-    private final AfkRewardConfiguration.StorageConfig configuration;
+    private final @Nullable AfkRewardConfiguration.StorageConfig configuration;
 
     public AfkRewardRepository(File dataFolder, AfkRewardConfiguration.StorageConfig configuration, Logger logger) {
         super("AXS-AfkReward", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;
+    }
+
+    /**
+     * 共享模式构造方法（1.4.0+）。
+     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
+     *
+     * @param storageManager 本体数据源管理器
+     * @param moduleId       模块 ID
+     * @param tablePrefix    表前缀
+     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
+     * @param logger         日志记录器
+     * @since 1.4.0
+     */
+    public AfkRewardRepository(StorageManager storageManager, String moduleId,
+                               String tablePrefix, String sqliteFileName, Logger logger) {
+        super("AXS-AfkReward", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
+        this.configuration = null;
+    }
+
+    /**
+     * 返回当前表前缀（兼容共享模式与自建模式）。
+     *
+     * @return 表前缀
+     */
+    private String prefix() {
+        return isSharedMode() ? tablePrefix() : prefix();
+    }
+
+    /**
+     * 当前是否为 SQLite 方言（兼容共享模式与自建模式）。
+     *
+     * @return {@code true} 表示 SQLite
+     */
+    private boolean isSqlite() {
+        return isSharedMode() ? !isMysql()
+            : isSqlite();
     }
 
     @Override
@@ -42,16 +80,16 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
     @Override
     protected List<String> playerDataTables() {
         return List.of(
-            configuration.tablePrefix() + "stats",
-            configuration.tablePrefix() + "sessions",
-            configuration.tablePrefix() + "area_stats"
+            prefix() + "stats",
+            prefix() + "sessions",
+            prefix() + "area_stats"
         );
     }
 
     private void createStatsTable(Connection conn) throws SQLException {
-        String table = configuration.tablePrefix() + "stats";
+        String table = prefix() + "stats";
         try (Statement stmt = conn.createStatement()) {
-            if (configuration.dialect() == AfkRewardConfiguration.StorageConfig.Dialect.SQLITE) {
+            if (isSqlite()) {
                 stmt.execute("""
                     CREATE TABLE IF NOT EXISTS %s (
                         player_uuid TEXT PRIMARY KEY,
@@ -78,9 +116,9 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
     }
 
     private void createSessionsTable(Connection conn) throws SQLException {
-        String table = configuration.tablePrefix() + "sessions";
+        String table = prefix() + "sessions";
         try (Statement stmt = conn.createStatement()) {
-            if (configuration.dialect() == AfkRewardConfiguration.StorageConfig.Dialect.SQLITE) {
+            if (isSqlite()) {
                 stmt.execute("""
                     CREATE TABLE IF NOT EXISTS %s (
                         player_uuid TEXT PRIMARY KEY,
@@ -117,9 +155,9 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
     }
 
     private void createAreaStatsTable(Connection conn) throws SQLException {
-        String table = configuration.tablePrefix() + "area_stats";
+        String table = prefix() + "area_stats";
         try (Statement stmt = conn.createStatement()) {
-            if (configuration.dialect() == AfkRewardConfiguration.StorageConfig.Dialect.SQLITE) {
+            if (isSqlite()) {
                 stmt.execute("""
                     CREATE TABLE IF NOT EXISTS %s (
                         player_uuid TEXT NOT NULL,
@@ -146,10 +184,10 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
     }
 
     private void ensureIndexes(Connection conn) throws SQLException {
-        String table = configuration.tablePrefix() + "stats";
+        String table = prefix() + "stats";
         try (Statement stmt = conn.createStatement()) {
             Set<String> indexes = loadIndexes(conn, table);
-            String idxName = configuration.tablePrefix() + "stats_date";
+            String idxName = prefix() + "stats_date";
             if (!indexes.contains(idxName.toLowerCase())) {
                 stmt.execute("CREATE INDEX " + idxName + " ON " + table + " (today_date)");
             }
@@ -169,7 +207,7 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
     }
 
     public PlayerStats loadStats(UUID playerUuid) throws SQLException {
-        String table = configuration.tablePrefix() + "stats";
+        String table = prefix() + "stats";
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(
                  "SELECT player_name, today_date, today_count, total_count, total_seconds FROM " + table + " WHERE player_uuid = ?")) {
@@ -192,9 +230,9 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
     // ── Sessions ──
 
     public void saveSession(SessionRecord session) throws SQLException {
-        String table = configuration.tablePrefix() + "sessions";
+        String table = prefix() + "sessions";
         String sql;
-        if (configuration.dialect() == AfkRewardConfiguration.StorageConfig.Dialect.SQLITE) {
+        if (isSqlite()) {
             sql = """
                 INSERT INTO %s (player_uuid, player_name, area_name, reward_type, mode, start_seconds, start_time,
                     today_count, total_count, today_date, total_seconds)
@@ -247,7 +285,7 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
     }
 
     public SessionRecord loadSession(UUID playerUuid) throws SQLException {
-        String table = configuration.tablePrefix() + "sessions";
+        String table = prefix() + "sessions";
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(
                  "SELECT player_name, area_name, reward_type, mode, start_seconds, start_time, " +
@@ -275,7 +313,7 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
     }
 
     public void deleteSession(UUID playerUuid) throws SQLException {
-        String table = configuration.tablePrefix() + "sessions";
+        String table = prefix() + "sessions";
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement("DELETE FROM " + table + " WHERE player_uuid = ?")) {
             ps.setString(1, playerUuid.toString());
@@ -284,7 +322,7 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
     }
 
     public void clearAllSessions() throws SQLException {
-        String table = configuration.tablePrefix() + "sessions";
+        String table = prefix() + "sessions";
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement()) {
             stmt.execute("DELETE FROM " + table);
@@ -295,9 +333,9 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
 
     public void saveAreaStats(UUID playerUuid, String areaName, int totalSeconds,
                                int todaySeconds, String todayDate) throws SQLException {
-        String table = configuration.tablePrefix() + "area_stats";
+        String table = prefix() + "area_stats";
         String sql;
-        if (configuration.dialect() == AfkRewardConfiguration.StorageConfig.Dialect.SQLITE) {
+        if (isSqlite()) {
             sql = """
                 INSERT INTO %s (player_uuid, area_name, total_seconds, today_seconds, today_date)
                 VALUES (?, ?, ?, ?, ?)
@@ -328,7 +366,7 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
     }
 
     public AreaStats loadAreaStats(UUID playerUuid, String areaName) throws SQLException {
-        String table = configuration.tablePrefix() + "area_stats";
+        String table = prefix() + "area_stats";
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(
                  "SELECT total_seconds, today_seconds, today_date FROM " + table + " WHERE player_uuid = ? AND area_name = ?")) {
@@ -349,7 +387,7 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
     }
 
     public List<AreaStats> loadAllAreaStats(UUID playerUuid) throws SQLException {
-        String table = configuration.tablePrefix() + "area_stats";
+        String table = prefix() + "area_stats";
         List<AreaStats> list = new ArrayList<>();
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(
@@ -372,7 +410,7 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
     // ── Leaderboard ──
 
     public List<PlayerStats> loadLeaderboard(int limit) throws SQLException {
-        String table = configuration.tablePrefix() + "stats";
+        String table = prefix() + "stats";
         List<PlayerStats> list = new java.util.ArrayList<>();
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(
@@ -395,9 +433,9 @@ public final class AfkRewardRepository extends AbstractModuleRepository {
     }
 
     public void saveStats(UUID playerUuid, PlayerStats stats) throws SQLException {
-        String table = configuration.tablePrefix() + "stats";
+        String table = prefix() + "stats";
         String sql;
-        if (configuration.dialect() == AfkRewardConfiguration.StorageConfig.Dialect.SQLITE) {
+        if (isSqlite()) {
             sql = """
                 INSERT INTO %s (player_uuid, player_name, today_date, today_count, total_count, total_seconds)
                 VALUES (?, ?, ?, ?, ?, ?)

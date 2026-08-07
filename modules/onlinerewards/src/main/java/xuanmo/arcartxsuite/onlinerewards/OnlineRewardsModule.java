@@ -144,9 +144,20 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
             throw new IllegalStateException("OnlineRewards 模块需要 ArcartX 客户端桥接");
         }
 
-        JdbcOnlineRewardsRepository rewardsRepo = new JdbcOnlineRewardsRepository(
-            dataFolder,
-            configuration.storage(), logger);
+        // 共享模式：使用本体统一数据源，模块只需提供表前缀
+        // 若模块配置了独立 storage 节（dialect=mysql 等），则走自建模式（向后兼容）
+        JdbcOnlineRewardsRepository rewardsRepo;
+        if (configuration.storage().hasOverride()) {
+            // 旧路径：模块自建连接池
+            rewardsRepo = new JdbcOnlineRewardsRepository(
+                dataFolder,
+                configuration.storage(), logger);
+        } else {
+            // 新路径：共享本体数据源
+            rewardsRepo = new JdbcOnlineRewardsRepository(
+                storageManager, "onlinerewards",
+                "", configuration.storage().sqliteFileName(), logger);
+        }
         service = new OnlineRewardsService(
             plugin, logger, configuration,
             rewardsRepo,

@@ -88,6 +88,38 @@ currencies:
     withdraw-command: ""
     deposit-command: ""
 
+# ========== 统一数据源（本体管控，1.4.0+）==========
+# 所有模块默认共用此处的数据库连接配置，无需在各模块的 ArcartX*.yml 中重复填写 storage 节。
+# 连接池由本体统一创建和关闭，彻底消除模块遗漏 initialize()/shutdown() 导致的「数据源不可用」和连接池泄漏问题。
+#
+# 两种模式：
+#   sqlite（默认）：各模块仍使用各自的 <moduleId>.db 文件（如 lottery.db、battlepass.db），
+#                   数据不合并，旧 .db 文件零迁移。本体按模块名分配独立连接。
+#   mysql：所有模块共享同一个 HikariCP 连接池，连同一个数据库，各模块用 table-prefix 隔离表。
+#          MySQL 连接数从 N×poolSize 降为 1 个池。
+#
+# 模块级覆盖（向后兼容）：
+#   如果模块在自己的 ArcartX<Module>.yml 中填写了 storage.mode 等字段，
+#   模块会优先使用自己的配置自建连接池（走旧路径），不影响旧 MySQL 数据库。
+#   不填则自动使用此处的全局配置。
+#
+# 旧用户迁移指南：
+#   - MySQL 用户：如果各模块原来连的是同一个库，直接把连接信息填到这里即可，模块配置里的 storage 节可删除。
+#   - SQLite 用户：无需任何操作，各模块 .db 文件路径不变。
+#   - 详见 Wiki: https://github.com/xuanmomo233/ArcartXSuite/wiki/存储架构
+storage:
+  # 存储模式：sqlite（单服，默认）/ mysql（跨服群组共享同一数据库）。
+  mode: "sqlite"
+  # MySQL 连接配置（mode=mysql 时生效，sqlite 模式下忽略）。
+  mysql:
+    host: "127.0.0.1"
+    port: 3306
+    database: "arcartxsuite"
+    username: "root"
+    password: ""
+  # MySQL 连接池大小（sqlite 固定为 1，此项无效）。
+  pool-size: 8
+
 # ========== 统一二级密码（本体管控）==========
 # 由本体统一提供的全服二级密码服务，warehouse / extrabackpack 等模块共用同一个密码。
 # 存储：默认独立 SQLite（plugins/ArcartX-Suite/secondary-password.db）；跨服群组可切换 MySQL 共享同一份密码。

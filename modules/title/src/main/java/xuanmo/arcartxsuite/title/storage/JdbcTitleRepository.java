@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.title.config.TitlePersistenceDialect;
 import xuanmo.arcartxsuite.title.config.TitleStorageConfiguration;
 import xuanmo.arcartxsuite.title.model.PlayerOwnedTitle;
@@ -38,6 +39,23 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
     public JdbcTitleRepository(File dataFolder, TitleStorageConfiguration configuration, Logger logger) {
         super("AXS-Title", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;
+    }
+
+    /**
+     * 共享模式构造方法（1.4.0+）。
+     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
+     *
+     * @param storageManager 本体数据源管理器
+     * @param moduleId       模块 ID
+     * @param tablePrefix    表前缀
+     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
+     * @param logger         日志器
+     * @since 1.4.0
+     */
+    public JdbcTitleRepository(StorageManager storageManager, String moduleId,
+                               String tablePrefix, String sqliteFileName, Logger logger) {
+        super("AXS-Title", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
+        this.configuration = null;
     }
 
     @Override
@@ -314,14 +332,9 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
         }
     }
 
-    @Override
-    public void close() {
-        shutdown();
-    }
-
     private void createTables(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            if (configuration.dialect() == TitlePersistenceDialect.SQLITE) {
+            if (isSqliteDialect()) {
                 statement.execute("""
                     CREATE TABLE IF NOT EXISTS title_player_titles (
                         player_uuid TEXT NOT NULL,
@@ -390,7 +403,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
     }
 
     private String displayTitleUpsertSql() {
-        if (configuration.dialect() == TitlePersistenceDialect.SQLITE) {
+        if (isSqliteDialect()) {
             return """
                 INSERT INTO title_player_display_title (player_uuid, title_id, updated_at)
                 VALUES (?, ?, ?)
@@ -409,7 +422,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
     }
 
     private String equippedUpsertSql() {
-        if (configuration.dialect() == TitlePersistenceDialect.SQLITE) {
+        if (isSqliteDialect()) {
             return """
                 INSERT INTO title_player_equipped_groups (player_uuid, group_id, title_id, updated_at)
                 VALUES (?, ?, ?, ?)
@@ -428,7 +441,7 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
     }
 
     private String titleUpsertSql() {
-        if (configuration.dialect() == TitlePersistenceDialect.SQLITE) {
+        if (isSqliteDialect()) {
             return """
                 INSERT INTO title_player_titles (player_uuid, title_id, hidden, granted_at, activates_at, expires_at, updated_at, granted_by)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -457,6 +470,19 @@ public final class JdbcTitleRepository extends AbstractModuleRepository implemen
 
     private Connection connection() throws SQLException {
         return getConnection();
+    }
+
+    /**
+     * 判断当前是否为 SQLite 方言。
+     * <p>
+     * 共享模式下通过 {@link #isMysql()} 判断（基于本体全局描述符）；
+     * 自建模式下通过模块配置的 {@code dialect} 判断。
+     *
+     * @return {@code true} 表示当前使用 SQLite 方言
+     * @since 1.4.0
+     */
+    private boolean isSqliteDialect() {
+        return isSharedMode() ? !isMysql() : isSqliteDialect();
     }
 
     private static void setNullableString(PreparedStatement statement, int index, String value) throws SQLException {

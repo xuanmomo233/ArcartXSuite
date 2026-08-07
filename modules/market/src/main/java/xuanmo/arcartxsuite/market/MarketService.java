@@ -118,9 +118,9 @@ public class MarketService {
         actionTokensInFlight.remove(playerUuid);
     }
 
-    public void start(java.io.File dataFolder) throws Exception {
+    public void start(java.io.File dataFolder, JdbcMarketRepository repository) throws Exception {
         // 初始化存储
-        repository = new JdbcMarketRepository(config.storage(), logger, dataFolder);
+        this.repository = repository;
         repository.initialize();
 
         // 初始化 Redis

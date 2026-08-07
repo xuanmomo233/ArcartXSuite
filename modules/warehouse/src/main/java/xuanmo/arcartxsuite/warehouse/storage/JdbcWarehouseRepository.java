@@ -15,8 +15,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Logger;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.StorageConfiguration;
-import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.StorageDialect;
 
 /**
  * 仓库模块的 JDBC 存储实现。
@@ -40,6 +40,24 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
     public JdbcWarehouseRepository(File dataFolder, StorageConfiguration configuration, Logger logger) {
         super("AXS-Warehouse", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;
+    }
+
+    /**
+     * 共享模式构造方法（1.4.0+）。
+     * 使用本体统一数据源，模块只需提供 SQLite 文件名。
+     * <p>
+     * 仓库模块的表名已内置 {@code warehouse_} 前缀，因此 tablePrefix 传入空字符串。
+     *
+     * @param storageManager 本体数据源管理器
+     * @param moduleId       模块 ID
+     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
+     * @param logger         日志记录器
+     * @since 1.4.0
+     */
+    public JdbcWarehouseRepository(StorageManager storageManager, String moduleId,
+                                    String sqliteFileName, Logger logger) {
+        super("AXS-Warehouse", storageManager, moduleId, "", sqliteFileName, logger);
+        this.configuration = null;
     }
 
     /**
@@ -321,7 +339,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
-        String sql = configuration.dialect() == StorageDialect.SQLITE
+        String sql = !isMysql()
             ? """
                 INSERT INTO warehouse_bank_balances (player_uuid, currency_id, balance, updated_at)
                 VALUES (?, ?, ?, ?)
@@ -361,7 +379,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return false;
         }
-        String sql = configuration.dialect() == StorageDialect.SQLITE
+        String sql = !isMysql()
             ? """
                 UPDATE warehouse_bank_balances
                 SET balance = CAST(balance AS REAL) - ?, updated_at = ?
@@ -509,7 +527,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         BigDecimal amount,
         long updatedAt
     ) throws SQLException {
-        String sql = configuration.dialect() == StorageDialect.SQLITE
+        String sql = !isMysql()
             ? """
                 INSERT INTO warehouse_bank_balances (player_uuid, currency_id, balance, updated_at)
                 VALUES (?, ?, ?, ?)
@@ -1234,7 +1252,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
                     PRIMARY KEY (owner_type, owner_id, warehouse_id, slot)
                 )
                 """);
-            if (configuration.dialect() == StorageDialect.SQLITE) {
+            if (!isMysql()) {
                 statement.execute("CREATE INDEX IF NOT EXISTS idx_warehouse_slots_hash ON warehouse_slots(owner_type, owner_id, warehouse_id, item_hash)");
             } else {
                 try {
@@ -1334,7 +1352,7 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         all.addAll(updateColumns);
         String columns = String.join(", ", all);
         String placeholders = String.join(", ", java.util.Collections.nCopies(all.size(), "?"));
-        if (configuration.dialect() == StorageDialect.SQLITE) {
+        if (!isMysql()) {
             return "INSERT INTO " + table + " (" + columns + ") VALUES (" + placeholders + ") ON CONFLICT(" + String.join(", ", keys) + ") DO UPDATE SET "
                 + updateAssignments(updateColumns, true);
         }

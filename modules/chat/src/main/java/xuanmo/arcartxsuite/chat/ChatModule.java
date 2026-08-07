@@ -49,6 +49,7 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
 
     private ChatModuleConfiguration configuration;
     private ChatService service;
+    private JdbcChatRepository repository;
     private String completionUiId;
 
     @Override
@@ -125,9 +126,20 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
             }
         }
 
-        JdbcChatRepository chatRepo = new JdbcChatRepository(
-            dataFolder,
-            configuration.storage(), logger);
+        // 共享模式：使用本体统一数据源，模块只需提供 SQLite 文件名
+        // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
+        JdbcChatRepository chatRepo;
+        if (configuration.storage().hasOverride()) {
+            // 旧路径：模块自建连接池
+            chatRepo = new JdbcChatRepository(
+                dataFolder,
+                configuration.storage(), logger);
+        } else {
+            // 新路径：共享本体数据源
+            chatRepo = new JdbcChatRepository(storageManager, "chat",
+                configuration.storage().sqliteFileName(), logger);
+        }
+        repository = chatRepo;
         service = new ChatService(
             plugin, logger,
             () -> getCapability(TabRefreshable.class),
@@ -208,6 +220,10 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         if (service != null) {
             service.shutdown();
             service = null;
+        }
+        if (repository != null) {
+            repository.shutdown();
+            repository = null;
         }
         completionUiId = null;
         configuration = null;

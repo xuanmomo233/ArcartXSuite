@@ -51,6 +51,7 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
     private LotteryModuleConfiguration configuration;
     private LotteryService service;
     private LotteryAdminCommand adminCommand;
+    private JdbcLotteryRepository repository;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -139,10 +140,20 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     protected void startService() throws Exception {
-        File moduleDataFolder = dataFolder;
-        JdbcLotteryRepository repo = new JdbcLotteryRepository(
-            moduleDataFolder, configuration.storage(), logger);
-
+        // 共享模式：使用本体统一数据源，模块只需提供表前缀
+        // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
+        JdbcLotteryRepository repo;
+        if (configuration.storage().hasOverride()) {
+            // 旧路径：模块自建连接池
+            repo = new JdbcLotteryRepository(dataFolder, configuration.storage(), logger);
+        } else {
+            // 新路径：共享本体数据源
+            repo = new JdbcLotteryRepository(storageManager, "lottery",
+                configuration.storage().tablePrefix(),
+                configuration.storage().sqliteFileName(), logger);
+        }
+        repo.initialize();
+        repository = repo;
 
         java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailSupplier
             = () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class);
@@ -208,6 +219,10 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         if (service != null) {
             service.shutdown();
             service = null;
+        }
+        if (repository != null) {
+            repository.shutdown();
+            repository = null;
         }
         configuration = null;
     }

@@ -41,6 +41,7 @@ import xuanmo.arcartxsuite.crossserver.CrossServerService;
 import xuanmo.arcartxsuite.keybind.KeybindService;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.script.AriaBridge;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.bridge.TaczCombatBridge;
 import xuanmo.arcartxsuite.security.ClientPacketGuard;
 
@@ -65,6 +66,7 @@ final class DefaultModuleContext implements ModuleContext {
     private final KeybindService keybindService;
     private final TaczCombatBridge taczCombatBridge;
     private final CrossServerService crossServerService;
+    private final StorageManager storageManager;
 
 
     // 模块注册的资源（onDisable 时自动清理）
@@ -89,7 +91,8 @@ final class DefaultModuleContext implements ModuleContext {
         KeybindService keybindService,
         TaczCombatBridge taczCombatBridge,
         CrossServerService crossServerService,
-        PlaceholderResolverAPI placeholderResolver
+        PlaceholderResolverAPI placeholderResolver,
+        StorageManager storageManager
     ) {
         this.plugin = plugin;
         this.moduleId = moduleId;
@@ -108,6 +111,7 @@ final class DefaultModuleContext implements ModuleContext {
         this.taczCombatBridge = taczCombatBridge;
         this.crossServerService = crossServerService;
         this.placeholderResolver = placeholderResolver;
+        this.storageManager = storageManager;
         this.expansionRegistry = resolveExpansionRegistry(logger);
     }
 
@@ -305,6 +309,11 @@ final class DefaultModuleContext implements ModuleContext {
     @Override
     public xuanmo.arcartxsuite.api.bridge.PropBridgeAPI propBridge() {
         return propBridge;
+    }
+
+    @Override
+    public @NotNull StorageManager storageManager() {
+        return storageManager;
     }
 
     @Override

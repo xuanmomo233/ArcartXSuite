@@ -34,5 +34,8 @@ public interface MapRepository {
 
     void clearPlayer(UUID playerUuid) throws SQLException;
 
-    void close();
+    /**
+     * 关闭仓库，释放连接池资源。
+     */
+    void shutdown();
 }

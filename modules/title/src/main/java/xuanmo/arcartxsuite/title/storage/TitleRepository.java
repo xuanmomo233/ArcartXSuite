@@ -116,5 +116,5 @@ public interface TitleRepository {
     /**
      * 关闭仓储，释放数据库连接等资源。
      */
-    void close();
+    void shutdown();
 }

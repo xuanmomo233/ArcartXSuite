@@ -142,11 +142,25 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
     @Override
     protected void startService() throws Exception {
 
-        repository = new JdbcEventPacketRepository(
-            dataFolder,
-            configuration.storage(), logger
-        );
-        repository.initialize();
+        // 共享模式：使用本体统一数据源，模块只需提供表前缀
+        // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
+        JdbcEventPacketRepository jdbcRepo;
+        if (configuration.storage().hasOverride()) {
+            // 旧路径：模块自建连接池
+            jdbcRepo = new JdbcEventPacketRepository(
+                dataFolder,
+                configuration.storage(), logger
+            );
+        } else {
+            // 新路径：共享本体数据源
+            jdbcRepo = new JdbcEventPacketRepository(
+                storageManager, "eventpacket",
+                "",
+                configuration.storage().sqliteFileName(), logger
+            );
+        }
+        jdbcRepo.initialize();
+        repository = jdbcRepo;
 
         dispatchService = new EventPacketDispatchService(
             logger,

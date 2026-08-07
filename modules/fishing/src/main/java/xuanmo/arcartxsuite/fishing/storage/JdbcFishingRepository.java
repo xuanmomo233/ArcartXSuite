@@ -12,6 +12,7 @@ import java.util.UUID;
 import java.util.logging.Logger;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration.StorageConfiguration;
 import xuanmo.arcartxsuite.fishing.model.FishCollectionEntry;
 import xuanmo.arcartxsuite.fishing.model.FishingPlayerData;
@@ -31,6 +32,24 @@ public final class JdbcFishingRepository extends AbstractModuleRepository implem
     public JdbcFishingRepository(File dataFolder, StorageConfiguration configuration, Logger logger) {
         super("AXS-Fishing", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;
+        this.logger = logger;
+    }
+
+    /**
+     * 共享模式构造方法（1.4.0+）。
+     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
+     *
+     * @param storageManager 本体数据源管理器
+     * @param moduleId       模块 ID
+     * @param tablePrefix    表前缀
+     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
+     * @param logger         日志记录器
+     * @since 1.4.0
+     */
+    public JdbcFishingRepository(StorageManager storageManager, String moduleId,
+                                 String tablePrefix, String sqliteFileName, Logger logger) {
+        super("AXS-Fishing", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
+        this.configuration = null;
         this.logger = logger;
     }
 

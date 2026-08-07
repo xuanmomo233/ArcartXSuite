@@ -11,6 +11,7 @@ import java.util.UUID;
 import java.util.logging.Logger;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.qqbot.config.QQBotStorageConfig;
 
 /**
@@ -41,6 +42,32 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
     public JdbcQQBotRepository(File dataFolder, QQBotStorageConfig config, Logger logger) {
         super("AXS-QQBot", dataFolder, config.toDescriptor(), logger);
         String prefix = config.isMysql() ? config.mysqlTablePrefix() : "axs_qqbot_";
+        this.tableBindings = prefix + "bindings";
+        this.tablePoints = prefix + "points";
+        this.tableSignin = prefix + "signin";
+        this.tableRedeemLog = prefix + "redeem_log";
+        this.tableBlacklist = prefix + "blacklist";
+        this.tableRedPackets = prefix + "red_packets";
+        this.tableRedPacketClaims = prefix + "red_packet_claims";
+        this.tableActivity = prefix + "activity";
+    }
+
+    /**
+     * 共享模式构造方法（1.4.0+）。
+     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
+     *
+     * @param storageManager 本体数据源管理器
+     * @param moduleId       模块 ID
+     * @param tablePrefix    表前缀（MySQL 模式下使用）
+     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
+     * @param logger         日志记录器
+     * @since 1.4.0
+     */
+    public JdbcQQBotRepository(StorageManager storageManager, String moduleId,
+                               String tablePrefix, String sqliteFileName, Logger logger) {
+        super("AXS-QQBot", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
+        // SQLite 模式下使用固定前缀，MySQL 模式下使用传入的 tablePrefix
+        String prefix = isMysql() ? tablePrefix() : "axs_qqbot_";
         this.tableBindings = prefix + "bindings";
         this.tablePoints = prefix + "points";
         this.tableSignin = prefix + "signin";

@@ -22,6 +22,7 @@ import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 
 /**
  * 可插拔模块的抽象基类，封装通用生命周期管理。
@@ -72,6 +73,7 @@ public abstract class AbstractAXSModule implements AXSModule {
     protected @NotNull xuanmo.arcartxsuite.api.placeholder.PlaceholderExpansionRegistry expansionRegistry;
     protected @Nullable xuanmo.arcartxsuite.api.bridge.PropBridgeAPI propBridge;
     protected File pluginDataFolder;
+    protected @NotNull StorageManager storageManager;
 
 
     private boolean ready;
@@ -325,6 +327,7 @@ public abstract class AbstractAXSModule implements AXSModule {
         this.placeholderResolver = context.placeholderResolver();
         this.expansionRegistry = context.expansionRegistry();
         this.propBridge = context.propBridge();
+        this.storageManager = context.storageManager();
 
         Logger logger = context.logger();
 

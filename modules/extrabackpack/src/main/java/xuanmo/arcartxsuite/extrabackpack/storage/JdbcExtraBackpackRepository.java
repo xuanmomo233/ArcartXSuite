@@ -10,7 +10,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Logger;
+import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.extrabackpack.config.ExtraBackpackConfiguration.StorageConfiguration;
 import xuanmo.arcartxsuite.extrabackpack.config.ExtraBackpackConfiguration.StorageDialect;
 import xuanmo.arcartxsuite.extrabackpack.storage.ExtraBackpackRepository.ExtraBackpackSlotRecord;
@@ -24,7 +26,7 @@ import xuanmo.arcartxsuite.extrabackpack.storage.ExtraBackpackRepository.ExtraBa
  */
 public final class JdbcExtraBackpackRepository extends AbstractModuleRepository implements ExtraBackpackRepository {
 
-    private final StorageConfiguration configuration;
+    private final @Nullable StorageConfiguration configuration;
 
     /**
      * 构造仓库实例。
@@ -36,6 +38,33 @@ public final class JdbcExtraBackpackRepository extends AbstractModuleRepository 
     public JdbcExtraBackpackRepository(File dataFolder, StorageConfiguration configuration, Logger logger) {
         super("AXS-ExtraBackpack", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;
+    }
+
+    /**
+     * 共享模式构造方法（1.4.0+）。
+     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
+     *
+     * @param storageManager 本体数据源管理器
+     * @param moduleId       模块 ID
+     * @param tablePrefix    表前缀
+     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
+     * @param logger         日志记录器
+     * @since 1.4.0
+     */
+    public JdbcExtraBackpackRepository(StorageManager storageManager, String moduleId,
+                                       String tablePrefix, String sqliteFileName, Logger logger) {
+        super("AXS-ExtraBackpack", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
+        this.configuration = null;
+    }
+
+    /**
+     * 当前是否为 SQLite 方言（兼容共享模式与自建模式）。
+     *
+     * @return {@code true} 表示 SQLite
+     */
+    private boolean isSqlite() {
+        return isSharedMode() ? !isMysql()
+            : isSqlite();
     }
 
     /**
@@ -199,7 +228,7 @@ public final class JdbcExtraBackpackRepository extends AbstractModuleRepository 
                     PRIMARY KEY (player_uuid, category_id, slot)
                 )
                 """);
-            if (configuration.dialect() == StorageDialect.SQLITE) {
+            if (isSqlite()) {
                 statement.execute("CREATE INDEX IF NOT EXISTS idx_extra_backpack_slots_player ON extra_backpack_slots(player_uuid, category_id, slot)");
             } else {
                 try {
@@ -216,7 +245,7 @@ public final class JdbcExtraBackpackRepository extends AbstractModuleRepository 
         all.addAll(updateColumns);
         String columns = String.join(", ", all);
         String placeholders = String.join(", ", java.util.Collections.nCopies(all.size(), "?"));
-        if (configuration.dialect() == StorageDialect.SQLITE) {
+        if (isSqlite()) {
             return "INSERT INTO " + table + " (" + columns + ") VALUES (" + placeholders + ") ON CONFLICT(" + String.join(", ", keys) + ") DO UPDATE SET "
                 + updateAssignments(updateColumns, true);
         }

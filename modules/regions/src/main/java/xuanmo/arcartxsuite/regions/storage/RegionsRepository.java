@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.regions.config.RegionsConfiguration.StorageConfig;
 import xuanmo.arcartxsuite.regions.model.Region;
 import xuanmo.arcartxsuite.regions.model.RegionFlag;
@@ -44,6 +45,25 @@ public final class RegionsRepository extends AbstractModuleRepository implements
         this.logger = logger;
         this.prefix = config.tablePrefix();
         this.mysql = config.dialect() == StorageConfig.Dialect.MYSQL;
+    }
+
+    /**
+     * 共享模式构造方法（1.4.0+）。
+     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
+     *
+     * @param storageManager 本体数据源管理器
+     * @param moduleId       模块 ID
+     * @param tablePrefix    表前缀
+     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
+     * @param logger         日志记录器
+     * @since 1.4.0
+     */
+    public RegionsRepository(StorageManager storageManager, String moduleId,
+                             String tablePrefix, String sqliteFileName, Logger logger) {
+        super("AXS-Regions", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
+        this.logger = logger;
+        this.prefix = tablePrefix();
+        this.mysql = isMysql();
     }
 
     /**

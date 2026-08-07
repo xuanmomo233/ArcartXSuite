@@ -78,6 +78,7 @@ public final class SuiteCoreImpl implements SuiteCore {
     private xuanmo.arcartxsuite.auth.AuthCommand authCommand;
     private ChatSignBypassService chatSignBypassService;
     private SecondaryPasswordService secondaryPasswordService;
+    private xuanmo.arcartxsuite.storage.StorageManagerImpl storageManager;
     private BridgeLifecycleManager bridgeLifecycleManager;
     private ClientEventLifecycleManager clientEventLifecycleManager;
     /** 宿主自身的 spec（config.yml） */
@@ -204,6 +205,14 @@ public final class SuiteCoreImpl implements SuiteCore {
         // 7.5 统一 PAPI 解析器
         placeholderResolver = new PlaceholderResolverImpl();
 
+        // 7.6 统一数据源管理器（1.4.0+）
+        try {
+            storageManager = new xuanmo.arcartxsuite.storage.StorageManagerImpl(getConfig(), getDataFolder());
+            consoleInfo("统一数据源已初始化 (" + (storageManager.getDescriptor().isMysql() ? "MySQL" : "SQLite") + ")");
+        } catch (Exception e) {
+            consoleError("统一数据源初始化失败: " + e.getMessage());
+        }
+
         // 8. ModuleRegistry：扫描并加载所有外部模块
         moduleRegistry = new ModuleRegistry(
             host,
@@ -217,7 +226,8 @@ public final class SuiteCoreImpl implements SuiteCore {
             bridgeLifecycleManager.taczCombatBridge(),
             crossServerService,
             placeholderResolver,
-            bridgeLifecycleManager.worldTextureBridge()
+            bridgeLifecycleManager.worldTextureBridge(),
+            storageManager
         );
         moduleRegistry.attachCore(this);
         try {
@@ -482,6 +492,10 @@ public final class SuiteCoreImpl implements SuiteCore {
         if (moduleRegistry != null) {
             moduleRegistry.unloadAll();
             moduleRegistry = null;
+        }
+        if (storageManager != null) {
+            storageManager.shutdown();
+            storageManager = null;
         }
         if (secondaryPasswordService != null) {
             secondaryPasswordService.close();

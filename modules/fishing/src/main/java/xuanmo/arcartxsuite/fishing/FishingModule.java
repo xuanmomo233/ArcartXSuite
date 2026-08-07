@@ -123,9 +123,17 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     protected void startService() throws Exception {
-        File moduleDataFolder = dataFolder;
-        JdbcFishingRepository repo = new JdbcFishingRepository(
-            moduleDataFolder, configuration.storage(), logger);
+        // 共享模式：使用本体统一数据源，模块只需提供表前缀
+        // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
+        JdbcFishingRepository repo;
+        if (configuration.storage().hasOverride()) {
+            // 旧路径：模块自建连接池
+            repo = new JdbcFishingRepository(dataFolder, configuration.storage(), logger);
+        } else {
+            // 新路径：共享本体数据源
+            repo = new JdbcFishingRepository(storageManager, "fishing",
+                "", configuration.storage().sqliteFileName(), logger);
+        }
 
         // 注册 UI 并获取 UI ID
         UiBinding binding1 = registerModuleUi(

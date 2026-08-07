@@ -15,7 +15,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
-import xuanmo.arcartxsuite.chat.config.ChatPersistenceDialect;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.chat.config.ChatStorageConfiguration;
 import xuanmo.arcartxsuite.chat.model.ChatMuteRecord;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerProfile;
@@ -40,6 +40,24 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
     public JdbcChatRepository(File dataFolder, ChatStorageConfiguration configuration, Logger logger) {
         super("AXS-Chat", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;
+    }
+
+    /**
+     * 共享模式构造方法（1.4.0+）。
+     * 使用本体统一数据源，模块只需提供 SQLite 文件名。
+     * <p>
+     * 聊天模块的表名已内置 {@code chat_} 前缀，因此 tablePrefix 传入空字符串。
+     *
+     * @param storageManager 本体数据源管理器
+     * @param moduleId       模块 ID
+     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
+     * @param logger         日志记录器
+     * @since 1.4.0
+     */
+    public JdbcChatRepository(StorageManager storageManager, String moduleId,
+                              String sqliteFileName, Logger logger) {
+        super("AXS-Chat", storageManager, moduleId, "", sqliteFileName, logger);
+        this.configuration = null;
     }
 
     @Override
@@ -233,7 +251,7 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
 
     private void createTables(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            if (configuration.dialect() == ChatPersistenceDialect.SQLITE) {
+            if (!isMysql()) {
                 statement.execute("""
                     CREATE TABLE IF NOT EXISTS chat_player_states (
                         player_uuid TEXT PRIMARY KEY,
@@ -312,7 +330,7 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
     }
 
     private String stateUpsertSql() {
-        if (configuration.dialect() == ChatPersistenceDialect.SQLITE) {
+        if (!isMysql()) {
             return """
                 INSERT INTO chat_player_states (player_uuid, current_channel_id, accepts_private_messages, accepts_mentions, social_spy_enabled, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -337,7 +355,7 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
     }
 
     private String muteUpsertSql() {
-        if (configuration.dialect() == ChatPersistenceDialect.SQLITE) {
+        if (!isMysql()) {
             return """
                 INSERT INTO chat_player_mutes (player_uuid, muted_by, reason, created_at, expires_at)
                 VALUES (?, ?, ?, ?, ?)
@@ -360,7 +378,7 @@ public final class JdbcChatRepository extends AbstractModuleRepository implement
     }
 
     private String profileUpsertSql() {
-        if (configuration.dialect() == ChatPersistenceDialect.SQLITE) {
+        if (!isMysql()) {
             return """
                 INSERT INTO chat_player_profiles (player_uuid, last_known_name, last_known_name_lower, last_seen_at, last_server)
                 VALUES (?, ?, ?, ?, ?)

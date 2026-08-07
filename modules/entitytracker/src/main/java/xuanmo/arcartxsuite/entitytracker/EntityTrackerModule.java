@@ -477,8 +477,21 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             return;
         }
         try {
-            repository = new JdbcEntityTrackerRepository(
-                dataFolder, moduleYaml, logger);
+            ConfigurationSection dbSection = moduleYaml.getConfigurationSection("database");
+            boolean isMysql = "mysql".equalsIgnoreCase(
+                dbSection != null ? dbSection.getString("type", "sqlite") : "sqlite");
+            if (isMysql) {
+                // 旧路径：模块自建连接池
+                repository = new JdbcEntityTrackerRepository(
+                    dataFolder, moduleYaml, logger);
+            } else {
+                // 新路径：共享本体数据源
+                String sqliteFile = dbSection != null
+                    ? dbSection.getString("sqlite.file", "entitytracker.db")
+                    : "entitytracker.db";
+                repository = new JdbcEntityTrackerRepository(
+                    storageManager, "entitytracker", sqliteFile, logger);
+            }
             repository.initialize();
         } catch (Exception e) {
             logger.severe("EntityTracker 数据库初始化失败: " + e.getMessage());

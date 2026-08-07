@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.StorageConfiguration;
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.StorageDialect;
 import xuanmo.arcartxsuite.map.model.MapWaypoint;
@@ -37,6 +38,23 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     public JdbcMapRepository(File dataFolder, StorageConfiguration configuration, Logger logger) {
         super("AXS-Map", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;
+    }
+
+    /**
+     * 共享模式构造方法（1.4.0+）。
+     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
+     *
+     * @param storageManager 本体数据源管理器
+     * @param moduleId       模块 ID
+     * @param tablePrefix    表前缀
+     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
+     * @param logger         日志记录器
+     * @since 1.4.0
+     */
+    public JdbcMapRepository(StorageManager storageManager, String moduleId,
+                             String tablePrefix, String sqliteFileName, Logger logger) {
+        super("AXS-Map", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
+        this.configuration = null;
     }
 
     @Override
@@ -102,7 +120,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
      */
     @Override
     public boolean tryUnlockAnchor(UUID playerUuid, String anchorId, long unlockTime) throws SQLException {
-        String sql = configuration.dialect() == StorageDialect.SQLITE
+        String sql = isSqliteDialect()
             ? "INSERT OR IGNORE INTO AXS_map_unlocks (uuid, anchor_id, unlock_time) VALUES (?, ?, ?)"
             : "INSERT IGNORE INTO AXS_map_unlocks (uuid, anchor_id, unlock_time) VALUES (?, ?, ?)";
         try (Connection connection = connection();
@@ -296,17 +314,9 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
         }
     }
 
-    /**
-     * 关闭仓库，释放连接池资源。
-     */
-    @Override
-    public void close() {
-        shutdown();
-    }
-
     private void createTables(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            if (configuration.dialect() == StorageDialect.SQLITE) {
+            if (isSqliteDialect()) {
                 statement.execute("""
                     CREATE TABLE IF NOT EXISTS AXS_map_unlocks (
                         uuid TEXT NOT NULL,
@@ -357,7 +367,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     }
 
     private String unlockUpsertSql() {
-        if (configuration.dialect() == StorageDialect.SQLITE) {
+        if (isSqliteDialect()) {
             return """
                 INSERT INTO AXS_map_unlocks (uuid, anchor_id, unlock_time)
                 VALUES (?, ?, ?)
@@ -374,7 +384,7 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
     }
 
     private String waypointUpsertSql() {
-        if (configuration.dialect() == StorageDialect.SQLITE) {
+        if (isSqliteDialect()) {
             return """
                 INSERT INTO AXS_map_waypoints (uuid, waypoint_id, name, world, x, y, z, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -402,5 +412,18 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
 
     private Connection connection() throws SQLException {
         return getConnection();
+    }
+
+    /**
+     * 判断当前是否为 SQLite 方言。
+     * <p>
+     * 共享模式下通过 {@link #isMysql()} 判断（基于本体全局描述符）；
+     * 自建模式下通过模块配置的 {@code dialect} 判断。
+     *
+     * @return {@code true} 表示当前使用 SQLite 方言
+     * @since 1.4.0
+     */
+    private boolean isSqliteDialect() {
+        return isSharedMode() ? !isMysql() : isSqliteDialect();
     }
 }

@@ -187,7 +187,7 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
             markerService.shutdown();
             markerService = null;
         }
-        repository.close();
+        repository.shutdown();
         waypointBridge.shutdown();
         viewStates.clear();
         navigationStates.clear();

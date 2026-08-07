@@ -167,6 +167,19 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         ensureExampleShopExported();
         ensureDefaultRecycleExported();
 
+        // 共享模式：使用本体统一数据源，模块只需提供表前缀
+        // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
+        JdbcMarketRepository marketRepo;
+        if (configuration.storage().hasOverride()) {
+            // 旧路径：模块自建连接池
+            marketRepo = new JdbcMarketRepository(configuration.storage(), logger, dataFolder);
+        } else {
+            // 新路径：共享本体数据源
+            marketRepo = new JdbcMarketRepository(storageManager, "market",
+                configuration.storage().tablePrefix(),
+                configuration.storage().sqliteFileName(), logger);
+        }
+
         service = new MarketService(plugin, configuration, packetBridge,
             currencyManager, itemSourceRegistry, itemSerializer,
             itemStackBridge, vanillaItemNameBridge, mailSupplier, logger, crossServer, messages());
@@ -177,7 +190,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             configuration.auction().qqBroadcastThreshold());
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
-        service.start(dataFolder);
+        service.start(dataFolder, marketRepo);
 
         // 注册待发放队列消费者（玩家上线补发离线期间累积的物品/货币）
         registerListener(new PendingDeliveryService(
@@ -190,7 +203,6 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
         bindMarketUi(configuration.ui().recycleId(), RECYCLE_UI_FILE_PATH);
         bindMarketUi(configuration.ui().historyId(), HISTORY_UI_FILE_PATH);
 
-        JdbcMarketRepository marketRepo = (JdbcMarketRepository) service.getRepository();
         registerCapability(xuanmo.arcartxsuite.api.capability.DatabaseMigratable.class,
             new xuanmo.arcartxsuite.api.capability.DatabaseMigratable() {
                 @Override public @NotNull String moduleId() { return "market"; }

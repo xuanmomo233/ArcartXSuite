@@ -222,7 +222,7 @@ public class TitleService {
             Thread.currentThread().interrupt();
             databaseExecutor.shutdownNow();
         } finally {
-            repository.close();
+            repository.shutdown();
         }
 
         states.clear();

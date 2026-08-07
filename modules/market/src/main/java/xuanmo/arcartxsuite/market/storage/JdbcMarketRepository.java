@@ -13,6 +13,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.market.auction.AuctionBid;
 import xuanmo.arcartxsuite.market.auction.AuctionListing;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.StorageConfiguration;
@@ -43,10 +44,28 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
         this.logger = logger;
     }
 
+    /**
+     * 共享模式构造方法（1.4.0+）。
+     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
+     *
+     * @param storageManager 本体数据源管理器
+     * @param moduleId       模块 ID
+     * @param tablePrefix    表前缀
+     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
+     * @param logger         日志记录器
+     * @since 1.4.0
+     */
+    public JdbcMarketRepository(StorageManager storageManager, String moduleId,
+                                String tablePrefix, String sqliteFileName, Logger logger) {
+        super("AXS-Market", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
+        this.config = null;
+        this.logger = logger;
+    }
+
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
-        sqlite = config.isSqlite();
-        String prefix = config.tablePrefix();
+        sqlite = !isMysql();
+        String prefix = isSharedMode() ? tablePrefix() : config.tablePrefix();
         tListings = prefix + "listings";
         tBids = prefix + "bids";
         tHistory = prefix + "history";
@@ -68,7 +87,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
 
     @Override
     protected List<String> allTables() {
-        String prefix = config.tablePrefix();
+        String prefix = isSharedMode() ? tablePrefix() : config.tablePrefix();
         return List.of(
             prefix + "listings",
             prefix + "bids",

@@ -13,6 +13,7 @@ import java.util.logging.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.lottery.config.LotteryModuleConfiguration.StorageConfiguration;
 import xuanmo.arcartxsuite.lottery.model.PlayerCaseState;
 import xuanmo.arcartxsuite.lottery.model.PlayerGachaState;
@@ -49,10 +50,28 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
         this.logger = logger;
     }
 
+    /**
+     * 共享模式构造方法（1.4.0+）。
+     * 使用本体统一数据源，模块只需提供表前缀和 SQLite 文件名。
+     *
+     * @param storageManager 本体数据源管理器
+     * @param moduleId       模块 ID
+     * @param tablePrefix    表前缀
+     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
+     * @param logger         日志记录器
+     * @since 1.4.0
+     */
+    public JdbcLotteryRepository(StorageManager storageManager, String moduleId,
+                                 String tablePrefix, String sqliteFileName, Logger logger) {
+        super("AXS-Lottery", storageManager, moduleId, tablePrefix, sqliteFileName, logger);
+        this.config = null;
+        this.logger = logger;
+    }
+
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
-        sqlite = !config.toDescriptor().isMysql();
-        String prefix = config.tablePrefix();
+        sqlite = !isMysql();
+        String prefix = isSharedMode() ? tablePrefix() : config.tablePrefix();
         tGachaState = prefix + "gacha_state";
         tGachaLog = prefix + "gacha_log";
         tCaseState = prefix + "case_state";

@@ -270,6 +270,19 @@ public record MarketModuleConfiguration(
             }
             return xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite(sqliteFileName);
         }
+
+        /**
+         * 判断是否为覆盖模式（模块自建连接池）。
+         * <p>
+         * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
+         * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
+         *
+         * @return {@code true} 表示模块应自建连接池（旧路径）
+         * @since 1.4.0
+         */
+        public boolean hasOverride() {
+            return "mysql".equalsIgnoreCase(mode);
+        }
     }
 
     public record RedisConfiguration(

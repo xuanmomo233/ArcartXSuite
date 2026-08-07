@@ -31,6 +31,7 @@ import xuanmo.arcartxsuite.mail.placeholder.MailPlaceholderExpansion;
 import xuanmo.arcartxsuite.mail.service.MailService;
 import xuanmo.arcartxsuite.mail.storage.JdbcMailRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.mail.storage.JdbcMailRepository;
 
 /**
  * 邮件模块主类，继承 {@link AbstractAXSModule} 并实现 {@link ModuleCommandHandler}。
@@ -46,6 +47,7 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
 
     private MailModuleConfiguration configuration;
     private MailService service;
+    private JdbcMailRepository repository;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -143,9 +145,20 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
             }
         };
 
-        JdbcMailRepository mailRepo = new JdbcMailRepository(
-            dataFolder,
-            configuration.storage(), logger);
+        // 共享模式：使用本体统一数据源，模块只需提供 SQLite 文件名
+        // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）
+        JdbcMailRepository mailRepo;
+        if (configuration.storage().hasOverride()) {
+            // 旧路径：模块自建连接池
+            mailRepo = new JdbcMailRepository(
+                dataFolder,
+                configuration.storage(), logger);
+        } else {
+            // 新路径：共享本体数据源
+            mailRepo = new JdbcMailRepository(storageManager, "mail",
+                configuration.storage().sqliteFileName(), logger);
+        }
+        repository = mailRepo;
         service = new MailService(
             plugin, logger, dataFolder, configuration,
             mailRepo,
@@ -206,6 +219,10 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
         if (service != null) {
             service.shutdown();
             service = null;
+        }
+        if (repository != null) {
+            repository.shutdown();
+            repository = null;
         }
         configuration = null;
     }

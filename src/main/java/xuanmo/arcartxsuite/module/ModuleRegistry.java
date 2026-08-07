@@ -78,6 +78,7 @@ public final class ModuleRegistry {
     private final ModuleSignatureVerifier signatureVerifier;
     private final PlaceholderResolverAPI placeholderResolver;
     private final ArcartXWorldTextureService worldTextureBridge;
+    private final xuanmo.arcartxsuite.api.storage.StorageManager storageManager;
 
     // ─── 全局桥接单例 ──────────────────────────────────────────
     private DefaultItemSourceRegistry itemSourceRegistry;
@@ -118,7 +119,8 @@ public final class ModuleRegistry {
         TaczCombatBridge taczCombatBridge,
         CrossServerService crossServerService,
         PlaceholderResolverAPI placeholderResolver,
-        ArcartXWorldTextureService worldTextureBridge
+        ArcartXWorldTextureService worldTextureBridge,
+        xuanmo.arcartxsuite.api.storage.StorageManager storageManager
     ) {
         this.plugin = plugin;
         this.modulesDir = modulesDir;
@@ -132,6 +134,7 @@ public final class ModuleRegistry {
         this.crossServerService = crossServerService;
         this.placeholderResolver = placeholderResolver;
         this.worldTextureBridge = worldTextureBridge;
+        this.storageManager = storageManager;
         List<String> sigPubKeys = plugin.getConfig().getStringList("module-signature-public-keys");
         if (plugin.getConfig().contains("module-signature-public-key")) {
             LOGGER.warning("[ModuleSignature] Legacy setting module-signature-public-key is no longer supported; use module-signature-public-keys (list). The legacy value will be ignored.");
@@ -755,7 +758,8 @@ public final class ModuleRegistry {
             keybindService,
             taczCombatBridge,
             crossServerService,
-            placeholderResolver
+            placeholderResolver,
+            storageManager
         );
 
         LoadedModule loaded = jarBytes != null

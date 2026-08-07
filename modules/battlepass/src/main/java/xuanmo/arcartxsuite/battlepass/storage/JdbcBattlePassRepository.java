@@ -17,6 +17,7 @@ import java.util.UUID;
 import java.util.logging.Logger;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.battlepass.config.BattlePassModuleConfiguration;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassTask;
@@ -45,6 +46,21 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
         this.configuration = configuration;
     }
 
+    /**
+     * 共享模式构造方法（1.4.0+）。
+     *
+     * @param storageManager 本体数据源管理器
+     * @param moduleId       模块 ID
+     * @param sqliteFileName SQLite 文件名
+     * @param logger         日志记录器
+     * @since 1.4.0
+     */
+    public JdbcBattlePassRepository(StorageManager storageManager, String moduleId,
+                                    String sqliteFileName, Logger logger) {
+        super("AXS-BattlePass", storageManager, moduleId, "", sqliteFileName, logger);
+        this.configuration = null;
+    }
+
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
         createTables(conn);
@@ -56,8 +72,16 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
         return java.util.List.of("bp_player_progress", "bp_task_progress", "bp_claimed_rewards", "bp_player_tasks");
     }
 
+    /** 获取当前方言标识，兼容共享模式和自建模式。 */
+    private String dialect() {
+        if (isSharedMode()) {
+            return isMysql() ? "mysql" : "sqlite";
+        }
+        return configuration.mode();
+    }
+
     private void createTables(Connection conn) throws SQLException {
-        String progressTable = switch (configuration.mode()) {
+        String progressTable = switch (dialect()) {
             case "sqlite" -> """
                 CREATE TABLE IF NOT EXISTS bp_player_progress (
                     player_uuid TEXT NOT NULL,
@@ -88,7 +112,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                 """;
         };
 
-        String taskTable = switch (configuration.mode()) {
+        String taskTable = switch (dialect()) {
             case "sqlite" -> """
                 CREATE TABLE IF NOT EXISTS bp_task_progress (
                     player_uuid TEXT NOT NULL,
@@ -111,7 +135,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                 """;
         };
 
-        String rewardTable = switch (configuration.mode()) {
+        String rewardTable = switch (dialect()) {
             case "sqlite" -> """
                 CREATE TABLE IF NOT EXISTS bp_claimed_rewards (
                     player_uuid TEXT NOT NULL,
@@ -132,7 +156,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                 """;
         };
 
-        String playerTaskTable = switch (configuration.mode()) {
+        String playerTaskTable = switch (dialect()) {
             case "sqlite" -> """
                 CREATE TABLE IF NOT EXISTS bp_player_tasks (
                     player_uuid TEXT NOT NULL,
@@ -175,7 +199,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
 
     private void ensureIndexes(Connection conn) {
         // MySQL 不支持 CREATE INDEX IF NOT EXISTS，重复创建时静默忽略
-        String prefix = "sqlite".equalsIgnoreCase(configuration.mode()) ? "CREATE INDEX IF NOT EXISTS " : "CREATE INDEX ";
+        String prefix = "sqlite".equalsIgnoreCase(dialect()) ? "CREATE INDEX IF NOT EXISTS " : "CREATE INDEX ";
         tryExecute(conn, prefix + "idx_bp_progress_season ON bp_player_progress(season_id)");
         tryExecute(conn, prefix + "idx_bp_task_season ON bp_task_progress(season_id)");
         tryExecute(conn, prefix + "idx_bp_reward_season ON bp_claimed_rewards(season_id)");
@@ -221,7 +245,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
 
     @Override
     public void saveProgress(BattlePassPlayerProgress progress) throws SQLException {
-        String sql = switch (configuration.mode()) {
+        String sql = switch (dialect()) {
             case "sqlite" -> """
                 INSERT INTO bp_player_progress (player_uuid, season_id, current_level, current_xp, pass_tier, unlocked_premium, last_daily_reset_date, last_weekly_reset_date, current_week_number)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -288,7 +312,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
 
     @Override
     public void saveTaskProgress(UUID playerUuid, String seasonId, String taskId, int count) throws SQLException {
-        String sql = switch (configuration.mode()) {
+        String sql = switch (dialect()) {
             case "sqlite" -> """
                 INSERT INTO bp_task_progress (player_uuid, season_id, task_id, completed_count, last_update)
                 VALUES (?, ?, ?, ?, ?)
@@ -335,7 +359,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
 
     @Override
     public void saveClaimedReward(UUID playerUuid, String seasonId, String rewardId) throws SQLException {
-        String sql = switch (configuration.mode()) {
+        String sql = switch (dialect()) {
             case "sqlite" -> """
                 INSERT INTO bp_claimed_rewards (player_uuid, season_id, reward_id, claimed_at)
                 VALUES (?, ?, ?, ?)
@@ -434,7 +458,7 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
 
     @Override
     public void savePlayerTask(UUID playerUuid, String seasonId, PlayerTaskInstance task) throws SQLException {
-        String sql = switch (configuration.mode()) {
+        String sql = switch (dialect()) {
             case "sqlite" -> """
                 INSERT INTO bp_player_tasks (player_uuid, season_id, instance_id, template_id, category, target_count, current_progress, completed, assigned_date, week_number)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

@@ -223,7 +223,7 @@ public class OnlineRewardsService implements Listener {
         leaderboardCache.clear();
         HandlerList.unregisterAll(this);
         unregisterMenuUi();
-        repository.close();
+        repository.shutdown();
     }
 
     /**

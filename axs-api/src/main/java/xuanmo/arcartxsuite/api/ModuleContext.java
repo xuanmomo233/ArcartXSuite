@@ -26,6 +26,7 @@ import xuanmo.arcartxsuite.api.placeholder.PlaceholderExpansionRegistry;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.script.AriaBridge;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 
 /**
  * 宿主提供给模块的上下文接口。
@@ -203,6 +204,21 @@ public interface ModuleContext {
     /** 获取 ArcartX Prop 桥接（可能为 null） */
     @ApiStability.Internal
     @Nullable xuanmo.arcartxsuite.api.bridge.PropBridgeAPI propBridge();
+
+    /**
+     * 获取宿主统一数据源管理器（永不为 null）。
+     * <p>
+     * 由本体在启动时创建唯一一个 HikariCP 连接池并注入给所有模块。
+     * 模块通过它复用本体连接池，无需自行管理 {@code initialize()}/{@code shutdown()}。
+     * <p>
+     * 若模块在自身配置中声明了独立的 storage 节（覆盖模式），
+     * 可不使用此管理器而走自建模式（向后兼容）。
+     *
+     * @return 宿主数据源管理器
+     * @since 1.4.0
+     */
+    @ApiStability.Stable
+    @NotNull StorageManager storageManager();
 
     // ─── 事件与命令注册 ────────────────────────────────────────
 

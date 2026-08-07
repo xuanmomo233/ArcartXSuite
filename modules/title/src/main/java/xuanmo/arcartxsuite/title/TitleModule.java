@@ -141,9 +141,20 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
         TitleService.UiResourceExporter uiExporter = (resourcePath, relativeUiPath, overwrite) ->
             exportUiResource(resourcePath, relativeUiPath, overwrite, moduleClassLoader());
 
-        JdbcTitleRepository titleRepo = new JdbcTitleRepository(
-            dataFolder,
-            configuration.storage(), logger);
+        // 共享模式：使用本体统一数据源，模块只需提供表前缀
+        // 若模块配置了独立 storage 节（dialect=mysql 等），则走自建模式（向后兼容）
+        JdbcTitleRepository titleRepo;
+        if (configuration.storage().hasOverride()) {
+            // 旧路径：模块自建连接池
+            titleRepo = new JdbcTitleRepository(
+                dataFolder,
+                configuration.storage(), logger);
+        } else {
+            // 新路径：共享本体数据源
+            titleRepo = new JdbcTitleRepository(
+                storageManager, "title",
+                "", configuration.storage().sqliteFileName(), logger);
+        }
         service = new TitleService(
             plugin, logger, configuration,
             titleRepo,

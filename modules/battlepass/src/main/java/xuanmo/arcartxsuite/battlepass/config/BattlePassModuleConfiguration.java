@@ -148,6 +148,16 @@ public record BattlePassModuleConfiguration(
             }
             return StorageDescriptor.sqlite(sqliteFileName);
         }
+
+        /**
+         * 判断是否为覆盖模式（模块自建连接池）。
+         *
+         * @return {@code true} 表示模块应自建连接池（mode=mysql）
+         * @since 1.4.0
+         */
+        public boolean hasOverride() {
+            return "mysql".equalsIgnoreCase(mode);
+        }
     }
 
     /**

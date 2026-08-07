@@ -12,6 +12,11 @@ public interface OnlineRewardsRepository {
 
     void initialize() throws SQLException;
 
+    /**
+     * 关闭仓储，释放数据库连接等资源。
+     */
+    void shutdown();
+
     OnlineRewardsPlayerState loadState(UUID playerUuid) throws SQLException;
 
     void saveState(UUID playerUuid, OnlineRewardsPlayerState state) throws SQLException;
@@ -41,6 +46,4 @@ public interface OnlineRewardsRepository {
     boolean isServerGoalTriggered(String date, String goalId) throws SQLException;
 
     void saveServerGoalTriggered(String date, String goalId) throws SQLException;
-
-    void close();
 }

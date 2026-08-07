@@ -16,7 +16,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Logger;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
-import xuanmo.arcartxsuite.mail.config.MailPersistenceDialect;
+import xuanmo.arcartxsuite.api.storage.StorageManager;
 import xuanmo.arcartxsuite.mail.config.MailStorageConfiguration;
 import xuanmo.arcartxsuite.mail.model.MailAttachment;
 import xuanmo.arcartxsuite.mail.model.MailAttachmentType;
@@ -45,6 +45,24 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     public JdbcMailRepository(File dataFolder, MailStorageConfiguration configuration, Logger logger) {
         super("AXS-Mail", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;
+    }
+
+    /**
+     * 共享模式构造方法（1.4.0+）。
+     * 使用本体统一数据源，模块只需提供 SQLite 文件名。
+     * <p>
+     * 邮件模块的表名已内置 {@code mail_} 前缀，因此 tablePrefix 传入空字符串。
+     *
+     * @param storageManager 本体数据源管理器
+     * @param moduleId       模块 ID
+     * @param sqliteFileName SQLite 文件名（SQLite 模式下使用）
+     * @param logger         日志记录器
+     * @since 1.4.0
+     */
+    public JdbcMailRepository(StorageManager storageManager, String moduleId,
+                              String sqliteFileName, Logger logger) {
+        super("AXS-Mail", storageManager, moduleId, "", sqliteFileName, logger);
+        this.configuration = null;
     }
 
     @Override
@@ -616,7 +634,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
 
     private void createTables(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
-            if (configuration.dialect() == MailPersistenceDialect.SQLITE) {
+            if (!isMysql()) {
                 statement.execute("""
                     CREATE TABLE IF NOT EXISTS mail_player_profiles (
                         player_uuid TEXT PRIMARY KEY,
@@ -787,7 +805,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     private void ensureSchemaUpgrade(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             if (!columnExists(connection, "mail_attachments", "currency_id")) {
-                statement.execute(alterTableAddColumnSql("mail_attachments", "currency_id", configuration.dialect() == MailPersistenceDialect.SQLITE ? "TEXT NULL" : "VARCHAR(64) NULL"));
+                statement.execute(alterTableAddColumnSql("mail_attachments", "currency_id", isMysql() ? "VARCHAR(64) NULL" : "TEXT NULL"));
             }
             if (!columnExists(connection, "mail_attachments", "currency_amount")) {
                 statement.execute(alterTableAddColumnSql("mail_attachments", "currency_amount", "DOUBLE NOT NULL DEFAULT 0"));
@@ -934,7 +952,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     }
 
     private String playerProfileUpsertSql() {
-        if (configuration.dialect() == MailPersistenceDialect.SQLITE) {
+        if (!isMysql()) {
             return """
                 INSERT INTO mail_player_profiles (player_uuid, last_known_name, last_known_name_lower, last_send_at, last_seen_at, last_server)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -986,7 +1004,7 @@ public final class JdbcMailRepository extends AbstractModuleRepository implement
     }
 
     private String cdkUpsertSql() {
-        if (configuration.dialect() == MailPersistenceDialect.SQLITE) {
+        if (!isMysql()) {
             return """
                 INSERT INTO mail_cdk_definitions (code, preset_id, max_claims, claimed_count, expires_at, enabled, created_by, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
