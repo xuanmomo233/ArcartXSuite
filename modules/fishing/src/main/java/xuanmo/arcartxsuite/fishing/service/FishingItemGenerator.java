@@ -28,6 +28,21 @@ public final class FishingItemGenerator {
     }
 
     /**
+     * 根据 FishingItemRef 生成 ItemStack 并序列化为 itemJson 字符串，供 UI Slot 图标渲染。
+     *
+     * @param ref    物品引用
+     * @param player 玩家上下文（Overture 需要）
+     * @return itemJson 字符串，失败或不可用时返回空字符串
+     */
+    public @NotNull String generateItemJson(@NotNull FishingItemRef ref, @Nullable Player player) {
+        ItemStack stack = generate(ref, player);
+        if (stack == null || itemBridgeAPI == null) {
+            return "";
+        }
+        return itemBridgeAPI.itemToJson(stack).orElse("");
+    }
+
+    /**
      * 根据 FishingItemRef 生成 ItemStack。
      *
      * @param ref    物品引用

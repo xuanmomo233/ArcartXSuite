@@ -756,6 +756,8 @@ public final class FishingService {
             entry.put("maxSize", caught != null ? caught.maxSize() : 0);
             entry.put("count", caught != null ? caught.caughtCount() : 0);
             fishDict.put(Integer.toString(idx), entry);
+            // 鱼物品图标 itemJson（分离模式，UI 端 Slot Icon 通过 fishIconJson{idx} 渲染）
+            payload.put("fishIconJson" + idx, itemGenerator.generateItemJson(fish.itemRef(), player));
             idx++;
         }
         payload.put("fishList", fishDict);

@@ -139,14 +139,47 @@ public final class FishingMinigame {
         if (progress >= 1.0) {
             success = true;
             finished = true;
-            cleanup();
+            finishWithResult(player, true, fishInside, barHeightRatio);
             service.onMinigameComplete(session, true, wasPerfect);
         } else if (progress <= 0.0 || session.remainingTicks() <= 0) {
             success = false;
             finished = true;
-            cleanup();
+            finishWithResult(player, false, fishInside, barHeightRatio);
             service.onMinigameComplete(session, false, false);
         }
+    }
+
+    /**
+     * 结束小游戏：先向客户端发送 state=success/failed 的最终结果包，
+     * 停止 tick 任务，并延迟约 1.5 秒（30 ticks）关闭 HUD，让玩家看到结果覆盖层。
+     */
+    private void finishWithResult(@NotNull Player player, boolean won, boolean fishInside, double barHeightRatio) {
+        session.setActive(false);
+        if (tickTask != null && !tickTask.isCancelled()) {
+            tickTask.cancel();
+            tickTask = null;
+        }
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("packetId", PACKET_ID);
+        payload.put("fishY", fishPosition);
+        payload.put("barY", barPosition);
+        payload.put("barHeight", barHeightRatio);
+        payload.put("progress", progress);
+        payload.put("state", won ? "success" : "failed");
+        payload.put("timeLeft", session.remainingTicks());
+        payload.put("fishInside", fishInside);
+        packetBridge.sendPacket(player, uiId, "update", payload);
+
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                Player p = Bukkit.getPlayer(session.playerUuid());
+                if (p != null) {
+                    packetBridge.closeUi(p, uiId);
+                }
+            }
+        }.runTaskLater(plugin, 30L);
     }
 
     private double calculateBarHeightRatio() {
