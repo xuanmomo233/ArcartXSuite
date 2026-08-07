@@ -41,6 +41,25 @@ ui:
       var.totalFeeCurrency = ''
   # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - session_id: 写信会话 ID，用于服务端校验本次寄信操作
+    #   - action_token: 操作令牌，防止重复提交
+    #   - base_fee: 基础邮费金额
+    #   - vault_tax_rate: 金币附件税率
+    #   - allow_vault: 是否允许附带金币附件
+    #   - quote_success: 费用报价是否成功
+    #   - quote_message: 报价提示信息（失败时展示原因）
+    #   - item_fee: 物品附件手续费
+    #   - total_fee: 邮件总费用
+    #   - max_attachments: 最大物品附件槽数量
+    #   - attachment_count: 当前已放入的附件数量
+    #   - subject_max: 标题文字上限
+    #   - body_max: 正文文字上限
+    #   - password_panel: 二级密码面板信息（含 visible 子字段控制面板显隐）
+    #   - currencies: 可用货币列表（Map，每项含 available 和 display_name）
+    #   - fee_currency: 当前邮费使用的货币 ID
+    #   - total_fee_currency: 总费用使用的货币 ID
     init: |-
       var.sessionId = packet['session_id']
       var.actionToken = packet['action_token']
@@ -77,6 +96,19 @@ ui:
           }
         }
       }
+    # packetHandler: update
+    # 包字段:
+    #   - base_fee: 基础邮费金额
+    #   - vault_tax_rate: 金币附件税率
+    #   - allow_vault: 是否允许附带金币附件
+    #   - quote_success: 费用报价是否成功
+    #   - quote_message: 报价提示信息（失败时展示原因）
+    #   - item_fee: 物品附件手续费
+    #   - total_fee: 邮件总费用
+    #   - max_attachments: 最大物品附件槽数量
+    #   - attachment_count: 当前已放入的附件数量
+    #   - password_panel: 二级密码面板信息（含 visible 子字段控制面板显隐）
+    #   - total_fee_currency: 总费用使用的货币 ID
     update: |-
       var.baseFee = packet['base_fee']
       var.vaultTaxRate = packet['vault_tax_rate']

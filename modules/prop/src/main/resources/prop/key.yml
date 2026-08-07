@@ -12,11 +12,17 @@ category: "ArcartX 快捷道具按键"
 keys:
   # 顶层键是显示给玩家的按键名称。
   快捷道具1:
+    # 默认按键（客户端按键名）
     defaultKey: "Z"
+    # 绑定的道具槽位
     slot: Slot1
   快捷道具2:
+    # 默认按键（客户端按键名）
     defaultKey: "X"
+    # 绑定的道具槽位
     slot: Slot2
   快捷道具3:
+    # 默认按键（客户端按键名）
     defaultKey: "C"
+    # 绑定的道具槽位
     slot: Slot3

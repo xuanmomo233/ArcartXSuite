@@ -31,6 +31,12 @@ import xuanmo.arcartxsuite.battlepass.service.BattlePassService;
 import xuanmo.arcartxsuite.battlepass.storage.BattlePassRepository;
 import xuanmo.arcartxsuite.battlepass.storage.JdbcBattlePassRepository;
 
+/**
+ * BattlePass（战令）模块入口，继承 {@link AbstractAXSModule} 并实现 {@link ModuleCommandHandler}。
+ * <p>
+ * 负责战令模块的完整生命周期管理：配置加载、仓储初始化、UI 注册、服务启动、
+ * 跨模块能力注册（数据库迁移、玩家数据清理）、命令绑定、PlaceholderAPI 扩展及客户端包处理。
+ */
 public final class BattlePassModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private static final String MODULE_VERSION = "1.3.2";
@@ -46,6 +52,11 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
     private BattlePassAdminCommand adminCommand;
     private BattlePassPacketHandler packetHandler;
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 返回 BattlePass 模块描述符（id=battlepass）。
+     */
     @Override
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("battlepass")

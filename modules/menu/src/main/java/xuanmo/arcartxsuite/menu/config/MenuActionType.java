@@ -3,6 +3,11 @@ package xuanmo.arcartxsuite.menu.config;
 import java.util.Locale;
 import java.util.logging.Logger;
 
+/**
+ * 菜单动作类型枚举，定义按钮点击时可执行的动作种类。
+ * <p>
+ * 包括执行命令、发送消息、打开/关闭菜单、翻页、播放音效、分发信号、运行脚本等。
+ */
 public enum MenuActionType {
     COMMAND,
     PLAYER_OP,
@@ -19,6 +24,12 @@ public enum MenuActionType {
 
     private static final Logger LOGGER = Logger.getLogger(MenuActionType.class.getName());
 
+    /**
+     * 将文本关键字解析为动作类型，未知关键字降级为 {@link #NONE} 并记录警告。
+     *
+     * @param raw 原始关键字文本
+     * @return 对应的动作类型枚举值
+     */
     public static MenuActionType parse(String raw) {
         if (raw == null || raw.isBlank()) {
             return NONE;

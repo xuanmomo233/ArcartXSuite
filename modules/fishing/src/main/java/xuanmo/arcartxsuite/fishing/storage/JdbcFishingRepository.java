@@ -16,6 +16,13 @@ import xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration.StorageConf
 import xuanmo.arcartxsuite.fishing.model.FishCollectionEntry;
 import xuanmo.arcartxsuite.fishing.model.FishingPlayerData;
 
+/**
+ * 基于 JDBC 的 {@link FishingRepository} 实现。
+ * <p>
+ * 关联模块：{@code fishing}。使用 SQLite/MySQL 存储，
+ * 维护 {@code axs_fishing_player}（玩家数据）与 {@code axs_fishing_collection}（图鉴条目）两张表，
+ * 并继承 {@link xuanmo.arcartxsuite.api.storage.AbstractModuleRepository} 获得数据迁移与清理能力。
+ */
 public final class JdbcFishingRepository extends AbstractModuleRepository implements FishingRepository {
 
     private final StorageConfiguration configuration;

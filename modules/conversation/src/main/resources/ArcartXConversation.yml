@@ -1,3 +1,4 @@
+# 配置版本号（不要手动修改，由模块自动管理）
 config-version: 1
 # AXS Conversation
 # 作用: 桥接 Chemdah/Adyeshach 对话，把 NPC 正文、玩家回复和附近可对话 NPC 列表推送到 ArcartX UI。
@@ -121,10 +122,12 @@ npc-appearances:
 #
 # 每个动作可设 delay-after-ms: 执行后等待的毫秒数。
 cinematic:
+  # 是否启用电影序列功能
   enabled: true
+  # 电影序列播放时显示的 letterbox 黑边 UI ID
   letterbox-ui-id: AXS:conversation_letterbox
 
-  # 序列定义
+  # 序列定义（每个根键为序列 ID，可在命令中引用）
   cinematics:
 #    intro:
 #      name: "开场动画"

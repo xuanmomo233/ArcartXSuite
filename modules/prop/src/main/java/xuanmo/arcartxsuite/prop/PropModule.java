@@ -21,6 +21,13 @@ import xuanmo.arcartxsuite.prop.config.PropLanguageConfiguration;
 import xuanmo.arcartxsuite.prop.config.PropModuleConfiguration;
 import xuanmo.arcartxsuite.prop.service.PropService;
 
+/**
+ * Prop 模块入口类。
+ * <p>
+ * 继承 {@link AbstractAXSModule}，负责道具模块的生命周期管理：加载配置、导出默认资源、
+ * 启动 {@link PropService}、注册管理命令与客户端初始化回调。
+ * 同时实现 {@link ModuleCommandHandler}，将命令委托给 {@link PropAdminCommand}。
+ */
 public final class PropModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private PropAdminCommand adminCommand;
@@ -101,10 +108,20 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
         };
     }
 
+    /**
+     * 获取当前运行中的 Prop 服务实例。
+     *
+     * @return 服务实例，模块未启动时为 {@code null}
+     */
     public PropService getService() {
         return service;
     }
 
+    /**
+     * 获取当前已加载的模块配置。
+     *
+     * @return 配置实例，模块未启动时为 {@code null}
+     */
     public PropModuleConfiguration getConfiguration() {
         return configuration;
     }

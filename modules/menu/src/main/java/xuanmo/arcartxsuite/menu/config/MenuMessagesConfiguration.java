@@ -2,6 +2,23 @@ package xuanmo.arcartxsuite.menu.config;
 
 import org.bukkit.configuration.ConfigurationSection;
 
+/**
+ * Menu 模块消息配置，定义各类提示消息的文本模板。
+ * <p>
+ * 由主配置的 {@code messages} 节或外部消息文件解析，支持颜色代码和占位符替换。
+ *
+ * @param prefix                 消息前缀
+ * @param noPermission           无权限提示
+ * @param playerOnly             仅玩家可执行提示
+ * @param menuNotFound           菜单未找到提示
+ * @param menuOpenFailed         菜单打开失败提示
+ * @param menuOpenSuccess        菜单打开成功提示
+ * @param buttonUnavailable      按钮不可用提示
+ * @param buttonConditionDenied  按钮条件不满足提示
+ * @param pageEmpty              当前页无按钮提示
+ * @param reloadSuccess          重载成功提示
+ * @param reloadFailed           重载失败提示
+ */
 public record MenuMessagesConfiguration(
     String prefix,
     String noPermission,
@@ -16,6 +33,12 @@ public record MenuMessagesConfiguration(
     String reloadFailed
 ) {
 
+    /**
+     * 从配置节加载消息配置，缺失的字段使用默认值。
+     *
+     * @param section 消息配置节
+     * @return 解析后的消息配置
+     */
     public static MenuMessagesConfiguration load(ConfigurationSection section) {
         if (section == null) {
             return defaults();
@@ -52,10 +75,24 @@ public record MenuMessagesConfiguration(
         );
     }
 
+    /**
+     * 将模板中的指定占位符替换为给定值并应用颜色代码。
+     *
+     * @param template 消息模板
+     * @param key      占位符名称（不含花括号）
+     * @param value    替换值
+     * @return 替换并着色后的消息文本
+     */
     public String format(String template, String key, String value) {
         return colorize(template.replace("{" + key + "}", value == null ? "" : value));
     }
 
+    /**
+     * 将 {@code &} 颜色代码转换为 Bukkit ChatColor 格式。
+     *
+     * @param input 原始文本
+     * @return 着色后的文本，null 返回空字符串
+     */
     public String colorize(String input) {
         if (input == null) {
             return "";

@@ -4,19 +4,19 @@
 # 任务文件中 xp-reward → base-xp-reward 的重命名由 Java 代码向后兼容处理
 # (BattlePassModuleConfiguration.parseTask 已支持 getInt("base-xp-reward", getInt("xp-reward", 0)))
 
-from-version: 1
-to-version: 2
-description: "任务模板外部化，移除主配置内联任务定义"
+from-version: 1  # 迁移起始版本号
+to-version: 2  # 迁移目标版本号
+description: "任务模板外部化，移除主配置内联任务定义"  # 迁移描述
 
-operations:
+operations:  # 迁移操作列表，按顺序执行
   # 移除旧版内联在主配置中的任务段（已拆分为 tasks/ 目录下独立文件）
+  - type: remove  # 操作类型：移除指定路径的配置段
+    path: tasks.daily  # 移除主配置中的每日任务定义段
   - type: remove
-    path: tasks.daily
+    path: tasks.weekly  # 移除主配置中的每周任务定义段
   - type: remove
-    path: tasks.weekly
-  - type: remove
-    path: tasks.season
+    path: tasks.season  # 移除主配置中的赛季任务定义段
   # 补充新增的 tasks-directory 字段
-  - type: set-if-missing
-    path: tasks.tasks-directory
-    value: "tasks"
+  - type: set-if-missing  # 操作类型：仅在字段不存在时设置默认值
+    path: tasks.tasks-directory  # 设置任务文件目录路径
+    value: "tasks"  # 默认值为 tasks 目录

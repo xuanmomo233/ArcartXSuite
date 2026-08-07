@@ -7,11 +7,25 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import xuanmo.arcartxsuite.chat.config.ChatFilterConfiguration;
 
+/**
+ * 聊天内容审核工具类，对消息执行敏感词过滤。
+ * <p>
+ * 支持精确词匹配与正则匹配，可配置匹配后取消发送或替换文本，
+ * 并合并云端敏感词库进行联合判定。
+ */
 public final class ChatModerationSupport {
 
     private ChatModerationSupport() {
     }
 
+    /**
+     * 对消息应用过滤器，返回审核结果。
+     *
+     * @param message      原始消息
+     * @param configuration 过滤器配置
+     * @param cloudWords   云端敏感词列表（可为 {@code null}）
+     * @return 审核结果（blocked = true 表示应取消发送）
+     */
     public static ModerationResult applyFilters(String message, ChatFilterConfiguration configuration, List<String> cloudWords) {
         if (message == null) {
             return new ModerationResult(false, "");
@@ -61,6 +75,12 @@ public final class ChatModerationSupport {
             .replaceAll(Matcher.quoteReplacement(replacement));
     }
 
+    /**
+     * 审核结果。
+     *
+     * @param blocked 是否命中敏感词且应取消发送
+     * @param message 处理后的消息（取消时为原文，替换时为替换后文本）
+     */
     public record ModerationResult(
         boolean blocked,
         String message

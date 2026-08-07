@@ -23,6 +23,13 @@ ui:
       var.maxLogCount = 0
   # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - logs: 日志列表（Map，键为索引，每项含 type_text/created_at/内容文字 等子字段）
+    #   - page: 当前页码
+    #   - max_page: 最大页码数
+    #   - total_count: 日志总条数
+    #   - maxLogCount: 日志列表最大显示条数（用于动态生成列表项）
     init: |-
       var.logs = packet['logs']
       var.page = packet['page']
@@ -37,6 +44,13 @@ ui:
         e = val.logs_list['日志项目'].copy('日志项目' + key)
         e.entryKey = key
       }
+    # packetHandler: update
+    # 包字段:
+    #   - logs: 日志列表（Map，键为索引，每项含 type_text/created_at/内容文字 等子字段）
+    #   - page: 当前页码
+    #   - max_page: 最大页码数
+    #   - total_count: 日志总条数
+    #   - maxLogCount: 日志列表最大显示条数（用于动态生成列表项）
     update: |-
       var.logs = packet['logs']
       var.page = packet['page']

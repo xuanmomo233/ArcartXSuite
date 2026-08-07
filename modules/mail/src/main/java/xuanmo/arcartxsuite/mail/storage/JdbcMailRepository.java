@@ -32,6 +32,12 @@ import xuanmo.arcartxsuite.mail.model.MailPlayerProfile;
 import xuanmo.arcartxsuite.mail.model.MailSourceType;
 import xuanmo.arcartxsuite.mail.model.MailStatus;
 
+/**
+ * 邮件 JDBC 仓储实现，继承 {@link AbstractModuleRepository}，提供邮件、附件、CDK、日志与玩家档案的持久化访问。
+ * <p>
+ * 关联模块：mail。支持 SQLite 与 MySQL 双方言，自动建表与 Schema 升级，
+ * 实现 {@link MailRepository} 接口供 {@link xuanmo.arcartxsuite.mail.service.MailService} 调用。
+ */
 public final class JdbcMailRepository extends AbstractModuleRepository implements MailRepository {
 
     private final MailStorageConfiguration configuration;

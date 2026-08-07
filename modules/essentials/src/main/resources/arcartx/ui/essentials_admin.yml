@@ -12,6 +12,18 @@ ui:
   through: false
   screenScale: true
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - page: 当前页面 (players/bans/warps/world)
+    #   - packetId: 服务端回包 ID，用于客户端 Packet.send 回传
+    #   - players: 在线玩家数据列表
+    #   - playerCount: 在线玩家数量
+    #   - warps: 传送点数据列表
+    #   - bans: 封禁列表数据
+    #   - banCount: 封禁数量
+    #   - worldName: 当前世界名称
+    #   - worldTime: 当前世界时间
+    #   - worldWeather: 当前世界天气
     init: |-
       var.page = packet['page']
       var.packetId = packet['packetId']

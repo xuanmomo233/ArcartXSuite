@@ -17,6 +17,17 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
+    # packetHandler: init
+    # 首次收到服务端数据包时执行，初始化回收界面所有变量和动态控件
+    # 包字段:
+    #   - packetId: 数据包通信 ID（用于客户端 Packet.send 回传）
+    #   - totalValue: 可回收物品的总价值
+    #   - currency: 货币类型名称（如 "money"）
+    #   - multiplier: 回收价格倍率（如 1.2 表示 VIP 加成 20%）
+    #   - recyclables: 可回收物品字典（key=序号, value=回收条目含 name/amount/unitPrice/totalPrice/slot 等）
+    #   - recycleItemJson{key}: 各回收物品的 NBT JSON 字符串（如 recycleItemJson0、recycleItemJson1...）
+    #   - maxRecycleCount: 最大回收条目数量（用于动态复制回收项控件）
+    #   - action_token: 操作令牌（防重放攻击，回收时回传）
     init: |-
       var.packetId = packet['packetId']
       var.totalValue = packet['totalValue']
@@ -50,6 +61,10 @@ ui:
           e['物品图标'].seticon()
         }
       }
+    # packetHandler: update
+    # 服务端推送更新时执行，字段与 init 完全相同，用于刷新回收列表数据
+    # 包字段: 同 init（packetId/totalValue/currency/multiplier/recyclables/
+    #   recycleItemJson{key}/maxRecycleCount/action_token）
     update: |-
       var.packetId = packet['packetId']
       var.totalValue = packet['totalValue']
@@ -84,6 +99,9 @@ ui:
         }
       }
   action:
+    # action: open
+    # UI 打开时执行，初始化所有变量为默认空值，然后向服务端请求回收预览数据
+    # 发送数据包: Packet.send(packetId, 'recycle_preview')
     open: |-
       var.packetId = 'AXS_MARKET'
       var.totalValue = '0'

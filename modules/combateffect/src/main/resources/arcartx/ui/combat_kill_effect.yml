@@ -20,12 +20,22 @@ ui:
       var.crosshairColor = var.r + ',' + var.g + ',' + var.b + ',200'
 
   packetHandler:
+    # packetHandler: attack
+    # 包字段:
+    #   - 无（attack-effect 包内容为空字符串，不携带额外数据）
+    # 说明: 命中特效处理器，显示命中贴图 1 秒后自动隐藏
     attack: |-
       val.attack_fx.visible = true
       async {
         Thread.sleep(1000)
         val.attack_fx.visible = false
       }
+    # packetHandler: kill
+    # 包字段:
+    #   - killer: 击杀者名称（来自 death-buffer-killer 包，环境死亡时为空字符串）
+    #   - victim: 死亡玩家名称（来自 death-buffer-killer 包）
+    # 说明: 击杀特效处理器，显示击杀贴图 1.5 秒并累加击杀计数；
+    #       5 秒内无新击杀则自动清零计数
     kill: |-
       var.击杀数++
       var.上次击杀时间 = Time.currentTime()

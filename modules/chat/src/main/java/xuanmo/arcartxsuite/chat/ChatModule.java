@@ -31,6 +31,15 @@ import xuanmo.arcartxsuite.chat.placeholder.ChatPlaceholderExpansion;
 import xuanmo.arcartxsuite.chat.service.ChatService;
 import xuanmo.arcartxsuite.chat.storage.JdbcChatRepository;
 
+/**
+ * 全频道聊天模块的主入口。
+ * <p>
+ * 负责加载聊天配置（频道、卡片、过滤器、功能开关）、启动 {@link ChatService}，
+ * 注册玩家命令（chat / msg / reply）与管理员命令，绑定 PlaceholderAPI 扩展，
+ * 并向宿主注册 {@link ChatCardSendable}、{@link ChatMutable}、
+ * {@link xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable}、
+ * {@link xuanmo.arcartxsuite.api.capability.DatabaseMigratable} 等跨模块能力。
+ */
 public final class ChatModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private static final String COMPLETION_UI_RESOURCE_PATH = "chat/ui/axs_chat_completion.yml";
@@ -221,10 +230,20 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
         return new ChatPlaceholderExpansion(plugin, () -> service);
     }
 
+    /**
+     * 获取当前运行中的聊天服务实例。
+     *
+     * @return 服务实例，模块未启动或已停止时返回 {@code null}
+     */
     public ChatService getService() {
         return service;
     }
 
+    /**
+     * 获取当前加载的聊天模块配置。
+     *
+     * @return 配置实例，模块未启动或已停止时返回 {@code null}
+     */
     public ChatModuleConfiguration getConfiguration() {
         return configuration;
     }

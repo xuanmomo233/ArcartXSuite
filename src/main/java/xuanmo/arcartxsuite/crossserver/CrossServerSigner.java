@@ -7,6 +7,11 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerEnvelope;
 
+/**
+ * 跨服信封 HMAC-SHA256 签名工具。
+ * <p>
+ * 签名载荷为信封的关键字段拼接；验证使用常量时间比较防止时序攻击。
+ */
 public final class CrossServerSigner {
 
     private static final String HMAC_ALGORITHM = "HmacSHA256";

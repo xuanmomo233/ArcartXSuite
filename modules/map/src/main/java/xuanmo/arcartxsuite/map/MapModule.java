@@ -30,6 +30,13 @@ import xuanmo.arcartxsuite.map.service.MapService;
 import xuanmo.arcartxsuite.map.storage.JdbcMapRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 
+/**
+ * 地图模块主类，继承 {@code AbstractAXSModule} 并实现管理命令接口。
+ * <p>
+ * 关联模块：map。负责加载配置、注册 UI、启动 {@code MapService}、
+ * 绑定玩家与管理命令、注册 {@code MapNavigable} / {@code PlayerDataPurgeable} /
+ * {@code DatabaseMigratable} capability，以及处理客户端初始化与数据包路由。
+ */
 public final class MapModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private MapAdminCommand adminCommand;
@@ -236,6 +243,11 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             service != null && service.handleClientPacket(player, packetId, data);
     }
 
+    /**
+     * 获取当前运行中的地图服务实例。
+     *
+     * @return 地图服务实例，模块未启动时返回 {@code null}
+     */
     public MapService getService() {
         return service;
     }

@@ -1,4 +1,6 @@
-config-version: 1
+# 文件用途: AXS Tab 模块主配置文件，控制全局设置与 Tab 定义目录。
+# 包含刷新周期、跨服同步、视觉风格（PVP/vanish/ping）、隐私脱敏、调试工具等配置项。
+config-version: 1  # 配置文件版本号，用于升级时自动迁移
 # AXS Tab
 # 作用: 周期生成在线玩家列表并推送给 ArcartX Tab UI，支持按玩家名、权限组或 PAPI 数值排序。
 # 依赖: ArcartX、PlaceholderAPI。
@@ -9,7 +11,7 @@ config-version: 1
 # 排序 PAPI: sort-mode=papi 时 sort-papi-key 填完整 PAPI，例如 %player_level%；sort-papi-numeric 控制数字/文本排序。
 
 settings:
-  refresh-interval-ticks: 20
+  refresh-interval-ticks: 20  # 服务端刷新间隔（ticks，20 ticks = 1 秒），周期扫描在线玩家并推送列表
   # 跨服快照广播节流：相邻两次广播最小间隔（ticks，50ms/tick）。0 表示禁用节流。
   # 当玩家进退服触发的额外 refresh 在短时间内连发时，可避免风暴。建议 = refresh-interval-ticks。
   batch:
@@ -17,7 +19,7 @@ settings:
   # 退服宽限：玩家退服后保留其在跨服快照中的虚拟条目，避免跨服跳传时的"消失闪烁"。
   # 0 表示禁用；典型值 1500 ~ 3000（毫秒）。
   leave-grace-ms: 0
-  debug: false
+  debug: false  # 是否开启调试日志（输出刷新/排序/发包等详细信息）
 
   # 插件启动/重载时是否自动注册随模块内置的 TAB UI。
   register-ui-on-enable: true
@@ -71,7 +73,7 @@ settings:
 
 #跨服：连接参数见宿主 plugins/ArcartXSuite/config.yml cross-server 节
 cross-server:
-  enabled: false
+  enabled: false  # 是否启用跨服玩家列表聚合（需宿主 cross-server 配置支持）
 
 # Tab 定义目录，路径相对模块数据目录。
 # 目录下每个 *.yml 文件为一个 Tab 定义，文件名（去掉 .yml）即为定义 ID。

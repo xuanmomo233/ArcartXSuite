@@ -21,6 +21,12 @@ import xuanmo.arcartxsuite.menu.config.MenuItemBinding;
 import xuanmo.arcartxsuite.menu.service.MenuConditionEvaluator;
 import xuanmo.arcartxsuite.menu.service.MenuService;
 
+/**
+ * 菜单绑定监听器，监听命令预处理和物品交互事件以触发菜单打开。
+ * <p>
+ * 命令绑定：拦截匹配的命令并打开对应菜单；物品绑定：玩家手持匹配物品交互时打开菜单。
+ * 通过 {@link java.util.function.Supplier} 延迟获取 {@link MenuService} 以兼容热重载。
+ */
 public final class MenuBindingListener implements Listener {
 
     private final Supplier<MenuService> serviceSupplier;
@@ -29,6 +35,11 @@ public final class MenuBindingListener implements Listener {
         this.serviceSupplier = serviceSupplier;
     }
 
+    /**
+     * 处理命令预处理事件，匹配命令绑定并打开对应菜单。
+     *
+     * @param event 命令预处理事件
+     */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onCommand(PlayerCommandPreprocessEvent event) {
         MenuService service = serviceSupplier.get();
@@ -51,6 +62,11 @@ public final class MenuBindingListener implements Listener {
         service.openMenu(player, binding.menuId());
     }
 
+    /**
+     * 处理物品交互事件，匹配物品绑定并打开对应菜单。
+     *
+     * @param event 玩家交互事件
+     */
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onItemInteract(PlayerInteractEvent event) {
         MenuService service = serviceSupplier.get();

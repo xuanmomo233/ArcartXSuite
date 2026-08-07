@@ -25,6 +25,14 @@ import xuanmo.arcartxsuite.api.util.AttributeResolver;
 import xuanmo.arcartxsuite.combateffect.display.config.CombatDisplayConfiguration;
 import java.util.logging.Logger;
 
+/**
+ * 战斗显示服务。
+ * <p>
+ * 属于 combateffect 模块的 display 子模块，是伤害与治疗数字显示的核心服务。
+ * 负责注册事件监听器、解析伤害来源、处理各类伤害/治疗事件，
+ * 并通过 {@link ClientBridgeAPI} 向客户端发送显示数据包。
+ * 支持伤害/治疗合并（merge）以减少高频发包。
+ */
 public final class CombatDisplayService {
 
     private final JavaPlugin plugin;
@@ -74,6 +82,15 @@ public final class CombatDisplayService {
         }
     }
 
+    /**
+     * 构造战斗显示服务。
+     *
+     * @param plugin         宿主插件实例
+     * @param logger         日志记录器
+     * @param configuration  战斗显示配置
+     * @param clientBridge   客户端桥接 API
+     * @param attributeBridge 属性桥接注册表
+     */
     public CombatDisplayService(
         JavaPlugin plugin,
         Logger logger,
@@ -88,6 +105,9 @@ public final class CombatDisplayService {
         this.attributeBridge = attributeBridge;
     }
 
+    /**
+     * 启动服务，注册所有事件监听器并解析伤害来源。
+     */
     public void start() {
         registerListener(new CombatDisplayDamageListener(this));
         registerListener(new CombatDisplayHealListener(this));
@@ -114,6 +134,9 @@ public final class CombatDisplayService {
         }
     }
 
+    /**
+     * 关闭服务，注销所有监听器并清空合并缓冲区。
+     */
     public void shutdown() {
         for (Listener listener : registeredListeners) {
             HandlerList.unregisterAll(listener);
@@ -139,14 +162,29 @@ public final class CombatDisplayService {
         activeDamageSource = CombatDisplayDamageSource.NONE;
     }
 
+    /**
+     * 返回当前战斗显示配置。
+     *
+     * @return 配置记录
+     */
     public CombatDisplayConfiguration configuration() {
         return configuration;
     }
 
+    /**
+     * 返回 MythicMobs 治疗监听器是否已成功挂载。
+     *
+     * @return {@code true} 表示已挂载
+     */
     public boolean mythicHealHooked() {
         return mythicHealHooked;
     }
 
+    /**
+     * 返回当前生效的伤害来源。
+     *
+     * @return 伤害来源枚举
+     */
     public CombatDisplayDamageSource activeDamageSource() {
         return activeDamageSource;
     }
@@ -310,6 +348,14 @@ public final class CombatDisplayService {
         trySendHealDisplay(player, configuration.healConfigId(), event.getAmount());
     }
 
+    /**
+     * 处理 MythicMobs 治疗事件。
+     * <p>
+     * 当启用精确模式时，治疗量会根据当前生命值与上限扣除溢出部分。
+     *
+     * @param player     治疗目标玩家
+     * @param healAmount 原始治疗量
+     */
     public void handleMythicHeal(Player player, double healAmount) {
         if (!configuration.mythicHealEnabled() || player == null) {
             return;

@@ -9,8 +9,22 @@ import xuanmo.arcartxsuite.lottery.model.GachaResult;
 import xuanmo.arcartxsuite.lottery.model.PlayerGachaState;
 import xuanmo.arcartxsuite.lottery.model.PoolItem;
 
+/**
+ * GACHA 抽卡引擎。
+ * <p>
+ * 实现保底机制（硬保底/软保底）、UP 概率、大保底/小保底判定、
+ * 武器池命运点定轨等核心抽卡逻辑。每次抽卡后返回更新后的玩家状态。
+ */
 public class GachaEngine {
 
+    /**
+     * 执行指定次数的抽卡。
+     *
+     * @param pool  GACHA 奖池配置
+     * @param state 玩家当前抽卡状态（保底计数、大保底标记、命运点等）
+     * @param count 抽卡次数（1 或 10）
+     * @return 抽卡结果，包含本次获得的奖品列表与更新后的状态
+     */
     @NotNull
     public GachaResult pull(@NotNull GachaPoolConfig pool, @NotNull PlayerGachaState state, int count) {
         List<PoolItem> results = new ArrayList<>();

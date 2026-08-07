@@ -16,6 +16,24 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.api.item.ItemMatcher;
 import xuanmo.arcartxsuite.api.item.ItemMatcherLoader;
 
+/**
+ * 地图模块配置记录，从 {@code ArcartXMap.yml} 解析的完整配置快照。
+ * <p>
+ * 关联模块：map。包含客户端通信、按键绑定、入服行为、存储、导航、
+ * 世界定义、默认解锁规则、锚点定义及路径点配置等全部子节。
+ * 通过 {@link #load(FileConfiguration, Logger, File)} 工厂方法从 YAML 加载。
+ *
+ * @param debug         是否开启调试日志
+ * @param client        客户端通信与 UI 配置
+ * @param keybinds      按键绑定配置
+ * @param join          入服行为配置
+ * @param storage       存储后端配置
+ * @param navigation    导航功能配置
+ * @param worlds        世界定义映射（键为世界 ID）
+ * @param defaultUnlocks 默认解锁规则列表
+ * @param anchors       锚点定义映射（键为锚点 ID）
+ * @param waypoints     路径点功能配置
+ */
 public record MapModuleConfiguration(
     boolean debug,
     ClientConfiguration client,
@@ -33,10 +51,25 @@ public record MapModuleConfiguration(
     private static final String DEFAULT_MENU_UI_ID = "AXS:map_menu";
     private static final String DEFAULT_HUD_UI_ID = "AXS:map_hud";
 
+    /**
+     * 从 YAML 配置加载模块配置（不加载外部锚点目录）。
+     *
+     * @param configuration YAML 配置对象
+     * @param logger        日志记录器
+     * @return 解析后的模块配置实例
+     */
     public static MapModuleConfiguration load(FileConfiguration configuration, Logger logger) {
         return load(configuration, logger, null);
     }
 
+    /**
+     * 从 YAML 配置加载模块配置，并从指定目录加载外部锚点定义文件。
+     *
+     * @param configuration    YAML 配置对象
+     * @param logger           日志记录器
+     * @param anchorsDirectory 锚点定义文件目录，为 {@code null} 时跳过外部锚点加载
+     * @return 解析后的模块配置实例
+     */
     public static MapModuleConfiguration load(FileConfiguration configuration, Logger logger, File anchorsDirectory) {
         boolean debug = configuration.getBoolean("debug", false);
 
@@ -119,10 +152,22 @@ public record MapModuleConfiguration(
         );
     }
 
+    /**
+     * 按世界 ID 获取世界定义。
+     *
+     * @param worldId 世界 ID（不区分大小写）
+     * @return 世界定义，不存在时返回 {@code null}
+     */
     public WorldDefinition world(String worldId) {
         return worlds.get(normalizeId(worldId));
     }
 
+    /**
+     * 按锚点 ID 获取锚点定义。
+     *
+     * @param anchorId 锚点 ID（不区分大小写）
+     * @return 锚点定义，不存在时返回 {@code null}
+     */
     public AnchorDefinition anchor(String anchorId) {
         return anchors.get(normalizeId(anchorId));
     }
@@ -412,6 +457,15 @@ public record MapModuleConfiguration(
         return Collections.unmodifiableMap(new LinkedHashMap<>(values));
     }
 
+    /**
+     * 客户端通信与 UI 配置。
+     *
+     * @param packetId           数据包标识
+     * @param menuUiId           菜单 UI 标识
+     * @param hudUiId            HUD UI 标识
+     * @param registerUiOnEnable 启用时是否注册 UI
+     * @param overwriteUiFiles   启用时是否覆盖已有 UI 文件
+     */
     public record ClientConfiguration(
         String packetId,
         String menuUiId,
@@ -421,6 +475,13 @@ public record MapModuleConfiguration(
     ) {
     }
 
+    /**
+     * 按键绑定配置。
+     *
+     * @param category   按键分类名称
+     * @param openMenu   打开地图菜单的按键定义
+     * @param toggleHud  切换小地图 HUD 的按键定义
+     */
     public record KeybindConfiguration(
         String category,
         KeybindDefinition openMenu,
@@ -428,6 +489,13 @@ public record MapModuleConfiguration(
     ) {
     }
 
+    /**
+     * 单个按键定义。
+     *
+     * @param enabled     是否启用
+     * @param displayName 显示名称
+     * @param defaultKey  默认按键
+     */
     public record KeybindDefinition(
         boolean enabled,
         String displayName,
@@ -435,12 +503,21 @@ public record MapModuleConfiguration(
     ) {
     }
 
+    /**
+     * 入服行为配置。
+     *
+     * @param showHudOnJoin     入服时是否自动显示 HUD
+     * @param showHudDelayTicks 显示 HUD 的延迟 tick 数
+     */
     public record JoinConfiguration(
         boolean showHudOnJoin,
         long showHudDelayTicks
     ) {
     }
 
+    /**
+     * 存储后端方言枚举（SQLite / MySQL）。
+     */
     public enum StorageDialect {
         SQLITE("sqlite"),
         MYSQL("mysql");
@@ -455,11 +532,29 @@ public record MapModuleConfiguration(
             return configKey;
         }
 
+        /**
+         * 从配置字符串解析存储方言。
+         *
+         * @param rawValue 原始字符串值
+         * @return 解析后的方言枚举，默认为 SQLITE
+         */
         public static StorageDialect parse(String rawValue) {
             return "mysql".equalsIgnoreCase(string(rawValue, "sqlite")) ? MYSQL : SQLITE;
         }
     }
 
+    /**
+     * 存储后端配置。
+     *
+     * @param dialect            存储方言
+     * @param sqliteFileName     SQLite 文件名
+     * @param mysqlHost          MySQL 主机地址
+     * @param mysqlPort          MySQL 端口
+     * @param mysqlDatabase      MySQL 数据库名
+     * @param mysqlUsername      MySQL 用户名
+     * @param mysqlPassword      MySQL 密码
+     * @param connectionPoolSize 连接池大小
+     */
     public record StorageConfiguration(
         StorageDialect dialect,
         String sqliteFileName,
@@ -479,6 +574,15 @@ public record MapModuleConfiguration(
         }
     }
 
+    /**
+     * 导航功能配置。
+     *
+     * @param enabled           是否启用导航
+     * @param waypointStyleId   路径点样式 ID
+     * @param anchorIdPrefix    锚点路径点 ID 前缀
+     * @param waypointIdPrefix  自定义路径点 ID 前缀
+     * @param marker            导航标记模型配置
+     */
     public record NavigationConfiguration(
         boolean enabled,
         String waypointStyleId,
@@ -488,6 +592,21 @@ public record MapModuleConfiguration(
     ) {
     }
 
+    /**
+     * 导航标记模型配置，控制路径标记实体的外观与行为。
+     *
+     * @param enabled          是否启用标记模型
+     * @param modelId          模型 ID
+     * @param scale            缩放比例
+     * @param defaultState     默认状态
+     * @param animation        动画类型
+     * @param yOffset          Y 轴偏移
+     * @param pathInterval     路径标记间距
+     * @param pathMaxMarkers   路径最大标记数
+     * @param pathUpdateTicks  路径更新间隔 tick
+     * @param pathMaxDistance  路径最大距离
+     * @param pathMaxIterations 路径计算最大迭代次数
+     */
     public record MarkerConfiguration(
         boolean enabled,
         String modelId,
@@ -507,6 +626,20 @@ public record MapModuleConfiguration(
         }
     }
 
+    /**
+     * 世界定义，描述单个世界的地图纹理与显示参数。
+     *
+     * @param id            世界 ID
+     * @param displayName   显示名称
+     * @param texture       纹理文件路径
+     * @param imageWidth    纹理图片宽度（像素）
+     * @param imageHeight   纹理图片高度（像素）
+     * @param pixelOffsetX  像素 X 偏移
+     * @param pixelOffsetZ  像素 Z 偏移
+     * @param defaultZoom   菜单默认缩放
+     * @param hudZoom       HUD 缩放
+     * @param hudSize       HUD 尺寸（像素）
+     */
     public record WorldDefinition(
         String id,
         String displayName,
@@ -521,12 +654,34 @@ public record MapModuleConfiguration(
     ) {
     }
 
+    /**
+     * 默认解锁规则，按权限自动为玩家解锁指定锚点。
+     *
+     * @param permission 所需权限节点
+     * @param anchorIds  自动解锁的锚点 ID 列表
+     */
     public record DefaultUnlockRule(
         String permission,
         List<String> anchorIds
     ) {
     }
 
+    /**
+     * 锚点定义，描述一个可解锁 / 可传送的地图标记点。
+     *
+     * @param id                 锚点 ID
+     * @param displayName        显示名称
+     * @param worldId            所在世界 ID
+     * @param x                  X 坐标
+     * @param y                  Y 坐标
+     * @param z                  Z 坐标
+     * @param description        描述文本
+     * @param permission         所需权限节点
+     * @param sortOrder          排序权重
+     * @param unlockCurrencies   解锁所需货币列表
+     * @param teleportCurrencies 传送所需货币列表
+     * @param unlockItems        解锁所需物品列表
+     */
     public record AnchorDefinition(
         String id,
         String displayName,
@@ -543,18 +698,40 @@ public record MapModuleConfiguration(
     ) {
     }
 
+    /**
+     * 货币消耗定义。
+     *
+     * @param currencyId 货币 ID
+     * @param amount     消耗金额
+     */
     public record CurrencyCost(
         String currencyId,
         BigDecimal amount
     ) {
     }
 
+    /**
+     * 物品消耗定义。
+     *
+     * @param amount  消耗数量
+     * @param matcher 物品匹配器
+     */
     public record ItemCost(
         int amount,
         ItemMatcher matcher
     ) {
     }
 
+    /**
+     * 路径点功能配置。
+     *
+     * @param enabled         是否启用自定义路径点
+     * @param defaultStyleId  默认样式 ID
+     * @param idPrefix        路径点 ID 前缀
+     * @param autoNamePrefix  自动命名前缀
+     * @param defaultMaxCount 默认每世界最大数量
+     * @param limits          按权限区分的数量限制列表
+     */
     public record WaypointConfiguration(
         boolean enabled,
         String defaultStyleId,
@@ -565,6 +742,12 @@ public record MapModuleConfiguration(
     ) {
     }
 
+    /**
+     * 路径点数量限制规则，按权限区分。
+     *
+     * @param permission 权限节点
+     * @param maxCount   每世界最大路径点数量
+     */
     public record WaypointLimit(
         String permission,
         int maxCount

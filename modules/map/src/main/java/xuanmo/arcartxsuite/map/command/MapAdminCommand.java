@@ -15,6 +15,12 @@ import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.map.model.MapOperationResult;
 import xuanmo.arcartxsuite.map.service.MapService;
 
+/**
+ * 地图模块管理命令处理器，提供 status / open / list / anchors 等管理子命令。
+ * <p>
+ * 关联模块：map。通过宿主 {@code ModuleCommandHandler} 机制注册，
+ * 供管理员查看模块运行状态、为玩家打开地图及列出已配置的世界与锚点。
+ */
 public final class MapAdminCommand implements ModuleCommandHandler {
 
     private static final List<String> ACTIONS = List.of("help", "status", "reload", "open", "list", "anchors");
@@ -22,6 +28,12 @@ public final class MapAdminCommand implements ModuleCommandHandler {
     private final Supplier<MapService> serviceProvider;
     private final MessageProvider messages;
 
+    /**
+     * 构造管理命令处理器。
+     *
+     * @param serviceProvider 地图服务提供者（允许服务未就绪时返回 {@code null}）
+     * @param messages        消息提供者，用于获取本地化提示文本
+     */
     public MapAdminCommand(Supplier<MapService> serviceProvider, MessageProvider messages) {
         this.serviceProvider = serviceProvider;
         this.messages = messages;
@@ -35,6 +47,14 @@ public final class MapAdminCommand implements ModuleCommandHandler {
     @Override public String commandId() { return "map"; }
     @Override public List<String> actions() { return ACTIONS; }
 
+    /**
+     * 处理管理命令，根据子动作分发到对应处理逻辑。
+     *
+     * @param sender 命令发送者
+     * @param label  命令标签
+     * @param args   命令参数数组
+     * @return {@code true} 表示命令已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "help";
@@ -50,6 +70,13 @@ public final class MapAdminCommand implements ModuleCommandHandler {
         return true;
     }
 
+    /**
+     * 提供管理命令的 Tab 补全建议。
+     *
+     * @param sender 命令发送者
+     * @param args   当前参数数组
+     * @return 补全候选列表，返回 {@code null} 表示交由 Bukkit 补全玩家名
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) return filter(ACTIONS, args[1]);

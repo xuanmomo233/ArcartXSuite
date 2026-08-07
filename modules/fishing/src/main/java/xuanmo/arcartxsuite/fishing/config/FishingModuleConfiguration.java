@@ -26,6 +26,25 @@ import xuanmo.arcartxsuite.fishing.model.TreasureDefinition;
 import xuanmo.arcartxsuite.fishing.model.WaterArea;
 import xuanmo.arcartxsuite.fishing.model.WaterArea.AreaType;
 
+/**
+ * 钓鱼模块的完整配置快照，由主 yml 与附属目录（fishes/treasures/baits/rods）加载而成。
+ * <p>
+ * 关联模块：{@code fishing}。包含存储、钓鱼设置、鱼/宝藏/鱼饵/鱼竿定义、
+ * 水域、奖池、UI 与命令配置等全部运行时所需的不可变数据。
+ *
+ * @param storage         存储配置（SQLite/MySQL 连接参数）
+ * @param fishing         钓鱼基础设置（是否替换原版、小游戏 tick 间隔等）
+ * @param fishes          鱼种定义列表
+ * @param treasures       宝藏定义列表
+ * @param baits           鱼饵定义列表
+ * @param rods            鱼竿定义列表
+ * @param specifiedWaters 显式声明的水域列表
+ * @param defaultWater    默认水域（未命中任何指定水域时使用）
+ * @param fishPools       鱼池映射（池名 → 鱼种 id 列表）
+ * @param treasurePools   宝藏池映射（池名 → 宝藏 id 列表）
+ * @param ui              UI 配置（小游戏/图鉴界面 id 等）
+ * @param commands        命令配置
+ */
 public record FishingModuleConfiguration(
     @NotNull StorageConfiguration storage,
     @NotNull FishingSettings fishing,

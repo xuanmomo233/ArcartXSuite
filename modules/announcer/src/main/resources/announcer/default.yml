@@ -2,12 +2,14 @@
 # 目录下每个 *.yml 文件可包含多个条目，根键即为条目 ID。
 # enabled=false 的条目不会下发到客户端。
 
+# 欢迎公告条目
 welcome:
-  enabled: true
-  text: "欢迎来到服务器，祝你游玩愉快。"
-  click-command: ""
+  enabled: true  # 是否启用此条目
+  text: "欢迎来到服务器，祝你游玩愉快。"  # 公告文本（支持 PAPI 变量）
+  click-command: ""  # 点击公告时执行的命令（留空 = 无点击事件）
 
+# 玩家个性化公告条目
 player:
-  enabled: true
-  text: "你好，%player_name%。"
-  click-command: "say <player> 点击了公告"
+  enabled: true  # 是否启用此条目
+  text: "你好，%player_name%。"  # 公告文本（%player_name% 会被 PAPI 解析）
+  click-command: "say <player> 点击了公告"  # 点击时执行命令（<player> 替换为点击者名）

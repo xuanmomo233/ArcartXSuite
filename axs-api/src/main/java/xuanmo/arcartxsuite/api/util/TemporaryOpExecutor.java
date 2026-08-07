@@ -23,6 +23,14 @@ import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
+/**
+ * 临时 OP 执行器，在执行单条命令期间短暂授予玩家 OP 权限并立即回收。
+ * <p>
+ * 通过持久化台账（ledger 文件）记录临时 OP 状态，服务端异常重启后可在
+ * {@link #reconcile()} 时清理遗留的 OP 玩家。提供命令黑名单（op/deop/stop 等）
+ * 防止提权滥用，并通过反射 {@code CraftHumanEntity.op} 实现"静默 OP"，
+ * 避免写入 ops.json 或触发平台事件。
+ */
 public final class TemporaryOpExecutor {
 
     private static final Object LEDGER_LOCK = new Object();
@@ -50,6 +58,12 @@ public final class TemporaryOpExecutor {
     private TemporaryOpExecutor() {
     }
 
+    /**
+     * 初始化执行器，指定台账文件与日志器。
+     *
+     * @param file          台账文件路径，非 null
+     * @param injectedLogger 日志器，null 时使用内置 fallback
+     */
     public static void init(File file, Logger injectedLogger) {
         Objects.requireNonNull(file, "file");
         synchronized (LEDGER_LOCK) {
@@ -61,6 +75,11 @@ public final class TemporaryOpExecutor {
         }
     }
 
+    /**
+     * 启动对账：读取台账中遗留的临时 OP 玩家并回收其 OP 权限，然后清空台账。
+ * <p>
+ * 用于服务端异常重启后清理上次未正常回收的临时 OP。
+     */
     public static void reconcile() {
         synchronized (LEDGER_LOCK) {
             if (!initialized || ledgerFile == null) {
@@ -95,6 +114,15 @@ public final class TemporaryOpExecutor {
         }
     }
 
+    /**
+     * 以临时 OP 身份为玩家执行单条命令，执行完毕后立即回收 OP。
+ * <p>
+ * 命令在黑名单中或包含控制字符时拒绝执行。玩家已是 OP 时直接派发不记账。
+     *
+     * @param player  目标玩家，非 null
+     * @param command 命令文本（可带前导斜杠）
+     * @return {@code true} 表示命令派发成功
+     */
     public static boolean execute(Player player, String command) {
         Objects.requireNonNull(player, "player");
         if (!isAllowedCommand(player, command)) {

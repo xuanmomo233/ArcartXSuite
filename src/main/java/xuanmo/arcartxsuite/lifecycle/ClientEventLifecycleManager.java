@@ -14,6 +14,12 @@ import priv.seventeen.artist.arcartx.event.client.ClientCustomPacketEvent;
 import priv.seventeen.artist.arcartx.event.client.ClientInitializedEvent;
 import xuanmo.arcartxsuite.module.ModuleRegistry;
 
+/**
+ * 客户端事件生命周期管理器，监听 ArcartX 客户端的初始化与自定义包事件，
+ * 并路由到已加载模块的客户端包处理器。
+ * <p>
+ * 通过 {@link ModuleRegistry} 查找模块，按 UI id 分发客户端回调。
+ */
 public final class ClientEventLifecycleManager implements Listener {
 
     private final JavaPlugin plugin;

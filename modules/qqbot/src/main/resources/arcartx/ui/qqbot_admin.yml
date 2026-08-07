@@ -13,6 +13,16 @@ ui:
   level: 15
   screenScale: true
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 通信标识，用于后续 Packet.send 回包
+    #   - botConnected: 机器人是否已连接
+    #   - totalBindings: 总绑定数量
+    #   - onlinePlayers: 当前在线玩家数
+    #   - maxPlayers: 服务器最大玩家数
+    #   - groups: 监听的 QQ 群列表
+    #   - bindings: 绑定列表数据
+    #   - bindTotal: 绑定总条数（用于分页）
     init: |-
       var.packetId = packet['packetId']
       var.botConnected = packet['botConnected']
@@ -26,15 +36,31 @@ ui:
       var.cmdHistory = []
       var.cmdResult = none
       var.tab = 'dashboard'
+    # packetHandler: update
+    # 包字段:
+    #   - botConnected: 机器人是否已连接
+    #   - totalBindings: 总绑定数量
+    #   - onlinePlayers: 当前在线玩家数
+    #   - maxPlayers: 服务器最大玩家数
     update: |-
       var.botConnected = packet['botConnected']
       var.totalBindings = packet['totalBindings']
       var.onlinePlayers = packet['onlinePlayers']
       var.maxPlayers = packet['maxPlayers']
+    # packetHandler: bindings
+    # 包字段:
+    #   - bindings: 绑定列表数据
+    #   - page: 当前页码
+    #   - total: 绑定总条数
     bindings: |-
       var.bindings = packet['bindings']
       var.bindPage = packet['page']
       var.bindTotal = packet['total']
+    # packetHandler: cmd_result
+    # 包字段:
+    #   - result: 命令执行结果文本
+    #   - cmd: 执行的命令
+    #   - time: 执行时间
     cmd_result: |-
       var.cmdResult = packet['result']
       var.cmdHistory.add({'cmd': packet['cmd'], 'result': packet['result'], 'time': packet['time']})

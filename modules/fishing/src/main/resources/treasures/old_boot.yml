@@ -1,7 +1,11 @@
-id: "old_boot"
-display-name: "旧靴子"
-item:
-  source: "minecraft"
-  item-id: "leather_boots"
-  amount: 1
-chance: 0.3
+# 宝藏定义：旧靴子
+# 旧靴子是一种常见宝藏（杂物类），钓到后掉落皮革靴子，出现概率较高
+# 宝藏文件位于 treasures/ 目录，每个文件定义一种宝藏
+
+id: "old_boot"                 # 宝藏唯一标识符
+display-name: "旧靴子"          # 显示名称
+item:                          # 宝藏对应的物品定义
+  source: "minecraft"          # 物品来源（minecraft=原版物品）
+  item-id: "leather_boots"     # 原版物品ID（皮革靴子）
+  amount: 1                    # 物品数量
+chance: 0.3                    # 该宝藏在宝藏池中的出现概率（30%）

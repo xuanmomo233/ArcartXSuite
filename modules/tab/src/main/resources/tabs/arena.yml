@@ -11,24 +11,24 @@
 #   - 玩家已分配到 scoreboard team "red" / "blue"（或替换下面的 team PAPI 来源）
 # 默认 enabled: false，避免与 online-tab / demo 同时推送时玩家看到多个 HUD。
 
-enabled: false
-ui-targets:
-  - ui-id: "tab-arena"
-    packet-handler: "tab"
-client-refresh-packet-id: "TAB"
-client-refresh-action: "update"
-max-entries: -1
+enabled: false  # 是否启用此 Tab 定义（默认关闭，避免与 online-tab / demo 同时推送导致多 HUD）
+ui-targets:  # 目标 UI 列表，同一个 payload 可同时发给多个 UI
+  - ui-id: "tab-arena"  # 对应的 UI ID（plugins/ArcartXSuite/ui/tab-arena.yml）
+    packet-handler: "tab"  # UI 端接收包的 handler 名称
+client-refresh-packet-id: "TAB"  # 客户端回包请求刷新的 Packet ID
+client-refresh-action: "update"  # 客户端回包请求刷新的 action 名称
+max-entries: -1  # 最大条目数，-1 表示不限制
 # 先按队伍聚集，再按名字
-sort-keys:
-  - { mode: papi, key: "%player_scoreboardteam%" }
-  - { mode: name }
-pack:
+sort-keys:  # 多键复合排序（优先级高于 sort-mode）
+  - { mode: papi, key: "%player_scoreboardteam%" }  # 第一优先级: 按 scoreboard 队伍排序
+  - { mode: name }  # 第二优先级: 按玩家名排序
+pack:  # map 形态 pack，每个在线玩家渲染为一个字典，UI 端按字段取值
   # 队伍来源：原版 scoreboard team。可替换为自己 PVP 插件 PAPI，例如：
   #   "%bedwars_team%" / "%matrixduels_team%" / "%cs_team%"
   # UI 端按 == "red" / "blue" 判定，其他值（含空串）不渲染。
   team: "%player_scoreboardteam%"
-  uuid: "{player_uuid}"
-  name: "%axstab_pvp_color%%axstab_vanish_color%%player_name%"
+  uuid: "{player_uuid}"  # 玩家 UUID，UI 端用于渲染 PlayerSkin 头像
+  name: "%axstab_pvp_color%%axstab_vanish_color%%player_name%"  # 玩家名称（含 PVP 红色/vanish 灰色颜色前缀）
   # 战斗中标志：%axstab_pvp% 返回 "1" / "0"
   status: "%axstab_pvp%"
   # 血量：%player_max_health% 在部分版本可能不存在，可替换为常量 20

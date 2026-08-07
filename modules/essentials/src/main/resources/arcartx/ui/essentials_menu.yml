@@ -12,6 +12,24 @@ ui:
   through: false
   screenScale: true
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - page: 当前页面 (home/homes/warps/tpa/settings)
+    #   - packetId: 服务端回包 ID，用于客户端 Packet.send 回传
+    #   - playerName: 玩家名称
+    #   - isFlying: 是否正在飞行
+    #   - isGod: 是否开启无敌
+    #   - isAfk: 是否挂机
+    #   - flySpeed: 飞行速度
+    #   - walkSpeed: 行走速度
+    #   - location: 当前位置信息
+    #   - homes: 家列表数据
+    #   - homeCount: 家数量
+    #   - warps: 传送点列表数据
+    #   - warpCount: 传送点数量
+    #   - onlinePlayers: 在线玩家列表
+    #   - replantEnabled: 自动补种是否开启
+    #   - autotoolEnabled: 自动工具切换是否开启
     init: |-
       var.page = packet['page']
       var.packetId = packet['packetId']

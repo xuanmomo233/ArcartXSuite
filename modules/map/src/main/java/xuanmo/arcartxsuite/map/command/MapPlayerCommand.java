@@ -14,6 +14,12 @@ import xuanmo.arcartxsuite.map.config.MapModuleConfiguration;
 import xuanmo.arcartxsuite.map.model.MapOperationResult;
 import xuanmo.arcartxsuite.map.service.MapService;
 
+/**
+ * 地图模块玩家命令处理器，提供 open / hud / cleartrack 等玩家子命令。
+ * <p>
+ * 关联模块：map。以 Bukkit {@code TabExecutor} 形式注册到 {@code /map} 命令，
+ * 供玩家打开地图界面、切换小地图 HUD 显示及清除当前导航追踪。
+ */
 public final class MapPlayerCommand implements org.bukkit.command.TabExecutor {
 
     private static final List<String> ROOT_ACTIONS = List.of("open", "hud", "cleartrack");
@@ -22,6 +28,13 @@ public final class MapPlayerCommand implements org.bukkit.command.TabExecutor {
     private final Supplier<MapModuleConfiguration> configurationProvider;
     private final MessageProvider messages;
 
+    /**
+     * 构造玩家命令处理器。
+     *
+     * @param serviceProvider       地图服务提供者（允许服务未就绪时返回 {@code null}）
+     * @param configurationProvider 模块配置提供者（用于 Tab 补全世界列表）
+     * @param messages              消息提供者，用于获取本地化提示文本
+     */
     public MapPlayerCommand(
         Supplier<MapService> serviceProvider,
         Supplier<MapModuleConfiguration> configurationProvider,
@@ -37,6 +50,15 @@ public final class MapPlayerCommand implements org.bukkit.command.TabExecutor {
         return messages.get("prefix") + messages.get(key, args);
     }
 
+    /**
+     * 处理玩家命令，根据子动作（open / hud / cleartrack）分发到对应服务方法。
+     *
+     * @param sender  命令发送者，必须是玩家
+     * @param command 命令对象
+     * @param label   命令标签
+     * @param args    命令参数数组
+     * @return {@code true} 表示命令已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (!(sender instanceof Player player)) {
@@ -74,6 +96,15 @@ public final class MapPlayerCommand implements org.bukkit.command.TabExecutor {
         return true;
     }
 
+    /**
+     * 提供玩家命令的 Tab 补全建议。
+     *
+     * @param sender 命令发送者
+     * @param command 命令对象
+     * @param alias  命令别名
+     * @param args   当前参数数组
+     * @return 补全候选列表
+     */
     @Override
     public @Nullable List<String> onTabComplete(
         @NotNull CommandSender sender,

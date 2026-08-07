@@ -1,14 +1,31 @@
+# 文件用途: CS 开箱风格抽奖界面（lottery_case）的 UI 配置。
+# 界面包含开箱滚动动画、单抽/十连抽奖品展示、奖励预览网格和交互按键区域。
+# 通过 packetHandler 接收服务端数据包，驱动界面显示。
 ui:
   match:
-    - "AXS:lottery_case"
-  isHud: false
-  through: false
-  escClose: true
-  background: false
-  closeDied: false
-  show: true
-  screenScale: true
+    - "AXS:lottery_case"  # 匹配的界面 ID
+  isHud: false  # 非 HUD，为弹出式菜单界面
+  through: false  # 不穿透点击
+  escClose: true  # 按 ESC 可关闭界面
+  background: false  # 不渲染原版背景
+  closeDied: false  # 玩家死亡时不关闭界面
+  show: true  # 界面可见
+  screenScale: true  # 启用屏幕等比缩放
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 数据包 ID，用于回传操作指令
+    #   - poolName: 当前奖池名称
+    #   - poolDescription: 奖池描述文本
+    #   - poolList: 可用奖池列表
+    #   - currentPoolIndex: 当前选中的奖池索引
+    #   - action_token: 操作令牌，用于防重放校验
+    #   - itemJsons: 奖池物品 itemJson 映射（key=槽位编号 1~43）
+    #   - itemNames: 奖池物品名称映射
+    #   - itemRarities: 奖池物品稀有度映射
+    #   - itemCount: 奖池物品数量
+    #   - costAmount: 单次开箱消耗数量
+    #   - costTenAmount: 十连开箱消耗数量
     init: |-
       var.packetId = packet['packetId']
       var.poolName = packet['poolName']
@@ -16,6 +33,22 @@ ui:
       var.poolList = packet['poolList']
       var.currentPoolIndex = packet['currentPoolIndex']
       var.actionToken = packet['action_token']
+      var.itemJsons = packet['itemJsons'] != none ? packet['itemJsons'] : {}
+      var.itemNames = packet['itemNames'] != none ? packet['itemNames'] : {}
+      var.itemRarities = packet['itemRarities'] != none ? packet['itemRarities'] : {}
+      var.itemCount = packet['itemCount'] != none ? packet['itemCount'] : 0
+      var.costAmount = packet['costAmount'] != none ? packet['costAmount'] : 1
+      var.costTenAmount = packet['costTenAmount'] != none ? packet['costTenAmount'] : 10
+      // 奖励预览网格: 设置图标
+      for(i in range(1, 44)){
+        key = i.round()
+        e = val.奖励预览['奖励展示总布局']['横向滚动栏']['奖励网格']['奖励布局' + key]
+        if(e != none){
+          e['slot0'].seticon()
+        }
+      }
+    # packetHandler: update
+    # 包字段: 与 init 相同，用于刷新界面数据
     update: |-
       var.packetId = packet['packetId']
       var.poolName = packet['poolName']
@@ -23,47 +56,122 @@ ui:
       var.poolList = packet['poolList']
       var.currentPoolIndex = packet['currentPoolIndex']
       var.actionToken = packet['action_token']
+      var.itemJsons = packet['itemJsons'] != none ? packet['itemJsons'] : {}
+      var.itemNames = packet['itemNames'] != none ? packet['itemNames'] : {}
+      var.itemRarities = packet['itemRarities'] != none ? packet['itemRarities'] : {}
+      var.itemCount = packet['itemCount'] != none ? packet['itemCount'] : 0
+      var.costAmount = packet['costAmount'] != none ? packet['costAmount'] : 1
+      var.costTenAmount = packet['costTenAmount'] != none ? packet['costTenAmount'] : 10
+      // 奖励预览网格: 刷新图标
+      for(i in range(1, 44)){
+        key = i.round()
+        e = val.奖励预览['奖励展示总布局']['横向滚动栏']['奖励网格']['奖励布局' + key]
+        if(e != none){
+          e['slot0'].seticon()
+        }
+      }
+    # packetHandler: result
+    # 包字段:
+    #   - resultItemJson: 中奖物品 itemJson
+    #   - resultItemName: 中奖物品名称
+    #   - resultRarity: 中奖物品稀有度
+    #   - animationJsons: 滚动动画物品 itemJson 映射（key=1~8）
+    #   - animationRarities: 滚动动画物品稀有度映射
+    result: |-
+      var.resultItemJson = packet['resultItemJson']
+      var.resultItemName = packet['resultItemName']
+      var.resultRarity = packet['resultRarity']
+      var.animationJsons = packet['animationJsons'] != none ? packet['animationJsons'] : {}
+      var.animationRarities = packet['animationRarities'] != none ? packet['animationRarities'] : {}
+      // 单抽结果: 设置中奖物品图标
+      val.奖品展示单抽['展示总布局']['奖品槽位'].seticon()
+      // 滚动动画: 设置随机物品图标
+      for(i in range(1, 28)){
+        key = i.round()
+        e = val.开箱动画['总布局']['横向滚动栏']['奖励网格']['抽奖布局' + key]
+        if(e != none){
+          e['slot0'].seticon()
+        }
+      }
+    # packetHandler: batch_result
+    # 包字段:
+    #   - batchCount: 十连结果数量
+    #   - batchItemJsons: 十连结果物品 itemJson 映射（key=1~10）
+    #   - batchItemNames: 十连结果物品名称映射
+    #   - batchItemRarities: 十连结果物品稀有度映射
+    batch_result: |-
+      var.batchCount = packet['batchCount']
+      var.batchItemJsons = packet['batchItemJsons'] != none ? packet['batchItemJsons'] : {}
+      var.batchItemNames = packet['batchItemNames'] != none ? packet['batchItemNames'] : {}
+      var.batchItemRarities = packet['batchItemRarities'] != none ? packet['batchItemRarities'] : {}
+      // 十连结果: 设置各物品图标
+      for(i in range(1, 11)){
+        key = i.round()
+        e = val.奖品展示十连抽['十连总布局']['十连网格']['十连单个布局' + key]
+        if(e != none){
+          e['奖品槽位'].seticon()
+        }
+      }
+      val.奖品展示十连抽.visible = true
+    # packetHandler: history
+    # 包字段:
+    #   - historyPoolName: 历史记录所属奖池名称
+    #   - historyCount: 历史记录条数
+    #   - historyRows: 历史记录行数据列表（每行含 openTime/itemId/rarity）
+    history: |-
+      var.historyPoolName = packet['historyPoolName']
+      var.historyCount = packet['historyCount']
+      var.historyRows = packet['historyRows']
+      var.showHistory = true
+    # packetHandler: details
+    # 包字段:
+    #   - detailPoolName: 详情奖池名称
+    #   - detailCount: 详情列表条数
+    #   - detailRows: 详情行数据列表（每行含 name/rarity/weight）
+    #   - rarityInfo: 稀有度权重信息映射
+    details: |-
+      var.detailPoolName = packet['detailPoolName']
+      var.detailCount = packet['detailCount']
+      var.detailRows = packet['detailRows']
+      var.rarityInfo = packet['rarityInfo']
+      var.showDetails = true
   action:
+    # load 事件: 界面加载时初始化稀有度颜色映射表（RGBA 格式）
     load: |-
       var.rarityColors = {}
-      var.rarityColors['COMMON']    = '192,195,198,255'
-      var.rarityColors['UNCOMMON']  = '176,195,217,255'
-      var.rarityColors['RARE']      = '94,152,217,255'
-      var.rarityColors['EPIC']      = '136,71,255,255'
-      var.rarityColors['LEGENDARY'] = '235,75,75,255'
-      var.rarityColors['MYTHIC']    = '255,215,0,255'
-      var.rarityColors[none] = '128,128,128,255'
+      var.rarityColors['COMMON']    = '192,195,198,255'  # 普通 - 灰色
+      var.rarityColors['UNCOMMON']  = '176,195,217,255'  # 不凡 - 浅蓝灰
+      var.rarityColors['RARE']      = '94,152,217,255'   # 稀有 - 蓝色
+      var.rarityColors['EPIC']      = '136,71,255,255'   # 史诗 - 紫色
+      var.rarityColors['LEGENDARY'] = '235,75,75,255'    # 传说 - 红色
+      var.rarityColors['MYTHIC']    = '255,215,0,255'    # 神话 - 金色
+      var.rarityColors['SPECIAL']   = '255,180,0,255'    # 特殊 - 亮金色
+      var.rarityColors[none] = '128,128,128,255'         # 默认 - 中灰色
+    # open 事件: 界面打开时初始化界面状态
     open: |-
-      var.random = 0.8 + math.random() * 0.01
-      Packet.send(var.packetId, 'open_case', var.actionToken)
-      var.V = TwoLerp(1, 3, 0.5, 2000, 6000)
-      val.Scroll.moveX = 0.0005
-      val.开箱动画.visible = true
-      val.奖励预览.visible = false
-      val.交互按键.visible = false
-      async {
-        Thread.sleep(10000)
-        if(val.开箱动画 != none && val.Scroll != none){
-          val.Scroll.moveX = 0
-          val.开箱动画.visible = false
-        }
-        if(val.奖品展示单抽 != none){
-          val.奖品展示单抽.visible = true
-        }
-      }
+      var.V = 0
+      var.random = 1
+      val.奖励预览.visible = true
+      val.交互按键.visible = true
+      val.开箱动画.visible = false
+      val.奖品展示单抽.visible = false
+      val.奖品展示十连抽.visible = false
+    # tick 事件: 每帧执行，控制滚动栏减速并停在随机位置
     tick: |-
       if(var.V < 1 && val.Scroll.moveX < 0.8){
-        var.V = math.max(var.V, 0.5)
+        var.V = math.max(var.V, 0.5)  # 最低速度保底
       }
       if(val.Scroll.moveX < var.random){
-        val.Scroll.moveX = val.Scroll.moveX + (0.0003 * var.V)
+        val.Scroll.moveX = val.Scroll.moveX + (0.0003 * var.V)  # 持续滚动
       } elif(val.Scroll.moveX >= var.random){
-        val.Scroll.moveX = var.random
-        var.V = 0
+        val.Scroll.moveX = var.random  # 停在目标位置
+        var.V = 0  # 速度归零
       }
-  defaultOpen: true
+  defaultOpen: true  # 界面打开时自动触发 open 事件
 
+# ─── 控件树 ────────────────────────────────────────
 controls:
+  # 背景遮罩: 全屏半透明黑色遮罩 + 顶部/底部金色渐变装饰条
   背景遮罩:
     type: Adaptive
     attribute:
@@ -103,6 +211,7 @@ controls:
             type: 0
             angleDeg: 90
 
+  # 奖品展示单抽: 开箱动画结束后显示的单个奖品结果界面
   奖品展示单抽:
     type: Adaptive
     val: 奖品展示单抽
@@ -122,7 +231,7 @@ controls:
           奖品名称:
             type: Text
             attribute:
-              texts: "self.parent['奖品槽位'].getSlotItemStack().getName()"
+              texts: "var.resultItemName != none ? var.resultItemName : ''"
               center: false
               y: 20.0
               fontSize: 120
@@ -130,7 +239,7 @@ controls:
           奖品副标题:
             type: Text
             attribute:
-              texts: "self.parent['奖品槽位'].getItemText('rarity') != none ? self.parent['奖品槽位'].getItemText('rarity') : 'COMMON'"
+              texts: "var.resultRarity != none ? var.resultRarity : 'COMMON'"
               y: 100.0
               fontSize: 81
               point: ~top_center
@@ -141,8 +250,9 @@ controls:
               width: 300
               height: 300
               point: ~middle_center
-              id: 13
+              slotType: ~Icon
               itemScale: 1.2
+              seticon: "self.setItemIcon(var.resultItemJson)"
           品质光环:
             type: Texture
             attribute:
@@ -159,19 +269,50 @@ controls:
           品质贴图:
             type: Texture
             attribute:
-              rarityColor: none
-              normal: "{self.rarityColor}"
+              normal: "{var.rarityColors[var.resultRarity] != none ? var.rarityColors[var.resultRarity] : var.rarityColors[none]}"
               width: 600
               y: 200
               point: ~top_center
               height: 10
               shape: ~round_rect
               radius: 5
+          确认按钮:
+            type: Slot
+            attribute:
+              normal: ~60,179,113,255
+              alpha: 1
+              width: 200
+              height: 60
+              y: 350
+              point: ~top_center
+              shape: ~round_rect
+              radius: 20
+            effect:
+              gradient:
+                color1: ~60,179,113,255
+                color2: ~34,139,34,255
+                type: 0
+                angleDeg: 90
+              stroke:
+                width: 2
+                color: ~95,95,95,100
             action:
-              create: |-
-                var.r = self.parent['奖品槽位'].getItemText('rarity')
-                self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors[none]
+              click: |-
+                val.奖品展示单抽.visible = false
+                val.奖励预览.visible = true
+                val.交互按键.visible = true
+            children:
+              确认文字:
+                type: Text
+                attribute:
+                  texts:
+                    - ~确认
+                  center: true
+                  x: 100
+                  y: 10
+                  fontSize: 49
 
+  # 奖品展示十连抽: 十连开箱结果显示界面，5列网格布局展示10个奖品
   奖品展示十连抽:
     type: Adaptive
     val: 奖品展示十连抽
@@ -198,10 +339,12 @@ controls:
               point: ~middle_center
             action:
               create: |-
-                for(i in range(1,9)){
+                for(i in range(1,11)){
                   key = i.round()
                   十连抽 = self['十连单个布局'].copy('十连单个布局' + key)
-                  十连抽['奖品槽位'].id = 8 + key
+                  十连抽['奖品槽位'].entryKey = key
+                  十连抽['品质背景'].rarityKey = key
+                  十连抽['奖品名称'].nameKey = key
                 }
             children:
               十连单个布局:
@@ -214,22 +357,19 @@ controls:
                   品质背景:
                     type: Texture
                     attribute:
-                      rarityColor: none
-                      normal: "{self.rarityColor}"
+                      rarityKey: 0.round()
+                      normal: "{var.rarityColors[var.batchItemRarities[self.rarityKey]] != none ? var.rarityColors[var.batchItemRarities[self.rarityKey]] : var.rarityColors[none]}"
                       width: 200
                       height: 150
                       point: ~middle_center
                       scale: 1.5
                       shape: ~round_rect
                       radius: 8
-                    action:
-                      create: |-
-                        var.r = self.parent['奖品槽位'].getItemText('rarity')
-                        self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors[none]
                   奖品名称:
                     type: Text
                     attribute:
-                      texts: "self.parent['奖品槽位'].getSlotItemStack().getName()"
+                      nameKey: 0.round()
+                      texts: "var.batchItemNames[self.nameKey] != none ? var.batchItemNames[self.nameKey] : ''"
                       center: false
                       y: 20.0
                       fontSize: 49
@@ -241,9 +381,47 @@ controls:
                       width: 200
                       height: 200
                       point: ~middle_center
-                      id: 8
+                      slotType: ~Icon
+                      entryKey: 0.round()
                       x: 15.0
+                      seticon: "self.setItemIcon(var.batchItemJsons[self.entryKey])"
+          十连确认按钮:
+            type: Slot
+            attribute:
+              normal: ~60,179,113,255
+              alpha: 1
+              width: 200
+              height: 60
+              y: 400
+              point: ~middle_center
+              shape: ~round_rect
+              radius: 20
+            effect:
+              gradient:
+                color1: ~60,179,113,255
+                color2: ~34,139,34,255
+                type: 0
+                angleDeg: 90
+              stroke:
+                width: 2
+                color: ~95,95,95,100
+            action:
+              click: |-
+                val.奖品展示十连抽.visible = false
+                val.奖励预览.visible = true
+                val.交互按键.visible = true
+            children:
+              确认文字:
+                type: Text
+                attribute:
+                  texts:
+                    - ~确认
+                  center: true
+                  x: 100
+                  y: 10
+                  fontSize: 49
 
+  # 开箱动画: 开箱时的横向滚动动画层，包含滚动奖品条、幕布遮罩和中线指示器
   开箱动画:
     type: Adaptive
     val: 开箱动画
@@ -285,17 +463,20 @@ controls:
                     for(i in range(1,9)){
                       key = i.round()
                       抽奖布局 = self['抽奖布局'].copy('抽奖布局' + key)
-                      抽奖布局['slot0'].id = key
+                      抽奖布局['slot0'].entryKey = key
+                      抽奖布局['品质背景'].rarityKey = key
                     }
                     for(i in range(1,9)){
                       key = i.round()
                       抽奖布局 = self['抽奖布局'].copy('抽奖布局' + 9 + key)
-                      抽奖布局['slot0'].id = key
+                      抽奖布局['slot0'].entryKey = key
+                      抽奖布局['品质背景'].rarityKey = key
                     }
                     for(i in range(1,9)){
                       key = i.round()
                       抽奖布局 = self['抽奖布局'].copy('抽奖布局' + 18 + key)
-                      抽奖布局['slot0'].id = key
+                      抽奖布局['slot0'].entryKey = key
+                      抽奖布局['品质背景'].rarityKey = key
                     }
                 children:
                   前占位布局:
@@ -318,18 +499,14 @@ controls:
                       品质背景:
                         type: Texture
                         attribute:
-                          rarityColor: none
-                          normal: "{self.rarityColor}"
+                          rarityKey: 0.round()
+                          normal: "{var.rarityColors[var.animationRarities[self.rarityKey]] != none ? var.rarityColors[var.animationRarities[self.rarityKey]] : var.rarityColors[none]}"
                           width: 200
                           height: 150
                           point: ~top_left
                           scale: 1.5
                           shape: ~round_rect
                           radius: 8
-                        action:
-                          create: |-
-                            var.r = self.parent['slot0'].getItemText('rarity')
-                            self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors[none]
                       slot0:
                         type: Slot
                         attribute:
@@ -340,7 +517,9 @@ controls:
                           y: 40
                           scale: 1.5
                           through: false
-                          id: 0
+                          slotType: ~Icon
+                          entryKey: 0.round()
+                          seticon: "self.setItemIcon(var.animationJsons[self.entryKey])"
           抽奖幕布:
             type: Texture
             attribute:
@@ -359,6 +538,7 @@ controls:
               through: true
               scale: 1.5
 
+  # 奖励预览: 开箱前的奖池预览界面，展示箱子图标、名称和所有可能掉落的物品网格
   奖励预览:
     type: Adaptive
     val: 奖励预览
@@ -479,7 +659,10 @@ controls:
                     for(i in range(1,44)){
                       key = i.round()
                       奖励布局 = self['奖励布局'].copy('奖励布局' + key)
-                      奖励布局['slot0'].id = key
+                      奖励布局.entryKey = key
+                      奖励布局['slot0'].entryKey = key
+                      奖励布局['品质背景'].rarityKey = key
+                      奖励布局['物品名称'].nameKey = key
                     }
                 children:
                   奖励布局:
@@ -488,41 +671,42 @@ controls:
                       width: 200
                       height: 150
                       scale: 0.8
-                      visible: "self['slot0'].getSlotItemStack().getName() != none"
+                      entryKey: 0.round()
+                      visible: "var.itemJsons[self.entryKey] != none && var.itemJsons[self.entryKey] != ''"
                     children:
                       品质背景:
                         type: Texture
                         attribute:
-                          rarityColor: none
-                          normal: "{self.rarityColor}"
+                          rarityKey: 0.round()
+                          normal: "{var.rarityColors[var.itemRarities[self.rarityKey]] != none ? var.rarityColors[var.itemRarities[self.rarityKey]] : var.rarityColors[none]}"
                           width: 200
                           height: 150
                           point: ~top_left
                           scale: 0.8
                           shape: ~round_rect
                           radius: 6
-                        action:
-                          create: |-
-                            var.r = self.parent['slot0'].getItemText('rarity')
-                            self.rarityColor = var.rarityColors[var.r] != none ? var.rarityColors[var.r] : var.rarityColors[none]
                       slot0:
                         type: Slot
                         attribute:
-                          id: 0
+                          entryKey: 0.round()
+                          slotType: ~Icon
                           width: 100
                           point: ~top_left
                           height: 100
                           x: 48
                           y: 20
                           scale: 0.8
+                          seticon: "self.setItemIcon(var.itemJsons[self.entryKey])"
                       物品名称:
                         type: Text
                         attribute:
-                          texts: self.parent['slot0'].getSlotItemStack().getName()
+                          nameKey: 0.round()
+                          texts: "var.itemNames[self.nameKey] != none ? var.itemNames[self.nameKey] : ''"
                           y: 30.0
                           fontSize: 30
                           point: ~bottom_left
 
+  # 交互按键: 底部操作栏，包含开箱按钮、十连按钮、关闭按钮、翻页按钮和钥匙消耗提示
   交互按键:
     type: Adaptive
     val: 交互按键
@@ -536,7 +720,7 @@ controls:
       按键总布局:
         type: Canvas
         attribute:
-          width: 900
+          width: 1100
           point: ~bottom_center
           height: 128
         children:
@@ -544,7 +728,7 @@ controls:
             type: Texture
             attribute:
               normal: ~255,255,255,255
-              width: 1820
+              width: 1100
               height: 8
               point: ~horizontal_stretch_top
               shape: ~round_rect
@@ -568,7 +752,7 @@ controls:
             type: Text
             attribute:
               texts:
-                - "~X{var.amount}"
+                - "~X{var.costAmount}"
               y: 0.0
               fontSize: 49
               point: ~middle_left
@@ -579,10 +763,9 @@ controls:
               normal: ~60,179,113,255
               alpha: 1
               width: 100
-              x: 250.0
+              x: 200.0
               point: ~middle_center
               height: 50
-              id: 49
               shape: ~round_rect
               radius: 20
             effect:
@@ -594,6 +777,27 @@ controls:
               stroke:
                 width: 2
                 color: ~95,95,95,100
+            action:
+              click: |-
+                var.random = 0.8 + math.random() * 0.01
+                Packet.send(var.packetId, 'open_case', var.actionToken)
+                var.V = TwoLerp(1, 3, 0.5, 2000, 6000)
+                val.Scroll.moveX = 0.0005
+                val.开箱动画.visible = true
+                val.奖励预览.visible = false
+                val.交互按键.visible = false
+                val.奖品展示单抽.visible = false
+                val.奖品展示十连抽.visible = false
+                async {
+                  Thread.sleep(10000)
+                  if(val.开箱动画 != none && val.Scroll != none){
+                    val.Scroll.moveX = 0
+                    val.开箱动画.visible = false
+                  }
+                  if(val.奖品展示单抽 != none){
+                    val.奖品展示单抽.visible = true
+                  }
+                }
             children:
               文字:
                 type: Text
@@ -604,20 +808,60 @@ controls:
                   x: 50
                   y: 10
                   fontSize: 64
-              槽位:
-                type: Slot
+          十连开箱:
+            type: Slot
+            attribute:
+              normal: ~60,120,200,220
+              alpha: 1
+              width: 120
+              x: 320.0
+              point: ~middle_center
+              height: 50
+              shape: ~round_rect
+              radius: 20
+            effect:
+              gradient:
+                color1: ~255,230,150,255
+                color2: ~255,180,50,255
+                type: 0
+                angleDeg: 90
+              stroke:
+                width: 2
+                color: ~255,240,200,200
+            action:
+              click: |-
+                Packet.send(var.packetId, 'open_case_batch', var.actionToken)
+                val.奖励预览.visible = false
+                val.交互按键.visible = false
+                val.奖品展示单抽.visible = false
+                val.奖品展示十连抽.visible = false
+            children:
+              文字:
+                type: Text
                 attribute:
-                  alpha: 0.9
-                  id: 49
-                  width: 100
-                  height: 100
+                  texts:
+                    - ~十连
+                  center: true
+                  x: 60
+                  y: 10
+                  fontSize: 64
+              消耗:
+                type: Text
+                attribute:
+                  texts:
+                    - "~X{var.costTenAmount}"
+                  center: true
+                  x: 60
+                  y: 36
+                  fontSize: 28
+                  through: true
           关闭:
             type: Slot
             attribute:
               normal: ~165,165,165,255
               alpha: 1
               width: 100
-              x: 400.0
+              x: 460.0
               point: ~middle_center
               height: 50
               shape: ~round_rect
@@ -640,7 +884,7 @@ controls:
                   y: 10
                   fontSize: 64
           上一页:
-            type: Slot
+            type: Texture
             val: 上一页
             attribute:
               normal: ~255,219,0,255
@@ -649,8 +893,12 @@ controls:
               x: -85
               point: ~middle_center
               height: 80
-              id: 45
-              visible: "self.getSlotItemStack().getType() == 'minecraft:arrow'"
+              visible: "var.currentPoolIndex > 0"
+              shape: ~round_rect
+              radius: 10
+            action:
+              click: |-
+                Packet.send(var.packetId, 'switch_pool', var.currentPoolIndex - 1, var.actionToken)
             children:
               文字:
                 type: Text
@@ -663,7 +911,7 @@ controls:
                   fontSize: 81
                   shadow: true
           下一页:
-            type: Slot
+            type: Texture
             val: 下一页
             attribute:
               normal: ~255,219,0,255
@@ -672,8 +920,12 @@ controls:
               x: 85
               point: ~middle_center
               height: 80
-              id: 53
-              visible: "self.getSlotItemStack().getType() == 'minecraft:arrow'"
+              visible: "var.currentPoolIndex < var.poolList.size() - 1"
+              shape: ~round_rect
+              radius: 10
+            action:
+              click: |-
+                Packet.send(var.packetId, 'switch_pool', var.currentPoolIndex + 1, var.actionToken)
             children:
               文字:
                 type: Text

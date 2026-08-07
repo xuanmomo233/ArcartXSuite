@@ -13,6 +13,12 @@ import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.prop.service.PropService;
 
+/**
+ * Prop 模块的管理命令处理器。
+ * <p>
+ * 提供 help（帮助）、status（状态查询）、reload（重载提示）、set（绑定道具到主手）四个子动作，
+ * 通过 {@link PropService} 供应商延迟获取服务实例，避免模块加载顺序耦合。
+ */
 public final class PropAdminCommand implements ModuleCommandHandler {
 
     private static final List<String> ACTIONS = List.of("help", "status", "reload", "set");
@@ -20,6 +26,12 @@ public final class PropAdminCommand implements ModuleCommandHandler {
     private final Supplier<PropService> serviceProvider;
     private final MessageProvider messages;
 
+    /**
+     * 构造管理命令处理器。
+     *
+     * @param serviceProvider Prop 服务供应商，延迟获取以避免加载顺序耦合
+     * @param messages        消息提供者，用于本地化提示
+     */
     public PropAdminCommand(Supplier<PropService> serviceProvider, MessageProvider messages) {
         this.serviceProvider = serviceProvider;
         this.messages = messages;
@@ -33,6 +45,14 @@ public final class PropAdminCommand implements ModuleCommandHandler {
     @Override public String commandId() { return "prop"; }
     @Override public List<String> actions() { return ACTIONS; }
 
+    /**
+     * 处理管理命令。
+     *
+     * @param sender 命令发送者
+     * @param label  命令标签
+     * @param args   参数数组，{@code args[1]} 为子动作
+     * @return {@code true} 表示已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "help";
@@ -46,6 +66,13 @@ public final class PropAdminCommand implements ModuleCommandHandler {
         return true;
     }
 
+    /**
+     * 提供命令补全。
+     *
+     * @param sender 命令发送者
+     * @param args   当前参数数组
+     * @return 补全候选列表，无匹配时返回空列表
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) return filter(ACTIONS, args[1]);

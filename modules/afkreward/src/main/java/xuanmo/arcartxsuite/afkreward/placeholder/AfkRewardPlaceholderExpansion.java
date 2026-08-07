@@ -9,6 +9,11 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.afkreward.service.AfkRewardService;
 import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository.PlayerStats;
 
+/**
+ * 挂机奖励模块的 PlaceholderAPI 扩展，占位符标识 {@code axsafkreward}。
+ * <p>
+ * 提供 AFK 状态、累计时长、奖励统计等占位符查询。
+ */
 public final class AfkRewardPlaceholderExpansion extends PlaceholderExpansion {
 
     private final JavaPlugin plugin;

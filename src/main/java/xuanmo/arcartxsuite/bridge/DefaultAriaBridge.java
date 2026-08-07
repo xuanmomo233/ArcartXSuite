@@ -14,6 +14,12 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.script.AriaBridge;
 
+/**
+ * {@link AriaBridge} 的默认实现，通过反射懒加载 ArcartX 内置的 Aria 脚本引擎。
+ * <p>
+ * Aria 为可选依赖，运行时从多个候选插件中探测引擎类，不可用时降级为
+ * {@link #available()} 返回 false。
+ */
 public final class DefaultAriaBridge implements AriaBridge {
 
     private static final String NEW_ARIA_CLASS =

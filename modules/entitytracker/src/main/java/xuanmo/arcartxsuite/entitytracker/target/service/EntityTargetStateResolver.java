@@ -11,6 +11,12 @@ import org.bukkit.entity.Player;
 import xuanmo.arcartxsuite.entitytracker.target.config.EntityTargetHudConfiguration;
 import xuanmo.arcartxsuite.api.combat.EntityCombatMetadata;
 
+/**
+ * 实体目标状态解析器，属于 entitytracker 模块的目标 HUD 子系统。
+ * <p>
+ * 根据攻击者与目标实体的位置、距离、超时等条件判断是否应显示目标 HUD，
+ * 并构建包含血量、距离、类型等信息的实体目标快照。
+ */
 public final class EntityTargetStateResolver {
 
     private static final DecimalFormat NUMBER_FORMAT = new DecimalFormat("0.##");
@@ -18,6 +24,16 @@ public final class EntityTargetStateResolver {
     private EntityTargetStateResolver() {
     }
 
+    /**
+     * 解析攻击者当前的目标实体快照。
+     *
+     * @param attacker       攻击者玩家
+     * @param target         目标实体
+     * @param configuration  目标 HUD 配置
+     * @param lastHitAtMs    上次攻击时间戳（毫秒）
+     * @param nowMillis      当前时间戳（毫秒）
+     * @return 目标快照的 Optional，不满足显示条件时为空
+     */
     public static Optional<EntityTargetSnapshot> resolve(
         Player attacker,
         LivingEntity target,

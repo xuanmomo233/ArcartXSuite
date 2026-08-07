@@ -22,6 +22,12 @@ import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsProgressSnapshot;
 import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsService;
 import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsTextFormats;
 
+/**
+ * 在线奖励玩家命令处理器。
+ * <p>
+ * 属于 {@code onlinerewards} 模块，提供 {@code /onlinerewards|/signin <action>} 玩家子命令，
+ * 包括打开菜单、查看状态、签到、排行榜、签到历史等。
+ */
 public final class OnlineRewardsPlayerCommand implements org.bukkit.command.TabExecutor {
 
     private static final int PAGE_SIZE = 10;
@@ -31,6 +37,13 @@ public final class OnlineRewardsPlayerCommand implements org.bukkit.command.TabE
     private final Supplier<OnlineRewardsModuleConfiguration> configurationProvider;
     private final MessageProvider messages;
 
+    /**
+     * 构造玩家命令处理器。
+     *
+     * @param serviceProvider      在线奖励服务提供者
+     * @param configurationProvider 模块配置提供者
+     * @param messages             消息提供者
+     */
     public OnlineRewardsPlayerCommand(
         Supplier<OnlineRewardsService> serviceProvider,
         Supplier<OnlineRewardsModuleConfiguration> configurationProvider,
@@ -45,6 +58,15 @@ public final class OnlineRewardsPlayerCommand implements org.bukkit.command.TabE
         return messages.get("prefix") + messages.get(key, args);
     }
 
+    /**
+     * 处理玩家命令，根据子动作分发到打开菜单、查看状态、签到、排行榜或历史。
+     *
+     * @param sender  命令发送者
+     * @param command 命令对象
+     * @param label   命令标签
+     * @param args    参数数组
+     * @return {@code true} 表示已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (!(sender instanceof Player player)) {
@@ -82,6 +104,15 @@ public final class OnlineRewardsPlayerCommand implements org.bukkit.command.TabE
         return true;
     }
 
+    /**
+     * 提供玩家命令的 Tab 补全建议。
+     *
+     * @param sender 命令发送者
+     * @param command 命令对象
+     * @param alias  命令别名
+     * @param args   参数数组
+     * @return 补全候选列表
+     */
     @Override
     public @Nullable List<String> onTabComplete(
         @NotNull CommandSender sender,

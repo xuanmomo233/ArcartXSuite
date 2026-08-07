@@ -10,6 +10,12 @@ import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.battlepass.config.BattlePassModuleConfiguration;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassTask;
 
+/**
+ * 战令任务引擎，负责监听事件总线并驱动任务进度更新。
+ * <p>
+ * 启动时为每个任务模板订阅对应的事件主题，事件到达时先进行条件匹配，
+ * 匹配通过后计算增量并委托 {@link BattlePassService} 更新玩家任务进度。
+ */
 public final class BattlePassTaskEngine {
 
     private final BattlePassService service;
@@ -18,11 +24,22 @@ public final class BattlePassTaskEngine {
     private EventBusCapability eventBus;
     private volatile boolean active;
 
+    /**
+     * 构造任务引擎。
+     *
+     * @param service       BattlePassService 实例
+     * @param configuration 模块配置
+     */
     public BattlePassTaskEngine(BattlePassService service, BattlePassModuleConfiguration configuration) {
         this.service = service;
         this.configuration = configuration;
     }
 
+    /**
+     * 启动任务引擎，订阅所有任务模板对应的事件主题。
+     *
+     * @param eventBusProvider 事件总线能力提供者
+     */
     public void start(Supplier<EventBusCapability> eventBusProvider) {
         if (active) return;
         eventBus = eventBusProvider != null ? eventBusProvider.get() : null;
@@ -42,6 +59,9 @@ public final class BattlePassTaskEngine {
         }
     }
 
+    /**
+     * 关闭任务引擎，注销所有事件订阅。
+     */
     public void shutdown() {
         active = false;
         if (eventBus != null) {

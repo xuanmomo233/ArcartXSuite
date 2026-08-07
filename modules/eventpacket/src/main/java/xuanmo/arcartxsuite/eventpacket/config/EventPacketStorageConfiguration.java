@@ -1,5 +1,20 @@
 package xuanmo.arcartxsuite.eventpacket.config;
 
+/**
+ * 事件包存储层配置记录。
+ * <p>
+ * 封装 SQLite/MySQL 连接所需的全部参数，可通过 {@link #toDescriptor()}
+ * 转换为宿主统一的 {@link xuanmo.arcartxsuite.api.storage.StorageDescriptor}。
+ *
+ * @param dialect            持久化方言（SQLite 或 MySQL）
+ * @param sqliteFileName     SQLite 数据库文件名
+ * @param mysqlHost          MySQL 主机地址
+ * @param mysqlPort          MySQL 端口
+ * @param mysqlDatabase      MySQL 数据库名
+ * @param mysqlUsername      MySQL 用户名
+ * @param mysqlPassword      MySQL 密码
+ * @param connectionPoolSize 连接池大小
+ */
 public record EventPacketStorageConfiguration(
     EventPacketPersistenceDialect dialect,
     String sqliteFileName,
@@ -10,6 +25,11 @@ public record EventPacketStorageConfiguration(
     String mysqlPassword,
     int connectionPoolSize
 ) {
+    /**
+     * 将此配置转换为宿主存储描述符。
+     *
+     * @return 根据方言生成的 SQLite 或 MySQL 存储描述符
+     */
     public xuanmo.arcartxsuite.api.storage.StorageDescriptor toDescriptor() {
         if (dialect == EventPacketPersistenceDialect.MYSQL) {
             return xuanmo.arcartxsuite.api.storage.StorageDescriptor.mysql(

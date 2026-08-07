@@ -1,11 +1,12 @@
 # Mail 配置迁移示例
 # 从版本 0 升级到版本 1 的迁移规则
-from-version: 0
-to-version: 1
-description: "初始迁移：补充缺失默认值"
+# 迁移系统在 config-version 低于 to-version 时自动执行此文件中的操作。
+from-version: 0  # 迁移起始版本
+to-version: 1    # 迁移目标版本
+description: "初始迁移：补充缺失默认值"  # 迁移说明
 
 operations:
   # 补充缺失的默认附件上限
-  - type: set-if-missing
-    path: "player-send.max-attachments"
-    value: 6
+  - type: set-if-missing  # 操作类型：仅当目标路径不存在时才写入默认值
+    path: "player-send.max-attachments"  # 目标配置路径
+    value: 6  # 写入的默认值

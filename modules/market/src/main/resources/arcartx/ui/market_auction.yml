@@ -17,6 +17,22 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
+    # packetHandler: init
+    # 首次收到服务端数据包时执行，初始化界面所有变量和动态控件
+    # 包字段:
+    #   - packetId: 数据包通信 ID（用于客户端 Packet.send 回传）
+    #   - page: 当前页码（从 0 开始）
+    #   - totalPages: 总页数
+    #   - pageText: 页码显示文本（如 "1/5"）
+    #   - currentCategory: 当前选中的分类 ID（如 "all"、"weapon"）
+    #   - categories: 分类字典（key=序号, value=分类对象含 id/displayName 等）
+    #   - categoryTexts: 分类显示文本字典（key=序号, value=带颜色码的分类名）
+    #   - listings: 拍卖列表字典（key=序号, value=拍卖条目含 id/name/seller/price/bid 等）
+    #   - listingTexts: 拍卖条目显示文本字典（key=序号, value=格式化文本）
+    #   - itemJson{key}: 各拍卖物品的 NBT JSON 字符串（如 itemJson0、itemJson1...）
+    #   - maxCategoryCount: 分类最大数量（用于动态复制分类项控件）
+    #   - maxListingCount: 拍卖条目最大数量（用于动态复制物品行控件）
+    #   - action_token: 操作令牌（防重放攻击，购买/出价/取消时回传）
     init: |-
       var.packetId = packet['packetId']
       var.page = packet['page']
@@ -63,6 +79,11 @@ ui:
           e['物品图标'].seticon()
         }
       }
+    # packetHandler: update
+    # 服务端推送更新时执行，字段与 init 完全相同，用于刷新界面数据
+    # 包字段: 同 init（packetId/page/totalPages/pageText/currentCategory/categories/
+    #   categoryTexts/listings/listingTexts/itemJson{key}/maxCategoryCount/
+    #   maxListingCount/action_token）
     update: |-
       var.packetId = packet['packetId']
       var.page = packet['page']
@@ -110,6 +131,9 @@ ui:
         }
       }
   action:
+    # action: open
+    # UI 打开时执行，初始化所有变量为默认空值，然后向服务端请求第一页拍卖列表
+    # 发送数据包: Packet.send(packetId, 'auction_list', 页码, 分类, 搜索词)
     open: |-
       var.packetId = 'AXS_MARKET'
       var.page = 0

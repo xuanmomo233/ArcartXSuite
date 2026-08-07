@@ -15,6 +15,14 @@ import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.warehouse.service.WarehouseService;
 
+/**
+ * 仓库模块的管理员命令处理器。
+ * <p>
+ * 实现 {@link ModuleCommandHandler}，在 {@code /axs warehouse ...} 下注册管理员子命令，
+ * 支持 help / status / reload / open / info / view / delete / bank 等动作。
+ * 所有动作均要求 {@code arcartxsuite.warehouse.admin} 权限。
+ * 关联模块：warehouse。
+ */
 public final class WarehouseAdminCommand implements ModuleCommandHandler {
 
     private static final List<String> ACTIONS = List.of("help", "status", "reload", "open", "info", "view", "delete", "bank");
@@ -22,6 +30,12 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
     private final Supplier<WarehouseService> serviceProvider;
     private final MessageProvider messages;
 
+    /**
+     * 构造管理员命令处理器。
+     *
+     * @param serviceProvider 仓库服务提供者，延迟获取 {@link WarehouseService} 实例
+     * @param messages        消息提供者，用于读取本地化提示文本
+     */
     public WarehouseAdminCommand(Supplier<WarehouseService> serviceProvider, MessageProvider messages) {
         this.serviceProvider = serviceProvider;
         this.messages = messages;
@@ -32,9 +46,19 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
         return messages.get("prefix") + messages.get(key, args);
     }
 
+    /** @return 子命令 id，固定为 {@code "warehouse"} */
     @Override public String commandId() { return "warehouse"; }
+    /** @return 支持的子命令动作列表 */
     @Override public List<String> actions() { return ACTIONS; }
 
+    /**
+     * 执行管理员子命令，根据 {@code args[1]} 分发到对应动作处理器。
+     *
+     * @param sender 命令发送者
+     * @param label  根命令标签
+     * @param args   完整参数数组（args[0] 为模块 id，args[1] 为动作）
+     * @return {@code true} 表示已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         if (sender instanceof Player player && !player.hasPermission("arcartxsuite.warehouse.admin")) {
@@ -56,6 +80,13 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
         return true;
     }
 
+    /**
+     * 提供管理员子命令的 Tab 补全。
+     *
+     * @param sender 命令发送者
+     * @param args   完整参数数组
+     * @return 补全列表，{@code null} 表示交由 Bukkit 补全玩家名
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) return filter(ACTIONS, args[1]);

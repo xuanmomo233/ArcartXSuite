@@ -33,6 +33,12 @@ import xuanmo.arcartxsuite.menu.listener.MenuBindingListener;
 import xuanmo.arcartxsuite.menu.packet.MenuUiPacketHandler;
 import xuanmo.arcartxsuite.menu.service.MenuService;
 
+/**
+ * Menu 模块主类，继承 {@link AbstractAXSModule} 并实现 {@link ModuleCommandHandler}。
+ * <p>
+ * 负责菜单定义的加载、UI 注册、命令绑定、事件监听和客户端包处理，
+ * 并通过 {@link xuanmo.arcartxsuite.api.capability.MenuOpenable} 向其他模块暴露菜单打开能力。
+ */
 public final class MenuModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private MenuModuleConfiguration configuration;
@@ -240,16 +246,34 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         });
     }
 
+    /**
+     * 返回模块命令标识。
+     *
+     * @return 命令 ID {@code "menu"}
+     */
     @Override
     public String commandId() {
         return "menu";
     }
 
+    /**
+     * 返回管理命令支持的子命令动作列表。
+     *
+     * @return 子命令名称列表
+     */
     @Override
     public List<String> actions() {
         return adminCommand != null ? adminCommand.actions() : List.of("help", "status", "reload");
     }
 
+    /**
+     * 处理管理命令，reload 子命令直接触发模块热重载，其余委托给 {@link MenuAdminCommand}。
+     *
+     * @param sender 命令发送者
+     * @param label  命令标签
+     * @param args   命令参数数组
+     * @return {@code true} 表示命令已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         if (adminCommand == null) {
@@ -272,6 +296,13 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         return adminCommand.onCommand(sender, label, args);
     }
 
+    /**
+     * 提供管理命令的 Tab 补全，委托给 {@link MenuAdminCommand}。
+     *
+     * @param sender 命令发送者
+     * @param args   当前已输入的参数数组
+     * @return 补全候选列表
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;

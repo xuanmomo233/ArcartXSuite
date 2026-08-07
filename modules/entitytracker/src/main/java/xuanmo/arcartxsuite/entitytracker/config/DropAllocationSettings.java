@@ -5,6 +5,18 @@ import java.util.Locale;
 import java.util.Map;
 import org.bukkit.configuration.ConfigurationSection;
 
+/**
+ * 掉落分配设置，属于 entitytracker 模块的新功能配置子系统。
+ * <p>
+ * 配置 Boss 掉落物品的分配模式（Roll/DKP/优先级）、超时时间及各子模式参数。
+ *
+ * @param enabled                  是否启用掉落分配
+ * @param defaultMode              默认分配模式（roll/dkp/priority）
+ * @param allocationTimeoutSeconds 分配超时秒数（最小 10）
+ * @param dkp                      DKP 分配设置
+ * @param roll                     Roll 分配设置
+ * @param priority                 优先级分配设置
+ */
 public record DropAllocationSettings(
     boolean enabled,
     String defaultMode,
@@ -14,6 +26,11 @@ public record DropAllocationSettings(
     PrioritySettings priority
 ) {
 
+    /**
+     * 返回未启用的默认设置。
+     *
+     * @return 禁用设置
+     */
     public static DropAllocationSettings disabled() {
         return new DropAllocationSettings(
             false, "roll", 60,
@@ -21,6 +38,12 @@ public record DropAllocationSettings(
         );
     }
 
+    /**
+     * 从配置节加载掉落分配设置。
+     *
+     * @param section 配置节，为 {@code null} 时返回禁用设置
+     * @return 解析得到的设置
+     */
     public static DropAllocationSettings load(ConfigurationSection section) {
         if (section == null) {
             return disabled();
@@ -35,6 +58,13 @@ public record DropAllocationSettings(
         );
     }
 
+    /**
+     * DKP 分配设置，属于掉落分配子系统。
+     *
+     * @param enabled         是否启用 DKP 模式
+     * @param baseEarnPoints  基础获得积分
+     * @param rankBonusPoints 名次到额外积分的映射
+     */
     public record DkpSettings(
         boolean enabled,
         int baseEarnPoints,
@@ -66,6 +96,15 @@ public record DropAllocationSettings(
         }
     }
 
+    /**
+     * Roll 分配设置，属于掉落分配子系统。
+     *
+     * @param enabled        是否启用 Roll 模式
+     * @param timeoutSeconds Roll 超时秒数（最小 5）
+     * @param rollMin        Roll 最小值
+     * @param rollMax        Roll 最大值
+     * @param allowPass      是否允许放弃
+     */
     public record RollSettings(
         boolean enabled,
         int timeoutSeconds,
@@ -102,6 +141,13 @@ public record DropAllocationSettings(
         }
     }
 
+    /**
+     * 优先级分配设置，属于掉落分配子系统。
+     *
+     * @param enabled         是否启用优先级模式
+     * @param classPriority   职业到优先级的映射
+     * @param qualityPriority 品质到优先级的映射
+     */
     public record PrioritySettings(
         boolean enabled,
         Map<String, Integer> classPriority,

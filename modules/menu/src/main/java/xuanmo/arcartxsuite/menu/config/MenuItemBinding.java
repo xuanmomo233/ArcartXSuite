@@ -6,6 +6,23 @@ import java.util.Locale;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.event.block.Action;
 
+/**
+ * 菜单物品绑定定义，描述通过特定物品交互触发打开菜单的规则。
+ * <p>
+ * 支持按材质、名称包含/正则、Lore 包含、自定义模型数据等条件匹配物品，
+ * 由 {@link xuanmo.arcartxsuite.menu.listener.MenuBindingListener} 在玩家交互时匹配。
+ *
+ * @param menuId         目标菜单 ID
+ * @param material       物品材质名称，空字符串表示不限制
+ * @param nameContains   物品显示名称需包含的文本
+ * @param nameRegex      物品显示名称需匹配的正则表达式
+ * @param loreContains   物品 Lore 需包含的文本
+ * @param customModelData 自定义模型数据 ID，{@code -1} 表示不限制
+ * @param clickAction    触发所需的点击类型
+ * @param mainHand       是否允许主手触发
+ * @param offHand        是否允许副手触发
+ * @param permission     触发所需的权限节点，空字符串表示无限制
+ */
 public record MenuItemBinding(
     String menuId,
     String material,
@@ -19,6 +36,13 @@ public record MenuItemBinding(
     String permission
 ) {
 
+    /**
+     * 从原始列表批量加载物品绑定定义，兼容 ConfigurationSection 和 Map 两种条目类型。
+     *
+     * @param rawList       原始列表
+     * @param defaultMenuId 默认菜单 ID
+     * @return 不可变的物品绑定列表
+     */
     public static List<MenuItemBinding> loadList(List<?> rawList, String defaultMenuId) {
         if (rawList == null || rawList.isEmpty()) {
             return List.of();
@@ -40,6 +64,13 @@ public record MenuItemBinding(
         return List.copyOf(bindings);
     }
 
+    /**
+     * 从配置节加载单个物品绑定定义。
+     *
+     * @param section       配置节
+     * @param defaultMenuId 默认菜单 ID
+     * @return 解析后的物品绑定定义
+     */
     public static MenuItemBinding load(ConfigurationSection section, String defaultMenuId) {
         String menuId = section.getString("menu", section.getString("open", defaultMenuId));
         return new MenuItemBinding(

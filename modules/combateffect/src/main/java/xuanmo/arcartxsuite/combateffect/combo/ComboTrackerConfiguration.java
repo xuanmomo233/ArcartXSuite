@@ -4,6 +4,21 @@ import java.util.HashSet;
 import java.util.Set;
 import org.bukkit.configuration.ConfigurationSection;
 
+/**
+ * 连击追踪模块的配置记录。
+ * <p>
+ * 属于 combateffect 模块的 combo 子模块，负责定义连击检测的启用状态、
+ * 伤害来源、超时时间、Chronos 分组、变量同步等参数。
+ *
+ * @param enabled              是否启用连击追踪
+ * @param source               连击伤害来源类型（AUTO / CHRONOS / BUKKIT）
+ * @param timeoutMs            连击超时时间（毫秒），超过则重置连击计数
+ * @param chronosGroups        Chronos 事件分组名称集合
+ * @param syncVariable         是否将连击数同步到客户端变量
+ * @param variableName         同步连击数所用的变量名
+ * @param perTarget            是否按目标分别计数连击
+ * @param debug                是否开启调试日志
+ */
 public record ComboTrackerConfiguration(
     boolean enabled,
     ComboSource source,
@@ -15,9 +30,20 @@ public record ComboTrackerConfiguration(
     boolean debug
 ) {
 
+    /**
+     * 连击伤害来源类型枚举。
+     * <p>
+     * AUTO 表示自动检测；CHRONOS 表示通过 Chronos 事件触发；BUKKIT 表示使用 Bukkit 原生事件。
+     */
     public enum ComboSource {
         AUTO, CHRONOS, BUKKIT;
 
+        /**
+         * 从字符串解析连击来源类型，无法识别时返回 {@link #AUTO}。
+         *
+         * @param value 配置字符串，大小写不敏感
+         * @return 对应的连击来源类型
+         */
         public static ComboSource from(String value) {
             if (value == null) return AUTO;
             return switch (value.trim().toLowerCase()) {
@@ -28,6 +54,14 @@ public record ComboTrackerConfiguration(
         }
     }
 
+    /**
+     * 从配置节点加载连击追踪配置。
+     * <p>
+     * 当配置节点为 {@code null} 时返回全部禁用的默认配置。
+     *
+     * @param section Bukkit 配置节点
+     * @return 加载后的配置记录
+     */
     public static ComboTrackerConfiguration load(ConfigurationSection section) {
         if (section == null) {
             return new ComboTrackerConfiguration(false, ComboSource.AUTO, 2000L, Set.of(), false, "combo_count", false, false);

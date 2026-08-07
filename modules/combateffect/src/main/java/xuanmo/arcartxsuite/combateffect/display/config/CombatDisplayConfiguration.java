@@ -3,6 +3,55 @@ package xuanmo.arcartxsuite.combateffect.display.config;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
+/**
+ * 战斗显示模块的配置记录。
+ * <p>
+ * 属于 combateffect 模块的 display 子模块，集中定义伤害与治疗数字显示的
+ * 所有参数，包括伤害来源模式、各属性插件（MythicLib / CraneAttribute /
+ * AttributePlus / Symphony）的显示开关与阈值、合并窗口、以及治疗显示配置。
+ *
+ * @param damageSourceMode                  伤害来源解析模式
+ * @param damageSourceFallback              指定来源不可用时是否回退
+ * @param damageSourceDebug                 是否输出伤害来源调试日志
+ * @param damageEnabled                     是否启用原版伤害显示
+ * @param damageConfigId                    原版伤害显示的 UI 配置 ID
+ * @param damageMinAmount                   原版伤害显示的最小金额阈值
+ * @param damageAttributePlusCompatible     原版伤害是否兼容 AttributePlus
+ * @param playerDamageEnabled               是否启用玩家受击伤害显示
+ * @param playerDamageConfigId              玩家受击伤害显示的 UI 配置 ID
+ * @param playerDamageMinAmount             玩家受击伤害显示的最小金额阈值
+ * @param mythicLibDamageEnabled            是否启用 MythicLib 伤害显示
+ * @param mythicLibDamageConfigId           MythicLib 伤害显示的 UI 配置 ID
+ * @param mythicLibPlayerDamageConfigId     MythicLib 玩家受击伤害显示的 UI 配置 ID
+ * @param mythicLibDamageMinAmount          MythicLib 伤害显示的最小金额阈值
+ * @param mythicLibPlayerDamageMinAmount    MythicLib 玩家受击伤害显示的最小金额阈值
+ * @param craneAttributeDamageEnabled       是否启用 CraneAttribute 伤害显示
+ * @param craneAttributeDamageConfigId      CraneAttribute 伤害显示的 UI 配置 ID
+ * @param craneAttributePlayerDamageConfigId CraneAttribute 玩家受击伤害显示的 UI 配置 ID
+ * @param craneAttributeDamageMinAmount     CraneAttribute 伤害显示的最小金额阈值
+ * @param craneAttributePlayerDamageMinAmount CraneAttribute 玩家受击伤害显示的最小金额阈值
+ * @param symphonyDamageEnabled             是否启用 Symphony 伤害显示
+ * @param symphonyDamageConfigId            Symphony 伤害显示的 UI 配置 ID
+ * @param symphonyPlayerDamageConfigId      Symphony 玩家受击伤害显示的 UI 配置 ID
+ * @param symphonyDamageMinAmount           Symphony 伤害显示的最小金额阈值
+ * @param symphonyPlayerDamageMinAmount     Symphony 玩家受击伤害显示的最小金额阈值
+ * @param healEnabled                       是否启用原版治疗显示
+ * @param healConfigId                      原版治疗显示的 UI 配置 ID
+ * @param healMinAmount                     原版治疗显示的最小金额阈值
+ * @param mythicHealEnabled                 是否启用 MythicMobs 治疗显示
+ * @param mythicHealConfigId                MythicMobs 治疗显示的 UI 配置 ID
+ * @param mythicHealMinAmount               MythicMobs 治疗显示的最小金额阈值
+ * @param mythicHealExactMode               MythicMobs 治疗是否使用精确模式（扣除溢出）
+ * @param damageMergeEnabled                是否启用伤害合并
+ * @param damageMergeWindowTicks            伤害合并窗口（tick）
+ * @param damageMergeMinAmount              伤害合并后的最小显示金额
+ * @param damageMergeMaxEntries             伤害合并缓冲区最大条目数
+ * @param showOthersDamage                  是否向旁观者显示伤害数字
+ * @param healMergeEnabled                  是否启用治疗合并
+ * @param healMergeWindowTicks              治疗合并窗口（tick）
+ * @param healMergeMinAmount                治疗合并后的最小显示金额
+ * @param healMergeMaxEntries               治疗合并缓冲区最大条目数
+ */
 public record CombatDisplayConfiguration(
     CombatDisplayDamageSourceMode damageSourceMode,
     boolean damageSourceFallback,
@@ -47,6 +96,14 @@ public record CombatDisplayConfiguration(
     int healMergeMaxEntries
 ) {
 
+    /**
+     * 从配置节点加载战斗显示配置。
+     * <p>
+     * 当配置节点为 {@code null} 时使用空配置并填充默认值。
+     *
+     * @param configuration Bukkit 配置节点
+     * @return 加载后的配置记录
+     */
     public static CombatDisplayConfiguration load(ConfigurationSection configuration) {
         if (configuration == null) {
             configuration = new YamlConfiguration();

@@ -40,6 +40,14 @@ import xuanmo.arcartxsuite.prop.config.PropLanguageConfiguration;
 import xuanmo.arcartxsuite.prop.config.PropModuleConfiguration;
 import java.util.logging.Logger;
 
+/**
+ * Prop 模块核心服务。
+ * <p>
+ * 实现 Bukkit {@link Listener}，负责道具的按键绑定注册、手持右键与按键使用处理、
+ * 效果执行（命令、消息、饱食度、生命、经验、药水、AttributePlus、MythicLib、Symphony）、
+ * 冷却管理、槽位同步与道具绑定。聚合三个属性子系统服务：
+ * {@link PropAttributePlusService}、{@link PropMythicLibService}、{@link PropSymphonyService}。
+ */
 public final class PropService implements Listener {
 
     private final JavaPlugin plugin;
@@ -57,6 +65,20 @@ public final class PropService implements Listener {
     private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private final Set<String> registeredBindingIds = new LinkedHashSet<>();
 
+    /**
+     * 构造 Prop 核心服务。
+     *
+     * @param plugin                    宿主插件实例
+     * @param logger                    日志记录器
+     * @param configuration             模块配置
+     * @param bridge                    Prop 桥接 API
+     * @param keyMappingConfiguration   按键映射配置
+     * @param languageConfiguration     语言配置
+     * @param definitionsByNormalizedId 以小写归一化 ID 为键的道具定义 Map
+     * @param attributeBridge           属性桥接注册表
+     * @param messages                  消息提供者
+     * @param vanillaItemNameBridge     原版物品名称桥接
+     */
     public PropService(
         JavaPlugin plugin,
         Logger logger,
@@ -83,10 +105,18 @@ public final class PropService implements Listener {
         this.symphonyService = new PropSymphonyService(plugin, attributeBridge.symphony());
     }
 
+    /**
+     * 设置事件总线供应商，用于发布道具使用事件。
+     *
+     * @param eventBusProvider 事件总线能力供应商
+     */
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
         this.eventBusProvider = eventBusProvider;
     }
 
+    /**
+     * 启动服务：初始化 MythicLib 子服务、注册事件监听、注册按键绑定、同步在线玩家槽位。
+     */
     public void start() {
         mythicLibService.start();
         Bukkit.getPluginManager().registerEvents(this, plugin);
@@ -94,6 +124,9 @@ public final class PropService implements Listener {
         syncOnlinePlayers();
     }
 
+    /**
+     * 关闭服务：注销事件监听、取消按键绑定、关闭各属性子服务。
+     */
     public void shutdown() {
         HandlerList.unregisterAll(this);
         unregisterBindings();
@@ -101,30 +134,65 @@ public final class PropService implements Listener {
         symphonyService.shutdown();
     }
 
+    /**
+     * 获取已加载的道具定义数量。
+     *
+     * @return 道具数量
+     */
     public int propCount() {
         return definitionsByNormalizedId.size();
     }
 
+    /**
+     * 获取已注册的按键绑定数量。
+     *
+     * @return 按键绑定数量
+     */
     public int registeredKeyCount() {
         return registeredBindingIds.size();
     }
 
+    /**
+     * 获取按键分类显示名称。
+     *
+     * @return 分类名称
+     */
     public String keyCategory() {
         return keyMappingConfiguration.category();
     }
 
+    /**
+     * 检查 AttributePlus 是否已挂钩。
+     *
+     * @return {@code true} 表示已挂钩
+     */
     public boolean attributePlusHooked() {
         return attributePlusService.hooked();
     }
 
+    /**
+     * 检查 MythicLib 是否已挂钩。
+     *
+     * @return {@code true} 表示已挂钩
+     */
     public boolean mythicLibHooked() {
         return mythicLibService.hooked();
     }
 
+    /**
+     * 检查 Symphony 是否已挂钩。
+     *
+     * @return {@code true} 表示已挂钩
+     */
     public boolean symphonyHooked() {
         return symphonyService.hooked();
     }
 
+    /**
+     * 获取全部道具 ID 列表。
+     *
+     * @return 不可变的道具 ID 列表
+     */
     public List<String> propIds() {
         List<String> propIds = new ArrayList<>();
         for (PropDefinition definition : definitionsByNormalizedId.values()) {
@@ -133,6 +201,13 @@ public final class PropService implements Listener {
         return List.copyOf(propIds);
     }
 
+    /**
+     * 将指定道具绑定到玩家主手物品上。
+     *
+     * @param player 目标玩家
+     * @param propId 道具 ID
+     * @return 操作结果，包含成功状态与提示消息
+     */
     public PropOperationResult applyPropToMainHand(Player player, String propId) {
         if (player == null) {
             return PropOperationResult.failure(messages.get("set.only-player"));
@@ -153,15 +228,30 @@ public final class PropService implements Listener {
         return PropOperationResult.success(messages.get("set.success", definition.id()));
     }
 
+    /**
+     * 处理客户端初始化完成事件，延迟同步槽位数据。
+     *
+     * @param player 上线玩家
+     */
     public void handleClientInitialized(Player player) {
         scheduleSlotSync(player, 1L);
     }
 
+    /**
+     * 玩家加入时延迟同步槽位数据。
+     *
+     * @param event 玩家加入事件
+     */
     @EventHandler(ignoreCancelled = true)
     public void onPlayerJoin(PlayerJoinEvent event) {
         scheduleSlotSync(event.getPlayer(), 1L);
     }
 
+    /**
+     * 玩家退出时清除各属性子服务的活跃状态。
+     *
+     * @param event 玩家退出事件
+     */
     @EventHandler(ignoreCancelled = true)
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
@@ -170,6 +260,11 @@ public final class PropService implements Listener {
         attributePlusService.clear(player);
     }
 
+    /**
+     * 玩家右键点击时触发手持道具使用。
+     *
+     * @param event 玩家交互事件
+     */
     @EventHandler(ignoreCancelled = true)
     public void onPlayerInteract(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
@@ -663,12 +758,30 @@ public final class PropService implements Listener {
         return builder.length() == 0 ? itemStack.getType().name() : builder.toString();
     }
 
+    /**
+     * 道具操作结果。
+     *
+     * @param success 操作是否成功
+     * @param message 提示消息
+     */
     public record PropOperationResult(boolean success, String message) {
 
+        /**
+         * 构造成功结果。
+         *
+         * @param message 提示消息
+         * @return 成功结果实例
+         */
         public static PropOperationResult success(String message) {
             return new PropOperationResult(true, message);
         }
 
+        /**
+         * 构造失败结果。
+         *
+         * @param message 提示消息
+         * @return 失败结果实例
+         */
         public static PropOperationResult failure(String message) {
             return new PropOperationResult(false, message);
         }

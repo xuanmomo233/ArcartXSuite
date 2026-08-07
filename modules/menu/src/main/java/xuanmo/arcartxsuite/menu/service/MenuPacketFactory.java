@@ -6,11 +6,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.bukkit.entity.Player;
+import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.menu.config.MenuButtonDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuLayoutType;
 import xuanmo.arcartxsuite.menu.config.MenuPageDefinition;
 
+/**
+ * 菜单数据包构建工厂，将菜单定义和会话状态组装为发送给客户端 UI 的 payload。
+ * <p>
+ * 负责收集可见按钮、分页裁剪、图标解析和行列布局计算，生成 UI 引擎所需的数据结构。
+ */
 public final class MenuPacketFactory {
 
     private static final Comparator<MenuButtonDefinition> BUTTON_ORDER =
@@ -20,12 +26,22 @@ public final class MenuPacketFactory {
     private MenuPacketFactory() {
     }
 
+    /**
+     * 构建发送给客户端 UI 的菜单 payload。
+     *
+     * @param packetId     数据包 ID
+     * @param player       目标玩家
+     * @param definition   菜单定义
+     * @param session      当前会话
+     * @param iconResolver 图标解析器
+     * @return 包含菜单元数据、按钮行和底栏行的 payload 映射
+     */
     public static Map<String, Object> buildPayload(
         String packetId,
         Player player,
         MenuDefinition definition,
         MenuSession session,
-        MenuIconResolver iconResolver
+        IconResolver iconResolver
     ) {
         LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
         MenuPageDefinition page = definition.pageAt(session.pageIndex());
@@ -111,7 +127,7 @@ public final class MenuPacketFactory {
         MenuButtonDefinition button,
         int index,
         int columns,
-        MenuIconResolver iconResolver
+        IconResolver iconResolver
     ) {
         LinkedHashMap<String, Object> row = new LinkedHashMap<>();
         row.put("id", button.id());
@@ -126,10 +142,24 @@ public final class MenuPacketFactory {
         return row;
     }
 
+    /**
+     * 将索引转换为 UI 引擎使用的行键（纯数字字符串）。
+     *
+     * @param index 行索引
+     * @return 数字字符串键
+     */
     public static String rowKey(int index) {
         return Integer.toString(index);
     }
 
+    /**
+     * 根据布局类型返回对应的运行时 UI ID。
+     *
+     * @param layout    布局类型
+     * @param panelUiId 面板 UI ID
+     * @param escUiId   ESC UI ID
+     * @return 对应布局的运行时 UI ID
+     */
     public static String runtimeUiId(MenuLayoutType layout, String panelUiId, String escUiId) {
         return layout == MenuLayoutType.ESC ? escUiId : panelUiId;
     }

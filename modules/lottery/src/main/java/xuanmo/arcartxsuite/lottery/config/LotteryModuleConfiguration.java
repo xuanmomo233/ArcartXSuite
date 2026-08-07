@@ -11,6 +11,17 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+/**
+ * Lottery 模块顶层配置。
+ * <p>
+ * 持有存储配置、奖池目录路径、共享保底组映射以及全部奖池定义。
+ * 由 {@link #load} 从主配置 YAML 与奖池目录加载。
+ *
+ * @param storage          存储配置
+ * @param poolsDirectory   奖池文件目录相对路径
+ * @param sharedPityGroups 共享保底组名到组 ID 的映射
+ * @param pools            奖池 ID 到奖池定义的映射
+ */
 public record LotteryModuleConfiguration(
     StorageConfiguration storage,
     String poolsDirectory,
@@ -18,6 +29,14 @@ public record LotteryModuleConfiguration(
     Map<String, PoolDefinition> pools
 ) {
 
+    /**
+     * 从主配置 YAML 加载模块配置，并扫描奖池目录加载全部奖池定义。
+     *
+     * @param yaml       主配置 YAML
+     * @param dataFolder 模块数据目录
+     * @param logger     日志记录器
+     * @return 解析后的 {@link LotteryModuleConfiguration} 实例
+     */
     public static LotteryModuleConfiguration load(YamlConfiguration yaml, File dataFolder, Logger logger) {
         StorageConfiguration storage = StorageConfiguration.load(yaml.getConfigurationSection("storage"));
         String poolsDir = yaml.getString("pools-directory", "lottery/pools");
@@ -71,6 +90,22 @@ public record LotteryModuleConfiguration(
         return pools;
     }
 
+    /**
+     * 存储子配置。
+     * <p>
+     * 支持 SQLite 与 MySQL 两种模式，通过 {@link #toDescriptor} 转换为
+     * {@link xuanmo.arcartxsuite.api.storage.StorageDescriptor} 供存储层使用。
+     *
+     * @param mode           存储模式（sqlite 或 mysql）
+     * @param sqliteFileName SQLite 文件名
+     * @param poolSize       连接池大小
+     * @param mysqlHost      MySQL 主机地址
+     * @param mysqlPort      MySQL 端口
+     * @param mysqlDatabase  MySQL 数据库名
+     * @param mysqlUsername  MySQL 用户名
+     * @param mysqlPassword  MySQL 密码
+     * @param tablePrefix    表名前缀
+     */
     public record StorageConfiguration(
         String mode,
         String sqliteFileName,
@@ -82,6 +117,12 @@ public record LotteryModuleConfiguration(
         String mysqlPassword,
         String tablePrefix
     ) {
+        /**
+         * 从配置节加载存储配置。
+         *
+         * @param section 配置节，为 {@code null} 时使用默认值
+         * @return 解析后的 {@link StorageConfiguration} 实例
+         */
         public static StorageConfiguration load(@Nullable ConfigurationSection section) {
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
             return new StorageConfiguration(
@@ -97,6 +138,11 @@ public record LotteryModuleConfiguration(
             );
         }
 
+        /**
+         * 将存储配置转换为存储描述符。
+         *
+         * @return 对应的 {@link xuanmo.arcartxsuite.api.storage.StorageDescriptor}
+         */
         public xuanmo.arcartxsuite.api.storage.StorageDescriptor toDescriptor() {
             boolean isMysql = "mysql".equalsIgnoreCase(mode);
             if (isMysql) {

@@ -7,6 +7,11 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.script.AriaBridge;
 
+/**
+ * Aria 脚本执行器（包私有），封装占位符预处理 + Aria 求值的流程。
+ * <p>
+ * 由 {@link DefaultScriptConditionEvaluator} 持有，负责 ARIA 类型条件与动作的实际执行。
+ */
 final class AriaScriptExecutor {
 
     private final AriaBridge ariaBridge;

@@ -23,6 +23,27 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
+    # packetHandler: update
+    # 包字段:
+    #   - packetId: 服务端回包 ID，用于客户端 Packet.send 回传
+    #   - action_token: 操作令牌，防止重复提交
+    #   - activeCategory: 当前激活的分类页名称
+    #   - categories: 分类页数据 map (key=分类索引, value=分类详情)
+    #   - categoryCount: 分类页总数
+    #   - slots: 当前分类页槽位数据 map (key=槽位索引, value=槽位详情)
+    #   - slotCount: 当前分类页槽位数量
+    #   - used: 已使用槽位数
+    #   - capacityText: 容量显示文本 (如 "9/27")
+    #   - maxCapacity: 最大容量
+    #   - canBuySlots: 是否可以购买更多槽位
+    #   - remainingSlots: 剩余可购买槽位数
+    #   - buySlotsText: 购买槽位按钮文本
+    #   - hotbar: 快捷栏 9 格数据 map
+    #   - vanillaTab: 是否显示原版背包标签页
+    #   - vanillaSlots: 原版背包槽位数据 map
+    #   - vanillaInfo: 原版物品信息面板状态
+    #   - vanillaOptions: 原版物品操作选项状态
+    #   - passwordPanel: 密码面板状态 (锁定/解锁/设置密码)
     update: |-
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']

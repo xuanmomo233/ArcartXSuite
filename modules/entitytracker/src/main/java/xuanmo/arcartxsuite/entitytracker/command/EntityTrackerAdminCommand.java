@@ -23,6 +23,12 @@ import xuanmo.arcartxsuite.entitytracker.boss.tracker.BossDamageSettlementRecord
 import xuanmo.arcartxsuite.entitytracker.boss.tracker.BossSessionRankingView;
 import xuanmo.arcartxsuite.entitytracker.boss.tracker.BossTrackerService;
 
+/**
+ * EntityTracker 模块管理命令处理器。
+ * <p>
+ * 提供状态查看、会话列表、排名查询、结算列表/详情、奖励补发等管理子命令，
+ * 供管理员通过 {@code /axs entitytracker <action>} 进行运维操作。
+ */
 public final class EntityTrackerAdminCommand implements ModuleCommandHandler {
 
     private static final DecimalFormat DF = new DecimalFormat("0.##");
@@ -35,6 +41,12 @@ public final class EntityTrackerAdminCommand implements ModuleCommandHandler {
     private final Supplier<BossTrackerService> serviceProvider;
     private final MessageProvider messages;
 
+    /**
+     * 构造管理命令处理器。
+     *
+     * @param serviceProvider Boss 追踪服务提供器
+     * @param messages        消息提供器
+     */
     public EntityTrackerAdminCommand(Supplier<BossTrackerService> serviceProvider, MessageProvider messages) {
         this.serviceProvider = serviceProvider;
         this.messages = messages;
@@ -45,16 +57,34 @@ public final class EntityTrackerAdminCommand implements ModuleCommandHandler {
         return messages.get("prefix") + messages.get(key, args);
     }
 
+    /**
+     * 返回命令标识符。
+     *
+     * @return 命令 ID
+     */
     @Override
     public String commandId() {
         return "entitytracker";
     }
 
+    /**
+     * 返回支持的子命令动作列表。
+     *
+     * @return 动作列表
+     */
     @Override
     public List<String> actions() {
         return ACTIONS;
     }
 
+    /**
+     * 处理命令执行。
+     *
+     * @param sender 命令发送者
+     * @param label  命令标签
+     * @param args   参数数组
+     * @return {@code true} 表示已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "help";
@@ -72,6 +102,13 @@ public final class EntityTrackerAdminCommand implements ModuleCommandHandler {
         return true;
     }
 
+    /**
+     * 提供命令 Tab 补全。
+     *
+     * @param sender 命令发送者
+     * @param args   参数数组
+     * @return 补全候选列表，返回 {@code null} 表示由 Bukkit 补全玩家名
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) {

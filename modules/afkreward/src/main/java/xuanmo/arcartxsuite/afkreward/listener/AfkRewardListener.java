@@ -24,6 +24,12 @@ import org.bukkit.event.vehicle.VehicleEnterEvent;
 import xuanmo.arcartxsuite.afkreward.service.AfkRewardService;
 import xuanmo.arcartxsuite.afkreward.service.AfkRewardService.ManualProtection;
 
+/**
+ * 挂机奖励模块的事件监听器，监测玩家活动以判定 AFK 状态。
+ * <p>
+ * 监听移动、交互、战斗、拾取、传送等事件，在玩家有活动时重置其 AFK 计时；
+ * 玩家退出时清理会话。
+ */
 public final class AfkRewardListener implements Listener {
 
     private final Supplier<AfkRewardService> serviceSupplier;

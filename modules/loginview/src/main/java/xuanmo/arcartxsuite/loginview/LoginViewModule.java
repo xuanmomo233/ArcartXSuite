@@ -34,6 +34,13 @@ import xuanmo.arcartxsuite.loginview.service.LoginViewService;
 import xuanmo.arcartxsuite.loginview.storage.JdbcLoginViewRepository;
 import xuanmo.arcartxsuite.loginview.storage.LoginViewRepository;
 
+/**
+ * LoginView 模块主类，提供基于 ArcartX UI 的登录/注册界面。
+ * <p>
+ * 继承 {@link AbstractAXSModule}，负责配置加载、UI 注册、仓储与服务生命周期管理，
+ * 并对外暴露 {@code /axs loginview} 子命令（状态、重载、打开、迁移、设置出生点等）。
+ * 支持 standalone 与 authme 两种认证模式，以及 AuthMe 数据迁移能力。
+ */
 public final class LoginViewModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private static final List<String> ACTIONS = List.of("help", "status", "reload", "open", "migrate-authme", "migration-commands", "set-spawn");
@@ -42,6 +49,11 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
     private LoginViewRepository repository;
     private File configFile;
 
+    /**
+     * 返回模块描述符（id=loginview，name=LoginView）。
+     *
+     * @return 模块描述符
+     */
     @Override
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("loginview")
@@ -51,11 +63,21 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
             .build();
     }
 
+    /**
+     * 返回模块命令标识。
+     *
+     * @return 命令 id {@code "loginview"}
+     */
     @Override
     public String commandId() {
         return "loginview";
     }
 
+    /**
+     * 返回模块支持的子命令动作列表。
+     *
+     * @return 动作名称列表
+     */
     @Override
     public List<String> actions() {
         return ACTIONS;

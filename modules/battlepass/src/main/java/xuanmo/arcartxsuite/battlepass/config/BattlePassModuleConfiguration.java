@@ -23,6 +23,19 @@ import xuanmo.arcartxsuite.battlepass.increment.IncrementStrategyParser;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassReward;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassTask;
 
+/**
+ * BattlePass 模块配置根 record，聚合存储、赛季、任务、奖励、UI、跨服等全部子配置。
+ * <p>
+ * 通过 {@link #load} 从 {@link FileConfiguration} 一次性解析所有配置节，
+ * 内部嵌套多个子 record 分别对应不同配置区段。
+ *
+ * @param storage     存储配置（SQLite/MySQL 连接参数）
+ * @param season      赛季配置（赛季 ID、等级上限、XP 规则、起止日期）
+ * @param tasks       任务配置（每日/每周/赛季任务列表及分配数量）
+ * @param rewards     奖励列表（按等级与档位组织的不可变列表）
+ * @param ui          UI 配置（注册开关与 UI ID）
+ * @param crossServer 跨服配置（启用开关与同步字段列表）
+ */
 public record BattlePassModuleConfiguration(
     BattlePassStorageConfiguration storage,
     BattlePassSeasonConfiguration season,
@@ -32,6 +45,14 @@ public record BattlePassModuleConfiguration(
     BattlePassCrossServerConfiguration crossServer
 ) {
 
+    /**
+     * 从 YAML 配置加载并组装完整的模块配置。
+     *
+     * @param yaml       主配置文件
+     * @param dataFolder 模块数据目录（用于加载外部任务文件），可为 null
+     * @param logger     日志记录器
+     * @return 解析后的配置实例
+     */
     public static BattlePassModuleConfiguration load(FileConfiguration yaml, @Nullable File dataFolder, Logger logger) {
         return new BattlePassModuleConfiguration(
             BattlePassStorageConfiguration.load(yaml.getConfigurationSection("storage")),
@@ -73,6 +94,18 @@ public record BattlePassModuleConfiguration(
         return new BattlePassReward(rewardId, level, tier, type, data);
     }
 
+    /**
+     * 存储配置 record，描述 SQLite/MySQL 连接参数。
+     *
+     * @param mode           存储模式（sqlite / mysql）
+     * @param sqliteFileName SQLite 文件名
+     * @param poolSize       连接池大小
+     * @param mysqlHost      MySQL 主机地址
+     * @param mysqlPort      MySQL 端口
+     * @param mysqlDatabase  MySQL 数据库名
+     * @param mysqlUsername  MySQL 用户名
+     * @param mysqlPassword  MySQL 密码
+     */
     public record BattlePassStorageConfiguration(
         String mode,
         String sqliteFileName,
@@ -83,6 +116,12 @@ public record BattlePassModuleConfiguration(
         String mysqlUsername,
         String mysqlPassword
     ) {
+        /**
+         * 从配置节加载存储配置。
+         *
+         * @param section 存储配置节，为 null 时使用默认值
+         * @return 存储配置实例
+         */
         public static BattlePassStorageConfiguration load(ConfigurationSection section) {
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
             return new BattlePassStorageConfiguration(
@@ -97,6 +136,11 @@ public record BattlePassModuleConfiguration(
             );
         }
 
+        /**
+         * 将存储配置转换为 {@link StorageDescriptor}。
+         *
+         * @return 对应的存储描述符
+         */
         public StorageDescriptor toDescriptor() {
             boolean isMysql = "mysql".equalsIgnoreCase(mode);
             if (isMysql) {
@@ -106,6 +150,16 @@ public record BattlePassModuleConfiguration(
         }
     }
 
+    /**
+     * 赛季配置 record，定义当前赛季的基本参数与时间范围。
+     *
+     * @param seasonId    赛季唯一标识
+     * @param displayName 赛季显示名称
+     * @param maxLevel    赛季最大等级
+     * @param xpPerLevel  每级所需经验值
+     * @param startDate   赛季开始日期
+     * @param endDate     赛季结束日期
+     */
     public record BattlePassSeasonConfiguration(
         String seasonId,
         String displayName,
@@ -114,6 +168,12 @@ public record BattlePassModuleConfiguration(
         LocalDate startDate,
         LocalDate endDate
     ) {
+        /**
+         * 从配置节加载赛季配置。
+         *
+         * @param section 赛季配置节，为 null 时使用默认值
+         * @return 赛季配置实例
+         */
         public static BattlePassSeasonConfiguration load(ConfigurationSection section) {
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
             return new BattlePassSeasonConfiguration(
@@ -135,6 +195,15 @@ public record BattlePassModuleConfiguration(
         }
     }
 
+    /**
+     * 任务配置 record，包含每日/每周/赛季三类任务模板及分配数量。
+     *
+     * @param daily       每日任务模板列表
+     * @param weekly      每周任务模板列表
+     * @param season      赛季任务模板列表
+     * @param dailyCount  每日分配任务数量
+     * @param weeklyCount 每周分配任务数量
+     */
     public record BattlePassTasksConfiguration(
         List<BattlePassTask> daily,
         List<BattlePassTask> weekly,
@@ -142,6 +211,14 @@ public record BattlePassModuleConfiguration(
         int dailyCount,
         int weeklyCount
     ) {
+        /**
+         * 从配置节加载任务配置，优先从外部任务文件读取。
+         *
+         * @param section    任务配置节，为 null 时使用默认值
+         * @param dataFolder 模块数据目录，用于定位外部任务文件
+         * @param logger     日志记录器
+         * @return 任务配置实例
+         */
         public static BattlePassTasksConfiguration load(ConfigurationSection section, @Nullable File dataFolder, Logger logger) {
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
             String tasksDirectory = section.getString("tasks-directory", "tasks");
@@ -225,6 +302,11 @@ public record BattlePassModuleConfiguration(
             );
         }
 
+        /**
+         * 返回所有任务模板的合并列表（每日 + 每周 + 赛季）。
+         *
+         * @return 不可变的全部任务列表
+         */
         public List<BattlePassTask> all() {
             List<BattlePassTask> all = new ArrayList<>();
             all.addAll(daily);
@@ -234,6 +316,13 @@ public record BattlePassModuleConfiguration(
         }
     }
 
+    /**
+     * UI 配置 record，控制模块 UI 的注册行为与 UI ID。
+     *
+     * @param registerOnEnable 启用时是否自动注册 UI
+     * @param mainId           主界面 UI ID
+     * @param tasksId          任务界面 UI ID
+     */
     public record BattlePassUiConfiguration(
         boolean registerOnEnable,
         String mainId,
@@ -249,6 +338,12 @@ public record BattlePassModuleConfiguration(
         }
     }
 
+    /**
+     * 跨服配置 record，控制跨服数据同步行为。
+     *
+     * @param enabled    是否启用跨服同步
+     * @param syncFields 需同步的字段列表（progress / task-progress / claimed-rewards）
+     */
     public record BattlePassCrossServerConfiguration(
         boolean enabled,
         List<String> syncFields

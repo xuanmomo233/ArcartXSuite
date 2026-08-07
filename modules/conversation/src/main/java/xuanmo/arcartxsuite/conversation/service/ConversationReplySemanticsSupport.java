@@ -4,6 +4,11 @@ import ink.ptms.chemdah.core.conversation.PlayerReply;
 import java.util.Locale;
 import java.util.Map;
 
+/**
+ * 对话回复语义支持工具（包私有），解析 Chemdah {@link PlayerReply} 的类型与格式。
+ * <p>
+ * 用于判定回复是 talk、option 还是其他类型，驱动 UI 渲染对应交互控件。
+ */
 final class ConversationReplySemanticsSupport {
 
     private ConversationReplySemanticsSupport() {

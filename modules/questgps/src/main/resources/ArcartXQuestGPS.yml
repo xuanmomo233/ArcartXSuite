@@ -1,3 +1,4 @@
+# 配置文件版本号（用于迁移脚本识别版本，勿手动修改）
 config-version: 1
 # AXS QuestGPS
 # 作用: 将 Chemdah 任务展示为 ArcartX 菜单，支持任务分类、接取/放弃、目标追踪、奖励预览、粒子导航和 AXMap 临时目标联动。

@@ -16,6 +16,50 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
+    # packetHandler: update
+    # 包字段:
+    #   - packetId: 包标识符（'AXS_WAREHOUSE'）
+    #   - action_token: 操作令牌（防重放）
+    #   - ownerType: 仓库所有者类型（personal / shared）
+    #   - ownerId: 所有者 ID
+    #   - warehouseId: 仓库 ID
+    #   - warehouseName: 仓库名称
+    #   - categoryId: 当前分类 ID
+    #   - search: 搜索关键词
+    #   - categories: 分类列表
+    #   - categoryTexts: 分类显示文本
+    #   - personalWarehouses: 个人仓库列表
+    #   - personalWarehouseTexts: 个人仓库显示文本
+    #   - sharedWarehouses: 共享仓库列表
+    #   - sharedWarehouseStorageTexts: 共享仓库存储显示文本
+    #   - slots: 仓库槽位数据
+    #   - selectedSlot: 当前选中的槽位索引
+    #   - selectedItem: 当前选中的物品
+    #   - backpack: 玩家背包数据
+    #   - unlocked: 二级密码是否已解锁
+    #   - hasPassword: 是否已设置二级密码
+    #   - readOnly: 是否只读模式
+    #   - sharedEditMode: 共享仓库是否处于编辑模式
+    #   - sharedCanEdit: 当前玩家是否有编辑权限
+    #   - lockOwner: 编辑锁持有者
+    #   - page: 当前页码
+    #   - pageTotal: 总页数
+    #   - pageText: 页码显示文本
+    #   - capacityText: 容量显示文本
+    #   - used: 已使用容量
+    #   - capacity: 总容量
+    #   - level: 仓库等级
+    #   - canUpgrade: 是否可升级
+    #   - nextUpgradeText: 下一级升级信息文本
+    #   - nextLevel: 下一级等级
+    #   - nextCapacity: 下一级容量
+    #   - usedSlots: 已使用的槽位集合
+    #   - matchedSlots: 搜索匹配的槽位集合
+    #   - slotCount: 槽位总数
+    #   - pageSize: 每页槽位数量
+    #   - maxPersonalCount: 个人仓库最大数量（用于动态创建控件）
+    #   - maxSharedCount: 共享仓库最大数量
+    #   - maxCategoryCount: 分类最大数量
     update: |-
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']

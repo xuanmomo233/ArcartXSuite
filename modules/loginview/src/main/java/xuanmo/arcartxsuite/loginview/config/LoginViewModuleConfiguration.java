@@ -6,6 +6,25 @@ import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
+/**
+ * LoginView 模块的不可变配置聚合体，从 {@code ArcartXLoginView.yml} 解析而来。
+ * <p>
+ * 包含调试开关、认证模式、QQ 绑定、UI、服务条款、安全、存储、AuthMe 迁移、
+ * 消息文本与登录出生点等子配置；各子配置以嵌套 record 形式组织，
+ * 通过 {@link #load(FileConfiguration, Logger)} 统一加载。
+ *
+ * @param debug         是否开启调试日志
+ * @param authMode      认证模式（standalone / authme）
+ * @param bypassWelcome 免登欢迎语配置
+ * @param qqBinding     QQ 绑定配置
+ * @param ui            UI 相关配置
+ * @param termsOfService 服务条款配置
+ * @param security      安全策略配置
+ * @param storage       存储后端配置
+ * @param migration     AuthMe 数据迁移配置
+ * @param messages      消息文本配置
+ * @param spawnOnLogin  登录后传送出生点配置
+ */
 public record LoginViewModuleConfiguration(
     boolean debug,
     AuthMode authMode,
@@ -20,10 +39,25 @@ public record LoginViewModuleConfiguration(
     SpawnOnLoginConfiguration spawnOnLogin
 ) {
 
+    /**
+     * 从主配置文件加载模块配置，消息节取自 {@code messages} 段。
+     *
+     * @param configuration Bukkit 配置文件
+     * @param logger        日志器，用于记录回退警告
+     * @return 解析后的配置实例
+     */
     public static LoginViewModuleConfiguration load(FileConfiguration configuration, Logger logger) {
         return load(configuration, configuration.getConfigurationSection("messages"), logger);
     }
 
+    /**
+     * 从主配置文件加载模块配置，消息节由调用方显式提供。
+     *
+     * @param configuration   Bukkit 配置文件
+     * @param messagesSection 消息配置节，可为 {@code null}
+     * @param logger          日志器，用于记录回退警告
+     * @return 解析后的配置实例
+     */
     public static LoginViewModuleConfiguration load(
             FileConfiguration configuration,
             ConfigurationSection messagesSection,
@@ -91,6 +125,11 @@ public record LoginViewModuleConfiguration(
         return section == null ? fallback : section.getDouble(path, fallback);
     }
 
+    /**
+     * 免登欢迎语配置（玩家已验证时展示的提示文本）。
+     *
+     * @param message 欢迎语，支持颜色代码
+     */
     public record BypassWelcomeConfiguration(
         String message
     ) {
@@ -101,6 +140,14 @@ public record LoginViewModuleConfiguration(
         }
     }
 
+    /**
+     * QQ 绑定配置，控制微软/LittleSkin 账号是否强制绑定 QQ。
+     *
+     * @param enabled             是否启用 QQ 绑定流程
+     * @param microsoftRequireBind 微软账号是否强制绑定 QQ
+     * @param littleskinRequireBind LittleSkin 账号是否强制绑定 QQ
+     * @param bindPrompt          未绑定时向玩家展示的提示文本列表
+     */
     public record QqBindingConfiguration(
         boolean enabled,
         boolean microsoftRequireBind,
@@ -121,6 +168,9 @@ public record LoginViewModuleConfiguration(
         }
     }
 
+    /**
+     * 认证模式枚举：{@code STANDALONE}（独立存储）或 {@code AUTHME}（委托 AuthMe）。
+     */
     public enum AuthMode {
         AUTHME("authme"),
         STANDALONE("standalone");
@@ -131,10 +181,22 @@ public record LoginViewModuleConfiguration(
             this.configKey = configKey;
         }
 
+        /**
+         * 该模式在配置文件中使用的键名。
+         *
+         * @return 配置键名
+         */
         public String configKey() {
             return configKey;
         }
 
+        /**
+         * 从配置原始字符串解析认证模式，无法识别时回退为 {@link #STANDALONE}。
+         *
+         * @param rawValue 原始配置值
+         * @param logger   日志器，非 {@code null} 时记录回退警告
+         * @return 解析得到的认证模式
+         */
         public static AuthMode parse(String rawValue, Logger logger) {
             String normalized = rawValue == null ? "" : rawValue.trim().toLowerCase(Locale.ROOT);
             for (AuthMode mode : values()) {
@@ -149,6 +211,17 @@ public record LoginViewModuleConfiguration(
         }
     }
 
+    /**
+     * UI 相关配置，控制登录界面的注册 ID、文件路径与打开行为。
+     *
+     * @param uiId              UI 注册标识
+     * @param packetId          客户端包通道标识
+     * @param uiFile            UI 配置文件名（位于 {@code ui/} 目录下）
+     * @param registerUiOnEnable 启用时是否自动注册 UI
+     * @param overwriteUiFiles  是否覆盖已存在的 UI 文件
+     * @param openDelayTicks    打开 UI 前的延迟（tick）
+     * @param closeOnLogin      登录成功后是否自动关闭 UI
+     */
     public record UiConfiguration(
         String uiId,
         String packetId,
@@ -170,11 +243,31 @@ public record LoginViewModuleConfiguration(
             );
         }
 
+        /**
+         * 返回 UI 文件相对于 {@code ui/} 目录的路径。
+         *
+         * @return 相对路径字符串
+         */
         public String relativeUiPath() {
             return "ui/" + uiFile;
         }
     }
 
+    /**
+     * 安全策略配置，涵盖密码长度、尝试次数、锁定行为与 session 过期。
+     *
+     * @param minPasswordLength         最小密码长度
+     * @param maxPasswordLength         最大密码长度
+     * @param maxAttempts               最大密码错误尝试次数
+     * @param kickOnMaxAttempts         达到最大尝试次数后是否踢出
+     * @param lockMovement              未登录时是否锁定移动
+     * @param lockChat                  未登录时是否锁定聊天
+     * @param lockCommands              未登录时是否锁定命令
+     * @param allowCommandsPrefix       允许执行的命令前缀列表（逗号分隔）
+     * @param rehashMigratedPasswordOnLogin 迁移账号登录时是否重新哈希密码
+     * @param sessionTtlMinutes         session 有效期（分钟），0 表示不持久化
+     * @param sessionStrictIp           session 是否严格校验 IP
+     */
     public record SecurityConfiguration(
         int minPasswordLength,
         int maxPasswordLength,
@@ -205,6 +298,18 @@ public record LoginViewModuleConfiguration(
         }
     }
 
+    /**
+     * 存储后端配置，支持 SQLite 与 MySQL 两种方言。
+     *
+     * @param dialect        存储方言
+     * @param sqliteFileName SQLite 文件名
+     * @param mysqlHost      MySQL 主机地址
+     * @param mysqlPort      MySQL 端口
+     * @param mysqlDatabase  MySQL 数据库名
+     * @param mysqlUsername  MySQL 用户名
+     * @param mysqlPassword  MySQL 密码
+     * @param tablePrefix    表名前缀
+     */
     public record StorageConfiguration(
         StorageDialect dialect,
         String sqliteFileName,
@@ -228,6 +333,11 @@ public record LoginViewModuleConfiguration(
             );
         }
 
+        /**
+         * 将本配置转换为宿主统一的 {@link xuanmo.arcartxsuite.api.storage.StorageDescriptor}。
+         *
+         * @return 存储描述符
+         */
         public xuanmo.arcartxsuite.api.storage.StorageDescriptor toDescriptor() {
             if (dialect == StorageDialect.MYSQL) {
                 return xuanmo.arcartxsuite.api.storage.StorageDescriptor.mysql(
@@ -237,6 +347,9 @@ public record LoginViewModuleConfiguration(
         }
     }
 
+    /**
+     * 存储方言枚举：{@code SQLITE} 或 {@code MYSQL}。
+     */
     public enum StorageDialect {
         SQLITE("sqlite"),
         MYSQL("mysql");
@@ -247,15 +360,45 @@ public record LoginViewModuleConfiguration(
             this.configKey = configKey;
         }
 
+        /**
+         * 该方言在配置文件中使用的键名。
+         *
+         * @return 配置键名
+         */
         public String configKey() {
             return configKey;
         }
 
+        /**
+         * 从配置原始字符串解析存储方言，非 {@code mysql} 一律回退为 {@link #SQLITE}。
+         *
+         * @param rawValue 原始配置值
+         * @return 解析得到的存储方言
+         */
         public static StorageDialect parse(String rawValue) {
             return "mysql".equalsIgnoreCase(rawValue == null ? "" : rawValue.trim()) ? MYSQL : SQLITE;
         }
     }
 
+    /**
+     * AuthMe 数据迁移配置，描述源数据库连接与列映射关系。
+     *
+     * @param jdbcUrl                 源数据库 JDBC 地址
+     * @param username                源数据库用户名
+     * @param password                源数据库密码
+     * @param table                   源数据表名
+     * @param nameColumn              玩家名列
+     * @param realNameColumn          真实名列
+     * @param passwordColumn          密码哈希列
+     * @param saltColumn              盐列
+     * @param lastIpColumn            最后登录 IP 列
+     * @param lastLoginColumn         最后登录时间列
+     * @param registrationDateColumn  注册时间列
+     * @param registrationIpColumn    注册 IP 列
+     * @param emailColumn             邮箱列
+     * @param importedHashAlgorithm   导入后标注的哈希算法
+     * @param batchSize               进度上报的批次大小
+     */
     public record MigrationConfiguration(
         String jdbcUrl,
         String username,
@@ -294,6 +437,11 @@ public record LoginViewModuleConfiguration(
         }
     }
 
+    /**
+     * 服务条款配置。
+     *
+     * @param enabled 是否启用服务条款确认
+     */
     public record TermsOfServiceConfiguration(
         boolean enabled
     ) {
@@ -304,6 +452,17 @@ public record LoginViewModuleConfiguration(
         }
     }
 
+    /**
+     * 登录后传送出生点配置。
+     *
+     * @param enabled 是否启用登录后传送
+     * @param world   目标世界名
+     * @param x       X 坐标
+     * @param y       Y 坐标
+     * @param z       Z 坐标
+     * @param yaw     偏航角
+     * @param pitch   俯仰角
+     */
     public record SpawnOnLoginConfiguration(
         boolean enabled,
         String world,
@@ -326,6 +485,24 @@ public record LoginViewModuleConfiguration(
         }
     }
 
+    /**
+     * 消息文本配置，集中管理 LoginView 各场景下的玩家可见提示。
+     *
+     * @param titleLogin        登录界面标题
+     * @param titleRegister     注册界面标题
+     * @param loginSuccess      登录成功提示
+     * @param registerSuccess   注册成功提示
+     * @param changeSuccess     改密成功提示
+     * @param passwordMismatch  两次密码不一致提示
+     * @param passwordTooShort  密码过短提示
+     * @param passwordTooLong   密码过长提示
+     * @param wrongPassword     密码错误提示
+     * @param alreadyRegistered 已注册提示
+     * @param notRegistered     未注册提示
+     * @param authmeUnavailable AuthMe 不可用提示
+     * @param locked            未登录锁定提示
+     * @param kicked            尝试次数过多踢出提示
+     */
     public record Messages(
         String titleLogin,
         String titleRegister,

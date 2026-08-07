@@ -9,6 +9,11 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.attribute.CraneAttributeBridge;
 
+/**
+ * {@link CraneAttributeBridge} 的默认实现，桥接 CraneAttribute 属性插件。
+ * <p>
+ * CraneAttribute 为可选依赖，运行时通过插件管理器检测可用性。
+ */
 public final class DefaultCraneAttributeBridge implements CraneAttributeBridge {
 
     private static final String PLUGIN_NAME = "CraneAttribute";

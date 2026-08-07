@@ -9,6 +9,13 @@ import java.util.Map;
 import java.util.UUID;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRankingSettings;
 
+/**
+ * Boss 伤害排名追踪器，属于 entitytracker 模块的 boss 伤害排名子系统。
+ * <p>
+ * 维护单个 Boss 会话中所有玩家的伤害贡献记录，按伤害降序排列，
+ * 并根据最低伤害门槛筛选入榜玩家，生成不可变的排名快照。
+ * 内部使用脏标记和参考血量缓存机制避免重复计算。
+ */
 final class BossDamageRankingTracker {
 
     private static final Comparator<Contribution> CONTRIBUTION_ORDER = Comparator
@@ -31,10 +38,22 @@ final class BossDamageRankingTracker {
         this.cachedSnapshot = BossDamageRankingSnapshot.empty(this.settings.enabled(), this.settings.maxEntries());
     }
 
+    /**
+     * 返回当前排名设置。
+     *
+     * @return 排名设置
+     */
     public BossDamageRankingSettings settings() {
         return settings;
     }
 
+    /**
+     * 记录玩家对 Boss 造成的伤害。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param playerName 玩家名称
+     * @param amount     伤害量（须大于 0）
+     */
     public void recordDamage(UUID playerUuid, String playerName, double amount) {
         if (!settings.enabled() || playerUuid == null || amount <= 0.0D) {
             return;
@@ -48,6 +67,13 @@ final class BossDamageRankingTracker {
         dirty = true;
     }
 
+    /**
+     * 记录玩家承受 Boss 的伤害。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param playerName 玩家名称
+     * @param amount     承伤量（须大于 0）
+     */
     public void recordTakenDamage(UUID playerUuid, String playerName, double amount) {
         if (!settings.enabled() || playerUuid == null || amount <= 0.0D) {
             return;
@@ -61,6 +87,14 @@ final class BossDamageRankingTracker {
         dirty = true;
     }
 
+    /**
+     * 生成当前排名快照，使用参考血量进行门槛判断。
+     * <p>
+     * 当数据未变更且参考血量未变化时返回缓存的快照。
+     *
+     * @param referenceHealth 参考血量（通常为 Boss 最大血量）
+     * @return 排名快照
+     */
     public BossDamageRankingSnapshot snapshot(double referenceHealth) {
         if (!settings.enabled()) {
             cachedSnapshot = BossDamageRankingSnapshot.empty(false, settings.maxEntries());

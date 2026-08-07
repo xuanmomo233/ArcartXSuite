@@ -16,11 +16,30 @@ import xuanmo.arcartxsuite.title.model.PlayerOwnedTitle;
 import xuanmo.arcartxsuite.title.model.PlayerTitleState;
 import xuanmo.arcartxsuite.title.model.ResolvedTitleState;
 
+/**
+ * 称号菜单数据包工厂。
+ * <p>
+ * 将模块配置、玩家状态与解析状态组装为 UI 通讯数据包，
+ * 包含称号列表、分组、品质、套装、已装备摘要、选中称号详情等字段，
+ * 供客户端 UI 渲染称号菜单。
+ * 属于 title 模块服务层。
+ */
 public final class TitleMenuPacketFactory {
 
     private TitleMenuPacketFactory() {
     }
 
+    /**
+     * 构建称号菜单数据包。
+     *
+     * @param configuration       模块配置
+     * @param state               玩家称号状态
+     * @param resolvedState       解析后的称号状态
+     * @param selectedTitleId     当前选中的称号 ID
+     * @param accessibleGroupIds  玩家可访问的分组 ID 集合
+     * @param now                 当前时间
+     * @return UI 通讯数据包
+     */
     public static Map<String, Object> build(
         TitleModuleConfiguration configuration,
         PlayerTitleState state,

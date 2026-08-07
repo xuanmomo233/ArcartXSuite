@@ -107,6 +107,11 @@ ui:
       }
     open: "Packet.send('vanilla_crafting', 'request_recipe_book')"
   packetHandler:
+    # packetHandler: recipe_book_toggle
+    # 包字段:
+    #   - open: 配方书是否展开 (true/false)
+    #   - recipes: 全部配方数据 map (key=配方名, value=配方详情)
+    #   - catIcons: 分类图标 map (key=all/tools/building/food/redstone/toggle, value=物品JSON)
     recipe_book_toggle: |-
       var.recipeBookOpen = packet['open']
       if(!var.recipeBookOpen){

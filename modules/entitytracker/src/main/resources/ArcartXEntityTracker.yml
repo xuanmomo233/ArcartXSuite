@@ -1,4 +1,7 @@
-config-version: 1
+# 文件用途: EntityTracker 模块主配置文件，控制 Boss 追踪、攻击目标 HUD、掉落记录/分配、跨服排行等全部功能开关与参数。
+# 重载命令: /axs entitytracker reload
+
+config-version: 1  # 配置文件版本号，用于迁移脚本判断升级路径
 # AXS EntityTracker
 # 作用: 跟踪指定 MythicMob，向 HUD/聊天卡片同步血量、距离、目标、存活时间、实时伤害排行和死亡结算结果；同时显示玩家最近攻击目标 HUD。
 # 新增: Boss掉落记录、掉落分配系统、跨服Boss排行功能
@@ -8,11 +11,11 @@ config-version: 1
 # 关联资源: ui/boss_tracker.yml、ui/attack_target_hud.yml
 # 福利模块: 消费额度满¥150获得授权
 
-boss:
-  settings:
-    refresh-interval-ticks: 5
-    default-viewer-range: 48.0
-    max-visible-bars: 5
+boss:                           # Boss 追踪相关配置
+  settings:                     # Boss 追踪全局设置
+    refresh-interval-ticks: 5   # 数据刷新间隔（tick，20tick=1秒）
+    default-viewer-range: 48.0  # 默认查看者范围（格），超出此距离的玩家不显示 Boss HUD
+    max-visible-bars: 5         # 最大同时显示的血条数量
     # sort-mode 排序模式:
     # spawn-order 生成顺序；distance 距离优先；health-percent 血量百分比优先；priority 配置优先级；hybrid 混合排序。
     sort-mode: "spawn-order"
@@ -22,30 +25,30 @@ boss:
     # ui-id:
     #   - "AXS:boss_tracker"
     #   - "AXS:boss_tracker_alt"
-    ui-id: "AXS:boss_tracker"
-    register-ui-on-enable: true
-    overwrite-ui-file: false
+    ui-id: "AXS:boss_tracker"   # Boss 追踪 HUD 的 UI ID
+    register-ui-on-enable: true # 模块启用时是否自动注册 UI
+    overwrite-ui-file: false    # 是否覆盖已有的 UI 文件（false=保留用户修改）
 
   # Boss 定义目录，路径相对模块数据目录。
   # 目录下每个 *.yml 文件为一个 Boss 追踪配置，文件名（去掉 .yml）即为 MythicMob ID。
   bosses-directory: "bosses"
 
-attack-target:
-  settings:
-    debug: false
-    refresh-interval-ticks: 5
-    target-timeout-ms: 3000
-    max-view-distance: 48.0
+attack-target:                  # 攻击目标 HUD 相关配置
+  settings:                     # 攻击目标 HUD 全局设置
+    debug: false                # 是否开启调试模式（输出额外日志）
+    refresh-interval-ticks: 5   # 数据刷新间隔（tick）
+    target-timeout-ms: 3000     # 目标超时时间（毫秒），超过此时间未攻击则关闭 HUD
+    max-view-distance: 48.0     # 最大查看距离（格），超出不显示目标 HUD
     # 目标 HUD 的 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
     # ui-id: "AXS:attack_target_hud"
     # 多 UI 示例：
     # ui-id:
     #   - "AXS:attack_target_hud"
     #   - "AXS:attack_target_hud_alt"
-    ui-id: "AXS:attack_target_hud"
-    register-ui-on-enable: true
-    overwrite-ui-file: false
-    blacklist:
+    ui-id: "AXS:attack_target_hud"  # 攻击目标 HUD 的 UI ID
+    register-ui-on-enable: true     # 模块启用时是否自动注册 UI
+    overwrite-ui-file: false        # 是否覆盖已有的 UI 文件
+    blacklist:                      # 黑名单配置：命中的实体不显示 target HUD
       # MythicMob ID 黑名单，大小写不敏感。命中后不显示 EntityTracker target HUD。
       mythic-mob-ids: []
       # Bukkit EntityType 黑名单，例如 ZOMBIE、PLAYER、ARMOR_STAND。
@@ -53,18 +56,18 @@ attack-target:
     entitytracker-link:
       # true 时，bosses 中 enabled=true 的 Boss 默认不触发 target HUD。
       ignore-configured-bosses: true
-    title-format: "&c{display_name}"
-    subtitle-format: "&7{entity_type_name} &8| &c{health}/{max_health} &8| &f{distance_text}"
+    title-format: "&c{display_name}"  # 标题格式模板，{display_name}=实体显示名
+    subtitle-format: "&7{entity_type_name} &8| &c{health}/{max_health} &8| &f{distance_text}"  # 副标题格式模板
 
 # 跨服通道开关；Redis/Proxy 连接与鉴权见宿主 plugins/ArcartXSuite/config.yml 的 cross-server 节。
-cross-server:
-  enabled: false
+cross-server:                   # 跨服通道配置
+  enabled: false                # 是否启用跨服功能（Redis/Proxy 连接配置见宿主 config.yml）
 
 # 新功能配置 (1.1.0-beta)
-new-features:
+new-features:                   # 新功能配置区（1.1.0-beta 新增）
   # Boss掉落记录系统
-  drop-recording:
-    enabled: true
+  drop-recording:               # Boss 掉落记录系统配置
+    enabled: true               # 是否启用掉落记录
     # 数据保留天数，超过此天数的记录将被自动清理
     retention-days: 30
     # 是否启用掉落统计
@@ -73,16 +76,16 @@ new-features:
     statistics-update-interval: 300
 
   # 掉落分配系统
-  drop-allocation:
-    enabled: true
+  drop-allocation:              # 掉落分配系统配置
+    enabled: true                # 是否启用掉落分配
     # 默认分配模式: dkp/roll/priority/manual
     default-mode: "roll"
     # 分配超时时间(秒)
     allocation-timeout: 60
     
     # DKP积分系统
-    dkp:
-      enabled: true
+    dkp:                       # DKP 积分系统配置
+      enabled: true            # 是否启用 DKP 积分系统
       # Boss击杀基础积分
       base-earn-points: 10
       # 伤害排名积分奖励
@@ -94,8 +97,8 @@ new-features:
         5: 3   # 第五名额外奖励
     
     # ROLL随机系统
-    roll:
-      enabled: true
+    roll:                      # ROLL 随机分配系统配置
+      enabled: true            # 是否启用 ROLL 系统
       # ROLL超时时间(秒)
       timeout-seconds: 30
       # ROLL范围: 1-100
@@ -104,8 +107,8 @@ new-features:
       allow-pass: true
     
     # 优先级分配系统
-    priority:
-      enabled: true
+    priority:                  # 优先级分配系统配置
+      enabled: true            # 是否启用优先级分配系统
       # 职业优先级配置
       class-priority:
         tank: 1    # 坦克职业优先级最高
@@ -119,8 +122,8 @@ new-features:
         common: 4     # 普通装备
 
   # 跨服 Boss 排行：Boss 死亡结算后同步各服最高伤害至共享 SQLite，经统一 CrossServer SDK 广播。
-  cross-server-ranking:
-    enabled: false
+  cross-server-ranking:         # 跨服 Boss 排行配置
+    enabled: false              # 是否启用跨服排行
     # 排行榜更新间隔(秒)，预留
     update-interval: 60
     # 排行榜类型（预留）
@@ -130,11 +133,11 @@ new-features:
       - "kills"
       - "participate"
       - "server"
-    max-entries: 50
+    max-entries: 50            # 排行榜最大记录条数
 
   # 排行榜定时奖励全局设置
   # 每个 Boss 的具体奖励（ranks + actions）在各自的 Boss yml 文件中配置。
-  ranking-rewards:
+  ranking-rewards:             # 排行榜定时奖励全局设置
     # 周奖励调度 (每周一 00:00)
     schedule:
       weekly:
@@ -174,7 +177,7 @@ database:
   mysql:
     host: "localhost"
     port: 3306
-    database: "arcartxsuite"
+    database: "arcartxsuite"      # 数据库名称
     username: "root"
     password: ""
     # 连接池配置

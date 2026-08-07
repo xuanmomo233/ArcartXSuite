@@ -1,15 +1,40 @@
+# 文件用途: 原神风格祈愿（gacha）抽奖界面（lottery_gacha）的 UI 配置。
+# 界面包含卡池导航、UP 物品展示、资源计数、祈愿操作、单抽/十连结果展示，
+# 以及历史记录、卡池详情、尘辉兑换等弹窗面板。
+# 通过 packetHandler 接收服务端数据包，驱动界面显示与交互。
 ui:
   match:
-    - "AXS:lottery_gacha"
-  isHud: false
-  through: false
-  escClose: true
-  background: true
-  closeDied: false
-  show: true
-  screenScale: true
-  defaultOpen: true
+    - "AXS:lottery_gacha"  # 匹配的界面 ID
+  isHud: false  # 非 HUD，为弹出式菜单界面
+  through: false  # 不穿透点击
+  escClose: true  # 按 ESC 可关闭界面
+  background: true  # 渲染原版背景
+  closeDied: false  # 玩家死亡时不关闭界面
+  show: true  # 界面可见
+  screenScale: true  # 启用屏幕等比缩放
+  defaultOpen: true  # 界面打开时自动触发 open 事件
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 数据包 ID，用于回传操作指令
+    #   - poolName: 当前卡池名称
+    #   - poolType: 卡池类型（CHARACTER/WEAPON 等）
+    #   - poolBanner: 卡池横幅图片路径
+    #   - poolDescription: 卡池描述文本
+    #   - upItemName: UP 物品名称
+    #   - upItemStar: UP 物品星级（3/4/5）
+    #   - upItemDesc: UP 物品描述
+    #   - upItemIcon: UP 物品图标 itemJson（由服务端 IconResolver 序列化的物品字符串）
+    #   - guaranteeDesc: 保底机制说明文本
+    #   - remainingTime: 卡池剩余时间
+    #   - fateCount: 纠缠之缘数量（祈愿券）
+    #   - primogemCount: 原石数量（货币）
+    #   - stardustCount: 星尘数量（兑换货币）
+    #   - pity4: 4星保底当前计数
+    #   - pity5: 5星保底当前计数
+    #   - poolList: 可用卡池列表
+    #   - currentPoolIndex: 当前选中的卡池索引
+    #   - action_token: 操作令牌，用于防重放校验
     init: |-
       var.packetId = packet['packetId']
       var.poolName = packet['poolName']
@@ -30,6 +55,8 @@ ui:
       var.poolList = packet['poolList']
       var.currentPoolIndex = packet['currentPoolIndex']
       var.actionToken = packet['action_token']
+    # packetHandler: update
+    # 包字段: 与 init 相同，用于刷新界面数据
     update: |-
       var.packetId = packet['packetId']
       var.poolName = packet['poolName']
@@ -50,6 +77,11 @@ ui:
       var.poolList = packet['poolList']
       var.currentPoolIndex = packet['currentPoolIndex']
       var.actionToken = packet['action_token']
+    # packetHandler: history
+    # 包字段:
+    #   - historyPoolName: 历史记录所属卡池名称
+    #   - historyCount: 历史记录条数
+    #   - historyRows: 历史记录行数据列表（每行含 timeText/summary）
     history: |-
       var.historyPoolName = packet['historyPoolName']
       var.historyCount = packet['historyCount']
@@ -63,6 +95,17 @@ ui:
         e = val.历史列表['历史项'].copy('历史项' + key)
         e.entryKey = key
       }
+    # packetHandler: details
+    # 包字段:
+    #   - detailPoolName: 详情卡池名称
+    #   - detailPity5: 5星保底抽数
+    #   - detailPity4: 4星保底抽数
+    #   - detailBase5Rate: 5星基础概率
+    #   - detailBase4Rate: 4星基础概率
+    #   - detailUpRate: UP 物品概率
+    #   - detailGuaranteeDesc: 保底机制说明
+    #   - detailCount: 详情列表条数
+    #   - detailRows: 详情行数据列表（每行含 name/rarity/weight）
     details: |-
       var.detailPoolName = packet['detailPoolName']
       var.detailPity5 = packet['detailPity5']
@@ -82,6 +125,11 @@ ui:
         e = val.详情列表['详情项'].copy('详情项' + key)
         e.entryKey = key
       }
+    # packetHandler: exchange
+    # 包字段:
+    #   - exchangeStardust: 可用星尘余额
+    #   - exchangeCount: 兑换列表条数
+    #   - exchangeRows: 兑换行数据列表（每行含 name）
     exchange: |-
       var.exchangeStardust = packet['exchangeStardust']
       var.exchangeCount = packet['exchangeCount']
@@ -96,6 +144,7 @@ ui:
         e.entryKey = key
       }
   action:
+    # load 事件: 界面加载时初始化所有变量默认值和稀有度颜色映射表
     load: |-
       var.packetId = 'AXS_LOTTERY_GACHA'
       var.poolName = '等待同步'
@@ -116,13 +165,13 @@ ui:
       var.poolList = {}
       var.currentPoolIndex = 0
       var.rarityColors = {}
-      var.rarityColors['COMMON']    = '192,195,198,255'
-      var.rarityColors['UNCOMMON']  = '176,195,217,255'
-      var.rarityColors['RARE']      = '94,152,217,255'
-      var.rarityColors['EPIC']      = '136,71,255,255'
-      var.rarityColors['LEGENDARY'] = '235,75,75,255'
-      var.rarityColors['MYTHIC']    = '255,215,0,255'
-      var.rarityColors[none] = '128,128,128,255'
+      var.rarityColors['COMMON']    = '192,195,198,255'  # 普通 - 灰色
+      var.rarityColors['UNCOMMON']  = '176,195,217,255'  # 不凡 - 浅蓝灰
+      var.rarityColors['RARE']      = '94,152,217,255'   # 稀有 - 蓝色
+      var.rarityColors['EPIC']      = '136,71,255,255'   # 史诗 - 紫色
+      var.rarityColors['LEGENDARY'] = '235,75,75,255'    # 传说 - 红色
+      var.rarityColors['MYTHIC']    = '255,215,0,255'    # 神话 - 金色
+      var.rarityColors[none] = '128,128,128,255'         # 默认 - 中灰色
       var.showHistory = false
       var.showDetails = false
       var.showExchange = false
@@ -132,13 +181,17 @@ ui:
       val.历史面板.visible = false
       val.详情面板.visible = false
       val.兑换面板.visible = false
+    # open 事件: 界面打开时显示祈愿主界面，隐藏结果面板
     open: |-
       val.祈愿界面.visible = true
       val.单抽结果.visible = false
       val.十连结果.visible = false
+    # tick 事件: 每帧执行（当前为空，预留）
     tick: |-
 
+# ─── 控件树 ────────────────────────────────────────
 controls:
+  # 背景层: 全屏渐变天空背景 + 星空噪点纹理
   背景层:
     type: Adaptive
     attribute:
@@ -164,6 +217,7 @@ controls:
           point: ~stretch_all
           normal: ~255,255,255,10
 
+  # 左侧导航: 卡池选择导航栏，列出所有可用卡池供玩家切换
   左侧导航:
     type: Adaptive
     attribute:
@@ -253,6 +307,7 @@ controls:
                       texts: "var.poolList[self.index] != none ? var.poolList[self.index] : none"
                       through: true
 
+  # 祈愿界面: 主面板，展示当前卡池类型、标题、UP 物品名称/星级/描述、保底说明和保底计数
   祈愿界面:
     type: Adaptive
     val: 祈愿界面
@@ -365,6 +420,7 @@ controls:
               texts: "'4星保底: ' + var.pity4 + '  5星保底: ' + var.pity5"
               color: ~180,180,180,255
 
+  # 顶部资源: 右上角资源计数栏，显示纠缠之缘、原石、星辉的数量
   顶部资源:
     type: Adaptive
     attribute:
@@ -486,6 +542,7 @@ controls:
                   texts: "var.stardustCount"
                   through: true
 
+  # 底部操作: 底部操作栏，包含尘辉兑换、详情、历史记录按钮和祈愿1次/10次按钮
   底部操作:
     type: Adaptive
     attribute:
@@ -647,6 +704,7 @@ controls:
                   texts: "~×10"
                   through: true
 
+  # 单抽结果: 单次祈愿结果弹窗，展示抽到的物品图标、名称、星级和确认按钮
   单抽结果:
     type: Adaptive
     val: 单抽结果
@@ -729,6 +787,7 @@ controls:
                   texts: "~确认"
                   through: true
 
+  # 十连结果: 十连祈愿结果弹窗，5列网格展示10个抽到的物品和确认按钮
   十连结果:
     type: Adaptive
     val: 十连结果
@@ -834,6 +893,7 @@ controls:
                   texts: "~确认"
                   through: true
 
+      # 历史面板: 祈愿历史记录弹窗，滚动列表展示每次祈愿的时间和结果摘要
       历史面板:
         type: Adaptive
         val: 历史面板
@@ -917,6 +977,7 @@ controls:
                       texts: "~关闭"
                       through: true
 
+      # 详情面板: 卡池详情弹窗，展示保底抽数、各星级概率、UP 概率和物品权重列表
       详情面板:
         type: Adaptive
         val: 详情面板
@@ -1043,6 +1104,7 @@ controls:
                       texts: "~关闭"
                       through: true
 
+      # 兑换面板: 尘辉兑换弹窗，展示星尘余额和可兑换物品列表（功能开发中）
       兑换面板:
         type: Adaptive
         val: 兑换面板

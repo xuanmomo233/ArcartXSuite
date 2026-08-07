@@ -12,21 +12,47 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.attribute.AttributePlusBridge;
 
+/**
+ * AttributePlus 属性效果服务。
+ * <p>
+ * 通过 {@link AttributePlusBridge} 为玩家添加临时属性来源，并在持续时间到期后自动移除。
+ * 维护每个玩家当前活跃的来源集合，支持手动清除。
+ */
 public final class PropAttributePlusService {
 
     private final JavaPlugin plugin;
     private final AttributePlusBridge bridge;
     private final Map<UUID, Set<String>> activeSources = new ConcurrentHashMap<>();
 
+    /**
+     * 构造 AttributePlus 属性服务。
+     *
+     * @param plugin 宿主插件实例
+     * @param bridge AttributePlus 桥接
+     */
     public PropAttributePlusService(JavaPlugin plugin, AttributePlusBridge bridge) {
         this.plugin = plugin;
         this.bridge = bridge;
     }
 
+    /**
+     * 检查 AttributePlus 桥接是否可用。
+     *
+     * @return {@code true} 表示已挂钩
+     */
     public boolean hooked() {
         return bridge.available();
     }
 
+    /**
+     * 为玩家添加临时属性来源，持续指定时长后自动移除。
+     *
+     * @param player         目标玩家
+     * @param propName       道具名称，用于生成来源 ID
+     * @param attributeLines 属性行列表
+     * @param durationSeconds 持续时间（秒）
+     * @return {@code true} 表示成功添加
+     */
     public boolean apply(Player player, String propName, List<String> attributeLines, int durationSeconds) {
         if (!bridge.available() || player == null || attributeLines == null || attributeLines.isEmpty()) {
             return false;
@@ -53,6 +79,11 @@ public final class PropAttributePlusService {
         return true;
     }
 
+    /**
+     * 清除指定玩家的全部活跃属性来源。
+     *
+     * @param player 目标玩家，为 {@code null} 时直接返回
+     */
     public void clear(Player player) {
         if (player == null) {
             return;

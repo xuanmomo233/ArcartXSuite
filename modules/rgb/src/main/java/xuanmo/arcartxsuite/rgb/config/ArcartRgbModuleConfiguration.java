@@ -13,6 +13,12 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 
+/**
+ * RGB 模块配置记录。
+ *
+ * @param debug   是否启用调试日志
+ * @param entries 渐变文本条目映射（id → 条目），不可变
+ */
 public record ArcartRgbModuleConfiguration(
     boolean debug,
     Map<String, ArcartRgbEntry> entries

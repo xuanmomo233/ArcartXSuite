@@ -32,6 +32,13 @@ import xuanmo.arcartxsuite.api.capability.TabRefreshable;
 import xuanmo.arcartxsuite.essentials.config.EssentialsConfiguration;
 import java.util.logging.Logger;
 
+/**
+ * 玩家管理服务。
+ * <p>
+ * 实现 {@link Listener}，负责飞行、无敌、治疗、饱食、游戏模式、速度、
+ * 隐身、AFK、/back 位置栈、修复、帽子、末影箱/工作台/铁砧/垃圾桶等功能的
+ * 状态维护与事件监听。通过定时任务检测 AFK 状态并自动踢出超时玩家。
+ */
 public final class PlayerManagementService implements Listener {
 
     private final JavaPlugin plugin;
@@ -48,6 +55,14 @@ public final class PlayerManagementService implements Listener {
 
     private int afkTaskId = -1;
 
+    /**
+     * 构造玩家管理服务。
+     *
+     * @param plugin              宿主插件实例
+     * @param logger              日志器
+     * @param config              模块配置
+     * @param tabRefreshProvider  Tab 刷新能力延迟供应者
+     */
     public PlayerManagementService(JavaPlugin plugin,
         Logger logger, EssentialsConfiguration config,
                                    java.util.function.Supplier<TabRefreshable> tabRefreshProvider) {
@@ -57,6 +72,9 @@ public final class PlayerManagementService implements Listener {
         this.tabRefreshProvider = tabRefreshProvider;
     }
 
+    /**
+     * 注册事件监听器并启动 AFK 检测定时任务。
+     */
     public void start() {
         Bukkit.getPluginManager().registerEvents(this, plugin);
         int timeout = config.player().afkTimeout();
@@ -65,6 +83,9 @@ public final class PlayerManagementService implements Listener {
         }
     }
 
+    /**
+     * 注销事件监听器、取消定时任务并清空全部运行时状态。
+     */
     public void shutdown() {
         HandlerList.unregisterAll(this);
         if (afkTaskId != -1) {
@@ -81,6 +102,11 @@ public final class PlayerManagementService implements Listener {
 
     // ─── Fly ───
 
+    /**
+     * 切换指定玩家的飞行模式开关。
+     *
+     * @param player 目标玩家
+     */
     public void toggleFly(Player player) {
         UUID uuid = player.getUniqueId();
         if (flyEnabled.contains(uuid)) {
@@ -95,6 +121,12 @@ public final class PlayerManagementService implements Listener {
         }
     }
 
+    /**
+     * 切换目标玩家的飞行模式，并向执行者发送提示。
+     *
+     * @param player 执行者
+     * @param target 目标玩家
+     */
     public void toggleFly(Player player, Player target) {
         toggleFly(target);
         if (!player.equals(target)) {
@@ -102,12 +134,23 @@ public final class PlayerManagementService implements Listener {
         }
     }
 
+    /**
+     * 判断指定玩家是否已启用飞行模式。
+     *
+     * @param uuid 玩家 UUID
+     * @return {@code true} 表示已启用
+     */
     public boolean isFlyEnabled(UUID uuid) {
         return flyEnabled.contains(uuid);
     }
 
     // ─── God ───
 
+    /**
+     * 切换指定玩家的无敌模式开关。
+     *
+     * @param player 目标玩家
+     */
     public void toggleGod(Player player) {
         UUID uuid = player.getUniqueId();
         if (godEnabled.contains(uuid)) {
@@ -121,18 +164,34 @@ public final class PlayerManagementService implements Listener {
         }
     }
 
+    /**
+     * 判断指定玩家是否已启用无敌模式。
+     *
+     * @param uuid 玩家 UUID
+     * @return {@code true} 表示已启用
+     */
     public boolean isGodEnabled(UUID uuid) {
         return godEnabled.contains(uuid);
     }
 
     // ─── Heal / Feed ───
 
+    /**
+     * 将目标玩家的生命值恢复至最大值并清除着火状态。
+     *
+     * @param target 目标玩家
+     */
     public void heal(Player target) {
         target.setHealth(AttributeResolver.getMaxHealth(target));
         target.setFireTicks(0);
         target.sendMessage(prefix() + config.messages().heal());
     }
 
+    /**
+     * 将目标玩家的饥饿值与饱和度恢复至满值。
+     *
+     * @param target 目标玩家
+     */
     public void feed(Player target) {
         target.setFoodLevel(20);
         target.setSaturation(20f);
@@ -141,6 +200,12 @@ public final class PlayerManagementService implements Listener {
 
     // ─── GameMode ───
 
+    /**
+     * 设置目标玩家的游戏模式。
+     *
+     * @param target 目标玩家
+     * @param mode   游戏模式
+     */
     public void setGameMode(Player target, GameMode mode) {
         target.setGameMode(mode);
         target.sendMessage(prefix() + ChatColor.GREEN + "游戏模式已切换为 " + ChatColor.WHITE + mode.name().toLowerCase() + ChatColor.GREEN + "。");
@@ -148,6 +213,13 @@ public final class PlayerManagementService implements Listener {
 
     // ─── Speed ───
 
+    /**
+     * 设置玩家的飞行或行走速度（自动限幅至 0-10）。
+     *
+     * @param player 目标玩家
+     * @param speed  速度值（0-10）
+     * @param isFly  {@code true} 设置飞行速度，{@code false} 设置行走速度
+     */
     public void setSpeed(Player player, float speed, boolean isFly) {
         float clamped = Math.max(0f, Math.min(10f, speed));
         float bukkit = clamped / 10f;
@@ -161,6 +233,11 @@ public final class PlayerManagementService implements Listener {
 
     // ─── Vanish ───
 
+    /**
+     * 切换玩家的隐身状态，对无 {@code axs.essentials.vanish.see} 权限的玩家隐藏/显示。
+     *
+     * @param player 目标玩家
+     */
     public void toggleVanish(Player player) {
         UUID uuid = player.getUniqueId();
         if (vanished.contains(uuid)) {
@@ -181,12 +258,23 @@ public final class PlayerManagementService implements Listener {
         refreshTab(player, "essentials-vanish");
     }
 
+    /**
+     * 判断指定玩家是否处于隐身状态。
+     *
+     * @param uuid 玩家 UUID
+     * @return {@code true} 表示已隐身
+     */
     public boolean isVanished(UUID uuid) {
         return vanished.contains(uuid);
     }
 
     // ─── AFK ───
 
+    /**
+     * 手动切换玩家的 AFK 状态并广播提示。
+     *
+     * @param player 目标玩家
+     */
     public void toggleAfk(Player player) {
         UUID uuid = player.getUniqueId();
         if (afkPlayers.contains(uuid)) {
@@ -198,6 +286,12 @@ public final class PlayerManagementService implements Listener {
         }
     }
 
+    /**
+     * 判断指定玩家是否处于 AFK 状态。
+     *
+     * @param uuid 玩家 UUID
+     * @return {@code true} 表示已挂机
+     */
     public boolean isAfk(UUID uuid) {
         return afkPlayers.contains(uuid);
     }
@@ -230,6 +324,11 @@ public final class PlayerManagementService implements Listener {
 
     // ─── Back ───
 
+    /**
+     * 将玩家当前位置压入 /back 返回栈，超出上限时丢弃最旧记录。
+     *
+     * @param player 目标玩家
+     */
     public void pushBackLocation(Player player) {
         UUID uuid = player.getUniqueId();
         Deque<Location> stack = backStacks.computeIfAbsent(uuid, k -> new ArrayDeque<>());
@@ -239,6 +338,12 @@ public final class PlayerManagementService implements Listener {
         }
     }
 
+    /**
+     * 弹出并返回玩家 /back 栈中最新的位置。
+     *
+     * @param player 目标玩家
+     * @return 上一次位置，栈为空时返回 null
+     */
     public Location popBackLocation(Player player) {
         Deque<Location> stack = backStacks.get(player.getUniqueId());
         return stack != null && !stack.isEmpty() ? stack.pop() : null;
@@ -246,6 +351,11 @@ public final class PlayerManagementService implements Listener {
 
     // ─── Repair ───
 
+    /**
+     * 修复玩家主手物品的耐久度。
+     *
+     * @param player 目标玩家
+     */
     public void repair(Player player) {
         ItemStack item = player.getInventory().getItemInMainHand();
         if (item.getType() == Material.AIR || !(item.getItemMeta() instanceof Damageable dmg)) {
@@ -259,6 +369,11 @@ public final class PlayerManagementService implements Listener {
 
     // ─── Hat ───
 
+    /**
+     * 将玩家主手物品戴到头盔槽，原头盔交换到主手。
+     *
+     * @param player 目标玩家
+     */
     public void hat(Player player) {
         ItemStack item = player.getInventory().getItemInMainHand();
         if (item.getType() == Material.AIR) {
@@ -274,14 +389,30 @@ public final class PlayerManagementService implements Listener {
 
     // ─── Enderchest / Workbench / Anvil / Trash ───
 
+    /**
+     * 为玩家打开目标玩家的末影箱。
+     *
+     * @param player 执行者
+     * @param target 末影箱所属玩家
+     */
     public void openEnderChest(Player player, Player target) {
         player.openInventory(target.getEnderChest());
     }
 
+    /**
+     * 为玩家打开工作台界面。
+     *
+     * @param player 目标玩家
+     */
     public void openWorkbench(Player player) {
         player.openWorkbench(player.getLocation(), true);
     }
 
+    /**
+     * 为玩家打开铁砧界面。
+     *
+     * @param player 目标玩家
+     */
     public void openAnvil(Player player) {
         // Paper API: openAnvil; Spigot 兼容用法
         try {
@@ -291,6 +422,11 @@ public final class PlayerManagementService implements Listener {
         }
     }
 
+    /**
+     * 为玩家打开垃圾桶（54 格虚拟容器）。
+     *
+     * @param player 目标玩家
+     */
     public void openTrash(Player player) {
         player.openInventory(Bukkit.createInventory(null, 54, ChatColor.DARK_RED + "垃圾桶"));
     }

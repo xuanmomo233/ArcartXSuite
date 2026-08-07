@@ -1,16 +1,28 @@
 # AXS 钓鱼图鉴界面
 # 打开方式: /fishing
 # 数据交互: packetHandler init/update
+# 本界面展示玩家已捕获鱼类的图鉴信息，包括等级、经验、捕获总数、图鉴完成度等
 
 ui:
-  isHud: false
-  background: true
-  escClose: true
-  closeDied: true
-  through: false
-  screenScale: true
-  show: true
+  isHud: false  # 非HUD模式，打开时显示鼠标光标
+  background: true  # 渲染半透明背景遮罩
+  escClose: true  # 按ESC键可关闭界面
+  closeDied: true  # 玩家死亡时自动关闭界面
+  through: false  # 不允许点击穿透到下层
+  screenScale: true  # 启用屏幕等比缩放
+  show: true  # 界面默认可见
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 数据包标识符，用于回传输入操作
+    #   - playerLevel: 玩家当前钓鱼等级
+    #   - totalXp: 玩家累计钓鱼经验值
+    #   - totalCaught: 玩家累计捕获鱼的总数
+    #   - collectionCount: 已收集图鉴条目数（已发现的鱼种数）
+    #   - totalFishTypes: 鱼种总数（图鉴总条目数）
+    #   - collectionPercent: 图鉴完成百分比
+    #   - fishList: 鱼类列表数据，每项含 name/rarity/caught/maxSize 字段
+    #   - maxFishCount: 鱼类列表最大条目数（用于动态生成列表项）
     init: |-
       var.packetId = packet['packetId']
       var.playerLevel = packet['playerLevel']
@@ -29,6 +41,17 @@ ui:
         e = val.鱼类列表['鱼条目'].copy('鱼条目' + key)
         e.entryKey = key
       }
+    # packetHandler: update
+    # 包字段:
+    #   - packetId: 数据包标识符
+    #   - playerLevel: 玩家当前钓鱼等级
+    #   - totalXp: 玩家累计钓鱼经验值
+    #   - totalCaught: 玩家累计捕获鱼的总数
+    #   - collectionCount: 已收集图鉴条目数
+    #   - totalFishTypes: 鱼种总数
+    #   - collectionPercent: 图鉴完成百分比
+    #   - fishList: 鱼类列表数据（同 init）
+    #   - maxFishCount: 鱼类列表最大条目数
     update: |-
       var.packetId = packet['packetId']
       var.playerLevel = packet['playerLevel']
@@ -48,6 +71,7 @@ ui:
         e.entryKey = key
       }
   action:
+    # open: 界面打开时的默认初始化变量（等待服务端数据包覆盖）
     open: |-
       var.packetId = 'AXS_FISHING'
       var.playerLevel = 1
@@ -60,6 +84,7 @@ ui:
       var.maxFishCount = 0
 
 controls:
+  # 自适应全局布局：以1920x1080设计分辨率等比缩放整个界面
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -74,6 +99,7 @@ controls:
           width: 800
           height: 600
         children:
+          # 背景：半透明深色圆角面板
           背景:
             type: Texture
             attribute:
@@ -91,6 +117,7 @@ controls:
                 blur: 6
                 color: ~0,0,0,120
 
+          # 标题：界面顶部"钓鱼图鉴"文字
           标题:
             type: Text
             attribute:
@@ -99,6 +126,7 @@ controls:
               texts: "~&e钓鱼图鉴"
               fontSize: 56
 
+          # 关闭按钮：右上角红色X按钮，点击关闭界面
           关闭按钮:
             type: Texture
             attribute:
@@ -128,6 +156,7 @@ controls:
                   fontSize: 36
                   texts: "~&fX"
 
+          # 统计信息：展示玩家等级、经验、捕获数、图鉴进度
           统计信息:
             type: Canvas
             attribute:
@@ -165,6 +194,7 @@ controls:
                   texts: "'&7图鉴: &f' + var.collectionCount + '/' + var.totalFishTypes + ' (' + var.collectionPercent + '%)'"
                   fontSize: 28
 
+          # 图鉴滑块：右侧滚动条滑块，可拖动滚动鱼类列表
           图鉴滑块:
             type: Texture
             val: 图鉴滑块
@@ -175,6 +205,7 @@ controls:
               height: 50
               normal: ~120,120,120,200
               maxDragY: 320
+          # 滚动区：可滚动的鱼类列表容器，滚轮控制滚动
           滚动区:
             type: Scroll
             attribute:
@@ -199,6 +230,7 @@ controls:
                   width: 728
                   spaceBetween: 6
                 children:
+                  # 鱼条目：单条鱼类信息模板，根据 fishList 数据动态复制
                   鱼条目:
                     type: Texture
                     attribute:

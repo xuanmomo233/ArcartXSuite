@@ -1,3 +1,4 @@
+# 配置版本号（不要手动修改，由模块自动管理）
 config-version: 2
 # AXS OnlineRewards
 # 作用: 统计今日/本周/本月/总在线时长，发放在线阶段奖励；提供签到、连续/累计/每月/节日奖励、补签卡、排行榜和日历 UI；
@@ -113,6 +114,8 @@ sign-in-file: "sign-in.yml"
 rewards-file: "rewards.yml"
 
 # 每周累计在线时长奖励。每周期自动重置，repeat: true 表示每周期都可重复领取一次。
+# 字段: id=奖励ID, minutes=所需在线分钟, name=名称, rewardText=描述,
+#       commands=达成后执行的命令, mail-presets=邮件预设ID列表, repeat=是否可重复领取
 weekly-rewards:
   - id: "weekly_2h"
     minutes: 120
@@ -130,6 +133,7 @@ weekly-rewards:
     repeat: false
 
 # 每月累计在线时长奖励。
+# 字段同 weekly-rewards
 monthly-rewards:
   - id: "monthly_10h"
     minutes: 600
@@ -149,15 +153,26 @@ monthly-rewards:
 # 离线时长储蓄：下线时按 storage-rate 比例存储当日已在线时长，次日登录时作为初始在线时长加成。
 # 每日上限 max-minutes 分钟；expire-days 保留用于未来扩展（当前跨天自动清零）。
 offline-savings:
+  # 是否启用离线时长储蓄
   enabled: true
+  # 每日可储蓄的最大分钟数
   max-minutes: 120
+  # 储蓄比例（1.0=全额储蓄当日在线时长）
   storage-rate: 1.0
+  # 过期天数（保留用于未来扩展，当前跨天自动清零）
   expire-days: 1
 
 # 全服签到目标/集体奖励。每当玩家签到时统计今日签到人数，达到目标后给所有在线玩家发奖励。
 server-sign-in-goal:
+  # 是否启用全服签到目标
   enabled: true
+  # 达成目标时是否全服广播
   broadcast: true
+  # 目标列表
+  # 字段: id=目标ID, required=所需签到人数, name=目标名称,
+  #       rewardText=描述, commands=达成后执行的命令, mail-presets=邮件预设,
+  #       chat-cards=聊天卡片, subtitle-groups=字幕组, title-ids=标题ID,
+  #       broadcast=达成时的广播文本
   targets:
     - id: "goal_10"
       required: 10

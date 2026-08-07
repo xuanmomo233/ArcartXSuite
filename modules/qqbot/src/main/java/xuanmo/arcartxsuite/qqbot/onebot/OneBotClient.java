@@ -13,6 +13,13 @@ import java.util.logging.Logger;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
+/**
+ * OneBot v11 协议的 WebSocket 客户端封装。
+ * <p>
+ * 关联模块：{@code qqbot}。负责与 OneBot 实现（如 SnowLuma）建立 WebSocket 长连接，
+ * 支持自动重连与心跳保活，提供发送群消息、@群员、撤回消息、禁言等操作。
+ * 收到的事件经 {@link OneBotEvent} 包装后回调给上层处理器。
+ */
 public final class OneBotClient {
 
     private final String wsUrl;
@@ -34,6 +41,18 @@ public final class OneBotClient {
         return t;
     });
 
+    /**
+     * 构造 OneBot 客户端。
+     *
+     * @param wsUrl                    OneBot WebSocket 服务地址
+     * @param accessToken              鉴权令牌，为空表示不鉴权
+     * @param reconnectIntervalSeconds 重连间隔（秒）
+     * @param heartbeatIntervalSeconds 心跳间隔（秒），{@code <=0} 表示不发送心跳
+     * @param logger                   日志器
+     * @param eventHandler             事件回调处理器
+     * @param onConnected              连接成功回调，可为 {@code null}
+     * @param onDisconnected           连接断开回调，可为 {@code null}
+     */
     public OneBotClient(
         String wsUrl,
         String accessToken,
@@ -54,18 +73,30 @@ public final class OneBotClient {
         this.onDisconnected = onDisconnected;
     }
 
+    /**
+     * 启动客户端并发起首次连接。重复调用将被忽略。
+     */
     public void start() {
         if (running) return;
         running = true;
         connect();
     }
 
+    /**
+     * 关闭客户端，停止重连调度并断开当前连接。
+     */
     public void shutdown() {
         running = false;
         scheduler.shutdownNow();
         disconnect();
     }
 
+    /**
+     * 向指定群发送纯文本消息。未连接时静默忽略。
+     *
+     * @param groupId 目标群号
+     * @param message 消息文本
+     */
     public void sendGroupMessage(long groupId, String message) {
         if (!connected || wsClient == null) return;
         JsonObject payload = new JsonObject();
@@ -77,6 +108,13 @@ public final class OneBotClient {
         wsClient.send(payload.toString());
     }
 
+    /**
+     * 向指定群发送 @ 某群员 + 文本的消息（消息段数组形式）。未连接时静默忽略。
+     *
+     * @param groupId 目标群号
+     * @param qqId    被 @ 的 QQ 号
+     * @param message 附加文本，为空时仅发送 @ 段
+     */
     public void sendGroupMessageAt(long groupId, long qqId, String message) {
         if (!connected || wsClient == null) return;
         JsonObject payload = new JsonObject();
@@ -104,6 +142,11 @@ public final class OneBotClient {
         wsClient.send(payload.toString());
     }
 
+    /**
+     * 撤回指定消息。未连接时静默忽略。
+     *
+     * @param messageId 待撤回的消息 ID
+     */
     public void deleteMessage(int messageId) {
         if (!connected || wsClient == null) return;
         JsonObject payload = new JsonObject();
@@ -114,6 +157,13 @@ public final class OneBotClient {
         wsClient.send(payload.toString());
     }
 
+    /**
+     * 在指定群禁言某成员。未连接时静默忽略。
+     *
+     * @param groupId    目标群号
+     * @param qqId       被禁言的 QQ 号
+     * @param durationSec 禁言时长（秒）
+     */
     public void setGroupBan(long groupId, long qqId, int durationSec) {
         if (!connected || wsClient == null) return;
         JsonObject payload = new JsonObject();

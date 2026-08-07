@@ -1,3 +1,8 @@
+# AXS 资源说明
+# 用途: QuestGPS 任务总览菜单 — 分类筛选、任务列表、目标/奖励详情、接取/放弃/追踪操作。
+# 前置依赖: ArcartX；QuestGPS 模块启用后自动注册。
+# 关联文件: ArcartXQuestGPS.yml、ui/questgps_guide.yml
+
 ui:
   background: true
   escClose: true
@@ -6,6 +11,37 @@ ui:
   screenScale: true
   show: true
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 数据包 ID（用于客户端回传服务端）
+    #   - categories: 分类字典（key=分类ID，value含id/name/selected字段）
+    #   - pages: 分页字典（key=页面ID，value含名称等）
+    #   - quests: 任务字典（key=任务ID，value含id/name/state/summary/selected/trackable字段）
+    #   - tasks: 目标字典（key=目标ID，value含id/text/status/completed/tracked字段）
+    #   - rewards: 奖励字典（key=奖励ID，value含title/description/itemJson字段）
+    #   - categoryId: 当前选中分类 ID
+    #   - pageId: 当前选中页面 ID（available/active/completed）
+    #   - categoryName: 当前分类显示名
+    #   - pageName: 当前页面显示名
+    #   - availableCount: 可接取任务数
+    #   - activeCount: 进行中任务数
+    #   - completedCount: 已完成任务数
+    #   - questCount: 当前列表任务总数
+    #   - navigationReady: 导航功能是否就绪
+    #   - selectedQuestId: 当前选中任务 ID
+    #   - selectedQuestName: 当前选中任务名称
+    #   - selectedQuestState: 当前选中任务状态文本
+    #   - selectedQuestPath: 当前选中任务路径文本
+    #   - selectedQuestDescriptionText: 当前选中任务描述
+    #   - trackSummary: 追踪摘要文本
+    #   - canAccept: 是否可接取任务
+    #   - canAbandon: 是否可放弃任务
+    #   - canTrackQuest: 是否可追踪任务
+    #   - canTrackTask: 是否可追踪目标
+    #   - canClearTrack: 是否可清除追踪
+    #   - questTracked: 当前任务是否已追踪
+    #   - taskCount: 目标总数
+    #   - rewardCount: 奖励总数
     init: |-
       var.packetId = packet['packetId']
       var.categories = packet['categories']
@@ -82,6 +118,8 @@ ui:
           item['奖励图标'].seticon()
         }
       }
+    # packetHandler: update
+    # 包字段: 与 init 相同，用于增量更新菜单数据
     update: |-
       var.packetId = packet['packetId']
       var.categories = packet['categories']

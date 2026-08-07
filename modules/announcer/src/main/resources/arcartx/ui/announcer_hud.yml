@@ -18,6 +18,14 @@ ui:
   hide:
     - boss_event_progress
   packetHandler:
+    # packetHandler: display
+    # 包字段:
+    #   - isShow: 是否显示公告
+    #   - id: 当前公告条目 ID
+    #   - text: 公告文本内容
+    #   - clickable: 是否可点击
+    #   - revision: 数据修订版本号
+    #   - textWidth: 公告文字估算宽度（用于滚动动画）
     display: |-
       var.displayVisible = packet['isShow']
       var.currentEntryId = packet['id']

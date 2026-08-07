@@ -16,6 +16,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
@@ -30,6 +31,13 @@ import xuanmo.arcartxsuite.menu.config.MenuPageDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuUiTarget;
 import java.util.logging.Logger;
 
+/**
+ * 菜单核心服务，管理菜单定义的加载、会话生命周期、UI 打开/关闭/刷新、按钮点击处理和绑定注册。
+ * <p>
+ * 作为 Menu 模块的业务中枢，协调 {@link MenuActionExecutor}、{@link IconResolver}、
+ * {@link MenuBindingRegistry} 和 {@link MenuPacketFactory} 等组件，
+ * 并通过 {@link xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI} 与客户端 UI 通信。
+ */
 public final class MenuService {
 
     public static final String PANEL_UI_RESOURCE_PATH = "arcartx/ui/menu_panel.yml";
@@ -45,7 +53,7 @@ public final class MenuService {
     private final Map<String, MenuDefinition> menus = new LinkedHashMap<>();
     private final Map<UUID, MenuSession> sessions = new ConcurrentHashMap<>();
     private final MenuActionExecutor actionExecutor;
-    private final MenuIconResolver iconResolver;
+    private final IconResolver iconResolver;
     private final MessageProvider messageProvider;
     private final MenuBindingRegistry bindingRegistry = new MenuBindingRegistry();
     private String panelRuntimeUiId = "menu_panel";
@@ -68,10 +76,17 @@ public final class MenuService {
         this.packetGuard = packetGuard;
         this.configuration = configuration;
         this.actionExecutor = new MenuActionExecutor(plugin, this, logger, signalProvider);
-        this.iconResolver = new MenuIconResolver(itemStackBridge, itemSourceRegistry);
+        this.iconResolver = new IconResolver(itemStackBridge, itemSourceRegistry,
+            MenuConditionEvaluator::applyPlaceholders);
         this.messageProvider = messageProvider;
     }
 
+    /**
+     * 设置面板和 ESC 菜单的运行时 UI ID。
+     *
+     * @param panelRuntimeUiId 面板运行时 UI ID
+     * @param escRuntimeUiId   ESC 运行时 UI ID
+     */
     public void setRuntimeUiIds(String panelRuntimeUiId, String escRuntimeUiId) {
         if (panelRuntimeUiId != null && !panelRuntimeUiId.isBlank()) {
             this.panelRuntimeUiId = panelRuntimeUiId;
@@ -81,6 +96,12 @@ public final class MenuService {
         }
     }
 
+    /**
+     * 重新加载菜单定义目录并重建绑定注册表。
+     *
+     * @param dataFolder 模块数据目录
+     * @throws IOException 读取菜单文件失败时抛出
+     */
     public void reload(File dataFolder) throws IOException {
         File menusDirectory = configuration.menusDirectory(dataFolder);
         menus.clear();
@@ -98,26 +119,57 @@ public final class MenuService {
         );
     }
 
+    /**
+     * 返回绑定注册表实例。
+     *
+     * @return 绑定注册表
+     */
     public MenuBindingRegistry bindingRegistry() {
         return bindingRegistry;
     }
 
+    /**
+     * 更新当前模块配置引用（用于热重载）。
+     *
+     * @param configuration 新的模块配置
+     */
     public void updateConfiguration(MenuModuleConfiguration configuration) {
         this.configuration = configuration;
     }
 
+    /**
+     * 返回当前模块配置。
+     *
+     * @return 模块配置
+     */
     public MenuModuleConfiguration configuration() {
         return configuration;
     }
 
+    /**
+     * 返回消息配置。
+     *
+     * @return 消息配置
+     */
     public MenuMessagesConfiguration messages() {
         return configuration.messages();
     }
 
+    /**
+     * 返回所有已加载的菜单定义集合。
+     *
+     * @return 菜单定义集合
+     */
     public Collection<MenuDefinition> menus() {
         return menus.values();
     }
 
+    /**
+     * 按菜单 ID 精确查找菜单定义（小写匹配）。
+     *
+     * @param menuId 菜单 ID
+     * @return 菜单定义，未找到返回 {@code null}
+     */
     public MenuDefinition findMenu(String menuId) {
         if (menuId == null) {
             return null;
@@ -125,6 +177,12 @@ public final class MenuService {
         return menus.get(menuId.toLowerCase(Locale.ROOT));
     }
 
+    /**
+     * 按菜单 ID 查找菜单定义（忽略大小写）。
+     *
+     * @param menuId 菜单 ID
+     * @return 菜单定义，未找到返回 {@code null}
+     */
     public MenuDefinition findMenuIgnoreCase(String menuId) {
         if (menuId == null) {
             return null;
@@ -141,6 +199,11 @@ public final class MenuService {
         return null;
     }
 
+    /**
+     * 打开默认 ESC 菜单，查找配置指定的 ESC 菜单 ID 或首个 ESC 布局菜单。
+     *
+     * @param player 目标玩家
+     */
     public void openEscMenu(Player player) {
         String escMenuId = configuration.client().escMenuId();
         MenuDefinition escDefinition = findMenuIgnoreCase(escMenuId);
@@ -158,6 +221,14 @@ public final class MenuService {
         pushMenu(player, escDefinition, 0, false);
     }
 
+    /**
+     * 打开指定菜单的指定页面。
+     *
+     * @param player    目标玩家
+     * @param menuId    菜单 ID
+     * @param pageIndex 起始页索引
+     * @return {@code true} 表示打开成功
+     */
     public boolean openMenu(Player player, String menuId, int pageIndex) {
         MenuDefinition definition = findMenuIgnoreCase(menuId);
         if (definition == null) {
@@ -198,10 +269,22 @@ public final class MenuService {
         return true;
     }
 
+    /**
+     * 打开指定菜单的第一页。
+     *
+     * @param player 目标玩家
+     * @param menuId 菜单 ID
+     * @return {@code true} 表示打开成功
+     */
     public boolean openMenu(Player player, String menuId) {
         return openMenu(player, menuId, 0);
     }
 
+    /**
+     * 刷新玩家当前菜单会话的 UI 数据，不重新打开 UI 窗口。
+     *
+     * @param player 目标玩家
+     */
     public void refreshMenu(Player player) {
         MenuSession session = sessions.get(player.getUniqueId());
         if (session == null) {
@@ -215,6 +298,11 @@ public final class MenuService {
         pushPayload(player, session, definition, false);
     }
 
+    /**
+     * 关闭玩家当前菜单会话，执行关闭动作并关闭 UI 窗口。
+     *
+     * @param player 目标玩家
+     */
     public void closeMenu(Player player) {
         MenuSession session = sessions.remove(player.getUniqueId());
         if (session == null) {
@@ -229,6 +317,12 @@ public final class MenuService {
         }
     }
 
+    /**
+     * 切换玩家当前菜单的页面，支持 prev/next 或指定页面 ID。
+     *
+     * @param player    目标玩家
+     * @param pageToken 页面标识或方向标记
+     */
     public void changePage(Player player, String pageToken) {
         MenuSession session = sessions.get(player.getUniqueId());
         if (session == null) {
@@ -250,6 +344,14 @@ public final class MenuService {
         pushPayload(player, session, definition, false);
     }
 
+    /**
+     * 处理按钮点击事件，执行权限和条件检查后触发对应动作。
+     *
+     * @param player   目标玩家
+     * @param buttonId 按钮 ID
+     * @param footer   是否为底栏按钮
+     * @return {@code true} 表示事件已处理
+     */
     public boolean handleButtonClick(Player player, String buttonId, boolean footer) {
         MenuSession session = sessions.get(player.getUniqueId());
         if (session == null || buttonId == null || buttonId.isBlank()) {
@@ -302,14 +404,32 @@ public final class MenuService {
         return true;
     }
 
+    /**
+     * 检查 PacketGuard 是否允许该玩家执行指定动作。
+     *
+     * @param player 目标玩家
+     * @param action 动作名称
+     * @return {@code true} 表示允许
+     */
     public boolean allowClientPacket(Player player, String action) {
         return packetGuard == null || packetGuard.allow(player, "menu", action, false);
     }
 
+    /**
+     * 处理玩家退出事件，清理其菜单会话。
+     *
+     * @param player 退出的玩家
+     */
     public void handlePlayerQuit(Player player) {
         sessions.remove(player.getUniqueId());
     }
 
+    /**
+     * 根据命令标签查找绑定的菜单定义。
+     *
+     * @param commandLabel 命令标签
+     * @return 绑定的菜单定义，无绑定返回 {@code null}
+     */
     public MenuDefinition resolveCommandMenu(String commandLabel) {
         if (commandLabel == null || commandLabel.isBlank()) {
             return null;

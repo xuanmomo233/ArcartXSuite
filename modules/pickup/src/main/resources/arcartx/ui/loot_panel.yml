@@ -1,9 +1,19 @@
+# 掉落物拾取面板 HUD（扫描模式）
+# 显示玩家附近掉落物列表，支持滚轮切换选中项、点击拾取。
+# 由服务端通过 packetHandler 更新槽位数据，客户端回包通知服务端执行拾取。
 ui:
-  isHud: true
-  defaultOpen: false
-  through: false
-  show: true
+  isHud: true  # HUD 模式，覆盖在游戏画面上
+  defaultOpen: false  # 不随启动自动打开
+  through: false  # 鼠标不穿透（需要捕获点击）
+  show: true  # 可见
   packetHandler:
+    # packetHandler: update
+    # 包字段:
+    #   - count: 当前掉落物总数
+    #   - selectedIndex: 当前选中项索引
+    #   - item0Visible~item7Visible: 各槽位是否可见
+    #   - item0Amount~item7Amount: 各槽位物品堆叠数量
+    #   - item0ItemJson~item7ItemJson: 各槽位物品的 JSON 序列化数据
     update: |-
       var.count = packet['count']
       var.selectedIndex = packet['selectedIndex']
@@ -35,11 +45,18 @@ ui:
       var.item7Amount = packet['item7Amount']
       var.item7ItemJson = packet['item7ItemJson']
       var.dirty = true
+    # packetHandler: select
+    # 包字段:
+    #   - selectedIndex: 新的选中项索引
     select: |-
       var.selectedIndex = packet['selectedIndex']
+    # packetHandler: open_interact
+    # 包字段: 无（仅通知客户端打开交互菜单）
     open_interact: |-
       var.menuOpen = true
       Screen.open('AXS:loot_interact')
+    # packetHandler: menu_closed
+    # 包字段: 无（仅通知客户端交互菜单已关闭）
     menu_closed: |-
       var.menuOpen = false
   action:

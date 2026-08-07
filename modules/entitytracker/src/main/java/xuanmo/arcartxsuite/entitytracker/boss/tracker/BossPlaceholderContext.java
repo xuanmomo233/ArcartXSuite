@@ -3,6 +3,35 @@ package xuanmo.arcartxsuite.entitytracker.boss.tracker;
 import java.text.DecimalFormat;
 import java.util.Locale;
 
+/**
+ * Boss 占位符上下文，属于 entitytracker 模块的 boss 追踪子系统。
+ * <p>
+ * 持有 Boss 会话的完整渲染状态（血量、距离、排名等），
+ * 解析标题/副标题模板和 HUD 占位符，供 UI 数据包和聊天卡片使用。
+ *
+ * @param visible             Boss 是否对观察者可见
+ * @param displayName         Boss 显示名称
+ * @param mythicMobId         MythicMob ID
+ * @param entityUuid          Boss 实体 UUID 字符串
+ * @param hasTarget           Boss 是否有目标实体
+ * @param targetDisplayName   目标显示名称
+ * @param targetUuid          目标 UUID
+ * @param targetType          目标类型
+ * @param health              当前血量
+ * @param maxHealth           最大血量
+ * @param healthPercent       血量百分比
+ * @param progress            血量进度（0-1）
+ * @param distance            观察者与 Boss 的距离（方块）
+ * @param spawnOrder          生成顺序序号
+ * @param priority            显示优先级
+ * @param world               所在世界名称
+ * @param x                   坐标 X
+ * @param y                   坐标 Y
+ * @param z                   坐标 Z
+ * @param aliveSeconds        存活秒数
+ * @param damageRanking       伤害排名快照
+ * @param viewerDamageEntry   观察者的伤害排名条目
+ */
 public record BossPlaceholderContext(
     boolean visible,
     String displayName,
@@ -30,6 +59,11 @@ public record BossPlaceholderContext(
 
     private static final ThreadLocal<DecimalFormat> NUMBER_FORMAT = ThreadLocal.withInitial(() -> new DecimalFormat("0.##"));
 
+    /**
+     * 返回空的占位符上下文。
+     *
+     * @return 空上下文
+     */
     public static BossPlaceholderContext empty() {
         return new BossPlaceholderContext(
             false,
@@ -57,6 +91,12 @@ public record BossPlaceholderContext(
         );
     }
 
+    /**
+     * 解析占位符字段名对应的值。
+     *
+     * @param fieldName 字段名
+     * @return 解析结果，无法识别时返回 {@code null}
+     */
     public String resolve(String fieldName) {
         String normalized = fieldName == null ? "" : fieldName.trim().toLowerCase(Locale.ROOT);
         String directValue = switch (normalized) {

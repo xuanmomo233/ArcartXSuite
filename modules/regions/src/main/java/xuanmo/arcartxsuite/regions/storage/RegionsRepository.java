@@ -20,12 +20,25 @@ import xuanmo.arcartxsuite.regions.config.RegionsConfiguration.StorageConfig;
 import xuanmo.arcartxsuite.regions.model.Region;
 import xuanmo.arcartxsuite.regions.model.RegionFlag;
 
+/**
+ * Regions 模块的数据访问仓储，负责区域、标志与成员的持久化 CRUD。
+ * <p>
+ * 继承 {@link AbstractModuleRepository}，支持 SQLite 与 MySQL 两种方言，
+ * 通过表名前缀隔离多模块数据。关联模块：{@code regions}。
+ */
 public final class RegionsRepository extends AbstractModuleRepository implements AutoCloseable {
 
     private final Logger logger;
     private final String prefix;
     private final boolean mysql;
 
+    /**
+     * 构造仓储实例。
+     *
+     * @param dataFolder 模块数据目录
+     * @param config     存储配置
+     * @param logger     日志记录器
+     */
     public RegionsRepository(File dataFolder, StorageConfig config, Logger logger) {
         super("AXS-Regions", dataFolder, config.toDescriptor(), logger);
         this.logger = logger;
@@ -33,6 +46,12 @@ public final class RegionsRepository extends AbstractModuleRepository implements
         this.mysql = config.dialect() == StorageConfig.Dialect.MYSQL;
     }
 
+    /**
+     * 初始化数据库表结构，创建区域、标志与成员表。
+     *
+     * @param conn 数据库连接
+     * @throws SQLException 建表失败时抛出
+     */
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
         try (Statement stmt = conn.createStatement()) {
@@ -40,12 +59,24 @@ public final class RegionsRepository extends AbstractModuleRepository implements
         }
     }
 
+    /**
+     * 返回包含玩家 UUID 列的表名列表。
+     * <p>
+     * Regions 以区域 id+world 为主键，无玩家 UUID 列，故返回空列表。
+     *
+     * @return 空列表
+     */
     @Override
     protected List<String> playerDataTables() {
         // Regions 以区域 id+world 为主键，无玩家 UUID 列
         return List.of();
     }
 
+    /**
+     * 返回本仓储管理的全部表名列表（含前缀）。
+     *
+     * @return 表名列表
+     */
     @Override
     protected List<String> allTables() {
         return List.of(prefix + "regions", prefix + "flags", prefix + "members");
@@ -85,6 +116,12 @@ public final class RegionsRepository extends AbstractModuleRepository implements
 
     // ─── 区域 CRUD ───
 
+    /**
+     * 保存或更新单个区域，包含其标志与成员，在单事务中提交。
+     *
+     * @param region 待保存的区域
+     * @throws SQLException 写入失败时抛出，事务会自动回滚
+     */
     public void saveRegion(Region region) throws SQLException {
         try (Connection conn = getConnection()) {
             conn.setAutoCommit(false);
@@ -116,6 +153,13 @@ public final class RegionsRepository extends AbstractModuleRepository implements
         }
     }
 
+    /**
+     * 删除指定区域及其关联的标志与成员记录。
+     *
+     * @param id    区域 ID
+     * @param world 区域所在世界名
+     * @throws SQLException 删除失败时抛出
+     */
     public void deleteRegion(String id, String world) throws SQLException {
         try (Connection conn = getConnection()) {
             try (PreparedStatement ps = conn.prepareStatement("DELETE FROM " + prefix + "regions WHERE id=? AND world=?")) {
@@ -130,6 +174,12 @@ public final class RegionsRepository extends AbstractModuleRepository implements
         }
     }
 
+    /**
+     * 从数据库加载全部区域，并回填各自的标志与成员数据。
+     *
+     * @return 全部区域列表
+     * @throws SQLException 查询失败时抛出
+     */
     public List<Region> loadAllRegions() throws SQLException {
         List<Region> regions = new ArrayList<>();
         try (Connection conn = getConnection();
@@ -249,6 +299,9 @@ public final class RegionsRepository extends AbstractModuleRepository implements
         }
     }
 
+    /**
+     * 关闭仓储，释放底层连接池等资源。
+     */
     @Override
     public void close() {
         shutdown();

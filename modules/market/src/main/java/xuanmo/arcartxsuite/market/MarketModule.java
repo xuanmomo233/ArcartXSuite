@@ -34,6 +34,12 @@ import xuanmo.arcartxsuite.market.listener.MarketEventListener;
 import xuanmo.arcartxsuite.market.placeholder.MarketPlaceholderExpansion;
 import xuanmo.arcartxsuite.market.storage.JdbcMarketRepository;
 
+/**
+ * Market 模块主类，整合商店、拍卖、回收三大子功能。
+ * <p>
+ * 负责配置加载、UI 资源导出、JDBC 仓储初始化、命令绑定与 PlaceholderAPI 注册。
+ * 实现 {@link MailDispatchable} 与 {@link PlayerDataPurgeable} 以支持邮件发货与玩家数据清理。
+ */
 public final class MarketModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private static final String SHOP_UI_RESOURCE_PATH = "arcartx/ui/market_shop.yml";

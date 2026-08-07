@@ -1,12 +1,16 @@
-id: "corn"
-display-name: "玉米粒"
-item:
-  source: "minecraft"
-  item-id: "wheat_seeds"
-  amount: 1
-default: false
-fish-attract-modifiers:
-  legendary_carp: 2.5
-  catfish: 1.8
-treasure-chance-boost: 0.05
-max-durability-bonus: 0
+# 饵料定义：玉米粒
+# 玉米粒是一种高级饵料，对传说鲤鱼有极强的吸引效果，同时提升宝藏概率
+# 饵料文件位于 baits/ 目录，每个文件定义一种饵料
+
+id: "corn"                     # 饵料唯一标识符
+display-name: "玉米粒"          # 显示名称
+item:                          # 饵料对应的物品定义
+  source: "minecraft"          # 物品来源（minecraft=原版物品）
+  item-id: "wheat_seeds"       # 原版物品ID（使用小麦种子代替玉米）
+  amount: 1                    # 物品数量
+default: false                 # 是否为默认饵料（玩家无饵料时使用）
+fish-attract-modifiers:        # 鱼类吸引倍率（对该鱼种的捕获概率乘数）
+  legendary_carp: 2.5          # 传说鲤鱼吸引倍率2.5倍（强力吸引）
+  catfish: 1.8                 # 鲶鱼吸引倍率1.8倍
+treasure-chance-boost: 0.05    # 宝藏概率额外加成（+5%）
+max-durability-bonus: 0        # 鱼竿最大耐久度加成

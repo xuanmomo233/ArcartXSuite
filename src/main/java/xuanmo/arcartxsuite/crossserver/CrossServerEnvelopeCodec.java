@@ -4,6 +4,11 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerEnvelope;
 
+/**
+ * 跨服信封 JSON 编解码工具，基于 Gson 序列化 {@link CrossServerEnvelope}。
+ * <p>
+ * 解码时校验信封非空且 module 字段存在，否则抛出 IllegalArgumentException。
+ */
 public final class CrossServerEnvelopeCodec {
 
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();

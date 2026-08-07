@@ -4,6 +4,11 @@ import io.lumine.mythic.bukkit.MythicBukkit;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
+/**
+ * MythicMobs 物品桥接，提供 MythicMobs 物品的按 id 构建与解析。
+ * <p>
+ * MythicMobs 为可选依赖，运行时通过插件管理器检测可用性，所有异常被吞掉以避免 LinkageError。
+ */
 public final class MythicItemBridge {
 
     private volatile boolean available;

@@ -11,6 +11,11 @@ import xuanmo.arcartxsuite.rgb.config.ArcartRgbEntry;
 import xuanmo.arcartxsuite.rgb.config.ArcartRgbModuleConfiguration;
 import xuanmo.arcartxsuite.rgb.config.ArcartRgbRenderOptions;
 
+/**
+ * RGB 模块服务，提供按 id 渲染渐变文本的能力，支持占位符嵌套解析与递归引用检测。
+ * <p>
+ * 通过 ThreadLocal 跟踪当前渲染链中的 entry id，防止条目互相引用导致死循环。
+ */
 public final class ArcartRgbService {
 
     private static final int MAX_RENDER_TEXT_LENGTH = 1024;

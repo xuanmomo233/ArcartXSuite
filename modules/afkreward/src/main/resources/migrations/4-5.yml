@@ -1,21 +1,20 @@
-# AfkReward 配置迁移: 4 -> 5
-# storage.mode 重命名为 storage.dialect，与 Warehouse/Mail 等模块统一命名
+# 文件用途: AfkReward 配置迁移 4 -> 5
+# 迁移目的: storage.mode 重命名为 storage.dialect，与 Warehouse/Mail 等模块统一命名
 # 同时补充 storage.table-prefix 和 storage.pool-size 字段
-
-from-version: 4
-to-version: 5
-description: "storage.mode 重命名为 storage.dialect，统一存储字段命名"
+from-version: 4  # 迁移起始版本号
+to-version: 5    # 迁移目标版本号
+description: "storage.mode 重命名为 storage.dialect，统一存储字段命名"  # 迁移说明
 
 operations:
   # storage.mode → storage.dialect（如果旧配置中存在 mode 字段则迁移）
-  - type: rename
-    from: storage.mode
-    to: storage.dialect
+  - type: rename          # 重命名操作：同层级键名变更
+    from: storage.mode    # 旧字段路径
+    to: storage.dialect   # 新字段路径
   # 补充新增的 table-prefix 字段
-  - type: set-if-missing
-    path: storage.table-prefix
-    value: "axs_afk_"
+  - type: set-if-missing  # 仅当目标路径不存在时设置默认值
+    path: storage.table-prefix  # 数据表前缀路径
+    value: "axs_afk_"           # 默认表前缀
   # 补充新增的 pool-size 字段
-  - type: set-if-missing
-    path: storage.pool-size
-    value: 3
+  - type: set-if-missing  # 仅当目标路径不存在时设置默认值
+    path: storage.pool-size  # 连接池大小路径
+    value: 3                  # 默认连接池大小

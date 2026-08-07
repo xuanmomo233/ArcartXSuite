@@ -16,6 +16,12 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.attribute.MythicLibBridge;
 
+/**
+ * {@link MythicLibBridge} 的默认实现，桥接 MythicLib 属性系统，
+ * 提供临时属性修饰符的注入与回收。
+ * <p>
+ * MythicLib 为可选依赖，运行时通过插件管理器检测可用性。
+ */
 public final class DefaultMythicLibBridge implements MythicLibBridge {
 
     private static final String PLUGIN_NAME = "MythicLib";

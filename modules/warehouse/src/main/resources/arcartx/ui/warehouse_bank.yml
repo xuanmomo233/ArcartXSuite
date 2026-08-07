@@ -15,6 +15,23 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
+    # packetHandler: update
+    # 包字段:
+    #   - packetId: 包标识符（'AXS_WAREHOUSE'）
+    #   - action_token: 操作令牌（防重放）
+    #   - warehouseName: 仓库名称
+    #   - balances: 各货币余额数据
+    #   - balanceTexts: 余额显示文本
+    #   - products: 理财产品列表
+    #   - productTexts: 产品显示文本
+    #   - fixedDeposits: 定期存款列表
+    #   - fixedDepositTexts: 定期存款显示文本
+    #   - unlocked: 二级密码是否已解锁
+    #   - hasPassword: 是否已设置二级密码
+    #   - maxBalanceCount: 余额条目最大数量（用于动态创建控件）
+    #   - maxProductCount: 产品条目最大数量
+    #   - maxFixedCount: 定期存款条目最大数量
+    #   - selectedCurrency: 当前选中的货币 ID
     update: |-
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']

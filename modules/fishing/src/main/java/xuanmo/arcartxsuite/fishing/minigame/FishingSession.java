@@ -8,6 +8,12 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.fishing.model.FishDefinition;
 import xuanmo.arcartxsuite.fishing.model.WaterArea;
 
+/**
+ * 单次钓鱼小游戏会话，记录玩家、目标鱼、水域、难度及实时状态。
+ * <p>
+ * 关联模块：{@code fishing}。由 {@link xuanmo.arcartxsuite.fishing.service.FishingService}
+ * 在小游戏启动时创建，持有玩家按住状态、剩余 tick 等运行时数据。
+ */
 public final class FishingSession {
 
     private final UUID playerUuid;

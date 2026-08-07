@@ -28,6 +28,12 @@ import priv.seventeen.artist.arcartx.util.collections.CallData;
 import priv.seventeen.artist.arcartx.util.collections.UICallBack;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 
+/**
+ * {@link PacketBridgeAPI} 的默认实现，桥接 ArcartX 客户端 MOD 的 UI 注册、
+ * 数据包收发与回调管理。
+ * <p>
+ * 维护 UI 适配器映射、关闭回调列表、玩家已打开 UI 集合，并在玩家退出时清理状态。
+ */
 public final class ArcartXPacketBridge implements PacketBridgeAPI {
 
     private final JavaPlugin plugin;

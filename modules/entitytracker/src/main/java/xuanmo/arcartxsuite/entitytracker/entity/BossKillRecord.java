@@ -2,6 +2,13 @@ package xuanmo.arcartxsuite.entitytracker.entity;
 
 import java.time.LocalDateTime;
 
+/**
+ * Boss 击杀记录实体，属于 entitytracker 模块的数据实体层。
+ * <p>
+ * 对应数据库 boss_kill_records 表的一行记录，
+ * 持有击杀 ID、Boss 信息、击杀时间、参与者 JSON、掉落 JSON、
+ * 总伤害、战斗时长和位置坐标等字段。
+ */
 public class BossKillRecord {
 
     private Long id;

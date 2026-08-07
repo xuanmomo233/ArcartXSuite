@@ -11,6 +11,11 @@ ui:
   isHud: true
   defaultOpen: true
   packetHandler:
+    # packetHandler: combo
+    # 包字段:
+    #   - combo_count: 当前连击数（整数字符串，由服务端 {combo_count} 变量替换后传入）
+    # 说明: 普通连击处理器，更新连击数字并显示；
+    #       3 秒内无新连击则自动隐藏并清零
     combo: |-
       var.combo_count = Cast.toInt(packet['combo_count'])
       var.combo_show = true
@@ -25,6 +30,11 @@ ui:
           }
         }
       }
+    # packetHandler: combo_milestone
+    # 包字段:
+    #   - combo_count: 当前连击数（整数字符串，由服务端 {combo_count} 变量替换后传入）
+    # 说明: 里程碑连击处理器，更新连击数字并播放里程碑特效动画（显示 2 秒）；
+    #       3 秒内无新连击则自动隐藏并清零
     combo_milestone: |-
       var.combo_count = Cast.toInt(packet['combo_count'])
       var.combo_show = true

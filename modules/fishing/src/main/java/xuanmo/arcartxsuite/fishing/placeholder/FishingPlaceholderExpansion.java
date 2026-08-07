@@ -10,6 +10,13 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.fishing.model.FishingPlayerData;
 import xuanmo.arcartxsuite.fishing.service.FishingService;
 
+/**
+ * 钓鱼模块的 PlaceholderAPI 扩展。
+ * <p>
+ * 关联模块：{@code fishing}。提供 {@code %axsfishing_level%}、
+ * {@code %axsfishing_total_xp%}、{@code %axsfishing_collection%} 等占位符，
+ * 供其他插件或显示系统读取玩家钓鱼数据。
+ */
 public final class FishingPlaceholderExpansion extends PlaceholderExpansion {
 
     private final JavaPlugin plugin;

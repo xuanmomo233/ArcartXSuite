@@ -6,16 +6,16 @@
 
 # -------- 示例：每日登录 --------
 daily-login:
-  display-name: "每日登录"
-  description: "每天登录游戏即可获得奖励"
+  display-name: "每日登录"  # 任务显示名称
+  description: "每天登录游戏即可获得奖励"  # 任务描述文本
   difficulty: easy                # easy / normal / hard
-  event-topic: "axs.loginview.login_success"
-  required-count: 1
-  base-xp-reward: 100
+  event-topic: "axs.loginview.login_success"  # 触发任务进度的事件主题
+  required-count: 1  # 完成任务所需的目标数量
+  base-xp-reward: 100  # 完成后奖励的基础经验值
   conditions: []                  # 无条件限制
-  increment-strategy:
-    type: fixed
-    value: 1
+  increment-strategy:  # 进度增量策略
+    type: fixed  # 固定增量：每次事件固定增加指定值
+    value: 1  # 每次事件增加的进度值
   weight: 5                       # 权重越高，被抽中的概率越大
 
 # -------- 示例：击杀僵尸 --------
@@ -26,11 +26,11 @@ daily-kill-zombie:
   event-topic: "axs.combateffect.kill_entity"
   required-count: 20
   base-xp-reward: 150
-  conditions:
-    - type: event_payload
-      key: entity_type
-      operator: equals
-      value: zombie
+  conditions:  # 触发条件列表，需全部满足才计入进度
+    - type: event_payload  # 条件类型：校验事件 Payload 字段
+      key: entity_type  # 校验的 Payload 字段名
+      operator: equals  # 比较运算符：等于
+      value: zombie  # 期望的字段值
   increment-strategy:
     type: fixed
     value: 1
@@ -51,7 +51,7 @@ daily-damage-boss:
       value: "true"
   increment-strategy:
     type: payload_value          # 动态增量：从 Payload 读取伤害值
-    payload-key: damage_amount
+    payload-key: damage_amount  # 从 Payload 中读取增量值的字段名
     max-per-event: 1000          # 单次事件最多增加 1000
-    scale: 1.0
+    scale: 1.0  # 增量缩放系数（1.0 表示不缩放）
   weight: 1

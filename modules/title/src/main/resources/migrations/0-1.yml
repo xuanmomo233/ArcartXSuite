@@ -1,11 +1,15 @@
+# Title 配置迁移文件
+# 作用: 定义从配置版本 0 升级到版本 1 的迁移规则，确保旧配置升级后补全缺失的默认值。
+# 迁移触发: 当 config-version 低于 to-version 时，由迁移引擎自动执行。
 # Title 配置迁移示例
 # 从版本 0 升级到版本 1 的迁移规则
-from-version: 0
-to-version: 1
-description: "初始迁移：补充缺失默认值"
+from-version: 0  # 迁移起始版本
+to-version: 1  # 迁移目标版本
+description: "初始迁移：补充缺失默认值"  # 迁移描述说明
 
 operations:
   # 设置缺失的默认UI ID
+  # type: set-if-missing 表示仅在目标路径不存在时才写入值，不覆盖已有配置
   - type: set-if-missing
-    path: "ui.ui-id"
-    value: "AXS:title_menu"
+    path: "ui.ui-id"  # 目标配置路径
+    value: "AXS:title_menu"  # 写入的默认值

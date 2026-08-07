@@ -17,6 +17,13 @@ import xuanmo.arcartxsuite.lottery.config.LotteryModuleConfiguration.StorageConf
 import xuanmo.arcartxsuite.lottery.model.PlayerCaseState;
 import xuanmo.arcartxsuite.lottery.model.PlayerGachaState;
 
+/**
+ * Lottery 模块基于 JDBC 的数据仓库实现。
+ * <p>
+ * 支持 SQLite 与 MySQL 两种存储后端，管理 GACHA 状态、CASE 状态、
+ * 抽卡/开箱日志以及待领取奖励队列表。
+ * 继承 {@link AbstractModuleRepository} 获得连接池与迁移能力。
+ */
 public class JdbcLotteryRepository extends AbstractModuleRepository implements LotteryRepository {
 
     private final StorageConfiguration config;
@@ -29,6 +36,13 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
     private String tCaseLog;
     private String tPendingClaim;
 
+    /**
+     * 构造 JDBC 数据仓库。
+     *
+     * @param dataFolder 模块数据目录
+     * @param config     存储配置
+     * @param logger     日志记录器
+     */
     public JdbcLotteryRepository(File dataFolder, StorageConfiguration config, Logger logger) {
         super("AXS-Lottery", dataFolder, config.toDescriptor(), logger);
         this.config = config;
@@ -106,10 +120,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             + "pool_id TEXT NOT NULL,"
             + "open_time INTEGER NOT NULL,"
             + "item_id TEXT NOT NULL,"
-            + "rarity TEXT NOT NULL,"
-            + "is_stattrak INTEGER NOT NULL DEFAULT 0,"
-            + "wear_value REAL,"
-            + "wear_tier TEXT"
+            + "rarity TEXT NOT NULL"
             + ")");
         stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_case_log_player_pool ON " + tCaseLog + " (player_uuid, pool_id)");
         stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPendingClaim + " ("
@@ -164,9 +175,6 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             + "open_time BIGINT NOT NULL,"
             + "item_id VARCHAR(64) NOT NULL,"
             + "rarity VARCHAR(32) NOT NULL,"
-            + "is_stattrak BOOLEAN NOT NULL DEFAULT FALSE,"
-            + "wear_value DOUBLE,"
-            + "wear_tier VARCHAR(32),"
             + "INDEX idx_player_pool (player_uuid, pool_id)"
             + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPendingClaim + " ("
@@ -390,9 +398,8 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
 
     @Override
     public void logCaseOpen(@NotNull UUID playerUuid, @NotNull String poolId,
-                             @NotNull String itemId, @NotNull String rarity,
-                             boolean stattrak, double wearValue, @NotNull String wearTier) {
-        String sql = "INSERT INTO " + tCaseLog + " (player_uuid, pool_id, open_time, item_id, rarity, is_stattrak, wear_value, wear_tier) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+                             @NotNull String itemId, @NotNull String rarity) {
+        String sql = "INSERT INTO " + tCaseLog + " (player_uuid, pool_id, open_time, item_id, rarity) VALUES (?, ?, ?, ?, ?)";
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, playerUuid.toString());
@@ -400,9 +407,6 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             ps.setLong(3, System.currentTimeMillis());
             ps.setString(4, itemId);
             ps.setString(5, rarity);
-            ps.setBoolean(6, stattrak);
-            ps.setDouble(7, wearValue);
-            ps.setString(8, wearTier);
             ps.executeUpdate();
         } catch (SQLException e) {
             logger.warning("[Lottery] 记录 Case 日志失败: " + e.getMessage());
@@ -440,7 +444,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
     @Override
     public @NotNull List<CaseLogEntry> getCaseHistory(@NotNull UUID playerUuid, @NotNull String poolId, int limit) {
         List<CaseLogEntry> result = new ArrayList<>();
-        String sql = "SELECT id, open_time, item_id, rarity, is_stattrak, wear_value, wear_tier FROM " + tCaseLog
+        String sql = "SELECT id, open_time, item_id, rarity FROM " + tCaseLog
             + " WHERE player_uuid = ? AND pool_id = ? ORDER BY open_time DESC LIMIT ?";
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -453,10 +457,7 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
                         rs.getLong("id"),
                         rs.getLong("open_time"),
                         rs.getString("item_id"),
-                        rs.getString("rarity"),
-                        rs.getBoolean("is_stattrak"),
-                        rs.getDouble("wear_value"),
-                        rs.getString("wear_tier")
+                        rs.getString("rarity")
                     ));
                 }
             }

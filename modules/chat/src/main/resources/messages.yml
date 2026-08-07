@@ -1,100 +1,101 @@
 # ============================================================
-#  Chat 模块消息文件
+#  文件用途: Chat 模块消息文件
+#  定义 Chat 模块所有命令反馈、状态提示和错误消息的文本内容。
 # ------------------------------------------------------------
 #  支持 & 颜色码（如 &c 红色）和 {0} {1} 占位符。
 #  修改后执行 /axs reload chat 即可生效。
 # ============================================================
 
-prefix: "&3◆ &6ArcartXSuite &7| &r"
+prefix: "&3◆ &6ArcartXSuite &7| &r"  # 消息前缀，所有 Chat 模块消息前自动添加
 
 # ── 通用 ──────────────────────────────────────────────
 common:
-  service-down: "&c服务未启动。"
-  module-down: "&c聊天模块当前未启用。"
-  reload-hint: "&e请使用 /{0} reload chat"
-  unknown: "&e未知命令，使用 /{0} chat help"
-  only-player: "&c该命令只能由玩家执行。"
-  no-permission: "&c你没有权限执行这个命令。"
+  service-down: "&c服务未启动。"              # 核心服务未运行时的提示
+  module-down: "&c聊天模块当前未启用。"        # Chat 模块未启用时的提示
+  reload-hint: "&e请使用 /{0} reload chat"    # 重载提示，{0} 为主命令别名
+  unknown: "&e未知命令，使用 /{0} chat help"  # 未知子命令提示
+  only-player: "&c该命令只能由玩家执行。"      # 非玩家（控制台）执行限制提示
+  no-permission: "&c你没有权限执行这个命令。"  # 权限不足提示
 
 # ── help ──────────────────────────────────────────────
 help:
-  title: "&6Chat 管理命令"
-  status: "&7{0} status&f - 查看模块状态"
-  mute: "&7{0} mute <玩家> <时长> [原因]&f - 禁言"
-  unmute: "&7{0} unmute <玩家>&f - 解除禁言"
-  spy: "&7{0} spy <玩家> <on|off>&f - 私聊监听"
+  title: "&6Chat 管理命令"                              # 帮助标题
+  status: "&7{0} status&f - 查看模块状态"               # status 子命令说明
+  mute: "&7{0} mute <玩家> <时长> [原因]&f - 禁言"      # mute 子命令说明
+  unmute: "&7{0} unmute <玩家>&f - 解除禁言"            # unmute 子命令说明
+  spy: "&7{0} spy <玩家> <on|off>&f - 私聊监听"         # spy 子命令说明
 
 # ── status ────────────────────────────────────────────
 status:
-  title: "&6Chat 状态"
-  channels: "&7频道数: &f{0}"
-  cache-state: "&7缓存状态: &f{0}"
-  cache-mute: "&7缓存禁言: &f{0}"
-  cross-server: "&7跨服通道: &f{0}"
+  title: "&6Chat 状态"                          # 状态信息标题
+  channels: "&7频道数: &f{0}"                   # 已加载频道数量
+  cache-state: "&7缓存状态: &f{0}"              # 玩家缓存状态摘要
+  cache-mute: "&7缓存禁言: &f{0}"               # 禁言缓存摘要
+  cross-server: "&7跨服通道: &f{0}"             # 跨服通道连接状态
 
 # ── mute / unmute / spy ───────────────────────────────
 mute:
-  usage: "&e用法: /axs chat mute <玩家> <时长> [原因]"
+  usage: "&e用法: /axs chat mute <玩家> <时长> [原因]"  # mute 命令用法提示
 unmute:
-  usage: "&e用法: /axs chat unmute <玩家>"
+  usage: "&e用法: /axs chat unmute <玩家>"             # unmute 命令用法提示
 spy:
-  usage: "&e用法: /axs chat spy <玩家> <on|off>"
+  usage: "&e用法: /axs chat spy <玩家> <on|off>"       # spy 命令用法提示
 
 # ── player ────────────────────────────────────────────
 player:
-  no-permission-msg: "&c你没有权限使用私聊。"
-  current-channel: "&7当前频道: &f{0}"
-  toggle-status: "&7私聊接收 / 提及接收 / 社交监听: &f{0} &7/ &f{1} &7/ &f{2}"
-  reply-status: "&7最近私聊对象 / 忽略数: &f{0} &7/ &f{1}"
-  channel-usage: "&e用法: /{0} channel <id>"
-  toggle-usage: "&e用法: /{0} toggle <private|mentions> [on|off]"
-  toggle-invalid: "&c状态只能是 on 或 off。"
-  ignore-usage: "&e用法: /{0} ignore <player>"
-  unignore-usage: "&e用法: /{0} unignore <player>"
-  chat-usage: "&e用法: /{0} channel|toggle|ignore|unignore|socialspy"
-  msg-usage: "&e用法: /{0} <player> <message>"
-  reply-usage: "&e用法: /{0} <message>"
+  no-permission-msg: "&c你没有权限使用私聊。"                    # 私聊权限不足
+  current-channel: "&7当前频道: &f{0}"                          # 当前所在频道
+  toggle-status: "&7私聊接收 / 提及接收 / 社交监听: &f{0} &7/ &f{1} &7/ &f{2}"  # 三项开关状态
+  reply-status: "&7最近私聊对象 / 忽略数: &f{0} &7/ &f{1}"     # 回复目标与忽略数
+  channel-usage: "&e用法: /{0} channel <id>"                   # channel 子命令用法
+  toggle-usage: "&e用法: /{0} toggle <private|mentions> [on|off]"  # toggle 子命令用法
+  toggle-invalid: "&c状态只能是 on 或 off。"                    # 无效开关值
+  ignore-usage: "&e用法: /{0} ignore <player>"                 # ignore 子命令用法
+  unignore-usage: "&e用法: /{0} unignore <player>"             # unignore 子命令用法
+  chat-usage: "&e用法: /{0} channel|toggle|ignore|unignore|socialspy"  # chat 总用法
+  msg-usage: "&e用法: /{0} <player> <message>"                 # msg 命令用法
+  reply-usage: "&e用法: /{0} <message>"                        # reply 命令用法
 
 # ── service results ─────────────────────────────────────
 result:
-  player-offline: "玩家当前不在线。"
-  no-channel: "未找到可用聊天频道。"
-  private-no-target: "当前私聊频道没有最近会话对象，请先使用 /msg。"
-  private-target-unavailable: "最近私聊对象不可用，请重新使用 /msg。"
-  unknown-channel: "未知频道: {0}"
-  channel-no-permission: "你没有权限进入该频道。"
-  channel-switched: "当前频道已切换为 {0}。"
-  private-toggle: "私聊接收已{0}。"
-  mentions-toggle: "提及接收已{0}。"
-  socialspy-no-permission: "你没有权限切换社交监听。"
-  socialspy-toggle: "社交监听已{0}。"
-  player-not-found: "找不到玩家: {0}"
-  socialspy-notify: "你的社交监听已被 {0} {1}。"
-  socialspy-set: "已将 {0} 的社交监听设置为 {1}。"
-  ignore-self: "不能忽略自己。"
-  already-ignored: "你已经忽略了 {0}。"
-  ignored: "已忽略 {0}。"
-  not-ignored: "你没有忽略 {0}。"
-  unignored: "已取消忽略 {0}。"
-  no-private-channel: "未配置私聊频道。"
-  no-reply-target: "当前没有可回复的私聊对象。"
-  reply-target-missing: "最近私聊对象不存在。"
-  muted-notify: "你已被禁言，时长: {0}。"
-  muted: "已禁言 {0}。"
-  unmuted-notify: "你的聊天禁言已解除。"
-  unmuted: "已解除 {0} 的禁言。"
-  empty-message: "消息不能为空。"
-  filtered: "消息包含被禁止内容。"
-  chat-sent: "聊天已发送。"
-  target-missing: "目标玩家不存在。"
-  self-private: "不能给自己发送私聊。"
-  target-rejects: "对方当前拒收私聊。"
-  target-ignored: "对方已忽略你。"
-  target-offline: "对方当前不在线。"
-  private-sent: "私聊已发送。"
-  channel-speak-no-permission: "你没有权限在该频道发言。"
-  private-no-permission: "你没有权限使用私聊。"
-  mute-remaining: "你当前处于禁言状态，剩余 {0}。"
-  too-fast: "发言过快，请稍后再试。"
-  duplicate: "请勿重复发送相同内容。"
-  message-too-long: "消息长度不能超过 {0} 个字符。"
+  player-offline: "玩家当前不在线。"                    # 目标玩家不在线
+  no-channel: "未找到可用聊天频道。"                    # 没有可用频道
+  private-no-target: "当前私聊频道没有最近会话对象，请先使用 /msg。"  # 无私聊目标
+  private-target-unavailable: "最近私聊对象不可用，请重新使用 /msg。"  # 私聊目标已失效
+  unknown-channel: "未知频道: {0}"                      # 指定了不存在的频道
+  channel-no-permission: "你没有权限进入该频道。"        # 频道进入权限不足
+  channel-switched: "当前频道已切换为 {0}。"             # 频道切换成功
+  private-toggle: "私聊接收已{0}。"                     # 私聊接收开关变更，{0} 为 开启/关闭
+  mentions-toggle: "提及接收已{0}。"                    # 提及接收开关变更
+  socialspy-no-permission: "你没有权限切换社交监听。"    # 社交监听权限不足
+  socialspy-toggle: "社交监听已{0}。"                   # 社交监听开关变更
+  player-not-found: "找不到玩家: {0}"                   # 目标玩家不存在
+  socialspy-notify: "你的社交监听已被 {0} {1}。"        # 社交监听被管理员变更通知
+  socialspy-set: "已将 {0} 的社交监听设置为 {1}。"       # 管理员设置社交监听结果
+  ignore-self: "不能忽略自己。"                         # 尝试忽略自己
+  already-ignored: "你已经忽略了 {0}。"                 # 目标已在忽略列表中
+  ignored: "已忽略 {0}。"                               # 忽略成功
+  not-ignored: "你没有忽略 {0}。"                       # 目标不在忽略列表中
+  unignored: "已取消忽略 {0}。"                         # 取消忽略成功
+  no-private-channel: "未配置私聊频道。"                # 私聊频道未配置
+  no-reply-target: "当前没有可回复的私聊对象。"          # 无可回复目标
+  reply-target-missing: "最近私聊对象不存在。"          # 回复目标已离线/失效
+  muted-notify: "你已被禁言，时长: {0}。"               # 被禁言通知
+  muted: "已禁言 {0}。"                                 # 管理员禁言操作成功
+  unmuted-notify: "你的聊天禁言已解除。"                # 禁言解除通知
+  unmuted: "已解除 {0} 的禁言。"                        # 管理员解除禁言成功
+  empty-message: "消息不能为空。"                       # 发送空消息
+  filtered: "消息包含被禁止内容。"                      # 消息被过滤拦截
+  chat-sent: "聊天已发送。"                             # 消息发送成功
+  target-missing: "目标玩家不存在。"                    # 私聊目标不存在
+  self-private: "不能给自己发送私聊。"                  # 尝试给自己发私聊
+  target-rejects: "对方当前拒收私聊。"                  # 对方关闭了私聊接收
+  target-ignored: "对方已忽略你。"                      # 对方将你加入忽略列表
+  target-offline: "对方当前不在线。"                    # 私聊目标不在线
+  private-sent: "私聊已发送。"                          # 私聊发送成功
+  channel-speak-no-permission: "你没有权限在该频道发言。"  # 频道发言权限不足
+  private-no-permission: "你没有权限使用私聊。"         # 私聊权限不足
+  mute-remaining: "你当前处于禁言状态，剩余 {0}。"      # 禁言剩余时间提示
+  too-fast: "发言过快，请稍后再试。"                    # 触发发言冷却
+  duplicate: "请勿重复发送相同内容。"                   # 触发重复消息检测
+  message-too-long: "消息长度不能超过 {0} 个字符。"      # 消息超长提示

@@ -4,6 +4,11 @@ import org.bukkit.plugin.java.JavaPlugin;
 import priv.seventeen.artist.arcartx.api.ArcartXAPI;
 import priv.seventeen.artist.arcartx.core.keybind.ArcartXKeyBindRegistry;
 
+/**
+ * ArcartX 按键绑定桥接，封装 {@link ArcartXKeyBindRegistry} 的注册与回调管理。
+ * <p>
+ * ArcartX 为必需依赖，运行时通过 {@link #initialize()} 检测可用性。
+ */
 public final class ArcartXKeyBindBridge {
 
     private final JavaPlugin plugin;

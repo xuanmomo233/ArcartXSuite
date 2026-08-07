@@ -27,6 +27,14 @@ import xuanmo.arcartxsuite.essentials.service.PlayerManagementService;
 import xuanmo.arcartxsuite.essentials.service.TeleportService;
 import xuanmo.arcartxsuite.essentials.storage.EssentialsRepository;
 
+/**
+ * Essentials 模块的命令委派器。
+ * <p>
+ * 负责解析并分发 {@code /essentials <action>} 形式的子命令，
+ * 涵盖玩家管理、传送、世界控制、安全管理、交互与工具等全部功能。
+ * 通过权限校验、参数校验后将请求转发至对应的服务层
+ * （{@link PlayerManagementService}、{@link TeleportService} 等）。
+ */
 public final class EssentialsCommandDelegate {
 
     private static final List<String> ACTIONS = List.of(
@@ -54,6 +62,21 @@ public final class EssentialsCommandDelegate {
     private final Supplier<MessageProvider> messagesSupplier;
     private final Map<UUID, BukkitTask> poseMonitorTasks;
 
+    /**
+     * 构造命令委派器，注入所有依赖的服务与组件。
+     *
+     * @param configuration          模块配置
+     * @param playerService          玩家管理服务
+     * @param teleportService        传送服务
+     * @param repository             数据仓储
+     * @param inventoryActionsService 背包操作服务
+     * @param chatMutableSupplier    ChatMutable 能力延迟供应者（禁言/解禁）
+     * @param menuPacketHandler      菜单 UI 包处理器
+     * @param adminPacketHandler     管理 UI 包处理器
+     * @param plugin                 宿主插件实例
+     * @param messagesSupplier       消息提供者延迟供应者
+     * @param poseMonitorTasks       姿势监控任务映射（坐/躺）
+     */
     public EssentialsCommandDelegate(
         EssentialsConfiguration configuration,
         PlayerManagementService playerService,
@@ -80,6 +103,14 @@ public final class EssentialsCommandDelegate {
         this.poseMonitorTasks = poseMonitorTasks;
     }
 
+    /**
+     * 处理 {@code /essentials} 命令，根据子动作分发到对应处理器。
+     *
+     * @param sender 命令发送者
+     * @param label  命令标签
+     * @param args   命令参数（args[0] 为模块名，args[1] 为动作）
+     * @return {@code true} 表示命令已处理
+     */
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         String action = args.length < 2 ? "help" : args[1].toLowerCase(Locale.ROOT);
         switch (action) {
@@ -196,6 +227,13 @@ public final class EssentialsCommandDelegate {
         return true;
     }
 
+    /**
+     * 提供 {@code /essentials} 命令的 Tab 补全。
+     *
+     * @param sender 命令发送者
+     * @param args   当前参数数组
+     * @return 补全候选列表，无补全时返回空列表
+     */
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) return filter(ACTIONS, args[1]);
         if (args.length == 3) {

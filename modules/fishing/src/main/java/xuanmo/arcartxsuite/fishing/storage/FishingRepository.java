@@ -9,6 +9,11 @@ import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.fishing.model.FishCollectionEntry;
 import xuanmo.arcartxsuite.fishing.model.FishingPlayerData;
 
+/**
+ * 钓鱼模块的数据仓储接口，定义玩家数据与图鉴条目的持久化操作。
+ * <p>
+ * 关联模块：{@code fishing}。默认实现为 {@link JdbcFishingRepository}。
+ */
 public interface FishingRepository {
 
     void initialize() throws Exception;

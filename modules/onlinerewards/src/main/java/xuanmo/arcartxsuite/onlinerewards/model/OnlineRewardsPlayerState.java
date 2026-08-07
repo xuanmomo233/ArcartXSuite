@@ -1,5 +1,12 @@
 package xuanmo.arcartxsuite.onlinerewards.model;
 
+/**
+ * 玩家在线奖励运行时状态。
+ * <p>
+ * 属于 {@code onlinerewards} 模块，承载单个玩家的当日/周/月/总在线时长、奖励阶段、
+ * 签到连续与累计天数、补签卡、离线储蓄分钟数及周期奖励领取记录等全部可变状态。
+ * 该类为可变对象，由 {@code OnlineRewardsStateEngine} 与 {@code OnlineRewardsService} 维护。
+ */
 public final class OnlineRewardsPlayerState {
 
     private String playerName;
@@ -20,10 +27,34 @@ public final class OnlineRewardsPlayerState {
     private java.util.Set<String> claimedWeeklyRewardIds;
     private java.util.Set<String> claimedMonthlyRewardIds;
 
+    /**
+     * 创建一个所有字段为默认初始值的新状态。
+     */
     public OnlineRewardsPlayerState() {
         this("", "", 0, 0, "", 0, "", 0, 0, "", 0, 0, 0, 0.0D, 0, java.util.Set.of(), java.util.Set.of());
     }
 
+    /**
+     * 以全字段构造玩家状态，所有数值字段会被约束为非负，字符串字段 null 转空串。
+     *
+     * @param playerName             玩家名称
+     * @param rewardDate             当前奖励日期
+     * @param onlineMinutes          当日在线分钟数
+     * @param rewardStage            已领取的阶段奖励序号
+     * @param weekKey                当前周键
+     * @param weekMinutes            本周在线分钟数
+     * @param monthKey               当前月键
+     * @param monthMinutes           本月在线分钟数
+     * @param totalMinutes           历史总在线分钟数
+     * @param lastSignInDate         上次签到日期
+     * @param signInStreak           连续签到天数
+     * @param signInTotal            累计签到天数
+     * @param makeupCards            补签卡数量
+     * @param timeBonusRemainder     时长倍率累计余数
+     * @param offlineSavingsMinutes  离线储蓄分钟数
+     * @param claimedWeeklyRewardIds 已领取的周奖励 id 集合
+     * @param claimedMonthlyRewardIds 已领取的月奖励 id 集合
+     */
     public OnlineRewardsPlayerState(
         String playerName,
         String rewardDate,
@@ -198,6 +229,11 @@ public final class OnlineRewardsPlayerState {
         this.claimedMonthlyRewardIds = claimedMonthlyRewardIds == null ? java.util.Set.of() : java.util.Set.copyOf(claimedMonthlyRewardIds);
     }
 
+    /**
+     * 创建当前状态的深拷贝。
+     *
+     * @return 与当前状态字段一致的新实例
+     */
     public OnlineRewardsPlayerState copy() {
         return new OnlineRewardsPlayerState(
             playerName,

@@ -13,11 +13,25 @@ import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsModuleConfiguration
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsPeriodicReward;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsPlayerState;
 
+/**
+ * 在线奖励菜单数据包工厂。
+ * <p>
+ * 属于 {@code onlinerewards} 模块，将模块配置、玩家快照与日历视图组装为发送给客户端
+ * 的菜单 payload，包含时长统计、进度、阶段奖励行、周期奖励行、签到奖励行与日历行等。
+ */
 public final class OnlineRewardsMenuPacketFactory {
 
     private OnlineRewardsMenuPacketFactory() {
     }
 
+    /**
+     * 构建包含日历视图的完整菜单 payload。
+     *
+     * @param configuration 模块配置
+     * @param snapshot      玩家快照
+     * @param calendarView  签到日历视图
+     * @return 菜单 payload 映射
+     */
     public static Map<String, Object> build(
         OnlineRewardsModuleConfiguration configuration,
         OnlineRewardsPlayerSnapshot snapshot,
@@ -79,6 +93,13 @@ public final class OnlineRewardsMenuPacketFactory {
         return payload;
     }
 
+    /**
+     * 以当月默认日历视图构建菜单 payload。
+     *
+     * @param configuration 模块配置
+     * @param snapshot      玩家快照
+     * @return 菜单 payload 映射
+     */
     public static Map<String, Object> build(
         OnlineRewardsModuleConfiguration configuration,
         OnlineRewardsPlayerSnapshot snapshot

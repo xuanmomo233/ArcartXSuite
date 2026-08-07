@@ -13,6 +13,13 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.fishing.service.FishingService;
 
+/**
+ * 钓鱼模块的 Bukkit 事件监听器。
+ * <p>
+ * 关联模块：{@code fishing}。拦截原版钓鱼事件并启动小游戏，
+ * 在玩家退出/死亡/传送时清理进行中的小游戏会话，
+ * 并处理鱼竿耐久度加成。
+ */
 public final class FishingListener implements Listener {
 
     private final FishingService service;

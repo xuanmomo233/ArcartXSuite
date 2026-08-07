@@ -45,7 +45,6 @@ pull:
   result: "&a你在 &e{0} &a抽中了: &f{1}"
   pity-info: "&7当前保底: 5星 &f{0} &7| 4星 &f{1}"
   fate-point: "&7命定值: &f{0}"
-  wear-info: "&7磨损度: &f{0} &7({1})"
 
 admin:
   help:

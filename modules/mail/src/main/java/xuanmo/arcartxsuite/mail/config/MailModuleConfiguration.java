@@ -13,6 +13,20 @@ import org.bukkit.configuration.file.FileConfiguration;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
 
+/**
+ * 邮件模块顶层配置，聚合存储、跨服、UI、玩家发送、审核、保留策略与预设目录等子配置。
+ * <p>
+ * 关联模块：mail。通过 {@link #load(FileConfiguration, Logger)} 从 {@code ArcartXMail.yml} 解析。
+ *
+ * @param debug           是否开启调试日志
+ * @param storage         存储配置
+ * @param crossServer     跨服通道配置
+ * @param ui              UI 配置
+ * @param playerSend      玩家发送配置
+ * @param moderation      审核配置
+ * @param retention       保留策略配置
+ * @param presetsDirectory 预设邮件模板目录名
+ */
 public record MailModuleConfiguration(
     boolean debug,
     MailStorageConfiguration storage,
@@ -24,6 +38,13 @@ public record MailModuleConfiguration(
     String presetsDirectory
 ) {
 
+    /**
+     * 从 Bukkit {@link FileConfiguration} 加载并组装邮件模块完整配置。
+     *
+     * @param configuration Bukkit 配置对象
+     * @param logger        日志器，用于记录正则编译警告
+     * @return 解析后的模块配置
+     */
     public static MailModuleConfiguration load(FileConfiguration configuration, Logger logger) {
         boolean debug = configuration.getBoolean("settings.debug", false);
 

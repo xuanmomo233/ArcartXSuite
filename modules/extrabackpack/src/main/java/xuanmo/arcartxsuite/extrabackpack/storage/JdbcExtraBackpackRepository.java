@@ -15,30 +15,65 @@ import xuanmo.arcartxsuite.extrabackpack.config.ExtraBackpackConfiguration.Stora
 import xuanmo.arcartxsuite.extrabackpack.config.ExtraBackpackConfiguration.StorageDialect;
 import xuanmo.arcartxsuite.extrabackpack.storage.ExtraBackpackRepository.ExtraBackpackSlotRecord;
 
+/**
+ * {@link ExtraBackpackRepository} 的 JDBC 实现，继承 {@link AbstractModuleRepository}。
+ * <p>
+ * 基于 HikariCP 连接池提供 SQLite/MySQL 双方言适配，管理 {@code extra_backpack_capacity}
+ * 与 {@code extra_backpack_slots} 两张表，负责扩展背包容量与槽位物品的持久化读写。
+ * 同时接入宿主的玩家数据清除（{@code /axs purge}）与跨源迁移（{@code /axs migrate}）能力。
+ */
 public final class JdbcExtraBackpackRepository extends AbstractModuleRepository implements ExtraBackpackRepository {
 
     private final StorageConfiguration configuration;
 
+    /**
+     * 构造仓库实例。
+     *
+     * @param dataFolder    模块数据目录，SQLite 文件存放于此
+     * @param configuration 存储配置
+     * @param logger        模块日志
+     */
     public JdbcExtraBackpackRepository(File dataFolder, StorageConfiguration configuration, Logger logger) {
         super("AXS-ExtraBackpack", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;
     }
 
+    /**
+     * 初始化时创建容量表、槽位表及索引。
+     *
+     * @param connection 数据库连接
+     * @throws SQLException 建表失败时抛出
+     */
     @Override
     protected void onInitialize(Connection connection) throws SQLException {
         createTables(connection);
     }
 
+    /**
+     * 返回存储玩家数据的表名列表。
+     *
+     * @return 包含 {@code extra_backpack_slots} 与 {@code extra_backpack_capacity}
+     */
     @Override
     public List<String> playerDataTables() {
         return List.of("extra_backpack_slots", "extra_backpack_capacity");
     }
 
+    /**
+     * 返回本仓库负责的全部表名列表，供跨源迁移使用。
+     *
+     * @return 包含 {@code extra_backpack_capacity} 与 {@code extra_backpack_slots}
+     */
     @Override
     public List<String> allTables() {
         return List.of("extra_backpack_capacity", "extra_backpack_slots");
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 查询 {@code extra_backpack_capacity} 表，不存在记录时返回 {@code -1}。
+     */
     @Override
     public long loadExtraBackpackCapacity(UUID playerUuid, String categoryId) throws SQLException {
         try (Connection connection = connection();
@@ -53,6 +88,11 @@ public final class JdbcExtraBackpackRepository extends AbstractModuleRepository 
         }
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 使用 upsert 语法（SQLite {@code ON CONFLICT} / MySQL {@code ON DUPLICATE KEY}）写入容量。
+     */
     @Override
     public void setExtraBackpackCapacity(UUID playerUuid, String categoryId, long capacity, long updatedAt) throws SQLException {
         try (Connection connection = connection();
@@ -67,6 +107,11 @@ public final class JdbcExtraBackpackRepository extends AbstractModuleRepository 
         }
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 查询 {@code extra_backpack_slots} 表，结果按分类与槽位号升序排列。
+     */
     @Override
     public List<ExtraBackpackSlotRecord> loadExtraBackpackSlots(UUID playerUuid) throws SQLException {
         try (Connection connection = connection();
@@ -90,6 +135,11 @@ public final class JdbcExtraBackpackRepository extends AbstractModuleRepository 
         }
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 以事务方式先删除该玩家全部槽位记录，再批量插入新记录；失败时回滚。
+     */
     @Override
     public void saveExtraBackpackSlots(UUID playerUuid, List<ExtraBackpackSlotRecord> items) throws SQLException {
         try (Connection connection = connection()) {
@@ -120,6 +170,9 @@ public final class JdbcExtraBackpackRepository extends AbstractModuleRepository 
         }
     }
 
+    /**
+     * 关闭仓库，委托 {@link #shutdown()} 释放连接池。
+     */
     @Override
     public void close() {
         shutdown();

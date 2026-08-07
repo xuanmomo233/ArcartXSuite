@@ -1,3 +1,4 @@
+# 配置文件版本号；用于自动迁移程序识别当前版本并执行升级。
 config-version: 1
 # AXS Chat
 # 作用: 频道聊天、私聊、回复、监听、忽略、禁言、跨服转发、聊天卡片、物品展示和过滤。
@@ -32,12 +33,14 @@ settings:
   # 重复消息判定窗口，单位毫秒。
   duplicate-window-millis: 4000
 
+# ── 兼容性设置 ───────────────────────────────────────
 compatibility:
   other-chat-plugins:
     # 强制接管聊天事件。开启后 AXS 会尽早捕获玩家原始消息，并在事件链末尾再次取消原版/其他插件广播。
     # 仅在服务器安装其他聊天插件并出现消息被改写、重复或复用旧消息时开启。
     force-takeover: false
 
+# ── 存储设置 ─────────────────────────────────────────
 storage:
   # 存储模式: sqlite 本地文件；mysql 远程 MySQL。
   mode: "sqlite"
@@ -47,18 +50,20 @@ storage:
     file: "chat.db"
 
   mysql:
-    host: "127.0.0.1"
-    port: 3306
-    database: "arcartxsuite"
-    username: "root"
-    password: ""
+    host: "127.0.0.1"       # MySQL 服务器地址
+    port: 3306              # MySQL 服务器端口
+    database: "arcartxsuite" # 数据库名称
+    username: "root"        # 数据库用户名
+    password: ""            # 数据库密码
 
   # 连接池大小；在线较多或启用跨服历史时可适当提高。
   pool-size: 4
 
+# ── 跨服设置 ─────────────────────────────────────────
 cross-server:
-  enabled: false
+  enabled: false            # 是否启用跨服聊天转发；需要 Redis 支持
 
+# ── 聊天卡片设置 ─────────────────────────────────────
 cards:
   # 提及、私聊、系统提示、物品展示对应的 ArcartX 聊天卡片 ID；留空则不发送卡片。
   mention-card-id: "axs_chat_mention"
@@ -83,6 +88,7 @@ cards:
   # 卡片最小宽度
   min-width: 500
 
+# ── 功能开关 ─────────────────────────────────────────
 function:
   mention:
     # 是否开启 @提及 识别。
@@ -93,9 +99,9 @@ function:
   item:
     # 是否开启 [item] 物品展示。
     enabled: true
-    token: "[item]"
-    format: "&b[&f{item_name}&b x{item_amount}]"
-    failed-format: "&c[物品不可用]"
+    token: "[item]"                          # 触发物品展示的占位标记
+    format: "&b[&f{item_name}&b x{item_amount}]" # 物品展示格式，{item_name} 为物品名，{item_amount} 为数量
+    failed-format: "&c[物品不可用]"           # 物品不可用时显示的替代文本
 
   # 自定义组件匹配表；为空时不额外替换。
   # 示例:
@@ -106,6 +112,7 @@ function:
   #     replacement: "★"
   custom-components: {}
 
+# ── 敏感词过滤 ───────────────────────────────────────
 filter:
   # 是否启用本地敏感词与正则过滤。
   enabled: false
@@ -115,14 +122,15 @@ filter:
 
   # 替换字符或文本。
   replacement: "*"
-  blocked-words: []
-  blocked-patterns: []
+  blocked-words: []         # 被屏蔽的敏感词列表
+  blocked-patterns: []      # 被屏蔽的正则表达式列表
 
+  # ── 远程词库 ───────────────────────────────────────
   cloud:
     # 远程词库开关；开启后会定期拉取 url 内容并并入过滤规则。
     enabled: false
-    url: ""
-    refresh-minutes: 60
+    url: ""                  # 远程词库拉取地址
+    refresh-minutes: 60      # 远程词库刷新间隔，单位分钟
 
 # 频道定义目录，相对于插件数据目录。
 channels-directory: "chat/channels"

@@ -26,6 +26,12 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import priv.seventeen.artist.arcartx.core.network.ArcartXNetworkSender;
 
+/**
+ * {@link xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI} 的默认实现，
+ * 桥接 Adyeshach NPC 插件，提供 NPC 创建、查找、可见性控制等能力。
+ * <p>
+ * Adyeshach 为可选依赖，运行时通过 {@link #initialize()} 懒检测可用性。
+ */
 public final class AdyeshachNpcBridge implements xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI {
 
     private final JavaPlugin plugin;

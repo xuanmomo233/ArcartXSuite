@@ -11,6 +11,21 @@ ui:
   screenScale: true
   show: true
   packetHandler:
+    # packetHandler: init
+    # 界面初始化时接收服务端数据包，将包字段写入 UI 变量
+    # 包字段:
+    #   - packetId: 包标识符，用于后续 Packet.send 回传
+    #   - seasonName: 当前赛季名称
+    #   - currentLevel: 玩家当前战令等级
+    #   - maxLevel: 赛季最大等级
+    #   - currentXp: 当前等级已获得经验值
+    #   - xpPerLevel: 每级所需经验值
+    #   - xpNeeded: 升级还需经验值
+    #   - premiumUnlocked: 是否已解锁高级版（premium）
+    #   - deluxeUnlocked: 是否已解锁豪华版（deluxe）
+    #   - tier: 当前档位标识（FREE / PREMIUM / DELUXE）
+    #   - tierDisplay: 档位显示文本（含颜色代码）
+    #   - progressRatio: 当前等级进度比例（0~1）
     init: |-
       var.packetId = packet['packetId']
       var.seasonName = packet['seasonName']
@@ -24,6 +39,21 @@ ui:
       var.tier = packet['tier']
       var.tierDisplay = packet['tierDisplay']
       var.progressRatio = packet['progressRatio']
+    # packetHandler: update
+    # 数据更新时接收服务端数据包，刷新 UI 变量（字段与 init 相同）
+    # 包字段:
+    #   - packetId: 包标识符
+    #   - seasonName: 当前赛季名称
+    #   - currentLevel: 玩家当前战令等级
+    #   - maxLevel: 赛季最大等级
+    #   - currentXp: 当前等级已获得经验值
+    #   - xpPerLevel: 每级所需经验值
+    #   - xpNeeded: 升级还需经验值
+    #   - premiumUnlocked: 是否已解锁高级版
+    #   - deluxeUnlocked: 是否已解锁豪华版
+    #   - tier: 当前档位标识
+    #   - tierDisplay: 档位显示文本
+    #   - progressRatio: 当前等级进度比例（0~1）
     update: |-
       var.packetId = packet['packetId']
       var.seasonName = packet['seasonName']
@@ -37,6 +67,14 @@ ui:
       var.tier = packet['tier']
       var.tierDisplay = packet['tierDisplay']
       var.progressRatio = packet['progressRatio']
+    # packetHandler: rewards
+    # 接收奖励列表数据包，动态生成奖励列表子元素
+    # 包字段:
+    #   - packetId: 包标识符
+    #   - rewards: 奖励数据映射（key 为等级标识，含 level/tierDisplay/claimed/claimable/locked/levelReached 等字段）
+    #   - rewardCount: 奖励条目总数
+    #   - currentLevel: 玩家当前战令等级
+    #   - action_token: 操作令牌，用于领取奖励时防伪造验证
     rewards: |-
       var.packetId = packet['packetId']
       var.rewards = packet['rewards']

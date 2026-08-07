@@ -1,3 +1,4 @@
+# 配置版本号（由 ConfigDiagnosticEngine 用于触发 migration 流程，仅破坏性改动时递增）
 config-version: 1
 # AXS CombatEffect
 # 作用: 监听玩家攻击/击杀活体实体并向 ArcartX UI 发包；同时将伤害/治疗事件桥接到 ArcartX 数字飘字显示。
@@ -49,6 +50,7 @@ combo-tracker:
   # 目标锁定模式: true 时切换攻击目标会重置 combo
   # 适用于 Boss 战等场景，确保 combo 仅计入对同一目标的连续攻击
   per-target: false
+  # 是否开启连击追踪调试日志
   debug: false
 
 # 死亡缓冲系统
@@ -74,6 +76,7 @@ death-buffer:
   block-auto-respawn: true
   # 不启用死亡缓冲的世界列表
   world-blacklist: []
+  # 是否开启死亡缓冲调试日志
   debug: false
 
 keybind-trigger:

@@ -1,12 +1,16 @@
-id: "worm"
-display-name: "蚯蚓"
-item:
-  source: "minecraft"
-  item-id: "string"
-  amount: 1
-default: true
-fish-attract-modifiers:
-  catfish: 2.0
-  sea_bass: 1.5
-treasure-chance-boost: 0.02
-max-durability-bonus: 0
+# 饵料定义：蚯蚓
+# 蚯蚓是默认饵料，玩家无其他饵料时自动使用，对鲶鱼和海鲈鱼有吸引效果
+# 饵料文件位于 baits/ 目录，每个文件定义一种饵料
+
+id: "worm"                     # 饵料唯一标识符
+display-name: "蚯蚓"            # 显示名称
+item:                          # 饵料对应的物品定义
+  source: "minecraft"          # 物品来源（minecraft=原版物品）
+  item-id: "string"            # 原版物品ID（使用线代替蚯蚓）
+  amount: 1                    # 物品数量
+default: true                  # 是否为默认饵料（true=玩家无饵料时自动使用）
+fish-attract-modifiers:        # 鱼类吸引倍率（对该鱼种的捕获概率乘数）
+  catfish: 2.0                 # 鲶鱼吸引倍率2.0倍
+  sea_bass: 1.5                # 海鲈鱼吸引倍率1.5倍
+treasure-chance-boost: 0.02    # 宝藏概率额外加成（+2%）
+max-durability-bonus: 0        # 鱼竿最大耐久度加成

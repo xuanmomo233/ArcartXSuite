@@ -1,4 +1,6 @@
-config-version: 2
+# AXS 钓鱼模块主配置文件
+# 配置钓鱼小游戏核心参数、水域定义、鱼类池、宝藏池、UI注册和命令
+config-version: 2              # 配置文件版本号
 
 # ─── 数据存储 ────────────────────────────────────────
 # mode: sqlite 或 mysql。
@@ -50,77 +52,77 @@ fishing:
 waters:
   # 指定地点水域列表
   specified:
-    - name: "dragon_lake"
-      display-name: "&b龙泉湖"
-      type: circle
-      world: "world"
-      center: [100, 64, 200]
-      radius: 50
-      fish-pool: "lake"
-      treasure-pool: "common"
-      difficulty-modifier: 1.2
-      bait-multipliers:
-        worm: 1.5
-        corn: 2.0
-      require-permission: ""
+    - name: "dragon_lake"     # 水域唯一标识名
+      display-name: "&b龙泉湖"  # 水域显示名称（支持颜色代码）
+      type: circle            # 水域形状类型（circle=圆形区域）
+      world: "world"          # 所在世界名称
+      center: [100, 64, 200]  # 圆形水域中心坐标 [x, y, z]
+      radius: 50              # 圆形水域半径（方块）
+      fish-pool: "lake"       # 引用的鱼类池ID（对应 fish-pools 定义）
+      treasure-pool: "common" # 引用的宝藏池ID（对应 treasure-pools 定义）
+      difficulty-modifier: 1.2 # 难度修正系数（1.2=难度提升20%）
+      bait-multipliers:       # 饵料在该水域的额外倍率
+        worm: 1.5             # 蚯蚓在此水域倍率1.5
+        corn: 2.0             # 玉米粒在此水域倍率2.0
+      require-permission: ""  # 进入此水域钓鱼所需权限（空=无限制）
 
-    - name: "jade_river"
-      display-name: "&a翡翠河"
-      type: rectangle
-      world: "world"
-      min: [500, 60, 300]
-      max: [700, 80, 400]
-      fish-pool: "river"
-      treasure-pool: "common"
-      difficulty-modifier: 0.9
-      bait-multipliers:
-        worm: 1.0
-        bread: 1.3
-      require-permission: ""
+    - name: "jade_river"     # 水域唯一标识名
+      display-name: "&a翡翠河"  # 水域显示名称（支持颜色代码）
+      type: rectangle         # 水域形状类型（rectangle=矩形区域）
+      world: "world"          # 所在世界名称
+      min: [500, 60, 300]     # 矩形水域最小坐标 [x, y, z]
+      max: [700, 80, 400]     # 矩形水域最大坐标 [x, y, z]
+      fish-pool: "river"      # 引用的鱼类池ID
+      treasure-pool: "common" # 引用的宝藏池ID
+      difficulty-modifier: 0.9 # 难度修正系数（0.9=难度降低10%）
+      bait-multipliers:       # 饵料在该水域的额外倍率
+        worm: 1.0             # 蚯蚓在此水域倍率1.0
+        bread: 1.3            # 面包屑在此水域倍率1.3
+      require-permission: ""  # 进入此水域钓鱼所需权限（空=无限制）
 
   # 默认水域（兜底）
   default:
-    name: "default"
-    display-name: "&7普通水域"
-    fish-pool: "default"
-    treasure-pool: "default"
-    difficulty-modifier: 1.0
-    bait-multipliers:
-      worm: 1.0
-      bread: 1.0
-      corn: 1.0
+    name: "default"           # 默认水域标识名
+    display-name: "&7普通水域"  # 默认水域显示名称
+    fish-pool: "default"      # 引用的鱼类池ID
+    treasure-pool: "default"  # 引用的宝藏池ID
+    difficulty-modifier: 1.0  # 难度修正系数（1.0=标准难度）
+    bait-multipliers:         # 饵料在该水域的额外倍率
+      worm: 1.0               # 蚯蚓倍率1.0
+      bread: 1.0              # 面包屑倍率1.0
+      corn: 1.0               # 玉米粒倍率1.0
 
 # ─── 鱼类池 ────────────────────────────────────────
 # 引用 fishes/ 目录下的鱼种 ID
 fish-pools:
-  default:
-    - "sea_bass"
-    - "salmon"
-  lake:
-    - "sea_bass"
-    - "catfish"
-    - "legendary_carp"
-  river:
-    - "salmon"
-    - "catfish"
-  ocean:
-    - "tuna"
-    - "pufferfish"
-    - "sea_bass"
+  default:                    # 默认鱼类池（普通水域使用）
+    - "sea_bass"              # 海鲈鱼
+    - "salmon"                # 鲑鱼
+  lake:                       # 湖泊鱼类池
+    - "sea_bass"              # 海鲈鱼
+    - "catfish"               # 鲶鱼
+    - "legendary_carp"        # 传说鲤鱼
+  river:                      # 河流鱼类池
+    - "salmon"                # 鲑鱼
+    - "catfish"               # 鲶鱼
+  ocean:                      # 海洋鱼类池
+    - "tuna"                  # 金枪鱼
+    - "pufferfish"            # 河豚
+    - "sea_bass"              # 海鲈鱼
 
 # ─── 宝藏池 ────────────────────────────────────────
 # 引用 treasures/ 目录下的宝藏 ID
 treasure-pools:
-  default:
-    - "old_boot"
-    - "lost_ring"
-  common:
-    - "old_boot"
-    - "lost_ring"
-    - "ancient_coin"
-  rare:
-    - "ancient_coin"
-    - "lost_ring"
+  default:                    # 默认宝藏池（普通水域使用）
+    - "old_boot"              # 旧靴子
+    - "lost_ring"             # 失落戒指
+  common:                     # 普通宝藏池
+    - "old_boot"              # 旧靴子
+    - "lost_ring"             # 失落戒指
+    - "ancient_coin"          # 古币
+  rare:                       # 稀有宝藏池
+    - "ancient_coin"          # 古币
+    - "lost_ring"             # 失落戒指
 
 # ─── 饵料定义 ────────────────────────────────────────
 # 饵料不通过本文件配置，请在 baits/ 目录下为每个饵料创建独立 YAML 文件。

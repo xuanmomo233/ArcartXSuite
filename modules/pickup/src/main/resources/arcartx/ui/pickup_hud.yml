@@ -8,6 +8,10 @@ ui:
   show: true
   level: 10
   packetHandler:
+    # packetHandler: pick
+    # 包字段:
+    #   - amount: 拾取的物品数量
+    #   - itemJson: 拾取物品的 JSON 序列化数据（用于显示图标）
     pick: |-
       var.now = Time.currentTime()
       var.entry4Visible = var.entry3Visible

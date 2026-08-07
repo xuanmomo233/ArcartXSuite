@@ -2,6 +2,17 @@ package xuanmo.arcartxsuite.prop.config;
 
 import org.bukkit.configuration.file.FileConfiguration;
 
+/**
+ * 道具模块语言配置模型。
+ * <p>
+ * 从 {@code language.yml} 解析，包含冷却、无权限、无按键、无手持、条件不满足等提示消息模板。
+ *
+ * @param coolDown         冷却中提示，支持 {NAME} 和 {TIME} 占位符
+ * @param noPermission     无权限提示，支持 {NAME} 占位符
+ * @param noKey            无法按键使用提示，支持 {NAME} 占位符
+ * @param noHand           无法手持使用提示，支持 {NAME} 占位符
+ * @param conditionNotMet 条件不满足提示，支持 {NAME} 和 {CONDITION} 占位符
+ */
 public record PropLanguageConfiguration(
     String coolDown,
     String noPermission,
@@ -16,6 +27,12 @@ public record PropLanguageConfiguration(
     private static final String DEFAULT_NO_HAND = "&7[&dArcartXProp&7]&c{NAME} &f该道具无法手持使用";
     private static final String DEFAULT_CONDITION_NOT_MET = "&7[&dArcartXProp&7]&c{NAME} &f使用条件不满足: &e{CONDITION}";
 
+    /**
+     * 从 YAML 配置加载语言配置。
+     *
+     * @param configuration YAML 配置
+     * @return 解析后的 {@link PropLanguageConfiguration}
+     */
     public static PropLanguageConfiguration load(FileConfiguration configuration) {
         return new PropLanguageConfiguration(
             readString(configuration, "COOL_DOWN", DEFAULT_COOLDOWN),

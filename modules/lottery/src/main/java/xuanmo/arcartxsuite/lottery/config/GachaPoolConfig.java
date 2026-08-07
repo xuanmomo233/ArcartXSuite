@@ -9,6 +9,28 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.lottery.model.PoolItem;
 
+/**
+ * GACHA 抽卡奖池配置。
+ * <p>
+ * 包含保底机制（硬保底/软保底）、基础概率、UP 概率、命运点系统、
+ * 共享保底组以及各星级奖品列表。
+ *
+ * @param poolType           奖池类型（角色/武器/常驻）
+ * @param pity5star          5 星硬保底抽数
+ * @param pity4star          4 星硬保底抽数
+ * @param softPityStart      软保底起始抽数
+ * @param softPityIncrement  软保底每抽概率增量
+ * @param base5starRate      5 星基础概率
+ * @param base4starRate      4 星基础概率
+ * @param upRate             UP 物品在对应星级中的占比概率
+ * @param fatePointCap       命运点上限（武器池定轨机制），0 表示不启用
+ * @param sharedPityGroup    共享保底组名，为 {@code null} 表示不共享
+ * @param up5starItems       UP 5 星奖品列表
+ * @param standard5starItems 常驻 5 星奖品列表
+ * @param up4starItems       UP 4 星奖品列表
+ * @param standard4starItems 常驻 4 星奖品列表
+ * @param star3Items         3 星奖品列表
+ */
 public record GachaPoolConfig(
     GachaPoolType poolType,
     int pity5star,
@@ -26,10 +48,21 @@ public record GachaPoolConfig(
     @NotNull List<PoolItem> standard4starItems,
     @NotNull List<PoolItem> star3Items
 ) {
+    /**
+     * GACHA 奖池类型枚举。
+     */
     public enum GachaPoolType {
         CHARACTER, WEAPON, STANDARD
     }
 
+    /**
+     * 从 YAML 配置节加载 GACHA 奖池配置。
+     *
+     * @param section 配置节，为 {@code null} 时使用默认值
+     * @param logger  日志记录器
+     * @return 解析后的 {@link GachaPoolConfig} 实例
+     * @throws IllegalArgumentException 当保底/概率配置无效或必需奖品列表为空时抛出
+     */
     public static GachaPoolConfig load(@Nullable ConfigurationSection section, Logger logger) {
         if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
 

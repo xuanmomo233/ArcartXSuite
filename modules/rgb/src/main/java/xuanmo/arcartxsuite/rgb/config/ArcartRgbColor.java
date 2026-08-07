@@ -3,6 +3,13 @@ package xuanmo.arcartxsuite.rgb.config;
 import java.util.Locale;
 import java.util.Objects;
 
+/**
+ * RGB 颜色记录，支持 6 位十六进制解析、颜色插值与 ArcartX 颜色码输出。
+ *
+ * @param red   红色通道（0-255）
+ * @param green 绿色通道（0-255）
+ * @param blue  蓝色通道（0-255）
+ */
 public record ArcartRgbColor(int red, int green, int blue) {
 
     public ArcartRgbColor {
@@ -11,6 +18,13 @@ public record ArcartRgbColor(int red, int green, int blue) {
         validateChannel(blue, "blue");
     }
 
+    /**
+     * 从字符串解析颜色，支持 "#RRGGBB"、"§#RRGGBB"、"RRGGBB" 三种格式。
+     *
+     * @param rawValue 原始值
+     * @return 颜色实例
+     * @throws IllegalArgumentException 非法格式或超出通道范围时抛出
+     */
     public static ArcartRgbColor parse(String rawValue) {
         String normalized = normalize(rawValue);
         if (normalized.length() != 6) {
@@ -27,6 +41,14 @@ public record ArcartRgbColor(int red, int green, int blue) {
         }
     }
 
+    /**
+     * 在两个颜色之间按进度插值。
+     *
+     * @param start    起始颜色
+     * @param end      结束颜色
+     * @param progress 插值进度 [0, 1]，超出会夹取
+     * @return 插值后的颜色
+     */
     public static ArcartRgbColor lerp(ArcartRgbColor start, ArcartRgbColor end, double progress) {
         Objects.requireNonNull(start, "start");
         Objects.requireNonNull(end, "end");
@@ -42,10 +64,12 @@ public record ArcartRgbColor(int red, int green, int blue) {
         return lerp(this, target, amount);
     }
 
+    /** 返回 ArcartX 客户端识别的颜色码（§#RRGGBB）。 */
     public String arcartCode() {
         return "§#" + hex();
     }
 
+    /** 返回大写十六进制表示（如 "FF00AA"）。 */
     public String hex() {
         return String.format(Locale.ROOT, "%02X%02X%02X", red, green, blue);
     }

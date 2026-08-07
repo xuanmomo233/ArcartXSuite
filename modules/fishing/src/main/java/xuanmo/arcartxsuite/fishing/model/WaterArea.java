@@ -6,6 +6,12 @@ import org.bukkit.World;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+/**
+ * 水域定义，描述一片可钓鱼的区域及其奖池、难度修正等属性。
+ * <p>
+ * 关联模块：{@code fishing}。支持圆形、矩形与默认三种区域类型，
+ * 通过 {@link #contains(Location)} 判断玩家位置是否落在水域内。
+ */
 public final class WaterArea {
 
     private final String name;

@@ -6,79 +6,80 @@ config-version: 1
 # PAPI: %axswarehouse_total_items%、%axswarehouse_bank_balance_money% 等。
 
 settings:
-  debug: false
-  flush-interval-ticks: 100
+  debug: false  # 是否输出调试日志
+  flush-interval-ticks: 100  # 数据落库间隔（ticks，20 = 1 秒）
   # 共享仓库转让确认等待时长（小时），<=0 表示永不过期。
   transfer-confirm-expire-hours: 24
 
 # 跨服共享仓库编辑锁；MySQL 共享库 + 多子服时建议开启。连接参数见宿主 config.yml cross-server 节。
 cross-server:
-  enabled: false
+  enabled: false  # 是否启用跨服编辑锁
 
 ui:
-  id: "AXS:warehouse_storage"
-  manage-id: "AXS:warehouse_manage"
-  bank-id: "AXS:warehouse_bank"
-  packet-id: "AXS_WAREHOUSE"
-  register-ui-on-enable: true
-  overwrite-ui-files: false
+  id: "AXS:warehouse_storage"  # 仓库存储界面 UI ID
+  manage-id: "AXS:warehouse_manage"  # 仓库管理界面 UI ID
+  bank-id: "AXS:warehouse_bank"  # 银行界面 UI ID
+  packet-id: "AXS_WAREHOUSE"  # 客户端通信包标识符
+  register-ui-on-enable: true  # 启动时是否自动注册 UI
+  overwrite-ui-files: false  # 是否强制覆盖用户已修改的 UI 文件
   # 仓库网格每页显示的槽位数量（控件按此数量动态创建）。
   page-size: 54
 
 storage:
-  mode: "sqlite"
+  mode: "sqlite"  # 存储模式：sqlite / mysql
   sqlite:
-    file: "warehouse.db"
+    file: "warehouse.db"  # SQLite 数据库文件名
   mysql:
-    host: "127.0.0.1"
-    port: 3306
-    database: "arcartxsuite"
-    username: "root"
-    password: ""
-  pool-size: 4
+    host: "127.0.0.1"  # MySQL 主机地址
+    port: 3306  # MySQL 端口
+    database: "arcartxsuite"  # MySQL 数据库名
+    username: "root"  # MySQL 用户名
+    password: ""  # MySQL 密码
+  pool-size: 4  # MySQL 连接池大小（SQLite 固定为 1）
 
 security:
-  min-length: 4
-  max-length: 32
-  unlock-session-ms: 600000
-  allow-admin-password-reveal: false
-  admin-reveal-secret: ""
+  min-length: 4  # 二级密码最小长度
+  max-length: 32  # 二级密码最大长度
+  unlock-session-ms: 600000  # 解锁后会话有效时长（毫秒，600000 = 10 分钟）
+  allow-admin-password-reveal: false  # 是否允许管理员查看玩家二级密码
+  admin-reveal-secret: ""  # 管理员查看密码所需的密钥
 
 pickup:
-  auto-store-on-pickup: true
-  auto-store-mythic-loot: false
-  notify-on-auto-store: true
+  auto-store-on-pickup: true  # 拾取时是否自动存入仓库
+  auto-store-mythic-loot: false  # 是否自动存入 MythicMobs 掉落物
+  notify-on-auto-store: true  # 自动存入时是否通知玩家
 
 search:
-  page-size: 18
-  default-sort: "time"
+  page-size: 18  # 搜索结果每页显示数量
+  default-sort: "time"  # 默认排序方式（time / name / amount）
 
 warehouses:
   personal:
-    display-name: "&6个人仓库"
-    default-owned: true
-    default-level: 1
+    display-name: "&6个人仓库"  # 个人仓库显示名称
+    default-owned: true  # 玩家首次使用时是否自动创建
+    default-level: 1  # 默认仓库等级
     levels:
       "1":
-        capacity: 1000
+        capacity: 1000  # 等级 1 容量
         upgrade:
-          currency: "points"
-          amount: 500
+          currency: "points"  # 升级所需货币 ID
+          amount: 500  # 升级所需金额
       "2":
-        capacity: 2500
+        capacity: 2500  # 等级 2 容量
         upgrade:
           currency: "points"
           amount: 1200
       "3":
-        capacity: 6000
+        capacity: 6000  # 等级 3 容量（最高级，无升级）
 
+# 物品分类定义（按 NBT 路径匹配物品归属分类）
 categories:
   equipment:
-    display-name: "装备"
-    priority: 10
+    display-name: "装备"  # 分类显示名称
+    priority: 10  # 分类排序优先级（数字越小越靠前）
     nbt:
-      path: "pdc:arcartx:item_category"
-      values: ["equipment", "weapon", "armor"]
+      path: "pdc:arcartx:item_category"  # NBT 匹配路径
+      values: ["equipment", "weapon", "armor"]  # 匹配值列表
   material:
     display-name: "材料"
     priority: 20
@@ -93,8 +94,8 @@ categories:
       values: ["consumable", "food", "potion"]
   other:
     display-name: "其它"
-    priority: 9999
-    default: true
+    priority: 9999  # 兜底分类，优先级最低
+    default: true  # 未匹配任何分类的物品归入此分类
 
 bank:
   # 银行展示的全局货币 ID 子集；定义必须存在于宿主 config.yml 的 currencies 中。
@@ -104,33 +105,33 @@ bank:
     - points
   deposit-products:
     money_stable_1d:
-      enabled: true
-      display-name: "稳健 1 日"
-      description: "低门槛短期定存。"
-      currency: "money"
-      duration-seconds: 86400
-      min-amount: 100
-      max-amount: 0
-      permission: ""
+      enabled: true  # 是否启用此产品
+      display-name: "稳健 1 日"  # 产品显示名称
+      description: "低门槛短期定存。"  # 产品描述
+      currency: "money"  # 存入货币 ID
+      duration-seconds: 86400  # 定期时长（秒，86400 = 1 天）
+      min-amount: 100  # 最低存入金额
+      max-amount: 0  # 最高存入金额（0 = 无上限）
+      permission: ""  # 购买所需权限（留空 = 无限制）
       interest-tiers:
         tier_1:
-          min: 100
-          max: 9999
-          rate: 0.01
+          min: 100  # 此利率档位最低金额
+          max: 9999  # 此利率档位最高金额
+          rate: 0.01  # 利率（0.01 = 1%）
         tier_2:
           min: 10000
           max: 99999
           rate: 0.015
         tier_3:
           min: 100000
-          max: 0
+          max: 0  # 0 = 无上限
           rate: 0.02
     money_vip_7d:
       enabled: true
       display-name: "贵宾 7 日"
       description: "权限专属较高收益定存。"
       currency: "money"
-      duration-seconds: 604800
+      duration-seconds: 604800  # 7 天
       min-amount: 1000
       max-amount: 0
       permission: "ArcartXSuite.warehouse.bank.vip"
@@ -148,7 +149,7 @@ bank:
       display-name: "点券 3 日"
       description: "点券定期产品。"
       currency: "points"
-      duration-seconds: 259200
+      duration-seconds: 259200  # 3 天
       min-amount: 50
       max-amount: 0
       permission: ""
@@ -162,15 +163,16 @@ bank:
           max: 0
           rate: 0.03
 
+# 共享仓库配置
 shared:
-  enabled: true
+  enabled: true  # 是否启用共享仓库功能
   create-cost:
-    currency: "points"
-    amount: 1000
-  default-level: 1
+    currency: "points"  # 创建共享仓库所需货币
+    amount: 1000  # 创建费用
+  default-level: 1  # 默认共享仓库等级
   levels:
     "1":
-      capacity: 2000
+      capacity: 2000  # 等级 1 容量
       upgrade:
         currency: "points"
         amount: 800
@@ -180,35 +182,36 @@ shared:
         currency: "points"
         amount: 1800
     "3":
-      capacity: 10000
+      capacity: 10000  # 等级 3 容量（最高级）
   role-names:
-    owner: "所有者"
-    member: "成员"
-    viewer: "观众"
+    owner: "所有者"  # 所有者角色显示名
+    member: "成员"  # 成员角色显示名
+    viewer: "观众"  # 观众角色显示名（只读）
   permission-tiers:
     default:
-      permission: ""
-      priority: 0
-      max-owned: 1
-      max-members: 6
+      permission: ""  # 默认权限组（无额外权限要求）
+      priority: 0  # 优先级（数字越大优先级越高）
+      max-owned: 1  # 可拥有的共享仓库上限
+      max-members: 6  # 每个仓库的成员上限
     vip:
-      permission: "ArcartXSuite.warehouse.shared.vip"
+      permission: "ArcartXSuite.warehouse.shared.vip"  # VIP 权限节点
       priority: 10
       max-owned: 3
       max-members: 12
 
+# 排序方案定义（搜索结果按此方案排序）
 sort-profiles:
   time:
     fields:
-      - "updated:desc"
-      - "name:asc"
+      - "updated:desc"  # 按更新时间降序
+      - "name:asc"  # 再按名称升序
   name:
     fields:
-      - "name:asc"
+      - "name:asc"  # 按名称升序
   amount:
     fields:
-      - "amount:desc"
-      - "updated:desc"
+      - "amount:desc"  # 按数量降序
+      - "updated:desc"  # 再按更新时间降序
 
 # ─── 展示柜（Showcase）配置 ────────────────────────────────────────
 # 允许玩家将仓库中的物品展示到聊天卡片，供其他玩家查看。

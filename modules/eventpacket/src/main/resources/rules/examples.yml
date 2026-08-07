@@ -74,32 +74,34 @@
 #   objective-* 触发：rule.signal 可填 quest_id 或 objective_name 过滤。
 #   chemdah-level-change 触发：rule.signal 填等级选项ID过滤。
 
+# 首次加入服务器时播放字幕、发送聊天卡片并推送主线任务
 first_join_offer_mainline:
-  enabled: false
-  trigger: first-join
-  repeatable: false
-  actions:
-    - type: subtitle.play
-      group-id: "quest_intro"
-    - type: chat.card
-      card-id: "quest_offer"
-      data:
-        quest: "main/example_quest"
-        title: "初入岛屿"
-    - type: questgps.offer
-      quest-id: "main/example_quest"
-      open-menu: true
+  enabled: false                 # 是否启用该规则
+  trigger: first-join            # 触发类型: 玩家首次加入服务器
+  repeatable: false              # 是否可重复触发
+  actions:                       # 动作链，按顺序执行
+    - type: subtitle.play        # 播放字幕组
+      group-id: "quest_intro"    # 字幕组 ID
+    - type: chat.card            # 发送聊天卡片
+      card-id: "quest_offer"     # 卡片模板 ID
+      data:                      # 卡片自定义数据
+        quest: "main/example_quest"  # 任务路径
+        title: "初入岛屿"        # 卡片标题
+    - type: questgps.offer       # 推送任务到 QuestGPS
+      quest-id: "main/example_quest"  # 任务 ID
+      open-menu: true            # 是否自动打开任务菜单
 
+# 击杀 10 个僵尸后触发遭遇任务
 kill_zombie_trigger_encounter:
   enabled: false
-  trigger: mob-kill-count
-  count: 10
+  trigger: mob-kill-count        # 触发类型: 击杀怪物计数
+  count: 10                      # 击杀数量阈值
   repeatable: false
-  worlds:
+  worlds:                        # 限定生效世界列表
     - "world"
-  entity-types:
+  entity-types:                  # 统计的实体类型 (EntityType 枚举名)
     - "ZOMBIE"
-  mythic-mob-ids: []
+  mythic-mob-ids: []             # MythicMobs 怪物 ID 列表 (为空则不匹配 MM)
   actions:
     - type: questgps.offer
       quest-id: "encounter/example_rare"
@@ -107,12 +109,13 @@ kill_zombie_trigger_encounter:
     - type: subtitle.play
       group-id: "encounter_trigger"
 
+# 玩家等级达到 10 级时推送支线任务
 power_threshold_offer_side:
   enabled: false
-  trigger: placeholder-threshold
-  placeholder: "%player_level%"
-  threshold: 10
-  require-non-empty: true
+  trigger: placeholder-threshold # 触发类型: PAPI 占位符达到阈值
+  placeholder: "%player_level%"  # 监听的 PAPI 占位符
+  threshold: 10                  # 阈值
+  require-non-empty: true        # 占位符值为空时是否不触发
   repeatable: false
   actions:
     - type: questgps.offer
@@ -122,42 +125,45 @@ power_threshold_offer_side:
       card-id: "quest_unlock"
       data:
         quest: "side/example_side"
-        level: "{new_number}"
+        level: "{new_number}"    # 使用新数值变量
 
+# 命令信号触发: 接受主线任务
 command_signal_accept_mainline:
   enabled: false
-  trigger: command-signal
-  signal: "accept_mainline"
-  repeatable: true
-  cooldown: "5s"
+  trigger: command-signal        # 触发类型: 命令信号
+  signal: "accept_mainline"      # 信号名称，需与管理命令发送的信号一致
+  repeatable: true               # 可重复触发
+  cooldown: "5s"                 # 冷却时间
   actions:
-    - type: questgps.accept
-      quest-id: "{quest-id}"
-    - type: command.dispatch
-      executor: console
+    - type: questgps.accept      # 接受指定任务
+      quest-id: "{quest-id}"     # 任务 ID (上下文变量)
+    - type: command.dispatch     # 派发命令
+      executor: console          # 执行者: console/player
       command: "say {player_name} accepted {quest-id}"
 
+# 任务完成后发放称号并推送 UI 通知
 quest_completed_title_reward:
   enabled: false
   trigger: command-signal
   signal: "questgps_main_completed"
   repeatable: false
   actions:
-    - type: title.give
-      title-id: "newcomer"
-      duration: "permanent"
-    - type: ui-packet
-      ui-id: "示例UI"
-      packet-handler: "questCompleted"
-      recipients:
-        - self
-      pack:
+    - type: title.give           # 发放称号
+      title-id: "newcomer"       # 称号 ID
+      duration: "permanent"      # 持续时间: permanent(永久) / 如 7d(7天)
+    - type: ui-packet            # 向客户端发送 UI 数据包
+      ui-id: "示例UI"            # 目标 UI ID
+      packet-handler: "questCompleted"  # 目标 packetHandler 名称
+      recipients:                # 接收者列表
+        - self                   # self=仅触发者, all=全服, world=同世界
+      pack:                      # 包数据 (键值对，客户端 packet['key'] 读取)
         player: "{player_name}"
         quest: "{quest-id}"
         time: "{timestamp_local}"
 
 # ── 模块联动示例 ──────────────────────────────────────────────
 
+# Boss 结算庆祝: 播放字幕、发送奖励邮件、发放称号
 boss_settlement_celebration:
   enabled: false
   trigger: command-signal
@@ -167,30 +173,32 @@ boss_settlement_celebration:
   actions:
     - type: subtitle.play
       group-id: "boss_victory"
-    - type: mail.send
-      preset-id: "boss_reward_{boss_id}"
+    - type: mail.send            # 发送邮件
+      preset-id: "boss_reward_{boss_id}"  # 邮件预设 ID (支持变量)
     - type: title.give
       title-id: "boss_slayer"
-      duration: "7d"
+      duration: "7d"             # 持续 7 天
 
+# 签到连续里程碑: 播放庆祝字幕并发送签到奖励邮件
 signin_streak_milestone:
   enabled: false
   trigger: command-signal
   signal: "signin_success"
   repeatable: true
-  cooldown: "1d"
+  cooldown: "1d"                 # 每天最多触发一次
   actions:
     - type: subtitle.play
       group-id: "signin_celebrate"
     - type: mail.send
       preset-id: "signin_bonus"
 
+# 微软正版玩家首次注册后: 播放欢迎字幕、推送教程任务、发送欢迎邮件
 welcome_after_register:
   enabled: false
   trigger: command-signal
   signal: "first_register"
-  conditions:
-    - "%axsloginview_account_type% == microsoft"
+  conditions:                    # 触发条件列表，全部满足才执行动作
+    - "%axsloginview_account_type% == microsoft"  # 仅微软正版账号
   repeatable: false
   actions:
     - type: subtitle.play
@@ -201,12 +209,13 @@ welcome_after_register:
     - type: mail.send
       preset-id: "welcome_gift"
 
+# LittleSkin 玩家首次注册后: 播放欢迎字幕并发送聊天卡片
 welcome_littleskin_after_register:
   enabled: false
   trigger: command-signal
   signal: "first_register"
   conditions:
-    - "%axsloginview_account_type% == littleskin"
+    - "%axsloginview_account_type% == littleskin"  # 仅 LittleSkin 账号
   repeatable: false
   actions:
     - type: subtitle.play
@@ -217,6 +226,7 @@ welcome_littleskin_after_register:
         title: "LittleSkin 登录奖励"
         source: "{account_type_display}"
 
+# CDK 兑换成功: 播放战斗特效和字幕
 cdk_redeemed_effect:
   enabled: false
   trigger: command-signal
@@ -224,8 +234,8 @@ cdk_redeemed_effect:
   repeatable: true
   cooldown: "5s"
   actions:
-    - type: combateffect.play
-      pack: "{player_name};CDK;{preset_name}"
+    - type: combateffect.play    # 播放战斗特效
+      pack: "{player_name};CDK;{preset_name}"  # 特效包数据
     - type: subtitle.play
       group-id: "cdk_success"
 

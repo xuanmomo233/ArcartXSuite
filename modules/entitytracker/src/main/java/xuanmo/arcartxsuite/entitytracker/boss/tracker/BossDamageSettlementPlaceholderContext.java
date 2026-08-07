@@ -3,6 +3,15 @@ package xuanmo.arcartxsuite.entitytracker.boss.tracker;
 import java.text.DecimalFormat;
 import java.util.Locale;
 
+/**
+ * 伤害结算占位符上下文，属于 entitytracker 模块的 boss 伤害结算子系统。
+ * <p>
+ * 持有结算记录和观察者条目，解析结算相关的占位符字段
+ * （如结算 ID、Boss 信息、排名数据、各名次详情等）。
+ *
+ * @param settlement   结算记录
+ * @param viewerEntry  观察者在结算中的条目
+ */
 public record BossDamageSettlementPlaceholderContext(
     BossDamageSettlementRecord settlement,
     BossDamageSettlementEntry viewerEntry
@@ -10,6 +19,11 @@ public record BossDamageSettlementPlaceholderContext(
 
     private static final DecimalFormat NUMBER_FORMAT = new DecimalFormat("0.##");
 
+    /**
+     * 返回空的占位符上下文。
+     *
+     * @return 空上下文
+     */
     public static BossDamageSettlementPlaceholderContext empty() {
         return new BossDamageSettlementPlaceholderContext(
             BossDamageSettlementRecord.empty(),
@@ -17,6 +31,12 @@ public record BossDamageSettlementPlaceholderContext(
         );
     }
 
+    /**
+     * 解析占位符字段名对应的值。
+     *
+     * @param fieldName 字段名
+     * @return 解析结果，无法识别时返回 {@code null}
+     */
     public String resolve(String fieldName) {
         String normalized = fieldName == null ? "" : fieldName.trim().toLowerCase(Locale.ROOT);
         String directValue = switch (normalized) {

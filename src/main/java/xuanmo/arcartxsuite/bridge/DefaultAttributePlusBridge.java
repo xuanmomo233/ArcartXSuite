@@ -10,6 +10,11 @@ import org.serverct.ersha.attribute.data.AttributeData;
 import org.serverct.ersha.attribute.data.AttributeSource;
 import xuanmo.arcartxsuite.api.attribute.AttributePlusBridge;
 
+/**
+ * {@link AttributePlusBridge} 的默认实现，桥接 AttributePlus 属性插件。
+ * <p>
+ * AttributePlus 为可选依赖，运行时通过插件管理器检测可用性。
+ */
 public final class DefaultAttributePlusBridge implements AttributePlusBridge {
 
     private static final String PLUGIN_NAME = "AttributePlus";

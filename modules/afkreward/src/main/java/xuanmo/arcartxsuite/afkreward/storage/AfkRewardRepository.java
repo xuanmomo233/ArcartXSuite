@@ -18,6 +18,10 @@ import xuanmo.arcartxsuite.api.storage.MigrationResult;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.afkreward.config.AfkRewardConfiguration;
 
+/**
+ * 挂机奖励模块的数据仓储，继承 {@link AbstractModuleRepository}，
+ * 负责玩家统计、区域统计与奖励记录的持久化 CRUD。
+ */
 public final class AfkRewardRepository extends AbstractModuleRepository {
 
     private final AfkRewardConfiguration.StorageConfig configuration;

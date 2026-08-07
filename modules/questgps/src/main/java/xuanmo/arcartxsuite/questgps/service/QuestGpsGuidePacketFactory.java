@@ -10,6 +10,12 @@ import org.bukkit.entity.Player;
 import xuanmo.arcartxsuite.questgps.QuestGpsPage;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 
+/**
+ * QuestGPS 引导界面数据包工厂。
+ * <p>
+ * 属于 {@code questgps} 模块，负责将当前追踪状态、任务进度与导航坐标
+ * 组装为发送给客户端引导 HUD 的数据包。
+ */
 public final class QuestGpsGuidePacketFactory {
 
     private static final int DISPLAY_TASK_LIMIT = 3;
@@ -17,6 +23,16 @@ public final class QuestGpsGuidePacketFactory {
     private QuestGpsGuidePacketFactory() {
     }
 
+    /**
+     * 构建引导 HUD 数据包。
+     *
+     * @param configuration       模块配置
+     * @param player              当前玩家，为 {@code null} 时仅返回空任务结构
+     * @param trackState          当前追踪状态
+     * @param presentationService 展示服务，用于构建任务描述符
+     * @param navigationService   导航服务，用于获取当前追踪坐标
+     * @return 引导 HUD 数据包
+     */
     public static Map<String, Object> build(
         QuestGpsModuleConfiguration configuration,
         Player player,

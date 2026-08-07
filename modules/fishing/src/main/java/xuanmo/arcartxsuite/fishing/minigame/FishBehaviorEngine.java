@@ -3,6 +3,12 @@ package xuanmo.arcartxsuite.fishing.minigame;
 import java.util.concurrent.ThreadLocalRandom;
 import xuanmo.arcartxsuite.fishing.model.FishBehaviorType;
 
+/**
+ * 鱼类行为引擎，实现 {@link FishBehavior} 接口。
+ * <p>
+ * 关联模块：{@code fishing}。根据 {@link FishBehaviorType} 与难度参数，
+ * 在每个 tick 计算鱼图标的目标位移量，模拟平滑游动、突进、下沉、上浮等行为模式。
+ */
 public final class FishBehaviorEngine implements FishBehavior {
 
     private final FishBehaviorType type;

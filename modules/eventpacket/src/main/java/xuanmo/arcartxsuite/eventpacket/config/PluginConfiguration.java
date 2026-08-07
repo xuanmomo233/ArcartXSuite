@@ -19,6 +19,22 @@ import xuanmo.arcartxsuite.api.condition.ScriptConditionsLoader;
 import xuanmo.arcartxsuite.eventpacket.service.EntityCleanupService;
 import xuanmo.arcartxsuite.eventpacket.service.ScheduledCommandService;
 
+/**
+ * EventPacket 模块的插件配置记录。
+ * <p>
+ * 从主配置文件和规则目录解析生成，包含全局设置、存储配置、
+ * 规则列表、客户端回包预设、实体清理配置和定时命令任务。
+ * 提供 {@link #load} 系列静态工厂方法从 YAML 配置构建实例。
+ *
+ * @param debug                 是否开启调试日志
+ * @param refreshIntervalTicks  PAPI 监听刷新间隔（tick）
+ * @param storage               存储层配置
+ * @param rules                 全部规则列表（含规则目录与客户端回包预设）
+ * @param clientPacketId        客户端回包 ID
+ * @param clientPacketPresetCount 客户端回包预设数量
+ * @param entityCleanup         实体清理配置
+ * @param scheduledCommands     定时命令任务列表
+ */
 public record PluginConfiguration(
     boolean debug,
     long refreshIntervalTicks,
@@ -30,10 +46,25 @@ public record PluginConfiguration(
     List<ScheduledCommandService.ScheduledTask> scheduledCommands
 ) {
 
+    /**
+     * 从配置文件加载插件配置（不含客户端回包预设目录和规则目录）。
+     *
+     * @param configuration Bukkit 配置对象
+     * @param logger        日志记录器
+     * @return 解析后的插件配置实例
+     */
     public static PluginConfiguration load(FileConfiguration configuration, Logger logger) {
         return load(configuration, logger, null);
     }
 
+    /**
+     * 从配置文件加载插件配置（含客户端回包预设目录，不含规则目录）。
+     *
+     * @param configuration               Bukkit 配置对象
+     * @param logger                      日志记录器
+     * @param clientPacketPresetsDirectory 客户端回包预设目录，可为 {@code null}
+     * @return 解析后的插件配置实例
+     */
     public static PluginConfiguration load(
         FileConfiguration configuration,
         Logger logger,
@@ -42,6 +73,15 @@ public record PluginConfiguration(
         return load(configuration, logger, clientPacketPresetsDirectory, null);
     }
 
+    /**
+     * 从配置文件加载插件配置（含客户端回包预设目录和规则目录）。
+     *
+     * @param configuration               Bukkit 配置对象
+     * @param logger                      日志记录器
+     * @param clientPacketPresetsDirectory 客户端回包预设目录，可为 {@code null}
+     * @param rulesDirectory              规则文件目录，可为 {@code null}
+     * @return 解析后的插件配置实例
+     */
     public static PluginConfiguration load(
         FileConfiguration configuration,
         Logger logger,
@@ -107,6 +147,11 @@ public record PluginConfiguration(
         );
     }
 
+    /**
+     * 统计已启用的规则数量。
+     *
+     * @return 已启用规则数
+     */
     public int enabledRuleCount() {
         int enabled = 0;
         for (EventPacketRule rule : rules) {
@@ -117,6 +162,11 @@ public record PluginConfiguration(
         return enabled;
     }
 
+    /**
+     * 统计已启用且使用 PAPI 触发器并配置了占位符的规则数量。
+     *
+     * @return PAPI 规则数
+     */
     public int papiPacketCount() {
         int count = 0;
         for (EventPacketRule rule : rules) {
@@ -453,6 +503,11 @@ public record PluginConfiguration(
             .replaceAll("<arg([1-9][0-9]*)>", "{arg$1}");
     }
 
+    /**
+     * 返回所有已启用的客户端回包规则列表。
+     *
+     * @return 客户端回包规则列表
+     */
     public List<EventPacketRule> clientPacketRules() {
         List<EventPacketRule> result = new ArrayList<>();
         for (EventPacketRule rule : rules) {
@@ -463,6 +518,13 @@ public record PluginConfiguration(
         return result;
     }
 
+    /**
+     * 按回包 ID 和预设 ID 查找客户端回包规则。
+     *
+     * @param packetId 回包 ID
+     * @param presetId 预设 ID（即规则的 signal）
+     * @return 匹配的规则，未找到返回 {@code null}
+     */
     public EventPacketRule findClientPacketRule(String packetId, String presetId) {
         if (packetId == null || presetId == null) {
             return null;

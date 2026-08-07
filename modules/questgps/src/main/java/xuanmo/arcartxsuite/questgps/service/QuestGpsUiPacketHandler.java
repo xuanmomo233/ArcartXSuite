@@ -6,6 +6,11 @@ import org.bukkit.entity.Player;
 import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
 import xuanmo.arcartxsuite.questgps.QuestGpsPage;
 
+/**
+ * 任务导航 UI 包处理器（包私有），解析客户端发来的操作指令并转发给服务。
+ * <p>
+ * 支持 refresh / switch_category / switch_page / select_quest / start_track 等动作。
+ */
 final class QuestGpsUiPacketHandler {
 
     private final QuestGpsService service;

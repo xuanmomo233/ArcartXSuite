@@ -12,11 +12,22 @@ import xuanmo.arcartxsuite.chat.model.ChatMuteRecord;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerState;
 import xuanmo.arcartxsuite.chat.service.ChatService;
 
+/**
+ * 聊天模块 PlaceholderAPI 扩展，提供 {@code %axschat_*%} 系列占位符。
+ * <p>
+ * 支持的占位符：{@code current_channel}、{@code current_channel_display}、
+ * {@code reply_target}、{@code spy_enabled}、{@code ignore_count}、{@code muted}。
+ * 通过 {@link Supplier} 延迟获取 {@link ChatService}，避免模块加载顺序问题。
+ */
 public final class ChatPlaceholderExpansion extends PlaceholderExpansion {
 
     private final JavaPlugin plugin;
     private final Supplier<ChatService> serviceProvider;
 
+    /**
+     * @param plugin          宿主插件实例
+     * @param serviceProvider 聊天服务延迟供应者
+     */
     public ChatPlaceholderExpansion(JavaPlugin plugin, Supplier<ChatService> serviceProvider) {
         this.plugin = plugin;
         this.serviceProvider = serviceProvider;
@@ -42,6 +53,13 @@ public final class ChatPlaceholderExpansion extends PlaceholderExpansion {
         return true;
     }
 
+    /**
+     * 解析占位符请求。
+     *
+     * @param offlinePlayer 离线玩家上下文
+     * @param params        占位符参数（如 "current_channel"）
+     * @return 占位符值，无法解析时返回 {@code null}
+     */
     @Override
     public @Nullable String onRequest(OfflinePlayer offlinePlayer, @NotNull String params) {
         if (offlinePlayer == null || offlinePlayer.getUniqueId() == null) {

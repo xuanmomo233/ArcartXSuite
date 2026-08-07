@@ -22,6 +22,11 @@ import xuanmo.arcartxsuite.mail.model.MailOperationResult;
 import xuanmo.arcartxsuite.mail.model.MailPresetDefinition;
 import xuanmo.arcartxsuite.mail.service.MailService;
 
+/**
+ * 邮件管理命令处理器，提供状态查看、预设分发、CDK 管理、打开他人邮箱等管理功能。
+ * <p>
+ * 关联模块：mail。实现 {@link ModuleCommandHandler}，由宿主统一命令系统调度。
+ */
 public final class MailAdminCommand implements ModuleCommandHandler {
 
     private static final List<String> ACTIONS = List.of("help", "status", "reload", "open", "preset", "cdk", "admin");
@@ -30,6 +35,12 @@ public final class MailAdminCommand implements ModuleCommandHandler {
     private final Supplier<MailService> serviceProvider;
     private final MessageProvider messages;
 
+    /**
+     * 构造管理命令处理器。
+     *
+     * @param serviceProvider 邮件服务提供者（延迟获取，允许服务未就绪时返回 {@code null}）
+     * @param messages        消息提供者
+     */
     public MailAdminCommand(Supplier<MailService> serviceProvider, MessageProvider messages) {
         this.serviceProvider = serviceProvider;
         this.messages = messages;
@@ -43,6 +54,14 @@ public final class MailAdminCommand implements ModuleCommandHandler {
     @Override public String commandId() { return "mail"; }
     @Override public List<String> actions() { return ACTIONS; }
 
+    /**
+     * 处理管理命令分发。
+     *
+     * @param sender 命令发送者
+     * @param label  命令标签
+     * @param args   参数数组
+     * @return {@code true} 表示已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "help";
@@ -69,6 +88,13 @@ public final class MailAdminCommand implements ModuleCommandHandler {
         svc.openAdminUi(player);
     }
 
+    /**
+     * 提供管理命令的 Tab 补全。
+     *
+     * @param sender 命令发送者
+     * @param args   参数数组
+     * @return 补全候选列表，{@code null} 表示交由 Bukkit 补全玩家名
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) return filter(ACTIONS, args[1]);

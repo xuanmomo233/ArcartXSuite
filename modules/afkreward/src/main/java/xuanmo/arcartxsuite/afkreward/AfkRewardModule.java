@@ -31,6 +31,13 @@ import xuanmo.arcartxsuite.afkreward.placeholder.AfkRewardPlaceholderExpansion;
 import xuanmo.arcartxsuite.afkreward.service.AfkRewardService;
 import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository;
 
+/**
+ * AFK 挂机奖励模块主类。
+ * <p>
+ * 关联模块：afkreward。负责模块生命周期管理：加载配置与区域、初始化仓储与服务、
+ * 注册事件监听器、玩家命令、管理命令与 PlaceholderAPI 变量，
+ * 并向宿主暴露 {@link xuanmo.arcartxsuite.api.capability.AfkRewardDispatchable} 能力。
+ */
 public final class AfkRewardModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private static final String HUD_UI_RESOURCE_PATH = "arcartx/ui/afk_reward_hud.yml";

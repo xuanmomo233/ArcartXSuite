@@ -8,11 +8,23 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+/**
+ * Lottery 模块的 PlaceholderAPI 扩展。
+ * <p>
+ * 提供保底计数、开箱次数、大保底状态、命运点等占位符查询，
+ * 占位符格式为 {@code %axslottery_<type>_<poolId>%}。
+ */
 public class LotteryPlaceholderExpansion extends PlaceholderExpansion {
 
     private final JavaPlugin plugin;
     private final Supplier<LotteryService> serviceSupplier;
 
+    /**
+     * 构造占位符扩展。
+     *
+     * @param plugin          宿主插件实例
+     * @param serviceSupplier Lottery 服务延迟供应器
+     */
     public LotteryPlaceholderExpansion(JavaPlugin plugin, Supplier<LotteryService> serviceSupplier) {
         this.plugin = plugin;
         this.serviceSupplier = serviceSupplier;
@@ -38,6 +50,13 @@ public class LotteryPlaceholderExpansion extends PlaceholderExpansion {
         return true;
     }
 
+    /**
+     * 处理占位符请求。
+     *
+     * @param player 离线玩家对象
+     * @param params 占位符参数，格式为 {@code <type>_<poolId>}
+     * @return 占位符值，无法解析时返回空字符串
+     */
     @Override
     public @Nullable String onRequest(OfflinePlayer player, @NotNull String params) {
         if (player == null) return "";

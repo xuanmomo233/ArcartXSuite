@@ -17,6 +17,10 @@ import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.loginview.config.LoginViewModuleConfiguration.StorageConfiguration;
 import xuanmo.arcartxsuite.loginview.config.LoginViewModuleConfiguration.StorageDialect;
 
+/**
+ * LoginView 的 JDBC 仓储实现，继承 {@link AbstractModuleRepository}，
+ * 管理 accounts 与 sessions 两张表，支持 SQLite/MySQL 双方言。
+ */
 public final class JdbcLoginViewRepository extends AbstractModuleRepository implements LoginViewRepository {
 
     private final StorageConfiguration configuration;

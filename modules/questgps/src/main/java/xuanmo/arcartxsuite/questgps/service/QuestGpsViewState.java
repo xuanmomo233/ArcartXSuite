@@ -3,6 +3,9 @@ package xuanmo.arcartxsuite.questgps.service;
 import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
 import xuanmo.arcartxsuite.questgps.QuestGpsPage;
 
+/**
+ * 任务导航 UI 视图状态（包私有），记录玩家当前选中的分类、页码与任务。
+ */
 final class QuestGpsViewState {
 
     private QuestGpsCategory category;

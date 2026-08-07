@@ -10,6 +10,12 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.fishing.service.FishingService;
 
+/**
+ * 钓鱼模块的玩家命令处理器。
+ * <p>
+ * 关联模块：{@code fishing}。默认打开鱼类图鉴 UI；
+ * 支持 {@code sell} 子命令出售手中或全部鱼类物品。
+ */
 public final class FishingPlayerCommand implements TabExecutor {
 
     private final java.util.function.Supplier<PacketBridgeAPI> packetBridgeSupplier;

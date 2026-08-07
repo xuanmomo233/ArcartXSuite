@@ -1,3 +1,4 @@
+# 配置文件版本号；迁移系统据此自动升级配置结构。
 config-version: 1
 # AXS Mail
 # 作用: 收件箱、写信、附件、领取命令、预设邮件、CDK、跨服刷新、邮件日志和 Mail UI；可被 OnlineRewards 等模块调用预设邮件发奖。
@@ -24,10 +25,15 @@ storage:
     file: mail.db
 
   mysql:
+    # MySQL 服务器地址。
     host: 127.0.0.1
+    # MySQL 服务器端口。
     port: 3306
+    # 数据库名称。
     database: arcartxsuite
+    # 数据库用户名。
     username: root
+    # 数据库密码。
     password: ""
 
   # 数据库连接池大小。
@@ -43,7 +49,9 @@ ui:
   compose-ui-id: AXS:mail_compose
   logs-ui-id: AXS:mail_logs
   admin-ui-id: AXS:mail_admin
+  # 模块启用时是否自动注册 UI 配置文件。
   register-ui-on-enable: true
+  # 是否覆盖玩家已有的同名 UI 文件（false 则保留玩家自定义修改）。
   overwrite-ui-files: false
 
   # 玩家打开写信背包时显示的标题。
@@ -108,17 +116,21 @@ player-send:
 
   # 玩家写信界面可放入的物品附件槽数量；实际不会超过写信容器大小。
   max-attachments: 6
+  # 邮件标题最大长度。
   subject-max-length: 48
+  # 邮件正文最大长度。
   body-max-length: 400
 
 moderation:
   # 命中时禁止发送；支持敏感词、正则、物品材质和 Lore 正则。
   blocked-words: []
+  # 屏蔽正则表达式列表；邮件标题/正文命中则禁止发送。
   blocked-patterns: []
   blocked-materials:
     - BEDROCK
     - COMMAND_BLOCK
     - BARRIER
+  # 屏蔽 Lore 正则表达式列表；附件物品 Lore 命中则禁止发送。
   blocked-lore-patterns: []
 
 retention:

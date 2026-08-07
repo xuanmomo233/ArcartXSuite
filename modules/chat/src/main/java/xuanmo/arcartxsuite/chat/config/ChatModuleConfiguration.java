@@ -16,6 +16,27 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
 
+/**
+ * 聊天模块顶层配置，聚合存储、跨服、卡片、功能、过滤器与频道定义等全部子配置。
+ * <p>
+ * 通过 {@link #load} 从 {@code ArcartXChat.yml} 主配置文件及频道目录加载，
+ * 供 {@link ChatService} 在运行时读取。
+ *
+ * @param debug                 是否开启调试日志
+ * @param serverId              当前服务器节点 ID
+ * @param defaultChannelId      默认频道 ID
+ * @param maxLength             单条消息最大长度
+ * @param cooldownMillis        发消息冷却时间（毫秒）
+ * @param duplicateWindowMillis 重复消息判定窗口（毫秒）
+ * @param forceChatTakeover     是否强制接管其他聊天插件
+ * @param storage               存储配置
+ * @param crossServer           跨服通道配置
+ * @param cards                 聊天卡片渲染配置
+ * @param functions             聊天功能开关配置
+ * @param filter                聊天过滤器配置
+ * @param channelsDirectory     频道定义文件相对目录
+ * @param channels              频道定义映射（key 为频道 ID，不可变）
+ */
 public record ChatModuleConfiguration(
     boolean debug,
     String serverId,
@@ -33,6 +54,14 @@ public record ChatModuleConfiguration(
     Map<String, ChatChannelDefinition> channels
 ) {
 
+    /**
+     * 从主配置文件和频道目录加载完整的聊天模块配置。
+     *
+     * @param configuration     主配置 yml
+     * @param channelsDirectory 频道定义文件目录
+     * @param logger            日志记录器，用于输出加载警告
+     * @return 加载后的模块配置实例
+     */
     public static ChatModuleConfiguration load(FileConfiguration configuration, File channelsDirectory, Logger logger) {
         boolean debug = configuration.getBoolean("settings.debug", false);
         String serverId = string(configuration.getString("settings.server-id", "default"));
@@ -123,6 +152,12 @@ public record ChatModuleConfiguration(
         );
     }
 
+    /**
+     * 按频道 ID 查询频道定义。
+     *
+     * @param channelId 频道 ID（不区分大小写）
+     * @return 频道定义，不存在时返回 {@code null}
+     */
     public ChatChannelDefinition channel(String channelId) {
         if (channelId == null) {
             return null;

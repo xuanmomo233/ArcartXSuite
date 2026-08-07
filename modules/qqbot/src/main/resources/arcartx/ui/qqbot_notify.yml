@@ -11,10 +11,18 @@ ui:
   level: 50
   screenScale: true
   packetHandler:
+    # packetHandler: notify
+    # 包字段:
+    #   - nick: 发送者昵称
+    #   - msg: 消息内容
+    #   - time: 消息时间
+    #   - maxDisplay: 最大同时显示通知数
     notify: |-
       var.notifications.add({'nick': packet['nick'], 'msg': packet['msg'], 'time': packet['time'], 'alpha': 1.0, 'born': Time.now()})
       var.maxDisplay = packet['maxDisplay']
       var.showCount = var.notifications.size()
+    # packetHandler: clear
+    # 包字段: 无（清空所有通知）
     clear: |-
       var.notifications = []
       var.showCount = 0

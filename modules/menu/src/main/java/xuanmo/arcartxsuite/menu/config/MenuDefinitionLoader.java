@@ -12,11 +12,28 @@ import java.util.logging.Logger;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
 
+/**
+ * 菜单定义加载器，从指定目录批量读取 YAML 文件并解析为 {@link MenuDefinition} 集合。
+ * <p>
+ * 支持多文档 YAML（以 {@code ---} 分隔），对解析失败的文档会记录警告并跳过，
+ * 重复的菜单 ID 后者覆盖前者。
+ */
 public final class MenuDefinitionLoader {
 
     private MenuDefinitionLoader() {
     }
 
+    /**
+     * 加载目录下所有 YAML 文件并解析为菜单定义映射。
+     *
+     * @param directory           菜单配置目录
+     * @param defaultLayout       默认布局类型
+     * @param defaultColumns      默认列数
+     * @param defaultButtonsPerPage 默认每页按钮数
+     * @param logger              日志记录器
+     * @return 菜单 ID 到菜单定义的有序映射
+     * @throws IOException 读取文件失败时抛出
+     */
     public static @NotNull Map<String, MenuDefinition> loadDirectory(
         @NotNull File directory,
         @NotNull MenuLayoutType defaultLayout,
@@ -75,6 +92,12 @@ public final class MenuDefinitionLoader {
         }
     }
 
+    /**
+     * 将多文档 YAML 内容按 {@code ---} 分隔符拆分为多个文档字符串。
+     *
+     * @param content 原始文件内容
+     * @return 拆分后的文档列表
+     */
     static List<String> splitDocuments(String content) {
         if (content == null || content.isBlank()) {
             return List.of();

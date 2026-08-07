@@ -14,6 +14,12 @@ import xuanmo.arcartxsuite.chat.model.ChatOperationResult;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerState;
 import xuanmo.arcartxsuite.chat.service.ChatService;
 
+/**
+ * 聊天模块玩家命令处理器，实现 {@link org.bukkit.command.TabExecutor}。
+ * <p>
+ * 通过 {@link CommandMode} 区分三种命令模式：CHAT（频道切换 / 开关 / 屏蔽）、
+ * MESSAGE（私聊）、REPLY（回复上次私聊），复用同一套命令逻辑。
+ */
 public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
 
     private static final List<String> CHAT_ACTIONS = List.of("channel", "toggle", "ignore", "unignore", "socialspy");
@@ -22,6 +28,11 @@ public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
     private final CommandMode mode;
     private final MessageProvider messages;
 
+    /**
+     * @param serviceProvider 聊天服务延迟供应者
+     * @param mode             命令模式（CHAT / MESSAGE / REPLY）
+     * @param messages         消息提供者，用于本地化提示文本
+     */
     public ChatPlayerCommand(Supplier<ChatService> serviceProvider, CommandMode mode, MessageProvider messages) {
         this.serviceProvider = serviceProvider;
         this.mode = mode;
@@ -230,6 +241,9 @@ public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
         return result;
     }
 
+    /**
+     * 命令模式枚举，区分聊天管理、私聊发送与回复三种命令用途。
+     */
     public enum CommandMode {
         CHAT,
         MESSAGE,

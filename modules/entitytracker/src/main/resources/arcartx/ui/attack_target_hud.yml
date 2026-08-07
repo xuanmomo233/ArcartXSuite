@@ -1,14 +1,42 @@
+# 文件用途: EntityTracker 模块「攻击目标 HUD」模板，展示玩家最近攻击的实体（Boss/普通怪）的血量、距离、超时倒计时等信息。
+# 前置依赖: ArcartX、MythicMobs/MythicBukkit；EntityTracker 模块启用后自动导出到 plugins/ArcartXSuite/ui。
+# 关联文件: ArcartXEntityTracker.yml（attack-target 节配置）、boss_tracker.yml（Boss 追踪 HUD）
+# 重载命令: /axs entitytracker reload
+
 ui:
-  isHud: true
-  defaultOpen: false
-  through: false
-  background: false
-  closeDied: true
-  show: true
-  level: 2
-  hide:
-    - boss_event_progress
+  isHud: true                    # 是否为 HUD（常驻叠加层，不弹光标）
+  defaultOpen: false             # 是否默认打开（HUD 一般由服务端 packet 驱动显隐）
+  through: false                 # 是否点击穿透（HUD 不拦截鼠标）
+  background: false              # 是否绘制全屏背景遮罩
+  closeDied: true                # 玩家死亡时是否自动关闭 HUD
+  show: true                     # 是否显示
+  level: 2                       # HUD 渲染优先级（越大越先渲染=越底层）
+  hide:                          # 本 HUD 存在时隐藏的原版 HUD 列表
+    - boss_event_progress        # 隐藏原版 Boss 进度条，避免与自定义 HUD 重叠
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - title: 标题文本（如实体显示名）
+    #   - subtitle: 副标题文本（如实体类型名）
+    #   - health: 当前血量（数值）
+    #   - maxHealth: 最大血量（数值）
+    #   - healthText: 当前血量文本（格式化后的字符串）
+    #   - maxHealthText: 最大血量文本（格式化后的字符串）
+    #   - healthPercent: 血量百分比（0~1 小数）
+    #   - healthPercentText: 血量百分比文本（如 "85"）
+    #   - progress: 血条进度比值（0~1，用于血条宽度计算）
+    #   - distance: 与玩家的距离（数值，单位：格）
+    #   - distanceText: 距离文本（格式化后的字符串）
+    #   - displayName: 实体显示名称
+    #   - entityUuid: 实体 UUID
+    #   - world: 实体所在世界名
+    #   - x/y/z: 实体坐标
+    #   - entityType: Bukkit EntityType 枚举名
+    #   - entityTypeName: 实体类型中文名
+    #   - mythicMobId: MythicMob 内部 ID（非 MythicMob 实体则为 none）
+    #   - isPlayerTarget: 是否为玩家主动选中的目标
+    #   - lastHitAgoMs: 距上次攻击过去的毫秒数
+    #   - timeoutMs: 目标超时阈值（毫秒，超过此时间未攻击则关闭 HUD）
     init: |-
       var.isVisible = true
       var.title = packet['title']
@@ -34,6 +62,8 @@ ui:
       var.isPlayerTarget = packet['isPlayerTarget']
       var.lastHitAgoMs = packet['lastHitAgoMs']
       var.timeoutMs = packet['timeoutMs']
+    # packetHandler: update
+    # 包字段: 与 init 完全一致，详见 init 注释
     update: |-
       var.isVisible = true
       var.title = packet['title']
@@ -59,6 +89,8 @@ ui:
       var.isPlayerTarget = packet['isPlayerTarget']
       var.lastHitAgoMs = packet['lastHitAgoMs']
       var.timeoutMs = packet['timeoutMs']
+    # packetHandler: close
+    # 服务端主动关闭 HUD 时执行，将所有变量重置为默认空值
     close: |-
       var.isVisible = false
       var.title = none
@@ -85,6 +117,7 @@ ui:
       var.lastHitAgoMs = 0
       var.timeoutMs = 0
   action:
+    # load 在 HUD 首次加载时执行，初始化所有变量为默认空值，避免数据包到达前显示脏数据
     load: |-
       var.isVisible = false
       var.title = none
@@ -111,52 +144,53 @@ ui:
       var.lastHitAgoMs = 0
       var.timeoutMs = 0
 
+# controls 为主要可视控件区块，可在此调整布局、材质与文本绑定
 controls:
-  自适应全局布局:
+  自适应全局布局:                   # 设计分辨率容器，整树等比缩放
     type: Adaptive
     attribute:
-      point: ~stretch_all
-      width: 1920
-      height: 1080
+      point: ~stretch_all           # 拉伸铺满整个屏幕
+      width: 1920                   # 设计稿宽度
+      height: 1080                  # 设计稿高度
     children:
-      目标面板:
+      目标面板:                      # 目标信息面板容器，居中顶部偏下
         type: Canvas
         attribute:
-          point: ~top_center
+          point: ~top_center        # 锚点：顶部居中
           x: 0
           y: 56
           width: 620
           height: 108
-          visible: var.isVisible
+          visible: var.isVisible    # 随 packetHandler 控制的可见性变量显隐
         children:
-          背景:
+          背景:                      # 面板背景：毛玻璃半透明底板
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~Frosted:30;95,95,95,220
-              shape: ~round_rect
-              radius: 20
+              normal: ~Frosted:30;95,95,95,220  # 毛玻璃效果，模糊度30，RGBA(95,95,95,220)
+              shape: ~round_rect    # 圆角矩形
+              radius: 20            # 圆角半径
             effect:
-              stroke:
+              stroke:               # 描边特效
                 width: 3
-                color: ~0,0,0,255
-          标题:
+                color: ~0,0,0,255   # 黑色描边
+          标题:                      # 目标标题文字（左上角）
             type: Text
             attribute:
               point: ~top_left
               x: 24
               y: 14
-              texts: "var.title"
+              texts: "var.title"    # 绑定 packetHandler 中的 title 变量
               fontSize: 49
-          距离:
+          距离:                      # 距离文字（右上角）
             type: Text
             attribute:
               point: ~top_right
               x: -24
               y: 18
-              texts: "'&f' + var.distanceText"
+              texts: "'&f' + var.distanceText"  # 白色距离文本
               fontSize: 36
-          血条背景:
+          血条背景:                   # 血条底框（深灰色圆角条）
             type: Texture
             attribute:
               point: ~top_left
@@ -164,25 +198,25 @@ controls:
               y: 56
               width: 572
               height: 20
-              normal: ~40,40,40,210
+              normal: ~40,40,40,210 # 深灰半透明底色
               shape: ~round_rect
               radius: 10
             effect:
               stroke:
                 width: 2
-                color: ~0,0,0,180
-          血条填充:
+                color: ~0,0,0,180   # 半透明黑色描边
+          血条填充:                   # 血条填充层（红色，宽度随 progress 变化）
             type: Texture
             attribute:
               point: ~top_left
               x: 24
               y: 56
-              width: 572 * var.progress
+              width: 572 * var.progress  # 宽度 = 满宽 × 进度比值
               height: 20
-              normal: ~220,72,72,255
+              normal: ~220,72,72,255     # 红色填充
               shape: ~round_rect
               radius: 10
-          血量文字:
+          血量文字:                    # 血量数值文字（左下角，显示 当前/最大 (百分比%)）
             type: Text
             attribute:
               point: ~top_left
@@ -190,7 +224,7 @@ controls:
               y: 80
               texts: "'&f' + var.healthText + '&8/&f' + var.maxHealthText + ' &7(' + var.healthPercentText + '%)'"
               fontSize: 36
-          超时文字:
+          超时文字:                    # 超时倒计时文字（右下角，显示 已过时间/超时阈值 ms）
             type: Text
             attribute:
               point: ~top_right

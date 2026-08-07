@@ -1,12 +1,16 @@
-id: "bread"
-display-name: "面包屑"
-item:
-  source: "minecraft"
-  item-id: "bread"
-  amount: 1
-default: false
-fish-attract-modifiers:
-  sea_bass: 1.3
-  salmon: 1.2
-treasure-chance-boost: 0.0
-max-durability-bonus: 0
+# 饵料定义：面包屑
+# 面包屑是一种常见饵料，对海鲈鱼和鲑鱼有较好的吸引效果
+# 饵料文件位于 baits/ 目录，每个文件定义一种饵料
+
+id: "bread"                    # 饵料唯一标识符
+display-name: "面包屑"          # 显示名称
+item:                          # 饵料对应的物品定义
+  source: "minecraft"          # 物品来源（minecraft=原版物品）
+  item-id: "bread"             # 原版物品ID
+  amount: 1                    # 物品数量
+default: false                 # 是否为默认饵料（玩家无饵料时使用）
+fish-attract-modifiers:        # 鱼类吸引倍率（对该鱼种的捕获概率乘数）
+  sea_bass: 1.3                # 海鲈鱼吸引倍率1.3倍
+  salmon: 1.2                  # 鲑鱼吸引倍率1.2倍
+treasure-chance-boost: 0.0     # 宝藏概率额外加成（0.0=无加成）
+max-durability-bonus: 0        # 鱼竿最大耐久度加成

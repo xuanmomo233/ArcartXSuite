@@ -5,55 +5,56 @@
 #  修改后执行 /axs reload questgps 即可生效。
 # ============================================================
 
+# 消息前缀，自动拼接在大部分消息前
 prefix: "&3◆ &6ArcartXSuite &7| &r"
 
 # ── 通用 ──────────────────────────────────────────────
 common:
   service-down: "&cQuestGPS 模块当前未启用。"
-  reload-hint: "&e请使用 /{0} reload questgps"
-  unknown: "&e未知命令，使用 /{0} questgps help"
+  reload-hint: "&e请使用 /{0} reload questgps"          # {0}=主命令别名（如 axs）
+  unknown: "&e未知命令，使用 /{0} questgps help"        # {0}=主命令别名
   only-player: "&c该命令只能由玩家执行。"
   no-permission: "&c你没有权限执行这个命令。"
 
 # ── help ──────────────────────────────────────────────
 help:
   title: "&6QuestGPS 管理命令"
-  status: "&7{0} status&f - 查看模块状态"
-  open: "&7{0} open <玩家>&f - 为玩家打开导航菜单"
+  status: "&7{0} status&f - 查看模块状态"               # {0}=主命令别名
+  open: "&7{0} open <玩家>&f - 为玩家打开导航菜单"      # {0}=主命令别名
 
 # ── status ────────────────────────────────────────────
 status:
   title: "&6QuestGPS 状态"
-  configured-quests: "&7配置任务数: &f{0}"
-  tracking-players: "&7追踪中: &f{0}"
-  nav-ready: "&7导航就绪: &f{0}"
+  configured-quests: "&7配置任务数: &f{0}"              # {0}=已配置任务总数
+  tracking-players: "&7追踪中: &f{0}"                  # {0}=正在追踪任务的玩家数
+  nav-ready: "&7导航就绪: &f{0}"                       # {0}=导航是否就绪（true/false）
 
 # ── open ──────────────────────────────────────────────
 open:
   usage: "&e用法: /axs questgps open <玩家>"
-  not-online: "&c玩家不在线: {0}"
-  success: "&a已为 {0} 打开导航菜单。"
+  not-online: "&c玩家不在线: {0}"                      # {0}=玩家名
+  success: "&a已为 {0} 打开导航菜单。"                  # {0}=玩家名
 
 # ── player-command ─────────────────────────────────────
 player:
-  usage: "&e用法: /{0} open|cleartrack"
-  quest-not-configured: "&c该任务未配置到 QuestGPS: {0}"
-  chemdah-not-found: "&c未找到 Chemdah 任务: {0}"
-  category-not-registered: "&c任务分类未在 categories 注册，无法接取: {0}"
+  usage: "&e用法: /{0} open|cleartrack"                # {0}=玩家命令别名
+  quest-not-configured: "&c该任务未配置到 QuestGPS: {0}"  # {0}=任务ID
+  chemdah-not-found: "&c未找到 Chemdah 任务: {0}"      # {0}=任务ID
+  category-not-registered: "&c任务分类未在 categories 注册，无法接取: {0}"  # {0}=分类ID
   accept-failed: "&c接取任务失败，请检查控制台。"
-  accept-success: "&a已接取任务: {0}"
-  accept-result-failed: "&c接取失败: {0}"
+  accept-success: "&a已接取任务: {0}"                  # {0}=任务名
+  accept-result-failed: "&c接取失败: {0}"              # {0}=失败原因
   abandon-not-allowed: "&c该任务不允许放弃。"
   abandon-unavailable: "&c当前任务不可放弃。"
   abandon-failed: "&c放弃任务失败。"
-  abandon-success: "&e已放弃任务: {0}"
+  abandon-success: "&e已放弃任务: {0}"                 # {0}=任务名
   navigation-unavailable: "&c该任务当前没有可用导航点。"
   navigation-create-failed: "&c任务导航创建失败。"
-  navigation-set: "&a已设置任务导航: {0}"
+  navigation-set: "&a已设置任务导航: {0}"              # {0}=任务名
   task-not-found: "&c未找到任务。"
   task-navigation-unavailable: "&c该任务目标当前没有可用导航点。"
   task-navigation-create-failed: "&c任务目标导航创建失败。"
-  task-navigation-set: "&a已设置任务目标导航: {0}"
+  task-navigation-set: "&a已设置任务目标导航: {0}"     # {0}=目标文案
   navigation-cleared: "&e已清除当前任务导航。"
   chemdah-profile-not-loaded: "&cChemdah 玩家档案尚未加载。"
   chemdah-profile-read-failed: "&c无法读取 Chemdah 玩家档案。"

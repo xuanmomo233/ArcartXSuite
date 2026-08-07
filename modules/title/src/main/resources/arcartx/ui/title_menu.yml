@@ -1,3 +1,9 @@
+# 称号总览菜单 UI 配置
+# 作用: 渲染称号管理界面，展示玩家拥有的称号列表、分组/品质筛选、详情面板、装备/卸下/隐藏等操作按钮。
+# 布局: 左侧栏（筛选 + 称号列表）、中间栏（详情信息）、右侧栏（已装备 + 总属性 + 操作按钮）。
+# 数据来源: 后端通过 AXS_TITLE_MENU 数据包推送 titles/groups/qualities/sets 等数据，由 packetHandler 接收。
+# 操作交互: 点击称号项发送 select 包，装备/卸下/隐藏/设为主展示等按钮发送对应操作包。
+
 ui:
   background: false
   escClose: true
@@ -53,6 +59,44 @@ ui:
       var.detailScrollRatio = 0
       var.rightScrollRatio = 0
   packetHandler:
+    # packetHandler: init
+    # 首次接收后端数据包时执行，初始化所有界面变量。
+    # 包字段:
+    #   - titles: 称号列表（字典，key 为序号，每项含 display_name/owned/hidden/equipped/selected/group_id/quality_name/remaining_text 等）
+    #   - groups: 分组列表（字典，每项含 id/name）
+    #   - qualities: 品质列表（字典，每项含 id/name）
+    #   - sets: 套装列表（字典，每项含 active/display_name/progress/required_titles_text/bonus_text）
+    #   - equipped_by_group: 按分组列出的已装备称号（字典，每项含 group_name/title_id/display_name/quality_name）
+    #   - filter_modes: 可用筛选模式列表
+    #   - selected_id: 当前选中的称号 ID
+    #   - selected_can_equip: 当前选中称号是否可装备
+    #   - selected_is_equipped: 当前选中称号是否已装备
+    #   - selected_display_name: 当前选中称号的显示名称
+    #   - selected_kind: 当前选中称号的类型（text 文本 / icon 贴图）
+    #   - selected_chat_prefix: 当前选中称号的聊天前缀
+    #   - selected_chat_suffix: 当前选中称号的聊天后缀
+    #   - selected_tab_prefix: 当前选中称号的 TAB 前缀
+    #   - selected_tab_suffix: 当前选中称号的 TAB 后缀
+    #   - selected_group_id: 当前选中称号所属分组 ID
+    #   - selected_group_name: 当前选中称号所属分组名称
+    #   - selected_quality_name: 当前选中称号的品质名称
+    #   - selected_description: 当前选中称号的描述文本
+    #   - selected_source: 当前选中称号的获取来源
+    #   - selected_owned: 当前选中称号是否已拥有
+    #   - selected_hidden: 当前选中称号是否已隐藏
+    #   - selected_remaining_text: 当前选中称号的剩余时间文本
+    #   - selected_display_attributes_text: 当前选中称号的展示属性行列表
+    #   - selected_collection_attributes_text: 当前选中称号的收集属性行列表
+    #   - display_attributes_text: 当前所有已装备称号的展示属性汇总文本
+    #   - collection_attributes_text: 当前所有已拥有称号的收集属性汇总文本
+    #   - total_attributes_text: 展示属性与收集属性的合计汇总文本
+    #   - set_bonus_attributes_text: 已激活套装的加成属性文本
+    #   - display_title_name: 当前主展示称号名称
+    #   - display_title_id: 当前主展示称号 ID
+    #   - selected_is_display_title: 当前选中称号是否为主展示称号
+    #   - owned_count: 已拥有称号数量
+    #   - hidden_count: 已隐藏称号数量
+    #   - equipped_count: 已装备称号数量
     init: |-
       var.titles = packet['titles']
       var.groups = packet['groups']
@@ -103,6 +147,9 @@ ui:
       var.qualityScrollRatio = 0
       var.detailScrollRatio = 0
       var.rightScrollRatio = 0
+    # packetHandler: update
+    # 后端推送更新时执行，字段与 init 完全相同，用于刷新界面变量。
+    # 包字段: 同 init（titles/groups/qualities/sets/equipped_by_group/filter_modes/selected_* 等全部字段）
     update: |-
       var.titles = packet['titles']
       var.groups = packet['groups']

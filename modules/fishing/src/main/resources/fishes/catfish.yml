@@ -1,23 +1,27 @@
-id: "catfish"
-display-name: "鲶鱼"
-rarity: rare
-min-size: 40
-max-size: 150
-base-price: 500
-base-xp: 80
-seasons: [spring, summer]
-weathers: [rain]
-water-types: [river, lake]
-time-ranges:
-  - start: "18:00"
-    end: "06:00"
-item:
-  source: "minecraft"
-  item-id: "cooked_cod"
-  amount: 1
-difficulty: 70
-behaviors:
-  - type: sinker
-    weight: 0.7
-  - type: smooth
-    weight: 0.3
+# 鱼类定义：鲶鱼
+# 鲶鱼是一种稀有淡水鱼，出现在河流和湖泊中，夜间活跃，雨天更易捕获
+# 鱼类文件位于 fishes/ 目录，每个文件定义一种鱼
+
+id: "catfish"                  # 鱼类唯一标识符
+display-name: "鲶鱼"            # 显示名称
+rarity: rare                   # 稀有度等级（common/uncommon/rare/legendary）
+min-size: 40                   # 最小尺寸（厘米）
+max-size: 150                  # 最大尺寸（厘米）
+base-price: 500                # 基础售价（游戏货币）
+base-xp: 80                    # 基础经验值（捕获时获得）
+seasons: [spring, summer]      # 可捕获季节（春季、夏季）
+weathers: [rain]               # 可捕获天气（仅雨天）
+water-types: [river, lake]     # 可捕获水域类型（河流、湖泊）
+time-ranges:                   # 可捕获时间段
+  - start: "18:00"             # 开始时间（18:00）
+    end: "06:00"               # 结束时间（次日06:00，即夜间时段）
+item:                          # 捕获后掉落的物品定义
+  source: "minecraft"          # 物品来源（minecraft=原版物品）
+  item-id: "cooked_cod"        # 原版物品ID（使用熟鳕鱼代替）
+  amount: 1                    # 物品数量
+difficulty: 70                 # 钓鱼难度（0-100，越高越难）
+behaviors:                     # 小游戏中鱼的行为模式及权重
+  - type: sinker               # 下沉型：鱼向轨道底部移动
+    weight: 0.7                # 权重0.7（主要行为）
+  - type: smooth               # 平滑型：鱼缓慢平稳移动
+    weight: 0.3                # 权重0.3（次要行为）

@@ -4,10 +4,20 @@ import java.util.logging.Logger;
 
 import xuanmo.arcartxsuite.security.NativeBridge;
 
+/**
+ * 安全防护环境，聚合 Java 层反调试检测与 native 层完整性检测，
+ * 判定服务端是否处于被调试/篡改环境。
+ * <p>
+ * 一旦判定为"硬威胁"（agent/debugger/tamper 或 JDWP/Frida/attach），
+ * 标记为 compromised 并拒绝后续敏感操作。
+ */
 public final class ProtectionEnvironment {
 
+    /** native 检测位：Java agent 注入 */
     public static final int NATIVE_FLAG_AGENT = 0x01;
+    /** native 检测位：调试器附加 */
     public static final int NATIVE_FLAG_DEBUGGER = 0x02;
+    /** native 检测位：二进制篡改 */
     public static final int NATIVE_FLAG_TAMPER = 0x04;
 
     private static final Logger LOGGER = Logger.getLogger("AXS-Protection");

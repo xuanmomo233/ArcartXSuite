@@ -15,10 +15,24 @@ import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketPersistenceDialect;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketStorageConfiguration;
 
+/**
+ * 基于 JDBC 的事件包仓储实现。
+ * <p>
+ * 支持 SQLite 与 MySQL 两种方言，自动建表并提供击杀进度与
+ * 已触发规则的增删改查能力。继承 {@link AbstractModuleRepository}
+ * 以复用宿主统一的连接池与数据迁移基础设施。
+ */
 public final class JdbcEventPacketRepository extends AbstractModuleRepository implements EventPacketRepository {
 
     private final EventPacketStorageConfiguration configuration;
 
+    /**
+     * 构造 JDBC 仓储实例。
+     *
+     * @param dataFolder     模块数据目录
+     * @param configuration  存储配置
+     * @param logger         日志记录器
+     */
     public JdbcEventPacketRepository(File dataFolder, EventPacketStorageConfiguration configuration, Logger logger) {
         super("AXS-EventPacket", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;
@@ -36,6 +50,14 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
 
     // ─── Kill count ──────────────────────────────────────────
 
+    /**
+     * 查询指定玩家在某条规则下的累计击杀数。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param ruleId     规则 ID
+     * @return 当前击杀数，无记录时返回 0
+     * @throws SQLException 数据库操作失败时抛出
+     */
     @Override
     public int getKillCount(UUID playerUuid, String ruleId) throws SQLException {
         try (Connection connection = connection();
@@ -50,6 +72,14 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
         }
     }
 
+    /**
+     * 设置指定玩家在某条规则下的击杀数，使用 upsert 语义写入。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param ruleId     规则 ID
+     * @param count      要设置的击杀数
+     * @throws SQLException 数据库操作失败时抛出
+     */
     @Override
     public void setKillCount(UUID playerUuid, String ruleId, int count) throws SQLException {
         try (Connection connection = connection();
@@ -66,6 +96,13 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
         }
     }
 
+    /**
+     * 将指定玩家在某条规则下的击杀数自增 1，按方言使用对应的 upsert 语句。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param ruleId     规则 ID
+     * @throws SQLException 数据库操作失败时抛出
+     */
     @Override
     public void incrementKillCount(UUID playerUuid, String ruleId) throws SQLException {
         if (configuration.dialect() == EventPacketPersistenceDialect.SQLITE) {
@@ -99,6 +136,13 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
         }
     }
 
+    /**
+     * 加载指定玩家所有规则的击杀进度。
+     *
+     * @param playerUuid 玩家 UUID
+     * @return 规则 ID 到击杀数的映射
+     * @throws SQLException 数据库操作失败时抛出
+     */
     @Override
     public Map<String, Integer> loadAllKillCounts(UUID playerUuid) throws SQLException {
         Map<String, Integer> counts = new LinkedHashMap<>();
@@ -118,6 +162,14 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
 
     // ─── Fired rules ─────────────────────────────────────────
 
+    /**
+     * 判断指定玩家是否已触发过某条规则。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param ruleId     规则 ID
+     * @return 已触发返回 {@code true}
+     * @throws SQLException 数据库操作失败时抛出
+     */
     @Override
     public boolean hasFired(UUID playerUuid, String ruleId) throws SQLException {
         try (Connection connection = connection();
@@ -132,6 +184,13 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
         }
     }
 
+    /**
+     * 标记指定玩家已触发某条规则，使用 upsert 语义写入。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param ruleId     规则 ID
+     * @throws SQLException 数据库操作失败时抛出
+     */
     @Override
     public void markFired(UUID playerUuid, String ruleId) throws SQLException {
         try (Connection connection = connection();
@@ -146,6 +205,13 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
         }
     }
 
+    /**
+     * 移除指定玩家某条规则的已触发标记。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param ruleId     规则 ID
+     * @throws SQLException 数据库操作失败时抛出
+     */
     @Override
     public void removeFired(UUID playerUuid, String ruleId) throws SQLException {
         try (Connection connection = connection();
@@ -160,6 +226,9 @@ public final class JdbcEventPacketRepository extends AbstractModuleRepository im
 
     // ─── Lifecycle ───────────────────────────────────────────
 
+    /**
+     * 关闭仓储，释放底层连接池资源。
+     */
     @Override
     public void close() {
         shutdown();

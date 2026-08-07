@@ -16,11 +16,25 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionsLoader;
 
+/**
+ * 道具定义加载器。
+ * <p>
+ * 工具类，负责从 {@code props/} 目录递归扫描 YAML 文件并解析为 {@link PropDefinition} 集合。
+ * 文件相对路径（去除扩展名）作为道具 ID，小写归一化后存入返回的 Map。
+ */
 public final class PropDefinitionLoader {
 
     private PropDefinitionLoader() {
     }
 
+    /**
+     * 扫描道具目录并加载全部定义。
+     *
+     * @param propsDirectory 道具目录，为 {@code null} 或不存在时返回空 Map
+     * @param logger         日志记录器，用于输出警告信息
+     * @return 以小写归一化 ID 为键的不可变 Map
+     * @throws IOException 读取文件时发生 I/O 错误
+     */
     public static Map<String, PropDefinition> load(File propsDirectory, Logger logger) throws IOException {
         if (propsDirectory == null || !propsDirectory.exists()) {
             return Map.of();
@@ -43,6 +57,14 @@ public final class PropDefinitionLoader {
         return Map.copyOf(definitions);
     }
 
+    /**
+     * 从单个 YAML 配置解析道具定义。
+     *
+     * @param id           道具 ID（相对路径）
+     * @param configuration YAML 配置
+     * @param logger       日志记录器
+     * @return 解析后的 {@link PropDefinition}
+     */
     public static PropDefinition loadDefinition(String id, FileConfiguration configuration, Logger logger) {
         String normalizedId = safe(id);
         String displayName = readString(configuration, "name", normalizedId);

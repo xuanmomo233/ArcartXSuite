@@ -12,6 +12,21 @@ ui:
   through: false
   screenScale: true
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - page: 当前页面 (regions/edit)
+    #   - packetId: 服务端回包 ID，用于客户端 Packet.send 回传
+    #   - regions: 所有区域数据列表
+    #   - regionCount: 区域总数
+    #   - selId: 当前选中区域 ID
+    #   - selWorld: 选中区域所在世界
+    #   - selPriority: 选中区域优先级
+    #   - selParent: 选中区域父区域
+    #   - selMin: 选中区域最小坐标
+    #   - selMax: 选中区域最大坐标
+    #   - selVolume: 选中区域体积 (方块数)
+    #   - selFlags: 选中区域标志列表
+    #   - selMembers: 选中区域成员列表
     init: |-
       var.page = packet['page']
       var.packetId = packet['packetId']

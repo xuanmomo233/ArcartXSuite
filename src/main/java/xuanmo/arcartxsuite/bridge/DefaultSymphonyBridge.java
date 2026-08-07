@@ -8,6 +8,11 @@ import priv.seventeen.artist.symphony.api.SymphonyAPI;
 import priv.seventeen.artist.symphony.api.attribute.Operation;
 import xuanmo.arcartxsuite.api.attribute.SymphonyBridge;
 
+/**
+ * {@link SymphonyBridge} 的默认实现，桥接 Symphony 属性插件。
+ * <p>
+ * Symphony 为可选依赖，运行时通过插件管理器检测可用性。
+ */
 public final class DefaultSymphonyBridge implements SymphonyBridge {
 
     private final JavaPlugin plugin;

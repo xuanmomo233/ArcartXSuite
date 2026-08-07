@@ -9,6 +9,11 @@ import java.time.LocalDateTime;
 import javax.sql.DataSource;
 import org.bukkit.plugin.java.JavaPlugin;
 
+/**
+ * Boss 掉落统计数据访问对象，属于 entitytracker 模块的数据持久层。
+ * <p>
+ * 提供 Boss 掉落物品记录、击杀计数递增和掉率刷新等数据库操作。
+ */
 public class BossDropStatisticsDao {
 
     private final DataSource dataSource;
@@ -17,6 +22,15 @@ public class BossDropStatisticsDao {
         this.dataSource = dataSource;
     }
 
+    /**
+     * 记录一次 Boss 掉落物品（存在则递增计数）。
+     *
+     * @param bossId      Boss ID
+     * @param itemId      物品 ID
+     * @param itemName    物品名称
+     * @param serverName  服务器名称
+     * @throws SQLException 数据库操作失败时抛出
+     */
     public void recordDrop(String bossId, String itemId, String itemName, String serverName) throws SQLException {
         String sql = """
             INSERT INTO boss_drop_statistics
@@ -38,6 +52,13 @@ public class BossDropStatisticsDao {
         }
     }
 
+    /**
+     * 递增指定 Boss 的击杀计数并更新掉率。
+     *
+     * @param bossId     Boss ID
+     * @param serverName 服务器名称
+     * @throws SQLException 数据库操作失败时抛出
+     */
     public void incrementKillCount(String bossId, String serverName) throws SQLException {
         String sql = """
             UPDATE boss_drop_statistics
@@ -54,6 +75,13 @@ public class BossDropStatisticsDao {
         }
     }
 
+    /**
+     * 刷新指定 Boss 的所有物品掉率。
+     *
+     * @param bossId     Boss ID
+     * @param serverName 服务器名称
+     * @throws SQLException 数据库操作失败时抛出
+     */
     public void refreshDropRates(String bossId, String serverName) throws SQLException {
         String sql = """
             UPDATE boss_drop_statistics

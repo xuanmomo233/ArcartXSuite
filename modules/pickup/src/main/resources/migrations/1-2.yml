@@ -1,6 +1,8 @@
-from-version: 1
-to-version: 2
+# Pickup 配置迁移文件（版本 1 → 2）
+# 移除已废弃的 scanner.keybind.default-key 字段，该字段从未被代码使用。
+from-version: 1  # 迁移起始版本
+to-version: 2  # 迁移目标版本
 description: "移除 scanner.keybind.default-key（dead field）。该字段自首次引入以来从未被代码使用，拾取按键的默认键位现由宿主 config.yml 的 keybinds.pickup-pick.default-key 统一注册。"
 operations:
-  - type: remove
-    path: scanner.keybind.default-key
+  - type: remove  # 操作类型：删除指定路径的配置项
+    path: scanner.keybind.default-key  # 要删除的配置路径

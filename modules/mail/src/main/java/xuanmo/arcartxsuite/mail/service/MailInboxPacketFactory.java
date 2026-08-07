@@ -14,6 +14,11 @@ import xuanmo.arcartxsuite.mail.model.MailPage;
 import xuanmo.arcartxsuite.mail.model.MailSourceType;
 import xuanmo.arcartxsuite.mail.model.MailStatus;
 
+/**
+ * 收件箱界面数据包工厂，构建发送给客户端的收件箱列表与选中邮件详情数据包。
+ * <p>
+ * 关联模块：mail。所有方法为静态工具方法，封装邮件条目、分页、筛选与状态文本等 UI 数据。
+ */
 public final class MailInboxPacketFactory {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());

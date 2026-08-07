@@ -21,10 +21,22 @@ import xuanmo.arcartxsuite.chat.model.ChatMuteRecord;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerProfile;
 import xuanmo.arcartxsuite.chat.model.ChatPlayerState;
 
+/**
+ * 基于 JDBC 的聊天数据仓储实现，支持 SQLite 与 MySQL 两种后端。
+ * <p>
+ * 继承 {@link AbstractModuleRepository} 获得连接池管理与数据迁移能力，
+ * 实现 {@link ChatRepository} 接口提供玩家状态、禁言记录与玩家档案的 CRUD 操作。
+ * 建表语句根据 {@link ChatPersistenceDialect} 自动适配方言。
+ */
 public final class JdbcChatRepository extends AbstractModuleRepository implements ChatRepository {
 
     private final ChatStorageConfiguration configuration;
 
+    /**
+     * @param dataFolder    模块数据目录
+     * @param configuration 存储配置
+     * @param logger        日志记录器
+     */
     public JdbcChatRepository(File dataFolder, ChatStorageConfiguration configuration, Logger logger) {
         super("AXS-Chat", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;

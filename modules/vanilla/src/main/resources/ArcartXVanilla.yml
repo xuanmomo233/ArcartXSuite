@@ -1,3 +1,8 @@
+# ArcartXSuite Vanilla - 原版界面替换模块配置
+# 替换原版工作台和熔炉界面为 ArcartX UI 纯色块风格界面。
+# 重载: /axs vanilla reload
+
+# 配置版本号（请勿手动修改）
 config-version: 1
 
 # 工作台界面替换

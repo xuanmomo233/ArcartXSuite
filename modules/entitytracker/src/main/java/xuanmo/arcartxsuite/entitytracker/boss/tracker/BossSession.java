@@ -20,6 +20,13 @@ import xuanmo.arcartxsuite.entitytracker.boss.config.BossDefinition;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRankingRewardsSettings;
 import xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration;
 
+/**
+ * Boss 追踪会话，属于 entitytracker 模块的 boss 追踪子系统。
+ * <p>
+ * 维护单个 Boss 实体从生成到消失的完整生命周期状态：
+ * 伤害排名追踪、渲染状态捕获、UI 数据包构建、聊天卡片数据生成、
+ * 占位符上下文创建以及结算快照生成。
+ */
 public final class BossSession {
 
     private static final DecimalFormat NUMBER_FORMAT = new DecimalFormat("0.##");

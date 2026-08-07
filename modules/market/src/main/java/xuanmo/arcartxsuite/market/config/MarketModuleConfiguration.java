@@ -11,6 +11,20 @@ import org.bukkit.configuration.file.FileConfiguration;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
 
+/**
+ * Market 模块配置记录，聚合 UI、存储、Redis、跨服、拍卖、商店、回收、消息等子配置。
+ *
+ * @param debug                   是否启用调试日志
+ * @param schedulerIntervalTicks  调度间隔（tick，至少 20）
+ * @param ui                      UI 配置
+ * @param storage                 存储配置
+ * @param redis                   Redis 配置
+ * @param crossServer             跨服通道配置
+ * @param auction                 拍卖配置
+ * @param shop                    商店配置
+ * @param recycle                 回收配置
+ * @param messages                消息配置
+ */
 public record MarketModuleConfiguration(
     boolean debug,
     long schedulerIntervalTicks,

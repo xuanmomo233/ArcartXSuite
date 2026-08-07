@@ -8,11 +8,27 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.MemoryConfiguration;
 import org.jetbrains.annotations.NotNull;
 
+/**
+ * 脚本条件加载器，从 YAML 配置节解析出 {@link ScriptCondition} 列表。
+ * <p>
+ * 支持三种配置形态：内联字符串列表、Map 列表、嵌套配置节。提供针对常见键名
+ * （open-requirements / requirements / use-conditions / conditions / claim-conditions）
+ * 的便捷方法。
+ */
 public final class ScriptConditionsLoader {
 
     private ScriptConditionsLoader() {
     }
 
+    /**
+     * 从指定配置节的多个键中加载条件列表。
+ * <p>
+ * 每个键会依次尝试：内联字符串列表、Map 列表、嵌套配置节三种解析方式。
+     *
+     * @param section 配置节，null 返回空列表
+     * @param keys    要读取的键名数组
+     * @return 不可变条件列表
+     */
     public static @NotNull List<ScriptCondition> load(
         ConfigurationSection section,
         String... keys
@@ -44,30 +60,43 @@ public final class ScriptConditionsLoader {
         return List.copyOf(conditions);
     }
 
+    /** 加载 {@code open-requirements} 键下的条件列表。 */
     public static @NotNull List<ScriptCondition> loadOpenRequirements(
         ConfigurationSection section
     ) {
         return load(section, "open-requirements");
     }
 
+    /** 加载 {@code requirements} 键下的条件列表（查看条件）。 */
     public static @NotNull List<ScriptCondition> loadViewConditions(
         ConfigurationSection section
     ) {
         return load(section, "requirements");
     }
 
+    /** 加载 {@code use-conditions} 键下的条件列表（使用条件）。 */
     public static @NotNull List<ScriptCondition> loadUseConditions(
         ConfigurationSection section
     ) {
         return load(section, "use-conditions");
     }
 
+    /** 加载 {@code conditions} 键下的条件列表（模块级条件）。 */
     public static @NotNull List<ScriptCondition> loadModuleConditions(
         ConfigurationSection section
     ) {
         return load(section, "conditions");
     }
 
+    /**
+     * 加载 {@code conditions} 键下的条件列表，并在解析结果为空但原始数据存在时
+     * 记录警告日志（用于提示用户配置格式错误）。
+     *
+     * @param section       配置节
+     * @param logger        日志器，null 时不记录
+     * @param invalidPrefix 警告前缀文本
+     * @return 不可变条件列表
+     */
     public static @NotNull List<ScriptCondition> loadModuleConditions(
         ConfigurationSection section,
         Logger logger,
@@ -90,12 +119,19 @@ public final class ScriptConditionsLoader {
         return conditions;
     }
 
+    /** 加载 {@code claim-conditions} 键下的条件列表（领取条件）。 */
     public static @NotNull List<ScriptCondition> loadClaimConditions(
         ConfigurationSection section
     ) {
         return load(section, "claim-conditions");
     }
 
+    /**
+     * 将内联字符串行列表解析为条件列表，每行尝试内联解析或反序列化。
+     *
+     * @param lines 原始行列表，null/空返回空列表
+     * @return 不可变条件列表
+     */
     public static @NotNull List<ScriptCondition> loadInlineLines(
         List<String> lines
     ) {

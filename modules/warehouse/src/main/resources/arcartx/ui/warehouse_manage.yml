@@ -15,6 +15,45 @@ ui:
   itemSize: 16
   screenScale: true
   packetHandler:
+    # packetHandler: update
+    # 包字段:
+    #   - packetId: 包标识符（'AXS_WAREHOUSE'）
+    #   - action_token: 操作令牌（防重放）
+    #   - ownerType: 仓库所有者类型（personal / shared）
+    #   - ownerId: 所有者 ID
+    #   - warehouseId: 仓库 ID
+    #   - warehouseName: 仓库名称
+    #   - personalWarehouses: 个人仓库列表
+    #   - personalWarehouseTexts: 个人仓库显示文本
+    #   - manageWarehouses: 可管理的仓库列表
+    #   - manageWarehouseTexts: 可管理仓库显示文本
+    #   - manageWarehouseTypes: 可管理仓库类型
+    #   - manageWarehouseTargets: 可管理仓库目标
+    #   - manageWarehouseSelected: 当前选中的管理仓库索引
+    #   - sharedWarehouses: 共享仓库列表
+    #   - sharedWarehouseManageTexts: 共享仓库管理显示文本
+    #   - sharedCreateCostText: 创建共享仓库费用文本
+    #   - sharedRoleOwnerName: 共享仓库所有者角色名
+    #   - sharedRoleMemberName: 共享仓库成员角色名
+    #   - sharedRoleViewerName: 共享仓库观众角色名
+    #   - sharedMembers: 共享仓库成员列表
+    #   - sharedMemberTexts: 成员显示文本
+    #   - sharedMemberNames: 成员名称列表
+    #   - sharedMemberRoles: 成员角色列表
+    #   - unlocked: 二级密码是否已解锁
+    #   - hasPassword: 是否已设置二级密码
+    #   - readOnly: 是否只读模式
+    #   - lockOwner: 编辑锁持有者
+    #   - capacityText: 容量显示文本
+    #   - level: 仓库等级
+    #   - canUpgrade: 是否可升级
+    #   - nextUpgradeText: 下一级升级信息文本
+    #   - autoPickup: 是否启用自动拾取
+    #   - autoPickupMythic: 是否自动拾取 MythicMobs 掉落
+    #   - autoPickupNotify: 是否通知自动拾取
+    #   - showcaseEnabled: 是否启用展示柜
+    #   - maxManageCount: 可管理仓库最大数量（用于动态创建控件）
+    #   - maxMemberCount: 成员最大数量
     update: |-
       var.packetId = packet['packetId']
       var.actionToken = packet['action_token']

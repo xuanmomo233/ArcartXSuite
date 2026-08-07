@@ -14,16 +14,33 @@ import xuanmo.arcartxsuite.eventpacket.config.EventPacketTrigger;
 import xuanmo.arcartxsuite.eventpacket.service.EventPacketDispatchService;
 import xuanmo.arcartxsuite.eventpacket.service.PapiWatcherService;
 
+/**
+ * 玩家事件监听器，负责将 Bukkit 原生事件桥接到事件包分发系统。
+ * <p>
+ * 监听玩家进服、退服以及实体死亡事件，分别触发对应的事件包规则，
+ * 并在玩家退服时清理 PAPI 监听器中缓存的玩家状态。
+ */
 public final class PlayerEventPacketListener implements Listener {
 
     private final EventPacketDispatchService dispatchService;
     private final PapiWatcherService watcherService;
 
+    /**
+     * 构造玩家事件监听器。
+     *
+     * @param dispatchService 事件包分发服务
+     * @param watcherService  PAPI 监听服务，可为 {@code null}
+     */
     public PlayerEventPacketListener(EventPacketDispatchService dispatchService, PapiWatcherService watcherService) {
         this.dispatchService = dispatchService;
         this.watcherService = watcherService;
     }
 
+    /**
+     * 玩家进服事件：触发 JOIN 规则，首次进服额外触发 FIRST_JOIN 规则。
+     *
+     * @param event 玩家进服事件
+     */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerJoin(PlayerJoinEvent event) {
         dispatchService.dispatchAll(
@@ -40,6 +57,11 @@ public final class PlayerEventPacketListener implements Listener {
         }
     }
 
+    /**
+     * 玩家退服事件：触发 QUIT 规则并清理分发服务与 PAPI 监听器中的玩家状态。
+     *
+     * @param event 玩家退服事件
+     */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerQuit(PlayerQuitEvent event) {
         dispatchService.dispatchAll(
@@ -53,6 +75,11 @@ public final class PlayerEventPacketListener implements Listener {
         }
     }
 
+    /**
+     * 实体死亡事件：记录击杀者击杀进度，交由 PAPI 监听服务判定是否触发击杀计数规则。
+     *
+     * @param event 实体死亡事件
+     */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onEntityDeath(EntityDeathEvent event) {
         LivingEntity entity = event.getEntity();

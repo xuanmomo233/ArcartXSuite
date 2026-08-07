@@ -1,12 +1,21 @@
+# 字幕 HUD — 打字机动画字幕显示界面
+# 由服务端 Subtitle 模块推送字幕帧，客户端按打字机效果逐字显示。
+# 支持背景板显示/隐藏、动画时长控制和自动关闭。
 ui:
-  isHud: true
-  defaultOpen: false
-  through: false
-  background: false
-  closeDied: false
-  show: true
-  level: 1
+  isHud: true  # HUD 模式，覆盖在游戏画面上
+  defaultOpen: false  # 不随启动自动打开
+  through: false  # 鼠标不穿透
+  background: false  # 无背景遮罩
+  closeDied: false  # 关闭后不销毁（可复用）
+  show: true  # 可见
+  level: 1  # 渲染层级
   packetHandler:
+    # packetHandler: play
+    # 包字段:
+    #   - text: 字幕文本内容
+    #   - length: 打字机动画总字数（0 = 自动按文本长度计算）
+    #   - time: 打字机动画时长（毫秒）
+    #   - showBackground: 是否显示字幕背景板
     play: |-
       var.subtitleVisible = true
       var.subtitleText = packet['text']
@@ -14,6 +23,8 @@ ui:
       var.subtitleTime = packet['time']
       var.subtitleShowBackground = packet['showBackground']
       var.subtitleAnimation = Lerp(0, var.subtitleLength, var.subtitleTime)
+    # packetHandler: close
+    # 包字段: 无（仅通知客户端关闭字幕）
     close: |-
       var.subtitleVisible = false
       var.subtitleText = none

@@ -15,8 +15,13 @@ ui:
   screenScale: true
   level: 50
   packetHandler:
+    # packetHandler: sync
+    # 包字段:
+    #   - visible: 是否显示黑边（true=播放电影序列，false=隐藏）
     sync: |-
       var.letterboxVisible = packet['visible']
+    # packetHandler: close
+    # 包字段: 无（隐藏黑边）
     close: |-
       var.letterboxVisible = false
   action:

@@ -21,10 +21,23 @@ import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsPersistenceDialect;
 import xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsStorageConfiguration;
 import xuanmo.arcartxsuite.onlinerewards.model.OnlineRewardsPlayerState;
 
+/**
+ * 在线奖励 JDBC 存储仓库。
+ * <p>
+ * 属于 {@code onlinerewards} 模块，继承 {@link AbstractModuleRepository} 实现 {@link OnlineRewardsRepository}，
+ * 负责玩家状态、签到记录、全服签到目标的持久化与排行榜查询，支持 SQLite 与 MySQL 双方言。
+ */
 public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository implements OnlineRewardsRepository {
 
     private final OnlineRewardsStorageConfiguration configuration;
 
+    /**
+     * 构造 JDBC 存储仓库。
+     *
+     * @param dataFolder    模块数据目录
+     * @param configuration 存储配置
+     * @param logger        日志器
+     */
     public JdbcOnlineRewardsRepository(File dataFolder, OnlineRewardsStorageConfiguration configuration, Logger logger) {
         super("AXS-OnlineRewards", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;
@@ -41,6 +54,13 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
         return List.of("online_rewards_players", "online_rewards_sign_ins", "online_rewards_server_goals");
     }
 
+    /**
+     * 加载玩家运行时状态，不存在时返回默认状态。
+     *
+     * @param playerUuid 玩家唯一 id
+     * @return 玩家状态
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public OnlineRewardsPlayerState loadState(UUID playerUuid) throws SQLException {
         try (Connection connection = connection();
@@ -82,6 +102,13 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
         return new OnlineRewardsPlayerState();
     }
 
+    /**
+     * 保存或更新玩家运行时状态。
+     *
+     * @param playerUuid 玩家唯一 id
+     * @param state      玩家状态
+     * @throws SQLException 写入失败时抛出
+     */
     @Override
     public void saveState(UUID playerUuid, OnlineRewardsPlayerState state) throws SQLException {
         try (Connection connection = connection();
@@ -108,6 +135,15 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
         }
     }
 
+    /**
+     * 加载玩家在指定日期范围内的签到日期集合。
+     *
+     * @param playerUuid 玩家唯一 id
+     * @param fromDate   起始日期（含）
+     * @param toDate     结束日期（含）
+     * @return 签到日期字符串集合
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public Set<String> loadSignInDates(UUID playerUuid, String fromDate, String toDate) throws SQLException {
         LinkedHashSet<String> dates = new LinkedHashSet<>();
@@ -132,6 +168,13 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
         return Set.copyOf(dates);
     }
 
+    /**
+     * 加载玩家全部签到日期集合。
+     *
+     * @param playerUuid 玩家唯一 id
+     * @return 签到日期字符串集合
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public Set<String> loadAllSignInDates(UUID playerUuid) throws SQLException {
         LinkedHashSet<String> dates = new LinkedHashSet<>();
@@ -154,6 +197,14 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
         return Set.copyOf(dates);
     }
 
+    /**
+     * 判断玩家在指定日期是否已有签到记录。
+     *
+     * @param playerUuid 玩家唯一 id
+     * @param date       日期字符串
+     * @return 是否已签到
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public boolean hasSignInRecord(UUID playerUuid, String date) throws SQLException {
         try (Connection connection = connection();
@@ -172,6 +223,15 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
         }
     }
 
+    /**
+     * 保存签到记录（覆盖式写入）。
+     *
+     * @param playerUuid 玩家唯一 id
+     * @param playerName 玩家名称
+     * @param date       签到日期
+     * @param makeup     是否为补签
+     * @throws SQLException 写入失败时抛出
+     */
     @Override
     public void saveSignInRecord(UUID playerUuid, String playerName, String date, boolean makeup) throws SQLException {
         try (Connection connection = connection();
@@ -184,6 +244,16 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
         }
     }
 
+    /**
+     * 尝试插入签到记录，仅当该日期不存在记录时才写入。
+     *
+     * @param playerUuid 玩家唯一 id
+     * @param playerName 玩家名称
+     * @param date       签到日期
+     * @param makeup     是否为补签
+     * @return 插入成功返回 {@code true}，已存在记录返回 {@code false}
+     * @throws SQLException 写入失败时抛出
+     */
     @Override
     public boolean tryInsertSignInRecord(UUID playerUuid, String playerName, String date, boolean makeup) throws SQLException {
         String sql = configuration.dialect() == OnlineRewardsPersistenceDialect.SQLITE
@@ -205,6 +275,16 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
         }
     }
 
+    /**
+     * 分页加载排行榜条目。
+     *
+     * @param scope    排行榜范围
+     * @param periodKey 周期键
+     * @param offset   偏移量
+     * @param limit    条数上限
+     * @return 排行榜条目列表
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public List<OnlineRewardsLeaderboardEntry> loadLeaderboard(
         OnlineRewardsLeaderboardScope scope,
@@ -267,6 +347,13 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
         return List.copyOf(entries);
     }
 
+    /**
+     * 统计指定日期前缀的签到记录数。
+     *
+     * @param datePrefix 日期前缀
+     * @return 签到记录数
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public int countSignInRecords(String datePrefix) throws SQLException {
         try (Connection connection = connection();
@@ -280,6 +367,14 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
         }
     }
 
+    /**
+     * 判断指定日期的全服签到目标是否已触发。
+     *
+     * @param date   日期
+     * @param goalId 目标 id
+     * @return 是否已触发
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public boolean isServerGoalTriggered(String date, String goalId) throws SQLException {
         try (Connection connection = connection();
@@ -294,6 +389,13 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
         }
     }
 
+    /**
+     * 记录指定日期的全服签到目标已触发。
+     *
+     * @param date   日期
+     * @param goalId 目标 id
+     * @throws SQLException 写入失败时抛出
+     */
     @Override
     public void saveServerGoalTriggered(String date, String goalId) throws SQLException {
         String sql = configuration.dialect() == OnlineRewardsPersistenceDialect.SQLITE
@@ -315,6 +417,9 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
         }
     }
 
+    /**
+     * 关闭存储资源。
+     */
     @Override
     public void close() {
         shutdown();

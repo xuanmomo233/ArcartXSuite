@@ -5,6 +5,20 @@ import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.configuration.file.YamlConfiguration;
 
+/**
+ * Regions 模块的聚合配置记录。
+ * <p>
+ * 由 {@link #load(YamlConfiguration, YamlConfiguration, Logger)} 从 {@code ArcartXRegions.yml}
+ * 与附属 {@code messages.yml} 解析得到，贯穿选区、默认值、通知、存储、消息等全部子配置。
+ * 关联模块：{@code regions}。
+ *
+ * @param debug         是否开启调试日志
+ * @param selection     选区工具与体积/数量限制配置
+ * @param defaults      区域默认值（优先级、全局区域 ID）
+ * @param notifications 通知展示配置（Actionbar、显示模式）
+ * @param storage       存储后端配置（SQLite / MySQL）
+ * @param messages      玩家可见消息模板
+ */
 public record RegionsConfiguration(
     boolean debug,
     SelectionConfig selection,
@@ -14,22 +28,72 @@ public record RegionsConfiguration(
     MessagesConfig messages
 ) {
 
+    /**
+     * 选区工具与限制配置。
+     *
+     * @param wandItem            选区工具物品类型
+     * @param maxVolume           单次选区最大方块体积
+     * @param maxRegionsPerPlayer 单玩家最大区域数量
+     */
     public record SelectionConfig(Material wandItem, long maxVolume, int maxRegionsPerPlayer) {}
+
+    /**
+     * 区域默认值配置。
+     *
+     * @param priority       新建区域默认优先级
+     * @param globalRegionId 全局区域 ID
+     */
     public record DefaultsConfig(int priority, String globalRegionId) {}
+
+    /**
+     * 通知展示配置。
+     *
+     * @param showActionbar 是否在 Actionbar 展示通知
+     * @param displayMode   显示模式（如 {@code actionbar}）
+     */
     public record NotificationConfig(boolean showActionbar, String displayMode) {}
+
+    /**
+     * 存储后端配置，支持 SQLite 与 MySQL。
+     *
+     * @param dialect     数据库方言
+     * @param sqliteFile  SQLite 数据库文件名
+     * @param host        MySQL 主机地址
+     * @param port        MySQL 端口
+     * @param database    MySQL 数据库名
+     * @param username    MySQL 用户名
+     * @param password    MySQL 密码
+     * @param tablePrefix 表名前缀
+     * @param poolSize    连接池大小
+     */
     public record StorageConfig(
         Dialect dialect, String sqliteFile,
         String host, int port, String database,
         String username, String password,
         String tablePrefix, int poolSize
     ) {
+        /**
+         * 存储方言枚举。
+         */
         public enum Dialect {
             SQLITE, MYSQL;
+
+            /**
+             * 由字符串解析方言，不区分大小写，非 {@code mysql} 一律视为 {@link #SQLITE}。
+             *
+             * @param s 方言字符串
+             * @return 对应的 {@link Dialect}
+             */
             public static Dialect from(String s) {
                 return "mysql".equalsIgnoreCase(s) ? MYSQL : SQLITE;
             }
         }
 
+        /**
+         * 将本配置转换为平台统一的 {@link xuanmo.arcartxsuite.api.storage.StorageDescriptor}。
+         *
+         * @return 对应的存储描述符
+         */
         public xuanmo.arcartxsuite.api.storage.StorageDescriptor toDescriptor() {
             if (dialect == Dialect.MYSQL) {
                 return xuanmo.arcartxsuite.api.storage.StorageDescriptor.mysql(
@@ -38,6 +102,32 @@ public record RegionsConfiguration(
             return xuanmo.arcartxsuite.api.storage.StorageDescriptor.sqlite(sqliteFile);
         }
     }
+
+    /**
+     * 玩家可见消息模板集合。
+     *
+     * @param prefix             消息前缀
+     * @param wandPos1           选区点 1 提示
+     * @param wandPos2           选区点 2 提示
+     * @param regionCreated      区域创建提示
+     * @param regionDeleted      区域删除提示
+     * @param regionNotFound     未找到区域提示
+     * @param regionExists       区域已存在提示
+     * @param noSelection        未选区提示
+     * @param selectionTooLarge  选区过大提示
+     * @param maxRegionsReached  达到最大区域数量提示
+     * @param flagSet            标志设置提示
+     * @param flagRemoved        标志移除提示
+     * @param flagUnknown        未知标志提示
+     * @param memberAdded        成员添加提示
+     * @param memberRemoved      成员移除提示
+     * @param noPermissionRegion 区域无权限提示
+     * @param noBuild            禁止建造提示
+     * @param noInteract         禁止交互提示
+     * @param noPvp              禁止 PVP 提示
+     * @param regionEnter        进入区域提示
+     * @param regionLeave        离开区域提示
+     */
     public record MessagesConfig(
         String prefix,
         String wandPos1, String wandPos2,
@@ -50,11 +140,25 @@ public record RegionsConfiguration(
         String noPermissionRegion, String noBuild, String noInteract, String noPvp,
         String regionEnter, String regionLeave
     ) {
+        /**
+         * 将消息模板拼接前缀并翻译 {@code &} 颜色代码。
+         *
+         * @param msg 原始消息模板
+         * @return 带颜色代码的最终消息
+         */
         public String format(String msg) {
             return ChatColor.translateAlternateColorCodes('&', prefix + msg);
         }
     }
 
+    /**
+     * 从主配置与消息配置 YAML 加载并构造 {@link RegionsConfiguration}。
+     *
+     * @param yaml         主配置 {@code ArcartXRegions.yml}
+     * @param messagesYaml 消息配置 {@code messages.yml}
+     * @param logger       日志记录器，用于记录加载过程中的警告
+     * @return 解析后的配置记录
+     */
     public static RegionsConfiguration load(YamlConfiguration yaml, YamlConfiguration messagesYaml, Logger logger) {
         var sel = yaml.getConfigurationSection("selection");
         Material wand = Material.matchMaterial(sel != null ? sel.getString("wand-item", "WOODEN_AXE") : "WOODEN_AXE");

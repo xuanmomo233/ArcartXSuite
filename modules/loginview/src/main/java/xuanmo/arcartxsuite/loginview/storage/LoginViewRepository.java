@@ -5,6 +5,11 @@ import java.util.Optional;
 import java.util.UUID;
 import org.bukkit.entity.Player;
 
+/**
+ * LoginView 仓储接口，定义账号与登录会话的持久化操作。
+ * <p>
+ * JDBC 实现见 {@link JdbcLoginViewRepository}。
+ */
 public interface LoginViewRepository extends AutoCloseable {
 
     void initialize() throws SQLException;

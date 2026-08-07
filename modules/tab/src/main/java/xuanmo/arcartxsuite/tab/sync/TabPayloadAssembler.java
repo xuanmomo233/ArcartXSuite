@@ -8,11 +8,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * Tab 数据包载荷组装工具类。
+ * <p>
+ * 负责根据打包模板类型（Map 或 List）创建、追加、快照及结构化比较 Tab 刷新载荷。
+ * 关联模块：{@code tab}，为 {@link TabRefreshRequester} 的实现提供底层载荷操作支持。
+ */
 final class TabPayloadAssembler {
 
     private TabPayloadAssembler() {
     }
 
+    /**
+     * 根据打包模板类型创建空载荷容器。
+     *
+     * @param packTemplate       打包模板，决定载荷为 Map 或 List
+     * @param expectedPlayerCount 预期玩家数量，仅对 List 载荷用于预分配容量
+     * @return 空的 Map 或 List 载荷容器
+     */
     static Object create(Object packTemplate, int expectedPlayerCount) {
         if (packTemplate instanceof Map<?, ?>) {
             return new LinkedHashMap<String, Object>();
@@ -20,6 +33,17 @@ final class TabPayloadAssembler {
         return new ArrayList<>(Math.max(0, expectedPlayerCount));
     }
 
+    /**
+     * 向载荷追加渲染结果。
+     * <p>
+     * 根据 {@code packTemplate} 类型将渲染结果合并到 Map 或 List 载荷中；
+     * 当 {@code omitBlankValues} 为 {@code true} 时跳过空白值。
+     *
+     * @param payload          载荷容器
+     * @param packTemplate     打包模板
+     * @param rendered         渲染结果
+     * @param omitBlankValues  是否省略空白值
+     */
     @SuppressWarnings("unchecked")
     static void append(Object payload, Object packTemplate, Object rendered, boolean omitBlankValues) {
         if (packTemplate instanceof Map<?, ?>) {
@@ -39,6 +63,12 @@ final class TabPayloadAssembler {
         listPayload.add(rendered);
     }
 
+    /**
+     * 对载荷做不可变快照，递归复制 List 与 Map 结构。
+     *
+     * @param payload 原始载荷
+     * @return 不可变快照
+     */
     static Object snapshot(Object payload) {
         if (payload instanceof List<?> listPayload) {
             List<Object> copy = new ArrayList<>(listPayload.size());
@@ -59,6 +89,15 @@ final class TabPayloadAssembler {
         return payload;
     }
 
+    /**
+     * 递归比较两个载荷的结构与值是否完全相等。
+     * <p>
+     * 对 List 按顺序逐元素比较，对 Map 按插入顺序逐键值比较。
+     *
+     * @param left  左侧载荷
+     * @param right 右侧载荷
+     * @return {@code true} 表示结构与值完全一致
+     */
     static boolean structurallyEquals(Object left, Object right) {
         if (left == right) {
             return true;

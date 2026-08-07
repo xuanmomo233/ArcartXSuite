@@ -43,6 +43,12 @@ import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository;
 import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository.AreaStats;
 import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository.PlayerStats;
 
+/**
+ * 挂机奖励核心服务，管理玩家 AFK 状态判定、奖励调度与发放。
+ * <p>
+ * 通过定时任务周期性检查玩家活动状态，对处于 AFK 的玩家按配置发放奖励，
+ * 支持 TPS 阈值限制、手动保护、每日上限等策略。
+ */
 public final class AfkRewardService {
 
     public enum EndReason {

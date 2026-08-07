@@ -14,6 +14,12 @@ import xuanmo.arcartxsuite.api.condition.ScriptConditionOperator;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.api.script.AriaBridge;
 
+/**
+ * {@link ScriptConditionEvaluator} 与 {@link ScriptActionExecutor} 的默认实现。
+ * <p>
+ * 统一处理占位符条件、ARIA 脚本条件与 JS 脚本条件的求值，
+ * 以及 ARIA/JS 动作的执行。委托 {@link AriaScriptExecutor} 与 {@link JavaScriptExecutor}。
+ */
 public final class DefaultScriptConditionEvaluator
     implements ScriptConditionEvaluator, ScriptActionExecutor {
 

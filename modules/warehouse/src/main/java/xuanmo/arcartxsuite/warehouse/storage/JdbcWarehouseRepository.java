@@ -18,26 +18,53 @@ import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.StorageConfiguration;
 import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.StorageDialect;
 
+/**
+ * 仓库模块的 JDBC 存储实现。
+ * <p>
+ * 继承 {@link AbstractModuleRepository} 并实现 {@link WarehouseRepository}，
+ * 负责个人仓库、槽位物品、银行余额、定期存款、共享仓库及其成员、待处理转让等全部数据的持久化。
+ * 支持 MySQL 与 SQLite 两种方言，自动建表与增量迁移，多步写操作使用事务保证原子性。
+ * 关联模块：warehouse。
+ */
 public final class JdbcWarehouseRepository extends AbstractModuleRepository implements WarehouseRepository {
 
     private final StorageConfiguration configuration;
 
+    /**
+     * 构造 JDBC 仓库存储。
+     *
+     * @param dataFolder    模块数据目录
+     * @param configuration 存储配置（连接信息、方言等）
+     * @param logger        日志记录器
+     */
     public JdbcWarehouseRepository(File dataFolder, StorageConfiguration configuration, Logger logger) {
         super("AXS-Warehouse", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;
     }
 
+    /**
+     * 初始化回调：建表并执行增量迁移。
+     *
+     * @param conn 初始化连接
+     * @throws SQLException 建表或迁移失败时抛出
+     */
     @Override
     protected void onInitialize(Connection conn) throws SQLException {
         createTables(conn);
         migrateSchema(conn);
     }
 
+    /**
+     * @return 包含玩家个人数据的表名列表，用于按玩家清理数据
+     */
     @Override
     protected List<String> playerDataTables() {
         return List.of("warehouse_personal", "warehouse_bank_balances", "warehouse_fixed_deposits", "warehouse_shared_members");
     }
 
+    /**
+     * @return 模块管理的全部表名列表，用于全量卸载
+     */
     @Override
     protected List<String> allTables() {
         return List.of(
@@ -51,6 +78,13 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         );
     }
 
+    /**
+     * 加载指定玩家的全部个人仓库记录。
+     *
+     * @param playerUuid 玩家 UUID
+     * @return 仓库记录列表，按 warehouse_id 升序排列
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public List<WarehouseRecord> loadPersonalWarehouses(UUID playerUuid) throws SQLException {
         try (Connection connection = connection();
@@ -68,6 +102,16 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 插入或更新个人仓库元数据（等级、自定义名称等）。
+     *
+     * @param playerUuid  玩家 UUID
+     * @param warehouseId 仓库标识
+     * @param level       仓库等级
+     * @param customName  自定义名称，{@code null} 视为空串
+     * @param updatedAt   更新时间戳
+     * @throws SQLException 写入失败时抛出
+     */
     @Override
     public void upsertPersonalWarehouse(UUID playerUuid, String warehouseId, int level, String customName, long updatedAt) throws SQLException {
         try (Connection connection = connection();
@@ -81,6 +125,15 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 加载指定仓库的全部槽位物品记录，按槽位序号升序排列。
+     *
+     * @param ownerType   所有者类型（personal / shared）
+     * @param ownerId     所有者 ID（玩家 UUID 或共享仓库 ID）
+     * @param warehouseId 仓库标识
+     * @return 槽位物品记录列表
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public List<SlotItemRecord> loadSlots(String ownerType, String ownerId, String warehouseId) throws SQLException {
         try (Connection connection = connection();
@@ -100,6 +153,16 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 加载指定仓库的单个槽位物品记录。
+     *
+     * @param ownerType   所有者类型
+     * @param ownerId     所有者 ID
+     * @param warehouseId 仓库标识
+     * @param slot        槽位序号
+     * @return 槽位记录；不存在时返回 {@link Optional#empty()}
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public Optional<SlotItemRecord> loadSlot(String ownerType, String ownerId, String warehouseId, int slot) throws SQLException {
         try (Connection connection = connection();
@@ -116,6 +179,16 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 按物品哈希查找仓库中首个匹配的槽位记录，用于物品合并/查重。
+     *
+     * @param ownerType   所有者类型
+     * @param ownerId     所有者 ID
+     * @param warehouseId 仓库标识
+     * @param itemHash    物品哈希值
+     * @return 匹配的槽位记录；不存在时返回 {@link Optional#empty()}
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public Optional<SlotItemRecord> findSlotByHash(String ownerType, String ownerId, String warehouseId, String itemHash) throws SQLException {
         try (Connection connection = connection();
@@ -132,6 +205,12 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 插入或更新单个槽位物品记录。
+     *
+     * @param item 槽位物品记录
+     * @throws SQLException 写入失败时抛出
+     */
     @Override
     public void upsertSlot(SlotItemRecord item) throws SQLException {
         try (Connection connection = connection();
@@ -160,6 +239,15 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 删除指定仓库的单个槽位记录。
+     *
+     * @param ownerType   所有者类型
+     * @param ownerId     所有者 ID
+     * @param warehouseId 仓库标识
+     * @param slot        槽位序号
+     * @throws SQLException 删除失败时抛出
+     */
     @Override
     public void deleteSlot(String ownerType, String ownerId, String warehouseId, int slot) throws SQLException {
         try (Connection connection = connection();
@@ -174,6 +262,13 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 加载指定玩家的全部银行余额，以货币 ID 为键。
+     *
+     * @param playerUuid 玩家 UUID
+     * @return 货币 ID 到余额的映射
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public Map<String, BigDecimal> loadBankBalances(UUID playerUuid) throws SQLException {
         try (Connection connection = connection();
@@ -191,6 +286,15 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 直接设置指定货币的银行余额（覆盖原值）。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param currencyId 货币 ID
+     * @param amount     目标余额
+     * @param updatedAt  更新时间戳
+     * @throws SQLException 写入失败时抛出
+     */
     @Override
     public void setBankBalance(UUID playerUuid, String currencyId, BigDecimal amount, long updatedAt) throws SQLException {
         try (Connection connection = connection();
@@ -203,6 +307,15 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 原子增加银行余额（记录不存在则创建）。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param currencyId 货币 ID
+     * @param amount     增加金额，必须大于 0
+     * @param updatedAt  更新时间戳
+     * @throws SQLException 写入失败时抛出
+     */
     @Override
     public void creditBankBalance(UUID playerUuid, String currencyId, BigDecimal amount, long updatedAt) throws SQLException {
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -233,6 +346,16 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 原子扣减银行余额，仅在余额充足时成功。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param currencyId 货币 ID
+     * @param amount     扣减金额，必须大于 0
+     * @param updatedAt  更新时间戳
+     * @return {@code true} 表示扣减成功；余额不足或金额无效时返回 {@code false}
+     * @throws SQLException 写入失败时抛出
+     */
     @Override
     public boolean debitBankBalance(UUID playerUuid, String currencyId, BigDecimal amount, long updatedAt) throws SQLException {
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -260,6 +383,17 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 原子领取定期存款：在事务中标记 claimed 并将本息入账。
+     * <p>
+     * 优先使用 {@code FOR UPDATE} 行锁；SQLite 等不支持时降级为条件 UPDATE。
+     *
+     * @param depositId 存款 ID
+     * @param playerUuid 玩家 UUID
+     * @param now       当前时间戳
+     * @return 实际入账金额；不可领取（未到期/已领取/不存在）时返回 {@link Optional#empty()}
+     * @throws SQLException 事务执行失败时抛出
+     */
     @Override
     public Optional<BigDecimal> claimFixedDepositAtomic(String depositId, UUID playerUuid, long now) throws SQLException {
         try (Connection connection = connection()) {
@@ -399,6 +533,12 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 创建一条定期存款记录。
+     *
+     * @param deposit 定期存款记录
+     * @throws SQLException 写入失败时抛出
+     */
     @Override
     public void createFixedDeposit(FixedDepositRecord deposit) throws SQLException {
         try (Connection connection = connection();
@@ -419,6 +559,13 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 加载指定玩家的全部定期存款记录，未领取的排在前面。
+     *
+     * @param playerUuid 玩家 UUID
+     * @return 定期存款记录列表
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public List<FixedDepositRecord> loadFixedDeposits(UUID playerUuid) throws SQLException {
         try (Connection connection = connection();
@@ -447,6 +594,13 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 将指定定期存款标记为已领取。
+     *
+     * @param depositId 存款 ID
+     * @param claimedAt 领取时间戳
+     * @throws SQLException 更新失败时抛出
+     */
     @Override
     public void markFixedDepositClaimed(String depositId, long claimedAt) throws SQLException {
         try (Connection connection = connection();
@@ -460,6 +614,12 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 创建共享仓库并同时将创建者写入成员表（角色 owner），在事务中执行。
+     *
+     * @param warehouse 共享仓库记录
+     * @throws SQLException 事务执行失败时抛出
+     */
     @Override
     public void createSharedWarehouse(SharedWarehouseRecord warehouse) throws SQLException {
         try (Connection connection = connection()) {
@@ -493,6 +653,15 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 更新共享仓库等级与容量。
+     *
+     * @param sharedId  共享仓库 ID
+     * @param level     新等级
+     * @param capacity  新容量
+     * @param updatedAt 更新时间戳
+     * @throws SQLException 更新失败时抛出
+     */
     @Override
     public void updateSharedWarehouseLevel(String sharedId, int level, long capacity, long updatedAt) throws SQLException {
         try (Connection connection = connection();
@@ -507,6 +676,14 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 更新共享仓库名称。
+     *
+     * @param sharedId  共享仓库 ID
+     * @param name      新名称
+     * @param updatedAt 更新时间戳
+     * @throws SQLException 更新失败时抛出
+     */
     @Override
     public void updateSharedWarehouseName(String sharedId, String name, long updatedAt) throws SQLException {
         try (Connection connection = connection();
@@ -520,6 +697,14 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 更新共享仓库展示柜开关状态。
+     *
+     * @param sharedId        共享仓库 ID
+     * @param showcaseEnabled 是否启用展示柜
+     * @param updatedAt       更新时间戳
+     * @throws SQLException 更新失败时抛出
+     */
     @Override
     public void updateSharedWarehouseShowcase(String sharedId, boolean showcaseEnabled, long updatedAt) throws SQLException {
         try (Connection connection = connection();
@@ -533,6 +718,15 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 更新个人仓库自定义名称。
+     *
+     * @param playerUuid  玩家 UUID
+     * @param warehouseId 仓库标识
+     * @param customName  新名称，{@code null} 视为空串
+     * @param updatedAt   更新时间戳
+     * @throws SQLException 更新失败时抛出
+     */
     @Override
     public void updatePersonalWarehouseName(UUID playerUuid, String warehouseId, String customName, long updatedAt) throws SQLException {
         try (Connection connection = connection();
@@ -547,6 +741,15 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 更新个人仓库展示柜开关状态。
+     *
+     * @param playerUuid      玩家 UUID
+     * @param warehouseId     仓库标识
+     * @param showcaseEnabled 是否启用展示柜
+     * @param updatedAt       更新时间戳
+     * @throws SQLException 更新失败时抛出
+     */
     @Override
     public void updatePersonalWarehouseShowcase(UUID playerUuid, String warehouseId, boolean showcaseEnabled, long updatedAt) throws SQLException {
         try (Connection connection = connection();
@@ -561,6 +764,13 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 删除指定个人仓库及其全部槽位数据，在事务中执行。
+     *
+     * @param playerUuid  玩家 UUID
+     * @param warehouseId 仓库标识
+     * @throws SQLException 事务执行失败时抛出
+     */
     @Override
     public void deletePersonalWarehouse(UUID playerUuid, String warehouseId) throws SQLException {
         try (Connection connection = connection()) {
@@ -586,6 +796,15 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 转让共享仓库所有权：更新仓库 owner 并交换新旧 owner 的成员角色，在事务中执行。
+     *
+     * @param sharedId         共享仓库 ID
+     * @param previousOwnerUuid 原 owner UUID
+     * @param newOwnerUuid     新 owner UUID
+     * @param updatedAt        更新时间戳
+     * @throws SQLException 事务执行失败时抛出
+     */
     @Override
     public void transferSharedWarehouse(String sharedId, UUID previousOwnerUuid, UUID newOwnerUuid, long updatedAt) throws SQLException {
         try (Connection connection = connection()) {
@@ -627,6 +846,12 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 写入待处理转让记录（先删除同 sharedId 的旧记录再插入），在事务中执行。
+     *
+     * @param transfer 待处理转让记录
+     * @throws SQLException 事务执行失败时抛出
+     */
     @Override
     public void upsertPendingTransfer(PendingTransfer transfer) throws SQLException {
         try (Connection connection = connection()) {
@@ -653,6 +878,13 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 按共享仓库 ID 加载单条待处理转让记录。
+     *
+     * @param sharedId 共享仓库 ID
+     * @return 转让记录；不存在时返回 {@link Optional#empty()}
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public Optional<PendingTransfer> loadPendingTransfer(String sharedId) throws SQLException {
         try (Connection connection = connection();
@@ -669,6 +901,13 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 加载指定目标玩家的全部待处理转让记录，按创建时间升序排列。
+     *
+     * @param targetUuid 目标玩家 UUID
+     * @return 转让记录列表
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public List<PendingTransfer> loadPendingTransfers(UUID targetUuid) throws SQLException {
         try (Connection connection = connection();
@@ -687,6 +926,12 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 删除指定共享仓库的待处理转让记录。
+     *
+     * @param sharedId 共享仓库 ID
+     * @throws SQLException 删除失败时抛出
+     */
     @Override
     public void deletePendingTransfer(String sharedId) throws SQLException {
         try (Connection connection = connection();
@@ -696,6 +941,12 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 删除共享仓库及其全部关联数据（槽位、成员、待处理转让），在事务中执行。
+     *
+     * @param sharedId 共享仓库 ID
+     * @throws SQLException 事务执行失败时抛出
+     */
     @Override
     public void deleteSharedWarehouse(String sharedId) throws SQLException {
         try (Connection connection = connection()) {
@@ -723,6 +974,13 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 加载指定玩家参与的全部共享仓库记录（含其角色），按创建时间降序排列。
+     *
+     * @param playerUuid 玩家 UUID
+     * @return 共享仓库记录列表
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public List<SharedWarehouseRecord> loadSharedWarehouses(UUID playerUuid) throws SQLException {
         String sql = """
@@ -755,6 +1013,14 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 按共享仓库 ID 查询单条记录（含成员角色），避免加载全部列表。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param sharedId   共享仓库 ID
+     * @return 共享仓库记录；玩家非成员或仓库不存在时返回 {@link Optional#empty()}
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public Optional<SharedWarehouseRecord> loadSharedWarehouse(UUID playerUuid, String sharedId) throws SQLException {
         String sql = """
@@ -786,6 +1052,13 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 加载指定玩家拥有的全部共享仓库记录（角色固定为 owner），按创建时间降序排列。
+     *
+     * @param ownerUuid owner UUID
+     * @return 共享仓库记录列表
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public List<SharedWarehouseRecord> loadSharedWarehousesByOwner(UUID ownerUuid) throws SQLException {
         try (Connection connection = connection();
@@ -813,6 +1086,13 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 加载指定共享仓库的全部成员记录，按角色和更新时间排序。
+     *
+     * @param sharedId 共享仓库 ID
+     * @return 成员记录列表
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public List<SharedMemberRecord> loadSharedMembers(String sharedId) throws SQLException {
         try (Connection connection = connection();
@@ -835,16 +1115,39 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 统计指定玩家拥有的共享仓库数量。
+     *
+     * @param ownerUuid owner UUID
+     * @return 仓库数量
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public int countOwnedSharedWarehouses(UUID ownerUuid) throws SQLException {
         return count("SELECT COUNT(*) FROM warehouse_shared WHERE owner_uuid = ?", ownerUuid.toString());
     }
 
+    /**
+     * 统计指定共享仓库的成员数量。
+     *
+     * @param sharedId 共享仓库 ID
+     * @return 成员数量
+     * @throws SQLException 查询失败时抛出
+     */
     @Override
     public int countSharedMembers(String sharedId) throws SQLException {
         return count("SELECT COUNT(*) FROM warehouse_shared_members WHERE shared_id = ?", sharedId);
     }
 
+    /**
+     * 插入或更新共享仓库成员记录（角色、更新时间）。
+     *
+     * @param sharedId   共享仓库 ID
+     * @param playerUuid 玩家 UUID
+     * @param role       成员角色（owner / member 等）
+     * @param updatedAt  更新时间戳
+     * @throws SQLException 写入失败时抛出
+     */
     @Override
     public void upsertSharedMember(String sharedId, UUID playerUuid, String role, long updatedAt) throws SQLException {
         try (Connection connection = connection();
@@ -857,6 +1160,13 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 移除共享仓库成员（owner 角色不可移除）。
+     *
+     * @param sharedId   共享仓库 ID
+     * @param playerUuid 玩家 UUID
+     * @throws SQLException 删除失败时抛出
+     */
     @Override
     public void removeSharedMember(String sharedId, UUID playerUuid) throws SQLException {
         try (Connection connection = connection();
@@ -869,6 +1179,9 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    /**
+     * 关闭存储，释放连接池等资源。
+     */
     @Override
     public void close() {
         shutdown();

@@ -1,20 +1,29 @@
-# ArcartXSuite Chat — @提及补全 HUD
+# 文件用途: ArcartXSuite Chat — @提及补全 HUD
 # 以 HUD 形式挂载在聊天栏，服务端推送在线玩家列表，客户端轮询聊天输入并显示 @ 候选。
+# 当玩家在聊天栏输入 @ 后，根据已输入的部分玩家名前缀匹配在线玩家，显示下拉候选列表。
 ui:
-  isHud: true
-  match:
-    - '聊天栏'
-  defaultOpen: true
-  through: true
-  level: 200
+  isHud: true                # 标记为 HUD 类型，常驻屏幕显示
+  match:                     # 匹配替换的原版界面 ID 列表
+    - '聊天栏'               # 挂载到原版聊天栏界面
+  defaultOpen: true          # HUD 加载后立即打开
+  through: true              # 开启穿透点击，重叠组件可同时触发事件
+  level: 200                 # HUD 渲染优先级，数值越大越先渲染（显示在越底层）
+  # packetHandler: updatePlayers
+  # 包字段:
+  #   - packet: 在线玩家名称列表（List<String>），由服务端推送
+  # 用途: 接收服务端推送的在线玩家列表，存入 var.players 供 @ 补全匹配使用
   packetHandler:
     updatePlayers: |-
       var.players = packet
   action:
+    # load 触发器: UI 加载完成时初始化变量
     load: |-
       var.players = []
       var.matches = []
       var.showDropdown = false
+    # tick 触发器: 每逻辑帧执行，轮询聊天输入并匹配 @ 候选玩家
+    # 逻辑: 获取当前聊天消息 → 查找最后一个 @ → 提取 @ 后的部分文本 →
+    #       在在线玩家列表中前缀匹配 → 最多取 8 个候选 → 控制下拉列表显示
     tick: |-
       var.__msg = Chat.getMessage()
       var.matches = []
@@ -42,37 +51,43 @@ ui:
         }
       }
 controls:
+  # 自适应布局: 根据屏幕尺寸自动缩放的根容器
   自适应布局:
     type: Adaptive
     attribute:
-      width: 2560
-      point: ~stretch_all
-      height: 1440
+      width: 2560              # 基准宽度
+      point: ~stretch_all      # 拉伸铺满整个屏幕
+      height: 1440             # 基准高度
     children:
+      # 下拉布局: 垂直堆叠容器，承载 @ 候选项列表
       下拉布局:
         type: VStack
         attribute:
-          visible: true
-          point: ~bottom_left
-          x: 1100
-          y: -105
-          width: 500
-          spaceBetween: 2
+          visible: true        # 始终可见（子项各自控制可见性）
+          point: ~bottom_left  # 锚点为左下角
+          x: 1100              # X 坐标偏移
+          y: -105              # Y 坐标偏移（负值表示向上偏移）
+          width: 500           # 布局宽度
+          spaceBetween: 2      # 子项间距 2 像素
         children:
+          # 候选项0: 第 1 个 @ 候选玩家条目
           候选项0:
             type: Texture
             attribute:
-              visible: "var.matches.size() > 0"
+              visible: "var.matches.size() > 0"  # 仅当候选列表至少有 1 项时显示
               width: 500
               height: 50
-              normal: ~Frosted:30;0,0,0,200
-              shape: ~round_rect
-              radius: 10
+              normal: ~Frosted:30;0,0,0,200      # 默认磨砂背景（半透明黑）
+              shape: ~round_rect                 # 圆角矩形
+              radius: 10                         # 圆角半径
             action:
+              # enter: 鼠标悬停时高亮背景
               enter: |-
                 self.normal = 'Frosted:30;80,80,100,220'
+              # leave: 鼠标离开时恢复默认背景
               leave: |-
                 self.normal = 'Frosted:30;0,0,0,200'
+              # click: 点击后将 @ 后的部分替换为选中的玩家名
               click: |-
                 var.__cm = Chat.getMessage()
                 var.__ai = var.__cm.lastIndexOf('@')
@@ -81,18 +96,20 @@ controls:
                 }
                 var.showDropdown = false
             children:
+              # 候选文字0: 显示候选玩家名，格式为 "@ 玩家名"
               候选文字0:
                 type: Text
                 attribute:
-                  through: true
+                  through: true  # 穿透点击，让父控件接收点击事件
                   x: 16
                   y: 7
                   fontSize: 64
                   texts: "var.matches.size() > 0 ? '&e@ &f' + var.matches.get(0) : none"
+          # 候选项1: 第 2 个 @ 候选玩家条目
           候选项1:
             type: Texture
             attribute:
-              visible: "var.matches.size() > 1"
+              visible: "var.matches.size() > 1"  # 仅当候选列表至少有 2 项时显示
               width: 500
               height: 50
               normal: ~Frosted:30;0,0,0,200
@@ -119,6 +136,7 @@ controls:
                   y: 7
                   fontSize: 64
                   texts: "var.matches.size() > 1 ? '&e@ &f' + var.matches.get(1) : none"
+          # 候选项2: 第 3 个 @ 候选玩家条目
           候选项2:
             type: Texture
             attribute:
@@ -149,6 +167,7 @@ controls:
                   y: 7
                   fontSize: 64
                   texts: "var.matches.size() > 2 ? '&e@ &f' + var.matches.get(2) : none"
+          # 候选项3: 第 4 个 @ 候选玩家条目
           候选项3:
             type: Texture
             attribute:
@@ -179,6 +198,7 @@ controls:
                   y: 7
                   fontSize: 64
                   texts: "var.matches.size() > 3 ? '&e@ &f' + var.matches.get(3) : none"
+          # 候选项4: 第 5 个 @ 候选玩家条目
           候选项4:
             type: Texture
             attribute:
@@ -209,6 +229,7 @@ controls:
                   y: 7
                   fontSize: 64
                   texts: "var.matches.size() > 4 ? '&e@ &f' + var.matches.get(4) : none"
+          # 候选项5: 第 6 个 @ 候选玩家条目
           候选项5:
             type: Texture
             attribute:
@@ -239,6 +260,7 @@ controls:
                   y: 7
                   fontSize: 64
                   texts: "var.matches.size() > 5 ? '&e@ &f' + var.matches.get(5) : none"
+          # 候选项6: 第 7 个 @ 候选玩家条目
           候选项6:
             type: Texture
             attribute:
@@ -269,6 +291,7 @@ controls:
                   y: 7
                   fontSize: 64
                   texts: "var.matches.size() > 6 ? '&e@ &f' + var.matches.get(6) : none"
+          # 候选项7: 第 8 个 @ 候选玩家条目
           候选项7:
             type: Texture
             attribute:

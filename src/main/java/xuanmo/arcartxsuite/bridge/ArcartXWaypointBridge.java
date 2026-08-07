@@ -13,6 +13,10 @@ import priv.seventeen.artist.arcartx.api.ArcartXAPI;
 import priv.seventeen.artist.arcartx.core.entity.ArcartXEntityManager;
 import priv.seventeen.artist.arcartx.core.entity.data.ArcartXPlayer;
 
+/**
+ * {@link xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI} 的默认实现，
+ * 桥接 ArcartX 路标系统，提供路标创建、样式加载与导航推送。
+ */
 public final class ArcartXWaypointBridge implements xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI {
 
     private final JavaPlugin plugin;

@@ -1,4 +1,6 @@
-config-version: 1
+# 文件用途: ArcartXLottery 抽奖模块的主配置文件。
+# 配置奖池目录路径、数据存储方式（SQLite/MySQL）和原神跨池共享保底分组。
+config-version: 1  # 配置文件版本号
 
 # 奖池文件所在目录，路径相对模块数据目录。
 # 目录下每个 *.yml 文件对应一个抽奖池，支持 gacha（原神祈愿）与 case（CS 开箱）两种类型。

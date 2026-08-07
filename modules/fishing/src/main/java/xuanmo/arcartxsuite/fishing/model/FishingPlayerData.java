@@ -3,6 +3,19 @@ package xuanmo.arcartxsuite.fishing.model;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
 
+/**
+ * 玩家钓鱼数据，记录等级、经验与各类捕获计数。
+ * <p>
+ * 关联模块：{@code fishing}。由 {@link xuanmo.arcartxsuite.fishing.storage.FishingRepository} 持久化，
+ * 提供经验累加、升级、捕获计数等不可变更新方法。
+ *
+ * @param uuid           玩家 UUID
+ * @param level          当前等级
+ * @param totalXp        累计经验值
+ * @param totalCaught    累计捕获总数
+ * @param perfectCatches 完美捕获次数
+ * @param treasureCaught 宝藏捕获次数
+ */
 public record FishingPlayerData(
     @NotNull UUID uuid,
     int level,

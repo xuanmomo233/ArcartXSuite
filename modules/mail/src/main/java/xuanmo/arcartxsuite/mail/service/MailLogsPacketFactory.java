@@ -8,6 +8,11 @@ import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.mail.model.MailLogEntry;
 import xuanmo.arcartxsuite.mail.model.MailPage;
 
+/**
+ * 日志界面数据包工厂，构建发送给客户端的操作日志分页数据包。
+ * <p>
+ * 关联模块：mail。所有方法为静态工具方法，封装日志条目、分页与类型文本等 UI 数据。
+ */
 public final class MailLogsPacketFactory {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());

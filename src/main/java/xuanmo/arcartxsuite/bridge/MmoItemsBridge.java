@@ -11,6 +11,11 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
+/**
+ * MMOItems 物品桥接，提供 MMOItems 物品的按 id 构建与解析。
+ * <p>
+ * MMOItems 为可选依赖，运行时通过插件管理器检测可用性。
+ */
 public final class MmoItemsBridge {
 
     private final JavaPlugin plugin;

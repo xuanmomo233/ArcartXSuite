@@ -16,12 +16,26 @@ import xuanmo.arcartxsuite.qqbot.service.QQBotService;
 import xuanmo.arcartxsuite.qqbot.service.QQBotUiService;
 import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.QQBotBinding;
 
+/**
+ * QQBot 模块的玩家命令处理器，实现 {@link TabExecutor}。
+ * <p>
+ * 关联模块：{@code qqbot}。处理 {@code /qqbot <子命令>} 下的玩家侧操作，
+ * 包括绑定 / 解绑 / 查询绑定信息 / 打开 UI 面板 / 管理面板 / @QQ 群员。
+ * 仅允许玩家执行，绑定与解绑会联动白名单自动增删。
+ */
 public final class QQBotPlayerCommand implements TabExecutor {
 
     private final Supplier<QQBotService> serviceProvider;
     private final Supplier<QQBotUiService> uiServiceProvider;
     private final MessageProvider messages;
 
+    /**
+     * 构造玩家命令处理器。
+     *
+     * @param serviceProvider  QQBotService 延时提供者
+     * @param uiServiceProvider QQBotUiService 延时提供者
+     * @param messages          消息提供者，可为 {@code null}
+     */
     public QQBotPlayerCommand(Supplier<QQBotService> serviceProvider, Supplier<QQBotUiService> uiServiceProvider, MessageProvider messages) {
         this.serviceProvider = serviceProvider;
         this.uiServiceProvider = uiServiceProvider;
@@ -33,6 +47,15 @@ public final class QQBotPlayerCommand implements TabExecutor {
         return messages.get("prefix") + messages.get(key, args);
     }
 
+    /**
+     * 处理玩家命令的主入口。
+     *
+     * @param sender  命令发送者，非玩家时提示仅玩家可用
+     * @param command Bukkit Command 对象
+     * @param label   命令标签
+     * @param args    参数数组，{@code args[0]} 为子命令名
+     * @return {@code true} 表示命令已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
@@ -151,6 +174,15 @@ public final class QQBotPlayerCommand implements TabExecutor {
         return true;
     }
 
+    /**
+     * 玩家命令的 Tab 补全，补全一级子命令名。
+     *
+     * @param sender  命令发送者
+     * @param command Bukkit Command 对象
+     * @param label   命令标签
+     * @param args    当前参数数组
+     * @return 补全候选列表，无匹配时返回空列表
+     */
     @Override
     @Nullable
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,

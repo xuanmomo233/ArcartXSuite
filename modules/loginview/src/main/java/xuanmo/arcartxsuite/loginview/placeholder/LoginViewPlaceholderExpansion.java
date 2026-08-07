@@ -10,6 +10,11 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.account.AccountType;
 import xuanmo.arcartxsuite.loginview.service.LoginViewService;
 
+/**
+ * LoginView 模块的 PlaceholderAPI 扩展，占位符标识 {@code axsloginview}。
+ * <p>
+ * 提供登录状态、账号类型、会话信息等占位符查询。
+ */
 public final class LoginViewPlaceholderExpansion extends PlaceholderExpansion {
 
     private final JavaPlugin plugin;

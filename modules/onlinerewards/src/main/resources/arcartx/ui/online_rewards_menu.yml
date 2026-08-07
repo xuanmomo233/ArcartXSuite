@@ -12,6 +12,48 @@ ui:
   screenScale: true
   show: true
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 通信标识，用于 Packet.send 回包
+    #   - dailyTimeText: 今日在线时长文本
+    #   - weeklyTimeText: 本周在线时长文本
+    #   - monthlyTimeText: 本月在线时长文本
+    #   - totalTimeText: 总在线时长文本
+    #   - offlineSavingsText: 离线储蓄时长文本
+    #   - progress: 当前进度（0.0~1.0）
+    #   - progressPercent: 进度百分比数值
+    #   - progressPercentText: 进度百分比文本
+    #   - progressTitle: 当前阶段标题
+    #   - completed: 是否全部完成
+    #   - rewardStage: 当前奖励阶段
+    #   - rewardCount: 奖励阶段总数
+    #   - rewardStageText: 奖励阶段文本
+    #   - signedToday: 今日是否已签到
+    #   - signInStatusText: 签到状态文本
+    #   - signInStreak: 连续签到天数
+    #   - signInTotal: 累计签到天数
+    #   - makeupCardCount: 补签卡数量
+    #   - calendarMonthText: 日历月份文本
+    #   - calendarCount: 日历天数
+    #   - calendarMonthOffset: 日历月份偏移
+    #   - selectedDateText: 选中日期文本
+    #   - selectedCanMakeup: 选中日期是否可补签
+    #   - selectedAction: 选中日期操作类型
+    #   - selectedActionText: 选中日期操作文本
+    #   - selectedActionEnabled: 选中日期操作是否可用
+    #   - rewardRows: 阶段奖励行数据
+    #   - periodicRewardRows: 周期奖励行数据
+    #   - signInRewardRows: 签到奖励行数据
+    #   - calendarRows: 日历行数据
+    #   - selectedRewardRows: 选中日期奖励行数据
+    #   - serverSignInGoalEnabled: 是否启用全服签到目标
+    #   - serverSignInGoalCurrent: 当前全服签到人数
+    #   - serverSignInGoalNext: 下一个目标所需人数
+    #   - maxRewardCount: 阶段奖励行模板最大复制数
+    #   - maxPeriodicCount: 周期奖励行模板最大复制数
+    #   - maxSigninRewardCount: 签到奖励行模板最大复制数
+    #   - maxSelectedRewardCount: 选中奖励行模板最大复制数
+    #   - action_token: 操作令牌，用于回包验证
     init: |-
       var.packetId = packet['packetId']
       var.dailyTimeText = packet['dailyTimeText']
@@ -95,6 +137,8 @@ ui:
         e = val.签到堆叠['签到奖励项'].copy('签到奖励项_' + key)
         e.entryKey = key
       }
+    # packetHandler: update
+    # 包字段: 同 init（实时刷新菜单数据）
     update: |-
       var.packetId = packet['packetId']
       var.dailyTimeText = packet['dailyTimeText']

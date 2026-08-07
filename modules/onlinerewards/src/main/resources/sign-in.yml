@@ -1,12 +1,29 @@
 # OnlineRewards 签到配置
 # 从 ArcartXOnlineRewards.yml 的 sign-in: 段独立为外部文件；根键即原 sign-in. 下各字段。
+#
+# 字段说明:
+#   reminder-on-join   - 进服提醒未签到
+#   messages           - 各场景消息模板（支持 {streak} {total} {date} {day} 等变量）
+#   base-commands      - 每次签到执行的命令
+#   base-rewardText    - 基础签到奖励描述
+#   base-mail-presets  - 基础签到邮件预设列表
+#   makeup             - 补签卡配置
+#   streak-rewards     - 连续签到奖励（恰好等于 days 时触发）
+#   total-rewards      - 累计签到奖励（恰好等于 days 时触发）
+#   day-of-month-rewards - 每月指定日期奖励
+#   holiday-rewards    - 节日签到奖励
+#   permission-bonus-groups - 权限额外奖励组
 
 # 玩家客户端初始化后，如果当天未签到，是否发送提醒消息
 reminder-on-join: true
 
+# 各场景消息模板
 messages:
+  # 签到成功消息
   sign-in-success: "§a今日签到成功，连续 {streak} 天，累计 {total} 天。"
+  # 重复签到消息
   sign-in-repeat: "§e今天已经签到过了。"
+  # 进服提醒消息
   sign-in-reminder: "§e你今天还没有签到，输入 /signin 即可领取奖励。"
 
 # 每次成功签到都会执行的命令
@@ -14,18 +31,28 @@ messages:
 base-commands:
   - "say [签到] {player} 完成了今日签到"
 
+# 基础签到奖励描述文本
 base-rewardText: "命令 1"
+# 基础签到邮件预设列表
 base-mail-presets: []
 
+# 补签卡配置
 makeup:
+  # 是否启用补签功能
   enabled: true
+  # 补签卡显示名称
   card-name: "补签卡"
+  # 补签成功消息
   success: "§a已消耗 1 张{card}补签 {date}，当前剩余 {cards} 张。"
+  # 补签卡不足消息
   no-card: "§c你的{card}不足，无法补签。"
+  # 日期无效消息
   invalid-date: "§c只能补签本月今天之前未签到的日期。"
+  # 该日期已签到消息
   already-signed: "§e该日期已经签到过了。"
 
 # 连续签到奖励，仅在连续天数"恰好等于" days 时触发
+# 字段: days=连续天数, rewardText=描述, mail-presets=邮件预设, commands=执行的命令
 streak-rewards:
   - days: 3
     rewardText: "这里是连续签到 3 天的奖励描述"
@@ -39,6 +66,7 @@ streak-rewards:
       - "say [签到] {player} 达成连续签到 {streak} 天"
 
 # 累计签到奖励，仅在累计天数"恰好等于" days 时触发
+# 字段同 streak-rewards
 total-rewards:
   - days: 10
     rewardText: "这里是累计签到 10 天的奖励描述"
@@ -52,6 +80,7 @@ total-rewards:
       - "say [签到] {player} 达成累计签到 {total} 天"
 
 # 每月指定日期签到奖励，仅在当月的指定 day 当天签到时触发
+# 字段: day=每月几号, rewardText=描述, mail-presets=邮件预设, commands=执行的命令
 day-of-month-rewards:
   - day: 1
     rewardText: "这里是每月 1 号的奖励描述"
@@ -65,6 +94,7 @@ day-of-month-rewards:
       - "say [签到] {player} 完成每月 15 号签到"
 
 # 节日签到奖励，在指定月日签到或补签该日期时触发
+# 字段: month=月份, day=日期, name=节日名称, rewardText=描述, mail-presets=邮件预设, commands=执行的命令
 holiday-rewards:
   - month: 1
     day: 1
@@ -75,6 +105,7 @@ holiday-rewards:
       - "say [签到] {player} 完成元旦签到"
 
 # 拥有对应权限时，成功签到或补签会额外发放一组奖励；匹配多个权限时取 priority 最高的一组。
+# 字段: permission=权限节点, priority=优先级, rewardText=描述, mail-presets=邮件预设, commands=执行的命令
 permission-bonus-groups:
   - permission: "ArcartXSuite.onlinerewards.signin.bonus"
     priority: 10

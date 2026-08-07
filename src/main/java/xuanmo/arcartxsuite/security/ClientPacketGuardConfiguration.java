@@ -10,6 +10,15 @@ import org.bukkit.configuration.ConfigurationSection;
 import xuanmo.arcartxsuite.api.security.ClientPacketGuardMode;
 import org.bukkit.configuration.file.FileConfiguration;
 
+/**
+ * 客户端包频率限制器配置记录。
+ *
+ * @param enabled             是否启用限流
+ * @param cleanupIntervalTicks 状态清理任务间隔（tick）
+ * @param defaults            默认限流规则
+ * @param moduleRules         按模块 id 覆盖的规则
+ * @param actionRules         按"模块 id → 动作名 → 规则"覆盖的规则
+ */
 public record ClientPacketGuardConfiguration(
     boolean enabled,
     long cleanupIntervalTicks,

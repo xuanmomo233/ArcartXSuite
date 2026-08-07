@@ -5,20 +5,20 @@
 #  修改后执行 /axs reload entitytracker 即可生效。
 # ============================================================
 
-prefix: "&3◆ &6ArcartXSuite &7| &r"
+prefix: "&3◆ &6ArcartXSuite &7| &r"  # 全局消息前缀，所有消息发送时自动拼接此前缀
 
 # ── 通用 ──────────────────────────────────────────────
-common:
+common:                        # 通用消息（权限、状态提示等）
   rewards-disabled: "&c[EntityTracker] 排行榜奖励系统未启用。"
   service-down-command: "&c[EntityTracker] BossTracker 服务未启动，管理命令不可用。"
   service-down: "&cBossTracker 服务未启动。"
-  reload-hint: "&e请使用 /{0} reload entitytracker"
-  unknown: "&e未知命令，使用 /{0} entitytracker help 查看帮助"
+  reload-hint: "&e请使用 /{0} reload entitytracker"  # {0}=主命令别名（如 axs）
+  unknown: "&e未知命令，使用 /{0} entitytracker help 查看帮助"  # {0}=主命令别名
   only-player: "&c此命令只能由玩家执行。"
   no-permission: "&c你没有权限执行这个命令。"
 
 # ── help ──────────────────────────────────────────────
-help:
+help:                          # 帮助命令消息（{0}=主命令别名）
   title: "&6EntityTracker 管理命令"
   status: "&7{0} status&f - 查看模块状态"
   sessions: "&7{0} sessions [mobId]&f - 列出活跃 Boss 会话"
@@ -28,48 +28,48 @@ help:
   reissue: "&7{0} reissue <结算ID> <名次> [玩家]&f - 补发奖励"
 
 # ── status ────────────────────────────────────────────
-status:
+status:                        # 状态查询消息（{0}=对应数值）
   title: "&6EntityTracker 状态"
-  active-sessions: "&7活跃会话: &f{0}"
-  active-viewers: "&7查看者: &f{0}"
-  history-settlements: "&7历史结算: &f{0}"
+  active-sessions: "&7活跃会话: &f{0}"      # {0}=活跃 Boss 会话数
+  active-viewers: "&7查看者: &f{0}"         # {0}=当前查看 HUD 的玩家数
+  history-settlements: "&7历史结算: &f{0}"  # {0}=历史结算记录数
 
 # ── admin ─────────────────────────────────────────────
-admin:
-  drop-allocation: "&6[EntityTracker] &e{0} 分配: &f{1} &7→ &a{2} &7({3})"
-  sessions:
+admin:                         # 管理命令相关消息
+  drop-allocation: "&6[EntityTracker] &e{0} 分配: &f{1} &7→ &a{2} &7({3})"  # {0}=Boss名 {1}=物品 {2}=获得者 {3}=分配模式
+  sessions:                    # 会话列表消息
     empty: "&7当前没有活跃的 Boss 会话。"
-    title: "&6活跃 Boss 会话 ({0}):"
-    item-format: "&e{0} &7| HP={1}/{2} | 参与={3} | UUID={4}"
-  rank:
+    title: "&6活跃 Boss 会话 ({0}):"  # {0}=会话总数
+    item-format: "&e{0} &7| HP={1}/{2} | 参与={3} | UUID={4}"  # {0}=Boss名 {1}=当前血量 {2}=最大血量 {3}=参与人数 {4}=UUID
+  rank:                        # 实时伤害排行消息
     usage: "&e用法: /axs entitytracker rank <实体UUID> [页码]"
-    invalid-uuid: "&c无效的 UUID: {0}"
+    invalid-uuid: "&c无效的 UUID: {0}"  # {0}=用户输入的无效 UUID
     not-found: "&c未找到该实体的会话。"
-    title: "&6{0} 实时伤害排行:"
-    item-format: "{0} &b{1} &7伤害={2}"
-  settlements:
+    title: "&6{0} 实时伤害排行:"  # {0}=Boss 名称
+    item-format: "{0} &b{1} &7伤害={2}"  # {0}=名次 {1}=玩家名 {2}=伤害值
+  settlements:                 # 历史结算列表消息
     empty: "&7暂无历史结算记录。"
-    title: "&6历史结算记录 ({0}):"
-    item-format: "&f{0} &e{1} &7| {2} | 参与={3}"
-  settlement:
+    title: "&6历史结算记录 ({0}):"  # {0}=记录总数
+    item-format: "&f{0} &e{1} &7| {2} | 参与={3}"  # {0}=结算ID {1}=Boss名 {2}=时间 {3}=参与人数
+  settlement:                  # 结算详情消息
     usage: "&e用法: /axs entitytracker settlement <结算ID> [页码]"
-    not-found: "&c未找到结算记录: {0}"
-    title: "&6{0} 结算详情 [{1}]"
-    info: "&7时间: {0} | 参与={1} | 总伤害={2}"
-    item-format: "{0} &b{1} &7伤害={2} 奖励={3}"
-  reissue:
-    record-not-found: "&c找不到结算记录: {0}"
-    rank-not-found: "&c该结算记录中不存在第 {0} 名。"
-    success: "&a已补发 {0} 第 {1} 名奖励 -> {2}"
-    failure: "&c补发失败: {0}"
+    not-found: "&c未找到结算记录: {0}"  # {0}=结算ID
+    title: "&6{0} 结算详情 [{1}]"  # {0}=Boss名 {1}=结算ID
+    info: "&7时间: {0} | 参与={1} | 总伤害={2}"  # {0}=时间 {1}=参与人数 {2}=总伤害
+    item-format: "{0} &b{1} &7伤害={2} 奖励={3}"  # {0}=名次 {1}=玩家名 {2}=伤害值 {3}=奖励内容
+  reissue:                     # 补发奖励消息
+    record-not-found: "&c找不到结算记录: {0}"  # {0}=结算ID
+    rank-not-found: "&c该结算记录中不存在第 {0} 名。"  # {0}=名次
+    success: "&a已补发 {0} 第 {1} 名奖励 -> {2}"  # {0}=Boss名 {1}=名次 {2}=玩家名
+    failure: "&c补发失败: {0}"  # {0}=失败原因
     usage: "&e用法: /axs entitytracker reissue <结算ID> <名次> [玩家]"
-    invalid-rank: "&c无效的名次: {0}"
-    result: "&a{0}"
-  common:
-    page-footer: "&7第 {0}/{1} 页"
+    invalid-rank: "&c无效的名次: {0}"  # {0}=用户输入的名次
+    result: "&a{0}"             # {0}=补发结果文本
+  common:                      # 通用分页消息
+    page-footer: "&7第 {0}/{1} 页"  # {0}=当前页码 {1}=总页数
 
 # ── rewards ───────────────────────────────────────────
-rewards:
+rewards:                       # 排行榜奖励命令消息
   no-permission: "&c你没有权限使用此命令"
   only-player: "&c只有玩家可以使用此命令"
   help:
@@ -85,23 +85,23 @@ rewards:
   history:
     opening: "&a正在打开发放历史界面..."
     failed: "&c打开界面失败: {0}"
-  distribute:
+  distribute:                  # 手动发放奖励消息
     usage: "&c用法: /rewards distribute <weekly|monthly>"
     invalid-type: "&c奖励类型必须是 weekly 或 monthly"
-    triggering: "&e正在发放{0}奖励..."
-    weekly: "周"
-    monthly: "月"
-    success: "&a奖励发放完成！共发放 {0} 个奖励"
-    failed: "&c奖励发放失败: {0}"
-  status:
+    triggering: "&e正在发放{0}奖励..."  # {0}=奖励类型（周/月）
+    weekly: "周"                # 周奖励类型显示文本
+    monthly: "月"               # 月奖励类型显示文本
+    success: "&a奖励发放完成！共发放 {0} 个奖励"  # {0}=发放数量
+    failed: "&c奖励发放失败: {0}"  # {0}=失败原因
+  status:                      # 调度器状态消息
     title: "&6=== 排行榜奖励调度器状态 ==="
     next-execution: "&e下次执行时间:"
     task-status: "&e任务状态:"
-    weekly-task: "&a周奖励任务: {0}"
-    monthly-task: "&a月奖励任务: {0}"
-    running: "&a运行中"
-    stopped: "&c已停止"
-  reload:
+    weekly-task: "&a周奖励任务: {0}"   # {0}=运行状态文本
+    monthly-task: "&a月奖励任务: {0}"  # {0}=运行状态文本
+    running: "&a运行中"          # 任务运行中状态文本
+    stopped: "&c已停止"          # 任务已停止状态文本
+  reload:                      # 重新加载调度器配置消息
     reloading: "&e正在重新加载调度器配置..."
     success: "&a调度器配置已重新加载"
-    failed: "&c重新加载失败: {0}"
+    failed: "&c重新加载失败: {0}"  # {0}=失败原因

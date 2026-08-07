@@ -13,6 +13,15 @@ ui:
   level: 15
   screenScale: true
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 通信标识，用于后续 Packet.send 回包
+    #   - bound: 玩家是否已绑定 QQ
+    #   - qqId: 绑定的 QQ 号（未绑定时为 none）
+    #   - playerName: 玩家名称
+    #   - bindTime: 绑定时间
+    #   - messages: 群消息列表
+    #   - msgCount: 群消息数量
     init: |-
       var.packetId = packet['packetId']
       var.bound = packet['bound']
@@ -26,18 +35,37 @@ ui:
       var.tab = 'status'
       var.messages = packet['messages']
       var.msgCount = packet['msgCount']
+    # packetHandler: update
+    # 包字段:
+    #   - bound: 玩家是否已绑定 QQ
+    #   - qqId: 绑定的 QQ 号
+    #   - bindTime: 绑定时间
+    #   - message: 操作结果消息
+    #   - type: 结果类型（success/error/info）
     update: |-
       var.bound = packet['bound']
       var.qqId = packet['qqId']
       var.bindTime = packet['bindTime']
       var.result = packet['message']
       var.resultType = packet['type']
+    # packetHandler: code
+    # 包字段:
+    #   - code: 生成的验证码
+    #   - expire: 验证码过期剩余秒数
     code: |-
       var.code = packet['code']
       var.codeExpire = packet['expire']
+    # packetHandler: messages
+    # 包字段:
+    #   - messages: 群消息列表
+    #   - msgCount: 群消息数量
     messages: |-
       var.messages = packet['messages']
       var.msgCount = packet['msgCount']
+    # packetHandler: result
+    # 包字段:
+    #   - message: 操作结果消息
+    #   - type: 结果类型（success/error/info）
     result: |-
       var.result = packet['message']
       var.resultType = packet['type']

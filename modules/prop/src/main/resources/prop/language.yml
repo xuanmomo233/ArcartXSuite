@@ -7,10 +7,15 @@
 # 最小使用路径: COOL_DOWN / NO_PERMISSION / NO_KEY / NO_HAND
 
 # {NAME} 为道具名，{TIME} 为剩余冷却秒数。
+# 冷却中提示
 COOL_DOWN: "&7[&dArcartXProp&7]&c{NAME}&f还在冷却,你还需要等待&a{TIME}秒&f才能使用道具"
+# 无权限提示
 NO_PERMISSION: "&7[&dArcartXProp&7]&f你没有权限使用 &c{NAME}"
+# 无法按键使用提示
 NO_KEY: "&7[&dArcartXProp&7]&c{NAME} &f无法按键使用"
+# 无法手持使用提示
 NO_HAND: "&7[&dArcartXProp&7]&c{NAME} &f该道具无法手持使用"
 
 # {NAME} 为道具名，{CONDITION} 为未满足的条件原文。
+# 使用条件不满足提示
 CONDITION_NOT_MET: "&7[&dArcartXProp&7]&c{NAME} &f使用条件不满足: &e{CONDITION}"

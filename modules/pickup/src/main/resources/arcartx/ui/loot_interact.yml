@@ -1,14 +1,16 @@
 # 掉落物交互面板（透明 Menu，捕获鼠标光标并处理按键/滚轮交互）
 # 打开后通过发包给服务端，由服务端发包更新 loot_panel HUD。
 ui:
-  isHud: false
-  defaultOpen: false
-  background: false
-  escClose: true
-  through: true
+  isHud: false  # 非 HUD，是独立打开的 Menu 界面
+  defaultOpen: false  # 不随启动自动打开
+  background: false  # 无背景遮罩（透明菜单）
+  escClose: true  # 按 ESC 关闭
+  through: true  # 鼠标穿透（仅捕获交互，不阻挡游戏画面）
 action:
+  # 关闭菜单时通知服务端
   close: |-
     Packet.send('pickup', 'close_menu')
+  # 滚轮事件：向上滚动发送 scroll_up，向下滚动发送 scroll_down
   wheel: |-
     if(self.wheelValue > 0){
       Packet.send('pickup', 'scroll_up')

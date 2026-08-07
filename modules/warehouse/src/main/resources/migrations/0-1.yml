@@ -1,16 +1,16 @@
-# Warehouse 配置迁移示例（版本 0 → 1）
+# Warehouse 配置迁移文件（版本 0 → 1）
 # 注意：仅包含与当前 schema 一致的示例操作；错误 rename 已移除，避免触发后破坏用户配置。
-from-version: 0
-to-version: 1
+from-version: 0  # 迁移起始版本
+to-version: 1  # 迁移目标版本
 description: "示例迁移：补充缺失默认值"
 
 operations:
-  - type: set-if-missing
-    path: "pickup.notify-on-auto-store"
-    value: true
+  - type: set-if-missing  # 操作类型：仅在字段不存在时设置默认值
+    path: "pickup.notify-on-auto-store"  # 目标配置路径
+    value: true  # 默认值
 
-  - type: value-map
-    path: "storage.mode"
+  - type: value-map  # 操作类型：按映射表替换字段值
+    path: "storage.mode"  # 目标配置路径
     mapping:
-      "file": "sqlite"
-      "remote": "mysql"
+      "file": "sqlite"  # 旧值 file → 新值 sqlite
+      "remote": "mysql"  # 旧值 remote → 新值 mysql

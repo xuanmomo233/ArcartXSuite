@@ -14,6 +14,14 @@ import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.menu.config.MenuDefinition;
 import xuanmo.arcartxsuite.menu.service.MenuService;
 
+/**
+ * Menu 模块的玩家命令处理器，实现 {@link org.bukkit.command.TabExecutor}。
+ * <p>
+ * 支持 {@code open <菜单ID>} 打开菜单和 {@code list} 列出可用菜单，
+ * 同时支持通过配置绑定的命令别名直接打开对应菜单。
+ * 通过 {@link java.util.function.Supplier} 延迟获取 {@link MenuService}，
+ * 以兼容模块热重载期间服务实例可能为 null 的情况。
+ */
 public final class MenuPlayerCommand implements org.bukkit.command.TabExecutor {
 
     private static final List<String> ROOT_ACTIONS = List.of("open", "list");
@@ -26,6 +34,15 @@ public final class MenuPlayerCommand implements org.bukkit.command.TabExecutor {
         this.messages = messages;
     }
 
+    /**
+     * 处理玩家命令，支持通过绑定的命令别名直接打开菜单，或使用 open/list 子命令。
+     *
+     * @param sender  命令发送者，必须是玩家
+     * @param command 命令对象
+     * @param label   命令标签
+     * @param args    命令参数数组
+     * @return {@code true} 表示命令已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (!(sender instanceof Player player)) {
@@ -67,6 +84,15 @@ public final class MenuPlayerCommand implements org.bukkit.command.TabExecutor {
         return true;
     }
 
+    /**
+     * 提供命令 Tab 补全，根据参数位置返回子命令名称或可用菜单 ID。
+     *
+     * @param sender  命令发送者
+     * @param command 命令对象
+     * @param label   命令标签
+     * @param args    当前已输入的参数数组
+     * @return 补全候选列表，可能为空
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         MenuService service = serviceSupplier.get();

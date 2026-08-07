@@ -23,6 +23,14 @@ import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.essentials.config.EssentialsConfiguration;
 import xuanmo.arcartxsuite.essentials.storage.EssentialsRepository;
 
+/**
+ * 传送服务。
+ * <p>
+ * 实现 {@link Listener}，负责家（home）、传送点（warp）、出生点（spawn）、
+ * TPA 请求、/top、/back 以及带预热的延迟传送等功能。
+ * 通过 {@link EssentialsRepository} 持久化位置数据，并监听玩家移动与退出事件
+ * 以取消预热中的传送和清理待处理 TPA 请求。
+ */
 public final class TeleportService implements Listener {
 
     private final JavaPlugin plugin;
@@ -36,6 +44,15 @@ public final class TeleportService implements Listener {
     // 传送等待中的玩家
     private final Map<UUID, Integer> warmups = new ConcurrentHashMap<>();
 
+    /**
+     * 构造传送服务。
+     *
+     * @param plugin        宿主插件实例
+     * @param config        模块配置
+     * @param repository    数据仓储
+     * @param playerService 玩家管理服务（用于 /back 位置栈）
+     * @param logger        日志器
+     */
     public TeleportService(JavaPlugin plugin, EssentialsConfiguration config,
                            EssentialsRepository repository, PlayerManagementService playerService, Logger logger) {
         this.plugin = plugin;
@@ -45,10 +62,16 @@ public final class TeleportService implements Listener {
         this.logger = logger;
     }
 
+    /**
+     * 注册事件监听器。
+     */
     public void start() {
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
+    /**
+     * 注销事件监听器，取消全部预热任务并清空待处理 TPA 请求。
+     */
     public void shutdown() {
         HandlerList.unregisterAll(this);
         for (int taskId : warmups.values()) {
@@ -60,6 +83,12 @@ public final class TeleportService implements Listener {
 
     // ─── Home ───
 
+    /**
+     * 设置玩家的家，支持权限覆盖上限检查。
+     *
+     * @param player 目标玩家
+     * @param name   家名称
+     */
     public void setHome(Player player, String name) {
         try {
             int count = repository.homeCount(player.getUniqueId());
@@ -84,6 +113,12 @@ public final class TeleportService implements Listener {
         }
     }
 
+    /**
+     * 删除玩家的指定家。
+     *
+     * @param player 目标玩家
+     * @param name   家名称
+     */
     public void deleteHome(Player player, String name) {
         try {
             Location loc = repository.getHome(player.getUniqueId(), name);
@@ -98,6 +133,12 @@ public final class TeleportService implements Listener {
         }
     }
 
+    /**
+     * 将玩家延迟传送到指定的家。
+     *
+     * @param player 目标玩家
+     * @param name   家名称
+     */
     public void teleportHome(Player player, String name) {
         try {
             Location loc = repository.getHome(player.getUniqueId(), name);
@@ -111,6 +152,12 @@ public final class TeleportService implements Listener {
         }
     }
 
+    /**
+     * 返回玩家全部家的名称列表。
+     *
+     * @param player 目标玩家
+     * @return 家名称不可变列表，查询失败时返回空列表
+     */
     public List<String> getHomeNames(Player player) {
         try {
             return List.copyOf(repository.getHomes(player.getUniqueId()).keySet());
@@ -121,6 +168,12 @@ public final class TeleportService implements Listener {
 
     // ─── Warp ───
 
+    /**
+     * 以玩家当前位置设置公共传送点。
+     *
+     * @param player 执行者
+     * @param name   传送点名称
+     */
     public void setWarp(Player player, String name) {
         try {
             repository.setWarp(name, player.getLocation());
@@ -130,6 +183,12 @@ public final class TeleportService implements Listener {
         }
     }
 
+    /**
+     * 删除指定公共传送点。
+     *
+     * @param player 执行者
+     * @param name   传送点名称
+     */
     public void deleteWarp(Player player, String name) {
         try {
             Location loc = repository.getWarp(name);
@@ -144,6 +203,12 @@ public final class TeleportService implements Listener {
         }
     }
 
+    /**
+     * 将玩家延迟传送到指定公共传送点。
+     *
+     * @param player 目标玩家
+     * @param name   传送点名称
+     */
     public void teleportWarp(Player player, String name) {
         try {
             Location loc = repository.getWarp(name);
@@ -157,6 +222,11 @@ public final class TeleportService implements Listener {
         }
     }
 
+    /**
+     * 返回全部公共传送点名称列表。
+     *
+     * @return 传送点名称不可变列表，查询失败时返回空列表
+     */
     public List<String> getWarpNames() {
         try {
             return repository.getWarpNames();
@@ -167,6 +237,11 @@ public final class TeleportService implements Listener {
 
     // ─── Spawn ───
 
+    /**
+     * 以玩家当前位置设置服务器出生点。
+     *
+     * @param player 执行者
+     */
     public void setSpawn(Player player) {
         try {
             repository.setSpawn(player.getLocation());
@@ -176,6 +251,11 @@ public final class TeleportService implements Listener {
         }
     }
 
+    /**
+     * 将玩家延迟传送到出生点，未设置时回退到世界默认出生点。
+     *
+     * @param player 目标玩家
+     */
     public void teleportSpawn(Player player) {
         try {
             Location loc = repository.getSpawn();
@@ -190,6 +270,13 @@ public final class TeleportService implements Listener {
 
     // ─── TPA ───
 
+    /**
+     * 向目标玩家发送 TPA 请求，并在超时后自动清除。
+     *
+     * @param sender 请求发起者
+     * @param target 请求接收者
+     * @param here   {@code true} 为 tpahere（请求对方过来），{@code false} 为 tpa（请求过去）
+     */
     public void sendTpa(Player sender, Player target, boolean here) {
         UUID targetUuid = target.getUniqueId();
         pendingTpa.put(targetUuid, new TpaRequest(sender.getUniqueId(), here, System.currentTimeMillis()));
@@ -209,6 +296,11 @@ public final class TeleportService implements Listener {
         }, config.teleport().tpaTimeout() * 20L);
     }
 
+    /**
+     * 接受当前待处理的 TPA 请求并执行延迟传送。
+     *
+     * @param player 请求接收者
+     */
     public void acceptTpa(Player player) {
         TpaRequest req = pendingTpa.remove(player.getUniqueId());
         if (req == null) {
@@ -229,6 +321,11 @@ public final class TeleportService implements Listener {
         }
     }
 
+    /**
+     * 拒绝当前待处理的 TPA 请求并通知双方。
+     *
+     * @param player 请求接收者
+     */
     public void denyTpa(Player player) {
         TpaRequest req = pendingTpa.remove(player.getUniqueId());
         if (req == null) {
@@ -242,6 +339,11 @@ public final class TeleportService implements Listener {
 
     // ─── /top ───
 
+    /**
+     * 将玩家传送到当前坐标的最高非空气方块上方。
+     *
+     * @param player 目标玩家
+     */
     public void teleportTop(Player player) {
         Location loc = player.getLocation();
         int highestY = loc.getWorld().getHighestBlockYAt(loc.getBlockX(), loc.getBlockZ());
@@ -251,6 +353,11 @@ public final class TeleportService implements Listener {
 
     // ─── /back ───
 
+    /**
+     * 将玩家延迟传送回 /back 栈中的上一个位置。
+     *
+     * @param player 目标玩家
+     */
     public void back(Player player) {
         Location loc = playerService.popBackLocation(player);
         if (loc == null) {
@@ -262,6 +369,15 @@ public final class TeleportService implements Listener {
 
     // ─── Teleport with delay ───
 
+    /**
+     * 延迟传送玩家到指定位置，预热期间移动将取消传送。
+     * <p>
+     * 拥有 {@code axs.essentials.teleport.bypass-delay} 权限或延迟为 0 时即时传送。
+     *
+     * @param player         目标玩家
+     * @param target         目标位置
+     * @param successMessage 传送成功后的提示消息，为 null 或空则不发送
+     */
     public void delayedTeleport(Player player, Location target, String successMessage) {
         int delay = config.teleport().teleportDelay();
         if (delay <= 0 || player.hasPermission("axs.essentials.teleport.bypass-delay")) {
@@ -339,5 +455,12 @@ public final class TeleportService implements Listener {
         logger.log(Level.WARNING, "Essentials." + method + " 失败", e);
     }
 
+    /**
+     * TPA 请求记录。
+     *
+     * @param sender    请求发起者 UUID
+     * @param here      是否为 tpahere（请求对方过来）
+     * @param timestamp 请求创建时间戳（毫秒）
+     */
     public record TpaRequest(UUID sender, boolean here, long timestamp) {}
 }

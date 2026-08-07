@@ -29,6 +29,14 @@ import xuanmo.arcartxsuite.announcer.config.AnnouncerModuleConfiguration;
 import xuanmo.arcartxsuite.announcer.service.AnnouncerService;
 import xuanmo.arcartxsuite.announcer.service.SubtitleService;
 
+/**
+ * 公告轮播模块的主类，隶属于 ArcartXSuite 的 announcer 模块。
+ * <p>
+ * 负责加载公告配置、注册 ArcartX UI（公告 HUD 与字幕 HUD）、
+ * 启动 {@link AnnouncerService} 与 {@link SubtitleService}，
+ * 并提供 {@code /axs announcer} 命令的广播、字幕播放等子命令处理。
+ * 支持单服轮播与跨服广播，可选转发到 QQ 机器人。
+ */
 public final class AnnouncerModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private AnnouncerModuleConfiguration configuration;
@@ -44,11 +52,21 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
             .build();
     }
 
+    /**
+     * 返回模块主配置文件名。
+     *
+     * @return 配置文件名 {@code "ArcartXAnnouncer.yml"}
+     */
     @Override
     protected String configFileName() {
         return "ArcartXAnnouncer.yml";
     }
 
+    /**
+     * 返回模块消息文件名。
+     *
+     * @return 消息文件名 {@code "messages.yml"}
+     */
     @Override
     protected String messagesFileName() {
         return "messages.yml";
@@ -58,6 +76,11 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         return messages().get("prefix") + messages().get(key, args);
     }
 
+    /**
+     * 返回主配置的默认同步策略：{@code entries} 节为动态区段，允许用户自由增删公告条目。
+     *
+     * @return 同步策略
+     */
     @Override
     protected @NotNull SyncPolicy defaultSyncPolicy() {
         // entries 由用户自由增删（每个公告条目自定义 id）
@@ -66,6 +89,11 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
             .build();
     }
 
+    /**
+     * 返回主配置的校验规则列表，覆盖检查间隔、冷却、条目间隔与字号等数值范围。
+     *
+     * @return 校验规则列表
+     */
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
@@ -80,6 +108,11 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         );
     }
 
+    /**
+     * 返回 UI 资源映射：内置公告 HUD 与字幕 HUD 的源路径到目标路径映射。
+     *
+     * @return UI 资源映射表
+     */
     @Override
     protected @NotNull Map<String, String> uiResourceMappings() {
         Map<String, String> mappings = new LinkedHashMap<>();
@@ -88,6 +121,11 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         return mappings;
     }
 
+    /**
+     * 判断是否需要在启用时覆盖已存在的 UI 文件。
+     *
+     * @return 当公告或字幕配置要求覆盖时返回 {@code true}
+     */
     @Override
     protected boolean overwriteUiFiles() {
         if (configuration == null) return false;
@@ -95,6 +133,14 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
             || configuration.subtitle().overwriteUiFile();
     }
 
+    /**
+     * 加载模块配置：读取主 yml，准备公告条目目录（必要时导出默认条目），并解析为
+     * {@link AnnouncerModuleConfiguration}。
+     *
+     * @param configFile 主配置文件，为 {@code null} 时抛出异常
+     * @throws IllegalStateException 配置文件缺失时抛出
+     * @throws Exception 解析配置过程中发生错误时抛出
+     */
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
         if (configFile == null) {
@@ -116,6 +162,13 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         configuration = AnnouncerModuleConfiguration.load(yaml, logger, entriesDirectory);
     }
 
+    /**
+     * 启动公告与字幕服务：注册多套 UI，创建 {@link AnnouncerService} 与 {@link SubtitleService}，
+     * 导出默认字幕组并注册 {@link SubtitlePlayable} 能力。
+     *
+     * @throws IllegalStateException UI 注册失败时抛出
+     * @throws Exception 启动过程中发生错误时抛出
+     */
     @Override
     protected void startService() throws Exception {
         // Announcer UI（支持多 UI）
@@ -201,6 +254,9 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         );
     }
 
+    /**
+     * 停止并释放字幕与公告服务，清空配置引用。
+     */
     @Override
     protected void stopService() {
         if (subtitleService != null) {
@@ -214,12 +270,22 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         configuration = null;
     }
 
+    /**
+     * 创建客户端数据包处理器，将包转发给 {@link AnnouncerService}。
+     *
+     * @return 数据包处理器，服务未启动时返回不产生副作用的 lambda
+     */
     @Override
     protected @Nullable ClientPacketHandler createPacketHandler() {
         return (player, packetId, data) ->
             service != null && service.handleClientPacket(player, packetId, data);
     }
 
+    /**
+     * 创建客户端初始化回调，在玩家客户端就绪时通知公告与字幕服务。
+     *
+     * @return 客户端初始化回调
+     */
     @Override
     protected @Nullable ClientInitializedHandler createInitializedHandler() {
         return player -> {
@@ -232,10 +298,20 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         };
     }
 
+    /**
+     * 返回公告服务实例。
+     *
+     * @return 公告服务，模块未启动时为 {@code null}
+     */
     public AnnouncerService getService() {
         return service;
     }
 
+    /**
+     * 返回字幕服务实例。
+     *
+     * @return 字幕服务，未启用字幕功能时为 {@code null}
+     */
     public SubtitleService getSubtitleService() {
         return subtitleService;
     }
@@ -247,6 +323,14 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
     @Override public String commandId() { return "announcer"; }
     @Override public List<String> actions() { return ACTIONS; }
 
+    /**
+     * 处理 {@code /axs announcer} 命令，分发到 help/status/reload/broadcast/subtitle 等子动作。
+     *
+     * @param sender 命令发送者
+     * @param label  命令标签
+     * @param args   参数数组，{@code args[1]} 为子动作
+     * @return 始终返回 {@code true}
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "help";
@@ -368,6 +452,13 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
         }
     }
 
+    /**
+     * 提供 {@code /axs announcer} 命令的 Tab 补全：子动作、字幕子命令、在线玩家名与字幕组 id。
+     *
+     * @param sender 命令发送者
+     * @param args   当前参数数组
+     * @return 补全候选列表
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) return filter(ACTIONS, args[1]);

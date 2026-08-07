@@ -14,11 +14,26 @@ import org.bukkit.Bukkit;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.warehouse.service.WarehouseService;
 
+/**
+ * 仓库模块的玩家命令处理器。
+ * <p>
+ * 实现 {@link org.bukkit.command.TabExecutor}，绑定到玩家可执行的仓库命令，
+ * 支持 open（打开仓库）、showcase（展示柜）、preview（管理员预览他人仓库）、
+ * spreview（静默预览）、transfer（确认/拒绝共享仓库转让）等子命令。
+ * 玩家需持有 {@code arcartxsuite.warehouse.use} 权限；preview 额外要求 admin 权限。
+ * 关联模块：warehouse。
+ */
 public final class WarehousePlayerCommand implements org.bukkit.command.TabExecutor {
 
     private final Supplier<WarehouseService> serviceProvider;
     private final MessageProvider messages;
 
+    /**
+     * 构造玩家命令处理器。
+     *
+     * @param serviceProvider 仓库服务提供者，延迟获取 {@link WarehouseService} 实例
+     * @param messages        消息提供者，用于读取本地化提示文本
+     */
     public WarehousePlayerCommand(Supplier<WarehouseService> serviceProvider, MessageProvider messages) {
         this.serviceProvider = serviceProvider;
         this.messages = messages;
@@ -29,6 +44,15 @@ public final class WarehousePlayerCommand implements org.bukkit.command.TabExecu
         return messages.get("prefix") + messages.get(key, args);
     }
 
+    /**
+     * 执行玩家子命令，根据 {@code args[0]} 分发到 open / showcase / preview / spreview / transfer。
+     *
+     * @param sender  命令发送者，必须是玩家
+     * @param command 命令对象
+     * @param label   命令标签
+     * @param args    参数数组（args[0] 为子命令名）
+     * @return {@code true} 表示已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (!(sender instanceof Player player)) {
@@ -142,6 +166,15 @@ public final class WarehousePlayerCommand implements org.bukkit.command.TabExecu
         return true;
     }
 
+    /**
+     * 提供玩家子命令的 Tab 补全。
+     *
+     * @param sender 命令发送者
+     * @param command 命令对象
+     * @param alias  命令别名
+     * @param args   参数数组
+     * @return 补全列表
+     */
     @Override
     public @Nullable List<String> onTabComplete(
         @NotNull CommandSender sender,

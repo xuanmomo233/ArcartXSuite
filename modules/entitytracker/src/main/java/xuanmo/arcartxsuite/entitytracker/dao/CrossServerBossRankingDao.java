@@ -10,6 +10,11 @@ import java.util.Optional;
 import javax.sql.DataSource;
 import org.bukkit.plugin.java.JavaPlugin;
 
+/**
+ * 跨服 Boss 排名数据访问对象，属于 entitytracker 模块的数据持久层。
+ * <p>
+ * 提供跨服排名数据的写入（先删后插）和按排名类型/Boss ID 查询功能。
+ */
 public class CrossServerBossRankingDao {
 
     private final DataSource dataSource;
@@ -18,6 +23,15 @@ public class CrossServerBossRankingDao {
         this.dataSource = dataSource;
     }
 
+    /**
+     * 写入或更新跨服排名数据（先删除旧记录再插入新记录）。
+     *
+     * @param rankingType     排名类型
+     * @param bossId          Boss ID，为空时表示全局排名
+     * @param rankingDataJson 排名数据 JSON
+     * @param expireTime      过期时间，为 {@code null} 时不过期
+     * @throws SQLException 数据库操作失败时抛出
+     */
     public void upsert(String rankingType, String bossId, String rankingDataJson, LocalDateTime expireTime)
         throws SQLException {
         deleteExisting(rankingType, bossId);
@@ -45,6 +59,14 @@ public class CrossServerBossRankingDao {
         }
     }
 
+    /**
+     * 查询指定排名类型和 Boss ID 的最新排名数据。
+     *
+     * @param rankingType 排名类型
+     * @param bossId      Boss ID，为空时查询全局排名
+     * @return 排名数据 JSON 的 Optional，未找到时为空
+     * @throws SQLException 数据库操作失败时抛出
+     */
     public Optional<String> findRankingData(String rankingType, String bossId) throws SQLException {
         String sql = bossId == null || bossId.isBlank()
             ? """

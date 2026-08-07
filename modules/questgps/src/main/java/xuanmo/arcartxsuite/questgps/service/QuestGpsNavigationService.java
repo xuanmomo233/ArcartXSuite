@@ -16,6 +16,13 @@ import xuanmo.arcartxsuite.api.bridge.WaypointBridgeAPI;
 import xuanmo.arcartxsuite.questgps.chemdah.ChemdahTrackerBridge;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 
+/**
+ * QuestGPS 导航服务。
+ * <p>
+ * 属于 {@code questgps} 模块，负责管理玩家任务/子任务的路径点追踪、
+ * 导航标记模型显示以及 Chemdah 动态坐标刷新。支持 overlay（配置坐标）、
+ * chemdah（任务系统动态坐标）和 hybrid（混合）三种导航模式。
+ */
 public final class QuestGpsNavigationService {
 
     private final QuestGpsModuleConfiguration configuration;
@@ -31,6 +38,16 @@ public final class QuestGpsNavigationService {
     private QuestGpsMarkerService markerService;
     private int chemdahRefreshTaskId = -1;
 
+    /**
+     * 构造导航服务，内部将 {@link WaypointBridgeAPI} 包装为 {@link BridgeWaypointRuntime}。
+     *
+     * @param plugin         宿主插件实例
+     * @param logger         日志器
+     * @param configuration  模块配置
+     * @param waypointBridge 路径点桥接 API
+     * @param npcBridge      Adyeshach NPC 桥接 API，用于导航标记
+     * @param trackerBridge  Chemdah 追踪桥接，用于动态坐标解析
+     */
     public QuestGpsNavigationService(
         JavaPlugin plugin,
         Logger logger,
@@ -65,6 +82,7 @@ public final class QuestGpsNavigationService {
         this.trackerBridge = trackerBridge;
     }
 
+    /** 启动导航运行时与标记服务，并按配置启动 Chemdah 坐标刷新定时任务。 */
     public void start() {
         runtimeReady = configuration.navigation().enabled() && waypointRuntime.initialize("QuestGPS 导航");
         if (configuration.navigation().marker().enabled()) {
@@ -85,6 +103,7 @@ public final class QuestGpsNavigationService {
         }
     }
 
+    /** 关闭导航服务，取消定时任务、清除所有玩家追踪并释放运行时资源。 */
     public void shutdown() {
         if (chemdahRefreshTaskId >= 0) {
             AxsScheduler.cancelTask(chemdahRefreshTaskId);
@@ -103,14 +122,22 @@ public final class QuestGpsNavigationService {
         waypointRuntime.shutdown();
     }
 
+    /** @return 导航运行时是否就绪 */
     public boolean runtimeReady() {
         return configuration.navigation().enabled() && runtimeReady;
     }
 
+    /** @return 任务完成后是否自动移除导航 */
     public boolean removeOnFinish() {
         return configuration.navigation().removeOnFinish();
     }
 
+    /**
+     * 获取玩家的追踪状态。
+     *
+     * @param player 玩家，为 {@code null} 时返回空状态
+     * @return 当前追踪状态，无追踪时返回 {@link TrackingState#none()}
+     */
     public TrackingState trackingState(Player player) {
         if (player == null) {
             return TrackingState.none();
@@ -118,6 +145,12 @@ public final class QuestGpsNavigationService {
         return trackingStates.getOrDefault(player.getUniqueId(), TrackingState.none());
     }
 
+    /**
+     * 获取玩家当前的追踪坐标点。
+     *
+     * @param player 玩家，为 {@code null} 时返回空
+     * @return 导航坐标点，无追踪时返回空
+     */
     public Optional<NavigationPoint> trackingPoint(Player player) {
         if (player == null) {
             return Optional.empty();
@@ -125,6 +158,14 @@ public final class QuestGpsNavigationService {
         return Optional.ofNullable(trackingPoints.get(player.getUniqueId()));
     }
 
+    /**
+     * 判断指定任务是否存在可用的导航坐标点。
+     *
+     * @param player             玩家，为 {@code null} 时仅检查 overlay 配置
+     * @param questId            任务 ID
+     * @param prioritizedTaskIds 优先检查的子任务 ID 列表
+     * @return 存在可用坐标点时返回 {@code true}
+     */
     public boolean hasQuestPoint(Player player, String questId, List<String> prioritizedTaskIds) {
         if (!runtimeReady()) {
             return false;
@@ -142,6 +183,14 @@ public final class QuestGpsNavigationService {
         return overlay || trackerBridge.resolveTrackingLocation(player, questId).isPresent();
     }
 
+    /**
+     * 判断指定子任务是否存在可用的导航坐标点。
+     *
+     * @param player  玩家，为 {@code null} 时仅检查 overlay 配置
+     * @param questId 任务 ID
+     * @param taskId  子任务 ID
+     * @return 存在可用坐标点时返回 {@code true}
+     */
     public boolean hasTaskPoint(Player player, String questId, String taskId) {
         if (!runtimeReady()) {
             return false;
@@ -159,14 +208,37 @@ public final class QuestGpsNavigationService {
         return overlay || trackerBridge.resolveTrackingLocation(player, questId).isPresent();
     }
 
+    /**
+     * 判断指定任务是否存在可用的导航坐标点（不检查玩家在线状态）。
+     *
+     * @param questId            任务 ID
+     * @param prioritizedTaskIds 优先检查的子任务 ID 列表
+     * @return 存在可用坐标点时返回 {@code true}
+     */
     public boolean hasQuestPoint(String questId, List<String> prioritizedTaskIds) {
         return hasQuestPoint(null, questId, prioritizedTaskIds);
     }
 
+    /**
+     * 判断指定子任务是否存在可用的导航坐标点（不检查玩家在线状态）。
+     *
+     * @param questId 任务 ID
+     * @param taskId  子任务 ID
+     * @return 存在可用坐标点时返回 {@code true}
+     */
     public boolean hasTaskPoint(String questId, String taskId) {
         return hasTaskPoint(null, questId, taskId);
     }
 
+    /**
+     * 为玩家开启任务级导航追踪。
+     *
+     * @param player             玩家
+     * @param questId            任务 ID
+     * @param questName          任务名称（用于路径点标题）
+     * @param prioritizedTaskIds 优先解析的子任务 ID 列表
+     * @return 成功激活或进入 Chemdah 追踪时返回 {@code true}
+     */
     public boolean trackQuest(Player player, String questId, String questName, List<String> prioritizedTaskIds) {
         if (player == null || !player.isOnline()) {
             return false;
@@ -195,6 +267,15 @@ public final class QuestGpsNavigationService {
         return false;
     }
 
+    /**
+     * 为玩家开启子任务级导航追踪。
+     *
+     * @param player   玩家
+     * @param questId  任务 ID
+     * @param taskId   子任务 ID
+     * @param taskName 子任务名称（用于路径点标题）
+     * @return 成功激活或进入 Chemdah 追踪时返回 {@code true}
+     */
     public boolean trackTask(Player player, String questId, String taskId, String taskName) {
         if (player == null || !player.isOnline()) {
             return false;
@@ -223,6 +304,12 @@ public final class QuestGpsNavigationService {
         return false;
     }
 
+    /**
+     * 清除玩家的导航追踪。
+     *
+     * @param player 玩家
+     * @param silent 为 {@code true} 时删除失败不输出警告日志
+     */
     public void clearTracking(Player player, boolean silent) {
         if (player == null) {
             return;
@@ -244,6 +331,12 @@ public final class QuestGpsNavigationService {
         }
     }
 
+    /**
+     * 当玩家当前追踪的目标属于指定任务时，清除其追踪。
+     *
+     * @param player  玩家
+     * @param questId 任务 ID
+     */
     public void clearTrackingForQuest(Player player, String questId) {
         TrackingState state = trackingState(player);
         if (state.matchesQuest(questId) || state.questId().equalsIgnoreCase(safe(questId))) {
@@ -521,12 +614,27 @@ public final class QuestGpsNavigationService {
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    /**
+     * 追踪模式枚举。
+     * <p>
+     * 区分当前追踪的是任务级还是子任务级导航目标。
+     */
     public enum TrackingMode {
         NONE,
         QUEST,
         TASK
     }
 
+    /**
+     * 玩家导航追踪状态快照。
+     *
+     * @param active     是否正在追踪
+     * @param mode       追踪模式
+     * @param questId    任务 ID
+     * @param taskId     子任务 ID，任务级追踪时为空
+     * @param waypointId 路径点标识符
+     * @param label      追踪目标显示名称
+     */
     public record TrackingState(
         boolean active,
         TrackingMode mode,
@@ -552,6 +660,18 @@ public final class QuestGpsNavigationService {
         }
     }
 
+    /**
+     * 导航坐标点。
+     *
+     * @param waypointId 路径点标识符
+     * @param title      路径点标题
+     * @param styleId    路径点样式 ID
+     * @param world      世界名称
+     * @param x          X 坐标
+     * @param y          Y 坐标
+     * @param z          Z 坐标
+     * @param mapLabel   地图标记标签
+     */
     public record NavigationPoint(
         String waypointId,
         String title,
@@ -564,6 +684,9 @@ public final class QuestGpsNavigationService {
     ) {
     }
 
+    /**
+     * 路径点运行时接口，抽象路径点桥接的增删与样式解析操作。
+     */
     interface WaypointRuntime {
         boolean initialize(String ownerLabel);
 

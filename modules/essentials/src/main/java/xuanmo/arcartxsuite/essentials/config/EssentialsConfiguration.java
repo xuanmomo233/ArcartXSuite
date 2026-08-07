@@ -6,6 +6,22 @@ import java.util.logging.Logger;
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.ConfigurationSection;
 
+/**
+ * Essentials 模块的顶层配置记录。
+ * <p>
+ * 从 {@code ArcartXEssentials.yml} 根节点加载，聚合玩家、传送、世界、
+ * 安全管理、交互、存储与消息等全部子配置。
+ * 各子配置均为独立 record，通过静态 {@code load} 方法从对应节点解析。
+ *
+ * @param debug       是否启用调试日志
+ * @param player      玩家管理配置（飞行速度、AFK 超时、隐身消息隐藏等）
+ * @param teleport    传送配置（TPA 超时、传送延迟、家上限、安全传送等）
+ * @param world       世界配置（允许生效的世界列表）
+ * @param moderation  安全管理配置（封禁/踢出/禁言消息、警告阈值等）
+ * @param interaction 交互配置（楼梯/半砖坐下等）
+ * @param storage     存储配置（SQLite/MySQL 方言与连接参数）
+ * @param messages    全部玩家可见消息模板（含颜色代码与占位符）
+ */
 public record EssentialsConfiguration(
     boolean debug,
     PlayerConfiguration player,
@@ -17,6 +33,13 @@ public record EssentialsConfiguration(
     MessagesConfiguration messages
 ) {
 
+    /**
+     * 从 YAML 根节点加载并组装完整配置。
+     *
+     * @param root   YAML 根节点
+     * @param logger 日志器，用于存储子配置的诊断输出
+     * @return 解析后的 {@link EssentialsConfiguration} 实例
+     */
     public static EssentialsConfiguration load(ConfigurationSection root, Logger logger) {
         return new EssentialsConfiguration(
             root.getBoolean("debug", false),
@@ -30,7 +53,16 @@ public record EssentialsConfiguration(
         );
     }
 
-    // ─── Player ───
+    /**
+     * 玩家管理子配置。
+     *
+     * @param defaultFlySpeed       默认飞行速度（1-10）
+     * @param defaultWalkSpeed      默认行走速度（1-10）
+     * @param afkTimeout            AFK 判定超时（秒，0 表示禁用）
+     * @param afkKickTimeout        AFK 踢出额外超时（秒，0 表示不踢出）
+     * @param vanishHideQuitMessage 隐身时是否隐藏退出消息
+     * @param vanishHideJoinMessage 隐身时是否隐藏加入消息
+     */
     public record PlayerConfiguration(
         int defaultFlySpeed,
         int defaultWalkSpeed,
@@ -51,7 +83,16 @@ public record EssentialsConfiguration(
         }
     }
 
-    // ─── Teleport ───
+    /**
+     * 传送子配置。
+     *
+     * @param tpaTimeout     TPA 请求自动过期时间（秒，最小 10）
+     * @param teleportDelay  传送预热延迟（秒，0 表示即时传送）
+     * @param cancelOnMove   预热期间移动是否取消传送
+     * @param maxHomes       每个玩家可设置的家数量上限
+     * @param backStackSize  /back 返回位置栈最大深度
+     * @param safeTeleport   是否启用安全传送（自动寻找无碰撞位置）
+     */
     public record TeleportConfiguration(
         int tpaTimeout,
         int teleportDelay,
@@ -72,7 +113,11 @@ public record EssentialsConfiguration(
         }
     }
 
-    // ─── World ───
+    /**
+     * 世界子配置。
+     *
+     * @param allowedWorlds 允许 Essentials 功能生效的世界名称列表
+     */
     public record WorldConfiguration(
         List<String> allowedWorlds
     ) {
@@ -83,7 +128,15 @@ public record EssentialsConfiguration(
         }
     }
 
-    // ─── Moderation ───
+    /**
+     * 安全管理子配置。
+     *
+     * @param banMessage           封禁踢出消息（含颜色代码与占位符）
+     * @param kickMessage          踢出消息
+     * @param muteMessage          禁言消息
+     * @param maxWarningsBeforeBan 触发自动封禁的累计警告数（0 表示不自动封禁）
+     * @param warningExpireDays    警告记录过期天数（0 表示永不过期）
+     */
     public record ModerationConfiguration(
         String banMessage,
         String kickMessage,
@@ -102,7 +155,12 @@ public record EssentialsConfiguration(
         }
     }
 
-    // ─── Interaction ───
+    /**
+     * 交互子配置。
+     *
+     * @param sitOnStairs 是否允许玩家在楼梯上坐下
+     * @param sitOnSlabs  是否允许玩家在半砖上坐下
+     */
     public record InteractionConfiguration(
         boolean sitOnStairs,
         boolean sitOnSlabs
@@ -115,7 +173,18 @@ public record EssentialsConfiguration(
         }
     }
 
-    // ─── Storage ───
+    /**
+     * 存储子配置，支持 SQLite 与 MySQL 两种方言。
+     *
+     * @param dialect      数据库方言
+     * @param sqliteFile   SQLite 数据库文件名（仅 dialect=SQLITE 时使用）
+     * @param host         MySQL 主机地址
+     * @param port         MySQL 端口
+     * @param database     MySQL 数据库名
+     * @param username     MySQL 用户名
+     * @param password     MySQL 密码
+     * @param tablePrefix  数据表前缀
+     */
     public record StorageConfiguration(
         Dialect dialect,
         String sqliteFile,
@@ -126,6 +195,9 @@ public record EssentialsConfiguration(
         String password,
         String tablePrefix
     ) {
+        /**
+         * 存储方言枚举。
+         */
         public enum Dialect {
             SQLITE("sqlite"), MYSQL("mysql");
             private final String key;
@@ -137,6 +209,11 @@ public record EssentialsConfiguration(
             }
         }
 
+        /**
+         * 将此配置转换为引擎统一的 {@link xuanmo.arcartxsuite.api.storage.StorageDescriptor}。
+         *
+         * @return 存储描述符
+         */
         public xuanmo.arcartxsuite.api.storage.StorageDescriptor toDescriptor() {
             if (dialect == Dialect.MYSQL) {
                 return xuanmo.arcartxsuite.api.storage.StorageDescriptor.mysql(
@@ -160,7 +237,12 @@ public record EssentialsConfiguration(
         }
     }
 
-    // ─── Messages ───
+    /**
+     * 消息模板子配置。
+     * <p>
+     * 包含 Essentials 模块全部玩家可见消息，支持 {@code &} 颜色代码
+     * 与 {@code {占位符}} 变量替换。所有字段均提供默认中文值。
+     */
     public record MessagesConfiguration(
         String flyEnabled, String flyDisabled,
         String godEnabled, String godDisabled,

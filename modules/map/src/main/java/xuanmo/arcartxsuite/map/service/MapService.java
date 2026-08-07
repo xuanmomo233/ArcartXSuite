@@ -50,6 +50,13 @@ import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import java.util.logging.Logger;
 
+/**
+ * 地图核心服务，实现 {@code Listener} 与 {@code MapUiPacketHandler.ActionTarget}。
+ * <p>
+ * 关联模块：map。管理玩家视图状态、导航状态、外部目标、锚点解锁 / 传送、
+ * 路径点 CRUD、HUD 显示、数据包处理与 UI 快照同步等全部运行时逻辑。
+ * 通过 {@code MapSnapshotBuilder} 生成菜单与 HUD 快照并推送到客户端。
+ */
 public final class MapService implements Listener, MapUiPacketHandler.ActionTarget {
 
     public static final String MENU_UI_RESOURCE_PATH = "arcartx/ui/map_menu.yml";
@@ -143,6 +150,11 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         return messages == null ? "" : messages.get(key, args);
     }
 
+    /**
+     * 启动地图服务，初始化存储、导航桥接与标记服务，并注册事件监听。
+     *
+     * @throws Exception 初始化失败时抛出
+     */
     public void start() throws Exception {
         repository.initialize();
         if (configuration.navigation().enabled()) {
@@ -160,6 +172,9 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
+    /**
+     * 关闭地图服务，注销监听、清理所有玩家状态并释放资源。
+     */
     public void shutdown() {
         HandlerList.unregisterAll(this);
         for (Player player : Bukkit.getOnlinePlayers()) {
@@ -182,10 +197,23 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         playerDataCache.clear();
     }
 
+    /**
+     * 处理来自客户端的地图数据包。
+     *
+     * @param player   发送数据包的玩家
+     * @param packetId 数据包标识
+     * @param data     数据包内容
+     * @return {@code true} 表示数据包已被处理
+     */
     public boolean handleClientPacket(Player player, String packetId, List<String> data) {
         return uiPacketHandler.handleClientPacket(player, packetId, data);
     }
 
+    /**
+     * 处理客户端初始化完成事件，确保默认解锁并按配置延迟显示 HUD。
+     *
+     * @param player 完成初始化的玩家
+     */
     public void handleClientInitialized(Player player) {
         if (player == null || !player.isOnline()) {
             return;
@@ -206,34 +234,78 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         );
     }
 
+    /**
+     * 获取已配置的世界 ID 列表。
+     *
+     * @return 世界 ID 列表
+     */
     public List<String> configuredWorldIds() {
         return new ArrayList<>(configuration.worlds().keySet());
     }
 
+    /**
+     * 获取已配置的锚点 ID 列表。
+     *
+     * @return 锚点 ID 列表
+     */
     public List<String> configuredAnchorIds() {
         return new ArrayList<>(configuration.anchors().keySet());
     }
 
+    /**
+     * 获取已配置的世界数量。
+     *
+     * @return 世界数量
+     */
     public int configuredWorldCount() {
         return configuration.worlds().size();
     }
 
+    /**
+     * 获取已配置的锚点数量。
+     *
+     * @return 锚点数量
+     */
     public int configuredAnchorCount() {
         return configuration.anchors().size();
     }
 
+    /**
+     * 获取当前正在导航的玩家数量。
+     *
+     * @return 处于活跃导航状态的玩家数
+     */
     public int trackingPlayerCount() {
         return (int) navigationStates.values().stream().filter(MapNavigationState::active).count();
     }
 
+    /**
+     * 判断路径点运行时是否就绪（导航未启用或桥接可用时返回 {@code true}）。
+     *
+     * @return 路径点运行时就绪状态
+     */
     public boolean waypointRuntimeReady() {
         return !configuration.navigation().enabled() || waypointBridge.available();
     }
 
+    /**
+     * 为玩家打开地图菜单。
+     *
+     * @param player  目标玩家
+     * @param worldId 指定世界 ID，为空时自动选择
+     * @return 操作结果
+     */
     public MapOperationResult openMenuFor(Player player, String worldId) {
         return openMenuInternal(player, worldId, true);
     }
 
+    /**
+     * 设置玩家 HUD 显示状态。
+     *
+     * @param player 目标玩家
+     * @param mode   模式：{@code "on"} / {@code "off"} / {@code "toggle"}
+     * @return 操作结果
+     */
     public MapOperationResult setHud(Player player, String mode) {
         if (player == null || !player.isOnline()) {
             return MapOperationResult.failure(message("player.offline"));
@@ -249,10 +321,23 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         return setHudInternal(player, targetVisible, true);
     }
 
+    /**
+     * 清除玩家的当前导航追踪。
+     *
+     * @param player 目标玩家
+     * @return 操作结果
+     */
     public MapOperationResult clearTrackCommand(Player player) {
         return clearTrackInternal(player, true);
     }
 
+    /**
+     * 新增或更新外部导航目标，并可选地自动选中。
+     *
+     * @param player 目标玩家
+     * @param target 外部目标数据
+     * @param select 是否自动选中该目标
+     */
     public void upsertExternalTarget(Player player, MapExternalTarget target, boolean select) {
         if (player == null || target == null) {
             return;
@@ -267,6 +352,13 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         sync(player, false);
     }
 
+    /**
+     * 移除指定的外部导航目标。
+     *
+     * @param player    目标玩家
+     * @param targetId  外部目标 ID
+     * @param syncView  是否同步刷新 UI
+     */
     public void removeExternalTarget(Player player, String targetId, boolean syncView) {
         if (player == null || targetId == null || targetId.isBlank()) {
             return;
@@ -290,6 +382,13 @@ public final class MapService implements Listener, MapUiPacketHandler.ActionTarg
         }
     }
 
+    /**
+     * 按来源清除玩家的所有外部导航目标。
+     *
+     * @param player   目标玩家
+     * @param source   来源模块标识，为空时清除全部
+     * @param syncView 是否同步刷新 UI
+     */
     public void clearExternalTargets(Player player, String source, boolean syncView) {
         if (player == null) {
             return;

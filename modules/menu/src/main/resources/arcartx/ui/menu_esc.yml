@@ -19,6 +19,20 @@ ui:
   screenScale: true
   defaultOpen: true
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 包标识符（'AXS_MENU'）
+    #   - menuId: 菜单唯一标识
+    #   - title: 菜单标题文本
+    #   - pageTitle: 当前页面标题
+    #   - pageIndex: 当前页索引（从 0 开始）
+    #   - pageCount: 总页数
+    #   - buttonRows: 按钮数据行（字典，key 为索引）
+    #   - buttonCount: 按钮总数
+    #   - footerRows: 页脚按钮数据行
+    #   - footerCount: 页脚按钮总数
+    #   - maxButtonCount: 按钮最大数量（用于动态创建控件）
+    #   - maxFooterCount: 页脚按钮最大数量
     init: |-
       var.packetId = packet['packetId']
       var.menuId = packet['menuId']
@@ -62,6 +76,8 @@ ui:
           fb['图标'].seticon()
         }
       }
+    # packetHandler: update
+    # 包字段: 与 init 相同（全量刷新菜单数据）
     update: |-
       var.packetId = packet['packetId']
       var.menuId = packet['menuId']

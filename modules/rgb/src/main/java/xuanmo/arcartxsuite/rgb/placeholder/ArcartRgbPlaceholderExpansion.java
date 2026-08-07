@@ -7,6 +7,11 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.rgb.service.ArcartRgbService;
 
+/**
+ * RGB 模块的 PlaceholderAPI 扩展，占位符标识 {@code axsrgb}。
+ * <p>
+ * 通过 {@code %axsrgb_<entryId>%} 渲染对应渐变文本。
+ */
 public final class ArcartRgbPlaceholderExpansion extends PlaceholderExpansion {
 
     private final JavaPlugin plugin;

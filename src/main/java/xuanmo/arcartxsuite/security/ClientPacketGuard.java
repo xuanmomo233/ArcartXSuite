@@ -15,6 +15,11 @@ import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import xuanmo.arcartxsuite.api.security.ClientPacketGuardMode;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 
+/**
+ * {@link PacketGuardAPI} 的默认实现，按"模块+动作"维度对客户端包进行滑动窗口频率限制。
+ * <p>
+ * 超限时按 {@link ClientPacketGuardMode} 执行静默/通知/惩罚，并定期清理过期状态。
+ */
 public final class ClientPacketGuard implements PacketGuardAPI {
 
     private final JavaPlugin plugin;

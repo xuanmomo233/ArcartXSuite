@@ -14,12 +14,25 @@ import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.util.ItemSerializer;
 import xuanmo.arcartxsuite.lottery.model.PoolItem;
 
+/**
+ * 奖品发放器。
+ * <p>
+ * 根据 {@link PoolItem.DeliveryType} 将奖品以直接发放、命令执行或邮件发送的方式
+ * 投递给玩家。背包满时自动转投邮件，投递失败时返回失败结果供上层入队待领取。
+ */
 public class PrizeDistributor {
 
     private final ItemSourceRegistry itemSourceRegistry;
     private final Supplier<MailDispatchable> mailSupplier;
     private final Logger logger;
 
+    /**
+     * 构造奖品发放器。
+     *
+     * @param itemSourceRegistry 物品来源注册表
+     * @param mailSupplier       邮件能力延迟供应器
+     * @param logger             日志记录器
+     */
     public PrizeDistributor(ItemSourceRegistry itemSourceRegistry,
                             Supplier<MailDispatchable> mailSupplier,
                             Logger logger) {
@@ -28,6 +41,13 @@ public class PrizeDistributor {
         this.logger = logger;
     }
 
+    /**
+     * 向玩家发放奖品。
+     *
+     * @param player 目标玩家
+     * @param item   奖品定义
+     * @return 发放结果，包含成功/失败状态与失败原因
+     */
     @NotNull
     public DistributionResult distribute(@NotNull Player player, @NotNull PoolItem item) {
         switch (item.delivery()) {
@@ -95,6 +115,12 @@ public class PrizeDistributor {
         return DistributionResult.failure(generateItem(item), "缺少 mail-preset");
     }
 
+    /**
+     * 根据奖品定义生成对应的 {@link ItemStack}。
+     *
+     * @param item 奖品定义
+     * @return 生成的物品堆，生成失败时返回 {@code null}
+     */
     @Nullable
     public ItemStack generateItem(PoolItem item) {
         if (item.pluginType() == PoolItem.PluginItemType.PLAIN && item.itemJson() != null
@@ -120,6 +146,12 @@ public class PrizeDistributor {
         };
     }
 
+    /**
+     * 将物品堆序列化为 Base64 字符串。
+     *
+     * @param stack 物品堆，为 {@code null} 时返回空字符串
+     * @return Base64 编码的序列化字符串，序列化失败时返回空字符串
+     */
     @NotNull
     public String toItemJson(@Nullable ItemStack stack) {
         if (stack == null) return "";
@@ -132,16 +164,43 @@ public class PrizeDistributor {
         }
     }
 
+    /**
+     * 奖品发放结果。
+     *
+     * @param success       是否发放成功
+     * @param item          涉及的物品堆，可能为 {@code null}
+     * @param mailSent      是否通过邮件发送
+     * @param failureReason 失败原因，成功时为空字符串
+     */
     public record DistributionResult(boolean success, @Nullable ItemStack item,
                                      boolean mailSent, @NotNull String failureReason) {
+        /**
+         * 构造直接发放成功的结果。
+         *
+         * @param item 涉及的物品堆
+         * @return 成功结果实例
+         */
         public static DistributionResult success(@Nullable ItemStack item) {
             return new DistributionResult(true, item, false, "");
         }
 
+        /**
+         * 构造邮件发送成功的结果。
+         *
+         * @param item 涉及的物品堆
+         * @return 邮件发送结果实例
+         */
         public static DistributionResult mailSent(@Nullable ItemStack item) {
             return new DistributionResult(true, item, true, "");
         }
 
+        /**
+         * 构造发放失败的结果。
+         *
+         * @param item   涉及的物品堆
+         * @param reason 失败原因
+         * @return 失败结果实例
+         */
         public static DistributionResult failure(@Nullable ItemStack item, @NotNull String reason) {
             return new DistributionResult(false, item, false, reason);
         }

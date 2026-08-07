@@ -22,6 +22,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * 原版配方收集器，遍历服务端已注册的合成/熔炼配方，
+ * 转换为可发送给客户端 UI 的数据结构（含中文名解析）。
+ */
 public final class RecipeCollector {
 
     private final VanillaItemNameBridge nameBridge;

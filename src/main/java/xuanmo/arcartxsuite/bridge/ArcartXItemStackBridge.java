@@ -7,6 +7,12 @@ import org.bukkit.plugin.java.JavaPlugin;
 import priv.seventeen.artist.arcartx.nms.ItemBridge;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 
+/**
+ * {@link ItemBridgeAPI} 的默认实现，桥接 ArcartX 的 {@code ItemBridge}，
+ * 提供物品 NBT 读写与序列化能力。
+ * <p>
+ * ArcartX 为必需依赖，运行时通过 {@link #initialize()} 检测可用性。
+ */
 public final class ArcartXItemStackBridge implements ItemBridgeAPI {
 
     private final JavaPlugin plugin;

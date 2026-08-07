@@ -12,6 +12,11 @@ import xuanmo.arcartxsuite.loginview.storage.LoginViewRepository;
 import xuanmo.arcartxsuite.loginview.storage.MigratedAuthMeAccount;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 
+/**
+ * AuthMe 账号迁移服务，从 AuthMe 数据库读取账号并导入 LoginView 仓储。
+ * <p>
+ * 支持 dry-run 预览模式，迁移过程记录扫描数、导入数、跳过数。
+ */
 public final class AuthMeMigrationService {
 
     private final MigrationConfiguration configuration;

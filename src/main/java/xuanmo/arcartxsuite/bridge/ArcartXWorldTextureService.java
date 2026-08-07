@@ -10,6 +10,10 @@ import priv.seventeen.artist.arcartx.core.effect.ArcartXEffectManager;
 import priv.seventeen.artist.arcartx.core.effect.data.EffectPosition;
 import priv.seventeen.artist.arcartx.core.effect.data.WorldTextureBuilder;
 
+/**
+ * {@link xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI} 的默认实现，
+ * 桥接 ArcartX 世界贴图特效，用于在世界上方渲染悬浮纹理/文字。
+ */
 public class ArcartXWorldTextureService implements xuanmo.arcartxsuite.api.bridge.WorldTextureBridgeAPI {
 
     private final JavaPlugin plugin;

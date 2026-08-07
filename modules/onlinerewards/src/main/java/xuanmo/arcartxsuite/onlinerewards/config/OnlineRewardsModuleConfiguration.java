@@ -10,6 +10,29 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
 
+/**
+ * 在线奖励模块顶层配置。
+ * <p>
+ * 属于 {@code onlinerewards} 模块，聚合 UI、存储、跨服、签到、阶段奖励、
+ * 周期奖励、离线储蓄、全服签到目标等全部子配置，由 {@link #load(FileConfiguration, File, File)}
+ * 从主配置文件及附属 sign-in.yml / rewards.yml 解析构建。
+ *
+ * @param debug                 是否开启调试日志
+ * @param clientSyncDelayTicks  客户端菜单同步延迟（tick）
+ * @param doneMessage           全部阶段奖励领取完毕时的提示文本
+ * @param progressVariableName  进度占位符变量名
+ * @param titleVariableName     阶段标题占位符变量名
+ * @param ui                    UI 配置
+ * @param storage               存储配置
+ * @param crossServer           跨服通道配置
+ * @param signIn                签到子系统配置
+ * @param timeBonusGroups       在线时长倍率权限组列表
+ * @param rewards               在线时长阶段奖励列表
+ * @param weeklyRewards         周期性周奖励列表
+ * @param monthlyRewards        周期性月奖励列表
+ * @param offlineSavings        离线储蓄配置
+ * @param serverSignInGoal      全服签到目标配置
+ */
 public record OnlineRewardsModuleConfiguration(
     boolean debug,
     long clientSyncDelayTicks,
@@ -28,10 +51,25 @@ public record OnlineRewardsModuleConfiguration(
     OnlineRewardsServerSignInGoalConfiguration serverSignInGoal
 ) {
 
+    /**
+     * 从主配置文件加载模块配置，签到与奖励附属文件使用默认查找。
+     *
+     * @param configuration 主配置
+     * @return 解析后的模块配置
+     */
     public static OnlineRewardsModuleConfiguration load(FileConfiguration configuration) {
         return load(configuration, null, null);
     }
 
+    /**
+     * 从主配置文件及附属签到、奖励文件加载模块配置。
+     *
+     * @param configuration 主配置
+     * @param signInFile    签到附属配置文件（sign-in.yml）
+     * @param rewardsFile   奖励附属配置文件（rewards.yml）
+     * @return 解析后的模块配置
+     * @throws IllegalStateException 当签到附属配置缺失时抛出
+     */
     public static OnlineRewardsModuleConfiguration load(
         FileConfiguration configuration,
         File signInFile,

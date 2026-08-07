@@ -11,6 +11,11 @@ import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.mail.config.MailModuleConfiguration;
 import xuanmo.arcartxsuite.mail.model.MailSendQuote;
 
+/**
+ * 写信界面数据包工厂，构建发送给客户端的写信初始化与报价数据包。
+ * <p>
+ * 关联模块：mail。所有方法为静态工具方法，封装手续费、货币列表、附件税率与密码面板等 UI 数据。
+ */
 public final class MailComposePacketFactory {
 
     private MailComposePacketFactory() {

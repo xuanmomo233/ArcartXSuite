@@ -27,6 +27,12 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfig;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerDelivery;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerEnvelope;
 
+/**
+ * {@link CrossServerAPI} 的默认实现，支持 Redis 与 Proxy 插件消息双后端跨服传输。
+ * <p>
+ * 通过 HMAC 签名信封，按频道发布/订阅消息，并路由到对应模块的处理器。
+ * Redis 不可用时自动降级到 PluginMessage 通道。
+ */
 public final class CrossServerService implements CrossServerAPI, PluginMessageListener {
 
     private static final String BUNGEE_CHANNEL = "BungeeCord";

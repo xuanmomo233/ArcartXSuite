@@ -6,11 +6,22 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.chat.model.ChatEnvelope;
 import xuanmo.arcartxsuite.chat.model.ChatItemPreview;
 
+/**
+ * 聊天消息信封编解码器，将 {@link ChatEnvelope} 序列化为 yml 字符串或从 yml 反序列化。
+ * <p>
+ * 用于跨服传输场景下将消息信封通过 {@link xuanmo.arcartxsuite.api.crossserver.CrossServerChannel} 传输。
+ */
 public final class ChatEnvelopeCodec {
 
     private ChatEnvelopeCodec() {
     }
 
+    /**
+     * 将消息信封编码为 yml 字符串。
+     *
+     * @param envelope 消息信封
+     * @return yml 格式的字符串
+     */
     public static String encode(ChatEnvelope envelope) {
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.set("message-id", envelope.messageId());
@@ -40,6 +51,13 @@ public final class ChatEnvelopeCodec {
         return yaml.saveToString();
     }
 
+    /**
+     * 从 yml 字符串解码消息信封。
+     *
+     * @param content yml 格式的字符串
+     * @return 解码后的消息信封
+     * @throws InvalidConfigurationException yml 格式非法时抛出
+     */
     public static ChatEnvelope decode(String content) throws InvalidConfigurationException {
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.loadFromString(content);

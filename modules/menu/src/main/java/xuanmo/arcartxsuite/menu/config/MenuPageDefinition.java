@@ -6,12 +6,27 @@ import java.util.List;
 import java.util.Map;
 import org.bukkit.configuration.ConfigurationSection;
 
+/**
+ * 菜单页面定义，描述单个页面的标题和按钮集合。
+ * <p>
+ * 一个菜单可包含多个页面，由 {@link xuanmo.arcartxsuite.menu.config.MenuDefinition} 管理。
+ *
+ * @param id      页面标识
+ * @param title   页面标题
+ * @param buttons 页面按钮映射（按钮 ID → 按钮定义）
+ */
 public record MenuPageDefinition(
     String id,
     String title,
     Map<String, MenuButtonDefinition> buttons
 ) {
 
+    /**
+     * 从配置节加载页面定义。
+     *
+     * @param section 页面配置节
+     * @return 解析后的页面定义，为 null 时返回默认空页面
+     */
     public static MenuPageDefinition load(ConfigurationSection section) {
         if (section == null) {
             return new MenuPageDefinition("main", "", Map.of());
@@ -28,6 +43,12 @@ public record MenuPageDefinition(
         return new MenuPageDefinition(id, title, Map.copyOf(buttons));
     }
 
+    /**
+     * 从原始 Map 列表批量加载页面定义，格式错误的页面会被跳过。
+     *
+     * @param rawPages 原始页面 Map 列表
+     * @return 不可变的页面定义列表
+     */
     public static List<MenuPageDefinition> loadList(List<Map<?, ?>> rawPages) {
         if (rawPages == null || rawPages.isEmpty()) {
             return List.of(new MenuPageDefinition("main", "Menu", Map.of()));

@@ -5,13 +5,14 @@
 #  修改后执行 /axs reload market 即可生效。
 # ============================================================
 
+# 消息前缀，所有 Market 模块消息都会自动附加此前缀
 prefix: "&3◆ &6ArcartXSuite &7| &r"
 
 # ── 通用 ──────────────────────────────────────────────
 common:
-  service-down: "&c市场服务尚未就绪"
-  reload-hint: "&e请使用 /{0} reload market"
-  unknown: "&e未知命令，使用 /{0} market help"
+  service-down: "&c市场服务尚未就绪"           # 服务未初始化或数据库连接失败
+  reload-hint: "&e请使用 /{0} reload market"    # {0}=插件主命令前缀
+  unknown: "&e未知命令，使用 /{0} market help"  # {0}=插件主命令前缀
   only-player: "&c该命令只能由玩家执行。"
   no-permission: "&c你没有权限执行这个命令。"
 
@@ -23,6 +24,7 @@ help:
   clear-expired: "&7{0} clear-expired&f - 处理到期"
   remove: "&7{0} remove <ID>&f - 强制移除"
 
+# ── 状态查询 ──────────────────────────────────────────
 status:
   title: "&6AXS Market 状态"
   active-listings: "&7活跃拍卖: &f{0}"
@@ -35,6 +37,7 @@ status:
   cross-server-active: "&a已启用"
   cross-server-inactive: "&e未启用"
 
+# ── 管理操作 ──────────────────────────────────────────
 admin:
   reloaded: "&a市场模块已重载"
   clear-expired-success: "&a已处理 {0} 个到期物品"
@@ -48,7 +51,8 @@ player:
   auction-unavailable: "&c拍卖行未启用"
   cancel-failed: "&c取消失败（不存在或非本人上架）"
   shop-unavailable: "&c系统商店未启用"
-  recycle-unavailable: "&c回收商店未启用"
+  recycle-unavailable: "&c回收商店未启用"
+
   auto-recycle-disabled: "&c批量回收功能已关闭"
   help:
     title: "&6=== AXS 全球市场 ==="
@@ -78,20 +82,21 @@ player:
 # 消息前缀，所有 Market 消息都会自动附加此前缀
 prefix: "&8[&6AXS市场&8] &7"
 # ── 拍卖行消息 ──
-auction-listed: "&a物品已成功上架！"
-auction-bought: "&a购买成功！"
-auction-bid-placed: "&a出价成功！当前最高出价: &e%amount%"
-auction-outbid: "&c您对 &e%item% &c的出价已被超越！新最高价: &e%amount%"
-auction-expired: "&7您上架的 &e%item% &7已到期，已退回。"
-auction-sold: "&a您上架的 &e%item% &a已售出！收入: &e%amount%"
-auction-cancelled: "&7已取消上架。"
+auction-listed: "&a物品已成功上架！"                    # 上架成功提示
+auction-bought: "&a购买成功！"                         # 一口价购买成功
+auction-bid-placed: "&a出价成功！当前最高出价: &e%amount%"  # %amount%=出价金额
+auction-outbid: "&c您对 &e%item% &c的出价已被超越！新最高价: &e%amount%"  # 被超越通知，%item%=物品名
+auction-expired: "&7您上架的 &e%item% &7已到期，已退回。"  # 到期退回通知
+auction-sold: "&a您上架的 &e%item% &a已售出！收入: &e%amount%"  # 售出通知，%amount%=税后收入
+auction-cancelled: "&7已取消上架。"                    # 取消上架成功
 # ── 系统商店消息 ──
-shop-bought: "&a购买成功！花费: &e%amount%"
-shop-limit-reached: "&c该商品已达购买上限。"
+shop-bought: "&a购买成功！花费: &e%amount%"            # %amount%=花费金额
+shop-limit-reached: "&c该商品已达购买上限。"           # 限购商品达到上限
 # ── 回收商店消息 ──
-recycle-success: "&a回收成功！获得: &e%amount%"
-recycle-nothing: "&7背包中没有可回收的物品。"
+recycle-success: "&a回收成功！获得: &e%amount%"        # %amount%=获得金额
+recycle-nothing: "&7背包中没有可回收的物品。"          # 无可回收物品
 # ── 通用错误消息 ──
-insufficient-funds: "&c余额不足。"
-item-blacklisted: "&c该物品不允许上架。"
-auto-recycle-disabled: "&c批量回收功能已关闭"
+insufficient-funds: "&c余额不足。"                    # 货币余额不足
+item-blacklisted: "&c该物品不允许上架。"               # 物品在黑名单中
+
+auto-recycle-disabled: "&c批量回收功能已关闭"          # 自动回收功能未启用

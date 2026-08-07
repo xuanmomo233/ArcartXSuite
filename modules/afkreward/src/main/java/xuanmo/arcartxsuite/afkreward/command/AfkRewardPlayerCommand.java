@@ -14,6 +14,13 @@ import xuanmo.arcartxsuite.afkreward.model.AfkArea;
 import xuanmo.arcartxsuite.afkreward.service.AfkRewardService;
 import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository.PlayerStats;
 
+/**
+ * 挂机奖励玩家命令处理器。
+ * <p>
+ * 关联模块：afkreward。提供 {@code toggle}、{@code status}、{@code start}、{@code end}、
+ * {@code list}、{@code top} 等子命令，玩家可通过命令查看挂机状态、手动开始/结束原地挂机、
+ * 查看在线挂机列表与排行榜。
+ */
 public final class AfkRewardPlayerCommand implements TabExecutor {
 
     private static final String PERMISSION = "arcartxsuite.afkreward.use";
@@ -22,6 +29,12 @@ public final class AfkRewardPlayerCommand implements TabExecutor {
     private final Supplier<AfkRewardService> serviceSupplier;
     private final MessageProvider messages;
 
+    /**
+     * 构造玩家命令处理器。
+     *
+     * @param serviceSupplier 挂机奖励服务提供者（服务可能尚未就绪，故使用 Supplier 延迟获取）
+     * @param messages        消息提供者，用于读取本地化提示文本
+     */
     public AfkRewardPlayerCommand(Supplier<AfkRewardService> serviceSupplier, MessageProvider messages) {
         this.serviceSupplier = serviceSupplier;
         this.messages = messages;
@@ -32,6 +45,15 @@ public final class AfkRewardPlayerCommand implements TabExecutor {
         return messages.get("prefix") + messages.get(key, args);
     }
 
+    /**
+     * 处理玩家命令，根据子命令分发到对应逻辑。
+     *
+     * @param sender  命令发送者（仅玩家可用）
+     * @param command 命令对象
+     * @param label   命令标签
+     * @param args    参数数组（{@code args[0]} 为子命令）
+     * @return {@code true} 表示已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
@@ -121,6 +143,15 @@ public final class AfkRewardPlayerCommand implements TabExecutor {
         }
     }
 
+    /**
+     * 提供子命令与区域名补全。
+     *
+     * @param sender  命令发送者
+     * @param command 命令对象
+     * @param alias   命令别名
+     * @param args    当前参数数组
+     * @return 补全候选列表；无补全时返回空列表
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                                   @NotNull String alias, @NotNull String[] args) {

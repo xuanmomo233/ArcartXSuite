@@ -2,13 +2,30 @@ package xuanmo.arcartxsuite.lottery.model;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Logger;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+/**
+ * 奖池中的单个奖品定义。
+ * <p>
+ * 描述奖品的投递方式、物品来源、数量、权重、稀有度等属性，
+ * 由 {@link #load} 从 YAML 配置节解析。
+ *
+ * @param id           奖品唯一标识
+ * @param name         显示名称
+ * @param delivery     投递方式（直接/命令/邮件）
+ * @param commands     命令投递时执行的命令列表
+ * @param mailPreset   邮件投递时使用的预设名称
+ * @param pluginType   物品来源类型
+ * @param pluginId     物品来源 ID（如 Mythic 内部名、原版材料名）
+ * @param itemJson     预序列化的 Base64 物品数据，仅 PLAIN 类型使用
+ * @param amount       物品数量
+ * @param weight       抽取权重
+ * @param rarity       稀有度名称，CASE 奖池使用
+ */
 public record PoolItem(
     @NotNull String id,
     @NotNull String name,
@@ -20,24 +37,55 @@ public record PoolItem(
     @Nullable String itemJson,
     int amount,
     int weight,
-    boolean stattrakEnabled,
-    @Nullable String rarity,
-    @Nullable Map<String, WearRange> wearDistribution
+    @Nullable String rarity
 ) {
+    /**
+     * 奖品投递方式枚举。
+     */
     public enum DeliveryType {
         DIRECT, COMMAND, MAIL
     }
 
+    /**
+     * 物品来源类型枚举。
+     * <p>
+     * 配置中可使用插件正式全称（如 {@code MythicMobs}、{@code NeigeItems}、{@code MMOItems}、
+     * {@code Overture}、{@code PLAIN}）或旧缩写（{@code MYTHIC}、{@code NEIGE}、{@code MMO}），
+     * 通过 {@link #fromString(String)} 统一解析，大小写无关。
+     */
     public enum PluginItemType {
-        MYTHIC, NEIGE, OVERTURE, MMO, PLAIN
+        MYTHIC, NEIGE, OVERTURE, MMO, PLAIN;
+
+        /**
+         * 将配置字符串解析为枚举值，支持插件正式全称与旧缩写别名，大小写无关。
+         *
+         * @param value 配置字符串
+         * @return 对应枚举值
+         * @throws IllegalArgumentException 无法识别时抛出
+         */
+        public static PluginItemType fromString(String value) {
+            if (value == null || value.isBlank()) {
+                return PLAIN;
+            }
+            String normalized = value.trim().toUpperCase(java.util.Locale.ROOT);
+            return switch (normalized) {
+                case "MYTHIC", "MYTHICMOBS" -> MYTHIC;
+                case "NEIGE", "NEIGEITEMS" -> NEIGE;
+                case "OVERTURE" -> OVERTURE;
+                case "MMO", "MMOITEMS" -> MMO;
+                case "PLAIN" -> PLAIN;
+                default -> throw new IllegalArgumentException("未知的 plugin-type: " + value);
+            };
+        }
     }
 
-    public record WearRange(
-        double min,
-        double max,
-        double weight
-    ) {}
-
+    /**
+     * 从 YAML 配置节加载奖品定义。
+     *
+     * @param section 配置节
+     * @param logger  日志记录器
+     * @return 解析后的 {@link PoolItem} 实例，缺少 id 或配置无效时返回 {@code null}
+     */
     public static PoolItem load(ConfigurationSection section, Logger logger) {
         String id = section.getString("id");
         if (id == null || id.isBlank()) {
@@ -53,7 +101,7 @@ public record PoolItem(
         if (mailPreset.isBlank()) mailPreset = null;
 
         String pluginTypeStr = section.getString("plugin-type", "PLAIN");
-        PluginItemType pluginType = PluginItemType.valueOf(pluginTypeStr.toUpperCase());
+        PluginItemType pluginType = PluginItemType.fromString(pluginTypeStr);
         String pluginId = section.getString("plugin-id", "");
         String itemJson = section.getString("item-json");
         int amount = section.getInt("amount", 1);
@@ -74,23 +122,7 @@ public record PoolItem(
         }
 
         int weight = section.getInt("weight", 1);
-        boolean stattrak = section.getBoolean("stattrak-enabled", false);
         String rarity = section.getString("rarity", null);
-
-        Map<String, WearRange> wearDist = null;
-        ConfigurationSection wearSection = section.getConfigurationSection("wear-distribution");
-        if (wearSection != null) {
-            wearDist = new java.util.LinkedHashMap<>();
-            for (String key : wearSection.getKeys(false)) {
-                ConfigurationSection ws = wearSection.getConfigurationSection(key);
-                if (ws == null) continue;
-                wearDist.put(key, new WearRange(
-                    ws.getDouble("min", 0.0),
-                    ws.getDouble("max", 1.0),
-                    ws.getDouble("weight", 1.0)
-                ));
-            }
-        }
 
         if (weight <= 0) {
             logger.warning("奖品 " + id + " 的 weight 必须为正数，已跳过");
@@ -98,6 +130,6 @@ public record PoolItem(
         }
 
         return new PoolItem(id, name, delivery, commands, mailPreset, pluginType, pluginId,
-            itemJson, amount, weight, stattrak, rarity, wearDist);
+            itemJson, amount, weight, rarity);
     }
 }

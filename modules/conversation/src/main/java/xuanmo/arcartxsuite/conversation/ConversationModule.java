@@ -25,6 +25,13 @@ import xuanmo.arcartxsuite.conversation.service.ConversationService;
 import xuanmo.arcartxsuite.api.capability.InteractionState;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 
+/**
+ * Conversation 模块的主入口，基于 Chemdah 对话引擎为 ArcartX 客户端提供 NPC 对话能力。
+ * <p>
+ * 该模块负责注册对话 / 选择器 / 信箱 UI，启动 {@link ConversationService} 与
+ * {@link CinematicService}，并将宿主全局按键（交互确认、上下导航）路由到对话服务。
+ * 同时实现 {@link ModuleCommandHandler}，提供 {@code /axs conversation} 管理子命令。
+ */
 public final class ConversationModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private static final String DIALOG_UI_RESOURCE_PATH = "arcartx/ui/conversation_dialog.yml";
@@ -223,26 +230,54 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         });
     }
 
+    /**
+     * 获取对话服务实例。
+     *
+     * @return 已启动的 {@link ConversationService}，模块未启用或已停止时返回 {@code null}
+     */
     public ConversationService getService() {
         return service;
     }
 
+    /**
+     * 获取电影序列服务实例。
+     *
+     * @return 已启动的 {@link CinematicService}，模块未启用或已停止时返回 {@code null}
+     */
     public CinematicService getCinematicService() {
         return cinematicService;
     }
 
     // ─── ModuleCommandHandler ───────────────────────────────
 
+    /**
+     * 返回该处理器对应的命令标识，用于宿主命令路由。
+     *
+     * @return 命令 id {@code "conversation"}
+     */
     @Override
     public String commandId() {
         return "conversation";
     }
 
+    /**
+     * 返回该命令支持的子动作列表，用于 Tab 补全与帮助提示。
+     *
+     * @return 子动作列表，服务未就绪时返回默认占位列表
+     */
     @Override
     public List<String> actions() {
         return adminCommand != null ? adminCommand.actions() : List.of("help", "status", "adyeshach", "cinematic");
     }
 
+    /**
+     * 处理 {@code /axs conversation <action> ...} 命令。
+     *
+     * @param sender 命令发送者
+     * @param label  命令标签
+     * @param args   参数数组，首个元素为子动作
+     * @return {@code true} 表示已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         if (adminCommand != null) {
@@ -252,6 +287,13 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
         return true;
     }
 
+    /**
+     * 为 {@code /axs conversation} 命令提供 Tab 补全建议。
+     *
+     * @param sender 命令发送者
+     * @param args   当前已输入的参数
+     * @return 补全候选列表，服务未就绪或无建议时返回 {@code null}
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;

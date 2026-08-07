@@ -11,6 +11,13 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * 称号时长解析器。
+ * <p>
+ * 将命令参数中的时长文本解析为 {@link TitleDurationSpec}，
+ * 支持永久（permanent）、时长（如 7d、12h）和日期范围（如 2024-01-01~2024-12-31）三种格式。
+ * 属于 title 模块工具层。
+ */
 public final class TitleDurationParser {
 
     private static final Pattern DURATION_PATTERN = Pattern.compile("^(\\d+)([smhd])$", Pattern.CASE_INSENSITIVE);
@@ -20,6 +27,12 @@ public final class TitleDurationParser {
     private TitleDurationParser() {
     }
 
+    /**
+     * 解析时长文本。
+     *
+     * @param input 时长文本，支持 permanent / 数字+单位 / 日期范围
+     * @return 解析结果，无法识别时返回空 Optional
+     */
     public static Optional<TitleDurationSpec> parse(String input) {
         if (input == null) {
             return Optional.empty();
@@ -81,19 +94,44 @@ public final class TitleDurationParser {
         }
     }
 
+    /**
+     * 称号时长规格。
+     * <p>
+     * 封装解析后的时长信息，区分永久、临时时长与日期范围三种模式。
+     *
+     * @param permanent   是否永久
+     * @param duration    临时时长，永久或日期范围模式下为 {@link Duration#ZERO}
+     * @param activatesAt 激活时间，仅日期范围模式非空
+     * @param expiresAt   过期时间，仅日期范围模式非空
+     */
     public record TitleDurationSpec(boolean permanent, Duration duration, Instant activatesAt, Instant expiresAt) {
+        /**
+         * @return 永久时长规格
+         */
         public static TitleDurationSpec ofPermanent() {
             return new TitleDurationSpec(true, Duration.ZERO, null, null);
         }
 
+        /**
+         * @param duration 临时时长
+         * @return 临时时长规格
+         */
         public static TitleDurationSpec ofTemporary(Duration duration) {
             return new TitleDurationSpec(false, duration == null ? Duration.ZERO : duration, null, null);
         }
 
+        /**
+         * @param activatesAt 激活时间
+         * @param expiresAt   过期时间
+         * @return 日期范围规格
+         */
         public static TitleDurationSpec ofDateRange(Instant activatesAt, Instant expiresAt) {
             return new TitleDurationSpec(false, Duration.ZERO, activatesAt, expiresAt);
         }
 
+        /**
+         * @return 是否为日期范围模式
+         */
         public boolean isDateRange() {
             return activatesAt != null && expiresAt != null;
         }

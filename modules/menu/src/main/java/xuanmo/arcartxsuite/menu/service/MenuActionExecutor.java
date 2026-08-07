@@ -17,6 +17,13 @@ import xuanmo.arcartxsuite.menu.config.MenuActionDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuActionType;
 import xuanmo.arcartxsuite.api.util.TemporaryOpExecutor;
 
+/**
+ * 菜单动作执行器，负责执行按钮点击或菜单开关时触发的各类动作。
+ * <p>
+ * 支持 {@link xuanmo.arcartxsuite.menu.config.MenuActionType} 定义的所有动作类型，
+ * 包括执行命令、临时 OP 执行、控制台命令、发送消息、打开/关闭菜单、翻页、播放音效、
+ * 分发信号和运行脚本等。
+ */
 public final class MenuActionExecutor {
 
     private final JavaPlugin plugin;
@@ -36,6 +43,13 @@ public final class MenuActionExecutor {
         this.signalProvider = signalProvider;
     }
 
+    /**
+     * 执行单个菜单动作。
+     *
+     * @param player 目标玩家
+     * @param action 动作定义
+     * @return {@code true} 表示执行后应关闭菜单
+     */
     public boolean execute(Player player, MenuActionDefinition action) {
         if (player == null || action == null) {
             return false;
@@ -147,6 +161,12 @@ public final class MenuActionExecutor {
         return menuService.configuration().settings().closeOnAction();
     }
 
+    /**
+     * 依次执行多个菜单动作，若任一动作返回需要关闭菜单则在全部执行后关闭。
+     *
+     * @param player  目标玩家
+     * @param actions 动作定义集合
+     */
     public void executeAll(Player player, Iterable<MenuActionDefinition> actions) {
         boolean shouldClose = false;
         for (MenuActionDefinition action : actions) {

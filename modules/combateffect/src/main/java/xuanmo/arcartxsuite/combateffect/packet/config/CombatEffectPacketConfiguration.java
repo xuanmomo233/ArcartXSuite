@@ -13,6 +13,13 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.EntityType;
 
+/**
+ * 战斗效果数据包配置。
+ * <p>
+ * 属于 combateffect 模块的 packet 子模块，负责加载和管理数据包定义（{@link PacketDefinition}）、
+ * 实体战斗开关、玩家/非玩家实体包含规则、MythicMob ID 黑名单与实体类型黑名单等。
+ * 支持从指定目录批量加载 yml 数据包定义文件。
+ */
 public final class CombatEffectPacketConfiguration {
 
     private final List<PacketDefinition> packetDefinitions;
@@ -41,10 +48,27 @@ public final class CombatEffectPacketConfiguration {
         this.debug = debug;
     }
 
+    /**
+     * 从配置节点加载数据包配置（不指定数据包目录）。
+     *
+     * @param section Bukkit 配置节点
+     * @param logger  日志记录器，用于输出解析警告
+     * @return 加载后的配置实例
+     */
     public static CombatEffectPacketConfiguration load(ConfigurationSection section, Logger logger) {
         return load(section, logger, null);
     }
 
+    /**
+     * 从配置节点加载数据包配置，并从指定目录批量加载 yml 数据包定义文件。
+     * <p>
+     * 当配置节点为 {@code null} 时返回默认配置。
+     *
+     * @param section          Bukkit 配置节点
+     * @param logger           日志记录器，用于输出解析警告
+     * @param packetsDirectory 数据包定义文件所在目录，为 {@code null} 时跳过文件加载
+     * @return 加载后的配置实例
+     */
     public static CombatEffectPacketConfiguration load(ConfigurationSection section, Logger logger, File packetsDirectory) {
         if (section == null) {
             return new CombatEffectPacketConfiguration(
@@ -86,18 +110,70 @@ public final class CombatEffectPacketConfiguration {
         );
     }
 
+    /**
+     * 返回所有数据包定义列表。
+     *
+     * @return 不可变的数据包定义列表
+     */
     public List<PacketDefinition> packetDefinitions() { return packetDefinitions; }
+
+    /**
+     * 返回是否启用实体战斗数据包。
+     *
+     * @return {@code true} 表示已启用
+     */
     public boolean entityCombatEnabled() { return entityCombatEnabled; }
+
+    /**
+     * 返回是否包含玩家作为战斗目标。
+     *
+     * @return {@code true} 表示包含玩家
+     */
     public boolean includePlayers() { return includePlayers; }
+
+    /**
+     * 返回是否包含非玩家生物作为战斗目标。
+     *
+     * @return {@code true} 表示包含非玩家生物
+     */
     public boolean includeNonPlayerLiving() { return includeNonPlayerLiving; }
+
+    /**
+     * 返回 MythicMob ID 黑名单集合。
+     *
+     * @return 不可变的黑名单集合
+     */
     public Set<String> blacklistedMythicMobIds() { return blacklistedMythicMobIds; }
+
+    /**
+     * 返回实体类型黑名单集合。
+     *
+     * @return 不可变的实体类型黑名单集合
+     */
     public Set<EntityType> blacklistedEntityTypes() { return blacklistedEntityTypes; }
+
+    /**
+     * 返回是否开启调试日志。
+     *
+     * @return {@code true} 表示已开启
+     */
     public boolean debug() { return debug; }
 
+    /**
+     * 返回已启用的数据包定义数量。
+     *
+     * @return 已启用的数据包定义数量
+     */
     public int enabledPacketCount() {
         return (int) packetDefinitions.stream().filter(PacketDefinition::enabled).count();
     }
 
+    /**
+     * 根据数据包 ID 查找对应的定义。
+     *
+     * @param packetId 数据包 ID
+     * @return 匹配的定义，未找到时返回 {@code null}
+     */
     public PacketDefinition findPacketById(String packetId) {
         if (packetId == null) return null;
         for (PacketDefinition definition : packetDefinitions) {
@@ -193,6 +269,14 @@ public final class CombatEffectPacketConfiguration {
             stateId, stateAction, controllerId);
     }
 
+    /**
+     * 判断指定目标是否应被处理（未被黑名单排除且符合包含规则）。
+     *
+     * @param isPlayer     目标是否为玩家
+     * @param mythicMobId  目标的 MythicMob ID，可为 {@code null}
+     * @param entityType   目标的实体类型
+     * @return {@code true} 表示该目标应被处理
+     */
     public boolean shouldProcessTarget(boolean isPlayer, String mythicMobId, EntityType entityType) {
         if (!entityCombatEnabled) return false;
         if (isPlayer && !includePlayers) return false;

@@ -1,23 +1,27 @@
-id: "pufferfish"
-display-name: "河豚"
-rarity: uncommon
-min-size: 5
-max-size: 25
-base-price: 200
-base-xp: 35
-seasons: [summer]
-weathers: [clear, rain]
-water-types: [ocean]
-time-ranges:
-  - start: "12:00"
-    end: "16:00"
-item:
-  source: "minecraft"
-  item-id: "pufferfish"
-  amount: 1
-difficulty: 55
-behaviors:
-  - type: dart
-    weight: 0.8
-  - type: floater
-    weight: 0.2
+# 鱼类定义：河豚
+# 河豚是一种不常见的海洋鱼类，夏季午后出现，以突进式行为为主，难度中等
+# 鱼类文件位于 fishes/ 目录，每个文件定义一种鱼
+
+id: "pufferfish"               # 鱼类唯一标识符
+display-name: "河豚"            # 显示名称
+rarity: uncommon               # 稀有度等级（uncommon=不常见）
+min-size: 5                    # 最小尺寸（厘米）
+max-size: 25                   # 最大尺寸（厘米）
+base-price: 200                # 基础售价（游戏货币）
+base-xp: 35                    # 基础经验值（捕获时获得）
+seasons: [summer]              # 可捕获季节（仅夏季）
+weathers: [clear, rain]        # 可捕获天气（晴天、雨天）
+water-types: [ocean]           # 可捕获水域类型（仅海洋）
+time-ranges:                   # 可捕获时间段
+  - start: "12:00"             # 开始时间（12:00，正午）
+    end: "16:00"               # 结束时间（16:00，午后时段）
+item:                          # 捕获后掉落的物品定义
+  source: "minecraft"          # 物品来源（minecraft=原版物品）
+  item-id: "pufferfish"        # 原版物品ID（河豚）
+  amount: 1                    # 物品数量
+difficulty: 55                 # 钓鱼难度（0-100，中等难度）
+behaviors:                     # 小游戏中鱼的行为模式及权重
+  - type: dart                 # 突进型：鱼快速跳跃移动
+    weight: 0.8                # 权重0.8（主要行为）
+  - type: floater              # 上浮型：鱼向轨道顶部移动
+    weight: 0.2                # 权重0.2（次要行为）

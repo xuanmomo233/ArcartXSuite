@@ -1,3 +1,4 @@
+# 配置版本号（不要手动修改，由模块自动管理）
 config-version: 1
 # AXS QQBot QQ群服互联
 # 作用: 通过 OneBot 11 协议连接 QQ 机器人，实现 QQ 群与服务器消息双向同步、
@@ -7,6 +8,7 @@ config-version: 1
 # PAPI: %axsqqbot_bound_qq%、%axsqqbot_bound_name% 等。
 
 settings:
+  # 是否输出调试日志
   debug: false
   # 服务器标识（多服时区分来源）
   server-id: "survival"
@@ -350,15 +352,24 @@ blacklist:
 
 # ─── 存储（QQ-游戏绑定数据） ──────────────────────────
 storage:
+  # 存储模式: sqlite 本地文件 / mysql 远程数据库
   mode: "sqlite"
+  # SQLite 数据库文件名
   sqlite-file: "qqbot.db"
   mysql:
+    # MySQL 数据库地址
     host: "127.0.0.1"
+    # MySQL 端口
     port: 3306
+    # 数据库名
     database: "arcartxsuite"
+    # 数据库用户名
     username: "root"
+    # 数据库密码
     password: ""
+    # 表名前缀
     table-prefix: "axs_qqbot_"
+  # 连接池大小
   pool-size: 4
 
 # ─── UI 界面配置 ───────────────────────────────────────
@@ -379,47 +390,91 @@ ui:
     ui-file: "qqbot_admin.yml"
 
 # ─── 消息文本 ─────────────────────────────────────────
+# 以下为各场景的消息模板，{xxx} 为占位符变量。
 messages:
+  # 消息前缀
   prefix: "&8[&bQQBot&8] &7"
+  # 验证码发送提示（群内）
   bind-code-sent: "验证码已生成: {code}\n请在 {expire} 秒内到游戏中输入:\n/qqbot bind {code}"
+  # 绑定成功提示（群内）
   bind-success: "绑定成功！\nQQ: {qq} ↔ 游戏: {name}"
+  # 绑定成功提示（游戏内）
   bind-success-game: "&a绑定成功！QQ: &e{qq} &a↔ 游戏: &e{name}"
+  # QQ 已绑定其他玩家时的提示
   already-bound: "该QQ已绑定玩家 {name}，如需换绑请先解绑"
+  # 解绑成功提示（群内）
   unbind-success: "已解除绑定: {name}"
+  # 解绑成功提示（游戏内）
   unbind-success-game: "&c已解除与 QQ &e{qq} &c的绑定"
+  # 未绑定提示
   not-bound: "该账号尚未绑定"
+  # 验证码过期提示
   code-expired: "验证码已过期，请重新获取"
+  # 验证码无效提示（游戏内）
   code-invalid: "&c验证码无效或已过期"
+  # 白名单添加成功
   whitelist-added: "已为 {name} 添加白名单"
+  # 白名单移除成功
   whitelist-removed: "已移除 {name} 的白名单"
+  # 机器人连接成功提示
   bot-connected: "&aQQ 机器人已连接"
+  # 机器人断开提示
   bot-disconnected: "&cQQ 机器人连接断开"
+  # 无权限提示
   no-permission: "你没有权限执行此指令"
+  # 玩家不存在提示
   player-not-found: "找不到玩家: {name}"
+  # 命令执行成功提示
   command-executed: "命令已执行: {command}"
+  # 管理员命令执行成功
   admin-command-executed: "[管理] 命令已执行: {command}"
+  # 管理员命令执行失败
   admin-command-failed: "[管理] 命令执行失败: {command}"
   # ─── 签到积分 ───
+  # 签到成功提示
   signin-success: "签到成功！获得 {points} 积分\n连续签到 {streak} 天，当前积分 {balance}"
+  # 重复签到提示
   signin-already: "你今天已经签到过了\n连续签到 {streak} 天，当前积分 {balance}"
+  # 积分查询结果
   points-query: "你的积分: {balance}\n累计获得 {earned}，已消费 {spent}"
+  # 兑换商店头部
   shop-header: "═══ 积分兑换商店 ═══\n（发送 #兑换 <编号> 兑换奖品）"
+  # 兑换商店单项格式
   shop-item: "[{id}] {name} - {cost}积分\n  {desc}"
+  # 兑换商店尾部
   shop-footer: "═══════════════\n你的积分: {balance}"
+  # 兑换成功提示
   redeem-success: "兑换成功！\n奖品 [{name}] 将通过邮件发放给 {player}\n已扣除 {cost} 积分，剩余 {balance}"
+  # 积分不足提示
   redeem-no-points: "积分不足！兑换 [{name}] 需要 {cost} 积分，你只有 {balance}"
+  # 奖品不存在提示
   redeem-not-found: "找不到该奖品编号: {id}"
+  # 未绑定提示（兑换时）
   redeem-not-bound: "兑换该奖品需要先绑定游戏账号\n请发送: #绑定 <游戏名>"
+  # 兑换次数上限提示
   redeem-limit: "[{name}] 今日兑换次数已达上限"
+  # 邮件发放失败提示
   redeem-mail-failed: "奖品发放失败（邮件系统不可用），积分已退还"
+  # ─── 黑名单 ───
+  # 被黑名单拦截提示
   blacklist-blocked: "你的账号已被禁止使用本机器人的功能"
+  # 加入黑名单成功
   blacklist-added: "已将 QQ {qq} 加入黑名单"
+  # 移出黑名单成功
   blacklist-removed: "已将 QQ {qq} 移出黑名单"
+  # 已在黑名单中
   blacklist-already: "QQ {qq} 已在黑名单中"
+  # 不在黑名单中
   blacklist-not-found: "QQ {qq} 不在黑名单中"
+  # 黑名单列表头部
   blacklist-list-header: "═══ 黑名单列表 ═══"
+  # 黑名单列表单项格式
   blacklist-list-item: "- {qq}"
+  # 黑名单为空
   blacklist-list-empty: "黑名单为空"
+  # 无权限管理黑名单
   blacklist-no-permission: "你没有权限管理黑名单"
+  # 帮助指令头部
   help-header: "═══ 可用指令 ═══"
+  # 帮助指令尾部
   help-footer: "═══════════════"

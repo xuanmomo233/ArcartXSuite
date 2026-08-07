@@ -35,6 +35,14 @@ import xuanmo.arcartxsuite.regions.service.RegionManager;
 import xuanmo.arcartxsuite.regions.service.WorldRulesService;
 import xuanmo.arcartxsuite.regions.storage.RegionsRepository;
 
+/**
+ * Regions 模块主类，负责区域保护、选区、命令、UI 与数据存储的整体生命周期管理。
+ * <p>
+ * 继承 {@link AbstractAXSModule}，实现 {@link ModuleCommandHandler}，
+ * 在启动时初始化 {@link RegionsRepository}、{@link RegionManager}、保护/选区监听器、
+ * 命令处理器、世界规则服务以及 UI Packet Handler，并注册数据库迁移与玩家数据清理能力。
+ * 关联模块：{@code regions}。
+ */
 public final class RegionsModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private RegionsConfiguration configuration;
@@ -48,6 +56,11 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
     private RegionsMenuPacketHandler menuPacketHandler;
     private RegionsAdminPacketHandler adminPacketHandler;
 
+    /**
+     * 返回模块描述符，包含模块 ID、名称、版本与主类信息。
+     *
+     * @return 模块描述符
+     */
     @Override
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("regions")
@@ -57,16 +70,31 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
             .build();
     }
 
+    /**
+     * 返回主配置文件名。
+     *
+     * @return 主配置文件名
+     */
     @Override
     protected String configFileName() {
         return "ArcartXRegions.yml";
     }
 
+    /**
+     * 返回消息配置文件名。
+     *
+     * @return 消息配置文件名
+     */
     @Override
     protected String messagesFileName() {
         return "messages.yml";
     }
 
+    /**
+     * 返回主配置的校验规则列表，覆盖存储方言与选区体积限制。
+     *
+     * @return 校验规则列表
+     */
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
@@ -76,6 +104,11 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         );
     }
 
+    /**
+     * 返回默认配置同步策略，允许 {@code world-rules.disabled-interactions} 按世界名动态新增。
+     *
+     * @return 同步策略
+     */
     @Override
     protected @NotNull SyncPolicy defaultSyncPolicy() {
         // world-rules.disabled-interactions 允许用户按世界名新增交互限制
@@ -84,6 +117,11 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
             .build();
     }
 
+    /**
+     * 返回 UI 资源路径到目标文件路径的映射，用于菜单与管理面板 UI 的释放与加载。
+     *
+     * @return UI 资源映射
+     */
     @Override
     protected @NotNull Map<String, String> uiResourceMappings() {
         Map<String, String> mappings = new LinkedHashMap<>();
@@ -92,6 +130,13 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         return mappings;
     }
 
+    /**
+     * 加载主配置与消息配置，解析为 {@link RegionsConfiguration}。
+     *
+     * @param configFile 主配置文件，为 {@code null} 时抛出异常
+     * @throws IllegalStateException 配置文件缺失时抛出
+     * @throws Exception             加载或解析失败时抛出
+     */
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
         if (configFile == null) {
@@ -109,6 +154,12 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
             logger);
     }
 
+    /**
+     * 启动核心服务：初始化存储、加载区域、注册监听器与命令、启动世界规则服务、
+     * 绑定 UI Packet Handler，并注册数据库迁移与玩家数据清理能力。
+     *
+     * @throws Exception 启动过程中发生错误时抛出
+     */
     @Override
     protected void startService() throws Exception {
         repository = new RegionsRepository(dataFolder, configuration.storage(), logger);
@@ -202,6 +253,9 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         logger.info("Regions 模块已启动 (已加载 " + regionManager.getAllRegions().size() + " 个区域)。");
     }
 
+    /**
+     * 停止并释放所有服务资源，包括监听器注销、存储关闭与配置清理。
+     */
     @Override
     protected void stopService() {
         menuPacketHandler = null;
@@ -216,6 +270,11 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         rawYaml = null;
     }
 
+    /**
+     * 创建客户端 Packet 处理器，将数据包分发给菜单与管理面板 Packet Handler。
+     *
+     * @return Packet 处理器，无可用 UI 时仍返回一个空实现
+     */
     @Override
     protected @Nullable ClientPacketHandler createPacketHandler() {
         return (player, packetId, data) -> {
@@ -225,17 +284,40 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         };
     }
 
+    /**
+     * 返回模块命令 ID。
+     *
+     * @return 命令 ID {@code "regions"}
+     */
     @Override
     public String commandId() { return "regions"; }
 
+    /**
+     * 返回命令别名列表。
+     *
+     * @return 别名列表
+     */
     @Override
     public List<String> commandAliases() { return List.of("rg"); }
 
+    /**
+     * 返回可用的子命令动作列表。
+     *
+     * @return 动作列表
+     */
     @Override
     public List<String> actions() {
         return commandHandler != null ? commandHandler.actions() : List.of("help", "status", "reload");
     }
 
+    /**
+     * 处理 {@code /regions} 命令，支持 {@code menu}、{@code admin} 等动作并转发其余动作给命令处理器。
+     *
+     * @param sender 命令发送者
+     * @param label  命令标签
+     * @param args   参数数组，{@code args[0]} 为命令 ID，{@code args[1]} 为动作
+     * @return {@code true} 表示已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         if (args.length >= 2) {
@@ -267,11 +349,23 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
         return commandHandler != null && commandHandler.onCommand(sender, label, args);
     }
 
+    /**
+     * 提供命令 Tab 补全建议。
+     *
+     * @param sender 命令发送者
+     * @param args   参数数组
+     * @return 补全建议列表，无可用建议时返回 {@code null}
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         return commandHandler != null ? commandHandler.onTabComplete(sender, args) : null;
     }
 
+    /**
+     * 返回区域管理器实例，供外部模块查询区域数据。
+     *
+     * @return 区域管理器，模块未启动时为 {@code null}
+     */
     public RegionManager getRegionManager() {
         return regionManager;
     }

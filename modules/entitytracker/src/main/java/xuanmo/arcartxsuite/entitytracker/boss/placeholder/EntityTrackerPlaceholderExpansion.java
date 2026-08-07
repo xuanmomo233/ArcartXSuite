@@ -17,6 +17,13 @@ import xuanmo.arcartxsuite.entitytracker.boss.tracker.PlayerBossViewSnapshot;
 import xuanmo.arcartxsuite.entitytracker.target.service.EntityTargetHudService;
 import xuanmo.arcartxsuite.entitytracker.target.service.EntityTargetSnapshot;
 
+/**
+ * EntityTracker 模块的 PlaceholderAPI 占位符扩展。
+ * <p>
+ * 向 PlaceholderAPI 注册 {@code %axsentitytracker_*%} 系列占位符，
+ * 提供模块配置信息、活跃会话统计、Boss 视图快照、伤害排名数据、
+ * 目标实体快照以及最近结算记录等动态变量。
+ */
 public final class EntityTrackerPlaceholderExpansion extends PlaceholderExpansion {
 
     private final JavaPlugin plugin;
@@ -26,6 +33,16 @@ public final class EntityTrackerPlaceholderExpansion extends PlaceholderExpansio
     private final java.util.function.Supplier<xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI> packetBridgeProvider;
     private final java.util.function.Supplier<EntityTargetHudService> targetServiceProvider;
 
+    /**
+     * 构造占位符扩展。
+     *
+     * @param plugin               插件实例
+     * @param configurationProvider 配置提供器
+     * @param serviceProvider      Boss 追踪服务提供器
+     * @param runtimeUiIdProvider  运行时 UI ID 提供器
+     * @param packetBridgeProvider 数据包桥接 API 提供器
+     * @param targetServiceProvider 目标实体 HUD 服务提供器
+     */
     public EntityTrackerPlaceholderExpansion(
         JavaPlugin plugin,
         java.util.function.Supplier<xuanmo.arcartxsuite.entitytracker.boss.config.PluginConfiguration> configurationProvider,
@@ -62,6 +79,13 @@ public final class EntityTrackerPlaceholderExpansion extends PlaceholderExpansio
         return true;
     }
 
+    /**
+     * 处理占位符请求，根据参数返回对应的动态值。
+     *
+     * @param offlinePlayer 离线玩家对象
+     * @param params        占位符参数
+     * @return 解析结果，无法解析时返回空字符串
+     */
     @Override
     public @Nullable String onRequest(OfflinePlayer offlinePlayer, @NotNull String params) {
         String normalized = params.trim().toLowerCase(Locale.ROOT);

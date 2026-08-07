@@ -18,6 +18,13 @@ import xuanmo.arcartxsuite.eventpacket.config.PluginConfiguration;
 import xuanmo.arcartxsuite.eventpacket.service.EntityCleanupService;
 import xuanmo.arcartxsuite.eventpacket.service.EventPacketDispatchService;
 
+/**
+ * EventPacket 模块的管理命令处理器。
+ * <p>
+ * 提供 help、status、reload、fire、clearlag、list、run 等子命令，
+ * 用于手动触发信号、查看规则列表、清理实体以及执行客户端回包预设。
+ * 通过 Supplier 延迟获取服务实例，以应对模块热重载场景。
+ */
 public final class EventPacketAdminCommand implements ModuleCommandHandler {
 
     private static final List<String> ACTIONS = List.of("help", "status", "reload", "fire", "clearlag", "list", "run");
@@ -27,6 +34,14 @@ public final class EventPacketAdminCommand implements ModuleCommandHandler {
     private final Supplier<PluginConfiguration> configurationProvider;
     private final MessageProvider messages;
 
+    /**
+     * 构造管理命令处理器。
+     *
+     * @param serviceProvider       事件包分发服务提供者
+     * @param cleanupProvider       实体清理服务提供者
+     * @param configurationProvider 插件配置提供者
+     * @param messages              消息国际化提供者
+     */
     public EventPacketAdminCommand(Supplier<EventPacketDispatchService> serviceProvider,
                                    Supplier<EntityCleanupService> cleanupProvider,
                                    Supplier<PluginConfiguration> configurationProvider,

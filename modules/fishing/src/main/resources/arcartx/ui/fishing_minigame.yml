@@ -1,15 +1,29 @@
 # AXS 钓鱼小游戏 HUD
 # 数据交互: packetHandler init/update
+# 本界面为钓鱼小游戏的 HUD 覆盖层，展示鱼的位置、绿色目标条、进度条及剩余时间
 
 ui:
-  isHud: true
-  background: false
-  escClose: false
-  closeDied: true
-  through: true
-  screenScale: true
-  show: true
+  isHud: true  # HUD模式，常驻叠加层不拦截游戏交互
+  background: false  # 不渲染背景遮罩（HUD透明叠加）
+  escClose: false  # 按ESC不关闭（由服务端控制关闭）
+  closeDied: true  # 玩家死亡时自动关闭
+  through: true  # 允许点击穿透到游戏世界
+  screenScale: true  # 启用屏幕等比缩放
+  show: true  # 界面默认可见
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 数据包标识符，用于回传玩家输入
+    #   - fishId: 当前钓到的鱼的ID
+    #   - fishName: 当前鱼的显示名称
+    #   - fishY: 鱼在轨道中的垂直位置（0.0~1.0，1为顶部）
+    #   - barY: 绿色目标条的垂直位置（0.0~1.0）
+    #   - barHeight: 绿色目标条的高度比例（0.0~1.0）
+    #   - progress: 钓鱼进度值（0.0~1.0，1.0为完成）
+    #   - state: 小游戏状态（playing/success/failed）
+    #   - timeLeft: 剩余时间（ticks）
+    #   - caughtSize: 已捕获鱼的尺寸数值
+    #   - rarity: 鱼的稀有度等级
     init: |-
       var.packetId = packet['packetId']
       var.fishId = packet['fishId']
@@ -23,6 +37,15 @@ ui:
       var.caughtSize = packet['caughtSize']
       var.rarity = packet['rarity']
       var.fishInside = false
+    # packetHandler: update
+    # 包字段:
+    #   - fishY: 鱼在轨道中的垂直位置（0.0~1.0）
+    #   - barY: 绿色目标条的垂直位置（0.0~1.0）
+    #   - barHeight: 绿色目标条的高度比例（0.0~1.0）
+    #   - progress: 钓鱼进度值（0.0~1.0）
+    #   - state: 小游戏状态（playing/success/failed）
+    #   - timeLeft: 剩余时间（ticks）
+    #   - fishInside: 鱼是否在绿色目标条内（布尔）
     update: |-
       var.fishY = packet['fishY']
       var.barY = packet['barY']
@@ -32,6 +55,7 @@ ui:
       var.timeLeft = packet['timeLeft']
       var.fishInside = packet['fishInside']
   action:
+    # load: HUD 加载时的默认初始化变量（等待服务端数据包覆盖）
     load: |-
       var.packetId = 'AXS_FISHING'
       var.fishId = none
@@ -45,20 +69,25 @@ ui:
       var.caughtSize = 0
       var.rarity = 'common'
       var.fishInside = false
+    # keyPress: 按下空格键时向服务端发送 input=true
     keyPress: |-
       if(self.currentKeyPress() == ' ' || self.currentKeyPress() == 'SPACE'){
         Packet.send(var.packetId, 'input', true)
       }
+    # keyRelease: 松开空格键时向服务端发送 input=false
     keyRelease: |-
       if(self.currentKeyReleased() == ' ' || self.currentKeyReleased() == 'SPACE'){
         Packet.send(var.packetId, 'input', false)
       }
+    # click: 鼠标按下时向服务端发送 input=true
     click: |-
       Packet.send(var.packetId, 'input', true)
+    # release: 鼠标松开时向服务端发送 input=false
     release: |-
       Packet.send(var.packetId, 'input', false)
 
 controls:
+  # 自适应全局布局：以1920x1080设计分辨率等比缩放整个HUD
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -66,6 +95,7 @@ controls:
       width: 1920
       height: 1080
     children:
+      # 钓鱼轨道区：竖直轨道容器，包含背景、绿色目标条和鱼图标
       钓鱼轨道区:
         type: Canvas
         attribute:
@@ -114,6 +144,7 @@ controls:
                 blur: 3
                 color: ~0,0,0,200
 
+      # 进度条区：竖直进度条，显示钓鱼进度（满=成功）
       进度条区:
         type: Canvas
         attribute:
@@ -141,6 +172,7 @@ controls:
               shape: ~round_rect
               radius: 12
 
+      # 顶部信息：显示鱼名、尺寸、剩余时间和状态提示
       顶部信息:
         type: Canvas
         attribute:

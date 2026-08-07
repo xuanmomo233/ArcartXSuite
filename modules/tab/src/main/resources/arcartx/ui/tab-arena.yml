@@ -1,18 +1,26 @@
+# 文件用途: 竞技场 / 枪战 PVP 风格 TAB HUD（红蓝双队左右分栏布局）。
+# 对应 Tab 定义: tabs/arena.yml（ui-id: "tab-arena"，packet-handler: "tab"）。
+# 消费 map 形态 pack（字典列表），每个元素含 team / uuid / name / status / health 字段。
+# 布局: 顶部居中面板，左侧红队列表 + 右侧蓝队列表，中间分隔线。
+# 特性: 常驻显示 + 按住 TAB 切换"详细模式"（额外显示血量），玩家头像 + 战斗状态图标。
 ui:
-  isHud: true
+  isHud: true  # 是否为 HUD（无界面容器，直接渲染到屏幕）
   hide:
-  - player_list
-  escClose: false
-  defaultOpen: true
+  - player_list  # 隐藏原版 player_list 控件
+  escClose: false  # 按 ESC 不关闭（HUD 常驻）
+  defaultOpen: true  # 模块加载时默认打开此 HUD
   action:
+    # UI 加载时初始化变量
     load: |-
       var.ArenaTAB刷新轮次 = 0
       var.ArenaTAB详细 = false
+    # 按下 TAB 键: 请求服务端刷新并开启详细模式（显示血量）
     keyPress: |-
       if(self.currentKeyPress() == "TAB"){
         Packet.send("TAB","update")
         var.ArenaTAB详细 = true
       }
+    # 松开 TAB 键: 关闭详细模式
     keyRelease: |-
       if(self.currentKeyReleased() == "TAB"){
         var.ArenaTAB详细 = false
@@ -67,30 +75,31 @@ ui:
       }
       var.ArenaTAB红队人数 = val.RedList.childrenCount() - 1
       var.ArenaTAB蓝队人数 = val.BlueList.childrenCount() - 1
+# ============ 控件定义 ============
 controls:
-  自适应全局布局:
+  自适应全局布局:  # 顶层自适应布局，锚定屏幕顶部居中
     type: Adaptive
     attribute:
       point: ~top_center
       width: 1920
       height: 1080
     children:
-      ArenaTAB背景:
+      ArenaTAB背景:  # 竞技场 TAB 毛玻璃背景面板，高度随队伍人数动态调整
         type: Texture
         attribute:
           point: ~top_center
           width: 720
-          height: 80 + 32 * math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数)
+          height: 80 + 32 * math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数)  # 高度随最大队伍人数增长
           y: 30
-          normal: ~Frosted:30;0,0,0,200
+          normal: ~Frosted:30;0,0,0,200  # 毛玻璃材质，30 模糊度，半透明黑
           shape: ~round_rect
           radius: 18
         effect:
-          stroke:
+          stroke:  # 描边
             width: 3
             color: ~0,0,0,255
         children:
-          标题:
+          标题:  # "RED vs BLUE" 标题文字
             type: Text
             attribute:
               point: ~top_center
@@ -98,7 +107,7 @@ controls:
               fontSize: 32
               texts: "'&cRED  &fvs  &9BLUE'"
               lineSpace: 6
-          中线:
+          中线:  # 红蓝队伍之间的分隔线
             type: Texture
             attribute:
               point: ~top_center
@@ -108,24 +117,24 @@ controls:
               height: 28 * math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数)
               normal: ~255,255,255,80
           # ============ 红队（左侧）============
-          RedGrid:
+          RedGrid:  # 红队玩家列表（VGrid），packetHandler 动态复制 red_player_row 填充
             type: VGrid
             val: RedList
             attribute:
               spaceBetweenY: 2
-              row: 16
+              row: 16  # 每列最多 16 行
               y: 60
               x: 20
             children:
-              red_player_row:
+              red_player_row:  # 红队玩家行模板（Canvas），packetHandler 复制后填充头像/名称/状态/血量
                 type: Canvas
                 val: red_player_row
                 attribute:
                   width: 320
                   height: 30
-                  visible: false
+                  visible: false  # 默认隐藏，packetHandler 中设为 true
                 children:
-                  头部:
+                  头部:  # 玩家头像（Texture），normal 设为 PlayerSkin:<uuid>
                     type: Texture
                     attribute:
                       width: 28
@@ -135,7 +144,7 @@ controls:
                       shape: ~round_rect
                       radius: 4
                       normal: "~120,120,120,255"
-                  名称文字:
+                  名称文字:  # 玩家名称（含 PVP/vanish 颜色前缀）
                     type: Text
                     attribute:
                       x: 36
@@ -143,7 +152,7 @@ controls:
                       fontSize: 26
                       texts: "~none"
                       lineSpace: 4
-                  状态文字:
+                  状态文字:  # 战斗状态图标（⚔ 战斗中 / · 正常）
                     type: Text
                     attribute:
                       x: 220
@@ -151,7 +160,7 @@ controls:
                       fontSize: 26
                       texts: "~&7•"
                       lineSpace: 4
-                  血量文字:
+                  血量文字:  # 血量显示，仅详细模式（按住 TAB）可见
                     type: Text
                     attribute:
                       x: 250
@@ -161,7 +170,7 @@ controls:
                       lineSpace: 4
                       visible: var.ArenaTAB详细
           # ============ 蓝队（右侧）============
-          BlueGrid:
+          BlueGrid:  # 蓝队玩家列表（VGrid），packetHandler 动态复制 blue_player_row 填充
             type: VGrid
             val: BlueList
             attribute:
@@ -170,15 +179,15 @@ controls:
               y: 60
               x: 380
             children:
-              blue_player_row:
+              blue_player_row:  # 蓝队玩家行模板（Canvas），packetHandler 复制后填充头像/名称/状态/血量
                 type: Canvas
                 val: blue_player_row
                 attribute:
                   width: 320
                   height: 30
-                  visible: false
+                  visible: false  # 默认隐藏，packetHandler 中设为 true
                 children:
-                  头部:
+                  头部:  # 玩家头像（Texture），normal 设为 PlayerSkin:<uuid>
                     type: Texture
                     attribute:
                       width: 28
@@ -188,7 +197,7 @@ controls:
                       shape: ~round_rect
                       radius: 4
                       normal: "~120,120,120,255"
-                  名称文字:
+                  名称文字:  # 玩家名称（含 PVP/vanish 颜色前缀）
                     type: Text
                     attribute:
                       x: 36
@@ -196,7 +205,7 @@ controls:
                       fontSize: 26
                       texts: "~none"
                       lineSpace: 4
-                  状态文字:
+                  状态文字:  # 战斗状态图标（⚔ 战斗中 / · 正常）
                     type: Text
                     attribute:
                       x: 220
@@ -204,7 +213,7 @@ controls:
                       fontSize: 26
                       texts: "~&7•"
                       lineSpace: 4
-                  血量文字:
+                  血量文字:  # 血量显示，仅详细模式（按住 TAB）可见
                     type: Text
                     attribute:
                       x: 250

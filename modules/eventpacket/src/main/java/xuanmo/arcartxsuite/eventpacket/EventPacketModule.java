@@ -28,6 +28,13 @@ import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
 import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.eventpacket.config.EventPacketContext;
+
+/**
+ * EventPacket 模块主类，基于事件触发条件向客户端/跨服推送数据包。
+ * <p>
+ * 支持占位符触发、定时触发与事件触发，可联动邮件、聊天卡片、QQ Bot、
+ * 任务导航、称号、字幕等多个能力。
+ */
 import xuanmo.arcartxsuite.eventpacket.config.PluginConfiguration;
 import xuanmo.arcartxsuite.eventpacket.listener.ChemdahEventBridge;
 import xuanmo.arcartxsuite.eventpacket.listener.PlayerEventPacketListener;

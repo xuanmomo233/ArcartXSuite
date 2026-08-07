@@ -1,4 +1,6 @@
-# 冒险类称号
+# 冒险类称号定义文件
+# 作用: 定义所有属于 adventure 分组的称号，每个根键为称号 ID。
+# 依赖: group 必须已在主配置 ArcartXTitle.yml 的 groups: 中定义。
 # 每个根键为称号 ID；group 必须已在主配置 groups: 中定义。
 
 adventurer:

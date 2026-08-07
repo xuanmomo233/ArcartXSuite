@@ -13,6 +13,27 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 
+/**
+ * 称号模块的完整配置根记录。
+ * <p>
+ * 聚合存储、UI、各属性桥接（AttributePlus / MythicLib / CraneAttribute / Symphony）、
+ * 展示称号、分组、品质、称号定义与套装定义等全部子配置。
+ * 通过 {@link #load(FileConfiguration, Logger, File)} 从 YAML 配置加载。
+ *
+ * @param debug                       是否开启调试日志
+ * @param expirationCleanupIntervalTicks 过期清理任务间隔（tick）
+ * @param storage                     存储配置
+ * @param ui                          UI 配置
+ * @param attributePlus               AttributePlus 桥接配置
+ * @param mythicLib                   MythicLib 桥接配置
+ * @param craneAttribute              CraneAttribute 桥接配置
+ * @param symphony                    Symphony 桥接配置
+ * @param displayTitle                展示称号配置
+ * @param groups                      分组定义映射（ID → 定义）
+ * @param qualities                   品质定义映射（ID → 定义）
+ * @param titles                      称号定义映射（ID → 定义）
+ * @param sets                        套装定义映射（ID → 定义）
+ */
 public record TitleModuleConfiguration(
     boolean debug,
     long expirationCleanupIntervalTicks,
@@ -29,6 +50,9 @@ public record TitleModuleConfiguration(
     Map<String, TitleSetDefinition> sets
 ) {
 
+    /**
+     * @return 展示称号的分组顺序；若未配置则按分组定义的 keySet 顺序
+     */
     public List<String> displayTitleGroupOrder() {
         if (displayTitle.groups().isEmpty()) {
             return List.copyOf(groups.keySet());
@@ -36,10 +60,25 @@ public record TitleModuleConfiguration(
         return displayTitle.groups();
     }
 
+    /**
+     * 从 YAML 配置加载模块配置（不扫描称号目录）。
+     *
+     * @param configuration YAML 配置
+     * @param logger        日志器
+     * @return 解析后的模块配置
+     */
     public static TitleModuleConfiguration load(FileConfiguration configuration, Logger logger) {
         return load(configuration, logger, null);
     }
 
+    /**
+     * 从 YAML 配置加载模块配置，支持从指定目录扫描独立称号文件。
+     *
+     * @param configuration   YAML 配置
+     * @param logger          日志器
+     * @param titlesDirectory 称号独立文件目录，为 {@code null} 时仅读取主配置内联称号
+     * @return 解析后的模块配置
+     */
     public static TitleModuleConfiguration load(FileConfiguration configuration, Logger logger, File titlesDirectory) {
         boolean debug = configuration.getBoolean("settings.debug", false);
         long expirationCleanupIntervalTicks = Math.max(20L, configuration.getLong("settings.expiration-cleanup-interval-ticks", 1200L));
@@ -120,22 +159,40 @@ public record TitleModuleConfiguration(
         );
     }
 
+    /**
+     * @param titleId 称号 ID
+     * @return 对应的称号定义，不存在时返回 {@code null}
+     */
     public TitleDefinition title(String titleId) {
         return titles.get(titleId);
     }
 
+    /**
+     * @param groupId 分组 ID
+     * @return 对应的分组定义，不存在时返回 {@code null}
+     */
     public TitleGroupDefinition group(String groupId) {
         return groups.get(groupId);
     }
 
+    /**
+     * @param qualityId 品质 ID
+     * @return 对应的品质定义，不存在时返回 {@code null}
+     */
     public TitleQualityDefinition quality(String qualityId) {
         return qualities.get(qualityId);
     }
 
+    /**
+     * @return 已启用的称号数量
+     */
     public int enabledTitleCount() {
         return titles.size();
     }
 
+    /**
+     * @return 按分组、品质、排序权重、ID 排序后的称号列表
+     */
     public List<TitleDefinition> orderedTitles() {
         List<TitleDefinition> ordered = new ArrayList<>(titles.values());
         ordered.sort(
@@ -158,6 +215,10 @@ public record TitleModuleConfiguration(
         return definition == null ? Integer.MAX_VALUE : definition.sortOrder();
     }
 
+    /**
+     * @param setId 套装 ID
+     * @return 对应的套装定义，不存在时返回 {@code null}
+     */
     public TitleSetDefinition set(String setId) {
         return sets.get(setId);
     }

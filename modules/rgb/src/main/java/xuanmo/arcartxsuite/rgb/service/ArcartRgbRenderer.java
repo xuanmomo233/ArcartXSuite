@@ -5,11 +5,23 @@ import xuanmo.arcartxsuite.rgb.config.ArcartRgbColor;
 import xuanmo.arcartxsuite.rgb.config.ArcartRgbEntry;
 import xuanmo.arcartxsuite.rgb.config.ArcartRgbRenderOptions;
 
+/**
+ * RGB 渐变文本渲染器，按 codePoints 逐字符分配渐变颜色，并可选叠加流光效果。
+ * <p>
+ * 所有方法为静态无状态，可直接调用。
+ */
 public final class ArcartRgbRenderer {
 
     private ArcartRgbRenderer() {
     }
 
+    /**
+     * 渲染条目为渐变文本。
+     *
+     * @param entry         条目，null 或非活动返回空串
+     * @param animationStep 动画步数（用于流光位移）
+     * @return 渲染后的带色文本
+     */
     public static String render(ArcartRgbEntry entry, long animationStep) {
         if (entry == null || !entry.active()) {
             return "";

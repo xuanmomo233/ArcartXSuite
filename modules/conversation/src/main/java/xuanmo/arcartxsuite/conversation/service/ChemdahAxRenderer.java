@@ -20,6 +20,14 @@ import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.conversation.config.ConversationModuleConfiguration;
 import java.util.logging.Logger;
 
+/**
+ * Chemdah 会话的 ArcartX UI 渲染器，负责将对话正文与回复列表渲染到客户端对话 UI。
+ * <p>
+ * 该类维护每个玩家的 {@link DialogState}、显示序号与已关闭会话等生命周期状态，
+ * 处理回复选择 / 确认 / 取消、按键导航、UI 打开与关闭等交互，
+ * 并通过 {@link PacketBridgeAPI} 向对话 UI 同步 payload。属于 Conversation 模块内部组件，
+ * 由 {@link ConversationService} 持有。
+ */
 final class ChemdahAxRenderer {
 
     private static final String HANDLER_SYNC = "sync";
@@ -53,6 +61,13 @@ final class ChemdahAxRenderer {
         this.owner = owner;
     }
 
+    /**
+     * 渲染对话正文与回复列表到玩家客户端。
+     *
+     * @param session  Chemdah 会话
+     * @param lines    对话正文行
+     * @param canReply 是否存在可选回复
+     */
     void display(Session session, List<String> lines, boolean canReply) {
         if (session == null || session.getPlayer() == null) {
             return;
@@ -78,6 +93,11 @@ final class ChemdahAxRenderer {
         );
     }
 
+    /**
+     * 关闭指定会话对应的对话 UI 并清理状态。
+     *
+     * @param session 待关闭的 Chemdah 会话
+     */
     void close(Session session) {
         if (session == null || session.getPlayer() == null) {
             return;
@@ -99,6 +119,12 @@ final class ChemdahAxRenderer {
         closeDialogView(player, state, !uiAlreadyClosed, !uiAlreadyClosed, "theme-close");
     }
 
+    /**
+     * 处理玩家通过 UI 点击选择某条回复的动作。
+     *
+     * @param player  玩家
+     * @param replyId 回复 id
+     */
     void handleSelectReply(Player player, String replyId) {
         DialogState state = dialogStates.get(player.getUniqueId());
         if (state == null || !state.selectReply(replyId)) {
@@ -107,6 +133,12 @@ final class ChemdahAxRenderer {
         syncDialogView(player, state, "select-reply");
     }
 
+    /**
+     * 处理玩家确认选择某条回复的动作，触发回复执行。
+     *
+     * @param player  玩家
+     * @param replyId 回复 id，空白表示确认当前选中项
+     */
     void handleConfirmReply(Player player, String replyId) {
         DialogState state = dialogStates.get(player.getUniqueId());
         if (state == null) {
@@ -118,6 +150,11 @@ final class ChemdahAxRenderer {
         confirmReply(player, state, "confirm-reply");
     }
 
+    /**
+     * 处理玩家取消当前对话的动作，关闭会话。
+     *
+     * @param player 玩家
+     */
     void handleCancelDialog(Player player) {
         DialogState state = dialogStates.get(player.getUniqueId());
         if (state == null) {
@@ -130,6 +167,11 @@ final class ChemdahAxRenderer {
         });
     }
 
+    /**
+     * 处理玩家客户端 UI 被关闭的回调，关闭对应会话。
+     *
+     * @param player 玩家
+     */
     void handleUiClosed(Player player) {
         if (player == null) {
             return;
@@ -148,6 +190,12 @@ final class ChemdahAxRenderer {
         });
     }
 
+    /**
+     * 处理宿主全局确认按键，确认当前选中的回复。
+     *
+     * @param player 玩家
+     * @return {@code true} 表示存在活跃对话且已处理
+     */
     boolean handleConfirmKey(Player player) {
         DialogState dialogState = dialogStates.get(player.getUniqueId());
         if (dialogState == null) {
@@ -157,6 +205,13 @@ final class ChemdahAxRenderer {
         return true;
     }
 
+    /**
+     * 处理宿主全局导航按键，按偏移量移动回复选中项。
+     *
+     * @param player 玩家
+     * @param delta  移动步数，负数向前、正数向后
+     * @return {@code true} 表示存在活跃对话且已处理
+     */
     boolean handleNavigationKey(Player player, int delta) {
         DialogState dialogState = dialogStates.get(player.getUniqueId());
         if (dialogState == null) {
@@ -168,22 +223,49 @@ final class ChemdahAxRenderer {
         return true;
     }
 
+    /**
+     * 判断指定玩家是否存在活跃的对话状态。
+     *
+     * @param playerId 玩家 id
+     * @return {@code true} 表示存在活跃对话
+     */
     boolean hasDialog(UUID playerId) {
         return dialogStates.containsKey(playerId);
     }
 
+    /**
+     * 判断指定玩家的对话 UI 是否处于打开状态。
+     *
+     * @param playerId 玩家 id
+     * @return {@code true} 表示对话 UI 已打开
+     */
     boolean isDialogOpened(UUID playerId) {
         return dialogOpenedPlayers.contains(playerId);
     }
 
+    /**
+     * 统计当前活跃的对话数量。
+     *
+     * @return 活跃对话数
+     */
     int activeConversationCount() {
         return dialogStates.size();
     }
 
+    /**
+     * 统计当前已打开对话 UI 的玩家数量。
+     *
+     * @return 已打开对话 UI 的玩家数
+     */
     int openedPlayerCount() {
         return dialogOpenedPlayers.size();
     }
 
+    /**
+     * 移除指定玩家的全部对话状态，用于玩家退出等清理场景。
+     *
+     * @param playerId 玩家 id
+     */
     void removePlayer(UUID playerId) {
         dialogStates.remove(playerId);
         displaySequences.remove(playerId);
@@ -192,6 +274,12 @@ final class ChemdahAxRenderer {
         dialogOpenedPlayers.remove(playerId);
     }
 
+    /**
+     * 关闭指定玩家的对话 UI 视图。
+     *
+     * @param player 玩家
+     * @param reason 关闭原因，用于诊断日志
+     */
     void closePlayerView(Player player, String reason) {
         if (player == null) {
             return;
@@ -199,6 +287,11 @@ final class ChemdahAxRenderer {
         closeDialogView(player, dialogStates.get(player.getUniqueId()), true, false, reason + "-dialog");
     }
 
+    /**
+     * 关闭所有已打开的对话 UI 视图，用于模块停服等场景。
+     *
+     * @param reason 关闭原因，用于诊断日志
+     */
     void closeAllOpenViews(String reason) {
         for (UUID playerId : new ArrayList<>(dialogOpenedPlayers)) {
             Player player = Bukkit.getPlayer(playerId);
@@ -208,6 +301,9 @@ final class ChemdahAxRenderer {
         }
     }
 
+    /**
+     * 清空全部玩家的对话状态，用于模块重置。
+     */
     void clear() {
         dialogStates.clear();
         displaySequences.clear();
@@ -216,6 +312,12 @@ final class ChemdahAxRenderer {
         dialogOpenedPlayers.clear();
     }
 
+    /**
+     * 返回指定玩家对话状态的简要摘要，用于诊断日志。
+     *
+     * @param playerId 玩家 id
+     * @return 状态摘要字符串
+     */
     String stateSummary(UUID playerId) {
         DialogState dialogState = dialogStates.get(playerId);
         String dialogSummary = dialogState == null
@@ -548,9 +650,22 @@ final class ChemdahAxRenderer {
         }
     }
 
+    /**
+     * 回复展示视图，承载单条回复的渲染信息。
+     *
+     * @param replyId   回复 id
+     * @param text      回复展示文本
+     * @param replyType 回复语义类型（如 talk / close）
+     */
     private record ReplyView(String replyId, String text, String replyType) {
     }
 
+    /**
+     * 单个玩家的对话状态快照，承载会话、正文、回复列表与选中项等渲染所需信息。
+     * <p>
+     * 选中项相关字段可变，其余字段不可变；通过 {@link #moveSelection} / {@link #selectReply}
+     * 修改选中项，{@link #setLastReplyActionAt} 更新最近操作时间用于防抖。
+     */
     private static final class DialogState {
 
         private final Session session;

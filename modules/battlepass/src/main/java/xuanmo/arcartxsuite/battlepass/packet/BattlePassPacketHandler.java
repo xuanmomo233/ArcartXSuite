@@ -23,6 +23,12 @@ import xuanmo.arcartxsuite.battlepass.model.BattlePassTask;
 import xuanmo.arcartxsuite.battlepass.model.PlayerTaskInstance;
 import xuanmo.arcartxsuite.battlepass.service.BattlePassService;
 
+/**
+ * 战令客户端包处理器，实现 {@link ClientPacketHandler}。
+ * <p>
+ * 负责处理来自 ArcartX 客户端的战令 UI 交互包（打开主界面、任务列表、奖励列表、领取奖励），
+ * 通过 {@link PacketBridgeAPI} 向 UI 推送数据，并使用 action token 机制防止重复领取。
+ */
 public final class BattlePassPacketHandler implements ClientPacketHandler {
 
     public static final String PACKET_ID = "AXS_BATTLEPASS";
@@ -37,6 +43,17 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     private final Map<UUID, String> actionTokens = new ConcurrentHashMap<>();
     private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
 
+    /**
+     * 构造战令包处理器。
+     *
+     * @param plugin          插件实例
+     * @param packetBridge    Packet 桥接 API
+     * @param packetGuard     包频率守卫
+     * @param service         BattlePassService 实例
+     * @param mainUiId        主界面 UI ID
+     * @param tasksUiId       任务界面 UI ID
+     * @param messageResolver 消息解析函数
+     */
     public BattlePassPacketHandler(JavaPlugin plugin, PacketBridgeAPI packetBridge,
                                     PacketGuardAPI packetGuard, BattlePassService service,
                                     String mainUiId, String tasksUiId,
@@ -50,6 +67,14 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         this.messageResolver = messageResolver;
     }
 
+    /**
+     * 处理客户端发来的战令交互包。
+     *
+     * @param player   发送包的玩家
+     * @param packetId 包标识（需匹配 {@link #PACKET_ID}）
+     * @param data     包数据列表
+     * @return {@code true} 表示已处理此包
+     */
     @Override
     public boolean handleClientPacket(@NotNull Player player, @NotNull String packetId, @NotNull List<String> data) {
         if (!PACKET_ID.equalsIgnoreCase(packetId)) return false;
@@ -105,6 +130,11 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         pushRewardsData(player);
     }
 
+    /**
+     * 为玩家打开战令主界面并推送进度数据。
+     *
+     * @param player 目标玩家
+     */
     public void openMain(Player player) {
         if (packetBridge == null) return;
         packetBridge.openUi(player, mainUiId);
@@ -116,6 +146,11 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         }, 2L);
     }
 
+    /**
+     * 为玩家打开任务界面并推送任务列表数据。
+     *
+     * @param player 目标玩家
+     */
     public void openTasks(Player player) {
         if (packetBridge == null) return;
         packetBridge.openUi(player, tasksUiId);
@@ -126,6 +161,11 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         }, 2L);
     }
 
+    /**
+     * 为玩家打开奖励界面并推送主界面与奖励数据。
+     *
+     * @param player 目标玩家
+     */
     public void openRewards(Player player) {
         if (packetBridge == null) return;
         packetBridge.openUi(player, mainUiId);

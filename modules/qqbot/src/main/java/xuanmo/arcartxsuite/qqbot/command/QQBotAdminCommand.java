@@ -13,6 +13,14 @@ import xuanmo.arcartxsuite.qqbot.service.QQBotService;
 import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository;
 import xuanmo.arcartxsuite.qqbot.storage.QQBotRepository.QQBotBinding;
 
+/**
+ * QQBot 模块的管理员命令处理器。
+ * <p>
+ * 关联模块：{@code qqbot}。处理 {@code /qqbot admin <action>} 下的子命令，
+ * 包括状态查看、配置重载、群消息发送、绑定查询、SnowLuma 进程管理及黑名单操作。
+ * 通过 {@link Supplier} 延时获取 {@link QQBotService} 与 {@link QQBotRepository}，
+ * 以适应服务尚未就绪的场景。
+ */
 public final class QQBotAdminCommand {
 
     private static final List<String> SNOWLUMA_ACTIONS = List.of("start", "stop", "status", "install", "logs", "check-update");
@@ -22,6 +30,14 @@ public final class QQBotAdminCommand {
     private final SnowLumaProcessManager snowLuma;
     private final MessageProvider messages;
 
+    /**
+     * 构造管理员命令处理器。
+     *
+     * @param serviceProvider    QQBotService 延时提供者
+     * @param repositoryProvider QQBotRepository 延时提供者
+     * @param snowLuma           SnowLuma 进程管理器
+     * @param messages           消息提供者，可为 {@code null}
+     */
     public QQBotAdminCommand(Supplier<QQBotService> serviceProvider, Supplier<QQBotRepository> repositoryProvider, SnowLumaProcessManager snowLuma, MessageProvider messages) {
         this.serviceProvider = serviceProvider;
         this.repositoryProvider = repositoryProvider;
@@ -34,10 +50,23 @@ public final class QQBotAdminCommand {
         return messages.get("prefix") + messages.get(key, args);
     }
 
+    /**
+     * 返回管理员命令支持的全部子命令列表。
+     *
+     * @return 不可修改的子命令名称列表
+     */
     public List<String> actions() {
         return List.of("help", "status", "reload", "send", "lookup", "snowluma", "blacklist");
     }
 
+    /**
+     * 处理管理员命令的主入口。
+     *
+     * @param sender 命令发送者
+     * @param label  命令标签
+     * @param args   参数数组，{@code args[1]} 为子命令名
+     * @return {@code true} 表示命令已处理
+     */
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         if (args.length < 2) {
             sendHelp(sender);
@@ -173,6 +202,13 @@ public final class QQBotAdminCommand {
         }
     }
 
+    /**
+     * 管理员命令的 Tab 补全。
+     *
+     * @param sender 命令发送者
+     * @param args   当前参数数组
+     * @return 补全候选列表，无匹配时返回 {@code null}
+     */
     @Nullable
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) {

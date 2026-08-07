@@ -6,11 +6,28 @@ import java.util.List;
 import java.util.Map;
 import xuanmo.arcartxsuite.prop.config.PropMythicLibConfiguration;
 
+/**
+ * MythicLib 属性修改器规划器。
+ * <p>
+ * 工具类，将 {@link PropMythicLibEffect} 列表按属性 ID 聚合后，
+ * 结合 {@link PropMythicLibConfiguration} 生成 {@link PropMythicLibModifierSpec} 列表。
+ */
 public final class PropMythicLibModifierPlanner {
 
     private PropMythicLibModifierPlanner() {
     }
 
+    /**
+     * 规划属性修改器列表。
+     * <p>
+     * 将同属性的多个效果值累加，生成每个属性对应的修改器规格。
+     *
+     * @param configuration   MythicLib 配置，用于生成键名
+     * @param propId          道具 ID
+     * @param effects         效果列表
+     * @param durationSeconds 持续时间（秒）
+     * @return 不可变的修改器规格列表
+     */
     public static List<PropMythicLibModifierSpec> plan(
         PropMythicLibConfiguration configuration,
         String propId,

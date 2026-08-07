@@ -4,6 +4,11 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
+/**
+ * 对话 UI 数据包构造辅助工具（包私有），提供行键生成与扁平行数据构建。
+ * <p>
+ * 确保发送给 UI 的每行数据只包含基本类型，避免嵌套 Map/Iterable。
+ */
 final class ConversationPayloadSupport {
 
     private ConversationPayloadSupport() {

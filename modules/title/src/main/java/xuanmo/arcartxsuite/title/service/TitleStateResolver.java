@@ -13,11 +13,28 @@ import xuanmo.arcartxsuite.title.model.PlayerOwnedTitle;
 import xuanmo.arcartxsuite.title.model.PlayerTitleState;
 import xuanmo.arcartxsuite.title.model.ResolvedTitleState;
 
+/**
+ * 称号状态解析器。
+ * <p>
+ * 将 {@link xuanmo.arcartxsuite.title.model.PlayerTitleState} 与
+ * {@link xuanmo.arcartxsuite.title.config.TitleModuleConfiguration} 合并，
+ * 生成包含已装备称号定义、属性汇总、套装完成度的 {@link ResolvedTitleState}。
+ * 属于 title 模块服务层。
+ */
 public final class TitleStateResolver {
 
     private TitleStateResolver() {
     }
 
+    /**
+     * 解析玩家称号状态，生成包含属性汇总与套装信息的解析结果。
+     *
+     * @param state              玩家称号状态，为 {@code null} 时返回空状态
+     * @param configuration      模块配置
+     * @param now                当前时间
+     * @param accessibleGroupIds 玩家可访问的分组 ID 集合
+     * @return 解析后的称号状态
+     */
     public static ResolvedTitleState resolve(
         PlayerTitleState state,
         TitleModuleConfiguration configuration,

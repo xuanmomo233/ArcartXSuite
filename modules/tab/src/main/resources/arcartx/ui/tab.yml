@@ -1,13 +1,19 @@
+# 文件用途: 基础版在线玩家列表 TAB HUD（按住 TAB 键显示，松开隐藏）。
+# 对应 Tab 定义: tabs/online-tab.yml（ui-id: "tab"，packet-handler: "tab"）。
+# 消费 list 形态 pack（字符串列表），每个元素为一名玩家的渲染文本。
+# 布局: 顶部居中毛玻璃背景 + 多列 VGrid 玩家行 + 底部 PING/TPS 信息栏。
 ui:
-  isHud: true
+  isHud: true  # 是否为 HUD（无界面容器，直接渲染到屏幕）
   hide:
-  - player_list
-  escClose: false
-  defaultOpen: true
+  - player_list  # 隐藏原版 player_list 控件
+  escClose: false  # 按 ESC 不关闭（HUD 常驻）
+  defaultOpen: true  # 模块加载时默认打开此 HUD
   action:
+    # UI 加载时初始化变量
     load: |-
       var.TAB刷新轮次 = 0
       var.TAB显示 = false
+    # 按下 TAB 键: 请求服务端刷新并计算列数
     keyPress: |-
       if(self.currentKeyPress() == "TAB"){
         Packet.send("TAB","update")
@@ -15,11 +21,18 @@ ui:
         var.第一列人数 = math.min(server.server_online, 15)
         var.TAB显示 = true
       }
+    # 松开 TAB 键: 隐藏列表
     keyRelease: |-
       if(self.currentKeyReleased() == "TAB"){
         var.TAB显示 = false
       }
   packetHandler:
+    # packetHandler: tab
+    # 接收服务端推送的在线玩家列表（list 形态 pack，每元素为一名玩家的渲染字符串）。
+    # 包字段:
+    #   - packet: 在线玩家文本列表（由 tabs/online-tab.yml 的 pack 渲染后逐玩家生成）
+    #     示例元素: "%axstitle_tab_adventure_prefix%Alice%axstitle_tab_adventure_suffix%20"
+    # 处理逻辑: 清空旧玩家行 → 遍历 packet 逐条复制 player 模板并填充文本 → 重算列数
     tab: |-
       i = 0
       var.TAB刷新轮次 = var.TAB刷新轮次 + 1
@@ -37,32 +50,33 @@ ui:
       }
       var.单列数量 = math.ceil(server.server_online / val.TAB遍历.row)
       var.第一列人数 = math.min(server.server_online, 15)
+# ============ 控件定义 ============
 controls:
-  自适应全局布局:
+  自适应全局布局:  # 顶层自适应布局，锚定屏幕顶部居中
     type: adaptive
     attribute:
       point: ~top_center
       width: 1920
       height: 1080
     children:
-      TAB背景:
+      TAB背景:  # 毛玻璃半透明背景面板，宽度随列数动态变化
         type: texture
         attribute:
           point: ~top_center
-          width: 50 + 252 * var.单列数量
-          height: 70 + 27 * var.第一列人数 + self['信息排列布局'].childrenCount() * 27 / self.about_y
+          width: 50 + 252 * var.单列数量  # 宽度 = 基础宽度 + 每列宽度 * 列数
+          height: 70 + 27 * var.第一列人数 + self['信息排列布局'].childrenCount() * 27 / self.about_y  # 高度随人数和信息栏动态调整
           y: 40
-          normal: ~Frosted:30;0,0,0,255
-          visible: var.TAB显示
+          normal: ~Frosted:30;0,0,0,255  # 毛玻璃材质，30 模糊度，黑色不透明
+          visible: var.TAB显示  # 仅按住 TAB 时显示
           shape: ~round_rect
           radius: 20
-          about_y: "var.单列数量 < 4 || var.单列数量 > 5 ? var.单列数量 : 3"
+          about_y: "var.单列数量 < 4 || var.单列数量 > 5 ? var.单列数量 : 3"  # 信息栏折行系数
         effect:
-          stroke:
+          stroke:  # 描边
             width: 3
             color: ~0,0,0,255
         children:
-          在线玩家:
+          在线玩家:  # 标题文字"在线玩家："
             type: text
             attribute:
               y: 23
@@ -70,7 +84,7 @@ controls:
               fontSize: 33
               texts: "'&a在线玩家：'"
               lineSpace: 8
-          信息排列布局:
+          信息排列布局:  # 底部信息栏（PING / TPS），水平排列
             type: HGrid
             attribute:
               y: 70 + 27 * var.第一列人数 - 10
@@ -79,7 +93,7 @@ controls:
               spaceBetweenX: 2
               column: var.单列数量
             children:
-              PING:
+              PING:  # 玩家延迟显示
                 type: Canvas
                 attribute:
                   width: 200
@@ -91,7 +105,7 @@ controls:
                       fontSize: 33
                       texts: "~&f玩家延迟：{server.player_ping}"
                       lineSpace: 8
-              TPS:
+              TPS:  # 服务器 TPS 显示
                 type: Canvas
                 attribute:
                   width: 200
@@ -103,23 +117,24 @@ controls:
                       fontSize: 33
                       texts: "~&f服务器TPS：{server.server_tps_1}"
                       lineSpace: 8
-          TAB遍历:
+          TAB遍历:  # 玩家行占位网格（VGrid），创建时预复制 118 个 TAB 模板
             type: VGrid
             val: TAB遍历
             attribute:
               spaceBetweenY: 2
               spaceBetweenX: 2
-              row: 15
+              row: 15  # 每列最多 15 行
               y: 44
               x: 26
             action:
+              # 创建时预生成 118 个占位行（对应最大在线人数），按 ID 控制可见性
               create: |-
                 for(i in range(1, 119)){
                   TAB = self['TAB'].copy('TAB' + i.round())
                   TAB.ID = i.round()
                 }
             children:
-              TAB:
+              TAB:  # 单个玩家行模板（灰色圆角背景），按 ID 和在线人数控制可见
                 type: texture
                 val: TAB
                 attribute:
@@ -131,8 +146,8 @@ controls:
                   radius: 10
                   ID: 0.round()
                   normal: ~95,95,95,255
-                  visible: var.TAB显示 && self.ID < server.server_online
-          TAB遍历2:
+                  visible: var.TAB显示 && self.ID < server.server_online  # 仅显示在线人数范围内的行
+          TAB遍历2:  # 玩家文本渲染网格，packetHandler 动态复制 player 模板填充文本
             type: VGrid
             val: TAB遍历2
             attribute:
@@ -142,7 +157,7 @@ controls:
               y: 44
               x: 26
             children:
-              player:
+              player:  # 玩家行文本模板（Canvas），packetHandler 复制后填充 player_text
                 type: Canvas
                 val: player
                 attribute:
@@ -150,9 +165,9 @@ controls:
                   height: 25
                   x: 4
                   y: 4
-                  visible: false
+                  visible: false  # 默认隐藏，packetHandler 中设为 true
                 children:
-                  player_text:
+                  player_text:  # 玩家名称等渲染文本
                     type: text
                     attribute:
                       fontSize: 33

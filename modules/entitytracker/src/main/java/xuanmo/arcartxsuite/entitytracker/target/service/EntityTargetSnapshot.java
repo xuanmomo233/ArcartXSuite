@@ -4,6 +4,36 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
+/**
+ * 实体目标快照，属于 entitytracker 模块的目标 HUD 子系统。
+ * <p>
+ * 持有玩家当前攻击目标的完整渲染状态（血量、距离、类型、位置等），
+ * 支持模板渲染、UI 数据包转换和占位符解析。
+ *
+ * @param title             标题文本
+ * @param subtitle          副标题文本
+ * @param health            当前血量
+ * @param maxHealth         最大血量
+ * @param healthText        血量显示文本
+ * @param maxHealthText     最大血量显示文本
+ * @param healthPercent     血量百分比
+ * @param healthPercentText 血量百分比显示文本
+ * @param progress          血量进度（0-1）
+ * @param distance          距离（方块）
+ * @param distanceText      距离显示文本
+ * @param displayName       目标显示名称
+ * @param entityUuid        目标实体 UUID
+ * @param world             所在世界名称
+ * @param x                 坐标 X
+ * @param y                 坐标 Y
+ * @param z                 坐标 Z
+ * @param entityType        实体类型标识
+ * @param entityTypeName    实体类型显示名称
+ * @param mythicMobId       MythicMob ID（非 MythicMob 时为空）
+ * @param playerTarget      目标是否为玩家
+ * @param lastHitAgoMs      距上次攻击的毫秒数
+ * @param timeoutMs         目标超时毫秒数
+ */
 public record EntityTargetSnapshot(
     String title,
     String subtitle,
@@ -30,6 +60,13 @@ public record EntityTargetSnapshot(
     long timeoutMs
 ) {
 
+    /**
+     * 使用标题和副标题模板渲染后返回新的快照。
+     *
+     * @param titleTemplate    标题模板
+     * @param subtitleTemplate 副标题模板
+     * @return 渲染后的新快照
+     */
     public EntityTargetSnapshot withRenderedTexts(String titleTemplate, String subtitleTemplate) {
         Map<String, String> values = placeholderValues();
         return new EntityTargetSnapshot(
@@ -59,6 +96,11 @@ public record EntityTargetSnapshot(
         );
     }
 
+    /**
+     * 转换为 UI 数据包 Map。
+     *
+     * @return 包含所有字段的 Map
+     */
     public Map<String, Object> toPacket() {
         Map<String, Object> packet = new LinkedHashMap<>();
         packet.put("title", title);
@@ -87,6 +129,12 @@ public record EntityTargetSnapshot(
         return packet;
     }
 
+    /**
+     * 解析占位符字段名对应的值。
+     *
+     * @param field 字段名
+     * @return 解析结果，无法识别时返回 {@code null}
+     */
     public String resolvePlaceholder(String field) {
         if (field == null) {
             return null;

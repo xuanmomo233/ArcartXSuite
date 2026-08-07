@@ -32,6 +32,14 @@ import xuanmo.arcartxsuite.mail.service.MailService;
 import xuanmo.arcartxsuite.mail.storage.JdbcMailRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 
+/**
+ * 邮件模块主类，继承 {@link AbstractAXSModule} 并实现 {@link ModuleCommandHandler}。
+ * <p>
+ * 关联模块：mail。负责配置加载、服务启动/停止、UI 资源导出、命令绑定、
+ * PAPI 占位符注册，以及 {@link xuanmo.arcartxsuite.api.capability.MailDispatchable}、
+ * {@link xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable}、
+ * {@link xuanmo.arcartxsuite.api.capability.DatabaseMigratable} 能力注册。
+ */
 public final class MailModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private MailAdminCommand adminCommand;

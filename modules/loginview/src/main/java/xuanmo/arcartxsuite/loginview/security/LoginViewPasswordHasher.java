@@ -10,8 +10,14 @@ import java.util.Base64;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 
+/**
+ * 登录密码哈希工具，支持 AXS_PBKDF2_SHA256、BCrypt、SHA-256 三种算法的哈希与验证。
+ * <p>
+ * 新注册账号使用 PBKDF2（18 万次迭代 + 16 字节盐），兼容验证 AuthMe 的 BCrypt 哈希。
+ */
 public final class LoginViewPasswordHasher {
 
+    /** AXS 自有哈希算法标识 */
     public static final String AXS_ALGORITHM = "AXS_PBKDF2_SHA256";
     private static final int ITERATIONS = 180000;
     private static final int KEY_LENGTH_BITS = 256;

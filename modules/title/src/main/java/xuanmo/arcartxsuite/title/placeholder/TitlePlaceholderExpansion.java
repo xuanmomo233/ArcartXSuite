@@ -21,12 +21,24 @@ import xuanmo.arcartxsuite.title.model.ResolvedTitleState;
 import xuanmo.arcartxsuite.title.service.TitleService;
 import xuanmo.arcartxsuite.title.service.TitleTextFormats;
 
+/**
+ * 称号模块的 PlaceholderAPI 变量扩展。
+ * <p>
+ * 注册 {@code %axstitle_*%} 系列占位符，提供拥有数量、隐藏数量、
+ * 展示称号信息、分组装备信息、属性值、套装完成度等数据查询。
+ * 属于 title 模块占位符层。
+ */
 public final class TitlePlaceholderExpansion extends PlaceholderExpansion {
 
     private final JavaPlugin plugin;
     private final Supplier<TitleService> serviceProvider;
     private final Supplier<TitleModuleConfiguration> configurationProvider;
 
+    /**
+     * @param plugin               插件实例
+     * @param serviceProvider      称号服务提供者
+     * @param configurationProvider 模块配置提供者
+     */
     public TitlePlaceholderExpansion(
         JavaPlugin plugin,
         Supplier<TitleService> serviceProvider,
@@ -57,6 +69,13 @@ public final class TitlePlaceholderExpansion extends PlaceholderExpansion {
         return true;
     }
 
+    /**
+     * 处理占位符请求。
+     *
+     * @param offlinePlayer 离线玩家
+     * @param params        占位符参数
+     * @return 占位符值；无法识别时返回 {@code null}
+     */
     @Override
     public @Nullable String onRequest(OfflinePlayer offlinePlayer, @NotNull String params) {
         if (offlinePlayer == null || offlinePlayer.getUniqueId() == null) {

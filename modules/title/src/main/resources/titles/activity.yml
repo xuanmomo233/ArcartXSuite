@@ -1,22 +1,40 @@
-# 活动类称号
+# 活动类称号定义文件
+# 作用: 定义所有属于 activity 分组的称号，每个根键为称号 ID。
+# 依赖: group 必须已在主配置 ArcartXTitle.yml 的 groups: 中定义。
 # 每个根键为称号 ID；group 必须已在主配置 groups: 中定义。
 
 myth_hunter:
+  # 是否启用该称号。
   enabled: true
+  # 所属分组 ID，必须已在 ArcartXTitle.yml 的 groups: 中定义。
   group: "activity"
+  # 品质 ID，必须已在 ArcartXTitle.yml 的 qualities: 中定义。
   quality: "mythic"
+  # 称号类型，当前支持 text（纯文本）。
   kind: "text"
+  # 称号显示名称。
   display-name: "&c神话猎手"
+  # 装备后附加在聊天消息前的文本。
   chat-prefix: "&c[神话猎手]&r "
+  # 装备后附加在聊天消息后的文本。
   chat-suffix: ""
+  # 装备后附加在玩家列表名字前的文本。
   tab-prefix: "&c[神话猎手]&r "
+  # 装备后附加在玩家列表名字后的文本。
   tab-suffix: ""
+  # 称号描述，常用于菜单提示。
   description: "用于演示高品质称号和收集属性。"
+  # 称号来源说明。
   source: "周年活动"
+  # 展示属性：仅当该称号装备时生效的属性加成。
+  # key 为属性名，value 为数值；最终由 attribute-bridges 映射到对应属性插件。
   display-attributes:
     critical_damage: 5
+  # 展示属性在菜单中的显示行列表。
   display-attribute-lines:
     - "暴击伤害:5(%)"
+  # 收藏属性：只要拥有该称号（无需装备）即可生效的属性加成。
   collection-attributes:
     collection_score: 10
+  # 同分组 / 同品质内的排序权重，越小越靠前。
   sort-order: 30

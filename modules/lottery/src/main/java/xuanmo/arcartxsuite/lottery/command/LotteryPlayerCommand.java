@@ -14,11 +14,23 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.lottery.LotteryService;
 
+/**
+ * Lottery 模块的玩家命令处理器，实现 {@link TabExecutor}。
+ * <p>
+ * 支持抽奖（单抽/十连）、领取待发放奖励、查看奖池状态与历史记录等操作。
+ * 通过 {@code Supplier<LotteryService>} 延迟获取服务实例。
+ */
 public class LotteryPlayerCommand implements TabExecutor {
 
     private final Supplier<LotteryService> serviceSupplier;
     private final MessageProvider messages;
 
+    /**
+     * 构造玩家命令处理器。
+     *
+     * @param serviceSupplier Lottery 服务延迟供应器
+     * @param messages         消息提供者
+     */
     public LotteryPlayerCommand(Supplier<LotteryService> serviceSupplier, MessageProvider messages) {
         this.serviceSupplier = serviceSupplier;
         this.messages = messages;
@@ -29,6 +41,15 @@ public class LotteryPlayerCommand implements TabExecutor {
         return messages.get("prefix") + messages.get(key, args);
     }
 
+    /**
+     * 处理玩家命令分发。
+     *
+     * @param sender  命令发送者，必须为玩家
+     * @param command Bukkit 命令对象
+     * @param label   命令标签
+     * @param args    命令参数，{@code args[0]} 为子操作名
+     * @return {@code true} 表示命令已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
@@ -152,6 +173,15 @@ public class LotteryPlayerCommand implements TabExecutor {
         return sb.toString();
     }
 
+    /**
+     * 提供玩家命令 Tab 补全建议。
+     *
+     * @param sender 命令发送者
+     * @param command Bukkit 命令对象
+     * @param alias   命令别名
+     * @param args    当前已输入的参数
+     * @return 补全候选列表，无匹配时返回空列表
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                                 @NotNull String alias, @NotNull String[] args) {

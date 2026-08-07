@@ -1,22 +1,27 @@
-config-version: 2
+# ArcartXBattlePass 主配置文件
+# 定义战令系统的存储、赛季、任务、奖励、UI 及跨服同步等核心参数
 
+config-version: 2  # 配置版本号，变更时触发迁移
+
+# 存储配置：支持 sqlite 与 mysql 两种模式
 storage:
-  mode: sqlite
-  sqlite-file-name: battlepass.db
-  pool-size: 1
-  mysql-host: localhost
-  mysql-port: 3306
-  mysql-database: axs_battlepass
-  mysql-username: root
-  mysql-password: ""
+  mode: sqlite  # 存储模式：sqlite 或 mysql
+  sqlite-file-name: battlepass.db  # SQLite 数据库文件名
+  pool-size: 1  # 数据库连接池大小
+  mysql-host: localhost  # MySQL 主机地址
+  mysql-port: 3306  # MySQL 端口
+  mysql-database: axs_battlepass  # MySQL 数据库名
+  mysql-username: root  # MySQL 用户名
+  mysql-password: ""  # MySQL 密码
 
+# 赛季配置：定义当前赛季的基本参数
 season:
-  season-id: "season-1"
-  display-name: "第一赛季"
-  max-level: 100
-  xp-per-level: 1000
-  start-date: "2026-06-01"
-  end-date: "2026-08-01"
+  season-id: "season-1"  # 赛季唯一标识
+  display-name: "第一赛季"  # 赛季显示名称
+  max-level: 100  # 赛季最大等级
+  xp-per-level: 1000  # 每级所需经验值
+  start-date: "2026-06-01"  # 赛季开始日期
+  end-date: "2026-08-01"  # 赛季结束日期
 
 # ---------------------------------------------------------------------------
 # 任务配置
@@ -37,15 +42,15 @@ tasks:
 # 注意：本段必须为 Mapping（键值对）结构，顶层键为任意唯一标识，内部必须包含 level 与 free/premium/deluxe 奖励。
 # 代码使用 section.getKeys(false) 遍历，若写成 YAML 列表会导致奖励无法加载。
 rewards:
-  "1":
-    level: 1
-    free:
-      type: command
-      data: "give {player} diamond 1"
-    premium:
+  "1":  # 奖励唯一标识（任意字符串，需全局唯一）
+    level: 1  # 达到该等级时可领取
+    free:  # 免费档奖励
+      type: command  # 奖励类型：command（执行命令）
+      data: "give {player} diamond 1"  # 奖励数据：执行的命令（{player} 为玩家名占位符）
+    premium:  # 高级版档奖励
       type: command
       data: "give {player} diamond 5"
-    deluxe:
+    deluxe:  # 豪华版档奖励
       type: command
       data: "give {player} diamond 8"
   "2":
@@ -82,14 +87,16 @@ rewards:
       type: command
       data: "give {player} emerald 12"
 
+# UI 配置：控制界面注册与绑定
 ui:
-  register-on-enable: true
-  main-id: "battlepass_main"
-  tasks-id: "battlepass_tasks"
+  register-on-enable: true  # 模块启动时是否自动注册 UI
+  main-id: "battlepass_main"  # 主界面 UI 标识
+  tasks-id: "battlepass_tasks"  # 任务列表界面 UI 标识
 
+# 跨服同步配置
 cross-server:
-  enabled: false
-  sync-fields:
-    - "progress"
-    - "task-progress"
-    - "claimed-rewards"
+  enabled: false  # 是否启用跨服数据同步
+  sync-fields:  # 需要同步的字段列表
+    - "progress"  # 战令等级与经验进度
+    - "task-progress"  # 任务完成进度
+    - "claimed-rewards"  # 已领取的奖励记录

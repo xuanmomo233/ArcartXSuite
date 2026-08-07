@@ -13,12 +13,25 @@ import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress;
 import xuanmo.arcartxsuite.battlepass.service.BattlePassService;
 
+/**
+ * 战令管理员命令处理器，实现 {@link ModuleCommandHandler}。
+ * <p>
+ * 处理 {@code /axs battlepass} 管理子命令，包括 help、status、reload、reset、season、unlock，
+ * 通过 {@link BattlePassService} 执行管理操作并向发送者反馈本地化消息。
+ */
 public final class BattlePassAdminCommand implements ModuleCommandHandler {
 
     private final Supplier<BattlePassService> serviceProvider;
     private final java.util.function.BiFunction<String, Object[], String> messageResolver;
     private final String moduleVersion;
 
+    /**
+     * 构造战令管理员命令处理器。
+     *
+     * @param serviceProvider  BattlePassService 提供者（延迟获取，可能为 null）
+     * @param messageResolver  消息解析函数（key + 参数 → 本地化文本）
+     * @param moduleVersion    模块版本号（用于 help 显示）
+     */
     public BattlePassAdminCommand(Supplier<BattlePassService> serviceProvider,
                                    java.util.function.BiFunction<String, Object[], String> messageResolver,
                                    String moduleVersion) {
@@ -37,6 +50,11 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
         return List.of("help", "status", "reload", "reset", "season", "unlock");
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 处理战令管理子命令（help/status/reload/reset/season/unlock）。
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "help";
@@ -53,6 +71,11 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
         return true;
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 根据参数位置补全子命令名、玩家名及档位选项。
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) {

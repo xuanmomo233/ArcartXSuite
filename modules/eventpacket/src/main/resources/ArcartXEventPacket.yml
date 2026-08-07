@@ -1,3 +1,4 @@
+# 配置版本号（请勿手动修改）
 config-version: 1
 # AXS EventPacket
 # 作用: 通用触发器和动作链，可由加入/退出、首次加入、PAPI 数值变化、击杀计数或命令信号触发 UI 包、字幕、聊天卡片、任务导航、称号和命令。
@@ -9,19 +10,24 @@ config-version: 1
 # 动作变量: 动作参数可使用 {player}、{uuid}、{world}、{trigger}、{placeholder}、{old_value}、{new_value}、{delta}、{signal} 等上下文字段。
 
 settings:
+  # 规则检查刷新间隔（tick），20 tick = 1 秒
   refresh-interval-ticks: 20
+  # 是否输出调试日志
   debug: false
 
 storage:
   mode: sqlite                     # sqlite 或 mysql
   sqlite:
+    # SQLite 文件名（相对模块数据目录）
     file: "eventpacket.db"
   mysql:
+    # 以下仅在 mode: mysql 时生效
     host: "127.0.0.1"
     port: 3306
     database: "arcartxsuite"
     username: "root"
     password: ""
+  # 数据库连接池大小
   pool-size: 2
 
 packet-command:

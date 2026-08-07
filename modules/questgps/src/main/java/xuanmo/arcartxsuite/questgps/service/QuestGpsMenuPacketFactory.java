@@ -7,11 +7,25 @@ import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
 import xuanmo.arcartxsuite.questgps.QuestGpsPage;
 import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 
+/**
+ * QuestGPS 菜单界面数据包工厂。
+ * <p>
+ * 属于 {@code questgps} 模块，负责将快照结果组装为发送给客户端
+ * 菜单 UI 的完整数据包，包含分类、分页、任务列表、任务详情与奖励预览。
+ */
 public final class QuestGpsMenuPacketFactory {
 
     private QuestGpsMenuPacketFactory() {
     }
 
+    /**
+     * 构建菜单 UI 数据包。
+     *
+     * @param configuration    模块配置
+     * @param snapshot         快照构建结果
+     * @param navigationReady  导航运行时是否就绪
+     * @return 菜单 UI 数据包
+     */
     public static Map<String, Object> build(
         QuestGpsModuleConfiguration configuration,
         QuestGpsSnapshotBuilder.BuildResult snapshot,

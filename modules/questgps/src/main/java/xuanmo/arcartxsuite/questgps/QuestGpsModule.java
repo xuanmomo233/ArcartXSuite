@@ -34,6 +34,14 @@ import xuanmo.arcartxsuite.questgps.service.QuestGpsService;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
 
+/**
+ * QuestGPS 模块主类。
+ * <p>
+ * 继承 {@link AbstractAXSModule}，负责模块配置加载、UI 资源注册、
+ * {@link QuestGpsService} 启停、命令与客户端数据包绑定，以及
+ * {@link xuanmo.arcartxsuite.api.capability.QuestGpsNavigable} 能力注册。
+ * 同时实现 {@link ModuleCommandHandler}，将管理命令委托给 {@link QuestGpsAdminCommand}。
+ */
 public final class QuestGpsModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private QuestGpsAdminCommand adminCommand;
@@ -41,6 +49,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     private QuestGpsModuleConfiguration configuration;
     private QuestGpsService service;
 
+    /** @return 模块描述符，包含 id、名称与版本 */
     @Override
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("questgps")
@@ -50,16 +59,19 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
             .build();
     }
 
+    /** @return 主配置文件名 */
     @Override
     protected String configFileName() {
         return "ArcartXQuestGPS.yml";
     }
 
+    /** @return 消息文件名 */
     @Override
     protected String messagesFileName() {
         return "messages.yml";
     }
 
+    /** @return 默认配置同步策略，允许 {@code categories} 段动态新增 */
     @Override
     protected @NotNull SyncPolicy defaultSyncPolicy() {
         // categories 允许用户新增自定义分类（如 daily）
@@ -68,6 +80,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
             .build();
     }
 
+    /** @return 主配置文件的校验规则列表 */
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
@@ -81,6 +94,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         );
     }
 
+    /** @return UI 资源文件到目标路径的映射 */
     @Override
     protected @NotNull Map<String, String> uiResourceMappings() {
         Map<String, String> mappings = new LinkedHashMap<>();
@@ -89,11 +103,18 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         return mappings;
     }
 
+    /** @return 是否在启用时覆盖已存在的 UI 文件 */
     @Override
     protected boolean overwriteUiFiles() {
         return configuration != null && configuration.client().overwriteUiFiles();
     }
 
+    /**
+     * 加载并解析主配置文件，初始化任务目录与 MySQL 数据库。
+     *
+     * @param configFile 主配置文件，为 {@code null} 时抛出异常
+     * @throws Exception 配置缺失或解析失败时抛出
+     */
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
         if (configFile == null) {
@@ -129,6 +150,12 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         }
     }
 
+    /**
+     * 启动模块服务：注册菜单/引导 UI、构建 {@link QuestGpsService}、
+     * 注册 {@link xuanmo.arcartxsuite.api.capability.QuestGpsNavigable} 能力。
+     *
+     * @throws Exception UI 注册失败或服务启动异常时抛出
+     */
     @Override
     protected void startService() throws Exception {
 
@@ -232,6 +259,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         );
     }
 
+    /** 停止模块服务，释放 {@link QuestGpsService} 与配置资源。 */
     @Override
     protected void stopService() {
         if (service != null) {
@@ -241,27 +269,47 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         configuration = null;
     }
 
+    /** @return 玩家命令绑定映射，键为命令名，值为 {@link TabExecutor} */
     @Override
     protected @NotNull Map<String, TabExecutor> commandBindings() {
         QuestGpsPlayerCommand cmd = new QuestGpsPlayerCommand(() -> service, messages());
         return Map.of("questgps", (TabExecutor) cmd);
     }
 
+    /** @return 客户端数据包处理器，委托给 {@link QuestGpsService#handleClientPacket} */
     @Override
     protected @Nullable ClientPacketHandler createPacketHandler() {
         return (player, packetId, data) ->
             service != null && service.handleClientPacket(player, packetId, data);
     }
 
+    /** @return 当前运行中的 {@link QuestGpsService} 实例，未启动时为 {@code null} */
     public QuestGpsService getService() {
         return service;
     }
 
+    /** @return 命令标识符，固定为 {@code "questgps"} */
     @Override public String commandId() { return "questgps"; }
+    /** @return 支持的子操作列表 */
     @Override public List<String> actions() { return adminCommand != null ? adminCommand.actions() : List.of("help", "status", "reload"); }
+    /**
+     * 委托给 {@link QuestGpsAdminCommand} 处理管理命令。
+     *
+     * @param sender 命令发送者
+     * @param label  命令标签
+     * @param args   参数数组
+     * @return {@code true} 表示已处理
+     */
     @Override public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         return adminCommand != null ? adminCommand.onCommand(sender, label, args) : false;
     }
+    /**
+     * 委托给 {@link QuestGpsAdminCommand} 提供 Tab 补全。
+     *
+     * @param sender 命令发送者
+     * @param args   当前参数数组
+     * @return 补全候选列表
+     */
     @Override public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         return adminCommand != null ? adminCommand.onTabComplete(sender, args) : null;
     }

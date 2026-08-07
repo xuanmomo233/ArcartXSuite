@@ -30,6 +30,11 @@ import xuanmo.arcartxsuite.eventpacket.config.PluginConfiguration;
 import xuanmo.arcartxsuite.eventpacket.storage.EventPacketRepository;
 import java.util.logging.Logger;
 
+/**
+ * 占位符监听服务，周期性轮询玩家占位符值，当值变化且满足触发条件时推送事件包。
+ * <p>
+ * 维护每个玩家每个规则的上次值缓存，通过定时任务对比检测变化。
+ */
 public final class PapiWatcherService {
 
     private static final Pattern NUMBER_PATTERN = Pattern.compile("[-+]?\\d+(?:\\.\\d+)?");

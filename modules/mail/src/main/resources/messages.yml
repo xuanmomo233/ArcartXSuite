@@ -5,6 +5,7 @@
 #  修改后执行 /axs reload mail 即可生效。
 # ============================================================
 
+# 所有消息的前缀，自动拼接在部分消息前。
 prefix: "&3◆ &6ArcartXSuite &7| &r"
 
 # ── 通用 ──────────────────────────────────────────────
@@ -20,6 +21,7 @@ help:
   title: "&6Mail 管理命令"
   status: "&7{0} status&f - 查看模块状态"
   open: "&7{0} open <玩家>&f - 为玩家打开邮箱"
+  # ── 预设邮件子命令帮助 ──
   preset:
     list: "&7{0} preset list&f - 列出所有预设"
     send: "&7{0} preset send <预设ID> <目标>&f - 派发预设邮件"
@@ -27,6 +29,7 @@ help:
     delete: "&7{0} preset delete <预设ID>&f - 删除预设"
     reload: "&7{0} preset reload&f - 重新加载预设"
   admin: "&7{0} admin&f - 打开管理 UI（预设编辑器）"
+  # ── CDK 兑换码子命令帮助 ──
   cdk:
     create: "&7{0} cdk create <预设ID> <code|auto> <最大领取数> <有效期>&f - 创建 CDK"
     info: "&7{0} cdk info <兑换码>&f - 查看 CDK"
@@ -44,8 +47,10 @@ status:
 
 # ── admin ─────────────────────────────────────────────
 admin:
+  # ── open 命令用法提示 ──
   open:
     usage: "&e用法: /axs mail open <玩家>"
+  # ── preset 子命令用法与反馈 ──
   preset:
     usage: "&e用法: /axs mail preset <list|send|info|delete|reload> ..."
     send-usage: "&e用法: /axs mail preset send <预设ID> <目标>"
@@ -77,6 +82,7 @@ admin:
   preset-not-found: "&c预设不存在: {0}"
   preset-disabled: "&c预设已禁用: {0}"
   preset-memory-removed-file-delete-failed: "&e预设已从内存移除，但文件删除失败: {0}"
+  # ── CDK 兑换码子命令用法与反馈 ──
   cdk:
     usage: "&e用法: /axs mail cdk <create|info|list|delete> ..."
     sub-list: "&ecdk 子命令: create|info|list|delete"
@@ -184,20 +190,28 @@ player:
   cdk-preview-missing: "CDK 不存在。"
 
 # ── ui ─────────────────────────────────────────────────
+# 以下为 UI 界面中使用的显示文本（来源标签、状态标签、日志类型等）。
 ui:
+  # 货币桥接不可用时 UI 显示的提示。
   currency-bridge-unavailable: "&c未配置桥接: {0}"
+  # 邮件永久有效时的到期显示文本。
   expires-never: "永久"
+  # 无附件时的摘要文本。
   no-attachments: "无附件"
+  # 无正文时的占位文本。
   no-body: "&8暂无正文"
+  # 邮件来源类型显示文本。
   source-player: "玩家邮件"
   source-preset: "预设邮件"
   source-cdk: "CDK 邮件"
   source-system: "系统邮件"
+  # 邮件状态显示文本。
   status-unread: "未读"
   status-read: "已读"
   status-claimed: "已领取"
   status-deleted: "已删除"
   status-expired: "已过期"
+  # 日志类型显示文本。
   log-type: "日志"
   log-send: "寄件"
   log-claim: "领取"

@@ -13,6 +13,13 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.storage.AbstractModuleRepository;
 import xuanmo.arcartxsuite.qqbot.config.QQBotStorageConfig;
 
+/**
+ * QQBot 模块基于 JDBC 的数据仓库实现。
+ * <p>
+ * 关联模块：{@code qqbot}。继承 {@link AbstractModuleRepository}，实现 {@link QQBotRepository} 接口，
+ * 管理 QQ-游戏绑定、积分账户、签到记录、兑换流水、黑名单、红包及领取记录、群活跃度等数据表。
+ * 支持 SQLite 与 MySQL，自动建表与建索引，并提供玩家数据表的枚举以供数据清理。
+ */
 public final class JdbcQQBotRepository extends AbstractModuleRepository implements QQBotRepository {
 
     private final String tableBindings;
@@ -24,6 +31,13 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
     private final String tableRedPacketClaims;
     private final String tableActivity;
 
+    /**
+     * 构造 JDBC 仓库，初始化各业务表名（带表前缀）。
+     *
+     * @param dataFolder 模块数据目录
+     * @param config     存储配置
+     * @param logger     日志器
+     */
     public JdbcQQBotRepository(File dataFolder, QQBotStorageConfig config, Logger logger) {
         super("AXS-QQBot", dataFolder, config.toDescriptor(), logger);
         String prefix = config.isMysql() ? config.mysqlTablePrefix() : "axs_qqbot_";
@@ -158,11 +172,21 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
             tableRedPackets, tableRedPacketClaims, tableActivity);
     }
 
+    /**
+     * 关闭仓库，释放连接池等资源。
+     */
     @Override
     public void close() {
         shutdown();
     }
 
+    /**
+     * 插入一条 QQ-游戏绑定记录。
+     *
+     * @param qqId       QQ 号
+     * @param playerUuid 玩家 UUID
+     * @param playerName 玩家名称
+     */
     @Override
     public void insertBinding(long qqId, UUID playerUuid, String playerName) {
         String sql = "INSERT INTO " + tableBindings
@@ -179,6 +203,11 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         }
     }
 
+    /**
+     * 按 QQ 号删除绑定记录。
+     *
+     * @param qqId 待解绑的 QQ 号
+     */
     @Override
     public void deleteBindingByQq(long qqId) {
         String sql = "DELETE FROM " + tableBindings + " WHERE qq_id = ?";
@@ -191,6 +220,11 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         }
     }
 
+    /**
+     * 按玩家 UUID 删除绑定记录。
+     *
+     * @param playerUuid 待解绑的玩家 UUID
+     */
     @Override
     public void deleteBindingByPlayer(UUID playerUuid) {
         String sql = "DELETE FROM " + tableBindings + " WHERE player_uuid = ?";
@@ -203,6 +237,12 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         }
     }
 
+    /**
+     * 按 QQ 号查询绑定记录（取第一条）。
+     *
+     * @param qqId QQ 号
+     * @return 绑定记录，未找到返回 {@code null}
+     */
     @Override
     @Nullable
     public QQBotBinding findByQq(long qqId) {
@@ -220,6 +260,12 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return null;
     }
 
+    /**
+     * 按玩家 UUID 查询绑定记录。
+     *
+     * @param playerUuid 玩家 UUID
+     * @return 绑定记录，未找到返回 {@code null}
+     */
     @Override
     @Nullable
     public QQBotBinding findByPlayer(UUID playerUuid) {
@@ -237,6 +283,12 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return null;
     }
 
+    /**
+     * 按玩家名查询绑定记录。
+     *
+     * @param playerName 玩家名
+     * @return 绑定记录，未找到返回 {@code null}
+     */
     @Override
     @Nullable
     public QQBotBinding findByPlayerName(String playerName) {
@@ -254,6 +306,12 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return null;
     }
 
+    /**
+     * 查询指定 QQ 号下的全部绑定记录。
+     *
+     * @param qqId QQ 号
+     * @return 绑定记录列表，可能为空
+     */
     @Override
     public List<QQBotBinding> findAllByQq(long qqId) {
         String sql = "SELECT qq_id, player_uuid, player_name, bound_at FROM " + tableBindings
@@ -271,6 +329,12 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return list;
     }
 
+    /**
+     * 统计指定 QQ 号下的绑定数量。
+     *
+     * @param qqId QQ 号
+     * @return 绑定数量，查询失败返回 {@code 0}
+     */
     @Override
     public int countByQq(long qqId) {
         String sql = "SELECT COUNT(*) FROM " + tableBindings + " WHERE qq_id = ?";
@@ -286,6 +350,11 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return 0;
     }
 
+    /**
+     * 统计绑定表中的总记录数。
+     *
+     * @return 总绑定数，查询失败返回 {@code 0}
+     */
     @Override
     public int countBindings() {
         String sql = "SELECT COUNT(*) FROM " + tableBindings;
@@ -299,6 +368,13 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return 0;
     }
 
+    /**
+     * 分页查询绑定记录（按绑定时间倒序）。
+     *
+     * @param page     页码，从 0 开始
+     * @param pageSize 每页条数
+     * @return 绑定记录列表
+     */
     @Override
     public List<QQBotBinding> getBindingsPage(int page, int pageSize) {
         String sql = "SELECT qq_id, player_uuid, player_name, bound_at FROM " + tableBindings
@@ -317,6 +393,13 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return list;
     }
 
+    /**
+     * 按关键词模糊搜索绑定记录（匹配玩家名或 QQ 号）。
+     *
+     * @param keyword 搜索关键词
+     * @param limit   最大返回条数
+     * @return 匹配的绑定记录列表
+     */
     @Override
     public List<QQBotBinding> searchBindings(String keyword, int limit) {
         String sql = "SELECT qq_id, player_uuid, player_name, bound_at FROM " + tableBindings
@@ -348,6 +431,12 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
 
     // ─── 签到积分实现 ────────────────────────────────────
 
+    /**
+     * 查询指定 QQ 号的积分余额。
+     *
+     * @param qqId QQ 号
+     * @return 积分余额，无记录或查询失败返回 {@code 0}
+     */
     @Override
     public int getPoints(long qqId) {
         String sql = "SELECT balance FROM " + tablePoints + " WHERE qq_id = ?";
@@ -363,6 +452,12 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return 0;
     }
 
+    /**
+     * 查询指定 QQ 号的积分账户详情。
+     *
+     * @param qqId QQ 号
+     * @return 积分账户，未找到返回 {@code null}
+     */
     @Override
     @Nullable
     public PointAccount getPointAccount(long qqId) {
@@ -386,6 +481,15 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return null;
     }
 
+    /**
+     * 为指定 QQ 号增加积分（upsert），正增量计入累计获得。
+     *
+     * @param qqId   QQ 号
+     * @param delta  积分变化量（可为负）
+     * @param action 操作标识
+     * @param detail 操作详情
+     * @return 操作后的积分余额
+     */
     @Override
     public synchronized int addPoints(long qqId, int delta, String action, String detail) {
         long now = System.currentTimeMillis();
@@ -414,6 +518,15 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return getPoints(qqId);
     }
 
+    /**
+     * 从指定 QQ 号扣减积分，余额不足时失败。
+     *
+     * @param qqId   QQ 号
+     * @param amount 扣减金额（必须为正）
+     * @param action 操作标识
+     * @param detail 操作详情
+     * @return {@code true} 表示扣减成功
+     */
     @Override
     public synchronized boolean deductPoints(long qqId, int amount, String action, String detail) {
         if (amount <= 0) return true;
@@ -436,6 +549,12 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         }
     }
 
+    /**
+     * 查询指定 QQ 号最近一次签到记录。
+     *
+     * @param qqId QQ 号
+     * @return 签到记录，未找到返回 {@code null}
+     */
     @Override
     @Nullable
     public SignInRecord getLastSignIn(long qqId) {
@@ -460,6 +579,13 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return null;
     }
 
+    /**
+     * 判断指定 QQ 号在给定日期是否已签到。
+     *
+     * @param qqId QQ 号
+     * @param date 日期字符串（如 {@code yyyy-MM-dd}）
+     * @return {@code true} 表示已签到
+     */
     @Override
     public boolean hasSignedOn(long qqId, String date) {
         String sql = "SELECT 1 FROM " + tableSignin + " WHERE qq_id = ? AND sign_date = ? LIMIT 1";
@@ -476,6 +602,14 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return false;
     }
 
+    /**
+     * 写入一条签到记录。
+     *
+     * @param qqId    QQ 号
+     * @param date    签到日期
+     * @param streak  连续签到天数
+     * @param signedAt 签到时间戳（毫秒）
+     */
     @Override
     public void recordSignIn(long qqId, String date, int streak, long signedAt) {
         String sql = "INSERT INTO " + tableSignin + " (qq_id, sign_date, streak, signed_at) VALUES (?, ?, ?, ?)";
@@ -491,6 +625,12 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         }
     }
 
+    /**
+     * 查询积分排行榜（按余额降序）。
+     *
+     * @param limit 最大返回条数
+     * @return 积分账户列表
+     */
     @Override
     public List<PointAccount> getPointsLeaderboard(int limit) {
         String sql = "SELECT qq_id, balance, total_earned, total_spent FROM " + tablePoints
@@ -515,6 +655,14 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return list;
     }
 
+    /**
+     * 统计指定 QQ 号今日对某奖品的兑换次数。
+     *
+     * @param qqId    QQ 号
+     * @param prizeId 奖品 ID
+     * @param date    日期字符串
+     * @return 今日已兑换次数
+     */
     @Override
     public int countRedeemToday(long qqId, String prizeId, String date) {
         String sql = "SELECT COUNT(*) FROM " + tableRedeemLog
@@ -533,6 +681,14 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return 0;
     }
 
+    /**
+     * 写入一条兑换流水记录。
+     *
+     * @param qqId    QQ 号
+     * @param prizeId 奖品 ID
+     * @param cost    消耗积分
+     * @param date    兑换日期
+     */
     @Override
     public void logRedeem(long qqId, String prizeId, int cost, String date) {
         String sql = "INSERT INTO " + tableRedeemLog + " (qq_id, prize_id, cost, redeem_date, created_at) VALUES (?, ?, ?, ?, ?)";
@@ -551,6 +707,12 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
 
     // ─── 黑名单 ────────────────────────────────────────
 
+    /**
+     * 将指定 QQ 号加入黑名单（已存在则更新）。
+     *
+     * @param qqId    被拉黑的 QQ 号
+     * @param addedBy 操作者 QQ 号
+     */
     @Override
     public void addBlacklist(long qqId, long addedBy) {
         String sql = "INSERT OR REPLACE INTO " + tableBlacklist + " (qq_id, added_by, added_at) VALUES (?, ?, ?)";
@@ -568,6 +730,11 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         }
     }
 
+    /**
+     * 将指定 QQ 号移出黑名单。
+     *
+     * @param qqId 待移除的 QQ 号
+     */
     @Override
     public void removeBlacklist(long qqId) {
         String sql = "DELETE FROM " + tableBlacklist + " WHERE qq_id = ?";
@@ -580,6 +747,12 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         }
     }
 
+    /**
+     * 判断指定 QQ 号是否在黑名单中。
+     *
+     * @param qqId QQ 号
+     * @return {@code true} 表示已被拉黑
+     */
     @Override
     public boolean isBlacklisted(long qqId) {
         String sql = "SELECT 1 FROM " + tableBlacklist + " WHERE qq_id = ? LIMIT 1";
@@ -595,6 +768,11 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return false;
     }
 
+    /**
+     * 获取全部黑名单 QQ 号列表（按添加时间倒序）。
+     *
+     * @return QQ 号列表
+     */
     @Override
     public List<Long> getBlacklist() {
         List<Long> list = new ArrayList<>();
@@ -613,6 +791,16 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
 
     // ─── 红包实现 ────────────────────────────────────────
 
+    /**
+     * 创建一个红包记录并返回自增 ID。
+     *
+     * @param senderQq    发送者 QQ 号
+     * @param groupId     目标群号
+     * @param totalAmount 总积分金额
+     * @param count       红包个数
+     * @param expireAt    过期时间戳（毫秒）
+     * @return 红包 ID，失败返回 {@code -1}
+     */
     @Override
     public long createRedPacket(long senderQq, long groupId, int totalAmount, int count, long expireAt) {
         String sql = "INSERT INTO " + tableRedPackets
@@ -638,6 +826,12 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return -1;
     }
 
+    /**
+     * 查询指定群中最新一个仍可领取的红包。
+     *
+     * @param groupId 目标群号
+     * @return 红包记录，无可用红包返回 {@code null}
+     */
     @Override
     @Nullable
     public RedPacket getActiveRedPacket(long groupId) {
@@ -670,6 +864,13 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         return null;
     }
 
+    /**
+     * 尝试抢红包（事务操作），含重复领取检测与随机金额分配。
+     *
+     * @param redPacketId 红包 ID
+     * @param claimerQq   领取者 QQ 号
+     * @return 抢到的积分金额；{@code -1} 表示抢失败；{@code -2} 表示已领过；{@code -3} 表示红包不可用
+     */
     @Override
     public int tryClaimRedPacket(long redPacketId, long claimerQq) {
         try (Connection conn = getConnection()) {
@@ -772,6 +973,9 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         }
     }
 
+    /**
+     * 退还所有已过期且仍有余额的红包积分给发送者。
+     */
     @Override
     public void refundExpiredRedPackets() {
         String selectSql = "SELECT id, sender_qq, remaining_amount FROM " + tableRedPackets
@@ -799,6 +1003,13 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
 
     // ─── 活跃度实现 ──────────────────────────────────────
 
+    /**
+     * 记录一条群消息活跃度（upsert，消息计数 +1）。
+     *
+     * @param qqId    发言者 QQ 号
+     * @param groupId 群号
+     * @param date    日期字符串
+     */
     @Override
     public void recordActivity(long qqId, long groupId, String date) {
         String upsert = isMysql()
@@ -817,6 +1028,14 @@ public final class JdbcQQBotRepository extends AbstractModuleRepository implemen
         }
     }
 
+    /**
+     * 查询指定日期范围内的群活跃度排行榜（按消息数降序）。
+     *
+     * @param dateStart 起始日期（含）
+     * @param dateEnd   结束日期（含）
+     * @param limit     最大返回条数
+     * @return 活跃度记录列表
+     */
     @Override
     public List<ActivityRecord> getActivityLeaderboard(String dateStart, String dateEnd, int limit) {
         String sql = "SELECT qq_id, SUM(message_count) as cnt FROM " + tableActivity

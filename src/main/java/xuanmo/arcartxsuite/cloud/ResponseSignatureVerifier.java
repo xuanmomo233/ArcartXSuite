@@ -4,6 +4,12 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import xuanmo.arcartxsuite.security.NativeBridge;
 
+/**
+ * 云端响应签名验证器，基于 native Ed25519 校验响应签名，并防重放。
+ * <p>
+ * 通过时间戳新鲜度检查（5 分钟有效、60 秒时钟偏移容忍）与已见时间戳去重，
+ * 防止重放攻击。依赖 {@link NativeBridge} 的 native 实现。
+ */
 final class ResponseSignatureVerifier {
 
     private static final long MAX_AGE_MS = 300_000L;

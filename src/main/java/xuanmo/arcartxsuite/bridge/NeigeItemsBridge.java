@@ -6,6 +6,11 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import pers.neige.neigeitems.manager.ItemManager;
 
+/**
+ * NeigeItems 物品桥接，提供 NeigeItems 物品的按 id 构建与解析。
+ * <p>
+ * NeigeItems 为可选依赖，运行时通过插件管理器检测可用性。
+ */
 public final class NeigeItemsBridge {
 
     private final JavaPlugin plugin;

@@ -34,6 +34,13 @@ import xuanmo.arcartxsuite.lottery.config.LotteryModuleConfiguration;
 import xuanmo.arcartxsuite.lottery.packet.LotteryPacketHandler;
 import xuanmo.arcartxsuite.lottery.storage.JdbcLotteryRepository;
 
+/**
+ * Lottery 模块主类。
+ * <p>
+ * 继承 {@link AbstractAXSModule}，负责配置加载、服务启动/停止、
+ * 命令绑定、PlaceholderAPI 注册、客户端包处理器创建以及
+ * 数据库迁移与玩家数据清除能力的注册。
+ */
 public final class LotteryModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private static final String GACHA_UI_RESOURCE = "arcartx/ui/lottery_gacha.yml";
@@ -220,7 +227,9 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         if (service == null || packetBridge == null || !packetBridge.isAvailable()) {
             return null;
         }
-        return new LotteryPacketHandler(service, packetBridge, plugin);
+        xuanmo.arcartxsuite.api.icon.IconResolver iconResolver =
+            new xuanmo.arcartxsuite.api.icon.IconResolver(itemStackBridge, itemSourceRegistry);
+        return new LotteryPacketHandler(service, packetBridge, iconResolver, plugin);
     }
 
     // ─── ModuleCommandHandler (/axs lottery) ──────────────────

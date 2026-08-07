@@ -28,6 +28,12 @@ import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import java.util.logging.Logger;
 
+/**
+ * Boss 伤害结算服务，属于 entitytracker 模块的 boss 伤害结算子系统。
+ * <p>
+ * 负责 Boss 死亡后的伤害排名结算、奖励动作执行（物品发放、命令执行、消息发送、
+ * 邮件发送、信号派发）、结算记录缓存与查询，以及奖励补发功能。
+ */
 final class BossDamageSettlementService {
 
     private static final int MAX_SETTLEMENT_CACHE_SIZE = 100;
@@ -69,12 +75,22 @@ final class BossDamageSettlementService {
         this.messages = messages;
     }
 
+    /**
+     * 关闭结算服务，清空所有缓存。
+     */
     public void shutdown() {
         settlementsById.clear();
         lastSettlementByPlayer.clear();
         nextSettlementId = 0L;
     }
 
+    /**
+     * 对指定 Boss 会话执行伤害结算并发放奖励。
+     *
+     * @param session Boss 会话
+     * @param entity  Boss 实体
+     * @return 结算记录，会话为空或已结算时返回 {@code null}
+     */
     public BossDamageSettlementRecord settle(BossSession session, org.bukkit.entity.LivingEntity entity) {
         if (session == null || entity == null || !session.markSettled()) {
             return null;
@@ -132,12 +148,23 @@ final class BossDamageSettlementService {
         return finalRecord;
     }
 
+    /**
+     * 返回所有结算记录（按时间倒序）。
+     *
+     * @return 结算记录列表
+     */
     public List<BossDamageSettlementRecord> settlements() {
         List<BossDamageSettlementRecord> records = new ArrayList<>(settlementsById.values());
         java.util.Collections.reverse(records);
         return List.copyOf(records);
     }
 
+    /**
+     * 按结算 ID 获取结算记录。
+     *
+     * @param settlementId 结算 ID
+     * @return 结算记录，未找到时返回 {@code null}
+     */
     public BossDamageSettlementRecord settlement(String settlementId) {
         if (settlementId == null || settlementId.isBlank()) {
             return null;
@@ -145,6 +172,12 @@ final class BossDamageSettlementService {
         return settlementsById.get(settlementId);
     }
 
+    /**
+     * 获取玩家最近一次结算的视图。
+     *
+     * @param playerUuid 玩家 UUID
+     * @return 结算视图，无记录时返回空视图
+     */
     public BossDamagePlayerSettlementView lastSettlement(UUID playerUuid) {
         if (playerUuid == null) {
             return BossDamagePlayerSettlementView.empty();
@@ -152,12 +185,25 @@ final class BossDamageSettlementService {
         return lastSettlementByPlayer.getOrDefault(playerUuid, BossDamagePlayerSettlementView.empty());
     }
 
+    /**
+     * 返回所有结算 ID（按时间倒序）。
+     *
+     * @return 结算 ID 列表
+     */
     public List<String> settlementIds() {
         List<String> ids = new ArrayList<>(settlementsById.keySet());
         java.util.Collections.reverse(ids);
         return List.copyOf(ids);
     }
 
+    /**
+     * 对指定结算的指定名次补发奖励。
+     *
+     * @param settlementId    结算 ID
+     * @param rank            名次
+     * @param overridePlayer  覆盖目标玩家（为 {@code null} 时使用原玩家）
+     * @return 奖励发放结果
+     */
     public BossDamageRewardDispatchResult reissueReward(String settlementId, int rank, OfflinePlayer overridePlayer) {
         BossDamageSettlementRecord record = settlement(settlementId);
         if (record == null) {

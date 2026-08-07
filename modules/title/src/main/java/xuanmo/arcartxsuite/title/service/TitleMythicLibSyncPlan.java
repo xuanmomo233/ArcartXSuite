@@ -5,6 +5,20 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * MythicLib 属性同步计划。
+ * <p>
+ * 由 {@link TitleMythicLibSyncPlanner} 生成，描述本次同步需要注册的修饰器列表、
+ * 当前属性键集合、以及需要触及（移除旧修饰器并更新）的属性键集合。
+ *
+ * @param displayModifiers       展示属性修饰器列表
+ * @param collectionModifiers    收集属性修饰器列表
+ * @param displayStats           当前展示属性键集合
+ * @param collectionStats        当前收集属性键集合
+ * @param displayTouchedStats    需要触及的展示属性键集合（含上一次同步的属性键）
+ * @param collectionTouchedStats 需要触及的收集属性键集合（含上一次同步的属性键）
+ * @param touchedStats           全部需要触及的属性键集合
+ */
 public record TitleMythicLibSyncPlan(
     List<TitleMythicLibModifierSpec> displayModifiers,
     List<TitleMythicLibModifierSpec> collectionModifiers,

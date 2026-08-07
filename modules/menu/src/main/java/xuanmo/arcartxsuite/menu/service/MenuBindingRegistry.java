@@ -10,11 +10,23 @@ import xuanmo.arcartxsuite.menu.config.MenuCommandBinding;
 import xuanmo.arcartxsuite.menu.config.MenuDefinition;
 import xuanmo.arcartxsuite.menu.config.MenuItemBinding;
 
+/**
+ * 菜单绑定注册表，维护命令绑定和物品绑定，支持按命令行匹配对应菜单。
+ * <p>
+ * 在菜单重载时由 {@link MenuService} 调用 {@link #rebuild} 重建全部绑定关系。
+ */
 public final class MenuBindingRegistry {
 
     private final List<MenuCommandBinding> commandBindings = new ArrayList<>();
     private final List<MenuItemBinding> itemBindings = new ArrayList<>();
 
+    /**
+     * 从菜单定义集合和全局物品绑定重建全部绑定关系。
+     *
+     * @param menus               菜单定义集合
+     * @param globalItemBindings  全局物品绑定列表
+     * @param logger              日志记录器
+     */
     public void rebuild(Iterable<MenuDefinition> menus, List<MenuItemBinding> globalItemBindings, Logger logger) {
         commandBindings.clear();
         itemBindings.clear();
@@ -53,6 +65,12 @@ public final class MenuBindingRegistry {
         }
     }
 
+    /**
+     * 匹配命令行对应的命令绑定。
+     *
+     * @param commandLine 命令行文本（可含前导 {@code /}）
+     * @return 匹配的命令绑定，无匹配返回 {@code null}
+     */
     public MenuCommandBinding matchCommand(String commandLine) {
         if (commandLine == null || commandLine.isBlank()) {
             return null;
@@ -69,10 +87,20 @@ public final class MenuBindingRegistry {
         return null;
     }
 
+    /**
+     * 返回所有物品绑定的不可变副本。
+     *
+     * @return 物品绑定列表
+     */
     public List<MenuItemBinding> itemBindings() {
         return List.copyOf(itemBindings);
     }
 
+    /**
+     * 返回当前命令绑定的数量。
+     *
+     * @return 命令绑定数量
+     */
     public int commandBindingCount() {
         return commandBindings.size();
     }

@@ -6,6 +6,11 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 
+/**
+ * 脚本占位符支持（包私有），在脚本执行前将 %placeholder% 替换为实际值。
+ * <p>
+ * 对包含 {@code return} 语句的脚本会跳过占位符替换，避免破坏脚本语法。
+ */
 final class ScriptPlaceholderSupport {
 
     private static final Pattern RETURN_PATTERN =

@@ -10,6 +10,11 @@ import java.util.Objects;
 import xuanmo.arcartxsuite.questgps.QuestGpsCategory;
 import xuanmo.arcartxsuite.questgps.QuestGpsPage;
 
+/**
+ * 任务导航快照构造器，按分类与页码对任务列表分桶、排序并生成分页快照。
+ * <p>
+ * 输出 {@link BuildResult} 供 UI 数据包发送。
+ */
 public final class QuestGpsSnapshotBuilder {
 
     public BuildResult build(

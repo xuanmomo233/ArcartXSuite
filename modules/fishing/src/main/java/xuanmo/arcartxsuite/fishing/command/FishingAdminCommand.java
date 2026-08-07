@@ -11,6 +11,13 @@ import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.fishing.model.FishingPlayerData;
 import xuanmo.arcartxsuite.fishing.service.FishingService;
 
+/**
+ * 钓鱼模块的管理员命令处理器。
+ * <p>
+ * 关联模块：{@code fishing}。提供 {@code stats}（查看玩家统计）、
+ * {@code givexp}（给予经验）、{@code reset}（重置玩家数据）等管理操作，
+ * 需要 {@code axs.fishing.admin} 权限。
+ */
 public final class FishingAdminCommand implements ModuleCommandHandler {
 
     private final java.util.function.Supplier<FishingService> serviceSupplier;

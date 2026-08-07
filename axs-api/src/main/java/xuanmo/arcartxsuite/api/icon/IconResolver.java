@@ -1,9 +1,10 @@
-package xuanmo.arcartxsuite.menu.service;
+package xuanmo.arcartxsuite.api.icon;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.bukkit.Bukkit;
@@ -23,21 +24,57 @@ import org.bukkit.profile.PlayerTextures;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
-import xuanmo.arcartxsuite.menu.config.MenuIconDefinition;
 
-public final class MenuIconResolver {
+/**
+ * 通用图标解析器，将 {@link IconDefinition} 转换为 ItemStack 或 itemJson 字符串。
+ * <p>
+ * 支持原版材质、外部物品来源（MythicMobs/NeigeItems/Overture/MMOItems）、
+ * 自定义 NBT 标签、头颅纹理和皮革染色等图标属性。
+ * <p>
+ * 该类原为 Menu 模块的 {@code MenuIconResolver}，提升至 axs-api 共享。
+ * 占位符解析通过构造时注入的 {@code placeholderResolver} 解耦：
+ * Menu 模块传入带 PlaceholderAPI 的解析器，其他模块（如 Lottery）可不传（原样返回）。
+ */
+public final class IconResolver {
 
     private static final Pattern SKIN_URL_PATTERN = Pattern.compile("\"url\"\\s*:\\s*\"(.*?)\"");
 
     private final ItemBridgeAPI itemStackBridge;
     private final ItemSourceRegistry itemSourceRegistry;
+    private final BiFunction<Player, String, String> placeholderResolver;
 
-    public MenuIconResolver(ItemBridgeAPI itemStackBridge, ItemSourceRegistry itemSourceRegistry) {
-        this.itemStackBridge = itemStackBridge;
-        this.itemSourceRegistry = itemSourceRegistry;
+    /**
+     * 构造图标解析器，不解析占位符。
+     *
+     * @param itemStackBridge    ItemStack 桥接 API，可为 null
+     * @param itemSourceRegistry 物品来源注册表，可为 null
+     */
+    public IconResolver(ItemBridgeAPI itemStackBridge, ItemSourceRegistry itemSourceRegistry) {
+        this(itemStackBridge, itemSourceRegistry, null);
     }
 
-    public String resolveItemJson(Player player, @Nullable MenuIconDefinition icon) {
+    /**
+     * 构造图标解析器。
+     *
+     * @param itemStackBridge    ItemStack 桥接 API，可为 null
+     * @param itemSourceRegistry 物品来源注册表，可为 null
+     * @param placeholderResolver 占位符解析函数（player, text）→ 解析后文本，为 null 时不解析
+     */
+    public IconResolver(ItemBridgeAPI itemStackBridge, ItemSourceRegistry itemSourceRegistry,
+                        @Nullable BiFunction<Player, String, String> placeholderResolver) {
+        this.itemStackBridge = itemStackBridge;
+        this.itemSourceRegistry = itemSourceRegistry;
+        this.placeholderResolver = placeholderResolver;
+    }
+
+    /**
+     * 将图标定义解析为 itemJson 字符串，供 UI 引擎渲染。
+     *
+     * @param player 目标玩家，用于占位符解析
+     * @param icon   图标定义，为 null 或无有效图标时返回空字符串
+     * @return itemJson 字符串
+     */
+    public String resolveItemJson(Player player, @Nullable IconDefinition icon) {
         if (icon == null || !icon.hasIcon()) {
             return "";
         }
@@ -52,7 +89,20 @@ public final class MenuIconResolver {
         return itemStackBridge.itemToJson(stack).orElse("");
     }
 
-    private ItemStack applyCustomNbt(ItemStack stack, MenuIconDefinition icon) {
+    /**
+     * 将 ItemStack 序列化为 itemJson 字符串，供 UI 引擎渲染。
+     *
+     * @param stack 物品堆，为 null 时返回空字符串
+     * @return itemJson 字符串
+     */
+    public String itemToJson(@Nullable ItemStack stack) {
+        if (stack == null || itemStackBridge == null) {
+            return "";
+        }
+        return itemStackBridge.itemToJson(stack).orElse("");
+    }
+
+    private ItemStack applyCustomNbt(ItemStack stack, IconDefinition icon) {
         if (stack == null || itemStackBridge == null) {
             return stack;
         }
@@ -75,7 +125,7 @@ public final class MenuIconResolver {
     }
 
     @Nullable
-    private ItemStack resolveItemStack(Player player, MenuIconDefinition icon) {
+    private ItemStack resolveItemStack(Player player, IconDefinition icon) {
         ItemStack generated = generateExternalItem(player, icon);
         if (generated != null) {
             return generated;
@@ -88,11 +138,11 @@ public final class MenuIconResolver {
         ItemMeta meta = stack.getItemMeta();
         if (meta != null) {
             if (icon.name() != null && !icon.name().isBlank()) {
-                meta.setDisplayName(colorize(MenuConditionEvaluator.applyPlaceholders(player, icon.name())));
+                meta.setDisplayName(colorize(applyPlaceholders(player, icon.name())));
             }
             if (icon.lore() != null && !icon.lore().isEmpty()) {
                 meta.setLore(icon.lore().stream()
-                    .map(line -> colorize(MenuConditionEvaluator.applyPlaceholders(player, line)))
+                    .map(line -> colorize(applyPlaceholders(player, line)))
                     .toList());
             }
             if (icon.customModelData() > 0) {
@@ -106,7 +156,14 @@ public final class MenuIconResolver {
         return stack;
     }
 
-    private void applyGlow(ItemMeta meta, MenuIconDefinition icon) {
+    private String applyPlaceholders(Player player, String input) {
+        if (placeholderResolver == null || input == null) {
+            return input;
+        }
+        return placeholderResolver.apply(player, input);
+    }
+
+    private void applyGlow(ItemMeta meta, IconDefinition icon) {
         if (!icon.glow()) {
             return;
         }
@@ -120,7 +177,7 @@ public final class MenuIconResolver {
         }
     }
 
-    private void applySkullTexture(ItemMeta meta, MenuIconDefinition icon) {
+    private void applySkullTexture(ItemMeta meta, IconDefinition icon) {
         if (icon.skullTexture() == null || icon.skullTexture().isBlank() || !(meta instanceof SkullMeta skullMeta)) {
             return;
         }
@@ -154,7 +211,7 @@ public final class MenuIconResolver {
         return matcher.find() ? matcher.group(1) : null;
     }
 
-    private void applyColor(ItemMeta meta, MenuIconDefinition icon) {
+    private void applyColor(ItemMeta meta, IconDefinition icon) {
         if (icon.color() == null || icon.color().isBlank() || !(meta instanceof LeatherArmorMeta leatherMeta)) {
             return;
         }
@@ -178,7 +235,7 @@ public final class MenuIconResolver {
     }
 
     @Nullable
-    private ItemStack generateExternalItem(Player player, MenuIconDefinition icon) {
+    private ItemStack generateExternalItem(Player player, IconDefinition icon) {
         if (itemSourceRegistry == null) {
             return null;
         }

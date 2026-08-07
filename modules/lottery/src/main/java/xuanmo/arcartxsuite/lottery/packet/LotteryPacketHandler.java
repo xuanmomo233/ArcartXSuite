@@ -15,14 +15,17 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.lottery.LotteryService;
 import xuanmo.arcartxsuite.lottery.config.GachaPoolConfig;
+import xuanmo.arcartxsuite.lottery.config.CasePoolConfig;
 import xuanmo.arcartxsuite.lottery.config.PoolDefinition;
 import xuanmo.arcartxsuite.lottery.config.PoolType;
-import xuanmo.arcartxsuite.lottery.model.GachaResult;
+import xuanmo.arcartxsuite.lottery.model.CaseResult;
 import xuanmo.arcartxsuite.lottery.model.PlayerGachaState;
 import xuanmo.arcartxsuite.lottery.model.PoolItem;
 import xuanmo.arcartxsuite.lottery.storage.LotteryRepository;
+import org.bukkit.inventory.ItemStack;
 
 /**
  * Lottery 模块客户端包处理器。
@@ -38,6 +41,7 @@ public class LotteryPacketHandler implements ClientPacketHandler {
 
     private final LotteryService service;
     private final PacketBridgeAPI packetBridge;
+    private final IconResolver iconResolver;
     private final JavaPlugin plugin;
     private final Map<UUID, Integer> playerPoolIndex = new ConcurrentHashMap<>();
     private final Map<UUID, String> gachaTokens = new ConcurrentHashMap<>();
@@ -45,9 +49,10 @@ public class LotteryPacketHandler implements ClientPacketHandler {
     private final Map<UUID, Object> tokenLocks = new ConcurrentHashMap<>();
 
     public LotteryPacketHandler(@NotNull LotteryService service, @NotNull PacketBridgeAPI packetBridge,
-                                @NotNull JavaPlugin plugin) {
+                                @NotNull IconResolver iconResolver, @NotNull JavaPlugin plugin) {
         this.service = service;
         this.packetBridge = packetBridge;
+        this.iconResolver = iconResolver;
         this.plugin = plugin;
     }
 
@@ -64,6 +69,7 @@ public class LotteryPacketHandler implements ClientPacketHandler {
                 case "switch_pool" -> handleSwitchPool(player, data);
                 case "pull" -> handlePull(player, data);
                 case "open_case" -> handleOpenCase(player, data);
+                case "open_case_batch" -> handleOpenCaseBatch(player, data);
                 case "history" -> handleHistory(player);
                 case "details" -> handleDetails(player);
                 case "exchange" -> handleExchange(player);
@@ -90,7 +96,12 @@ public class LotteryPacketHandler implements ClientPacketHandler {
             } catch (NumberFormatException ignored) {}
         }
         playerPoolIndex.put(player.getUniqueId(), index);
-        pushGachaData(player, index);
+        PoolDefinition pool = getPoolAtIndex(player, index);
+        if (pool != null && pool.type() == PoolType.CASE) {
+            pushCaseData(player, index);
+        } else {
+            pushGachaData(player, index);
+        }
     }
 
     private void handlePull(Player player, List<String> data) {
@@ -135,12 +146,98 @@ public class LotteryPacketHandler implements ClientPacketHandler {
         }
 
         try {
-            var result = service.openCase(player, pool.id());
+            CaseResult result = service.openCase(player, pool.id());
             if (result != null) caseTokens.put(uuid, UUID.randomUUID().toString());
+            // 推送开箱结果给 UI
+            if (result != null && result.item() != null) {
+                pushCaseResult(player, result, pool);
+            }
         } finally {
             releaseToken(uuid);
             pushCaseData(player, getCurrentIndex(player));
         }
+    }
+
+    /**
+     * 推送开箱结果到 UI，包含中奖物品信息和滚动动画用的随机物品列表。
+     */
+    private void pushCaseResult(Player player, CaseResult result, PoolDefinition pool) {
+        if (packetBridge == null || !packetBridge.isAvailable()) return;
+        CasePoolConfig caseConfig = pool.caseConfig();
+        if (caseConfig == null) return;
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("resultItemJson", iconResolver.itemToJson(service.generateItem(result.item())));
+        payload.put("resultItemName", result.item().name());
+        payload.put("resultRarity", result.rarity());
+
+        // 滚动动画用的随机物品列表（从奖池中随机取 8 件）
+        List<PoolItem> allItems = caseConfig.items();
+        Map<String, Object> animationJsons = new LinkedHashMap<>();
+        Map<String, Object> animationRarities = new LinkedHashMap<>();
+        java.util.Random rnd = new java.util.Random();
+        for (int i = 1; i <= 8; i++) {
+            PoolItem randomItem = allItems.get(rnd.nextInt(allItems.size()));
+            animationJsons.put(Integer.toString(i), iconResolver.itemToJson(service.generateItem(randomItem)));
+            animationRarities.put(Integer.toString(i), randomItem.rarity() != null ? randomItem.rarity() : "");
+        }
+        payload.put("animationJsons", animationJsons);
+        payload.put("animationRarities", animationRarities);
+
+        packetBridge.sendPacket(player, CASE_UI_FILE, "result", payload);
+    }
+
+    private void handleOpenCaseBatch(Player player, List<String> data) {
+        UUID uuid = player.getUniqueId();
+        if (!acquireToken(player, CASE_PACKET_ID, data, 1)) return;
+        PoolDefinition pool = getPoolAtIndex(player, getCurrentIndex(player));
+        if (pool == null || pool.type() != PoolType.CASE || pool.caseConfig() == null) {
+            releaseToken(uuid);
+            pushCaseData(player, getCurrentIndex(player));
+            return;
+        }
+
+        try {
+            List<CaseResult> results = service.openCaseBatch(player, pool.id(), 10);
+            if (!results.isEmpty()) caseTokens.put(uuid, UUID.randomUUID().toString());
+            // 推送十连结果给 UI
+            pushCaseBatchResult(player, results);
+        } finally {
+            releaseToken(uuid);
+            pushCaseData(player, getCurrentIndex(player));
+        }
+    }
+
+    /**
+     * 推送十连开箱结果到 UI。
+     */
+    private void pushCaseBatchResult(Player player, List<CaseResult> results) {
+        if (packetBridge == null || !packetBridge.isAvailable()) return;
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("batchCount", results.size());
+
+        Map<String, Object> itemJsons = new LinkedHashMap<>();
+        Map<String, Object> itemNames = new LinkedHashMap<>();
+        Map<String, Object> itemRarities = new LinkedHashMap<>();
+        for (int i = 0; i < results.size(); i++) {
+            CaseResult result = results.get(i);
+            String key = Integer.toString(i + 1);
+            if (result != null && result.item() != null) {
+                itemJsons.put(key, iconResolver.itemToJson(service.generateItem(result.item())));
+                itemNames.put(key, result.item().name());
+                itemRarities.put(key, result.rarity());
+            } else {
+                itemJsons.put(key, "");
+                itemNames.put(key, "");
+                itemRarities.put(key, "");
+            }
+        }
+        payload.put("batchItemJsons", itemJsons);
+        payload.put("batchItemNames", itemNames);
+        payload.put("batchItemRarities", itemRarities);
+
+        packetBridge.sendPacket(player, CASE_UI_FILE, "batch_result", payload);
     }
 
     private int getCurrentIndex(Player player) {
@@ -183,7 +280,7 @@ public class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("upItemName", "");
         payload.put("upItemStar", 5);
         payload.put("upItemDesc", "");
-        payload.put("upItemIcon", pool.upItemIcon());
+        payload.put("upItemIcon", iconResolver.resolveItemJson(player, pool.upItemIcon()));
         payload.put("guaranteeDesc", buildGuaranteeText(pool));
         payload.put("remainingTime", ""); // 暂无限时配置，留空
         payload.put("fateCount", 0); // 暂无命运之契计数，留空
@@ -222,6 +319,31 @@ public class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("currentPoolIndex", poolIndex);
         caseTokens.putIfAbsent(player.getUniqueId(), UUID.randomUUID().toString());
         payload.put("action_token", caseTokens.get(player.getUniqueId()));
+
+        // 消耗数量
+        payload.put("costAmount", pool.cost().itemAmount());
+        payload.put("costTenAmount", pool.cost().itemAmount() * 10);
+
+        // 奖池物品列表（供奖励预览网格展示）
+        if (pool.caseConfig() != null) {
+            List<PoolItem> items = pool.caseConfig().items();
+            Map<String, Object> itemJsons = new LinkedHashMap<>();
+            Map<String, Object> itemNames = new LinkedHashMap<>();
+            Map<String, Object> itemRarities = new LinkedHashMap<>();
+            for (int i = 0; i < items.size() && i < 43; i++) {
+                PoolItem item = items.get(i);
+                String key = Integer.toString(i + 1);
+                ItemStack stack = service.generateItem(item);
+                itemJsons.put(key, iconResolver.itemToJson(stack));
+                itemNames.put(key, item.name());
+                itemRarities.put(key, item.rarity() != null ? item.rarity() : "");
+            }
+            payload.put("itemJsons", itemJsons);
+            payload.put("itemNames", itemNames);
+            payload.put("itemRarities", itemRarities);
+            payload.put("itemCount", Math.min(items.size(), 43));
+        }
+
         packetBridge.sendPacket(player, CASE_UI_FILE, "update", payload);
     }
 
@@ -247,65 +369,123 @@ public class LotteryPacketHandler implements ClientPacketHandler {
         PoolDefinition pool = getPoolAtIndex(player, getCurrentIndex(player));
         if (pool == null) return;
 
-        List<LotteryRepository.GachaLogEntry> entries =
-            service.getGachaHistory(player.getUniqueId(), pool.id(), 20);
+        if (pool.type() == PoolType.CASE) {
+            // CASE 开箱历史
+            List<LotteryRepository.CaseLogEntry> entries =
+                service.getCaseHistory(player.getUniqueId(), pool.id(), 20);
 
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("historyPoolName", pool.displayName());
-        payload.put("historyCount", entries.size());
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("historyPoolName", pool.displayName());
+            payload.put("historyCount", entries.size());
 
-        Map<String, Object> rows = new LinkedHashMap<>();
-        for (int i = 0; i < entries.size(); i++) {
-            LotteryRepository.GachaLogEntry entry = entries.get(i);
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("pullTime", entry.pullTime());
-            row.put("pullCount", entry.pullCount());
-            row.put("itemsJson", entry.itemsJson());
-            row.put("pityAtPull", entry.pityAtPull());
-            row.put("guaranteed", entry.guaranteed());
-            rows.put(Integer.toString(i), row);
+            Map<String, Object> rows = new LinkedHashMap<>();
+            for (int i = 0; i < entries.size(); i++) {
+                LotteryRepository.CaseLogEntry entry = entries.get(i);
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("openTime", entry.openTime());
+                row.put("itemId", entry.itemId());
+                row.put("rarity", entry.rarity());
+                rows.put(Integer.toString(i), row);
+            }
+            payload.put("historyRows", rows);
+
+            packetBridge.sendPacket(player, CASE_UI_FILE, "history", payload);
+        } else {
+            // GACHA 抽卡历史
+            List<LotteryRepository.GachaLogEntry> entries =
+                service.getGachaHistory(player.getUniqueId(), pool.id(), 20);
+
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("historyPoolName", pool.displayName());
+            payload.put("historyCount", entries.size());
+
+            Map<String, Object> rows = new LinkedHashMap<>();
+            for (int i = 0; i < entries.size(); i++) {
+                LotteryRepository.GachaLogEntry entry = entries.get(i);
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("pullTime", entry.pullTime());
+                row.put("pullCount", entry.pullCount());
+                row.put("itemsJson", entry.itemsJson());
+                row.put("pityAtPull", entry.pityAtPull());
+                row.put("guaranteed", entry.guaranteed());
+                rows.put(Integer.toString(i), row);
+            }
+            payload.put("historyRows", rows);
+
+            packetBridge.sendPacket(player, GACHA_UI_FILE, "history", payload);
         }
-        payload.put("historyRows", rows);
-
-        packetBridge.sendPacket(player, GACHA_UI_FILE, "history", payload);
     }
 
     private void handleDetails(Player player) {
         if (packetBridge == null || !packetBridge.isAvailable()) return;
         PoolDefinition pool = getPoolAtIndex(player, getCurrentIndex(player));
-        if (pool == null || pool.gacha() == null) return;
+        if (pool == null) return;
 
-        GachaPoolConfig gacha = pool.gacha();
+        if (pool.type() == PoolType.CASE && pool.caseConfig() != null) {
+            // CASE 开箱详情
+            CasePoolConfig caseConfig = pool.caseConfig();
+            List<PoolItem> allItems = caseConfig.items();
 
-        List<PoolItem> allItems = new ArrayList<>();
-        if (gacha.up5starItems() != null) allItems.addAll(gacha.up5starItems());
-        if (gacha.standard5starItems() != null) allItems.addAll(gacha.standard5starItems());
-        if (gacha.up4starItems() != null) allItems.addAll(gacha.up4starItems());
-        if (gacha.standard4starItems() != null) allItems.addAll(gacha.standard4starItems());
-        if (gacha.star3Items() != null) allItems.addAll(gacha.star3Items());
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("detailPoolName", pool.displayName());
+            payload.put("detailCount", allItems.size());
 
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("detailPoolName", pool.displayName());
-        payload.put("detailPity5", gacha.pity5star());
-        payload.put("detailPity4", gacha.pity4star());
-        payload.put("detailBase5Rate", gacha.base5starRate());
-        payload.put("detailBase4Rate", gacha.base4starRate());
-        payload.put("detailUpRate", gacha.upRate());
-        payload.put("detailGuaranteeDesc", buildGuaranteeText(pool));
-        payload.put("detailCount", allItems.size());
+            Map<String, Object> rows = new LinkedHashMap<>();
+            for (int i = 0; i < allItems.size(); i++) {
+                PoolItem item = allItems.get(i);
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("name", item.name());
+                row.put("rarity", item.rarity() != null ? item.rarity() : "");
+                row.put("weight", item.weight());
+                rows.put(Integer.toString(i), row);
+            }
+            payload.put("detailRows", rows);
 
-        Map<String, Object> rows = new LinkedHashMap<>();
-        for (int i = 0; i < allItems.size(); i++) {
-            PoolItem item = allItems.get(i);
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("name", item.name());
-            row.put("rarity", item.rarity() != null ? item.rarity() : "");
-            row.put("weight", item.weight());
-            rows.put(Integer.toString(i), row);
+            // 稀有度权重信息
+            Map<String, Object> rarityInfo = new LinkedHashMap<>();
+            for (Map.Entry<String, CasePoolConfig.RaritySetting> entry : caseConfig.raritySettings().entrySet()) {
+                Map<String, Object> info = new LinkedHashMap<>();
+                info.put("color", entry.getValue().color());
+                info.put("baseWeight", entry.getValue().baseWeight());
+                rarityInfo.put(entry.getKey(), info);
+            }
+            payload.put("rarityInfo", rarityInfo);
+
+            packetBridge.sendPacket(player, CASE_UI_FILE, "details", payload);
+        } else if (pool.gacha() != null) {
+            // GACHA 祈愿详情
+            GachaPoolConfig gacha = pool.gacha();
+
+            List<PoolItem> allItems = new ArrayList<>();
+            if (gacha.up5starItems() != null) allItems.addAll(gacha.up5starItems());
+            if (gacha.standard5starItems() != null) allItems.addAll(gacha.standard5starItems());
+            if (gacha.up4starItems() != null) allItems.addAll(gacha.up4starItems());
+            if (gacha.standard4starItems() != null) allItems.addAll(gacha.standard4starItems());
+            if (gacha.star3Items() != null) allItems.addAll(gacha.star3Items());
+
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("detailPoolName", pool.displayName());
+            payload.put("detailPity5", gacha.pity5star());
+            payload.put("detailPity4", gacha.pity4star());
+            payload.put("detailBase5Rate", gacha.base5starRate());
+            payload.put("detailBase4Rate", gacha.base4starRate());
+            payload.put("detailUpRate", gacha.upRate());
+            payload.put("detailGuaranteeDesc", buildGuaranteeText(pool));
+            payload.put("detailCount", allItems.size());
+
+            Map<String, Object> rows = new LinkedHashMap<>();
+            for (int i = 0; i < allItems.size(); i++) {
+                PoolItem item = allItems.get(i);
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("name", item.name());
+                row.put("rarity", item.rarity() != null ? item.rarity() : "");
+                row.put("weight", item.weight());
+                rows.put(Integer.toString(i), row);
+            }
+            payload.put("detailRows", rows);
+
+            packetBridge.sendPacket(player, GACHA_UI_FILE, "details", payload);
         }
-        payload.put("detailRows", rows);
-
-        packetBridge.sendPacket(player, GACHA_UI_FILE, "details", payload);
     }
 
     private void handleExchange(Player player) {

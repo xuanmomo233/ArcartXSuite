@@ -19,6 +19,13 @@ import xuanmo.arcartxsuite.title.TitleDurationParser.TitleDurationSpec;
 import xuanmo.arcartxsuite.title.service.TitleOperationResult;
 import xuanmo.arcartxsuite.title.service.TitleService;
 
+/**
+ * 称号模块的管理员命令处理器。
+ * <p>
+ * 提供 help、status、reload、give、revoke、open 等子命令，
+ * 供管理员查看模块状态、发放/回收称号、强制打开玩家菜单。
+ * 属于 title 模块命令层。
+ */
 public final class TitleAdminCommand implements ModuleCommandHandler {
 
     private static final List<String> ACTIONS = List.of("help", "status", "reload", "give", "revoke", "open");
@@ -26,6 +33,10 @@ public final class TitleAdminCommand implements ModuleCommandHandler {
     private final Supplier<TitleService> serviceProvider;
     private final MessageProvider messages;
 
+    /**
+     * @param serviceProvider 称号服务提供者，运行时可能尚未就绪
+     * @param messages         消息提供者，用于获取本地化提示文本
+     */
     public TitleAdminCommand(Supplier<TitleService> serviceProvider, MessageProvider messages) {
         this.serviceProvider = serviceProvider;
         this.messages = messages;
@@ -42,6 +53,14 @@ public final class TitleAdminCommand implements ModuleCommandHandler {
     @Override public String commandId() { return "title"; }
     @Override public List<String> actions() { return ACTIONS; }
 
+    /**
+     * 处理管理员命令分发。
+     *
+     * @param sender 命令发送者
+     * @param label  命令标签
+     * @param args   命令参数，args[1] 为子命令名
+     * @return 始终返回 {@code true}
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "help";
@@ -57,6 +76,13 @@ public final class TitleAdminCommand implements ModuleCommandHandler {
         return true;
     }
 
+    /**
+     * 提供命令 Tab 补全。
+     *
+     * @param sender 命令发送者
+     * @param args   当前已输入的参数
+     * @return 补全候选列表，{@code null} 表示由 Bukkit 补全玩家名
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) return filter(ACTIONS, args[1]);

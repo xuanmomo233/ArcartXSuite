@@ -36,6 +36,13 @@ import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsService;
 import xuanmo.arcartxsuite.onlinerewards.storage.JdbcOnlineRewardsRepository;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 
+/**
+ * 在线奖励模块主类。
+ * <p>
+ * 属于 {@code onlinerewards} 模块，继承 {@link AbstractAXSModule}，负责配置加载、服务启停、
+ * 命令绑定、PAPI 占位符、客户端包处理与初始化回调，并注册 {@code OnlineRewardsQueryable}、
+ * {@code PlayerDataPurgeable}、{@code DatabaseMigratable} 等跨模块能力。
+ */
 public final class OnlineRewardsModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private OnlineRewardsAdminCommand adminCommand;
@@ -249,10 +256,20 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
             service != null && service.handleClientPacket(player, packetId, data);
     }
 
+    /**
+     * 返回当前在线奖励服务实例。
+     *
+     * @return 服务实例，模块未启动时为 {@code null}
+     */
     public OnlineRewardsService getService() {
         return service;
     }
 
+    /**
+     * 返回当前已加载的模块配置。
+     *
+     * @return 模块配置，未加载时为 {@code null}
+     */
     public OnlineRewardsModuleConfiguration getConfiguration() {
         return configuration;
     }

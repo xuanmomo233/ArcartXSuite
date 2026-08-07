@@ -7,30 +7,30 @@ config-version: 1
 # 关联资源: ui/menu_panel.yml, ui/menu_esc.yml
 
 debug:
-  enabled: false
+  enabled: false  # 是否输出调试日志
 
 client:
-  packet-id: "AXS_MENU"
-  panel-ui-id: "AXS:menu_panel"
-  esc-ui-id: "AXS:menu_esc"
-  register-ui-on-enable: true
-  overwrite-ui-files: false
+  packet-id: "AXS_MENU"  # 客户端通信包标识符
+  panel-ui-id: "AXS:menu_panel"  # 面板布局 UI 的 ID
+  esc-ui-id: "AXS:menu_esc"  # ESC 布局 UI 的 ID
+  register-ui-on-enable: true  # 启动时是否自动注册 UI
+  overwrite-ui-files: false  # 是否强制覆盖用户已修改的 UI 文件
   # ESC 暂停界面绑定的默认菜单 ID（layout: esc 的菜单定义）
   esc-menu-id: "esc_main"
 
 settings:
-  menus-directory: "menus"
-  default-layout: "panel"
-  columns: 2
-  buttons-per-page: 12
-  click-cooldown-ms: 300
-  close-on-action: true
+  menus-directory: "menus"  # 菜单定义文件目录（相对模块数据目录）
+  default-layout: "panel"  # 默认布局模式（panel / esc / full）
+  columns: 2  # 默认每行按钮列数
+  buttons-per-page: 12  # 每页最大按钮数量
+  click-cooldown-ms: 300  # 按钮点击冷却时间（毫秒）
+  close-on-action: true  # 点击按钮执行动作后是否自动关闭菜单
   # 打开菜单失败时是否向玩家发送提示
   notify-open-failed: true
   # 全局物品绑定（跨菜单）
   item-binds:
-    - menu: example
-      material: NETHER_STAR
-      name-contains: "服务器菜单"
-      action: RIGHT_CLICK
+    - menu: example  # 绑定的目标菜单 ID
+      material: NETHER_STAR  # 触发物品的材质
+      name-contains: "服务器菜单"  # 物品名称包含的关键词
+      action: RIGHT_CLICK  # 触发动作（RIGHT_CLICK / LEFT_CLICK 等）
 

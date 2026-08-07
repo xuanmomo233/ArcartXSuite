@@ -15,6 +15,12 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.lottery.LotteryService;
 
+/**
+ * Lottery 模块的管理员命令处理器。
+ * <p>
+ * 提供状态查看、配置重载、状态重置、发放抽奖券、模拟抽奖等管理操作。
+ * 通过 {@code Supplier<LotteryService>} 延迟获取服务实例，避免模块未就绪时的空指针。
+ */
 public class LotteryAdminCommand {
 
     private final Supplier<LotteryService> serviceSupplier;
@@ -25,10 +31,23 @@ public class LotteryAdminCommand {
         this.messages = messages;
     }
 
+    /**
+     * 返回该命令支持的全部子操作列表。
+     *
+     * @return 不可变操作名称列表
+     */
     public List<String> actions() {
         return List.of("help", "status", "reload", "reset", "give-ticket", "simulate");
     }
 
+    /**
+     * 处理管理员命令分发。
+     *
+     * @param sender 命令发送者
+     * @param label  命令标签
+     * @param args   命令参数，{@code args[0]} 为子操作名
+     * @return {@code true} 表示命令已处理
+     */
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         if (args.length == 0) {
             sender.sendMessage(msg("admin.help"));
@@ -75,6 +94,13 @@ public class LotteryAdminCommand {
         return true;
     }
 
+    /**
+     * 提供命令 Tab 补全建议。
+     *
+     * @param sender 命令发送者
+     * @param args   当前已输入的参数
+     * @return 补全候选列表，无匹配时返回空列表
+     */
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 1) {
             return filter(actions(), args[0]);

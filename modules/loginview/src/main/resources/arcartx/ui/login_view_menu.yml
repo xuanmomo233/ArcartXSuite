@@ -30,6 +30,23 @@ ui:
   level: 20
   screenScale: true
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 服务端回包 ID，用于客户端 Packet.send 回传
+    #   - type: 界面类型 (login/register/change/bypass/bypass_unbound)
+    #   - title: 界面标题文本
+    #   - mode: 模式 (standalone/authme)
+    #   - registered: 玩家是否已注册
+    #   - playerName: 玩家名称
+    #   - serverName: 服务器名称
+    #   - online: 当前在线人数
+    #   - maxPlayers: 最大玩家数
+    #   - address: 服务器 IP 地址
+    #   - premiumBypass: 是否通过正版验证免登录
+    #   - qqBound: 是否已绑定 QQ
+    #   - bindPrompt: 未绑定 QQ 时的提示消息列表
+    #   - message: 初始结果消息
+    #   - requireTerms: 是否要求同意服务条款
     init: |-
       var.packetId = packet['packetId']
       var.type = packet['type']
@@ -54,6 +71,10 @@ ui:
       var.agreed = false
       var.showRules = false
       var.requireTerms = packet['requireTerms']
+    # packetHandler: result
+    # 包字段:
+    #   - message: 操作结果消息文本
+    #   - success: 操作是否成功 (true/false)
     result: |-
       var.result = packet['message']
       var.lastSuccess = packet['success']
@@ -64,6 +85,9 @@ ui:
         var.newPassword = none
         var.changeConfirmPassword = none
       }
+    # packetHandler: close
+    # 包字段:
+    #   - message: 关闭时的结果消息
     close: |-
       var.result = packet['message']
   action:

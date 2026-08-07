@@ -5,6 +5,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
+/**
+ * 拾取 HUD 模板生成器，根据 maxVisible 与 entryTtlMs 参数动态生成 pickup_hud.yml。
+ * <p>
+ * 生成的 HUD 通过 packetHandler.pick 接收拾取事件，并以滚动队列展示最近 N 条拾取记录。
+ */
 public final class PickupHudTemplateWriter {
 
     private PickupHudTemplateWriter() {

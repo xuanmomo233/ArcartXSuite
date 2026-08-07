@@ -7,6 +7,12 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import xuanmo.arcartxsuite.conversation.service.ConversationService;
 
+/**
+ * ArcartX 对话主题，替代 Chemdah 默认主题，将对话渲染到 ArcartX UI。
+ * <p>
+ * 实现 {@link Theme} 的生命周期回调（onBegin/onReply/onClose），
+ * 委托 {@link ConversationService} 构造并发送 UI 数据包。
+ */
 public final class ArcartXConversationTheme extends Theme<ThemeSettings> {
 
     private final ConversationService service;

@@ -15,6 +15,12 @@ import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsOperationResult;
 import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsService;
 
+/**
+ * 在线奖励管理命令处理器。
+ * <p>
+ * 属于 {@code onlinerewards} 模块，提供 {@code /axs onlinerewards <action>} 管理子命令，
+ * 包括查看状态、重载、调整在线时长、补签卡、离线储蓄等操作。
+ */
 public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
 
     private static final List<String> ACTIONS = List.of("help", "status", "reload", "add", "remove", "set", "card", "savings");
@@ -22,6 +28,12 @@ public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
     private final Supplier<OnlineRewardsService> serviceProvider;
     private final MessageProvider messages;
 
+    /**
+     * 构造管理命令处理器。
+     *
+     * @param serviceProvider 在线奖励服务提供者
+     * @param messages        消息提供者
+     */
     public OnlineRewardsAdminCommand(Supplier<OnlineRewardsService> serviceProvider, MessageProvider messages) {
         this.serviceProvider = serviceProvider;
         this.messages = messages;
@@ -34,6 +46,14 @@ public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
     @Override public String commandId() { return "onlinerewards"; }
     @Override public List<String> actions() { return ACTIONS; }
 
+    /**
+     * 处理管理命令，根据子动作分发到对应处理逻辑。
+     *
+     * @param sender 命令发送者
+     * @param label  命令标签
+     * @param args   参数数组
+     * @return {@code true} 表示已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "help";
@@ -49,6 +69,13 @@ public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
         return true;
     }
 
+    /**
+     * 提供管理命令的 Tab 补全建议。
+     *
+     * @param sender 命令发送者
+     * @param args   参数数组
+     * @return 补全候选列表，返回 {@code null} 表示由 Bukkit 补全玩家名
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) return filter(ACTIONS, args[1]);

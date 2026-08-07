@@ -14,6 +14,13 @@ import xuanmo.arcartxsuite.title.config.TitleDefinition;
 import xuanmo.arcartxsuite.title.config.TitleDefinition.OverheadMode;
 import xuanmo.arcartxsuite.title.model.ResolvedTitleState;
 
+/**
+ * 称号头顶显示服务。
+ * <p>
+ * 根据已装备称号的头顶模式（纹理/文本/无），在玩家头顶渲染称号效果：
+ * 纹理模式通过 WorldTextureBridge 挂载贴图实体，文本模式通过 Scoreboard Team 设置前后缀。
+ * 模式切换时自动清理旧效果。属于 title 模块服务层。
+ */
 public class TitleOverheadService {
 
     private static final String EFFECT_PREFIX = "axs_title_";
@@ -23,11 +30,21 @@ public class TitleOverheadService {
     private final Logger logger;
     private final Map<UUID, OverheadMode> activeMode = new ConcurrentHashMap<>();
 
+    /**
+     * @param worldTextureService 世界纹理桥接 API
+     * @param logger              日志器
+     */
     public TitleOverheadService(WorldTextureBridgeAPI worldTextureService, Logger logger) {
         this.worldTextureService = worldTextureService;
         this.logger = logger;
     }
 
+    /**
+     * 同步玩家的头顶显示效果。
+     *
+     * @param player       目标玩家
+     * @param resolvedState 解析后的称号状态
+     */
     public void sync(Player player, ResolvedTitleState resolvedState) {
         if (player == null || !player.isOnline()) return;
 
@@ -51,6 +68,11 @@ public class TitleOverheadService {
         activeMode.put(player.getUniqueId(), targetMode);
     }
 
+    /**
+     * 清除玩家的头顶显示效果。
+     *
+     * @param player 目标玩家
+     */
     public void clear(Player player) {
         if (player == null) return;
         OverheadMode mode = activeMode.remove(player.getUniqueId());
@@ -59,6 +81,9 @@ public class TitleOverheadService {
         }
     }
 
+    /**
+     * 关闭服务，清除所有在线玩家的头顶效果并注销 Scoreboard Team。
+     */
     public void shutdown() {
         Scoreboard scoreboard = Bukkit.getScoreboardManager().getMainScoreboard();
         for (Map.Entry<UUID, OverheadMode> entry : activeMode.entrySet()) {

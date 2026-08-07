@@ -1,10 +1,11 @@
-config-version: 5
-# ArcartXSuite AfkReward - 区域挂机奖励模块
+# 文件用途: ArcartXSuite 挂机奖励模块主配置
+# 管理区域挂机奖励的全局开关、反滥用策略、原地挂机行为保护、存储与 HUD 配置。
 # 重载: /axs afkreward reload
 # 奖励周期、上限、倍率与奖励定义已下放到各个 areas/area-*.yml 文件，
 # 每个区域文件现在可以独立配置完整的奖励规则。
+config-version: 5  # 配置版本号（用于触发 migration 迁移流程）
 
-debug: false
+debug: false  # 是否开启调试模式（输出详细日志）
 
 # 区域配置目录（相对于 data/afkreward/ 文件夹）
 # 每个区域为独立的 area-<id>.yml 文件
@@ -12,31 +13,31 @@ areas-directory: "areas"
 
 # 反滥用配置（默认关闭）
 anti-abuse:
-  time-limit:
-    enable: false
-    session-seconds: 0
-    daily-seconds: 0
-    on-exceed: STOP
-    exempt-permission: "axs.afkreward.bypass.timelimit"
-  bot-detection:
-    enable: false
-    window-seconds: 300
-    min-view-changes: 3
-    action: NO_REWARD
-    exempt-permission: "axs.afkreward.bypass.botcheck"
-  ip-limit:
-    enable: false
-    exempt-permission: "axs.afkreward.bypass.iplimit"
-  decay:
-    enable: false
-    start-seconds: 3600
-    factor-per-hour: 0.2
-    min-multiplier: 0.3
+  time-limit:  # 挂机时长限制
+    enable: false              # 是否启用时长限制
+    session-seconds: 0         # 单次挂机最大时长（秒），0 表示不限
+    daily-seconds: 0           # 每日挂机最大时长（秒），0 表示不限
+    on-exceed: STOP            # 超限时行为：STOP（停止挂机）
+    exempt-permission: "axs.afkreward.bypass.timelimit"  # 豁免权限节点
+  bot-detection:  # 挂机机器人检测
+    enable: false              # 是否启用机器人检测
+    window-seconds: 300        # 检测窗口时长（秒）
+    min-view-changes: 3        # 窗口内最小视角变化次数，低于此值判定为机器人
+    action: NO_REWARD          # 检测到机器人时的行为：NO_REWARD（不发奖励）
+    exempt-permission: "axs.afkreward.bypass.botcheck"  # 豁免权限节点
+  ip-limit:  # 同 IP 挂机人数限制
+    enable: false              # 是否启用 IP 限制
+    exempt-permission: "axs.afkreward.bypass.iplimit"  # 豁免权限节点
+  decay:  # 奖励衰减机制
+    enable: false              # 是否启用奖励衰减
+    start-seconds: 3600        # 衰减开始时间（秒），挂机超过此时长后开始衰减
+    factor-per-hour: 0.2       # 每小时衰减因子（倍率每小时减少 0.2）
+    min-multiplier: 0.3        # 最低衰减倍率（衰减不会低于此值）
 
 # 发奖审计日志
 audit:
-  enable: true
-  file: "audit.log"
+  enable: true   # 是否启用审计日志
+  file: "audit.log"  # 审计日志文件名
 
 # 原地挂机配置
 manual:
@@ -99,24 +100,24 @@ manual:
 
 # 性能保护
 performance:
-  pause-on-low-tps:
-    enable: false
-    min-tps: 15.0
+  pause-on-low-tps:  # 服务器 TPS 过低时暂停挂机奖励
+    enable: false    # 是否启用低 TPS 暂停
+    min-tps: 15.0    # 触发暂停的 TPS 阈值
 
 # 存储配置
 storage:
-  dialect: sqlite
-  sqlite-file: "afkreward.db"
-  host: "127.0.0.1"
-  port: 3306
-  database: "arcartxsuite"
-  username: "root"
-  password: ""
-  table-prefix: "axs_afk_"
-  pool-size: 3
+  dialect: sqlite          # 存储方言：sqlite 或 mysql
+  sqlite-file: "afkreward.db"  # SQLite 数据库文件名
+  host: "127.0.0.1"        # MySQL 主机地址
+  port: 3306               # MySQL 端口
+  database: "arcartxsuite"  # MySQL 数据库名
+  username: "root"         # MySQL 用户名
+  password: ""             # MySQL 密码
+  table-prefix: "axs_afk_"  # 数据表前缀
+  pool-size: 3             # 连接池大小
 
 # HUD 配置
 ui:
-  hud-id: "AXS:afk_reward_hud"
-  register-on-enable: true
-  overwrite-ui-file: false
+  hud-id: "AXS:afk_reward_hud"  # HUD 界面 ID（对应 ui/afk_reward_hud.yml）
+  register-on-enable: true       # 模块启用时是否自动注册 HUD
+  overwrite-ui-file: false       # 是否在每次启用时覆盖用户已修改的 UI 文件

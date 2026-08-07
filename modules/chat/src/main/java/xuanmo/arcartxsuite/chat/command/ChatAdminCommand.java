@@ -17,6 +17,12 @@ import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.chat.model.ChatOperationResult;
 import xuanmo.arcartxsuite.chat.service.ChatService;
 
+/**
+ * 聊天模块管理员命令处理器。
+ * <p>
+ * 支持 help / status / reload / mute / unmute / spy 六个子动作，
+ * 通过 {@link Supplier} 延迟获取 {@link ChatService}，避免模块加载顺序问题。
+ */
 public final class ChatAdminCommand implements ModuleCommandHandler {
 
     private static final List<String> ACTIONS = List.of("help", "status", "reload", "mute", "unmute", "spy");
@@ -25,6 +31,10 @@ public final class ChatAdminCommand implements ModuleCommandHandler {
     private final Supplier<ChatService> serviceProvider;
     private final MessageProvider messages;
 
+    /**
+     * @param serviceProvider 聊天服务延迟供应者
+     * @param messages         消息提供者，用于本地化提示文本
+     */
     public ChatAdminCommand(Supplier<ChatService> serviceProvider, MessageProvider messages) {
         this.serviceProvider = serviceProvider;
         this.messages = messages;

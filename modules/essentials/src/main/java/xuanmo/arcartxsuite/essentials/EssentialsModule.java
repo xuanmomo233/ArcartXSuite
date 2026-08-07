@@ -42,6 +42,15 @@ import xuanmo.arcartxsuite.essentials.service.TeleportService;
 import xuanmo.arcartxsuite.essentials.service.TreeCapitatorService;
 import xuanmo.arcartxsuite.essentials.storage.EssentialsRepository;
 
+/**
+ * Essentials 模块主类。
+ * <p>
+ * 继承 {@link AbstractAXSModule}，实现 {@link ModuleCommandHandler}，
+ * 是 Essentials 模块的生命周期入口与命令注册中心。
+ * 负责加载配置、初始化仓储与各服务层、注册 UI 绑定与 Packet Handler、
+ * 注册跨模块能力（{@code EssentialsQueryable}、{@code PlayerDataPurgeable}、
+ * {@code DatabaseMigratable}）以及注册 PAPI 占位符扩展。
+ */
 public final class EssentialsModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private static final List<String> ACTIONS = List.of(
@@ -78,6 +87,11 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
     private EssentialsCommandDelegate commandDelegate;
     private final Map<UUID, BukkitTask> poseMonitorTasks = new ConcurrentHashMap<>();
 
+    /**
+     * 返回模块描述符（id=essentials，名称=Essentials，版本=1.0.0-beta）。
+     *
+     * @return 模块描述符
+     */
     @Override
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("essentials")
@@ -87,31 +101,61 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
             .build();
     }
 
+    /**
+     * 返回命令标识符。
+     *
+     * @return {@code "essentials"}
+     */
     @Override
     public String commandId() {
         return "essentials";
     }
 
+    /**
+     * 返回命令别名列表。
+     *
+     * @return 包含 {@code "ess"} 的别名列表
+     */
     @Override
     public List<String> commandAliases() {
         return List.of("ess");
     }
 
+    /**
+     * 返回模块支持的全部子动作列表，用于命令分发与 Tab 补全。
+     *
+     * @return 不可变动作列表
+     */
     @Override
     public List<String> actions() {
         return ACTIONS;
     }
 
+    /**
+     * 返回主配置文件名。
+     *
+     * @return {@code "ArcartXEssentials.yml"}
+     */
     @Override
     protected String configFileName() {
         return "ArcartXEssentials.yml";
     }
 
+    /**
+     * 返回消息文件名。
+     *
+     * @return {@code "messages.yml"}
+     */
     @Override
     protected String messagesFileName() {
         return "messages.yml";
     }
 
+    /**
+     * 返回主配置的校验规则列表，确保存储方言与 SQLite 文件路径必填。
+     *
+     * @return 校验规则列表
+     */
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
@@ -121,6 +165,11 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         );
     }
 
+    /**
+     * 返回 UI 资源映射（菜单 UI 与管理 UI 的资源路径到文件路径映射）。
+     *
+     * @return UI 资源映射表
+     */
     @Override
     protected @NotNull Map<String, String> uiResourceMappings() {
         Map<String, String> mappings = new LinkedHashMap<>();
@@ -129,6 +178,13 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         return mappings;
     }
 
+    /**
+     * 加载并解析主配置文件为 {@link EssentialsConfiguration}。
+     *
+     * @param configFile 配置文件，为 null 时抛出异常
+     * @throws IllegalStateException 配置文件缺失时抛出
+     * @throws Exception             配置解析失败时抛出
+     */
     @Override
     protected void loadConfiguration(@Nullable File configFile) throws Exception {
         if (configFile == null) {
@@ -138,6 +194,12 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         configuration = EssentialsConfiguration.load(rawYaml, logger);
     }
 
+    /**
+     * 启动全部服务层：仓储、玩家管理、传送、砍树、背包操作，
+     * 注册能力、UI 绑定、命令与 PAPI 扩展。
+     *
+     * @throws Exception 启动失败时抛出
+     */
     @Override
     protected void startService() throws Exception {
         repository = new EssentialsRepository(
@@ -256,6 +318,9 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         logger.info("Essentials 模块已启动。");
     }
 
+    /**
+     * 停止并释放全部服务层资源，按反向顺序关闭。
+     */
     @Override
     protected void stopService() {
         commandDelegate = null;
@@ -272,6 +337,11 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         rawYaml = null;
     }
 
+    /**
+     * 创建客户端包处理器，将包路由到菜单或管理 UI 的 Packet Handler。
+     *
+     * @return 包处理器，桥接不可用时仍返回无操作处理器
+     */
     @Override
     protected @Nullable ClientPacketHandler createPacketHandler() {
         return (player, packetId, data) -> {
@@ -281,6 +351,14 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         };
     }
 
+    /**
+     * 处理 {@code /essentials} 命令，委派给 {@link EssentialsCommandDelegate}。
+     *
+     * @param sender 命令发送者
+     * @param label  命令标签
+     * @param args   命令参数
+     * @return {@code true} 表示命令已处理
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         if (commandDelegate == null) {
@@ -290,6 +368,13 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
         return commandDelegate.onCommand(sender, label, args);
     }
 
+    /**
+     * 提供 {@code /essentials} 命令的 Tab 补全，委派给 {@link EssentialsCommandDelegate}。
+     *
+     * @param sender 命令发送者
+     * @param args   当前参数数组
+     * @return 补全候选列表，无补全时返回空列表
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (commandDelegate == null) return List.of();
@@ -298,6 +383,11 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
 
     // ─── Sit / Lay ───
 
+    /**
+     * 创建模块事件监听器列表，当前包含玩家退出时取消姿势监控任务的监听器。
+     *
+     * @return 监听器列表
+     */
     @Override
     protected List<Listener> createListeners() {
         return List.of(new Listener() {
@@ -317,14 +407,29 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
 
     // ─── Utilities ───
 
+    /**
+     * 返回模块数据仓储实例。
+     *
+     * @return 仓储实例，模块未启动时可能为 null
+     */
     public EssentialsRepository getRepository() {
         return repository;
     }
 
+    /**
+     * 返回玩家管理服务实例。
+     *
+     * @return 玩家管理服务，模块未启动时可能为 null
+     */
     public PlayerManagementService getPlayerService() {
         return playerService;
     }
 
+    /**
+     * 创建 PlaceholderAPI 占位符扩展实例。
+     *
+     * @return {@link EssentialsPlaceholderExpansion} 实例
+     */
     @Override
     protected @Nullable Object createPlaceholderExpansion() {
         return new EssentialsPlaceholderExpansion(plugin, () -> playerService);
@@ -332,6 +437,10 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
 
     // ─── EssentialsQueryable 实现 ───
 
+    /**
+     * {@link EssentialsQueryable} 能力的内部实现，
+     * 供 Tab、Chat 等外部模块查询玩家的 AFK、隐身、禁言、昵称、飞行与无敌状态。
+     */
     private final class EssentialsQueryableImpl implements EssentialsQueryable {
 
         @Override

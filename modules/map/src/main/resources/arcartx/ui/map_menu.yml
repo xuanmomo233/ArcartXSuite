@@ -14,6 +14,41 @@ ui:
   screenScale: true
   show: true
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 通信标识，用于 Packet.send 回包
+    #   - selectedWorldId: 当前选中的世界 ID
+    #   - selectedWorldName: 当前选中的世界名称
+    #   - worldRows: 世界列表行数据
+    #   - anchorRows: 锚点列表行数据
+    #   - waypointRows: 路径点列表行数据
+    #   - externalTargetRows: 外部目标列表行数据
+    #   - waypointLimit: 路径点上限
+    #   - waypointCount: 当前路径点数量
+    #   - canCreateWaypoint: 是否允许创建路径点
+    #   - clearTrackVisible: 是否显示清除导航按钮
+    #   - trackingText: 导航追踪提示文本
+    #   - detailSelectedType: 详情面板选中类型
+    #   - detailSelectedId: 详情面板选中 ID
+    #   - detailTitle: 详情标题
+    #   - detailDescription: 详情描述
+    #   - detailUnlocked: 是否已解锁
+    #   - detailUnlockCostText: 解锁费用文本
+    #   - detailTeleportCostText: 传送费用文本
+    #   - detailExternalTarget: 是否为外部目标
+    #   - detailCanUnlock: 是否可解锁
+    #   - detailCanTeleport: 是否可传送
+    #   - detailCanTrackAnchor: 是否可追踪锚点
+    #   - detailCanTrackWaypoint: 是否可追踪路径点
+    #   - detailCanTrackExternal: 是否可追踪外部目标
+    #   - detailCanDeleteWaypoint: 是否可删除路径点
+    #   - detailCanCreateWaypoint: 是否可创建路径点
+    #   - detailClearTrackVisible: 详情面板是否显示清除导航
+    #   - detailTrackingText: 详情面板导航追踪文本
+    #   - maxWorldCount: 世界行模板最大复制数
+    #   - maxAnchorCount: 锚点行模板最大复制数
+    #   - maxWaypointCount: 路径点行模板最大复制数
+    #   - maxExternalCount: 外部目标行模板最大复制数
     init: |-
       var.packetId = packet['packetId']
       var.selectedWorldId = packet['selectedWorldId']
@@ -80,6 +115,8 @@ ui:
         e = val.external_row['地图项目'].copy('地图项目' + key)
         e.entryKey = key
       }
+    # packetHandler: update
+    # 包字段: 同 init（实时刷新地图菜单数据）
     update: |-
       var.packetId = packet['packetId']
       var.selectedWorldId = packet['selectedWorldId']

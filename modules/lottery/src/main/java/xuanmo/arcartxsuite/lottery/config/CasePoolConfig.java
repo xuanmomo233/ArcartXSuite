@@ -11,21 +11,41 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.lottery.model.PoolItem;
 
+/**
+ * CASE 开箱奖池配置。
+ * <p>
+ * 定义稀有度权重与奖品列表，由 {@link #load} 从 YAML 配置节解析。
+ *
+ * @param raritySettings 稀有度名称到权重设定的映射
+ * @param items          奖池中全部可用奖品列表
+ */
 public record CasePoolConfig(
     @NotNull Map<String, RaritySetting> raritySettings,
-    double stattrakChance,
     @NotNull List<PoolItem> items
 ) {
 
+    /**
+     * 单个稀有度的配置设定。
+     *
+     * @param color      显示颜色代码（如 {@code &f}）
+     * @param baseWeight 基础权重，用于加权随机抽取
+     */
     public record RaritySetting(
         String color,
         int baseWeight
     ) {}
 
+    /**
+     * 从 YAML 配置节加载 CASE 奖池配置。
+     *
+     * @param section 配置节，为 {@code null} 时使用空配置
+     * @param logger  日志记录器，用于输出警告信息
+     * @return 解析后的 {@link CasePoolConfig} 实例
+     * @throws IllegalArgumentException 当奖池无可用奖品或稀有度配置无效时抛出
+     */
     public static CasePoolConfig load(@Nullable ConfigurationSection section, Logger logger) {
         if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
 
-        double stattrakChance = section.getDouble("stattrak-chance", 0.1);
         List<PoolItem> items = loadItems(section.getConfigurationSection("items"), logger);
         if (items.isEmpty()) {
             throw new IllegalArgumentException("CASE 奖池没有可用奖品");
@@ -36,7 +56,7 @@ public record CasePoolConfig(
             throw new IllegalArgumentException("CASE 奖池没有包含奖品的有效稀有度");
         }
 
-        return new CasePoolConfig(raritySettings, stattrakChance, items);
+        return new CasePoolConfig(raritySettings, items);
     }
 
     private static Map<String, RaritySetting> loadRaritySettings(

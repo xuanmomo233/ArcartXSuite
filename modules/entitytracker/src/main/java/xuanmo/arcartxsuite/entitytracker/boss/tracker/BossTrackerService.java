@@ -45,6 +45,13 @@ import xuanmo.arcartxsuite.api.event.TaczGunDamageEvent;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import java.util.logging.Logger;
 
+/**
+ * Boss 追踪服务，属于 entitytracker 模块的核心服务。
+ * <p>
+ * 监听 MythicMob 生成/死亡/消失事件和实体伤害事件，管理 Boss 会话生命周期，
+ * 定时刷新观察者 HUD 数据包，处理混合服务端的实体重扫描，
+ * 并协调伤害结算、跨服排名和击杀记录等子服务。
+ */
 public final class BossTrackerService implements Listener {
 
     private static final DecimalFormat NUMBER_FORMAT = new DecimalFormat("0.##");

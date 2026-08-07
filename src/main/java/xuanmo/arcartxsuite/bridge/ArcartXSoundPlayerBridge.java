@@ -11,6 +11,10 @@ import priv.seventeen.artist.arcartx.core.entity.data.ArcartXPlayer;
 import priv.seventeen.artist.arcartx.core.sound.ArcartXSoundPlayer;
 import xuanmo.arcartxsuite.api.bridge.SoundPlayerBridgeAPI;
 
+/**
+ * {@link SoundPlayerBridgeAPI} 的默认实现，桥接 ArcartX 音效播放器，
+ * 向客户端推送自定义音效（绕过原版音效包限制）。
+ */
 public final class ArcartXSoundPlayerBridge implements SoundPlayerBridgeAPI {
 
     private final JavaPlugin plugin;

@@ -1,13 +1,12 @@
-# AfkReward 配置迁移: 2 -> 3
-# areas 节从主配置移除，改为独立区域配置文件 (data/afkreward/areas/area-*.yml)
-
-from-version: 2
-to-version: 3
-description: "移除主配置内联 areas，改用 areas-directory 指向区域文件目录"
+# 文件用途: AfkReward 配置迁移 2 -> 3
+# 迁移目的: areas 节从主配置移除，改为独立区域配置文件 (data/afkreward/areas/area-*.yml)
+from-version: 2  # 迁移起始版本号
+to-version: 3    # 迁移目标版本号
+description: "移除主配置内联 areas，改用 areas-directory 指向区域文件目录"  # 迁移说明
 
 operations:
-  - type: remove
+  - type: remove          # 删除主配置中的内联 areas 节
     path: areas
-  - type: set-if-missing
+  - type: set-if-missing  # 补充新增的 areas-directory 字段（仅当不存在时设置）
     path: areas-directory
     value: "areas"

@@ -13,6 +13,12 @@ import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.menu.config.MenuDefinition;
 import xuanmo.arcartxsuite.menu.service.MenuService;
 
+/**
+ * Menu 模块的管理命令处理器，提供 help、status、reload、list、open 等子命令。
+ * <p>
+ * 由 {@link xuanmo.arcartxsuite.menu.MenuModule} 通过 {@link xuanmo.arcartxsuite.api.ModuleCommandHandler}
+ * 接口委托调用，面向管理员进行菜单状态查看、配置重载和强制打开菜单等操作。
+ */
 public final class MenuAdminCommand {
 
     private static final List<String> ACTIONS = List.of("help", "status", "reload", "list", "open");
@@ -25,10 +31,23 @@ public final class MenuAdminCommand {
         this.messages = messages;
     }
 
+    /**
+     * 返回该命令支持的所有子命令动作列表。
+     *
+     * @return 不可变的子命令名称列表
+     */
     public List<String> actions() {
         return ACTIONS;
     }
 
+    /**
+     * 处理管理命令，根据子命令分发到对应的帮助、状态、重载、列表或打开逻辑。
+     *
+     * @param sender 命令发送者
+     * @param label  命令标签
+     * @param args   命令参数数组
+     * @return {@code true} 表示命令已处理
+     */
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         String action = args.length < 2 ? "help" : args[1].toLowerCase(Locale.ROOT);
         switch (action) {
@@ -57,6 +76,13 @@ public final class MenuAdminCommand {
         return true;
     }
 
+    /**
+     * 提供命令 Tab 补全，根据参数位置返回子命令名称、菜单 ID 或在线玩家名。
+     *
+     * @param sender 命令发送者
+     * @param args   当前已输入的参数数组
+     * @return 补全候选列表，可能为空
+     */
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) {
             return filter(ACTIONS, args[1]);

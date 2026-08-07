@@ -73,4 +73,5 @@ conditions: []
 # mythiclib|critical_damage:8   -> 同上，支持完整前缀写法
 # 最小示例保留一个可运行效果，实际可继续追加多行。
 effects:
+  # potion|SPEED:2 -> 附加速度 II 药水效果
   - "potion|SPEED:2"

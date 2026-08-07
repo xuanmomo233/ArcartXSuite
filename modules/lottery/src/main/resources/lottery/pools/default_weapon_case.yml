@@ -1,101 +1,59 @@
-id: "default_weapon_case"
-type: CASE
-enabled: true
-display-name: "常规武器箱"
-description: |-
+# 文件用途: 常规武器箱卡池数据定义。
+# 定义 CS 开箱风格武器箱的消耗、稀有度权重和武器皮肤物品池。
+# 类型为 CASE（CS 开箱），使用钥匙开启，包含7个稀有度等级。
+
+id: "default_weapon_case"  # 卡池唯一标识
+type: CASE  # 卡池类型：CASE（CS 开箱）
+enabled: true  # 是否启用
+display-name: "常规武器箱"  # 显示名称
+description: |-  # 卡池描述文本
   常规武器箱
   使用武器箱钥匙开启，可获得各种稀有度的武器皮肤。
   包含从消费级到隐秘级的多款皮肤，更有罕见特殊级掉落！
-up-item-icon: '{"id":"minecraft:chest","Count":1b}'
+up-item-icon: '{"id":"minecraft:chest","Count":1b}'  # UP 物品图标（JSON 格式）
 
-cost:
-  mode: ITEM
-  item-id: "CaseKey"
-  item-amount: 1
+cost:  # 开箱消耗配置
+  mode: ITEM  # 消耗模式：ITEM（物品）
+  item-id: "CaseKey"  # 消耗物品标识
+  item-amount: 1  # 消耗数量
 
-case:
-  rarity-settings:
-    CONSUMER:
-      color: "&f"
-      base-weight: 15625
-    INDUSTRIAL:
+case:  # 开箱机制参数
+  rarity-settings:  # 稀有度权重配置（base-weight 越大越常见）
+    COMMON:  # 普通（灰色）
+      color: "&f"  # 显示颜色代码
+      base-weight: 15625  # 基础权重
+    UNCOMMON:  # 不凡（浅蓝灰）
       color: "&b"
       base-weight: 3125
-    MIL_SPEC:
+    RARE:  # 稀有（蓝色）
       color: "&9"
       base-weight: 625
-    RESTRICTED:
+    EPIC:  # 史诗（紫色）
       color: "&5"
       base-weight: 125
-    CLASSIFIED:
+    LEGENDARY:  # 传说（红色）
       color: "&d"
       base-weight: 25
-    COVERT:
+    MYTHIC:  # 神话（金色）
       color: "&c"
       base-weight: 5
-    SPECIAL:
+    SPECIAL:  # 特殊（亮金色，最稀有）
       color: "&6"
       base-weight: 2
 
-  stattrak-chance: 0.1
-
-  items:
+  items:  # 武器皮肤物品池
     skin_ak47_redline:
-      id: "skin_ak47_redline"
-      name: "AK-47 | 红线"
-      rarity: CLASSIFIED
-      plugin-type: NEIGE
-      plugin-id: "AK47_Redline"
-      delivery: DIRECT
-      stattrak-enabled: true
-      wear-distribution:
-        FACTORY_NEW:
-          min: 0.00
-          max: 0.07
-          weight: 0.05
-        MINIMAL_WEAR:
-          min: 0.07
-          max: 0.15
-          weight: 0.15
-        FIELD_TESTED:
-          min: 0.15
-          max: 0.38
-          weight: 0.50
-        WELL_WORN:
-          min: 0.38
-          max: 0.45
-          weight: 0.20
-        BATTLE_SCARRED:
-          min: 0.45
-          max: 1.00
-          weight: 0.10
+      id: "skin_ak47_redline"  # 物品唯一标识
+      name: "AK-47 | 红线"  # 物品显示名称
+      rarity: LEGENDARY  # 稀有度等级
+      plugin-type: NeigeItems  # 物品来源插件类型：NeigeItems
+      plugin-id: "AK47_Redline"  # 物品来源插件内部 ID
+      delivery: DIRECT  # 发放方式：DIRECT（直接发放）
 
     skin_awp_dragon:
       id: "skin_awp_dragon"
       name: "AWP | 巨龙传说"
-      rarity: COVERT
-      plugin-type: NEIGE
+      rarity: MYTHIC  # 神话级（金色）
+      plugin-type: NeigeItems
       plugin-id: "AWP_DragonLore"
       delivery: DIRECT
-      stattrak-enabled: true
-      wear-distribution:
-        FACTORY_NEW:
-          min: 0.00
-          max: 0.07
-          weight: 0.01
-        MINIMAL_WEAR:
-          min: 0.07
-          max: 0.15
-          weight: 0.05
-        FIELD_TESTED:
-          min: 0.15
-          max: 0.38
-          weight: 0.15
-        WELL_WORN:
-          min: 0.38
-          max: 0.45
-          weight: 0.30
-        BATTLE_SCARRED:
-          min: 0.45
-          max: 1.00
-          weight: 0.49

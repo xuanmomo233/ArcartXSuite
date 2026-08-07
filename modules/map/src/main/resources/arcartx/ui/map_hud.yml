@@ -13,6 +13,20 @@ ui:
   screenScale: true
   show: true
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: 通信标识，用于 Packet.send 回包
+    #   - visible: 小地图是否可见
+    #   - worldId: 当前世界 ID
+    #   - texture: 地图纹理路径
+    #   - imageWidth: 地图图片宽度
+    #   - imageHeight: 地图图片高度
+    #   - hudZoom: HUD 缩放比例
+    #   - hudSize: HUD 尺寸（像素）
+    #   - clippedPlayerX: 裁剪后玩家 X 坐标
+    #   - clippedPlayerZ: 裁剪后玩家 Z 坐标
+    #   - playerYaw: 玩家朝向角度
+    #   - trackingText: 导航追踪提示文本
     init: |-
       var.packetId = packet['packetId']
       var.visible = packet['visible']
@@ -26,6 +40,8 @@ ui:
       var.clippedPlayerZ = packet['clippedPlayerZ']
       var.playerYaw = packet['playerYaw']
       var.trackingText = packet['trackingText']
+    # packetHandler: update
+    # 包字段: 同 init（实时刷新小地图数据）
     update: |-
       var.packetId = packet['packetId']
       var.visible = packet['visible']

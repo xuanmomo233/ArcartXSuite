@@ -1,11 +1,23 @@
+# 文件用途: 挂机奖励 HUD 界面配置
+# 定义玩家在挂机区域时屏幕上显示的 HUD 面板，展示当前挂机区域、时长、下次奖励倒计时、
+# 区域人数、本次收益与累计挂机时长等信息。
 ui:
-  id: AXS:afk_reward_hud
-  isHud: true
-  defaultOpen: true
-  level: 20
-  through: true
-  show: true
+  id: AXS:afk_reward_hud  # UI 唯一标识符
+  isHud: true              # 是否为 HUD（无交互的纯显示界面）
+  defaultOpen: true        # 是否默认开启（玩家进入区域自动显示）
+  level: 20                # UI 渲染层级（数值越大越靠前）
+  through: true            # 是否允许点击穿透（不拦截鼠标操作）
+  show: true               # 是否显示此 HUD
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - area: 挂机区域名称
+    #   - time: 当前挂机时长（已格式化的文本）
+    #   - next: 距离下次发放奖励的剩余秒数
+    #   - players: 当前区域挂机人数
+    #   - session_rewards: 本次挂机已获得奖励的次数
+    #   - session_time: 本次挂机累计时长（已格式化的文本）
+    #   - visible: HUD 是否可见（布尔值）
     init: |-
       var.area = packet['area']
       var.time = packet['time']
@@ -14,6 +26,15 @@ ui:
       var.session_rewards = packet['session_rewards']
       var.session_time = packet['session_time']
       var.visible = packet['visible']
+    # packetHandler: update
+    # 包字段:
+    #   - area: 挂机区域名称
+    #   - time: 当前挂机时长（已格式化的文本）
+    #   - next: 距离下次发放奖励的剩余秒数
+    #   - players: 当前区域挂机人数
+    #   - session_rewards: 本次挂机已获得奖励的次数
+    #   - session_time: 本次挂机累计时长（已格式化的文本）
+    #   - visible: HUD 是否可见（布尔值）
     update: |-
       var.area = packet['area']
       var.time = packet['time']
@@ -23,33 +44,34 @@ ui:
       var.session_time = packet['session_time']
       var.visible = packet['visible']
 
+# 控件定义区
 controls:
-  背景:
+  背景:  # 背景面板（圆角矩形纹理）
     type: Texture
     attribute:
-      x: 10
-      y: 10
-      width: 200
-      height: 150
-      normal: ~30,30,40,200
-      shape: ~round_rect
-      radius: 8
-      visible: var.visible
+      x: 10                # X 坐标
+      y: 10                # Y 坐标
+      width: 200           # 面板宽度
+      height: 150          # 面板高度
+      normal: ~30,30,40,200  # 背景色 RGBA（深蓝半透明）
+      shape: ~round_rect   # 形状：圆角矩形
+      radius: 8            # 圆角半径
+      visible: var.visible  # 可见性绑定到变量
     effect:
-      stroke:
-        width: 2
-        color: ~80,180,255,180
+      stroke:  # 描边效果
+        width: 2            # 描边宽度
+        color: ~80,180,255,180  # 描边颜色 RGBA（浅蓝半透明）
     children:
-      标题:
+      标题:  # 标题文本：显示当前挂机区域名称
         type: Text
         attribute:
           x: 100
           y: 10
-          center: true
-          fontSize: 36
+          center: true      # 文本水平居中
+          fontSize: 36      # 字号
           texts: "~&b挂机区域: &f{var.area}"
           visible: var.visible
-      时间:
+      时间:  # 当前挂机时长
         type: Text
         attribute:
           x: 10
@@ -57,7 +79,7 @@ controls:
           fontSize: 22
           texts: "~&7当前挂机: &f{var.time}"
           visible: var.visible
-      下次奖励:
+      下次奖励:  # 距离下次发放奖励的倒计时（秒）
         type: Text
         attribute:
           x: 10
@@ -65,7 +87,7 @@ controls:
           fontSize: 22
           texts: "~&7下次奖励: &f{var.next}秒"
           visible: var.visible
-      人数:
+      人数:  # 当前区域挂机人数
         type: Text
         attribute:
           x: 10
@@ -73,7 +95,7 @@ controls:
           fontSize: 22
           texts: "~&7区域人数: &f{var.players}"
           visible: var.visible
-      本次收益:
+      本次收益:  # 本次挂机已获得奖励的次数
         type: Text
         attribute:
           x: 10
@@ -81,7 +103,7 @@ controls:
           fontSize: 22
           texts: "~&7本次收益: &f{var.session_rewards} 次"
           visible: var.visible
-      本次时长:
+      本次时长:  # 本次挂机累计时长
         type: Text
         attribute:
           x: 10

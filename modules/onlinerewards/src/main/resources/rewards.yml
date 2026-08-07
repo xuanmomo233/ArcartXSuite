@@ -4,6 +4,13 @@
 # 会按配置顺序推进；minutes 为达到该阶段所需的今日累计在线分钟。
 # commands 支持 {player} 变量。
 # mail-presets 填写 Mail 模块 mail/presets/*.yml 中的 preset.id，达成阶段后会发送给玩家。
+#
+# 字段说明:
+#   minutes      - 达到该阶段所需的今日累计在线分钟数
+#   name         - 阶段名称
+#   rewardText   - 奖励描述文本（显示在 UI 中）
+#   mail-presets - 邮件预设 ID 列表（对应 Mail 模块的 preset.id）
+#   commands     - 达成阶段后执行的命令列表（支持 {player} 变量）
 
 rewards:
   - minutes: 1

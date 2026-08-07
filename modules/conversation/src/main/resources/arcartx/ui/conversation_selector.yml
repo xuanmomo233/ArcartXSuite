@@ -23,6 +23,18 @@ ui:
   screenScale: true
   level: 0
   packetHandler:
+    # packetHandler: sync
+    # 包字段:
+    #   - token: 会话令牌，用于回包验证
+    #   - packetId: 通信标识，用于 Packet.send 回包
+    #   - title: 选择器标题
+    #   - hintText: 操作提示文字
+    #   - selectedNpcId: 当前选中的 NPC ID
+    #   - selectedNpcIndex: 当前选中的 NPC 索引
+    #   - npcCount: 可对话 NPC 总数
+    #   - npcScrollRatio: 列表滚动比例
+    #   - npcRows: NPC 行数据字典（每行含 id, text, distanceText, selected, index）
+    #   - maxNpcCount: NPC 行模板最大复制数
     sync: |-
       var.token = packet['token']
       var.packetId = packet['packetId']
@@ -44,6 +56,9 @@ ui:
         ni = val.selector_list['选择器模板'].copy('选择器模板' + key)
         ni.entryKey = key
       }
+    # packetHandler: close
+    # 包字段:
+    #   - packetId: 通信标识（可能为 none）
     close: |-
       var.token = none
       var.packetId = packet['packetId'] == none ? none : packet['packetId']

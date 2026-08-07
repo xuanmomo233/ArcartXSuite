@@ -8,6 +8,14 @@ import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
+/**
+ * QQBot 模块的全量配置 record，聚合所有子配置节。
+ * <p>
+ * 关联模块：{@code qqbot}。包含 OneBot 连接、群列表、绑定、白名单、
+ * 管理员、自定义命令、存储、消息、签到、奖品、监控、定时消息、广播、
+ * 欢迎词、自动回复、公告、审核、黑名单等全部配置项，
+ * 并提供从 YamlConfiguration 解析的 {@link #load} 工厂方法。
+ */
 public record QQBotConfiguration(
     boolean debug,
     String serverId,
@@ -36,10 +44,22 @@ public record QQBotConfiguration(
     boolean atToGameEnabled
 ) {
 
+    /**
+     * 判断指定 QQ 号是否为已启用的管理员。
+     *
+     * @param qqId 待检测的 QQ 号
+     * @return {@code true} 表示管理员功能已启用且该 QQ 在管理员列表中
+     */
     public boolean isAdmin(long qqId) {
         return adminEnabled && adminQQs.contains(qqId);
     }
 
+    /**
+     * 按奖品 ID 查找奖品配置（忽略大小写）。
+     *
+     * @param id 奖品 ID
+     * @return 匹配的 {@link QQBotPrizeConfig}，未找到返回 {@code null}
+     */
     public QQBotPrizeConfig findPrize(String id) {
         for (QQBotPrizeConfig p : prizes) {
             if (p.id().equalsIgnoreCase(id)) return p;
@@ -47,6 +67,13 @@ public record QQBotConfiguration(
         return null;
     }
 
+    /**
+     * 从 Bukkit YamlConfiguration 解析并构造完整的 QQBot 配置。
+     *
+     * @param yaml  模块 config.yml 对应的 YamlConfiguration
+     * @param logger 用于输出解析警告的日志器
+     * @return 解析后的 {@link QQBotConfiguration} 实例
+     */
     public static QQBotConfiguration load(YamlConfiguration yaml, Logger logger) {
         boolean debug = yaml.getBoolean("settings.debug", false);
         String serverId = yaml.getString("settings.server-id", "survival");

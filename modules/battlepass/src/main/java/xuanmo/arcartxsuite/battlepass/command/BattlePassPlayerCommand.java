@@ -14,12 +14,25 @@ import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.battlepass.packet.BattlePassPacketHandler;
 import xuanmo.arcartxsuite.battlepass.service.BattlePassService;
 
+/**
+ * 战令玩家命令处理器，实现 {@link TabExecutor}。
+ * <p>
+ * 处理 {@code /bp} 和 {@code /battlepass} 玩家子命令，包括 open、tasks、rewards、claim、help，
+ * 通过 {@link BattlePassPacketHandler} 打开 UI 并通过 {@link BattlePassService} 处理奖励领取。
+ */
 public final class BattlePassPlayerCommand implements TabExecutor {
 
     private final Supplier<BattlePassPacketHandler> packetHandlerSupplier;
     private final Supplier<BattlePassService> serviceSupplier;
     private final MessageProvider messages;
 
+    /**
+     * 构造战令玩家命令处理器。
+     *
+     * @param packetHandlerSupplier 包处理器提供者（延迟获取，可能为 null）
+     * @param serviceSupplier       BattlePassService 提供者（延迟获取，可能为 null）
+     * @param messages              消息提供者
+     */
     public BattlePassPlayerCommand(Supplier<BattlePassPacketHandler> packetHandlerSupplier,
                                     Supplier<BattlePassService> serviceSupplier, MessageProvider messages) {
         this.packetHandlerSupplier = packetHandlerSupplier;
@@ -27,6 +40,11 @@ public final class BattlePassPlayerCommand implements TabExecutor {
         this.messages = messages;
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 处理战令玩家子命令（open/tasks/rewards/claim/help），仅限玩家执行。
+     */
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                               @NotNull String label, @NotNull String[] args) {
@@ -56,6 +74,11 @@ public final class BattlePassPlayerCommand implements TabExecutor {
         return true;
     }
 
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 补全第一参数的子命令名（open/tasks/rewards/claim/help）。
+     */
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                                    @NotNull String label, @NotNull String[] args) {

@@ -11,6 +11,12 @@ import priv.seventeen.artist.arcartx.util.EntityUtils;
 import priv.seventeen.artist.arcartx.util.collections.PlayerCallBack;
 import xuanmo.arcartxsuite.api.bridge.ClientBridgeAPI;
 
+/**
+ * {@link ClientBridgeAPI} 的默认实现，桥接 ArcartX 客户端 MOD 的网络发送器，
+ * 提供向客户端推送数据包的能力。
+ * <p>
+ * ArcartX 为必需依赖，但运行时仍通过 {@link #initialize()} 检测可用性以兜底。
+ */
 public class ArcartXClientBridge implements ClientBridgeAPI {
 
     private final JavaPlugin plugin;

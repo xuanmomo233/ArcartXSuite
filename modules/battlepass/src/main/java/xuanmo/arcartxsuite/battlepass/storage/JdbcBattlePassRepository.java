@@ -22,10 +22,24 @@ import xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassTask;
 import xuanmo.arcartxsuite.battlepass.model.PlayerTaskInstance;
 
+/**
+ * 战令 JDBC 仓储实现，继承 {@link AbstractModuleRepository} 并实现 {@link BattlePassRepository}。
+ * <p>
+ * 管理 4 张数据表（玩家进度、任务进度、奖励领取、玩家任务），
+ * 支持 SQLite 和 MySQL 两种模式的建表、索引及 CRUD 操作，
+ * 同时实现数据库迁移和玩家数据清理能力。
+ */
 public final class JdbcBattlePassRepository extends AbstractModuleRepository implements BattlePassRepository {
 
     private final BattlePassModuleConfiguration.BattlePassStorageConfiguration configuration;
 
+    /**
+     * 构造 JDBC 战令仓储实例。
+     *
+     * @param dataFolder    模块数据目录
+     * @param configuration 存储配置
+     * @param logger        日志记录器
+     */
     public JdbcBattlePassRepository(File dataFolder, BattlePassModuleConfiguration.BattlePassStorageConfiguration configuration, Logger logger) {
         super("AXS-BattlePass", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;

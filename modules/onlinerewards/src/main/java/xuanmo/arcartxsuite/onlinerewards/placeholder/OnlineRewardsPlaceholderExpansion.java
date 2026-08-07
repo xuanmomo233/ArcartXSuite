@@ -16,11 +16,23 @@ import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsPlayerSnapshot;
 import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsService;
 import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsTextFormats;
 
+/**
+ * 在线奖励 PlaceholderAPI 占位符扩展。
+ * <p>
+ * 属于 {@code onlinerewards} 模块，提供 {@code %axsonlinerewards_*%} 系列占位符，
+ * 涵盖在线时长、签到状态、排行榜、签到历史与全服签到目标等查询。
+ */
 public final class OnlineRewardsPlaceholderExpansion extends PlaceholderExpansion {
 
     private final JavaPlugin plugin;
     private final Supplier<OnlineRewardsService> serviceProvider;
 
+    /**
+     * 构造占位符扩展。
+     *
+     * @param plugin          宿主插件实例
+     * @param serviceProvider 在线奖励服务提供者
+     */
     public OnlineRewardsPlaceholderExpansion(JavaPlugin plugin, Supplier<OnlineRewardsService> serviceProvider) {
         this.plugin = plugin;
         this.serviceProvider = serviceProvider;
@@ -46,6 +58,13 @@ public final class OnlineRewardsPlaceholderExpansion extends PlaceholderExpansio
         return true;
     }
 
+    /**
+     * 解析占位符请求，根据参数返回在线时长、签到、排行榜或历史等文本。
+     *
+     * @param offlinePlayer 离线玩家，可为 {@code null}
+     * @param params        占位符参数
+     * @return 解析结果，无法识别时返回 {@code null}
+     */
     @Override
     public @Nullable String onRequest(OfflinePlayer offlinePlayer, @NotNull String params) {
         OnlineRewardsService service = serviceProvider.get();

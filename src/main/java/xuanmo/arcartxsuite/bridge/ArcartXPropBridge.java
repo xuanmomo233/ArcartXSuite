@@ -20,6 +20,12 @@ import priv.seventeen.artist.arcartx.core.keybind.ArcartXKeyBindRegistry;
 import priv.seventeen.artist.arcartx.util.ItemStackUtils;
 import priv.seventeen.artist.arcartx.util.collections.KeyCallBack;
 
+/**
+ * {@link xuanmo.arcartxsuite.api.bridge.PropBridgeAPI} 的默认实现，
+ * 桥接 ArcartX 快捷道具栏，提供道具绑定、按键回调与 PDC 持久化。
+ * <p>
+ * 通过 PDC 在物品上记录 prop id，配合 KeyBindRegistry 注册按键回调。
+ */
 public final class ArcartXPropBridge implements xuanmo.arcartxsuite.api.bridge.PropBridgeAPI {
 
     private static final String PDC_BACKEND_KEY = "pdc";

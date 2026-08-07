@@ -32,6 +32,15 @@ import xuanmo.arcartxsuite.fishing.service.FishingService;
 import xuanmo.arcartxsuite.fishing.storage.FishingRepository;
 import xuanmo.arcartxsuite.fishing.storage.JdbcFishingRepository;
 
+/**
+ * 钓鱼模块的入口类。
+ * <p>
+ * 关联模块：{@code fishing}（id），版本 {@code 1.0.0}。
+ * 负责加载配置、初始化 {@link xuanmo.arcartxsuite.fishing.service.FishingService}、
+ * 注册 UI（小游戏界面与图鉴界面）、注册命令、事件监听器与 PlaceholderAPI 扩展，
+ * 并向外暴露 {@link xuanmo.arcartxsuite.api.capability.DatabaseMigratable} 与
+ * {@link xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable} 能力。
+ */
 public final class FishingModule extends AbstractAXSModule implements ModuleCommandHandler {
 
     private static final String MINIGAME_UI_RESOURCE = "arcartx/ui/fishing_minigame.yml";

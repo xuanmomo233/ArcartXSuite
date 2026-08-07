@@ -17,10 +17,23 @@ import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.StorageConfiguratio
 import xuanmo.arcartxsuite.map.config.MapModuleConfiguration.StorageDialect;
 import xuanmo.arcartxsuite.map.model.MapWaypoint;
 
+/**
+ * 地图模块 JDBC 存储仓库，基于 SQLite / MySQL 实现锚点解锁与路径点的持久化。
+ * <p>
+ * 关联模块：map。继承 {@code AbstractModuleRepository} 获取连接池与迁移能力，
+ * 实现 {@code MapRepository} 接口提供数据访问方法。支持玩家数据清除与数据库迁移。
+ */
 public final class JdbcMapRepository extends AbstractModuleRepository implements MapRepository {
 
     private final StorageConfiguration configuration;
 
+    /**
+     * 构造 JDBC 存储仓库。
+     *
+     * @param dataFolder    模块数据目录
+     * @param configuration 存储配置
+     * @param logger        日志记录器
+     */
     public JdbcMapRepository(File dataFolder, StorageConfiguration configuration, Logger logger) {
         super("AXS-Map", dataFolder, configuration.toDescriptor(), logger);
         this.configuration = configuration;
@@ -41,6 +54,13 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
         return "uuid";
     }
 
+    /**
+     * 加载玩家已解锁的锚点 ID 集合。
+     *
+     * @param playerUuid 玩家 UUID
+     * @return 已解锁锚点 ID 集合
+     * @throws SQLException 数据库查询失败时抛出
+     */
     @Override
     public Set<String> loadUnlockedAnchors(UUID playerUuid) throws SQLException {
         LinkedHashSet<String> result = new LinkedHashSet<>();
@@ -58,11 +78,28 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
         return Set.copyOf(result);
     }
 
+    /**
+     * 记录玩家解锁锚点（忽略重复插入）。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param anchorId   锚点 ID
+     * @param unlockTime 解锁时间戳
+     * @throws SQLException 数据库写入失败时抛出
+     */
     @Override
     public void unlockAnchor(UUID playerUuid, String anchorId, long unlockTime) throws SQLException {
         tryUnlockAnchor(playerUuid, anchorId, unlockTime);
     }
 
+    /**
+     * 尝试解锁锚点，若已解锁则不重复插入。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param anchorId   锚点 ID
+     * @param unlockTime 解锁时间戳
+     * @return {@code true} 表示本次插入成功（此前未解锁）
+     * @throws SQLException 数据库写入失败时抛出
+     */
     @Override
     public boolean tryUnlockAnchor(UUID playerUuid, String anchorId, long unlockTime) throws SQLException {
         String sql = configuration.dialect() == StorageDialect.SQLITE
@@ -77,6 +114,13 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
         }
     }
 
+    /**
+     * 移除玩家的指定锚点解锁记录。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param anchorId   锚点 ID
+     * @throws SQLException 数据库删除失败时抛出
+     */
     @Override
     public void removeUnlock(UUID playerUuid, String anchorId) throws SQLException {
         try (Connection connection = connection();
@@ -89,6 +133,16 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
         }
     }
 
+    /**
+     * 在世界路径点数量限制内创建新路径点（事务操作）。
+     *
+     * @param playerUuid     玩家 UUID
+     * @param waypoint       路径点数据
+     * @param worldId        世界 ID
+     * @param maxCountInWorld 该世界允许的最大路径点数量
+     * @return {@code true} 表示创建成功，{@code false} 表示已达上限
+     * @throws SQLException 数据库操作失败时抛出
+     */
     @Override
     public boolean createWaypointIfUnderWorldLimit(
         UUID playerUuid,
@@ -136,6 +190,13 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
         }
     }
 
+    /**
+     * 加载玩家的全部路径点列表。
+     *
+     * @param playerUuid 玩家 UUID
+     * @return 路径点列表，按更新时间降序排列
+     * @throws SQLException 数据库查询失败时抛出
+     */
     @Override
     public List<MapWaypoint> loadWaypoints(UUID playerUuid) throws SQLException {
         List<MapWaypoint> result = new ArrayList<>();
@@ -165,6 +226,13 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
         return List.copyOf(result);
     }
 
+    /**
+     * 新增或更新玩家路径点（upsert 语义）。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param waypoint   路径点数据
+     * @throws SQLException 数据库写入失败时抛出
+     */
     @Override
     public void upsertWaypoint(UUID playerUuid, MapWaypoint waypoint) throws SQLException {
         try (Connection connection = connection();
@@ -182,6 +250,14 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
         }
     }
 
+    /**
+     * 删除玩家指定路径点。
+     *
+     * @param playerUuid  玩家 UUID
+     * @param waypointId  路径点 ID
+     * @return {@code true} 表示删除成功
+     * @throws SQLException 数据库删除失败时抛出
+     */
     @Override
     public boolean deleteWaypoint(UUID playerUuid, String waypointId) throws SQLException {
         try (Connection connection = connection();
@@ -194,6 +270,12 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
         }
     }
 
+    /**
+     * 清除玩家的全部地图数据（解锁记录与路径点），事务操作。
+     *
+     * @param playerUuid 玩家 UUID
+     * @throws SQLException 数据库操作失败时抛出
+     */
     @Override
     public void clearPlayer(UUID playerUuid) throws SQLException {
         try (Connection connection = connection()) {
@@ -214,6 +296,9 @@ public final class JdbcMapRepository extends AbstractModuleRepository implements
         }
     }
 
+    /**
+     * 关闭仓库，释放连接池资源。
+     */
     @Override
     public void close() {
         shutdown();

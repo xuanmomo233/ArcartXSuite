@@ -26,6 +26,19 @@ ui:
   show: true
   screenScale: true
   packetHandler:
+    # packetHandler: sync
+    # 包字段:
+    #   - token: 会话令牌，用于回包验证
+    #   - packetId: 通信标识，用于 Packet.send 回包
+    #   - speakerName: 说话人名称（NPC 名）
+    #   - messageLines: 对话正文文本行列表
+    #   - hintText: 底部提示文字
+    #   - canReply: 是否允许玩家回复
+    #   - selectedReplyId: 当前选中的回复 ID
+    #   - selectedReplyIndex: 当前选中的回复索引
+    #   - replyCount: 可选回复总数
+    #   - replyScrollRatio: 回复列表滚动比例
+    #   - replyRows: 回复行数据字典（每行含 id, text, replyType, selected, index）
     sync: |-
       var.token = packet['token']
       var.packetId = packet['packetId']
@@ -56,6 +69,9 @@ ui:
         ri = val.reply_list['回复模板'].copy('reply_' + i.round())
         ri.entryKey = key
       }
+    # packetHandler: close
+    # 包字段:
+    #   - packetId: 通信标识（可能为 none）
     close: |-
       var.token = none
       var.packetId = packet['packetId'] == none ? none : packet['packetId']

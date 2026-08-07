@@ -8,6 +8,12 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.script.AriaBridge;
 
+/**
+ * JavaScript 脚本执行器（包私有），基于 Nashorn/GraalJS 引擎执行 JS 脚本。
+ * <p>
+ * 由 {@link DefaultScriptConditionEvaluator} 持有，负责 JS 类型动作的执行。
+ * 引擎不可用时所有执行返回 null。
+ */
 final class JavaScriptExecutor {
 
     private final ScriptEngine jsEngine;

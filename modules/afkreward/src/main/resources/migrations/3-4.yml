@@ -1,8 +1,7 @@
-# AfkReward 配置迁移: 3 -> 4
-# 说明: 区域目录 areas-directory 直接使用模块 data 目录下的新默认路径 "areas"。
+# 文件用途: AfkReward 配置迁移 3 -> 4
+# 迁移目的: 区域目录 areas-directory 直接使用模块 data 目录下的新默认路径 "areas"。
+from-version: 3  # 迁移起始版本号
+to-version: 4    # 迁移目标版本号
+description: "区域目录基准改为相对于模块 data 目录"  # 迁移说明
 
-from-version: 3
-to-version: 4
-description: "区域目录基准改为相对于模块 data 目录"
-
-operations:
+operations:  # 本版本迁移无破坏性操作，仅调整路径基准语义

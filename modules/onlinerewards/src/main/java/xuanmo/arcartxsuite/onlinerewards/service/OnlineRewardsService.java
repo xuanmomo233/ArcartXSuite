@@ -61,6 +61,13 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import java.util.logging.Logger;
 
+/**
+ * 在线奖励核心服务。
+ * <p>
+ * 属于 {@code onlinerewards} 模块，负责玩家状态缓存与持久化、每分钟在线时长累计、
+ * 阶段/周期奖励发放、签到与补签、排行榜缓存、离线储蓄、跨服刷新通知、客户端菜单数据同步
+ * 与客户端包处理等全部业务逻辑。同时实现 {@link Listener} 处理玩家退出事件。
+ */
 public class OnlineRewardsService implements Listener {
 
     public static final String MENU_UI_RESOURCE_PATH = "arcartx/ui/online_rewards_menu.yml";
@@ -173,6 +180,12 @@ public class OnlineRewardsService implements Listener {
         }
     }
 
+    /**
+     * 启动服务：初始化存储、绑定 UI、注册事件、刷新排行榜、调度每分钟 tick 与跨服通道。
+     *
+     * @throws SQLException 存储初始化失败时抛出
+     * @throws IOException  UI 资源导出失败时抛出
+     */
     public void start() throws SQLException, IOException {
         repository.initialize();
         bindMenuUi();
@@ -190,6 +203,9 @@ public class OnlineRewardsService implements Listener {
         }
     }
 
+    /**
+     * 关闭服务：取消任务、关闭跨服通道、落盘全部脏状态、注销事件与 UI 并关闭存储。
+     */
     public void shutdown() {
         if (minuteTask != null) {
             minuteTask.cancel();
@@ -210,10 +226,20 @@ public class OnlineRewardsService implements Listener {
         repository.close();
     }
 
+    /**
+     * 返回跨服通道是否处于活跃状态。
+     *
+     * @return 跨服启用返回 {@code true}
+     */
     public boolean crossServerActive() {
         return crossServerChannel != null && crossServerChannel.isActive();
     }
 
+    /**
+     * 客户端初始化完成回调，延迟同步玩家菜单数据。
+     *
+     * @param player 上线玩家
+     */
     public void handleClientInitialized(Player player) {
         if (player == null || !player.isOnline()) {
             return;
@@ -221,6 +247,11 @@ public class OnlineRewardsService implements Listener {
         AxsScheduler.runTaskLater(plugin, () -> syncPlayer(player), configuration.clientSyncDelayTicks());
     }
 
+    /**
+     * 返回当前缓存的玩家状态数量。
+     *
+     * @return 缓存玩家数
+     */
     public int cachedPlayerCount() {
         return cachedStates.size();
     }
@@ -241,6 +272,12 @@ public class OnlineRewardsService implements Listener {
         return runtimeMenuUiIds;
     }
 
+    /**
+     * 打开在线奖励菜单并发送初始数据包。
+     *
+     * @param player 目标玩家
+     * @return 操作结果
+     */
     public OnlineRewardsOperationResult openMenu(Player player) {
         if (player == null || !player.isOnline()) {
             return new OnlineRewardsOperationResult(false, "玩家当前不在线。");
@@ -256,6 +293,14 @@ public class OnlineRewardsService implements Listener {
         return new OnlineRewardsOperationResult(true, "已打开在线奖励界面。");
     }
 
+    /**
+     * 处理客户端菜单数据包，根据 action 分发到打开、日历翻页、预览、补签、签到、刷新等逻辑。
+     *
+     * @param player   玩家
+     * @param packetId 数据包 id
+     * @param data     数据载荷
+     * @return 是否已处理（包 id 不匹配返回 {@code false}）
+     */
     public boolean handleClientPacket(Player player, String packetId, List<String> data) {
         if (player == null || !player.isOnline() || packetId == null || !configuration.ui().packetId().equalsIgnoreCase(packetId)) {
             return false;
@@ -322,6 +367,13 @@ public class OnlineRewardsService implements Listener {
     // NOTE: 此方法可能由 PlaceholderAPI 从异步线程调用。
     // ConcurrentHashMap 保证引用可见性，但 normalizeForPeriod 对 state 字段的修改并非原子操作。
     // 实际影响极低（仅日/周/月切换瞬间可能读到部分更新状态），如需严格线程安全需加同步。
+    /**
+     * 加载玩家快照，可能由 PlaceholderAPI 异步调用。
+     *
+     * @param playerUuid 玩家唯一 id
+     * @param playerName 玩家名称
+     * @return 玩家快照
+     */
     public OnlineRewardsPlayerSnapshot loadSnapshot(UUID playerUuid, String playerName) {
         OnlineRewardsPlayerState state = cachedStates.get(playerUuid);
         boolean cached = state != null;
@@ -346,6 +398,14 @@ public class OnlineRewardsService implements Listener {
         return new OnlineRewardsPlayerSnapshot(state.copy(), stateEngine.snapshot(state), hasSignInRecord(playerUuid, context.rewardDate()) || stateEngine.hasSignedToday(state, context));
     }
 
+    /**
+     * 分页加载排行榜条目。
+     *
+     * @param scope    排行榜范围
+     * @param pageSize 每页条数
+     * @param page     页码（从 1 开始）
+     * @return 排行榜条目列表，失败时返回空列表
+     */
     public List<OnlineRewardsLeaderboardEntry> loadLeaderboard(OnlineRewardsLeaderboardScope scope, int pageSize, int page) {
         if (scope == null) {
             return List.of();
@@ -360,6 +420,13 @@ public class OnlineRewardsService implements Listener {
         }
     }
 
+    /**
+     * 返回排行榜缓存中指定名次的条目。
+     *
+     * @param scope 排行榜范围
+     * @param rank  名次（从 1 开始）
+     * @return 条目，越界或无效时返回 {@code null}
+     */
     public OnlineRewardsLeaderboardEntry leaderboardEntry(OnlineRewardsLeaderboardScope scope, int rank) {
         if (scope == null || rank <= 0) {
             return null;
@@ -371,10 +438,23 @@ public class OnlineRewardsService implements Listener {
         return entries.get(rank - 1);
     }
 
+    /**
+     * 返回排行榜缓存的条目数量。
+     *
+     * @param scope 排行榜范围
+     * @return 缓存条目数
+     */
     public int leaderboardSnapshotSize(OnlineRewardsLeaderboardScope scope) {
         return leaderboardCache.getOrDefault(scope, List.of()).size();
     }
 
+    /**
+     * 加载玩家签到历史涉及的月份列表（降序，限制条数）。
+     *
+     * @param playerUuid 玩家唯一 id
+     * @param limit      返回的最大月份数
+     * @return 月份字符串列表（yyyy-MM）
+     */
     public List<String> loadSignInHistoryMonths(UUID playerUuid, int limit) {
         Set<String> dates = loadAllSignInDates(playerUuid);
         Set<String> months = new HashSet<>();
@@ -389,11 +469,23 @@ public class OnlineRewardsService implements Listener {
         return sorted.stream().limit(Math.max(1, limit)).toList();
     }
 
+    /**
+     * 统计玩家在指定月份的签到天数。
+     *
+     * @param playerUuid 玩家唯一 id
+     * @param month      目标年月
+     * @return 签到天数
+     */
     public int countSignInDaysForMonth(UUID playerUuid, YearMonth month) {
         Set<String> dates = loadSignInDates(playerUuid, month.atDay(1), month.atEndOfMonth());
         return dates.size();
     }
 
+    /**
+     * 返回今日全服签到人数。
+     *
+     * @return 签到人数，查询失败返回 0
+     */
     public int todaySignInCount() {
         try {
             return repository.countSignInRecords(currentPeriodContext().rewardDate());
@@ -403,25 +495,56 @@ public class OnlineRewardsService implements Listener {
         }
     }
 
+    /**
+     * 查询玩家今日是否已签到（跨模块能力接口）。
+     *
+     * @param playerUuid 玩家唯一 id
+     * @return 今日是否已签到
+     */
     public boolean hasSignedTodayPublic(UUID playerUuid) {
         return hasSignInRecord(playerUuid, currentPeriodContext().rewardDate());
     }
 
+    /**
+     * 查询玩家今日在线分钟数（跨模块能力接口）。
+     *
+     * @param playerUuid 玩家唯一 id
+     * @return 今日在线分钟数
+     */
     public int todayOnlineMinutesPublic(UUID playerUuid) {
         OnlineRewardsPlayerState state = loadState(playerUuid);
         return state.onlineMinutes();
     }
 
+    /**
+     * 查询玩家本周在线分钟数（跨模块能力接口）。
+     *
+     * @param playerUuid 玩家唯一 id
+     * @return 本周在线分钟数
+     */
     public int weeklyOnlineMinutesPublic(UUID playerUuid) {
         OnlineRewardsPlayerState state = loadState(playerUuid);
         return state.weekMinutes();
     }
 
+    /**
+     * 查询玩家本月在线分钟数（跨模块能力接口）。
+     *
+     * @param playerUuid 玩家唯一 id
+     * @return 本月在线分钟数
+     */
     public int monthlyOnlineMinutesPublic(UUID playerUuid) {
         OnlineRewardsPlayerState state = loadState(playerUuid);
         return state.monthMinutes();
     }
 
+    /**
+     * 为在线玩家增加指定分钟数的在线时长（跨模块能力接口）。
+     *
+     * @param player  玩家
+     * @param minutes 增加的分钟数
+     * @return 操作是否成功
+     */
     public boolean addOnlineMinutesPublic(Player player, int minutes) {
         if (player == null || !player.isOnline()) {
             return false;
@@ -430,6 +553,13 @@ public class OnlineRewardsService implements Listener {
         return true;
     }
 
+    /**
+     * 为在线玩家增加指定数量的补签卡（跨模块能力接口）。
+     *
+     * @param player 玩家
+     * @param amount 增加的数量
+     * @return 操作是否成功
+     */
     public boolean addMakeupCardsPublic(Player player, int amount) {
         if (player == null || !player.isOnline()) {
             return false;
@@ -438,6 +568,11 @@ public class OnlineRewardsService implements Listener {
         return true;
     }
 
+    /**
+     * 立即发放玩家当前已达阈值但未领取的阶段奖励（跨模块能力接口）。
+     *
+     * @param player 玩家
+     */
     public void grantDailyRewardsPublic(Player player) {
         if (player == null || !player.isOnline()) {
             return;
@@ -456,6 +591,11 @@ public class OnlineRewardsService implements Listener {
         }
     }
 
+    /**
+     * 返回距离下一个未达成的全服签到目标所需人数，无目标时返回 0。
+     *
+     * @return 下一个目标所需人数
+     */
     public int nextServerSignInGoalRequired() {
         OnlineRewardsServerSignInGoalConfiguration goalConfig = configuration.serverSignInGoal();
         if (!goalConfig.enabled() || goalConfig.targets().isEmpty()) {
@@ -481,6 +621,12 @@ public class OnlineRewardsService implements Listener {
         return next;
     }
 
+    /**
+     * 执行签到，发放基础与加成奖励并刷新排行榜。
+     *
+     * @param player 签到玩家
+     * @return 操作结果
+     */
     public OnlineRewardsOperationResult signIn(Player player) {
         if (player == null || !player.isOnline()) {
             return new OnlineRewardsOperationResult(false, "玩家当前不在线。");
@@ -511,6 +657,13 @@ public class OnlineRewardsService implements Listener {
         return new OnlineRewardsOperationResult(true, renderSignInText(configuration.signIn().signInSuccessMessage(), player, result));
     }
 
+    /**
+     * 消耗补签卡对当月历史日期进行补签。
+     *
+     * @param player  玩家
+     * @param rawDate 目标日期字符串
+     * @return 操作结果
+     */
     public OnlineRewardsOperationResult makeupSignIn(Player player, String rawDate) {
         if (player == null || !player.isOnline()) {
             return new OnlineRewardsOperationResult(false, "玩家当前不在线。");
@@ -1001,6 +1154,14 @@ public class OnlineRewardsService implements Listener {
         }
     }
 
+    /**
+     * 管理命令：按操作类型调整玩家在线时长。
+     *
+     * @param player    目标玩家
+     * @param operation 操作类型（add/remove/set）
+     * @param minutes   分钟数
+     * @return 操作结果
+     */
     public OnlineRewardsOperationResult adjustOnlineTime(Player player, String operation, int minutes) {
         if (player == null || !player.isOnline()) {
             return new OnlineRewardsOperationResult(false, "目标玩家必须在线。");
@@ -1050,6 +1211,14 @@ public class OnlineRewardsService implements Listener {
         );
     }
 
+    /**
+     * 管理命令：按操作类型调整玩家离线储蓄分钟数。
+     *
+     * @param player    目标玩家
+     * @param operation 操作类型（add/set/reset）
+     * @param minutes   分钟数
+     * @return 操作结果
+     */
     public OnlineRewardsOperationResult adjustOfflineSavings(Player player, String operation, int minutes) {
         if (player == null || !player.isOnline()) {
             return new OnlineRewardsOperationResult(false, "目标玩家必须在线。");
@@ -1077,6 +1246,14 @@ public class OnlineRewardsService implements Listener {
         );
     }
 
+    /**
+     * 管理命令：按操作类型调整玩家补签卡数量。
+     *
+     * @param player    目标玩家
+     * @param operation 操作类型（add/remove/set）
+     * @param amount    数量
+     * @return 操作结果
+     */
     public OnlineRewardsOperationResult adjustMakeupCards(Player player, String operation, int amount) {
         if (player == null || !player.isOnline()) {
             return new OnlineRewardsOperationResult(false, "目标玩家必须在线。");

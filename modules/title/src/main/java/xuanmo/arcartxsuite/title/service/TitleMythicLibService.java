@@ -13,6 +13,14 @@ import xuanmo.arcartxsuite.title.config.TitleMythicLibConfiguration;
 import xuanmo.arcartxsuite.title.model.ResolvedTitleState;
 import java.util.logging.Logger;
 
+/**
+ * MythicLib 属性同步服务。
+ * <p>
+ * 将解析后的展示属性与收集属性以属性修饰器形式注册到玩家的 MythicLib 数据，
+ * 通过同步计划（{@link TitleMythicLibSyncPlan}）实现增量更新，
+ * 仅对 MythicLib 已注册的属性键生效，未注册的属性键会记录警告。
+ * 属于 title 模块属性桥接层。
+ */
 public final class TitleMythicLibService {
 
     private final JavaPlugin plugin;
@@ -22,6 +30,12 @@ public final class TitleMythicLibService {
     private final Set<String> warnedUnknownStats = ConcurrentHashMap.newKeySet();
     private final Map<UUID, SyncedState> syncedStates = new ConcurrentHashMap<>();
 
+    /**
+     * @param plugin        插件实例
+     * @param logger        日志器
+     * @param configuration MythicLib 桥接配置
+     * @param bridge        MythicLib 桥接接口
+     */
     public TitleMythicLibService(JavaPlugin plugin,
         Logger logger, TitleMythicLibConfiguration configuration, MythicLibBridge bridge) {
         this.plugin = plugin;
@@ -30,20 +44,35 @@ public final class TitleMythicLibService {
         this.bridge = bridge;
     }
 
+    /**
+     * 启动服务，清空警告缓存与同步状态。
+     */
     public void start() {
         warnedUnknownStats.clear();
         syncedStates.clear();
     }
 
+    /**
+     * 关闭服务，清空警告缓存与同步状态。
+     */
     public void shutdown() {
         warnedUnknownStats.clear();
         syncedStates.clear();
     }
 
+    /**
+     * @return MythicLib 桥接是否可用
+     */
     public boolean hooked() {
         return bridge.available();
     }
 
+    /**
+     * 同步玩家的展示属性与收集属性到 MythicLib。
+     *
+     * @param player       目标玩家
+     * @param resolvedState 解析后的称号状态
+     */
     public void sync(Player player, ResolvedTitleState resolvedState) {
         if (!hooked() || player == null || resolvedState == null) {
             return;
@@ -70,6 +99,11 @@ public final class TitleMythicLibService {
         syncedStates.put(playerUuid, new SyncedState(plan.displayStats(), plan.collectionStats()));
     }
 
+    /**
+     * 清除玩家在 MythicLib 中的全部称号属性修饰器。
+     *
+     * @param player 目标玩家
+     */
     public void clear(Player player) {
         if (player == null) {
             return;

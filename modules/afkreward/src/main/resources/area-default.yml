@@ -1,3 +1,6 @@
+# 文件用途: 挂机区域默认配置模板
+# 定义一个挂机区域的完整配置，包括区域边界、奖励档位、倍率调度与原地挂机传送点。
+# 复制此文件并重命名为 area-<id>.yml 即可创建新区域。
 # 区域唯一 ID（同时用于区域奖励权限：axs.afkreward.start.<id>.<档位>）
 id: default
 
@@ -37,15 +40,15 @@ reward:
   round: 15
   # 每日最大奖励次数
   max:
-    enable: true
-    limit: 32
+    enable: true    # 是否启用每日次数上限
+    limit: 32       # 每日最大奖励次数
   # 本区域最大同时挂机人数
   player:
-    enable: true
-    limit: 30
+    enable: true    # 是否启用人数上限
+    limit: 30       # 最大同时挂机人数
   # 背包满时是否改发 full-inventory-mail
   overflow-to-mail:
-    enable: false
+    enable: false   # 是否启用背包满时转邮件
 
   # 奖励说明
   describe: "泡澡的人越多，获取的铜币和经验越多"
@@ -56,39 +59,40 @@ reward:
   full-inventory-mail: ""
 
   # 奖励档位从高到低排列
-  vip3:
+  # 各档位对应权限 axs.afkreward.start.<id>.<档位名>，玩家拥有对应权限则执行该档位命令
+  vip3:  # VIP3 档位（最高奖励）
     - "addbalance %player_name% 铜币 %axsafkreward_players%*35+%player_level%/4+250"
     - "cmi give %player_name% cobblestone 54"
     - "cmi exp %player_name% add %axsafkreward_players%*%player_level%/4+%player_level%"
-  vip2:
+  vip2:  # VIP2 档位
     - "addbalance %player_name% 铜币 %axsafkreward_players%*30+%player_level%/6+200"
     - "cmi give %player_name% cobblestone 54"
     - "cmi exp %player_name% add %axsafkreward_players%*%player_level%/6+%player_level%/2"
-  vip1:
+  vip1:  # VIP1 档位
     - "addbalance %player_name% 铜币 %axsafkreward_players%*25+%player_level%/8+150"
     - "cmi exp %player_name% add %axsafkreward_players%*%player_level%/8+%player_level%/4"
-  common:
+  common:  # 普通档位（无权限要求，默认奖励）
     - "addbalance %player_name% 铜币 %axsafkreward_players%*20+%player_level%/10+100"
     - "cmi exp %player_name% add %axsafkreward_players%*%player_level%/10+%player_level%/4"
 
 # 本区域倍率配置
 multiplier:
-  enable: false
-  base: 1.0
-  weekend: 1.0
-  combine: MAX
-  schedules:
+  enable: false    # 是否启用倍率系统
+  base: 1.0        # 基础倍率
+  weekend: 1.0     # 周末倍率
+  combine: MAX     # 多倍率叠加方式：MAX（取最大值）
+  schedules:       # 定时倍率调度列表
     # 周六、周日 20:00-22:00，倍率 2 倍
-    - days: "SAT,SUN"
-      start: "20:00"
-      end: "22:00"
-      multiplier: 2.0
+    - days: "SAT,SUN"    # 生效的星期（英文缩写，逗号分隔）
+      start: "20:00"     # 生效开始时间
+      end: "22:00"       # 生效结束时间
+      multiplier: 2.0    # 该时段的倍率
 
 # 原地挂机传送点
 teleport:
-  world: bskyblock_world
-  x: 20.5
-  y: 64.0
-  z: 140.5
-  yaw: 0
-  pitch: 0
+  world: bskyblock_world  # 传送目标世界
+  x: 20.5                 # X 坐标
+  y: 64.0                 # Y 坐标
+  z: 140.5                # Z 坐标
+  yaw: 0                  # 视角水平偏转角
+  pitch: 0                # 视角俯仰角

@@ -10,6 +10,11 @@ import java.time.LocalDateTime;
 import javax.sql.DataSource;
 import org.bukkit.plugin.java.JavaPlugin;
 
+/**
+ * 掉落分配记录数据访问对象，属于 entitytracker 模块的数据持久层。
+ * <p>
+ * 提供掉落分配记录和 Roll 参与记录的数据库写入功能。
+ */
 public class DropAllocationRecordDao {
 
     private final DataSource dataSource;
@@ -18,6 +23,23 @@ public class DropAllocationRecordDao {
         this.dataSource = dataSource;
     }
 
+    /**
+     * 插入一条掉落分配记录。
+     *
+     * @param bossKillId      关联的 Boss 击杀记录 ID
+     * @param itemId          物品 ID
+     * @param itemName        物品名称
+     * @param amount          物品数量
+     * @param allocationType  分配类型
+     * @param winnerUuid      获得者 UUID
+     * @param winnerName      获得者名称
+     * @param pointsCost      消耗积分
+     * @param rollValue       Roll 值（可为 {@code null}）
+     * @param priorityScore   优先级分数（可为 {@code null}）
+     * @param serverName      服务器名称
+     * @return 新记录的自增 ID，失败时返回 -1
+     * @throws SQLException 数据库操作失败时抛出
+     */
     public long insert(
         long bossKillId,
         String itemId,
@@ -68,6 +90,17 @@ public class DropAllocationRecordDao {
         return -1L;
     }
 
+    /**
+     * 插入一条 Roll 参与记录。
+     *
+     * @param allocationRecordId 关联的分配记录 ID
+     * @param playerUuid         玩家 UUID
+     * @param playerName         玩家名称
+     * @param rollType           Roll 类型
+     * @param rollValue          Roll 值（可为 {@code null}）
+     * @param serverName         服务器名称
+     * @throws SQLException 数据库操作失败时抛出
+     */
     public void insertRollParticipation(
         long allocationRecordId,
         String playerUuid,

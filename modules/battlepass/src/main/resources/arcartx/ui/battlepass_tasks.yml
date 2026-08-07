@@ -11,6 +11,19 @@ ui:
   screenScale: true
   show: true
   packetHandler:
+    # packetHandler: init
+    # 界面初始化时接收服务端任务数据包，写入 UI 变量并动态生成三类任务列表子元素
+    # 包字段:
+    #   - packetId: 包标识符，用于后续 Packet.send 回传
+    #   - dailyTasks: 每日任务数据映射（key 为序号，含 name/description/difficultyDisplay/progress/required/progressPercent/xpReward/completed 等字段）
+    #   - weeklyTasks: 每周任务数据映射（字段结构同 dailyTasks）
+    #   - seasonTasks: 赛季任务数据映射（字段结构同 dailyTasks）
+    #   - dailyTaskCount: 当前已分配的每日任务数量
+    #   - weeklyTaskCount: 当前已分配的每周任务数量
+    #   - seasonTaskCount: 当前已分配的赛季任务数量
+    #   - maxDailyCount: 每日任务最大可分配数量（用于动态生成列表项）
+    #   - maxWeeklyCount: 每周任务最大可分配数量
+    #   - maxSeasonCount: 赛季任务最大可分配数量
     init: |-
       var.packetId = packet['packetId']
       var.dailyTasks = packet['dailyTasks']
@@ -46,6 +59,19 @@ ui:
         e = val.赛季任务列表['任务项'].copy('任务项' + key)
         e.entryKey = key
       }
+    # packetHandler: update
+    # 数据更新时接收服务端任务数据包，刷新 UI 变量并重建任务列表子元素（字段与 init 相同）
+    # 包字段:
+    #   - packetId: 包标识符
+    #   - dailyTasks: 每日任务数据映射
+    #   - weeklyTasks: 每周任务数据映射
+    #   - seasonTasks: 赛季任务数据映射
+    #   - dailyTaskCount: 当前已分配的每日任务数量
+    #   - weeklyTaskCount: 当前已分配的每周任务数量
+    #   - seasonTaskCount: 当前已分配的赛季任务数量
+    #   - maxDailyCount: 每日任务最大可分配数量
+    #   - maxWeeklyCount: 每周任务最大可分配数量
+    #   - maxSeasonCount: 赛季任务最大可分配数量
     update: |-
       var.packetId = packet['packetId']
       var.dailyTasks = packet['dailyTasks']

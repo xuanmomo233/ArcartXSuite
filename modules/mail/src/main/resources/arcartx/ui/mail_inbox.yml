@@ -35,6 +35,24 @@ ui:
       var.maxMailCount = 0
   # packetHandler 负责接收服务端下发的数据包并刷新本地变量。
   packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - messages: 邮件列表（Map，键为索引，每项含 id/主题/sender_name/source_text/status_text/预览/unread/claimable/source_type 等子字段）
+    #   - filter_mode: 当前筛选模式（all/unread/claimable/system/player/preset/cdk）
+    #   - total_count: 收件箱邮件总数
+    #   - unread_count: 未读邮件数
+    #   - claimable_count: 可领取邮件数
+    #   - selected_id: 当前选中邮件的 ID
+    #   - selected_subject: 选中邮件的标题
+    #   - selected_sender_name: 选中邮件的发件人名称
+    #   - selected_source_text: 选中邮件的来源描述文本
+    #   - selected_status_text: 选中邮件的状态描述文本
+    #   - selected_created_at: 选中邮件的创建时间
+    #   - selected_expires_at: 选中邮件的到期时间
+    #   - selected_body: 选中邮件的正文内容（列表形式，每行一个元素）
+    #   - selected_attachment_summary: 选中邮件的附件摘要文本
+    #   - selected_claimable: 选中邮件是否可领取
+    #   - maxMailCount: 邮件列表最大显示条数（用于动态生成列表项）
     init: |-
       var.messages = packet['messages']
       var.filterMode = packet['filter_mode'] != none ? packet['filter_mode'] : 'all'
@@ -60,6 +78,24 @@ ui:
         e = val.mail_list['邮件项目'].copy('邮件项目' + key)
         e.entryKey = key
       }
+    # packetHandler: update
+    # 包字段:
+    #   - messages: 邮件列表（Map，键为索引，每项含 id/主题/sender_name/source_text/status_text/预览/unread/claimable/source_type 等子字段）
+    #   - filter_mode: 当前筛选模式（all/unread/claimable/system/player/preset/cdk）
+    #   - total_count: 收件箱邮件总数
+    #   - unread_count: 未读邮件数
+    #   - claimable_count: 可领取邮件数
+    #   - selected_id: 当前选中邮件的 ID
+    #   - selected_subject: 选中邮件的标题
+    #   - selected_sender_name: 选中邮件的发件人名称
+    #   - selected_source_text: 选中邮件的来源描述文本
+    #   - selected_status_text: 选中邮件的状态描述文本
+    #   - selected_created_at: 选中邮件的创建时间
+    #   - selected_expires_at: 选中邮件的到期时间
+    #   - selected_body: 选中邮件的正文内容（列表形式，每行一个元素）
+    #   - selected_attachment_summary: 选中邮件的附件摘要文本
+    #   - selected_claimable: 选中邮件是否可领取
+    #   - maxMailCount: 邮件列表最大显示条数（用于动态生成列表项）
     update: |-
       var.messages = packet['messages']
       var.filterMode = packet['filter_mode'] != none ? packet['filter_mode'] : var.filterMode

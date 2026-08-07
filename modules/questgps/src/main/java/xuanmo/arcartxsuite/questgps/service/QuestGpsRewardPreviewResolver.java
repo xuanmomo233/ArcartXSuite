@@ -16,6 +16,11 @@ import xuanmo.arcartxsuite.questgps.config.QuestGpsModuleConfiguration;
 import xuanmo.arcartxsuite.api.capability.TitleConfigQueryable;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 
+/**
+ * 任务奖励预览解析器，将任务奖励配置解析为可展示的物品 JSON 与称号信息。
+ * <p>
+ * 支持原版物品、ItemSource 注册的第三方物品以及称号奖励的预览渲染。
+ */
 public final class QuestGpsRewardPreviewResolver {
 
     private final JavaPlugin plugin;

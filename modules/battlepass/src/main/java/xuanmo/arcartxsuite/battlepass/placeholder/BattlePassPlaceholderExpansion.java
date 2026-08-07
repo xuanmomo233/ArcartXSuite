@@ -9,11 +9,23 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress;
 import xuanmo.arcartxsuite.battlepass.service.BattlePassService;
 
+/**
+ * 战令 PlaceholderAPI 扩展，继承 {@link PlaceholderExpansion}。
+ * <p>
+ * 向 PlaceholderAPI 注册 {@code %axsbattlepass_xxx%} 系列占位符，
+ * 提供赛季信息、玩家等级、经验、档位、活跃任务数等数据的占位符解析。
+ */
 public final class BattlePassPlaceholderExpansion extends PlaceholderExpansion {
 
     private final JavaPlugin plugin;
     private final Supplier<BattlePassService> serviceProvider;
 
+    /**
+     * 构造战令 PlaceholderAPI 扩展。
+     *
+     * @param plugin           插件实例
+     * @param serviceProvider  BattlePassService 提供者（延迟获取，可能为 null）
+     */
     public BattlePassPlaceholderExpansion(JavaPlugin plugin, Supplier<BattlePassService> serviceProvider) {
         this.plugin = plugin;
         this.serviceProvider = serviceProvider;
@@ -24,6 +36,13 @@ public final class BattlePassPlaceholderExpansion extends PlaceholderExpansion {
     @Override public @NotNull String getVersion() { return "1.0.0"; }
     @Override public boolean persist() { return true; }
 
+    /**
+     * 解析占位符请求，根据标识符返回对应的战令数据。
+     *
+     * @param player    请求占位符的玩家
+     * @param identifier 占位符标识（如 level、xp、season 等）
+     * @return 占位符值字符串，未知标识符返回空串
+     */
     @Override
     public @Nullable String onPlaceholderRequest(Player player, @NotNull String identifier) {
         if (player == null) return "";
