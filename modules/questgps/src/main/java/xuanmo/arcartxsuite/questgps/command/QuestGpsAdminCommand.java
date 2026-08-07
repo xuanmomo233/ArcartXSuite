@@ -78,6 +78,13 @@ public final class QuestGpsAdminCommand implements ModuleCommandHandler {
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
         if (args.length == 2) return filter(ACTIONS, args[1]);
+        if (args.length == 3 && "open".equalsIgnoreCase(args[1])) {
+            List<String> names = new ArrayList<>();
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                names.add(p.getName());
+            }
+            return filter(names, args[2]);
+        }
         return List.of();
     }
 

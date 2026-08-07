@@ -38,6 +38,10 @@ open:
 # ── player-command ─────────────────────────────────────
 player:
   usage: "&e用法: /{0} open|cleartrack"                # {0}=玩家命令别名
+  help:
+    title: "&6任务导航 命令"
+    open: "&7/questgps open&f - 打开导航菜单"
+    cleartrack: "&7/questgps cleartrack&f - 清除当前导航追踪"
   quest-not-configured: "&c该任务未配置到 QuestGPS: {0}"  # {0}=任务ID
   chemdah-not-found: "&c未找到 Chemdah 任务: {0}"      # {0}=任务ID
   category-not-registered: "&c任务分类未在 categories 注册，无法接取: {0}"  # {0}=分类ID

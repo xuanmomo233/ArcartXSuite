@@ -24,7 +24,7 @@ import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository.PlayerStats;
 public final class AfkRewardPlayerCommand implements TabExecutor {
 
     private static final String PERMISSION = "arcartxsuite.afkreward.use";
-    private static final List<String> ACTIONS = List.of("toggle", "status", "start", "end", "list", "top");
+    private static final List<String> ACTIONS = List.of("help", "toggle", "status", "start", "end", "list", "top");
 
     private final Supplier<AfkRewardService> serviceSupplier;
     private final MessageProvider messages;
@@ -66,6 +66,11 @@ public final class AfkRewardPlayerCommand implements TabExecutor {
             return true;
         }
 
+        if (args.length > 0 && "help".equalsIgnoreCase(args[0])) {
+            showHelp(player);
+            return true;
+        }
+
         AfkRewardService service = serviceSupplier.get();
         if (service == null) {
             player.sendMessage(msg("common.service-down"));
@@ -92,6 +97,16 @@ public final class AfkRewardPlayerCommand implements TabExecutor {
             default -> player.sendMessage(msg("player.usage", label));
         }
         return true;
+    }
+
+    private void showHelp(Player player) {
+        player.sendMessage(msg("player.help.title"));
+        player.sendMessage(msg("player.help.toggle"));
+        player.sendMessage(msg("player.help.status"));
+        player.sendMessage(msg("player.help.start"));
+        player.sendMessage(msg("player.help.end"));
+        player.sendMessage(msg("player.help.list"));
+        player.sendMessage(msg("player.help.top"));
     }
 
     private void sendStatus(Player player, AfkRewardService service) {

@@ -60,7 +60,7 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
         String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "help";
         String cmd = "/" + label + " battlepass";
         switch (action) {
-            case "help" -> sendHelp(sender, cmd);
+            case "help" -> sendHelp(sender, label);
             case "status" -> sendStatus(sender);
             case "reload" -> sender.sendMessage(msg("common.reload-hint", label));
             case "reset" -> handleReset(sender, args);
@@ -93,13 +93,14 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
         return List.of();
     }
 
-    private void sendHelp(CommandSender sender, String cmd) {
-        sender.sendMessage(msg("admin.help.title", moduleVersion));
-        sender.sendMessage(msg("admin.help.status", cmd));
-        sender.sendMessage(msg("admin.help.reload", cmd));
-        sender.sendMessage(msg("admin.help.season", cmd));
-        sender.sendMessage(msg("admin.help.reset", cmd));
-        sender.sendMessage(msg("admin.help.unlock", cmd));
+    private void sendHelp(CommandSender sender, String label) {
+        String cmd = "/" + label + " battlepass";
+        sender.sendMessage(msg("help.title"));
+        sender.sendMessage(msg("help.status", cmd));
+        sender.sendMessage(msg("help.reload", cmd));
+        sender.sendMessage(msg("help.season", cmd));
+        sender.sendMessage(msg("help.reset", cmd));
+        sender.sendMessage(msg("help.unlock", cmd));
     }
 
     private void sendStatus(CommandSender sender) {

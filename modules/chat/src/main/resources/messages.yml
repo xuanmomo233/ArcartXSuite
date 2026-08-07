@@ -55,6 +55,13 @@ player:
   chat-usage: "&e用法: /{0} channel|toggle|ignore|unignore|socialspy"  # chat 总用法
   msg-usage: "&e用法: /{0} <player> <message>"                 # msg 命令用法
   reply-usage: "&e用法: /{0} <message>"                        # reply 命令用法
+  help:
+    title: "&6聊天 命令"
+    channel: "&7/chat channel <频道ID>&f - 切换聊天频道"
+    toggle: "&7/chat toggle <private|mentions> [on|off]&f - 切换私聊/提及接收"
+    ignore: "&7/chat ignore <玩家>&f - 忽略玩家私聊"
+    unignore: "&7/chat unignore <玩家>&f - 取消忽略玩家"
+    socialspy: "&7/chat socialspy [on|off]&f - 切换社交监听"
 
 # ── service results ─────────────────────────────────────
 result:

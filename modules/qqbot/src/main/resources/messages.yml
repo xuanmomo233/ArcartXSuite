@@ -17,12 +17,13 @@ common:
 
 # ── help ──────────────────────────────────────────────
 help:
-  title: "&bQQBot 管理命令:"
-  status: "&e  /axs qqbot status&7 - 查看运行状态"
-  reload: "&e  /axs qqbot reload&7 - 重载配置"
-  send: "&e  /axs qqbot send <all|群号> <消息>&7 - 向指定群或所有群发消息"
-  lookup: "&e  /axs qqbot lookup <玩家|QQ>&7 - 查询绑定"
-  snowluma: "&e  /axs qqbot snowluma ...&7 - SnowLuma 进程管理"
+  title: "&6QQBot 管理"
+  status: "&7{0} status&f - 查看运行状态"
+  reload: "&7{0} reload&f - 重载配置"
+  send: "&7{0} send <all|群号> <消息>&f - 向指定群或所有群发消息"
+  lookup: "&7{0} lookup <玩家|QQ>&f - 查询绑定"
+  snowluma: "&7{0} snowluma ...&f - SnowLuma 进程管理"
+  blacklist: "&7{0} blacklist <add|remove|list> [QQ]&f - 黑名单管理"
 
 # ── status ────────────────────────────────────────────
 status:
@@ -68,12 +69,13 @@ player:
   at-title: "&b[QQ群] &f{0} @了你"
   at-message: "&7[QQ群] &f{0} &7@了你，快去看看吧"
   help:
-    title: "&bQQBot 命令帮助:"
-    bind: "&e  /{0} bind <验证码>&7 - 绑定QQ"
-    unbind: "&e  /{0} unbind&7 - 解绑QQ"
-    info: "&e  /{0} info&7 - 查看绑定信息"
-    ui: "&e  /{0} ui&7 - 打开绑定中心面板"
-    admin: "&e  /{0} admin&7 - 打开管理后台"
+    title: "&6QQBot 命令"
+    bind: "&7{0} bind <验证码>&f - 绑定QQ"
+    unbind: "&7{0} unbind&f - 解绑QQ"
+    info: "&7{0} info&f - 查看绑定信息"
+    ui: "&7{0} ui&f - 打开绑定中心面板"
+    admin: "&7{0} admin&f - 打开管理后台"
+    at: "&7{0} at <QQ号> <消息>&f - @QQ群员"
   bind:
     usage: "&c用法: /{0} bind <验证码>"
   info:

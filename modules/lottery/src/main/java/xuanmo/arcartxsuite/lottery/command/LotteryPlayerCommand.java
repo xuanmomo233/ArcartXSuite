@@ -65,7 +65,12 @@ public class LotteryPlayerCommand implements TabExecutor {
         }
 
         if (args.length == 0) {
-            player.sendMessage(fullMsg("player.help"));
+            showHelp(sender);
+            return true;
+        }
+
+        if ("help".equalsIgnoreCase(args[0])) {
+            showHelp(sender);
             return true;
         }
 
@@ -99,9 +104,17 @@ public class LotteryPlayerCommand implements TabExecutor {
                 }
                 handleHistory(player, service, args[1]);
             }
-            default -> player.sendMessage(fullMsg("player.help"));
+            default -> showHelp(sender);
         }
         return true;
+    }
+
+    private void showHelp(CommandSender sender) {
+        sender.sendMessage(fullMsg("player.help.title"));
+        sender.sendMessage(fullMsg("player.help.claim"));
+        sender.sendMessage(fullMsg("player.help.pull"));
+        sender.sendMessage(fullMsg("player.help.info"));
+        sender.sendMessage(fullMsg("player.help.history"));
     }
 
     private void handlePull(Player player, LotteryService service, String poolId, int count) {
@@ -189,7 +202,7 @@ public class LotteryPlayerCommand implements TabExecutor {
         if (service == null) return Collections.emptyList();
 
         if (args.length == 1) {
-            return List.of("claim", "pull", "info", "history");
+            return List.of("help", "claim", "pull", "info", "history");
         }
         if (args.length == 2) {
             List<String> ids = new ArrayList<>(service.getPools().keySet());

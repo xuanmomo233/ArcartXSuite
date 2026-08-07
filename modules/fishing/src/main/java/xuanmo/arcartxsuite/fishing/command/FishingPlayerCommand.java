@@ -21,29 +21,38 @@ public final class FishingPlayerCommand implements TabExecutor {
     private final java.util.function.Supplier<PacketBridgeAPI> packetBridgeSupplier;
     private final java.util.function.Supplier<String> collectionUiIdSupplier;
     private final java.util.function.Supplier<FishingService> serviceSupplier;
+    private final java.util.function.BiFunction<String, Object[], String> msg;
 
     public FishingPlayerCommand(@NotNull java.util.function.Supplier<PacketBridgeAPI> packetBridgeSupplier,
                                 @NotNull java.util.function.Supplier<String> collectionUiIdSupplier,
-                                @NotNull java.util.function.Supplier<FishingService> serviceSupplier) {
+                                @NotNull java.util.function.Supplier<FishingService> serviceSupplier,
+                                @NotNull java.util.function.BiFunction<String, Object[], String> msg) {
         this.packetBridgeSupplier = packetBridgeSupplier;
         this.collectionUiIdSupplier = collectionUiIdSupplier;
         this.serviceSupplier = serviceSupplier;
+        this.msg = msg;
     }
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("该命令只能由玩家执行。");
+            sender.sendMessage(msg.apply("command_player_only", new Object[]{}));
             return true;
         }
 
         FishingService service = serviceSupplier.get();
 
+        // help 子命令
+        if (args.length > 0 && "help".equalsIgnoreCase(args[0])) {
+            showHelp(sender);
+            return true;
+        }
+
         // sell 子命令
         if (args.length > 0 && "sell".equalsIgnoreCase(args[0])) {
             if (service == null) {
-                sender.sendMessage("&c服务暂不可用。");
+                sender.sendMessage(msg.apply("command_service_unavailable", new Object[]{}));
                 return true;
             }
             String result;
@@ -59,13 +68,13 @@ public final class FishingPlayerCommand implements TabExecutor {
         // 默认：打开图鉴 UI
         PacketBridgeAPI bridge = packetBridgeSupplier.get();
         if (bridge == null || !bridge.isAvailable()) {
-            sender.sendMessage("&cUI 系统暂不可用。");
+            sender.sendMessage(msg.apply("command_ui_unavailable", new Object[]{}));
             return true;
         }
 
         String uiId = collectionUiIdSupplier.get();
         if (uiId == null || uiId.isBlank()) {
-            sender.sendMessage("&c图鉴界面未配置。");
+            sender.sendMessage(msg.apply("command_ui_not_configured", new Object[]{}));
             return true;
         }
 
@@ -80,7 +89,7 @@ public final class FishingPlayerCommand implements TabExecutor {
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                                    @NotNull String label, @NotNull String[] args) {
         if (args.length == 1) {
-            return java.util.stream.Stream.of("sell")
+            return java.util.stream.Stream.of("help", "sell")
                 .filter(a -> a.startsWith(args[0].toLowerCase()))
                 .toList();
         }
@@ -90,5 +99,12 @@ public final class FishingPlayerCommand implements TabExecutor {
                 .toList();
         }
         return List.of();
+    }
+
+    private void showHelp(@NotNull CommandSender sender) {
+        sender.sendMessage(msg.apply("player.help.title", new Object[]{}));
+        sender.sendMessage(msg.apply("player.help.open", new Object[]{}));
+        sender.sendMessage(msg.apply("player.help.sell", new Object[]{}));
+        sender.sendMessage(msg.apply("player.help.sell-all", new Object[]{}));
     }
 }

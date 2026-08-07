@@ -97,6 +97,13 @@ player:
   hide-usage: "&e用法: /{0} hide <titleId>"
   unhide-usage: "&e用法: /{0} unhide <titleId>"
   usage: "&e用法: /{0} open|equip <titleId>|unequip <groupId|all>|hide <titleId>|unhide <titleId>"
+  help:
+    title: "&6称号 命令"
+    open: "&7/title open&f - 打开称号菜单"
+    equip: "&7/title equip <称号ID>&f - 装备称号"
+    unequip: "&7/title unequip <分组ID|all>&f - 卸下称号"
+    hide: "&7/title hide <称号ID>&f - 隐藏称号"
+    unhide: "&7/title unhide <称号ID>&f - 取消隐藏称号"
   data-load-failed: "&c称号数据加载失败，请稍后重试。"
   title-not-found: "&c称号不存在: {0}"
   group-no-permission: "&c你没有权限使用该称号分组。"

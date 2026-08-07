@@ -1012,6 +1012,19 @@ public class MarketService {
         return auctionService != null ? auctionService.countMy(player.getUniqueId()) : 0;
     }
 
+    /**
+     * 获取玩家自己的上架物品 ID 列表，用于 tab 补全。
+     *
+     * @param player 玩家
+     * @return 上架 ID 字符串列表，服务不可用时返回空列表
+     */
+    public List<String> getMyListingIds(Player player) {
+        if (auctionService == null) return List.of();
+        return auctionService.getMyListings(player.getUniqueId()).stream()
+            .map(listing -> String.valueOf(listing.getId()))
+            .toList();
+    }
+
     public int getShopCount() {
         return shopService != null ? shopService.getShops().size() : 0;
     }

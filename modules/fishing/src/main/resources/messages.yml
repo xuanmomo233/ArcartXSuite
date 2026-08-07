@@ -27,6 +27,22 @@ command_help_stats: "&7/axs fishing stats [玩家] &f- 查看钓鱼统计"
 command_help_givexp: "&7/axs fishing givexp <玩家> <经验值> &f- 给予钓鱼经验"
 command_help_reset: "&7/axs fishing reset <玩家> &f- 重置钓鱼数据"
 command_help_reload: "&7/axs fishing reload &f- 重载钓鱼模块配置"
+
+# ── 管理命令帮助（标准格式） ──────────────────────────
+help:
+  title: "&6钓鱼管理"
+  stats: "&7{0} stats [玩家]&f - 查看钓鱼统计"
+  givexp: "&7{0} givexp <玩家> <经验值>&f - 给予钓鱼经验"
+  reset: "&7{0} reset [玩家]&f - 重置钓鱼数据"
+  reload: "&7{0} reload&f - 重载模块配置"
+
+# ── 玩家命令帮助 ──────────────────────────────────────
+player:
+  help:
+    title: "&6钓鱼命令"
+    open: "&7/fishing&f - 打开鱼类图鉴"
+    sell: "&7/fishing sell&f - 出售手中的鱼"
+    sell-all: "&7/fishing sell all&f - 出售背包所有鱼"
 command_reload_success: "&a钓鱼模块重载完成。"
 command_reload_failed: "&c钓鱼模块重载失败: &f{0}"
 
@@ -35,3 +51,7 @@ fishing_inventory_full: "&c你的背包已满，鱼掉落在地上了！"
 sell_not_fish: "&c手中物品不是钓鱼产物，无法出售。"
 sell_success: "&a成功出售 &e{0} &a获得 &6{1} {2}&a！"
 sell_none: "&c背包中没有可出售的鱼。"
+
+command_player_only: "&c该命令只能由玩家执行。"
+command_ui_unavailable: "&cUI 系统暂不可用。"
+command_ui_not_configured: "&c图鉴界面未配置。"

@@ -52,8 +52,14 @@ public class MarketPlayerCommand implements TabExecutor {
             return true;
         }
 
+        if (args.length > 0 && "help".equalsIgnoreCase(args[0])) {
+            sendHelp(player);
+            return true;
+        }
+
         String sub = args[0].toLowerCase();
         switch (sub) {
+            case "help" -> sendHelp(player);
             case "shop" -> {
                 if (args.length > 1) {
                     service.openShopUi(player, args[1]);
@@ -140,7 +146,7 @@ public class MarketPlayerCommand implements TabExecutor {
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (args.length == 1) {
-            List<String> subs = List.of("shop", "auction", "sell", "recycle", "history", "my", "search", "cancel");
+            List<String> subs = List.of("help", "shop", "auction", "sell", "recycle", "history", "my", "search", "cancel");
             return filterStartsWith(subs, args[0]);
         }
         if (args.length == 2) {
@@ -151,6 +157,12 @@ public class MarketPlayerCommand implements TabExecutor {
                 MarketService service = serviceSupplier.get();
                 if (service != null) {
                     return filterStartsWith(new ArrayList<>(service.getShopIds()), args[1]);
+                }
+            }
+            if ("cancel".equalsIgnoreCase(args[0]) && sender instanceof Player) {
+                MarketService service = serviceSupplier.get();
+                if (service != null) {
+                    return filterStartsWith(service.getMyListingIds((Player) sender), args[1]);
                 }
             }
         }

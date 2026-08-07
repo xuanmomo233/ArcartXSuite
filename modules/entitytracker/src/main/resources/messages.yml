@@ -105,3 +105,13 @@ rewards:                       # 排行榜奖励命令消息
     reloading: "&e正在重新加载调度器配置..."
     success: "&a调度器配置已重新加载"
     failed: "&c重新加载失败: {0}"  # {0}=失败原因
+
+# ── ranking.help ──────────────────────────────────────
+ranking:                       # 排行榜奖励帮助消息（标准格式）
+  help:
+    title: "&6排行榜奖励 管理"
+    manage: "&7{0} manage&f - 打开奖励管理界面"
+    history: "&7{0} history&f - 打开发放历史界面"
+    distribute: "&7{0} distribute <weekly|monthly>&f - 手动发放奖励"
+    status: "&7{0} status&f - 查看调度器状态"
+    reload: "&7{0} reload&f - 重新加载调度器配置"

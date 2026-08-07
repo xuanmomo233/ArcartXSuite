@@ -1,16 +1,24 @@
 prefix: '&7[&b战令&7] &f'
+
+# ── 管理命令帮助（标准格式） ────────────────────────
+help:
+  title: '&6战令 管理'
+  status: '&7{0} status&f - 查看模块状态'
+  reload: '&7{0} reload&f - 重载配置'
+  season: '&7{0} season <new|info>&f - 赛季管理'
+  reset: '&7{0} reset <玩家>&f - 重置玩家进度'
+  unlock: '&7{0} unlock <玩家> <premium|deluxe>&f - 解锁指定战令'
+  # 以下为旧 key 保留（代码不再引用）
+  tasks: '&e/bp tasks &7- 打开任务面板'
+  rewards: '&e/bp rewards &7- 打开奖励面板'
+  claim: '&e/bp claim <等级> &7- 领取指定等级奖励'
+
 common:
   enabled: '&a已启用'
   disabled: '&c未启用'
   unknown: '&c未知指令，使用 /axs battlepass help 查看帮助。'
   reload-hint: '&e请使用 /axs reload 重载配置。'
   service-unavailable: '&c服务未就绪。'
-help:
-  title: '&6===== 战令系统 &7v{0} &6====='
-  status: '&e/bp status &7- 查看当前战令状态'
-  tasks: '&e/bp tasks &7- 打开任务面板'
-  rewards: '&e/bp rewards &7- 打开奖励面板'
-  claim: '&e/bp claim <等级> &7- 领取指定等级奖励'
 status:
   title: '&6===== 战令状态 ====='
   season: '&7赛季: &f{0}'
@@ -61,6 +69,13 @@ player:
   only-player: "&c该命令仅限玩家使用。"
   module-down: "&c战令模块未就绪，请稍后再试。"
   unknown-subcommand: "&c未知子命令，使用 /{0} help 查看帮助。"
+  help:
+    title: "&6战令 命令"
+    open: "&7/bp open&f - 打开战令主界面"
+    tasks: "&7/bp tasks&f - 打开任务列表"
+    rewards: "&7/bp rewards&f - 打开奖励面板"
+    claim: "&7/bp claim <等级>&f - 领取指定等级奖励"
+    help: "&7/bp help&f - 显示帮助"
   help-title: "&6==== BattlePass 命令 ===="
   help-open: "&e/{0} &f— 打开战令主界面"
   help-tasks: "&e/{0} tasks&f— 打开任务列表"

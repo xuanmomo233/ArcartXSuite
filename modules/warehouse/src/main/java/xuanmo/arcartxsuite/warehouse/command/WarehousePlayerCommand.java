@@ -68,6 +68,10 @@ public final class WarehousePlayerCommand implements org.bukkit.command.TabExecu
             player.sendMessage(fullMsg("player.module-down"));
             return true;
         }
+        if (args.length > 0 && "help".equalsIgnoreCase(args[0])) {
+            showHelp(player);
+            return true;
+        }
         String subCommand = args.length > 0 ? args[0].toLowerCase() : "open";
         switch (subCommand) {
             case "transfer" -> {
@@ -166,6 +170,14 @@ public final class WarehousePlayerCommand implements org.bukkit.command.TabExecu
         return true;
     }
 
+    private void showHelp(Player player) {
+        player.sendMessage(fullMsg("player.help.title"));
+        player.sendMessage(fullMsg("player.help.open"));
+        player.sendMessage(fullMsg("player.help.showcase"));
+        player.sendMessage(fullMsg("player.help.preview"));
+        player.sendMessage(fullMsg("player.help.transfer"));
+    }
+
     /**
      * 提供玩家子命令的 Tab 补全。
      *
@@ -185,7 +197,7 @@ public final class WarehousePlayerCommand implements org.bukkit.command.TabExecu
         if (args.length == 1) {
             String prefix = args[0].toLowerCase();
             List<String> completions = new ArrayList<>();
-            for (String cmd : List.of("open", "showcase", "preview", "transfer")) {
+            for (String cmd : List.of("help", "open", "showcase", "preview", "transfer")) {
                 if (cmd.startsWith(prefix)) completions.add(cmd);
             }
             return completions;

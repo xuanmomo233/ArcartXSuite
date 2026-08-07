@@ -25,11 +25,18 @@ common:
   pending-claim-claimed: "&a已领取 {0} 个待领取奖励。"
   mail-sent: "&a奖励已通过邮件发放: &f{0}"
 player:
+  # 旧 player.help 列表格式（已被 player.help.title 等标准格式替代）:
+  # help:
+  #   - "&6=== AXS 抽奖系统 ==="
+  #   - "&7/lottery pull <奖池ID> [single|ten] &f- 抽奖"
+  #   - "&7/lottery info <奖池ID> &f- 查看奖池信息"
+  #   - "&7/lottery history <奖池ID> &f- 查看历史记录"
   help:
-    - "&6=== AXS 抽奖系统 ==="
-    - "&7/lottery pull <奖池ID> [single|ten] &f- 抽奖"
-    - "&7/lottery info <奖池ID> &f- 查看奖池信息"
-    - "&7/lottery history <奖池ID> &f- 查看历史记录"
+    title: "&6抽奖 命令"
+    claim: "&7/lottery claim&f - 领取待发放奖励"
+    pull: "&7/lottery pull <奖池ID> [single|ten]&f - 抽奖"
+    info: "&7/lottery info <奖池ID>&f - 查看奖池信息"
+    history: "&7/lottery history <奖池ID>&f - 查看历史记录"
   pull:
     usage: "&e用法: /lottery pull <奖池ID> [single|ten]"
   info:
@@ -70,3 +77,12 @@ admin:
   player-not-found: "&c玩家不在线: &f{0}"
   invalid-number: "&c无效的数字: &f{0}"
   unknown: "&c未知命令"
+
+# ── 管理命令 help（标准格式） ────────────────────────
+help:
+  title: "&6抽奖 管理"
+  status: "&7{0} status&f - 查看奖池状态"
+  reload: "&7{0} reload&f - 重载配置"
+  reset: "&7{0} reset <玩家> <奖池ID>&f - 重置玩家抽奖状态"
+  give-ticket: "&7{0} give-ticket <玩家> <奖池ID> <数量>&f - 发放抽奖券"
+  simulate: "&7{0} simulate <奖池ID> <次数>&f - 概率模拟"

@@ -58,13 +58,13 @@ public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "help";
         switch (action) {
-            case "help" -> sendHelp(sender, label);
+            case "help" -> showHelp(sender, label);
             case "status" -> sendStatus(sender);
             case "reload" -> sender.sendMessage(msg("admin.reload-hint", label));
             case "add", "remove", "set" -> handleTimeAdjust(sender, action, args);
             case "card" -> handleCard(sender, args);
             case "savings" -> handleSavings(sender, args);
-            default -> sender.sendMessage(msg("admin.unknown", label));
+            default -> showHelp(sender, label);
         }
         return true;
     }
@@ -97,13 +97,15 @@ public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
         return List.of();
     }
 
-    private void sendHelp(CommandSender sender, String label) {
+    private void showHelp(CommandSender sender, String label) {
         String cmd = "/" + label + " onlinerewards";
-        sender.sendMessage(msg("admin.help.title"));
-        sender.sendMessage(msg("admin.help.status", cmd));
-        sender.sendMessage(msg("admin.help.time", cmd));
-        sender.sendMessage(msg("admin.help.card", cmd));
-        sender.sendMessage(msg("admin.help.savings", cmd));
+        sender.sendMessage(msg("help.title"));
+        sender.sendMessage(msg("help.status", cmd));
+        sender.sendMessage(msg("help.add", cmd));
+        sender.sendMessage(msg("help.remove", cmd));
+        sender.sendMessage(msg("help.set", cmd));
+        sender.sendMessage(msg("help.card", cmd));
+        sender.sendMessage(msg("help.savings", cmd));
     }
 
     private void sendStatus(CommandSender sender) {

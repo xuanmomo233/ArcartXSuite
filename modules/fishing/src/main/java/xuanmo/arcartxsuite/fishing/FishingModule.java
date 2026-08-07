@@ -214,7 +214,8 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         return Map.of("fishing", new FishingPlayerCommand(
             () -> packetBridge,
             () -> collectionUiId,
-            () -> service
+            () -> service,
+            this::msg
         ));
     }
 
@@ -242,7 +243,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
-        if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
+        if (args.length >= 2 && args[1].equalsIgnoreCase("reload")) {
             if (!sender.hasPermission("axs.fishing.admin")) {
                 sender.sendMessage(msg("command_no_permission"));
                 return true;

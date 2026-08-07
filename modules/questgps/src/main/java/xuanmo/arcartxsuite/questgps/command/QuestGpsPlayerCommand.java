@@ -18,7 +18,7 @@ import xuanmo.arcartxsuite.questgps.service.QuestGpsService;
  */
 public final class QuestGpsPlayerCommand implements org.bukkit.command.TabExecutor {
 
-    private static final List<String> ROOT_ACTIONS = List.of("open", "cleartrack");
+    private static final List<String> ROOT_ACTIONS = List.of("help", "open", "cleartrack");
 
     private final Supplier<QuestGpsService> serviceProvider;
     private final MessageProvider messages;
@@ -64,6 +64,11 @@ public final class QuestGpsPlayerCommand implements org.bukkit.command.TabExecut
             return true;
         }
 
+        if (args.length > 0 && "help".equalsIgnoreCase(args[0])) {
+            showHelp(player);
+            return true;
+        }
+
         if (args.length == 0 || "open".equalsIgnoreCase(args[0])) {
             svc.openMenu(player);
             return true;
@@ -96,5 +101,11 @@ public final class QuestGpsPlayerCommand implements org.bukkit.command.TabExecut
             return ROOT_ACTIONS.stream().filter(value -> value.startsWith(args[0].toLowerCase())).toList();
         }
         return List.of();
+    }
+
+    private void showHelp(Player player) {
+        player.sendMessage(fullMsg("player.help.title"));
+        player.sendMessage(fullMsg("player.help.open"));
+        player.sendMessage(fullMsg("player.help.cleartrack"));
     }
 }

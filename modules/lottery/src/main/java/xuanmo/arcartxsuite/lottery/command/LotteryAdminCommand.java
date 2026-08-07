@@ -50,7 +50,7 @@ public class LotteryAdminCommand {
      */
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         if (args.length == 0) {
-            sender.sendMessage(msg("admin.help"));
+            showHelp(sender);
             return true;
         }
 
@@ -62,7 +62,7 @@ public class LotteryAdminCommand {
         }
 
         switch (action) {
-            case "help" -> sender.sendMessage(msg("admin.help"));
+            case "help" -> showHelp(sender);
             case "status" -> handleStatus(sender, service);
             case "reload" -> {
                 sender.sendMessage(msg("admin.reload"));
@@ -89,7 +89,7 @@ public class LotteryAdminCommand {
                 }
                 handleSimulate(sender, service, args[1], args[2]);
             }
-            default -> sender.sendMessage(msg("admin.unknown"));
+            default -> showHelp(sender);
         }
         return true;
     }
@@ -126,6 +126,16 @@ public class LotteryAdminCommand {
             }
         }
         return Collections.emptyList();
+    }
+
+    private void showHelp(CommandSender sender) {
+        String cmd = "/lottery admin";
+        sender.sendMessage(msg("help.title"));
+        sender.sendMessage(msg("help.status", cmd));
+        sender.sendMessage(msg("help.reload", cmd));
+        sender.sendMessage(msg("help.reset", cmd));
+        sender.sendMessage(msg("help.give-ticket", cmd));
+        sender.sendMessage(msg("help.simulate", cmd));
     }
 
     private void handleStatus(CommandSender sender, LotteryService service) {

@@ -24,7 +24,7 @@ import xuanmo.arcartxsuite.menu.service.MenuService;
  */
 public final class MenuPlayerCommand implements org.bukkit.command.TabExecutor {
 
-    private static final List<String> ROOT_ACTIONS = List.of("open", "list");
+    private static final List<String> ROOT_ACTIONS = List.of("help", "open", "list");
 
     private final Supplier<MenuService> serviceSupplier;
     private final MessageProvider messages;
@@ -62,6 +62,11 @@ public final class MenuPlayerCommand implements org.bukkit.command.TabExecutor {
         MenuDefinition boundMenu = service.resolveCommandMenu(label);
         if (boundMenu != null && (args.length == 0 || "open".equalsIgnoreCase(args[0]))) {
             service.openMenu(player, boundMenu.id());
+            return true;
+        }
+
+        if (args.length > 0 && "help".equalsIgnoreCase(args[0])) {
+            showHelp(sender);
             return true;
         }
 
@@ -107,6 +112,12 @@ public final class MenuPlayerCommand implements org.bukkit.command.TabExecutor {
             return filter(ids, args[1]);
         }
         return List.of();
+    }
+
+    private void showHelp(CommandSender sender) {
+        sender.sendMessage(msg("player.help.title"));
+        sender.sendMessage(msg("player.help.open"));
+        sender.sendMessage(msg("player.help.list"));
     }
 
     private void sendList(Player player) {

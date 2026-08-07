@@ -69,7 +69,7 @@ public final class QQBotAdminCommand {
      */
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         if (args.length < 2) {
-            sendHelp(sender);
+            sendHelp(sender, label);
             return true;
         }
 
@@ -77,7 +77,7 @@ public final class QQBotAdminCommand {
         String action = args[1].toLowerCase();
 
         switch (action) {
-            case "help" -> sendHelp(sender);
+            case "help" -> sendHelp(sender, label);
             case "status" -> {
                 if (service == null) {
                     sender.sendMessage(fullMsg("common.service-down"));
@@ -159,7 +159,7 @@ public final class QQBotAdminCommand {
             }
             case "snowluma" -> handleSnowLuma(sender, args);
             case "blacklist" -> handleBlacklist(sender, args);
-            default -> sendHelp(sender);
+            default -> sendHelp(sender, label);
         }
         return true;
     }
@@ -216,6 +216,22 @@ public final class QQBotAdminCommand {
             String prefix = args[1].toLowerCase();
             for (String action : actions()) {
                 if (action.startsWith(prefix)) completions.add(action);
+            }
+            return completions;
+        }
+        if (args.length == 3 && "send".equalsIgnoreCase(args[1])) {
+            List<String> completions = new ArrayList<>();
+            String prefix = args[2].toLowerCase();
+            // 补全 "all" 以及已配置的群号
+            for (String candidate : List.of("all")) {
+                if (candidate.toLowerCase().startsWith(prefix)) completions.add(candidate);
+            }
+            QQBotService service = serviceProvider.get();
+            if (service != null) {
+                for (var group : service.configuration().groups()) {
+                    String groupId = String.valueOf(group.groupId());
+                    if (groupId.startsWith(prefix)) completions.add(groupId);
+                }
             }
             return completions;
         }
@@ -299,13 +315,14 @@ public final class QQBotAdminCommand {
         try { return Long.parseLong(s.trim()); } catch (NumberFormatException e) { return 0; }
     }
 
-    private void sendHelp(CommandSender sender) {
+    private void sendHelp(CommandSender sender, String label) {
+        String cmd = "/" + label + " qqbot admin";
         sender.sendMessage(fullMsg("help.title"));
-        sender.sendMessage(fullMsg("help.status"));
-        sender.sendMessage(fullMsg("help.reload"));
-        sender.sendMessage(fullMsg("help.send"));
-        sender.sendMessage(fullMsg("help.lookup"));
-        sender.sendMessage(fullMsg("help.snowluma"));
-        sender.sendMessage(fullMsg("help.blacklist"));
+        sender.sendMessage(fullMsg("help.status", cmd));
+        sender.sendMessage(fullMsg("help.reload", cmd));
+        sender.sendMessage(fullMsg("help.send", cmd));
+        sender.sendMessage(fullMsg("help.lookup", cmd));
+        sender.sendMessage(fullMsg("help.snowluma", cmd));
+        sender.sendMessage(fullMsg("help.blacklist", cmd));
     }
 }

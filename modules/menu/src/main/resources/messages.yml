@@ -11,6 +11,10 @@ player:
   list-header: "&3◆ &6已注册菜单 (&f{0}&6):"
   list-entry: "&8  ▸ &f{0} &7- &r{1}"
   list-empty: "&7当前没有已注册的菜单。"
+  help:
+    title: "&6菜单 命令"
+    open: "&7/menu open <菜单ID>&f - 打开指定菜单"
+    list: "&7/menu list&f - 列出所有可用菜单"
 
 admin:
   usage: "&7用法: &f/axs menu <help|status|reload|list|open <菜单ID> [玩家]>"
@@ -28,6 +32,13 @@ admin:
   reload-failed: "&cMenu 模块重载失败: &7{0}"
   list-entry: "&8  ▸ &f{0} &8[{1}] &r{2}"
   open-other: "&a已为 &f{0} &a打开菜单 &f{1}"
+
+help:
+  title: "&6菜单 管理"
+  status: "&7{0} status&f - 查看模块状态"
+  reload: "&7{0} reload&f - 重载菜单配置"
+  list: "&7{0} list&f - 列出所有已注册菜单"
+  open: "&7{0} open <菜单ID> [玩家]&f - 为指定玩家打开菜单"
 
 # Migrated messages from the module configuration.
 no-permission: "&c你没有权限执行此操作。"

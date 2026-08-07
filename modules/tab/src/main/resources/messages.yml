@@ -32,6 +32,11 @@ player:
     view: "&7/{0} view <name>"
     page: "&7/{0} page <definitionId> <next|prev|N>"
     refresh: "&7/{0} refresh"
+  help:
+    title: "&6Tab列表 命令"
+    view: "&7/axstab view <视图名>&f - 切换视图"
+    page: "&7/axstab page <definitionId> <next|prev|页码>&f - 翻页"
+    refresh: "&7/axstab refresh&f - 强制刷新本玩家"
 
 # ── 调试与快照运维 ────────────────────────────────────
 admin:

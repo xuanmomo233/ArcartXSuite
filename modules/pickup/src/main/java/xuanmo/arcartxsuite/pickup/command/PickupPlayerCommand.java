@@ -30,7 +30,7 @@ import xuanmo.arcartxsuite.pickup.service.PickupService;
 public final class PickupPlayerCommand implements TabExecutor {
 
     private static final String PERMISSION = "arcartxsuite.pickup.use";
-    private static final List<String> ACTIONS = List.of("on", "off", "status");
+    private static final List<String> ACTIONS = List.of("help", "on", "off", "status");
 
     private final Supplier<PickupService> notificationServiceSupplier;
     private final Supplier<LootScannerService> scannerServiceSupplier;
@@ -61,6 +61,11 @@ public final class PickupPlayerCommand implements TabExecutor {
             return true;
         }
 
+        if (args.length > 0 && "help".equalsIgnoreCase(args[0])) {
+            showHelp(player);
+            return true;
+        }
+
         String action = args.length >= 1 ? args[0].toLowerCase(Locale.ROOT) : "toggle";
 
         switch (action) {
@@ -79,6 +84,13 @@ public final class PickupPlayerCommand implements TabExecutor {
             return List.of();
         }
         return filter(ACTIONS, args[0]);
+    }
+
+    private void showHelp(Player player) {
+        player.sendMessage(msg("player.help.title"));
+        player.sendMessage(msg("player.help.on"));
+        player.sendMessage(msg("player.help.off"));
+        player.sendMessage(msg("player.help.status"));
     }
 
     private void handleToggle(Player player, Boolean enabled) {

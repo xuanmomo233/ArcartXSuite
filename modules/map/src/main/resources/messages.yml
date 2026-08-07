@@ -48,6 +48,11 @@ anchors:
 # ── player ────────────────────────────────────────────
 player:
   usage: "&e用法: /{0} open [world]|hud [on|off|toggle]|cleartrack"
+  help:
+    title: "&6地图 命令"
+    open: "&7/map open [世界名]&f - 打开地图界面"
+    hud: "&7/map hud [on|off|toggle]&f - 切换小地图 HUD"
+    cleartrack: "&7/map cleartrack&f - 清除当前导航追踪"
   offline: "玩家当前不在线。"
   world-not-configured: "未配置地图世界: {0}"
   map-unavailable: "当前世界未配置地图，且没有可用的默认地图。"

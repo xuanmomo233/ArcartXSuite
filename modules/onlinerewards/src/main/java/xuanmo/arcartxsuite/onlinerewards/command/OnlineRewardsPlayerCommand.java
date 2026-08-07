@@ -31,7 +31,7 @@ import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsTextFormats;
 public final class OnlineRewardsPlayerCommand implements org.bukkit.command.TabExecutor {
 
     private static final int PAGE_SIZE = 10;
-    private static final List<String> ROOT_ACTIONS = List.of("open", "status", "signin", "top", "history");
+    private static final List<String> ROOT_ACTIONS = List.of("help", "open", "status", "signin", "top", "history");
 
     private final Supplier<OnlineRewardsService> serviceProvider;
     private final Supplier<OnlineRewardsModuleConfiguration> configurationProvider;
@@ -93,6 +93,11 @@ public final class OnlineRewardsPlayerCommand implements org.bukkit.command.TabE
             return true;
         }
 
+        if ("help".equalsIgnoreCase(args[0])) {
+            showHelp(sender);
+            return true;
+        }
+
         switch (args[0].toLowerCase()) {
             case "open" -> sendOperationResult(player, service.openMenu(player));
             case "status" -> sendStatus(player, service);
@@ -137,6 +142,15 @@ public final class OnlineRewardsPlayerCommand implements org.bukkit.command.TabE
                 .toList();
         }
         return List.of();
+    }
+
+    private void showHelp(CommandSender sender) {
+        sender.sendMessage(msg("player.help.title"));
+        sender.sendMessage(msg("player.help.open"));
+        sender.sendMessage(msg("player.help.status"));
+        sender.sendMessage(msg("player.help.signin"));
+        sender.sendMessage(msg("player.help.top"));
+        sender.sendMessage(msg("player.help.history"));
     }
 
     private void sendStatus(Player player, OnlineRewardsService service) {

@@ -19,6 +19,13 @@ common:
 # ── 玩家命令 ──────────────────────────────────────────
 player:
   usage: "&e用法: /{0} open|status|signin|top|history <daily|weekly|monthly|total> [page]"
+  help:
+    title: "&6在线奖励 命令"
+    open: "&7/onlinerewards open&f - 打开在线奖励菜单"
+    status: "&7/onlinerewards status&f - 查看在线时长与签到状态"
+    signin: "&7/onlinerewards signin&f - 每日签到"
+    top: "&7/onlinerewards top <daily|weekly|monthly|total> [页码]&f - 查看排行榜"
+    history: "&7/onlinerewards history [月数]&f - 查看签到历史"
   status:
     online: "&7今日在线: &f{0}&7 | 本周在线: &f{1}"
     monthly: "&7本月在线: &f{0}&7 | 总在线: &f{1}"
@@ -60,6 +67,16 @@ admin:
   savings:
     usage: "&e用法: /axs onlinerewards savings add|set|reset <时长> <玩家>"
     invalid: "&c无效时长: {0} (支持 30m/2h/1d)"
+
+# ── 管理命令 help（标准格式） ────────────────────────
+help:
+  title: "&6在线奖励 管理"
+  status: "&7{0} status&f - 查看模块状态"
+  add: "&7{0} add <时长> <玩家>&f - 增加在线时长"
+  remove: "&7{0} remove <时长> <玩家>&f - 扣除在线时长"
+  set: "&7{0} set <时长> <玩家>&f - 设置在线时长"
+  card: "&7{0} card add|remove|set <数量> <玩家>&f - 修改补签卡"
+  savings: "&7{0} savings add|set|reset <时长> <玩家>&f - 修改离线储蓄"
 
 hints:
   server-goal: "&e[全服签到] &f{0} &7已达成！今日签到人数：&f{1}&7。"

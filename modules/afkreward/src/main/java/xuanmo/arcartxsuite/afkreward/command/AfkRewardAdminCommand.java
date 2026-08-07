@@ -95,9 +95,10 @@ public final class AfkRewardAdminCommand implements ModuleCommandHandler {
     }
 
     private void sendHelp(CommandSender sender, String label) {
-        sender.sendMessage(msg("admin.help.title"));
-        sender.sendMessage(msg("admin.help.status", label));
-        sender.sendMessage(msg("admin.help.reload", label));
+        String cmd = "/" + label + " afkreward";
+        sender.sendMessage(msg("help.title"));
+        sender.sendMessage(msg("help.status", cmd));
+        sender.sendMessage(msg("help.reload", cmd));
     }
 
     private void sendStatus(CommandSender sender) {

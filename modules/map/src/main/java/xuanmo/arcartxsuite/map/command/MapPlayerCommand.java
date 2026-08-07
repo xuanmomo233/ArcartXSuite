@@ -22,7 +22,7 @@ import xuanmo.arcartxsuite.map.service.MapService;
  */
 public final class MapPlayerCommand implements org.bukkit.command.TabExecutor {
 
-    private static final List<String> ROOT_ACTIONS = List.of("open", "hud", "cleartrack");
+    private static final List<String> ROOT_ACTIONS = List.of("help", "open", "hud", "cleartrack");
 
     private final Supplier<MapService> serviceProvider;
     private final Supplier<MapModuleConfiguration> configurationProvider;
@@ -72,6 +72,11 @@ public final class MapPlayerCommand implements org.bukkit.command.TabExecutor {
         MapService svc = serviceProvider.get();
         if (svc == null) {
             player.sendMessage(fullMsg("common.module-down"));
+            return true;
+        }
+
+        if (args.length > 0 && "help".equalsIgnoreCase(args[0])) {
+            showHelp(player);
             return true;
         }
 
@@ -125,6 +130,13 @@ public final class MapPlayerCommand implements org.bukkit.command.TabExecutor {
                 .toList();
         }
         return List.of();
+    }
+
+    private void showHelp(Player player) {
+        player.sendMessage(fullMsg("player.help.title"));
+        player.sendMessage(fullMsg("player.help.open"));
+        player.sendMessage(fullMsg("player.help.hud"));
+        player.sendMessage(fullMsg("player.help.cleartrack"));
     }
 
     private void sendResult(Player player, MapOperationResult result) {

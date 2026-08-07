@@ -47,7 +47,12 @@ public class RankingRewardCommand {
         }
 
         if (args.length == 0) {
-            showHelp(sender);
+            showHelp(sender, label);
+            return true;
+        }
+
+        if ("help".equalsIgnoreCase(args[0])) {
+            showHelp(sender, label);
             return true;
         }
 
@@ -59,7 +64,7 @@ public class RankingRewardCommand {
             case "distribute" -> handleDistribute(sender, args);
             case "status" -> showSchedulerStatus(sender);
             case "reload" -> reloadScheduler(sender);
-            default -> showHelp(sender);
+            default -> showHelp(sender, label);
         }
 
         return true;
@@ -71,7 +76,7 @@ public class RankingRewardCommand {
         }
 
         if (args.length == 1) {
-            return Arrays.asList("manage", "history", "distribute", "status", "reload")
+            return Arrays.asList("help", "manage", "history", "distribute", "status", "reload")
                 .stream()
                 .filter(s -> s.toLowerCase().startsWith(args[0].toLowerCase()))
                 .collect(Collectors.toList());
@@ -90,13 +95,14 @@ public class RankingRewardCommand {
     /**
      * 显示帮助信息
      */
-    private void showHelp(CommandSender sender) {
-        sender.sendMessage(fullMsg("rewards.help.title"));
-        sender.sendMessage(fullMsg("rewards.help.manage"));
-        sender.sendMessage(fullMsg("rewards.help.history"));
-        sender.sendMessage(fullMsg("rewards.help.distribute"));
-        sender.sendMessage(fullMsg("rewards.help.status"));
-        sender.sendMessage(fullMsg("rewards.help.reload"));
+    private void showHelp(CommandSender sender, String label) {
+        String cmd = "/" + label;
+        sender.sendMessage(fullMsg("ranking.help.title"));
+        sender.sendMessage(fullMsg("ranking.help.manage", cmd));
+        sender.sendMessage(fullMsg("ranking.help.history", cmd));
+        sender.sendMessage(fullMsg("ranking.help.distribute", cmd));
+        sender.sendMessage(fullMsg("ranking.help.status", cmd));
+        sender.sendMessage(fullMsg("ranking.help.reload", cmd));
     }
 
     /**

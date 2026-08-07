@@ -23,7 +23,7 @@ import xuanmo.arcartxsuite.title.service.TitleService;
  */
 public final class TitlePlayerCommand implements org.bukkit.command.TabExecutor {
 
-    private static final List<String> ROOT_ACTIONS = List.of("open", "equip", "unequip", "hide", "unhide");
+    private static final List<String> ROOT_ACTIONS = List.of("help", "open", "equip", "unequip", "hide", "unhide");
 
     private final Supplier<TitleService> serviceProvider;
     private final Supplier<TitleModuleConfiguration> configurationProvider;
@@ -66,6 +66,11 @@ public final class TitlePlayerCommand implements org.bukkit.command.TabExecutor 
         TitleService titleSvc = serviceProvider.get();
         if (titleSvc == null) {
             sender.sendMessage(msg("player.module-disabled"));
+            return true;
+        }
+
+        if (args.length > 0 && "help".equalsIgnoreCase(args[0])) {
+            showHelp(player);
             return true;
         }
 
@@ -150,6 +155,15 @@ public final class TitlePlayerCommand implements org.bukkit.command.TabExecutor 
             }
         }
         return List.of();
+    }
+
+    private void showHelp(Player player) {
+        player.sendMessage(msg("player.help.title"));
+        player.sendMessage(msg("player.help.open"));
+        player.sendMessage(msg("player.help.equip"));
+        player.sendMessage(msg("player.help.unequip"));
+        player.sendMessage(msg("player.help.hide"));
+        player.sendMessage(msg("player.help.unhide"));
     }
 
     private List<String> filter(List<String> candidates, String input) {

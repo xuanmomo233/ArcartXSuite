@@ -75,6 +75,11 @@ public final class QQBotPlayerCommand implements TabExecutor {
             return true;
         }
 
+        if ("help".equalsIgnoreCase(args[0])) {
+            sendHelp(player, label);
+            return true;
+        }
+
         QQBotBindService bindService = service.bindService();
         switch (args[0].toLowerCase()) {
             case "bind" -> {
@@ -190,7 +195,7 @@ public final class QQBotPlayerCommand implements TabExecutor {
         if (args.length == 1) {
             List<String> completions = new ArrayList<>();
             String prefix = args[0].toLowerCase();
-            for (String sub : List.of("bind", "unbind", "info", "ui", "admin", "at")) {
+            for (String sub : List.of("help", "bind", "unbind", "info", "ui", "admin", "at")) {
                 if (sub.startsWith(prefix)) completions.add(sub);
             }
             return completions;
@@ -199,12 +204,13 @@ public final class QQBotPlayerCommand implements TabExecutor {
     }
 
     private void sendHelp(Player player, String label) {
+        String cmd = "/" + label;
         player.sendMessage(fullMsg("player.help.title"));
-        player.sendMessage(fullMsg("player.help.bind", label));
-        player.sendMessage(fullMsg("player.help.unbind", label));
-        player.sendMessage(fullMsg("player.help.info", label));
-        player.sendMessage(fullMsg("player.help.ui", label));
-        player.sendMessage(fullMsg("player.help.at", label));
-        player.sendMessage(fullMsg("player.help.admin", label));
+        player.sendMessage(fullMsg("player.help.bind", cmd));
+        player.sendMessage(fullMsg("player.help.unbind", cmd));
+        player.sendMessage(fullMsg("player.help.info", cmd));
+        player.sendMessage(fullMsg("player.help.ui", cmd));
+        player.sendMessage(fullMsg("player.help.at", cmd));
+        player.sendMessage(fullMsg("player.help.admin", cmd));
     }
 }

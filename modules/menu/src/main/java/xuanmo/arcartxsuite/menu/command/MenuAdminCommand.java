@@ -51,7 +51,7 @@ public final class MenuAdminCommand {
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         String action = args.length < 2 ? "help" : args[1].toLowerCase(Locale.ROOT);
         switch (action) {
-            case "help" -> sendHelp(sender, label, args[0]);
+            case "help" -> showHelp(sender, label);
             case "status" -> sendStatus(sender);
             case "reload" -> {
                 if (!sender.hasPermission("axs.menu.reload")) {
@@ -68,10 +68,7 @@ public final class MenuAdminCommand {
                 sendList(player);
             }
             case "open" -> handleOpen(sender, args);
-            default -> {
-                sender.sendMessage(msg("admin.usage"));
-                sendHelp(sender, label, args[0]);
-            }
+            default -> showHelp(sender, label);
         }
         return true;
     }
@@ -128,13 +125,13 @@ public final class MenuAdminCommand {
         }
     }
 
-    private void sendHelp(CommandSender sender, String label, String alias) {
-        sender.sendMessage(msg("admin.usage"));
-        sender.sendMessage(msg("admin.help-header"));
-        sender.sendMessage(msg("admin.help-status"));
-        sender.sendMessage(msg("admin.help-reload"));
-        sender.sendMessage(msg("admin.help-list"));
-        sender.sendMessage(msg("admin.help-open"));
+    private void showHelp(CommandSender sender, String label) {
+        String cmd = "/" + label + " menu";
+        sender.sendMessage(msg("help.title"));
+        sender.sendMessage(msg("help.status", cmd));
+        sender.sendMessage(msg("help.reload", cmd));
+        sender.sendMessage(msg("help.list", cmd));
+        sender.sendMessage(msg("help.open", cmd));
     }
 
     private void sendStatus(CommandSender sender) {

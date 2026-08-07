@@ -53,6 +53,11 @@ public final class BattlePassPlayerCommand implements TabExecutor {
             return true;
         }
 
+        if (args.length > 0 && "help".equalsIgnoreCase(args[0])) {
+            showHelp(player);
+            return true;
+        }
+
         BattlePassPacketHandler handler = packetHandlerSupplier.get();
         if (handler == null) {
             player.sendMessage(fullMsg("player.module-down"));
@@ -65,7 +70,6 @@ public final class BattlePassPlayerCommand implements TabExecutor {
             case "tasks" -> handler.openTasks(player);
             case "rewards" -> handler.openRewards(player);
             case "claim" -> handleClaim(player, args, label);
-            case "help" -> sendHelp(player, label);
             default -> {
                 player.sendMessage(fullMsg("player.unknown-subcommand", label));
                 handler.openMain(player);
@@ -115,13 +119,13 @@ public final class BattlePassPlayerCommand implements TabExecutor {
         player.sendMessage(fullMsg(key, level));
     }
 
-    private void sendHelp(Player player, String label) {
-        player.sendMessage(plainMsg("player.help-title"));
-        player.sendMessage(plainMsg("player.help-open", label));
-        player.sendMessage(plainMsg("player.help-tasks", label));
-        player.sendMessage(plainMsg("player.help-rewards", label));
-        player.sendMessage(plainMsg("player.help-claim", label));
-        player.sendMessage(plainMsg("player.help-help", label));
+    private void showHelp(Player player) {
+        player.sendMessage(fullMsg("player.help.title"));
+        player.sendMessage(fullMsg("player.help.open"));
+        player.sendMessage(fullMsg("player.help.tasks"));
+        player.sendMessage(fullMsg("player.help.rewards"));
+        player.sendMessage(fullMsg("player.help.claim"));
+        player.sendMessage(fullMsg("player.help.help"));
     }
 
     private String plainMsg(String key, Object... args) {

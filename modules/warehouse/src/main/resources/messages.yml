@@ -63,6 +63,12 @@ player:
   only-player: "&c该命令只能由玩家执行。"
   no-permission: "&c你没有权限执行这个命令。"
   module-down: "&cWarehouse 模块当前未启用。"
+  help:
+    title: "&6仓库 命令"
+    open: "&7/warehouse open&f - 打开仓库"
+    showcase: "&7/warehouse showcase&f - 展示仓库"
+    preview: "&7/warehouse preview <玩家名或UUID>&f - 预览他人仓库"
+    transfer: "&7/warehouse transfer <confirm|reject> <sharedId>&f - 确认/拒绝共享仓库转让"
   transfer:
     usage: "&e用法: /warehouse transfer <confirm|reject> <sharedId>"
   preview:

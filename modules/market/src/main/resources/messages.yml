@@ -55,7 +55,7 @@ player:
 
   auto-recycle-disabled: "&c批量回收功能已关闭"
   help:
-    title: "&6=== AXS 全球市场 ==="
+    title: "&6全球市场 命令"
     auction: "&7/market&f - 打开拍卖行"
     shop: "&7/market shop [商店ID]&f - 系统商店"
     sell: "&7/market sell <一口价> [起拍价] [时长] [货币]&f - 上架物品"

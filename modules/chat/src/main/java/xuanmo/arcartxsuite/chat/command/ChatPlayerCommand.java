@@ -22,7 +22,7 @@ import xuanmo.arcartxsuite.chat.service.ChatService;
  */
 public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
 
-    private static final List<String> CHAT_ACTIONS = List.of("channel", "toggle", "ignore", "unignore", "socialspy");
+    private static final List<String> CHAT_ACTIONS = List.of("help", "channel", "toggle", "ignore", "unignore", "socialspy");
     private static final List<String> TOGGLE_ACTIONS = List.of("private", "mentions");
     private final Supplier<ChatService> serviceProvider;
     private final CommandMode mode;
@@ -103,6 +103,11 @@ public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
             player.sendMessage(fullMsg("common.no-permission"));
             return true;
         }
+        if (args.length > 0 && "help".equalsIgnoreCase(args[0])) {
+            showHelp(player);
+            return true;
+        }
+
         if (args.length == 0) {
             ChatPlayerState state = service.getCachedState(player.getUniqueId());
             player.sendMessage(fullMsg("player.current-channel", service.channelDisplayName(state.currentChannelId())));
@@ -200,6 +205,15 @@ public final class ChatPlayerCommand implements org.bukkit.command.TabExecutor {
         }
         sendResult(player, service.reply(player, joinTail(args, 0)));
         return true;
+    }
+
+    private void showHelp(Player player) {
+        player.sendMessage(fullMsg("player.help.title"));
+        player.sendMessage(fullMsg("player.help.channel"));
+        player.sendMessage(fullMsg("player.help.toggle"));
+        player.sendMessage(fullMsg("player.help.ignore"));
+        player.sendMessage(fullMsg("player.help.unignore"));
+        player.sendMessage(fullMsg("player.help.socialspy"));
     }
 
     private void sendResult(Player player, ChatOperationResult result) {

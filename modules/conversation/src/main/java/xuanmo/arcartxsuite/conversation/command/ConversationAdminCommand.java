@@ -13,6 +13,7 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.bridge.AdyeshachNpcBridgeAPI;
+import xuanmo.arcartxsuite.api.bridge.AdyeshachNearbyNpc;
 import xuanmo.arcartxsuite.conversation.cinematic.CinematicService;
 import xuanmo.arcartxsuite.conversation.service.ConversationService;
 
@@ -94,6 +95,20 @@ public final class ConversationAdminCommand implements ModuleCommandHandler {
                 return filter(svc.sequenceIds(), args[3]);
             }
         }
+        // adyeshach 子命令的 NPC 名补全（args[3] = NPC 名）
+        if (args.length == 4 && "adyeshach".equalsIgnoreCase(args[1]) && ADYESHACH_ACTIONS.stream().anyMatch(a -> a.equalsIgnoreCase(args[2]))) {
+            AdyeshachNpcBridgeAPI bridge = npcBridgeProvider.get();
+            if (bridge != null && bridge.isAvailable() && sender instanceof Player player) {
+                List<String> names = new ArrayList<>();
+                for (AdyeshachNearbyNpc npc : bridge.findNearby(player, 64)) {
+                    if (npc.npcId() != null && !npc.npcId().isEmpty()) names.add(npc.npcId());
+                    if (npc.label() != null && !npc.label().isEmpty() && !names.contains(npc.label())) names.add(npc.label());
+                }
+                return filter(names, args[3]);
+            }
+            return List.of();
+        }
+        // 模型 ID / 动画名补全：API 未提供可用列表，返回空
         return List.of();
     }
 

@@ -26,7 +26,7 @@ import xuanmo.arcartxsuite.tab.transport.TabRemoteEntry;
  */
 public final class TabPlayerCommand implements org.bukkit.command.TabExecutor {
 
-    private static final List<String> ROOT_ACTIONS = List.of("view", "page", "refresh", "debug", "snapshot");
+    private static final List<String> ROOT_ACTIONS = List.of("help", "view", "page", "refresh", "debug", "snapshot");
     private static final List<String> SNAPSHOT_ACTIONS = List.of("save", "load", "unload", "list", "delete");
     private static final String DEBUG_PERMISSION = "axstab.debug";
 
@@ -69,8 +69,12 @@ public final class TabPlayerCommand implements org.bukkit.command.TabExecutor {
             sender.sendMessage(fullMsg("common.only-player"));
             return true;
         }
+        if (args.length > 0 && "help".equalsIgnoreCase(args[0])) {
+            showHelp(player);
+            return true;
+        }
         if (args.length == 0) {
-            sendUsage(player, label);
+            showHelp(player);
             return true;
         }
         String action = args[0].toLowerCase(Locale.ROOT);
@@ -81,7 +85,7 @@ public final class TabPlayerCommand implements org.bukkit.command.TabExecutor {
                 service.refreshViewer(player, "command");
                 player.sendMessage(fullMsg("player.refresh.requested"));
             }
-            default -> sendUsage(player, label);
+            default -> showHelp(player);
         }
         return true;
     }
@@ -314,11 +318,11 @@ public final class TabPlayerCommand implements org.bukkit.command.TabExecutor {
         }
     }
 
-    private void sendUsage(Player player, String label) {
-        player.sendMessage(fullMsg("player.usage.title"));
-        player.sendMessage(fullMsg("player.usage.view", label));
-        player.sendMessage(fullMsg("player.usage.page", label));
-        player.sendMessage(fullMsg("player.usage.refresh", label));
+    private void showHelp(Player player) {
+        player.sendMessage(fullMsg("player.help.title"));
+        player.sendMessage(fullMsg("player.help.view"));
+        player.sendMessage(fullMsg("player.help.page"));
+        player.sendMessage(fullMsg("player.help.refresh"));
     }
 
     @Override
