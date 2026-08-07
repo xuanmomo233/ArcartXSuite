@@ -50,6 +50,12 @@ ui:
       var.hiddenCount = 0
       var.equippedCount = 0
       var.activeSetCount = 0
+      var.maxTitleCount = 0
+      var.maxGroupCount = 0
+      var.maxQualityCount = 0
+      var.maxSetCount = 0
+      var.maxEquippedCount = 0
+      var.刷新轮次 = 0
       var.filterMode = 'all'
       var.filterGroup = 'all'
       var.filterQuality = 'all'
@@ -97,6 +103,11 @@ ui:
     #   - owned_count: 已拥有称号数量
     #   - hidden_count: 已隐藏称号数量
     #   - equipped_count: 已装备称号数量
+    #   - max_title_count: 称号最大数量（用于动态复制称号项控件）
+    #   - max_group_count: 分组最大数量（用于动态复制分组项控件）
+    #   - max_quality_count: 品质最大数量（用于动态复制品质项控件）
+    #   - max_set_count: 套装最大数量（用于动态复制套装项控件）
+    #   - max_equipped_count: 已装备分组最大数量（用于动态复制已装备项控件）
     init: |-
       var.titles = packet['titles']
       var.groups = packet['groups']
@@ -139,6 +150,81 @@ ui:
         for(key in var.sets.keys()){
           if(var.sets[key]['active']){
             var.activeSetCount = var.activeSetCount + 1
+          }
+        }
+      }
+      var.maxTitleCount = packet['max_title_count']
+      var.maxGroupCount = packet['max_group_count']
+      var.maxQualityCount = packet['max_quality_count']
+      var.maxSetCount = packet['max_set_count']
+      var.maxEquippedCount = packet['max_equipped_count']
+      称号数 = var.maxTitleCount.round()
+      现有称号数 = val.title_list.childrenCount() - 1
+      if(现有称号数 != 称号数 - 1){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.title_list.childrenCount() > 1){
+          val.title_list.get(1).remove()
+        }
+        if(称号数 > 1){
+          for(序号 in range(1, 称号数 - 1)){
+            项 = val.title_list['称号模板'].copy('称号项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
+      }
+      分组数 = var.maxGroupCount.round()
+      现有分组数 = val.group_list.childrenCount() - 1
+      if(现有分组数 != 分组数 - 1){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.group_list.childrenCount() > 1){
+          val.group_list.get(1).remove()
+        }
+        if(分组数 > 1){
+          for(序号 in range(1, 分组数 - 1)){
+            项 = val.group_list['分组模板'].copy('分组项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
+      }
+      品质数 = var.maxQualityCount.round()
+      现有品质数 = val.quality_list.childrenCount() - 1
+      if(现有品质数 != 品质数 - 1){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.quality_list.childrenCount() > 1){
+          val.quality_list.get(1).remove()
+        }
+        if(品质数 > 1){
+          for(序号 in range(1, 品质数 - 1)){
+            项 = val.quality_list['品质模板'].copy('品质项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
+      }
+      套装数 = var.maxSetCount.round()
+      现有套装数 = val.set_list.childrenCount() - 1
+      if(现有套装数 != 套装数 - 1){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.set_list.childrenCount() > 1){
+          val.set_list.get(1).remove()
+        }
+        if(套装数 > 1){
+          for(序号 in range(1, 套装数 - 1)){
+            项 = val.set_list['套装模板'].copy('套装项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
+      }
+      已装备数 = var.maxEquippedCount.round()
+      现有已装备数 = val.equipped_list.childrenCount() - 1
+      if(现有已装备数 != 已装备数 - 1){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.equipped_list.childrenCount() > 1){
+          val.equipped_list.get(1).remove()
+        }
+        if(已装备数 > 1){
+          for(序号 in range(1, 已装备数 - 1)){
+            项 = val.equipped_list['已装备模板'].copy('已装备项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
           }
         }
       }
@@ -192,6 +278,81 @@ ui:
         for(key in var.sets.keys()){
           if(var.sets[key]['active']){
             var.activeSetCount = var.activeSetCount + 1
+          }
+        }
+      }
+      var.maxTitleCount = packet['max_title_count']
+      var.maxGroupCount = packet['max_group_count']
+      var.maxQualityCount = packet['max_quality_count']
+      var.maxSetCount = packet['max_set_count']
+      var.maxEquippedCount = packet['max_equipped_count']
+      称号数 = var.maxTitleCount.round()
+      现有称号数 = val.title_list.childrenCount() - 1
+      if(现有称号数 != 称号数 - 1){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.title_list.childrenCount() > 1){
+          val.title_list.get(1).remove()
+        }
+        if(称号数 > 1){
+          for(序号 in range(1, 称号数 - 1)){
+            项 = val.title_list['称号模板'].copy('称号项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
+      }
+      分组数 = var.maxGroupCount.round()
+      现有分组数 = val.group_list.childrenCount() - 1
+      if(现有分组数 != 分组数 - 1){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.group_list.childrenCount() > 1){
+          val.group_list.get(1).remove()
+        }
+        if(分组数 > 1){
+          for(序号 in range(1, 分组数 - 1)){
+            项 = val.group_list['分组模板'].copy('分组项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
+      }
+      品质数 = var.maxQualityCount.round()
+      现有品质数 = val.quality_list.childrenCount() - 1
+      if(现有品质数 != 品质数 - 1){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.quality_list.childrenCount() > 1){
+          val.quality_list.get(1).remove()
+        }
+        if(品质数 > 1){
+          for(序号 in range(1, 品质数 - 1)){
+            项 = val.quality_list['品质模板'].copy('品质项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
+      }
+      套装数 = var.maxSetCount.round()
+      现有套装数 = val.set_list.childrenCount() - 1
+      if(现有套装数 != 套装数 - 1){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.set_list.childrenCount() > 1){
+          val.set_list.get(1).remove()
+        }
+        if(套装数 > 1){
+          for(序号 in range(1, 套装数 - 1)){
+            项 = val.set_list['套装模板'].copy('套装项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
+          }
+        }
+      }
+      已装备数 = var.maxEquippedCount.round()
+      现有已装备数 = val.equipped_list.childrenCount() - 1
+      if(现有已装备数 != 已装备数 - 1){
+        var.刷新轮次 = var.刷新轮次 + 1
+        while(val.equipped_list.childrenCount() > 1){
+          val.equipped_list.get(1).remove()
+        }
+        if(已装备数 > 1){
+          for(序号 in range(1, 已装备数 - 1)){
+            项 = val.equipped_list['已装备模板'].copy('已装备项_' + var.刷新轮次 + '_' + 序号.round())
+            项.entryKey = 序号.round()
           }
         }
       }
@@ -384,17 +545,11 @@ controls:
                 attribute:
                   height: 36
                   spaceBetween: 10
-                action:
-                  create: |-
-                    for(i in range(0, 64)){
-                      item = self['分组模板'].copy('分组项' + i.round())
-                      item.entryKey = i.round()
-                    }
                 children:
                   分组模板:
                     type: Texture
                     attribute:
-                      entryKey: none
+                      entryKey: 0.round()
                       entry: var.groups[self.entryKey]
                       width: 100
                       height: 36
@@ -459,17 +614,11 @@ controls:
                 attribute:
                   height: 36
                   spaceBetween: 10
-                action:
-                  create: |-
-                    for(i in range(0, 64)){
-                      item = self['品质模板'].copy('品质项' + i.round())
-                      item.entryKey = i.round()
-                    }
                 children:
                   品质模板:
                     type: Texture
                     attribute:
-                      entryKey: none
+                      entryKey: 0.round()
                       entry: var.qualities[self.entryKey]
                       width: 100
                       height: 36
@@ -534,17 +683,11 @@ controls:
                 attribute:
                   width: 372
                   spaceBetween: 8
-                action:
-                  create: |-
-                    for(i in range(0, 200)){
-                      item = self['称号模板'].copy('称号项' + i.round())
-                      item.entryKey = i.round()
-                    }
                 children:
                   称号模板:
                     type: Texture
                     attribute:
-                      entryKey: none
+                      entryKey: 0.round()
                       entry: var.titles[self.entryKey]
                       width: 372
                       height: 64
@@ -768,17 +911,11 @@ controls:
                       width: 472
                       spaceBetween: 10
                       visible: var.sets != none && var.sets.size() > 0
-                    action:
-                      create: |-
-                        for(i in range(0, 64)){
-                          item = self['套装模板'].copy('套装项' + i.round())
-                          item.entryKey = i.round()
-                        }
                     children:
                       套装模板:
                         type: Texture
                         attribute:
-                          entryKey: none
+                          entryKey: 0.round()
                           entry: var.sets[self.entryKey]
                           width: 472
                           height: 80
@@ -861,17 +998,11 @@ controls:
                     attribute:
                       width: 392
                       spaceBetween: 8
-                    action:
-                      create: |-
-                        for(i in range(0, 64)){
-                          item = self['已装备模板'].copy('已装备项' + i.round())
-                          item.entryKey = i.round()
-                        }
                     children:
                       已装备模板:
                         type: Texture
                         attribute:
-                          entryKey: none
+                          entryKey: 0.round()
                           entry: var.equippedByGroup[self.entryKey]
                           width: 392
                           height: 52

@@ -197,6 +197,11 @@ public final class TitleMenuPacketFactory {
         packet.put("total_attributes_text", colorize(totalLines, colorPrefix, emptyPlaceholder));
         packet.put("set_bonus_attributes_text", colorize(setBonusLines, colorPrefix, emptyPlaceholder));
         packet.put("sets", sets);
+        packet.put("max_title_count", titles.size());
+        packet.put("max_group_count", groups.size());
+        packet.put("max_quality_count", qualities.size());
+        packet.put("max_set_count", sets.size());
+        packet.put("max_equipped_count", equippedByGroup.size());
         packet.put("display_title_id", resolvedState.totalDisplayTitle() == null ? "" : resolvedState.totalDisplayTitle().id());
         packet.put("display_title_name", displayTitleField(configuration, resolvedState, TitleDefinition::displayName));
         packet.put("display_title_chat_prefix", displayTitleField(configuration, resolvedState, TitleDefinition::chatPrefix));
