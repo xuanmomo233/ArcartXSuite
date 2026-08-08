@@ -527,6 +527,7 @@ public class MarketService {
         if (item == null || item.getType().isAir()) return;
         var result = recycleService.recycle(player, item);
         if (result.success()) {
+            rotateToken(player, config.ui().recycleId());
             player.sendMessage(ChatColor.translateAlternateColorCodes('&',
                 config.messages().recycleSuccess().replace("%amount%",
                     formatRecycleEarnings(result.earningsByCurrency()))));
@@ -617,6 +618,12 @@ public class MarketService {
             row.put("hasItem", hasItem);
             row.put("name", hasItem ? itemDisplayName(item) : "");
             row.put("amount", hasItem ? item.getAmount() : 0);
+            // 物品 lore（用于 UI 展示物品介绍）
+            if (hasItem && item.hasItemMeta() && item.getItemMeta().hasLore()) {
+                row.put("lore", item.getItemMeta().getLore());
+            } else {
+                row.put("lore", List.of());
+            }
             String key = Integer.toString(slot);
             backpackItems.put(key, row);
             if (hasItem) packet.put("itemJson" + key, itemToJson(item));
@@ -807,9 +814,23 @@ public class MarketService {
             idx++;
         }
         packet.put("recyclables", recyclables);
-        packet.put("totalValue", totalsByCurrency.isEmpty() ? formatPrice(totalValue) : formatRecycleEarnings(totalsByCurrency));
-        packet.put("currency", totalsByCurrency.isEmpty() ? config.recycle().defaultCurrency() : String.join(", ", totalsByCurrency.keySet()));
-        packet.put("earningsByCurrency", totalsByCurrency);
+        // 收益标题：单货币="可回收总价值:"，多货币="可回收收益明细:"
+        boolean singleCurrency = totalsByCurrency.size() == 1;
+        packet.put("earningsTitle", singleCurrency ? "可回收总价值:" : "可回收收益明细:");
+        // 收益文本（UI 分行展示，格式："货币名: 金额"）
+        Map<String, String> earningsTexts = new LinkedHashMap<>();
+        int eIdx = 0;
+        for (var entry : totalsByCurrency.entrySet()) {
+            String currencyId = entry.getKey();
+            var def = currencyManager.definition(currencyId);
+            String displayName = def != null && def.displayName() != null && !def.displayName().isEmpty()
+                ? def.displayName() : currencyId;
+            earningsTexts.put(Integer.toString(eIdx),
+                displayName + ": " + currencyManager.format(currencyId, BigDecimal.valueOf(entry.getValue())));
+            eIdx++;
+        }
+        packet.put("earningsTexts", earningsTexts);
+        packet.put("maxEarningsCount", earningsTexts.size());
         packet.put("multiplier", String.format("%.1f", multiplier));
         packet.put("maxRecycleCount", recyclables.size());
         return packet;
@@ -827,7 +848,6 @@ public class MarketService {
 
         packet.put("page", page);
         packet.put("totalPages", totalPages);
-        packet.put("pageText", (page + 1) + "/" + totalPages);
 
         Map<String, Object> records = new LinkedHashMap<>();
         for (int i = 0; i < histories.size() && i < HISTORY_PAGE_SIZE; i++) {

@@ -178,7 +178,7 @@ controls:
               x: 42
               y: 24
               texts: "~&e{var.shopName}"
-              fontSize: 56
+              fontSize: 100
           副标题:
             type: Text
             attribute:
@@ -213,7 +213,7 @@ controls:
                   y: 9
                   through: true
                   center: true
-                  fontSize: 30
+                  fontSize: 48
                   texts: "~&f✕"
 
           # ── 左侧商店列表 ──────────────────────────────
@@ -283,7 +283,7 @@ controls:
                           width: 200
                           height: 48
                           normal: "self.entry != none && self.entry['id'] == var.shopId ? '70,150,250,230' : '56,58,70,200'"
-                          hover: ~Frosted:0;255,255,255,200
+                          hover: ~Frosted:0;255,255,255,80
                           shape: ~round_rect
                           radius: 12
                           texts: "var.shopTexts[self.entryKey]"
@@ -327,69 +327,85 @@ controls:
                 color: ~90,170,255,50
             children:
               # ── 数量工具栏（全局数量，左键±1 右键±10）──
+              工具栏底条:
+                type: Texture
+                attribute:
+                  x: 14
+                  y: 10
+                  width: 1050
+                  height: 44
+                  normal: ~36,38,48,200
+                  shape: ~round_rect
+                  radius: 10
+                  through: true
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~90,170,255,40
               数量标签:
                 type: Text
                 attribute:
-                  x: 20
-                  y: 22
+                  x: 30
+                  y: 26
                   texts: "~&7购买数量"
                   fontSize: 24
                   through: true
-              减按钮:
-                type: Texture
+              数量步进器:
+                type: HStack
                 attribute:
-                  x: 130
+                  x: 140
                   y: 14
-                  width: 36
-                  height: 36
-                  normal: ~56,58,70,220
-                  hover: ~Frosted:0;255,255,255,180
-                  shape: ~round_rect
-                  radius: 10
-                  center: true
-                  fontSize: 26
-                  texts: "~&f-"
-                  tip: "~左键 -1，右键 -10"
-                action:
-                  clickLeft: |-
-                    if(var.quantity > 1){
-                      var.quantity = var.quantity - 1
-                    }
-                  clickRight: |-
-                    if(var.quantity > 10){
-                      var.quantity = var.quantity - 10
-                    } else {
-                      var.quantity = 1
-                    }
-              数量文本:
-                type: Text
-                attribute:
-                  x: 183
-                  y: 22
-                  center: true
-                  texts: "~&7数量: &f{var.quantity.round()}"
-                  fontSize: 24
-                  through: true
-              加按钮:
-                type: Texture
-                attribute:
-                  x: 236
-                  y: 14
-                  width: 36
-                  height: 36
-                  normal: ~56,58,70,220
-                  hover: ~Frosted:0;255,255,255,180
-                  shape: ~round_rect
-                  radius: 10
-                  center: true
-                  fontSize: 26
-                  texts: "~&f+"
-                  tip: "~左键 +1，右键 +10"
-                action:
-                  clickLeft: |-
-                    var.quantity = var.quantity + 1
-                  clickRight: |-
-                    var.quantity = var.quantity + 10
+                  spaceBetween: 10
+                children:
+                  减按钮:
+                    type: Texture
+                    attribute:
+                      width: 36
+                      height: 36
+                      normal: ~56,58,70,220
+                      hover: ~Frosted:0;255,255,255,80
+                      shape: ~round_rect
+                      radius: 10
+                      center: true
+                      fontSize: 26
+                      texts: "~&f-"
+                      tip: "~左键 -1，右键 -10"
+                    action:
+                      clickLeft: |-
+                        if(var.quantity > 1){
+                          var.quantity = var.quantity - 1
+                        }
+                      clickRight: |-
+                        if(var.quantity > 10){
+                          var.quantity = var.quantity - 10
+                        } else {
+                          var.quantity = 1
+                        }
+                  数量文本:
+                    type: Text
+                    attribute:
+                      y: 12
+                      texts: "~&7数量: &f{var.quantity.round()}"
+                      fontSize: 24
+                      through: true
+                  加按钮:
+                    type: Texture
+                    attribute:
+                      width: 36
+                      height: 36
+                      normal: ~56,58,70,220
+                      hover: ~Frosted:0;255,255,255,80
+                      shape: ~round_rect
+                      radius: 10
+                      center: true
+                      fontSize: 26
+                      texts: "~&f+"
+                      tip: "~左键 +1，右键 +10"
+                    action:
+                      clickLeft: |-
+                        var.quantity = var.quantity + 1
+                      clickRight: |-
+                        var.quantity = var.quantity + 10
 
               商品纵向滑块:
                 type: Texture
@@ -437,7 +453,7 @@ controls:
                           width: 340
                           height: 300
                           normal: ~50,53,66,220
-                          hover: ~Frosted:0;90,150,230,220
+                          hover: ~Frosted:0;90,150,230,80
                           shape: ~round_rect
                           radius: 16
                         effect:
@@ -505,11 +521,11 @@ controls:
                               height: 40
                               visible: "self.parent.entry != none && var.shopId != none"
                               normal: ~60,180,100,200
-                              hover: ~Frosted:0;80,220,120,230
+                              hover: ~Frosted:0;80,220,120,80
                               shape: ~round_rect
                               radius: 10
                               center: true
-                              fontSize: 24
+                              fontSize: 42
                               texts: "var.quantity > 1 ? '&f购买 x' + var.quantity.round() : '&f购买'"
                             action:
                               clickLeft: |-
@@ -524,7 +540,7 @@ controls:
                   x: 539
                   y: 380
                   center: true
-                  fontSize: 36
+                  fontSize: 100
                   visible: "var.items == none || var.items.keys().length == 0"
                   texts: "~&8暂无商品"
                   through: true

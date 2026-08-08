@@ -21,21 +21,23 @@ ui:
     # 首次收到服务端数据包时执行，初始化回收界面所有变量和动态控件
     # 包字段:
     #   - packetId: 数据包通信 ID（用于客户端 Packet.send 回传）
-    #   - totalValue: 可回收物品的总价值
-    #   - currency: 货币类型名称（如 "money"）
     #   - multiplier: 回收价格倍率（如 1.2 表示 VIP 加成 20%）
     #   - recyclables: 可回收物品字典（key=序号, value=回收条目含 name/amount/unitPrice/totalPrice/slot 等）
     #   - recycleItemJson{key}: 各回收物品的 NBT JSON 字符串（如 recycleItemJson0、recycleItemJson1...）
     #   - maxRecycleCount: 最大回收条目数量（用于动态复制回收项控件）
+    #   - earningsTitle: 收益区标题（单货币="可回收总价值:"，多货币="可回收收益明细:"）
+    #   - earningsTexts: 分货币收益文本字典（key=序号, value=已格式化的收益字符串如"金币: 100.00"）
+    #   - maxEarningsCount: 货币种类数量（用于动态复制收益项控件）
     #   - action_token: 操作令牌（防重放攻击，回收时回传）
     init: |-
       var.packetId = packet['packetId']
-      var.totalValue = packet['totalValue']
-      var.currency = packet['currency']
       var.multiplier = packet['multiplier']
       var.recyclables = packet['recyclables']
       var.itemJsons = {}
       var.maxRecycleCount = packet['maxRecycleCount']
+      var.earningsTitle = packet['earningsTitle']
+      var.earningsTexts = packet['earningsTexts']
+      var.maxEarningsCount = packet['maxEarningsCount']
       var.actionToken = packet['action_token']
       for(key in var.recyclables.keys()){
         json = packet['recycleItemJson' + key]
@@ -60,19 +62,28 @@ ui:
           e['物品图标'].entryKey = key
           e['物品图标'].seticon()
         }
+      }
+      while(val.收益列表.childrenCount() > 1){
+        val.收益列表.get(1).remove()
+      }
+      for(i in range(1, var.maxEarningsCount - 1)){
+        key = i.round()
+        e = val.收益列表['收益项'].copy('收益项' + key)
+        e.entryKey = key
       }
     # packetHandler: update
     # 服务端推送更新时执行，字段与 init 完全相同，用于刷新回收列表数据
-    # 包字段: 同 init（packetId/totalValue/currency/multiplier/recyclables/
-    #   recycleItemJson{key}/maxRecycleCount/action_token）
+    # 包字段: 同 init（packetId/multiplier/recyclables/recycleItemJson{key}/maxRecycleCount/
+    #   earningsTitle/earningsTexts/maxEarningsCount/action_token）
     update: |-
       var.packetId = packet['packetId']
-      var.totalValue = packet['totalValue']
-      var.currency = packet['currency']
       var.multiplier = packet['multiplier']
       var.recyclables = packet['recyclables']
       var.itemJsons = {}
       var.maxRecycleCount = packet['maxRecycleCount']
+      var.earningsTitle = packet['earningsTitle']
+      var.earningsTexts = packet['earningsTexts']
+      var.maxEarningsCount = packet['maxEarningsCount']
       var.actionToken = packet['action_token']
       for(key in var.recyclables.keys()){
         json = packet['recycleItemJson' + key]
@@ -97,6 +108,14 @@ ui:
           e['物品图标'].entryKey = key
           e['物品图标'].seticon()
         }
+      }
+      while(val.收益列表.childrenCount() > 1){
+        val.收益列表.get(1).remove()
+      }
+      for(i in range(1, var.maxEarningsCount - 1)){
+        key = i.round()
+        e = val.收益列表['收益项'].copy('收益项' + key)
+        e.entryKey = key
       }
   action:
     # action: open
@@ -104,14 +123,14 @@ ui:
     # 发送数据包: Packet.send(packetId, 'recycle_preview')
     open: |-
       var.packetId = 'AXS_MARKET'
-      var.totalValue = '0'
-      var.currency = 'money'
       var.multiplier = '1.0'
       var.recyclables = {}
       var.itemJsons = {}
-      var.scrollRatio = 0
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
       var.maxRecycleCount = 0
+      var.earningsTitle = '可回收总价值:'
+      var.earningsTexts = {}
+      var.maxEarningsCount = 0
       Packet.send(var.packetId, 'recycle_preview')
 
 controls:
@@ -126,8 +145,8 @@ controls:
         type: Canvas
         attribute:
           point: ~middle_center
-          width: 1100
-          height: 780
+          width: 1400
+          height: 860
         children:
           背景:
             type: Texture
@@ -141,10 +160,10 @@ controls:
                 width: 2
                 color: ~80,255,140,180
               shadow:
-                xOffset: 2
-                yOffset: 2
-                blur: 6
-                color: ~0,0,0,120
+                xOffset: 0
+                yOffset: 4
+                blur: 12
+                color: ~0,0,0,140
 
           标题:
             type: Text
@@ -152,7 +171,7 @@ controls:
               x: 42
               y: 24
               texts: "~&a回收商店"
-              fontSize: 56
+              fontSize: 100
           副标题:
             type: Text
             attribute:
@@ -164,31 +183,31 @@ controls:
           关闭按钮:
             type: Texture
             attribute:
-              x: 1010
-              y: 24
-              width: 56
-              height: 56
-              normal: ~180,60,60,200
-              hover: ~Frosted:0;220,80,80,230
+              x: 1332
+              y: 28
+              width: 48
+              height: 48
+              normal: ~180,70,70,210
+              hover: ~Frosted:0;220,90,90,230
               shape: ~round_rect
-              radius: 14
+              radius: 12
             action:
               clickLeft: |-
                 Screen.close()
             effect:
               stroke:
-                width: 2
-                color: ~255,120,120,120
+                width: 1
+                color: ~255,130,130,120
             children:
               文字:
                 type: Text
                 attribute:
-                  x: 28
-                  y: 14
+                  x: 24
+                  y: 9
                   through: true
                   center: true
-                  fontSize: 36
-                  texts: "~&fX"
+                  fontSize: 48
+                  texts: "~&f✕"
 
           # ── 物品列表 ──────────────────────────────────
           列表卡片:
@@ -196,9 +215,9 @@ controls:
             attribute:
               x: 32
               y: 120
-              width: 1036
-              height: 530
-              normal: ~52,52,62,190
+              width: 1336
+              height: 600
+              normal: ~42,45,58,220
               shape: ~round_rect
               radius: 20
             effect:
@@ -217,10 +236,10 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  x: 518
-                  y: 360
+                  x: 668
+                  y: 285
                   center: true
-                  fontSize: 36
+                  fontSize: 100
                   visible: "var.recyclables == none || var.recyclables.keys().length == 0"
                   texts: "~&8暂无可回收物品"
                   through: true
@@ -228,20 +247,20 @@ controls:
                 type: Texture
                 val: 列表纵向滑块
                 attribute:
-                  x: 1020
+                  x: 1320
                   y: 48
                   width: 6
                   height: 50
                   normal: ~120,120,120,200
-                  maxDragY: 420
+                  maxDragY: 460
               列表滚动:
                 type: Scroll
                 val: 列表滚动
                 attribute:
-                  x: 10
+                  x: 30
                   y: 48
-                  width: 1010
-                  height: 470
+                  width: 1280
+                  height: 510
                   moveY: "self.parent['列表纵向滑块'].getDragYRatio()"
                 action:
                   wheel: |-
@@ -256,7 +275,7 @@ controls:
                     val: 回收列表
                     type: VStack
                     attribute:
-                      width: 996
+                      width: 1280
                       spaceBetween: 8
                     children:
                       回收项:
@@ -265,10 +284,10 @@ controls:
                           entryKey: 0.round()
                           entry: var.recyclables[self.entryKey]
                           visible: self.entry != none
-                          width: 996
+                          width: 1280
                           height: 64
-                          normal: ~62,62,74,205
-                          hover: ~Frosted:0;60,160,90,200
+                          normal: ~50,53,66,220
+                          hover: ~Frosted:0;80,255,140,80
                           shape: ~round_rect
                           radius: 14
                         effect:
@@ -281,12 +300,12 @@ controls:
                             attribute:
                               entryKey: 0.round()
                               slotType: ~Icon
-                              itemScale: 0.64
-                              x: 8
+                              itemScale: 1.0
+                              x: 12
                               y: 4
                               width: 56
                               height: 56
-                              normal: ~45,47,56,205
+                              normal: ~40,42,54,220
                               shape: ~round_rect
                               radius: 10
                               through: true
@@ -294,16 +313,16 @@ controls:
                           名称:
                             type: Text
                             attribute:
-                              x: 76
-                              y: 10
-                              width: 260
+                              x: 84
+                              y: 8
+                              width: 400
                               texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
                               fontSize: 34
                               through: true
                           数量:
                             type: Text
                             attribute:
-                              x: 76
+                              x: 84
                               y: 38
                               width: 120
                               texts: "self.parent.entry != none ? '&7x' + self.parent.entry['amount'] : none"
@@ -312,32 +331,35 @@ controls:
                           单价:
                             type: Text
                             attribute:
-                              x: 380
+                              x: 540
                               y: 14
-                              width: 200
+                              width: 240
                               texts: "self.parent.entry != none ? '&e单价: &f' + self.parent.entry['unitPrice'] : none"
                               fontSize: 28
                               through: true
                           总价:
                             type: Text
                             attribute:
-                              x: 620
+                              x: 800
                               y: 14
-                              width: 200
+                              width: 340
                               texts: "self.parent.entry != none ? '&a总计: &f' + self.parent.entry['totalPrice'] : none"
                               fontSize: 28
                               through: true
                           回收按钮:
                             type: Texture
                             attribute:
-                              x: 870
+                              x: 1150
                               y: 6
-                              width: 110
+                              width: 120
                               height: 52
                               normal: ~60,180,100,200
-                              hover: ~Frosted:0;80,220,120,230
+                              hover: ~Frosted:0;80,220,120,80
                               shape: ~round_rect
                               radius: 10
+                              center: true
+                              fontSize: 28
+                              texts: "~&f回收"
                             action:
                               clickLeft: |-
                                 Packet.send(var.packetId, 'recycle_single', self.parent.entry['slot'] + '', var.actionToken)
@@ -345,37 +367,50 @@ controls:
                               stroke:
                                 width: 1
                                 color: ~80,255,140,120
-                            children:
-                              文字:
-                                type: Text
-                                attribute:
-                                  x: 55
-                                  y: 14
-                                  through: true
-                                  center: true
-                                  fontSize: 28
-                                  texts: "~&f回收"
 
           # ── 底部操作栏 ──────────────────────────────
-          总价值:
+          收益标题:
             type: Text
             attribute:
               x: 42
-              y: 670
-              texts: "~&7可回收总价值: &e{var.totalValue} &7{var.currency}"
-              fontSize: 40
+              y: 750
+              texts: "~&7{var.earningsTitle}"
+              fontSize: 36
+              through: true
+
+          收益列表:
+            val: 收益列表
+            type: VStack
+            attribute:
+              x: 154
+              y: 750
+              width: 600
+              spaceBetween: 4
+            children:
+              收益项:
+                type: Text
+                attribute:
+                  entryKey: 0.round()
+                  entry: var.earningsTexts[self.entryKey]
+                  visible: self.entry != none
+                  texts: "'&a▪ &f' + self.entry"
+                  fontSize: 28
+                  through: true
 
           一键回收:
             type: Texture
             attribute:
-              x: 760
-              y: 660
-              width: 220
+              x: 1040
+              y: 750
+              width: 240
               height: 56
               normal: ~60,200,100,220
-              hover: ~Frosted:0;80,240,120,240
+              hover: ~Frosted:0;80,240,120,80
               shape: ~round_rect
               radius: 14
+              center: true
+              fontSize: 42
+              texts: "~&f一键回收全部"
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'recycle_all', var.actionToken)
@@ -383,42 +418,25 @@ controls:
               stroke:
                 width: 2
                 color: ~80,255,140,160
-            children:
-              文字:
-                type: Text
-                attribute:
-                  x: 110
-                  y: 14
-                  through: true
-                  center: true
-                  fontSize: 36
-                  texts: "~&f一键回收全部"
 
           刷新按钮:
             type: Texture
             attribute:
-              x: 1000
-              y: 660
+              x: 1300
+              y: 750
               width: 68
               height: 56
-              normal: ~62,62,74,205
-              hover: ~Frosted:0;255,255,255,180
+              normal: ~56,58,70,220
+              hover: ~Frosted:0;255,255,255,80
               shape: ~round_rect
               radius: 14
+              center: true
+              fontSize: 42
+              texts: "~&f刷新"
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'recycle_preview')
             effect:
               stroke:
                 width: 2
-                color: ~80,180,255,120
-            children:
-              文字:
-                type: Text
-                attribute:
-                  x: 34
-                  y: 14
-                  through: true
-                  center: true
-                  fontSize: 36
-                  texts: "~&f↻"
+                color: ~80,255,140,120

@@ -191,14 +191,7 @@ controls:
               x: 42
               y: 24
               texts: "~&6全球拍卖行"
-              fontSize: 56
-          副标题:
-            type: Text
-            attribute:
-              x: 42
-              y: 78
-              texts: "~&7第 {(var.page + 1).round()} / {var.totalPages.round()} 页"
-              fontSize: 32
+              fontSize: 100
 
           # ── 顶部按钮栏 ──────────────────────────────
           全部按钮:
@@ -209,7 +202,7 @@ controls:
               width: 110
               height: 48
               normal: "var.currentCategory == 'all' ? '70,150,250,230' : '56,58,70,220'"
-              hover: ~Frosted:0;255,255,255,180
+              hover: ~Frosted:0;255,255,255,80
               shape: ~round_rect
               radius: 12
             action:
@@ -228,7 +221,7 @@ controls:
                   y: 12
                   through: true
                   center: true
-                  fontSize: 36
+                  fontSize: 42
                   texts: "~&f全部"
 
           我的上架按钮:
@@ -239,7 +232,7 @@ controls:
               width: 130
               height: 48
               normal: ~56,58,70,220
-              hover: ~Frosted:0;255,255,255,180
+              hover: ~Frosted:0;255,255,255,80
               shape: ~round_rect
               radius: 12
             action:
@@ -257,7 +250,7 @@ controls:
                   y: 12
                   through: true
                   center: true
-                  fontSize: 36
+                  fontSize: 42
                   texts: "~&f我的上架"
 
           刷新按钮:
@@ -268,7 +261,7 @@ controls:
               width: 90
               height: 48
               normal: ~56,58,70,220
-              hover: ~Frosted:0;255,255,255,180
+              hover: ~Frosted:0;255,255,255,80
               shape: ~round_rect
               radius: 12
             action:
@@ -286,7 +279,7 @@ controls:
                   y: 12
                   through: true
                   center: true
-                  fontSize: 36
+                  fontSize: 42
                   texts: "~&f刷新"
 
           我要上架按钮:
@@ -297,7 +290,7 @@ controls:
               width: 130
               height: 48
               normal: ~70,150,250,230
-              hover: ~Frosted:0;255,255,255,180
+              hover: ~Frosted:0;255,255,255,80
               shape: ~round_rect
               radius: 12
             action:
@@ -394,7 +387,7 @@ controls:
               shape: ~round_rect
               radius: 12
               center: true
-              fontSize: 30
+              fontSize: 48
               texts: "~&f✕"
             action:
               clickLeft: |-
@@ -520,7 +513,7 @@ controls:
                   x: 595
                   y: 330
                   center: true
-                  fontSize: 36
+                  fontSize: 100
                   visible: "var.listings == none || var.listings.keys().length == 0"
                   texts: "~&8暂无拍卖物品"
                   through: true
@@ -741,7 +734,7 @@ controls:
               width: 120
               height: 48
               normal: ~56,58,70,220
-              hover: ~Frosted:0;255,255,255,180
+              hover: ~Frosted:0;255,255,255,80
               shape: ~round_rect
               radius: 12
             action:
@@ -761,7 +754,7 @@ controls:
                   y: 12
                   through: true
                   center: true
-                  fontSize: 36
+                  fontSize: 42
                   texts: "~&f< 上一页"
 
           页码:
@@ -771,7 +764,7 @@ controls:
               y: 850
               center: true
               texts: "~&7第 &f{(var.page + 1).round()} &7/ &f{var.totalPages.round()} &7页"
-              fontSize: 32
+              fontSize: 49
 
           下一页:
             type: Texture
@@ -781,7 +774,7 @@ controls:
               width: 120
               height: 48
               normal: ~56,58,70,220
-              hover: ~Frosted:0;255,255,255,180
+              hover: ~Frosted:0;255,255,255,80
               shape: ~round_rect
               radius: 12
             action:
@@ -801,5 +794,5 @@ controls:
                   y: 12
                   through: true
                   center: true
-                  fontSize: 36
+                  fontSize: 42
                   texts: "~&f下一页 >"
