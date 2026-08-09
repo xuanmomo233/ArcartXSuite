@@ -60,6 +60,7 @@ import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
+import xuanmo.arcartxsuite.api.item.VanillaItemNameTable;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.util.ItemSerializer;
 import xuanmo.arcartxsuite.api.capability.PickupInterceptor;
@@ -156,6 +157,8 @@ public final class WarehouseService implements Listener {
     private final ConcurrentMap<UUID, String> manageActionTokens = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, String> bankActionTokens = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, Object> actionTokenLocks = new ConcurrentHashMap<>();
+    /** materialId → 中文翻译搜索 token 缓存（搜索时动态翻译原版物品名，避免依赖存入时的 searchText）。 */
+    private final ConcurrentMap<String, SearchTokens> materialSearchCache = new ConcurrentHashMap<>();
     private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
     private final ThreadLocal<Set<UUID>> committedActionTokens =
         ThreadLocal.withInitial(HashSet::new);
@@ -1788,7 +1791,9 @@ public final class WarehouseService implements Listener {
         if (remaining > 0) {
             int emptySlot = firstEmptySlot(currentSlots, currentWarehouseCapacity(player, ownerType, ownerId, warehouseId));
             if (emptySlot >= 0) {
-                SearchTokens searchTokens = toSearchTokens(resolveDisplayName(prototype) + " " + prototype.getType().name() + " " + resolveCategory(prototype));
+                // searchText 只保留 displayName（中文翻译名/自定义名），
+                // materialId 与 categoryId 由 slotMatches 搜索时动态翻译匹配，不再拼入 searchText
+                SearchTokens searchTokens = toSearchTokens(resolveDisplayName(prototype));
                 String displayJson = itemJson(prototype, 1L);
                 repository.upsertSlot(new SlotItemRecord(
                     ownerType,
@@ -3261,11 +3266,45 @@ public final class WarehouseService implements Listener {
         if (!normalizedCategory.isBlank() && !"all".equals(normalizedCategory) && !normalizedCategory.equals(item.categoryId())) {
             return false;
         }
-        return keyword == null
-            || keyword.isBlank()
-            || item.searchText().contains(keyword)
-            || item.pinyin().contains(keyword)
-            || item.initials().contains(keyword);
+        if (keyword == null || keyword.isBlank()) {
+            return true;
+        }
+        // 存入时写入的 searchText / pinyin / initials（可能含英文旧数据）
+        if (containsToken(item.searchText(), keyword)
+            || containsToken(item.pinyin(), keyword)
+            || containsToken(item.initials(), keyword)) {
+            return true;
+        }
+        // 搜索时动态翻译 materialId → 中文名，匹配中文/拼音/首字母
+        // 这样旧数据（searchText 只有英文）也能被中文关键词搜到
+        SearchTokens materialTokens = materialSearchTokens(item.materialId());
+        return materialTokens.searchText().contains(keyword)
+            || materialTokens.pinyin().contains(keyword)
+            || materialTokens.initials().contains(keyword);
+    }
+
+    private static boolean containsToken(String text, String keyword) {
+        return text != null && text.contains(keyword);
+    }
+
+    /**
+     * 根据 materialId（Bukkit Material 枚举名）动态翻译为中文名并生成搜索 token。
+     * 结果做缓存，因为 Material → 中文名是静态映射，无需每次搜索重复计算。
+     */
+    private SearchTokens materialSearchTokens(String materialId) {
+        if (materialId == null || materialId.isBlank()) {
+            return new SearchTokens("", "", "");
+        }
+        return materialSearchCache.computeIfAbsent(materialId, id -> {
+            String zhName;
+            try {
+                Material material = Material.valueOf(id.toUpperCase(Locale.ROOT));
+                zhName = VanillaItemNameTable.translate(material);
+            } catch (IllegalArgumentException ignored) {
+                zhName = id;
+            }
+            return toSearchTokens(zhName);
+        });
     }
 
     private String currentWarehouseName(Player player, ViewState state) throws Exception {
