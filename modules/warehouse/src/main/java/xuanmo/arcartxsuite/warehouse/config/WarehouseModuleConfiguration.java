@@ -169,6 +169,10 @@ public record WarehouseModuleConfiguration(
         return sortProfiles.getOrDefault(search.defaultSortId(), sortProfiles.get("time"));
     }
 
+    public List<String> sortProfileIds() {
+        return List.copyOf(sortProfiles.keySet());
+    }
+
     public CategoryDefinition otherCategory() {
         return categories.getOrDefault("other", new CategoryDefinition("other", "其它", 9999, "", List.of(), true));
     }

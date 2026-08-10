@@ -69,6 +69,8 @@ ui:
       var.warehouseName = packet['warehouseName']
       var.categoryId = packet['categoryId']
       var.search = packet['search']
+      var.sortId = packet['sortId']
+      var.sortText = packet['sortText']
       var.categories = packet['categories']
       var.categoryTexts = packet['categoryTexts']
       var.personalWarehouses = packet['personalWarehouses']
@@ -187,6 +189,8 @@ ui:
       var.warehouseName = 'AXPM 仓库'
       var.categoryId = 'all'
       var.search = none
+      var.sortId = 'time'
+      var.sortText = '时间'
       var.categories = {}
       var.categoryTexts = {}
       var.personalWarehouses = {}
@@ -429,6 +433,25 @@ controls:
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'refresh')
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              排序按钮:
+                type: Texture
+                attribute:
+                  width: 80
+                  height: 50
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                  texts: "'&0' + var.sortText"
+                  center: true
+                  fontSize: 34
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'sort')
                 effect:
                   stroke:
                     width: 2

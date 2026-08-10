@@ -75,6 +75,7 @@ import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.Categor
 import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.DepositProductDefinition;
 import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.InterestTier;
 import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.SharedPermissionTier;
+import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.SortField;
 import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.WarehouseDefinition;
 import xuanmo.arcartxsuite.warehouse.config.WarehouseModuleConfiguration.WarehouseLevelDefinition;
 import xuanmo.arcartxsuite.warehouse.storage.WarehouseRepository;
@@ -487,7 +488,7 @@ public final class WarehouseService implements Listener {
             if (warehouseId != null && !warehouseId.isBlank() && !configuration.warehouses().containsKey(warehouseId)) {
                 previewOwnerType = OWNER_SHARED;
             }
-            ViewState previewState = ViewState.preview(targetUuid, warehouseId, previewOwnerType);
+            ViewState previewState = ViewState.preview(targetUuid, warehouseId, previewOwnerType, configuration.search().defaultSortId());
             viewStates.put(viewer.getUniqueId(), previewState);
             if (packetBridge != null) {
                 packetBridge.openUi(viewer, storageRuntimeUiId);
@@ -623,6 +624,7 @@ public final class WarehouseService implements Listener {
                     case "page" -> setPage(player, parseInt(value(data, 1, "1"), 1));
                     case "category" -> setCategory(player, value(data, 1, "all"));
                     case "search" -> setSearch(player, value(data, 1, ""));
+                    case "sort" -> setSort(player, value(data, 1, ""));
                     case "select" -> selectSlot(player, parsePacketSlot(value(data, 1, "-1")));
                     case "refresh" -> refreshBoth(player);
                     case "warehouse" -> selectPersonalWarehouse(player, value(data, 1, firstPersonalWarehouseId()));
@@ -650,6 +652,7 @@ public final class WarehouseService implements Listener {
                 case "shared_mode" -> setSharedMode(player, value(data, 1, "readonly"));
                 case "category" -> setCategory(player, value(data, 1, "all"));
                 case "search" -> setSearch(player, value(data, 1, ""));
+                case "sort" -> setSort(player, value(data, 1, ""));
                 case "select" -> selectSlot(player, parsePacketSlot(value(data, 1, "-1")));
                 case "deposit_slot" -> depositSlot(player, value(data, 1, ""), parseLong(value(data, 2, "1"), 1L));
                 case "deposit_all_backpack" -> depositAllBackpack(player);
@@ -1334,6 +1337,8 @@ public final class WarehouseService implements Listener {
             : null;
         packet.put("ui", "storage");
         packet.put("action_token", storageActionTokens.getOrDefault(player.getUniqueId(), ""));
+        packet.put("sortId", state.sortId());
+        packet.put("sortText", sortText(state.sortId()));
         packet.put("slots", slots);
         packet.put("slotCount", pageSize);
         packet.put("selectedSlot", selectedDisplaySlot);
@@ -1356,11 +1361,59 @@ public final class WarehouseService implements Listener {
         return packet;
     }
 
+    private Comparator<SlotItemRecord> sortComparator(String sortId) {
+        Comparator<SlotItemRecord> comparator = null;
+        for (SortField field : configuration.sortProfile(sortId).fields()) {
+            Comparator<SlotItemRecord> fieldComparator = switch (field.key().toLowerCase(Locale.ROOT)) {
+                case "name" -> Comparator.comparing(
+                    SlotItemRecord::displayName,
+                    Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)
+                );
+                case "amount" -> Comparator.comparingLong(SlotItemRecord::amount);
+                case "updated" -> Comparator.comparingLong(SlotItemRecord::updatedAt);
+                case "created" -> Comparator.comparingLong(SlotItemRecord::createdAt);
+                case "material" -> Comparator.comparing(
+                    SlotItemRecord::materialId,
+                    Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)
+                );
+                case "category" -> Comparator.comparing(
+                    SlotItemRecord::categoryId,
+                    Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)
+                );
+                case "warehouse" -> Comparator.comparing(
+                    SlotItemRecord::warehouseId,
+                    Comparator.nullsFirst(String.CASE_INSENSITIVE_ORDER)
+                );
+                default -> null;
+            };
+            if (fieldComparator == null) {
+                continue;
+            }
+            if (field.descending()) {
+                fieldComparator = fieldComparator.reversed();
+            }
+            comparator = comparator == null
+                ? fieldComparator
+                : comparator.thenComparing(fieldComparator);
+        }
+        Comparator<SlotItemRecord> slotComparator = Comparator.comparingInt(SlotItemRecord::slot);
+        return comparator == null ? slotComparator : comparator.thenComparing(slotComparator);
+    }
+
+    private String sortText(String sortId) {
+        return switch (normalizeId(sortId)) {
+            case "time" -> message("ui.sort-time");
+            case "name" -> message("ui.sort-name");
+            case "amount" -> message("ui.sort-amount");
+            default -> safe(sortId);
+        };
+    }
+
     private List<SlotItemRecord> visibleSlots(ViewState state) {
         String normalizedSearch = normalizeToken(state.search());
         return loadSlots(state.ownerType(), state.ownerId(), state.warehouseId()).stream()
             .filter(item -> slotMatches(item, state.categoryId(), normalizedSearch))
-            .sorted(Comparator.comparingInt(SlotItemRecord::slot))
+            .sorted(sortComparator(state.sortId()))
             .toList();
     }
 
@@ -1499,6 +1552,30 @@ public final class WarehouseService implements Listener {
             }
         }
         return result;
+    }
+
+    private void setSort(Player player, String sortId) throws Exception {
+        ViewState state = state(player);
+        List<String> sortIds = configuration.sortProfileIds();
+        if (sortIds.isEmpty()) {
+            return;
+        }
+        String normalized = normalizeId(sortId);
+        String selected;
+        if (normalized.isBlank()) {
+            int currentIndex = sortIds.indexOf(state.sortId());
+            selected = sortIds.get((currentIndex < 0 ? 0 : currentIndex + 1) % sortIds.size());
+        } else if (sortIds.contains(normalized)) {
+            selected = normalized;
+        } else {
+            selected = sortIds.contains(normalizeId(configuration.search().defaultSortId()))
+                ? normalizeId(configuration.search().defaultSortId())
+                : sortIds.get(0);
+        }
+        state.setSortId(selected);
+        state.setPage(1);
+        clearFilteredSelection(state);
+        refreshBoth(player);
     }
 
     private void setCategory(Player player, String categoryId) throws Exception {
@@ -1793,8 +1870,8 @@ public final class WarehouseService implements Listener {
         ItemStack prototype = stack.clone();
         prototype.setAmount(1);
         byte[] bytes = ItemSerializer.serialize(prototype);
-        boolean skipMerge = prototype.getItemMeta() instanceof BlockStateMeta;
-        if (skipMerge) {
+        boolean blockStateItem = prototype.getItemMeta() instanceof BlockStateMeta;
+        if (blockStateItem) {
             try {
                 ItemStack verify = ItemSerializer.deserialize(bytes);
                 if (verify == null || verify.getType().isAir() || !(verify.getItemMeta() instanceof BlockStateMeta)) {
@@ -1820,22 +1897,20 @@ public final class WarehouseService implements Listener {
             currentSlots = repository.loadSlots(ownerType, ownerId, warehouseId);
         debug("DEPOSIT-STACK load player=" + player.getName() + " ownerType=" + ownerType + " ownerId=" + ownerId
             + " warehouseId=" + warehouseId + " currentSlots=" + currentSlots.size() + " hash=" + shortHash(itemHash)
-            + " itemJsonEmpty=" + itemJson(prototype, 1L).isBlank() + " skipMerge=" + skipMerge);
+            + " itemJsonEmpty=" + itemJson(prototype, 1L).isBlank() + " blockState=" + blockStateItem);
 
-        if (!skipMerge) {
-            for (SlotItemRecord current : currentSlots) {
-                if (remaining <= 0 || !itemHash.equals(current.itemHash())) {
-                    continue;
-                }
-                long room = Math.max(0L, MAX_AGGREGATED_AMOUNT - current.amount());
-                int moved = (int) Math.min(remaining, room);
-                if (moved > 0) {
-                    repository.upsertSlot(copySlot(current, current.amount() + moved, now));
-                    debug("DEPOSIT-STACK merge player=" + player.getName() + " slot=" + current.slot()
-                        + " moved=" + moved + " oldAmount=" + current.amount() + " newAmount=" + (current.amount() + moved));
-                    remaining -= moved;
-                    stored += moved;
-                }
+        for (SlotItemRecord current : currentSlots) {
+            if (remaining <= 0 || !itemHash.equals(current.itemHash())) {
+                continue;
+            }
+            long room = Math.max(0L, MAX_AGGREGATED_AMOUNT - current.amount());
+            int moved = (int) Math.min(remaining, room);
+            if (moved > 0) {
+                repository.upsertSlot(copySlot(current, current.amount() + moved, now));
+                debug("DEPOSIT-STACK merge player=" + player.getName() + " slot=" + current.slot()
+                    + " moved=" + moved + " oldAmount=" + current.amount() + " newAmount=" + (current.amount() + moved));
+                remaining -= moved;
+                stored += moved;
             }
         }
 
@@ -2564,7 +2639,8 @@ public final class WarehouseService implements Listener {
             configuration.pickup().autoStoreOnPickup(),
             configuration.pickup().autoStoreMythicLoot(),
             configuration.pickup().notifyOnAutoStore(),
-            configuration.bankCurrencies().stream().findFirst().orElse("money")));
+            configuration.bankCurrencies().stream().findFirst().orElse("money"),
+            configuration.search().defaultSortId()));
     }
 
     private List<WarehouseRecord> personalRecords(UUID playerUuid) throws Exception {
@@ -3107,7 +3183,7 @@ public final class WarehouseService implements Listener {
             rowMap.put("storageText", message("ui.shared-name", shared.name()));
             rowMap.put("manageText", message("ui.shared-entry", shared.name(), sharedRoleName(shared.viewerRole()), shared.level(), shared.capacity()));
             rowMap.put("capacity", shared.capacity());
-            rowMap.put("lockedBy", lockOwnerName(ViewState.shared(shared.id(), player, false, false, false, "")));
+            rowMap.put("lockedBy", lockOwnerName(ViewState.shared(shared.id(), player, false, false, false, "", configuration.search().defaultSortId())));
             result.put(Integer.toString(idx), rowMap);
             idx++;
         }
@@ -3834,6 +3910,7 @@ public final class WarehouseService implements Listener {
         private String warehouseId;
         private String categoryId;
         private String search;
+        private String sortId;
         private int page;
         private int selectedSlot;
         private boolean sharedEditMode;
@@ -3845,13 +3922,14 @@ public final class WarehouseService implements Listener {
         private String previewWarehouseId;
         private String selectedCurrency;
 
-        private ViewState(String ownerType, String ownerId, String warehouseId, String categoryId, String search, int selectedSlot,
+        private ViewState(String ownerType, String ownerId, String warehouseId, String categoryId, String search, String sortId, int selectedSlot,
                           boolean autoPickup, boolean autoPickupMythic, boolean autoPickupNotify, String selectedCurrency) {
             this.ownerType = ownerType;
             this.ownerId = ownerId;
             this.warehouseId = warehouseId;
             this.categoryId = categoryId;
             this.search = search;
+            this.sortId = sortId;
             this.page = 1;
             this.selectedSlot = selectedSlot;
             this.sharedEditMode = false;
@@ -3864,22 +3942,22 @@ public final class WarehouseService implements Listener {
             this.selectedCurrency = selectedCurrency;
         }
 
-        static ViewState initial(Player player, boolean autoPickup, boolean autoPickupMythic, boolean autoPickupNotify, String selectedCurrency) {
-            return new ViewState(OWNER_PERSONAL, player.getUniqueId().toString(), "", "all", "", -1, autoPickup, autoPickupMythic, autoPickupNotify, selectedCurrency);
+        static ViewState initial(Player player, boolean autoPickup, boolean autoPickupMythic, boolean autoPickupNotify, String selectedCurrency, String sortId) {
+            return new ViewState(OWNER_PERSONAL, player.getUniqueId().toString(), "", "all", "", sortId, -1, autoPickup, autoPickupMythic, autoPickupNotify, selectedCurrency);
         }
 
-        static ViewState shared(String sharedId, Player player, boolean autoPickup, boolean autoPickupMythic, boolean autoPickupNotify, String selectedCurrency) {
-            return new ViewState(OWNER_SHARED, sharedId, sharedId, "all", "", -1, autoPickup, autoPickupMythic, autoPickupNotify, selectedCurrency);
+        static ViewState shared(String sharedId, Player player, boolean autoPickup, boolean autoPickupMythic, boolean autoPickupNotify, String selectedCurrency, String sortId) {
+            return new ViewState(OWNER_SHARED, sharedId, sharedId, "all", "", sortId, -1, autoPickup, autoPickupMythic, autoPickupNotify, selectedCurrency);
         }
 
-        static ViewState preview(UUID targetUuid, String warehouseId, String ownerType) {
+        static ViewState preview(UUID targetUuid, String warehouseId, String ownerType, String sortId) {
             String effectiveWarehouseId = warehouseId;
             String effectiveOwnerId = targetUuid.toString();
             if (OWNER_SHARED.equals(ownerType)) {
                 effectiveOwnerId = warehouseId;
                 effectiveWarehouseId = warehouseId;
             }
-            ViewState state = new ViewState(ownerType, effectiveOwnerId, effectiveWarehouseId, "all", "", -1, false, false, false, "");
+            ViewState state = new ViewState(ownerType, effectiveOwnerId, effectiveWarehouseId, "all", "", sortId, -1, false, false, false, "");
             state.previewMode = true;
             state.previewTargetUuid = targetUuid;
             state.previewWarehouseId = warehouseId;
@@ -3891,6 +3969,7 @@ public final class WarehouseService implements Listener {
         String warehouseId() { return warehouseId; }
         String categoryId() { return categoryId; }
         String search() { return search; }
+        String sortId() { return sortId; }
         int page() { return page; }
         int selectedSlot() { return selectedSlot; }
         boolean sharedEditMode() { return sharedEditMode; }
@@ -3909,6 +3988,7 @@ public final class WarehouseService implements Listener {
         void setWarehouseId(String warehouseId) { this.warehouseId = warehouseId; }
         void setCategoryId(String categoryId) { this.categoryId = categoryId; }
         void setSearch(String search) { this.search = search; }
+        void setSortId(String sortId) { this.sortId = sortId; }
         void setPage(int page) { this.page = page; }
         void setSelectedSlot(int selectedSlot) { this.selectedSlot = selectedSlot; }
         void setSharedEditMode(boolean sharedEditMode) { this.sharedEditMode = sharedEditMode; }
