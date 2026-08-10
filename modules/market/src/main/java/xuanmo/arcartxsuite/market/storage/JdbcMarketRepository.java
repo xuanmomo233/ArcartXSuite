@@ -118,6 +118,8 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             + "seller_name TEXT NOT NULL,"
             + "item_data TEXT NOT NULL,"
             + "item_display_name TEXT NOT NULL,"
+            + "pinyin TEXT NOT NULL DEFAULT '',"
+            + "initials TEXT NOT NULL DEFAULT '',"
             + "category TEXT NOT NULL DEFAULT 'other',"
             + "buy_now_price REAL NOT NULL DEFAULT 0,"
             + "starting_bid REAL NOT NULL DEFAULT 0,"
@@ -211,6 +213,8 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             + "seller_name VARCHAR(64) NOT NULL,"
             + "item_data MEDIUMTEXT NOT NULL,"
             + "item_display_name VARCHAR(256) NOT NULL,"
+            + "pinyin VARCHAR(512) NOT NULL DEFAULT '',"
+            + "initials VARCHAR(512) NOT NULL DEFAULT '',"
             + "category VARCHAR(64) NOT NULL DEFAULT 'other',"
             + "buy_now_price DOUBLE NOT NULL DEFAULT 0,"
             + "starting_bid DOUBLE NOT NULL DEFAULT 0,"
@@ -317,24 +321,26 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     @Override
     public boolean insertListing(AuctionListing listing) {
         String sql = "INSERT INTO " + tListings
-            + " (seller, seller_name, item_data, item_display_name, category, buy_now_price, starting_bid, current_bid, highest_bidder, currency, type, status, created_at, expires_at)"
-            + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+            + " (seller, seller_name, item_data, item_display_name, pinyin, initials, category, buy_now_price, starting_bid, current_bid, highest_bidder, currency, type, status, created_at, expires_at)"
+            + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, listing.getSeller().toString());
             ps.setString(2, listing.getSellerName());
             ps.setString(3, listing.getItemData());
             ps.setString(4, listing.getItemDisplayName());
-            ps.setString(5, listing.getCategory());
-            ps.setDouble(6, listing.getBuyNowPrice());
-            ps.setDouble(7, listing.getStartingBid());
-            ps.setDouble(8, listing.getCurrentBid());
-            ps.setString(9, listing.getHighestBidder() == null ? null : listing.getHighestBidder().toString());
-            ps.setString(10, listing.getCurrency());
-            ps.setString(11, listing.getType().name());
-            ps.setString(12, listing.getStatus().name());
-            ps.setLong(13, listing.getCreatedAt());
-            ps.setLong(14, listing.getExpiresAt());
+            ps.setString(5, listing.getPinyin());
+            ps.setString(6, listing.getInitials());
+            ps.setString(7, listing.getCategory());
+            ps.setDouble(8, listing.getBuyNowPrice());
+            ps.setDouble(9, listing.getStartingBid());
+            ps.setDouble(10, listing.getCurrentBid());
+            ps.setString(11, listing.getHighestBidder() == null ? null : listing.getHighestBidder().toString());
+            ps.setString(12, listing.getCurrency());
+            ps.setString(13, listing.getType().name());
+            ps.setString(14, listing.getStatus().name());
+            ps.setLong(15, listing.getCreatedAt());
+            ps.setLong(16, listing.getExpiresAt());
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
                 if (rs.next()) listing.setId(rs.getLong(1));
@@ -448,14 +454,19 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     @Override
     public List<AuctionListing> searchListings(String keyword, int offset, int limit) {
         String sql = "SELECT * FROM " + tListings
-            + " WHERE status='ACTIVE' AND expires_at > ? AND item_display_name LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?";
+            + " WHERE status='ACTIVE' AND expires_at > ?"
+            + " AND (item_display_name LIKE ? OR pinyin LIKE ? OR initials LIKE ?)"
+            + " ORDER BY created_at DESC LIMIT ? OFFSET ?";
         List<AuctionListing> results = new ArrayList<>();
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setLong(1, System.currentTimeMillis());
-            ps.setString(2, "%" + keyword + "%");
-            ps.setInt(3, limit);
-            ps.setInt(4, offset);
+            String like = "%" + keyword + "%";
+            ps.setString(2, like);
+            ps.setString(3, like);
+            ps.setString(4, like);
+            ps.setInt(5, limit);
+            ps.setInt(6, offset);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) results.add(mapListing(rs));
             }
@@ -486,8 +497,9 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     public int countSearchListings(String keyword) {
         String sql = "SELECT COUNT(*) FROM " + tListings
             + " WHERE status='ACTIVE' AND expires_at > ?"
-            + " AND item_display_name LIKE ?";
-        return countQuery(sql, System.currentTimeMillis(), "%" + keyword + "%");
+            + " AND (item_display_name LIKE ? OR pinyin LIKE ? OR initials LIKE ?)";
+        String like = "%" + keyword + "%";
+        return countQuery(sql, System.currentTimeMillis(), like, like, like);
     }
     @Override
     public List<AuctionListing> getListingsBySeller(UUID seller) {
@@ -1073,6 +1085,8 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             rs.getString("seller_name"),
             rs.getString("item_data"),
             rs.getString("item_display_name"),
+            rs.getString("pinyin"),
+            rs.getString("initials"),
             rs.getString("category"),
             rs.getDouble("buy_now_price"),
             rs.getDouble("starting_bid"),

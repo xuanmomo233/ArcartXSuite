@@ -171,6 +171,22 @@ public final class JdbcWarehouseRepository extends AbstractModuleRepository impl
         }
     }
 
+    @Override
+    public List<SlotItemRecord> loadAllSlots() throws SQLException {
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement(
+                 "SELECT * FROM warehouse_slots ORDER BY slot ASC"
+             )) {
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<SlotItemRecord> result = new ArrayList<>();
+                while (resultSet.next()) {
+                    result.add(slot(resultSet));
+                }
+                return result;
+            }
+        }
+    }
+
     /**
      * 加载指定仓库的单个槽位物品记录。
      *

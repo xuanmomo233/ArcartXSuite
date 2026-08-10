@@ -5,10 +5,16 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import net.sourceforge.pinyin4j.PinyinHelper;
+import net.sourceforge.pinyin4j.format.HanyuPinyinCaseType;
+import net.sourceforge.pinyin4j.format.HanyuPinyinOutputFormat;
+import net.sourceforge.pinyin4j.format.HanyuPinyinToneType;
+import net.sourceforge.pinyin4j.format.exception.BadHanyuPinyinOutputFormatCombination;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -34,6 +40,12 @@ import xuanmo.arcartxsuite.market.storage.RedisMarketCache;
 public class AuctionService {
 
     private static final int AUCTION_BACKPACK_SLOTS = 36;
+    private static final HanyuPinyinOutputFormat PINYIN_FORMAT = new HanyuPinyinOutputFormat();
+
+    static {
+        PINYIN_FORMAT.setCaseType(HanyuPinyinCaseType.LOWERCASE);
+        PINYIN_FORMAT.setToneType(HanyuPinyinToneType.WITHOUT_TONE);
+    }
 
     private final JavaPlugin plugin;
     private final AuctionConfiguration config;
@@ -165,6 +177,10 @@ public class AuctionService {
         String itemData = itemSerializer.serialize(item);
         String displayName = getItemDisplayName(item);
         String category = classifyItem(item);
+        // 生成拼音/首字母搜索 token（多音字遍历所有读音，字间空格分隔）
+        String[] pinyinTokens = toPinyinTokens(displayName);
+        String pinyin = pinyinTokens[0];
+        String initials = pinyinTokens[1];
 
         // 确定上架类型
         AuctionListing.ListingType type;
@@ -175,7 +191,7 @@ public class AuctionService {
         long now = System.currentTimeMillis();
         AuctionListing listing = new AuctionListing(
             0, seller.getUniqueId(), seller.getName(), itemData, displayName,
-            category, buyNowPrice, startingBid, 0, null,
+            pinyin, initials, category, buyNowPrice, startingBid, 0, null,
             currency, type, AuctionListing.ListingStatus.ACTIVE,
             now, now + duration * 1000L
         );
@@ -740,6 +756,57 @@ public class AuctionService {
             return item.getItemMeta().getDisplayName();
         }
         return item.getType().name();
+    }
+
+    /**
+     * 生成 displayName 的拼音和首字母搜索 token。
+     * 多音字遍历所有读音，同一字的多读音连续拼接；字之间用空格分隔。
+     * 返回 [pinyin, initials]，如 "钻石剑" → ["zuan shi jian", "z s j"]。
+     */
+    private static String[] toPinyinTokens(String rawValue) {
+        String stripped = ChatColor.stripColor(rawValue == null ? "" : value(rawValue));
+        StringBuilder pinyin = new StringBuilder();
+        StringBuilder initials = new StringBuilder();
+        for (char character : stripped.toCharArray()) {
+            if (Character.isWhitespace(character)) {
+                continue;
+            }
+            String[] values;
+            try {
+                values = PinyinHelper.toHanyuPinyinStringArray(character, PINYIN_FORMAT);
+            } catch (BadHanyuPinyinOutputFormatCombination ignored) {
+                values = null;
+            }
+            if (values != null && values.length > 0) {
+                StringBuilder charPinyin = new StringBuilder();
+                StringBuilder charInitials = new StringBuilder();
+                for (String value : values) {
+                    String candidate = value.replaceAll("[^a-z0-9]", "");
+                    if (!candidate.isBlank()) {
+                        charPinyin.append(candidate);
+                        charInitials.append(candidate.charAt(0));
+                    }
+                }
+                if (charPinyin.length() > 0) {
+                    if (pinyin.length() > 0) pinyin.append(' ');
+                    if (initials.length() > 0) initials.append(' ');
+                    pinyin.append(charPinyin);
+                    initials.append(charInitials);
+                    continue;
+                }
+            }
+            if (Character.isLetterOrDigit(character)) {
+                if (pinyin.length() > 0) pinyin.append(' ');
+                if (initials.length() > 0) initials.append(' ');
+                pinyin.append(Character.toLowerCase(character));
+                initials.append(Character.toLowerCase(character));
+            }
+        }
+        return new String[]{pinyin.toString(), initials.toString()};
+    }
+
+    private static String value(String s) {
+        return s == null ? "" : s.trim();
     }
 
     // 离线 / 背包溢出的发放统一由 deliverItemSafe / depositSafe + 待发放队列处理，

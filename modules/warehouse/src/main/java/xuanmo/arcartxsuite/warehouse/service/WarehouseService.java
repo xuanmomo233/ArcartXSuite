@@ -60,8 +60,8 @@ import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.currency.CurrencyDefinition;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
-import xuanmo.arcartxsuite.api.item.VanillaItemNameTable;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import xuanmo.arcartxsuite.api.util.ItemSerializer;
 import xuanmo.arcartxsuite.api.capability.PickupInterceptor;
 import xuanmo.arcartxsuite.api.capability.PickupNotifiable;
@@ -157,8 +157,6 @@ public final class WarehouseService implements Listener {
     private final ConcurrentMap<UUID, String> manageActionTokens = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, String> bankActionTokens = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, Object> actionTokenLocks = new ConcurrentHashMap<>();
-    /** materialId → 中文翻译搜索 token 缓存（搜索时动态翻译原版物品名，避免依赖存入时的 searchText）。 */
-    private final ConcurrentMap<String, SearchTokens> materialSearchCache = new ConcurrentHashMap<>();
     private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
     private final ThreadLocal<Set<UUID>> committedActionTokens =
         ThreadLocal.withInitial(HashSet::new);
@@ -282,6 +280,59 @@ public final class WarehouseService implements Listener {
             crossServerLockService.start();
         }
         Bukkit.getPluginManager().registerEvents(this, plugin);
+        AxsScheduler.runAsync(plugin, this::migrateSearchText);
+    }
+
+    /**
+     * 异步迁移旧数据：检测 searchText 不含中文的槽位，
+     * 反序列化 itemData 重新计算 searchText/pinyin/initials 并 UPDATE。
+     */
+    private void migrateSearchText() {
+        try {
+            List<SlotItemRecord> allSlots = repository.loadAllSlots();
+            int migrated = 0;
+            for (SlotItemRecord item : allSlots) {
+                // searchText 含中文说明已是新格式，跳过
+                if (containsChinese(item.searchText())) {
+                    continue;
+                }
+                try {
+                    ItemStack stack = ItemSerializer.deserialize(Base64.getDecoder().decode(item.itemData()));
+                    if (stack == null || stack.getType().isAir()) {
+                        continue;
+                    }
+                    String displayName = resolveDisplayName(stack);
+                    SearchTokens tokens = toSearchTokens(displayName);
+                    repository.upsertSlot(new SlotItemRecord(
+                        item.ownerType(), item.ownerId(), item.warehouseId(), item.slot(),
+                        item.itemHash(), item.categoryId(), item.displayName(), item.materialId(),
+                        tokens.searchText(), tokens.pinyin(), tokens.initials(),
+                        item.itemData(), item.itemJson(), item.amount(), item.createdAt(), item.updatedAt()
+                    ));
+                    migrated++;
+                } catch (Exception ignored) {
+                    // 反序列化失败的跳过
+                }
+            }
+            if (migrated > 0) {
+                logger.info("[Warehouse] 搜索字段迁移完成，共更新 " + migrated + " 条记录");
+            }
+        } catch (Exception exception) {
+            logger.warning("[Warehouse] 搜索字段迁移失败: " + exception.getMessage());
+        }
+    }
+
+    /** 判断字符串是否包含中文字符 */
+    private static boolean containsChinese(String text) {
+        if (text == null || text.isEmpty()) {
+            return false;
+        }
+        for (char c : text.toCharArray()) {
+            if (c >= '\u4e00' && c <= '\u9fff') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -1791,9 +1842,10 @@ public final class WarehouseService implements Listener {
         if (remaining > 0) {
             int emptySlot = firstEmptySlot(currentSlots, currentWarehouseCapacity(player, ownerType, ownerId, warehouseId));
             if (emptySlot >= 0) {
-                // searchText 只保留 displayName（中文翻译名/自定义名），
-                // materialId 与 categoryId 由 slotMatches 搜索时动态翻译匹配，不再拼入 searchText
-                SearchTokens searchTokens = toSearchTokens(resolveDisplayName(prototype));
+                String displayName = resolveDisplayName(prototype);
+                String categoryId = resolveCategory(prototype);
+                // searchText 写 displayName（原版物品为中文翻译名，自定义物品为自定义名）
+                SearchTokens searchTokens = toSearchTokens(displayName);
                 String displayJson = itemJson(prototype, 1L);
                 repository.upsertSlot(new SlotItemRecord(
                     ownerType,
@@ -1801,8 +1853,8 @@ public final class WarehouseService implements Listener {
                     warehouseId,
                     emptySlot,
                     itemHash,
-                    resolveCategory(prototype),
-                    resolveDisplayName(prototype),
+                    categoryId,
+                    displayName,
                     prototype.getType().name(),
                     searchTokens.searchText(),
                     searchTokens.pinyin(),
@@ -3269,42 +3321,35 @@ public final class WarehouseService implements Listener {
         if (keyword == null || keyword.isBlank()) {
             return true;
         }
-        // 存入时写入的 searchText / pinyin / initials（可能含英文旧数据）
-        if (containsToken(item.searchText(), keyword)
-            || containsToken(item.pinyin(), keyword)
-            || containsToken(item.initials(), keyword)) {
-            return true;
-        }
-        // 搜索时动态翻译 materialId → 中文名，匹配中文/拼音/首字母
-        // 这样旧数据（searchText 只有英文）也能被中文关键词搜到
-        SearchTokens materialTokens = materialSearchTokens(item.materialId());
-        return materialTokens.searchText().contains(keyword)
-            || materialTokens.pinyin().contains(keyword)
-            || materialTokens.initials().contains(keyword);
-    }
-
-    private static boolean containsToken(String text, String keyword) {
-        return text != null && text.contains(keyword);
+        // 纯字段匹配：存入时 searchText 已包含中文翻译名/自定义名
+        return matchesTokens(item.searchText(), item.pinyin(), item.initials(), keyword);
     }
 
     /**
-     * 根据 materialId（Bukkit Material 枚举名）动态翻译为中文名并生成搜索 token。
-     * 结果做缓存，因为 Material → 中文名是静态映射，无需每次搜索重复计算。
+     * 多关键词匹配：搜索词按空格拆分，每个部分都要在 searchText/pinyin/initials 中至少匹配一个。
+     * pinyin/initials 字段内部用空格分隔每个字，匹配时去空格还原为连续串再 contains。
+     * 支持混合搜索如 "zs jian"（首字母 + 拼音）匹配 "钻石剑"。
      */
-    private SearchTokens materialSearchTokens(String materialId) {
-        if (materialId == null || materialId.isBlank()) {
-            return new SearchTokens("", "", "");
+    private static boolean matchesTokens(String searchText, String pinyin, String initials, String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return true;
         }
-        return materialSearchCache.computeIfAbsent(materialId, id -> {
-            String zhName;
-            try {
-                Material material = Material.valueOf(id.toUpperCase(Locale.ROOT));
-                zhName = VanillaItemNameTable.translate(material);
-            } catch (IllegalArgumentException ignored) {
-                zhName = id;
+        String normalizedSearchText = normalizeToken(searchText);
+        String normalizedPinyin = pinyin == null ? "" : pinyin.replace(" ", "");
+        String normalizedInitials = initials == null ? "" : initials.replace(" ", "");
+        String[] parts = keyword.split("\\s+");
+        for (String part : parts) {
+            String normalizedPart = normalizeToken(part);
+            if (normalizedPart.isBlank()) {
+                continue;
             }
-            return toSearchTokens(zhName);
-        });
+            if (!normalizedSearchText.contains(normalizedPart)
+                && !normalizedPinyin.contains(normalizedPart)
+                && !normalizedInitials.contains(normalizedPart)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private String currentWarehouseName(Player player, ViewState state) throws Exception {
@@ -3695,14 +3740,28 @@ public final class WarehouseService implements Listener {
                 values = null;
             }
             if (values != null && values.length > 0) {
-                String candidate = values[0].replaceAll("[^a-z0-9]", "");
-                if (!candidate.isBlank()) {
-                    pinyin.append(candidate);
-                    initials.append(candidate.charAt(0));
+                // 多音字：遍历所有读音，同一字的多读音连续拼接
+                // 字之间用空格分隔，支持跨词搜索（如 "zs jian" 匹配 "钻石剑"）
+                StringBuilder charPinyin = new StringBuilder();
+                StringBuilder charInitials = new StringBuilder();
+                for (String value : values) {
+                    String candidate = value.replaceAll("[^a-z0-9]", "");
+                    if (!candidate.isBlank()) {
+                        charPinyin.append(candidate);
+                        charInitials.append(candidate.charAt(0));
+                    }
+                }
+                if (charPinyin.length() > 0) {
+                    if (pinyin.length() > 0) pinyin.append(' ');
+                    if (initials.length() > 0) initials.append(' ');
+                    pinyin.append(charPinyin);
+                    initials.append(charInitials);
                     continue;
                 }
             }
             if (Character.isLetterOrDigit(character)) {
+                if (pinyin.length() > 0) pinyin.append(' ');
+                if (initials.length() > 0) initials.append(' ');
                 pinyin.append(Character.toLowerCase(character));
                 initials.append(Character.toLowerCase(character));
             }

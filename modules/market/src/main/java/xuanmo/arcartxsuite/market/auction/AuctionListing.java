@@ -12,6 +12,8 @@ public class AuctionListing {
     private final String sellerName;
     private final String itemData;
     private final String itemDisplayName;
+    private final String pinyin;
+    private final String initials;
     private String message;
     private final String category;
     private final double buyNowPrice;
@@ -25,7 +27,8 @@ public class AuctionListing {
     private final long expiresAt;
 
     public AuctionListing(long id, UUID seller, String sellerName, String itemData,
-                          String itemDisplayName, String category, double buyNowPrice,
+                          String itemDisplayName, String pinyin, String initials,
+                          String category, double buyNowPrice,
                           double startingBid, double currentBid, UUID highestBidder,
                           String currency, ListingType type, ListingStatus status,
                           long createdAt, long expiresAt) {
@@ -34,6 +37,8 @@ public class AuctionListing {
         this.sellerName = sellerName;
         this.itemData = itemData;
         this.itemDisplayName = itemDisplayName;
+        this.pinyin = pinyin == null ? "" : pinyin;
+        this.initials = initials == null ? "" : initials;
         this.message = "";
         this.category = category;
         this.buyNowPrice = buyNowPrice;
@@ -53,6 +58,8 @@ public class AuctionListing {
     public String getSellerName() { return sellerName; }
     public String getItemData() { return itemData; }
     public String getItemDisplayName() { return itemDisplayName; }
+    public String getPinyin() { return pinyin; }
+    public String getInitials() { return initials; }
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message == null ? "" : message; }
     public String getCategory() { return category; }
