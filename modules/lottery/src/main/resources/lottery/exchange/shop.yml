@@ -3,6 +3,14 @@ items:
   dust_ticket:
     id: dust_ticket
     display-name: "祈愿凭证"
+    # icon 可写成材质名/物品 JSON 字符串，也可写成完整图标定义：
+    #   material / amount / name / lore / custom-model-data / glow
+    #   skull-texture / color / source + id / mmo-type + mmo-id
+    #   json / texture / texture-url / nbt
+    # nbt 支持两种写法：
+    #   nbt:
+    #     CustomTag: "value"                       # 写法一：键值映射
+    #   nbt: "{CustomTag:'value',Unbreakable:1b}"  # 写法二：整段 SNBT
     icon: "minecraft:amethyst_shard"
     cost:
       single:

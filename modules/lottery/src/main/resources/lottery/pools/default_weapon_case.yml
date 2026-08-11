@@ -11,6 +11,14 @@ description: |-  # 卡池描述文本
   使用武器箱钥匙开启，可获得各种稀有度的武器皮肤。
   包含从消费级到隐秘级的多款皮肤，更有罕见特殊级掉落！
 up-item-icon: '{"id":"minecraft:chest","Count":1b}'  # UP 物品图标（JSON 格式）
+# up-item-icon、points.*.icon 与奖品的 icon 都支持完整图标定义（与 Menu 模块一致）：
+#   material / amount / name / lore / custom-model-data / glow
+#   skull-texture / color / source + id / mmo-type + mmo-id
+#   json / texture / texture-url / nbt
+# nbt 支持两种写法：
+#   nbt:
+#     CustomTag: "value"                       # 写法一：键值映射，逐个写入字符串标签
+#   nbt: "{CustomTag:'value',Unbreakable:1b}"  # 写法二：整段 SNBT 字符串
 
 # cost 必须使用条目列表；显式空列表才表示免费奖池。
 cost:

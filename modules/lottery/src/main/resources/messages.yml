@@ -27,6 +27,9 @@ common:
   pending-claim-manual: "&e奖励需要管理员处理: &f{0}"
 packet:
   guarantee-desc: "5星保底: {0} | 4星保底: {1}"
+  guaranteed-up: "&e下次五星必为 UP"
+  guaranteed-not-up: "&7下次五星不保证 UP"
+  guaranteed-unknown: "&7暂无额外保底说明"
   guaranteed: "保底"
   history-gacha: "{0}抽 · {1}"
   history-case: "获得 {0}（{1}）"

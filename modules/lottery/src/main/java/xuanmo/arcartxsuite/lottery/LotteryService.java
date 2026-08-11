@@ -87,7 +87,7 @@ public class LotteryService {
         this.logger = logger;
         this.gachaEngine = new GachaEngine();
         this.caseEngine = new CaseOpeningEngine();
-        this.distributor = new PrizeDistributor(itemSourceRegistry, mailSupplier, logger);
+        this.distributor = new PrizeDistributor(plugin, itemSourceRegistry, mailSupplier, logger);
     }
 
     /**

@@ -149,9 +149,8 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         for (int i = 0; i < items.size(); i++) {
             PoolItem item = items.get(i);
             String key = Integer.toString(i + 1);
-            ItemStack stack = service.generateItem(item);
             LotteryService.GachaItemInfo info = service.describeGachaItem(pool, item);
-            jsons.put(key, iconResolver.itemToJson(stack));
+            jsons.put(key, poolItemJson(player, item));
             names.put(key, item.name());
             stars.put(key, info.star());
             ups.put(key, info.up());
@@ -174,7 +173,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         Map<String, Object> payload = new LinkedHashMap<>();
         PoolItem item = result == null ? null : result.item();
         payload.put("resultCount", item == null ? 0 : 1);
-        payload.put("resultItemJson", item == null ? "" : iconResolver.itemToJson(service.generateItem(item)));
+        payload.put("resultItemJson", item == null ? "" : poolItemJson(player, item));
         payload.put("resultItemName", item == null ? "" : item.name());
         payload.put("resultRarity", result == null ? "" : result.rarity());
         packetBridge.sendPacket(player, CASE_UI, "result", payload);
@@ -189,7 +188,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             CaseResult result = results.get(i);
             PoolItem item = result == null ? null : result.item();
             String key = Integer.toString(i + 1);
-            jsons.put(key, item == null ? "" : iconResolver.itemToJson(service.generateItem(item)));
+            jsons.put(key, item == null ? "" : poolItemJson(player, item));
             names.put(key, item == null ? "" : item.name());
             rarities.put(key, result == null ? "" : result.rarity());
         }
@@ -212,9 +211,10 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("packetId", packetId);
         payload.put("poolName", pool.displayName());
         payload.put("poolType", pool.type().name());
-        payload.put("poolDescription", pool.description());
+        payload.put("poolDescription", descriptionLines(pool.description()));
         payload.put("poolList", poolList(pools));
         payload.put("currentPoolIndex", index);
+        payload.put("poolCount", pools.size());
         payload.put("action_token", token);
         if (pool.type() == PoolType.GACHA) updateGacha(player, pool, payload);
         else updateCase(player, pool, payload);
@@ -226,19 +226,45 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         PoolItem up = firstUp(gacha);
         payload.put("upItemName", up == null ? "" : up.name());
         payload.put("upItemStar", up == null ? 0 : service.describeGachaItem(pool, up).star());
-        payload.put("upItemDesc", "");
+        payload.put("upItemDesc", pool.upItemDesc());
         payload.put("upItemIcon", iconResolver.resolveItemJson(player, pool.upItemIcon()));
         PlayerGachaState state = service.getGachaState(player, pool.id());
         payload.put("pity4", state.pity4star());
         payload.put("pity5", state.pity5star());
         payload.put("pity4Limit", gacha.pity4star());
         payload.put("pity5Limit", gacha.pity5star());
+        payload.put("guaranteedUp", state.guaranteedUp());
+        String guaranteedUpText = service.message("packet.guaranteed-up");
+        String guaranteedNotUpText = service.message("packet.guaranteed-not-up");
+        payload.put("guaranteedUpText", guaranteedUpText);
+        payload.put("guaranteedNotUpText", guaranteedNotUpText);
+        payload.put("guaranteedUnknownText", service.message("packet.guaranteed-unknown"));
+        payload.put("guaranteedStatusText", state.guaranteedUp() ? guaranteedUpText : guaranteedNotUpText);
+        payload.put("fatePoints", state.fatePoints());
+        payload.put("fateTarget", state.fateTarget());
+        payload.put("fatePointCap", gacha.fatePointCap());
+        payload.put("softPityStart", gacha.softPityStart());
+        payload.put("softPityIncrement", gacha.softPityIncrement());
+        payload.put("upRate", gacha.upRate());
+        payload.put("base5Rate", gacha.base5starRate());
+        payload.put("base4Rate", gacha.base4starRate());
         payload.put("guaranteeDesc", service.message("packet.guarantee-desc",
             gacha.pity5star(), gacha.pity4star()));
         payload.put("costRows", costRows(player, pool.cost(), false));
         payload.put("costTenRows", costRows(player, pool.cost(), true));
         payload.put("tenAvailable", !pool.cost().ten().isEmpty());
         payload.put("resourceRows", resourceRows(player, pool.cost()));
+    }
+
+    private List<String> descriptionLines(String description) {
+        if (description == null || description.isEmpty()) return List.of();
+        String normalized = description.replace("\r\n", "\n").replace('\r', '\n');
+        String[] lines = normalized.split("\\\\n|\\n", -1);
+        List<String> colored = new ArrayList<>(lines.length);
+        for (String line : lines) {
+            if (!line.isBlank()) colored.add("&7" + line);
+        }
+        return colored;
     }
 
     private void updateCase(Player player, PoolDefinition pool, Map<String, Object> payload) {
@@ -254,7 +280,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         for (int i = 0; i < items.size() && i < CASE_PREVIEW_SLOT_LIMIT; i++) {
             PoolItem item = items.get(i);
             String key = Integer.toString(i + 1);
-            jsons.put(key, iconResolver.itemToJson(service.generateItem(item)));
+            jsons.put(key, poolItemJson(player, item));
             names.put(key, item.name());
             rarities.put(key, item.rarity() == null ? "" : item.rarity());
         }
@@ -277,7 +303,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             row.put("id", entry.id());
             row.put("amount", entry.amount());
             row.put("displayName", displayName(entry, point));
-            row.put("icon", icon(entry, point));
+            row.put("icon", icon(player, entry, point));
             row.put("owned", owned(player, entry));
             rows.put(Integer.toString(i), row);
         }
@@ -297,7 +323,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             row.put("type", entry.type().name());
             row.put("id", entry.id());
             row.put("displayName", entry.displayName() == null ? entry.id() : entry.displayName());
-            row.put("icon", entry.icon() == null ? "" : entry.icon());
+            row.put("icon", resolveIconJson(player, entry.icon()));
             row.put("owned", owned(player, entry));
             rows.put(Integer.toString(rowIndex++), row);
         }
@@ -313,11 +339,20 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
     }
 
     private String icon(
+            Player player,
             CostConfig.CostEntry entry,
             xuanmo.arcartxsuite.lottery.config.PointDefinition point
     ) {
-        if (entry.icon() != null) return entry.icon();
-        return point == null ? "" : point.icon();
+        return resolveIconJson(player, entry.icon() == null ? (point == null ? "" : point.icon()) : entry.icon());
+    }
+
+    private String poolItemJson(Player player, PoolItem item) {
+        if (item.icon() != null) return iconResolver.resolveItemJson(player, item.icon());
+        return iconResolver.itemToJson(service.generateItem(item));
+    }
+
+    private String resolveIconJson(Player player, String value) {
+        return iconResolver.resolveItemJson(player, xuanmo.arcartxsuite.api.icon.IconDefinition.load(value));
     }
 
     private xuanmo.arcartxsuite.lottery.config.PointDefinition pointDefinition(String id) {
@@ -430,7 +465,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("id", definition.id());
                 row.put("displayName", definition.displayName());
-                row.put("icon", definition.icon());
+                row.put("icon", resolveIconJson(player, definition.icon()));
                 row.put("amount", service.getPoint(player.getUniqueId(), definition.id()));
                 pointRows.put(Integer.toString(pointIndex++), row);
             }
@@ -443,7 +478,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", item.id());
             row.put("name", item.displayName());
-            row.put("icon", item.icon());
+            row.put("icon", iconResolver.resolveItemJson(player, item.icon()));
             row.put("costRows", costRows(player, new CostConfig(item.cost(), item.cost()), false));
             row.put("limit", item.limit());
             row.put("used", used);

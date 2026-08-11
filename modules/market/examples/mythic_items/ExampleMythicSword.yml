@@ -1,6 +1,6 @@
 # MythicMobs 物品配置示例
 # 文件需复制到 plugins/MythicMobs/Items/ 目录下
-# 物品 internal_name 为 ExampleMythicSword，需与 example_shop.yml 中 item-id 一致
+# 物品 internal_name 为 ExampleMythicSword，需与 example_shop.yml 中 item.id 一致
 
 ExampleMythicSword:
   # 基础材质

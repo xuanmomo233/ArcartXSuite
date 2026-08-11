@@ -22,6 +22,7 @@ import xuanmo.arcartxsuite.api.capability.QQBotBroadcastable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
+import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerChannel;
@@ -48,6 +49,7 @@ public class MarketService {
     private final PacketBridgeAPI packetBridge;
     private final CurrencyBridgeAPI currencyManager;
     private final ItemSourceRegistry itemSourceRegistry;
+    private final IconResolver iconResolver;
     private final AuctionItemSerializer itemSerializer;
     private final @Nullable ItemBridgeAPI itemStackBridge;
     private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
@@ -90,6 +92,7 @@ public class MarketService {
         this.packetBridge = packetBridge;
         this.currencyManager = currencyManager;
         this.itemSourceRegistry = itemSourceRegistry;
+        this.iconResolver = new IconResolver(itemStackBridge, itemSourceRegistry);
         this.itemSerializer = itemSerializer;
         this.itemStackBridge = itemStackBridge;
         this.vanillaItemNameBridge = vanillaItemNameBridge;
@@ -732,6 +735,7 @@ public class MarketService {
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("id", id);
                 shops.put(key, row);
+                packet.put("shopIconJson" + key, iconResolver.resolveItemJson(player, entry.getValue().icon()));
                 shopTexts.put(key, "&f" + entry.getValue().displayName());
             }
         }
@@ -767,7 +771,7 @@ public class MarketService {
                     items.put(key, row);
 
                     // 物品 JSON（flat 字段）
-                    packet.put("shopItemJson" + idx, shopItemJson(shopItem));
+                    packet.put("shopItemJson" + idx, shopItemJson(player, shopItem));
                     idx++;
                 }
             }
@@ -947,38 +951,14 @@ public class MarketService {
         }
     }
 
-    private String shopItemJson(ShopService.ShopItem shopItem) {
+    private String shopItemJson(Player player, ShopService.ShopItem shopItem) {
+        if (shopItem.icon() != null) return iconResolver.resolveItemJson(player, shopItem.icon());
         try {
-            ItemStack item = switch (shopItem.source().toLowerCase()) {
-                case "mythic" -> itemSourceRegistry.generateMythicItem(shopItem.itemId(), 1);
-                case "neige" -> itemSourceRegistry.generateNeigeItem(shopItem.itemId(), 1);
-                case "overture" -> itemSourceRegistry.generateOvertureItem(shopItem.itemId(), null, 1);
-                case "mmoitems" -> {
-                    String[] parts = shopItem.itemId().split(";", 2);
-                    yield parts.length == 2
-                        ? itemSourceRegistry.generateMmoItem(parts[0], parts[1], 1)
-                        : null;
-                }
-                default -> {
-                    org.bukkit.Material mat = org.bukkit.Material.matchMaterial(shopItem.itemId());
-                    ItemStack base = mat != null ? new ItemStack(mat, 1) : null;
-                    yield applyItemNbt(base, shopItem.itemNbt());
-                }
-            };
+            ItemStack item = xuanmo.arcartxsuite.market.shop.ShopItemFactory.create(
+                itemSourceRegistry, shopItem.item(), 1, logger);
             return item != null ? itemToJson(item) : "";
-        } catch (Exception e) {
+        } catch (Exception exception) {
             return "";
-        }
-    }
-
-    private static @Nullable ItemStack applyItemNbt(@Nullable ItemStack item, @Nullable String nbt) {
-        if (item == null || nbt == null || nbt.isBlank()) {
-            return item;
-        }
-        try {
-            return org.bukkit.Bukkit.getUnsafe().modifyItemStack(item.clone(), nbt);
-        } catch (Exception e) {
-            return item;
         }
     }
 

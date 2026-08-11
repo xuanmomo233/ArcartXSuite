@@ -1,6 +1,6 @@
 # NeigeItems 物品配置示例
 # 文件需复制到 plugins/NeigeItems/Items/ 目录下（文件名任意，.yml 后缀即可）
-# 物品 ID 为根键 NeigeFishRod，需与 example_shop.yml 中 item-id 一致
+# 物品 ID 为根键 NeigeFishRod，需与 example_shop.yml 中 item.id 一致
 
 NeigeFishRod:
   # 基础材质

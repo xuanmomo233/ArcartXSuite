@@ -1,6 +1,6 @@
 # MMOItems 物品配置示例
 # 文件需复制到 plugins/MMOItems/item/ 目录下（按类型分文件夹）
-# 因 example_shop.yml 中 source 为 mmoitems，item-id 为 ARMOR;STEEL_HELMET
+# 因 example_shop.yml 中 item.source 为 mmoitems，item.id 为 ARMOR;STEEL_HELMET
 # 故 Type = ARMOR, ID = STEEL_HELMET
 # 通常放置路径: plugins/MMOItems/item/armor/STEEL_HELMET.yml
 

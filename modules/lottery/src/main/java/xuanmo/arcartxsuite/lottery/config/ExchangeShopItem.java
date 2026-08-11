@@ -5,6 +5,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.lottery.model.PoolItem;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 
 /**
  * 兑换商店商品。
@@ -12,7 +13,7 @@ import xuanmo.arcartxsuite.lottery.model.PoolItem;
 public record ExchangeShopItem(
     @NotNull String id,
     @NotNull String displayName,
-    @NotNull String icon,
+    @Nullable IconDefinition icon,
     @Nullable String poolId,
     @NotNull List<CostConfig.CostEntry> cost,
     @NotNull PoolItem reward,
@@ -22,7 +23,7 @@ public record ExchangeShopItem(
                                         java.util.logging.Logger logger) {
         String id = section.getString("id", section.getName());
         String displayName = section.getString("display-name", id);
-        String icon = section.getString("icon", "");
+        IconDefinition icon = IconDefinition.load(section, "icon");
         String poolId = section.getString("pool-id");
         List<CostConfig.CostEntry> cost;
         ConfigurationSection costSection = section.getConfigurationSection("cost");

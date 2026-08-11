@@ -25,6 +25,7 @@ ui:
     #   - shopName: 当前商店显示名称
     #   - shops: 商店列表字典（key=序号, value=商店对象含 id/displayName 等）
     #   - shopTexts: 商店显示文本字典（key=序号, value=带颜色码的商店名）
+    #   - shopIconJson{key}: 各商店列表图标的物品 JSON（如 shopIconJson0、shopIconJson1...）
     #   - items: 商品列表字典（key=序号, value=商品条目含 name/price/stock/limitText/key 等）
     #   - shopItemJson{key}: 各商品的 NBT JSON 字符串（如 shopItemJson0、shopItemJson1...）
     #   - maxShopCount: 最大商店数量（用于动态复制商店项控件）
@@ -38,6 +39,15 @@ ui:
       var.shopTexts = packet['shopTexts']
       var.items = packet['items']
       var.itemJsons = {}
+      var.shopIcons = {}
+      for(key in var.shops.keys()){
+        json = packet['shopIconJson' + key]
+        if(json != none && json != ''){
+          var.shopIcons[key] = json
+        } else {
+          var.shopIcons[key] = var.emptyItemJson
+        }
+      }
       var.maxShopCount = packet['maxShopCount']
       var.maxItemCount = packet['maxItemCount']
       var.actionToken = packet['action_token']
@@ -56,6 +66,14 @@ ui:
         key = i.round()
         e = val.商店列表['商店项'].copy('商店项' + key)
         e.entryKey = key
+      }
+      for(i in range(0, var.maxShopCount - 1)){
+        key = i.round()
+        e = val.商店列表.get(i.round())
+        if(e != none && e['商店图标'] != none){
+          e['商店图标'].entryKey = key
+          e['商店图标'].seticon()
+        }
       }
       while(val.商品列表.childrenCount() > 1){
         val.商品列表.get(1).remove()
@@ -76,7 +94,7 @@ ui:
     # packetHandler: update
     # 服务端推送更新时执行，字段与 init 完全相同，用于刷新商店列表和商品数据
     # 包字段: 同 init（packetId/shopId/shopName/shops/shopTexts/items/
-    #   shopItemJson{key}/maxShopCount/maxItemCount/action_token）
+    #   shopIconJson{key}/shopItemJson{key}/maxShopCount/maxItemCount/action_token）
     update: |-
       var.packetId = packet['packetId']
       var.shopId = packet['shopId']
@@ -85,6 +103,15 @@ ui:
       var.shopTexts = packet['shopTexts']
       var.items = packet['items']
       var.itemJsons = {}
+      var.shopIcons = {}
+      for(key in var.shops.keys()){
+        json = packet['shopIconJson' + key]
+        if(json != none && json != ''){
+          var.shopIcons[key] = json
+        } else {
+          var.shopIcons[key] = var.emptyItemJson
+        }
+      }
       var.maxShopCount = packet['maxShopCount']
       var.maxItemCount = packet['maxItemCount']
       var.actionToken = packet['action_token']
@@ -103,6 +130,14 @@ ui:
         key = i.round()
         e = val.商店列表['商店项'].copy('商店项' + key)
         e.entryKey = key
+      }
+      for(i in range(0, var.maxShopCount - 1)){
+        key = i.round()
+        e = val.商店列表.get(i.round())
+        if(e != none && e['商店图标'] != none){
+          e['商店图标'].entryKey = key
+          e['商店图标'].seticon()
+        }
       }
       while(val.商品列表.childrenCount() > 1){
         val.商品列表.get(1).remove()
@@ -129,6 +164,7 @@ ui:
       var.shopId = none
       var.shopName = '系统商店'
       var.shops = {}
+      var.shopIcons = {}
       var.shopTexts = {}
       var.items = {}
       var.itemJsons = {}
@@ -286,9 +322,6 @@ controls:
                           hover: ~Frosted:0;255,255,255,80
                           shape: ~round_rect
                           radius: 12
-                          texts: "var.shopTexts[self.entryKey]"
-                          center: true
-                          fontSize: 28
                         action:
                           clickLeft: |-
                             Packet.send(var.packetId, 'shop_list', self.entry['id'])
@@ -297,6 +330,29 @@ controls:
                             width: 1
                             color: ~90,170,255,50
                         children:
+                          商店图标:
+                            type: Slot
+                            attribute:
+                              entryKey: 0.round()
+                              slotType: ~Icon
+                              itemScale: 0.8
+                              x: 12
+                              y: 8
+                              width: 32
+                              height: 32
+                              through: true
+                              seticon: "self.setItemIcon(var.shopIcons[self.entryKey])"
+                          商店名称:
+                            type: Text
+                            attribute:
+                              x: 52
+                              y: 0
+                              width: 140
+                              height: 48
+                              texts: "var.shopTexts[self.parent.entryKey]"
+                              center: false
+                              fontSize: 28
+                              through: true
                           强调条:
                             type: Texture
                             attribute:

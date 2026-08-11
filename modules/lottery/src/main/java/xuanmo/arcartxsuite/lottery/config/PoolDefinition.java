@@ -32,6 +32,7 @@ public record PoolDefinition(
     boolean enabled,
     @NotNull String displayName,
     @NotNull String description,
+    @NotNull String upItemDesc,
     @Nullable IconDefinition upItemIcon,
     @NotNull CostConfig cost,
     @Nullable GachaPoolConfig gacha,
@@ -59,7 +60,8 @@ public record PoolDefinition(
         boolean enabled = section.getBoolean("enabled", true);
         String displayName = section.getString("display-name", id);
         String description = section.getString("description", "");
-        IconDefinition upItemIcon = IconDefinition.load(section.getConfigurationSection("up-item-icon"));
+        String upItemDesc = section.getString("up-item-desc", "");
+        IconDefinition upItemIcon = IconDefinition.load(section, "up-item-icon");
         CostConfig cost = CostConfig.load(section.getConfigurationSection("cost"), id);
         if (cost.single().isEmpty() && cost.ten().isEmpty()) {
             logger.warning("Lottery pool has an empty cost (explicitly free): " + id);
@@ -88,7 +90,7 @@ public record PoolDefinition(
             caseConfig = CasePoolConfig.load(section.getConfigurationSection("case"), logger);
         }
 
-        return new PoolDefinition(id, type, enabled, displayName, description, upItemIcon, cost,
+        return new PoolDefinition(id, type, enabled, displayName, description, upItemDesc, upItemIcon, cost,
             gacha, caseConfig, Collections.unmodifiableMap(points));
     }
 }

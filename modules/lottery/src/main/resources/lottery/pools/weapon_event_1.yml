@@ -11,6 +11,14 @@ description: |-  # 卡池描述文本
   在本祈愿中，5星武器「传说之刃」的获取概率将大幅提升！
   5星保底80抽，4星保底10抽，UP武器概率75%，命定值上限2点。
 up-item-icon: '{"id":"minecraft:diamond_sword","Count":1b}'  # UP 物品图标（JSON 格式）
+# up-item-icon、points.*.icon 与奖品的 icon 都支持完整图标定义（与 Menu 模块一致）：
+#   material / amount / name / lore / custom-model-data / glow
+#   skull-texture / color / source + id / mmo-type + mmo-id
+#   json / texture / texture-url / nbt
+# nbt 支持两种写法：
+#   nbt:
+#     CustomTag: "value"                       # 写法一：键值映射，逐个写入字符串标签
+#   nbt: "{CustomTag:'value',Unbreakable:1b}"  # 写法二：整段 SNBT 字符串
 
 cost:
   single:

@@ -21,6 +21,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.MessagesConfiguration;
@@ -105,7 +106,7 @@ public class ShopService {
 
     private @Nullable ShopDefinition parseShop(String shopId, YamlConfiguration yaml) {
         String displayName = yaml.getString("display-name", shopId);
-        String icon = yaml.getString("icon", "CHEST");
+        IconDefinition icon = IconDefinition.load(yaml, "icon");
         String permission = yaml.getString("permission", "");
         List<String> tags = yaml.getStringList("tags");
 
@@ -117,9 +118,18 @@ public class ShopService {
             ConfigurationSection itemSec = itemsSec.getConfigurationSection(itemKey);
             if (itemSec == null) continue;
 
-            String source = itemSec.getString("source", "minecraft");
-            String itemId = itemSec.getString("item-id", "STONE");
-            String itemDisplayName = itemSec.getString("display-name", itemId);
+            ShopItemType type = ShopItemType.parse(itemSec.getString("type", "item"), logger, itemKey);
+            IconDefinition itemIcon = IconDefinition.load(itemSec, "icon");
+            List<String> rewardCommands = itemSec.getStringList("reward-commands");
+            ConfigurationSection itemDefinitionSection = itemSec.getConfigurationSection("item");
+            ItemDefinition itemDefinition = itemDefinitionSection == null
+                ? new ItemDefinition("minecraft", "", null)
+                : new ItemDefinition(
+                    itemDefinitionSection.getString("source", "minecraft"),
+                    itemDefinitionSection.getString("id", ""),
+                    itemDefinitionSection.getString("nbt", null)
+                );
+            String itemDisplayName = itemSec.getString("display-name", itemDefinition.id());
             double buyPrice = itemSec.getDouble("buy-price", 0);
             double sellPrice = itemSec.getDouble("sell-price", 0);
             String currency = itemSec.getString("currency", config.defaultCurrency());
@@ -137,7 +147,7 @@ public class ShopService {
             }
 
             items.put(itemKey, new ShopItem(
-                itemKey, source, itemId, itemSec.getString("item-nbt", null),
+                itemKey, type, itemIcon, rewardCommands, itemDefinition,
                 itemDisplayName, buyPrice, sellPrice, currency,
                 stockMode, stockAmount, limitPerPlayer, limitReset, discount
             ));
@@ -196,6 +206,10 @@ public class ShopService {
             return BuyResult.fail("货币系统不可用");
         }
 
+        if (shopItem.type() == ShopItemType.COMMAND && !hasRewardCommands(shopItem)) {
+            return BuyResult.fail("指令商品未配置有效的 reward-commands");
+        }
+
         if (!tryConsumeStock(player, shopId, itemId, shopItem, amount)) {
             return BuyResult.fail("商品库存不足");
         }
@@ -206,6 +220,12 @@ public class ShopService {
         }
 
         // 生成物品
+        if (shopItem.type() == ShopItemType.COMMAND) {
+            executeRewardCommands(player, shopItem, amount);
+            updateLimit(player, shopId, itemId, shopItem, amount);
+            return BuyResult.success(totalPrice.doubleValue(), shopItem.currency());
+        }
+
         ItemStack item = createItem(shopItem, amount);
         if (item == null) {
             depositSafe(player, shopItem.currency(), totalPrice, "shop_item_generation_refund");
@@ -228,14 +248,8 @@ public class ShopService {
         }
 
         // 更新限购记录（按实际成交数量计）
-        if (shopItem.limitPerPlayer() > 0) {
-            ShopLimitRecord existing = repository.getShopLimit(player.getUniqueId(), shopId, itemId);
-            int newCount = (existing == null ? 0 : existing.purchasedCount()) + delivered;
-            long resetTime = calculateResetTime(shopItem.limitReset());
-            repository.upsertShopLimit(new ShopLimitRecord(
-                player.getUniqueId(), shopId, itemId, newCount, System.currentTimeMillis(), resetTime
-            ));
-        }
+        updateLimit(player, shopId, itemId, shopItem, delivered);
+        executeRewardCommands(player, shopItem, delivered);
 
         return BuyResult.success(unitPrice.multiply(BigDecimal.valueOf(delivered)).doubleValue(), shopItem.currency());
     }
@@ -251,6 +265,59 @@ public class ShopService {
         return shops.get(shopId);
     }
 
+    private void updateLimit(Player player, String shopId, String itemId, ShopItem shopItem, int delivered) {
+        if (shopItem.limitPerPlayer() <= 0 || delivered <= 0) return;
+        ShopLimitRecord existing = repository.getShopLimit(player.getUniqueId(), shopId, itemId);
+        int newCount = (existing == null ? 0 : existing.purchasedCount()) + delivered;
+        repository.upsertShopLimit(new ShopLimitRecord(
+            player.getUniqueId(), shopId, itemId, newCount, System.currentTimeMillis(),
+            calculateResetTime(shopItem.limitReset())
+        ));
+    }
+
+    private boolean hasRewardCommands(ShopItem shopItem) {
+        return shopItem.rewardCommands().stream().anyMatch(command -> command != null && !command.isBlank());
+    }
+
+    /**
+     * 投递商品奖励命令。命令采用“提交即成功”语义，不依据 Bukkit 的返回值退款，
+     * 与 lottery 奖励命令保持一致；返回值为 false 的单条命令仅记录警告。
+     */
+    private void executeRewardCommands(Player player, ShopItem shopItem, int amount) {
+        List<String> commands = shopItem.rewardCommands().stream()
+            .filter(command -> command != null && !command.isBlank())
+            .toList();
+        if (commands.isEmpty()) return;
+        if (Bukkit.isPrimaryThread()) {
+            dispatchRewardCommands(player, shopItem, commands, amount);
+        } else {
+            AxsScheduler.runTask(
+                plugin,
+                () -> dispatchRewardCommands(player, shopItem, commands, amount)
+            );
+        }
+    }
+
+    private void dispatchRewardCommands(
+            Player player,
+            ShopItem shopItem,
+            List<String> commands,
+            int amount
+    ) {
+        for (String raw : commands) {
+            String command = raw.replace("{player}", player.getName())
+                .replace("{uuid}", player.getUniqueId().toString())
+                .replace("{amount}", Integer.toString(amount));
+            if (command.startsWith("/")) command = command.substring(1);
+            if (!Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command)) {
+                logger.warning(
+                    "[Market-Shop] 商品奖励命令派发返回 false: shop-item="
+                        + shopItem.key() + ", command=" + command
+                );
+            }
+        }
+    }
+
     private void depositSafe(Player player, String currency, BigDecimal amount, String reason) {
         if (amount == null || amount.signum() <= 0) return;
         CurrencyBridgeAPI.CurrencyBridge bridge = currencyManager.bridge(currency);
@@ -264,40 +331,7 @@ public class ShopService {
     }
 
     private @Nullable ItemStack createItem(ShopItem shopItem, int amount) {
-        try {
-            ItemStack item = switch (shopItem.source().toLowerCase()) {
-                case "mythic" -> itemSourceRegistry.generateMythicItem(shopItem.itemId(), amount);
-                case "neige" -> itemSourceRegistry.generateNeigeItem(shopItem.itemId(), amount);
-                case "overture" -> itemSourceRegistry.generateOvertureItem(shopItem.itemId(), null, amount);
-                case "mmoitems" -> {
-                    String[] parts = shopItem.itemId().split(";", 2);
-                    yield parts.length == 2
-                        ? itemSourceRegistry.generateMmoItem(parts[0], parts[1], amount)
-                        : null;
-                }
-                default -> {
-                    // minecraft 原版物品
-                    org.bukkit.Material mat = org.bukkit.Material.matchMaterial(shopItem.itemId());
-                    ItemStack base = mat != null ? new ItemStack(mat, amount) : null;
-                    yield applyItemNbt(base, shopItem.itemNbt());
-                }
-            };
-            return item;
-        } catch (Exception e) {
-            logger.log(Level.WARNING, "[Market-Shop] 创建物品失败: " + shopItem.source() + ":" + shopItem.itemId(), e);
-            return null;
-        }
-    }
-
-    private static @Nullable ItemStack applyItemNbt(@Nullable ItemStack item, @Nullable String nbt) {
-        if (item == null || nbt == null || nbt.isBlank()) {
-            return item;
-        }
-        try {
-            return org.bukkit.Bukkit.getUnsafe().modifyItemStack(item.clone(), nbt);
-        } catch (Exception e) {
-            return item;
-        }
+        return ShopItemFactory.create(itemSourceRegistry, shopItem.item(), amount, logger);
     }
 
     private long calculateResetTime(String resetType) {
@@ -346,13 +380,34 @@ public class ShopService {
     // ─── 数据模型 ───────────────────────────────────────────
 
     public record ShopDefinition(
-        String id, String displayName, String icon, String permission,
+        String id, String displayName, @Nullable IconDefinition icon, String permission,
         List<String> tags, Map<String, ShopItem> items
     ) {}
 
+    public enum ShopItemType {
+        ITEM, COMMAND;
+
+        public static ShopItemType parse(String value, Logger logger, String itemKey) {
+            if (value == null || value.isBlank()) return ITEM;
+            try {
+                return valueOf(value.trim().toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException exception) {
+                logger.warning("[Market-Shop] 商品 " + itemKey + " 的 type 无效，已回落为 item");
+                return ITEM;
+            }
+        }
+    }
+
+    public record ItemDefinition(String source, String id, @Nullable String nbt) {
+        public ItemDefinition {
+            source = source == null || source.isBlank() ? "minecraft" : source;
+            id = id == null ? "" : id;
+        }
+    }
+
     public record ShopItem(
-        String key, String source, String itemId, @Nullable String itemNbt,
-        String displayName, double buyPrice, double sellPrice,
+        String key, ShopItemType type, @Nullable IconDefinition icon, List<String> rewardCommands,
+        ItemDefinition item, String displayName, double buyPrice, double sellPrice,
         String currency, String stockMode, int stockAmount,
         int limitPerPlayer, String limitReset, Map<String, Double> discount
     ) {}

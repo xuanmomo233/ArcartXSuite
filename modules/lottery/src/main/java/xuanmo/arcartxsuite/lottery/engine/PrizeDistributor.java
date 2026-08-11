@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
+import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -25,6 +26,7 @@ public class PrizeDistributor {
     private final ItemSourceRegistry itemSourceRegistry;
     private final Supplier<MailDispatchable> mailSupplier;
     private final Logger logger;
+    private final org.bukkit.plugin.java.JavaPlugin plugin;
 
     /**
      * 构造奖品发放器。
@@ -33,9 +35,11 @@ public class PrizeDistributor {
      * @param mailSupplier       邮件能力延迟供应器
      * @param logger             日志记录器
      */
-    public PrizeDistributor(ItemSourceRegistry itemSourceRegistry,
+    public PrizeDistributor(org.bukkit.plugin.java.JavaPlugin plugin,
+                            ItemSourceRegistry itemSourceRegistry,
                             Supplier<MailDispatchable> mailSupplier,
                             Logger logger) {
+        this.plugin = plugin;
         this.itemSourceRegistry = itemSourceRegistry;
         this.mailSupplier = mailSupplier;
         this.logger = logger;
@@ -50,20 +54,13 @@ public class PrizeDistributor {
      */
     @NotNull
     public DistributionResult distribute(@NotNull Player player, @NotNull PoolItem item) {
-        switch (item.delivery()) {
-            case DIRECT -> {
-                return giveDirectItem(player, item);
-            }
-            case COMMAND -> {
-                return executeCommands(player, item);
-            }
-            case MAIL -> {
-                return sendMail(player, item);
-            }
-            default -> {
-                return DistributionResult.failure(null, "未知奖励投递类型");
-            }
-        }
+        DistributionResult result = switch (item.delivery()) {
+            case DIRECT -> giveDirectItem(player, item);
+            case COMMAND -> executeCommands(player, item);
+            case MAIL -> sendMail(player, item);
+        };
+        if (result.success()) executeExtraCommands(player, item);
+        return result;
     }
 
     private DistributionResult giveDirectItem(Player player, PoolItem item) {
@@ -88,14 +85,22 @@ public class PrizeDistributor {
     private DistributionResult executeCommands(Player player, PoolItem item) {
         List<String> commands = item.commands();
         if (commands == null || commands.isEmpty()) return DistributionResult.failure(null, "奖励命令为空");
-        for (String cmd : commands) {
-            if (cmd == null || cmd.isBlank()) continue;
-            String processed = cmd
-                .replace("{player}", player.getName())
-                .replace("{uuid}", player.getUniqueId().toString());
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), processed);
-        }
+        for (String command : commands) dispatchCommand(player, item, command);
         return DistributionResult.success(null);
+    }
+
+    private void executeExtraCommands(Player player, PoolItem item) {
+        for (String command : item.extraCommands()) dispatchCommand(player, item, command);
+    }
+
+    private void dispatchCommand(Player player, PoolItem item, String command) {
+        if (command == null || command.isBlank()) return;
+        String processed = command.replace("{player}", player.getName())
+            .replace("{uuid}", player.getUniqueId().toString())
+            .replace("{amount}", Integer.toString(item.amount()))
+            .replace("{item}", item.name());
+        String normalized = processed.startsWith("/") ? processed.substring(1) : processed;
+        AxsScheduler.runTask(plugin, () -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), normalized));
     }
 
     private DistributionResult sendMail(Player player, PoolItem item) {

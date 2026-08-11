@@ -11,6 +11,14 @@ description: |-  # 卡池描述文本
   在本祈愿中，5星角色「星辰」的获取概率将大幅提升！
   5星保底90抽，4星保底10抽，UP角色概率50%。
 up-item-icon: '{"id":"minecraft:nether_star","Count":1b}'  # UP 物品图标（JSON 格式）
+# up-item-icon、points.*.icon 与奖品的 icon 都支持完整图标定义（与 Menu 模块一致）：
+#   material / amount / name / lore / custom-model-data / glow
+#   skull-texture / color / source + id / mmo-type + mmo-id
+#   json / texture / texture-url / nbt
+# nbt 支持两种写法：
+#   nbt:
+#     CustomTag: "value"                       # 写法一：键值映射，逐个写入字符串标签
+#   nbt: "{CustomTag:'value',Unbreakable:1b}"  # 写法二：整段 SNBT 字符串
 
 cost:
   single:
@@ -61,6 +69,14 @@ gacha:  # 祈愿机制参数
       plugin-id: "StarCharacter"  # 物品来源插件内部 ID
       delivery: DIRECT  # 发放方式：DIRECT（直接发放）
       weight: 1  # 权重（同池内相对概率）
+      # 奖品在 UI 中的图标，省略时由 plugin-type/plugin-id 生成的物品充当
+      # icon:
+      #   material: "NETHER_STAR"
+      #   name: "&b星辰"
+      #   lore:
+      #     - "&7限定 5 星角色"
+      #   glow: true
+      #   nbt: "{CustomTag:'character_star'}"
 
   standard-5star-items:  # 常驻 5星物品池（未命中 UP 时的 fallback）
     moon_character:

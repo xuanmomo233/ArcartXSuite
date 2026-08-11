@@ -21,6 +21,11 @@ ui:
     #   - poolName / poolType / poolDescription: 当前卡池名称、类型与描述
     #   - poolList: 卡池名称列表（key 为 "0"、"1"… 的纯数字字符串）
     #   - currentPoolIndex: 当前卡池索引
+    #   - poolCount: 当前 packetId 对应的卡池总数
+    #   - guaranteedUp / fatePoints / fateTarget: 玩家 UP 保证状态与命运点状态
+    #   - fatePointCap: 命运点上限
+    #   - softPityStart / softPityIncrement: 软保底起点与递增值
+    #   - upRate / base5Rate / base4Rate: UP、基础 5 星与基础 4 星概率
     #   - action_token: 操作令牌，每次 update 换发，回传时必须带上
     #   - upItemName / upItemStar / upItemDesc / upItemIcon: UP 物品展示信息（无描述时 upItemDesc 为空）
     #   - pity4 / pity5: 玩家当前 4 星、5 星累计未出次数
@@ -38,10 +43,16 @@ ui:
       var.poolDescription = packet['poolDescription']
       var.poolList = packet['poolList'] != none ? packet['poolList'] : {}
       var.currentPoolIndex = packet['currentPoolIndex'] != none ? packet['currentPoolIndex'] : 0
+      var.poolCount = packet['poolCount']
       var.actionToken = packet['action_token']
       var.upItemName = packet['upItemName']
       var.upItemStar = packet['upItemStar'] != none ? packet['upItemStar'] : 0
       var.upItemDesc = packet['upItemDesc']
+      var.guaranteedUp = packet['guaranteedUp']
+      var.guaranteedUpText = packet['guaranteedUpText']
+      var.guaranteedNotUpText = packet['guaranteedNotUpText']
+      var.guaranteedUnknownText = packet['guaranteedUnknownText']
+      var.guaranteedStatusText = packet['guaranteedStatusText']
       var.upItemIcon = packet['upItemIcon']
       var.pity4 = packet['pity4'] != none ? packet['pity4'] : 0
       var.pity5 = packet['pity5'] != none ? packet['pity5'] : 0
@@ -88,10 +99,16 @@ ui:
       var.poolDescription = packet['poolDescription']
       var.poolList = packet['poolList'] != none ? packet['poolList'] : {}
       var.currentPoolIndex = packet['currentPoolIndex'] != none ? packet['currentPoolIndex'] : 0
+      var.poolCount = packet['poolCount']
       var.actionToken = packet['action_token']
       var.upItemName = packet['upItemName']
       var.upItemStar = packet['upItemStar'] != none ? packet['upItemStar'] : 0
       var.upItemDesc = packet['upItemDesc']
+      var.guaranteedUp = packet['guaranteedUp']
+      var.guaranteedUpText = packet['guaranteedUpText']
+      var.guaranteedNotUpText = packet['guaranteedNotUpText']
+      var.guaranteedUnknownText = packet['guaranteedUnknownText']
+      var.guaranteedStatusText = packet['guaranteedStatusText']
       var.upItemIcon = packet['upItemIcon']
       var.pity4 = packet['pity4'] != none ? packet['pity4'] : 0
       var.pity5 = packet['pity5'] != none ? packet['pity5'] : 0
@@ -561,7 +578,7 @@ controls:
                           point: ~middle_left
                           x: 62
                           y: 13
-                          texts: "var.resourceRows == none || var.resourceRows[self.entryKey] == none || var.resourceRows[self.entryKey]['owned'] == none ? '&7—' : (var.resourceRows[self.entryKey]['owned'] < 0 ? '&7—' : '&f' + var.resourceRows[self.entryKey]['owned'])"
+                          texts: "var.resourceRows == none || var.resourceRows[self.entryKey] == none || var.resourceRows[self.entryKey]['owned'] == none ? '&7—' : (var.resourceRows[self.entryKey]['owned'] < 0 ? '&7—' : '&f' + var.resourceRows[self.entryKey]['owned'].round())"
                           fontSize: 32
                           through: true
 
@@ -624,7 +641,7 @@ controls:
                       entryKey: 12.round()
                       width: 208
                       height: 124
-                      visible: "var.poolList == none || var.poolList[0] == none ? self.entryKey < 3 : var.poolList[self.entryKey] != none"
+                      visible: "var.poolList == none || var.poolList.size() == 0 ? self.entryKey < 3 : self.entryKey < var.poolList.size()"
                     children:
                       卡底:
                         type: Texture
@@ -1048,19 +1065,20 @@ controls:
                   point: ~top_left
                   x: 66
                   y: 500
-                  width: 420
+                  width: 300
                   height: 120
                 children:
                   描述正文:
                     type: Text
                     attribute:
                       point: ~top_left
-                      width: 420
-                      texts: "var.poolDescription != none && var.poolDescription != '' ? '&7' + var.poolDescription : ''"
-                      fontSize: 28
-                      lineSpace: 34
+                      width: 300
+                      texts: "var.poolDescription != none ? var.poolDescription : []"
+                      fontSize: 36
+                      lineSpace: 36
+                      limit: 120
                       through: true
-                      visible: "var.poolDescription != none && var.poolDescription != ''"
+                      visible: "var.poolDescription != none && var.poolDescription.size() > 0"
                   描述空态1:
                     type: Texture
                     attribute:
@@ -1073,7 +1091,7 @@ controls:
                       shape: ~round_rect
                       radius: 5
                       through: true
-                      visible: "var.poolDescription == none || var.poolDescription == ''"
+                      visible: "var.poolDescription == none || var.poolDescription.size() == 0"
                   描述空态2:
                     type: Texture
                     attribute:
@@ -1086,7 +1104,7 @@ controls:
                       shape: ~round_rect
                       radius: 5
                       through: true
-                      visible: "var.poolDescription == none || var.poolDescription == ''"
+                      visible: "var.poolDescription == none || var.poolDescription.size() == 0"
                   描述空态3:
                     type: Texture
                     attribute:
@@ -1099,7 +1117,7 @@ controls:
                       shape: ~round_rect
                       radius: 5
                       through: true
-                      visible: "var.poolDescription == none || var.poolDescription == ''"
+                      visible: "var.poolDescription == none || var.poolDescription.size() == 0"
 
               # UP 物品展示
               UP展示区:
@@ -1176,7 +1194,7 @@ controls:
                       shape: ~round_rect
                       radius: 8
                       through: true
-                      visible: "var.upItemName != none && var.upItemName != ''"
+                      visible: false
                   UP角标:
                     type: Texture
                     attribute:
@@ -1192,7 +1210,7 @@ controls:
                       texts: "~&fUP!"
                       center: true
                       fontSize: 26
-                      visible: "var.upItemName != none && var.upItemName != ''"
+                      visible: true
                     effect:
                       stroke:
                         width: 2
@@ -1201,10 +1219,10 @@ controls:
                     type: Texture
                     attribute:
                       point: ~bottom_center
-                      y: -92
+                      y: -106
                       width: 420
-                      height: 74
-                      normal: ~24,28,44,200
+                      height: 112
+                      normal: ~24,28,44,120
                       shape: ~round_rect
                       radius: 10
                       through: true
@@ -1240,7 +1258,7 @@ controls:
                     type: Text
                     attribute:
                       point: ~bottom_center
-                      y: -144
+                      y: -142
                       texts: "var.upItemName != none && var.upItemName != '' ? '&f' + var.upItemName : '&7———'"
                       fontSize: 52
                       through: true
@@ -1248,10 +1266,10 @@ controls:
                     type: Texture
                     attribute:
                       point: ~bottom_center
-                      y: -102
+                      y: -104
                       width: 190
                       height: 30
-                      normal: ~18,22,36,215
+                      normal: ~18,22,36,120
                       shape: ~round_rect
                       radius: 6
                       through: true
@@ -1267,44 +1285,44 @@ controls:
                         type: Text
                         attribute:
                           texts: "var.upItemStar != none && var.upItemStar >= 1 ? '&6★' : '&8★'"
-                          fontSize: 28
+                          fontSize: 56
                           through: true
                           visible: true
                       星2:
                         type: Text
                         attribute:
                           texts: "var.upItemStar != none && var.upItemStar >= 2 ? '&6★' : '&8★'"
-                          fontSize: 28
+                          fontSize: 56
                           through: true
                           visible: true
                       星3:
                         type: Text
                         attribute:
                           texts: "var.upItemStar != none && var.upItemStar >= 3 ? '&6★' : '&8★'"
-                          fontSize: 28
+                          fontSize: 56
                           through: true
                           visible: true
                       星4:
                         type: Text
                         attribute:
                           texts: "var.upItemStar != none && var.upItemStar >= 4 ? '&6★' : '&8★'"
-                          fontSize: 28
+                          fontSize: 56
                           through: true
                           visible: true
                       星5:
                         type: Text
                         attribute:
                           texts: "var.upItemStar != none && var.upItemStar >= 5 ? '&6★' : '&8★'"
-                          fontSize: 28
+                          fontSize: 56
                           through: true
                           visible: true
                   UP描述底:
                     type: Texture
                     attribute:
                       point: ~bottom_center
-                      y: -34
-                      width: 260
-                      height: 30
+                      y: -68
+                      width: 390
+                      height: 34
                       normal: ~18,22,36,190
                       shape: ~round_rect
                       radius: 6
@@ -1314,10 +1332,10 @@ controls:
                     type: Text
                     attribute:
                       point: ~bottom_center
-                      y: -34
+                      y: -68
                       texts: "var.upItemDesc != none && var.upItemDesc != '' ? '&f' + var.upItemDesc : ''"
-                      fontSize: 26
-                      limit: 26
+                      fontSize: 32
+                      limit: 40
                       through: true
                   空卡池提示:
                     type: Text
@@ -1388,7 +1406,7 @@ controls:
                 type: Text
                 attribute:
                   point: ~top_left
-                  x: 48
+                  x: 58
                   y: 16
                   texts:
                     - ~&f保底进度
@@ -1412,13 +1430,6 @@ controls:
                   y: 86
                   width: 432
                   height: 92
-                action:
-                  create: |-
-                    for(i in range(0, 10)){
-                      key = i.round()
-                      e = self['进度格'].copy('进度格' + key)
-                      e.entryKey = key
-                    }
                 children:
                   卡底:
                     type: Texture
@@ -1477,20 +1488,33 @@ controls:
                       stroke:
                         width: 1
                         color: ~110,148,204,150
-                  进度格:
-                    type: Texture
+                  进度条排列:
+                    type: HStack
                     attribute:
-                      entryKey: 10.round()
                       point: ~middle_left
-                      x: "242 + self.entryKey * 16.8"
-                      y: 0
-                      width: "var.pity5Limit != none && var.pity5Limit > 0 && var.pity5 != none ? (var.pity5 * 10 >= (self.entryKey + 1) * var.pity5Limit ? 16.8 : (var.pity5 * 10 > self.entryKey * var.pity5Limit ? (var.pity5 * 10 - self.entryKey * var.pity5Limit) * 16.8 / var.pity5Limit : 0)) : 6"
+                      x: 245
+                      width: 162
                       height: 10
-                      normal: "var.pity5Limit != none && var.pity5Limit > 0 ? '236,196,110,245' : '110,148,204,90'"
-                      shape: ~round_rect
-                      radius: 3
-                      through: true
-                      visible: "var.pity5Limit == none || var.pity5Limit <= 0 ? self.entryKey < 3 : var.pity5 != none && var.pity5 * 10 > self.entryKey * var.pity5Limit"
+                      spaceBetween: 1
+                    action:
+                      create: |-
+                        for(i in range(0, 9)){
+                          key = i.round()
+                          e = self['进度格'].copy('进度格' + key)
+                          e.entryKey = key
+                        }
+                    children:
+                      进度格:
+                        type: Texture
+                        attribute:
+                          entryKey: 10.round()
+                          width: "var.pity5Limit != none && var.pity5Limit > 0 && var.pity5 != none ? (var.pity5 * 10 >= (self.entryKey + 1) * var.pity5Limit ? 15.3 : (var.pity5 * 10 > self.entryKey * var.pity5Limit ? (var.pity5 * 10 - self.entryKey * var.pity5Limit) * 15.3 / var.pity5Limit : 15.3)) : 15.3"
+                          height: 10
+                          normal: "var.pity5Limit != none && var.pity5Limit > 0 ? '236,196,110,245' : '110,148,204,90'"
+                          shape: ~round_rect
+                          radius: 3
+                          through: true
+                          visible: "var.pity5Limit == none || var.pity5Limit <= 0 ? self.entryKey < 3 : self.entryKey < 10 && var.pity5 != none && var.pity5 * 10 > self.entryKey * var.pity5Limit"
               四星卡:
                 type: Canvas
                 attribute:
@@ -1499,13 +1523,6 @@ controls:
                   y: 192
                   width: 432
                   height: 92
-                action:
-                  create: |-
-                    for(i in range(0, 10)){
-                      key = i.round()
-                      e = self['进度格'].copy('进度格' + key)
-                      e.entryKey = key
-                    }
                 children:
                   卡底:
                     type: Texture
@@ -1564,20 +1581,33 @@ controls:
                       stroke:
                         width: 1
                         color: ~110,148,204,150
-                  进度格:
-                    type: Texture
+                  进度条排列:
+                    type: HStack
                     attribute:
-                      entryKey: 10.round()
                       point: ~middle_left
-                      x: "242 + self.entryKey * 16.8"
-                      y: 0
-                      width: "var.pity4Limit != none && var.pity4Limit > 0 && var.pity4 != none ? (var.pity4 * 10 >= (self.entryKey + 1) * var.pity4Limit ? 16.8 : (var.pity4 * 10 > self.entryKey * var.pity4Limit ? (var.pity4 * 10 - self.entryKey * var.pity4Limit) * 16.8 / var.pity4Limit : 0)) : 6"
+                      x: 245
+                      width: 162
                       height: 10
-                      normal: "var.pity4Limit != none && var.pity4Limit > 0 ? '176,146,232,245' : '110,148,204,90'"
-                      shape: ~round_rect
-                      radius: 3
-                      through: true
-                      visible: "var.pity4Limit == none || var.pity4Limit <= 0 ? self.entryKey < 3 : var.pity4 != none && var.pity4 * 10 > self.entryKey * var.pity4Limit"
+                      spaceBetween: 1
+                    action:
+                      create: |-
+                        for(i in range(0, 9)){
+                          key = i.round()
+                          e = self['进度格'].copy('进度格' + key)
+                          e.entryKey = key
+                        }
+                    children:
+                      进度格:
+                        type: Texture
+                        attribute:
+                          entryKey: 10.round()
+                          width: "var.pity4Limit != none && var.pity4Limit > 0 && var.pity4 != none ? (var.pity4 * 10 >= (self.entryKey + 1) * var.pity4Limit ? 15.3 : (var.pity4 * 10 > self.entryKey * var.pity4Limit ? (var.pity4 * 10 - self.entryKey * var.pity4Limit) * 15.3 / var.pity4Limit : 15.3)) : 15.3"
+                          height: 10
+                          normal: "var.pity4Limit != none && var.pity4Limit > 0 ? '176,146,232,245' : '110,148,204,90'"
+                          shape: ~round_rect
+                          radius: 3
+                          through: true
+                          visible: "var.pity4Limit == none || var.pity4Limit <= 0 ? self.entryKey < 3 : self.entryKey < 10 && var.pity4 != none && var.pity4 * 10 > self.entryKey * var.pity4Limit"
               说明分隔:
                 type: Texture
                 attribute:
@@ -1595,7 +1625,7 @@ controls:
                   x: 26
                   y: 328
                   width: 424
-                  texts: "var.guaranteeDesc != none && var.guaranteeDesc != '' ? '&7' + var.guaranteeDesc : '&7暂无额外保底说明'"
+                  texts: "var.guaranteedStatusText != none ? var.guaranteedStatusText : (var.guaranteedUnknownText != none ? var.guaranteedUnknownText : '&7———')"
                   fontSize: 34
                   lineSpace: 32
                   through: true
@@ -1703,7 +1733,7 @@ controls:
                   point: ~top_left
                   x: 170
                   y: 158
-                  texts: "var.currentPoolIndex != none ? '&f第 ' + (var.currentPoolIndex + 1).round() + ' 个' : '&7———'"
+                  texts: "var.currentPoolIndex == none ? '&7———' : (var.poolCount != none && var.poolCount > 0 ? '&f第 ' + (var.currentPoolIndex + 1).round() + ' / 共 ' + var.poolCount.round() + ' 个' : '&f第 ' + (var.currentPoolIndex + 1).round() + ' 个')"
                   fontSize: 36
                   limit: 18
                   through: true
@@ -1914,22 +1944,12 @@ controls:
                       stroke:
                         width: 1
                         color: ~255,255,255,220
-                  文字:
-                    type: Text
-                    attribute:
-                      point: ~top_center
-                      y: 10
-                      texts:
-                        - ~&0祈愿 1 次
-                      fontSize: 38
-                      through: true
                   单抽消耗区:
                     type: HStack
                     val: 单抽消耗区
                     attribute:
-                      point: ~bottom_center
-                      y: -10
-                      spaceBetween: 16
+                      point: ~middle_center
+                      spaceBetween: 8
                       height: 34
                     action:
                       create: |-
@@ -1941,11 +1961,18 @@ controls:
                           e['数量'].entryKey = key
                         }
                     children:
+                      文字:
+                        type: Text
+                        attribute:
+                          texts:
+                            - ~&0祈愿 1 次
+                          fontSize: 64
+                          through: true
                       消耗条目:
                         type: Canvas
                         attribute:
                           entryKey: 4.round()
-                          width: 90
+                          width: 80
                           height: 34
                           through: true
                           visible: "var.costRows == none || var.costRows[0] == none ? self.entryKey < 1 : var.costRows[self.entryKey] != none"
@@ -1967,7 +1994,7 @@ controls:
                               entryKey: 0.round()
                               point: ~middle_left
                               x: 36
-                              texts: "var.costRows == none || var.costRows[self.entryKey] == none ? (self.entryKey == 0 ? '———' : '') : ((var.costRows[self.entryKey]['owned'] == none ? '&7x' : (var.costRows[self.entryKey]['owned'] < 0 ? '&7x' : (var.costRows[self.entryKey]['amount'] != none && var.costRows[self.entryKey]['owned'] != none && var.costRows[self.entryKey]['owned'] < var.costRows[self.entryKey]['amount'] ? '&cx' : '&fx'))) + (var.costRows[self.entryKey]['amount'] != none ? var.costRows[self.entryKey]['amount'] : 0))"
+                              texts: "var.costRows == none || var.costRows[self.entryKey] == none ? (self.entryKey == 0 ? '———' : '') : ((var.costRows[self.entryKey]['owned'] == none ? '&7x' : (var.costRows[self.entryKey]['owned'] < 0 ? '&7x' : (var.costRows[self.entryKey]['amount'] != none && var.costRows[self.entryKey]['owned'] != none && var.costRows[self.entryKey]['owned'] < var.costRows[self.entryKey]['amount'] ? '&cx' : '&fx'))) + (var.costRows[self.entryKey]['amount'] != none ? var.costRows[self.entryKey]['amount'].round() : 0))"
                               fontSize: 30
                               through: true
               祈愿十次:
@@ -2042,22 +2069,12 @@ controls:
                       stroke:
                         width: 1
                         color: ~255,255,255,220
-                  文字:
-                    type: Text
-                    attribute:
-                      point: ~top_center
-                      y: 10
-                      texts:
-                        - ~&0祈愿 10 次
-                      fontSize: 38
-                      through: true
                   十连消耗区:
                     type: HStack
                     val: 十连消耗区
                     attribute:
-                      point: ~bottom_center
-                      y: -10
-                      spaceBetween: 16
+                      point: ~middle_center
+                      spaceBetween: 8
                       height: 34
                     action:
                       create: |-
@@ -2069,11 +2086,18 @@ controls:
                           e['数量'].entryKey = key
                         }
                     children:
+                      文字:
+                        type: Text
+                        attribute:
+                          texts:
+                            - ~&0祈愿 10 次
+                          fontSize: 64
+                          through: true
                       消耗条目:
                         type: Canvas
                         attribute:
                           entryKey: 4.round()
-                          width: 90
+                          width: 80
                           height: 34
                           through: true
                           visible: "var.costTenRows == none || var.costTenRows[0] == none ? self.entryKey < 1 : var.costTenRows[self.entryKey] != none"
@@ -2095,7 +2119,7 @@ controls:
                               entryKey: 0.round()
                               point: ~middle_left
                               x: 36
-                              texts: "var.costTenRows == none || var.costTenRows[self.entryKey] == none ? (self.entryKey == 0 ? '———' : '') : ((var.costTenRows[self.entryKey]['owned'] == none ? '&7x' : (var.costTenRows[self.entryKey]['owned'] < 0 ? '&7x' : (var.costTenRows[self.entryKey]['amount'] != none && var.costTenRows[self.entryKey]['owned'] != none && var.costTenRows[self.entryKey]['owned'] < var.costTenRows[self.entryKey]['amount'] ? '&cx' : '&fx'))) + (var.costTenRows[self.entryKey]['amount'] != none ? var.costTenRows[self.entryKey]['amount'] : 0))"
+                              texts: "var.costTenRows == none || var.costTenRows[self.entryKey] == none ? (self.entryKey == 0 ? '———' : '') : ((var.costTenRows[self.entryKey]['owned'] == none ? '&7x' : (var.costTenRows[self.entryKey]['owned'] < 0 ? '&7x' : (var.costTenRows[self.entryKey]['amount'] != none && var.costTenRows[self.entryKey]['owned'] != none && var.costTenRows[self.entryKey]['owned'] < var.costTenRows[self.entryKey]['amount'] ? '&cx' : '&fx'))) + (var.costTenRows[self.entryKey]['amount'] != none ? var.costTenRows[self.entryKey]['amount'].round() : 0))"
                               fontSize: 30
                               through: true
           关闭按钮:

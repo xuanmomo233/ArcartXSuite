@@ -7,6 +7,7 @@ import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 
 /**
  * 奖池中的单个奖品定义。
@@ -35,6 +36,8 @@ public record PoolItem(
     @NotNull PluginItemType pluginType,
     @NotNull String pluginId,
     @Nullable String itemJson,
+    @Nullable IconDefinition icon,
+    @NotNull List<String> extraCommands,
     int amount,
     int weight,
     @Nullable String rarity
@@ -104,19 +107,22 @@ public record PoolItem(
         PluginItemType pluginType = PluginItemType.fromString(pluginTypeStr);
         String pluginId = section.getString("plugin-id", "");
         String itemJson = section.getString("item-json");
+        IconDefinition icon = IconDefinition.load(section, "icon");
+        List<String> extraCommands = section.getStringList("extra-commands");
         int amount = section.getInt("amount", 1);
         if (amount <= 0) {
             logger.warning("奖品 " + id + " 的 amount 必须为正数，已跳过");
             return null;
         }
-        if (pluginType == PluginItemType.PLAIN && (itemJson == null || itemJson.isBlank())) {
+        boolean commandOnly = delivery == DeliveryType.COMMAND;
+        if (!commandOnly && pluginType == PluginItemType.PLAIN && (itemJson == null || itemJson.isBlank())) {
             String materialName = pluginId.startsWith("minecraft:")
                 ? pluginId.substring("minecraft:".length()) : pluginId;
             if (Material.matchMaterial(materialName, true) == null) {
-                logger.warning("奖品 " + id + " 的原版物品无效: " + pluginId + "，已跳过");
+                logger.warning("奖品 " + id + " 使用了无效材质: " + pluginId + "，已跳过");
                 return null;
             }
-        } else if (pluginId.isBlank()) {
+        } else if (!commandOnly && (itemJson == null || itemJson.isBlank()) && pluginId.isBlank()) {
             logger.warning("奖品 " + id + " 缺少 plugin-id，已跳过");
             return null;
         }
@@ -130,6 +136,6 @@ public record PoolItem(
         }
 
         return new PoolItem(id, name, delivery, commands, mailPreset, pluginType, pluginId,
-            itemJson, amount, weight, rarity);
+            itemJson, icon, extraCommands, amount, weight, rarity);
     }
 }
