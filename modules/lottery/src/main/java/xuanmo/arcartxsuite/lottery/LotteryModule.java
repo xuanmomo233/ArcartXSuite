@@ -52,12 +52,13 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
     private LotteryService service;
     private LotteryAdminCommand adminCommand;
     private JdbcLotteryRepository repository;
+    private LotteryPacketHandler packetHandler;
 
     @Override
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("lottery")
             .name("Lottery")
-            .version("1.0.0")
+            .version("1.3.3")
             .mainClass(getClass().getName())
             .build();
     }
@@ -191,7 +192,13 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
             }
         });
 
-        adminCommand = new LotteryAdminCommand(() -> service, messages());
+        adminCommand = new LotteryAdminCommand(() -> service, messages(), () -> {
+            try {
+                onReload();
+            } catch (Exception exception) {
+                throw new IllegalStateException("Lottery reload failed", exception);
+            }
+        });
         logger.fine("Lottery 模块已载入 | 奖池=" + configuration.pools().size());
     }
 
@@ -209,6 +216,9 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
             public void onQuit(PlayerQuitEvent event) {
                 if (service != null) {
                     service.removePlayerLock(event.getPlayer().getUniqueId());
+                }
+                if (packetHandler != null) {
+                    packetHandler.onPlayerQuit(event.getPlayer().getUniqueId());
                 }
             }
         });
@@ -244,7 +254,8 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         }
         xuanmo.arcartxsuite.api.icon.IconResolver iconResolver =
             new xuanmo.arcartxsuite.api.icon.IconResolver(itemStackBridge, itemSourceRegistry);
-        return new LotteryPacketHandler(service, packetBridge, iconResolver, plugin);
+        packetHandler = new LotteryPacketHandler(service, packetBridge, iconResolver, plugin);
+        return packetHandler;
     }
 
     // ─── ModuleCommandHandler (/axs lottery) ──────────────────
@@ -272,5 +283,4 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         return prefix + mp.get(key, args);
     }
 }
-
 

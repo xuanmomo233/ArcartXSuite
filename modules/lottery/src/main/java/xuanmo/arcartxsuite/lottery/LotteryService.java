@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.lottery;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -20,8 +21,10 @@ import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.util.ItemSerializer;
 import xuanmo.arcartxsuite.lottery.config.CostConfig;
+import xuanmo.arcartxsuite.lottery.config.ExchangeShopItem;
 import xuanmo.arcartxsuite.lottery.config.GachaPoolConfig;
 import xuanmo.arcartxsuite.lottery.config.LotteryModuleConfiguration;
+import xuanmo.arcartxsuite.lottery.config.PointDefinition;
 import xuanmo.arcartxsuite.lottery.config.PoolDefinition;
 import xuanmo.arcartxsuite.lottery.config.PoolType;
 import xuanmo.arcartxsuite.lottery.engine.CaseOpeningEngine;
@@ -225,6 +228,7 @@ public class LotteryService {
                 distributeOrEnqueue(player, poolId, item);
             }
         }
+        awardPoints(player, poolDef, result.items());
 
         return result;
     }
@@ -310,6 +314,7 @@ public class LotteryService {
         if (result != null && result.item() != null) {
             distributeOrEnqueue(player, poolId, result.item());
         }
+        if (result != null) awardPoints(player, poolDef, List.of(result.item()));
 
         return result;
     }
@@ -347,6 +352,9 @@ public class LotteryService {
                 }
             }
         });
+        for (CaseResult result : results) {
+            if (result != null) awardPoints(player, poolDef, List.of(result.item()));
+        }
 
         return results;
     }
@@ -438,36 +446,280 @@ public class LotteryService {
 
     // ─── 消耗扣除 ─────────────────────────────────────────
 
+    /**
+     * 一次消耗扣除的结果，成功时携带回滚所需的条目与背包快照。
+     *
+     * @param success   是否扣除成功
+     * @param deducted  已成功扣除的条目
+     * @param snapshots 扣除前的物品快照，按物品 ID 分组
+     */
+    private record CostTransaction(
+        boolean success,
+        List<CostConfig.CostEntry> deducted,
+        Map<String, List<ItemStack>> snapshots
+    ) {
+        static CostTransaction failed() {
+            return new CostTransaction(false, List.of(), Map.of());
+        }
+    }
+
     private boolean deductCost(Player player, CostConfig cost, int multiplier) {
-        int amount = (multiplier == 10) ? cost.ten() : cost.single() * multiplier;
-        if (amount <= 0) {
-            logger.warning("[Lottery] Invalid non-positive cost: " + amount);
+        return deductCostTransaction(player, cost, multiplier).success();
+    }
+
+    private CostTransaction deductCostTransaction(Player player, CostConfig cost, int multiplier) {
+        List<CostConfig.CostEntry> source = multiplier == 10 ? cost.ten() : cost.single();
+        if (multiplier == 10 && source.isEmpty()) {
+            sendMessage(player, "common.ten-unavailable");
+            return CostTransaction.failed();
+        }
+        List<CostConfig.CostEntry> entries = new ArrayList<>();
+        for (CostConfig.CostEntry entry : source) {
+            int amount = multiplier == 10 ? entry.amount() : entry.amount() * multiplier;
+            entries.add(new CostConfig.CostEntry(entry.type(), entry.id(), amount,
+                entry.displayName(), entry.icon()));
+        }
+        if (entries.isEmpty()) return new CostTransaction(true, List.of(), Map.of());
+        Map<String, Long> required = new java.util.LinkedHashMap<>();
+        for (CostConfig.CostEntry entry : entries) {
+            String key = entry.type().name() + ":" + entry.id();
+            required.merge(key, (long) entry.amount(), Long::sum);
+        }
+        for (CostConfig.CostEntry entry : entries) {
+            String key = entry.type().name() + ":" + entry.id();
+            if (!required.containsKey(key)) continue;
+            long amount = required.remove(key);
+            boolean enough = switch (entry.type()) {
+                case POINT -> repository.getPoint(player.getUniqueId(), entry.id()) >= amount;
+                case ITEM -> countInventory(player, entry.id()) >= amount;
+                case CURRENCY -> hasCurrency(player, entry.id(), amount);
+            };
+            if (!enough) {
+                sendMessage(player, entry.type() == CostConfig.CostMode.POINT
+                    ? "common.insufficient-point"
+                    : entry.type() == CostConfig.CostMode.ITEM
+                        ? "common.insufficient-item" : "common.insufficient-currency", entry.id());
+                return CostTransaction.failed();
+            }
+        }
+        List<CostConfig.CostEntry> changed = new ArrayList<>();
+        Map<String, List<ItemStack>> snapshots = new java.util.LinkedHashMap<>();
+        for (CostConfig.CostEntry entry : entries) {
+            if (entry.type() == CostConfig.CostMode.ITEM) {
+                snapshots.computeIfAbsent(entry.id(), ignored -> snapshotInventory(player, entry.id()));
+            }
+            boolean ok = switch (entry.type()) {
+                case POINT -> repository.subtractPoints(player.getUniqueId(), entry.id(), entry.amount());
+                case ITEM -> removeItemFromInventory(player, entry.id(), entry.amount());
+                case CURRENCY -> withdrawCurrency(player, entry.id(), entry.amount());
+            };
+            if (!ok) {
+                rollbackCost(player, changed, snapshots);
+                sendMessage(player, "common.resource-cost-failed", entry.id());
+                return CostTransaction.failed();
+            }
+            changed.add(entry);
+        }
+        return new CostTransaction(true, changed, snapshots);
+    }
+
+    private long countInventory(Player player, String itemId) {
+        long total = 0;
+        for (ItemStack stack : player.getInventory().getContents()) {
+            if (stack != null && matchesItem(stack, itemId)) total += stack.getAmount();
+        }
+        return total;
+    }
+
+    private boolean hasCurrency(Player player, String id, long amount) {
+        if (currencyManager == null) return false;
+        var bridge = currencyManager.bridge(id);
+        return bridge != null && bridge.available()
+            && bridge.balance(player).compareTo(BigDecimal.valueOf(amount)) >= 0;
+    }
+
+    private boolean withdrawCurrency(Player player, String id, long amount) {
+        if (currencyManager == null) return false;
+        var bridge = currencyManager.bridge(id);
+        return bridge != null && bridge.available()
+            && bridge.withdraw(player, BigDecimal.valueOf(amount)).success();
+    }
+
+    private void rollbackCost(Player player, List<CostConfig.CostEntry> changed,
+                              Map<String, List<ItemStack>> snapshots) {
+        java.util.Set<String> restoredItems = new java.util.HashSet<>();
+        Map<String, Integer> itemAmounts = new java.util.HashMap<>();
+        for (CostConfig.CostEntry entry : changed) {
+            if (entry.type() == CostConfig.CostMode.ITEM) {
+                itemAmounts.merge(entry.id(), entry.amount(), Integer::sum);
+            }
+        }
+        for (int i = changed.size() - 1; i >= 0; i--) {
+            CostConfig.CostEntry entry = changed.get(i);
+            switch (entry.type()) {
+                case POINT -> repository.addPoints(player.getUniqueId(), entry.id(), entry.amount());
+                case ITEM -> {
+                    if (!restoredItems.add(entry.id())) break;
+                    List<ItemStack> stacks = snapshots.get(entry.id());
+                    if (stacks != null) {
+                        restoreItemSnapshots(
+                            player,
+                            stacks,
+                            itemAmounts.getOrDefault(entry.id(), 0)
+                        );
+                    }
+                }
+                case CURRENCY -> refundCurrency(player, entry.id(), entry.amount());
+            }
+        }
+    }
+
+    private List<ItemStack> snapshotInventory(Player player, String itemId) {
+        List<ItemStack> snapshots = new ArrayList<>();
+        for (ItemStack stack : player.getInventory().getContents()) {
+            if (stack != null && matchesItem(stack, itemId)) snapshots.add(stack.clone());
+        }
+        return snapshots;
+    }
+
+    private void restoreItemSnapshots(
+            Player player,
+            List<ItemStack> snapshots,
+            int amount
+    ) {
+        int remaining = amount;
+        for (ItemStack snapshot : snapshots) {
+            if (remaining <= 0) break;
+            ItemStack restored = snapshot.clone();
+            restored.setAmount(Math.min(restored.getAmount(), remaining));
+            remaining -= restored.getAmount();
+            Map<Integer, ItemStack> leftovers = player.getInventory().addItem(restored);
+            enqueueOverflowItems(player, leftovers.values());
+        }
+    }
+
+    private void enqueueOverflowItems(
+            Player player,
+            Collection<ItemStack> leftovers
+    ) {
+        for (ItemStack leftover : leftovers) {
+            if (leftover == null || leftover.getAmount() <= 0) continue;
+            String itemData = java.util.Base64.getEncoder().encodeToString(
+                ItemSerializer.serialize(leftover)
+            );
+            repository.enqueuePendingClaim(
+                player.getUniqueId(),
+                "rollback",
+                "rollback|" + leftover.getType().name(),
+                itemData
+            );
+        }
+    }
+
+    private void refundCurrency(Player player, String id, long amount) {
+        if (currencyManager == null) return;
+        var bridge = currencyManager.bridge(id);
+        if (bridge == null || !bridge.available()
+                || !bridge.deposit(player, BigDecimal.valueOf(amount)).success()) {
+            logger.warning("[Lottery] Currency rollback failed for " + id);
+        }
+    }
+
+    private void awardPoints(Player player, PoolDefinition pool, List<PoolItem> items) {
+        for (PointDefinition point : pool.points().values()) {
+            long amount = point.perPull();
+            for (PoolItem item : items) {
+                if (item != null) {
+                    String rarity = item.rarity();
+                    if (pool.gacha() != null) {
+                        rarity = Integer.toString(describeGachaItem(pool, item).star());
+                    }
+                    amount += point.rarityRewards().getOrDefault(rarity, 0);
+                }
+            }
+            if (amount > 0) repository.addPoints(player.getUniqueId(), point.id(), amount);
+        }
+    }
+
+    public Map<String, Long> getPoints(@NotNull UUID playerUuid) {
+        return repository.getPoints(playerUuid);
+    }
+
+    public long getPoint(@NotNull UUID playerUuid, @NotNull String pointId) {
+        return repository.getPoint(playerUuid, pointId);
+    }
+
+    public long getCurrencyBalance(@NotNull Player player, @NotNull String currencyId) {
+        if (currencyManager == null) return -1L;
+        var bridge = currencyManager.bridge(currencyId);
+        if (bridge == null || !bridge.available()) return -1L;
+        return bridge.balance(player).longValue();
+    }
+
+    public long getItemBalance(@NotNull Player player, @NotNull String itemId) {
+        return countInventory(player, itemId);
+    }
+
+    public boolean givePoints(@NotNull UUID playerUuid, @NotNull String pointId, long amount) {
+        return repository.addPoints(playerUuid, pointId, amount);
+    }
+
+    public Map<String, ExchangeShopItem> getExchangeItems() {
+        return configuration.exchangeItems();
+    }
+
+    public int getExchangeCount(@NotNull UUID playerUuid, @NotNull String itemId) {
+        return repository.getExchangeCount(playerUuid, itemId);
+    }
+
+    public boolean exchange(@NotNull Player player, @NotNull String itemId) {
+        ExchangeShopItem item = configuration.exchangeItems().get(itemId);
+        if (item == null) {
+            sendMessage(player, "common.exchange-not-found");
             return false;
         }
-
-        if (cost.mode() == CostConfig.CostMode.CURRENCY) {
-            if (currencyManager == null) return false;
-            var bridge = currencyManager.bridge(cost.currency());
-            if (bridge == null || !bridge.available()) {
-                sendMessage(player, "common.insufficient-currency", cost.currency());
-                return false;
-            }
-            var result = bridge.withdraw(player, BigDecimal.valueOf(amount));
-            if (!result.success()) {
-                sendMessage(player, "common.insufficient-currency", cost.currency());
-                return false;
-            }
-        } else {
-            // ITEM 模式：检查并扣除物品
-            // 简化处理：直接尝试从背包扣除指定物品
-            // 实际应该用 ItemMatcher 匹配
-            if (!removeItemFromInventory(player, cost.itemId(), cost.itemAmount() * multiplier)) {
-                sendMessage(player, "common.insufficient-item", cost.itemId());
-                return false;
-            }
+        int used = repository.getExchangeCount(player.getUniqueId(), itemId);
+        if (item.limit() > 0 && used >= item.limit()) {
+            sendMessage(player, "common.exchange-limit");
+            return false;
         }
+        if (!repository.incrementExchangeCount(player.getUniqueId(), itemId)) {
+            sendMessage(player, "common.exchange-failed");
+            return false;
+        }
+        CostConfig cost = new CostConfig(item.cost(), item.cost());
+        CostTransaction transaction = deductCostTransaction(player, cost, 1);
+        if (!transaction.success()) {
+            repository.decrementExchangeCount(player.getUniqueId(), itemId);
+            return false;
+        }
+        try {
+            distributeOrEnqueue(player, item.poolId() == null ? "exchange" : item.poolId(), item.reward());
+        } catch (RuntimeException exception) {
+            rollbackCost(player, transaction.deducted(), transaction.snapshots());
+            repository.decrementExchangeCount(player.getUniqueId(), itemId);
+            sendMessage(player, "common.exchange-failed");
+            return false;
+        }
+        sendMessage(player, "common.exchange-success", item.displayName());
         return true;
     }
+
+    public GachaItemInfo describeGachaItem(@NotNull PoolDefinition pool, @NotNull PoolItem item) {
+        GachaPoolConfig gacha = pool.gacha();
+        if (gacha == null) return new GachaItemInfo(0, false);
+        if (contains(gacha.up5starItems(), item)) return new GachaItemInfo(5, true);
+        if (contains(gacha.standard5starItems(), item)) return new GachaItemInfo(5, false);
+        if (contains(gacha.up4starItems(), item)) return new GachaItemInfo(4, true);
+        if (contains(gacha.standard4starItems(), item)) return new GachaItemInfo(4, false);
+        return new GachaItemInfo(3, false);
+    }
+
+    private boolean contains(List<PoolItem> items, PoolItem target) {
+        return items != null && items.stream().anyMatch(item -> item.id().equals(target.id()));
+    }
+
+    public record GachaItemInfo(int star, boolean up) {}
 
     private boolean removeItemFromInventory(Player player, String itemId, int amount) {
         if (amount <= 0) return false;
@@ -567,6 +819,13 @@ public class LotteryService {
         }
         sb.append("]");
         return sb.toString();
+    }
+
+    public void sendFailureMessage(Player player) { sendMessage(player, "common.error"); }
+
+    public String message(String key, Object... args) {
+        if (messageProvider == null) return key;
+        return messageProvider.get(key, args);
     }
 
     private void sendMessage(Player player, String key, Object... args) {

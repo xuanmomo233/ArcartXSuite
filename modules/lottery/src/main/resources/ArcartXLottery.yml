@@ -5,6 +5,7 @@ config-version: 1  # 配置文件版本号
 # 奖池文件所在目录，路径相对模块数据目录。
 # 目录下每个 *.yml 文件对应一个抽奖池，支持 gacha（原神祈愿）与 case（CS 开箱）两种类型。
 pools-directory: "lottery/pools"
+exchange-directory: "lottery/exchange"
 
 # ─── 数据存储 ────────────────────────────────────────
 storage:

@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.lottery.config;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
@@ -34,7 +35,8 @@ public record PoolDefinition(
     @Nullable IconDefinition upItemIcon,
     @NotNull CostConfig cost,
     @Nullable GachaPoolConfig gacha,
-    @Nullable CasePoolConfig caseConfig
+    @Nullable CasePoolConfig caseConfig,
+    @NotNull Map<String, PointDefinition> points
 ) {
 
     /**
@@ -58,7 +60,24 @@ public record PoolDefinition(
         String displayName = section.getString("display-name", id);
         String description = section.getString("description", "");
         IconDefinition upItemIcon = IconDefinition.load(section.getConfigurationSection("up-item-icon"));
-        CostConfig cost = CostConfig.load(section.getConfigurationSection("cost"));
+        CostConfig cost = CostConfig.load(section.getConfigurationSection("cost"), id);
+        if (cost.single().isEmpty() && cost.ten().isEmpty()) {
+            logger.warning("Lottery pool has an empty cost (explicitly free): " + id);
+        } else if (cost.single().isEmpty()) {
+            logger.warning("Lottery pool " + id + " has no single cost; single pulls are unavailable.");
+        } else if (cost.ten().isEmpty()) {
+            logger.warning("Lottery pool " + id + " has no ten cost; ten pulls are unavailable.");
+        }
+        Map<String, PointDefinition> points = new LinkedHashMap<>();
+        ConfigurationSection pointSection = section.getConfigurationSection("points");
+        if (pointSection != null) {
+            for (String pointId : pointSection.getKeys(false)) {
+                ConfigurationSection definition = pointSection.getConfigurationSection(pointId);
+                if (definition != null) {
+                    points.put(pointId, PointDefinition.load(pointId, definition));
+                }
+            }
+        }
 
         GachaPoolConfig gacha = null;
         CasePoolConfig caseConfig = null;
@@ -69,6 +88,7 @@ public record PoolDefinition(
             caseConfig = CasePoolConfig.load(section.getConfigurationSection("case"), logger);
         }
 
-        return new PoolDefinition(id, type, enabled, displayName, description, upItemIcon, cost, gacha, caseConfig);
+        return new PoolDefinition(id, type, enabled, displayName, description, upItemIcon, cost,
+            gacha, caseConfig, Collections.unmodifiableMap(points));
     }
 }

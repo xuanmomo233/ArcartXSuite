@@ -64,12 +64,19 @@ public class LotteryPlaceholderExpansion extends PlaceholderExpansion {
         if (service == null) return "";
 
         String[] parts = params.split("_");
+        UUID uuid = player.getUniqueId();
+        if (parts.length == 2 && (parts[0].equalsIgnoreCase("point")
+                || parts[0].equalsIgnoreCase("points"))) {
+            try {
+                return String.valueOf(service.getPoint(uuid, parts[1]));
+            } catch (IllegalArgumentException ignored) {
+                return "0";
+            }
+        }
         if (parts.length < 2) return "";
 
         String type = parts[0].toLowerCase();
         String poolId = parts[1];
-
-        UUID uuid = player.getUniqueId();
 
         switch (type) {
             case "pity5" -> {
@@ -86,7 +93,9 @@ public class LotteryPlaceholderExpansion extends PlaceholderExpansion {
             }
             case "guaranteed" -> {
                 var state = service.getGachaState(player.getPlayer(), poolId);
-                return state.guaranteedUp() ? "是" : "否";
+                return state.guaranteedUp()
+                    ? service.message("placeholder.guaranteed-yes")
+                    : service.message("placeholder.guaranteed-no");
             }
             case "fatepoints" -> {
                 var state = service.getGachaState(player.getPlayer(), poolId);

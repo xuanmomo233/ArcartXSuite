@@ -12,10 +12,28 @@ description: |-  # 卡池描述文本
   包含从消费级到隐秘级的多款皮肤，更有罕见特殊级掉落！
 up-item-icon: '{"id":"minecraft:chest","Count":1b}'  # UP 物品图标（JSON 格式）
 
-cost:  # 开箱消耗配置
-  mode: ITEM  # 消耗模式：ITEM（物品）
-  item-id: "CaseKey"  # 消耗物品标识
-  item-amount: 1  # 消耗数量
+# cost 必须使用条目列表；显式空列表才表示免费奖池。
+cost:
+  single:
+    - type: ITEM
+      id: "CaseKey"
+      amount: 1
+      display-name: "CaseKey"
+  ten:
+    - type: ITEM
+      id: "CaseKey"
+      amount: 10
+      display-name: "CaseKey"
+
+points:
+  dust:
+    display-name: "尘辉"
+    icon: "minecraft:quartz"
+    per-pull: 1
+    rarity:
+      COMMON: 1
+      RARE: 2
+      EPIC: 4
 
 case:  # 开箱机制参数
   rarity-settings:  # 稀有度权重配置（base-weight 越大越常见）

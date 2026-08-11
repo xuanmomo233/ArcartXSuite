@@ -177,7 +177,9 @@ public class LotteryPlayerCommand implements TabExecutor {
     }
 
     private String formatItems(List<xuanmo.arcartxsuite.lottery.model.PoolItem> items) {
-        if (items == null || items.isEmpty()) return "无";
+        if (items == null || items.isEmpty()) return messages == null
+            ? ""
+            : messages.get("player.pull-no-items");
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < items.size(); i++) {
             if (i > 0) sb.append(", ");

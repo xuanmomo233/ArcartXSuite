@@ -12,11 +12,35 @@ description: |-  # 卡池描述文本
   5星保底80抽，4星保底10抽，UP武器概率75%，命定值上限2点。
 up-item-icon: '{"id":"minecraft:diamond_sword","Count":1b}'  # UP 物品图标（JSON 格式）
 
-cost:  # 抽奖消耗配置
-  mode: CURRENCY  # 消耗模式：CURRENCY（货币）
-  currency: "gem"  # 货币类型标识
-  single: 160  # 单抽消耗数量
-  ten: 1600  # 十连消耗数量
+cost:
+  single:
+    - type: CURRENCY
+      id: "gem"
+      amount: 160
+      display-name: "原石"
+    - type: POINT
+      id: "stardust"
+      amount: 1
+      display-name: "星尘"
+  ten:
+    - type: CURRENCY
+      id: "gem"
+      amount: 1600
+      display-name: "原石"
+    - type: POINT
+      id: "stardust"
+      amount: 10
+      display-name: "星尘"
+
+# 积分产出规则：gacha 的 rarity key 使用星级（3/4/5），case 使用奖池中定义的 rarity 名称
+points:
+  stardust:
+    display-name: "星尘"
+    icon: "minecraft:amethyst_shard"
+    per-pull: 1
+    rarity:
+      "4": 2
+      "5": 10
 
 gacha:  # 祈愿机制参数
   pool-type: WEAPON  # 卡池类型：WEAPON（武器池）

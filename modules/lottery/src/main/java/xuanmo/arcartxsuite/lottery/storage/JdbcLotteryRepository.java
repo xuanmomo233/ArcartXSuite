@@ -36,6 +36,8 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
     private String tCaseState;
     private String tCaseLog;
     private String tPendingClaim;
+    private String tPoints;
+    private String tExchange;
 
     /**
      * 构造 JDBC 数据仓库。
@@ -77,18 +79,20 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
         tCaseState = prefix + "case_state";
         tCaseLog = prefix + "case_log";
         tPendingClaim = prefix + "pending_claim";
+        tPoints = prefix + "points";
+        tExchange = prefix + "exchange";
         createTables(conn);
         logger.info("[Lottery] " + (sqlite ? "SQLite" : "MySQL") + " 存储已初始化，表前缀: " + prefix);
     }
 
     @Override
     protected List<String> playerDataTables() {
-        return List.of(tGachaState, tGachaLog, tCaseState, tCaseLog, tPendingClaim);
+        return List.of(tGachaState, tGachaLog, tCaseState, tCaseLog, tPendingClaim, tPoints, tExchange);
     }
 
     @Override
     protected List<String> allTables() {
-        return List.of(tGachaState, tGachaLog, tCaseState, tCaseLog, tPendingClaim);
+        return List.of(tGachaState, tGachaLog, tCaseState, tCaseLog, tPendingClaim, tPoints, tExchange);
     }
 
     private void createTables(Connection conn) throws SQLException {
@@ -153,6 +157,18 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             + "attempts INTEGER NOT NULL DEFAULT 0"
             + ")");
         stmt.executeUpdate("CREATE INDEX IF NOT EXISTS idx_pending_claim_player ON " + tPendingClaim + " (player_uuid, claimed)");
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPoints + " ("
+            + "player_uuid TEXT NOT NULL,"
+            + "point_id TEXT NOT NULL,"
+            + "amount INTEGER NOT NULL DEFAULT 0,"
+            + "PRIMARY KEY (player_uuid, point_id)"
+            + ")");
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tExchange + " ("
+            + "player_uuid TEXT NOT NULL,"
+            + "item_id TEXT NOT NULL,"
+            + "amount INTEGER NOT NULL DEFAULT 0,"
+            + "PRIMARY KEY (player_uuid, item_id)"
+            + ")");
     }
 
     private void createTablesMysql(Statement stmt) throws SQLException {
@@ -206,6 +222,18 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             + "claimed BOOLEAN NOT NULL DEFAULT FALSE,"
             + "attempts INT NOT NULL DEFAULT 0,"
             + "INDEX idx_pending_claim_player (player_uuid, claimed)"
+            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tPoints + " ("
+            + "player_uuid VARCHAR(36) NOT NULL,"
+            + "point_id VARCHAR(64) NOT NULL,"
+            + "amount BIGINT NOT NULL DEFAULT 0,"
+            + "PRIMARY KEY (player_uuid, point_id)"
+            + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        stmt.executeUpdate("CREATE TABLE IF NOT EXISTS " + tExchange + " ("
+            + "player_uuid VARCHAR(36) NOT NULL,"
+            + "item_id VARCHAR(64) NOT NULL,"
+            + "amount INT NOT NULL DEFAULT 0,"
+            + "PRIMARY KEY (player_uuid, item_id)"
             + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     }
 
@@ -484,5 +512,131 @@ public class JdbcLotteryRepository extends AbstractModuleRepository implements L
             logger.warning("[Lottery] 查询 Case 历史失败: " + e.getMessage());
         }
         return result;
+    }
+
+    @Override
+    public @NotNull java.util.Map<String, Long> getPoints(@NotNull UUID playerUuid) {
+        java.util.Map<String, Long> result = new java.util.LinkedHashMap<>();
+        String sql = "SELECT point_id, amount FROM " + tPoints + " WHERE player_uuid = ?";
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, playerUuid.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) result.put(rs.getString("point_id"), rs.getLong("amount"));
+            }
+        } catch (SQLException e) {
+            logger.warning("[Lottery] Failed to read points: " + e.getMessage());
+        }
+        return result;
+    }
+
+    @Override
+    public long getPoint(@NotNull UUID playerUuid, @NotNull String pointId) {
+        String sql = "SELECT amount FROM " + tPoints + " WHERE player_uuid = ? AND point_id = ?";
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, playerUuid.toString());
+            ps.setString(2, pointId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getLong(1) : 0L;
+            }
+        } catch (SQLException e) {
+            logger.warning("[Lottery] Failed to read point: " + e.getMessage());
+            return 0L;
+        }
+    }
+
+    @Override
+    public boolean addPoints(@NotNull UUID playerUuid, @NotNull String pointId, long amount) {
+        if (amount < 0) return false;
+        return changePoints(playerUuid, pointId, amount, false);
+    }
+
+    @Override
+    public boolean subtractPoints(@NotNull UUID playerUuid, @NotNull String pointId, long amount) {
+        if (amount < 0) return false;
+        return changePoints(playerUuid, pointId, amount, true);
+    }
+
+    private boolean changePoints(UUID playerUuid, String pointId, long amount, boolean subtract) {
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            String select = "SELECT amount FROM " + tPoints + " WHERE player_uuid = ? AND point_id = ?";
+            long current = 0;
+            try (PreparedStatement ps = conn.prepareStatement(select)) {
+                ps.setString(1, playerUuid.toString());
+                ps.setString(2, pointId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) current = rs.getLong(1);
+                }
+            }
+            long next = subtract ? current - amount : current + amount;
+            if (next < 0) {
+                conn.rollback();
+                return false;
+            }
+            String sql = sqlite
+                ? "INSERT INTO " + tPoints + " (player_uuid, point_id, amount) VALUES (?, ?, ?) "
+                    + "ON CONFLICT(player_uuid, point_id) DO UPDATE SET amount = excluded.amount"
+                : "INSERT INTO " + tPoints + " (player_uuid, point_id, amount) VALUES (?, ?, ?) "
+                    + "ON DUPLICATE KEY UPDATE amount = VALUES(amount)";
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, playerUuid.toString());
+                ps.setString(2, pointId);
+                ps.setLong(3, next);
+                ps.executeUpdate();
+            }
+            conn.commit();
+            return true;
+        } catch (SQLException e) {
+            logger.warning("[Lottery] Failed to change points: " + e.getMessage());
+            return false;
+        }
+    }
+
+    @Override
+    public int getExchangeCount(@NotNull UUID playerUuid, @NotNull String itemId) {
+        String sql = "SELECT amount FROM " + tExchange + " WHERE player_uuid = ? AND item_id = ?";
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, playerUuid.toString());
+            ps.setString(2, itemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        } catch (SQLException e) {
+            logger.warning("[Lottery] Failed to read exchange count: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    @Override
+    public boolean incrementExchangeCount(@NotNull UUID playerUuid, @NotNull String itemId) {
+        String sql = sqlite
+            ? "INSERT INTO " + tExchange + " (player_uuid, item_id, amount) VALUES (?, ?, 1) "
+                + "ON CONFLICT(player_uuid, item_id) DO UPDATE SET amount = amount + 1"
+            : "INSERT INTO " + tExchange + " (player_uuid, item_id, amount) VALUES (?, ?, 1) "
+                + "ON DUPLICATE KEY UPDATE amount = amount + 1";
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, playerUuid.toString());
+            ps.setString(2, itemId);
+            ps.executeUpdate();
+            return true;
+        } catch (SQLException e) {
+            logger.warning("[Lottery] Failed to increment exchange count: " + e.getMessage());
+            return false;
+        }
+    }
+
+    @Override
+    public boolean decrementExchangeCount(@NotNull UUID playerUuid, @NotNull String itemId) {
+        String sql = "UPDATE " + tExchange + " SET amount = amount - 1 "
+            + "WHERE player_uuid = ? AND item_id = ? AND amount > 0";
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, playerUuid.toString());
+            ps.setString(2, itemId);
+            ps.executeUpdate();
+            return true;
+        } catch (SQLException e) {
+            logger.warning("[Lottery] Failed to rollback exchange count: " + e.getMessage());
+            return false;
+        }
     }
 }

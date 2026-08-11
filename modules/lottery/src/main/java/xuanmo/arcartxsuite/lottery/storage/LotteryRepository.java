@@ -66,6 +66,20 @@ public interface LotteryRepository {
      */
     void deleteCaseState(@NotNull UUID playerUuid, @NotNull String poolId);
 
+    @NotNull java.util.Map<String, Long> getPoints(@NotNull UUID playerUuid);
+
+    long getPoint(@NotNull UUID playerUuid, @NotNull String pointId);
+
+    boolean addPoints(@NotNull UUID playerUuid, @NotNull String pointId, long amount);
+
+    boolean subtractPoints(@NotNull UUID playerUuid, @NotNull String pointId, long amount);
+
+    int getExchangeCount(@NotNull UUID playerUuid, @NotNull String itemId);
+
+    boolean incrementExchangeCount(@NotNull UUID playerUuid, @NotNull String itemId);
+
+    boolean decrementExchangeCount(@NotNull UUID playerUuid, @NotNull String itemId);
+
     /**
      * 将一条待领取奖励加入队列。
      *

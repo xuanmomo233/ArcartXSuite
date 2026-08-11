@@ -1,0 +1,21 @@
+# Lottery 积分兑换商店示例.
+items:
+  dust_ticket:
+    id: dust_ticket
+    display-name: "祈愿凭证"
+    icon: "minecraft:amethyst_shard"
+    cost:
+      single:
+        - type: POINT
+          id: stardust
+          amount: 10
+          display-name: "星尘"
+    limit: 0
+    reward:
+      id: dust_ticket
+      name: "祈愿凭证"
+      plugin-type: PLAIN
+      plugin-id: "minecraft:amethyst_shard"
+      delivery: DIRECT
+      amount: 1
+      weight: 1

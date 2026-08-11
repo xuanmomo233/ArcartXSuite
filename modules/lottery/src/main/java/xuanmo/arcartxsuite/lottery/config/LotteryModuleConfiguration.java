@@ -25,8 +25,10 @@ import org.jetbrains.annotations.Nullable;
 public record LotteryModuleConfiguration(
     StorageConfiguration storage,
     String poolsDirectory,
+    String exchangeDirectory,
     Map<String, String> sharedPityGroups,
-    Map<String, PoolDefinition> pools
+    Map<String, PoolDefinition> pools,
+    Map<String, ExchangeShopItem> exchangeItems
 ) {
 
     /**
@@ -40,12 +42,25 @@ public record LotteryModuleConfiguration(
     public static LotteryModuleConfiguration load(YamlConfiguration yaml, File dataFolder, Logger logger) {
         StorageConfiguration storage = StorageConfiguration.load(yaml.getConfigurationSection("storage"));
         String poolsDir = yaml.getString("pools-directory", "lottery/pools");
+        String exchangeDir = yaml.getString("exchange-directory", "lottery/exchange");
         Map<String, String> sharedGroups = loadSharedPityGroups(yaml.getConfigurationSection("shared-pity-groups"));
 
         File poolsDirectory = new File(dataFolder, poolsDir);
         Map<String, PoolDefinition> pools = loadPoolsFromDirectory(poolsDirectory, logger);
+        Map<String, PointDefinition> knownPoints = new LinkedHashMap<>();
+        for (PoolDefinition pool : pools.values()) {
+            for (PointDefinition point : pool.points().values()) {
+                PointDefinition previous = knownPoints.putIfAbsent(point.id(), point);
+                if (previous != null && (!previous.displayName().equals(point.displayName())
+                        || !previous.icon().equals(point.icon()))) {
+                    logger.warning("Lottery point definition conflict, keeping first: " + point.id());
+                }
+            }
+        }
+        Map<String, ExchangeShopItem> exchangeItems =
+            loadExchangeItems(new File(dataFolder, exchangeDir), logger);
 
-        return new LotteryModuleConfiguration(storage, poolsDir, sharedGroups, pools);
+        return new LotteryModuleConfiguration(storage, poolsDir, exchangeDir, sharedGroups, pools, exchangeItems);
     }
 
     private static Map<String, String> loadSharedPityGroups(@Nullable ConfigurationSection section) {
@@ -88,6 +103,33 @@ public record LotteryModuleConfiguration(
 
         logger.info("Lottery 已加载 " + pools.size() + " 个奖池");
         return pools;
+    }
+
+    private static Map<String, ExchangeShopItem> loadExchangeItems(File directory, Logger logger) {
+        Map<String, ExchangeShopItem> result = new LinkedHashMap<>();
+        if (!directory.exists() || !directory.isDirectory()) return result;
+        File[] files = directory.listFiles(file -> file.isFile()
+            && file.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".yml"));
+        if (files == null) return result;
+        java.util.Arrays.sort(files, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
+        for (File file : files) {
+            try {
+                YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+                ConfigurationSection items = yaml.getConfigurationSection("items");
+                if (items == null) continue;
+                for (String key : items.getKeys(false)) {
+                    ConfigurationSection section = items.getConfigurationSection(key);
+                    if (section == null) continue;
+                    ExchangeShopItem item = ExchangeShopItem.load(section, logger);
+                    if (result.putIfAbsent(item.id(), item) != null) {
+                        logger.warning("Lottery exchange item duplicated: " + item.id());
+                    }
+                }
+            } catch (Exception e) {
+                logger.warning("Failed to load exchange file " + file.getName() + ": " + e.getMessage());
+            }
+        }
+        return result;
     }
 
     /**

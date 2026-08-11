@@ -25,10 +25,17 @@ public class LotteryAdminCommand {
 
     private final Supplier<LotteryService> serviceSupplier;
     private final MessageProvider messages;
+    private final Runnable reloadAction;
 
     public LotteryAdminCommand(Supplier<LotteryService> serviceSupplier, MessageProvider messages) {
+        this(serviceSupplier, messages, () -> {});
+    }
+
+    public LotteryAdminCommand(Supplier<LotteryService> serviceSupplier,
+                               MessageProvider messages, Runnable reloadAction) {
         this.serviceSupplier = serviceSupplier;
         this.messages = messages;
+        this.reloadAction = reloadAction;
     }
 
     /**
@@ -37,7 +44,7 @@ public class LotteryAdminCommand {
      * @return 不可变操作名称列表
      */
     public List<String> actions() {
-        return List.of("help", "status", "reload", "reset", "give-ticket", "simulate");
+        return List.of("help", "status", "reload", "reset", "give-ticket", "give-points", "simulate");
     }
 
     /**
@@ -65,8 +72,12 @@ public class LotteryAdminCommand {
             case "help" -> showHelp(sender);
             case "status" -> handleStatus(sender, service);
             case "reload" -> {
-                sender.sendMessage(msg("admin.reload"));
-                // reload 由 Module 生命周期处理
+                try {
+                    reloadAction.run();
+                    sender.sendMessage(msg("admin.reload"));
+                } catch (RuntimeException exception) {
+                    sender.sendMessage(msg("common.error", exception.getMessage()));
+                }
             }
             case "reset" -> {
                 if (args.length < 3) {
@@ -81,6 +92,13 @@ public class LotteryAdminCommand {
                     return true;
                 }
                 handleGiveTicket(sender, service, args[1], args[2], args[3]);
+            }
+            case "give-points" -> {
+                if (args.length < 4) {
+                    sender.sendMessage(msg("admin.give-points.usage"));
+                    return true;
+                }
+                handleGivePoints(sender, service, args[1], args[2], args[3]);
             }
             case "simulate" -> {
                 if (args.length < 3) {
@@ -135,6 +153,7 @@ public class LotteryAdminCommand {
         sender.sendMessage(msg("help.reload", cmd));
         sender.sendMessage(msg("help.reset", cmd));
         sender.sendMessage(msg("help.give-ticket", cmd));
+        sender.sendMessage(msg("help.give-points", cmd));
         sender.sendMessage(msg("help.simulate", cmd));
     }
 
@@ -197,6 +216,25 @@ public class LotteryAdminCommand {
         }
         // 简化模拟统计
         sender.sendMessage(msg("admin.simulate.result", poolId, times));
+    }
+
+    private void handleGivePoints(CommandSender sender, LotteryService service,
+                                  String playerName, String pointId, String amountStr) {
+        Player target = Bukkit.getPlayerExact(playerName);
+        if (target == null) {
+            sender.sendMessage(msg("admin.player-not-found", playerName));
+            return;
+        }
+        try {
+            long amount = Long.parseLong(amountStr);
+            if (amount <= 0 || !service.givePoints(target.getUniqueId(), pointId, amount)) {
+                sender.sendMessage(msg("admin.invalid-number", amountStr));
+                return;
+            }
+            sender.sendMessage(msg("admin.give-points.success", playerName, amount, pointId));
+        } catch (NumberFormatException e) {
+            sender.sendMessage(msg("admin.invalid-number", amountStr));
+        }
     }
 
     private String msg(String key, Object... args) {
