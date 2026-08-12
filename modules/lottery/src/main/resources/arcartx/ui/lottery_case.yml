@@ -515,6 +515,7 @@ controls:
               开箱标题:
                 type: Text
                 attribute:
+                  through: true
                   texts: ~开箱
                   center: false
                   y: 30
@@ -523,6 +524,7 @@ controls:
               副标题:
                 type: Text
                 attribute:
+                  through: true
                   texts: "'&f解锁  ' + (var.poolName != none ? var.poolName : '')"
                   center: false
                   y: 110
@@ -698,6 +700,7 @@ controls:
                       名称:
                         type: Text
                         attribute:
+                          through: true
                           entryKey: 0.round()
                           point: ~middle_left
                           x: 110
@@ -707,6 +710,7 @@ controls:
                       数量:
                         type: Text
                         attribute:
+                          through: true
                           entryKey: 0.round()
                           point: ~middle_left
                           x: 110
@@ -729,6 +733,7 @@ controls:
                   文本:
                     type: Text
                     attribute:
+                      through: true
                       point: ~top_left
                       x: 50
                       y: 10
@@ -773,6 +778,7 @@ controls:
                   文本:
                     type: Text
                     attribute:
+                      through: true
                       point: ~top_left
                       x: 50
                       y: 10
@@ -816,6 +822,7 @@ controls:
                   文本:
                     type: Text
                     attribute:
+                      through: true
                       point: ~top_left
                       x: 50
                       y: 10
@@ -839,18 +846,9 @@ controls:
                   shape: ~round_rect
                   radius: 20
                   visible: "var.currentPoolIndex != none && var.currentPoolIndex > 0"
-                children:
-                  文本:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: (150) / 2
-                      y: 10
-                      width: 150
-                      height: 80
-                      texts: ~‹
-                      fontSize: 81
-                      center: true
+                  texts: ~‹
+                  fontSize: 81
+                  center: true
                 action:
                   click: "Packet.send(var.packetId, 'switch_pool', var.currentPoolIndex - 1, var.actionToken)"
               下一页:
@@ -866,23 +864,15 @@ controls:
                   shape: ~round_rect
                   radius: 20
                   visible: "var.currentPoolIndex != none && var.poolList != none && var.currentPoolIndex < var.poolList.size() - 1"
-                children:
-                  文本:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: (150) / 2
-                      y: 10
-                      width: 150
-                      height: 80
-                      texts: ~›
-                      fontSize: 81
-                      center: true
+                  texts: ~›
+                  fontSize: 81
+                  center: true
                 action:
                   click: "Packet.send(var.packetId, 'switch_pool', (var.currentPoolIndex != none ? var.currentPoolIndex : 0) + 1, var.actionToken)"
               页码:
                 type: Text
                 attribute:
+                  through: true
                   point: ~middle_center
                   y: 0
                   texts: "var.currentPoolIndex != none && var.poolList != none ? '&7' + (var.currentPoolIndex + 1).round() + ' / ' + var.poolList.size().round() : ''"
@@ -947,6 +937,7 @@ controls:
                   名称:
                     type: Text
                     attribute:
+                      through: true
                       entryKey: 0.round()
                       point: ~middle_left
                       x: 58
@@ -956,6 +947,7 @@ controls:
                   余额:
                     type: Text
                     attribute:
+                      through: true
                       entryKey: 0.round()
                       point: ~middle_left
                       x: 58
@@ -981,18 +973,9 @@ controls:
                   height: 45
                   normal: ~0,0,0,35
                   hover: ~255,255,255,45
-                children:
-                  文本:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: (115) / 2
-                      y: 10
-                      width: 115
-                      height: 45
-                      texts: ~&7记录
-                      fontSize: 50
-                      center: true
+                  texts: ~&7记录
+                  fontSize: 50
+                  center: true
                 action:
                   click: "Packet.send(var.packetId, 'history')"
               详情按钮:
@@ -1005,18 +988,9 @@ controls:
                   height: 45
                   normal: ~0,0,0,35
                   hover: ~255,255,255,45
-                children:
-                  文本:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: (115) / 2
-                      y: 10
-                      width: 115
-                      height: 45
-                      texts: ~&7概率
-                      fontSize: 50
-                      center: true
+                  texts: ~&7概率
+                  fontSize: 50
+                  center: true
                 action:
                   click: "Packet.send(var.packetId, 'details')"
       开箱动画层:
@@ -1035,6 +1009,7 @@ controls:
           等待文本:
             type: Text
             attribute:
+              through: true
               point: ~middle_center
               y: -180
               texts:
@@ -1120,6 +1095,7 @@ controls:
                       物品名:
                         type: Text
                         attribute:
+                          through: true
                           entryKey: 1.round()
                           point: ~bottom_center
                           y: -8
@@ -1174,6 +1150,7 @@ controls:
               结果物品名:
                 type: Text
                 attribute:
+                  through: true
                   point: ~top_center
                   y: 74
                   texts: "var.resultItemName != none ? '&f' + var.resultItemName : ''"
@@ -1181,6 +1158,7 @@ controls:
               结果稀有度名:
                 type: Text
                 attribute:
+                  through: true
                   point: ~top_center
                   y: 148
                   texts: "var.resultRarity != none && var.rarityNames != none && var.rarityNames[var.resultRarity] != none ? '&7' + var.rarityNames[var.resultRarity] : (var.rarityNames != none && var.rarityNames['UNKNOWN'] != none ? '&7' + var.rarityNames['UNKNOWN'] : '')"
@@ -1225,18 +1203,9 @@ controls:
               hover: ~40,56,78,255
               shape: ~round_rect
               radius: 6
-            children:
-              文本:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: (200) / 2
-                  y: 10
-                  width: 200
-                  height: 64
-                  texts: "&b继续"
-                  fontSize: 38
-                  center: true
+              texts: ~&b继续
+              fontSize: 38
+              center: true
             action:
               click: |-
                 val.单抽结果层.visible = false
@@ -1256,18 +1225,9 @@ controls:
               hover: ~107,144,255,255
               shape: ~round_rect
               radius: 6
-            children:
-              文本:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: (200) / 2
-                  y: 10
-                  width: 200
-                  height: 64
-                  texts: "&f再开一次"
-                  fontSize: 38
-                  center: true
+              texts: ~&f再开一次
+              fontSize: 38
+              center: true
             action:
               click: |-
                 if(var.rolling != none && var.rolling != true){
@@ -1303,6 +1263,7 @@ controls:
           十连标题:
             type: Text
             attribute:
+              through: true
               point: ~top_center
               y: 90
               texts: "'&6本次开出 ' + (var.batchCount != none ? var.batchCount.round() : 0) + ' 件物品'"
@@ -1367,6 +1328,7 @@ controls:
                   物品名:
                     type: Text
                     attribute:
+                      through: true
                       entryKey: 1.round()
                       point: ~bottom_center
                       y: -44
@@ -1375,6 +1337,7 @@ controls:
                   稀有度名:
                     type: Text
                     attribute:
+                      through: true
                       entryKey: 1.round()
                       point: ~bottom_center
                       y: -16
@@ -1392,18 +1355,9 @@ controls:
               hover: ~40,56,78,255
               shape: ~round_rect
               radius: 6
-            children:
-              文本:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: (200) / 2
-                  y: 10
-                  width: 200
-                  height: 64
-                  texts: "&b继续"
-                  fontSize: 38
-                  center: true
+              texts: ~&b继续
+              fontSize: 38
+              center: true
             action:
               click: |-
                 val.十连结果层.visible = false
@@ -1423,18 +1377,9 @@ controls:
               shape: ~round_rect
               radius: 6
               visible: "var.tenAvailable != false"
-            children:
-              文本:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: (200) / 2
-                  y: 10
-                  width: 200
-                  height: 64
-                  texts: "&f再来十连"
-                  fontSize: 38
-                  center: true
+              texts: ~&f再来十连
+              fontSize: 38
+              center: true
             action:
               click: |-
                 if(var.rolling != none && var.rolling != true){
@@ -1478,6 +1423,7 @@ controls:
           面板标题:
             type: Text
             attribute:
+              through: true
               point: ~top_left
               x: 24
               y: 20
@@ -1486,6 +1432,7 @@ controls:
           记录条数:
             type: Text
             attribute:
+              through: true
               point: ~top_left
               x: 24
               y: 64
@@ -1560,6 +1507,7 @@ controls:
                       时间:
                         type: Text
                         attribute:
+                          through: true
                           entryKey: 0.round()
                           point: ~middle_left
                           x: 16
@@ -1568,6 +1516,7 @@ controls:
                       摘要:
                         type: Text
                         attribute:
+                          through: true
                           entryKey: 0.round()
                           point: ~middle_left
                           x: 220
@@ -1576,6 +1525,7 @@ controls:
           历史空态:
             type: Text
             attribute:
+              through: true
               point: ~middle_center
               texts:
                 - ~&7暂无开箱记录
@@ -1592,18 +1542,9 @@ controls:
               hover: ~40,56,78,255
               shape: ~round_rect
               radius: 6
-            children:
-              文本:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: (200) / 2
-                  y: 10
-                  width: 200
-                  height: 56
-                  texts: "&b关闭"
-                  fontSize: 34
-                  center: true
+              texts: ~&b关闭
+              fontSize: 34
+              center: true
             action:
               click: "val.历史面板.visible = false"
       # 详情面板: details 包的奖池条目与权重
@@ -1630,6 +1571,7 @@ controls:
           面板标题:
             type: Text
             attribute:
+              through: true
               point: ~top_left
               x: 24
               y: 20
@@ -1638,6 +1580,7 @@ controls:
           表头:
             type: Text
             attribute:
+              through: true
               point: ~top_left
               x: 24
               y: 72
@@ -1714,6 +1657,7 @@ controls:
                       名称:
                         type: Text
                         attribute:
+                          through: true
                           entryKey: 0.round()
                           point: ~middle_left
                           x: 16
@@ -1722,6 +1666,7 @@ controls:
                       稀有度:
                         type: Text
                         attribute:
+                          through: true
                           entryKey: 0.round()
                           point: ~middle_left
                           x: 460
@@ -1730,6 +1675,7 @@ controls:
                       权重:
                         type: Text
                         attribute:
+                          through: true
                           entryKey: 0.round()
                           point: ~middle_left
                           x: 680
@@ -1738,6 +1684,7 @@ controls:
           详情空态:
             type: Text
             attribute:
+              through: true
               point: ~middle_center
               texts:
                 - ~&7暂无可展示的奖池条目
@@ -1754,17 +1701,8 @@ controls:
               hover: ~40,56,78,255
               shape: ~round_rect
               radius: 6
-            children:
-              文本:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: (200) / 2
-                  y: 10
-                  width: 200
-                  height: 56
-                  texts: "&b关闭"
-                  fontSize: 34
-                  center: true
+              texts: ~&b关闭
+              fontSize: 34
+              center: true
             action:
               click: "val.详情面板.visible = false"
