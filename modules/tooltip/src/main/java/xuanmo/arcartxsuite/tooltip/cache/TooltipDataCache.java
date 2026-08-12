@@ -26,7 +26,7 @@ public final class TooltipDataCache {
      * 存入 tooltip 数据。
      *
      * @param player        玩家
-     * @param fingerprint   物品指纹（类型 ID + NBT hash）
+     * @param fingerprint   物品指纹（物品注册名，如 "tacz:ak47"）
      * @param textLines     tooltip 文本行
      * @param structuredData 结构化数据 JSON
      */
@@ -82,12 +82,22 @@ public final class TooltipDataCache {
     }
 
     /**
-     * 生成物品指纹：类型 ID + NBT hash。
+     * 获取当前缓存中的玩家数量。
+     */
+    public int playerCount() {
+        return cache.size();
+    }
+
+    /**
+     * 生成物品指纹：物品注册名（namespace:path 格式）。
+     * <p>
+     * 与客户端 {@code ForgeRegistries.ITEMS.getKey(stack.getItem()).toString()} 一致，
+     * 确保缓存能正确匹配。不包含 NBT hash，因为客户端（Forge NBT）和服务端
+     * （Bukkit ItemMeta）的 hash 计算方式不同，无法统一。
+     * 同类型物品共享一份 tooltip 数据，对于聊天预览场景足够精确。
      */
     public static String fingerprint(@NotNull ItemStack itemStack) {
-        String typeId = itemStack.getType().getKey().toString();
-        int nbtHash = itemStack.hasItemMeta() ? itemStack.getItemMeta().hashCode() : 0;
-        return typeId + "@" + nbtHash;
+        return itemStack.getType().getKey().toString();
     }
 
     /** 缓存条目 */

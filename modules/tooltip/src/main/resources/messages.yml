@@ -1,0 +1,16 @@
+prefix: "&3◆ &6ArcartXSuite &7| &r"
+
+common:
+  no-permission: "&c你没有权限执行此操作。"
+  player-only: "&c该命令只能由玩家执行。"
+
+admin:
+  status-title: "&6Tooltip 模块状态"
+  status-cache-size: "&7缓存玩家数: &f{0}"
+  status-packet-id: "&7数据包 ID: &f{0}"
+  status-ttl: "&7缓存 TTL: &f{0}秒"
+  status-no-cache: "&7缓存为空，等待客户端 mod 发送数据"
+
+help:
+  title: "&6Tooltip 管理"
+  status: "&7{0} status&f - 查看模块状态"

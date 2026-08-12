@@ -1,8 +1,6 @@
 package xuanmo.arcartxsuite.tooltip.packet;
 
 import java.util.List;
-import java.util.UUID;
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
@@ -18,11 +16,14 @@ import xuanmo.arcartxsuite.tooltip.service.TooltipJsonParser;
  * 数据包格式：
  * <pre>
  * packetId: "AXS_TOOLTIP_DATA"
- * data[0]: 物品指纹（类型 ID + NBT hash，用于服务端去重）
- * data[1]: 物品类型 ID
+ * data[0]: 物品指纹（物品注册名，如 "tacz:ak47"）
+ * data[1]: 物品类型 ID（同 data[0]）
  * data[2]: tooltip 文本行（JSON 数组字符串）
  * data[3]: 结构化数据（JSON 对象字符串）
  * </pre>
+ * <p>
+ * 缓存操作同步执行：{@link TooltipDataCache} 内部使用 {@code ConcurrentHashMap}，
+ * 线程安全，无需异步调度。
  */
 public final class TooltipPacketHandler implements ClientPacketHandler {
 
@@ -52,12 +53,8 @@ public final class TooltipPacketHandler implements ClientPacketHandler {
             List<String> textLines = parser.parseStringArray(linesJson);
             if (textLines == null || textLines.isEmpty()) return true;
 
-            // 异步存入缓存（避免阻塞网络线程）
-            final UUID playerUuid = player.getUniqueId();
-            Bukkit.getScheduler().runTaskAsynchronously(
-                Bukkit.getPluginManager().getPlugin("ArcartXSuite"),
-                () -> cache.put(player, fingerprint, textLines, structuredData)
-            );
+            // 同步存入缓存（ConcurrentHashMap 线程安全，无需异步）
+            cache.put(player, fingerprint, textLines, structuredData);
         } catch (Exception e) {
             // 静默处理解析错误
         }
