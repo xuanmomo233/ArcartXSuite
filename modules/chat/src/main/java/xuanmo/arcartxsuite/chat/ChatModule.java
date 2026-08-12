@@ -153,6 +153,8 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
             vanillaItemNameBridge
         );
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+        // 注入 Tooltip 数据提供者，用于聊天物品预览时注入动态 tooltip Lore
+        service.setTooltipDataProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.TooltipDataCapable.class));
         service.start();
         adminCommand = new ChatAdminCommand(() -> service, messages());
 

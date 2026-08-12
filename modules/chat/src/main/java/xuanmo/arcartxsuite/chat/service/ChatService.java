@@ -103,6 +103,7 @@ public final class ChatService implements Listener {
     private volatile boolean paperChatEventObserved;
     private java.util.function.BiConsumer<Player, Collection<String>> completionAdder;
     private java.util.function.BiConsumer<Player, Collection<String>> completionRemover;
+    private java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.TooltipDataCapable> tooltipDataProvider;
 
     public ChatService(
         JavaPlugin plugin,
@@ -159,6 +160,17 @@ public final class ChatService implements Listener {
 
     public void setEventBusProvider(java.util.function.Supplier<EventBusCapability> eventBusProvider) {
         this.eventBusProvider = eventBusProvider;
+    }
+
+    /**
+     * 注入 Tooltip 数据提供者（由 ChatModule 在 startService 后设置）。
+     * <p>
+     * 用于聊天物品预览时，将客户端采集的动态 tooltip 文本行注入物品 NBT Lore，
+     * 使 ArcartX 客户端 UI 能显示 TACZ 枪属性和 Apotheosis affix 等内容。
+     */
+    public void setTooltipDataProvider(
+            java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.TooltipDataCapable> tooltipDataProvider) {
+        this.tooltipDataProvider = tooltipDataProvider;
     }
 
     public void start() throws Exception {
@@ -833,7 +845,21 @@ public final class ChatService implements Listener {
         if (itemStack == null || itemStack.getType() == Material.AIR || itemStack.getAmount() <= 0) {
             return null;
         }
-        Optional<String> itemJson = itemStackBridge.itemToJson(itemStack);
+
+        // 如果 Tooltip 模块可用，将客户端采集的动态 tooltip 文本行注入物品 NBT Lore
+        // 使 ArcartX 客户端 UI 能显示 TACZ 枪属性和 Apotheosis affix 等内容
+        ItemStack itemForSerialization = itemStack;
+        if (tooltipDataProvider != null) {
+            xuanmo.arcartxsuite.api.capability.TooltipDataCapable tooltipCap = tooltipDataProvider.get();
+            if (tooltipCap != null) {
+                java.util.List<String> tooltipLines = tooltipCap.getTooltipLines(sender, itemStack);
+                if (tooltipLines != null && !tooltipLines.isEmpty()) {
+                    itemForSerialization = tooltipCap.injectLore(itemStack, tooltipLines);
+                }
+            }
+        }
+
+        Optional<String> itemJson = itemStackBridge.itemToJson(itemForSerialization);
         if (itemJson.isEmpty()) {
             return null;
         }

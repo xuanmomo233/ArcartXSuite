@@ -33,6 +33,7 @@ include("modules:battlepass")
 include("modules:fishing")
 include("modules:lottery")
 include("modules:vanilla")
+include("modules:tooltip")
 
 // ─── 代理端插件 ───
 include("proxy:common")
