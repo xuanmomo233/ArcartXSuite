@@ -25,6 +25,7 @@ ArcartXSuite/
 │   ├── conversation/     # Conversation 对话桥（需要 Chemdah）
 │   ├── entitytracker/    # EntityTracker 实体追踪 + AttackTarget 攻击目标
 │   ├── eventpacket/      # EventPacket 事件引擎
+│   ├── extrabackpack/    # ExtraBackpack 扩展背包
 │   ├── fishing/          # Fishing 钓鱼小游戏
 │   ├── loginview/        # LoginView 登录界面
 │   ├── lottery/          # Lottery 抽奖
@@ -40,6 +41,8 @@ ArcartXSuite/
 │   ├── rgb/              # RGB 渐变色文本
 │   ├── tab/              # Tab 在线列表
 │   ├── title/            # Title 称号
+│   ├── tooltip/          # Tooltip 物品提示桥接
+│   ├── vanilla/          # VanillaUI 原版界面替换
 │   ├── warehouse/        # Warehouse 仓库银行
 │   └── qqbot/            # QQBot 群服互联
 ├── proxy/                # Bungee / Velocity 代理端公共库
@@ -122,6 +125,8 @@ onEnable()
 ### `axs reload <module>`
 
 单模块重载遵循同样逻辑，通过 `isExternalModule()` 判断走外部还是内置路径。
+
+> **注意**：模块级 `/axs <module> reload` 子命令已移除，统一使用 `/axs reload <module>` 宿主级命令。
 
 ### UI 注册/更新
 
@@ -262,7 +267,7 @@ public final class MyModule implements AXSModule, ModuleCommandHandler {
     public String commandId() { return "mymodule"; }
 
     @Override
-    public List<String> actions() { return List.of("help", "status", "reload"); }
+    public List<String> actions() { return List.of("help", "status"); }
 
     @Override
     public boolean onCommand(CommandSender sender, String label, String[] args) {
@@ -285,6 +290,11 @@ public final class MyModule implements AXSModule, ModuleCommandHandler {
 | `worldTextureBridge()` | 世界文字贴图桥接 |
 | `createWaypointBridge()` | 创建独立路标桥接实例 |
 | `createAdyeshachNpcBridge()` | 创建独立 Adyeshach NPC 桥接实例 |
+| `createSoundPlayerBridge()` | 创建独立音效播放器桥接实例 |
+| `vanillaItemNameBridge()` | 原版物品中文名称解析桥接 |
+| `storageManager()` | 统一数据源管理器（HikariCP 连接池复用） |
+| `placeholderResolver()` | PlaceholderAPI 解析器 |
+| `expansionRegistry()` | PlaceholderAPI 扩展注册表 |
 | `packetGuard()` | 客户端包守卫 |
 | `crossServer()` | 跨服通道 |
 | `accountTypeService()` | 统一账号识别服务 |
@@ -324,6 +334,7 @@ public final class MyModule implements AXSModule, ModuleCommandHandler {
 | conversation | Conversation 对话 | ✅ 独立 | UI+Selector |
 | entitytracker | EntityTracker + AttackTarget | ✅ 独立 | HUD |
 | eventpacket | EventPacket 事件引擎 | ✅ 独立 | — |
+| extrabackpack | ExtraBackpack 扩展背包 | ✅ 独立 | UI |
 | fishing | Fishing 钓鱼 | ✅ 独立 | UI |
 | loginview | LoginView 登录界面 | ✅ 独立 | UI |
 | lottery | Lottery 抽奖 | ✅ 独立 | UI |
@@ -362,6 +373,8 @@ UI 发包结构对齐 Title 模块：`categories` / `pages` / `quests` / `tasks`
 | rgb | RGB 渐变色文本 | ✅ 独立 | — |
 | tab | Tab 在线列表 | ✅ 独立 | — |
 | title | Title 称号 | ✅ 独立 | — |
+| tooltip | Tooltip 物品提示桥接 | ✅ 独立 | — |
+| vanilla | VanillaUI 原版界面替换 | ✅ 独立 | UI |
 | warehouse | Warehouse 仓库银行 | ✅ 独立 | UI |
 | qqbot | QQBot 群服互联 | ✅ 独立 | — |
 
@@ -375,7 +388,7 @@ UI 发包结构对齐 Title 模块：`categories` / `pages` / `quests` / `tasks`
 - **核心内部字段接口化**：`ArcartXSuitePlugin`、`ModuleRegistry`、`DefaultModuleContext`、`KeybindService` 字段与参数全部使用 API 接口类型。
 - **生命周期拆分**：新增 `BridgeLifecycleManager` 管理桥接创建/初始化/关闭；新增 `ClientEventLifecycleManager` 管理客户端事件监听与路由；`ArcartXSuitePlugin` 从 765 行精简到约 578 行。
 - **反射缓存工具**：新增 `ReflectionCache`，已应用于 `ChatSignBypassService` 和 `ClientEventLifecycleManager`，减少重复反射样板代码。
-- **混淆安全**：核心 bridge 实现类可被 ProGuard 完全混淆，`modules/` 下 17 个模块 JAR 中不再出现任何原始 bridge 实现类名。
+- **混淆安全**：核心 bridge 实现类可被 ProGuard 完全混淆，`modules/` 下模块 JAR 中不再出现任何原始 bridge 实现类名。
 - **委托模式淘汰**：所有模块均通过 `AbstractAXSModule` 独立实现，不再依赖 `ArcartXSuitePlugin.reloadXxxState()` 等宿主方法。
 
 ### v3 — 混合登录代理重构（独立进程架构）
