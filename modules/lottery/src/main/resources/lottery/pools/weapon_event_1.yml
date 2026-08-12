@@ -10,15 +10,50 @@ description: |-  # 卡池描述文本
   武器活动祈愿
   在本祈愿中，5星武器「传说之刃」的获取概率将大幅提升！
   5星保底80抽，4星保底10抽，UP武器概率75%，命定值上限2点。
-up-item-icon: '{"id":"minecraft:diamond_sword","Count":1b}'  # UP 物品图标（JSON 格式）
-# up-item-icon、points.*.icon 与奖品的 icon 都支持完整图标定义（与 Menu 模块一致）：
-#   material / amount / name / lore / custom-model-data / glow
-#   skull-texture / color / source + id / mmo-type + mmo-id
-#   json / texture / texture-url / nbt
-# nbt 支持两种写法：
-#   nbt:
-#     CustomTag: "value"                       # 写法一：键值映射，逐个写入字符串标签
-#   nbt: "{CustomTag:'value',Unbreakable:1b}"  # 写法二：整段 SNBT 字符串
+# UP 物品图标
+up-item-icon:
+  source: "neigeitems"
+  id: "LottoLegendBlade"
+# 未配置 up-item-icon 时自动使用 UP 5星奖品（CASE 池为最高稀有度奖品）的物品作为图标；up-item-icon 配置可以省略。
+# 奖品未配置 icon 时使用该奖品 item 生成的物品作为图标。
+# 图标配置分为物品库物品与自定义物品，两种写法二选一。
+# up-item-icon:
+  #############################################################
+  # --- 物品库物品：source + id（与下方 material 写法二选一） ---
+  # -------------------------------
+  # source: "neigeitems"                         # 物品库来源
+  # id: "LottoLegendBlade"                     # 物品库物品 ID
+  ############################################################
+  # --- MMOItems 物品：source + mmo-type + mmo-id ---
+  # -------------------------------
+  # source: "mmoitems"
+  # mmo-type: "ARMOR"                         # MMOItems 类型
+  # mmo-id: "LOTTO_STAR_HELMET"               # MMOItems 物品 ID
+  ############################################################
+  # --- 自定义物品：material 及其它字段 ---
+  # material: DIAMOND_SWORD                      # Minecraft 材质
+  # amount: 1                                  # 图标数量
+  # name: "传说之刃"                               # 图标名称
+  # lore:                                      # 图标 Lore
+  #   - "&7自定义图标说明"                      # Lore 文本
+  # custom-model-data: 0                       # 自定义模型数据
+  # glow: true                                 # 是否显示附魔光效
+  # skull-texture: "base64..."                 # 玩家头颅纹理
+  # color: "#FF5555"                           # 可染色材质的颜色
+  #
+  # --- nbt写法二选一 ---
+  # nbt:                                       # 图标 NBT 键值映射写法，与下方整段 SNBT 写法二选一
+  #   CustomTag: "value"                       # 图标 NBT 键值
+  # 或者
+  # nbt: "{CustomTag:'value',Unbreakable:1b}"  # 图标 NBT 整段 SNBT 写法，与上方键值映射二选一
+  #
+  # ---ArcartX 读取物品的 icon / url NBT 来渲染自定义贴图（详见ArcartX wiki：自定义物品贴图）---
+  # texture: "item"                            # 写入 icon NBT，渲染 resource/item_icon/ 下的贴图（手持 / AX-UI）；子目录用 "xxx/xxx"
+  # texture-url: "menu/icon.png"               # 写入 url NBT，仅用于原版 GUI(箱子菜单)图标，支持文件路径 / 网络链接 / GIF
+  ############################################################
+  # --- 直接发送 json/NBT 给 slot 控件（完全自定义物品） ---
+  # json: '{"id":"minecraft:diamond","Count":1b}'  # 完整物品 JSON；配置后不再叠加其它字段或 texture/texture-url/nbt
+  ####################################################################################################################
 
 cost:
   single:
@@ -26,25 +61,39 @@ cost:
       id: "gem"
       amount: 160
       display-name: "原石"
+      icon:
+        material: DIAMOND
+        name: "原石"
     - type: POINT
       id: "stardust"
       amount: 1
       display-name: "星尘"
+      icon:
+        material: AMETHYST_SHARD
+        name: "星尘"
   ten:
     - type: CURRENCY
       id: "gem"
       amount: 1600
       display-name: "原石"
+      icon:
+        material: DIAMOND
+        name: "原石"
     - type: POINT
       id: "stardust"
       amount: 10
       display-name: "星尘"
+      icon:
+        material: AMETHYST_SHARD
+        name: "星尘"
 
 # 积分产出规则：gacha 的 rarity key 使用星级（3/4/5），case 使用奖池中定义的 rarity 名称
 points:
   stardust:
     display-name: "星尘"
-    icon: "minecraft:amethyst_shard"
+    icon:
+      material: AMETHYST_SHARD
+      name: "星尘"
     per-pull: 1
     rarity:
       "4": 2
@@ -64,45 +113,46 @@ gacha:  # 祈愿机制参数
 
   up-5star-items:  # UP 5星物品池（概率提升）
     legend_blade:
-      id: "weapon_legend"  # 物品唯一标识
       name: "传说之刃"  # 物品显示名称
-      plugin-type: MythicMobs  # 物品来源插件类型：MythicMobs
-      plugin-id: "LegendBlade"  # 物品来源插件内部 ID
+      item:
+        source: neigeitems
+        id: "LottoLegendBlade"
+      # 未配置 icon 时使用 item 生成的物品作为图标。
       delivery: DIRECT  # 发放方式：DIRECT（直接发放）
       weight: 1  # 权重（同池内相对概率）
 
   standard-5star-items:  # 常驻 5星物品池（未命中 UP 时的 fallback）
     epic_spear:
-      id: "weapon_epic"
       name: "史诗长枪"
-      plugin-type: MythicMobs
-      plugin-id: "EpicSpear"
+      item:
+        source: mythicmobs
+        id: "EpicSpear"
       delivery: DIRECT
       weight: 1
 
   up-4star-items:  # UP 4星物品池（概率提升）
     rare_dagger:
-      id: "weapon_rare"
       name: "稀有匕首"
-      plugin-type: NeigeItems  # 物品来源插件类型：NeigeItems
-      plugin-id: "RareDagger"
+      item:
+        source: neigeitems
+        id: "RareDagger"
       delivery: DIRECT
       weight: 1
 
   standard-4star-items:  # 常驻 4星物品池（未命中 UP 时的 fallback）
     fine_staff:
-      id: "weapon_common"
       name: "精良法杖"
-      plugin-type: NeigeItems
-      plugin-id: "FineStaff"
+      item:
+        source: neigeitems
+        id: "FineStaff"
       delivery: DIRECT
       weight: 1
 
   star3-items:  # 3星物品池（保底之外的基础掉落）
     material_iron:
-      id: "material_iron"
       name: "铁锭"
-      plugin-type: PLAIN  # 物品来源类型：PLAIN（原版物品，非插件）
-      plugin-id: "minecraft:iron_ingot"
+      item:
+        source: minecraft
+        id: "minecraft:iron_ingot"
       delivery: DIRECT
       weight: 1

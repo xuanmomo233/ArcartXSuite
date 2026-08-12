@@ -1,0 +1,14 @@
+# NeigeItems 物品配置示例
+# 文件需复制到 plugins/NeigeItems/Items/ 目录下（文件名任意，.yml 后缀即可）
+# 对应 lottery/pools/default_weapon_case.yml 的 skin_p250_sand.item.id: LottoP250SandDune
+
+LottoP250SandDune:
+  material: IRON_NUGGET
+  name: '&fP250 | 沙漠风暴'
+  lore:
+    - '&7常规武器箱中的消费级武器皮肤。'
+    - ''
+    - '&e✦ &7稀有度: &f普通'
+    - '&e✦ &7来源: &f常规武器箱'
+  nbt:
+    HideFlags: (Int) 1

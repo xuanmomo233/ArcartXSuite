@@ -1,0 +1,207 @@
+# 文件用途: 原版物品角色活动祈愿卡池。
+# 使用原版 Minecraft 物品模拟原神风格角色祈愿，包含5星/4星保底、软保底与UP概率。
+
+id: "genshin_vanilla_event"
+type: GACHA
+enabled: true
+display-name: "星辉祈愿"
+description: |-
+  星辉祈愿
+  消耗纠缠之缘，可获得不同星级的原版物品奖励。
+  5星保底90抽，4星保底10抽；5星UP概率50%。
+
+up-item-icon:
+  material: NETHER_STAR
+  name: "星辰之核"
+
+cost:
+  single:
+    - type: ITEM
+      amount: 1
+      display-name: "纠缠之缘"
+      icon:
+        material: AMETHYST_SHARD
+        name: "纠缠之缘"
+      matcher:
+        material-ids:
+          - AMETHYST_SHARD
+        lore-contains:
+          - "纠缠之缘"
+        nbt-values:
+          axs:lottery_token: "intertwined_fate"
+  ten:
+    - type: ITEM
+      amount: 10
+      display-name: "纠缠之缘"
+      icon:
+        material: AMETHYST_SHARD
+        name: "纠缠之缘"
+      matcher:
+        material-ids:
+          - AMETHYST_SHARD
+        lore-contains:
+          - "纠缠之缘"
+        nbt-values:
+          axs:lottery_token: "intertwined_fate"
+
+points:
+  stardust:
+    display-name: "星尘"
+    icon:
+      material: AMETHYST_SHARD
+      name: "星尘"
+    per-pull: 1
+    rarity:
+      "4": 2
+      "5": 10
+
+gacha:
+  pool-type: CHARACTER
+  pity-5star: 90
+  pity-4star: 10
+  soft-pity-start: 73
+  soft-pity-increment: 0.06
+  base-5star-rate: 0.006
+  base-4star-rate: 0.051
+  up-rate: 0.5
+  shared-pity-group: "genshin_vanilla_events"
+
+  up-5star-items:
+    star_core:
+      name: "星辰之核"
+      item:
+        source: minecraft
+        id: "NETHER_STAR"
+      delivery: DIRECT
+      icon:
+        material: NETHER_STAR
+        name: "星辰之核"
+      weight: 1
+    dawn_blade:
+      name: "黎明之刃"
+      item:
+        source: minecraft
+        id: "DIAMOND_SWORD"
+      delivery: DIRECT
+      icon:
+        material: DIAMOND_SWORD
+        name: "黎明之刃"
+      weight: 1
+
+  standard-5star-items:
+    ocean_trident:
+      name: "潮汐三叉戟"
+      item:
+        source: minecraft
+        id: "TRIDENT"
+      delivery: DIRECT
+      icon:
+        material: TRIDENT
+        name: "潮汐三叉戟"
+      weight: 1
+    netherite_guard:
+      name: "下界守护剑"
+      item:
+        source: minecraft
+        id: "NETHERITE_SWORD"
+      delivery: DIRECT
+      icon:
+        material: NETHERITE_SWORD
+        name: "下界守护剑"
+      weight: 1
+
+  up-4star-items:
+    wind_bow:
+      name: "苍风猎弓"
+      item:
+        source: minecraft
+        id: "BOW"
+      delivery: DIRECT
+      icon:
+        material: BOW
+        name: "苍风猎弓"
+      weight: 1
+    star_crossbow:
+      name: "星辉弩"
+      item:
+        source: minecraft
+        id: "CROSSBOW"
+      delivery: DIRECT
+      icon:
+        material: CROSSBOW
+        name: "星辉弩"
+      weight: 1
+
+  standard-4star-items:
+    ancient_book:
+      name: "古典秘典"
+      item:
+        source: minecraft
+        id: "ENCHANTED_BOOK"
+      delivery: DIRECT
+      icon:
+        material: ENCHANTED_BOOK
+        name: "古典秘典"
+      weight: 1
+    golden_apple:
+      name: "金辉圣果"
+      item:
+        source: minecraft
+        id: "GOLDEN_APPLE"
+      delivery: DIRECT
+      icon:
+        material: GOLDEN_APPLE
+        name: "金辉圣果"
+      weight: 1
+
+  star3-items:
+    amethyst_fragment:
+      name: "紫晶碎片"
+      item:
+        source: minecraft
+        id: "AMETHYST_SHARD"
+      delivery: DIRECT
+      icon:
+        material: AMETHYST_SHARD
+        name: "紫晶碎片"
+      weight: 1
+    prismarine_crystal:
+      name: "海渊晶砂"
+      item:
+        source: minecraft
+        id: "PRISMARINE_CRYSTALS"
+      delivery: DIRECT
+      icon:
+        material: PRISMARINE_CRYSTALS
+        name: "海渊晶砂"
+      weight: 1
+    glowstone_dust:
+      name: "辉光粉尘"
+      item:
+        source: minecraft
+        id: "GLOWSTONE_DUST"
+      delivery: DIRECT
+      icon:
+        material: GLOWSTONE_DUST
+        name: "辉光粉尘"
+      weight: 1
+    iron_ingot:
+      name: "精炼铁锭"
+      item:
+        source: minecraft
+        id: "IRON_INGOT"
+      delivery: DIRECT
+      icon:
+        material: IRON_INGOT
+        name: "精炼铁锭"
+      weight: 1
+    gold_ingot:
+      name: "灿金锭"
+      item:
+        source: minecraft
+        id: "GOLD_INGOT"
+      delivery: DIRECT
+      icon:
+        material: GOLD_INGOT
+        name: "灿金锭"
+      weight: 1

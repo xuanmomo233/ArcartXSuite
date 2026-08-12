@@ -1,0 +1,10 @@
+# Overture 展示方案配置
+# 放置路径: plugins/Overture/displays/lotto_karambit_display.yml
+# 被 LottoKarambitFade.yml 中的 display: lotto_karambit_display 引用
+
+lotto_karambit_display:
+  name: "<item_name>"
+  lore:
+    - "<item_type>"
+    - ""
+    - "<item_desc...>"

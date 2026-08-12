@@ -4,9 +4,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.MemoryConfiguration;
 import org.jetbrains.annotations.NotNull;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
+import xuanmo.arcartxsuite.api.item.ItemMatcher;
+import xuanmo.arcartxsuite.api.item.ItemMatcherLoader;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -23,6 +27,8 @@ public record CostConfig(
     @NotNull List<CostEntry> single,
     @NotNull List<CostEntry> ten
 ) {
+    private static final Logger LOGGER = Logger.getLogger("ArcartX-Lottery");
+
     /**
      * 消耗模式枚举。
      */
@@ -41,7 +47,7 @@ public record CostConfig(
         if (section == null) {
             return new CostConfig(List.of(), List.of());
         }
-        return new CostConfig(loadEntries(section, "single"), loadEntries(section, "ten"));
+        return new CostConfig(loadEntries(section, "single", "cost.single"), loadEntries(section, "ten", "cost.ten"));
     }
 
     /**
@@ -54,7 +60,8 @@ public record CostConfig(
      */
     public static CostConfig load(@Nullable ConfigurationSection section, String ownerId) {
         try {
-            return load(section);
+            return new CostConfig(loadEntries(section, "single", ownerId + ".single"),
+                loadEntries(section, "ten", ownerId + ".ten"));
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("Invalid cost configuration for "
                 + ownerId + ": " + exception.getMessage(), exception);
@@ -72,7 +79,7 @@ public record CostConfig(
         if (entries == null || entries.isEmpty()) return List.of();
         MemoryConfiguration configuration = new MemoryConfiguration();
         configuration.set("single", entries);
-        return loadEntries(configuration, "single");
+        return loadEntries(configuration, "single", "cost");
     }
 
     /**
@@ -85,51 +92,89 @@ public record CostConfig(
      */
     public static List<CostEntry> loadDirectList(@Nullable List<Map<?, ?>> entries, String ownerId) {
         try {
-            return loadDirectList(entries);
+            if (entries == null || entries.isEmpty()) return List.of();
+            MemoryConfiguration configuration = new MemoryConfiguration();
+            configuration.set("single", entries);
+            return loadEntries(configuration, "single", ownerId + ".single");
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("Invalid cost configuration for "
                 + ownerId + ": " + exception.getMessage(), exception);
         }
     }
 
-    private static List<CostEntry> loadEntries(ConfigurationSection section, String key) {
-        List<Map<?, ?>> maps = new ArrayList<>();
-        for (Map<?, ?> map : section.getMapList(key)) maps.add(map);
+    private static List<CostEntry> loadEntries(ConfigurationSection section, String key, String path) {
+        ConfigurationSection entriesSection = section.getConfigurationSection(key);
+        if (entriesSection != null) {
+            List<CostEntry> result = new ArrayList<>();
+            for (String childKey : entriesSection.getKeys(false)) {
+                ConfigurationSection entrySection = entriesSection.getConfigurationSection(childKey);
+                if (entrySection != null) result.add(loadEntry(entrySection, path + "." + childKey));
+            }
+            return result;
+        }
+        List<Map<?, ?>> maps = section.getMapList(key);
         if (maps.isEmpty()) return Collections.emptyList();
         List<CostEntry> result = new ArrayList<>();
-        for (Map<?, ?> map : maps) {
-            String type = String.valueOf(map.containsKey("type") ? map.get("type") : "ITEM");
-            String id = String.valueOf(map.containsKey("id") ? map.get("id") : "");
-            Object rawAmount = map.containsKey("amount") ? map.get("amount") : 1;
-            int amount;
-            try {
-                if (rawAmount instanceof Number number) {
-                    amount = new java.math.BigDecimal(number.toString()).intValueExact();
-                } else {
-                    amount = new java.math.BigDecimal(String.valueOf(rawAmount)).intValueExact();
-                }
-            } catch (NumberFormatException | ArithmeticException exception) {
-                throw new IllegalArgumentException("Invalid cost amount: " + rawAmount, exception);
-            }
-            Object displayName = map.get("display-name");
-            Object icon = map.get("icon");
-            result.add(new CostEntry(CostMode.valueOf(type.toUpperCase(java.util.Locale.ROOT)), id, amount,
-                displayName == null ? null : String.valueOf(displayName),
-                icon == null ? null : String.valueOf(icon)));
-        }
+        for (int index = 0; index < maps.size(); index++) result.add(loadEntry(toSection(maps.get(index)), path + "[" + index + "]"));
         return result;
     }
 
+    private static ConfigurationSection toSection(Map<?, ?> map) {
+        MemoryConfiguration configuration = new MemoryConfiguration();
+        configuration.set("entry", map);
+        ConfigurationSection section = configuration.getConfigurationSection("entry");
+        if (section == null) throw new IllegalArgumentException("Invalid cost entry");
+        return section;
+    }
+
+    private static CostEntry loadEntry(ConfigurationSection section, String path) {
+        String type = section.getString("type", "ITEM");
+        String id = section.getString("id", "");
+        CostMode mode;
+        try {
+            mode = CostMode.valueOf(type.toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException(path + ": invalid cost type " + type, exception);
+        }
+        Object rawAmount = section.get("amount", 1);
+        int amount;
+        try {
+            if (rawAmount instanceof Number number) {
+                amount = new java.math.BigDecimal(number.toString()).intValueExact();
+            } else {
+                amount = new java.math.BigDecimal(String.valueOf(rawAmount)).intValueExact();
+            }
+        } catch (NumberFormatException | ArithmeticException exception) {
+            throw new IllegalArgumentException("Invalid cost amount: " + rawAmount, exception);
+        }
+        String displayName = section.getString("display-name");
+        IconDefinition icon = IconDefinition.load(section, "icon");
+        ItemMatcher matcher = null;
+        if (mode == CostMode.ITEM) {
+            if (!id.isBlank()) {
+                throw new IllegalArgumentException(path + ": ITEM cost must not define id; use matcher");
+            }
+            matcher = ItemMatcherLoader.load(section.getConfigurationSection("matcher"), LOGGER, path + ".matcher");
+            if (matcher.emptyMatcher()) {
+                throw new IllegalArgumentException(path + ": ITEM cost requires a non-empty matcher");
+            }
+        }
+        return new CostEntry(mode, id, amount, displayName, icon, matcher);
+    }
 
     public record CostEntry(
         @NotNull CostMode type,
         @NotNull String id,
         int amount,
         @Nullable String displayName,
-        @Nullable String icon
+        @Nullable IconDefinition icon,
+        @Nullable ItemMatcher matcher
     ) {
         public CostEntry {
             if (amount <= 0) throw new IllegalArgumentException("Cost amount must be positive");
+            if (type == CostMode.ITEM && (matcher == null || matcher.emptyMatcher())) {
+                throw new IllegalArgumentException("ITEM cost requires a non-empty matcher");
+            }
         }
     }
 }

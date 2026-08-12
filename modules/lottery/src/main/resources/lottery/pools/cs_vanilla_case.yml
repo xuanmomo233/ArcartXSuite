@@ -1,0 +1,229 @@
+# 文件用途: 原版物品 CS 开箱风格卡池。
+# 使用原版 Minecraft 物品模拟武器箱，按七档稀有度权重抽取奖励。
+
+id: "cs_vanilla_case"
+type: CASE
+enabled: true
+display-name: "战术武器箱"
+description: |-
+  战术武器箱
+  使用武器箱钥匙开启，可获得从消费级到特殊级的原版物品。
+  稀有度按 COMMON、UNCOMMON、RARE、EPIC、LEGENDARY、MYTHIC、SPECIAL 七档权重抽取。
+
+up-item-icon:
+  material: CHEST
+  name: "战术武器箱"
+
+cost:
+  single:
+    - type: ITEM
+      amount: 1
+      display-name: "武器箱钥匙"
+      icon:
+        material: TRIPWIRE_HOOK
+        name: "武器箱钥匙"
+      matcher:
+        material-ids:
+          - TRIPWIRE_HOOK
+        lore-contains:
+          - "武器箱钥匙"
+        nbt-values:
+          axs:lottery_token: "case_key"
+  ten:
+    - type: ITEM
+      amount: 10
+      display-name: "武器箱钥匙"
+      icon:
+        material: TRIPWIRE_HOOK
+        name: "武器箱钥匙"
+      matcher:
+        material-ids:
+          - TRIPWIRE_HOOK
+        lore-contains:
+          - "武器箱钥匙"
+        nbt-values:
+          axs:lottery_token: "case_key"
+
+points:
+  dust:
+    display-name: "尘辉"
+    icon:
+      material: QUARTZ
+      name: "尘辉"
+    per-pull: 1
+    rarity:
+      COMMON: 1
+      RARE: 2
+      EPIC: 4
+
+case:
+  rarity-settings:
+    COMMON:
+      color: "&f"
+      base-weight: 15625
+    UNCOMMON:
+      color: "&b"
+      base-weight: 3125
+    RARE:
+      color: "&9"
+      base-weight: 625
+    EPIC:
+      color: "&5"
+      base-weight: 125
+    LEGENDARY:
+      color: "&d"
+      base-weight: 25
+    MYTHIC:
+      color: "&c"
+      base-weight: 5
+    SPECIAL:
+      color: "&6"
+      base-weight: 2
+
+  items:
+    stone_sword:
+      name: "石纹短剑"
+      rarity: COMMON
+      item:
+        source: minecraft
+        id: "STONE_SWORD"
+      delivery: DIRECT
+      icon:
+        material: STONE_SWORD
+        name: "石纹短剑"
+    iron_sword:
+      name: "铁卫军刀"
+      rarity: COMMON
+      item:
+        source: minecraft
+        id: "IRON_SWORD"
+      delivery: DIRECT
+      icon:
+        material: IRON_SWORD
+        name: "铁卫军刀"
+
+    iron_axe:
+      name: "工业战斧"
+      rarity: UNCOMMON
+      item:
+        source: minecraft
+        id: "IRON_AXE"
+      delivery: DIRECT
+      icon:
+        material: IRON_AXE
+        name: "工业战斧"
+    hunter_bow:
+      name: "猎手复合弓"
+      rarity: UNCOMMON
+      item:
+        source: minecraft
+        id: "BOW"
+      delivery: DIRECT
+      icon:
+        material: BOW
+        name: "猎手复合弓"
+
+    diamond_sword:
+      name: "钻石突袭剑"
+      rarity: RARE
+      item:
+        source: minecraft
+        id: "DIAMOND_SWORD"
+      delivery: DIRECT
+      icon:
+        material: DIAMOND_SWORD
+        name: "钻石突袭剑"
+    diamond_axe:
+      name: "钻石破阵斧"
+      rarity: RARE
+      item:
+        source: minecraft
+        id: "DIAMOND_AXE"
+      delivery: DIRECT
+      icon:
+        material: DIAMOND_AXE
+        name: "钻石破阵斧"
+
+    netherite_sword:
+      name: "下界合金军刀"
+      rarity: EPIC
+      item:
+        source: minecraft
+        id: "NETHERITE_SWORD"
+      delivery: DIRECT
+      icon:
+        material: NETHERITE_SWORD
+        name: "下界合金军刀"
+    tactical_crossbow:
+      name: "战术重弩"
+      rarity: EPIC
+      item:
+        source: minecraft
+        id: "CROSSBOW"
+      delivery: DIRECT
+      icon:
+        material: CROSSBOW
+        name: "战术重弩"
+
+    trident:
+      name: "深海三叉戟"
+      rarity: LEGENDARY
+      item:
+        source: minecraft
+        id: "TRIDENT"
+      delivery: DIRECT
+      icon:
+        material: TRIDENT
+        name: "深海三叉戟"
+    netherite_axe:
+      name: "下界合金战斧"
+      rarity: LEGENDARY
+      item:
+        source: minecraft
+        id: "NETHERITE_AXE"
+      delivery: DIRECT
+      icon:
+        material: NETHERITE_AXE
+        name: "下界合金战斧"
+
+    nether_star:
+      name: "虚空星核"
+      rarity: MYTHIC
+      item:
+        source: minecraft
+        id: "NETHER_STAR"
+      delivery: DIRECT
+      icon:
+        material: NETHER_STAR
+        name: "虚空星核"
+    elytra:
+      name: "幽影翼装"
+      rarity: MYTHIC
+      item:
+        source: minecraft
+        id: "ELYTRA"
+      delivery: DIRECT
+      icon:
+        material: ELYTRA
+        name: "幽影翼装"
+
+    dragon_egg:
+      name: "龙王遗物"
+      rarity: SPECIAL
+      item:
+        source: minecraft
+        id: "DRAGON_EGG"
+      delivery: DIRECT
+      icon:
+        material: DRAGON_EGG
+        name: "龙王遗物"
+    totem:
+      name: "不死图腾"
+      rarity: SPECIAL
+      item:
+        source: minecraft
+        id: "TOTEM_OF_UNDYING"
+      delivery: DIRECT
+      icon:
+        material: TOTEM_OF_UNDYING
+        name: "不死图腾"

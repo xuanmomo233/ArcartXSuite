@@ -3,27 +3,85 @@ items:
   dust_ticket:
     id: dust_ticket
     display-name: "祈愿凭证"
-    # icon 可写成材质名/物品 JSON 字符串，也可写成完整图标定义：
-    #   material / amount / name / lore / custom-model-data / glow
-    #   skull-texture / color / source + id / mmo-type + mmo-id
-    #   json / texture / texture-url / nbt
-    # nbt 支持两种写法：
-    #   nbt:
-    #     CustomTag: "value"                       # 写法一：键值映射
-    #   nbt: "{CustomTag:'value',Unbreakable:1b}"  # 写法二：整段 SNBT
-    icon: "minecraft:amethyst_shard"
+    # 兑换项在 UI 中的图标
+    icon:
+      material: AMETHYST_SHARD
+      name: "祈愿凭证"
     cost:
       single:
         - type: POINT
-          id: stardust
+          id: "stardust"
           amount: 10
           display-name: "星尘"
+          icon:
+            material: AMETHYST_SHARD
+            name: "星尘"
     limit: 0
     reward:
-      id: dust_ticket
       name: "祈愿凭证"
-      plugin-type: PLAIN
-      plugin-id: "minecraft:amethyst_shard"
-      delivery: DIRECT
-      amount: 1
-      weight: 1
+      item:
+        source: minecraft
+        id: "minecraft:amethyst_shard"
+
+  star_helmet:
+    id: star_helmet
+    display-name: "星辰头盔"
+    # 图标与实际物品不同时才需要配置 icon。
+    icon:
+      source: "mmoitems"
+      mmo-type: "ARMOR"
+      mmo-id: "LOTTO_STAR_HELMET"
+    # 图标配置分为物品库物品与自定义物品，两种写法二选一。
+    # icon:
+      #############################################################
+      # --- 物品库物品：source + id（与下方 material 写法二选一） ---
+      # -------------------------------
+      # source: "mmoitems"                         # 物品库来源
+      # id: "LOTTO_STAR_HELMET"                     # 物品库物品 ID
+      ############################################################
+      # --- MMOItems 物品：source + mmo-type + mmo-id ---
+      # -------------------------------
+      # source: "mmoitems"
+      # mmo-type: "ARMOR"                         # MMOItems 类型
+      # mmo-id: "LOTTO_STAR_HELMET"               # MMOItems 物品 ID
+      ############################################################
+      # --- 自定义物品：material 及其它字段 ---
+      # material: IRON_HELMET                      # Minecraft 材质
+      # amount: 1                                  # 图标数量
+      # name: "星辰头盔"                               # 图标名称
+      # lore:                                      # 图标 Lore
+      #   - "&7自定义图标说明"                      # Lore 文本
+      # custom-model-data: 0                       # 自定义模型数据
+      # glow: true                                 # 是否显示附魔光效
+      # skull-texture: "base64..."                 # 玩家头颅纹理
+      # color: "#FF5555"                           # 可染色材质的颜色
+      #
+      # --- nbt写法二选一 ---
+      # nbt:                                       # 图标 NBT 键值映射写法，与下方整段 SNBT 写法二选一
+      #   CustomTag: "value"                       # 图标 NBT 键值
+      # 或者
+      # nbt: "{CustomTag:'value',Unbreakable:1b}"  # 图标 NBT 整段 SNBT 写法，与上方键值映射二选一
+      #
+      # ---ArcartX 读取物品的 icon / url NBT 来渲染自定义贴图（详见ArcartX wiki：自定义物品贴图）---
+      # texture: "item"                            # 写入 icon NBT，渲染 resource/item_icon/ 下的贴图（手持 / AX-UI）；子目录用 "xxx/xxx"
+      # texture-url: "menu/icon.png"               # 写入 url NBT，仅用于原版 GUI(箱子菜单)图标，支持文件路径 / 网络链接 / GIF
+      ############################################################
+      # --- 直接发送 json/NBT 给 slot 控件（完全自定义物品） ---
+      # json: '{"id":"minecraft:diamond","Count":1b}'  # 完整物品 JSON；配置后不再叠加其它字段或 texture/texture-url/nbt
+      ####################################################################################################################
+
+    cost:
+      single:
+        - type: POINT
+          id: "stardust"
+          amount: 20
+          display-name: "星尘"
+          icon:
+            material: AMETHYST_SHARD
+            name: "星尘"
+    limit: 0
+    reward:
+      name: "星辰头盔"
+      item:
+        source: mmoitems
+        id: "ARMOR;LOTTO_STAR_HELMET"

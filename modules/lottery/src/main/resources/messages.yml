@@ -40,6 +40,15 @@ packet:
   pending-claim-available: "&e你有 {0} 个待领取奖励，请使用 /lottery claim。"
   pending-claim-claimed: "&a已领取 {0} 个待领取奖励。"
   mail-sent: "&a奖励已通过邮件发放: &f{0}"
+rarity:
+  common: "消费级"
+  uncommon: "工业级"
+  rare: "军规级"
+  epic: "受限"
+  legendary: "保密"
+  mythic: "隐秘"
+  special: "罕见特殊物品"
+  unknown: "未知稀有度"
 player:
   # 旧 player.help 列表格式（已被 player.help.title 等标准格式替代）:
   # help:

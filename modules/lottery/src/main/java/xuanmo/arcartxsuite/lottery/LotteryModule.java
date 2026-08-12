@@ -161,7 +161,7 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
 
         service = new LotteryService(
             plugin, configuration, repo,
-            currencyManager, itemSourceRegistry, mailSupplier, logger);
+            currencyManager, itemSourceRegistry, itemMatcher, mailSupplier, logger);
         service.setMessageProvider(messages());
         service.start();
 

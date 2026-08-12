@@ -1,0 +1,17 @@
+# MythicMobs 物品配置示例
+# 文件需复制到 plugins/MythicMobs/Items/ 目录下
+# 对应 lottery/pools/character_event_1.yml 的 star_character.item.id: LottoStarCharacter
+
+LottoStarCharacter:
+  Id: NETHER_STAR
+  Display: '&5星辰'
+  Lore:
+    - '&7角色活动祈愿中的限定五星角色。'
+    - ''
+    - '&e✦ &7稀有度: &b五星'
+    - '&e✦ &7来源: &f角色活动祈愿'
+  Enchantments:
+    - DURABILITY:1
+  Options:
+    Unbreakable: true
+    HideEnchants: false

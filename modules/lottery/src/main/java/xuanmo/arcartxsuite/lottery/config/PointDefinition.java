@@ -4,7 +4,9 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.bukkit.configuration.ConfigurationSection;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * 单个奖池使用的积分定义及其产出规则。
@@ -18,13 +20,13 @@ import org.jetbrains.annotations.NotNull;
 public record PointDefinition(
     @NotNull String id,
     @NotNull String displayName,
-    @NotNull String icon,
+    @Nullable IconDefinition icon,
     int perPull,
     @NotNull Map<String, Integer> rarityRewards
 ) {
     public static PointDefinition load(String id, ConfigurationSection section) {
         String displayName = section.getString("display-name", id);
-        String icon = section.getString("icon", "");
+        IconDefinition icon = IconDefinition.load(section, "icon");
         int perPull = section.getInt("per-pull", 0);
         Map<String, Integer> rarity = new LinkedHashMap<>();
         ConfigurationSection rewards = section.getConfigurationSection("rarity");

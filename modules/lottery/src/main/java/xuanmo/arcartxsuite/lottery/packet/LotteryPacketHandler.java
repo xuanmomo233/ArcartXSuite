@@ -17,6 +17,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.api.icon.IconResolver;
 import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import xuanmo.arcartxsuite.lottery.LotteryService;
@@ -227,7 +228,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("upItemName", up == null ? "" : up.name());
         payload.put("upItemStar", up == null ? 0 : service.describeGachaItem(pool, up).star());
         payload.put("upItemDesc", pool.upItemDesc());
-        payload.put("upItemIcon", iconResolver.resolveItemJson(player, pool.upItemIcon()));
+        payload.put("upItemIcon", upItemIconJson(player, pool));
         PlayerGachaState state = service.getGachaState(player, pool.id());
         payload.put("pity4", state.pity4star());
         payload.put("pity5", state.pity5star());
@@ -258,7 +259,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
 
     private List<String> descriptionLines(String description) {
         if (description == null || description.isEmpty()) return List.of();
-        String normalized = description.replace("\r\n", "\n").replace('\r', '\n');
+        String normalized = description.replace("\n", "\n").replace('\r', '\n');
         String[] lines = normalized.split("\\\\n|\\n", -1);
         List<String> colored = new ArrayList<>(lines.length);
         for (String line : lines) {
@@ -268,10 +269,12 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
     }
 
     private void updateCase(Player player, PoolDefinition pool, Map<String, Object> payload) {
+        payload.put("rarityNames", caseRarityNames());
         payload.put("costRows", costRows(player, pool.cost(), false));
         payload.put("costTenRows", costRows(player, pool.cost(), true));
         payload.put("tenAvailable", !pool.cost().ten().isEmpty());
         payload.put("resourceRows", resourceRows(player, pool.cost()));
+        payload.put("upItemIcon", upItemIconJson(player, pool));
         if (pool.caseConfig() == null) return;
         Map<String, Object> jsons = new LinkedHashMap<>();
         Map<String, Object> names = new LinkedHashMap<>();
@@ -288,6 +291,19 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("itemNames", names);
         payload.put("itemRarities", rarities);
         payload.put("itemCount", Math.min(items.size(), CASE_PREVIEW_SLOT_LIMIT));
+    }
+
+    private Map<String, Object> caseRarityNames() {
+        Map<String, Object> names = new LinkedHashMap<>();
+        names.put("COMMON", service.message("rarity.common"));
+        names.put("UNCOMMON", service.message("rarity.uncommon"));
+        names.put("RARE", service.message("rarity.rare"));
+        names.put("EPIC", service.message("rarity.epic"));
+        names.put("LEGENDARY", service.message("rarity.legendary"));
+        names.put("MYTHIC", service.message("rarity.mythic"));
+        names.put("SPECIAL", service.message("rarity.special"));
+        names.put("UNKNOWN", service.message("rarity.unknown"));
+        return names;
     }
 
     /** 构建单抽或十连的消耗条目数据，供界面展示。 */
@@ -323,7 +339,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             row.put("type", entry.type().name());
             row.put("id", entry.id());
             row.put("displayName", entry.displayName() == null ? entry.id() : entry.displayName());
-            row.put("icon", resolveIconJson(player, entry.icon()));
+            row.put("icon", iconResolver.resolveItemJson(player, entry.icon()));
             row.put("owned", owned(player, entry));
             rows.put(Integer.toString(rowIndex++), row);
         }
@@ -343,7 +359,8 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             CostConfig.CostEntry entry,
             xuanmo.arcartxsuite.lottery.config.PointDefinition point
     ) {
-        return resolveIconJson(player, entry.icon() == null ? (point == null ? "" : point.icon()) : entry.icon());
+        IconDefinition icon = entry.icon() == null ? (point == null ? null : point.icon()) : entry.icon();
+        return iconResolver.resolveItemJson(player, icon);
     }
 
     private String poolItemJson(Player player, PoolItem item) {
@@ -351,8 +368,39 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         return iconResolver.itemToJson(service.generateItem(item));
     }
 
-    private String resolveIconJson(Player player, String value) {
-        return iconResolver.resolveItemJson(player, xuanmo.arcartxsuite.api.icon.IconDefinition.load(value));
+    private String upItemIconJson(Player player, PoolDefinition pool) {
+        if (pool.upItemIcon() != null) {
+            return iconResolver.resolveItemJson(player, pool.upItemIcon());
+        }
+        PoolItem fallback = fallbackUpItem(pool);
+        return fallback == null ? "" : poolItemJson(player, fallback);
+    }
+
+    private PoolItem fallbackUpItem(PoolDefinition pool) {
+        if (pool.type() == PoolType.GACHA) {
+            GachaPoolConfig gacha = pool.gacha();
+            if (gacha == null) return null;
+            if (!gacha.up5starItems().isEmpty()) {
+                return gacha.up5starItems().get(0);
+            }
+            if (!gacha.standard5starItems().isEmpty()) {
+                return gacha.standard5starItems().get(0);
+            }
+            return null;
+        }
+
+        CasePoolConfig caseConfig = pool.caseConfig();
+        if (caseConfig == null || caseConfig.items().isEmpty()) return null;
+        List<String> rarityOrder = new ArrayList<>(caseConfig.raritySettings().keySet());
+        for (int i = rarityOrder.size() - 1; i >= 0; i--) {
+            String rarity = rarityOrder.get(i);
+            for (PoolItem item : caseConfig.items()) {
+                if (item.rarity() != null && item.rarity().equalsIgnoreCase(rarity)) {
+                    return item;
+                }
+            }
+        }
+        return caseConfig.items().get(caseConfig.items().size() - 1);
     }
 
     private xuanmo.arcartxsuite.lottery.config.PointDefinition pointDefinition(String id) {
@@ -366,7 +414,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
     private long owned(Player player, CostConfig.CostEntry entry) {
         return switch (entry.type()) {
             case POINT -> service.getPoint(player.getUniqueId(), entry.id());
-            case ITEM -> service.getItemBalance(player, entry.id());
+            case ITEM -> service.getItemBalance(player, entry.matcher());
             case CURRENCY -> service.getCurrencyBalance(player, entry.id());
         };
     }
@@ -465,7 +513,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("id", definition.id());
                 row.put("displayName", definition.displayName());
-                row.put("icon", resolveIconJson(player, definition.icon()));
+                row.put("icon", iconResolver.resolveItemJson(player, definition.icon()));
                 row.put("amount", service.getPoint(player.getUniqueId(), definition.id()));
                 pointRows.put(Integer.toString(pointIndex++), row);
             }

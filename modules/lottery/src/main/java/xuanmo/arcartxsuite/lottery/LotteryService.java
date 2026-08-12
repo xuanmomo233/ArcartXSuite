@@ -17,6 +17,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
+import xuanmo.arcartxsuite.api.item.ItemMatcher;
+import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.util.ItemSerializer;
@@ -51,6 +53,7 @@ public class LotteryService {
     private final LotteryRepository repository;
     private final CurrencyBridgeAPI currencyManager;
     private final ItemSourceRegistry itemSourceRegistry;
+    private final ItemMatcherAPI itemMatcherSupport;
     private final Supplier<MailDispatchable> mailSupplier;
     private final Logger logger;
     private final GachaEngine gachaEngine;
@@ -76,13 +79,15 @@ public class LotteryService {
                           LotteryRepository repository,
                           CurrencyBridgeAPI currencyManager,
                           ItemSourceRegistry itemSourceRegistry,
-                          Supplier<MailDispatchable> mailSupplier,
+                           ItemMatcherAPI itemMatcherSupport,
+                           Supplier<MailDispatchable> mailSupplier,
                           Logger logger) {
         this.plugin = plugin;
         this.configuration = configuration;
         this.repository = repository;
         this.currencyManager = currencyManager;
         this.itemSourceRegistry = itemSourceRegistry;
+        this.itemMatcherSupport = itemMatcherSupport;
         this.mailSupplier = mailSupplier;
         this.logger = logger;
         this.gachaEngine = new GachaEngine();
@@ -477,21 +482,21 @@ public class LotteryService {
         for (CostConfig.CostEntry entry : source) {
             int amount = multiplier == 10 ? entry.amount() : entry.amount() * multiplier;
             entries.add(new CostConfig.CostEntry(entry.type(), entry.id(), amount,
-                entry.displayName(), entry.icon()));
+                entry.displayName(), entry.icon(), entry.matcher()));
         }
         if (entries.isEmpty()) return new CostTransaction(true, List.of(), Map.of());
         Map<String, Long> required = new java.util.LinkedHashMap<>();
         for (CostConfig.CostEntry entry : entries) {
-            String key = entry.type().name() + ":" + entry.id();
+            String key = costKey(entry);
             required.merge(key, (long) entry.amount(), Long::sum);
         }
         for (CostConfig.CostEntry entry : entries) {
-            String key = entry.type().name() + ":" + entry.id();
+            String key = costKey(entry);
             if (!required.containsKey(key)) continue;
             long amount = required.remove(key);
             boolean enough = switch (entry.type()) {
                 case POINT -> repository.getPoint(player.getUniqueId(), entry.id()) >= amount;
-                case ITEM -> countInventory(player, entry.id()) >= amount;
+                case ITEM -> countInventory(player, entry.matcher()) >= amount;
                 case CURRENCY -> hasCurrency(player, entry.id(), amount);
             };
             if (!enough) {
@@ -506,11 +511,11 @@ public class LotteryService {
         Map<String, List<ItemStack>> snapshots = new java.util.LinkedHashMap<>();
         for (CostConfig.CostEntry entry : entries) {
             if (entry.type() == CostConfig.CostMode.ITEM) {
-                snapshots.computeIfAbsent(entry.id(), ignored -> snapshotInventory(player, entry.id()));
+                snapshots.computeIfAbsent(costKey(entry), ignored -> snapshotInventory(player, entry.matcher()));
             }
             boolean ok = switch (entry.type()) {
                 case POINT -> repository.subtractPoints(player.getUniqueId(), entry.id(), entry.amount());
-                case ITEM -> removeItemFromInventory(player, entry.id(), entry.amount());
+                case ITEM -> removeItemFromInventory(player, entry.matcher(), entry.amount());
                 case CURRENCY -> withdrawCurrency(player, entry.id(), entry.amount());
             };
             if (!ok) {
@@ -523,10 +528,14 @@ public class LotteryService {
         return new CostTransaction(true, changed, snapshots);
     }
 
-    private long countInventory(Player player, String itemId) {
+    private String costKey(CostConfig.CostEntry entry) {
+        return entry.type().name() + ":" + entry.id() + ":" + (entry.matcher() == null ? "" : entry.matcher());
+    }
+
+    private long countInventory(Player player, ItemMatcher matcher) {
         long total = 0;
         for (ItemStack stack : player.getInventory().getContents()) {
-            if (stack != null && matchesItem(stack, itemId)) total += stack.getAmount();
+            if (stack != null && itemMatcherSupport.matches(matcher, stack)) total += stack.getAmount();
         }
         return total;
     }
@@ -551,7 +560,7 @@ public class LotteryService {
         Map<String, Integer> itemAmounts = new java.util.HashMap<>();
         for (CostConfig.CostEntry entry : changed) {
             if (entry.type() == CostConfig.CostMode.ITEM) {
-                itemAmounts.merge(entry.id(), entry.amount(), Integer::sum);
+                itemAmounts.merge(costKey(entry), entry.amount(), Integer::sum);
             }
         }
         for (int i = changed.size() - 1; i >= 0; i--) {
@@ -559,13 +568,13 @@ public class LotteryService {
             switch (entry.type()) {
                 case POINT -> repository.addPoints(player.getUniqueId(), entry.id(), entry.amount());
                 case ITEM -> {
-                    if (!restoredItems.add(entry.id())) break;
-                    List<ItemStack> stacks = snapshots.get(entry.id());
+                    if (!restoredItems.add(costKey(entry))) break;
+                    List<ItemStack> stacks = snapshots.get(costKey(entry));
                     if (stacks != null) {
                         restoreItemSnapshots(
                             player,
                             stacks,
-                            itemAmounts.getOrDefault(entry.id(), 0)
+                            itemAmounts.getOrDefault(costKey(entry), 0)
                         );
                     }
                 }
@@ -574,10 +583,10 @@ public class LotteryService {
         }
     }
 
-    private List<ItemStack> snapshotInventory(Player player, String itemId) {
+    private List<ItemStack> snapshotInventory(Player player, ItemMatcher matcher) {
         List<ItemStack> snapshots = new ArrayList<>();
         for (ItemStack stack : player.getInventory().getContents()) {
-            if (stack != null && matchesItem(stack, itemId)) snapshots.add(stack.clone());
+            if (stack != null && itemMatcherSupport.matches(matcher, stack)) snapshots.add(stack.clone());
         }
         return snapshots;
     }
@@ -656,8 +665,8 @@ public class LotteryService {
         return bridge.balance(player).longValue();
     }
 
-    public long getItemBalance(@NotNull Player player, @NotNull String itemId) {
-        return countInventory(player, itemId);
+    public long getItemBalance(@NotNull Player player, @NotNull ItemMatcher matcher) {
+        return countInventory(player, matcher);
     }
 
     public boolean givePoints(@NotNull UUID playerUuid, @NotNull String pointId, long amount) {
@@ -721,12 +730,12 @@ public class LotteryService {
 
     public record GachaItemInfo(int star, boolean up) {}
 
-    private boolean removeItemFromInventory(Player player, String itemId, int amount) {
+    private boolean removeItemFromInventory(Player player, ItemMatcher matcher, int amount) {
         if (amount <= 0) return false;
         int available = 0;
         for (int i = 0; i < player.getInventory().getSize(); i++) {
             org.bukkit.inventory.ItemStack stack = player.getInventory().getItem(i);
-            if (stack != null && matchesItem(stack, itemId)) {
+            if (stack != null && itemMatcherSupport.matches(matcher, stack)) {
                 available += stack.getAmount();
                 if (available >= amount) break;
             }
@@ -735,20 +744,13 @@ public class LotteryService {
         int removed = 0;
         for (int i = 0; i < player.getInventory().getSize(); i++) {
             org.bukkit.inventory.ItemStack stack = player.getInventory().getItem(i);
-            if (stack == null || !matchesItem(stack, itemId)) continue;
+            if (stack == null || !itemMatcherSupport.matches(matcher, stack)) continue;
             int toRemove = Math.min(stack.getAmount(), amount - removed);
             stack.setAmount(stack.getAmount() - toRemove);
             removed += toRemove;
             if (removed >= amount) break;
         }
         return removed == amount;
-    }
-
-    private boolean matchesItem(org.bukkit.inventory.ItemStack stack, String itemId) {
-        String mythicId = itemSourceRegistry.mythicItemId(stack);
-        String neigeId = itemSourceRegistry.neigeItemId(stack);
-        return itemId.equals(mythicId) || itemId.equals(neigeId)
-            || stack.getType().name().equalsIgnoreCase(itemId);
     }
 
     private String resolveSharedPoolId(String poolId) {

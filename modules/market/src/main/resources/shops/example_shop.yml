@@ -21,28 +21,40 @@
 #   具体可用值取决于 CurrencyBridgeManager 注册的桥接器。
 #   常见值: "money"(Vault经济)、"points"(PlayerPoints) 等。
 #
-# 图标 (icon) 字段说明:
-#   商店与商品的 icon 使用与 Menu 模块一致的通用图标定义，支持以下字段：
-#     material           - 原版材质名
-#     amount             - 物品数量
-#     name               - 图标显示名称（支持 & 颜色码）
-#     lore               - 图标描述行列表
-#     custom-model-data  - 自定义模型数据（配合资源包 / ItemsAdder / CraftEngine）
-#     glow               - 是否附魔发光
-#     skull-texture      - 头颅材质（material 为 PLAYER_HEAD 时）
-#     color              - 皮革染色（material 为 LEATHER_* 时，如 "#FF5555"）
-#     source + id        - 直接取物品库物品（neigeitems/mythicmobs/overture）
-#     mmo-type + mmo-id  - MMOItems 物品（source 为 mmoitems 时）
-#     json               - 直接给出物品 NBT JSON，配置后忽略其余字段
-#     texture            - 写入 icon NBT，渲染 ArcartX 自定义贴图
-#     texture-url        - 写入 url NBT，用于原版 GUI 图标（支持路径 / 链接 / GIF）
-#     nbt                - 自定义 NBT，支持两种写法（见下）
-#   nbt 的两种写法:
-#     nbt:                                             # 写法一：键值映射，逐个写入字符串标签
-#       CustomTag: "value"
-#     nbt: "{CustomTag:'value',Unbreakable:1b}"        # 写法二：整段 SNBT 字符串
-#   注意 icon.nbt 只影响 UI 中显示的图标，item.nbt 才影响实际购买到手的物品。
-#   商店级 icon 也可直接写成字符串材质名，如 icon: "DIAMOND"。
+# ─── 图标配置（商店 icon / 商品 icon）─────────────────────────────────────────
+# 与 Menu 模块的 icon 用法完全一致：icon 需写成配置节，字段如下。
+# 商品省略 icon 时，直接用 item 生成的物品当图标。
+# icon:
+#   material: NETHER_STAR         — 材质（Minecraft 物品 ID，大写）
+#   name: "&b图标名称"             — 图标悬浮名称（支持 & 颜色码）
+#   custom-model-data: 0          — 自定义模型数据（用于资源包自定义贴图，配合ItemsAdder或CraftEngine使用）
+#   amount: 1                     — 物品数量（显示为堆叠数）
+#   lore:                         — 物品描述（列表）
+#     - "&7第一行描述"
+#     - "&7第二行描述"
+#   glow: true                    — 附魔光效
+#   skull-texture: "base64..."    — 自定义头颅材质（material 为 PLAYER_HEAD 时）
+#   color: "#FF5555"              — 皮革盔甲颜色（material 为 LEATHER_* 时）
+#   --- 物品库图标（source + id 直接调用物品库的物品）---
+#   source: "neigeitems"          — 物品来源 (neigeitems/mythicmobs/overture/mmoitems)
+#   id: "herb_bundle"             — 物品库中的物品 ID
+#   mmo-type: "SWORD"             — MMOItems 类型（source 为 mmoitems 时，代替 id）
+#   mmo-id: "STEEL_SWORD"         — MMOItems ID（source 为 mmoitems 时，代替 id）
+#   --- 直接发送 json/NBT 给 slot 控件（完全自定义物品）---
+#   json: '{"id":"minecraft:diamond_sword","Count":1b}' — 直接提供物品 NBT JSON（会忽略上面的 material 等字段）
+#   --- ArcartX 自定义贴图（在 material 物品上写入 NBT，无需资源包 CustomModelData）---
+#   原理：ArcartX 读取物品的 icon / url NBT 来渲染自定义贴图（详见ArcartX wiki：自定义物品贴图）
+#   texture: "item"               — 写入 icon NBT，渲染 resource/item_icon/ 下的贴图（手持 / AX-UI）；子目录用 "xxx/xxx"
+#   或（写法三选一）
+#   texture-url: "menu/icon.png"  — 写入 url NBT，仅用于原版 GUI(箱子菜单)图标，支持文件路径 / 网络链接 / GIF
+#   或（写法三选一）
+#   nbt:                          — 写法一：键值映射，逐个写入字符串 NBT（键: 值）
+#     icon: "item"                — 等同于上述texture: "item"
+#     url: "https://example.com/icon.gif"  — 等同于上述texture-url
+#     CustomTag: "value"          — 任意自定义字符串标签
+#   或（nbt 两种写法二选一）
+#   nbt: "{CustomTag:'value',Unbreakable:1b}" — 写法二：整段 SNBT 字符串，可写入数字/字节/数组等任意类型标签
+#   注意：icon.nbt 只改变 UI 中图标的外观；玩家买到手的物品由 item.nbt 决定（见示例 2）。
 # =============================================================================
 
 # ── 商店基础信息 ──
@@ -55,7 +67,8 @@ display-name: "&6综合商店"
 #   name: "&6综合商店"
 #   glow: true
 #   nbt: "{CustomTag:'shop_main'}"
-icon: "DIAMOND"
+icon:
+  material: "DIAMOND"
 # 查看此商店所需的权限（空字符串表示无限制）
 permission: ""
 # 分类标签（用于 UI 筛选功能，可定义多个）
@@ -68,25 +81,34 @@ items:
   # 示例 1: 原版 Minecraft 物品（无限库存）
   # ═══════════════════════════════════════════════════════════════════════════
   diamond_sword:
+    ###########################################################################
     # 商品实际发放的物品定义
     item:
       # 物品来源
       source: "minecraft"
       # 物品 ID: Bukkit Material 枚举名
       id: "DIAMOND_SWORD"
-    # 商品在 UI 中的图标（省略时直接用 item 生成的物品作为图标）
-    # 可用字段见文件顶部「图标 (icon) 字段说明」
+    ###########################################################################
+    # 注意！！！
+    # 上方的item配置节为真实发放的物品
+    # 而下方icon为你想展示在商店的图标
+    # 例如你不想展示商品真实物品信息，或者想推销商品，可修改lore打广告
+    # 省略下方icon时直接用 item 生成的物品作为图标
+    # 完整可用字段见文件顶部「图标配置」
     icon:
       material: "DIAMOND_SWORD"
       name: "&b锋利的钻石剑"
       lore:
         - "&7示例商品图标"
-      # 自定义 NBT 写法一：键值映射
+      # 自定义 NBT 写法一：键值映射（icon / url 即 ArcartX 贴图键）
       # nbt:
+      #   icon: "item"
       #   CustomTag: "shop_diamond_sword"
       # 自定义 NBT 写法二：整段 SNBT 字符串
       # nbt: "{Enchantments:[{id:'minecraft:sharpness',lvl:5s}]}"
-    # 在商店 UI 中显示的名称（覆盖物品本身的名称）
+    ###########################################################################
+    # 在商店 UI 中显示的名称，顶替的是item的物品来源名称（覆盖物品本身的名称）
+    # 上方icon的name为鼠标移动到商品，其tooltip显示物品的名称，而这里的display为商店UI货架展示的名称
     display-name: "&b钻石剑"
     # 玩家从商店购买此物品的价格（设为 0 或省略表示不可购买）
     buy-price: 500
@@ -243,7 +265,7 @@ items:
     # 指令商品不生成物品，只在扣款成功后执行奖励指令
     type: "command"  # 指令商品：不生成物品，仅执行 reward-commands
     # 指令商品没有实际物品，图标必须由 icon 提供
-    # 可用字段见文件顶部「图标 (icon) 字段说明」
+    # 完整可用字段见文件顶部「图标配置」
     icon:
       material: "NETHER_STAR"
       name: "&d指令奖励"
@@ -255,13 +277,16 @@ items:
       # glow: true
       # skull-texture: "base64..."
       # color: "#FF5555"
-      # texture: "item"
-      # texture-url: "menu/reward.png"
-      # 自定义 NBT 写法一：键值映射
+      # --- ArcartX 自定义贴图（与 Menu 完全相同的两种写法）---
+      # texture: "item"                 — 写入 icon NBT，渲染 resource/item_icon/ 下的贴图
+      # texture-url: "menu/reward.png"  — 写入 url NBT，用于原版 GUI(箱子菜单)图标
+      # 等价写法：直接用 nbt 子键写 icon / url
       # nbt:
-      #   CustomTag: "command_reward"
-      # 自定义 NBT 写法二：整段 SNBT 字符串
-      # nbt: "{CustomTag:'command_reward',Unbreakable:1b}"
+      #   icon: "item"                            — 等同于 texture: "item"
+      #   url: "https://example.com/reward.gif"   — 等同于 texture-url
+      #   CustomTag: "command_reward"             — 任意自定义字符串标签
+      # 或写成整段 SNBT（与上面的 nbt 键值映射二选一）
+      # nbt: "{icon:'item',CustomTag:'command_reward',Unbreakable:1b}"
     display-name: "&d指令奖励"
     buy-price: 100
     sell-price: 0

@@ -66,7 +66,7 @@ public class PrizeDistributor {
     private DistributionResult giveDirectItem(Player player, PoolItem item) {
         ItemStack stack = generateItem(item);
         if (stack == null) {
-            logger.warning("[Lottery] 无法生成物品: " + item.pluginId() + " (type=" + item.pluginType() + ")");
+            logger.warning("[Lottery] 无法生成物品: " + item.itemId() + " (type=" + item.itemSource() + ")");
             return DistributionResult.failure(null, "物品生成失败");
         }
 
@@ -128,7 +128,7 @@ public class PrizeDistributor {
      */
     @Nullable
     public ItemStack generateItem(PoolItem item) {
-        if (item.pluginType() == PoolItem.PluginItemType.PLAIN && item.itemJson() != null
+        if (item.itemSource() == PoolItem.PluginItemType.PLAIN && item.itemJson() != null
                 && !item.itemJson().isBlank()) {
             try {
                 return ItemSerializer.deserialize(java.util.Base64.getDecoder().decode(item.itemJson()));
@@ -136,15 +136,20 @@ public class PrizeDistributor {
                 logger.warning("[Lottery] 预序列化物品解析失败: " + e.getMessage());
             }
         }
-        if (item.pluginId() == null || item.pluginId().isBlank()) return null;
-        return switch (item.pluginType()) {
-            case MYTHIC -> itemSourceRegistry.generateMythicItem(item.pluginId(), item.amount());
-            case NEIGE -> itemSourceRegistry.generateNeigeItem(item.pluginId(), item.amount());
-            case OVERTURE -> itemSourceRegistry.generateOvertureItem(item.pluginId(), null, item.amount());
-            case MMO -> itemSourceRegistry.generateMmoItem(item.pluginId(), item.pluginId(), item.amount());
+        if (item.itemId() == null || item.itemId().isBlank()) return null;
+        return switch (item.itemSource()) {
+            case MYTHIC -> itemSourceRegistry.generateMythicItem(item.itemId(), item.amount());
+            case NEIGE -> itemSourceRegistry.generateNeigeItem(item.itemId(), item.amount());
+            case OVERTURE -> itemSourceRegistry.generateOvertureItem(item.itemId(), null, item.amount());
+            case MMO -> {
+                String[] parts = item.itemId().split(";", 2);
+                String typeId = parts[0];
+                String itemId = parts.length == 2 ? parts[1] : parts[0];
+                yield itemSourceRegistry.generateMmoItem(typeId, itemId, item.amount());
+            }
             case PLAIN -> {
-                String materialName = item.pluginId().startsWith("minecraft:")
-                    ? item.pluginId().substring("minecraft:".length()) : item.pluginId();
+                String materialName = item.itemId().startsWith("minecraft:")
+                    ? item.itemId().substring("minecraft:".length()) : item.itemId();
                 Material material = Material.matchMaterial(materialName, true);
                 yield material == null ? null : new ItemStack(material, item.amount());
             }

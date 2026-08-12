@@ -1,0 +1,20 @@
+# Overture 物品配置示例
+# 官方文档: https://17artist.github.io/Overture/
+# 对应 lottery/pools/default_weapon_case.yml 的 skin_karambit_fade.item.id: LottoKarambitFade
+# 物品 ID 为根键 LottoKarambitFade，对应 lottery/pools/default_weapon_case.yml 的 skin_karambit_fade.item.id
+
+LottoKarambitFade:
+  display: lotto_karambit_display
+  icon: IRON_SWORD
+  name:
+    item_name: "&6★ 爪子刀 | 渐变"
+  lore:
+    item_type: "&6特殊级武器皮肤"
+    item_desc:
+      - "&7常规武器箱中的罕见特殊级奖励。"
+      - "&e✦ &7来源: &f常规武器箱"
+  meta:
+    shiny: true
+  data:
+    skin_type: "karambit_fade"
+    rarity: "SPECIAL"
