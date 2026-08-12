@@ -21,6 +21,19 @@ public final class YamlConfigSynchronizer {
     }
 
     /**
+     * 递归深度上限。
+     * <p>
+     * 正常的 YAML 配置树深度很少超过 10 层。此上限用于防御 Mohist 等混合端
+     * Bukkit YAML 实现的边界情况（如 {@code getConfigurationSection(key)} 返回
+     * 当前 section 而非子 section），避免 {@link #mergeSection} 无限递归导致
+     * {@link StackOverflowError}。
+     */
+    private static final int MAX_DEPTH = 64;
+
+    private static final java.util.logging.Logger DEPTH_LOGGER =
+        java.util.logging.Logger.getLogger("AXS-ConfigSync");
+
+    /**
      * 把内置默认值的内容合并到一个内存中的 live YAML 副本，不动任何文件。
      * <p>
      * 用于 dry-run / 诊断模式：调用方传入已加载的 live 配置（可为空 {@link YamlConfiguration}）
@@ -41,7 +54,7 @@ public final class YamlConfigSynchronizer {
         Objects.requireNonNull(policy, "policy");
         List<String> addedPaths = new ArrayList<>();
         List<String> removedPaths = new ArrayList<>();
-        mergeSection(live, live, defaults, "", policy, true, true, addedPaths, removedPaths);
+        mergeSection(live, live, defaults, "", policy, true, true, addedPaths, removedPaths, 0);
         return new MergeOutcome(List.copyOf(addedPaths), List.copyOf(removedPaths));
     }
 
@@ -135,7 +148,8 @@ public final class YamlConfigSynchronizer {
             true,
             true,
             addedPaths,
-            removedPaths
+            removedPaths,
+            0
         );
 
         if (addedPaths.isEmpty() && removedPaths.isEmpty()) {
@@ -204,8 +218,15 @@ public final class YamlConfigSynchronizer {
         boolean sectionExistedBefore,
         boolean pruneUnknownPaths,
         List<String> addedPaths,
-        List<String> removedPaths
+        List<String> removedPaths,
+        int depth
     ) {
+        if (depth > MAX_DEPTH) {
+            DEPTH_LOGGER.warning("YamlConfigSynchronizer.mergeSection 超过最大递归深度 " + MAX_DEPTH
+                + "，已在 path='" + parentPath + "' 处中止。"
+                + "这可能由 Mohist 等混合端的 YAML 实现边界情况或配置循环引用引起。");
+            return;
+        }
         if (policy.isOpaqueSection(parentPath)) {
             return;
         }
@@ -217,7 +238,8 @@ public final class YamlConfigSynchronizer {
                 parentPath,
                 policy,
                 addedPaths,
-                removedPaths
+                removedPaths,
+                depth
             );
             return;
         }
@@ -226,13 +248,21 @@ public final class YamlConfigSynchronizer {
             String path = childPath(parentPath, key);
             ConfigurationSection defaultChildSection = defaultsSection.getConfigurationSection(key);
             if (defaultChildSection != null) {
+                // 防御 Mohist 等混合端的 YAML 实现 bug：
+                // getConfigurationSection(key) 应返回子 section，但某些实现可能返回当前 section 本身，
+                // 导致 mergeSection 无限自递归。检测到这种自引用时跳过。
+                if (defaultChildSection == defaultsSection) {
+                    DEPTH_LOGGER.warning("YamlConfigSynchronizer.mergeSection 检测到 getConfigurationSection('"
+                        + key + "') 返回了当前 section 自身（疑似 Mohist YAML 实现 bug），已跳过该键。");
+                    continue;
+                }
                 boolean existed = liveConfiguration.isSet(path);
                 if (!existed) {
                     liveConfiguration.createSection(path);
                     copyComments(liveConfiguration, path, defaultsSection, key);
                     addedPaths.add(path);
                     if (policy.isOpaqueSection(path)) {
-                        copySectionContents(liveConfiguration, defaultChildSection, path, addedPaths);
+                        copySectionContents(liveConfiguration, defaultChildSection, path, addedPaths, depth);
                         continue;
                     }
                 }
@@ -247,7 +277,8 @@ public final class YamlConfigSynchronizer {
                         existed,
                         pruneUnknownPaths,
                         addedPaths,
-                        removedPaths
+                        removedPaths,
+                        depth + 1
                     );
                 }
                 continue;
@@ -285,8 +316,14 @@ public final class YamlConfigSynchronizer {
         String parentPath,
         SyncPolicy policy,
         List<String> addedPaths,
-        List<String> removedPaths
+        List<String> removedPaths,
+        int depth
     ) {
+        if (depth > MAX_DEPTH) {
+            DEPTH_LOGGER.warning("YamlConfigSynchronizer.mergeExistingDynamicChildren 超过最大递归深度 "
+                + MAX_DEPTH + "，已在 path='" + parentPath + "' 处中止。");
+            return;
+        }
         for (String liveKey : List.copyOf(liveSection.getKeys(false))) {
             String path = childPath(parentPath, liveKey);
             if (policy.isObsoletePath(path)) {
@@ -300,6 +337,12 @@ public final class YamlConfigSynchronizer {
             if (defaultChildSection == null || liveChildSection == null) {
                 continue;
             }
+            // 防御 Mohist YAML 实现 bug：getConfigurationSection 返回自身
+            if (defaultChildSection == defaultsSection || liveChildSection == liveSection) {
+                DEPTH_LOGGER.warning("YamlConfigSynchronizer.mergeExistingDynamicChildren 检测到 "
+                    + "getConfigurationSection('" + liveKey + "') 返回了当前 section 自身，已跳过。");
+                continue;
+            }
 
             mergeSection(
                 liveConfiguration,
@@ -310,7 +353,8 @@ public final class YamlConfigSynchronizer {
                 true,
                 false,
                 addedPaths,
-                removedPaths
+                removedPaths,
+                depth + 1
             );
         }
     }
@@ -330,16 +374,27 @@ public final class YamlConfigSynchronizer {
         YamlConfiguration liveConfiguration,
         ConfigurationSection defaultsSection,
         String parentPath,
-        List<String> addedPaths
+        List<String> addedPaths,
+        int depth
     ) {
+        if (depth > MAX_DEPTH) {
+            DEPTH_LOGGER.warning("YamlConfigSynchronizer.copySectionContents 超过最大递归深度 "
+                + MAX_DEPTH + "，已在 path='" + parentPath + "' 处中止。");
+            return;
+        }
         for (String key : defaultsSection.getKeys(false)) {
             String path = childPath(parentPath, key);
             ConfigurationSection defaultChildSection = defaultsSection.getConfigurationSection(key);
             if (defaultChildSection != null) {
+                if (defaultChildSection == defaultsSection) {
+                    DEPTH_LOGGER.warning("YamlConfigSynchronizer.copySectionContents 检测到 "
+                        + "getConfigurationSection('" + key + "') 返回了当前 section 自身，已跳过。");
+                    continue;
+                }
                 liveConfiguration.createSection(path);
                 copyComments(liveConfiguration, path, defaultsSection, key);
                 addedPaths.add(path);
-                copySectionContents(liveConfiguration, defaultChildSection, path, addedPaths);
+                copySectionContents(liveConfiguration, defaultChildSection, path, addedPaths, depth + 1);
                 continue;
             }
 
@@ -366,7 +421,16 @@ public final class YamlConfigSynchronizer {
     }
 
     private static List<String> listLeafPaths(ConfigurationSection section, String parentPath) {
+        return listLeafPaths(section, parentPath, 0);
+    }
+
+    private static List<String> listLeafPaths(ConfigurationSection section, String parentPath, int depth) {
         List<String> paths = new ArrayList<>();
+        if (depth > MAX_DEPTH) {
+            DEPTH_LOGGER.warning("YamlConfigSynchronizer.listLeafPaths 超过最大递归深度 "
+                + MAX_DEPTH + "，已在 path='" + parentPath + "' 处中止。");
+            return paths;
+        }
         for (String key : section.getKeys(false)) {
             String path = childPath(parentPath, key);
             ConfigurationSection child = section.getConfigurationSection(key);
@@ -374,7 +438,12 @@ public final class YamlConfigSynchronizer {
                 paths.add(path);
                 continue;
             }
-            List<String> childPaths = listLeafPaths(child, path);
+            if (child == section) {
+                DEPTH_LOGGER.warning("YamlConfigSynchronizer.listLeafPaths 检测到 "
+                    + "getConfigurationSection('" + key + "') 返回了当前 section 自身，已跳过。");
+                continue;
+            }
+            List<String> childPaths = listLeafPaths(child, path, depth + 1);
             if (childPaths.isEmpty()) {
                 paths.add(path);
             } else {
