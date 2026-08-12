@@ -28,6 +28,7 @@
 -repackageclasses ''
 
 # ─── 调试支持：输出混淆映射 + 保留行号表 ──────────────────────
-# 每个模块的 mapping 输出到各自的 build/libs 目录下。
--printmapping build/libs/proguard-mapping.txt
+# -printmapping 由 ObfuscateJarTask 动态注入（输出到 outputJar 同目录），
+# 不在此声明：ProGuard 会把此处的相对路径相对于 proguard/ 解析，
+# 而 proguard/ 下无 build/ 目录，导致 FileNotFoundException。
 -keepattributes SourceFile,LineNumberTable

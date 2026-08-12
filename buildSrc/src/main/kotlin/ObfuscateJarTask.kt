@@ -86,6 +86,15 @@ abstract class ObfuscateJarTask : DefaultTask() {
         sb.appendLine("-injars ${quote(inputJar.get().asFile)}")
         sb.appendLine("-outjars ${quote(outputJar.get().asFile)}")
 
+        // 调试：输出混淆映射到 outputJar 同目录，文件名基于 outputJar 名以避免多模块互相覆盖。
+        // ProGuard 的 ConfigurationParser 会把 .pro 里的相对路径相对于配置文件所在目录解析，
+        // 而 configFiles 来自 proguard/ 目录，其下没有 build/ 子目录，直接写相对路径会 FileNotFoundException。
+        // 故在此用 outputJar 的绝对路径推导 mapping 位置，并确保父目录存在。
+        val outJar = outputJar.get().asFile
+        val mappingFile = outJar.parentFile.resolve(outJar.nameWithoutExtension + "-proguard-mapping.txt")
+        mappingFile.parentFile.mkdirs()
+        sb.appendLine("-printmapping ${quote(mappingFile)}")
+
         // Library jars
         libraryJars.files.forEach { sb.appendLine("-libraryjars ${quote(it)}") }
 

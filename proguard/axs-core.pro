@@ -89,5 +89,7 @@
 # SourceFile + LineNumberTable 让栈追踪显示源文件名和行号，便于定位。
 # 注意：生产环境可考虑移除 LineNumberTable（略微增加逆向难度），
 #       但 printmapping 务必保留并归档，否则 StackOverflowError 等无法排查。
--printmapping build/libs/proguard-mapping.txt
+# -printmapping 由 ObfuscateJarTask 动态注入（输出到 outputJar 同目录），
+# 不在此声明：ProGuard 会把此处的相对路径相对于 proguard/ 解析，
+# 而 proguard/ 下无 build/ 目录，导致 FileNotFoundException。
 -keepattributes SourceFile,LineNumberTable
