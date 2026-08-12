@@ -26,3 +26,8 @@
 
 # ─── 扁平化包名（混淆类名但不改变方法可见性）───────────────
 -repackageclasses ''
+
+# ─── 调试支持：输出混淆映射 + 保留行号表 ──────────────────────
+# 每个模块的 mapping 输出到各自的 build/libs 目录下。
+-printmapping build/libs/proguard-mapping.txt
+-keepattributes SourceFile,LineNumberTable

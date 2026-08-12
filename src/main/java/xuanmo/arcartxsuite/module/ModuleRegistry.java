@@ -267,6 +267,11 @@ public final class ModuleRegistry {
                 LOGGER.log(Level.SEVERE, "加载模块 " + dm.descriptor.name() + " 失败，缺少运行依赖或依赖版本不兼容", error);
                 failedModules.add(dm.descriptor.name());
                 cleanupFailedModule(id);
+            } catch (StackOverflowError error) {
+                LOGGER.log(Level.SEVERE, "加载模块 " + dm.descriptor.name() + " 时发生 StackOverflowError"
+                    + "（可能由配置树循环引用或递归方法无终止条件引起）", error);
+                failedModules.add(dm.descriptor.name());
+                cleanupFailedModule(id);
             }
         }
 
@@ -397,9 +402,11 @@ public final class ModuleRegistry {
      */
     public boolean loadCloudModule(byte[] jarBytes, byte[] moduleSeed) {
         initializeGlobalBridges();
+        String cloudModuleId = null;
         try {
             ModuleDescriptor descriptor = ModuleDescriptorParser.parse(jarBytes);
-            String moduleId = descriptor.id();
+            cloudModuleId = descriptor.id();
+            String moduleId = cloudModuleId;
             if (modules.containsKey(moduleId)) {
                 LOGGER.info("云端模块 " + moduleId + " 已加载，跳过。");
                 return false;
@@ -418,6 +425,17 @@ public final class ModuleRegistry {
             return ok;
         } catch (Exception | LinkageError exception) {
             LOGGER.log(Level.SEVERE, "加载云端模块失败", exception);
+            return false;
+        } catch (StackOverflowError error) {
+            // StackOverflowError 是 VirtualMachineError，不会被上面的 catch(Exception|LinkageError) 捕获。
+            // 模块加载过程中的无限递归（如配置树循环引用、toString/equals 循环）会抛出此错误，
+            // 若不在此捕获则会直接传播到 Bukkit 调度器，丢失模块上下文信息。
+            LOGGER.log(Level.SEVERE, "加载云端模块 " + (cloudModuleId != null ? cloudModuleId : "<未知>")
+                + " 时发生 StackOverflowError"
+                + "（可能由配置树循环引用或递归方法无终止条件引起）", error);
+            if (cloudModuleId != null) {
+                cleanupFailedModule(cloudModuleId);
+            }
             return false;
         }
     }
@@ -530,6 +548,11 @@ public final class ModuleRegistry {
                     return ok;
                 } catch (Exception | LinkageError exception) {
                     LOGGER.log(Level.SEVERE, "热加载模块 " + descriptor.name() + " 失败", exception);
+                    cleanupFailedModule(descriptor.id());
+                    return false;
+                } catch (StackOverflowError error) {
+                    LOGGER.log(Level.SEVERE, "热加载模块 " + descriptor.name() + " 时发生 StackOverflowError"
+                        + "（可能由配置树循环引用或递归方法无终止条件引起）", error);
                     cleanupFailedModule(descriptor.id());
                     return false;
                 }

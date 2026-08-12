@@ -100,7 +100,7 @@ abstract class ObfuscateJarTask : DefaultTask() {
         sb.appendLine("-dontwarn")
         sb.appendLine("-dontoptimize")
         sb.appendLine("-dontshrink")
-        sb.appendLine("-keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod,Exceptions")
+        sb.appendLine("-keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod,Exceptions,SourceFile,LineNumberTable")
 
         // ── 公开 API 全保留（对外契约，不混淆） ──
         sb.appendLine("-keep class xuanmo.arcartxsuite.api.** { *; }")

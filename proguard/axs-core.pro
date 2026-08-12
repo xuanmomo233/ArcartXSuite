@@ -83,3 +83,11 @@
 
 # ─── 允许更激进的重命名 ──────────────────────────────────────
 -allowaccessmodification
+
+# ─── 调试支持：输出混淆映射 + 保留行号表 ──────────────────────
+# printmapping 生成原始类名 ↔ 混淆名映射文件，用于还原栈追踪。
+# SourceFile + LineNumberTable 让栈追踪显示源文件名和行号，便于定位。
+# 注意：生产环境可考虑移除 LineNumberTable（略微增加逆向难度），
+#       但 printmapping 务必保留并归档，否则 StackOverflowError 等无法排查。
+-printmapping build/libs/proguard-mapping.txt
+-keepattributes SourceFile,LineNumberTable

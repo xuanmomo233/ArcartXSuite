@@ -692,4 +692,9 @@ modules:
     # 功能：将原版工作台 / 熔炉界面替换为 ArcartX 自定义 UI，熔炉状态实时推送到客户端。
     # 配置文件：ArcartXVanilla.yml（crafting / furnace 启用开关与 UI id），UI 文件位于模块内 arcartx/ui/。
 
-
+  tooltip:
+    enabled: false
+    # Tooltip 物品提示数据采集
+    # 功能：接收客户端 Forge mod（ArcartX-Suite-Mod）发送的 AXS_TOOLTIP_DATA 网络包，缓存物品 tooltip 文本行与结构化数据，并通过 TooltipDataCapable 能力供其他模块（如 Chat 聊天物品预览）查询；支持将 tooltip 文本注入物品 NBT Lore。
+    # 前置：需客户端安装 ArcartX-Suite-Mod，否则服务端无法获取 tooltip 数据。
+    # 无配置文件；管理命令 /axs tooltip（help 查看帮助、status 查看缓存状态）。
