@@ -418,55 +418,76 @@ public record TitleModuleConfiguration(
         if (files == null) return;
         Arrays.sort(files, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
         for (File file : files) {
-            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
-            int index = 0;
-            for (String rawId : yaml.getKeys(false)) {
-                ConfigurationSection child = yaml.getConfigurationSection(rawId);
-                if (child == null) { index++; continue; }
-
-                String id = normalizeId(rawId);
-                if (id.isBlank()) { index++; continue; }
-
-                boolean enabled = child.getBoolean("enabled", true);
-                if (!enabled) { index++; continue; }
-
-                String groupId = normalizeId(child.getString("group", "default"));
-                String qualityId = normalizeId(child.getString("quality", "default"));
-                if (!groups.containsKey(groupId)) {
-                    logger.warning("称号 '" + id + "' (文件 " + file.getName() + ") 引用了不存在的分组 '" + groupId + "'，已跳过。");
-                    index++; continue;
-                }
-                if (!qualities.containsKey(qualityId)) {
-                    logger.warning("称号 '" + id + "' (文件 " + file.getName() + ") 引用了不存在的品质 '" + qualityId + "'，已跳过。");
-                    index++; continue;
-                }
-
-                String displayName = nullToEmpty(child.getString("display-name", id)).trim();
-                target.put(id, new TitleDefinition(
-                    id, true, groupId, qualityId,
-                    TitleKind.parse(child.getString("kind", "text")),
-                    displayName.isBlank() ? id : displayName,
-                    nullToEmpty(child.getString("chat-prefix")).trim(),
-                    nullToEmpty(child.getString("chat-suffix")).trim(),
-                    nullToEmpty(child.getString("tab-prefix")).trim(),
-                    nullToEmpty(child.getString("tab-suffix")).trim(),
-                    nullToEmpty(child.getString("description")).trim(),
-                    nullToEmpty(child.getString("source")).trim(),
-                    readAttributeMap(child.getConfigurationSection("display-attributes"), logger, id, "display-attributes"),
-                    readAttributeMap(child.getConfigurationSection("collection-attributes"), logger, id, "collection-attributes"),
-                    readStringList(child, logger, id, "display-attribute-lines"),
-                    readStringList(child, logger, id, "collection-attribute-lines"),
-                    child.getInt("sort-order", index),
-                    TitleDefinition.OverheadMode.parse(child.getString("overhead-mode", "none")),
-                    nullToEmpty(child.getString("overhead-texture")).trim(),
-                    child.getInt("overhead-width", 64),
-                    child.getInt("overhead-height", 64),
-                    child.getDouble("overhead-offset-y", 2.3),
-                    nullToEmpty(child.getString("overhead-prefix")).trim(),
-                    nullToEmpty(child.getString("overhead-suffix")).trim()
-                ));
-                index++;
+            try {
+                loadSingleTitleFile(file, groups, qualities, logger, target);
+            } catch (StackOverflowError error) {
+                // 单个称号文件的 YAML 结构异常（如配置树循环引用、Mohist 混合端 YAML 实现 bug）
+                // 可能触发 StackOverflowError。跳过该文件，不影响其他称号文件和模块整体加载。
+                logger.severe("加载称号文件 " + file.getName() + " 时发生 StackOverflowError"
+                    + "（可能由配置树循环引用或 YAML 实现边界问题引起），已跳过该文件。");
+            } catch (Error error) {
+                // 兜底捕获其他 Error（如 OutOfMemoryError 之外的罕见 VirtualMachineError），
+                // 避免单个文件的问题导致整个 title 模块加载失败。
+                logger.severe("加载称号文件 " + file.getName() + " 时发生错误: " + error.getMessage() + "，已跳过该文件。");
             }
+        }
+    }
+
+    private static void loadSingleTitleFile(
+        File file,
+        Map<String, TitleGroupDefinition> groups,
+        Map<String, TitleQualityDefinition> qualities,
+        Logger logger,
+        Map<String, TitleDefinition> target
+    ) {
+        YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+        int index = 0;
+        for (String rawId : yaml.getKeys(false)) {
+            ConfigurationSection child = yaml.getConfigurationSection(rawId);
+            if (child == null) { index++; continue; }
+
+            String id = normalizeId(rawId);
+            if (id.isBlank()) { index++; continue; }
+
+            boolean enabled = child.getBoolean("enabled", true);
+            if (!enabled) { index++; continue; }
+
+            String groupId = normalizeId(child.getString("group", "default"));
+            String qualityId = normalizeId(child.getString("quality", "default"));
+            if (!groups.containsKey(groupId)) {
+                logger.warning("称号 '" + id + "' (文件 " + file.getName() + ") 引用了不存在的分组 '" + groupId + "'，已跳过。");
+                index++; continue;
+            }
+            if (!qualities.containsKey(qualityId)) {
+                logger.warning("称号 '" + id + "' (文件 " + file.getName() + ") 引用了不存在的品质 '" + qualityId + "'，已跳过。");
+                index++; continue;
+            }
+
+            String displayName = nullToEmpty(child.getString("display-name", id)).trim();
+            target.put(id, new TitleDefinition(
+                id, true, groupId, qualityId,
+                TitleKind.parse(child.getString("kind", "text")),
+                displayName.isBlank() ? id : displayName,
+                nullToEmpty(child.getString("chat-prefix")).trim(),
+                nullToEmpty(child.getString("chat-suffix")).trim(),
+                nullToEmpty(child.getString("tab-prefix")).trim(),
+                nullToEmpty(child.getString("tab-suffix")).trim(),
+                nullToEmpty(child.getString("description")).trim(),
+                nullToEmpty(child.getString("source")).trim(),
+                readAttributeMap(child.getConfigurationSection("display-attributes"), logger, id, "display-attributes"),
+                readAttributeMap(child.getConfigurationSection("collection-attributes"), logger, id, "collection-attributes"),
+                readStringList(child, logger, id, "display-attribute-lines"),
+                readStringList(child, logger, id, "collection-attribute-lines"),
+                child.getInt("sort-order", index),
+                TitleDefinition.OverheadMode.parse(child.getString("overhead-mode", "none")),
+                nullToEmpty(child.getString("overhead-texture")).trim(),
+                child.getInt("overhead-width", 64),
+                child.getInt("overhead-height", 64),
+                child.getDouble("overhead-offset-y", 2.3),
+                nullToEmpty(child.getString("overhead-prefix")).trim(),
+                nullToEmpty(child.getString("overhead-suffix")).trim()
+            ));
+            index++;
         }
     }
 

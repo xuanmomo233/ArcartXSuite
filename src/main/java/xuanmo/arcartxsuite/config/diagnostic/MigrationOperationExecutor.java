@@ -14,6 +14,16 @@ import xuanmo.arcartxsuite.api.config.MigrationOperation;
  */
 public final class MigrationOperationExecutor {
 
+    /**
+     * 递归深度上限，用于防御 Mohist 等混合端 Bukkit YAML 实现的边界情况
+     * （如 {@code getConfigurationSection(key)} 返回当前 section 而非子 section），
+     * 避免 {@link #collectMatchingPaths} 无限递归导致 {@link StackOverflowError}。
+     */
+    private static final int MAX_DEPTH = 64;
+
+    private static final java.util.logging.Logger DEPTH_LOGGER =
+        java.util.logging.Logger.getLogger("AXS-Migration");
+
     private MigrationOperationExecutor() {
     }
 
@@ -117,6 +127,12 @@ public final class MigrationOperationExecutor {
         if (depth >= pattern.length) {
             return results;
         }
+        if (depth > MAX_DEPTH) {
+            DEPTH_LOGGER.warning("MigrationOperationExecutor.collectMatchingPaths 超过最大递归深度 " + MAX_DEPTH
+                + "，已在 path='" + prefix + "' 处中止。"
+                + "这可能由 Mohist 等混合端的 YAML 实现边界情况或配置循环引用引起。");
+            return results;
+        }
         String segment = pattern[depth];
         boolean isLast = depth == pattern.length - 1;
 
@@ -129,6 +145,12 @@ public final class MigrationOperationExecutor {
                 } else {
                     ConfigurationSection child = section.getConfigurationSection(key);
                     if (child != null) {
+                        // 防御 Mohist YAML 实现 bug：getConfigurationSection 返回自身
+                        if (child == section) {
+                            DEPTH_LOGGER.warning("MigrationOperationExecutor.collectMatchingPaths 检测到 "
+                                + "getConfigurationSection('" + key + "') 返回了当前 section 自身，已跳过。");
+                            continue;
+                        }
                         results.addAll(collectMatchingPaths(child, pattern, depth + 1, childPath));
                     }
                 }
@@ -142,8 +164,14 @@ public final class MigrationOperationExecutor {
             } else {
                 ConfigurationSection child = section.getConfigurationSection(segment);
                 if (child != null) {
-                    String childPath = prefix.isEmpty() ? segment : prefix + "." + segment;
-                    results.addAll(collectMatchingPaths(child, pattern, depth + 1, childPath));
+                    // 防御 Mohist YAML 实现 bug：getConfigurationSection 返回自身
+                    if (child == section) {
+                        DEPTH_LOGGER.warning("MigrationOperationExecutor.collectMatchingPaths 检测到 "
+                            + "getConfigurationSection('" + segment + "') 返回了当前 section 自身，已跳过。");
+                    } else {
+                        String childPath = prefix.isEmpty() ? segment : prefix + "." + segment;
+                        results.addAll(collectMatchingPaths(child, pattern, depth + 1, childPath));
+                    }
                 }
             }
         }

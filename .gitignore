@@ -2,6 +2,9 @@
 .gradle/
 build/
 
+# Devin 临时文件
+.devin-tmp/
+
 # IntelliJ IDEA
 .idea/
 *.iml

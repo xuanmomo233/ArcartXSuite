@@ -802,6 +802,11 @@ public final class ModuleRegistry {
             }
         } catch (RuntimeException exception) {
             LOGGER.warning("模块 " + descriptor.name() + " 配置诊断异常: " + exception.getMessage());
+        } catch (StackOverflowError error) {
+            // 配置树循环引用或递归方法无终止条件可能触发 StackOverflowError，
+            // 诊断是 dry-run 不影响实际加载，此处吞掉避免阻断模块 onEnable。
+            LOGGER.log(Level.WARNING, "模块 " + descriptor.name() + " 配置诊断时发生 StackOverflowError"
+                + "（可能由配置树循环引用引起），已跳过诊断。", error);
         }
 
         // 启用
