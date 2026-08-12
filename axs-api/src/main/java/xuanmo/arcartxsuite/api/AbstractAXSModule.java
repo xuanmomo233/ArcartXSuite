@@ -62,6 +62,7 @@ public abstract class AbstractAXSModule implements AXSModule {
     protected xuanmo.arcartxsuite.api.item.ItemMatcherAPI itemMatcher;
     protected @NotNull xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     protected xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI currencyManager;
+    protected xuanmo.arcartxsuite.api.currency.RondoBridge rondoBridge;
     protected xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry attributeBridge;
     protected @NotNull xuanmo.arcartxsuite.api.script.AriaBridge ariaBridge;
     protected @NotNull xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator scriptConditionEvaluator;
@@ -317,6 +318,7 @@ public abstract class AbstractAXSModule implements AXSModule {
         this.itemMatcher = context.itemMatcher();
         this.vanillaItemNameBridge = context.vanillaItemNameBridge();
         this.currencyManager = context.currencyManager();
+        this.rondoBridge = context.rondoBridge();
         this.attributeBridge = context.attributeBridge();
         this.ariaBridge = context.ariaBridge();
         this.scriptConditionEvaluator = context.scriptConditionEvaluator();

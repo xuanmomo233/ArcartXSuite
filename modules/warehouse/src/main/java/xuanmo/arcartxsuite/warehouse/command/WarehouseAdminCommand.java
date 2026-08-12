@@ -25,7 +25,7 @@ import xuanmo.arcartxsuite.warehouse.service.WarehouseService;
  */
 public final class WarehouseAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "reload", "open", "info", "view", "delete", "bank");
+    private static final List<String> ACTIONS = List.of("help", "status", "open", "info", "view", "delete", "bank");
 
     private final Supplier<WarehouseService> serviceProvider;
     private final MessageProvider messages;
@@ -69,7 +69,6 @@ public final class WarehouseAdminCommand implements ModuleCommandHandler {
         switch (action) {
             case "help" -> sendHelp(sender, label);
             case "status" -> sendStatus(sender);
-            case "reload" -> sender.sendMessage(fullMsg("common.reload-hint", label));
             case "open" -> handleOpen(sender, args);
             case "info" -> handleInfo(sender, args);
             case "view" -> handleView(sender, args);

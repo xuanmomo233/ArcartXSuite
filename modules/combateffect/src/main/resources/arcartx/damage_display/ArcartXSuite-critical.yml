@@ -1,0 +1,28 @@
+# AXS CombatEffect — 暴击伤害飘字样式 (critical)
+# 说明: 暴击时显示的伤害数字样式，建议使用更醒目的颜色/更大字号
+# 文档: https://wiki.arcartx.com/docs/arcartx_v2/2_simple/9_damage_display
+
+ArcartXSuite-critical:
+  textureWidth: 44
+  textureHeight: 66
+  randomMin: 0
+  randomMax: 0.2
+  # 小数位数：控制伤害数字显示几位小数。
+  # 0 = 仅整数（小数部分被截断/舍入）；1 = 显示 1 位小数（如 12.5）；2 = 显示 2 位小数（如 12.50）。
+  # 当此值 > 0 时，客户端会从 textures 列表第 11 张取小数点贴图渲染。
+  decimalPlaces: 1
+  # 贴图列表：
+  # 第 1-10 张对应数字 0-9；第 11 张为小数点 "."；第 12 张为千位分隔逗号 ","（可选）。
+  textures:
+    - "damage/critical/0.png"
+    - "damage/critical/1.png"
+    - "damage/critical/2.png"
+    - "damage/critical/3.png"
+    - "damage/critical/4.png"
+    - "damage/critical/5.png"
+    - "damage/critical/6.png"
+    - "damage/critical/7.png"
+    - "damage/critical/8.png"
+    - "damage/critical/9.png"
+    # 第 11 张：小数点贴图（decimalPlaces > 0 时使用）
+    - "damage/critical/dot.png"

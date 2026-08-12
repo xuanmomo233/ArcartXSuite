@@ -85,6 +85,7 @@ public final class ModuleRegistry {
     private ItemMatcherSupport itemMatcherSupport;
     private CurrencyBridgeManager currencyBridgeManager;
     private DefaultAttributeBridgeRegistry attributeBridgeRegistry;
+    private xuanmo.arcartxsuite.bridge.DefaultRondoBridge rondoBridge;
     private DefaultAriaBridge ariaBridge;
     private ScriptConditionEvaluator scriptConditionEvaluator;
     private DefaultVanillaItemNameBridge vanillaItemNameBridge;
@@ -968,6 +969,12 @@ public final class ModuleRegistry {
         attributeBridgeRegistry.setSourceEnabled(apEnabled, caEnabled, mlEnabled, symEnabled);
         attributeBridgeRegistry.initialize();
 
+        // Rondo 经济系统桥接
+        if (rondoBridge == null) {
+            rondoBridge = new xuanmo.arcartxsuite.bridge.DefaultRondoBridge();
+        }
+        rondoBridge.initialize();
+
         if (ariaBridge == null) {
             ariaBridge = new DefaultAriaBridge(plugin);
         }
@@ -980,6 +987,12 @@ public final class ModuleRegistry {
             capabilities.put(xuanmo.arcartxsuite.api.capability.EventBusCapability.class,
                 new SimpleEventBus(xuanmo.arcartxsuite.module.AxsLog.logger()));
         }
+
+        // 将事件总线注入货币管理器，使 withdraw/deposit 成功后分发 axs.currency.spent / axs.currency.earned 事件
+        currencyBridgeManager.setEventBusProvider(
+            () -> (xuanmo.arcartxsuite.api.capability.EventBusCapability)
+                capabilities.get(xuanmo.arcartxsuite.api.capability.EventBusCapability.class)
+        );
 
         // 统一账号识别服务（微软正版 / LittleSkin / 离线）
         ensureAccountTypeService();
@@ -1040,6 +1053,11 @@ public final class ModuleRegistry {
     /** 获取全局属性桥接注册表 */
     public DefaultAttributeBridgeRegistry attributeBridge() {
         return attributeBridgeRegistry;
+    }
+
+    /** 获取 Rondo 经济系统桥接 */
+    public xuanmo.arcartxsuite.bridge.DefaultRondoBridge rondoBridge() {
+        return rondoBridge;
     }
 
     /** 获取 Aria 脚本桥接 */

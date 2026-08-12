@@ -92,6 +92,40 @@ public final class DefaultItemSourceRegistry implements ItemSourceRegistry {
         return mmoItemsBridge != null ? mmoItemsBridge.getItemStack(typeId, itemId, amount) : null;
     }
 
+    // ─── Overture 扩展查询 ────────────────────────────────────────
+
+    @Override
+    public String overtureItemDisplayName(String itemId) {
+        return overtureItemBridge != null ? overtureItemBridge.itemDisplayName(itemId) : null;
+    }
+
+    @Override
+    public java.util.List<String> overtureItemDisplayLore(String itemId) {
+        return overtureItemBridge != null ? overtureItemBridge.itemDisplayLore(itemId) : null;
+    }
+
+    @Override
+    public ItemStack overtureTemplateItem(String itemId) {
+        return overtureItemBridge != null ? overtureItemBridge.templateItem(itemId) : null;
+    }
+
+    @Override
+    public java.util.List<String> overtureItemIds() {
+        return overtureItemBridge != null ? overtureItemBridge.getItemIds() : java.util.List.of();
+    }
+
+    // ─── Overture 序列化 ──────────────────────────────────────────
+
+    @Override
+    public String overtureSerialize(ItemStack item) {
+        return overtureItemBridge != null ? overtureItemBridge.serializeItem(item) : null;
+    }
+
+    @Override
+    public ItemStack overtureDeserialize(String json) {
+        return overtureItemBridge != null ? overtureItemBridge.deserializeItem(json) : null;
+    }
+
     // ─── 可用性查询 ───────────────────────────────────────────────
 
     @Override

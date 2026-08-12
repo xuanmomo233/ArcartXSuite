@@ -51,7 +51,7 @@ public final class AfkRewardAdminCommand implements ModuleCommandHandler {
      */
     @Override
     public List<String> actions() {
-        return List.of("help", "status", "reload");
+        return List.of("help", "status");
     }
 
     /**
@@ -73,7 +73,6 @@ public final class AfkRewardAdminCommand implements ModuleCommandHandler {
         switch (action) {
             case "help" -> sendHelp(sender, label);
             case "status" -> sendStatus(sender);
-            case "reload" -> sender.sendMessage(msg("admin.reload-hint", label));
             default -> sender.sendMessage(msg("admin.unknown", label));
         }
         return true;
@@ -98,7 +97,6 @@ public final class AfkRewardAdminCommand implements ModuleCommandHandler {
         String cmd = "/" + label + " afkreward";
         sender.sendMessage(msg("help.title"));
         sender.sendMessage(msg("help.status", cmd));
-        sender.sendMessage(msg("help.reload", cmd));
     }
 
     private void sendStatus(CommandSender sender) {

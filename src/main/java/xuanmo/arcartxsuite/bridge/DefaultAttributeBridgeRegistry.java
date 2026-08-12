@@ -83,8 +83,7 @@ public final class DefaultAttributeBridgeRegistry implements AttributeBridgeRegi
 
     @Override
     public boolean hasHealSource() {
-        return (craneAttributeBridge != null && craneAttributeBridge.available())
-            || (symphonyBridge != null && symphonyBridge.available());
+        return (craneAttributeBridge != null && craneAttributeBridge.available());
     }
 
     @Override

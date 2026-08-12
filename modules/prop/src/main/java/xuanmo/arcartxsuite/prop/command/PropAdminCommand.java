@@ -21,7 +21,7 @@ import xuanmo.arcartxsuite.prop.service.PropService;
  */
 public final class PropAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "reload", "set");
+    private static final List<String> ACTIONS = List.of("help", "status", "set");
 
     private final Supplier<PropService> serviceProvider;
     private final MessageProvider messages;
@@ -59,7 +59,6 @@ public final class PropAdminCommand implements ModuleCommandHandler {
         switch (action) {
             case "help" -> sendHelp(sender, label);
             case "status" -> sendStatus(sender);
-            case "reload" -> sender.sendMessage(fullMsg("common.reload-hint", label));
             case "set" -> handleSet(sender, args);
             default -> sender.sendMessage(fullMsg("common.unknown", label));
         }

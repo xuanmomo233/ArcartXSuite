@@ -9,7 +9,6 @@ prefix: "&3◆ &6ArcartXSuite &7| &r"
 
 # ── 通用 ──────────────────────────────────────────────
 common:
-  reload-hint: "&e请使用 /{0} reload announcer"
   unknown: "&e未知命令，使用 /{0} announcer help"
   player-offline: "&c玩家不在线: {0}"
   enabled: "&a已启用"

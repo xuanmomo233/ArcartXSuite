@@ -94,4 +94,53 @@ public final class OvertureItemBridge {
             return java.util.List.of();
         }
     }
+
+    // ─── Overture 扩展查询 ────────────────────────────────────
+
+    public String itemDisplayName(String itemId) {
+        if (!available || overtureApi == null || itemId == null || itemId.isBlank()) return null;
+        try {
+            return overtureApi.getItemName(itemId);
+        } catch (Exception | LinkageError e) {
+            return null;
+        }
+    }
+
+    public java.util.List<String> itemDisplayLore(String itemId) {
+        if (!available || overtureApi == null || itemId == null || itemId.isBlank()) return null;
+        try {
+            return overtureApi.getItemLore(itemId);
+        } catch (Exception | LinkageError e) {
+            return null;
+        }
+    }
+
+    public org.bukkit.inventory.ItemStack templateItem(String itemId) {
+        if (!available || overtureApi == null || itemId == null || itemId.isBlank()) return null;
+        try {
+            return overtureApi.getTemplateItem(itemId);
+        } catch (Exception | LinkageError e) {
+            return null;
+        }
+    }
+
+    // ─── Overture 序列化 ──────────────────────────────────────
+
+    public String serializeItem(org.bukkit.inventory.ItemStack item) {
+        if (!available || overtureApi == null || item == null) return null;
+        try {
+            return overtureApi.serialize(item);
+        } catch (Exception | LinkageError e) {
+            return null;
+        }
+    }
+
+    public org.bukkit.inventory.ItemStack deserializeItem(String json) {
+        if (!available || overtureApi == null || json == null || json.isBlank()) return null;
+        try {
+            return overtureApi.deserialize(json);
+        } catch (Exception | LinkageError e) {
+            return null;
+        }
+    }
 }

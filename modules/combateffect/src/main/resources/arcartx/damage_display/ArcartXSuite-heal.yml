@@ -1,6 +1,6 @@
 # AXS CombatEffect — 治疗飘字样式 (heal)
 # 说明: 客户端数字飘字显示配置，由 CombatEffect 模块自动导出到 plugins/ArcartX/damage_display/
-# 文档: https://wiki.arcartx.com/docs/core/2_simple/9_damage_display
+# 文档: https://wiki.arcartx.com/docs/arcartx_v2/2_simple/9_damage_display
 
 # 样式ID
 ArcartXSuite-heal:
@@ -10,7 +10,12 @@ ArcartXSuite-heal:
   # 位置随机值（世界坐标单位）
   randomMin: 0
   randomMax: 0.75
-  # 贴图列表，对应数字 0-9
+  # 小数位数：控制治疗数字显示几位小数。
+  # 0 = 仅整数（小数部分被截断/舍入）；1 = 显示 1 位小数（如 5.3）；2 = 显示 2 位小数（如 5.30）。
+  # 当此值 > 0 时，客户端会从 textures 列表第 11 张取小数点贴图渲染。
+  decimalPlaces: 1
+  # 贴图列表：
+  # 第 1-10 张对应数字 0-9；第 11 张为小数点 "."；第 12 张为千位分隔逗号 ","（可选）。
   textures:
     - "damage/0.png"
     - "damage/1.png"
@@ -22,3 +27,5 @@ ArcartXSuite-heal:
     - "damage/7.png"
     - "damage/8.png"
     - "damage/9.png"
+    # 第 11 张：小数点贴图（decimalPlaces > 0 时使用）
+    - "damage/dot.png"

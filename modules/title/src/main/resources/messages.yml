@@ -12,7 +12,6 @@ prefix: "&3◆ &6ArcartXSuite &7| &r"
 common:
   service-down: "&c服务未启动。"
   player-offline: "&c玩家不在线: {0}"
-  reload-hint: "&e请使用 /{0} reload title"
   unknown: "&e未知命令，使用 /{0} title help"
 
 # ── help（管理命令）───────────────────────────────────

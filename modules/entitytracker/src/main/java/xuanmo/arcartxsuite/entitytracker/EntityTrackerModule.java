@@ -518,7 +518,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         if (rewardCommand != null) {
             actions.addAll(List.of("rewards"));
         }
-        return actions.isEmpty() ? List.of("help", "status", "reload") : actions;
+        return actions.isEmpty() ? List.of("help", "status") : actions;
     }
 
     @Override

@@ -35,3 +35,27 @@ weekly-kill-100:
     type: fixed
     value: 1
   weight: 2
+
+# -------- 示例：累计消费货币 --------
+# 通用货币消费追踪任务，支持所有货币提供者（Vault/PlayerPoints/XConomy/Rondo/Command）。
+# CurrencyBridgeManager 在每次 withdraw 成功后自动分发 axs.currency.spent 事件，
+# payload 包含: currency_id（货币ID）、amount（消费金额）、action（"withdraw"）、balance_after（变动后余额）。
+# 可通过 conditions 限制特定货币，或不加条件追踪所有货币消费。
+weekly-spend-1000:
+  display-name: "消费达人"
+  description: "本周累计消费1000金币"
+  difficulty: normal
+  event-topic: "axs.currency.spent"
+  required-count: 1000
+  base-xp-reward: 400
+  conditions:
+    - type: event_payload
+      key: currency_id
+      operator: equals
+      value: money
+  increment-strategy:
+    type: payload_value
+    payload-key: amount
+    max-per-event: 500
+    scale: 1.0
+  weight: 2

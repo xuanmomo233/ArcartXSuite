@@ -257,7 +257,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
     @Override public String commandId() { return "battlepass"; }
 
     @Override public List<String> actions() {
-        return adminCommand != null ? adminCommand.actions() : List.of("help", "status", "reload");
+        return adminCommand != null ? adminCommand.actions() : List.of("help", "status");
     }
 
     @Override

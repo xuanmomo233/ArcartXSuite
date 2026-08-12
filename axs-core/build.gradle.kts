@@ -27,6 +27,7 @@ dependencies {
     compileOnly(files("../libs/ArcartX-2.5.36.jar"))
     compileOnly(files("../libs/AttributePlus-3.3.3.5.jar"))
     compileOnly(files("../libs/CraneAttribute-0.1.0-dev.jar"))
+    compileOnly(files("../libs/Rondo-1.0.0-SNAPSHOT.jar"))
     compileOnly("me.clip:placeholderapi:2.11.7")
     implementation("com.zaxxer:HikariCP:5.1.0")
     implementation("org.xerial:sqlite-jdbc:3.46.0.0")

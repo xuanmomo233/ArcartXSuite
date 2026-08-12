@@ -11,7 +11,6 @@ prefix: "&3◆ &6ArcartXSuite &7| &r"
 # ── 通用 ──────────────────────────────────────────────
 common:
   service-down: "&c服务未启动。"
-  reload-hint: "&e请使用 /{0} reload prop"
   unknown: "&e未知命令，使用 /{0} prop help"
 
 # ── help ──────────────────────────────────────────────

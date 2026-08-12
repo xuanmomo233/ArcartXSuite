@@ -20,6 +20,7 @@ import xuanmo.arcartxsuite.api.attribute.AttributeBridgeRegistry;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionEvaluator;
 import xuanmo.arcartxsuite.api.crossserver.CrossServerAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
+import xuanmo.arcartxsuite.api.currency.RondoBridge;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderExpansionRegistry;
@@ -88,6 +89,10 @@ public interface ModuleContext {
     /** 获取全局货币管理器 */
     @ApiStability.Stable
     CurrencyBridgeAPI currencyManager();
+
+    /** 获取 Rondo 经济系统桥接（排行榜/转账/快照/日志），Rondo 未安装时 available() 为 false */
+    @ApiStability.Stable
+    @NotNull RondoBridge rondoBridge();
 
     /** 获取全局属性桥接注册表（统一 AttributePlus/CraneAttribute/MythicLib/Symphony 桥接） */
     @ApiStability.Stable

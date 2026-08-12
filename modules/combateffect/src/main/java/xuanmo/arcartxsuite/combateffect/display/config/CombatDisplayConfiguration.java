@@ -51,6 +51,18 @@ import org.bukkit.configuration.file.YamlConfiguration;
  * @param healMergeWindowTicks              治疗合并窗口（tick）
  * @param healMergeMinAmount                治疗合并后的最小显示金额
  * @param healMergeMaxEntries               治疗合并缓冲区最大条目数
+ * @param criticalEnabled                   是否启用暴击飘字
+ * @param criticalConfigId                  暴击伤害显示的 UI 配置 ID
+ * @param criticalPlayerConfigId            暴击 PVP 伤害显示的 UI 配置 ID
+ * @param criticalMinAmount                 暴击伤害显示的最小金额阈值
+ * @param dodgedEnabled                     是否启用闪避飘字
+ * @param dodgedConfigId                    闪避显示的 UI 配置 ID
+ * @param advantagedEnabled                 是否启用克制（优势）飘字
+ * @param advantagedConfigId                优势克制伤害显示的 UI 配置 ID
+ * @param advantagedPlayerConfigId          优势克制 PVP 伤害显示的 UI 配置 ID
+ * @param disadvantagedEnabled              是否启用被克制（劣势）飘字
+ * @param disadvantagedConfigId             劣势克制伤害显示的 UI 配置 ID
+ * @param disadvantagedPlayerConfigId       劣势克制 PVP 伤害显示的 UI 配置 ID
  */
 public record CombatDisplayConfiguration(
     CombatDisplayDamageSourceMode damageSourceMode,
@@ -93,7 +105,19 @@ public record CombatDisplayConfiguration(
     boolean healMergeEnabled,
     int healMergeWindowTicks,
     double healMergeMinAmount,
-    int healMergeMaxEntries
+    int healMergeMaxEntries,
+    boolean criticalEnabled,
+    String criticalConfigId,
+    String criticalPlayerConfigId,
+    double criticalMinAmount,
+    boolean dodgedEnabled,
+    String dodgedConfigId,
+    boolean advantagedEnabled,
+    String advantagedConfigId,
+    String advantagedPlayerConfigId,
+    boolean disadvantagedEnabled,
+    String disadvantagedConfigId,
+    String disadvantagedPlayerConfigId
 ) {
 
     /**
@@ -151,7 +175,20 @@ public record CombatDisplayConfiguration(
             configuration.getBoolean("heal-display.heal-merge.enabled", false),
             Math.max(0, configuration.getInt("heal-display.heal-merge.window-ticks", 2)),
             Math.max(0.0D, configuration.getDouble("heal-display.heal-merge.min-amount", 1.0D)),
-            Math.max(1, configuration.getInt("heal-display.heal-merge.max-entries", 500))
+            Math.max(1, configuration.getInt("heal-display.heal-merge.max-entries", 500)),
+            // 暴击/闪避/克制（全局配置块，跨所有属性插件）
+            configuration.getBoolean("damage-display.critical.enabled", false),
+            readString(configuration, "damage-display.critical.config-id", "ArcartXSuite-critical"),
+            readString(configuration, "damage-display.critical.player-config-id", "ArcartXSuite-critical"),
+            Math.max(0.0D, configuration.getDouble("damage-display.critical.min-amount", 1.0D)),
+            configuration.getBoolean("damage-display.dodged.enabled", false),
+            readString(configuration, "damage-display.dodged.config-id", "ArcartXSuite-dodged"),
+            configuration.getBoolean("damage-display.advantaged.enabled", false),
+            readString(configuration, "damage-display.advantaged.config-id", "ArcartXSuite-advantaged"),
+            readString(configuration, "damage-display.advantaged.player-config-id", "ArcartXSuite-advantaged"),
+            configuration.getBoolean("damage-display.disadvantaged.enabled", false),
+            readString(configuration, "damage-display.disadvantaged.config-id", "ArcartXSuite-disadvantaged"),
+            readString(configuration, "damage-display.disadvantaged.player-config-id", "ArcartXSuite-disadvantaged")
         );
     }
 

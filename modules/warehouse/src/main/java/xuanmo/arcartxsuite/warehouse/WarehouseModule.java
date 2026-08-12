@@ -308,7 +308,7 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
     }
 
     @Override public String commandId() { return "warehouse"; }
-    @Override public List<String> actions() { return adminCommand != null ? adminCommand.actions() : List.of("help", "status", "reload"); }
+    @Override public List<String> actions() { return adminCommand != null ? adminCommand.actions() : List.of("help", "status"); }
     @Override public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         return adminCommand != null ? adminCommand.onCommand(sender, label, args) : false;
     }

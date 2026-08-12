@@ -83,14 +83,12 @@ admin:
   help:
     - "&6Lottery 管理"
     - "&7/axs lottery status &f- 查看奖池状态"
-    - "&7/axs lottery reload &f- 重载配置"
     - "&7/axs lottery reset <玩家> <奖池ID> &f- 重置状态"
     - "&7/axs lottery give-ticket <玩家> <奖池ID> <数量> &f- 发放抽奖券"
     - "&7/axs lottery simulate <奖池ID> <次数> &f- 概率模拟"
   status:
     title: "&6AXS Lottery 状态"
     pool: "&7{0} &7[ &f{1} &7] &f{2}"
-  reload: "&aLottery 配置已重载"
   reset:
     usage: "&e用法: /axs lottery reset <玩家> <奖池ID>"
     success: "&a已重置 &f{0} &a在奖池 &f{1} &a的状态"
@@ -111,7 +109,6 @@ admin:
 help:
   title: "&6抽奖 管理"
   status: "&7{0} status&f - 查看奖池状态"
-  reload: "&7{0} reload&f - 重载配置"
   reset: "&7{0} reset <玩家> <奖池ID>&f - 重置玩家抽奖状态"
   give-ticket: "&7{0} give-ticket <玩家> <奖池ID> <数量>&f - 发放抽奖券"
   give-points: "&7{0} give-points <玩家> <积分ID> <数量>&f - 发放积分"

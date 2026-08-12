@@ -21,7 +21,7 @@ import xuanmo.arcartxsuite.questgps.service.QuestGpsService;
  */
 public final class QuestGpsAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "reload", "open");
+    private static final List<String> ACTIONS = List.of("help", "status", "open");
 
     private final Supplier<QuestGpsService> serviceProvider;
     private final MessageProvider messages;
@@ -61,7 +61,6 @@ public final class QuestGpsAdminCommand implements ModuleCommandHandler {
         switch (action) {
             case "help" -> sendHelp(sender, label);
             case "status" -> sendStatus(sender);
-            case "reload" -> sender.sendMessage(fullMsg("common.reload-hint", label));
             case "open" -> handleOpen(sender, args);
             default -> sender.sendMessage(fullMsg("common.unknown", label));
         }

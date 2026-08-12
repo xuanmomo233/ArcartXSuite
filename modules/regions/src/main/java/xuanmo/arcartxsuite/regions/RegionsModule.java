@@ -318,7 +318,7 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
      */
     @Override
     public List<String> actions() {
-        return commandHandler != null ? commandHandler.actions() : List.of("help", "status", "reload");
+        return commandHandler != null ? commandHandler.actions() : List.of("help", "status");
     }
 
     /**

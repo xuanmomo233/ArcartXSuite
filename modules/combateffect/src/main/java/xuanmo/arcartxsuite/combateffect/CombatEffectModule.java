@@ -252,7 +252,7 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
 
     // ─── ModuleCommandHandler ────────────────────────────────
 
-    private static final List<String> ACTIONS = List.of("help", "status", "reload", "send", "direct");
+    private static final List<String> ACTIONS = List.of("help", "status", "send", "direct");
 
     @Override
     public String commandId() {
@@ -271,7 +271,6 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
         switch (action) {
             case "help" -> sendHelp(sender, cmd);
             case "status" -> sendStatus(sender);
-            case "reload" -> sender.sendMessage(msg("common.reload-hint", label));
             case "send" -> handleSend(sender, args, cmd);
             case "direct" -> handleDirect(sender, args, cmd);
             default -> sender.sendMessage(msg("common.unknown", cmd));
@@ -302,7 +301,6 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
     private void sendHelp(CommandSender sender, String cmd) {
         sender.sendMessage(msg("help.title", descriptor().version()));
         sender.sendMessage(msg("help.status", cmd));
-        sender.sendMessage(msg("help.reload", cmd));
         sender.sendMessage(msg("help.send", cmd));
         sender.sendMessage(msg("help.direct", cmd));
     }
@@ -395,6 +393,10 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
     static {
         DAMAGE_DISPLAY_MAPPINGS.put("arcartx/damage_display/ArcartXSuite-damage.yml", "ArcartXSuite-damage.yml");
         DAMAGE_DISPLAY_MAPPINGS.put("arcartx/damage_display/ArcartXSuite-heal.yml", "ArcartXSuite-heal.yml");
+        DAMAGE_DISPLAY_MAPPINGS.put("arcartx/damage_display/ArcartXSuite-critical.yml", "ArcartXSuite-critical.yml");
+        DAMAGE_DISPLAY_MAPPINGS.put("arcartx/damage_display/ArcartXSuite-dodged.yml", "ArcartXSuite-dodged.yml");
+        DAMAGE_DISPLAY_MAPPINGS.put("arcartx/damage_display/ArcartXSuite-advantaged.yml", "ArcartXSuite-advantaged.yml");
+        DAMAGE_DISPLAY_MAPPINGS.put("arcartx/damage_display/ArcartXSuite-disadvantaged.yml", "ArcartXSuite-disadvantaged.yml");
     }
 
     private void exportDamageDisplayResources() {

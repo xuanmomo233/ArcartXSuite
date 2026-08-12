@@ -28,7 +28,7 @@ import xuanmo.arcartxsuite.title.service.TitleService;
  */
 public final class TitleAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "reload", "give", "revoke", "open");
+    private static final List<String> ACTIONS = List.of("help", "status", "give", "revoke", "open");
 
     private final Supplier<TitleService> serviceProvider;
     private final MessageProvider messages;
@@ -67,7 +67,6 @@ public final class TitleAdminCommand implements ModuleCommandHandler {
         switch (action) {
             case "help" -> sendHelp(sender, label);
             case "status" -> sendStatus(sender);
-            case "reload" -> sender.sendMessage(msg("common.reload-hint", label));
             case "give" -> handleGive(sender, args);
             case "revoke" -> handleRevoke(sender, args);
             case "open" -> handleOpen(sender, args);

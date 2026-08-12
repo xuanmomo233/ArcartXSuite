@@ -256,7 +256,7 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
     }
 
     @Override public String commandId() { return "title"; }
-    @Override public List<String> actions() { return adminCommand != null ? adminCommand.actions() : List.of("help", "status", "reload"); }
+    @Override public List<String> actions() { return adminCommand != null ? adminCommand.actions() : List.of("help", "status"); }
     @Override public boolean onCommand(@org.jetbrains.annotations.NotNull CommandSender sender, @org.jetbrains.annotations.NotNull String label, @org.jetbrains.annotations.NotNull String[] args) {
         return adminCommand != null ? adminCommand.onCommand(sender, label, args) : false;
     }

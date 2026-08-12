@@ -318,7 +318,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
 
     // ─── ModuleCommandHandler ───────────────────────────────
 
-    private static final List<String> ACTIONS = List.of("help", "status", "reload", "broadcast", "broadcastnow", "gbroadcast", "gbroadcastnow", "subtitle");
+    private static final List<String> ACTIONS = List.of("help", "status", "broadcast", "broadcastnow", "gbroadcast", "gbroadcastnow", "subtitle");
 
     @Override public String commandId() { return "announcer"; }
     @Override public List<String> actions() { return ACTIONS; }
@@ -339,7 +339,6 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
                 String cmd = "/" + label + " announcer";
                 sender.sendMessage(msg("help.title"));
                 sender.sendMessage(msg("help.status", cmd));
-                sender.sendMessage(msg("help.reload", cmd));
                 sender.sendMessage(msg("help.broadcast", cmd));
                 sender.sendMessage(msg("help.broadcastnow", cmd));
                 sender.sendMessage(msg("help.gbroadcast", cmd));
@@ -359,7 +358,6 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
                     service != null && service.crossServerActive()
                         ? messages().get("common.enabled") : messages().get("common.disabled")));
             }
-            case "reload" -> sender.sendMessage(msg("common.reload-hint", label));
             case "broadcast" -> handleBroadcast(sender, label, args, false, false);
             case "broadcastnow" -> handleBroadcast(sender, label, args, true, false);
             case "gbroadcast" -> handleBroadcast(sender, label, args, false, true);

@@ -44,7 +44,7 @@ public class LotteryAdminCommand {
      * @return 不可变操作名称列表
      */
     public List<String> actions() {
-        return List.of("help", "status", "reload", "reset", "give-ticket", "give-points", "simulate");
+        return List.of("help", "status", "reset", "give-ticket", "give-points", "simulate");
     }
 
     /**
@@ -71,14 +71,6 @@ public class LotteryAdminCommand {
         switch (action) {
             case "help" -> showHelp(sender);
             case "status" -> handleStatus(sender, service);
-            case "reload" -> {
-                try {
-                    reloadAction.run();
-                    sender.sendMessage(msg("admin.reload"));
-                } catch (RuntimeException exception) {
-                    sender.sendMessage(msg("common.error", exception.getMessage()));
-                }
-            }
             case "reset" -> {
                 if (args.length < 3) {
                     sender.sendMessage(msg("admin.reset.usage"));
@@ -150,7 +142,6 @@ public class LotteryAdminCommand {
         String cmd = "/lottery admin";
         sender.sendMessage(msg("help.title"));
         sender.sendMessage(msg("help.status", cmd));
-        sender.sendMessage(msg("help.reload", cmd));
         sender.sendMessage(msg("help.reset", cmd));
         sender.sendMessage(msg("help.give-ticket", cmd));
         sender.sendMessage(msg("help.give-points", cmd));

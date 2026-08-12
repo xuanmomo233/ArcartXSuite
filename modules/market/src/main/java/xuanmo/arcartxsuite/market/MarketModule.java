@@ -144,10 +144,21 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
     @Override
     protected void startService() throws Exception {
 
-        // 构造物品序列化器（使用 ItemSerializer byte[] + Base64）
+        // 构造物品序列化器（智能检测 Overture 物品并使用原生序列化）
         AuctionItemSerializer itemSerializer = new AuctionItemSerializer() {
+            private static final String OVERTURE_PREFIX = "OVERTURE:";
+
             @Override
             public String serialize(ItemStack item) {
+                // 检测是否为 Overture 物品，优先使用 Overture 原生 JSON 序列化
+                if (itemSourceRegistry != null && itemSourceRegistry.overtureBridgeAvailable()
+                    && itemSourceRegistry.isOvertureItem(item)) {
+                    String json = itemSourceRegistry.overtureSerialize(item);
+                    if (json != null && !json.isBlank()) {
+                        return OVERTURE_PREFIX + json;
+                    }
+                }
+                // 非 Overture 物品或 Overture 不可用，降级到 Bukkit 原生序列化
                 byte[] bytes = xuanmo.arcartxsuite.api.util.ItemSerializer.serialize(item);
                 return java.util.Base64.getEncoder().encodeToString(bytes);
             }
@@ -155,6 +166,16 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             @Override
             public @Nullable ItemStack deserialize(String data) {
                 if (data == null || data.isEmpty()) return null;
+                // 检测 Overture 前缀，使用 Overture 原生反序列化
+                if (data.startsWith(OVERTURE_PREFIX)) {
+                    String json = data.substring(OVERTURE_PREFIX.length());
+                    if (itemSourceRegistry != null && itemSourceRegistry.overtureBridgeAvailable()) {
+                        ItemStack item = itemSourceRegistry.overtureDeserialize(json);
+                        if (item != null) return item;
+                        // Overture 反序列化失败，降级到 Bukkit（兼容 Overture 插件被卸载的情况）
+                    }
+                }
+                // Bukkit 原生序列化
                 byte[] bytes = java.util.Base64.getDecoder().decode(data);
                 return xuanmo.arcartxsuite.api.util.ItemSerializer.deserialize(bytes);
             }
@@ -318,7 +339,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
     @Override public String commandId() { return "market"; }
 
     @Override public List<String> actions() {
-        return adminCommand != null ? adminCommand.actions() : List.of("help", "status", "reload");
+        return adminCommand != null ? adminCommand.actions() : List.of("help", "status");
     }
 
     @Override

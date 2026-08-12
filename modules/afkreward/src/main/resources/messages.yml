@@ -55,7 +55,6 @@ player:
 
 # ── 管理命令 ──────────────────────────────────────────
 admin:
-  reload-hint: "&e请使用 /{0} reload afkreward"
   unknown: "&e未知命令，使用 /{0} afkreward help 查看帮助"
   help:
     title: "&6AfkReward 管理命令"

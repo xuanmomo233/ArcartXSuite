@@ -34,7 +34,7 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
     @Override public String commandId() { return "fishing"; }
 
     @Override public List<String> actions() {
-        return List.of("help", "stats", "givexp", "reset", "reload");
+        return List.of("help", "stats", "givexp", "reset");
     }
 
     @Override
@@ -139,7 +139,6 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(msg.apply("help.stats", new Object[]{cmd}));
         sender.sendMessage(msg.apply("help.givexp", new Object[]{cmd}));
         sender.sendMessage(msg.apply("help.reset", new Object[]{cmd}));
-        sender.sendMessage(msg.apply("help.reload", new Object[]{cmd}));
     }
 
     @Override

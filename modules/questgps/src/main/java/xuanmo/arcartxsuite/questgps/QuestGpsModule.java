@@ -291,7 +291,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     /** @return 命令标识符，固定为 {@code "questgps"} */
     @Override public String commandId() { return "questgps"; }
     /** @return 支持的子操作列表 */
-    @Override public List<String> actions() { return adminCommand != null ? adminCommand.actions() : List.of("help", "status", "reload"); }
+    @Override public List<String> actions() { return adminCommand != null ? adminCommand.actions() : List.of("help", "status"); }
     /**
      * 委托给 {@link QuestGpsAdminCommand} 处理管理命令。
      *

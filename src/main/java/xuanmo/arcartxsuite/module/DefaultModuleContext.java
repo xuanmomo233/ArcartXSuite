@@ -193,6 +193,11 @@ final class DefaultModuleContext implements ModuleContext {
     }
 
     @Override
+    public xuanmo.arcartxsuite.api.currency.RondoBridge rondoBridge() {
+        return registry.rondoBridge();
+    }
+
+    @Override
     public AttributeBridgeRegistry attributeBridge() {
         return registry.attributeBridge();
     }

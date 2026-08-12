@@ -56,7 +56,7 @@ public final class QQBotAdminCommand {
      * @return 不可修改的子命令名称列表
      */
     public List<String> actions() {
-        return List.of("help", "status", "reload", "send", "lookup", "snowluma", "blacklist");
+        return List.of("help", "status", "send", "lookup", "snowluma", "blacklist");
     }
 
     /**
@@ -319,7 +319,6 @@ public final class QQBotAdminCommand {
         String cmd = "/" + label + " qqbot admin";
         sender.sendMessage(fullMsg("help.title"));
         sender.sendMessage(fullMsg("help.status", cmd));
-        sender.sendMessage(fullMsg("help.reload", cmd));
         sender.sendMessage(fullMsg("help.send", cmd));
         sender.sendMessage(fullMsg("help.lookup", cmd));
         sender.sendMessage(fullMsg("help.snowluma", cmd));

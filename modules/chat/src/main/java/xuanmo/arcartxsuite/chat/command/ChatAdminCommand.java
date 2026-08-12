@@ -25,7 +25,7 @@ import xuanmo.arcartxsuite.chat.service.ChatService;
  */
 public final class ChatAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "reload", "mute", "unmute", "spy");
+    private static final List<String> ACTIONS = List.of("help", "status", "mute", "unmute", "spy");
     private static final Pattern DURATION_PATTERN = Pattern.compile("^(\\d+)([smhd])$", Pattern.CASE_INSENSITIVE);
 
     private final Supplier<ChatService> serviceProvider;
@@ -54,7 +54,6 @@ public final class ChatAdminCommand implements ModuleCommandHandler {
         switch (action) {
             case "help" -> sendHelp(sender, label);
             case "status" -> sendStatus(sender);
-            case "reload" -> sender.sendMessage(fullMsg("common.reload-hint", label));
             case "mute" -> handleMute(sender, args);
             case "unmute" -> handleUnmute(sender, args);
             case "spy" -> handleSpy(sender, args);

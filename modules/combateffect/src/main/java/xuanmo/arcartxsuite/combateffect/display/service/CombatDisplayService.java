@@ -120,7 +120,8 @@ public final class CombatDisplayService {
                 && activeDamageSource != CombatDisplayDamageSource.BUKKIT) {
                 attributeDamageListener = event -> {
                     if (!matchesActiveSource(event.source())) return;
-                    handleAttributeDamage(event.attacker(), event.target(), event.damage(), event.source());
+                    handleAttributeDamage(event.attacker(), event.target(), event.damage(), event.source(),
+                        event.critical(), event.dodged(), event.relation());
                 };
                 attributeBridge.registerDamageListener(attributeDamageListener);
                 debugDamageSource("已注册统一属性伤害监听，active=" + activeDamageSource);
@@ -252,10 +253,41 @@ public final class CombatDisplayService {
         trySendDamageDisplay(attacker, target, configuration.craneAttributeDamageConfigId(), damage);
     }
 
-    private void handleAttributeDamage(Player attacker, Entity target, double damage, AttributeDamageEvent.Source source) {
+    private void handleAttributeDamage(Player attacker, Entity target, double damage, AttributeDamageEvent.Source source,
+                                       boolean critical, boolean dodged, AttributeDamageEvent.DamageRelation relation) {
         if (attacker == null) {
             return;
         }
+        // 闪避优先处理（damage=0，使用独立飘字样式）
+        if (dodged) {
+            if (configuration.dodgedEnabled()) {
+                trySendDamageDisplay(attacker, target, configuration.dodgedConfigId(), 0.0D);
+            }
+            return;
+        }
+        // 暴击优先于克制关系（暴击飘字样式覆盖普通伤害）
+        if (critical && configuration.criticalEnabled() && damage >= configuration.criticalMinAmount()) {
+            String configId = target instanceof Player
+                ? configuration.criticalPlayerConfigId() : configuration.criticalConfigId();
+            trySendDamageDisplay(attacker, target, configId, damage);
+            return;
+        }
+        // 元素克制关系飘字
+        if (relation != null) {
+            if (relation == AttributeDamageEvent.DamageRelation.ADVANTAGED && configuration.advantagedEnabled()) {
+                String configId = target instanceof Player
+                    ? configuration.advantagedPlayerConfigId() : configuration.advantagedConfigId();
+                trySendDamageDisplay(attacker, target, configId, damage);
+                return;
+            }
+            if (relation == AttributeDamageEvent.DamageRelation.DISADVANTAGED && configuration.disadvantagedEnabled()) {
+                String configId = target instanceof Player
+                    ? configuration.disadvantagedPlayerConfigId() : configuration.disadvantagedConfigId();
+                trySendDamageDisplay(attacker, target, configId, damage);
+                return;
+            }
+        }
+        // 普通伤害飘字（按来源分发）
         switch (source) {
             case ATTRIBUTE_PLUS -> handleStandardDamage(attacker, target, damage);
             case CRANE_ATTRIBUTE -> handleCraneAttributeDamage(attacker, target, damage);

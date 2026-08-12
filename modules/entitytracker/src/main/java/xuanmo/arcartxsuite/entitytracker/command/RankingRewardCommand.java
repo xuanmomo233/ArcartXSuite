@@ -63,7 +63,6 @@ public class RankingRewardCommand {
             case "history" -> openRewardHistory(sender);
             case "distribute" -> handleDistribute(sender, args);
             case "status" -> showSchedulerStatus(sender);
-            case "reload" -> reloadScheduler(sender);
             default -> showHelp(sender, label);
         }
 
@@ -76,7 +75,7 @@ public class RankingRewardCommand {
         }
 
         if (args.length == 1) {
-            return Arrays.asList("help", "manage", "history", "distribute", "status", "reload")
+            return Arrays.asList("help", "manage", "history", "distribute", "status")
                 .stream()
                 .filter(s -> s.toLowerCase().startsWith(args[0].toLowerCase()))
                 .collect(Collectors.toList());
@@ -102,7 +101,6 @@ public class RankingRewardCommand {
         sender.sendMessage(fullMsg("ranking.help.history", cmd));
         sender.sendMessage(fullMsg("ranking.help.distribute", cmd));
         sender.sendMessage(fullMsg("ranking.help.status", cmd));
-        sender.sendMessage(fullMsg("ranking.help.reload", cmd));
     }
 
     /**

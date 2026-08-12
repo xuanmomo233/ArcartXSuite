@@ -20,7 +20,7 @@ import org.bukkit.plugin.EventExecutor;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import priv.seventeen.artist.symphony.api.event.SymphonyDamageEvent;
-import priv.seventeen.artist.symphony.api.event.SymphonyHealEvent;
+import priv.seventeen.artist.symphony.api.event.SymphonyHitCheckEvent;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageEvent;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageListener;
 import xuanmo.arcartxsuite.api.attribute.AttributeDamageEvent.Source;
@@ -96,7 +96,6 @@ final class AttributeDamageDispatcher {
         if (mythicLibEnabled) registerMythicLib();
         if (symphonyEnabled) {
             registerSymphony();
-            registerSymphonyHeal();
         }
         registerBukkitFallback();
     }
@@ -439,50 +438,63 @@ final class AttributeDamageDispatcher {
     private void registerSymphony() {
         Plugin symphony = Bukkit.getPluginManager().getPlugin("Symphony");
         if (symphony == null || !symphony.isEnabled()) return;
-        Listener listener = new SymphonyDamageListener();
-        Bukkit.getPluginManager().registerEvents(listener, plugin);
-        registeredListeners.add(listener);
+        Listener damageListener = new SymphonyDamageListener();
+        Listener hitCheckListener = new SymphonyHitCheckListener();
+        Bukkit.getPluginManager().registerEvents(damageListener, plugin);
+        Bukkit.getPluginManager().registerEvents(hitCheckListener, plugin);
+        registeredListeners.add(damageListener);
+        registeredListeners.add(hitCheckListener);
     }
 
     private final class SymphonyDamageListener implements Listener {
         @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
         public void onSymphonyDamage(SymphonyDamageEvent event) {
             try {
-                LivingEntity target = event.getVictim();
+                LivingEntity target = event.getRequest().getVictim();
                 if (target == null) return;
-                Player attacker = event.getAttacker() instanceof Player p ? p : null;
+                Player attacker = event.getRequest().getAttacker() instanceof Player p ? p : null;
                 double damage = event.getFinalDamage();
                 if (damage <= 0.0D) return;
-                dispatch(new AttributeDamageEvent(attacker, target, damage, Source.SYMPHONY));
+                boolean critical = event.getCritical();
+                AttributeDamageEvent.DamageRelation relation = resolveRelation(event);
+                dispatch(new AttributeDamageEvent(attacker, target, damage, Source.SYMPHONY, critical, false, relation));
             } catch (RuntimeException e) {
                 xuanmo.arcartxsuite.module.AxsLog.logger().warning("[AttributeDamageDispatcher] Symphony damage dispatch failed: " + e.getMessage());
             }
         }
     }
 
-    // ─── Symphony Heal ─────────────────────────────────────────
-
-    private void registerSymphonyHeal() {
-        Plugin symphony = Bukkit.getPluginManager().getPlugin("Symphony");
-        if (symphony == null || !symphony.isEnabled()) return;
-        Listener listener = new SymphonyHealListener();
-        Bukkit.getPluginManager().registerEvents(listener, plugin);
-        registeredListeners.add(listener);
+    /** 监听命中判定事件，闪避时分发 dodged=true 的 DamageEvent（damage=0） */
+    private final class SymphonyHitCheckListener implements Listener {
+        @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+        public void onSymphonyHitCheck(SymphonyHitCheckEvent event) {
+            try {
+                if (event.getHit()) return; // 命中成功，由 SymphonyDamageEvent 处理
+                LivingEntity target = event.getRequest().getVictim();
+                if (target == null) return;
+                Player attacker = event.getRequest().getAttacker() instanceof Player p ? p : null;
+                dispatch(new AttributeDamageEvent(attacker, target, 0.0D, Source.SYMPHONY, false, true, null));
+            } catch (RuntimeException e) {
+                xuanmo.arcartxsuite.module.AxsLog.logger().warning("[AttributeDamageDispatcher] Symphony hit-check dispatch failed: " + e.getMessage());
+            }
+        }
     }
 
-    private final class SymphonyHealListener implements Listener {
-        @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-        public void onSymphonyHeal(SymphonyHealEvent event) {
-            try {
-                LivingEntity target = event.getTarget();
-                if (target == null) return;
-                Player source = event.getSource() instanceof Player p ? p : null;
-                double amount = event.getAmount();
-                if (amount <= 0.0D) return;
-                dispatchHeal(new AttributeHealEvent(source, target, amount, SourceType.SYMPHONY));
-            } catch (RuntimeException e) {
-                xuanmo.arcartxsuite.module.AxsLog.logger().warning("[AttributeDamageDispatcher] Symphony heal dispatch failed: " + e.getMessage());
+    /** 根据伤害明细中优势/中性/劣势伤害的占比判定克制关系 */
+    private static AttributeDamageEvent.DamageRelation resolveRelation(SymphonyDamageEvent event) {
+        try {
+            double advantaged = event.getAdvantagedDamage();
+            double neutral = event.getNeutralDamage();
+            double disadvantaged = event.getDisadvantagedDamage();
+            if (advantaged > neutral && advantaged > disadvantaged && advantaged > 0.0D) {
+                return AttributeDamageEvent.DamageRelation.ADVANTAGED;
             }
+            if (disadvantaged > neutral && disadvantaged > advantaged && disadvantaged > 0.0D) {
+                return AttributeDamageEvent.DamageRelation.DISADVANTAGED;
+            }
+            return AttributeDamageEvent.DamageRelation.NEUTRAL;
+        } catch (Exception | LinkageError e) {
+            return null;
         }
     }
 

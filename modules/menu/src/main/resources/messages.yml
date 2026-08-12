@@ -17,10 +17,9 @@ player:
     list: "&7/menu list&f - 列出所有可用菜单"
 
 admin:
-  usage: "&7用法: &f/axs menu <help|status|reload|list|open <菜单ID> [玩家]>"
+  usage: "&7用法: &f/axs menu <help|status|list|open <菜单ID> [玩家]>"
   help-header: "&6========== Menu 管理命令 =========="
   help-status: "&7/axs menu status &f- 查看模块状态"
-  help-reload: "&7/axs menu reload &f- 重载菜单配置"
   help-list: "&7/axs menu list &f- 列出所有已注册菜单"
   help-open: "&7/axs menu open <菜单ID> [玩家] &f- 为指定玩家打开菜单"
   status-title: "&6Menu 模块状态"
@@ -28,15 +27,12 @@ admin:
   status-panel-ui: "&7面板 UI: &f{0}"
   status-esc-ui: "&7ESC UI: &f{0}"
   status-bindings: "&7命令绑定: &f{0} &7| 物品绑定: &f{1}"
-  reload-success: "&aMenu 模块配置已重载。"
-  reload-failed: "&cMenu 模块重载失败: &7{0}"
   list-entry: "&8  ▸ &f{0} &8[{1}] &r{2}"
   open-other: "&a已为 &f{0} &a打开菜单 &f{1}"
 
 help:
   title: "&6菜单 管理"
   status: "&7{0} status&f - 查看模块状态"
-  reload: "&7{0} reload&f - 重载菜单配置"
   list: "&7{0} list&f - 列出所有已注册菜单"
   open: "&7{0} open <菜单ID> [玩家]&f - 为指定玩家打开菜单"
 
@@ -49,5 +45,3 @@ menu-open-success: "&a已打开菜单 &f{menu}"
 button-unavailable: "&c该按钮当前不可用。"
 button-condition-denied: "&c条件未满足，无法使用该按钮。"
 page-empty: "&7当前页没有可用按钮。"
-reload-success: "&aMenu 模块配置已重载。"
-reload-failed: "&cMenu 模块重载失败: &7{error}"

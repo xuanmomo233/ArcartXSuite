@@ -21,7 +21,7 @@ import xuanmo.arcartxsuite.menu.service.MenuService;
  */
 public final class MenuAdminCommand {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "reload", "list", "open");
+    private static final List<String> ACTIONS = List.of("help", "status", "list", "open");
 
     private final MenuService service;
     private final MessageProvider messages;
@@ -53,13 +53,6 @@ public final class MenuAdminCommand {
         switch (action) {
             case "help" -> showHelp(sender, label);
             case "status" -> sendStatus(sender);
-            case "reload" -> {
-                if (!sender.hasPermission("axs.menu.reload")) {
-                    sender.sendMessage(msg("common.no-permission"));
-                    return true;
-                }
-                sender.sendMessage(msg("admin.reload-success"));
-            }
             case "list" -> {
                 if (!(sender instanceof Player player)) {
                     sender.sendMessage(msg("common.player-only"));
@@ -129,7 +122,6 @@ public final class MenuAdminCommand {
         String cmd = "/" + label + " menu";
         sender.sendMessage(msg("help.title"));
         sender.sendMessage(msg("help.status", cmd));
-        sender.sendMessage(msg("help.reload", cmd));
         sender.sendMessage(msg("help.list", cmd));
         sender.sendMessage(msg("help.open", cmd));
     }

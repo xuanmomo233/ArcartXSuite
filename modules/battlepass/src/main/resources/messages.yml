@@ -17,7 +17,6 @@ common:
   enabled: '&a已启用'
   disabled: '&c未启用'
   unknown: '&c未知指令，使用 /axs battlepass help 查看帮助。'
-  reload-hint: '&e请使用 /axs reload 重载配置。'
   service-unavailable: '&c服务未就绪。'
 status:
   title: '&6===== 战令状态 ====='
@@ -47,7 +46,6 @@ admin:
   help:
     title: '&6===== 战令管理 &7v{0} &6====='
     status: '&e/axs battlepass status &7- 查看模块状态'
-    reload: '&e/axs battlepass reload &7- 重载配置'
     season: '&e/axs battlepass season <new|info> &7- 赛季管理'
     reset: '&e/axs battlepass reset <玩家> &7- 重置玩家进度'
     unlock: '&e/axs battlepass unlock <玩家> <premium|deluxe> &7- 解锁指定战令'

@@ -27,7 +27,7 @@ import xuanmo.arcartxsuite.eventpacket.service.EventPacketDispatchService;
  */
 public final class EventPacketAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "reload", "fire", "clearlag", "list", "run");
+    private static final List<String> ACTIONS = List.of("help", "status", "fire", "clearlag", "list", "run");
 
     private final Supplier<EventPacketDispatchService> serviceProvider;
     private final Supplier<EntityCleanupService> cleanupProvider;
@@ -61,7 +61,6 @@ public final class EventPacketAdminCommand implements ModuleCommandHandler {
         switch (action) {
             case "help" -> sendHelp(sender, label);
             case "status" -> sender.sendMessage(msg("common.running"));
-            case "reload" -> sender.sendMessage(msg("common.reload-hint", label));
             case "fire" -> handleFire(sender, args);
             case "clearlag" -> handleClearlag(sender);
             case "list" -> handleList(sender);

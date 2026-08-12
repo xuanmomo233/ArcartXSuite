@@ -263,7 +263,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
      */
     @Override
     public List<String> actions() {
-        return adminCommand != null ? adminCommand.actions() : List.of("help", "status", "reload");
+        return adminCommand != null ? adminCommand.actions() : List.of("help", "status");
     }
 
     /**

@@ -34,7 +34,7 @@ public final class EntityTrackerAdminCommand implements ModuleCommandHandler {
     private static final DecimalFormat DF = new DecimalFormat("0.##");
     private static final SimpleDateFormat DATE_FMT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private static final List<String> ACTIONS = List.of(
-        "help", "status", "reload", "sessions", "rank", "settlements", "settlement", "reissue"
+        "help", "status", "sessions", "rank", "settlements", "settlement", "reissue"
     );
     private static final int PAGE_SIZE = 10;
 
@@ -91,7 +91,6 @@ public final class EntityTrackerAdminCommand implements ModuleCommandHandler {
         switch (action) {
             case "help" -> sendHelp(sender, label);
             case "status" -> sendStatus(sender);
-            case "reload" -> sender.sendMessage(fullMsg("common.reload-hint", label));
             case "sessions" -> handleSessions(sender, args);
             case "rank" -> handleRank(sender, args);
             case "settlements" -> handleSettlements(sender, args);

@@ -28,7 +28,7 @@ public class MarketAdminCommand {
     }
 
     public List<String> actions() {
-        return List.of("help", "status", "reload", "clear-expired", "remove");
+        return List.of("help", "status", "clear-expired", "remove");
     }
 
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
@@ -58,10 +58,6 @@ public class MarketAdminCommand {
                     service.crossServerActive()
                         ? fullMsg("status.cross-server-active")
                         : fullMsg("status.cross-server-inactive")));
-            }
-            case "reload" -> {
-                service.reload();
-                sender.sendMessage(fullMsg("admin.reloaded"));
             }
             case "clear-expired" -> {
                 int cleared = service.clearExpired();
@@ -97,7 +93,6 @@ public class MarketAdminCommand {
         String cmd = "/axs market";
         sender.sendMessage(fullMsg("help.title"));
         sender.sendMessage(fullMsg("help.status", cmd));
-        sender.sendMessage(fullMsg("help.reload", cmd));
         sender.sendMessage(fullMsg("help.clear-expired", cmd));
         sender.sendMessage(fullMsg("help.remove", cmd));
     }

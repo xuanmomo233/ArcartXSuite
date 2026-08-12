@@ -23,7 +23,7 @@ import xuanmo.arcartxsuite.onlinerewards.service.OnlineRewardsService;
  */
 public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "reload", "add", "remove", "set", "card", "savings");
+    private static final List<String> ACTIONS = List.of("help", "status", "add", "remove", "set", "card", "savings");
 
     private final Supplier<OnlineRewardsService> serviceProvider;
     private final MessageProvider messages;
@@ -60,7 +60,6 @@ public final class OnlineRewardsAdminCommand implements ModuleCommandHandler {
         switch (action) {
             case "help" -> showHelp(sender, label);
             case "status" -> sendStatus(sender);
-            case "reload" -> sender.sendMessage(msg("admin.reload-hint", label));
             case "add", "remove", "set" -> handleTimeAdjust(sender, action, args);
             case "card" -> handleCard(sender, args);
             case "savings" -> handleSavings(sender, args);

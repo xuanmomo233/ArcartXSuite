@@ -255,7 +255,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
 
     @Override
     public List<String> actions() {
-        return adminCommand != null ? adminCommand.actions() : List.of("help", "status", "reload");
+        return adminCommand != null ? adminCommand.actions() : List.of("help", "status");
     }
 
     @Override

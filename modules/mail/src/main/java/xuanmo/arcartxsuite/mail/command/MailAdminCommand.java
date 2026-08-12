@@ -29,7 +29,7 @@ import xuanmo.arcartxsuite.mail.service.MailService;
  */
 public final class MailAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "reload", "open", "preset", "cdk", "admin");
+    private static final List<String> ACTIONS = List.of("help", "status", "open", "preset", "cdk", "admin");
     private static final Pattern DURATION_PATTERN = Pattern.compile("^(\\d+)([smhd])$", Pattern.CASE_INSENSITIVE);
 
     private final Supplier<MailService> serviceProvider;
@@ -68,7 +68,6 @@ public final class MailAdminCommand implements ModuleCommandHandler {
         switch (action) {
             case "help" -> sendHelp(sender, label);
             case "status" -> sendStatus(sender);
-            case "reload" -> sender.sendMessage(fullMsg("common.reload-hint", label));
             case "open" -> handleOpen(sender, args);
             case "preset" -> handlePreset(sender, args);
             case "cdk" -> handleCdk(sender, args);

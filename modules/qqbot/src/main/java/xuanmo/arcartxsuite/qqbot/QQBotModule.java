@@ -484,7 +484,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
 
     @Override
     public List<String> actions() {
-        return adminCommand != null ? adminCommand.actions() : List.of("help", "status", "reload");
+        return adminCommand != null ? adminCommand.actions() : List.of("help", "status");
     }
 
     @Override

@@ -23,7 +23,7 @@ import xuanmo.arcartxsuite.map.service.MapService;
  */
 public final class MapAdminCommand implements ModuleCommandHandler {
 
-    private static final List<String> ACTIONS = List.of("help", "status", "reload", "open", "list", "anchors");
+    private static final List<String> ACTIONS = List.of("help", "status", "open", "list", "anchors");
 
     private final Supplier<MapService> serviceProvider;
     private final MessageProvider messages;
@@ -61,7 +61,6 @@ public final class MapAdminCommand implements ModuleCommandHandler {
         switch (action) {
             case "help" -> sendHelp(sender, label);
             case "status" -> sendStatus(sender);
-            case "reload" -> sender.sendMessage(fullMsg("common.reload-hint", label));
             case "open" -> handleOpen(sender, args);
             case "list" -> handleList(sender);
             case "anchors" -> handleAnchors(sender, args);

@@ -47,7 +47,7 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
 
     @Override
     public List<String> actions() {
-        return List.of("help", "status", "reload", "reset", "season", "unlock");
+        return List.of("help", "status", "reset", "season", "unlock");
     }
 
     /**
@@ -62,7 +62,6 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
         switch (action) {
             case "help" -> sendHelp(sender, label);
             case "status" -> sendStatus(sender);
-            case "reload" -> sender.sendMessage(msg("common.reload-hint", label));
             case "reset" -> handleReset(sender, args);
             case "unlock" -> handleUnlock(sender, args);
             case "season" -> sender.sendMessage(msg("admin.season-unimplemented"));
@@ -97,7 +96,6 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
         String cmd = "/" + label + " battlepass";
         sender.sendMessage(msg("help.title"));
         sender.sendMessage(msg("help.status", cmd));
-        sender.sendMessage(msg("help.reload", cmd));
         sender.sendMessage(msg("help.season", cmd));
         sender.sendMessage(msg("help.reset", cmd));
         sender.sendMessage(msg("help.unlock", cmd));

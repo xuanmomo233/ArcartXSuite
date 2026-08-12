@@ -46,7 +46,6 @@ player:
 
 # ── 管理命令 ──────────────────────────────────────────
 admin:
-  reload-hint: "&e请使用 /{0} reload onlinerewards"
   unknown: "&e未知命令，使用 /{0} onlinerewards help"
   help:
     title: "&6OnlineRewards 管理命令"

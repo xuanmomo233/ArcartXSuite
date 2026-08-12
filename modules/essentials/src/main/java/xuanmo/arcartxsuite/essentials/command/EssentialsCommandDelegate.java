@@ -38,7 +38,7 @@ import xuanmo.arcartxsuite.essentials.storage.EssentialsRepository;
 public final class EssentialsCommandDelegate {
 
     private static final List<String> ACTIONS = List.of(
-        "help", "status", "reload", "menu", "admin",
+        "help", "status", "menu", "admin",
         "fly", "god", "heal", "feed", "gamemode", "speed", "vanish", "afk", "back",
         "repair", "hat", "enderchest", "workbench", "anvil", "trash", "nick", "seen",
         "home", "sethome", "delhome", "warp", "setwarp", "delwarp",
@@ -116,7 +116,6 @@ public final class EssentialsCommandDelegate {
         switch (action) {
             case "help" -> sendHelp(sender, label, args[0]);
             case "status" -> sendStatus(sender);
-            case "reload" -> requirePermission(sender, "axs.essentials.reload", () -> reload(sender));
             case "menu" -> requirePlayer(sender, p -> {
                 if (menuPacketHandler != null) menuPacketHandler.openMenu(p);
                 else p.sendMessage(fullMsg("admin.ui.offline"));

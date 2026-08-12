@@ -246,24 +246,11 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     @Override public String commandId() { return "fishing"; }
 
     @Override public List<String> actions() {
-        return adminCommand != null ? adminCommand.actions() : List.of("help", "stats", "reload");
+        return adminCommand != null ? adminCommand.actions() : List.of("help", "stats");
     }
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
-        if (args.length >= 2 && args[1].equalsIgnoreCase("reload")) {
-            if (!sender.hasPermission("axs.fishing.admin")) {
-                sender.sendMessage(msg("command_no_permission"));
-                return true;
-            }
-            try {
-                onReload();
-                sender.sendMessage(msg("command_reload_success"));
-            } catch (Exception exception) {
-                sender.sendMessage(msg("command_reload_failed", exception.getMessage()));
-            }
-            return true;
-        }
         return adminCommand != null && adminCommand.onCommand(sender, label, args);
     }
 

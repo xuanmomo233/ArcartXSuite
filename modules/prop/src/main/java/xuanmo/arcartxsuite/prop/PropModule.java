@@ -151,7 +151,7 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
     }
 
     @Override public String commandId() { return "prop"; }
-    @Override public List<String> actions() { return adminCommand != null ? adminCommand.actions() : List.of("help", "status", "reload"); }
+    @Override public List<String> actions() { return adminCommand != null ? adminCommand.actions() : List.of("help", "status"); }
     @Override public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
         return adminCommand != null ? adminCommand.onCommand(sender, label, args) : false;
     }

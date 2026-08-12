@@ -263,7 +263,7 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
     @Override public String commandId() { return "lottery"; }
 
     @Override public List<String> actions() {
-        return adminCommand != null ? adminCommand.actions() : List.of("help", "status", "reload");
+        return adminCommand != null ? adminCommand.actions() : List.of("help", "status");
     }
 
     @Override
