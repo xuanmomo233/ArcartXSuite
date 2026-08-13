@@ -972,11 +972,15 @@ public class MarketService {
     }
 
     private static int parseIntSafe(String s, int def) {
-        try { return Integer.parseInt(s); } catch (NumberFormatException e) { return def; }
+        if (s == null) return def;
+        try { return Integer.parseInt(s); } catch (NumberFormatException ignored) {}
+        try { return (int) Double.parseDouble(s); } catch (NumberFormatException e) { return def; }
     }
 
     private static long parseLongSafe(String s, long def) {
-        try { return Long.parseLong(s); } catch (NumberFormatException e) { return def; }
+        if (s == null) return def;
+        try { return Long.parseLong(s); } catch (NumberFormatException ignored) {}
+        try { return (long) Double.parseDouble(s); } catch (NumberFormatException e) { return def; }
     }
 
     private static double parseDoubleSafe(String s, double def) {

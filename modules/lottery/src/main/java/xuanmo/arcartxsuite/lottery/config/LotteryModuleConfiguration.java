@@ -82,7 +82,9 @@ public record LotteryModuleConfiguration(
             return pools;
         }
 
-        File[] files = directory.listFiles(file -> file.isFile() && file.getName().toLowerCase().endsWith(".yml"));
+        File[] files = directory.listFiles(file -> file.isFile()
+            && (file.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".yml")
+                || file.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".yaml")));
         if (files == null) return pools;
 
         java.util.Arrays.sort(files, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));

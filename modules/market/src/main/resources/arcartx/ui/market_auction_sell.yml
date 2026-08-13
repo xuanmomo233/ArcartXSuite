@@ -310,15 +310,6 @@ controls:
                   texts: "var.selectedSlot != none && var.selectedItemName != none ? '&f' + var.selectedItemName : '&7未选择物品'"
                   fontSize: 30
                   through: true
-              预览物品数量:
-                type: Text
-                attribute:
-                  x: 124
-                  y: 134
-                  width: 410
-                  texts: "var.selectedSlot != none && var.selectedItemAmount > 0 ? '&7数量: &f' + var.selectedItemAmount : '&7数量: -'"
-                  fontSize: 24
-                  through: true
               预览分隔线:
                 type: Texture
                 attribute:

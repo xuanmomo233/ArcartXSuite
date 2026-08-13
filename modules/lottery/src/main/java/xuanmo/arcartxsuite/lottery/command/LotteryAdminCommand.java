@@ -57,12 +57,13 @@ public class LotteryAdminCommand {
      * @return {@code true} 表示命令已处理
      */
     public boolean onCommand(@NotNull CommandSender sender, @NotNull String label, @NotNull String[] args) {
-        if (args.length == 0) {
+        // args[0] 为模块 id（lottery），args[1] 开始为子命令（与 ModuleCommandHandler 接口约定一致）
+        if (args.length < 2) {
             showHelp(sender);
             return true;
         }
 
-        String action = args[0].toLowerCase();
+        String action = args[1].toLowerCase();
         LotteryService service = serviceSupplier.get();
         if (service == null) {
             sender.sendMessage(msg("common.service-down"));
@@ -73,25 +74,25 @@ public class LotteryAdminCommand {
             case "help" -> showHelp(sender);
             case "status" -> handleStatus(sender, service);
             case "reset" -> {
-                if (args.length < 3) {
+                if (args.length < 4) {
                     sender.sendMessage(msg("admin.reset.usage"));
                     return true;
                 }
-                handleReset(sender, service, args[1], args[2]);
+                handleReset(sender, service, args[2], args[3]);
             }
             case "give-points" -> {
-                if (args.length < 4) {
+                if (args.length < 5) {
                     sender.sendMessage(msg("admin.give-points.usage"));
                     return true;
                 }
-                handleGivePoints(sender, service, args[1], args[2], args[3]);
+                handleGivePoints(sender, service, args[2], args[3], args[4]);
             }
             case "simulate" -> {
-                if (args.length < 3) {
+                if (args.length < 4) {
                     sender.sendMessage(msg("admin.simulate.usage"));
                     return true;
                 }
-                handleSimulate(sender, service, args[1], args[2]);
+                handleSimulate(sender, service, args[2], args[3]);
             }
             default -> showHelp(sender);
         }
@@ -106,29 +107,42 @@ public class LotteryAdminCommand {
      * @return 补全候选列表，无匹配时返回空列表
      */
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull String[] args) {
-        if (args.length == 1) {
-            return filter(actions(), args[0]);
+        // args[0] 为模块 id（lottery），args[1] 开始为子命令
+        // args.length == 1 时返回 null，让 ArcartXSuiteCommand fallback 到 actions() 补全
+        if (args.length < 2) {
+            return null;
         }
         LotteryService service = serviceSupplier.get();
         if (service == null) return Collections.emptyList();
 
-        String action = args[0].toLowerCase();
+        String action = args[1].toLowerCase();
         if (args.length == 2) {
-            switch (action) {
-                case "reset" -> {
-                    List<String> players = Bukkit.getOnlinePlayers().stream()
-                        .map(Player::getName).collect(Collectors.toList());
-                    return filter(players, args[1]);
-                }
-                case "simulate" -> {
-                    return filter(new ArrayList<>(service.getPools().keySet()), args[1]);
-                }
-            }
+            return filter(actions(), args[1]);
         }
         if (args.length == 3) {
             switch (action) {
-                case "reset" -> {
+                case "reset", "give-points" -> {
+                    List<String> players = Bukkit.getOnlinePlayers().stream()
+                        .map(Player::getName).collect(Collectors.toList());
+                    return filter(players, args[2]);
+                }
+                case "simulate" -> {
                     return filter(new ArrayList<>(service.getPools().keySet()), args[2]);
+                }
+            }
+        }
+        if (args.length == 4) {
+            switch (action) {
+                case "reset" -> {
+                    return filter(new ArrayList<>(service.getPools().keySet()), args[3]);
+                }
+                case "give-points" -> {
+                    // 补全所有奖池中定义的积分点 ID
+                    java.util.Set<String> pointIds = new java.util.LinkedHashSet<>();
+                    for (var pool : service.getPools().values()) {
+                        pointIds.addAll(pool.points().keySet());
+                    }
+                    return filter(new ArrayList<>(pointIds), args[3]);
                 }
             }
         }
