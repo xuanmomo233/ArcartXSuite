@@ -35,7 +35,7 @@
 #
 # 奖励类型说明：
 #   item:     通过 ItemSourceRegistry 生成物品并直接放入玩家背包
-#   command:  以控制台身份执行命令列表，支持 {player} 占位符
+#   command:  以控制台身份执行命令列表（commands 字段），支持 {player} 占位符
 #   currency: 向玩家发放指定货币（需 Vault/PlayerPoints 等经济插件）
 #
 # icon 配置（完整字段见 menu/market 模块）：

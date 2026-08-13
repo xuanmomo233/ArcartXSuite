@@ -2,8 +2,7 @@
 # 奖励配置从主配置拆分为外部文件 (rewards.yml)
 # 主配置中内联的 rewards 段需要移除，新增 rewards-file 字段指向外部文件
 # UI 配置新增 rewards-id 字段（奖励界面 UI 标识）
-# 旧版 rewards 段中的 type: command + data 格式由 Java 代码向后兼容处理
-# (BattlePassModuleConfiguration.parseReward 已支持旧版 data 字段单命令)
+# 用户需手动将旧版 rewards 段内容迁移到 rewards.yml 的新格式（type: command 用 commands 列表替代 data 字段）
 
 from-version: 2  # 迁移起始版本号
 to-version: 3  # 迁移目标版本号

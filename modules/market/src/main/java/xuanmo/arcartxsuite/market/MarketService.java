@@ -613,24 +613,6 @@ public class MarketService {
     private Map<String, Object> buildAuctionSellPacket(Player player) {
         Map<String, Object> packet = new LinkedHashMap<>();
         packet.put("packetId", config.ui().packetId());
-        Map<String, Object> backpackItems = new LinkedHashMap<>();
-        for (int slot = 1; slot < 35; slot++) {
-            ItemStack item = player.getInventory().getItem(slot);
-            Map<String, Object> row = new LinkedHashMap<>();
-            boolean hasItem = item != null && !item.getType().isAir();
-            row.put("hasItem", hasItem);
-            row.put("name", hasItem ? itemDisplayName(item) : "");
-            row.put("amount", hasItem ? item.getAmount() : 0);
-            // 物品 lore（用于 UI 展示物品介绍）
-            if (hasItem && item.hasItemMeta() && item.getItemMeta().hasLore()) {
-                row.put("lore", item.getItemMeta().getLore());
-            } else {
-                row.put("lore", List.of());
-            }
-            String key = Integer.toString(slot);
-            backpackItems.put(key, row);
-            if (hasItem) packet.put("itemJson" + key, itemToJson(item));
-        }
         Map<String, Object> currencies = new LinkedHashMap<>();
         int currencyIndex = 0;
         for (var option : config.auction().currencies()) {
@@ -639,7 +621,6 @@ public class MarketService {
             currency.put("name", option.name());
             currencies.put(Integer.toString(currencyIndex++), currency);
         }
-        packet.put("backpackItems", backpackItems);
         packet.put("currencies", currencies);
         packet.put("maxCurrencyCount", currencies.size());
         packet.put("defaultCurrency", config.auction().defaultCurrency());

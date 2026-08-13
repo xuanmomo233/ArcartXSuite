@@ -1,7 +1,6 @@
 package xuanmo.arcartxsuite.battlepass.model;
 
 import java.util.List;
-import java.util.Map;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.icon.IconDefinition;
 
@@ -25,7 +24,6 @@ import xuanmo.arcartxsuite.api.icon.IconDefinition;
  * @param commands  命令列表（type: command 时使用），可为空列表
  * @param currency  货币 ID（type: currency 时使用），可为 null
  * @param currencyAmount 货币数量（type: currency 时使用）
- * @param data      旧版奖励数据键值对（向后兼容，新配置不使用）
  */
 public record BattlePassReward(
     String rewardId,
@@ -36,8 +34,7 @@ public record BattlePassReward(
     @Nullable BattlePassItemDefinition item,
     List<String> commands,
     @Nullable String currency,
-    double currencyAmount,
-    Map<String, String> data
+    double currencyAmount
 ) {
 
     /**

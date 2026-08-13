@@ -8,9 +8,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
@@ -119,24 +117,11 @@ public record BattlePassModuleConfiguration(
         String type = section.getString("type", "command");
         IconDefinition icon = IconDefinition.load(section, "icon");
         BattlePassItemDefinition item = parseItemDefinition(section.getConfigurationSection("item"));
-        List<String> commands = section.getStringList("commands");
-        if (commands.isEmpty()) {
-            // 向后兼容：旧版 data 字段单命令
-            String legacyData = section.getString("data", "");
-            if (!legacyData.isEmpty()) {
-                commands = List.of(legacyData);
-            }
-        }
+        List<String> commands = Collections.unmodifiableList(section.getStringList("commands"));
         String currency = section.getString("currency", "");
         double currencyAmount = section.getDouble("amount", 0);
-        // 旧版 data 键值对（向后兼容）
-        Map<String, String> data = new LinkedHashMap<>();
-        String legacyData = section.getString("data", "");
-        if (!legacyData.isEmpty()) {
-            data.put("data", legacyData);
-        }
         return new BattlePassReward(rewardId, level, tier, type, icon, item,
-            Collections.unmodifiableList(commands), currency, currencyAmount, data);
+            commands, currency, currencyAmount);
     }
 
     private static @Nullable BattlePassItemDefinition parseItemDefinition(@Nullable ConfigurationSection section) {

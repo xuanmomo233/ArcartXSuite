@@ -24,16 +24,16 @@ ui:
       var.priceMin = 1
       var.priceMax = 1000000000
       var.messageMaxLength = 50
-      var.backpackItems = {}
-      var.itemJsons = {}
+      var.selectedItemName = none
+      var.selectedItemAmount = 0
+      var.selectedItemLore = none
+      var.selectedItemJson = none
       var.currencies = {}
       var.maxCurrencyCount = 0
     open: "Packet.send(var.packetId, 'auction_sell_open')"
   packetHandler:
     init: |-
       var.packetId = packet['packetId']
-      var.backpackItems = packet['backpackItems']
-      var.itemJsons = {}
       var.currencies = packet['currencies']
       var.maxCurrencyCount = packet['maxCurrencyCount']
       var.selectedCurrency = packet['defaultCurrency']
@@ -49,33 +49,8 @@ ui:
         key = i.round()
         e = val.货币列表['货币项'].copy('货币项' + key)
         e.entryKey = key
-      }
-      
-      if(var.backpackItems != none){
-        for(key in var.backpackItems.keys()){
-          json = packet['itemJson' + key]
-          if(json != none){
-            var.itemJsons[key] = json
-          } else {
-            var.itemJsons[key] = var.emptyItemJson
-          }
-        }
-      }
-      
-      for(i in range(0, 35)){
-        slot = val.背包网格.get(i.round())
-        if(slot != none){
-          slot.seticon()
-        }
-      }
-      
-      preview = val.信息面板['预览槽']
-      if(preview != none){
-        preview.seticon()
       }
     update: |-
-      var.backpackItems = packet['backpackItems']
-      var.itemJsons = {}
       var.currencies = packet['currencies']
       var.maxCurrencyCount = packet['maxCurrencyCount']
       var.selectedCurrency = packet['defaultCurrency']
@@ -91,29 +66,6 @@ ui:
         key = i.round()
         e = val.货币列表['货币项'].copy('货币项' + key)
         e.entryKey = key
-      }
-      
-      if(var.backpackItems != none){
-        for(key in var.backpackItems.keys()){
-          json = packet['itemJson' + key]
-          if(json != none){
-            var.itemJsons[key] = json
-          } else {
-            var.itemJsons[key] = var.emptyItemJson
-          }
-        }
-      }
-      
-      for(i in range(0, 35)){
-        slot = val.背包网格.get(i.round())
-        if(slot != none){
-          slot.seticon()
-        }
-      }
-      
-      preview = val.信息面板['预览槽']
-      if(preview != none){
-        preview.seticon()
       }
   defaultOpen: false
 controls:
@@ -244,25 +196,32 @@ controls:
                     attribute:
                       id: 0
                       entryKey: 0.round()
-                      entry: var.backpackItems[self.entryKey]
-                      slotType: ~Icon
+                      slotType: ~Backpack
                       itemScale: 0.74
                       width: 72
                       height: 72
                       through: false
+                      lock: true
                       normal: "self.entryKey == var.selectedSlot ? '70,150,250,255' : '42,45,56,230'"
                       hover: "~Frosted:0;255,255,255,80"
                       shape: ~round_rect
                       radius: 12
-                      seticon: self.setItemIcon(var.itemJsons[self.entryKey])
                     action:
                       clickLeft: |-
-                        entry = var.backpackItems[self.entryKey]
-                        if(entry != none && entry['hasItem']){
+                        item = self.getSlotItemStack()
+                        if(item != none && item.getType() != 'null' && item.getCount() > 0){
                           if(var.selectedSlot == self.entryKey){
                             var.selectedSlot = none
+                            var.selectedItemName = none
+                            var.selectedItemAmount = 0
+                            var.selectedItemLore = none
+                            var.selectedItemJson = none
                           } else {
                             var.selectedSlot = self.entryKey
+                            var.selectedItemName = item.getName()
+                            var.selectedItemAmount = item.getCount()
+                            var.selectedItemLore = item.getLore()
+                            var.selectedItemJson = item.toJson()
                           }
                           preview = val.信息面板['预览槽']
                           if(preview != none){
@@ -273,14 +232,11 @@ controls:
                             while(loreList.childrenCount() > 1){
                               loreList.get(1).remove()
                             }
-                            if(var.selectedSlot != none){
-                              item = var.backpackItems[var.selectedSlot]
-                              if(item != none && item['lore'] != none){
-                                loreCount = item['lore'].length
-                                for(i in range(1, loreCount)){
-                                  e = loreList['介绍行'].copy('介绍行' + i.round())
-                                  e.entryKey = i.round()
-                                }
+                            if(var.selectedSlot != none && var.selectedItemLore != none){
+                              loreCount = var.selectedItemLore.length
+                              for(i in range(1, loreCount)){
+                                e = loreList['介绍行'].copy('介绍行' + i.round())
+                                e.entryKey = i.round()
                               }
                             }
                           }
@@ -289,27 +245,6 @@ controls:
                       stroke:
                         width: 2
                         color: ~0,0,0,120
-                    children:
-                      数量:
-                        type: Text
-                        attribute:
-                          x: 8
-                          y: 48
-                          width: 60
-                          texts: "self.parent.entry != none && self.parent.entry['hasItem'] && self.parent.entry['amount'] > 1 ? '&f' + self.parent.entry['amount'] : none"
-                          fontSize: 26
-                          through: true
-              空背包提示:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  x: 0
-                  y: 0
-                  center: false
-                  fontSize: 100
-                  visible: var.backpackItems == none || var.backpackItems.keys().length == 0
-                  texts: ~&8暂无可上架物品
-                  through: true
           # ── 右上：信息面板（上架信息+物品描述）──────────
           信息面板:
             type: Canvas
@@ -361,7 +296,7 @@ controls:
                   shape: ~round_rect
                   radius: 12
                   through: true
-                  seticon: "var.selectedSlot != none ? self.setItemIcon(var.itemJsons[var.selectedSlot]) : self.setItemIcon(var.emptyItemJson)"
+                  seticon: "var.selectedSlot != none ? self.setItemIcon(var.selectedItemJson) : self.setItemIcon(var.emptyItemJson)"
                 effect:
                   stroke:
                     width: 2
@@ -372,7 +307,7 @@ controls:
                   x: 124
                   y: 92
                   width: 410
-                  texts: "var.selectedSlot != none && var.backpackItems[var.selectedSlot] != none ? '&f' + var.backpackItems[var.selectedSlot]['name'] : '&7未选择物品'"
+                  texts: "var.selectedSlot != none && var.selectedItemName != none ? '&f' + var.selectedItemName : '&7未选择物品'"
                   fontSize: 30
                   through: true
               预览物品数量:
@@ -381,7 +316,7 @@ controls:
                   x: 124
                   y: 134
                   width: 410
-                  texts: "var.selectedSlot != none && var.backpackItems[var.selectedSlot] != none ? '&7数量: &f' + var.backpackItems[var.selectedSlot]['amount'] : '&7数量: -'"
+                  texts: "var.selectedSlot != none && var.selectedItemAmount > 0 ? '&7数量: &f' + var.selectedItemAmount : '&7数量: -'"
                   fontSize: 24
                   through: true
               预览分隔线:
@@ -430,7 +365,7 @@ controls:
                         type: Text
                         attribute:
                           entryKey: 0.round()
-                          entry: "var.selectedSlot != none && var.backpackItems[var.selectedSlot] != none ? var.backpackItems[var.selectedSlot]['lore'][self.entryKey] : none"
+                          entry: "var.selectedSlot != none && var.selectedItemLore != none ? var.selectedItemLore[self.entryKey] : none"
                           visible: self.entry != none
                           texts: "'&f' + self.entry"
                           fontSize: 24
@@ -453,7 +388,7 @@ controls:
                   y: 90
                   center: false
                   fontSize: 64
-                  visible: "var.selectedSlot == none || var.backpackItems[var.selectedSlot] == none || var.backpackItems[var.selectedSlot]['lore'] == none || var.backpackItems[var.selectedSlot]['lore'].length == 0"
+                  visible: "var.selectedSlot == none || var.selectedItemLore == none || var.selectedItemLore.length == 0"
                   texts: ~&8暂无介绍
                   through: true
           # ── 底部横跨：设置面板（价格+留言+货币+时长+按钮）──
