@@ -38,12 +38,12 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
     private static final int CASE_PREVIEW_SLOT_LIMIT = 45;
     private static final String GACHA = "AXS_LOTTERY_GACHA";
     private static final String CASE = "AXS_LOTTERY_CASE";
-    private static final String GACHA_UI = "ui/lottery_gacha.yml";
-    private static final String CASE_UI = "ui/lottery_case.yml";
     private final LotteryService service;
     private final PacketBridgeAPI packetBridge;
     private final IconResolver iconResolver;
     private final JavaPlugin plugin;
+    private final String gachaUiId;
+    private final String caseUiId;
     private final ConcurrentMap<UUID, Integer> gachaIndex = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, Integer> caseIndex = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, String> tokens = new ConcurrentHashMap<>();
@@ -51,11 +51,14 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
     private final java.util.Set<UUID> inFlight = ConcurrentHashMap.newKeySet();
 
     public LotteryPacketHandler(@NotNull LotteryService service, @NotNull PacketBridgeAPI packetBridge,
-                                @NotNull IconResolver iconResolver, @NotNull JavaPlugin plugin) {
+                                @NotNull IconResolver iconResolver, @NotNull JavaPlugin plugin,
+                                @NotNull String gachaUiId, @NotNull String caseUiId) {
         this.service = service;
         this.packetBridge = packetBridge;
         this.iconResolver = iconResolver;
         this.plugin = plugin;
+        this.gachaUiId = gachaUiId;
+        this.caseUiId = caseUiId;
     }
 
     @Override
@@ -167,7 +170,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("pity4", result == null ? 0 : result.finalState().pity4star());
         payload.put("pity5", result == null ? 0 : result.finalState().pity5star());
         payload.put("highestStar", highest);
-        packetBridge.sendPacket(player, GACHA_UI, count == 1 ? "result" : "batch_result", payload);
+        packetBridge.sendPacket(player, gachaUiId, count == 1 ? "result" : "batch_result", payload);
     }
 
     private void sendCaseResult(Player player, CaseResult result) {
@@ -177,7 +180,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("resultItemJson", item == null ? "" : poolItemJson(player, item));
         payload.put("resultItemName", item == null ? "" : item.name());
         payload.put("resultRarity", result == null ? "" : result.rarity());
-        packetBridge.sendPacket(player, CASE_UI, "result", payload);
+        packetBridge.sendPacket(player, caseUiId, "result", payload);
     }
 
     private void sendCaseBatch(Player player, List<CaseResult> results, int count) {
@@ -198,7 +201,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("batchItemJsons", jsons);
         payload.put("batchItemNames", names);
         payload.put("batchItemRarities", rarities);
-        packetBridge.sendPacket(player, CASE_UI, "batch_result", payload);
+        packetBridge.sendPacket(player, caseUiId, "batch_result", payload);
     }
 
     private void update(Player player, String packetId, int index) {
@@ -219,7 +222,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         payload.put("action_token", token);
         if (pool.type() == PoolType.GACHA) updateGacha(player, pool, payload);
         else updateCase(player, pool, payload);
-        packetBridge.sendPacket(player, packetId.equals(GACHA) ? GACHA_UI : CASE_UI, "update", payload);
+        packetBridge.sendPacket(player, packetId.equals(GACHA) ? gachaUiId : caseUiId, "update", payload);
     }
 
     private void updateGacha(Player player, PoolDefinition pool, Map<String, Object> payload) {
@@ -460,7 +463,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         }
         payload.put("historyCount", rows.size());
         payload.put("historyRows", rows);
-        packetBridge.sendPacket(player, packetId.equals(GACHA) ? GACHA_UI : CASE_UI,
+        packetBridge.sendPacket(player, packetId.equals(GACHA) ? gachaUiId : caseUiId,
             "history", payload);
     }
 
@@ -498,7 +501,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         }
         payload.put("detailCount", rows.size());
         payload.put("detailRows", rows);
-        packetBridge.sendPacket(player, packetId.equals(GACHA) ? GACHA_UI : CASE_UI,
+        packetBridge.sendPacket(player, packetId.equals(GACHA) ? gachaUiId : caseUiId,
             "details", payload);
     }
 
@@ -536,7 +539,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
         }
         payload.put("exchangeCount", rows.size());
         payload.put("exchangeRows", rows);
-        packetBridge.sendPacket(player, GACHA_UI, "exchange", payload);
+        packetBridge.sendPacket(player, gachaUiId, "exchange", payload);
     }
 
     private void exchangeBuy(Player player, List<String> data) {
@@ -547,6 +550,65 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
             inFlight.remove(player.getUniqueId());
             update(player, GACHA, currentIndex(player, GACHA));
         }
+    }
+
+    // ─── 命令入口：打开 UI ─────────────────────────────────
+
+    /**
+     * 根据奖池 ID 打开对应类型的抽奖 UI（GACHA 或 CASE）。
+     *
+     * @param player 玩家
+     * @param poolId 奖池 ID
+     * @return {@code true} 表示成功打开；奖池不存在、桥接不可用时返回 {@code false}
+     */
+    public boolean openPoolUi(@NotNull Player player, @NotNull String poolId) {
+        PoolDefinition pool = service.getPool(poolId);
+        if (pool == null || !pool.enabled()) return false;
+        if (!packetBridge.isAvailable()) return false;
+        String packetId = pool.type() == PoolType.GACHA ? GACHA : CASE;
+        String uiId = pool.type() == PoolType.GACHA ? gachaUiId : caseUiId;
+        List<PoolDefinition> poolList = pools(packetId);
+        int index = -1;
+        for (int i = 0; i < poolList.size(); i++) {
+            if (poolList.get(i).id().equals(poolId)) { index = i; break; }
+        }
+        if (index < 0) return false;
+        indexMap(packetId).put(player.getUniqueId(), index);
+        if (!packetBridge.openUi(player, uiId)) return false;
+        update(player, packetId, index);
+        return true;
+    }
+
+    /**
+     * 打开指定奖池的 UI 并自动跳转到详情页面。
+     *
+     * @param player 玩家
+     * @param poolId 奖池 ID
+     * @return {@code true} 表示成功
+     */
+    public boolean openPoolDetails(@NotNull Player player, @NotNull String poolId) {
+        if (!openPoolUi(player, poolId)) return false;
+        PoolDefinition pool = service.getPool(poolId);
+        if (pool == null) return false;
+        String packetId = pool.type() == PoolType.GACHA ? GACHA : CASE;
+        details(player, packetId);
+        return true;
+    }
+
+    /**
+     * 打开指定奖池的 UI 并自动跳转到历史记录页面。
+     *
+     * @param player 玩家
+     * @param poolId 奖池 ID
+     * @return {@code true} 表示成功
+     */
+    public boolean openPoolHistory(@NotNull Player player, @NotNull String poolId) {
+        if (!openPoolUi(player, poolId)) return false;
+        PoolDefinition pool = service.getPool(poolId);
+        if (pool == null) return false;
+        String packetId = pool.type() == PoolType.GACHA ? GACHA : CASE;
+        history(player, packetId);
+        return true;
     }
 
     public void onPlayerQuit(@NotNull UUID playerUuid) {

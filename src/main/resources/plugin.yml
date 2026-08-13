@@ -116,7 +116,7 @@ commands:
     permission: arcartxsuite.fishing.use
   lottery:
     description: 玩家抽奖命令
-    usage: /<command> <pull|info|history> <poolId> [single|ten]
+    usage: /<command> <open|info|history> <奖池ID> | claim | help
     permission: arcartxsuite.lottery.use
   bp:
     description: 玩家战令命令

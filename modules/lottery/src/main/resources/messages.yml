@@ -50,25 +50,19 @@ rarity:
   special: "罕见特殊物品"
   unknown: "未知稀有度"
 player:
-  # 旧 player.help 列表格式（已被 player.help.title 等标准格式替代）:
-  # help:
-  #   - "&6=== AXS 抽奖系统 ==="
-  #   - "&7/lottery pull <奖池ID> [single|ten] &f- 抽奖"
-  #   - "&7/lottery info <奖池ID> &f- 查看奖池信息"
-  #   - "&7/lottery history <奖池ID> &f- 查看历史记录"
   help:
     title: "&6抽奖 命令"
-    claim: "&7/lottery claim&f - 领取待发放奖励"
-    pull: "&7/lottery pull <奖池ID> [single|ten]&f - 抽奖"
-    info: "&7/lottery info <奖池ID>&f - 查看奖池信息"
+    open: "&7/lottery open <奖池ID>&f - 打开抽奖界面"
+    info: "&7/lottery info <奖池ID>&f - 查看奖池详情"
     history: "&7/lottery history <奖池ID>&f - 查看历史记录"
-  pull:
-    usage: "&e用法: /lottery pull <奖池ID> [single|ten]"
+    claim: "&7/lottery claim&f - 领取待发放奖励"
+  open:
+    usage: "&e用法: /lottery open <奖池ID>"
+    disabled: "&c奖池未启用: &e{0}"
+    ui-unavailable: "&cArcartX UI 桥接不可用，无法打开界面。"
+    failed: "&c打开界面失败: &e{0}"
   info:
     usage: "&e用法: /lottery info <奖池ID>"
-    gacha: "&e奖池: &f{0} &7| 5星保底: &f{1} &7| 4星保底: &f{2}"
-    case: "&e奖池: &f{0} &7| 开箱次数: &f{1}"
-  pull-no-items: "无"
   history:
     usage: "&e用法: /lottery history <奖池ID>"
     title: "&6=== {0} 历史记录 ==="
@@ -84,7 +78,7 @@ admin:
     - "&6Lottery 管理"
     - "&7/axs lottery status &f- 查看奖池状态"
     - "&7/axs lottery reset <玩家> <奖池ID> &f- 重置状态"
-    - "&7/axs lottery give-ticket <玩家> <奖池ID> <数量> &f- 发放抽奖券"
+    - "&7/axs lottery give-points <玩家> <积分ID> <数量> &f- 发放积分"
     - "&7/axs lottery simulate <奖池ID> <次数> &f- 概率模拟"
   status:
     title: "&6AXS Lottery 状态"
@@ -92,12 +86,11 @@ admin:
   reset:
     usage: "&e用法: /axs lottery reset <玩家> <奖池ID>"
     success: "&a已重置 &f{0} &a在奖池 &f{1} &a的状态"
-  give-ticket:
-    usage: "&e用法: /axs lottery give-ticket <玩家> <奖池ID> <数量>"
-    success: "&a已向 &f{0} &a发放 &f{1} &ax{2} &a张抽奖券"
   simulate:
     usage: "&e用法: /axs lottery simulate <奖池ID> <次数>"
-    result: "&a奖池 &f{0} &a模拟 &f{1} &a次抽奖完成"
+    range: "&c次数必须在 1-100000 之间"
+    title: "&6奖池 &f{0} &6模拟 &f{1} &6次抽奖统计:"
+    entry: "&7{0}: &f{1} &7次 (&f{2}%&7)"
   player-not-found: "&c玩家不在线: &f{0}"
   give-points:
     usage: "&e用法: /axs lottery give-points <玩家> <积分ID> <数量>"
@@ -110,7 +103,6 @@ help:
   title: "&6抽奖 管理"
   status: "&7{0} status&f - 查看奖池状态"
   reset: "&7{0} reset <玩家> <奖池ID>&f - 重置玩家抽奖状态"
-  give-ticket: "&7{0} give-ticket <玩家> <奖池ID> <数量>&f - 发放抽奖券"
   give-points: "&7{0} give-points <玩家> <积分ID> <数量>&f - 发放积分"
   simulate: "&7{0} simulate <奖池ID> <次数>&f - 概率模拟"
 

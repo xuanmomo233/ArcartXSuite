@@ -810,6 +810,43 @@ public class LotteryService {
         repository.deleteCaseState(playerUuid, poolId);
     }
 
+    // ─── 概率模拟 ─────────────────────────────────────────
+
+    /**
+     * 模拟指定奖池的抽奖统计（不扣费、不发奖、不保存状态）。
+     *
+     * @param poolId 奖池 ID
+     * @param times  模拟次数
+     * @return 按稀有度/星级分组的统计结果映射，key 为稀有度名称，value 为出现次数
+     */
+    public Map<String, Integer> simulate(@NotNull String poolId, int times) {
+        PoolDefinition poolDef = getPool(poolId);
+        if (poolDef == null) {
+            throw new IllegalArgumentException("奖池不存在: " + poolId);
+        }
+        Map<String, Integer> stats = new java.util.LinkedHashMap<>();
+        if (poolDef.type() == PoolType.GACHA && poolDef.gacha() != null) {
+            PlayerGachaState state = PlayerGachaState.empty(java.util.UUID.randomUUID(), poolId);
+            for (int i = 0; i < times; i++) {
+                GachaResult result = gachaEngine.pull(poolDef.gacha(), state, 1);
+                state = result.finalState();
+                for (PoolItem item : result.items()) {
+                    if (item == null) continue;
+                    int star = describeGachaItem(poolDef, item).star();
+                    String key = star + "star";
+                    stats.merge(key, 1, Integer::sum);
+                }
+            }
+        } else if (poolDef.type() == PoolType.CASE && poolDef.caseConfig() != null) {
+            for (int i = 0; i < times; i++) {
+                CaseResult result = caseEngine.openCase(poolDef.caseConfig());
+                String rarity = result.rarity() == null ? "UNKNOWN" : result.rarity();
+                stats.merge(rarity, 1, Integer::sum);
+            }
+        }
+        return stats;
+    }
+
     // ─── 辅助 ─────────────────────────────────────────────
 
     private String serializeItems(List<PoolItem> items) {

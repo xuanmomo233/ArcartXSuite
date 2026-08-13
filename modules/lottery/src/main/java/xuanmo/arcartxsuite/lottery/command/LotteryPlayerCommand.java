@@ -4,36 +4,46 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
-import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.lottery.LotteryService;
+import xuanmo.arcartxsuite.lottery.config.PoolDefinition;
+import xuanmo.arcartxsuite.lottery.packet.LotteryPacketHandler;
 
 /**
  * Lottery 模块的玩家命令处理器，实现 {@link TabExecutor}。
  * <p>
- * 支持抽奖（单抽/十连）、领取待发放奖励、查看奖池状态与历史记录等操作。
- * 通过 {@code Supplier<LotteryService>} 延迟获取服务实例。
+ * 支持打开抽奖 UI（open）、查看奖池详情（info）、查看历史记录（history）、
+ * 领取待发放奖励（claim）等操作。通过 {@code Supplier} 延迟获取服务与桥接实例。
  */
 public class LotteryPlayerCommand implements TabExecutor {
 
     private final Supplier<LotteryService> serviceSupplier;
     private final MessageProvider messages;
+    private final Supplier<LotteryPacketHandler> packetHandlerSupplier;
+    private final Supplier<PacketBridgeAPI> packetBridgeSupplier;
 
     /**
      * 构造玩家命令处理器。
      *
-     * @param serviceSupplier Lottery 服务延迟供应器
-     * @param messages         消息提供者
+     * @param serviceSupplier      Lottery 服务延迟供应器
+     * @param messages             消息提供者
+     * @param packetHandlerSupplier 客户端包处理器延迟供应器
+     * @param packetBridgeSupplier  Packet 桥接延迟供应器
      */
-    public LotteryPlayerCommand(Supplier<LotteryService> serviceSupplier, MessageProvider messages) {
+    public LotteryPlayerCommand(Supplier<LotteryService> serviceSupplier, MessageProvider messages,
+                                Supplier<LotteryPacketHandler> packetHandlerSupplier,
+                                Supplier<PacketBridgeAPI> packetBridgeSupplier) {
         this.serviceSupplier = serviceSupplier;
         this.messages = messages;
+        this.packetHandlerSupplier = packetHandlerSupplier;
+        this.packetBridgeSupplier = packetBridgeSupplier;
     }
 
     private String fullMsg(String key, Object... args) {
@@ -58,12 +68,6 @@ public class LotteryPlayerCommand implements TabExecutor {
             return true;
         }
 
-        LotteryService service = serviceSupplier.get();
-        if (service == null) {
-            player.sendMessage(fullMsg("common.service-down"));
-            return true;
-        }
-
         if (args.length == 0) {
             showHelp(sender);
             return true;
@@ -74,35 +78,35 @@ public class LotteryPlayerCommand implements TabExecutor {
             return true;
         }
 
+        LotteryService service = serviceSupplier.get();
+        if (service == null) {
+            player.sendMessage(fullMsg("common.service-down"));
+            return true;
+        }
+
         String sub = args[0].toLowerCase();
         switch (sub) {
             case "claim" -> service.claimPending(player);
-            case "pull" -> {
+            case "open" -> {
                 if (args.length < 2) {
-                    player.sendMessage(fullMsg("player.pull.usage"));
+                    player.sendMessage(fullMsg("player.open.usage"));
                     return true;
                 }
-                String poolId = args[1];
-                int count = 1;
-                if (args.length > 2) {
-                    String mode = args[2].toLowerCase();
-                    if ("ten".equals(mode) || "10".equals(mode)) count = 10;
-                }
-                handlePull(player, service, poolId, count);
+                handleOpen(player, args[1]);
             }
             case "info" -> {
                 if (args.length < 2) {
                     player.sendMessage(fullMsg("player.info.usage"));
                     return true;
                 }
-                handleInfo(player, service, args[1]);
+                handleInfo(player, args[1]);
             }
             case "history" -> {
                 if (args.length < 2) {
                     player.sendMessage(fullMsg("player.history.usage"));
                     return true;
                 }
-                handleHistory(player, service, args[1]);
+                handleHistory(player, args[1]);
             }
             default -> showHelp(sender);
         }
@@ -111,85 +115,91 @@ public class LotteryPlayerCommand implements TabExecutor {
 
     private void showHelp(CommandSender sender) {
         sender.sendMessage(fullMsg("player.help.title"));
-        sender.sendMessage(fullMsg("player.help.claim"));
-        sender.sendMessage(fullMsg("player.help.pull"));
+        sender.sendMessage(fullMsg("player.help.open"));
         sender.sendMessage(fullMsg("player.help.info"));
         sender.sendMessage(fullMsg("player.help.history"));
+        sender.sendMessage(fullMsg("player.help.claim"));
     }
 
-    private void handlePull(Player player, LotteryService service, String poolId, int count) {
-        var pool = service.getPool(poolId);
+    private void handleOpen(Player player, String poolId) {
+        PoolDefinition pool = serviceSupplier.get().getPool(poolId);
         if (pool == null) {
             player.sendMessage(fullMsg("common.pool-not-found", poolId));
             return;
         }
-        try {
-            if (pool.type() == xuanmo.arcartxsuite.lottery.config.PoolType.GACHA) {
-                var result = service.pullGacha(player, poolId, count);
-                player.sendMessage(fullMsg("pull.result", ChatColor.translateAlternateColorCodes('&', pool.displayName()), formatItems(result.items())));
-            } else {
-                for (int i = 0; i < count; i++) {
-                    var result = service.openCase(player, poolId);
-                    if (result != null && result.item() != null) {
-                        player.sendMessage(fullMsg("pull.result", ChatColor.translateAlternateColorCodes('&', pool.displayName()), result.item().name()));
-                    }
-                }
-            }
-        } catch (Exception e) {
-            player.sendMessage(fullMsg("common.error", e.getMessage()));
+        if (!pool.enabled()) {
+            player.sendMessage(fullMsg("player.open.disabled", poolId));
+            return;
+        }
+        PacketBridgeAPI bridge = packetBridgeSupplier.get();
+        if (bridge == null || !bridge.isAvailable()) {
+            player.sendMessage(fullMsg("player.open.ui-unavailable"));
+            return;
+        }
+        LotteryPacketHandler handler = packetHandlerSupplier.get();
+        if (handler == null) {
+            player.sendMessage(fullMsg("player.open.ui-unavailable"));
+            return;
+        }
+        if (!handler.openPoolUi(player, poolId)) {
+            player.sendMessage(fullMsg("player.open.failed", poolId));
         }
     }
 
-    private void handleInfo(Player player, LotteryService service, String poolId) {
-        var pool = service.getPool(poolId);
+    private void handleInfo(Player player, String poolId) {
+        PoolDefinition pool = serviceSupplier.get().getPool(poolId);
         if (pool == null) {
             player.sendMessage(fullMsg("common.pool-not-found", poolId));
             return;
         }
-        if (pool.type() == xuanmo.arcartxsuite.lottery.config.PoolType.GACHA) {
-            var state = service.getGachaState(player, poolId);
-            player.sendMessage(fullMsg("player.info.gacha", ChatColor.translateAlternateColorCodes('&', pool.displayName()), state.pity5star(), state.pity4star()));
-        } else {
-            var state = service.getCaseState(player, poolId);
-            player.sendMessage(fullMsg("player.info.case", ChatColor.translateAlternateColorCodes('&', pool.displayName()), state.openCount()));
+        if (!pool.enabled()) {
+            player.sendMessage(fullMsg("player.open.disabled", poolId));
+            return;
+        }
+        PacketBridgeAPI bridge = packetBridgeSupplier.get();
+        if (bridge == null || !bridge.isAvailable()) {
+            player.sendMessage(fullMsg("player.open.ui-unavailable"));
+            return;
+        }
+        LotteryPacketHandler handler = packetHandlerSupplier.get();
+        if (handler == null) {
+            player.sendMessage(fullMsg("player.open.ui-unavailable"));
+            return;
+        }
+        if (!handler.openPoolDetails(player, poolId)) {
+            player.sendMessage(fullMsg("player.open.failed", poolId));
         }
     }
 
-    private void handleHistory(Player player, LotteryService service, String poolId) {
-        var pool = service.getPool(poolId);
+    private void handleHistory(Player player, String poolId) {
+        PoolDefinition pool = serviceSupplier.get().getPool(poolId);
         if (pool == null) {
             player.sendMessage(fullMsg("common.pool-not-found", poolId));
             return;
         }
-        if (pool.type() == xuanmo.arcartxsuite.lottery.config.PoolType.GACHA) {
-            var history = service.getGachaHistory(player.getUniqueId(), poolId, 10);
-            player.sendMessage(fullMsg("player.history.title", ChatColor.translateAlternateColorCodes('&', pool.displayName())));
-            for (var entry : history) {
-                player.sendMessage(fullMsg("player.history.entry", entry.itemsJson(), entry.pullTime()));
-            }
-        } else {
-            var history = service.getCaseHistory(player.getUniqueId(), poolId, 10);
-            player.sendMessage(fullMsg("player.history.title", ChatColor.translateAlternateColorCodes('&', pool.displayName())));
-            for (var entry : history) {
-                player.sendMessage(fullMsg("player.history.entry", entry.itemId(), entry.openTime()));
-            }
+        if (!pool.enabled()) {
+            player.sendMessage(fullMsg("player.open.disabled", poolId));
+            return;
         }
-    }
-
-    private String formatItems(List<xuanmo.arcartxsuite.lottery.model.PoolItem> items) {
-        if (items == null || items.isEmpty()) return messages == null
-            ? ""
-            : messages.get("player.pull-no-items");
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < items.size(); i++) {
-            if (i > 0) sb.append(", ");
-            sb.append(items.get(i) != null ? items.get(i).name() : "?");
+        PacketBridgeAPI bridge = packetBridgeSupplier.get();
+        if (bridge == null || !bridge.isAvailable()) {
+            player.sendMessage(fullMsg("player.open.ui-unavailable"));
+            return;
         }
-        return sb.toString();
+        LotteryPacketHandler handler = packetHandlerSupplier.get();
+        if (handler == null) {
+            player.sendMessage(fullMsg("player.open.ui-unavailable"));
+            return;
+        }
+        if (!handler.openPoolHistory(player, poolId)) {
+            player.sendMessage(fullMsg("player.open.failed", poolId));
+        }
     }
 
     /**
      * 提供玩家命令 Tab 补全建议。
+     * <p>
+     * 子命令补全不依赖 service，确保即使服务未就绪也能补全子命令。
      *
      * @param sender 命令发送者
      * @param command Bukkit 命令对象
@@ -200,18 +210,19 @@ public class LotteryPlayerCommand implements TabExecutor {
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                                 @NotNull String alias, @NotNull String[] args) {
-        LotteryService service = serviceSupplier.get();
-        if (service == null) return Collections.emptyList();
-
+        // 子命令补全不依赖 service，确保即使服务未就绪也能补全
         if (args.length == 1) {
-            return List.of("help", "claim", "pull", "info", "history");
+            return filter(List.of("help", "open", "info", "history", "claim"), args[0]);
         }
+        // 第 2 参数（奖池 ID）补全需要 service
         if (args.length == 2) {
-            List<String> ids = new ArrayList<>(service.getPools().keySet());
-            return filter(ids, args[1]);
-        }
-        if (args.length == 3 && "pull".equalsIgnoreCase(args[0])) {
-            return List.of("single", "ten");
+            String sub = args[0].toLowerCase();
+            if ("open".equals(sub) || "info".equals(sub) || "history".equals(sub)) {
+                LotteryService service = serviceSupplier.get();
+                if (service == null) return Collections.emptyList();
+                List<String> ids = new ArrayList<>(service.getPools().keySet());
+                return filter(ids, args[1]);
+            }
         }
         return Collections.emptyList();
     }

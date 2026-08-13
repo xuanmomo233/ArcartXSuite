@@ -3,6 +3,7 @@ package xuanmo.arcartxsuite.lottery.command;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -18,7 +19,7 @@ import xuanmo.arcartxsuite.lottery.LotteryService;
 /**
  * Lottery 模块的管理员命令处理器。
  * <p>
- * 提供状态查看、配置重载、状态重置、发放抽奖券、模拟抽奖等管理操作。
+ * 提供状态查看、配置重载、状态重置、发放积分、模拟抽奖等管理操作。
  * 通过 {@code Supplier<LotteryService>} 延迟获取服务实例，避免模块未就绪时的空指针。
  */
 public class LotteryAdminCommand {
@@ -44,7 +45,7 @@ public class LotteryAdminCommand {
      * @return 不可变操作名称列表
      */
     public List<String> actions() {
-        return List.of("help", "status", "reset", "give-ticket", "give-points", "simulate");
+        return List.of("help", "status", "reset", "give-points", "simulate");
     }
 
     /**
@@ -77,13 +78,6 @@ public class LotteryAdminCommand {
                     return true;
                 }
                 handleReset(sender, service, args[1], args[2]);
-            }
-            case "give-ticket" -> {
-                if (args.length < 4) {
-                    sender.sendMessage(msg("admin.give-ticket.usage"));
-                    return true;
-                }
-                handleGiveTicket(sender, service, args[1], args[2], args[3]);
             }
             case "give-points" -> {
                 if (args.length < 4) {
@@ -121,16 +115,19 @@ public class LotteryAdminCommand {
         String action = args[0].toLowerCase();
         if (args.length == 2) {
             switch (action) {
-                case "reset", "give-ticket", "simulate" -> {
+                case "reset" -> {
                     List<String> players = Bukkit.getOnlinePlayers().stream()
                         .map(Player::getName).collect(Collectors.toList());
                     return filter(players, args[1]);
+                }
+                case "simulate" -> {
+                    return filter(new ArrayList<>(service.getPools().keySet()), args[1]);
                 }
             }
         }
         if (args.length == 3) {
             switch (action) {
-                case "reset", "give-ticket", "simulate" -> {
+                case "reset" -> {
                     return filter(new ArrayList<>(service.getPools().keySet()), args[2]);
                 }
             }
@@ -139,11 +136,10 @@ public class LotteryAdminCommand {
     }
 
     private void showHelp(CommandSender sender) {
-        String cmd = "/lottery admin";
+        String cmd = "/axs lottery";
         sender.sendMessage(msg("help.title"));
         sender.sendMessage(msg("help.status", cmd));
         sender.sendMessage(msg("help.reset", cmd));
-        sender.sendMessage(msg("help.give-ticket", cmd));
         sender.sendMessage(msg("help.give-points", cmd));
         sender.sendMessage(msg("help.simulate", cmd));
     }
@@ -175,23 +171,6 @@ public class LotteryAdminCommand {
         sender.sendMessage(msg("admin.reset.success", playerName, poolId));
     }
 
-    private void handleGiveTicket(CommandSender sender, LotteryService service, String playerName, String poolId, String amountStr) {
-        Player target = Bukkit.getPlayerExact(playerName);
-        if (target == null) {
-            sender.sendMessage(msg("admin.player-not-found", playerName));
-            return;
-        }
-        int amount;
-        try {
-            amount = Integer.parseInt(amountStr);
-        } catch (NumberFormatException e) {
-            sender.sendMessage(msg("admin.invalid-number", amountStr));
-            return;
-        }
-        // 这里简化处理：实际应通过物品系统发放抽奖券
-        sender.sendMessage(msg("admin.give-ticket.success", playerName, poolId, amount));
-    }
-
     private void handleSimulate(CommandSender sender, LotteryService service, String poolId, String timesStr) {
         var pool = service.getPool(poolId);
         if (pool == null) {
@@ -205,8 +184,17 @@ public class LotteryAdminCommand {
             sender.sendMessage(msg("admin.invalid-number", timesStr));
             return;
         }
-        // 简化模拟统计
-        sender.sendMessage(msg("admin.simulate.result", poolId, times));
+        if (times <= 0 || times > 100000) {
+            sender.sendMessage(msg("admin.simulate.range"));
+            return;
+        }
+        Map<String, Integer> stats = service.simulate(poolId, times);
+        sender.sendMessage(msg("admin.simulate.title", poolId, times));
+        for (var entry : stats.entrySet()) {
+            double rate = (double) entry.getValue() / times * 100;
+            sender.sendMessage(msg("admin.simulate.entry", entry.getKey(), entry.getValue(),
+                String.format("%.2f", rate)));
+        }
     }
 
     private void handleGivePoints(CommandSender sender, LotteryService service,

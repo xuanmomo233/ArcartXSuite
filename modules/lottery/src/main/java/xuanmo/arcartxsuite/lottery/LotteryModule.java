@@ -18,6 +18,7 @@ import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
+import xuanmo.arcartxsuite.api.UiBinding;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.DatabaseMigratable;
 import xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable;
@@ -239,7 +240,10 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     protected @NotNull Map<String, TabExecutor> commandBindings() {
-        return Map.of("lottery", new LotteryPlayerCommand(() -> service, messages()));
+        return Map.of("lottery", new LotteryPlayerCommand(
+            () -> service, messages(),
+            () -> packetHandler,
+            () -> packetBridge));
     }
 
     @Override
@@ -254,7 +258,11 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
         }
         xuanmo.arcartxsuite.api.icon.IconResolver iconResolver =
             new xuanmo.arcartxsuite.api.icon.IconResolver(itemStackBridge, itemSourceRegistry);
-        packetHandler = new LotteryPacketHandler(service, packetBridge, iconResolver, plugin);
+        UiBinding gachaBinding = getUiBinding(GACHA_UI_FILE);
+        UiBinding caseBinding = getUiBinding(CASE_UI_FILE);
+        String gachaUiId = gachaBinding != null ? gachaBinding.runtimeUiId() : "AXS:lottery_gacha";
+        String caseUiId = caseBinding != null ? caseBinding.runtimeUiId() : "AXS:lottery_case";
+        packetHandler = new LotteryPacketHandler(service, packetBridge, iconResolver, plugin, gachaUiId, caseUiId);
         return packetHandler;
     }
 
