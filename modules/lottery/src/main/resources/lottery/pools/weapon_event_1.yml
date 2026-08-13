@@ -55,35 +55,54 @@ up-item-icon:
   # json: '{"id":"minecraft:diamond","Count":1b}'  # 完整物品 JSON；配置后不再叠加其它字段或 texture/texture-url/nbt
   ####################################################################################################################
 
+# 消耗配置：single=单抽消耗条目列表，ten=十连消耗条目列表（十连不做倍数换算，未配置则不提供十连）。
+# 每个条目通过 type 区分资源类型：
+#   CURRENCY — 货币：需填 id（货币ID），按 amount 扣除对应货币
+#   ITEM     — 物品：禁止填 id，必须用 matcher 匹配背包物品，按 amount 扣除匹配物品数量
+#   POINT    — 积分：需填 id（对应下方 points 块定义的积分点ID），按 amount 扣除积分
+# 公共字段：amount（正整数）、display-name（UI显示名）、icon（消耗图标，写法同 up-item-icon）。
+# 同一抽（single 或 ten）下可列多个条目，玩家需同时满足全部条目才能抽奖。
+# ITEM 类型额外需要 matcher 块（本池未使用，字段供参考）：
+#   material-ids       — 原版材质 ID 列表（如 TRIPWIRE_HOOK）
+#   mythic-item-ids    — MythicMobs 物品内部 ID 列表
+#   neige-item-ids     — NeigeItems 物品内部 ID 列表
+#   overture-item-ids  — Overture 物品内部 ID 列表
+#   name-contains      — 显示名称包含的文本列表（自动去除颜色码后匹配）
+#   lore-contains      — Lore 包含的文本列表（自动去除颜色码后匹配）
+#   nbt-keys           — 必须存在的 NBT 键列表（只校验键存在，不校验值）
+#   nbt-values         — NBT 键=值 映射（键和值都会标准化为小写）
+#   name-regex         — 显示名称正则列表（大小写不敏感，无效正则记录警告并跳过）
+#   lore-regex         — Lore 正则列表（大小写不敏感，无效正则记录警告并跳过）
+#   多个维度之间为 AND（同时满足才匹配），所有字段可选，留空表示不校验该维度。
 cost:
   single:
-    - type: CURRENCY
-      id: "gem"
-      amount: 160
-      display-name: "原石"
-      icon:
+    - type: CURRENCY           # 资源类型：CURRENCY（货币，需填 id）
+      id: "gem"                # 货币 ID
+      amount: 160              # 扣除数量（正整数）
+      display-name: "原石"      # UI 显示名称
+      icon:                    # 消耗图标（写法同 up-item-icon）
         material: DIAMOND
         name: "原石"
-    - type: POINT
-      id: "stardust"
-      amount: 1
-      display-name: "星尘"
-      icon:
+    - type: POINT              # 资源类型：POINT（积分，需填 id 对应下方 points 块）
+      id: "stardust"           # 积分点 ID（对应下方 points.stardust）
+      amount: 1                # 扣除数量（正整数）
+      display-name: "星尘"      # UI 显示名称
+      icon:                    # 消耗图标（写法同 up-item-icon）
         material: AMETHYST_SHARD
         name: "星尘"
   ten:
-    - type: CURRENCY
-      id: "gem"
-      amount: 1600
-      display-name: "原石"
-      icon:
+    - type: CURRENCY           # 资源类型：CURRENCY（同 single 第一条）
+      id: "gem"                # 货币 ID
+      amount: 1600             # 扣除数量（十连为 1600）
+      display-name: "原石"      # UI 显示名称
+      icon:                    # 消耗图标（同 single）
         material: DIAMOND
         name: "原石"
-    - type: POINT
-      id: "stardust"
-      amount: 10
-      display-name: "星尘"
-      icon:
+    - type: POINT              # 资源类型：POINT（同 single 第二条）
+      id: "stardust"           # 积分点 ID（对应下方 points.stardust）
+      amount: 10               # 扣除数量（十连为 10）
+      display-name: "星尘"      # UI 显示名称
+      icon:                    # 消耗图标（同 single）
         material: AMETHYST_SHARD
         name: "星尘"
 

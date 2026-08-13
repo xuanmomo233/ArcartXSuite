@@ -1,36 +1,76 @@
-# Lottery 积分兑换商店示例.
+# 文件用途: Lottery 积分兑换商店示例配置。
+# 定义玩家可用积分（或物品/货币）兑换指定奖品的商品列表。
+# 兑换文件放在 exchange-directory（默认 lottery/exchange/）下，每个 .yml 文件的 items 块下每个键为一个商品。
+# 商品通过 ExchangeShopItem 加载，包含消耗(cost)、奖励(reward)、限购次数(limit)等字段。
+
+# 商品列表：每个键为商品标识（与商品内的 id 字段二选一，缺省时用键名作为 id）。
 items:
   dust_ticket:
-    id: dust_ticket
-    display-name: "祈愿凭证"
-    # 兑换项在 UI 中的图标
+    id: dust_ticket              # 商品唯一标识（缺省时用上方键名）
+    display-name: "祈愿凭证"      # 商品在 UI 中的显示名称
+    # 兑换项在 UI 中的图标（写法同奖池的 up-item-icon，支持物品库物品/自定义物品/JSON 三种写法）。
+    # 未配置 icon 时使用 reward.item 生成的物品作为图标。
     icon:
       material: AMETHYST_SHARD
       name: "祈愿凭证"
+    # pool-id: "genshin_vanilla_event"  # 可选：兑换记录归属的奖池 ID（用于日志/统计归类），未配置时记为 "exchange"
+    # 消耗配置：兑换所需的资源。支持两种写法——
+    #   1) 配置节写法（下方 cost: 下再写 single:）：取 single 列表作为消耗条目（兑换只取 single，不要写 ten）
+    #   2) 直接列表写法：cost 直接写成条目列表（省去 single 层级）
+    # 每个条目通过 type 区分资源类型：
+    #   CURRENCY — 货币：需填 id（货币ID），按 amount 扣除对应货币
+    #   ITEM     — 物品：禁止填 id，必须用 matcher 匹配背包物品，按 amount 扣除匹配物品数量
+    #   POINT    — 积分：需填 id（对应奖池 points 块定义的积分点ID），按 amount 扣除积分
+    # 公共字段：amount（正整数）、display-name（UI显示名）、icon（消耗图标）。
+    # ITEM 类型额外需要 matcher 块（物品匹配器，字段见奖池文件 cost 注释或 ItemMatcherLoader）。
     cost:
       single:
-        - type: POINT
-          id: "stardust"
-          amount: 10
-          display-name: "星尘"
-          icon:
+        - type: POINT            # 资源类型：POINT（积分，需填 id 对应奖池的 points 定义）
+          id: "stardust"         # 积分点 ID
+          amount: 10             # 扣除数量（正整数）
+          display-name: "星尘"    # UI 显示名称
+          icon:                  # 消耗图标
             material: AMETHYST_SHARD
             name: "星尘"
-    limit: 0
+    limit: 0                     # 限购次数：0=无限制，>0=每人最多可兑换次数
+    # 奖励配置：兑换成功后发放的奖品（由 PoolItem 加载，与奖池中的奖品结构相同）。
+    # 完整字段（未用到的可省略）：
+    #   name           — 奖品显示名称（缺省时用 id）
+    #   delivery       — 投递方式：DIRECT（直接发放）/ COMMAND（执行命令）/ MAIL（邮件发放），默认 DIRECT
+    #   item           — 奖品物品来源（source + id），与 delivery=COMMAND 互斥（COMMAND 不发放物品）
+    #   item-json      — PLAIN 物品的 Base64 序列化 ItemStack 数据（与 item 二选一）
+    #   amount         — 发放数量（正整数，默认1）
+    #   icon           — 奖品图标（未配置时用 item 生成的物品作为图标）
+    #   commands       — COMMAND 投递时执行的命令列表（支持 {player}/{uuid}/{amount}/{item} 占位符）
+    #   mail-preset    — MAIL 投递时使用的邮件预设名称
+    #   extra-commands — 投递成功后执行的附加命令列表
+    #   weight         — 权重（兑换商店无意义，默认1）
+    #   rarity         — 稀有度名称（CASE 奖池用，兑换商店无意义）
+    # item.source 支持的来源：
+    #   minecraft/MINECRAFT/PLAIN — 原版物品，item.id 为材质名（可带 minecraft: 前缀）
+    #   mythicmobs/MYTHICMOBS     — MythicMobs 物品，item.id 为内部 ID
+    #   neigeitems/NEIGEITEMS     — NeigeItems 物品，item.id 为内部 ID
+    #   overture/OVERTURE         — Overture 物品，item.id 为内部 ID
+    #   mmoitems/MMOITEMS         — MMOItems 物品，item.id 为 "TYPE;ID" 格式（注意与 icon 的 mmo-type/mmo-id 写法不同）
     reward:
-      name: "祈愿凭证"
-      item:
-        source: minecraft
-        id: "minecraft:amethyst_shard"
+      name: "祈愿凭证"            # 奖品显示名称
+      item:                      # 奖品物品来源
+        source: minecraft        # 原版物品
+        id: "minecraft:amethyst_shard"  # 原版材质（可带 minecraft: 前缀）
+      # delivery: DIRECT         # 投递方式（默认 DIRECT，可省略）
+      # amount: 1                # 发放数量（默认1，可省略）
 
   star_helmet:
-    id: star_helmet
-    display-name: "星辰头盔"
-    # 图标与实际物品不同时才需要配置 icon。
+    id: star_helmet              # 商品唯一标识
+    display-name: "星辰头盔"      # 商品在 UI 中的显示名称
+    # 图标配置：此处用 MMOItems 物品作为图标。
+    # ⚠ MMOItems 在 icon 和 reward.item 里写法不同（两套独立解析系统，不能混用）：
+    #   icon    — 用 source + mmo-type + mmo-id（IconDefinition 解析）
+    #   reward  — 用 source + id("TYPE;ID" 格式)（PoolItem 解析）
     icon:
-      source: "mmoitems"
-      mmo-type: "ARMOR"
-      mmo-id: "LOTTO_STAR_HELMET"
+      source: "mmoitems"         # 物品库来源：MMOItems
+      mmo-type: "ARMOR"          # MMOItems 物品类型
+      mmo-id: "LOTTO_STAR_HELMET"  # MMOItems 物品 ID
     # 图标配置分为物品库物品与自定义物品，两种写法二选一。
     # icon:
       #############################################################
@@ -69,19 +109,18 @@ items:
       # --- 直接发送 json/NBT 给 slot 控件（完全自定义物品） ---
       # json: '{"id":"minecraft:diamond","Count":1b}'  # 完整物品 JSON；配置后不再叠加其它字段或 texture/texture-url/nbt
       ####################################################################################################################
-
     cost:
       single:
-        - type: POINT
-          id: "stardust"
-          amount: 20
-          display-name: "星尘"
-          icon:
+        - type: POINT            # 资源类型：POINT（积分）
+          id: "stardust"         # 积分点 ID
+          amount: 20             # 扣除数量
+          display-name: "星尘"    # UI 显示名称
+          icon:                  # 消耗图标
             material: AMETHYST_SHARD
             name: "星尘"
-    limit: 0
+    limit: 0                     # 限购次数：0=无限制
     reward:
-      name: "星辰头盔"
-      item:
-        source: mmoitems
-        id: "ARMOR;LOTTO_STAR_HELMET"
+      name: "星辰头盔"            # 奖品显示名称
+      item:                      # 奖品物品来源（MMOItems 用 "TYPE;ID" 格式，与 icon 的 mmo-type/mmo-id 写法不同）
+        source: mmoitems         # MMOItems 物品
+        id: "ARMOR;LOTTO_STAR_HELMET"  # MMOItems 物品标识：TYPE;ID 格式

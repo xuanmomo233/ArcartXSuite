@@ -14,29 +14,48 @@ up-item-icon:
   material: CHEST
   name: "战术武器箱"
 
+# 消耗配置：single=单抽消耗条目列表，ten=十连消耗条目列表（十连不做倍数换算，未配置则不提供十连）。
+# 每个条目通过 type 区分资源类型：
+#   CURRENCY — 货币：需填 id（货币ID），按 amount 扣除对应货币
+#   ITEM     — 物品：禁止填 id，必须用 matcher 匹配背包物品，按 amount 扣除匹配物品数量
+#   POINT    — 积分：需填 id（对应下方 points 块定义的积分点ID），按 amount 扣除积分
+# 公共字段：amount（正整数）、display-name（UI显示名）、icon（消耗图标，写法同 up-item-icon）。
+# ITEM 类型额外需要 matcher 块（物品匹配器，字段见下方注释）。
 cost:
   single:
-    - type: ITEM
-      amount: 1
-      display-name: "武器箱钥匙"
-      icon:
+    - type: ITEM                # 资源类型：ITEM（物品，需 matcher 匹配背包物品，禁止填 id）
+      amount: 1                 # 扣除数量（正整数）
+      display-name: "武器箱钥匙"  # UI 显示名称
+      icon:                     # 消耗图标（写法同 up-item-icon，此处用自定义物品）
         material: TRIPWIRE_HOOK
         name: "武器箱钥匙"
-      matcher:
-        material-ids:
+      # 物品匹配器：识别背包中哪些物品算作本消耗条目。所有字段可选，留空表示不校验该维度；
+      # 多个维度之间为 AND（同时满足才匹配）。完整字段（未用到的可省略）：
+      #   material-ids       — 原版材质 ID 列表（如 TRIPWIRE_HOOK）
+      #   mythic-item-ids    — MythicMobs 物品内部 ID 列表
+      #   neige-item-ids     — NeigeItems 物品内部 ID 列表
+      #   overture-item-ids  — Overture 物品内部 ID 列表
+      #   name-contains      — 显示名称包含的文本列表（自动去除颜色码后匹配）
+      #   lore-contains      — Lore 包含的文本列表（自动去除颜色码后匹配）
+      #   nbt-keys           — 必须存在的 NBT 键列表（只校验键存在，不校验值）
+      #   nbt-values         — NBT 键=值 映射（键和值都会标准化为小写）
+      #   name-regex         — 显示名称正则列表（大小写不敏感，无效正则记录警告并跳过）
+      #   lore-regex         — Lore 正则列表（大小写不敏感，无效正则记录警告并跳过）
+      matcher:                  # 物品匹配器（仅 ITEM 类型需要）
+        material-ids:           # 匹配材质为 TRIPWIRE_HOOK 的物品
           - TRIPWIRE_HOOK
-        lore-contains:
+        lore-contains:          # Lore 必须包含"武器箱钥匙"（去颜色码后匹配）
           - "武器箱钥匙"
-        nbt-values:
-          axs:lottery_token: "case_key"
+        nbt-values:             # NBT 键值校验：键 axs:lottery_token 的值必须为 case_key
+          lottery: "case_key"
   ten:
-    - type: ITEM
-      amount: 10
-      display-name: "武器箱钥匙"
-      icon:
+    - type: ITEM                # 资源类型：ITEM（同 single）
+      amount: 10                # 扣除数量（十连为 10）
+      display-name: "武器箱钥匙"  # UI 显示名称
+      icon:                     # 消耗图标（同 single）
         material: TRIPWIRE_HOOK
         name: "武器箱钥匙"
-      matcher:
+      matcher:                  # 物品匹配器（字段同 single.matcher）
         material-ids:
           - TRIPWIRE_HOOK
         lore-contains:

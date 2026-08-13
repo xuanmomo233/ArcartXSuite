@@ -1,4 +1,4 @@
-﻿# AXS 资源说明
+# AXS 资源说明
 # 用途: Conversation 模块默认 NPC 选择 HUD，负责展示附近可触发对话的 NPC。
 # 前置依赖: ArcartX、Chemdah、Adyeshach；Conversation 模块启用后会自动注册或导出。
 # 启用开关: config.yml -> modules.conversation.enabled + modules.conversation.password
