@@ -402,14 +402,9 @@ controls:
               normal: ~255,255,255,40
               shape: ~round_rect
               radius: 6
+              texts: ~&7✕
+              fontSize: 12
+              shadow: false
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'clear_track')
-            children:
-              关闭文字:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  texts: "~&7✕"
-                  fontSize: 12
-                  shadow: false

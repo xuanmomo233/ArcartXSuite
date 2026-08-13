@@ -220,6 +220,9 @@ controls:
               normal: ~42,45,58,220
               shape: ~round_rect
               radius: 20
+              texts: ~&8暂无可回收物品
+              center: true
+              fontSize: 100
             effect:
               stroke:
                 width: 2
@@ -232,17 +235,6 @@ controls:
                   y: 12
                   texts: "~&7可回收物品"
                   fontSize: 32
-              空回收提示:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  x: 668
-                  y: 285
-                  center: true
-                  fontSize: 100
-                  visible: "var.recyclables == none || var.recyclables.keys().length == 0"
-                  texts: "~&8暂无可回收物品"
-                  through: true
               列表纵向滑块:
                 type: Texture
                 val: 列表纵向滑块

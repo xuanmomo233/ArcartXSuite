@@ -94,28 +94,13 @@ controls:
           normal: ~Frosted:30;0,0,0,200  # 毛玻璃材质，30 模糊度，半透明黑
           shape: ~round_rect
           radius: 18
+          texts: '&cRED  &fvs  &9BLUE'
+          fontSize: 32
         effect:
           stroke:  # 描边
             width: 3
             color: ~0,0,0,255
         children:
-          标题:  # "RED vs BLUE" 标题文字
-            type: Text
-            attribute:
-              point: ~top_center
-              y: 18
-              fontSize: 32
-              texts: "'&cRED  &fvs  &9BLUE'"
-              lineSpace: 6
-          中线:  # 红蓝队伍之间的分隔线
-            type: Texture
-            attribute:
-              point: ~top_center
-              x: 0
-              y: 60
-              width: 2
-              height: 28 * math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数)
-              normal: ~255,255,255,80
           # ============ 红队（左侧）============
           RedGrid:  # 红队玩家列表（VGrid），packetHandler 动态复制 red_player_row 填充
             type: VGrid

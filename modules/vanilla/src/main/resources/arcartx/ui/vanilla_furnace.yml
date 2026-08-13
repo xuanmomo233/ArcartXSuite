@@ -198,7 +198,6 @@ controls:
               point: ~middle_center
               visible: true
               texts: "~&0书"
-              center: true
               fontSize: 12
               tip: ~shift+左键点击配方，即可快速填充材料
             action:

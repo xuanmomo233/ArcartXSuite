@@ -2783,7 +2783,6 @@ controls:
               shape: ~round_rect
               radius: 6
               texts: "~&f关闭"
-              center: true
               fontSize: 36
             action:
               click: "val.历史面板.visible = false"
@@ -2984,7 +2983,6 @@ controls:
               shape: ~round_rect
               radius: 6
               texts: "~&f关闭"
-              center: true
               fontSize: 36
             action:
               click: "val.详情面板.visible = false"
@@ -3274,7 +3272,6 @@ controls:
               shape: ~round_rect
               radius: 6
               texts: "~&f关闭"
-              center: true
               fontSize: 36
             action:
               click: "val.兑换面板.visible = false"

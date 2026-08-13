@@ -108,6 +108,7 @@ controls:
     type: Adaptive
     attribute:
       point: ~stretch_all
+      through: true
       width: 1920
       height: 1080
     children:
@@ -123,6 +124,7 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
+              through: true
               normal: ~28,30,42,244
               shape: ~round_rect
               radius: 24
@@ -181,6 +183,7 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
+                  through: true
                   normal: ~255,255,255,14
                   shape: ~round_rect
                   radius: 22
@@ -279,6 +282,7 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
+                      through: true
                       normal: "var.deluxeUnlocked ? '120,70,180,220' : var.premiumUnlocked ? '200,160,60,220' : '60,64,76,200'"
                       shape: ~round_rect
                       radius: 20
@@ -297,38 +301,40 @@ controls:
                       point: ~middle_center
                       width: 200
                       texts: "var.tierDisplay"
-                      center: true
                       fontSize: 28
                       through: true
-              # 关闭按钮
+              # 关闭按钮：Canvas + Texture(背景) + Text(文字)
               关闭按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   point: ~top_right
                   x: -20
                   y: 18
                   width: 44
                   height: 44
-                  normal: ~60,40,40,220
-                  hover: ~Frosted:0;200,70,70,240
-                  shape: ~circle
                 action:
                   clickLeft: |-
                     Screen.close()
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~255,100,100,140
                 children:
+                  关闭背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~60,40,40,220
+                      hover: ~Frosted:0;200,70,70,240
+                      shape: ~circle
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~255,100,100,140
                   关闭文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       width: 44
                       texts: "~&f✕"
-                      center: true
                       fontSize: 28
-                      through: true
 
           # ════════════════════════════════════════════════════
           # 模式一: 信息面板（showRewards = false）
@@ -337,6 +343,7 @@ controls:
             type: Canvas
             attribute:
               point: ~stretch_all
+              through: true
               visible: "!var.showRewards"
             children:
               # ── 等级展示卡片 ────────────────────────────────
@@ -353,6 +360,7 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
+                      through: true
                       normal: ~42,46,62,220
                       shape: ~round_rect
                       radius: 20
@@ -484,6 +492,7 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
+                      through: true
                       normal: ~42,46,62,220
                       shape: ~round_rect
                       radius: 20
@@ -524,6 +533,7 @@ controls:
                         type: Texture
                         attribute:
                           point: ~stretch_all
+                          through: true
                           normal: ~50,55,72,200
                           shape: ~round_rect
                           radius: 14
@@ -571,6 +581,7 @@ controls:
                         type: Texture
                         attribute:
                           point: ~stretch_all
+                          through: true
                           normal: "var.premiumUnlocked ? '60,50,30,220' : '50,55,72,180'"
                           shape: ~round_rect
                           radius: 14
@@ -624,6 +635,7 @@ controls:
                         type: Texture
                         attribute:
                           point: ~stretch_all
+                          through: true
                           normal: "var.deluxeUnlocked ? '50,30,60,220' : '50,55,72,180'"
                           shape: ~round_rect
                           radius: 14
@@ -751,12 +763,14 @@ controls:
             type: Canvas
             attribute:
               point: ~stretch_all
+              through: true
               visible: var.showRewards
             children:
               奖励面板底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
+                  through: true
                   normal: ~28,30,42,248
                   shape: ~round_rect
                   radius: 24
@@ -794,6 +808,7 @@ controls:
                     type: Texture
                     attribute:
                       point: ~stretch_all
+                      through: true
                       normal: ~255,180,100,18
                       shape: ~round_rect
                       radius: 22
@@ -838,33 +853,36 @@ controls:
                       fontSize: 28
                       through: true
                   奖励返回按钮:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       point: ~top_right
                       x: -20
                       y: 18
                       width: 44
                       height: 44
-                      normal: ~50,55,72,220
-                      hover: ~Frosted:0;90,100,120,240
-                      shape: ~circle
                     action:
                       clickLeft: |-
                         var.showRewards = false
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~90,170,255,140
                     children:
+                      返回背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~50,55,72,220
+                          hover: ~Frosted:0;90,100,120,240
+                          shape: ~circle
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~90,170,255,140
                       返回文字:
                         type: Text
                         attribute:
                           point: ~middle_center
                           width: 44
                           texts: "~&f←"
-                          center: true
                           fontSize: 28
-                          through: true
               # 奖励滚动区
               奖励滑块:
                 type: Texture
@@ -912,21 +930,26 @@ controls:
                       spaceBetween: 10
                     children:
                       奖励项:
-                        type: Texture
+                        type: Canvas
                         attribute:
                           entryKey: 0.round()
                           entry: var.rewards[self.entryKey]
                           visible: self.entry != none
                           width: 1136
                           height: 70
-                          normal: "self.entry != none && self.entry['claimed'] ? '40,60,50,200' : self.entry != none && self.entry['claimable'] ? '50,60,80,220' : self.entry != none && self.entry['locked'] ? '50,40,50,200' : '42,46,62,200'"
-                          shape: ~round_rect
-                          radius: 16
-                        effect:
-                          stroke:
-                            width: 1
-                            color: "self.entry != none && self.entry['claimable'] ? '120,200,255,160' : self.entry != none && self.entry['claimed'] ? '100,180,120,120' : '90,170,255,50'"
                         children:
+                          奖励项背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: "self.parent.entry != none && self.parent.entry['claimed'] ? '40,60,50,200' : self.parent.entry != none && self.parent.entry['claimable'] ? '50,60,80,220' : self.parent.entry != none && self.parent.entry['locked'] ? '50,40,50,200' : '42,46,62,200'"
+                              shape: ~round_rect
+                              radius: 16
+                            effect:
+                              stroke:
+                                width: 1
+                                color: "self.parent.entry != none && self.parent.entry['claimable'] ? '120,200,255,160' : self.parent.entry != none && self.parent.entry['claimed'] ? '100,180,120,120' : '90,170,255,50'"
                           # 等级标签
                           奖励等级:
                             type: Text
@@ -935,7 +958,6 @@ controls:
                               y: 18
                               texts: "self.parent.entry != none ? '&f&lLv.' + self.parent.entry['level'] : none"
                               fontSize: 32
-                              through: true
                           # 档位标签
                           奖励档位:
                             type: Text
@@ -944,7 +966,6 @@ controls:
                               y: 22
                               texts: "self.parent.entry != none ? self.parent.entry['tierDisplay'] : none"
                               fontSize: 26
-                              through: true
                           # 状态文字
                           奖励状态:
                             type: Text
@@ -953,37 +974,46 @@ controls:
                               y: 22
                               texts: "self.parent.entry != none ? (self.parent.entry['claimed'] ? '&a✔ 已领取' : self.parent.entry['locked'] ? '&c🔒 未解锁档位' : self.parent.entry['levelReached'] ? '&e可领取' : '&7等级不足') : none"
                               fontSize: 26
-                              through: true
-                          # 领取按钮
+                          # 领取按钮：Canvas + Texture(背景) + Text(文字)
                           领取按钮:
-                            type: Texture
+                            type: Canvas
                             attribute:
                               point: ~middle_right
                               x: -16
                               width: 140
                               height: 48
                               visible: "self.parent.entry != none && self.parent.entry['claimable']"
-                              normal: ~80,160,100,240
-                              hover: ~Frosted:0;100,200,130,255
-                              shape: ~round_rect
-                              radius: 24
-                              texts: "~&f领取"
-                              center: true
-                              fontSize: 28
                             action:
                               clickLeft: |-
                                 Packet.send(var.packetId, 'claim', self.parent.entry['level'], var.actionToken)
-                            effect:
-                              stroke:
-                                width: 2
-                                color: ~120,220,150,200
-                              shadow:
-                                xOffset: 0
-                                yOffset: 2
-                                blur: 8
-                                color: ~0,0,0,100
-                              neon:
-                                color: ~100,200,130,100
-                                size: 6
-                                intensity: 0.4
-                                animated: false
+                            children:
+                              领取背景:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~80,160,100,240
+                                  hover: ~Frosted:0;100,200,130,255
+                                  shape: ~round_rect
+                                  radius: 24
+                                effect:
+                                  stroke:
+                                    width: 2
+                                    color: ~120,220,150,200
+                                  shadow:
+                                    xOffset: 0
+                                    yOffset: 2
+                                    blur: 8
+                                    color: ~0,0,0,100
+                                  neon:
+                                    color: ~100,200,130,100
+                                    size: 6
+                                    intensity: 0.4
+                                    animated: false
+                              领取文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  width: 140
+                                  texts: "~&f领取"
+                                  fontSize: 28

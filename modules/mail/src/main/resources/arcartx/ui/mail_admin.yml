@@ -116,6 +116,9 @@ controls:
                       normal: ~60,130,200,200
                       shape: ~round_rect
                       radius: 8
+                      texts: ~&f刷新
+                      center: true
+                      fontSize: 49
                     effect:
                       stroke:
                         width: 2
@@ -124,16 +127,6 @@ controls:
                       click: |-
                         var.view = 'list'
                         Packet.send('AXS_MAIL', 'admin-preset-list')
-                    children:
-                      刷新按钮文字:
-                        type: Text
-                        attribute:
-                          x: 60
-                          y: 12
-                          center: true
-                          point: ~middle_center
-                          fontSize: 49
-                          texts: "~&f刷新"
                   新建按钮:
                     type: Texture
                     attribute:
@@ -142,6 +135,9 @@ controls:
                       normal: ~50,180,80,200
                       shape: ~round_rect
                       radius: 8
+                      texts: ~&f新建
+                      center: true
+                      fontSize: 49
                     effect:
                       stroke:
                         width: 2
@@ -162,17 +158,6 @@ controls:
                         var.view = 'edit'
                         var.resultMsg = none
                         Packet.send('AXS_MAIL', 'admin-preset-new')
-                    children:
-                      新建按钮文字:
-                        type: Text
-                        attribute:
-                          x: 60
-                          y: 12
-                          center: true
-                          point: ~middle_center
-                          fontSize: 49
-                          texts: "~&f新建"
-
           # 结果提示
           结果栏:
             type: Text

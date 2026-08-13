@@ -165,22 +165,14 @@ controls:
               normal: ~42,45,58,220
               shape: ~round_rect
               radius: 20
+              texts: ~&8暂无记录
+              center: true
+              fontSize: 100
             effect:
               stroke:
                 width: 2
                 color: ~180,160,255,100
             children:
-              空记录提示:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  x: 668
-                  y: 300
-                  center: true
-                  fontSize: 100
-                  visible: var.records == none || var.records.keys().length == 0
-                  texts: ~&8暂无记录
-                  through: true
               列表纵向滑块:
                 type: Texture
                 val: 列表纵向滑块

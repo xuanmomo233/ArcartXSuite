@@ -82,16 +82,11 @@ controls:
                   normal: ~80,80,100,200
                   shape: ~round_rect
                   radius: 8
+                  texts: ~&f全部
+                  fontSize: 26
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, 1)
-                children:
-                  全部文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      fontSize: 26
-                      texts: "~&f全部"
               成功筛选按钮:
                 type: Texture
                 attribute:
@@ -102,16 +97,11 @@ controls:
                   normal: ~50,180,80,180
                   shape: ~round_rect
                   radius: 8
+                  texts: ~&a成功
+                  fontSize: 26
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'success', none, 1)
-                children:
-                  成功文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      fontSize: 26
-                      texts: "~&a成功"
               失败筛选按钮:
                 type: Texture
                 attribute:
@@ -122,16 +112,11 @@ controls:
                   normal: ~200,60,60,180
                   shape: ~round_rect
                   radius: 8
+                  texts: ~&c失败
+                  fontSize: 26
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'failed', none, 1)
-                children:
-                  失败文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      fontSize: 26
-                      texts: "~&c失败"
               待发筛选按钮:
                 type: Texture
                 attribute:
@@ -142,16 +127,11 @@ controls:
                   normal: ~200,160,50,180
                   shape: ~round_rect
                   radius: 8
+                  texts: ~&e待发
+                  fontSize: 26
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', 'pending', none, 1)
-                children:
-                  待发文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      fontSize: 26
-                      texts: "~&e待发"
               刷新按钮:
                 type: Texture
                 attribute:
@@ -162,16 +142,11 @@ controls:
                   normal: ~60,130,200,200
                   shape: ~round_rect
                   radius: 8
+                  texts: ~&f刷新
+                  fontSize: 26
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, var.currentPage)
-                children:
-                  刷新文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      fontSize: 26
-                      texts: "~&f刷新"
               返回按钮:
                 type: Texture
                 attribute:
@@ -182,17 +157,11 @@ controls:
                   normal: ~80,80,100,200
                   shape: ~round_rect
                   radius: 8
+                  texts: ~&f← 返回管理
+                  fontSize: 26
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'open-manage')
-                children:
-                  返回文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      fontSize: 26
-                      texts: "~&f← 返回管理"
-
           # 统计摘要
           统计栏:
             type: Texture
@@ -403,17 +372,11 @@ controls:
                           radius: 6
                           visible: |-
                             each.status == 'failed'
+                          texts: ~&f重试
+                          fontSize: 22
                         action:
                           click: |-
                             Packet.send('AXS_ENTITY_TRACKER_REWARD', 'retry', each.id)
-                        children:
-                          重试文字:
-                            type: Text
-                            attribute:
-                              point: ~middle_center
-                              fontSize: 22
-                              texts: "~&f重试"
-
           # 分页控件
           分页控件:
             type: Texture
@@ -427,31 +390,31 @@ controls:
               radius: 8
             children:
               上一页按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 10
                   y: 4
                   width: 100
                   height: 36
-                  normal: ~60,130,200,180
-                  shape: ~round_rect
-                  radius: 6
                 action:
                   click: |-
                     if (var.currentPage > 1) { Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, var.currentPage - 1) }
                 children:
+                  上一页背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~60,130,200,180
+                      shape: ~round_rect
+                      radius: 6
                   上一页文字:
                     type: Text
                     attribute:
                       point: ~middle_center
+                      width: 100
                       fontSize: 24
                       texts: "~&f上一页"
-              页码信息:
-                type: Text
-                attribute:
-                  point: ~middle_center
-                  fontSize: 26
-                  texts: "~&f{var.currentPage} / {var.totalPages}"
               下一页按钮:
                 type: Texture
                 attribute:
@@ -462,13 +425,8 @@ controls:
                   normal: ~60,130,200,180
                   shape: ~round_rect
                   radius: 6
+                  texts: ~&f下一页
+                  fontSize: 24
                 action:
                   click: |-
                     if (var.currentPage < var.totalPages) { Packet.send('AXS_ENTITY_TRACKER_REWARD', 'history-list', none, none, var.currentPage + 1) }
-                children:
-                  下一页文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      fontSize: 24
-                      texts: "~&f下一页"

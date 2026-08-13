@@ -262,7 +262,7 @@ controls:
                   spaceBetween: 8
                 children:
                   回复模板:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       entryKey: 0.round()
                       visible: "var.replyRows[self.entryKey] != none"
@@ -270,13 +270,6 @@ controls:
                       replyId: "var.replyRows[self.entryKey] != none ? var.replyRows[self.entryKey]['id'] : none"
                       width: 394
                       height: 42
-                      normal: ~150,150,150,200
-                      shape: ~round_rect
-                      radius: 10
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
                     action:
                       clickLeft: |-
                         if(self.entry != none){
@@ -287,16 +280,27 @@ controls:
                           }
                         }
                     children:
+                      回复背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~150,150,150,200
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~0,0,0,255
                       选中覆盖层:
                         type: Texture
                         attribute:
+                          point: ~stretch_all
+                          through: true
                           visible: "self.parent.entry != none ? self.parent.entry['selected'] : false"
-                          width: 394
-                          height: 42
                           normal: ~200,200,200,200
                           shape: ~round_rect
                           radius: 10
-                          through: true
                         effect:
                           stroke:
                             width: 2
@@ -309,7 +313,6 @@ controls:
                           y: 10
                           texts: "self.parent.entry != none ? self.parent.entry['text'] : none"
                           fontSize: 49
-                          through: true
                       回复序号:
                         type: Text
                         attribute:

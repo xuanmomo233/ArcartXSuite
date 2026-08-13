@@ -87,16 +87,11 @@ controls:
                   normal: ~50,180,80,200
                   shape: ~round_rect
                   radius: 8
+                  texts: ~&f周奖励
+                  fontSize: 28
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', 'weekly')
-                children:
-                  周奖励文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      fontSize: 28
-                      texts: "~&f周奖励"
               月奖励按钮:
                 type: Texture
                 attribute:
@@ -107,16 +102,11 @@ controls:
                   normal: ~200,160,50,200
                   shape: ~round_rect
                   radius: 8
+                  texts: ~&f月奖励
+                  fontSize: 28
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', 'monthly')
-                children:
-                  月奖励文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      fontSize: 28
-                      texts: "~&f月奖励"
               调度状态按钮:
                 type: Texture
                 attribute:
@@ -127,16 +117,11 @@ controls:
                   normal: ~60,130,200,200
                   shape: ~round_rect
                   radius: 8
+                  texts: ~&f调度状态
+                  fontSize: 28
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'scheduler-status')
-                children:
-                  调度状态文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      fontSize: 28
-                      texts: "~&f调度状态"
               发放历史按钮:
                 type: Texture
                 attribute:
@@ -147,16 +132,11 @@ controls:
                   normal: ~130,100,200,200
                   shape: ~round_rect
                   radius: 8
+                  texts: ~&f发放历史
+                  fontSize: 28
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'open-history')
-                children:
-                  发放历史文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      fontSize: 28
-                      texts: "~&f发放历史"
               手动发放按钮:
                 type: Texture
                 attribute:
@@ -167,17 +147,11 @@ controls:
                   normal: ~200,80,50,200
                   shape: ~round_rect
                   radius: 8
+                  texts: ~&f手动发放
+                  fontSize: 28
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'manual-distribute', var.rewardType)
-                children:
-                  手动发放文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      fontSize: 28
-                      texts: "~&f手动发放"
-
           # 结果提示
           结果提示:
             type: Text
@@ -333,17 +307,11 @@ controls:
                           normal: ~60,130,200,180
                           shape: ~round_rect
                           radius: 6
+                          texts: ~&f切换
+                          fontSize: 24
                         action:
                           click: |-
                             Packet.send('AXS_ENTITY_TRACKER_REWARD', 'toggle', each.id)
-                        children:
-                          切换文字:
-                            type: Text
-                            attribute:
-                              point: ~middle_center
-                              fontSize: 24
-                              texts: "~&f切换"
-
           # 调度状态区域
           状态区:
             type: Texture
@@ -403,13 +371,8 @@ controls:
                   normal: ~60,130,200,200
                   shape: ~round_rect
                   radius: 8
+                  texts: ~&f← 返回列表
+                  fontSize: 28
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', var.rewardType)
-                children:
-                  返回文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      fontSize: 28
-                      texts: "~&f← 返回列表"

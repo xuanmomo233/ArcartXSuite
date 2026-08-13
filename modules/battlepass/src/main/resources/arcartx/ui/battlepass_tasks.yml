@@ -1,4 +1,4 @@
-﻿# AXS BattlePass 任务列表界面
+# AXS BattlePass 任务列表界面
 # 打开方式: 主界面点击任务按钮 或 /bp tasks 命令
 # 数据交互: packetHandler init/update
 # 重制: 扩大面板至 1100x780，参考 lottery/market/warehouse 风格，三分类卡片 + 进度条 + 难度标签
@@ -137,6 +137,7 @@ controls:
             type: Texture
             attribute:
               point: ~stretch_all
+              through: true
               normal: ~28,30,42,244
               shape: ~round_rect
               radius: 24
@@ -195,10 +196,10 @@ controls:
                 type: Texture
                 attribute:
                   point: ~stretch_all
+                  through: true
                   normal: ~255,255,255,14
                   shape: ~round_rect
                   radius: 22
-                  through: true
               顶栏分隔线:
                 type: Texture
                 attribute:
@@ -233,7 +234,6 @@ controls:
                   normal: ~50,56,76,240
                   shape: ~round_rect
                   radius: 12
-                  through: true
                 effect:
                   stroke:
                     width: 2
@@ -248,7 +248,6 @@ controls:
                   normal: ~90,170,255,220
                   shape: ~round_rect
                   radius: 8
-                  through: true
                 effect:
                   neon:
                     color: ~120,200,255,160
@@ -262,7 +261,6 @@ controls:
                   x: 80
                   texts: "~&e任务列表"
                   fontSize: 36
-                  through: true
               标题竖线:
                 type: Texture
                 attribute:
@@ -271,7 +269,6 @@ controls:
                   width: 2
                   height: 30
                   normal: ~90,170,255,80
-                  through: true
               任务统计:
                 type: Text
                 attribute:
@@ -279,36 +276,38 @@ controls:
                   x: 276
                   texts: "'&7每日 &f' + var.dailyTaskCount + ' &7| 每周 &f' + var.weeklyTaskCount + ' &7| 赛季 &f' + var.seasonTaskCount"
                   fontSize: 26
-                  through: true
-              # 关闭按钮
+              # 关闭按钮：Canvas + Texture(背景) + Text(文字)
               关闭按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   point: ~top_right
                   x: -20
                   y: 18
                   width: 44
                   height: 44
-                  normal: ~60,40,40,220
-                  hover: ~Frosted:0;200,70,70,240
-                  shape: ~circle
                 action:
                   clickLeft: |-
                     Screen.close()
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~255,100,100,140
                 children:
+                  关闭背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~60,40,40,220
+                      hover: ~Frosted:0;200,70,70,240
+                      shape: ~circle
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~255,100,100,140
                   关闭文字:
                     type: Text
                     attribute:
                       point: ~middle_center
                       width: 44
                       texts: "~&f✕"
-                      center: true
                       fontSize: 28
-                      through: true
 
           # ── 滚动区 ─────────────────────────────────────────
           任务滑块:
@@ -324,7 +323,6 @@ controls:
               maxDragY: 650
               shape: ~round_rect
               radius: 3
-              through: true
             effect:
               neon:
                 color: ~90,170,255,100
@@ -370,6 +368,7 @@ controls:
                         type: Texture
                         attribute:
                           point: ~stretch_all
+                          through: true
                           normal: ~42,46,62,200
                           shape: ~round_rect
                           radius: 18
@@ -387,7 +386,6 @@ controls:
                           normal: ~90,200,255,220
                           shape: ~round_rect
                           radius: 2
-                          through: true
                         effect:
                           neon:
                             color: ~90,200,255,120
@@ -402,7 +400,6 @@ controls:
                           y: 18
                           texts: "~&b&l每日任务"
                           fontSize: 32
-                          through: true
                       每日计数:
                         type: Text
                         attribute:
@@ -411,7 +408,6 @@ controls:
                           y: 22
                           texts: "'&7共 &f' + var.dailyTaskCount + ' &7个任务'"
                           fontSize: 26
-                          through: true
                       每日任务列表:
                         val: 每日任务列表
                         type: VStack
@@ -422,44 +418,54 @@ controls:
                           width: 1020
                           spaceBetween: 8
                         children:
+                          # 任务项：Canvas 容器，背景为子 Texture（stretch_all + through）
+                          # 其他子控件（Text/Texture）可正确使用 point 锚点
                           任务项:
-                            type: Texture
+                            type: Canvas
                             attribute:
                               entryKey: 0.round()
                               entry: var.dailyTasks[self.entryKey]
                               visible: self.entry != none
                               width: 1020
                               height: 82
-                              normal: "self.entry != none && self.entry['completed'] ? '40,70,55,220' : '50,55,72,220'"
-                              shape: ~round_rect
-                              radius: 14
-                            effect:
-                              stroke:
-                                width: 1
-                                color: "self.entry != none && self.entry['completed'] ? '100,200,130,140' : '90,170,255,60'"
                             children:
-                              # 难度标签
-                              难度标签:
+                              任务项背景:
                                 type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: "self.parent.entry != none && self.parent.entry['completed'] ? '40,70,55,220' : '50,55,72,220'"
+                                  shape: ~round_rect
+                                  radius: 14
+                                effect:
+                                  stroke:
+                                    width: 1
+                                    color: "self.parent.entry != none && self.parent.entry['completed'] ? '100,200,130,140' : '90,170,255,60'"
+                              # 难度标签：Canvas + Texture(背景) + Text(文字)
+                              难度标签:
+                                type: Canvas
                                 attribute:
                                   point: ~top_left
                                   x: 12
                                   y: 12
                                   width: 64
                                   height: 28
-                                  normal: "self.parent.entry != none && self.parent.entry['difficulty'] == 'HARD' ? '160,60,60,220' : self.parent.entry != none && self.parent.entry['difficulty'] == 'NORMAL' ? '180,140,50,220' : '60,140,80,220'"
-                                  shape: ~round_rect
-                                  radius: 14
                                 children:
+                                  难度背景:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.parent.entry != none && self.parent.entry['difficulty'] == 'HARD' ? '160,60,60,220' : self.parent.entry != none && self.parent.entry['difficulty'] == 'NORMAL' ? '180,140,50,220' : '60,140,80,220'"
+                                      shape: ~round_rect
+                                      radius: 14
                                   难度文字:
                                     type: Text
                                     attribute:
                                       point: ~middle_center
                                       width: 64
-                                      texts: "self.parent.parent.entry != none ? self.parent.parent.entry['difficultyDisplay'] : none"
-                                      center: true
+                                      texts: "self.parent.entry != none ? self.parent.entry['difficultyDisplay'] : none"
                                       fontSize: 20
-                                      through: true
                               # 任务名
                               任务名:
                                 type: Text
@@ -471,7 +477,6 @@ controls:
                                   texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
                                   fontSize: 28
                                   limit: 24
-                                  through: true
                               # XP 奖励
                               任务奖励:
                                 type: Text
@@ -481,7 +486,6 @@ controls:
                                   y: 12
                                   texts: "self.parent.entry != none ? '&e+' + self.parent.entry['xpReward'] + ' XP' : none"
                                   fontSize: 24
-                                  through: true
                               # 任务描述
                               任务描述:
                                 type: Text
@@ -493,7 +497,6 @@ controls:
                                   texts: "self.parent.entry != none ? '&8' + self.parent.entry['description'] : none"
                                   fontSize: 22
                                   limit: 36
-                                  through: true
                               # 进度条背景
                               进度条背景:
                                 type: Texture
@@ -519,7 +522,7 @@ controls:
                                   y: 64
                                   width: "self.parent.entry != none ? (type.toNumber(self.parent.entry['progressPercent'].replace('%','')) / 100 * 700) : 0"
                                   height: 10
-                                  normal: "self.parent.entry != none && self.entry['completed'] ? '100,200,130,255' : '90,170,255,255'"
+                                  normal: "self.parent.entry != none && self.parent.entry['completed'] ? '100,200,130,255' : '90,170,255,255'"
                                   shape: ~round_rect
                                   radius: 5
                                 effect:
@@ -537,7 +540,6 @@ controls:
                                   y: 56
                                   texts: "self.parent.entry != none ? '&7' + self.parent.entry['progress'] + '/' + self.parent.entry['required'] + ' &8(' + self.parent.entry['progressPercent'] + ')' : none"
                                   fontSize: 22
-                                  through: true
                               # 完成标记
                               完成标记:
                                 type: Text
@@ -547,7 +549,6 @@ controls:
                                   y: 56
                                   texts: "self.parent.entry != none && self.parent.entry['completed'] ? '&a✔ 已完成' : '&7进行中'"
                                   fontSize: 22
-                                  through: true
 
                   # ══════════════════════════════════════════════
                   # 每周任务区
@@ -563,6 +564,7 @@ controls:
                         type: Texture
                         attribute:
                           point: ~stretch_all
+                          through: true
                           normal: ~42,46,62,200
                           shape: ~round_rect
                           radius: 18
@@ -580,7 +582,6 @@ controls:
                           normal: ~255,200,120,220
                           shape: ~round_rect
                           radius: 2
-                          through: true
                         effect:
                           neon:
                             color: ~255,180,100,120
@@ -595,7 +596,6 @@ controls:
                           y: 18
                           texts: "~&6&l每周任务"
                           fontSize: 32
-                          through: true
                       每周计数:
                         type: Text
                         attribute:
@@ -604,7 +604,6 @@ controls:
                           y: 22
                           texts: "'&7共 &f' + var.weeklyTaskCount + ' &7个任务'"
                           fontSize: 26
-                          through: true
                       每周任务列表:
                         val: 每周任务列表
                         type: VStack
@@ -616,42 +615,50 @@ controls:
                           spaceBetween: 8
                         children:
                           任务项:
-                            type: Texture
+                            type: Canvas
                             attribute:
                               entryKey: 0.round()
                               entry: var.weeklyTasks[self.entryKey]
                               visible: self.entry != none
                               width: 1020
                               height: 82
-                              normal: "self.entry != none && self.entry['completed'] ? '40,70,55,220' : '50,55,72,220'"
-                              shape: ~round_rect
-                              radius: 14
-                            effect:
-                              stroke:
-                                width: 1
-                                color: "self.entry != none && self.entry['completed'] ? '100,200,130,140' : '255,180,100,60'"
                             children:
-                              难度标签:
+                              任务项背景:
                                 type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: "self.parent.entry != none && self.parent.entry['completed'] ? '40,70,55,220' : '50,55,72,220'"
+                                  shape: ~round_rect
+                                  radius: 14
+                                effect:
+                                  stroke:
+                                    width: 1
+                                    color: "self.parent.entry != none && self.parent.entry['completed'] ? '100,200,130,140' : '255,180,100,60'"
+                              难度标签:
+                                type: Canvas
                                 attribute:
                                   point: ~top_left
                                   x: 12
                                   y: 12
                                   width: 64
                                   height: 28
-                                  normal: "self.parent.entry != none && self.parent.entry['difficulty'] == 'HARD' ? '160,60,60,220' : self.parent.entry != none && self.parent.entry['difficulty'] == 'NORMAL' ? '180,140,50,220' : '60,140,80,220'"
-                                  shape: ~round_rect
-                                  radius: 14
                                 children:
+                                  难度背景:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.parent.entry != none && self.parent.entry['difficulty'] == 'HARD' ? '160,60,60,220' : self.parent.entry != none && self.parent.entry['difficulty'] == 'NORMAL' ? '180,140,50,220' : '60,140,80,220'"
+                                      shape: ~round_rect
+                                      radius: 14
                                   难度文字:
                                     type: Text
                                     attribute:
                                       point: ~middle_center
                                       width: 64
-                                      texts: "self.parent.parent.entry != none ? self.parent.parent.entry['difficultyDisplay'] : none"
-                                      center: true
+                                      texts: "self.parent.entry != none ? self.parent.entry['difficultyDisplay'] : none"
                                       fontSize: 20
-                                      through: true
                               任务名:
                                 type: Text
                                 attribute:
@@ -662,7 +669,6 @@ controls:
                                   texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
                                   fontSize: 28
                                   limit: 24
-                                  through: true
                               任务奖励:
                                 type: Text
                                 attribute:
@@ -671,7 +677,6 @@ controls:
                                   y: 12
                                   texts: "self.parent.entry != none ? '&e+' + self.parent.entry['xpReward'] + ' XP' : none"
                                   fontSize: 24
-                                  through: true
                               任务描述:
                                 type: Text
                                 attribute:
@@ -682,7 +687,6 @@ controls:
                                   texts: "self.parent.entry != none ? '&8' + self.parent.entry['description'] : none"
                                   fontSize: 22
                                   limit: 36
-                                  through: true
                               进度条背景:
                                 type: Texture
                                 attribute:
@@ -723,7 +727,6 @@ controls:
                                   y: 56
                                   texts: "self.parent.entry != none ? '&7' + self.parent.entry['progress'] + '/' + self.parent.entry['required'] + ' &8(' + self.parent.entry['progressPercent'] + ')' : none"
                                   fontSize: 22
-                                  through: true
                               完成标记:
                                 type: Text
                                 attribute:
@@ -732,7 +735,6 @@ controls:
                                   y: 56
                                   texts: "self.parent.entry != none && self.parent.entry['completed'] ? '&a✔ 已完成' : '&7进行中'"
                                   fontSize: 22
-                                  through: true
 
                   # ══════════════════════════════════════════════
                   # 赛季任务区
@@ -748,6 +750,7 @@ controls:
                         type: Texture
                         attribute:
                           point: ~stretch_all
+                          through: true
                           normal: ~42,46,62,200
                           shape: ~round_rect
                           radius: 18
@@ -765,7 +768,6 @@ controls:
                           normal: ~220,160,255,220
                           shape: ~round_rect
                           radius: 2
-                          through: true
                         effect:
                           neon:
                             color: ~200,140,255,120
@@ -780,7 +782,6 @@ controls:
                           y: 18
                           texts: "~&d&l赛季任务"
                           fontSize: 32
-                          through: true
                       赛季计数:
                         type: Text
                         attribute:
@@ -789,7 +790,6 @@ controls:
                           y: 22
                           texts: "'&7共 &f' + var.seasonTaskCount + ' &7个任务'"
                           fontSize: 26
-                          through: true
                       赛季任务列表:
                         val: 赛季任务列表
                         type: VStack
@@ -801,42 +801,50 @@ controls:
                           spaceBetween: 8
                         children:
                           任务项:
-                            type: Texture
+                            type: Canvas
                             attribute:
                               entryKey: 0.round()
                               entry: var.seasonTasks[self.entryKey]
                               visible: self.entry != none
                               width: 1020
                               height: 82
-                              normal: "self.entry != none && self.entry['completed'] ? '40,70,55,220' : '50,55,72,220'"
-                              shape: ~round_rect
-                              radius: 14
-                            effect:
-                              stroke:
-                                width: 1
-                                color: "self.entry != none && self.entry['completed'] ? '100,200,130,140' : '200,140,255,60'"
                             children:
-                              难度标签:
+                              任务项背景:
                                 type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: "self.parent.entry != none && self.parent.entry['completed'] ? '40,70,55,220' : '50,55,72,220'"
+                                  shape: ~round_rect
+                                  radius: 14
+                                effect:
+                                  stroke:
+                                    width: 1
+                                    color: "self.parent.entry != none && self.parent.entry['completed'] ? '100,200,130,140' : '200,140,255,60'"
+                              难度标签:
+                                type: Canvas
                                 attribute:
                                   point: ~top_left
                                   x: 12
                                   y: 12
                                   width: 64
                                   height: 28
-                                  normal: "self.parent.entry != none && self.parent.entry['difficulty'] == 'HARD' ? '160,60,60,220' : self.parent.entry != none && self.parent.entry['difficulty'] == 'NORMAL' ? '180,140,50,220' : '60,140,80,220'"
-                                  shape: ~round_rect
-                                  radius: 14
                                 children:
+                                  难度背景:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: "self.parent.entry != none && self.parent.entry['difficulty'] == 'HARD' ? '160,60,60,220' : self.parent.entry != none && self.parent.entry['difficulty'] == 'NORMAL' ? '180,140,50,220' : '60,140,80,220'"
+                                      shape: ~round_rect
+                                      radius: 14
                                   难度文字:
                                     type: Text
                                     attribute:
                                       point: ~middle_center
                                       width: 64
-                                      texts: "self.parent.parent.entry != none ? self.parent.parent.entry['difficultyDisplay'] : none"
-                                      center: true
+                                      texts: "self.parent.entry != none ? self.parent.entry['difficultyDisplay'] : none"
                                       fontSize: 20
-                                      through: true
                               任务名:
                                 type: Text
                                 attribute:
@@ -847,7 +855,6 @@ controls:
                                   texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
                                   fontSize: 28
                                   limit: 24
-                                  through: true
                               任务奖励:
                                 type: Text
                                 attribute:
@@ -856,7 +863,6 @@ controls:
                                   y: 12
                                   texts: "self.parent.entry != none ? '&e+' + self.parent.entry['xpReward'] + ' XP' : none"
                                   fontSize: 24
-                                  through: true
                               任务描述:
                                 type: Text
                                 attribute:
@@ -867,7 +873,6 @@ controls:
                                   texts: "self.parent.entry != none ? '&8' + self.parent.entry['description'] : none"
                                   fontSize: 22
                                   limit: 36
-                                  through: true
                               进度条背景:
                                 type: Texture
                                 attribute:
@@ -908,7 +913,6 @@ controls:
                                   y: 56
                                   texts: "self.parent.entry != none ? '&7' + self.parent.entry['progress'] + '/' + self.parent.entry['required'] + ' &8(' + self.parent.entry['progressPercent'] + ')' : none"
                                   fontSize: 22
-                                  through: true
                               完成标记:
                                 type: Text
                                 attribute:
@@ -917,7 +921,6 @@ controls:
                                   y: 56
                                   texts: "self.parent.entry != none && self.parent.entry['completed'] ? '&a✔ 已完成' : '&7进行中'"
                                   fontSize: 22
-                                  through: true
 
                   # 空状态提示
                   空状态:
@@ -931,6 +934,7 @@ controls:
                         type: Texture
                         attribute:
                           point: ~stretch_all
+                          through: true
                           normal: ~42,46,62,180
                           shape: ~round_rect
                           radius: 18
@@ -944,8 +948,4 @@ controls:
                           point: ~middle_center
                           width: 1052
                           texts: "~&7暂无任务，请稍后再来"
-                          center: true
                           fontSize: 32
-                          through: true
-
-

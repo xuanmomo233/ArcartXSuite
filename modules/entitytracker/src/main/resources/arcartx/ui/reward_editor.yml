@@ -90,16 +90,11 @@ controls:
                   normal: ~50,180,80,200
                   shape: ~round_rect
                   radius: 8
+                  texts: ~&f保存
+                  fontSize: 28
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'save-config', var.configId, var.rewardType, var.rankingType, var.bossId, var.rankStart, var.rankEnd, var.rewardName, var.rewardDescription, var.rewardMoney, var.rewardDkp)
-                children:
-                  保存文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      fontSize: 28
-                      texts: "~&f保存"
               取消按钮:
                 type: Texture
                 attribute:
@@ -110,17 +105,11 @@ controls:
                   normal: ~200,60,60,200
                   shape: ~round_rect
                   radius: 8
+                  texts: ~&f取消
+                  fontSize: 28
                 action:
                   click: |-
                     Screen.close()
-                children:
-                  取消文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      fontSize: 28
-                      texts: "~&f取消"
-
           结果提示:
             type: Text
             attribute:

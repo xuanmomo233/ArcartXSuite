@@ -548,15 +548,8 @@ controls:
                   point: ~horizontal_stretch_bottom
                   shape: ~round_rect
                   radius: 4
-                children:
-                  区块标题:
-                    type: Text
-                    attribute:
-                      texts: ~这个箱子可能有以下物品
-                      y: -40
-                      fontSize: 49
-                      point: ~bottom_left
-                      through: true
+                  texts: ~这个箱子可能有以下物品
+                  fontSize: 49
               纵向滑块:
                 type: Texture
                 attribute:
@@ -729,19 +722,9 @@ controls:
                   hover: ~82,205,132,255
                   shape: ~round_rect
                   radius: 20
-                children:
-                  文本:
-                    type: Text
-                    attribute:
-                      through: true
-                      point: ~top_left
-                      x: 50
-                      y: 10
-                      width: 100
-                      height: 50
-                      texts: ~开箱
-                      fontSize: 64
-                      center: true
+                  texts: ~开箱
+                  center: true
+                  fontSize: 64
                 action:
                   click: |-
                     if(var.rolling != none && var.rolling != true){
@@ -762,31 +745,14 @@ controls:
                       Packet.send(var.packetId, 'open_case', var.actionToken)
                     }
               十连按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   point: ~middle_center
                   x: 370
                   y: 0
                   width: 100
                   height: 50
-                  normal: ~120,120,120,255
-                  hover: ~155,155,155,255
-                  shape: ~round_rect
-                  radius: 20
                   visible: "var.tenAvailable != false"
-                children:
-                  文本:
-                    type: Text
-                    attribute:
-                      through: true
-                      point: ~top_left
-                      x: 50
-                      y: 10
-                      width: 100
-                      height: 50
-                      texts: ~十连
-                      fontSize: 64
-                      center: true
                 action:
                   click: |-
                     if(var.rolling != none && var.rolling != true){
@@ -806,33 +772,50 @@ controls:
                       val.开箱动画层.visible = true
                       Packet.send(var.packetId, 'open_case_batch', 10, var.actionToken)
                     }
+                children:
+                  十连背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~120,120,120,255
+                      hover: ~155,155,155,255
+                      shape: ~round_rect
+                      radius: 20
+                  十连文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 100
+                      texts: ~十连
+                      fontSize: 64
               底部关闭按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   point: ~middle_center
                   x: 490
                   y: 0
                   width: 100
                   height: 50
-                  normal: ~165,165,165,255
-                  hover: ~195,195,195,255
-                  shape: ~round_rect
-                  radius: 20
-                children:
-                  文本:
-                    type: Text
-                    attribute:
-                      through: true
-                      point: ~top_left
-                      x: 50
-                      y: 10
-                      width: 100
-                      height: 50
-                      texts: ~关闭
-                      fontSize: 64
-                      center: true
                 action:
                   click: "Screen.close()"
+                children:
+                  关闭背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~165,165,165,255
+                      hover: ~195,195,195,255
+                      shape: ~round_rect
+                      radius: 20
+                  关闭文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 100
+                      texts: ~关闭
+                      fontSize: 64
               上一页:
                 type: Texture
                 attribute:
@@ -877,7 +860,6 @@ controls:
                   y: 0
                   texts: "var.currentPoolIndex != none && var.poolList != none ? '&7' + (var.currentPoolIndex + 1).round() + ' / ' + var.poolList.size().round() : ''"
                   fontSize: 50
-                  center: true
           底部分界线总布局:
             type: Canvas
             attribute:
