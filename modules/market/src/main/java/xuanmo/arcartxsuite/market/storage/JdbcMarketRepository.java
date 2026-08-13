@@ -483,7 +483,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
             int limit
     ) {
         String sql = "SELECT * FROM " + tListings
-            + " WHERE seller=? ORDER BY created_at DESC LIMIT ? OFFSET ?";
+            + " WHERE seller=? AND status='ACTIVE' ORDER BY created_at DESC LIMIT ? OFFSET ?";
         return queryListings(sql, seller.toString(), limit, offset);
     }
     @Override
@@ -503,7 +503,7 @@ public class JdbcMarketRepository extends AbstractModuleRepository implements Ma
     }
     @Override
     public List<AuctionListing> getListingsBySeller(UUID seller) {
-        String sql = "SELECT * FROM " + tListings + " WHERE seller=? ORDER BY created_at DESC";
+        String sql = "SELECT * FROM " + tListings + " WHERE seller=? AND status='ACTIVE' ORDER BY created_at DESC";
         List<AuctionListing> results = new ArrayList<>();
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {

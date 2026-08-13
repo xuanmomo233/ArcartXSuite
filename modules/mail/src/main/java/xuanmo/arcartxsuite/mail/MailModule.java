@@ -171,12 +171,46 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
         adminCommand = new MailAdminCommand(() -> service, messages());
 
         // 注册 MailDispatchable capability，供其他模块调用
-        registerCapability(MailDispatchable.class, (presetId, playerName, source) -> {
-            Player player = Bukkit.getPlayerExact(playerName);
-            if (player != null && player.isOnline()) {
-                return service.dispatchPresetToPlayer(presetId, player, source).success();
+        registerCapability(MailDispatchable.class, new MailDispatchable() {
+            @Override
+            public boolean dispatchPreset(@NotNull String presetId, @NotNull String playerName, @NotNull String source) {
+                Player player = Bukkit.getPlayerExact(playerName);
+                if (player != null && player.isOnline()) {
+                    return service.dispatchPresetToPlayer(presetId, player, source).success();
+                }
+                return service.dispatchPreset(presetId, playerName, source).success();
             }
-            return service.dispatchPreset(presetId, playerName, source).success();
+
+            @Override
+            public boolean sendItemMail(@NotNull java.util.UUID playerUuid,
+                                        @NotNull String subject,
+                                        @NotNull String body,
+                                        @NotNull org.bukkit.inventory.ItemStack item,
+                                        @Nullable String senderName) {
+                try {
+                    String itemData = xuanmo.arcartxsuite.mail.util.MailItemSerializer.serialize(item);
+                    xuanmo.arcartxsuite.mail.model.MailAttachment attachment = new xuanmo.arcartxsuite.mail.model.MailAttachment(
+                        0L, 0, xuanmo.arcartxsuite.mail.model.MailAttachmentType.ITEM,
+                        itemData, "", 0.0D, "");
+                    var result = service.sendSystemMail(
+                        playerUuid,
+                        subject,
+                        subject,
+                        body,
+                        java.util.List.of(attachment),
+                        java.util.List.of(),
+                        java.time.Instant.now().plus(java.time.Duration.ofDays(15)),
+                        senderName != null && !senderName.isBlank() ? senderName : "System"
+                    );
+                    return result.success();
+                } catch (IOException e) {
+                    logger.warning("[Mail] sendItemMail 物品序列化失败: " + e.getMessage());
+                    return false;
+                } catch (Exception e) {
+                    logger.warning("[Mail] sendItemMail 发送失败: " + e.getMessage());
+                    return false;
+                }
+            }
         });
 
         ensureMailNotifyCardDefaults();

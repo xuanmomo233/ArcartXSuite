@@ -39,7 +39,7 @@ import xuanmo.arcartxsuite.market.storage.RedisMarketCache;
  */
 public class AuctionService {
 
-    private static final int AUCTION_BACKPACK_SLOTS = 36;
+    private static final int AUCTION_BACKPACK_SLOTS = 41;
     private static final HanyuPinyinOutputFormat PINYIN_FORMAT = new HanyuPinyinOutputFormat();
 
     static {
@@ -617,8 +617,8 @@ public class AuctionService {
     }
 
     /**
-     * 安全发放物品：收件人在线则在主线程放入背包（装不下的部分入待发放队列），
-     * 离线则整笔入待发放队列，玩家上线时补发。彻底避免物品丢失。
+     * 安全发放物品：收件人在线则在主线程放入背包（装不下的部分通过邮件返还），
+     * 离线则通过邮件发送，邮件不可用时降级入待发放队列。彻底避免物品丢失。
      */
     private void deliverItemSafe(UUID target, AuctionListing listing, String reason) {
         final ItemStack item = itemSerializer.deserialize(listing.getItemData());
@@ -632,11 +632,33 @@ public class AuctionService {
             runOnMain(() -> {
                 java.util.Map<Integer, ItemStack> overflow = online.getInventory().addItem(item);
                 for (ItemStack left : overflow.values()) {
-                    repository.addPendingItem(target, itemSerializer.serialize(left), reason);
+                    if (!sendItemMail(target, left, reason, listing.getItemDisplayName())) {
+                        repository.addPendingItem(target, itemSerializer.serialize(left), reason);
+                    }
                 }
             });
         } else {
-            repository.addPendingItem(target, listing.getItemData(), reason);
+            if (!sendItemMail(target, item, reason, listing.getItemDisplayName())) {
+                repository.addPendingItem(target, listing.getItemData(), reason);
+            }
+        }
+    }
+
+    /**
+     * 通过 Mail 模块发送附带物品的系统邮件。
+     *
+     * @return {@code true} 表示邮件发送成功，{@code false} 表示 Mail 模块不可用
+     */
+    private boolean sendItemMail(UUID target, ItemStack item, String reason, String itemDisplayName) {
+        MailDispatchable mail = mailSupplier != null ? mailSupplier.get() : null;
+        if (mail == null) return false;
+        String subject = "拍卖行物品返还";
+        String body = "物品: " + itemDisplayName + " (来源: " + reason + ")";
+        try {
+            return mail.sendItemMail(target, subject, body, item, "拍卖行");
+        } catch (Exception e) {
+            logger.warning("[Market-Auction] 邮件返还物品失败，降级入待发放队列: " + e.getMessage());
+            return false;
         }
     }
 

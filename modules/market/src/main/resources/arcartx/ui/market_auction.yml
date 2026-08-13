@@ -761,7 +761,7 @@ controls:
                               visible: "self.parent.entry != none && self.parent.entry['canCancel']"
                             action:
                               clickLeft: |-
-                                Packet.send(var.packetId, 'auction_cancel', self.parent.entry['id'].round(), var.actionToken)
+                                Packet.send(var.packetId, 'auction_cancel', self.parent.entry['id'].round(), var.actionToken, var.page, var.currentCategory, var.search)
                             children:
                               取消背景:
                                 type: Texture

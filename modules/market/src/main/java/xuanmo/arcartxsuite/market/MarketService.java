@@ -62,7 +62,7 @@ public class MarketService {
 
     private static final int AUCTION_PAGE_SIZE = 20;
     private static final String AUCTION_SELL_UI_ID = "AXS:market_auction_sell";
-    private static final int AUCTION_BACKPACK_SLOTS = 36;
+    private static final int AUCTION_BACKPACK_SLOTS = 41;
     private static final int HISTORY_PAGE_SIZE = 20;
     private static final SimpleDateFormat TIME_FMT = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 
@@ -480,6 +480,11 @@ public class MarketService {
         long listingId = data.size() > 1 ? parseLongSafe(data.get(1), 0) : 0;
         if (listingId <= 0) return;
         cancelListing(player, listingId);
+        // 取消后刷新当前页列表
+        String page = data.size() > 3 && data.get(3) != null ? data.get(3) : "0";
+        String category = data.size() > 4 && data.get(4) != null ? data.get(4) : "all";
+        String search = data.size() > 5 && data.get(5) != null ? data.get(5) : null;
+        handleAuctionListPacket(player, List.of("auction_list", page, category, search));
     }
 
     private void handleAuctionFavoritePacket(Player player, List<String> data) {

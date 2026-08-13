@@ -8,6 +8,7 @@ import java.util.Set;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -49,6 +50,8 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     private QQBotAdminCommand adminCommand;
     private SnowLumaProcessManager snowLumaManager;
     private QQBotLoginGateListener loginGateListener;
+    // 红包过期退款定时任务引用：stopService 时需取消，避免 reload 后定时器仍触发已置 null 的 signInService
+    private BukkitTask redPacketRefundTask;
     // 异步启动守卫：startService 后台拉起 SnowLuma 期间若模块被关闭，置位以阻止/回收启动，避免孤儿进程。
     private volatile boolean closed = false;
 
@@ -389,8 +392,12 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
 
         // 20. 红包过期退款定时器（每小时检查一次）
         if (configuration.signin().enabled()) {
-            AxsScheduler.runAsyncTimer(plugin,
-                () -> signInService.refundExpiredRedPackets(), 72000L, 72000L);
+            redPacketRefundTask = AxsScheduler.runAsyncTimer(plugin,
+                () -> {
+                    // 双重保险：stopService 会 cancel 本任务，但仍可能在 cancel 前一刻被调度执行
+                    xuanmo.arcartxsuite.qqbot.service.QQBotSignInService signSvc = signInService;
+                    if (signSvc != null) signSvc.refundExpiredRedPackets();
+                }, 72000L, 72000L);
         }
     }
 
@@ -438,6 +445,11 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         if (weeklyRankService != null) {
             weeklyRankService.stop();
             weeklyRankService = null;
+        }
+        // 取消红包退款定时器，避免 reload 后触发已置 null 的 signInService
+        if (redPacketRefundTask != null) {
+            redPacketRefundTask.cancel();
+            redPacketRefundTask = null;
         }
         signInService = null;
         if (loginGateListener != null) {
