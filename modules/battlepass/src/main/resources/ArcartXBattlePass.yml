@@ -1,7 +1,7 @@
 # ArcartXBattlePass 主配置文件
 # 定义战令系统的存储、赛季、任务、奖励、UI 及跨服同步等核心参数
 
-config-version: 2  # 配置版本号，变更时触发迁移
+config-version: 3  # 配置版本号，变更时触发迁移
 
 # 存储配置：支持 sqlite 与 mysql 两种模式
 storage:
@@ -38,60 +38,22 @@ tasks:
   weekly-count: 2                 # 每周分配给玩家的每周任务数量
   tasks-directory: "tasks"        # 任务文件所在目录（相对模块数据目录）
 
-# 等级奖励定义。
-# 注意：本段必须为 Mapping（键值对）结构，顶层键为任意唯一标识，内部必须包含 level 与 free/premium/deluxe 奖励。
-# 代码使用 section.getKeys(false) 遍历，若写成 YAML 列表会导致奖励无法加载。
-rewards:
-  "1":  # 奖励唯一标识（任意字符串，需全局唯一）
-    level: 1  # 达到该等级时可领取
-    free:  # 免费档奖励
-      type: command  # 奖励类型：command（执行命令）
-      data: "give {player} diamond 1"  # 奖励数据：执行的命令（{player} 为玩家名占位符）
-    premium:  # 高级版档奖励
-      type: command
-      data: "give {player} diamond 5"
-    deluxe:  # 豪华版档奖励
-      type: command
-      data: "give {player} diamond 8"
-  "2":
-    level: 2
-    free:
-      type: command
-      data: "give {player} iron_ingot 8"
-    premium:
-      type: command
-      data: "give {player} iron_ingot 32"
-    deluxe:
-      type: command
-      data: "give {player} iron_ingot 48"
-  "5":
-    level: 5
-    free:
-      type: command
-      data: "give {player} experience_bottle 4"
-    premium:
-      type: command
-      data: "give {player} experience_bottle 16"
-    deluxe:
-      type: command
-      data: "give {player} experience_bottle 24"
-  "10":
-    level: 10
-    free:
-      type: command
-      data: "give {player} emerald 2"
-    premium:
-      type: command
-      data: "give {player} emerald 8"
-    deluxe:
-      type: command
-      data: "give {player} emerald 12"
+# ---------------------------------------------------------------------------
+# 等级奖励配置
+# ---------------------------------------------------------------------------
+# 奖励配置已拆分为外部文件，位于 <模块数据目录>/<rewards-file> 下。
+# 默认文件名为 rewards.yml，首次启动时自动导出。
+# 每个等级的奖励支持 item / command / currency 三种类型，并支持 icon 图标配置。
+# 详细配置格式见 rewards.yml 文件内注释。
+# ---------------------------------------------------------------------------
+rewards-file: "rewards.yml"
 
 # UI 配置：控制界面注册与绑定
 ui:
   register-on-enable: true  # 模块启动时是否自动注册 UI
   main-id: "battlepass_main"  # 主界面 UI 标识
   tasks-id: "battlepass_tasks"  # 任务列表界面 UI 标识
+  rewards-id: "battlepass_rewards"  # 奖励界面 UI 标识
 
 # 跨服同步配置
 cross-server:

@@ -14,8 +14,12 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
+import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
+import xuanmo.arcartxsuite.api.icon.IconResolver;
+import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassReward;
@@ -39,6 +43,8 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     private final BattlePassService service;
     private final String mainUiId;
     private final String tasksUiId;
+    private final String rewardsUiId;
+    private final IconResolver iconResolver;
     private final java.util.function.BiFunction<String, Object[], String> messageResolver;
     private final Map<UUID, String> actionTokens = new ConcurrentHashMap<>();
     private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
@@ -52,11 +58,16 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
      * @param service         BattlePassService 实例
      * @param mainUiId        主界面 UI ID
      * @param tasksUiId       任务界面 UI ID
+     * @param rewardsUiId     奖励界面 UI ID
+     * @param itemSourceRegistry 物品来源注册表，可为 null
+     * @param itemStackBridge    ItemStack 桥接 API，可为 null
      * @param messageResolver 消息解析函数
      */
     public BattlePassPacketHandler(JavaPlugin plugin, PacketBridgeAPI packetBridge,
                                     PacketGuardAPI packetGuard, BattlePassService service,
-                                    String mainUiId, String tasksUiId,
+                                    String mainUiId, String tasksUiId, String rewardsUiId,
+                                    @Nullable ItemSourceRegistry itemSourceRegistry,
+                                    @Nullable ItemBridgeAPI itemStackBridge,
                                     java.util.function.BiFunction<String, Object[], String> messageResolver) {
         this.plugin = plugin;
         this.packetBridge = packetBridge;
@@ -64,6 +75,8 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         this.service = service;
         this.mainUiId = mainUiId;
         this.tasksUiId = tasksUiId;
+        this.rewardsUiId = rewardsUiId;
+        this.iconResolver = new IconResolver(itemStackBridge, itemSourceRegistry);
         this.messageResolver = messageResolver;
     }
 
@@ -84,7 +97,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         switch (action) {
             case "open_main" -> openMain(player);
             case "open_tasks" -> openTasks(player);
-            case "open_rewards" -> pushRewardsData(player);
+            case "open_rewards" -> openRewards(player);
             case "claim" -> handleClaim(player, data);
             case "refresh" -> pushMainData(player);
             default -> pushMainData(player);
@@ -96,9 +109,11 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         UUID uuid = player.getUniqueId();
         String supplied = data.size() > 2 ? safe(data.get(data.size() - 1)) : "";
         String expected = actionTokens.get(uuid);
+        // claim 可在主界面或奖励界面发起，两者都允许
         if (expected == null || supplied.isBlank() || !expected.equals(supplied)
             || !actionTokensInFlight.add(uuid)
-            || packetBridge == null || !packetBridge.isUiOpen(player, mainUiId)) {
+            || packetBridge == null
+            || (!packetBridge.isUiOpen(player, mainUiId) && !packetBridge.isUiOpen(player, rewardsUiId))) {
             actionTokensInFlight.remove(uuid);
             return;
         }
@@ -127,7 +142,10 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         if (result == BattlePassService.ClaimResult.SUCCESS) {
             actionTokens.put(uuid, UUID.randomUUID().toString());
         }
-        pushRewardsData(player);
+        // 刷新奖励数据（如果奖励界面打开着）
+        if (packetBridge.isUiOpen(player, rewardsUiId)) {
+            pushRewardsData(player);
+        }
     }
 
     /**
@@ -162,17 +180,16 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     }
 
     /**
-     * 为玩家打开奖励界面并推送主界面与奖励数据。
+     * 为玩家打开独立的奖励界面并推送奖励数据。
      *
      * @param player 目标玩家
      */
     public void openRewards(Player player) {
         if (packetBridge == null) return;
-        packetBridge.openUi(player, mainUiId);
+        packetBridge.openUi(player, rewardsUiId);
         actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
         AxsScheduler.runTaskLater(plugin, () -> {
             if (player.isOnline()) {
-                pushMainData(player);
                 pushRewardsData(player);
             }
         }, 2L);
@@ -186,9 +203,23 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         sorted.sort(java.util.Comparator.comparingInt(BattlePassReward::level)
             .thenComparingInt(r -> r.tier().ordinal()));
 
+        // 按等级分组：每个等级包含 free/premium/deluxe 三个档位
+        Map<String, Map<String, String>> levelsMap = new LinkedHashMap<>();
         Map<String, Map<String, String>> rewardsMap = new LinkedHashMap<>();
+        Map<String, Object> payload = new LinkedHashMap<>();
+
         int idx = 0;
         for (BattlePassReward reward : sorted) {
+            String levelKey = String.valueOf(reward.level());
+            if (!levelsMap.containsKey(levelKey)) {
+                Map<String, String> levelEntry = new LinkedHashMap<>();
+                levelEntry.put("level", levelKey);
+                levelEntry.put("reached", String.valueOf(progress.currentLevel() >= reward.level()));
+                levelsMap.put(levelKey, levelEntry);
+            }
+
+            String tierKey = reward.tier().name().toLowerCase();
+            String entryKey = String.valueOf(idx);
             boolean tierUnlocked = switch (reward.tier()) {
                 case FREE -> true;
                 case PREMIUM -> progress.unlockedPremium();
@@ -197,25 +228,35 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
             boolean levelReached = progress.currentLevel() >= reward.level();
             boolean claimed = progress.claimedRewards().contains(reward.rewardId());
 
-            Map<String, String> entry = new HashMap<>();
+            Map<String, String> entry = new LinkedHashMap<>();
             entry.put("level", String.valueOf(reward.level()));
             entry.put("tier", reward.tier().name());
             entry.put("tierDisplay", rewardTierDisplay(reward.tier()));
+            entry.put("tierKey", tierKey);
             entry.put("claimed", String.valueOf(claimed));
             entry.put("claimable", String.valueOf(!claimed && levelReached && tierUnlocked));
             entry.put("locked", String.valueOf(!tierUnlocked));
             entry.put("levelReached", String.valueOf(levelReached));
-            rewardsMap.put(String.valueOf(idx++), entry);
+            entry.put("type", reward.type());
+            rewardsMap.put(entryKey, entry);
+
+            // 推送图标 itemJson（flat 字段）
+            String iconJson = iconResolver.resolveItemJson(player, reward.icon());
+            payload.put("iconJson" + idx, iconJson);
+
+            levelsMap.get(levelKey).put(tierKey + "EntryKey", entryKey);
+            idx++;
         }
 
-        Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("packetId", PACKET_ID);
+        payload.put("levels", levelsMap);
         payload.put("rewards", rewardsMap);
-        payload.put("rewardCount", String.valueOf(rewardsMap.size()));
+        payload.put("levelCount", String.valueOf(levelsMap.size()));
+        payload.put("rewardCount", String.valueOf(idx));
         payload.put("currentLevel", String.valueOf(progress.currentLevel()));
         payload.put("action_token", actionTokens.getOrDefault(player.getUniqueId(), ""));
 
-        packetBridge.sendPacket(player, mainUiId, "rewards", payload);
+        packetBridge.sendPacket(player, rewardsUiId, "rewards", payload);
     }
 
     private static String rewardTierDisplay(BattlePassReward.RewardTier tier) {

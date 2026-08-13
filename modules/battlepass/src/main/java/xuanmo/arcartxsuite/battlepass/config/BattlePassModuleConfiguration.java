@@ -3,6 +3,9 @@ package xuanmo.arcartxsuite.battlepass.config;
 import java.io.File;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.io.File;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -15,11 +18,13 @@ import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.icon.IconDefinition;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.battlepass.condition.TaskCondition;
 import xuanmo.arcartxsuite.battlepass.condition.TaskConditionParser;
 import xuanmo.arcartxsuite.battlepass.increment.IncrementStrategy;
 import xuanmo.arcartxsuite.battlepass.increment.IncrementStrategyParser;
+import xuanmo.arcartxsuite.battlepass.model.BattlePassItemDefinition;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassReward;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassTask;
 
@@ -32,6 +37,7 @@ import xuanmo.arcartxsuite.battlepass.model.BattlePassTask;
  * @param storage     存储配置（SQLite/MySQL 连接参数）
  * @param season      赛季配置（赛季 ID、等级上限、XP 规则、起止日期）
  * @param tasks       任务配置（每日/每周/赛季任务列表及分配数量）
+ * @param rewardsFile 奖励配置文件名（相对模块数据目录）
  * @param rewards     奖励列表（按等级与档位组织的不可变列表）
  * @param ui          UI 配置（注册开关与 UI ID）
  * @param crossServer 跨服配置（启用开关与同步字段列表）
@@ -40,6 +46,7 @@ public record BattlePassModuleConfiguration(
     BattlePassStorageConfiguration storage,
     BattlePassSeasonConfiguration season,
     BattlePassTasksConfiguration tasks,
+    String rewardsFile,
     List<BattlePassReward> rewards,
     BattlePassUiConfiguration ui,
     BattlePassCrossServerConfiguration crossServer
@@ -49,39 +56,60 @@ public record BattlePassModuleConfiguration(
      * 从 YAML 配置加载并组装完整的模块配置。
      *
      * @param yaml       主配置文件
-     * @param dataFolder 模块数据目录（用于加载外部任务文件），可为 null
+     * @param dataFolder 模块数据目录（用于加载外部任务和奖励文件），可为 null
      * @param logger     日志记录器
      * @return 解析后的配置实例
      */
     public static BattlePassModuleConfiguration load(FileConfiguration yaml, @Nullable File dataFolder, Logger logger) {
+        String rewardsFile = yaml.getString("rewards-file", "rewards.yml");
         return new BattlePassModuleConfiguration(
             BattlePassStorageConfiguration.load(yaml.getConfigurationSection("storage")),
             BattlePassSeasonConfiguration.load(yaml.getConfigurationSection("season")),
             BattlePassTasksConfiguration.load(yaml.getConfigurationSection("tasks"), dataFolder, logger),
-            loadRewards(yaml.getConfigurationSection("rewards")),
+            rewardsFile,
+            loadRewards(rewardsFile, dataFolder, logger),
             BattlePassUiConfiguration.load(yaml.getConfigurationSection("ui")),
             BattlePassCrossServerConfiguration.load(yaml.getConfigurationSection("cross-server"))
         );
     }
 
-    private static List<BattlePassReward> loadRewards(ConfigurationSection section) {
+    private static List<BattlePassReward> loadRewards(String rewardsFile, @Nullable File dataFolder, Logger logger) {
         List<BattlePassReward> result = new ArrayList<>();
-        if (section == null) return result;
-        for (String key : section.getKeys(false)) {
-            ConfigurationSection rewardSection = section.getConfigurationSection(key);
-            if (rewardSection == null) continue;
-            int level = rewardSection.getInt("level", 0);
-            ConfigurationSection freeSection = rewardSection.getConfigurationSection("free");
-            if (freeSection != null && level > 0) {
-                result.add(parseReward(level + "_free", level, BattlePassReward.RewardTier.FREE, freeSection));
+        if (dataFolder == null) return result;
+        File file = new File(dataFolder, rewardsFile);
+        if (!file.exists()) {
+            if (logger != null) {
+                logger.warning("未找到奖励配置文件: " + file.getPath() + "，奖励列表为空");
             }
-            ConfigurationSection premiumSection = rewardSection.getConfigurationSection("premium");
-            if (premiumSection != null && level > 0) {
-                result.add(parseReward(level + "_premium", level, BattlePassReward.RewardTier.PREMIUM, premiumSection));
+            return result;
+        }
+        try {
+            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+            ConfigurationSection section = yaml.getConfigurationSection("rewards");
+            if (section == null) section = yaml; // 允许顶层直接写奖励
+            for (String key : section.getKeys(false)) {
+                ConfigurationSection rewardSection = section.getConfigurationSection(key);
+                if (rewardSection == null) continue;
+                int level = rewardSection.getInt("level", 0);
+                ConfigurationSection freeSection = rewardSection.getConfigurationSection("free");
+                if (freeSection != null && level > 0) {
+                    result.add(parseReward(level + "_free", level, BattlePassReward.RewardTier.FREE, freeSection));
+                }
+                ConfigurationSection premiumSection = rewardSection.getConfigurationSection("premium");
+                if (premiumSection != null && level > 0) {
+                    result.add(parseReward(level + "_premium", level, BattlePassReward.RewardTier.PREMIUM, premiumSection));
+                }
+                ConfigurationSection deluxeSection = rewardSection.getConfigurationSection("deluxe");
+                if (deluxeSection != null && level > 0) {
+                    result.add(parseReward(level + "_deluxe", level, BattlePassReward.RewardTier.DELUXE, deluxeSection));
+                }
             }
-            ConfigurationSection deluxeSection = rewardSection.getConfigurationSection("deluxe");
-            if (deluxeSection != null && level > 0) {
-                result.add(parseReward(level + "_deluxe", level, BattlePassReward.RewardTier.DELUXE, deluxeSection));
+            if (logger != null) {
+                logger.fine("已从外部文件加载战令奖励: " + file.getName() + " (" + result.size() + " 条)");
+            }
+        } catch (Exception e) {
+            if (logger != null) {
+                logger.log(Level.WARNING, "加载奖励配置文件失败: " + file.getPath(), e);
             }
         }
         return Collections.unmodifiableList(result);
@@ -89,9 +117,36 @@ public record BattlePassModuleConfiguration(
 
     private static BattlePassReward parseReward(String rewardId, int level, BattlePassReward.RewardTier tier, ConfigurationSection section) {
         String type = section.getString("type", "command");
+        IconDefinition icon = IconDefinition.load(section, "icon");
+        BattlePassItemDefinition item = parseItemDefinition(section.getConfigurationSection("item"));
+        List<String> commands = section.getStringList("commands");
+        if (commands.isEmpty()) {
+            // 向后兼容：旧版 data 字段单命令
+            String legacyData = section.getString("data", "");
+            if (!legacyData.isEmpty()) {
+                commands = List.of(legacyData);
+            }
+        }
+        String currency = section.getString("currency", "");
+        double currencyAmount = section.getDouble("amount", 0);
+        // 旧版 data 键值对（向后兼容）
         Map<String, String> data = new LinkedHashMap<>();
-        data.put("data", section.getString("data", ""));
-        return new BattlePassReward(rewardId, level, tier, type, data);
+        String legacyData = section.getString("data", "");
+        if (!legacyData.isEmpty()) {
+            data.put("data", legacyData);
+        }
+        return new BattlePassReward(rewardId, level, tier, type, icon, item,
+            Collections.unmodifiableList(commands), currency, currencyAmount, data);
+    }
+
+    private static @Nullable BattlePassItemDefinition parseItemDefinition(@Nullable ConfigurationSection section) {
+        if (section == null) return null;
+        String source = section.getString("source", "minecraft");
+        String id = section.getString("id", "");
+        int amount = section.getInt("amount", 1);
+        String nbt = section.getString("nbt", "");
+        if (id.isBlank()) return null;
+        return new BattlePassItemDefinition(source, id, amount, nbt.isBlank() ? null : nbt);
     }
 
     /**
@@ -332,18 +387,21 @@ public record BattlePassModuleConfiguration(
      * @param registerOnEnable 启用时是否自动注册 UI
      * @param mainId           主界面 UI ID
      * @param tasksId          任务界面 UI ID
+     * @param rewardsId        奖励界面 UI ID
      */
     public record BattlePassUiConfiguration(
         boolean registerOnEnable,
         String mainId,
-        String tasksId
+        String tasksId,
+        String rewardsId
     ) {
         public static BattlePassUiConfiguration load(ConfigurationSection section) {
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
             return new BattlePassUiConfiguration(
                 section.getBoolean("register-on-enable", true),
                 section.getString("main-id", "battlepass_main"),
-                section.getString("tasks-id", "battlepass_tasks")
+                section.getString("tasks-id", "battlepass_tasks"),
+                section.getString("rewards-id", "battlepass_rewards")
             );
         }
     }

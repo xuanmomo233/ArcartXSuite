@@ -1,7 +1,7 @@
 # AXS BattlePass 主界面
 # 打开方式: /bp open 或 Packet 触发
-# 数据交互: packetHandler init/update/rewards
-# 重制: 扩大面板至 1200x720，参考 lottery/market/warehouse 风格，分层面板 + 进度条 + 奖励列表
+# 数据交互: packetHandler init/update
+# 奖励领取: 点击"领取奖励"按钮打开独立 battlepass_rewards.yml 界面
 
 ui:
   isHud: false
@@ -57,30 +57,6 @@ ui:
       var.tier = packet['tier']
       var.tierDisplay = packet['tierDisplay']
       var.progressRatio = packet['progressRatio']
-    # packetHandler: rewards
-    # 接收奖励列表数据包，动态生成奖励列表子元素
-    # 包字段:
-    #   - packetId: 包标识符
-    #   - rewards: 奖励数据映射（key 为序号，含 level/tier/tierDisplay/claimed/claimable/locked/levelReached 等字段）
-    #   - rewardCount: 奖励条目总数
-    #   - currentLevel: 玩家当前战令等级
-    #   - action_token: 操作令牌，用于领取奖励时防伪造验证
-    rewards: |-
-      var.packetId = packet['packetId']
-      var.rewards = packet['rewards']
-      var.rewardCount = packet['rewardCount']
-      var.currentLevel = packet['currentLevel']
-      var.actionToken = packet['action_token']
-      var.showRewards = true
-      while(val.奖励列表.childrenCount() > 1){
-        val.奖励列表.get(1).remove()
-      }
-      // range(a,b) 左闭右闭，生成 a~b 含两端；模板在索引0，故复制 1~count-1 共 count-1 项
-      for(i in range(1, var.rewardCount - 1)){
-        key = i.round()
-        e = val.奖励列表['奖励项'].copy('奖励项' + key)
-        e.entryKey = key
-      }
   action:
     load: |-
       var.packetId = 'AXS_BATTLEPASS'
@@ -95,9 +71,6 @@ ui:
       var.tier = 'FREE'
       var.tierDisplay = '&7免费'
       var.progressRatio = 0
-      var.rewards = {}
-      var.rewardCount = 0
-      var.showRewards = false
       var.actionToken = ''
     open: |-
       Packet.send(var.packetId, 'refresh')
@@ -337,14 +310,13 @@ controls:
                       fontSize: 28
 
           # ════════════════════════════════════════════════════
-          # 模式一: 信息面板（showRewards = false）
+          # 信息面板
           # ════════════════════════════════════════════════════
           信息面板:
             type: Canvas
             attribute:
               point: ~stretch_all
               through: true
-              visible: "!var.showRewards"
             children:
               # ── 等级展示卡片 ────────────────────────────────
               等级卡片:
@@ -755,265 +727,3 @@ controls:
                             size: 8
                             intensity: 0.3
                             animated: false
-
-          # ════════════════════════════════════════════════════
-          # 模式二: 奖励面板（showRewards = true）
-          # ════════════════════════════════════════════════════
-          奖励面板:
-            type: Canvas
-            attribute:
-              point: ~stretch_all
-              through: true
-              visible: var.showRewards
-            children:
-              奖励面板底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~28,30,42,248
-                  shape: ~round_rect
-                  radius: 24
-                effect:
-                  gradient:
-                    color1: ~38,42,58,255
-                    color2: ~28,30,42,255
-                    type: 0
-                    angleDeg: 90
-                  stroke:
-                    width: 2
-                    color: ~255,180,100,150
-              奖励内描边:
-                type: Texture
-                attribute:
-                  point: ~middle_center
-                  width: 1184
-                  height: 704
-                  normal: ~0,0,0,0
-                  shape: ~round_rect
-                  radius: 20
-                  through: true
-                effect:
-                  stroke:
-                    width: 1
-                    color: ~255,180,100,60
-              # 奖励顶栏
-              奖励顶栏:
-                type: Canvas
-                attribute:
-                  point: ~horizontal_stretch_top
-                  height: 80
-                children:
-                  奖励顶栏底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~255,180,100,18
-                      shape: ~round_rect
-                      radius: 22
-                      through: true
-                  奖励顶栏线:
-                    type: Texture
-                    attribute:
-                      point: ~horizontal_stretch_bottom
-                      height: 2
-                      normal: ~255,180,100,120
-                      through: true
-                  奖励顶栏高光:
-                    type: Texture
-                    attribute:
-                      point: ~bottom_center
-                      width: 360
-                      height: 3
-                      normal: ~255,210,120,220
-                      shape: ~round_rect
-                      radius: 2
-                      through: true
-                    effect:
-                      neon:
-                        color: ~255,180,100,140
-                        size: 8
-                        intensity: 0.5
-                        animated: false
-                  奖励标题:
-                    type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 32
-                      texts: "~&6奖励领取"
-                      fontSize: 36
-                      through: true
-                  奖励当前等级:
-                    type: Text
-                    attribute:
-                      point: ~middle_left
-                      x: 260
-                      texts: "'&7当前等级: &fLv.' + var.currentLevel"
-                      fontSize: 28
-                      through: true
-                  奖励返回按钮:
-                    type: Canvas
-                    attribute:
-                      point: ~top_right
-                      x: -20
-                      y: 18
-                      width: 44
-                      height: 44
-                    action:
-                      clickLeft: |-
-                        var.showRewards = false
-                    children:
-                      返回背景:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~50,55,72,220
-                          hover: ~Frosted:0;90,100,120,240
-                          shape: ~circle
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~90,170,255,140
-                      返回文字:
-                        type: Text
-                        attribute:
-                          point: ~middle_center
-                          width: 44
-                          texts: "~&f←"
-                          fontSize: 28
-              # 奖励滚动区
-              奖励滑块:
-                type: Texture
-                val: 奖励滑块
-                attribute:
-                  point: ~top_right
-                  x: -18
-                  y: 100
-                  width: 6
-                  height: 50
-                  normal: ~255,180,100,220
-                  maxDragY: 560
-                  shape: ~round_rect
-                  radius: 3
-                  through: true
-                effect:
-                  neon:
-                    color: ~255,180,100,100
-                    size: 4
-                    intensity: 0.4
-                    animated: false
-              奖励滚动区:
-                type: Scroll
-                attribute:
-                  point: ~top_left
-                  x: 32
-                  y: 100
-                  width: 1136
-                  height: 580
-                  moveY: "self.parent['奖励滑块'].getDragYRatio()"
-                action:
-                  wheel: |-
-                    if(self.moveY >= 0 && self.wheelValue > 0){
-                      self.parent['奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                    if(self.moveY <= 1 && self.wheelValue < 0){
-                      self.parent['奖励滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
-                    }
-                children:
-                  奖励列表:
-                    val: 奖励列表
-                    type: VStack
-                    attribute:
-                      width: 1136
-                      spaceBetween: 10
-                    children:
-                      奖励项:
-                        type: Canvas
-                        attribute:
-                          entryKey: 0.round()
-                          entry: var.rewards[self.entryKey]
-                          visible: self.entry != none
-                          width: 1136
-                          height: 70
-                        children:
-                          奖励项背景:
-                            type: Texture
-                            attribute:
-                              point: ~stretch_all
-                              through: true
-                              normal: "self.parent.entry != none && self.parent.entry['claimed'] ? '40,60,50,200' : self.parent.entry != none && self.parent.entry['claimable'] ? '50,60,80,220' : self.parent.entry != none && self.parent.entry['locked'] ? '50,40,50,200' : '42,46,62,200'"
-                              shape: ~round_rect
-                              radius: 16
-                            effect:
-                              stroke:
-                                width: 1
-                                color: "self.parent.entry != none && self.parent.entry['claimable'] ? '120,200,255,160' : self.parent.entry != none && self.parent.entry['claimed'] ? '100,180,120,120' : '90,170,255,50'"
-                          # 等级标签
-                          奖励等级:
-                            type: Text
-                            attribute:
-                              x: 20
-                              y: 18
-                              texts: "self.parent.entry != none ? '&f&lLv.' + self.parent.entry['level'] : none"
-                              fontSize: 32
-                          # 档位标签
-                          奖励档位:
-                            type: Text
-                            attribute:
-                              x: 130
-                              y: 22
-                              texts: "self.parent.entry != none ? self.parent.entry['tierDisplay'] : none"
-                              fontSize: 26
-                          # 状态文字
-                          奖励状态:
-                            type: Text
-                            attribute:
-                              x: 260
-                              y: 22
-                              texts: "self.parent.entry != none ? (self.parent.entry['claimed'] ? '&a✔ 已领取' : self.parent.entry['locked'] ? '&c🔒 未解锁档位' : self.parent.entry['levelReached'] ? '&e可领取' : '&7等级不足') : none"
-                              fontSize: 26
-                          # 领取按钮：Canvas + Texture(背景) + Text(文字)
-                          领取按钮:
-                            type: Canvas
-                            attribute:
-                              point: ~middle_right
-                              x: -16
-                              width: 140
-                              height: 48
-                              visible: "self.parent.entry != none && self.parent.entry['claimable']"
-                            action:
-                              clickLeft: |-
-                                Packet.send(var.packetId, 'claim', self.parent.entry['level'], var.actionToken)
-                            children:
-                              领取背景:
-                                type: Texture
-                                attribute:
-                                  point: ~stretch_all
-                                  through: true
-                                  normal: ~80,160,100,240
-                                  hover: ~Frosted:0;100,200,130,255
-                                  shape: ~round_rect
-                                  radius: 24
-                                effect:
-                                  stroke:
-                                    width: 2
-                                    color: ~120,220,150,200
-                                  shadow:
-                                    xOffset: 0
-                                    yOffset: 2
-                                    blur: 8
-                                    color: ~0,0,0,100
-                                  neon:
-                                    color: ~100,200,130,100
-                                    size: 6
-                                    intensity: 0.4
-                                    animated: false
-                              领取文字:
-                                type: Text
-                                attribute:
-                                  point: ~middle_center
-                                  width: 140
-                                  texts: "~&f领取"
-                                  fontSize: 28

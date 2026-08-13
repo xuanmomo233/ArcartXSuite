@@ -45,6 +45,8 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
     private static final String MAIN_UI_FILE_PATH = "ui/battlepass_main.yml";
     private static final String TASKS_UI_RESOURCE_PATH = "arcartx/ui/battlepass_tasks.yml";
     private static final String TASKS_UI_FILE_PATH = "ui/battlepass_tasks.yml";
+    private static final String REWARDS_UI_RESOURCE_PATH = "arcartx/ui/battlepass_rewards.yml";
+    private static final String REWARDS_UI_FILE_PATH = "ui/battlepass_rewards.yml";
 
     private BattlePassModuleConfiguration configuration;
     private BattlePassService service;
@@ -68,7 +70,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
     @Override
     protected int currentConfigVersion() {
-        return 2;
+        return 3;
     }
 
     @Override
@@ -85,7 +87,6 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
     protected @NotNull SyncPolicy defaultSyncPolicy() {
         return SyncPolicy.builder()
             .dynamicSection("tasks")
-            .dynamicSection("rewards")
             .dynamicSection("messages")
             .build();
     }
@@ -110,6 +111,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         Map<String, String> mappings = new LinkedHashMap<>();
         mappings.put(MAIN_UI_RESOURCE_PATH, MAIN_UI_FILE_PATH);
         mappings.put(TASKS_UI_RESOURCE_PATH, TASKS_UI_FILE_PATH);
+        mappings.put(REWARDS_UI_RESOURCE_PATH, REWARDS_UI_FILE_PATH);
         return mappings;
     }
 
@@ -126,6 +128,8 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         File dataFolder = configFile.getParentFile();
         // 首次安装时导出默认任务文件
         ensureTaskDefaults(dataFolder);
+        // 首次安装时导出默认奖励文件
+        ensureRewardDefaults(dataFolder);
         configuration = BattlePassModuleConfiguration.load(
             YamlConfiguration.loadConfiguration(configFile), dataFolder, logger);
     }
@@ -140,6 +144,14 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             if (!target.exists()) {
                 exportResource("tasks/" + taskFile, target, false);
             }
+        }
+    }
+
+    private void ensureRewardDefaults(File dataFolder) {
+        // 先从主配置读取 rewards-file 字段（默认 rewards.yml），导出默认奖励文件
+        File target = new File(dataFolder, "rewards.yml");
+        if (!target.exists()) {
+            exportResource("rewards.yml", target, false);
         }
     }
 
@@ -159,11 +171,14 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
         UiBinding mainBinding = registerModuleUi(MAIN_UI_FILE_PATH, configuration.ui().mainId(), true);
         UiBinding tasksBinding = registerModuleUi(TASKS_UI_FILE_PATH, configuration.ui().tasksId(), true);
-        if (mainBinding.registeredUiId() == null || tasksBinding.registeredUiId() == null) {
+        UiBinding rewardsBinding = registerModuleUi(REWARDS_UI_FILE_PATH, configuration.ui().rewardsId(), true);
+        if (mainBinding.registeredUiId() == null || tasksBinding.registeredUiId() == null
+            || rewardsBinding.registeredUiId() == null) {
             throw new IllegalStateException("BattlePass UI 注册失败");
         }
 
-        service = new BattlePassService(plugin, configuration, repo, logger);
+        service = new BattlePassService(plugin, configuration, repo, logger,
+            itemSourceRegistry, currencyManager);
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();
@@ -240,6 +255,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         if (service == null) return null;
         String mainUiId = getModuleUiId(MAIN_UI_FILE_PATH);
         String tasksUiId = getModuleUiId(TASKS_UI_FILE_PATH);
+        String rewardsUiId = getModuleUiId(REWARDS_UI_FILE_PATH);
         packetHandler = new BattlePassPacketHandler(
             plugin,
             packetBridge,
@@ -247,6 +263,9 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             service,
             mainUiId != null ? mainUiId : configuration.ui().mainId(),
             tasksUiId != null ? tasksUiId : configuration.ui().tasksId(),
+            rewardsUiId != null ? rewardsUiId : configuration.ui().rewardsId(),
+            itemSourceRegistry,
+            itemStackBridge,
             this::msg
         );
         return packetHandler;

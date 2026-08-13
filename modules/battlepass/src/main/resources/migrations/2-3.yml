@@ -1,0 +1,23 @@
+# BattlePass 配置迁移: 2 -> 3
+# 奖励配置从主配置拆分为外部文件 (rewards.yml)
+# 主配置中内联的 rewards 段需要移除，新增 rewards-file 字段指向外部文件
+# UI 配置新增 rewards-id 字段（奖励界面 UI 标识）
+# 旧版 rewards 段中的 type: command + data 格式由 Java 代码向后兼容处理
+# (BattlePassModuleConfiguration.parseReward 已支持旧版 data 字段单命令)
+
+from-version: 2  # 迁移起始版本号
+to-version: 3  # 迁移目标版本号
+description: "奖励配置外部化，移除主配置内联奖励定义，新增 rewards-file 和 rewards-id"  # 迁移描述
+
+operations:  # 迁移操作列表，按顺序执行
+  # 移除旧版内联在主配置中的 rewards 段（已拆分为 rewards.yml 独立文件）
+  - type: remove  # 操作类型：移除指定路径的配置段
+    path: rewards  # 移除主配置中的奖励定义段
+  # 新增 rewards-file 字段，指向外部奖励配置文件
+  - type: set-if-missing  # 操作类型：仅在字段不存在时设置默认值
+    path: rewards-file  # 奖励配置文件名
+    value: "rewards.yml"  # 默认文件名
+  # 新增 UI 配置中的 rewards-id 字段
+  - type: set-if-missing  # 操作类型：仅在字段不存在时设置默认值
+    path: ui.rewards-id  # 奖励界面 UI 标识
+    value: "battlepass_rewards"  # 默认 UI ID

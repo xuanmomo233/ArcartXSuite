@@ -19,6 +19,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
+import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
+import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.battlepass.config.BattlePassModuleConfiguration;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassReward;
@@ -51,13 +53,15 @@ public final class BattlePassService {
         JavaPlugin plugin,
         BattlePassModuleConfiguration configuration,
         BattlePassRepository repository,
-        Logger logger
+        Logger logger,
+        @Nullable ItemSourceRegistry itemSourceRegistry,
+        @Nullable CurrencyBridgeAPI currencyManager
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
         this.repository = repository;
         this.logger = logger;
-        this.rewardDispatcher = new BattlePassRewardDispatcher(plugin, logger);
+        this.rewardDispatcher = new BattlePassRewardDispatcher(plugin, logger, itemSourceRegistry, currencyManager);
         this.taskEngine = new BattlePassTaskEngine(this, configuration);
     }
 
