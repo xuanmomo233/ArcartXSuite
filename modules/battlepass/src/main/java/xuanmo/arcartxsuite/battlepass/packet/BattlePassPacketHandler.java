@@ -82,8 +82,8 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         if (packetGuard != null && !packetGuard.allow(player, "battlepass", action, false)) return true;
 
         switch (action) {
-            case "open_main" -> pushMainData(player);
-            case "open_tasks" -> pushTasksData(player);
+            case "open_main" -> openMain(player);
+            case "open_tasks" -> openTasks(player);
             case "open_rewards" -> pushRewardsData(player);
             case "claim" -> handleClaim(player, data);
             case "refresh" -> pushMainData(player);
