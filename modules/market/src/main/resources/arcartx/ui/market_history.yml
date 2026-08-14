@@ -156,23 +156,33 @@ controls:
                   fontSize: 48
                   texts: ~&f✕
           列表卡片:
-            type: Texture
+            type: Canvas
             attribute:
               x: 32
               y: 110
               width: 1336
               height: 670
-              normal: ~42,45,58,220
-              shape: ~round_rect
-              radius: 20
-              texts: ~&8暂无记录
-              center: true
-              fontSize: 100
-            effect:
-              stroke:
-                width: 2
-                color: ~180,160,255,100
             children:
+              列表卡片背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~42,45,58,220
+                  shape: ~round_rect
+                  radius: 20
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~180,160,255,100
+              列表卡片文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 1336
+                  texts: ~&8暂无记录
+                  fontSize: 100
+                  through: true
               列表纵向滑块:
                 type: Texture
                 val: 列表纵向滑块
@@ -286,35 +296,39 @@ controls:
                               fontSize: 28
                               through: true
           上一页:
-            type: Texture
+            type: Canvas
             attribute:
               x: 32
               y: 794
               width: 120
               height: 48
-              normal: ~62,62,74,205
-              hover: ~Frosted:0;255,255,255,80
-              shape: ~round_rect
-              radius: 14
             action:
               clickLeft: |-
                 if(var.page > 0){
                   Packet.send(var.packetId, 'history_list', (var.page - 1))
                 }
-            effect:
-              stroke:
-                width: 2
-                color: ~180,160,255,120
             children:
-              文字:
+              上一页背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,62,74,205
+                  hover: ~Frosted:0;255,255,255,80
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~180,160,255,120
+              上一页文字:
                 type: Text
                 attribute:
-                  x: 60
-                  y: 12
-                  through: true
-                  center: true
-                  fontSize: 42
+                  point: ~middle_center
+                  width: 120
                   texts: ~&f< 上一页
+                  fontSize: 42
+                  through: true
           页码:
             type: Text
             attribute:
@@ -324,32 +338,36 @@ controls:
               texts: ~&7第 &f{(var.page + 1).round()} &7/ &f{var.totalPages.round()} &7页
               fontSize: 49
           下一页:
-            type: Texture
+            type: Canvas
             attribute:
               x: 1248
               y: 794
               width: 120
               height: 48
-              normal: ~62,62,74,205
-              hover: ~Frosted:0;255,255,255,80
-              shape: ~round_rect
-              radius: 14
             action:
               clickLeft: |-
                 if(var.page < var.totalPages - 1){
                   Packet.send(var.packetId, 'history_list', (var.page + 1))
                 }
-            effect:
-              stroke:
-                width: 2
-                color: ~180,160,255,120
             children:
-              文字:
+              下一页背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,62,74,205
+                  hover: ~Frosted:0;255,255,255,80
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~180,160,255,120
+              下一页文字:
                 type: Text
                 attribute:
-                  x: 60
-                  y: 12
-                  through: true
-                  center: true
-                  fontSize: 42
+                  point: ~middle_center
+                  width: 120
                   texts: ~&f下一页 >
+                  fontSize: 42
+                  through: true

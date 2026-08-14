@@ -185,27 +185,39 @@ controls:
                 blur: 5
                 color: ~0,0,0,120
           配方书按钮:
-            type: Texture
+            type: Canvas
             attribute:
               x: -78
               y: -48
               width: 19
               height: 19
-              normal: "var.recipeBookOpen ? '120,190,255,230' : '255,255,255,150'"
-              hover: ~Frosted:0;255,255,255,240
-              shape: ~round_rect
-              radius: 4
               point: ~middle_center
               visible: true
-              texts: "~&0书"
-              fontSize: 12
               tip: ~shift+左键点击配方，即可快速填充材料
             action:
               clickLeft: "Packet.send('vanilla_furnace', 'toggle_recipe_book')"
-            effect:
-              stroke:
-                width: 1
-                color: ~0,0,0,180
+            children:
+              配方书背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.recipeBookOpen ? '120,190,255,230' : '255,255,255,150'"
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 4
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~0,0,0,180
+              配方书文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 19
+                  texts: "~&0书"
+                  fontSize: 12
+                  through: true
           输入槽:
             type: Slot
             val: 输入槽

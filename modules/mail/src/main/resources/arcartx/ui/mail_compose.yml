@@ -380,26 +380,37 @@ controls:
               spaceBetween: 8
             children:
               货币按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 120
                   height: 32
-                  normal: ~150,150,150,255
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "self.currencyName != none ? self.currencyName : ''"
-                  center: true
-                  fontSize: 40
                   currencyId: ''
                   currencyName: ''
                   visible: "self.currencyId != '' && self.currencyId != var.totalFeeCurrency"
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'change-fee-currency', self.currencyId)
+                children:
+                  货币背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~150,150,150,255
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  货币文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 120
+                      texts: "self.parent.currencyName != none ? self.parent.currencyName : ''"
+                      fontSize: 40
+                      through: true
           当前货币显示:
             type: Text
             attribute:
@@ -477,26 +488,37 @@ controls:
                   textChange: |-
                     var.passwordText = self.getContent()
               二级密码确认按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 328
                   y: 50
                   width: 128
                   height: 32
-                  normal: ~150,150,150,255
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "~&0解锁"
-                  center: true
-                  fontSize: 40
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'password-unlock', var.passwordText)
                     var.passwordText = ''
+                children:
+                  二级密码确认背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~150,150,150,255
+                      shape: ~round_rect
+                      radius: 10
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  二级密码确认文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 128
+                      texts: "~&0解锁"
+                      fontSize: 40
+                      through: true
           底部按钮区:
             type: HStack
             attribute:
@@ -505,38 +527,60 @@ controls:
               spaceBetween: 20
             children:
               发送按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 180
                   height: 48
-                  normal: ~150,150,150,255
-                  shape: ~round_rect
-                  radius: 16
-                  texts: "~&0发送邮件"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                      Packet.send('AXS_MAIL', 'compose-send', var.sessionId, var.composeRecipient, var.composeSubject, var.composeBody, var.composeVault, var.actionToken)
+                children:
+                  发送背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~150,150,150,255
+                      shape: ~round_rect
+                      radius: 16
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  发送文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 180
+                      texts: "~&0发送邮件"
+                      fontSize: 49
+                      through: true
               返回收件箱按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 180
                   height: 48
-                  normal: ~150,150,150,255
-                  shape: ~round_rect
-                  radius: 16
-                  texts: "~&0返回邮箱"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Chat.say('/mail')
+                children:
+                  返回收件箱背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~150,150,150,255
+                      shape: ~round_rect
+                      radius: 16
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  返回收件箱文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 180
+                      texts: "~&0返回邮箱"
+                      fontSize: 49
+                      through: true

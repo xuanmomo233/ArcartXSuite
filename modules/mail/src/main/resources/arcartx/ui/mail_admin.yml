@@ -109,39 +109,40 @@ controls:
                   spaceBetween: 14
                 children:
                   刷新按钮:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       width: 120
                       height: 48
-                      normal: ~60,130,200,200
-                      shape: ~round_rect
-                      radius: 8
-                      texts: ~&f刷新
-                      center: true
-                      fontSize: 49
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~80,180,255,180
                     action:
                       click: |-
                         var.view = 'list'
                         Packet.send('AXS_MAIL', 'admin-preset-list')
+                    children:
+                      刷新背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~60,130,200,200
+                          shape: ~round_rect
+                          radius: 8
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~80,180,255,180
+                      刷新文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 120
+                          texts: ~&f刷新
+                          fontSize: 49
+                          through: true
                   新建按钮:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       width: 120
                       height: 48
-                      normal: ~50,180,80,200
-                      shape: ~round_rect
-                      radius: 8
-                      texts: ~&f新建
-                      center: true
-                      fontSize: 49
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~80,180,255,180
                     action:
                       click: |-
                         var.editId = none
@@ -158,6 +159,27 @@ controls:
                         var.view = 'edit'
                         var.resultMsg = none
                         Packet.send('AXS_MAIL', 'admin-preset-new')
+                    children:
+                      新建背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~50,180,80,200
+                          shape: ~round_rect
+                          radius: 8
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~80,180,255,180
+                      新建文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 120
+                          texts: ~&f新建
+                          fontSize: 49
+                          through: true
           # 结果提示
           结果栏:
             type: Text

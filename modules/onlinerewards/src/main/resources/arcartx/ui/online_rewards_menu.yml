@@ -401,65 +401,98 @@ controls:
               texts: "'&0签到日历 &0| &0' + var.calendarMonthText"
               fontSize: 36
           上月按钮:
-            type: Texture
+            type: Canvas
             attribute:
               x: 312
               y: 278
               width: 44
               height: 30
-              normal: ~145,145,145,255
-              shape: ~round_rect
-              radius: 8
-              center: true
-              fontSize: 36
-              texts: "~&0<"
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'calendar_prev')
+            children:
+              上月背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~145,145,145,255
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              上月文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 44
+                  texts: "~&0<"
+                  fontSize: 36
+                  through: true
           本月按钮:
-            type: Texture
+            type: Canvas
             attribute:
               x: 364
               y: 278
               width: 60
               height: 30
-              normal: ~145,145,145,255
-              shape: ~round_rect
-              radius: 8
-              center: true
-              fontSize: 28
-              texts: "~&0本月"
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'calendar_today')
+            children:
+              本月背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~145,145,145,255
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              本月文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 60
+                  texts: "~&0本月"
+                  fontSize: 28
+                  through: true
           下月按钮:
-            type: Texture
+            type: Canvas
             attribute:
               x: 434
               y: 278
               width: 44
               height: 30
-              normal: ~145,145,145,255
-              shape: ~round_rect
-              radius: 8
-              center: true
-              fontSize: 36
-              texts: "~&0>"
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'calendar_next')
+            children:
+              下月背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~145,145,145,255
+                  shape: ~round_rect
+                  radius: 8
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              下月文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 44
+                  texts: "~&0>"
+                  fontSize: 36
+                  through: true
 
           日历网格:
             type: HGrid
@@ -474,44 +507,66 @@ controls:
               spaceBetweenY: 6
             children:
               日历模板:
-                type: Texture
+                type: Canvas
                 attribute:
                   entryKey: 0.round()
                   entry: var.calendarRows[self.entryKey]
                   width: 52
                   height: 38
-                  normal: "self.entry == none ? '255,255,255,0' : (self.entry['status'] == 'signed' ? '100,200,130,230' : (self.entry['status'] == 'expired' ? '210,120,120,230' : '145,145,145,255'))"
-                  shape: ~round_rect
-                  radius: 8
-                  texts: "self.entry == none ? none : ('&0' + self.entry['label'])"
-                  center: true
-                  fontSize: 36
                   visible: self.entry != none
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'preview_day', self.entry['date'])
                 children:
-                  日历选中:
+                  日历背景:
                     type: Texture
                     attribute:
+                      point: ~stretch_all
                       through: true
-                      width: 52
-                      height: 38
                       normal: "self.parent.entry == none ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '100,200,130,230' : (self.parent.entry['status'] == 'expired' ? '210,120,120,230' : '145,145,145,255'))"
                       shape: ~round_rect
                       radius: 8
-                      texts: "self.parent.entry == none ? none : ('&0' + self.parent.entry['label'])"
-                      center: true
-                      fontSize: 36
-                      visible: "self.parent.entry != none && self.parent.entry['date'] == var.selectedDateText"
                     effect:
                       stroke:
                         width: 2
                         color: ~0,0,0,255
+                  日历文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 52
+                      texts: "self.parent.entry == none ? none : ('&0' + self.parent.entry['label'])"
+                      fontSize: 36
+                      through: true
+                  日历选中:
+                    type: Canvas
+                    attribute:
+                      through: true
+                      width: 52
+                      height: 38
+                      entry: self.parent.entry
+                      visible: "self.parent.entry != none && self.parent.entry['date'] == var.selectedDateText"
+                    children:
+                      日历选中背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.parent.entry == none ? '255,255,255,0' : (self.parent.entry['status'] == 'signed' ? '100,200,130,230' : (self.parent.entry['status'] == 'expired' ? '210,120,120,230' : '145,145,145,255'))"
+                          shape: ~round_rect
+                          radius: 8
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~0,0,0,255
+                      日历选中文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 52
+                          texts: "self.parent.entry == none ? none : ('&0' + self.parent.entry['label'])"
+                          fontSize: 36
+                          through: true
                   日历今:
                     type: Text
                     attribute:

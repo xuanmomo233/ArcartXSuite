@@ -39,7 +39,7 @@ import xuanmo.arcartxsuite.market.storage.RedisMarketCache;
  */
 public class AuctionService {
 
-    private static final int AUCTION_BACKPACK_SLOTS = 41;
+    private static final int AUCTION_BACKPACK_SLOTS = 36;
     private static final HanyuPinyinOutputFormat PINYIN_FORMAT = new HanyuPinyinOutputFormat();
 
     static {

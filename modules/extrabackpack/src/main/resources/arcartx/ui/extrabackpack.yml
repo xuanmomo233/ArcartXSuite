@@ -218,26 +218,37 @@ controls:
               texts: "'&f容量 ' + var.capacityText + ' / 上限 ' + var.maxCapacity"
               fontSize: 34
           刷新按钮:
-            type: Texture
+            type: Canvas
             attribute:
               x: 1050
               y: 30
               width: 110
               height: 50
-              normal: ~255,255,255,150
-              hover: ~Frosted:0;255,255,255,240
-              shape: ~round_rect
-              radius: 14
-              texts: "~&0刷新"
-              center: true
-              fontSize: 34
-              action:
-                clickLeft: |-
-                 Packet.send(var.packetId, 'vanilla_info', -1)
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'vanilla_info', -1)
+            children:
+              刷新背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              刷新文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 110
+                  texts: "~&0刷新"
+                  fontSize: 34
+                  through: true
 
           分类标签卡片:
             type: Texture
@@ -264,27 +275,38 @@ controls:
                   spaceBetween: 10
                 children:
                   项:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       entryKey: 0.round()
                       entry: var.categories[self.entryKey]
                       visible: self.entry != none
                       width: 180
                       height: 48
-                      normal: "self.entry != none && self.entry['active'] ? '120,190,255,230' : '255,255,255,145'"
-                      hover: ~Frosted:0;255,255,255,240
-                      shape: ~round_rect
-                      radius: 14
-                      texts: "self.entry != none ? '&0' + self.entry['name'] : none"
-                      center: true
-                      fontSize: 32
                     action:
                       clickLeft: |-
                         Packet.send(var.packetId, 'category', self.entry['id'])
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
+                    children:
+                      项背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.parent.entry != none && self.parent.entry['active'] ? '120,190,255,230' : '255,255,255,145'"
+                          hover: ~Frosted:0;255,255,255,240
+                          shape: ~round_rect
+                          radius: 14
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~0,0,0,255
+                      项文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 180
+                          texts: "self.parent.entry != none ? '&0' + self.parent.entry['name'] : none"
+                          fontSize: 32
+                          through: true
 
           分类页卡片:
             type: Texture
@@ -393,27 +415,38 @@ controls:
                     width: 2
                     color: ~0,0,0,255
               购买槽位:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 840
                   y: 12
                   width: 150
                   height: 46
                   visible: var.canBuySlots
-                  normal: ~120,190,255,200
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0购买槽位"
-                  center: true
-                  fontSize: 34
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'buy_slots', var.buyAmount, var.actionToken)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  购买槽位背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~120,190,255,200
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  购买槽位文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 150
+                      texts: "~&0购买槽位"
+                      fontSize: 34
+                      through: true
 
           快捷栏卡片:
             type: Texture
@@ -481,152 +514,248 @@ controls:
                           fontSize: 32
                           through: true
           背包物品信息:
-            type: Texture
+            type: Canvas
             attribute:
               x: 350
               y: 300
               width: 500
               height: 180
               visible: var.vanillaInfo != none && var.vanillaInfo['visible']
-              normal: ~40,40,40,245
-              shape: ~round_rect
-              radius: 18
-              texts: "var.vanillaInfo != none && var.vanillaInfo['visible'] ? '&f物品信息  数量: ' + var.vanillaInfo['amount'].round() : none"
-              center: true
-              fontSize: 30
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'refresh')
+            children:
+              背包物品信息背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~40,40,40,245
+                  shape: ~round_rect
+                  radius: 18
+              背包物品信息文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 500
+                  texts: "var.vanillaInfo != none && var.vanillaInfo['visible'] ? '&f物品信息  数量: ' + var.vanillaInfo['amount'].round() : none"
+                  fontSize: 30
+                  through: true
           背包物品选项:
-            type: Texture
+            type: Canvas
             attribute:
               x: 400
               y: 300
               width: 400
               height: 240
               visible: var.vanillaOptions != none && var.vanillaOptions['visible']
-              normal: ~40,40,40,245
-              shape: ~round_rect
-              radius: 18
-              texts: "~&f背包物品操作"
-              center: true
-              fontSize: 30
             children:
-              存入按钮:
+              背包物品选项背景:
                 type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~40,40,40,245
+                  shape: ~round_rect
+                  radius: 18
+              背包物品选项文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 400
+                  texts: "~&f背包物品操作"
+                  fontSize: 30
+                  through: true
+              存入按钮:
+                type: Canvas
                 attribute:
                   x: 30
                   y: 70
                   width: 150
                   height: 54
-                  normal: ~120,190,255,220
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&0存入"
-                  center: true
-                  fontSize: 28
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'vanilla_store', var.vanillaOptions['slot'])
+                children:
+                  存入背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~120,190,255,220
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 12
+                  存入文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 150
+                      texts: "~&0存入"
+                      fontSize: 28
+                      through: true
               销毁按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 220
                   y: 70
                   width: 150
                   height: 54
-                  normal: ~255,100,100,220
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&f销毁"
-                  center: true
-                  fontSize: 28
                 action:
                   clickLeft: |-
                     var.destroyConfirm = true
+                children:
+                  销毁背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,100,100,220
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 12
+                  销毁文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 150
+                      texts: "~&f销毁"
+                      fontSize: 28
+                      through: true
               关闭按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 125
                   y: 150
                   width: 150
                   height: 48
-                  normal: ~255,255,255,150
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&0关闭"
-                  center: true
-                  fontSize: 26
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'vanilla_options', -1)
+                children:
+                  关闭背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 12
+                  关闭文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 150
+                      texts: "~&0关闭"
+                      fontSize: 26
+                      through: true
           销毁确认框:
-            type: Texture
+            type: Canvas
             attribute:
               x: 320
               y: 270
               width: 560
               height: 260
               visible: var.destroyConfirm
-              normal: ~30,30,30,250
-              shape: ~round_rect
-              radius: 18
-              texts: "~&f确认销毁？需要二级密码"
-              center: true
-              fontSize: 28
             children:
-              确认按钮:
+              销毁确认框背景:
                 type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~30,30,30,250
+                  shape: ~round_rect
+                  radius: 18
+              销毁确认框文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 560
+                  texts: "~&f确认销毁？需要二级密码"
+                  fontSize: 28
+                  through: true
+              确认按钮:
+                type: Canvas
                 attribute:
                   x: 90
                   y: 160
                   width: 160
                   height: 50
-                  normal: ~255,100,100,220
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  texts: "~&f确认"
-                  center: true
-                  fontSize: 28
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'vanilla_destroy', var.vanillaOptions['slot'], 'true', var.actionToken)
                     var.destroyConfirm = false
+                children:
+                  确认背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,100,100,220
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                  确认文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 160
+                      texts: "~&f确认"
+                      fontSize: 28
+                      through: true
               取消按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 310
                   y: 160
                   width: 160
                   height: 50
-                  normal: ~255,255,255,150
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  texts: "~&0取消"
-                  center: true
-                  fontSize: 28
                 action:
                   clickLeft: |-
                     var.destroyConfirm = false
                     Packet.send(var.packetId, 'vanilla_options', -1)
+                children:
+                  取消背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                  取消文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 160
+                      texts: "~&0取消"
+                      fontSize: 28
+                      through: true
           二级密码面板:
-            type: Texture
+            type: Canvas
             attribute:
               x: 300
               y: 240
               width: 600
               height: 300
               visible: var.passwordPanel != none && var.passwordPanel['visible']
-              normal: ~30,30,30,250
-              shape: ~round_rect
-              radius: 18
-              texts: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set' ? '~&f设置二级密码' : (var.passwordPanel != none && var.passwordPanel['mode'] == 'clear' ? '~&f清除二级密码' : '~&f解锁二级密码')"
-              center: true
-              fontSize: 28
             children:
+              二级密码面板背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~30,30,30,250
+                  shape: ~round_rect
+                  radius: 18
+              二级密码面板文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 600
+                  texts: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set' ? '~&f设置二级密码' : (var.passwordPanel != none && var.passwordPanel['mode'] == 'clear' ? '~&f清除二级密码' : '~&f解锁二级密码')"
+                  fontSize: 28
+                  through: true
               当前密码:
                 type: TextBox
                 attribute:
@@ -661,19 +790,12 @@ controls:
                   textChange: |-
                     var.passwordNew = self.getContent()
               提交:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 80
                   y: 205
                   width: 180
                   height: 48
-                  normal: ~120,190,255,220
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set' ? '~&0设置' : (var.passwordPanel != none && var.passwordPanel['mode'] == 'clear' ? '~&0清除' : '~&0解锁')"
-                  center: true
-                  fontSize: 25
                 action:
                   clickLeft: |-
                     if(var.passwordPanel['mode'] == 'set'){
@@ -683,39 +805,79 @@ controls:
                     }else{
                       Packet.send(var.packetId, 'password_unlock', var.passwordCurrent)
                     }
+                children:
+                  提交背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~120,190,255,220
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 12
+                  提交文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 180
+                      texts: "var.passwordPanel != none && var.passwordPanel['mode'] == 'set' ? '~&0设置' : (var.passwordPanel != none && var.passwordPanel['mode'] == 'clear' ? '~&0清除' : '~&0解锁')"
+                      fontSize: 25
+                      through: true
               取消:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 340
                   y: 205
                   width: 180
                   height: 48
-                  normal: ~255,255,255,150
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&0取消"
-                  center: true
-                  fontSize: 25
                 action:
                   clickLeft: |-
                     var.passwordPanel['visible'] = false
                     Packet.send(var.packetId, 'password_panel_close')
+                children:
+                  取消背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 12
+                  取消文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 180
+                      texts: "~&0取消"
+                      fontSize: 25
+                      through: true
               清除密码:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 210
                   y: 255
                   width: 180
                   height: 34
                   visible: var.passwordPanel != none && var.passwordPanel['mode'] != 'set'
-                  normal: ~255,170,170,180
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "~&0清除密码"
-                  center: true
-                  fontSize: 20
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'password_clear', var.passwordCurrent, var.actionToken)
+                children:
+                  清除密码背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,170,170,180
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 10
+                  清除密码文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 180
+                      texts: "~&0清除密码"
+                      fontSize: 20
+                      through: true

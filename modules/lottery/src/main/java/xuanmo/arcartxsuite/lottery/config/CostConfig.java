@@ -121,10 +121,45 @@ public record CostConfig(
 
     private static ConfigurationSection toSection(Map<?, ?> map) {
         MemoryConfiguration configuration = new MemoryConfiguration();
-        configuration.set("entry", map);
-        ConfigurationSection section = configuration.getConfigurationSection("entry");
-        if (section == null) throw new IllegalArgumentException("Invalid cost entry");
+        ConfigurationSection section = configuration.createSection("entry");
+        populateSection(section, map);
         return section;
+    }
+
+    /**
+     * 递归地把 Map 的内容填充到 ConfigurationSection 中。
+     * <p>
+     * 不能直接用 {@code section.set(key, map)}，因为某些 Bukkit 版本的
+     * {@code MemorySection.set} 不会自动把 Map 转为子 ConfigurationSection，
+     * 导致后续 {@code getConfigurationSection} 返回 null。
+     * 用 {@code createSection} 递归构建可正确创建子 section。
+     */
+    @SuppressWarnings("unchecked")
+    private static void populateSection(ConfigurationSection section, Map<?, ?> map) {
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            String key = String.valueOf(entry.getKey());
+            Object value = entry.getValue();
+            if (value instanceof Map<?, ?> childMap) {
+                ConfigurationSection subSection = section.createSection(key);
+                populateSection(subSection, childMap);
+            } else if (value instanceof List<?> list) {
+                // list 中的 Map 元素也需要转为 ConfigurationSection
+                List<Object> converted = new ArrayList<>();
+                for (Object item : list) {
+                    if (item instanceof Map<?, ?> itemMap) {
+                        MemoryConfiguration itemConfig = new MemoryConfiguration();
+                        ConfigurationSection itemSection = itemConfig.createSection("item");
+                        populateSection(itemSection, itemMap);
+                        converted.add(itemSection);
+                    } else {
+                        converted.add(item);
+                    }
+                }
+                section.set(key, converted);
+            } else {
+                section.set(key, value);
+            }
+        }
     }
 
     private static CostEntry loadEntry(ConfigurationSection section, String path) {

@@ -222,63 +222,90 @@ controls:
               texts: "'&f仓库名称: ' + var.warehouseName + '  &f仓库类型:' + (var.ownerType == 'shared' ? '  &b共享' : '  &a个人')"
               fontSize: 49
           返回仓库:
-            type: Texture
+            type: Canvas
             attribute:
               x: 1335
               y: 42
               width: 68
               height: 42
-              normal: ~255,255,255,150
-              hover: ~Frosted:0;255,255,255,240
-              shape: ~round_rect
-              radius: 14
-              texts: "~&0仓库"
-              center: true
-              fontSize: 42
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'storage')
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
+            children:
+              返回仓库背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              返回仓库文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 68
+                  texts: "~&0仓库"
+                  fontSize: 42
+                  through: true
           银行:
-            type: Texture
+            type: Canvas
             attribute:
               x: 1435
               y: 42
               width: 68
               height: 42
-              normal: ~255,255,255,150
-              hover: ~Frosted:0;255,255,255,240
-              shape: ~round_rect
-              radius: 14
-              texts: "~&0银行"
-              center: true
-              fontSize: 42
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'bank')
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
+            children:
+              银行背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~255,255,255,150
+                  hover: ~Frosted:0;255,255,255,240
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              银行文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 68
+                  texts: "~&0银行"
+                  fontSize: 42
+                  through: true
 
           自动拾取卡片:
-            type: Texture
+            type: Canvas
             attribute:
               x: 500
               y: 112
               width: 700
               height: 72
-              normal: ~120,120,120,200
-              shape: ~round_rect
-              radius: 20
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
             children:
+              自动拾取卡片背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~120,120,120,200
+                  shape: ~round_rect
+                  radius: 20
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
               拾取标题:
                 type: Text
                 attribute:
@@ -287,68 +314,101 @@ controls:
                   texts: "~&f自动拾取"
                   fontSize: 60
               自动入库:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 200
                   y: 14
                   width: 140
                   height: 42
-                  normal: "var.autoPickup ? '100,185,120,255' : '160,160,165,255'"
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "var.autoPickup ? '&0自动入库 开' : '&0自动入库 关'"
-                  center: true
-                  fontSize: 30
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'toggle_auto_pickup', var.actionToken)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  自动入库背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.autoPickup ? '100,185,120,255' : '160,160,165,255'"
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  自动入库文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 140
+                      texts: "var.autoPickup ? '&0自动入库 开' : '&0自动入库 关'"
+                      fontSize: 30
+                      through: true
               怪物战利品:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 360
                   y: 14
                   width: 170
                   height: 42
-                  normal: "var.autoPickupMythic ? '100,185,120,255' : '160,160,165,255'"
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "var.autoPickupMythic ? '&0怪物战利品 开' : '&0怪物战利品 关'"
-                  center: true
-                  fontSize: 30
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'toggle_auto_mythic', var.actionToken)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  怪物战利品背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.autoPickupMythic ? '100,185,120,255' : '160,160,165,255'"
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  怪物战利品文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 170
+                      texts: "var.autoPickupMythic ? '&0怪物战利品 开' : '&0怪物战利品 关'"
+                      fontSize: 30
+                      through: true
               入库通知:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 550
                   y: 14
                   width: 130
                   height: 42
-                  normal: "var.autoPickupNotify ? '100,185,120,255' : '160,160,165,255'"
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "var.autoPickupNotify ? '&0入库通知 开' : '&0入库通知 关'"
-                  center: true
-                  fontSize: 30
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'toggle_auto_notify', var.actionToken)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  入库通知背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.autoPickupNotify ? '100,185,120,255' : '160,160,165,255'"
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  入库通知文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 130
+                      texts: "var.autoPickupNotify ? '&0入库通知 开' : '&0入库通知 关'"
+                      fontSize: 30
+                      through: true
 
           仓库列表卡片:
             type: Texture
@@ -405,26 +465,37 @@ controls:
                       textChange: |-
                         var.sharedName = self.getContent()
               创建:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 250
                   y: 82
                   width: 110
                   height: 42
-                  normal: ~255,255,255,150
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&0创建"
-                  center: true
-                  fontSize: 34
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'shared_create', var.sharedName, var.actionToken)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  创建背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  创建文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 110
+                      texts: "~&0创建"
+                      fontSize: 34
+                      through: true
               创建费用:
                 type: Text
                 attribute:
@@ -470,24 +541,13 @@ controls:
                       spaceBetween: 10
                     children:
                       项:
-                        type: Texture
+                        type: Canvas
                         attribute:
                           entryKey: 0.round()
                           entry: var.manageWarehouses[self.entryKey]
                           visible: self.entry != none
                           width: 370
                           height: 54
-                          normal: "var.manageWarehouseSelected[self.entryKey] ? '110,170,230,255' : '255,255,255,150'"
-                          hover: ~Frosted:0;255,255,255,240
-                          shape: ~round_rect
-                          radius: 14
-                          texts: "var.manageWarehouseTexts[self.entryKey]"
-                          center: true
-                          fontSize: 32
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~0,0,0,255
                         action:
                           clickLeft: |-
                             var.deleteConfirm = false
@@ -497,6 +557,28 @@ controls:
                             }else{
                               Packet.send(var.packetId, 'warehouse', var.manageWarehouseTargets[self.entryKey])
                             }
+                        children:
+                          项背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: "var.manageWarehouseSelected[self.parent.entryKey] ? '110,170,230,255' : '255,255,255,150'"
+                              hover: ~Frosted:0;255,255,255,240
+                              shape: ~round_rect
+                              radius: 14
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~0,0,0,255
+                          项文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              width: 370
+                              texts: "var.manageWarehouseTexts[self.parent.entryKey]"
+                              fontSize: 32
+                              through: true
 
           删除卡片:
             type: Texture
@@ -562,20 +644,13 @@ controls:
                       textChange: |-
                         var.deletePassword = self.getContent()
               删除按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 320
                   y: 136
                   width: 140
                   height: 42
                   visible: var.ownerType == 'shared'
-                  normal: ~255,120,120,210
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "var.deleteConfirm ? '&0确认' : '&0删除'"
-                  center: true
-                  fontSize: 34
                 action:
                   clickLeft: |-
                     if(var.deleteConfirm){
@@ -584,10 +659,28 @@ controls:
                       var.deleteConfirm = true
                       var.deletePassword = none
                     }
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  删除按钮背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,120,120,210
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  删除按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 140
+                      texts: "var.deleteConfirm ? '&0确认' : '&0删除'"
+                      fontSize: 34
+                      through: true
 
           改名卡片:
             type: Texture
@@ -620,20 +713,13 @@ controls:
                   texts: "var.ownerType != none ? ('&f当前: ' + var.warehouseName) : '&7请选择一个仓库'"
                   fontSize: 32
               展示按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 330
                   y: 84
                   width: 111
                   height: 42
                   visible: var.ownerType != none
-                  normal: "var.showcaseEnabled ? '110,170,230,255' : '190,190,195,255'"
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "var.showcaseEnabled ? '&0展示:开' : '&0展示:关'"
-                  center: true
-                  fontSize: 30
                 action:
                   clickLeft: |-
                     if(var.ownerType == 'shared'){
@@ -641,10 +727,28 @@ controls:
                     }else{
                     Packet.send(var.packetId, 'personal_showcase_toggle', var.warehouseId, var.actionToken)
                     }
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  展示按钮背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.showcaseEnabled ? '110,170,230,255' : '190,190,195,255'"
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  展示按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 111
+                      texts: "var.showcaseEnabled ? '&0展示:开' : '&0展示:关'"
+                      fontSize: 30
+                      through: true
               新名称:
                 type: Canvas
                 attribute:
@@ -678,20 +782,13 @@ controls:
                       textChange: |-
                         var.renameName = self.getContent()
               改名按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 330
                   y: 126
                   width: 111
                   height: 42
                   visible: var.ownerType != none
-                  normal: ~255,255,255,150
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&0修改"
-                  center: true
-                  fontSize: 30
                 action:
                   clickLeft: |-
                     if(var.ownerType == 'shared'){
@@ -699,10 +796,28 @@ controls:
                     }else{
                     Packet.send(var.packetId, 'personal_rename', var.warehouseId, var.renameName, var.actionToken)
                     }
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  改名按钮背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  改名按钮文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 111
+                      texts: "~&0修改"
+                      fontSize: 30
+                      through: true
 
           扩充卡片:
             type: Texture
@@ -783,19 +898,12 @@ controls:
                       textChange: |-
                         var.passwordText = self.getContent()
               解锁:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 250
                   y: 196
                   width: 80
                   height: 42
-                  normal: ~255,255,255,150
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "var.hasPassword ? '&0解锁' : '&0设置'"
-                  center: true
-                  fontSize: 34
                 action:
                   clickLeft: |-
                     if(var.hasPassword){
@@ -803,54 +911,94 @@ controls:
                     }else{
                     Packet.send(var.packetId, 'password_set', var.passwordText, var.actionToken)
                     }
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  解锁背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  解锁文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 80
+                      texts: "var.hasPassword ? '&0解锁' : '&0设置'"
+                      fontSize: 34
+                      through: true
               锁定:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 366
                   y: 196
                   width: 80
                   height: 42
-                  normal: ~255,255,255,150
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0锁定"
-                  center: true
-                  fontSize: 34
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'password_lock', var.actionToken)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  锁定背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  锁定文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 80
+                      texts: "~&0锁定"
+                      fontSize: 34
+                      through: true
               扩充:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 24
                   y: 250
                   width: 378
                   height: 42
-                  normal: "var.canUpgrade && var.unlocked ? '100,185,120,255' : '90,90,95,255'"
-                  hover: ~Frosted:0;255,255,255,240
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "var.canUpgrade ? '&0确认扩充' : '&0不可扩充'"
-                  center: true
-                  fontSize: 34
                 action:
                   clickLeft: |-
                     if(var.canUpgrade){
                     Packet.send(var.packetId, 'warehouse_upgrade', var.actionToken)
                     }
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  扩充背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.canUpgrade && var.unlocked ? '100,185,120,255' : '90,90,95,255'"
+                      hover: ~Frosted:0;255,255,255,240
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  扩充文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 378
+                      texts: "var.canUpgrade ? '&0确认扩充' : '&0不可扩充'"
+                      fontSize: 34
+                      through: true
 
           成员卡片:
             type: Texture
@@ -907,110 +1055,165 @@ controls:
                       textChange: |-
                         var.memberName = self.getContent()
               存取:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 270
                   y: 82
                   width: 110
                   height: 42
-                  normal: "var.memberRole == 'member' ? '110,170,230,255' : '255,255,255,150'"
-                  hover: ~Frosted:0;200,200,200,255
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "'&0' + var.sharedRoleMemberName"
-                  center: true
-                  fontSize: 34
                 action:
                   clickLeft: |-
                     var.memberRole = 'member'
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  存取背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.memberRole == 'member' ? '110,170,230,255' : '255,255,255,150'"
+                      hover: ~Frosted:0;200,200,200,255
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  存取文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 110
+                      texts: "'&0' + var.sharedRoleMemberName"
+                      fontSize: 34
+                      through: true
               只读:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 396
                   y: 82
                   width: 110
                   height: 42
-                  normal: "var.memberRole == 'viewer' ? '120,190,255,255' : '150,150,150,255'"
-                  hover: ~Frosted:0;200,200,200,255
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "'&0' + var.sharedRoleViewerName"
-                  center: true
-                  fontSize: 34
                 action:
                   clickLeft: |-
                     var.memberRole = 'viewer'
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  只读背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.memberRole == 'viewer' ? '120,190,255,255' : '150,150,150,255'"
+                      hover: ~Frosted:0;200,200,200,255
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  只读文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 110
+                      texts: "'&0' + var.sharedRoleViewerName"
+                      fontSize: 34
+                      through: true
               邀请:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 36
                   y: 154
                   width: 134
                   height: 42
-                  normal: "var.unlocked ? '220,220,220,255' : '130,130,130,255'"
-                  hover: ~Frosted:0;200,200,200,255
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "var.unlocked ? '&0邀请/改权限' : '&0需解锁'"
-                  center: true
-                  fontSize: 34
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'shared_invite', var.ownerId, var.memberName, var.memberRole, var.actionToken)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  邀请背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.unlocked ? '220,220,220,255' : '130,130,130,255'"
+                      hover: ~Frosted:0;200,200,200,255
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  邀请文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 134
+                      texts: "var.unlocked ? '&0邀请/改权限' : '&0需解锁'"
+                      fontSize: 34
+                      through: true
               移除:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 204
                   y: 154
                   width: 134
                   height: 42
-                  normal: ~200,50,50,255
-                  hover: ~Frosted:0;255,0,0,255
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0移除成员"
-                  center: true
-                  fontSize: 34
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'shared_remove', var.ownerId, var.memberName, var.actionToken)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  移除背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~200,50,50,255
+                      hover: ~Frosted:0;255,0,0,255
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  移除文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 134
+                      texts: "~&0移除成员"
+                      fontSize: 34
+                      through: true
               转让:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 372
                   y: 154
                   width: 136
                   height: 42
-                  normal: "var.unlocked ? '220,210,140,255' : '130,130,130,255'"
-                  hover: ~Frosted:0;200,200,200,255
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "var.unlocked ? ('&0转让给' + var.sharedRoleMemberName) : '&0需解锁'"
-                  center: true
-                  fontSize: 34
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'shared_transfer', var.ownerId, var.memberName, var.actionToken)
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
+                children:
+                  转让背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.unlocked ? '220,210,140,255' : '130,130,130,255'"
+                      hover: ~Frosted:0;200,200,200,255
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  转让文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 136
+                      texts: "var.unlocked ? ('&0转让给' + var.sharedRoleMemberName) : '&0需解锁'"
+                      fontSize: 34
+                      through: true
               成员滑块:
                 type: Texture
                 val: 成员滑块
@@ -1046,25 +1249,36 @@ controls:
                       spaceBetween: 10
                     children:
                       项:
-                        type: Texture
+                        type: Canvas
                         attribute:
                           entryKey: 0.round()
                           entry: var.sharedMembers[self.entryKey]
                           visible: self.entry != none
                           width: 510
                           height: 56
-                          normal: ~255,255,255,150
-                          hover: ~Frosted:0;255,255,255,240
-                          shape: ~round_rect
-                          radius: 14
-                          texts: "var.sharedMemberTexts[self.entryKey]"
-                          center: true
-                          fontSize: 32
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~0,0,0,255
                         action:
                           clickLeft: |-
                             var.memberName = var.sharedMemberNames[self.entryKey]
                             var.memberRole = (var.sharedMemberRoles[self.entryKey] == 'viewer' ? 'viewer' : 'member')
+                        children:
+                          项背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~255,255,255,150
+                              hover: ~Frosted:0;255,255,255,240
+                              shape: ~round_rect
+                              radius: 14
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~0,0,0,255
+                          项文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              width: 510
+                              texts: "var.sharedMemberTexts[self.parent.entryKey]"
+                              fontSize: 32
+                              through: true

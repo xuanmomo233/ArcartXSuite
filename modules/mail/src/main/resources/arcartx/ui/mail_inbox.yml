@@ -177,138 +177,215 @@ controls:
               spaceBetween: 10
             children:
               全部筛选按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 104
                   height: 40
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&0全部"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     var.filterMode = 'all'
                     Packet.send('AXS_MAIL', 'filter', 'all')
+                children:
+                  全部筛选背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  全部筛选文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 104
+                      texts: "~&0全部"
+                      fontSize: 49
+                      through: true
               未读筛选按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 104
                   height: 40
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&0未读"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     var.filterMode = 'unread'
                     Packet.send('AXS_MAIL', 'filter', 'unread')
+                children:
+                  未读筛选背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  未读筛选文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 104
+                      texts: "~&0未读"
+                      fontSize: 49
+                      through: true
               可领取筛选按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 104
                   height: 40
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&0可领"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     var.filterMode = 'claimable'
                     Packet.send('AXS_MAIL', 'filter', 'claimable')
+                children:
+                  可领取筛选背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  可领取筛选文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 104
+                      texts: "~&0可领"
+                      fontSize: 49
+                      through: true
               系统筛选按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 104
                   height: 40
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&0系统"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     var.filterMode = 'system'
                     Packet.send('AXS_MAIL', 'filter', 'system')
+                children:
+                  系统筛选背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  系统筛选文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 104
+                      texts: "~&0系统"
+                      fontSize: 49
+                      through: true
               玩家筛选按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 104
                   height: 40
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&0玩家"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     var.filterMode = 'player'
                     Packet.send('AXS_MAIL', 'filter', 'player')
+                children:
+                  玩家筛选背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  玩家筛选文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 104
+                      texts: "~&0玩家"
+                      fontSize: 49
+                      through: true
               预设筛选按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 104
                   height: 40
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&0预设"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     var.filterMode = 'preset'
                     Packet.send('AXS_MAIL', 'filter', 'preset')
+                children:
+                  预设筛选背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  预设筛选文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 104
+                      texts: "~&0预设"
+                      fontSize: 49
+                      through: true
               兑换码筛选按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 104
                   height: 40
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&0CDK"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     var.filterMode = 'cdk'
                     Packet.send('AXS_MAIL', 'filter', 'cdk')
+                children:
+                  兑换码筛选背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  兑换码筛选文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 104
+                      texts: "~&0CDK"
+                      fontSize: 49
+                      through: true
           左侧面板:
             type: Texture
             attribute:
@@ -457,23 +534,34 @@ controls:
               spaceBetween: 14
             children:
               日志按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 124
                   height: 40
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0日志"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'logs')
+                children:
+                  日志背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  日志文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 124
+                      texts: "~&0日志"
+                      fontSize: 49
+                      through: true
           操作按钮区:
             type: HStack
             attribute:
@@ -482,99 +570,154 @@ controls:
               spaceBetween: 14
             children:
               撰写按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 124
                   height: 44
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0写信"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'compose')
+                children:
+                  撰写背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  撰写文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 124
+                      texts: "~&0写信"
+                      fontSize: 49
+                      through: true
               领取按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 124
                   height: 44
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0领取"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     if(var.selectedId != none){
                       Packet.send('AXS_MAIL', 'claim', var.selectedId)
                     }
+                children:
+                  领取背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  领取文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 124
+                      texts: "~&0领取"
+                      fontSize: 49
+                      through: true
               删除按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 124
                   height: 44
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0删除"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     if(var.selectedId != none){
                       Packet.send('AXS_MAIL', 'delete', var.selectedId)
                     }
+                children:
+                  删除背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  删除文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 124
+                      texts: "~&0删除"
+                      fontSize: 49
+                      through: true
               领取全部按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 124
                   height: 44
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0全部领取"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'claimall')
+                children:
+                  领取全部背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  领取全部文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 124
+                      texts: "~&0全部领取"
+                      fontSize: 49
+                      through: true
               删除全部按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 124
                   height: 44
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0全部删除"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'deleteall')
+                children:
+                  删除全部背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  删除全部文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 124
+                      texts: "~&0全部删除"
+                      fontSize: 49
+                      through: true
           兑换码行:
             type: HStack
             attribute:

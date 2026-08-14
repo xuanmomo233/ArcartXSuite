@@ -121,59 +121,92 @@ controls:
               spaceBetween: 15
             children:
               返回按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 110
                   height: 42
-                  normal: ~150,150,150,255
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0邮箱"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'open')
+                children:
+                  返回背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~150,150,150,255
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  返回文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 110
+                      texts: "~&0邮箱"
+                      fontSize: 49
+                      through: true
               上一页按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 110
                   height: 42
-                  normal: ~150,150,150,255
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0<"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'logs-prev')
+                children:
+                  上一页背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~150,150,150,255
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  上一页文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 110
+                      texts: "~&0<"
+                      fontSize: 49
+                      through: true
               下一页按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 110
                   height: 42
-                  normal: ~150,150,150,255
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0>"
-                  center: true
-                  fontSize: 49
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Packet.send('AXS_MAIL', 'logs-next')
+                children:
+                  下一页背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~150,150,150,255
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  下一页文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 110
+                      texts: "~&0>"
+                      fontSize: 49
+                      through: true
           主面板:
             type: Texture
             attribute:

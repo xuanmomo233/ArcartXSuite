@@ -290,80 +290,135 @@ controls:
               spaceBetween: 10
             children:
               标签_全部:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 190
                   height: 44
-                  normal: "var.currentTab == 'all' ? '35,110,135,230' : '25,40,55,210'"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "var.currentTab == 'all' ? '&f&l全部' : '&7全部'"
-                  fontSize: 22
-                  center: true
                 action:
                   clickLeft: |-
                     var.currentTab = 'all'
                     var.needRebuild = true
+                children:
+                  标签_全部背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.currentTab == 'all' ? '35,110,135,230' : '25,40,55,210'"
+                      shape: ~round_rect
+                      radius: 10
+                  标签_全部文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 190
+                      through: true
+                      texts: "var.currentTab == 'all' ? '&f&l全部' : '&7全部'"
+                      fontSize: 22
               标签_普通:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 190
                   height: 44
-                  normal: "var.currentTab == 'common' ? '35,110,135,230' : '25,40,55,210'"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "var.currentTab == 'common' ? '&f&l普通' : '&7普通'"
-                  fontSize: 22
-                  center: true
                 action:
                   clickLeft: |-
                     var.currentTab = 'common'
                     var.needRebuild = true
+                children:
+                  标签_普通背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.currentTab == 'common' ? '35,110,135,230' : '25,40,55,210'"
+                      shape: ~round_rect
+                      radius: 10
+                  标签_普通文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 190
+                      through: true
+                      texts: "var.currentTab == 'common' ? '&f&l普通' : '&7普通'"
+                      fontSize: 22
               标签_罕见:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 190
                   height: 44
-                  normal: "var.currentTab == 'uncommon' ? '35,110,135,230' : '25,40,55,210'"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "var.currentTab == 'uncommon' ? '&a&l罕见' : '&7罕见'"
-                  fontSize: 22
-                  center: true
                 action:
                   clickLeft: |-
                     var.currentTab = 'uncommon'
                     var.needRebuild = true
+                children:
+                  标签_罕见背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.currentTab == 'uncommon' ? '35,110,135,230' : '25,40,55,210'"
+                      shape: ~round_rect
+                      radius: 10
+                  标签_罕见文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 190
+                      through: true
+                      texts: "var.currentTab == 'uncommon' ? '&a&l罕见' : '&7罕见'"
+                      fontSize: 22
               标签_稀有:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 190
                   height: 44
-                  normal: "var.currentTab == 'rare' ? '35,110,135,230' : '25,40,55,210'"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "var.currentTab == 'rare' ? '&9&l稀有' : '&7稀有'"
-                  fontSize: 22
-                  center: true
                 action:
                   clickLeft: |-
                     var.currentTab = 'rare'
                     var.needRebuild = true
+                children:
+                  标签_稀有背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.currentTab == 'rare' ? '35,110,135,230' : '25,40,55,210'"
+                      shape: ~round_rect
+                      radius: 10
+                  标签_稀有文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 190
+                      through: true
+                      texts: "var.currentTab == 'rare' ? '&9&l稀有' : '&7稀有'"
+                      fontSize: 22
               标签_传说:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 190
                   height: 44
-                  normal: "var.currentTab == 'legendary' ? '35,110,135,230' : '25,40,55,210'"
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "var.currentTab == 'legendary' ? '&6&l传说' : '&7传说'"
-                  fontSize: 22
-                  center: true
                 action:
                   clickLeft: |-
                     var.currentTab = 'legendary'
                     var.needRebuild = true
+                children:
+                  标签_传说背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.currentTab == 'legendary' ? '35,110,135,230' : '25,40,55,210'"
+                      shape: ~round_rect
+                      radius: 10
+                  标签_传说文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 190
+                      through: true
+                      texts: "var.currentTab == 'legendary' ? '&6&l传说' : '&7传说'"
+                      fontSize: 22
 
           # 图鉴滑块：右侧滚动条滑块
           图鉴滑块:

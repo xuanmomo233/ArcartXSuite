@@ -1196,25 +1196,35 @@ controls:
                       through: true
                       visible: false
                   UP角标:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       point: ~top_center
                       x: 130
                       y: 60
                       width: 62
                       height: 32
-                      normal: ~214,86,92,250
-                      shape: ~round_rect
-                      radius: 8
-                      through: true
-                      texts: "~&fUP!"
-                      center: true
-                      fontSize: 26
                       visible: true
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~255,246,214,220
+                    children:
+                      UP角标背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~214,86,92,250
+                          shape: ~round_rect
+                          radius: 8
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~255,246,214,220
+                      UP角标文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 62
+                          texts: "~&fUP!"
+                          fontSize: 26
+                          through: true
                   名称底:
                     type: Texture
                     attribute:
@@ -1803,74 +1813,107 @@ controls:
                   height: 52
                 children:
                   兑换按钮:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       width: 210
                       height: 52
-                      normal: ~40,48,74,240
-                      hover: ~62,78,120,245
-                      shape: ~round_rect
-                      radius: 26
-                      texts: "~&f积分兑换"
-                      center: true
-                      fontSize: 34
                     action:
                       click: "Packet.send(var.packetId, 'exchange')"
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~226,196,132,235
-                      shadow:
-                        xOffset: 0
-                        yOffset: 2
-                        blur: 6
-                        color: ~90,86,120,80
+                    children:
+                      兑换背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~40,48,74,240
+                          hover: ~62,78,120,245
+                          shape: ~round_rect
+                          radius: 26
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~226,196,132,235
+                          shadow:
+                            xOffset: 0
+                            yOffset: 2
+                            blur: 6
+                            color: ~90,86,120,80
+                      兑换文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 210
+                          texts: "~&f积分兑换"
+                          fontSize: 34
+                          through: true
                   详情按钮:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       width: 210
                       height: 52
-                      normal: ~40,48,74,240
-                      hover: ~62,78,120,245
-                      shape: ~round_rect
-                      radius: 26
-                      texts: "~&f概率详情"
-                      center: true
-                      fontSize: 34
                     action:
                       click: "Packet.send(var.packetId, 'details')"
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~226,196,132,235
-                      shadow:
-                        xOffset: 0
-                        yOffset: 2
-                        blur: 6
-                        color: ~90,86,120,80
+                    children:
+                      详情背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~40,48,74,240
+                          hover: ~62,78,120,245
+                          shape: ~round_rect
+                          radius: 26
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~226,196,132,235
+                          shadow:
+                            xOffset: 0
+                            yOffset: 2
+                            blur: 6
+                            color: ~90,86,120,80
+                      详情文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 210
+                          texts: "~&f概率详情"
+                          fontSize: 34
+                          through: true
                   记录按钮:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       width: 210
                       height: 52
-                      normal: ~40,48,74,240
-                      hover: ~62,78,120,245
-                      shape: ~round_rect
-                      radius: 26
-                      texts: "~&f祈愿记录"
-                      center: true
-                      fontSize: 34
                     action:
                       click: "Packet.send(var.packetId, 'history')"
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~226,196,132,235
-                      shadow:
-                        xOffset: 0
-                        yOffset: 2
-                        blur: 6
-                        color: ~90,86,120,80
+                    children:
+                      记录背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~40,48,74,240
+                          hover: ~62,78,120,245
+                          shape: ~round_rect
+                          radius: 26
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~226,196,132,235
+                          shadow:
+                            xOffset: 0
+                            yOffset: 2
+                            blur: 6
+                            color: ~90,86,120,80
+                      记录文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 210
+                          texts: "~&f祈愿记录"
+                          fontSize: 34
+                          through: true
 
               祈愿一次:
                 type: Canvas
@@ -2123,25 +2166,36 @@ controls:
                               fontSize: 30
                               through: true
           关闭按钮:
-            type: Texture
+            type: Canvas
             attribute:
               point: ~top_right
               x: -22
               y: 22
               width: 52
               height: 52
-              normal: ~38,46,72,238
-              hover: ~198,86,92,245
-              shape: ~circle
-              texts: "~&f✕"
-              center: true
-              fontSize: 32
             action:
               click: Screen.close()
-            effect:
-              stroke:
-                width: 2
-                color: ~226,196,132,235
+            children:
+              关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~38,46,72,238
+                  hover: ~198,86,92,245
+                  shape: ~circle
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~226,196,132,235
+              关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 52
+                  texts: "~&f✕"
+                  fontSize: 32
+                  through: true
 
       # 等待层: 发出请求后到结果包到达之间的过场
       等待层:
@@ -2339,39 +2393,43 @@ controls:
               texts: "'&75 星累计 ' + (var.pity5 != none ? var.pity5 : 0) + ' · 4 星累计 ' + (var.pity4 != none ? var.pity4 : 0)"
               fontSize: 34
           继续按钮:
-            type: Texture
+            type: Canvas
             attribute:
               point: ~middle_center
               x: -120
               y: 320
               width: 200
               height: 64
-              normal: ~30,38,58,246
-              hover: ~36,46,72,246
-              shape: ~round_rect
-              radius: 6
-              texts: "~&f继续"
-              center: true
-              fontSize: 38
             action:
               click: |-
                 val.单抽结果层.visible = false
                 val.主面板.visible = true
+            children:
+              继续背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~30,38,58,246
+                  hover: ~36,46,72,246
+                  shape: ~round_rect
+                  radius: 6
+              继续文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 200
+                  texts: "~&f继续"
+                  fontSize: 38
+                  through: true
           再抽一次:
-            type: Texture
+            type: Canvas
             attribute:
               point: ~middle_center
               x: 120
               y: 320
               width: 200
               height: 64
-              normal: ~255,226,158,255
-              hover: ~255,238,196,255
-              shape: ~round_rect
-              radius: 6
-              texts: "~&0再抽一次"
-              center: true
-              fontSize: 38
             action:
               click: |-
                 if(var.pulling != true){
@@ -2381,6 +2439,24 @@ controls:
                   val.等待层.visible = true
                   Packet.send(var.packetId, 'pull', 1, var.actionToken)
                 }
+            children:
+              再抽一次背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~255,226,158,255
+                  hover: ~255,238,196,255
+                  shape: ~round_rect
+                  radius: 6
+              再抽一次文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 200
+                  texts: "~&0再抽一次"
+                  fontSize: 38
+                  through: true
       # 十连结果层: 展示 batch_result 包的全部结果，5 列两行
       十连结果层:
         type: Canvas
@@ -2560,40 +2636,44 @@ controls:
               texts: "'&75 星累计 ' + (var.pity5 != none ? var.pity5 : 0) + ' · 4 星累计 ' + (var.pity4 != none ? var.pity4 : 0)"
               fontSize: 34
           十连继续按钮:
-            type: Texture
+            type: Canvas
             attribute:
               point: ~bottom_center
               x: -120
               y: 60
               width: 200
               height: 64
-              normal: ~30,38,58,246
-              hover: ~36,46,72,246
-              shape: ~round_rect
-              radius: 6
-              texts: "~&f继续"
-              center: true
-              fontSize: 38
             action:
               click: |-
                 val.十连结果层.visible = false
                 val.主面板.visible = true
+            children:
+              十连继续背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~30,38,58,246
+                  hover: ~36,46,72,246
+                  shape: ~round_rect
+                  radius: 6
+              十连继续文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 200
+                  texts: "~&f继续"
+                  fontSize: 38
+                  through: true
           十连再抽一次:
-            type: Texture
+            type: Canvas
             attribute:
               point: ~bottom_center
               x: 120
               y: 60
               width: 200
               height: 64
-              normal: ~255,226,158,255
-              hover: ~255,238,196,255
-              shape: ~round_rect
-              radius: 6
               visible: "var.tenAvailable != false"
-              texts: "~&0再来十连"
-              center: true
-              fontSize: 38
             action:
               click: |-
                 if(var.pulling != true){
@@ -2603,6 +2683,24 @@ controls:
                   val.等待层.visible = true
                   Packet.send(var.packetId, 'pull', 10, var.actionToken)
                 }
+            children:
+              十连再抽一次背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~255,226,158,255
+                  hover: ~255,238,196,255
+                  shape: ~round_rect
+                  radius: 6
+              十连再抽一次文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 200
+                  texts: "~&0再来十连"
+                  fontSize: 38
+                  through: true
       # 历史面板: history 包的祈愿记录，使用服务端格式化的 timeText 与 summary
       历史面板:
         type: Canvas
@@ -2772,20 +2870,32 @@ controls:
               fontSize: 36
               visible: "var.historyCount != none && var.historyCount == 0"
           历史关闭:
-            type: Texture
+            type: Canvas
             attribute:
               point: ~bottom_center
               y: 20
               width: 200
               height: 56
-              normal: ~30,38,58,246
-              hover: ~36,46,72,246
-              shape: ~round_rect
-              radius: 6
-              texts: "~&f关闭"
-              fontSize: 36
             action:
               click: "val.历史面板.visible = false"
+            children:
+              历史关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~30,38,58,246
+                  hover: ~36,46,72,246
+                  shape: ~round_rect
+                  radius: 6
+              历史关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 200
+                  texts: "~&f关闭"
+                  fontSize: 36
+                  through: true
       # 详情面板: details 包的概率、保底与卡池条目
       详情面板:
         type: Canvas
@@ -2972,20 +3082,32 @@ controls:
               fontSize: 36
               visible: "var.detailCount != none && var.detailCount == 0"
           详情关闭:
-            type: Texture
+            type: Canvas
             attribute:
               point: ~bottom_center
               y: 20
               width: 200
               height: 56
-              normal: ~30,38,58,246
-              hover: ~36,46,72,246
-              shape: ~round_rect
-              radius: 6
-              texts: "~&f关闭"
-              fontSize: 36
             action:
               click: "val.详情面板.visible = false"
+            children:
+              详情关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~30,38,58,246
+                  hover: ~36,46,72,246
+                  shape: ~round_rect
+                  radius: 6
+              详情关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 200
+                  texts: "~&f关闭"
+                  fontSize: 36
+                  through: true
       # 兑换面板: exchange 包的积分余额与真实商品列表，点击兑换发送 exchange_buy
       兑换面板:
         type: Canvas
@@ -3261,17 +3383,29 @@ controls:
               fontSize: 36
               visible: "var.exchangeCount != none && var.exchangeCount == 0"
           兑换关闭:
-            type: Texture
+            type: Canvas
             attribute:
               point: ~bottom_center
               y: 20
               width: 200
               height: 56
-              normal: ~30,38,58,246
-              hover: ~36,46,72,246
-              shape: ~round_rect
-              radius: 6
-              texts: "~&f关闭"
-              fontSize: 36
             action:
               click: "val.兑换面板.visible = false"
+            children:
+              兑换关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~30,38,58,246
+                  hover: ~36,46,72,246
+                  shape: ~round_rect
+                  radius: 6
+              兑换关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 200
+                  texts: "~&f关闭"
+                  fontSize: 36
+                  through: true

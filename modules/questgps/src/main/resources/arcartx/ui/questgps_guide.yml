@@ -392,19 +392,31 @@ controls:
               shadow: false
               visible: var.hasNav
           关闭按钮:
-            type: Texture
+            type: Canvas
             attribute:
               point: ~top_right
               x: -8
               y: 8
               width: 22
               height: 22
-              normal: ~255,255,255,40
-              shape: ~round_rect
-              radius: 6
-              texts: ~&7✕
-              fontSize: 12
-              shadow: false
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'clear_track')
+            children:
+              关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~255,255,255,40
+                  shape: ~round_rect
+                  radius: 6
+              关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 22
+                  texts: ~&7✕
+                  fontSize: 12
+                  shadow: false
+                  through: true

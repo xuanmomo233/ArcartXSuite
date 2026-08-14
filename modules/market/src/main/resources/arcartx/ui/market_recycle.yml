@@ -211,23 +211,33 @@ controls:
 
           # ── 物品列表 ──────────────────────────────────
           列表卡片:
-            type: Texture
+            type: Canvas
             attribute:
               x: 32
               y: 120
               width: 1336
               height: 600
-              normal: ~42,45,58,220
-              shape: ~round_rect
-              radius: 20
-              texts: ~&8暂无可回收物品
-              center: true
-              fontSize: 100
-            effect:
-              stroke:
-                width: 2
-                color: ~80,255,140,100
             children:
+              列表卡片背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~42,45,58,220
+                  shape: ~round_rect
+                  radius: 20
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~80,255,140,100
+              列表卡片文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 1336
+                  texts: ~&8暂无可回收物品
+                  fontSize: 100
+                  through: true
               列表标题:
                 type: Text
                 attribute:
@@ -339,26 +349,37 @@ controls:
                               fontSize: 28
                               through: true
                           回收按钮:
-                            type: Texture
+                            type: Canvas
                             attribute:
                               x: 1150
                               y: 6
                               width: 120
                               height: 52
-                              normal: ~60,180,100,200
-                              hover: ~Frosted:0;80,220,120,80
-                              shape: ~round_rect
-                              radius: 10
-                              center: true
-                              fontSize: 28
-                              texts: "~&f回收"
                             action:
                               clickLeft: |-
                                 Packet.send(var.packetId, 'recycle_single', self.parent.entry['slot'] + '', var.actionToken)
-                            effect:
-                              stroke:
-                                width: 1
-                                color: ~80,255,140,120
+                            children:
+                              回收背景:
+                                type: Texture
+                                attribute:
+                                  point: ~stretch_all
+                                  through: true
+                                  normal: ~60,180,100,200
+                                  hover: ~Frosted:0;80,220,120,80
+                                  shape: ~round_rect
+                                  radius: 10
+                                effect:
+                                  stroke:
+                                    width: 1
+                                    color: ~80,255,140,120
+                              回收文字:
+                                type: Text
+                                attribute:
+                                  point: ~middle_center
+                                  width: 120
+                                  texts: "~&f回收"
+                                  fontSize: 28
+                                  through: true
 
           # ── 底部操作栏 ──────────────────────────────
           收益标题:
@@ -390,45 +411,67 @@ controls:
                   through: true
 
           一键回收:
-            type: Texture
+            type: Canvas
             attribute:
               x: 1040
               y: 750
               width: 240
               height: 56
-              normal: ~60,200,100,220
-              hover: ~Frosted:0;80,240,120,80
-              shape: ~round_rect
-              radius: 14
-              center: true
-              fontSize: 42
-              texts: "~&f一键回收全部"
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'recycle_all', var.actionToken)
-            effect:
-              stroke:
-                width: 2
-                color: ~80,255,140,160
+            children:
+              一键回收背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~60,200,100,220
+                  hover: ~Frosted:0;80,240,120,80
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~80,255,140,160
+              一键回收文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 240
+                  texts: "~&f一键回收全部"
+                  fontSize: 42
+                  through: true
 
           刷新按钮:
-            type: Texture
+            type: Canvas
             attribute:
               x: 1300
               y: 750
               width: 68
               height: 56
-              normal: ~56,58,70,220
-              hover: ~Frosted:0;255,255,255,80
-              shape: ~round_rect
-              radius: 14
-              center: true
-              fontSize: 42
-              texts: "~&f刷新"
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'recycle_preview')
-            effect:
-              stroke:
-                width: 2
-                color: ~80,255,140,120
+            children:
+              刷新背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~56,58,70,220
+                  hover: ~Frosted:0;255,255,255,80
+                  shape: ~round_rect
+                  radius: 14
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~80,255,140,120
+              刷新文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 68
+                  texts: "~&f刷新"
+                  fontSize: 42
+                  through: true

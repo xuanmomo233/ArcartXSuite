@@ -81,35 +81,59 @@ controls:
                   fontSize: 42
                   texts: "~&6{var.mode == 'edit' ? '编辑' : '新建'}奖励配置"
               保存按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 748
                   y: 12
                   width: 110
                   height: 48
-                  normal: ~50,180,80,200
-                  shape: ~round_rect
-                  radius: 8
-                  texts: ~&f保存
-                  fontSize: 28
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'save-config', var.configId, var.rewardType, var.rankingType, var.bossId, var.rankStart, var.rankEnd, var.rewardName, var.rewardDescription, var.rewardMoney, var.rewardDkp)
+                children:
+                  保存背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~50,180,80,200
+                      shape: ~round_rect
+                      radius: 8
+                  保存文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 110
+                      texts: ~&f保存
+                      fontSize: 28
+                      through: true
               取消按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 872
                   y: 12
                   width: 110
                   height: 48
-                  normal: ~200,60,60,200
-                  shape: ~round_rect
-                  radius: 8
-                  texts: ~&f取消
-                  fontSize: 28
                 action:
                   click: |-
                     Screen.close()
+                children:
+                  取消背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~200,60,60,200
+                      shape: ~round_rect
+                      radius: 8
+                  取消文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 110
+                      texts: ~&f取消
+                      fontSize: 28
+                      through: true
           结果提示:
             type: Text
             attribute:

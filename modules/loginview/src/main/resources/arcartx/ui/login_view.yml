@@ -220,40 +220,44 @@ controls:
                 width: 2
                 color: ~165,190,220,255
           登录按钮:
-            type: Texture
+            type: Canvas
             attribute:
               x: 478
               y: 190
               width: 180
               height: 42
-              normal: ~80,180,122,238
-              hover: ~108,210,156,255
-              shape: ~round_rect
-              radius: 12
-              texts: ~&f登录
-              center: true
-              fontSize: 38
               visible: "var.type == 'login'"
             action:
               clickLeft: "Packet.send(var.packetId, 'login', var.password, var.agreed)"
-            effect:
-              stroke:
-                width: 2
-                color: ~165,190,220,255
+            children:
+              登录按钮背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~80,180,122,238
+                  hover: ~108,210,156,255
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~165,190,220,255
+              登录按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 180
+                  texts: ~&f登录
+                  fontSize: 38
+                  through: true
           切换修改密码:
-            type: Texture
+            type: Canvas
             attribute:
               x: 42
               y: 246
               width: 616
               height: 38
-              normal: ~191,160,72,220
-              hover: ~224,188,88,255
-              shape: ~round_rect
-              radius: 10
-              texts: ~&f修改密码
-              center: true
-              fontSize: 38
               visible: "var.type == 'login'"
             action:
               clickLeft: |-
@@ -264,30 +268,59 @@ controls:
                 var.oldPassword = none
                 var.newPassword = none
                 var.changeConfirmPassword = none
-            effect:
-              stroke:
-                width: 2
-                color: ~165,190,220,255
+            children:
+              切换修改密码背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~191,160,72,220
+                  hover: ~224,188,88,255
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~165,190,220,255
+              切换修改密码文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 616
+                  texts: ~&f修改密码
+                  fontSize: 38
+                  through: true
           退出服务器:
-            type: Texture
+            type: Canvas
             attribute:
               x: 42
               y: 300
               width: 616
               height: 42
-              normal: ~160,50,50,220
-              hover: ~200,60,60,255
-              shape: ~round_rect
-              radius: 10
-              texts: ~&f退出服务器
-              center: true
-              fontSize: 38
             action:
               clickLeft: Game.quit()
-            effect:
-              stroke:
-                width: 2
-                color: ~165,190,220,255
+            children:
+              退出服务器背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~160,50,50,220
+                  hover: ~200,60,60,255
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~165,190,220,255
+              退出服务器文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 616
+                  texts: ~&f退出服务器
+                  fontSize: 38
+                  through: true
           免登录提示:
             type: Text
             attribute:
@@ -297,26 +330,37 @@ controls:
               fontSize: 36
               visible: "var.type == 'bypass'"
           进入服务器:
-            type: Texture
+            type: Canvas
             attribute:
               x: 42
               y: 240
               width: 616
               height: 42
-              normal: ~80,180,122,238
-              hover: ~108,210,156,255
-              shape: ~round_rect
-              radius: 12
-              texts: ~&f进入服务器
-              center: true
-              fontSize: 38
               visible: "var.type == 'bypass'"
             action:
               clickLeft: "Packet.send(var.packetId, 'bypass_enter', var.agreed)"
-            effect:
-              stroke:
-                width: 2
-                color: ~165,190,220,255
+            children:
+              进入服务器背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~80,180,122,238
+                  hover: ~108,210,156,255
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~165,190,220,255
+              进入服务器文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 616
+                  texts: ~&f进入服务器
+                  fontSize: 38
+                  through: true
           绑定提示:
             type: Text
             attribute:
@@ -345,26 +389,37 @@ controls:
                 width: 2
                 color: ~165,190,220,255
           确认绑定:
-            type: Texture
+            type: Canvas
             attribute:
               x: 478
               y: 218
               width: 180
               height: 42
-              normal: ~80,180,122,238
-              hover: ~108,210,156,255
-              shape: ~round_rect
-              radius: 12
-              texts: ~&f确认绑定
-              center: true
-              fontSize: 38
               visible: "var.type == 'bypass_unbound'"
             action:
               clickLeft: "Packet.send(var.packetId, 'bind_code', var.bindCode)"
-            effect:
-              stroke:
-                width: 2
-                color: ~165,190,220,255
+            children:
+              确认绑定背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~80,180,122,238
+                  hover: ~108,210,156,255
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~165,190,220,255
+              确认绑定文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 180
+                  texts: ~&f确认绑定
+                  fontSize: 38
+                  through: true
           注册密码:
             type: TextBox
             attribute:
@@ -404,22 +459,33 @@ controls:
                 width: 2
                 color: ~165,190,220,255
           注册按钮:
-            type: Texture
+            type: Canvas
             attribute:
               x: 42
               y: 246
               width: 616
               height: 42
-              normal: ~80,180,122,238
-              hover: ~108,210,156,255
-              shape: ~round_rect
-              radius: 12
-              texts: ~&f注册并登录
-              center: true
-              fontSize: 38
               visible: "var.type == 'register'"
             action:
               clickLeft: "Packet.send(var.packetId, 'register', var.password, var.confirmPassword, var.agreed)"
+            children:
+              注册按钮背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~80,180,122,238
+                  hover: ~108,210,156,255
+                  shape: ~round_rect
+                  radius: 12
+              注册按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 616
+                  texts: ~&f注册并登录
+                  fontSize: 38
+                  through: true
           修改旧密码:
             type: TextBox
             attribute:
@@ -478,40 +544,44 @@ controls:
                 width: 2
                 color: ~165,190,220,255
           修改按钮:
-            type: Texture
+            type: Canvas
             attribute:
               x: 42
               y: 246
               width: 300
               height: 42
-              normal: ~191,160,72,225
-              hover: ~224,188,88,255
-              shape: ~round_rect
-              radius: 12
-              texts: ~&f修改密码
-              center: true
-              fontSize: 38
               visible: "var.type == 'change'"
             action:
               clickLeft: "Packet.send(var.packetId, 'change_password', var.oldPassword, var.newPassword, var.changeConfirmPassword)"
-            effect:
-              stroke:
-                width: 2
-                color: ~165,190,220,255
+            children:
+              修改按钮背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~191,160,72,225
+                  hover: ~224,188,88,255
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~165,190,220,255
+              修改按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 300
+                  texts: ~&f修改密码
+                  fontSize: 38
+                  through: true
           返回登录:
-            type: Texture
+            type: Canvas
             attribute:
               x: 358
               y: 246
               width: 300
               height: 42
-              normal: ~86,112,148,225
-              hover: ~145,170,205,255
-              shape: ~round_rect
-              radius: 12
-              texts: ~&f返回登录
-              center: true
-              fontSize: 38
               visible: "var.type == 'change'"
             action:
               clickLeft: |-
@@ -521,10 +591,28 @@ controls:
                 var.oldPassword = none
                 var.newPassword = none
                 var.changeConfirmPassword = none
-            effect:
-              stroke:
-                width: 2
-                color: ~165,190,220,255
+            children:
+              返回登录背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~86,112,148,225
+                  hover: ~145,170,205,255
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~165,190,220,255
+              返回登录文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 300
+                  texts: ~&f返回登录
+                  fontSize: 38
+                  through: true
           结果:
             type: Text
             attribute:
@@ -629,44 +717,66 @@ controls:
                                     - ~&f7. 账号安全由玩家本人负责，请勿共享账号密码。
                                   fontSize: 36
                   同意按钮:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       x: 170
                       y: 250
                       width: 120
                       height: 38
-                      normal: ~80,180,122,238
-                      hover: ~108,210,156,255
-                      shape: ~round_rect
-                      radius: 10
-                      texts: ~&f同意
-                      center: true
-                      fontSize: 36
                     action:
                       clickLeft: |-
                         var.agreed = true
                         var.showRules = false
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~165,190,220,255
+                    children:
+                      同意按钮背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~80,180,122,238
+                          hover: ~108,210,156,255
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~165,190,220,255
+                      同意按钮文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 120
+                          texts: ~&f同意
+                          fontSize: 36
+                          through: true
                   关闭按钮:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       x: 310
                       y: 250
                       width: 120
                       height: 38
-                      normal: ~160,50,50,220
-                      hover: ~200,60,60,255
-                      shape: ~round_rect
-                      radius: 10
-                      texts: ~&f关闭
-                      center: true
-                      fontSize: 36
                     action:
                       clickLeft: var.showRules = false
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~165,190,220,255
+                    children:
+                      关闭按钮背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~160,50,50,220
+                          hover: ~200,60,60,255
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~165,190,220,255
+                      关闭按钮文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 120
+                          texts: ~&f关闭
+                          fontSize: 36
+                          through: true

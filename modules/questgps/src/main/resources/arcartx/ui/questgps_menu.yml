@@ -350,86 +350,130 @@ controls:
                   spaceBetween: 10
                 children:
                   分类模板:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       entryKey: none
                       entry: var.categories[self.entryKey]
                       visible: self.entryKey != none && self.entry != none
                       width: 100
                       height: 40
-                      normal: "self.entry != none && self.entry['selected'] ? '120,190,255,230' : '145,145,145,255'"
-                      shape: ~round_rect
-                      radius: 12
-                      texts: "self.entry != none ? self.entry['name'] : none"
-                      center: true
-                      fontSize: 36
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~0,0,0,255
                     action:
                       clickLeft: |-
                         Packet.send(var.packetId, 'switch_category', self.entry['id'])
+                    children:
+                      分类背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '120,190,255,230' : '145,145,145,255'"
+                          shape: ~round_rect
+                          radius: 12
+                        effect:
+                          stroke:
+                            width: 2
+                            color: ~0,0,0,255
+                      分类文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 100
+                          texts: "self.parent.entry != none ? self.parent.entry['name'] : none"
+                          fontSize: 36
+                          through: true
           可接取:
-            type: Texture
+            type: Canvas
             attribute:
               x: 56
               y: 204
               width: 108
               height: 40
-              normal: "var.pageId == 'available' ? '120,190,255,230' : '100,100,100,200'"
-              shape: ~round_rect
-              radius: 12
-              texts: "'&0可接取 ' + var.availableCount.round()"
-              center: true
-              fontSize: 30
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'switch_page', 'available')
+            children:
+              可接取背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.pageId == 'available' ? '120,190,255,230' : '100,100,100,200'"
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              可接取文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 108
+                  texts: "'&0可接取 ' + var.availableCount.round()"
+                  fontSize: 30
+                  through: true
           进行中:
-            type: Texture
+            type: Canvas
             attribute:
               x: 174
               y: 204
               width: 108
               height: 40
-              normal: "var.pageId == 'active' ? '100,200,130,230' : '100,100,100,200'"
-              shape: ~round_rect
-              radius: 12
-              texts: "'&0进行中 ' + var.activeCount.round()"
-              center: true
-              fontSize: 30
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'switch_page', 'active')
+            children:
+              进行中背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.pageId == 'active' ? '100,200,130,230' : '100,100,100,200'"
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              进行中文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 108
+                  texts: "'&0进行中 ' + var.activeCount.round()"
+                  fontSize: 30
+                  through: true
           已完成:
-            type: Texture
+            type: Canvas
             attribute:
               x: 292
               y: 204
               width: 108
               height: 40
-              normal: "var.pageId == 'completed' ? '200,150,80,230' : '100,100,100,200'"
-              shape: ~round_rect
-              radius: 12
-              texts: "'&0已完成 ' + var.completedCount.round()"
-              center: true
-              fontSize: 30
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
             action:
               clickLeft: |-
                 Packet.send(var.packetId, 'switch_page', 'completed')
+            children:
+              已完成背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.pageId == 'completed' ? '200,150,80,230' : '100,100,100,200'"
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              已完成文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 108
+                  texts: "'&0已完成 ' + var.completedCount.round()"
+                  fontSize: 30
+                  through: true
           列表标题:
             type: Text
             attribute:
@@ -751,98 +795,153 @@ controls:
               spaceBetween: 20
             children:
               接取:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 160
                   height: 44
                   visible: var.canAccept
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0接取任务"
-                  center: true
-                  fontSize: 36
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'accept_quest', var.selectedQuestId)
+                children:
+                  接取背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  接取文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 160
+                      texts: "~&0接取任务"
+                      fontSize: 36
+                      through: true
               放弃:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 160
                   height: 44
                   visible: var.canAbandon
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0放弃任务"
-                  center: true
-                  fontSize: 36
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'abandon_quest', var.selectedQuestId)
+                children:
+                  放弃背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  放弃文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 160
+                      texts: "~&0放弃任务"
+                      fontSize: 36
+                      through: true
               追踪:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 190
                   height: 44
                   visible: var.canTrackQuest && !var.questTracked
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0追踪任务"
-                  center: true
-                  fontSize: 36
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'track_quest', var.selectedQuestId)
+                children:
+                  追踪背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  追踪文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 190
+                      texts: "~&0追踪任务"
+                      fontSize: 36
+                      through: true
               取消:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 160
                   height: 44
                   visible: var.questTracked
-                  normal: ~255,255,255,150
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0取消导航"
-                  center: true
-                  fontSize: 36
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'clear_track')
+                children:
+                  取消背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~255,255,255,150
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  取消文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 160
+                      texts: "~&0取消导航"
+                      fontSize: 36
+                      through: true
               地图:
-                type: Texture
+                type: Canvas
                 attribute:
                   width: 160
                   height: 44
                   visible: var.navigationReady
-                  normal: ~120,190,255,230
-                  shape: ~round_rect
-                  radius: 14
-                  texts: "~&0打开地图"
-                  center: true
-                  fontSize: 36
-                effect:
-                  stroke:
-                    width: 2
-                    color: ~0,0,0,255
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'open_map')
+                children:
+                  地图背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~120,190,255,230
+                      shape: ~round_rect
+                      radius: 14
+                    effect:
+                      stroke:
+                        width: 2
+                        color: ~0,0,0,255
+                  地图文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 160
+                      texts: "~&0打开地图"
+                      fontSize: 36
+                      through: true
 

@@ -62,9 +62,20 @@ public class MarketService {
 
     private static final int AUCTION_PAGE_SIZE = 20;
     private static final String AUCTION_SELL_UI_ID = "AXS:market_auction_sell";
-    private static final int AUCTION_BACKPACK_SLOTS = 41;
     private static final int HISTORY_PAGE_SIZE = 20;
     private static final SimpleDateFormat TIME_FMT = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+
+    /**
+     * 将 ARIA UI ~Backpack 槽位编号转换为 Bukkit inventory slot index。
+     * ARIA rawSlot 9-35 → Bukkit 9-35（主背包 27 格），
+     * ARIA rawSlot 36-44 → Bukkit 0-8（快捷栏 9 格）。
+     */
+    private static int toBukkitBackpackSlot(int rawSlot) {
+        if (rawSlot >= 36 && rawSlot <= 44) {
+            return rawSlot - 36;
+        }
+        return rawSlot;
+    }
 
     private volatile java.util.function.Supplier<SignalDispatchable> signalProvider;
     private volatile java.util.function.Supplier<QQBotBroadcastable> qqBotProvider;
@@ -351,16 +362,17 @@ public class MarketService {
 
     private void handleAuctionListCreatePacket(Player player, List<String> data) {
         if (auctionService == null) return;
-        int slot = data.size() > 1 ? parseIntSafe(data.get(1), -1) : -1;
+        int rawSlot = data.size() > 1 ? parseIntSafe(data.get(1), -1) : -1;
         double startingBid = data.size() > 2 ? parseDoubleSafe(data.get(2), 0) : 0;
         String message = data.size() > 3 && data.get(3) != null ? data.get(3) : "";
         long duration = data.size() > 4 ? parseLongSafe(data.get(4), 0) : 0;
         String currency = data.size() > 5 && data.get(5) != null && !data.get(5).isBlank()
             ? data.get(5) : config.auction().defaultCurrency();
-        if (slot < 0 || slot >= AUCTION_BACKPACK_SLOTS) {
+        if (rawSlot < 9 || rawSlot > 44) {
             player.sendMessage(messages.get("player.sell.invalid-slot"));
             return;
         }
+        int slot = toBukkitBackpackSlot(rawSlot);
         if (startingBid < config.auction().minPrice()
                 || startingBid > config.auction().maxPrice()) {
             player.sendMessage(messages.get("player.sell.price-out-of-range",

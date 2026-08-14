@@ -85,22 +85,33 @@ controls:
       height: 1080
     children:
       ArenaTAB背景:  # 竞技场 TAB 毛玻璃背景面板，高度随队伍人数动态调整
-        type: Texture
+        type: Canvas
         attribute:
           point: ~top_center
           width: 720
           height: 80 + 32 * math.max(var.ArenaTAB红队人数, var.ArenaTAB蓝队人数)  # 高度随最大队伍人数增长
           y: 30
-          normal: ~Frosted:30;0,0,0,200  # 毛玻璃材质，30 模糊度，半透明黑
-          shape: ~round_rect
-          radius: 18
-          texts: '&cRED  &fvs  &9BLUE'
-          fontSize: 32
-        effect:
-          stroke:  # 描边
-            width: 3
-            color: ~0,0,0,255
         children:
+          ArenaTAB背景背景:  # 毛玻璃背景纹理，stretch_all 填充父控件
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~Frosted:30;0,0,0,200  # 毛玻璃材质，30 模糊度，半透明黑
+              shape: ~round_rect
+              radius: 18
+            effect:
+              stroke:  # 描边
+                width: 3
+                color: ~0,0,0,255
+          ArenaTAB标题文字:  # 红蓝对阵标题"RED vs BLUE"
+            type: Text
+            attribute:
+              point: ~top_center
+              width: 720
+              texts: '&cRED  &fvs  &9BLUE'
+              fontSize: 32
+              through: true
           # ============ 红队（左侧）============
           RedGrid:  # 红队玩家列表（VGrid），packetHandler 动态复制 red_player_row 填充
             type: VGrid

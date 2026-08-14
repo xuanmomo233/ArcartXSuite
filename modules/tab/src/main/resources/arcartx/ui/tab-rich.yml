@@ -108,7 +108,6 @@ controls:
                 type: Texture
                 val: ROW
                 attribute:
-                  point: ~top_center
                   width: 320
                   height: 30
                   shape: ~round_rect

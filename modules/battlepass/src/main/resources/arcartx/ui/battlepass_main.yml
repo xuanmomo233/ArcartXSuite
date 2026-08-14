@@ -670,60 +670,82 @@ controls:
                       height: 64
                     children:
                       任务按钮:
-                        type: Texture
+                        type: Canvas
                         attribute:
                           width: 320
                           height: 64
-                          normal: ~50,90,160,235
-                          hover: ~Frosted:0;70,120,200,245
-                          shape: ~round_rect
-                          radius: 32
-                          texts: "~&f任务列表"
-                          center: true
-                          fontSize: 32
                         action:
                           clickLeft: |-
                             Packet.send(var.packetId, 'open_tasks')
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~90,170,255,180
-                          shadow:
-                            xOffset: 0
-                            yOffset: 3
-                            blur: 10
-                            color: ~0,0,0,120
-                          neon:
-                            color: ~90,170,255,80
-                            size: 8
-                            intensity: 0.3
-                            animated: false
+                        children:
+                          任务背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~50,90,160,235
+                              hover: ~Frosted:0;70,120,200,245
+                              shape: ~round_rect
+                              radius: 32
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~90,170,255,180
+                              shadow:
+                                xOffset: 0
+                                yOffset: 3
+                                blur: 10
+                                color: ~0,0,0,120
+                              neon:
+                                color: ~90,170,255,80
+                                size: 8
+                                intensity: 0.3
+                                animated: false
+                          任务文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              width: 320
+                              texts: "~&f任务列表"
+                              fontSize: 32
+                              through: true
                       奖励按钮:
-                        type: Texture
+                        type: Canvas
                         attribute:
                           width: 320
                           height: 64
-                          normal: ~160,100,50,235
-                          hover: ~Frosted:0;200,130,70,245
-                          shape: ~round_rect
-                          radius: 32
-                          texts: "~&f领取奖励"
-                          center: true
-                          fontSize: 32
                         action:
                           clickLeft: |-
                             Packet.send(var.packetId, 'open_rewards')
-                        effect:
-                          stroke:
-                            width: 2
-                            color: ~255,180,100,180
-                          shadow:
-                            xOffset: 0
-                            yOffset: 3
-                            blur: 10
-                            color: ~0,0,0,120
-                          neon:
-                            color: ~255,180,100,80
-                            size: 8
-                            intensity: 0.3
-                            animated: false
+                        children:
+                          奖励背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~160,100,50,235
+                              hover: ~Frosted:0;200,130,70,245
+                              shape: ~round_rect
+                              radius: 32
+                            effect:
+                              stroke:
+                                width: 2
+                                color: ~255,180,100,180
+                              shadow:
+                                xOffset: 0
+                                yOffset: 3
+                                blur: 10
+                                color: ~0,0,0,120
+                              neon:
+                                color: ~255,180,100,80
+                                size: 8
+                                intensity: 0.3
+                                animated: false
+                          奖励文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              width: 320
+                              texts: "~&f领取奖励"
+                              fontSize: 32
+                              through: true

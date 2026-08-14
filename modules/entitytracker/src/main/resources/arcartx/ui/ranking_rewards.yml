@@ -78,80 +78,140 @@ controls:
                   fontSize: 42
                   texts: "~&6排行榜奖励管理"
               周奖励按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 520
                   y: 12
                   width: 120
                   height: 48
-                  normal: ~50,180,80,200
-                  shape: ~round_rect
-                  radius: 8
-                  texts: ~&f周奖励
-                  fontSize: 28
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', 'weekly')
+                children:
+                  周奖励背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~50,180,80,200
+                      shape: ~round_rect
+                      radius: 8
+                  周奖励文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 120
+                      texts: ~&f周奖励
+                      fontSize: 28
+                      through: true
               月奖励按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 654
                   y: 12
                   width: 120
                   height: 48
-                  normal: ~200,160,50,200
-                  shape: ~round_rect
-                  radius: 8
-                  texts: ~&f月奖励
-                  fontSize: 28
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', 'monthly')
+                children:
+                  月奖励背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~200,160,50,200
+                      shape: ~round_rect
+                      radius: 8
+                  月奖励文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 120
+                      texts: ~&f月奖励
+                      fontSize: 28
+                      through: true
               调度状态按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 788
                   y: 12
                   width: 140
                   height: 48
-                  normal: ~60,130,200,200
-                  shape: ~round_rect
-                  radius: 8
-                  texts: ~&f调度状态
-                  fontSize: 28
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'scheduler-status')
+                children:
+                  调度状态背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~60,130,200,200
+                      shape: ~round_rect
+                      radius: 8
+                  调度状态文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 140
+                      texts: ~&f调度状态
+                      fontSize: 28
+                      through: true
               发放历史按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 942
                   y: 12
                   width: 120
                   height: 48
-                  normal: ~130,100,200,200
-                  shape: ~round_rect
-                  radius: 8
-                  texts: ~&f发放历史
-                  fontSize: 28
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'open-history')
+                children:
+                  发放历史背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~130,100,200,200
+                      shape: ~round_rect
+                      radius: 8
+                  发放历史文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 120
+                      texts: ~&f发放历史
+                      fontSize: 28
+                      through: true
               手动发放按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 1076
                   y: 12
                   width: 110
                   height: 48
-                  normal: ~200,80,50,200
-                  shape: ~round_rect
-                  radius: 8
-                  texts: ~&f手动发放
-                  fontSize: 28
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'manual-distribute', var.rewardType)
+                children:
+                  手动发放背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~200,80,50,200
+                      shape: ~round_rect
+                      radius: 8
+                  手动发放文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 110
+                      texts: ~&f手动发放
+                      fontSize: 28
+                      through: true
           # 结果提示
           结果提示:
             type: Text
@@ -298,20 +358,32 @@ controls:
                           fontSize: 26
                           texts: "~{each.statusIcon}"
                       切换按钮:
-                        type: Texture
+                        type: Canvas
                         attribute:
                           x: 1060
                           y: 6
                           width: 80
                           height: 36
-                          normal: ~60,130,200,180
-                          shape: ~round_rect
-                          radius: 6
-                          texts: ~&f切换
-                          fontSize: 24
                         action:
                           click: |-
                             Packet.send('AXS_ENTITY_TRACKER_REWARD', 'toggle', each.id)
+                        children:
+                          切换背景:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~60,130,200,180
+                              shape: ~round_rect
+                              radius: 6
+                          切换文字:
+                            type: Text
+                            attribute:
+                              point: ~middle_center
+                              width: 80
+                              texts: ~&f切换
+                              fontSize: 24
+                              through: true
           # 调度状态区域
           状态区:
             type: Texture
@@ -362,17 +434,29 @@ controls:
                   fontSize: 28
                   texts: "~&7下次月奖励: &f{var.nextMonthly}"
               返回列表按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 40
                   y: 340
                   width: 140
                   height: 48
-                  normal: ~60,130,200,200
-                  shape: ~round_rect
-                  radius: 8
-                  texts: ~&f← 返回列表
-                  fontSize: 28
                 action:
                   click: |-
                     Packet.send('AXS_ENTITY_TRACKER_REWARD', 'list-configs', var.rewardType)
+                children:
+                  返回列表背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~60,130,200,200
+                      shape: ~round_rect
+                      radius: 8
+                  返回列表文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 140
+                      texts: ~&f← 返回列表
+                      fontSize: 28
+                      through: true

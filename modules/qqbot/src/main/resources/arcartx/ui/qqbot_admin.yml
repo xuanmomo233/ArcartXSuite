@@ -124,75 +124,119 @@ controls:
               texts: "~&6QQBot 管理后台"
               fontSize: 49
           关闭按钮:
-            type: Texture
+            type: Canvas
             attribute:
               x: 840
               y: 18
               width: 40
               height: 40
-              normal: ~180,50,50,200
-              hover: ~220,70,70,255
-              shape: ~round_rect
-              radius: 10
-              texts: "~&f✕"
-              center: true
-              fontSize: 36
             action:
               clickLeft: |-
                 self.close()
+            children:
+              关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~180,50,50,200
+                  hover: ~220,70,70,255
+                  shape: ~round_rect
+                  radius: 10
+              关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 40
+                  texts: "~&f✕"
+                  fontSize: 36
+                  through: true
           # ── Tab 切换 ──
           tab_仪表盘:
-            type: Texture
+            type: Canvas
             attribute:
               x: 28
               y: 76
               width: 120
               height: 38
-              normal: "var.tab == 'dashboard' ? '255,180,60,220' : '50,55,65,200'"
-              hover: ~255,200,90,255
-              shape: ~round_rect
-              radius: 10
-              texts: "~&f仪表盘"
-              center: true
-              fontSize: 34
             action:
               clickLeft: |-
                 var.tab = 'dashboard'
+            children:
+              tab_仪表盘背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.tab == 'dashboard' ? '255,180,60,220' : '50,55,65,200'"
+                  hover: ~255,200,90,255
+                  shape: ~round_rect
+                  radius: 10
+              tab_仪表盘文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 120
+                  texts: "~&f仪表盘"
+                  fontSize: 34
+                  through: true
           tab_绑定管理:
-            type: Texture
+            type: Canvas
             attribute:
               x: 158
               y: 76
               width: 120
               height: 38
-              normal: "var.tab == 'bindings' ? '255,180,60,220' : '50,55,65,200'"
-              hover: ~255,200,90,255
-              shape: ~round_rect
-              radius: 10
-              texts: "~&f绑定管理"
-              center: true
-              fontSize: 34
             action:
               clickLeft: |-
                 var.tab = 'bindings'
                 Packet.send(var.packetId, 'fetch_bindings', var.bindPage)
+            children:
+              tab_绑定管理背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.tab == 'bindings' ? '255,180,60,220' : '50,55,65,200'"
+                  hover: ~255,200,90,255
+                  shape: ~round_rect
+                  radius: 10
+              tab_绑定管理文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 120
+                  texts: "~&f绑定管理"
+                  fontSize: 34
+                  through: true
           tab_控制台:
-            type: Texture
+            type: Canvas
             attribute:
               x: 288
               y: 76
               width: 120
               height: 38
-              normal: "var.tab == 'console' ? '255,180,60,220' : '50,55,65,200'"
-              hover: ~255,200,90,255
-              shape: ~round_rect
-              radius: 10
-              texts: "~&f控制台"
-              center: true
-              fontSize: 34
             action:
               clickLeft: |-
                 var.tab = 'console'
+            children:
+              tab_控制台背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.tab == 'console' ? '255,180,60,220' : '50,55,65,200'"
+                  hover: ~255,200,90,255
+                  shape: ~round_rect
+                  radius: 10
+              tab_控制台文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 120
+                  texts: "~&f控制台"
+                  fontSize: 34
+                  through: true
           # ═══════════════════════════════════
           # ── 仪表盘页 ──
           # ═══════════════════════════════════
@@ -303,22 +347,33 @@ controls:
                       fontSize: 26
               # 快捷操作
               刷新按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 0
                   y: 120
                   width: 160
                   height: 42
-                  normal: ~60,140,200,220
-                  hover: ~80,160,220,255
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "~&f刷新数据"
-                  center: true
-                  fontSize: 34
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'refresh')
+                children:
+                  刷新背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~60,140,200,220
+                      hover: ~80,160,220,255
+                      shape: ~round_rect
+                      radius: 10
+                  刷新文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 160
+                      texts: "~&f刷新数据"
+                      fontSize: 34
+                      through: true
           # ═══════════════════════════════════
           # ── 绑定管理页 ──
           # ═══════════════════════════════════
@@ -351,22 +406,33 @@ controls:
                     width: 1
                     color: ~80,180,255,100
               搜索按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 310
                   y: 0
                   width: 80
                   height: 36
-                  normal: ~60,140,200,220
-                  hover: ~80,160,220,255
-                  shape: ~round_rect
-                  radius: 8
-                  texts: "~&f搜索"
-                  center: true
-                  fontSize: 28
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'search_binding', var.searchInput)
+                children:
+                  搜索背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~60,140,200,220
+                      hover: ~80,160,220,255
+                      shape: ~round_rect
+                      radius: 8
+                  搜索文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 80
+                      texts: "~&f搜索"
+                      fontSize: 28
+                      through: true
               # 绑定列表
               绑定滚动区:
                 type: Canvas
@@ -436,41 +502,63 @@ controls:
                                   texts: "'&8' + self.parent.entry['time']"
                                   fontSize: 26
                               解绑操作:
-                                type: Texture
+                                type: Canvas
                                 attribute:
                                   x: 730
                                   y: 8
                                   width: 72
                                   height: 30
-                                  normal: ~180,60,50,200
-                                  hover: ~210,80,70,255
-                                  shape: ~round_rect
-                                  radius: 8
-                                  texts: "~&f解绑"
-                                  center: true
-                                  fontSize: 24
                                 action:
                                   clickLeft: |-
                                     Packet.send(var.packetId, 'admin_unbind', self.parent.entry['name'])
+                                children:
+                                  解绑操作背景:
+                                    type: Texture
+                                    attribute:
+                                      point: ~stretch_all
+                                      through: true
+                                      normal: ~180,60,50,200
+                                      hover: ~210,80,70,255
+                                      shape: ~round_rect
+                                      radius: 8
+                                  解绑操作文字:
+                                    type: Text
+                                    attribute:
+                                      point: ~middle_center
+                                      width: 72
+                                      texts: "~&f解绑"
+                                      fontSize: 24
+                                      through: true
               # 分页控制
               上一页:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 330
                   y: 390
                   width: 80
                   height: 32
-                  normal: ~50,55,65,200
-                  hover: ~70,75,85,255
-                  shape: ~round_rect
-                  radius: 8
-                  texts: "~&f← 上页"
-                  center: true
-                  fontSize: 26
                   visible: var.bindPage > 0
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'fetch_bindings', var.bindPage - 1)
+                children:
+                  上一页背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~50,55,65,200
+                      hover: ~70,75,85,255
+                      shape: ~round_rect
+                      radius: 8
+                  上一页文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 80
+                      texts: "~&f← 上页"
+                      fontSize: 26
+                      through: true
               页码:
                 type: Text
                 attribute:
@@ -480,23 +568,34 @@ controls:
                   fontSize: 26
                   center: true
               下一页:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 434
                   y: 390
                   width: 80
                   height: 32
-                  normal: ~50,55,65,200
-                  hover: ~70,75,85,255
-                  shape: ~round_rect
-                  radius: 8
-                  texts: "~&f下页 →"
-                  center: true
-                  fontSize: 26
                   visible: (var.bindPage + 1) * 10 < var.bindTotal
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'fetch_bindings', var.bindPage + 1)
+                children:
+                  下一页背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~50,55,65,200
+                      hover: ~70,75,85,255
+                      shape: ~round_rect
+                      radius: 8
+                  下一页文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 80
+                      texts: "~&f下页 →"
+                      fontSize: 26
+                      through: true
           # ═══════════════════════════════════
           # ── 控制台页 ──
           # ═══════════════════════════════════
@@ -590,22 +689,33 @@ controls:
                     width: 1
                     color: ~255,180,60,120
               执行按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 740
                   y: 388
                   width: 104
                   height: 38
-                  normal: ~200,150,40,220
-                  hover: ~230,180,60,255
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "~&f执行"
-                  center: true
-                  fontSize: 32
                 action:
                   clickLeft: |-
                     if(var.cmdInput != none){
                       Packet.send(var.packetId, 'exec_command', var.cmdInput)
                       var.cmdInput = none
                     }
+                children:
+                  执行背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~200,150,40,220
+                      hover: ~230,180,60,255
+                      shape: ~round_rect
+                      radius: 10
+                  执行文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 104
+                      texts: "~&f执行"
+                      fontSize: 32
+                      through: true

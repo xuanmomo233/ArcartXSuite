@@ -323,22 +323,34 @@ controls:
                   spaceBetween: 12
                 children:
                   地图项目:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       entryKey: 0.round()
                       entry: var.worldRows[self.entryKey]
                       visible: self.entry != none
                       width: 148
                       height: 68
-                      normal: "self.entry != none && self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
-                      shape: ~round_rect
-                      radius: 16
-                      texts: "self.parent.entry != none ? self.parent.entry['displayName'] : none"
-                      fontSize: 18
-                      shadow: false
                     action:
                       clickLeft: |-
                         Packet.send(var.packetId, 'open_world', self.entry['id'])
+                    children:
+                      地图项目背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                          shape: ~round_rect
+                          radius: 16
+                      地图项目文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 148
+                          texts: "self.parent.entry != none ? self.parent.entry['displayName'] : none"
+                          fontSize: 18
+                          shadow: false
+                          through: true
           地图面板:
             type: Texture
             attribute:
@@ -425,22 +437,34 @@ controls:
                   spaceBetween: 10
                 children:
                   地图项目:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       entryKey: 0.round()
                       entry: var.anchorRows[self.entryKey]
                       visible: self.entry != none
                       width: 500
                       height: 70
-                      normal: "self.entry != none && self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
-                      shape: ~round_rect
-                      radius: 14
-                      texts: "self.parent.entry != none ? (self.parent.entry['unlocked'] ? '&a已解锁' : '&c未解锁') : none"
-                      fontSize: 14
-                      shadow: false
                     action:
                       clickLeft: |-
                         Packet.send(var.packetId, 'select_anchor', self.entry['id'])
+                    children:
+                      地图项目背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                          shape: ~round_rect
+                          radius: 14
+                      地图项目文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 500
+                          texts: "self.parent.entry != none ? (self.parent.entry['unlocked'] ? '&a已解锁' : '&c未解锁') : none"
+                          fontSize: 14
+                          shadow: false
+                          through: true
           路径点面板:
             type: Texture
             attribute:
@@ -498,22 +522,34 @@ controls:
                   spaceBetween: 8
                 children:
                   地图项目:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       entryKey: 0.round()
                       entry: var.waypointRows[self.entryKey]
                       visible: self.entry != none
                       width: 500
                       height: 48
-                      normal: "self.entry != none && self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
-                      shape: ~round_rect
-                      radius: 14
-                      texts: "self.parent.entry != none ? self.parent.entry['name'] : none"
-                      fontSize: 16
-                      shadow: false
                     action:
                       clickLeft: |-
                         Packet.send(var.packetId, 'select_waypoint', self.entry['id'])
+                    children:
+                      地图项目背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                          shape: ~round_rect
+                          radius: 14
+                      地图项目文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 500
+                          texts: "self.parent.entry != none ? self.parent.entry['name'] : none"
+                          fontSize: 16
+                          shadow: false
+                          through: true
           外部面板:
             type: Texture
             attribute:
@@ -571,22 +607,34 @@ controls:
                   spaceBetween: 8
                 children:
                   地图项目:
-                    type: Texture
+                    type: Canvas
                     attribute:
                       entryKey: 0.round()
                       entry: var.externalTargetRows[self.entryKey]
                       visible: self.entry != none
                       width: 500
                       height: 48
-                      normal: "self.entry != none && self.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
-                      shape: ~round_rect
-                      radius: 14
-                      texts: "self.parent.entry != none ? self.parent.entry['name'] : none"
-                      fontSize: 16
-                      shadow: false
                     action:
                       clickLeft: |-
                         Packet.send(var.packetId, 'select_external', self.entry['id'])
+                    children:
+                      地图项目背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: "self.parent.entry != none && self.parent.entry['selected'] ? '135,195,240,255' : '200,200,210,255'"
+                          shape: ~round_rect
+                          radius: 14
+                      地图项目文字:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          width: 500
+                          texts: "self.parent.entry != none ? self.parent.entry['name'] : none"
+                          fontSize: 16
+                          shadow: false
+                          through: true
           详情面板:
             type: Texture
             attribute:
@@ -637,57 +685,75 @@ controls:
               shadow: false
               visible: "var.detailSelectedType == 'anchor'"
           解锁按钮:
-            type: Texture
+            type: Canvas
             attribute:
               point: ~top_left
               x: 972
               y: 800
               width: 104
               height: 34
-              normal: "var.detailCanUnlock ? '225,225,230,255' : '110,110,115,255'"
-              shape: ~round_rect
-              radius: 12
-              texts: '&0解锁'
-              fontSize: 16
-              shadow: false
             action:
               clickLeft: |-
                 if (var.detailCanUnlock) {
                          Packet.send(var.packetId, 'unlock_anchor', var.detailSelectedId, packet['action_token'])
                 }
+            children:
+              解锁按钮背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.detailCanUnlock ? '225,225,230,255' : '110,110,115,255'"
+                  shape: ~round_rect
+                  radius: 12
+              解锁按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 104
+                  texts: '&0解锁'
+                  fontSize: 16
+                  shadow: false
+                  through: true
           传送按钮:
-            type: Texture
+            type: Canvas
             attribute:
               point: ~top_left
               x: 1088
               y: 800
               width: 104
               height: 34
-              normal: "var.detailCanTeleport ? '225,225,230,255' : '110,110,115,255'"
-              shape: ~round_rect
-              radius: 12
-              texts: '&0传送'
-              fontSize: 16
-              shadow: false
             action:
               clickLeft: |-
                 if (var.detailCanTeleport) {
                   Packet.send(var.packetId, 'teleport_anchor', var.detailSelectedId, packet['action_token'])
                 }
+            children:
+              传送按钮背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.detailCanTeleport ? '225,225,230,255' : '110,110,115,255'"
+                  shape: ~round_rect
+                  radius: 12
+              传送按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 104
+                  texts: '&0传送'
+                  fontSize: 16
+                  shadow: false
+                  through: true
           追踪按钮:
-            type: Texture
+            type: Canvas
             attribute:
               point: ~top_left
               x: 1204
               y: 800
               width: 104
               height: 34
-              normal: "(var.detailCanTrackAnchor || var.detailCanTrackWaypoint || var.detailCanTrackExternal) ? '225,225,230,255' : '110,110,115,255'"
-              shape: ~round_rect
-              radius: 12
-              texts: '&0导航'
-              fontSize: 16
-              shadow: false
             action:
               clickLeft: |-
                 if (var.detailSelectedType == 'anchor' && var.detailCanTrackAnchor) {
@@ -699,60 +765,114 @@ controls:
                 if (var.detailSelectedType == 'external' && var.detailCanTrackExternal) {
                   Packet.send(var.packetId, 'track_external', var.detailSelectedId)
                 }
+            children:
+              追踪按钮背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "(var.detailCanTrackAnchor || var.detailCanTrackWaypoint || var.detailCanTrackExternal) ? '225,225,230,255' : '110,110,115,255'"
+                  shape: ~round_rect
+                  radius: 12
+              追踪按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 104
+                  texts: '&0导航'
+                  fontSize: 16
+                  shadow: false
+                  through: true
           删除按钮:
-            type: Texture
+            type: Canvas
             attribute:
               point: ~top_left
               x: 1320
               y: 800
               width: 72
               height: 34
-              normal: "var.detailCanDeleteWaypoint ? '225,225,230,255' : '110,110,115,255'"
-              shape: ~round_rect
-              radius: 12
-              texts: '&0删除'
-              fontSize: 16
-              shadow: false
             action:
               clickLeft: |-
                 if (var.detailCanDeleteWaypoint) {
                   Packet.send(var.packetId, 'delete_waypoint', var.detailSelectedId, packet['action_token'])
                 }
+            children:
+              删除按钮背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.detailCanDeleteWaypoint ? '225,225,230,255' : '110,110,115,255'"
+                  shape: ~round_rect
+                  radius: 12
+              删除按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 72
+                  texts: '&0删除'
+                  fontSize: 16
+                  shadow: false
+                  through: true
           创建按钮:
-            type: Texture
+            type: Canvas
             attribute:
               point: ~top_left
               x: 1404
               y: 800
               width: 72
               height: 34
-              normal: "var.canCreateWaypoint ? '225,225,230,255' : '110,110,115,255'"
-              shape: ~round_rect
-              radius: 12
-              texts: '&0新建'
-              fontSize: 16
-              shadow: false
             action:
               clickLeft: |-
                 if (var.canCreateWaypoint) {
                   Packet.send(var.packetId, 'create_waypoint', packet['action_token'])
                 }
+            children:
+              创建按钮背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.canCreateWaypoint ? '225,225,230,255' : '110,110,115,255'"
+                  shape: ~round_rect
+                  radius: 12
+              创建按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 72
+                  texts: '&0新建'
+                  fontSize: 16
+                  shadow: false
+                  through: true
           清除按钮:
-            type: Texture
+            type: Canvas
             attribute:
               point: ~top_left
               x: 1404
               y: 24
               width: 72
               height: 34
-              normal: "var.clearTrackVisible ? '225,225,230,255' : '110,110,115,255'"
-              shape: ~round_rect
-              radius: 12
-              texts: '&0清除'
-              fontSize: 16
-              shadow: false
             action:
               clickLeft: |-
                 if (var.clearTrackVisible) {
                   Packet.send(var.packetId, 'clear_track')
                 }
+            children:
+              清除按钮背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.clearTrackVisible ? '225,225,230,255' : '110,110,115,255'"
+                  shape: ~round_rect
+                  radius: 12
+              清除按钮文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 72
+                  texts: '&0清除'
+                  fontSize: 16
+                  shadow: false
+                  through: true

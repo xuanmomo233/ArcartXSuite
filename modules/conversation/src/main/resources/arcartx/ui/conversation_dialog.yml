@@ -156,27 +156,38 @@ controls:
               fontSize: 36
               lineSpace: 8
           关闭按钮:
-            type: Texture
+            type: Canvas
             attribute:
               point: ~top_right
               x: -28
               y: 15
               width: 84
               height: 34
-              normal: ~150,150,150,255
-              hover: ~200,200,200,255
-              shape: ~round_rect
-              radius: 12
-              texts: "~&0关闭"
-              center: true
-              fontSize: 36
-            effect:
-              stroke:
-                width: 2
-                color: ~0,0,0,255
             action:
               clickLeft: |-
                 Screen.close()
+            children:
+              关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~150,150,150,255
+                  hover: ~200,200,200,255
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~0,0,0,255
+              关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 84
+                  texts: "~&0关闭"
+                  fontSize: 36
+                  through: true
           消息面板:
             type: Texture
             attribute:

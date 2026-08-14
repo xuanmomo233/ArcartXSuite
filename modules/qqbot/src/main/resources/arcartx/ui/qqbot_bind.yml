@@ -128,58 +128,91 @@ controls:
               texts: "~&fQQ 绑定中心"
               fontSize: 49
           关闭按钮:
-            type: Texture
+            type: Canvas
             attribute:
               x: 660
               y: 18
               width: 40
               height: 40
-              normal: ~180,50,50,200
-              hover: ~220,70,70,255
-              shape: ~round_rect
-              radius: 10
-              texts: "~&f✕"
-              center: true
-              fontSize: 36
             action:
               clickLeft: |-
                 self.close()
+            children:
+              关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~180,50,50,200
+                  hover: ~220,70,70,255
+                  shape: ~round_rect
+                  radius: 10
+              关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 40
+                  texts: "~&f✕"
+                  fontSize: 36
+                  through: true
           # ── Tab 切换按钮 ──
           tab_状态:
-            type: Texture
+            type: Canvas
             attribute:
               x: 28
               y: 76
               width: 130
               height: 38
-              normal: "var.tab == 'status' ? '80,180,255,220' : '50,55,65,200'"
-              hover: ~100,200,255,255
-              shape: ~round_rect
-              radius: 10
-              texts: "~&f绑定状态"
-              center: true
-              fontSize: 34
             action:
               clickLeft: |-
                 var.tab = 'status'
+            children:
+              tab_状态背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.tab == 'status' ? '80,180,255,220' : '50,55,65,200'"
+                  hover: ~100,200,255,255
+                  shape: ~round_rect
+                  radius: 10
+              tab_状态文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 130
+                  texts: "~&f绑定状态"
+                  fontSize: 34
+                  through: true
           tab_消息:
-            type: Texture
+            type: Canvas
             attribute:
               x: 168
               y: 76
               width: 130
               height: 38
-              normal: "var.tab == 'messages' ? '80,180,255,220' : '50,55,65,200'"
-              hover: ~100,200,255,255
-              shape: ~round_rect
-              radius: 10
-              texts: "'&f群消息 (' + var.msgCount + ')'"
-              center: true
-              fontSize: 34
             action:
               clickLeft: |-
                 var.tab = 'messages'
                 Packet.send(var.packetId, 'fetch_messages')
+            children:
+              tab_消息背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.tab == 'messages' ? '80,180,255,220' : '50,55,65,200'"
+                  hover: ~100,200,255,255
+                  shape: ~round_rect
+                  radius: 10
+              tab_消息文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 130
+                  texts: "'&f群消息 (' + var.msgCount + ')'"
+                  fontSize: 34
+                  through: true
           # ── 绑定状态页 ──
           状态容器:
             type: Canvas
@@ -191,18 +224,29 @@ controls:
               visible: var.tab == 'status'
             children:
               绑定状态图标:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 0
                   y: 8
                   width: 48
                   height: 48
-                  normal: "var.bound ? '80,200,120,255' : '200,80,80,255'"
-                  shape: ~round_rect
-                  radius: 24
-                  texts: "var.bound ? '&f✔' : '&f✘'"
-                  center: true
-                  fontSize: 36
+                children:
+                  绑定状态图标背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: "var.bound ? '80,200,120,255' : '200,80,80,255'"
+                      shape: ~round_rect
+                      radius: 24
+                  绑定状态图标文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 48
+                      texts: "var.bound ? '&f✔' : '&f✘'"
+                      fontSize: 36
+                      through: true
               绑定状态文字:
                 type: Text
                 attribute:
@@ -219,23 +263,34 @@ controls:
                   fontSize: 28
               # 生成验证码按钮
               获取验证码按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 0
                   y: 80
                   width: 200
                   height: 44
-                  normal: ~60,140,200,220
-                  hover: ~80,160,220,255
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&f获取验证码"
-                  center: true
-                  fontSize: 36
                   visible: "!var.bound"
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'request_code')
+                children:
+                  获取验证码背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~60,140,200,220
+                      hover: ~80,160,220,255
+                      shape: ~round_rect
+                      radius: 12
+                  获取验证码文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 200
+                      texts: "~&f获取验证码"
+                      fontSize: 36
+                      through: true
               # 验证码显示
               验证码显示:
                 type: Text
@@ -247,23 +302,34 @@ controls:
                   visible: "!var.bound && var.code != none"
               # 解绑按钮
               解绑按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 0
                   y: 80
                   width: 160
                   height: 44
-                  normal: ~180,80,60,220
-                  hover: ~210,100,80,255
-                  shape: ~round_rect
-                  radius: 12
-                  texts: "~&f解除绑定"
-                  center: true
-                  fontSize: 36
                   visible: var.bound
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'unbind')
+                children:
+                  解绑背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~180,80,60,220
+                      hover: ~210,100,80,255
+                      shape: ~round_rect
+                      radius: 12
+                  解绑文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 160
+                      texts: "~&f解除绑定"
+                      fontSize: 36
+                      through: true
               # 结果消息
               结果消息:
                 type: Text
@@ -354,22 +420,33 @@ controls:
                     width: 1
                     color: ~80,180,255,120
               发送按钮:
-                type: Texture
+                type: Canvas
                 attribute:
                   x: 550
                   y: 268
                   width: 114
                   height: 36
-                  normal: ~60,140,200,220
-                  hover: ~80,160,220,255
-                  shape: ~round_rect
-                  radius: 10
-                  texts: "~&f发送"
-                  center: true
-                  fontSize: 30
                 action:
                   clickLeft: |-
                     if(var.replyText != none){
                       Packet.send(var.packetId, 'send_message', var.replyText)
                       var.replyText = none
                     }
+                children:
+                  发送背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~60,140,200,220
+                      hover: ~80,160,220,255
+                      shape: ~round_rect
+                      radius: 10
+                  发送文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 114
+                      texts: "~&f发送"
+                      fontSize: 30
+                      through: true
