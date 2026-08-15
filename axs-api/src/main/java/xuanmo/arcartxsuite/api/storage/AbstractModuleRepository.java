@@ -35,7 +35,7 @@ import javax.sql.DataSource;
  *   <li>MySQL 模式：所有模块共享本体一个 HikariCP 连接池，各模块用 {@code tablePrefix} 隔离表。</li>
  *   <li>SQLite 模式：各模块仍使用各自的 {@code <moduleId>.db} 文件，本体按模块名分配独立连接。</li>
  *   <li>{@link #initialize()} 只建表，不建池（池由 {@link StorageManager} 管理）。</li>
- *   <li>{@link #shutdown()} 不关闭池（池由 {@link StorageManager} 统一关闭）。</li>
+ *   <li>{@link #shutdown()} 关闭该模块对应的 SQLite 独立池（释放文件锁），MySQL 全局池不受影响。</li>
  * </ul>
  *
  * <h4>2. 自建模式（向后兼容，旧模块/覆盖配置时使用）</h4>
@@ -245,12 +245,15 @@ public abstract class AbstractModuleRepository {
     /**
      * 关闭连接池。
      * <p>
-     * 共享模式下<b>不关闭</b>数据源（由 {@link StorageManager} 统一管理）；
-     * 自建模式下关闭 HikariCP 连接池。
+     * 共享模式下关闭该模块对应的 SQLite 独立连接池（释放文件锁，供热更新场景使用），
+     * MySQL 全局共享池不受影响；自建模式下关闭 HikariCP 连接池。
      */
     public void shutdown() {
         if (isSharedMode()) {
-            // 共享模式：不关闭池，只清除引用
+            // 共享模式：关闭模块独立的 SQLite 池（释放文件锁），MySQL 全局池为空操作
+            if (storageManager != null && moduleId != null) {
+                storageManager.closeModuleDataSource(moduleId);
+            }
             sharedDataSource = null;
             return;
         }

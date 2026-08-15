@@ -87,4 +87,15 @@ public interface StorageManager {
      * @throws SQLException 数据源不可用或创建失败
      */
     DataSource getModuleDataSource(String moduleId, String sqliteFileName) throws SQLException;
+
+    /**
+     * 关闭指定模块的 SQLite 独立数据源（仅 SQLite 模式下有效）。
+     * <p>
+     * 用于模块热更新（{@code /axs update}）时释放旧连接池，避免 SQLite 文件锁占用
+     * 导致新模块加载时连接超时。MySQL 模式下此方法为空操作（全局共享池由本体统一管理）。
+     *
+     * @param moduleId 模块 ID，为 {@code null} 时按 {@code "default"} 处理
+     * @since 1.4.1
+     */
+    void closeModuleDataSource(String moduleId);
 }

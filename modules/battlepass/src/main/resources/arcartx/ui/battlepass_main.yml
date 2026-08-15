@@ -435,8 +435,6 @@ controls:
                         type: Text
                         attribute:
                           point: ~middle_center
-                          x: 246
-                          y: 14
                           texts: "'&f' + ((type.toNumber(var.progressRatio) * 100).round()) + '%'"
                           fontSize: 28
                           through: true

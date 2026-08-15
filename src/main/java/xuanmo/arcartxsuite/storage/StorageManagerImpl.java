@@ -177,6 +177,20 @@ public final class StorageManagerImpl implements StorageManager {
         }
     }
 
+    @Override
+    public void closeModuleDataSource(String moduleId) {
+        // MySQL 模式：全局共享池，不关闭（由本体 onDisable 统一管理）
+        if (descriptor.isMysql()) {
+            return;
+        }
+        // SQLite 模式：关闭并移除该模块的独立连接池，释放文件锁
+        String key = moduleId != null ? moduleId : "default";
+        HikariDataSource ds = sqliteModuleSources.remove(key);
+        if (ds != null && !ds.isClosed()) {
+            ds.close();
+        }
+    }
+
     /**
      * 关闭所有数据源（本体 onDisable 时调用）。
      */
