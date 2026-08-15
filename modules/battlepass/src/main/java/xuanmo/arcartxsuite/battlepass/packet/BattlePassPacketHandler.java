@@ -280,6 +280,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         payload.put("rewardCount", String.valueOf(idx));
         payload.put("currentLevel", String.valueOf(progress.currentLevel()));
         payload.put("action_token", actionTokens.getOrDefault(player.getUniqueId(), ""));
+        plugin.getLogger().info("[DEBUG] pushRewardsData: rewards=" + sorted.size() + " levelsMap=" + levelsMap.size() + " levelCount=" + levelsMap.size() + " rewardCount=" + idx);
 
         packetBridge.sendPacket(player, rewardsUiId, "rewards", payload);
     }
