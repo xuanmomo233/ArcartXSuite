@@ -101,8 +101,8 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
             case "open_tasks" -> openTasks(player);
             case "open_rewards" -> openRewards(player);
             case "claim" -> handleClaim(player, data);
-            case "refresh" -> pushMainData(player);
-            default -> pushMainData(player);
+            case "refresh" -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushMainData(player); });
+            default -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushMainData(player); });
         }
         return true;
     }
