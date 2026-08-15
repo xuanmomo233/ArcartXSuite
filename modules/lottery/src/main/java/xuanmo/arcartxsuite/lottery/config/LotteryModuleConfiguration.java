@@ -26,6 +26,7 @@ public record LotteryModuleConfiguration(
     StorageConfiguration storage,
     String poolsDirectory,
     String exchangeDirectory,
+    boolean overwriteUiFiles,
     Map<String, String> sharedPityGroups,
     Map<String, PoolDefinition> pools,
     Map<String, ExchangeShopItem> exchangeItems
@@ -60,7 +61,9 @@ public record LotteryModuleConfiguration(
         Map<String, ExchangeShopItem> exchangeItems =
             loadExchangeItems(new File(dataFolder, exchangeDir), logger);
 
-        return new LotteryModuleConfiguration(storage, poolsDir, exchangeDir, sharedGroups, pools, exchangeItems);
+        boolean overwriteUiFiles = yaml.getBoolean("ui.overwrite-ui-files", false);
+
+        return new LotteryModuleConfiguration(storage, poolsDir, exchangeDir, overwriteUiFiles, sharedGroups, pools, exchangeItems);
     }
 
     private static Map<String, String> loadSharedPityGroups(@Nullable ConfigurationSection section) {

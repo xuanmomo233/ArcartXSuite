@@ -104,7 +104,7 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
 
     @Override
     protected boolean overwriteUiFiles() {
-        return false;
+        return rawConfiguration != null && rawConfiguration.getBoolean("ui.overwrite-ui-files", false);
     }
 
     @Override

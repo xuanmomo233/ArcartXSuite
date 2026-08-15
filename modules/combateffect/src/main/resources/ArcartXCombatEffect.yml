@@ -6,6 +6,11 @@ config-version: 1
 # 重载: /axs combateffect reload
 # PAPI 输出: 无独立 PlaceholderAPI 输出。
 
+# ─── UI 配置 ────────────────────────────────────────
+ui:
+  # 是否强制覆盖用户已修改的 UI 文件。
+  overwrite-ui-files: false
+
 kill-effect:
   settings:
     # 是否开启调试日志（输出详细发包信息）

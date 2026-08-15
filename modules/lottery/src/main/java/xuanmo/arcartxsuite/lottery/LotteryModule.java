@@ -108,7 +108,7 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     protected boolean overwriteUiFiles() {
-        return false;
+        return configuration != null && configuration.overwriteUiFiles();
     }
 
     @Override
