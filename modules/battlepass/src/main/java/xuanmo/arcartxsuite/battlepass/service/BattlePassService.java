@@ -293,6 +293,72 @@ public final class BattlePassService {
         return true;
     }
 
+    /**
+     * 管理员给玩家增加指定经验值，自动升级。
+     *
+     * @param player 目标玩家
+     * @param xp     增加的经验值（正数）
+     * @return 实际增加后的总经验（当前等级经验 + 已升级数 * xpPerLevel）
+     */
+    public synchronized int addXp(Player player, int xp) {
+        if (xp <= 0) return 0;
+        BattlePassPlayerProgress progress = getProgress(player);
+        BattlePassPlayerProgress updated = addXp(progress, xp);
+        cachedProgress.put(player.getUniqueId(), updated);
+        dirtyPlayers.add(player.getUniqueId());
+        return updated.currentXp() + (updated.currentLevel() - progress.currentLevel()) * configuration.season().xpPerLevel();
+    }
+
+    /**
+     * 管理员设置玩家当前等级内的经验值（不触发升级，超出部分截断）。
+     *
+     * @param player 目标玩家
+     * @param xp     目标经验值
+     */
+    public synchronized void setXp(Player player, int xp) {
+        int xpPerLevel = configuration.season().xpPerLevel();
+        int clamped = Math.max(0, Math.min(xp, xpPerLevel - 1));
+        BattlePassPlayerProgress progress = getProgress(player);
+        cachedProgress.put(player.getUniqueId(), progress.withXp(clamped));
+        dirtyPlayers.add(player.getUniqueId());
+    }
+
+    /**
+     * 管理员扣除玩家经验值，可能降级。
+     *
+     * @param player 目标玩家
+     * @param xp     扣除的经验值（正数）
+     */
+    public synchronized void removeXp(Player player, int xp) {
+        if (xp <= 0) return;
+        BattlePassPlayerProgress progress = getProgress(player);
+        int xpPerLevel = configuration.season().xpPerLevel();
+        int totalXp = progress.currentXp() + progress.currentLevel() * xpPerLevel;
+        int newTotal = Math.max(0, totalXp - xp);
+        int newLevel = Math.max(1, newTotal / xpPerLevel);
+        int newXp = newTotal - newLevel * xpPerLevel;
+        if (newLevel < 1) {
+            newLevel = 1;
+            newXp = 0;
+        }
+        cachedProgress.put(player.getUniqueId(), progress.withLevel(newLevel).withXp(newXp));
+        dirtyPlayers.add(player.getUniqueId());
+    }
+
+    /**
+     * 管理员直接设置玩家等级，经验清零。
+     *
+     * @param player 目标玩家
+     * @param level  目标等级
+     */
+    public synchronized void setLevel(Player player, int level) {
+        int maxLevel = configuration.season().maxLevel();
+        int clamped = Math.max(1, Math.min(level, maxLevel));
+        BattlePassPlayerProgress progress = getProgress(player);
+        cachedProgress.put(player.getUniqueId(), progress.withLevel(clamped).withXp(0));
+        dirtyPlayers.add(player.getUniqueId());
+    }
+
     public void resetPlayerProgress(UUID playerUuid) {
         try {
             repository.resetPlayerProgress(playerUuid, configuration.season().seasonId());

@@ -103,8 +103,8 @@ controls:
               radius: 24
             effect:
               gradient:
-                color1: ~38,42,58,255
-                color2: ~28,30,42,255
+                color1: ~45,52,72,255
+                color2: ~20,22,34,255
                 type: 0
                 angleDeg: 90
               stroke:
@@ -152,9 +152,15 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~255,255,255,14
+                  normal: ~0,0,0,255
                   shape: ~round_rect
                   radius: 22
+                effect:
+                  gradient:
+                    color1: ~60,70,98,235
+                    color2: ~25,28,40,235
+                    type: 0
+                    angleDeg: 90
               顶栏分隔线:
                 type: Texture
                 attribute:
@@ -283,10 +289,15 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~60,40,40,220
-                      hover: ~Frosted:0;200,70,70,240
+                      normal: ~0,0,0,255
+                      hover: ~Frosted:0;220,90,90,240
                       shape: ~circle
                     effect:
+                      gradient:
+                        color1: ~140,60,60,240
+                        color2: ~95,40,40,240
+                        type: 0
+                        angleDeg: 90
                       stroke:
                         width: 2
                         color: ~255,100,100,140
@@ -295,7 +306,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       width: 44
-                      texts: "~&f✕"
+                      texts: "~&c✕"
                       fontSize: 28
 
           # ════════════════════════════════════════════════════
@@ -322,13 +333,13 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~42,46,62,220
+                      normal: ~0,0,0,255
                       shape: ~round_rect
                       radius: 20
                     effect:
                       gradient:
-                        color1: ~52,58,80,230
-                        color2: ~38,42,58,220
+                        color1: ~70,80,108,240
+                        color2: ~32,38,55,230
                         type: 0
                         angleDeg: 90
                       stroke:
@@ -340,8 +351,8 @@ controls:
                       point: ~top_left
                       x: 24
                       y: 20
-                      texts: "~&7当前等级"
-                      fontSize: 28
+                      texts: "~&b当前等级"
+                      fontSize: 40
                       through: true
                   # 大等级数字
                   等级数字:
@@ -350,17 +361,17 @@ controls:
                       point: ~top_left
                       x: 24
                       y: 56
-                      texts: "'&f&lLv.' + var.currentLevel"
+                      texts: "'&fLv.' + var.currentLevel"
                       fontSize: 72
                       through: true
                   等级上限:
                     type: Text
                     attribute:
                       point: ~top_left
-                      x: 220
+                      x: 170
                       y: 88
-                      texts: "'&7/ ' + var.maxLevel"
-                      fontSize: 36
+                      texts: "'&f/ ' + var.maxLevel"
+                      fontSize: 42
                       through: true
                   # 经验信息
                   经验文本:
@@ -368,10 +379,10 @@ controls:
                     attribute:
                       point: ~top_left
                       x: 24
-                      y: 150
+                      y: 148
                       width: 492
-                      texts: "'&7经验: &f' + var.currentXp + ' / ' + var.xpPerLevel"
-                      fontSize: 28
+                      texts: "'&f经验: &f' + var.currentXp + ' &7/ ' + var.xpPerLevel"
+                      fontSize: 34
                       through: true
                   还需经验:
                     type: Text
@@ -380,59 +391,55 @@ controls:
                       x: 24
                       y: 184
                       width: 492
-                      texts: "'&8升级还需 &f' + var.xpNeeded + ' &8经验'"
-                      fontSize: 24
+                      texts: "'&f升级还需 &f' + var.xpNeeded + ' &7经验'"
+                      fontSize: 30
                       through: true
                   # 进度条
-                  进度条背景:
-                    type: Texture
+                  进度条容器:
+                    type: Canvas
                     attribute:
                       point: ~top_left
                       x: 24
                       y: 222
                       width: 492
                       height: 28
-                      normal: ~20,22,32,200
-                      shape: ~round_rect
-                      radius: 14
-                    effect:
-                      stroke:
-                        width: 1
-                        color: ~90,170,255,60
-                  进度条填充:
-                    type: Texture
-                    attribute:
-                      point: ~top_left
-                      x: 24
-                      y: 222
-                      width: "(type.toNumber(var.progressRatio) > 1 ? 1 : type.toNumber(var.progressRatio)) * 492"
-                      height: 28
-                      normal: ~90,170,255,255
-                      shape: ~round_rect
-                      radius: 14
-                    effect:
-                      gradient:
-                        color1: ~120,200,255,255
-                        color2: ~70,140,220,255
-                        type: 0
-                        angleDeg: 0
-                      neon:
-                        color: ~120,200,255,120
-                        size: 6
-                        intensity: 0.4
-                        animated: false
-                  进度百分比:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 24
-                      y: 222
-                      width: 492
-                      height: 28
-                      texts: "'&f' + ((type.toNumber(var.progressRatio) * 100).round()) + '%'"
-                      center: true
-                      fontSize: 24
                       through: true
+                    children:
+                      进度条背景:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          normal: ~20,22,32,240
+                          shape: ~round_rect
+                          radius: 14
+                        effect:
+                          stroke:
+                            width: 1
+                            color: ~90,170,255,60
+                      进度条填充:
+                        type: Texture
+                        attribute:
+                          point: ~top_left
+                          width: "(type.toNumber(var.progressRatio) > 1 ? 1 : type.toNumber(var.progressRatio)) * 492"
+                          height: 28
+                          normal: ~0,0,0,255
+                          shape: ~round_rect
+                          radius: 14
+                        effect:
+                          gradient:
+                            color1: ~160,235,255,255
+                            color2: ~70,145,225,255
+                            type: 0
+                            angleDeg: 0
+                      进度百分比:
+                        type: Text
+                        attribute:
+                          point: ~middle_center
+                          x: 246
+                          y: 14
+                          texts: "'&f' + ((type.toNumber(var.progressRatio) * 100).round()) + '%'"
+                          fontSize: 28
+                          through: true
 
               # ── 档位信息卡片 ────────────────────────────────
               档位信息卡片:
@@ -449,13 +456,13 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~42,46,62,220
+                      normal: ~0,0,0,255
                       shape: ~round_rect
                       radius: 20
                     effect:
                       gradient:
-                        color1: ~52,58,80,230
-                        color2: ~38,42,58,220
+                        color1: ~70,80,108,240
+                        color2: ~32,38,55,230
                         type: 0
                         angleDeg: 90
                       stroke:
@@ -467,8 +474,8 @@ controls:
                       point: ~top_left
                       x: 24
                       y: 20
-                      texts: "~&7档位权益"
-                      fontSize: 28
+                      texts: "~&b档位权益"
+                      fontSize: 40
                       through: true
                   # 免费档
                   免费档行:
@@ -485,10 +492,15 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: ~50,55,72,200
+                          normal: ~0,0,0,255
                           shape: ~round_rect
                           radius: 14
                         effect:
+                          gradient:
+                            color1: ~85,96,122,215
+                            color2: ~45,52,70,215
+                            type: 0
+                            angleDeg: 90
                           stroke:
                             width: 1
                             color: ~120,130,150,100
@@ -507,8 +519,8 @@ controls:
                         attribute:
                           point: ~middle_left
                           x: 48
-                          texts: "~&7免费档 &8(默认)"
-                          fontSize: 26
+                          texts: "~&f免费档 &f(默认)"
+                          fontSize: 30
                           through: true
                       免费档状态:
                         type: Text
@@ -533,10 +545,15 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.premiumUnlocked ? '60,50,30,220' : '50,55,72,180'"
+                          normal: "var.premiumUnlocked ? '0,0,0,255' : '0,0,0,255'"
                           shape: ~round_rect
                           radius: 14
                         effect:
+                          gradient:
+                            color1: "var.premiumUnlocked ? '100,80,40,230' : '85,96,122,205'"
+                            color2: "var.premiumUnlocked ? '60,50,28,230' : '45,52,70,205'"
+                            type: 0
+                            angleDeg: 90
                           stroke:
                             width: 1
                             color: "var.premiumUnlocked ? '255,210,100,160' : '120,130,150,80'"
@@ -561,15 +578,15 @@ controls:
                         attribute:
                           point: ~middle_left
                           x: 48
-                          texts: "~&6高级档 &8(额外奖励)"
-                          fontSize: 26
+                          texts: "~&6高级档 &f(额外奖励)"
+                          fontSize: 30
                           through: true
                       高级档状态:
                         type: Text
                         attribute:
                           point: ~middle_right
                           x: -16
-                          texts: "var.premiumUnlocked ? '&a已激活' : '&7未激活'"
+                          texts: "var.premiumUnlocked ? '&a已激活' : '&c未激活'"
                           fontSize: 26
                           through: true
                   # 典藏档
@@ -587,10 +604,15 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.deluxeUnlocked ? '50,30,60,220' : '50,55,72,180'"
+                          normal: "var.deluxeUnlocked ? '0,0,0,255' : '0,0,0,255'"
                           shape: ~round_rect
                           radius: 14
                         effect:
+                          gradient:
+                            color1: "var.deluxeUnlocked ? '70,45,90,220' : '62,70,90,190'"
+                            color2: "var.deluxeUnlocked ? '50,30,60,220' : '50,56,74,190'"
+                            type: 0
+                            angleDeg: 90
                           stroke:
                             width: 1
                             color: "var.deluxeUnlocked ? '200,140,255,160' : '120,130,150,80'"
@@ -615,15 +637,15 @@ controls:
                         attribute:
                           point: ~middle_left
                           x: 48
-                          texts: "~&5典藏档 &8(专属奖励)"
-                          fontSize: 26
+                          texts: "~&5典藏档 &f(专属奖励)"
+                          fontSize: 30
                           through: true
                       典藏档状态:
                         type: Text
                         attribute:
                           point: ~middle_right
                           x: -16
-                          texts: "var.deluxeUnlocked ? '&a已激活' : '&7未激活'"
+                          texts: "var.deluxeUnlocked ? '&a已激活' : '&c未激活'"
                           fontSize: 26
                           through: true
 
@@ -662,11 +684,16 @@ controls:
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: ~50,90,160,235
+                              normal: ~0,0,0,255
                               hover: ~Frosted:0;70,120,200,245
                               shape: ~round_rect
                               radius: 32
                             effect:
+                              gradient:
+                                color1: ~115,180,255,245
+                                color2: ~50,105,195,245
+                                type: 0
+                                angleDeg: 90
                               stroke:
                                 width: 2
                                 color: ~90,170,255,180
@@ -697,11 +724,16 @@ controls:
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: ~160,100,50,235
-                              hover: ~Frosted:0;200,130,70,245
+                              normal: ~0,0,0,255
+                              hover: ~Frosted:0;220,150,80,245
                               shape: ~round_rect
                               radius: 32
                             effect:
+                              gradient:
+                                color1: ~245,185,85,245
+                                color2: ~190,120,40,245
+                                type: 0
+                                angleDeg: 90
                               stroke:
                                 width: 2
                                 color: ~255,180,100,180

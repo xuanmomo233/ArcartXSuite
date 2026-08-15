@@ -8,6 +8,10 @@ help:
   season: '&7{0} season <new|info>&f - 赛季管理'
   reset: '&7{0} reset <玩家>&f - 重置玩家进度'
   unlock: '&7{0} unlock <玩家> <premium|deluxe>&f - 解锁指定战令'
+  addexp: '&7{0} addexp <玩家> <数量>&f - 增加玩家经验'
+  setexp: '&7{0} setexp <玩家> <数量>&f - 设置玩家当前等级经验'
+  removeexp: '&7{0} removeexp <玩家> <数量>&f - 扣除玩家经验'
+  setlevel: '&7{0} setlevel <玩家> <等级>&f - 设置玩家等级'
   # 以下为旧 key 保留（代码不再引用）
   tasks: '&e/bp tasks &7- 打开任务面板'
   rewards: '&e/bp rewards &7- 打开奖励面板'
@@ -62,6 +66,16 @@ admin:
   reset:
     usage: '&c用法: {0}'
     offline: '&c玩家不在线: {0}'
+  addexp-usage-full: "&c用法: /{0} battlepass addexp <玩家> <数量>"
+  setexp-usage-full: "&c用法: /{0} battlepass setexp <玩家> <数量>"
+  removeexp-usage-full: "&c用法: /{0} battlepass removeexp <玩家> <数量>"
+  setlevel-usage-full: "&c用法: /{0} battlepass setlevel <玩家> <等级>"
+  invalid-amount: '&c无效的数量，请输入正整数。'
+  addexp-success: '&a已为玩家 &e{0} &a增加 &e{1} &a点战令经验。'
+  setexp-success: '&a已将玩家 &e{0} &a的当前等级经验设为 &e{1}&a。'
+  removeexp-success: '&a已扣除玩家 &e{0} &a的 &e{1} &a点战令经验。'
+  setlevel-success: '&a已将玩家 &e{0} &a的战令等级设为 &e{1}&a。'
+  setlevel-exceed-max: '&c等级超过上限，最大等级为 {0}。'
 
 player:
   only-player: "&c该命令仅限玩家使用。"

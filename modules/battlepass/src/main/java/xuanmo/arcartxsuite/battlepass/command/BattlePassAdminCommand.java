@@ -47,7 +47,7 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
 
     @Override
     public List<String> actions() {
-        return List.of("help", "status", "reset", "season", "unlock");
+        return List.of("help", "status", "reset", "season", "unlock", "addexp", "setexp", "removeexp", "setlevel");
     }
 
     /**
@@ -64,6 +64,10 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
             case "status" -> sendStatus(sender);
             case "reset" -> handleReset(sender, args);
             case "unlock" -> handleUnlock(sender, args);
+            case "addexp" -> handleAddExp(sender, args);
+            case "setexp" -> handleSetExp(sender, args);
+            case "removeexp" -> handleRemoveExp(sender, args);
+            case "setlevel" -> handleSetLevel(sender, args);
             case "season" -> sender.sendMessage(msg("admin.season-unimplemented"));
             default -> sender.sendMessage(msg("common.unknown", cmd));
         }
@@ -82,7 +86,9 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
         }
         if (args.length == 3) {
             String action = args[1].toLowerCase(Locale.ROOT);
-            if ("reset".equals(action) || "unlock".equals(action)) {
+            if ("reset".equals(action) || "unlock".equals(action)
+                || "addexp".equals(action) || "setexp".equals(action)
+                || "removeexp".equals(action) || "setlevel".equals(action)) {
                 return null; // Bukkit 补全在线玩家名
             }
         }
@@ -99,6 +105,10 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(msg("help.season", cmd));
         sender.sendMessage(msg("help.reset", cmd));
         sender.sendMessage(msg("help.unlock", cmd));
+        sender.sendMessage(msg("help.addexp", cmd));
+        sender.sendMessage(msg("help.setexp", cmd));
+        sender.sendMessage(msg("help.removeexp", cmd));
+        sender.sendMessage(msg("help.setlevel", cmd));
     }
 
     private void sendStatus(CommandSender sender) {
@@ -169,6 +179,131 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
         } else {
             sender.sendMessage(msg("admin.unlock-already", target.getName(), ChatColor.translateAlternateColorCodes('&', tier.name())));
         }
+    }
+
+    private void handleAddExp(CommandSender sender, String[] args) {
+        if (args.length < 4) {
+            sender.sendMessage(msg("admin.addexp-usage-full", args[0]));
+            return;
+        }
+        Player target = Bukkit.getPlayerExact(args[2]);
+        if (target == null) {
+            sender.sendMessage(msg("admin.reset.offline", args[2]));
+            return;
+        }
+        int xp;
+        try {
+            xp = Integer.parseInt(args[3]);
+        } catch (NumberFormatException e) {
+            sender.sendMessage(msg("admin.invalid-amount"));
+            return;
+        }
+        if (xp <= 0) {
+            sender.sendMessage(msg("admin.invalid-amount"));
+            return;
+        }
+        BattlePassService service = serviceProvider.get();
+        if (service == null) {
+            sender.sendMessage(msg("common.service-unavailable"));
+            return;
+        }
+        service.addXp(target, xp);
+        sender.sendMessage(msg("admin.addexp-success", target.getName(), String.valueOf(xp)));
+    }
+
+    private void handleSetExp(CommandSender sender, String[] args) {
+        if (args.length < 4) {
+            sender.sendMessage(msg("admin.setexp-usage-full", args[0]));
+            return;
+        }
+        Player target = Bukkit.getPlayerExact(args[2]);
+        if (target == null) {
+            sender.sendMessage(msg("admin.reset.offline", args[2]));
+            return;
+        }
+        int xp;
+        try {
+            xp = Integer.parseInt(args[3]);
+        } catch (NumberFormatException e) {
+            sender.sendMessage(msg("admin.invalid-amount"));
+            return;
+        }
+        if (xp < 0) {
+            sender.sendMessage(msg("admin.invalid-amount"));
+            return;
+        }
+        BattlePassService service = serviceProvider.get();
+        if (service == null) {
+            sender.sendMessage(msg("common.service-unavailable"));
+            return;
+        }
+        service.setXp(target, xp);
+        sender.sendMessage(msg("admin.setexp-success", target.getName(), String.valueOf(xp)));
+    }
+
+    private void handleRemoveExp(CommandSender sender, String[] args) {
+        if (args.length < 4) {
+            sender.sendMessage(msg("admin.removeexp-usage-full", args[0]));
+            return;
+        }
+        Player target = Bukkit.getPlayerExact(args[2]);
+        if (target == null) {
+            sender.sendMessage(msg("admin.reset.offline", args[2]));
+            return;
+        }
+        int xp;
+        try {
+            xp = Integer.parseInt(args[3]);
+        } catch (NumberFormatException e) {
+            sender.sendMessage(msg("admin.invalid-amount"));
+            return;
+        }
+        if (xp <= 0) {
+            sender.sendMessage(msg("admin.invalid-amount"));
+            return;
+        }
+        BattlePassService service = serviceProvider.get();
+        if (service == null) {
+            sender.sendMessage(msg("common.service-unavailable"));
+            return;
+        }
+        service.removeXp(target, xp);
+        sender.sendMessage(msg("admin.removeexp-success", target.getName(), String.valueOf(xp)));
+    }
+
+    private void handleSetLevel(CommandSender sender, String[] args) {
+        if (args.length < 4) {
+            sender.sendMessage(msg("admin.setlevel-usage-full", args[0]));
+            return;
+        }
+        Player target = Bukkit.getPlayerExact(args[2]);
+        if (target == null) {
+            sender.sendMessage(msg("admin.reset.offline", args[2]));
+            return;
+        }
+        int level;
+        try {
+            level = Integer.parseInt(args[3]);
+        } catch (NumberFormatException e) {
+            sender.sendMessage(msg("admin.invalid-amount"));
+            return;
+        }
+        if (level < 1) {
+            sender.sendMessage(msg("admin.invalid-amount"));
+            return;
+        }
+        BattlePassService service = serviceProvider.get();
+        if (service == null) {
+            sender.sendMessage(msg("common.service-unavailable"));
+            return;
+        }
+        int maxLevel = service.configuration().season().maxLevel();
+        if (level > maxLevel) {
+            sender.sendMessage(msg("admin.setlevel-exceed-max", String.valueOf(maxLevel)));
+            return;
+        }
+        service.setLevel(target, level);
+        sender.sendMessage(msg("admin.setlevel-success", target.getName(), String.valueOf(level)));
     }
 
     private String msg(String key, Object... args) {
