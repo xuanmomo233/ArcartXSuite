@@ -117,7 +117,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
     @Override
     protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().registerOnEnable();
+        return configuration != null && configuration.ui().overwriteUiFiles();
     }
 
     @Override

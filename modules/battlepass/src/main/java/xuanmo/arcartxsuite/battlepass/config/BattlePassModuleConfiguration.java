@@ -370,12 +370,14 @@ public record BattlePassModuleConfiguration(
      * UI 配置 record，控制模块 UI 的注册行为与 UI ID。
      *
      * @param registerOnEnable 启用时是否自动注册 UI
+     * @param overwriteUiFiles 是否强制覆盖用户已修改的 UI 文件
      * @param mainId           主界面 UI ID
      * @param tasksId          任务界面 UI ID
      * @param rewardsId        奖励界面 UI ID
      */
     public record BattlePassUiConfiguration(
         boolean registerOnEnable,
+        boolean overwriteUiFiles,
         String mainId,
         String tasksId,
         String rewardsId
@@ -384,6 +386,7 @@ public record BattlePassModuleConfiguration(
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
             return new BattlePassUiConfiguration(
                 section.getBoolean("register-on-enable", true),
+                section.getBoolean("overwrite-ui-files", false),
                 section.getString("main-id", "battlepass_main"),
                 section.getString("tasks-id", "battlepass_tasks"),
                 section.getString("rewards-id", "battlepass_rewards")
