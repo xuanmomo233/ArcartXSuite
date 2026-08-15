@@ -51,6 +51,16 @@ ui:
         e = val.等级列表['等级列'].copy('等级列' + key)
         e.levelKey = key
       }
+      // 数据就绪后触发每个奖励图标的 seticon()，否则 Slot 的 seticon 属性不会自动生效
+      for(i in range(1, var.levelCount - 1)){
+        key = i.round()
+        e = val.等级列表['等级列' + key]
+        if(e != none){
+          e['免费档卡片']['物品图标'].seticon()
+          e['高级档卡片']['物品图标'].seticon()
+          e['典藏档卡片']['物品图标'].seticon()
+        }
+      }
   action:
     load: |-
       var.packetId = 'AXS_BATTLEPASS'
@@ -326,7 +336,7 @@ controls:
                               fontSize: 22
                               through: true
                           物品图标:
-                            type: Texture
+                            type: Slot
                             attribute:
                               point: ~middle_center
                               y: -8
@@ -417,7 +427,7 @@ controls:
                               fontSize: 22
                               through: true
                           物品图标:
-                            type: Texture
+                            type: Slot
                             attribute:
                               point: ~middle_center
                               y: -8
@@ -507,7 +517,7 @@ controls:
                               fontSize: 22
                               through: true
                           物品图标:
-                            type: Texture
+                            type: Slot
                             attribute:
                               point: ~middle_center
                               y: -8

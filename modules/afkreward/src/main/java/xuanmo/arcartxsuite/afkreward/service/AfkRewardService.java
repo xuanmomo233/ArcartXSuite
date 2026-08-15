@@ -92,6 +92,8 @@ public final class AfkRewardService {
     private final Map<UUID, Deque<Long>> viewChanges = new ConcurrentHashMap<>();
     private final Set<UUID> antiAbuseNotified = ConcurrentHashMap.newKeySet();
     private final Set<UUID> overflowNotified = ConcurrentHashMap.newKeySet();
+    // 加载失败的玩家集合：这些玩家的缓存数据不可信，trySave/saveAreaStats 必须跳过，避免空数据覆盖 DB 真实数据
+    private final Set<UUID> failedLoads = ConcurrentHashMap.newKeySet();
     private final Map<UUID, EndReason> pendingManualEndReasons = new ConcurrentHashMap<>();
     private volatile String dailySecondsDate = LocalDate.now().format(DATE_FMT);
     private final AfkRewardAuditLogger auditLogger;
@@ -182,6 +184,7 @@ public final class AfkRewardService {
         viewChanges.clear();
         antiAbuseNotified.clear();
         overflowNotified.clear();
+        failedLoads.clear();
         pendingManualEndReasons.clear();
     }
 
@@ -663,31 +666,62 @@ public final class AfkRewardService {
     }
 
     private PlayerStats getStats(UUID uuid) {
-        return statsCache.computeIfAbsent(uuid, id -> {
+        PlayerStats cached = statsCache.get(uuid);
+        if (cached != null) return cached;
+        // 首次加载失败时短暂等待后重试一次，应对 DB 连接短暂抖动
+        for (int attempt = 0; attempt < 2; attempt++) {
             try {
-                return repository.loadStats(id);
+                PlayerStats loaded = repository.loadStats(uuid);
+                statsCache.put(uuid, loaded);
+                failedLoads.remove(uuid);
+                return loaded;
             } catch (Exception e) {
-                logger.warning("[AfkReward] 加载玩家统计失败: " + e.getMessage());
-                return new PlayerStats("", "", 0, 0, 0);
+                if (attempt == 0) {
+                    logger.warning("[AfkReward] 加载玩家统计失败（将重试一次）: " + e.getMessage());
+                    try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                } else {
+                    logger.warning("[AfkReward] 加载玩家统计失败（重试仍失败）: " + e.getMessage());
+                    // 不缓存空值，避免 trySave 把空数据写回 DB 覆盖真实数据
+                    failedLoads.add(uuid);
+                    return new PlayerStats("", "", 0, 0, 0);
+                }
             }
-        });
+        }
+        failedLoads.add(uuid);
+        return new PlayerStats("", "", 0, 0, 0);
     }
 
     private void preloadStats(UUID uuid, String playerName) {
-        statsCache.computeIfAbsent(uuid, id -> {
+        PlayerStats cached = statsCache.get(uuid);
+        if (cached != null) return;
+        // 首次加载失败时短暂等待后重试一次，应对 DB 连接短暂抖动
+        for (int attempt = 0; attempt < 2; attempt++) {
             try {
-                PlayerStats stats = repository.loadStats(id);
+                PlayerStats stats = repository.loadStats(uuid);
                 if (stats.playerName().isEmpty()) {
                     stats = new PlayerStats(playerName, stats.todayDate(), stats.todayCount(), stats.totalCount(), stats.totalSeconds());
                 }
-                return stats;
+                statsCache.put(uuid, stats);
+                failedLoads.remove(uuid);
+                return;
             } catch (Exception e) {
-                return new PlayerStats(playerName, "", 0, 0, 0);
+                if (attempt == 0) {
+                    logger.warning("[AfkReward] 预加载玩家统计失败（将重试一次）: " + e.getMessage());
+                    try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                } else {
+                    logger.warning("[AfkReward] 预加载玩家统计失败（重试仍失败）: " + e.getMessage());
+                    // 不缓存空值，避免 trySave 把空数据写回 DB 覆盖真实数据
+                    failedLoads.add(uuid);
+                    return;
+                }
             }
-        });
+        }
+        failedLoads.add(uuid);
     }
 
     private void trySave(UUID uuid, PlayerStats stats) {
+        // 跳过加载失败的玩家：缓存中的统计不可信，写回会覆盖 DB 真实数据
+        if (failedLoads.contains(uuid)) return;
         try {
             repository.saveStats(uuid, stats);
         } catch (Exception e) {
@@ -1157,6 +1191,17 @@ public final class AfkRewardService {
         pendingManualEndReasons.remove(playerUuid);
         viewChanges.remove(playerUuid);
         statsCache.remove(playerUuid);
+        failedLoads.remove(playerUuid);
+    }
+
+    /**
+     * 判断指定玩家的统计数据是否因 DB 加载失败而不可用。
+     *
+     * @param uuid 玩家 UUID
+     * @return {@code true} 表示上次加载失败，缓存中无可信数据
+     */
+    public boolean isLoadFailed(UUID uuid) {
+        return failedLoads.contains(uuid);
     }
 
     // ── 区域统计 ──
@@ -1164,13 +1209,29 @@ public final class AfkRewardService {
     private void updateAreaTime(UUID uuid, String areaName, int deltaSeconds) {
         String today = LocalDate.now().format(DATE_FMT);
         Map<UUID, AreaStats> cache = areaStatsCache.computeIfAbsent(areaName, k -> new ConcurrentHashMap<>());
-        AreaStats stats = cache.computeIfAbsent(uuid, id -> {
-            try {
-                return repository.loadAreaStats(id, areaName);
-            } catch (Exception e) {
-                return new AreaStats(areaName, 0, 0, "");
+        AreaStats stats = cache.get(uuid);
+        if (stats == null) {
+            // 首次加载失败时短暂等待后重试一次，应对 DB 连接短暂抖动
+            boolean loaded = false;
+            for (int attempt = 0; attempt < 2; attempt++) {
+                try {
+                    stats = repository.loadAreaStats(uuid, areaName);
+                    failedLoads.remove(uuid);
+                    loaded = true;
+                    break;
+                } catch (Exception e) {
+                    if (attempt == 0) {
+                        logger.warning("[AfkReward] 加载区域统计失败（将重试一次）: " + e.getMessage());
+                        try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                    } else {
+                        logger.warning("[AfkReward] 加载区域统计失败（重试仍失败）: " + e.getMessage());
+                        // 不缓存空值，避免 saveAreaStats 把空数据写回 DB 覆盖真实数据
+                        failedLoads.add(uuid);
+                    }
+                }
             }
-        });
+            if (!loaded) return;
+        }
         if (!today.equals(stats.todayDate())) {
             stats = new AreaStats(areaName, stats.totalSeconds(), 0, today);
         }
@@ -1180,6 +1241,8 @@ public final class AfkRewardService {
     }
 
     private void saveAreaStats(UUID uuid, String areaName) {
+        // 跳过加载失败的玩家：缓存中的区域统计不可信，写回会覆盖 DB 真实数据
+        if (failedLoads.contains(uuid)) return;
         Map<UUID, AreaStats> cache = areaStatsCache.get(areaName);
         if (cache == null) return;
         AreaStats stats = cache.get(uuid);

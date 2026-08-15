@@ -88,6 +88,8 @@ public final class ChatService implements Listener {
     private final Map<UUID, DuplicateStamp> lastDuplicateStamps = new ConcurrentHashMap<>();
     private final Map<String, Long> processedEnvelopeKeys = new ConcurrentHashMap<>();
     private final Set<String> cloudWords = ConcurrentHashMap.newKeySet();
+    // 加载失败的玩家集合：这些玩家的缓存数据不可信，saveStateAsync 必须跳过，避免默认状态覆盖 DB 真实数据
+    private final Set<UUID> failedLoads = ConcurrentHashMap.newKeySet();
     private final java.util.function.Supplier<TabRefreshable> tabRefreshableProvider;
     private java.util.function.Supplier<EventBusCapability> eventBusProvider;
     private final String completionUiId;
@@ -234,6 +236,7 @@ public final class ChatService implements Listener {
         lastDuplicateStamps.clear();
         processedEnvelopeKeys.clear();
         cloudWords.clear();
+        failedLoads.clear();
     }
 
     public ChatModuleConfiguration configuration() {
@@ -566,6 +569,7 @@ public final class ChatService implements Listener {
         replyTargets.remove(uuid);
         lastMessageTimes.remove(uuid);
         lastDuplicateStamps.remove(uuid);
+        failedLoads.remove(uuid);
         updateMentionCompletions(event.getPlayer(), false);
         broadcastCompletionPlayerList();
     }
@@ -1443,16 +1447,39 @@ public final class ChatService implements Listener {
         if (cached != null) {
             return cached;
         }
-        try {
-            ChatPlayerState loaded = repository.loadState(playerUuid, configuration.defaultChannelId());
-            states.put(playerUuid, loaded);
-            return loaded;
-        } catch (SQLException exception) {
-            this.logger.warning("读取聊天状态失败: " + exception.getMessage());
-            ChatPlayerState fallback = ChatPlayerState.createDefault(playerUuid, configuration.defaultChannelId());
-            states.put(playerUuid, fallback);
-            return fallback;
+        // 首次加载失败时短暂等待后重试一次，应对 DB 连接短暂抖动
+        for (int attempt = 0; attempt < 2; attempt++) {
+            try {
+                ChatPlayerState loaded = repository.loadState(playerUuid, configuration.defaultChannelId());
+                states.put(playerUuid, loaded);
+                failedLoads.remove(playerUuid);
+                return loaded;
+            } catch (SQLException exception) {
+                if (attempt == 0) {
+                    this.logger.warning("读取聊天状态失败（将重试一次）: " + exception.getMessage());
+                    try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                } else {
+                    this.logger.warning("读取聊天状态失败（重试仍失败）: " + exception.getMessage());
+                    // 不缓存默认状态，避免 saveStateAsync 把默认数据写回 DB 覆盖真实数据
+                    // 标记为加载失败，saveStateAsync 将跳过该玩家
+                    failedLoads.add(playerUuid);
+                    return ChatPlayerState.createDefault(playerUuid, configuration.defaultChannelId());
+                }
+            }
         }
+        // 理论上不会走到这里
+        failedLoads.add(playerUuid);
+        return ChatPlayerState.createDefault(playerUuid, configuration.defaultChannelId());
+    }
+
+    /**
+     * 判断玩家上次加载聊天状态是否失败，缓存中无可信数据。
+     *
+     * @param playerUuid 玩家 UUID
+     * @return {@code true} 表示上次加载失败，缓存中无可信数据
+     */
+    public boolean isLoadFailed(UUID playerUuid) {
+        return failedLoads.contains(playerUuid);
     }
 
     private ChatMuteRecord currentMute(UUID playerUuid) {
@@ -1635,6 +1662,11 @@ public final class ChatService implements Listener {
     }
 
     private void saveStateAsync(ChatPlayerState state) {
+        // 跳过加载失败的玩家：缓存中的状态不可信，写回会覆盖 DB 真实数据
+        if (failedLoads.contains(state.playerUuid())) {
+            this.logger.info("跳过加载失败玩家的状态保存 [" + state.playerUuid() + "]");
+            return;
+        }
         ioExecutor.execute(() -> {
             try {
                 repository.saveState(state);

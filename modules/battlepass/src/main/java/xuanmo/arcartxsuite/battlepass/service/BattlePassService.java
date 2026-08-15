@@ -42,6 +42,8 @@ public final class BattlePassService {
     private final Map<UUID, List<PlayerTaskInstance>> cachedInstances = new ConcurrentHashMap<>();
     private final Set<UUID> dirtyPlayers = ConcurrentHashMap.newKeySet();
     private final Set<UUID> dirtyInstances = ConcurrentHashMap.newKeySet();
+    // 加载失败的玩家集合：这些玩家的缓存数据不可信，flushDirtyProgress 必须跳过，避免空进度覆盖 DB 真实数据
+    private final Set<UUID> failedLoads = ConcurrentHashMap.newKeySet();
     private BukkitTask saveTask;
     private BukkitTask resetTask;
     private volatile boolean active;
@@ -92,64 +94,100 @@ public final class BattlePassService {
         cachedInstances.clear();
         dirtyPlayers.clear();
         dirtyInstances.clear();
+        failedLoads.clear();
     }
 
     public BattlePassPlayerProgress getProgress(Player player) {
-        return cachedProgress.computeIfAbsent(player.getUniqueId(), uuid -> {
+        UUID uuid = player.getUniqueId();
+        BattlePassPlayerProgress cached = cachedProgress.get(uuid);
+        if (cached != null) return cached;
+        // 首次加载失败时短暂等待后重试一次，应对 DB 连接短暂抖动
+        for (int attempt = 0; attempt < 2; attempt++) {
             try {
-                return repository.loadProgress(uuid, configuration.season().seasonId());
+                BattlePassPlayerProgress loaded = repository.loadProgress(uuid, configuration.season().seasonId());
+                cachedProgress.put(uuid, loaded);
+                failedLoads.remove(uuid);
+                return loaded;
             } catch (SQLException e) {
-                logger.warning("加载战令进度失败: " + e.getMessage());
-                return new BattlePassPlayerProgress(uuid, configuration.season().seasonId());
+                if (attempt == 0) {
+                    logger.warning("加载战令进度失败（将重试一次）: " + e.getMessage());
+                    try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                } else {
+                    logger.warning("加载战令进度失败（重试仍失败）: " + e.getMessage());
+                    // 不缓存空进度，避免 flushDirtyProgress 把空数据写回 DB 覆盖真实数据
+                    // 标记为加载失败，flushDirtyProgress 将跳过该玩家
+                    failedLoads.add(uuid);
+                    return new BattlePassPlayerProgress(uuid, configuration.season().seasonId());
+                }
             }
-        });
+        }
+        // 理论上不会走到这里
+        failedLoads.add(uuid);
+        return new BattlePassPlayerProgress(uuid, configuration.season().seasonId());
     }
 
     public List<PlayerTaskInstance> getTaskInstances(Player player) {
-        return cachedInstances.computeIfAbsent(player.getUniqueId(), uuid -> {
-            try {
-                String seasonId = configuration.season().seasonId();
-                LocalDate today = LocalDate.now();
-                List<PlayerTaskInstance> result = new ArrayList<>(
-                    repository.loadPlayerTasks(uuid, seasonId));
-                if (result.isEmpty()) {
-                    // 首次加载：自动分配当日/当周任务
-                    BattlePassPlayerProgress progress = getProgress(player);
-                    result.addAll(assignmentService.assignDailyTasks(
-                        uuid, configuration.tasks().daily(), configuration.tasks().dailyCount(), today));
-                    result.addAll(assignmentService.assignWeeklyTasks(
-                        uuid, configuration.tasks().weekly(), configuration.tasks().weeklyCount(),
-                        progress.currentWeekNumber(), today));
-                }
-                // 赛季任务为固定列表：补齐缺失的模板实例
-                Set<String> seasonTemplates = new java.util.HashSet<>();
-                for (PlayerTaskInstance inst : result) {
-                    if (inst.category() == BattlePassTask.TaskCategory.SEASON) {
-                        seasonTemplates.add(inst.templateId());
-                    }
-                }
-                List<PlayerTaskInstance> newlyCreated = new ArrayList<>();
-                for (BattlePassTask task : configuration.tasks().season()) {
-                    if (!seasonTemplates.contains(task.taskId())) {
-                        PlayerTaskInstance inst = new PlayerTaskInstance(
-                            uuid, uuid + "|SEASON|" + task.taskId(), task.taskId(),
-                            BattlePassTask.TaskCategory.SEASON, task.requiredCount(),
-                            0, false, today, 0);
-                        result.add(inst);
-                        newlyCreated.add(inst);
-                    }
-                }
-                for (PlayerTaskInstance inst : result) {
-                    if (inst.category() != BattlePassTask.TaskCategory.SEASON || newlyCreated.contains(inst)) {
-                        repository.savePlayerTask(uuid, seasonId, inst);
-                    }
-                }
-                return Collections.unmodifiableList(result);
-            } catch (SQLException e) {
-                logger.warning("加载玩家任务实例失败: " + e.getMessage());
-                return Collections.emptyList();
+        UUID uuid = player.getUniqueId();
+        List<PlayerTaskInstance> cached = cachedInstances.get(uuid);
+        if (cached != null) return cached;
+        try {
+            String seasonId = configuration.season().seasonId();
+            LocalDate today = LocalDate.now();
+            List<PlayerTaskInstance> result = new ArrayList<>(
+                repository.loadPlayerTasks(uuid, seasonId));
+            if (result.isEmpty()) {
+                // 首次加载：自动分配当日/当周任务
+                BattlePassPlayerProgress progress = getProgress(player);
+                result.addAll(assignmentService.assignDailyTasks(
+                    uuid, configuration.tasks().daily(), configuration.tasks().dailyCount(), today));
+                result.addAll(assignmentService.assignWeeklyTasks(
+                    uuid, configuration.tasks().weekly(), configuration.tasks().weeklyCount(),
+                    progress.currentWeekNumber(), today));
             }
-        });
+            // 赛季任务为固定列表：补齐缺失的模板实例
+            Set<String> seasonTemplates = new java.util.HashSet<>();
+            for (PlayerTaskInstance inst : result) {
+                if (inst.category() == BattlePassTask.TaskCategory.SEASON) {
+                    seasonTemplates.add(inst.templateId());
+                }
+            }
+            List<PlayerTaskInstance> newlyCreated = new ArrayList<>();
+            for (BattlePassTask task : configuration.tasks().season()) {
+                if (!seasonTemplates.contains(task.taskId())) {
+                    PlayerTaskInstance inst = new PlayerTaskInstance(
+                        uuid, uuid + "|SEASON|" + task.taskId(), task.taskId(),
+                        BattlePassTask.TaskCategory.SEASON, task.requiredCount(),
+                        0, false, today, 0);
+                    result.add(inst);
+                    newlyCreated.add(inst);
+                }
+            }
+            for (PlayerTaskInstance inst : result) {
+                if (inst.category() != BattlePassTask.TaskCategory.SEASON || newlyCreated.contains(inst)) {
+                    repository.savePlayerTask(uuid, seasonId, inst);
+                }
+            }
+            List<PlayerTaskInstance> immutable = Collections.unmodifiableList(result);
+            cachedInstances.put(uuid, immutable);
+            failedLoads.remove(uuid);
+            return immutable;
+        } catch (SQLException e) {
+            logger.warning("加载玩家任务实例失败: " + e.getMessage());
+            // 不缓存空列表，避免后续操作基于错误数据生成重复任务
+            failedLoads.add(uuid);
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 判断指定玩家的进度数据是否因 DB 加载失败而不可用。
+     * UI 推送层据此决定是否启动自动重试。
+     *
+     * @param uuid 玩家 UUID
+     * @return {@code true} 表示上次加载失败，缓存中无可信数据
+     */
+    public boolean isLoadFailed(UUID uuid) {
+        return failedLoads.contains(uuid);
     }
 
     /** 赛季时间窗口内才累积任务进度。 */
@@ -173,6 +211,7 @@ public final class BattlePassService {
         cachedInstances.remove(uuid);
         dirtyPlayers.remove(uuid);
         dirtyInstances.remove(uuid);
+        failedLoads.remove(uuid);
     }
 
     public List<PlayerTaskInstance> getActiveTaskInstances(Player player) {
@@ -369,6 +408,7 @@ public final class BattlePassService {
         cachedInstances.remove(playerUuid);
         dirtyPlayers.remove(playerUuid);
         dirtyInstances.remove(playerUuid);
+        failedLoads.remove(playerUuid);
     }
 
     public @Nullable BattlePassTask findTask(String taskId) {
@@ -389,6 +429,8 @@ public final class BattlePassService {
     private void flushDirtyProgress() {
         // 逐个摘除脏标记，失败则重新标脏，避免 DB 抖动时静默丢数据
         for (UUID uuid : new ArrayList<>(dirtyPlayers)) {
+            // 跳过加载失败的玩家：缓存中的进度不可信，写回会覆盖 DB 真实数据
+            if (failedLoads.contains(uuid)) continue;
             if (!dirtyPlayers.remove(uuid)) continue;
             BattlePassPlayerProgress progress = cachedProgress.get(uuid);
             if (progress == null) continue;
@@ -400,6 +442,7 @@ public final class BattlePassService {
             }
         }
         for (UUID uuid : new ArrayList<>(dirtyInstances)) {
+            if (failedLoads.contains(uuid)) continue;
             if (!dirtyInstances.remove(uuid)) continue;
             List<PlayerTaskInstance> instances = cachedInstances.get(uuid);
             if (instances == null) continue;
@@ -416,6 +459,11 @@ public final class BattlePassService {
     }
 
     private void flushPlayer(UUID uuid) {
+        // 跳过加载失败的玩家：缓存中的进度不可信，写回会覆盖 DB 真实数据
+        if (failedLoads.contains(uuid)) {
+            logger.info("跳过加载失败玩家的退服保存 [" + uuid + "]");
+            return;
+        }
         BattlePassPlayerProgress progress = cachedProgress.get(uuid);
         if (progress != null && dirtyPlayers.contains(uuid)) {
             try {

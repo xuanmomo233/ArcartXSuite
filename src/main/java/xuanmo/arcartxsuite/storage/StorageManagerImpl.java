@@ -101,8 +101,9 @@ public final class StorageManagerImpl implements StorageManager {
         HikariConfig hc = new HikariConfig();
         hc.setPoolName("AXS-SQLite-" + moduleId);
         hc.setMinimumIdle(1);
-        hc.setMaximumPoolSize(1);
+        hc.setMaximumPoolSize(2);
         hc.setAutoCommit(true);
+        hc.setConnectionTimeout(10000);
         hc.setJdbcUrl("jdbc:sqlite:" + sqliteFile.getAbsolutePath());
         hc.setDriverClassName("org.sqlite.JDBC");
         hc.setConnectionTestQuery("SELECT 1");

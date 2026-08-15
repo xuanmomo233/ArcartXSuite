@@ -225,7 +225,8 @@ public abstract class AbstractModuleRepository {
             }
             hc.setJdbcUrl("jdbc:sqlite:" + sqliteFile.getAbsolutePath());
             hc.setDriverClassName("org.sqlite.JDBC");
-            hc.setMaximumPoolSize(1);
+            hc.setMaximumPoolSize(2);
+            hc.setConnectionTimeout(10000);
             hc.setConnectionTestQuery("SELECT 1");
         }
 

@@ -36,6 +36,8 @@ import xuanmo.arcartxsuite.battlepass.service.BattlePassService;
 public final class BattlePassPacketHandler implements ClientPacketHandler {
 
     public static final String PACKET_ID = "AXS_BATTLEPASS";
+    private static final int MAX_PUSH_RETRY = 3;
+    private static final long RETRY_INTERVAL_TICKS = 20L; // 1秒
 
     private final JavaPlugin plugin;
     private final PacketBridgeAPI packetBridge;
@@ -196,7 +198,15 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     }
 
     private void pushRewardsData(Player player) {
+        pushRewardsData(player, 0);
+    }
+
+    private void pushRewardsData(Player player, int retryCount) {
         if (packetBridge == null) return;
+        if (service.isLoadFailed(player.getUniqueId())) {
+            scheduleRetryPush(player, "rewards", retryCount);
+            return;
+        }
         BattlePassPlayerProgress progress = service.getProgress(player);
 
         List<BattlePassReward> sorted = new ArrayList<>(service.configuration().rewards());
@@ -268,7 +278,15 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     }
 
     private void pushMainData(Player player) {
+        pushMainData(player, 0);
+    }
+
+    private void pushMainData(Player player, int retryCount) {
         if (packetBridge == null) return;
+        if (service.isLoadFailed(player.getUniqueId())) {
+            scheduleRetryPush(player, "main", retryCount);
+            return;
+        }
         BattlePassPlayerProgress progress = service.getProgress(player);
         var season = service.configuration().season();
         int xpNeeded = Math.max(0, season.xpPerLevel() - progress.currentXp());
@@ -292,7 +310,15 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     }
 
     private void pushTasksData(Player player) {
+        pushTasksData(player, 0);
+    }
+
+    private void pushTasksData(Player player, int retryCount) {
         if (packetBridge == null) return;
+        if (service.isLoadFailed(player.getUniqueId())) {
+            scheduleRetryPush(player, "tasks", retryCount);
+            return;
+        }
         List<PlayerTaskInstance> instances = service.getTaskInstances(player);
 
         Map<String, Map<String, String>> dailyMap = new LinkedHashMap<>();
@@ -354,5 +380,43 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
 
     private static String safe(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    /**
+     * DB 加载失败时异步重试推送 UI 数据。
+     * <p>
+     * 延迟 1 秒后在主线程重试，先调用 getProgress 触发 DB 重新加载，
+     * 若加载成功则推送真实数据；若仍失败且未超过最大重试次数则继续重试。
+     *
+     * @param player    目标玩家
+     * @param type      推送类型（"main" / "tasks" / "rewards"）
+     * @param retryCount 当前已重试次数
+     */
+    private void scheduleRetryPush(Player player, String type, int retryCount) {
+        if (retryCount >= MAX_PUSH_RETRY) {
+            return;
+        }
+        AxsScheduler.runTaskLater(plugin, () -> {
+            if (!player.isOnline()) return;
+            String uiId = switch (type) {
+                case "rewards" -> rewardsUiId;
+                case "tasks" -> tasksUiId;
+                default -> mainUiId;
+            };
+            if (packetBridge == null || !packetBridge.isUiOpen(player, uiId)) return;
+            // 触发 DB 重新加载（getProgress 内部会重试一次，成功后清除 failedLoads）
+            service.getProgress(player);
+            if (!service.isLoadFailed(player.getUniqueId())) {
+                // 加载成功，推送真实数据
+                switch (type) {
+                    case "rewards" -> pushRewardsData(player, retryCount + 1);
+                    case "tasks" -> pushTasksData(player, retryCount + 1);
+                    default -> pushMainData(player, retryCount + 1);
+                }
+            } else {
+                // 仍然失败，继续重试
+                scheduleRetryPush(player, type, retryCount + 1);
+            }
+        }, RETRY_INTERVAL_TICKS);
     }
 }

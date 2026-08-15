@@ -99,6 +99,8 @@ public class OnlineRewardsService implements Listener {
     private final CrossServerAPI crossServer;
     private final Map<UUID, OnlineRewardsPlayerState> cachedStates = new ConcurrentHashMap<>();
     private final Map<UUID, OnlineRewardsPlayerState> dirtyStates = new ConcurrentHashMap<>();
+    // 加载失败的玩家集合：这些玩家的缓存数据不可信，flush 必须跳过，避免空状态覆盖 DB 真实数据
+    private final Set<UUID> failedLoads = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Integer> calendarMonthOffsets = new ConcurrentHashMap<>();
     private final Map<UUID, LocalDate> selectedCalendarDates = new ConcurrentHashMap<>();
     private final Map<UUID, String> actionTokens = new ConcurrentHashMap<>();
@@ -218,6 +220,7 @@ public class OnlineRewardsService implements Listener {
         flushAll();
         cachedStates.clear();
         dirtyStates.clear();
+        failedLoads.clear();
         calendarMonthOffsets.clear();
         selectedCalendarDates.clear();
         leaderboardCache.clear();
@@ -708,6 +711,7 @@ public class OnlineRewardsService implements Listener {
         flushPlayer(playerUuid);
         cachedStates.remove(playerUuid);
         dirtyStates.remove(playerUuid);
+        failedLoads.remove(playerUuid);
         calendarMonthOffsets.remove(playerUuid);
         selectedCalendarDates.remove(playerUuid);
         actionTokens.remove(playerUuid);
@@ -934,16 +938,52 @@ public class OnlineRewardsService implements Listener {
         if (cached != null) {
             return cached;
         }
-        try {
-            return repository.loadState(playerUuid);
-        } catch (SQLException exception) {
-            this.logger.log(Level.WARNING, "加载在线奖励数据失败: " + playerUuid, exception);
-            return new OnlineRewardsPlayerState();
+        // 首次加载失败时短暂等待后重试一次，应对 DB 连接短暂抖动
+        for (int attempt = 0; attempt < 2; attempt++) {
+            try {
+                OnlineRewardsPlayerState loaded = repository.loadState(playerUuid);
+                cachedStates.put(playerUuid, loaded);
+                failedLoads.remove(playerUuid);
+                return loaded;
+            } catch (SQLException exception) {
+                if (attempt == 0) {
+                    this.logger.log(Level.WARNING, "加载在线奖励数据失败（将重试一次）: " + playerUuid, exception);
+                    try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                } else {
+                    this.logger.log(Level.WARNING, "加载在线奖励数据失败（重试仍失败）: " + playerUuid, exception);
+                    // 不缓存空状态，避免 flush 把空数据写回 DB 覆盖真实数据
+                    // 标记为加载失败，flush 将跳过该玩家
+                    failedLoads.add(playerUuid);
+                    return new OnlineRewardsPlayerState();
+                }
+            }
         }
+        // 理论上不会走到这里
+        failedLoads.add(playerUuid);
+        return new OnlineRewardsPlayerState();
+    }
+
+    /**
+     * 判断指定玩家的状态数据是否因 DB 加载失败而不可用。
+     * UI 推送层据此决定是否启动自动重试。
+     *
+     * @param playerUuid 玩家 UUID
+     * @return {@code true} 表示上次加载失败，缓存中无可信数据
+     */
+    public boolean isLoadFailed(UUID playerUuid) {
+        return failedLoads.contains(playerUuid);
     }
 
     private OnlineRewardsPlayerState attachPlayerState(Player player) {
-        OnlineRewardsPlayerState state = cachedStates.computeIfAbsent(player.getUniqueId(), this::loadState);
+        UUID playerUuid = player.getUniqueId();
+        OnlineRewardsPlayerState state = cachedStates.get(playerUuid);
+        if (state == null) {
+            state = loadState(playerUuid);
+            // loadState 加载失败时不缓存空状态，此处仅在成功时才放入缓存
+            if (!failedLoads.contains(playerUuid)) {
+                cachedStates.put(playerUuid, state);
+            }
+        }
         OnlineRewardsPeriodContext context = currentPeriodContext();
         boolean changed = stateEngine.normalizeForPeriod(state, context);
         changed |= applyOfflineSavings(player, state, context);
@@ -952,7 +992,7 @@ public class OnlineRewardsService implements Listener {
             changed = true;
         }
         if (changed) {
-            dirtyStates.put(player.getUniqueId(), state.copy());
+            dirtyStates.put(playerUuid, state.copy());
         }
         return state;
     }
@@ -1132,6 +1172,10 @@ public class OnlineRewardsService implements Listener {
     }
 
     private void flushPlayer(UUID playerUuid) {
+        // 跳过加载失败的玩家：缓存中的状态不可信，写回会覆盖 DB 真实数据
+        if (failedLoads.contains(playerUuid)) {
+            return;
+        }
         OnlineRewardsPlayerState dirtyState = dirtyStates.remove(playerUuid);
         if (dirtyState == null) {
             return;
@@ -1141,6 +1185,10 @@ public class OnlineRewardsService implements Listener {
 
     private void flushAll() {
         for (Map.Entry<UUID, OnlineRewardsPlayerState> entry : dirtyStates.entrySet()) {
+            // 跳过加载失败的玩家：缓存中的状态不可信，写回会覆盖 DB 真实数据
+            if (failedLoads.contains(entry.getKey())) {
+                continue;
+            }
             saveImmediately(entry.getKey(), entry.getValue());
         }
         dirtyStates.clear();
