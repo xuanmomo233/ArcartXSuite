@@ -135,6 +135,8 @@ treasure-pools:
 ui:
   # 是否在插件启用时自动注册本模块的 UI。
   register-on-enable: true
+  # 是否强制覆盖用户已修改的 UI 文件。
+  overwrite-ui-files: false
   # 钓鱼小游戏 UI 的 ID。
   minigame-id: "fishing_minigame"
   # 鱼类图鉴 UI 的 ID。

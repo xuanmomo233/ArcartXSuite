@@ -109,7 +109,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().registerOnEnable();
+        return configuration != null && configuration.ui().overwriteUiFiles();
     }
 
     @Override

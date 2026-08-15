@@ -498,6 +498,7 @@ public record FishingModuleConfiguration(
 
     public record UiConfiguration(
         boolean registerOnEnable,
+        boolean overwriteUiFiles,
         String minigameId,
         String collectionId
     ) {
@@ -505,6 +506,7 @@ public record FishingModuleConfiguration(
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
             return new UiConfiguration(
                 section.getBoolean("register-on-enable", true),
+                section.getBoolean("overwrite-ui-files", false),
                 section.getString("minigame-id", "fishing_minigame"),
                 section.getString("collection-id", "fishing_collection")
             );
