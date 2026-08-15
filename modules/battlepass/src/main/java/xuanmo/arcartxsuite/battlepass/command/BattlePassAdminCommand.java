@@ -127,6 +127,7 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
             sender.sendMessage(msg("admin.status.players", "N/A"));
         }
         sender.sendMessage(msg("admin.status.cross-server", config.crossServer().enabled() ? msg("common.enabled") : msg("common.disabled")));
+        sender.sendMessage(msg("admin.status.rewards", String.valueOf(config.rewards().size())));
     }
 
     private void handleReset(CommandSender sender, String[] args) {

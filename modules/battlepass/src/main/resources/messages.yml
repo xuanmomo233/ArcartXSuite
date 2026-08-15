@@ -58,6 +58,7 @@ admin:
     season: '&7当前赛季: &f{0}'
     players: '&7活跃玩家: &f{0}'
     cross-server: '&7跨服同步: {0}'
+    rewards: '&7奖励配置: &f{0} 条'
   reset-success: '&a已重置玩家 &e{0} &a的战令进度。'
   unlock-already: '&e玩家 &f{0} &e已经拥有 &f{1} &e战令。'
   unlock-success: '&a已为玩家 &e{0} &a解锁 &e{1} &a战令。'
