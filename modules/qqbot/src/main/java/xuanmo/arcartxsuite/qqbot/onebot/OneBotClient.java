@@ -332,11 +332,8 @@ public final class OneBotClient {
     }
 
     private void startHeartbeat() {
-        if (heartbeatIntervalSeconds <= 0) return;
-        scheduler.scheduleAtFixedRate(() -> {
-            if (wsClient != null && connected) {
-                wsClient.send("{\"post_type\":\"meta_event\",\"meta_event_type\":\"heartbeat\"}");
-            }
-        }, heartbeatIntervalSeconds, heartbeatIntervalSeconds, TimeUnit.SECONDS);
+        // OneBot v11 心跳由服务端（SnowLuma/NapCat 等）主动推送给客户端，
+        // 客户端无需主动发送心跳事件。连接存活检测依赖 WebSocket 的 onClose/onError 回调。
+        // heartbeatIntervalSeconds 参数保留以兼容现有配置接口，但不再发送心跳包。
     }
 }

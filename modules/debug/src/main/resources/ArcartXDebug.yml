@@ -1,0 +1,23 @@
+config-version: 1
+# AXS Debug Bridge — 服务端调试桥模块
+# 作用: 通过 WebSocket 暴露 ArcartXSuite 的调试能力（UI 操控、ARIA 脚本、模块管理、
+#       包流拦截等）给外部 MCP Server 调用，使用 JSON-RPC 协议。
+# 依赖: ArcartXSuite 本体；无外部插件依赖。
+# 注意: 本模块面向个人本地调试使用，不做安全加固，请勿在生产服务器启用。
+
+debug:
+  enabled: true  # 是否启用调试桥（关闭后 WebSocket 不会启动）
+
+websocket:
+  port: 18899  # WebSocket 监听端口
+  # 认证 token，客户端连接时需在 URL 中携带 ?token=xxx
+  # 例: ws://127.0.0.1:18899/?token=axs-debug-local
+  token: "axs-debug-local"
+  # 绑定地址，0.0.0.0 表示监听所有网卡（本地调试可改为 127.0.0.1）
+  host: "0.0.0.0"
+
+packet-capture:
+  # 包流拦截环形缓冲容量（记录最近 N 条客户端包）
+  buffer-size: 256
+  # 是否在捕获时记录包负载内容
+  log-payload: true

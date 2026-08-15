@@ -15,7 +15,7 @@ settings:
 
 # ─── OneBot 11 WebSocket 连接 ──────────────────────────
 onebot:
-  # OneBot 正向 WebSocket 地址（如 Lagrange/NapCat/LLOneBot）
+  # OneBot 正向 WebSocket 地址（如 SnowLuma/NapCat/Lagrange）
   ws-url: "ws://127.0.0.1:3001"
   # 鉴权 token（可留空）
   access-token: ""

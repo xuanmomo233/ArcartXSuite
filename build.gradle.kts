@@ -28,7 +28,8 @@ subprojects {
 
     afterEvaluate {
         // 模块子项目：注册混淆任务 + 字符串加密任务
-        if (project.path.startsWith(":modules:")) {
+        // debug 模块仅本地调试用，跳过混淆/加密/签名等保护流程。
+        if (project.path.startsWith(":modules:") && project.path != ":modules:debug") {
 
             // 统一移除调试信息
             tasks.withType<JavaCompile> {
@@ -165,23 +166,27 @@ subprojects {
     }
 }
 
+// debug 模块仅本地调试用，不参与 CI 构建、云端下发、批量混淆/加密。
+fun isProductionModule(p: Project): Boolean =
+    p.path.startsWith(":modules:") && p.path != ":modules:debug"
+
 tasks.register("buildAll") {
     group = "build"
     description = "Build all subprojects (with obfuscation)"
     dependsOn(":axs-core:build")
-    dependsOn(subprojects.filter { it.path.startsWith(":modules:") || it.path.startsWith(":proxy:") }.map { "${it.path}:build" })
+    dependsOn(subprojects.filter { it.path.startsWith(":modules:") || it.path.startsWith(":proxy:") }.filter { it.path != ":modules:debug" }.map { "${it.path}:build" })
 }
 
 tasks.register("buildModules") {
     group = "build"
     description = "Build all module JARs (with obfuscation)"
-    dependsOn(subprojects.filter { it.path.startsWith(":modules:") }.map { "${it.path}:obfuscateModule" })
+    dependsOn(subprojects.filter { isProductionModule(it) }.map { "${it.path}:obfuscateModule" })
 }
 
 tasks.register("encryptAllModuleAxb") {
     group = "protection"
     description = "将所有模块加密为 .axb（输出到 build/ArcartX-Suite/module-axb/，上传云端用）"
-    dependsOn(subprojects.filter { it.path.startsWith(":modules:") }.map { "${it.path}:encryptModuleAxb" })
+    dependsOn(subprojects.filter { isProductionModule(it) }.map { "${it.path}:encryptModuleAxb" })
 }
 
 // ─── JAR 加密保护构建任务 ─────────────────────────────────────────
@@ -197,7 +202,7 @@ tasks.register("buildDev") {
     group = "build"
     description = "Build all JARs WITHOUT obfuscation (dev only)"
     dependsOn(":axs-core:shadowJar")
-    dependsOn(subprojects.filter { it.path.startsWith(":modules:") }.map { "${it.path}:jar" })
+    dependsOn(subprojects.filter { isProductionModule(it) }.map { "${it.path}:jar" })
     // 仅对应用了 shadow 插件的代理子项目（velocity/bungee）依赖 shadowJar；
     // proxy:common 是纯 java 库、无 shadowJar 任务，其 jar 会随 velocity/bungee 的 shadowJar 传递构建。
     dependsOn(

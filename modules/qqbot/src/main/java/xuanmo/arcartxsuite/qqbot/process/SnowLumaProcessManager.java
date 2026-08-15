@@ -168,7 +168,7 @@ public final class SnowLumaProcessManager {
                     "--name", config.dockerContainerName(),"--restart","unless-stopped","--shm-size=1g",
                     "--cap-add=SYS_PTRACE","--security-opt","seccomp=unconfined",
                     "-p", config.dockerWebUiPort()+":5099","-p",config.dockerHttpPort()+":3000","-p",config.dockerWsPort()+":3001",
-                    "-v",config.dockerContainerName()+"-data:/app/snowluma-data",
+                    "-v",config.dockerContainerName()+"-data:/app/data",
                     "-v",config.dockerContainerName()+"-qq-config:/app/.config",
                     "-v",config.dockerContainerName()+"-qq-data:/app/.local/share",
                     config.dockerImage());

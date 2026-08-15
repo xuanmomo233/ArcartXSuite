@@ -110,11 +110,6 @@ controls:
               stroke:
                 width: 2
                 color: ~90,170,255,150
-              shadow:
-                xOffset: 0
-                yOffset: 6
-                blur: 20
-                color: ~0,0,0,160
           内描边:
             type: Texture
             attribute:
@@ -160,7 +155,6 @@ controls:
                   normal: ~255,255,255,14
                   shape: ~round_rect
                   radius: 22
-                  through: true
               顶栏分隔线:
                 type: Texture
                 attribute:
@@ -263,11 +257,6 @@ controls:
                       stroke:
                         width: 2
                         color: "var.deluxeUnlocked ? '200,140,255,200' : var.premiumUnlocked ? '255,210,100,200' : '120,130,150,160'"
-                      shadow:
-                        xOffset: 0
-                        yOffset: 2
-                        blur: 8
-                        color: ~0,0,0,100
                   档位文字:
                     type: Text
                     attribute:
@@ -345,11 +334,6 @@ controls:
                       stroke:
                         width: 2
                         color: ~90,170,255,80
-                      shadow:
-                        xOffset: 0
-                        yOffset: 3
-                        blur: 10
-                        color: ~0,0,0,100
                   等级卡片标题:
                     type: Text
                     attribute:
@@ -477,11 +461,6 @@ controls:
                       stroke:
                         width: 2
                         color: ~90,170,255,80
-                      shadow:
-                        xOffset: 0
-                        yOffset: 3
-                        blur: 10
-                        color: ~0,0,0,100
                   档位信息标题:
                     type: Text
                     attribute:
@@ -691,11 +670,6 @@ controls:
                               stroke:
                                 width: 2
                                 color: ~90,170,255,180
-                              shadow:
-                                xOffset: 0
-                                yOffset: 3
-                                blur: 10
-                                color: ~0,0,0,120
                               neon:
                                 color: ~90,170,255,80
                                 size: 8
@@ -731,11 +705,6 @@ controls:
                               stroke:
                                 width: 2
                                 color: ~255,180,100,180
-                              shadow:
-                                xOffset: 0
-                                yOffset: 3
-                                blur: 10
-                                color: ~0,0,0,120
                               neon:
                                 color: ~255,180,100,80
                                 size: 8

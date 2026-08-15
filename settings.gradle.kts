@@ -34,6 +34,9 @@ include("modules:fishing")
 include("modules:lottery")
 include("modules:vanilla")
 include("modules:tooltip")
+// modules:debug 仅本地调试用，不参与 CI 构建、云端下发、批量混淆/加密。
+// 可通过 :modules:debug:jar 单独构建。
+include("modules:debug")
 
 // ─── 代理端插件 ───
 include("proxy:common")
