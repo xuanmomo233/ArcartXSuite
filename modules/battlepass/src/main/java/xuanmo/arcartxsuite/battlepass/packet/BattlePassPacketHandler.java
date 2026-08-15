@@ -217,18 +217,30 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
             .thenComparingInt(r -> r.tier().ordinal()));
 
         // 按等级分组：每个等级包含 free/premium/deluxe 三个档位
+        // levelsMap 的 key 使用从1开始的连续索引（与 UI 端 range(1, levelCount) 遍历对应）
         Map<String, Map<String, String>> levelsMap = new LinkedHashMap<>();
         Map<String, Map<String, String>> rewardsMap = new LinkedHashMap<>();
         Map<String, Object> payload = new LinkedHashMap<>();
 
         int idx = 0;
+        int levelIdx = 0;
         for (BattlePassReward reward : sorted) {
-            String levelKey = String.valueOf(reward.level());
-            if (!levelsMap.containsKey(levelKey)) {
+            String actualLevel = String.valueOf(reward.level());
+            if (!levelsMap.values().stream().anyMatch(e -> actualLevel.equals(e.get("level")))) {
+                levelIdx++;
+                String levelKey = String.valueOf(levelIdx);
                 Map<String, String> levelEntry = new LinkedHashMap<>();
-                levelEntry.put("level", levelKey);
+                levelEntry.put("level", actualLevel);
                 levelEntry.put("reached", String.valueOf(progress.currentLevel() >= reward.level()));
                 levelsMap.put(levelKey, levelEntry);
+            }
+            // 找到当前等级对应的 levelKey
+            String levelKey = null;
+            for (Map.Entry<String, Map<String, String>> entry : levelsMap.entrySet()) {
+                if (actualLevel.equals(entry.getValue().get("level"))) {
+                    levelKey = entry.getKey();
+                    break;
+                }
             }
 
             String tierKey = reward.tier().name().toLowerCase();
