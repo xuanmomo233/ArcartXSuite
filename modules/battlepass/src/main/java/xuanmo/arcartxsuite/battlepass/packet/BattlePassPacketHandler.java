@@ -126,28 +126,31 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
             actionTokensInFlight.remove(uuid);
             return;
         }
-        BattlePassService.ClaimResult result;
-        try {
-            result = service.claimRewards(player, level);
-        } finally {
-            actionTokensInFlight.remove(uuid);
-        }
-        String key = switch (result) {
-            case SUCCESS -> "claim.success";
-            case LEVEL_NOT_REACHED -> "claim.level-not-reached";
-            case ALREADY_CLAIMED -> "claim.already-claimed";
-            case NOT_FOUND -> "claim.none";
-        };
-        if (messageResolver != null) {
-            player.sendMessage(messageResolver.apply(key, new Object[]{String.valueOf(level)}));
-        }
-        if (result == BattlePassService.ClaimResult.SUCCESS) {
-            actionTokens.put(uuid, UUID.randomUUID().toString());
-        }
-        // 刷新奖励数据（如果奖励界面打开着）
-        if (packetBridge.isUiOpen(player, rewardsUiId)) {
-            pushRewardsData(player);
-        }
+        // DB 操作异步执行，避免阻塞主线程
+        AxsScheduler.runAsync(plugin, () -> {
+            BattlePassService.ClaimResult result;
+            try {
+                result = service.claimRewards(player, level);
+            } finally {
+                actionTokensInFlight.remove(uuid);
+            }
+            String key = switch (result) {
+                case SUCCESS -> "claim.success";
+                case LEVEL_NOT_REACHED -> "claim.level-not-reached";
+                case ALREADY_CLAIMED -> "claim.already-claimed";
+                case NOT_FOUND -> "claim.none";
+            };
+            if (messageResolver != null) {
+                player.sendMessage(messageResolver.apply(key, new Object[]{String.valueOf(level)}));
+            }
+            if (result == BattlePassService.ClaimResult.SUCCESS) {
+                actionTokens.put(uuid, UUID.randomUUID().toString());
+            }
+            // 刷新奖励数据（如果奖励界面打开着）
+            if (packetBridge.isUiOpen(player, rewardsUiId)) {
+                pushRewardsData(player);
+            }
+        });
     }
 
     /**
@@ -159,7 +162,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         if (packetBridge == null) return;
         packetBridge.openUi(player, mainUiId);
         actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
-        AxsScheduler.runTaskLater(plugin, () -> {
+        AxsScheduler.runAsyncLater(plugin, () -> {
             if (player.isOnline()) {
                 pushMainData(player);
             }
@@ -174,7 +177,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     public void openTasks(Player player) {
         if (packetBridge == null) return;
         packetBridge.openUi(player, tasksUiId);
-        AxsScheduler.runTaskLater(plugin, () -> {
+        AxsScheduler.runAsyncLater(plugin, () -> {
             if (player.isOnline()) {
                 pushTasksData(player);
             }
@@ -190,7 +193,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         if (packetBridge == null) return;
         packetBridge.openUi(player, rewardsUiId);
         actionTokens.put(player.getUniqueId(), UUID.randomUUID().toString());
-        AxsScheduler.runTaskLater(plugin, () -> {
+        AxsScheduler.runAsyncLater(plugin, () -> {
             if (player.isOnline()) {
                 pushRewardsData(player);
             }
@@ -396,7 +399,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         if (retryCount >= MAX_PUSH_RETRY) {
             return;
         }
-        AxsScheduler.runTaskLater(plugin, () -> {
+        AxsScheduler.runAsyncLater(plugin, () -> {
             if (!player.isOnline()) return;
             String uiId = switch (type) {
                 case "rewards" -> rewardsUiId;

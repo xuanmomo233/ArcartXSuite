@@ -74,7 +74,7 @@ public final class BattlePassService {
     public void start() {
         active = true;
         taskEngine.start(eventBusProvider);
-        saveTask = AxsScheduler.runAsyncTimer(plugin, this::flushDirtyProgress, 1200L, 1200L);
+        saveTask = AxsScheduler.runAsyncTimer(plugin, this::flushDirtyProgress, 300L, 300L);
         resetTask = AxsScheduler.runAsyncTimer(plugin, this::checkResets, 6000L, 6000L);
     }
 
@@ -324,11 +324,27 @@ public final class BattlePassService {
         });
     }
 
+    /** 关键操作后立即异步落盘进度，缩小崩服数据丢失窗口。 */
+    private void persistProgressAsync(UUID uuid) {
+        if (failedLoads.contains(uuid)) return;
+        BattlePassPlayerProgress progress = cachedProgress.get(uuid);
+        if (progress == null) return;
+        AxsScheduler.runAsync(plugin, () -> {
+            try {
+                repository.saveProgress(progress);
+                dirtyPlayers.remove(uuid);
+            } catch (SQLException e) {
+                logger.warning("即时保存战令进度失败 [" + uuid + "]: " + e.getMessage());
+            }
+        });
+    }
+
     public boolean unlockTier(Player player, BattlePassPlayerProgress.PassTier tier) {
         BattlePassPlayerProgress progress = getProgress(player);
         if (progress.passTier().ordinal() >= tier.ordinal()) return false;
         cachedProgress.put(player.getUniqueId(), progress.withPassTier(tier));
         dirtyPlayers.add(player.getUniqueId());
+        persistProgressAsync(player.getUniqueId());
         return true;
     }
 
@@ -345,6 +361,7 @@ public final class BattlePassService {
         BattlePassPlayerProgress updated = addXp(progress, xp);
         cachedProgress.put(player.getUniqueId(), updated);
         dirtyPlayers.add(player.getUniqueId());
+        persistProgressAsync(player.getUniqueId());
         return updated.currentXp() + (updated.currentLevel() - progress.currentLevel()) * configuration.season().xpPerLevel();
     }
 
@@ -360,6 +377,7 @@ public final class BattlePassService {
         BattlePassPlayerProgress progress = getProgress(player);
         cachedProgress.put(player.getUniqueId(), progress.withXp(clamped));
         dirtyPlayers.add(player.getUniqueId());
+        persistProgressAsync(player.getUniqueId());
     }
 
     /**
@@ -382,6 +400,7 @@ public final class BattlePassService {
         }
         cachedProgress.put(player.getUniqueId(), progress.withLevel(newLevel).withXp(newXp));
         dirtyPlayers.add(player.getUniqueId());
+        persistProgressAsync(player.getUniqueId());
     }
 
     /**
@@ -396,6 +415,7 @@ public final class BattlePassService {
         BattlePassPlayerProgress progress = getProgress(player);
         cachedProgress.put(player.getUniqueId(), progress.withLevel(clamped).withXp(0));
         dirtyPlayers.add(player.getUniqueId());
+        persistProgressAsync(player.getUniqueId());
     }
 
     public void resetPlayerProgress(UUID playerUuid) {
