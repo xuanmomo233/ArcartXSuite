@@ -42,6 +42,9 @@ claim:
   premium-required: '&c需要激活进阶版战令。'
   none: '&c该等级没有可领取的奖励。'
   usage: '&c用法: /{0} claim <等级>'
+claim_all:
+  success: '&a一键领取成功！共领取 &e{0} &a个奖励。'
+  none: '&7当前没有可领取的奖励。'
 admin:
   season-unimplemented: "&6===== 战令模块状态 ===== 赛季管理暂未实现。"
   service-unavailable-status: "&6===== 战令模块状态 ===== 服务未就绪。"

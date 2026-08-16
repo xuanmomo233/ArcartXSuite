@@ -101,6 +101,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
             case "open_tasks" -> openTasks(player);
             case "open_rewards" -> openRewards(player);
             case "claim" -> handleClaim(player, data);
+            case "claim_all" -> handleClaimAll(player, data);
             case "refresh" -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushMainData(player); });
             default -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushMainData(player); });
         }
@@ -147,6 +148,39 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
                 actionTokens.put(uuid, UUID.randomUUID().toString());
             }
             // 刷新奖励数据（如果奖励界面打开着）
+            if (packetBridge.isUiOpen(player, rewardsUiId)) {
+                pushRewardsData(player);
+            }
+        });
+    }
+
+    private void handleClaimAll(Player player, List<String> data) {
+        UUID uuid = player.getUniqueId();
+        String supplied = data.size() > 1 ? safe(data.get(data.size() - 1)) : "";
+        String expected = actionTokens.get(uuid);
+        if (expected == null || supplied.isBlank() || !expected.equals(supplied)
+            || !actionTokensInFlight.add(uuid)
+            || packetBridge == null
+            || !packetBridge.isUiOpen(player, rewardsUiId)) {
+            actionTokensInFlight.remove(uuid);
+            return;
+        }
+        // DB 操作异步执行，避免阻塞主线程
+        AxsScheduler.runAsync(plugin, () -> {
+            int claimedCount;
+            try {
+                claimedCount = service.claimAllRewards(player);
+            } finally {
+                actionTokensInFlight.remove(uuid);
+            }
+            if (messageResolver != null) {
+                String key = claimedCount > 0 ? "claim_all.success" : "claim_all.none";
+                player.sendMessage(messageResolver.apply(key, new Object[]{String.valueOf(claimedCount)}));
+            }
+            if (claimedCount > 0) {
+                actionTokens.put(uuid, UUID.randomUUID().toString());
+            }
+            // 刷新奖励数据
             if (packetBridge.isUiOpen(player, rewardsUiId)) {
                 pushRewardsData(player);
             }

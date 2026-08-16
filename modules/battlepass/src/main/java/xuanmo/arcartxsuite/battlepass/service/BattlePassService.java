@@ -285,6 +285,31 @@ public final class BattlePassService {
         SUCCESS, LEVEL_NOT_REACHED, ALREADY_CLAIMED, NOT_FOUND
     }
 
+    /** 一键领取所有已解锁等级中当前可领的全部档位奖励，返回成功领取的数量。 */
+    public synchronized int claimAllRewards(Player player) {
+        BattlePassPlayerProgress progress = getProgress(player);
+        int currentLevel = progress.currentLevel();
+        int claimedCount = 0;
+
+        for (BattlePassReward reward : configuration.rewards()) {
+            if (reward.level() > currentLevel) continue;
+            if (reward.tier() == BattlePassReward.RewardTier.PREMIUM && !progress.unlockedPremium()) continue;
+            if (reward.tier() == BattlePassReward.RewardTier.DELUXE && !progress.unlockedDeluxe()) continue;
+            String rewardId = reward.rewardId();
+            if (progress.claimedRewards().contains(rewardId)) continue;
+
+            rewardDispatcher.dispatch(player, reward);
+            progress = progress.withClaimedReward(rewardId);
+            persistClaimAsync(player.getUniqueId(), rewardId);
+            claimedCount++;
+        }
+        if (claimedCount > 0) {
+            cachedProgress.put(player.getUniqueId(), progress);
+            dirtyPlayers.add(player.getUniqueId());
+        }
+        return claimedCount;
+    }
+
     /** 领取指定等级下当前可领的全部档位奖励。 */
     public synchronized ClaimResult claimRewards(Player player, int level) {
         BattlePassPlayerProgress progress = getProgress(player);
