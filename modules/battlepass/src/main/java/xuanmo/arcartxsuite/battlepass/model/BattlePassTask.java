@@ -43,7 +43,8 @@ public record BattlePassTask(
     float difficultyMultiplier,
     List<TaskCondition> conditions,
     IncrementStrategy incrementStrategy,
-    int weight
+    int weight,
+    TriggerLimits limits
 ) {
 
     public BattlePassTask {
@@ -51,6 +52,31 @@ public record BattlePassTask(
         if (incrementStrategy == null) incrementStrategy = new xuanmo.arcartxsuite.battlepass.increment.FixedIncrementStrategy(1);
         if (difficultyMultiplier <= 0) difficultyMultiplier = 1.0f;
         if (weight <= 0) weight = 1;
+        if (limits == null) limits = TriggerLimits.UNLIMITED;
+    }
+
+    /**
+     * 任务触发频率限制。状态由服务内存中的限流器维护，不持久化；服务重启后状态清零。
+     *
+     * @param cooldownMs 同一玩家同一任务两次计入之间的最小间隔，0 表示不限制
+     * @param maxPerDay 单个自然日最多计入次数，0 表示不限制
+     */
+    public record TriggerLimits(long cooldownMs, int maxPerDay) {
+        public static final TriggerLimits UNLIMITED = new TriggerLimits(0L, 0);
+
+        public TriggerLimits {
+            if (cooldownMs < 0) cooldownMs = 0;
+            if (maxPerDay < 0) maxPerDay = 0;
+        }
+
+        /**
+         * 判断是否未配置任何限制。
+         *
+         * @return {@code true} 表示不限制
+         */
+        public boolean unlimited() {
+            return cooldownMs == 0 && maxPerDay == 0;
+        }
     }
 
     /**

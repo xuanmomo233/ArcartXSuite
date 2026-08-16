@@ -3,12 +3,11 @@ package xuanmo.arcartxsuite.battlepass.config;
 import java.io.File;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
-import java.io.File;
-import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bukkit.configuration.ConfigurationSection;
@@ -272,87 +271,210 @@ public record BattlePassModuleConfiguration(
         public static BattlePassTasksConfiguration load(ConfigurationSection section, @Nullable File dataFolder, Logger logger) {
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
             String tasksDirectory = section.getString("tasks-directory", "tasks");
-            return new BattlePassTasksConfiguration(
-                loadTasksWithFallback(section, "daily", BattlePassTask.TaskCategory.DAILY, tasksDirectory, dataFolder, logger),
-                loadTasksWithFallback(section, "weekly", BattlePassTask.TaskCategory.WEEKLY, tasksDirectory, dataFolder, logger),
-                loadTasksWithFallback(section, "season", BattlePassTask.TaskCategory.SEASON, tasksDirectory, dataFolder, logger),
-                section.getInt("daily-count", 3),
-                section.getInt("weekly-count", 2)
-            );
+            TaskConfigProblemCollector problems = new TaskConfigProblemCollector(logger);
+            List<BattlePassTask> daily = loadTasksWithFallback(
+                section, "daily", BattlePassTask.TaskCategory.DAILY, tasksDirectory, dataFolder, logger, problems);
+            List<BattlePassTask> weekly = loadTasksWithFallback(
+                section, "weekly", BattlePassTask.TaskCategory.WEEKLY, tasksDirectory, dataFolder, logger, problems);
+            List<BattlePassTask> season = loadTasksWithFallback(
+                section, "season", BattlePassTask.TaskCategory.SEASON, tasksDirectory, dataFolder, logger, problems);
+            BattlePassTasksConfiguration result = new BattlePassTasksConfiguration(
+                daily, weekly, season, section.getInt("daily-count", 3), section.getInt("weekly-count", 2));
+            problems.report(daily.size() + weekly.size() + season.size());
+            return result;
         }
 
         private static List<BattlePassTask> loadTasksWithFallback(
-            ConfigurationSection section, String key,
-            BattlePassTask.TaskCategory category, String tasksDirectory,
-            @Nullable File dataFolder, Logger logger
+            ConfigurationSection section,
+            String key,
+            BattlePassTask.TaskCategory category,
+            String tasksDirectory,
+            @Nullable File dataFolder,
+            Logger logger,
+            TaskConfigProblemCollector problems
         ) {
-            // 从外部任务文件读取
             if (dataFolder != null) {
                 File file = new File(dataFolder, tasksDirectory + "/" + key + ".yml");
                 if (file.exists()) {
                     try {
                         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
                         ConfigurationSection root = yaml.getConfigurationSection("tasks");
-                        if (root == null) root = yaml; // 允许顶层直接写任务
-                        List<BattlePassTask> tasks = loadTaskList(root, category);
-                        if (logger != null) {
-                            logger.fine("已从外部文件加载 " + category.name().toLowerCase() + " 任务: " + file.getName() + " (" + tasks.size() + " 条)");
+                        if (root == null) root = yaml;
+                        List<BattlePassTask> tasks = loadTaskList(
+                            root, category, file.getName(), logger, problems);
+                        if (tasks.isEmpty()) {
+                            problems.add(file.getName(), "-", "任务文件存在但未解析出任何任务");
                         }
                         return tasks;
                     } catch (Exception e) {
+                        problems.add(file.getName(), "-", "任务文件解析失败: " + e.getMessage());
                         if (logger != null) {
                             logger.log(Level.WARNING, "加载外部任务文件失败: " + file.getPath(), e);
                         }
-                    }
-                } else {
-                    if (logger != null) {
-                        logger.warning("未找到外部任务文件: " + file.getPath() + "，" + category.name().toLowerCase() + " 任务列表为空");
+                        return Collections.emptyList();
                     }
                 }
             }
+
+            ConfigurationSection inline = section.getConfigurationSection(key);
+            if (inline != null) {
+                String source = "battlepass.yml#tasks." + key;
+                List<BattlePassTask> tasks = loadTaskList(
+                    inline, category, source, logger, problems);
+                if (tasks.isEmpty()) {
+                    problems.add(source, key, "内联任务分类存在但未解析出任何任务");
+                }
+                return tasks;
+            }
+
+            problems.add(key + ".yml", "-", "任务文件不存在且没有可用的内联任务");
             return Collections.emptyList();
         }
 
-        private static List<BattlePassTask> loadTaskList(ConfigurationSection section, BattlePassTask.TaskCategory category) {
+        private static List<BattlePassTask> loadTaskList(
+            ConfigurationSection section,
+            BattlePassTask.TaskCategory category,
+            String source,
+            Logger logger,
+            TaskConfigProblemCollector problems
+        ) {
             List<BattlePassTask> result = new ArrayList<>();
             if (section == null) return result;
             for (String key : section.getKeys(false)) {
                 ConfigurationSection taskSection = section.getConfigurationSection(key);
                 if (taskSection == null) continue;
-                result.add(parseTask(taskSection, key, category));
+                String taskId = taskSection.getString("task-id", key);
+                String previousSource = problems.registerTask(taskId, source);
+                if (previousSource != null) {
+                    problems.add(source, taskId,
+                        "任务 ID 与 " + previousSource + " 冲突，已丢弃后出现的任务");
+                    continue;
+                }
+                result.add(parseTask(taskSection, key, category, source, logger, problems));
             }
             return Collections.unmodifiableList(result);
         }
 
-        private static BattlePassTask parseTask(ConfigurationSection section, String key, BattlePassTask.TaskCategory category) {
+        private static BattlePassTask parseTask(
+            ConfigurationSection section,
+            String key,
+            BattlePassTask.TaskCategory category,
+            String source,
+            Logger logger,
+            TaskConfigProblemCollector problems
+        ) {
             String taskId = section.getString("task-id", key);
             String displayName = section.getString("display-name", key);
             String description = section.getString("description", "");
             String eventTopic = section.getString("event-topic", "");
             int requiredCount = section.getInt("required-count", 1);
+            if (requiredCount <= 0) {
+                problems.add(source, taskId, "required-count 必须大于 0，已回退为 1");
+                requiredCount = 1;
+            }
             int baseXpReward = section.getInt("base-xp-reward", section.getInt("xp-reward", 0));
+            if (baseXpReward < 0) {
+                problems.add(source, taskId, "base-xp-reward 不能小于 0，已回退为 0");
+                baseXpReward = 0;
+            }
 
-            String diffStr = section.getString("difficulty", "easy").toUpperCase();
+            String diffStr = section.getString("difficulty", "easy");
             BattlePassTask.TaskDifficulty difficulty;
             try {
-                difficulty = BattlePassTask.TaskDifficulty.valueOf(diffStr);
+                difficulty = BattlePassTask.TaskDifficulty.valueOf(diffStr.toUpperCase());
             } catch (IllegalArgumentException e) {
+                problems.add(source, taskId, "difficulty 值非法: " + diffStr + "，已回退为 EASY");
                 difficulty = BattlePassTask.TaskDifficulty.EASY;
             }
 
-            float difficultyMultiplier = (float) section.getDouble("difficulty-multiplier", difficulty.multiplier());
-            List<TaskCondition> conditions = TaskConditionParser.parseList(section.getConfigurationSection("conditions"));
-            IncrementStrategy incrementStrategy = IncrementStrategyParser.parse(section.getConfigurationSection("increment-strategy"));
+            float difficultyMultiplier = (float) section.getDouble(
+                "difficulty-multiplier", difficulty.multiplier());
+            if (difficultyMultiplier <= 0) {
+                problems.add(source, taskId,
+                    "difficulty-multiplier 必须大于 0，已回退为 " + difficulty.multiplier());
+                difficultyMultiplier = difficulty.multiplier();
+            }
             int weight = section.getInt("weight", 1);
+            if (weight <= 0) {
+                problems.add(source, taskId, "weight 必须大于 0，已回退为 1");
+                weight = 1;
+            }
 
-            // 解析 bukkit-event 降级配置
-            BattlePassTask.BukkitEventSource bukkitEvent = parseBukkitEvent(section.getConfigurationSection("bukkit-event"));
+            List<TaskCondition> conditions;
+            List<java.util.Map<?, ?>> conditionMaps = section.getMapList("conditions");
+            if (!conditionMaps.isEmpty()) {
+                conditions = TaskConditionParser.parseList(conditionMaps, logger, taskId);
+            } else {
+                conditions = TaskConditionParser.parseList(
+                    section.getConfigurationSection("conditions"), logger, taskId);
+            }
+            IncrementStrategy incrementStrategy = IncrementStrategyParser.parse(
+                section.getConfigurationSection("increment-strategy"), logger, taskId);
+            BattlePassTask.TriggerLimits limits = parseTriggerLimits(
+                section.getConfigurationSection("limits"), logger, taskId);
+            BattlePassTask.BukkitEventSource bukkitEvent = parseBukkitEvent(
+                section.getConfigurationSection("bukkit-event"));
+            if (eventTopic.isBlank() && bukkitEvent == null) {
+                problems.add(source, taskId, "既没有 event-topic 也没有 bukkit-event，任务永远不会触发");
+            }
 
             return new BattlePassTask(
                 taskId, displayName, description, category, difficulty,
                 eventTopic, bukkitEvent, requiredCount, baseXpReward, difficultyMultiplier,
-                conditions, incrementStrategy, weight
+                conditions, incrementStrategy, weight, limits
             );
+        }
+
+        private static BattlePassTask.TriggerLimits parseTriggerLimits(
+            @Nullable ConfigurationSection section, Logger logger, String taskId
+        ) {
+            if (section == null) return BattlePassTask.TriggerLimits.UNLIMITED;
+            long cooldownMs = section.getLong("cooldown-ms", 0L);
+            int maxPerDay = section.getInt("max-per-day", 0);
+            if (cooldownMs < 0) {
+                if (logger != null) logger.warning("[battlepass] 任务 " + taskId
+                    + " 的 limits.cooldown-ms 小于 0，已回退为 0");
+                cooldownMs = 0;
+            }
+            if (maxPerDay < 0) {
+                if (logger != null) logger.warning("[battlepass] 任务 " + taskId
+                    + " 的 limits.max-per-day 小于 0，已回退为 0");
+                maxPerDay = 0;
+            }
+            if (cooldownMs == 0 && maxPerDay == 0) {
+                return BattlePassTask.TriggerLimits.UNLIMITED;
+            }
+            return new BattlePassTask.TriggerLimits(cooldownMs, maxPerDay);
+        }
+
+        private static final class TaskConfigProblemCollector {
+            private final Logger logger;
+            private final List<String> problems = new ArrayList<>();
+            private final Map<String, String> firstTaskSources = new LinkedHashMap<>();
+
+            private TaskConfigProblemCollector(Logger logger) {
+                this.logger = logger;
+            }
+
+            private void add(String source, String taskId, String reason) {
+                problems.add(source + ":" + taskId + " - " + reason);
+            }
+
+            private String registerTask(String taskId, String source) {
+                return firstTaskSources.putIfAbsent(taskId, source);
+            }
+
+            private void report(int taskCount) {
+                if (logger == null) return;
+                if (problems.isEmpty()) {
+                    logger.fine("[battlepass] 任务配置校验通过，共加载 " + taskCount + " 个任务");
+                    return;
+                }
+                logger.warning("[battlepass] 任务配置校验发现 " + problems.size() + " 处问题:");
+                for (String problem : problems) {
+                    logger.warning("[battlepass]   " + problem);
+                }
+            }
         }
 
         /**

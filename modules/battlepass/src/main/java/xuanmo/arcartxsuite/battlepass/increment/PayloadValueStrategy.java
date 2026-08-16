@@ -4,53 +4,99 @@ import java.util.Map;
 import org.bukkit.entity.Player;
 
 /**
- * 基于事件载荷值的增量策略，实现 {@link IncrementStrategy}。
+ * 基于事件载荷值的增量策略。
  * <p>
- * 从事件 payload 中提取指定键的数值，乘以缩放系数后取整作为增量，
- * 可配置单次事件最大增量上限。
+ * 运行期只读取已解析的字段，先将载荷值乘以 scale 并四舍五入，
+ * 再按 min-per-event 和 max-per-event 进行夹取。
  */
 public final class PayloadValueStrategy implements IncrementStrategy {
 
     private final String payloadKey;
     private final int maxPerEvent;
+    private final int minPerEvent;
     private final double scale;
 
     /**
      * 构造载荷值增量策略。
      *
-     * @param payloadKey  payload 中数值键名
-     * @param maxPerEvent 单次事件最大增量（0 表示不限）
-     * @param scale       数值缩放系数
+     * @param payloadKey payload 键名
+     * @param maxPerEvent 单次最大增量，0 表示不限制
+     * @param minPerEvent 单次最小增量
+     * @param scale 载荷值倍率
      */
-    public PayloadValueStrategy(String payloadKey, int maxPerEvent, double scale) {
+    public PayloadValueStrategy(
+        String payloadKey, int maxPerEvent, int minPerEvent, double scale
+    ) {
         this.payloadKey = payloadKey;
         this.maxPerEvent = maxPerEvent;
+        this.minPerEvent = minPerEvent;
         this.scale = scale;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param player 触发事件的玩家
+     * @param payload 事件载荷
+     * @return 夹取后的非负增量
+     */
     @Override
     public int calculateIncrement(Player player, Map<String, String> payload) {
         if (payload == null) return 0;
         String raw = payload.get(payloadKey);
         if (raw == null) return 0;
         try {
-            double value = Double.parseDouble(raw) * scale;
-            int increment = (int) Math.round(value);
-            if (maxPerEvent > 0) {
-                increment = Math.min(increment, maxPerEvent);
-            }
-            return Math.max(0, increment);
+            int increment = Math.max(0, (int) Math.round(Double.parseDouble(raw) * scale));
+            if (maxPerEvent > 0) increment = Math.min(increment, maxPerEvent);
+            return Math.max(minPerEvent, increment);
         } catch (NumberFormatException e) {
             return 0;
         }
     }
 
+    /**
+     * 返回策略类型。
+     *
+     * @return {@code payload_value}
+     */
     @Override
     public String type() {
         return "payload_value";
     }
 
-    public String payloadKey() { return payloadKey; }
-    public int maxPerEvent() { return maxPerEvent; }
-    public double scale() { return scale; }
+    /**
+     * 返回 payload 键名。
+     *
+     * @return payload 键名
+     */
+    public String payloadKey() {
+        return payloadKey;
+    }
+
+    /**
+     * 返回单次最大增量。
+     *
+     * @return 最大增量，0 表示不限制
+     */
+    public int maxPerEvent() {
+        return maxPerEvent;
+    }
+
+    /**
+     * 返回单次最小增量。
+     *
+     * @return 最小增量
+     */
+    public int minPerEvent() {
+        return minPerEvent;
+    }
+
+    /**
+     * 返回载荷值倍率。
+     *
+     * @return 倍率
+     */
+    public double scale() {
+        return scale;
+    }
 }

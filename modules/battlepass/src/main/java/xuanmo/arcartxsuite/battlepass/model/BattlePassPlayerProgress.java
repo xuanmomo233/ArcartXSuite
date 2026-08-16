@@ -153,21 +153,15 @@ public record BattlePassPlayerProgress(
     }
 
     /**
-     * 返回执行每周重置后的新进度实例（更新重置日期与周序号）。
+     * 返回更新每周重置日期与周序号后的新进度实例。
      *
      * @param date        重置日期
      * @param weekNumber  新周序号
      * @return 更新后的进度实例
      */
     public BattlePassPlayerProgress withWeeklyReset(LocalDate date, int weekNumber) {
-        Map<String, Integer> newProgresses = new HashMap<>();
-        for (Map.Entry<String, Integer> entry : taskProgresses.entrySet()) {
-            // 只保留赛季任务进度，清除周任务
-            // 这里由上层业务决定过滤逻辑
-            newProgresses.put(entry.getKey(), entry.getValue());
-        }
         return new BattlePassPlayerProgress(playerUuid, seasonId, currentLevel, currentXp, passTier,
-            newProgresses, claimedRewards, lastDailyResetDate, date, weekNumber);
+            taskProgresses, claimedRewards, lastDailyResetDate, date, weekNumber);
     }
 
     /**

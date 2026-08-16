@@ -9,6 +9,7 @@
 #       icon:         # UI 显示图标（与 menu/market 的 icon 用法一致）
 #         material: DIAMOND
 #         name: "&b钻石 x1"
+#         amount: 1   # 图标显示数量（与 item.amount 一致）
 #       item:         # type: item 时的物品定义
 #         source: minecraft      # 物品来源：minecraft / mythic / neige / overture / mmoitems
 #         id: DIAMOND             # 物品 ID（原版材质名或外部物品库 ID）
@@ -19,6 +20,7 @@
 #       icon:
 #         material: DIAMOND
 #         name: "&6钻石 x5"
+#         amount: 5
 #       item:
 #         source: minecraft
 #         id: DIAMOND
@@ -28,6 +30,7 @@
 #       icon:
 #         material: DIAMOND
 #         name: "&5钻石 x8"
+#         amount: 8
 #       item:
 #         source: minecraft
 #         id: DIAMOND
@@ -42,6 +45,7 @@
 #   material:          原版材质名（如 DIAMOND）
 #   source + id:       外部物品库图标（mythic/neige/overture/mmoitems）
 #   name:              图标悬浮名称（支持 & 颜色码）
+#   amount:            图标显示数量（默认1，大于1时图标右下角显示数字）
 #   lore:              图标描述（列表）
 #   custom-model-data: 自定义模型数据
 #   glow:              是否附魔发光
@@ -56,6 +60,7 @@
     icon:
       material: DIAMOND
       name: "&b钻石 x1"
+      amount: 1
     item:
       source: minecraft
       id: DIAMOND
@@ -65,6 +70,7 @@
     icon:
       material: DIAMOND
       name: "&6钻石 x5"
+      amount: 5
     item:
       source: minecraft
       id: DIAMOND
@@ -74,6 +80,7 @@
     icon:
       material: DIAMOND
       name: "&5钻石 x8"
+      amount: 8
     item:
       source: minecraft
       id: DIAMOND
@@ -86,6 +93,7 @@
     icon:
       material: IRON_INGOT
       name: "&f铁锭 x8"
+      amount: 8
     item:
       source: minecraft
       id: IRON_INGOT
@@ -95,6 +103,7 @@
     icon:
       material: IRON_INGOT
       name: "&6铁锭 x32"
+      amount: 32
     item:
       source: minecraft
       id: IRON_INGOT
@@ -104,10 +113,77 @@
     icon:
       material: IRON_INGOT
       name: "&5铁锭 x48"
+      amount: 48
     item:
       source: minecraft
       id: IRON_INGOT
       amount: 48
+
+"3":
+  level: 3
+  free:
+    type: item
+    icon:
+      material: GOLD_INGOT
+      name: "&e金锭 x4"
+      amount: 4
+    item:
+      source: minecraft
+      id: GOLD_INGOT
+      amount: 4
+  premium:
+    type: item
+    icon:
+      material: GOLD_INGOT
+      name: "&6金锭 x16"
+      amount: 16
+    item:
+      source: minecraft
+      id: GOLD_INGOT
+      amount: 16
+  deluxe:
+    type: item
+    icon:
+      material: GOLD_INGOT
+      name: "&5金锭 x32"
+      amount: 32
+    item:
+      source: minecraft
+      id: GOLD_INGOT
+      amount: 32
+
+"4":
+  level: 4
+  free:
+    type: item
+    icon:
+      material: COAL
+      name: "&8煤炭 x16"
+      amount: 16
+    item:
+      source: minecraft
+      id: COAL
+      amount: 16
+  premium:
+    type: item
+    icon:
+      material: COAL_BLOCK
+      name: "&6煤炭块 x8"
+      amount: 8
+    item:
+      source: minecraft
+      id: COAL_BLOCK
+      amount: 8
+  deluxe:
+    type: item
+    icon:
+      material: COAL_BLOCK
+      name: "&5煤炭块 x16"
+      amount: 16
+    item:
+      source: minecraft
+      id: COAL_BLOCK
+      amount: 16
 
 "5":
   level: 5
@@ -116,6 +192,7 @@
     icon:
       material: EXPERIENCE_BOTTLE
       name: "&a经验瓶 x4"
+      amount: 4
     item:
       source: minecraft
       id: EXPERIENCE_BOTTLE
@@ -125,6 +202,7 @@
     icon:
       material: EXPERIENCE_BOTTLE
       name: "&6经验瓶 x16"
+      amount: 16
     item:
       source: minecraft
       id: EXPERIENCE_BOTTLE
@@ -134,10 +212,143 @@
     icon:
       material: EXPERIENCE_BOTTLE
       name: "&5经验瓶 x24"
+      amount: 24
     item:
       source: minecraft
       id: EXPERIENCE_BOTTLE
       amount: 24
+
+"6":
+  level: 6
+  free:
+    type: item
+    icon:
+      material: REDSTONE
+      name: "&c红石 x16"
+      amount: 16
+    item:
+      source: minecraft
+      id: REDSTONE
+      amount: 16
+  premium:
+    type: item
+    icon:
+      material: REDSTONE_BLOCK
+      name: "&6红石块 x4"
+      amount: 4
+    item:
+      source: minecraft
+      id: REDSTONE_BLOCK
+      amount: 4
+  deluxe:
+    type: item
+    icon:
+      material: REDSTONE_BLOCK
+      name: "&5红石块 x8"
+      amount: 8
+    item:
+      source: minecraft
+      id: REDSTONE_BLOCK
+      amount: 8
+
+"7":
+  level: 7
+  free:
+    type: item
+    icon:
+      material: LAPIS_LAZULI
+      name: "&1青金石 x16"
+      amount: 16
+    item:
+      source: minecraft
+      id: LAPIS_LAZULI
+      amount: 16
+  premium:
+    type: item
+    icon:
+      material: LAPIS_BLOCK
+      name: "&6青金块 x4"
+      amount: 4
+    item:
+      source: minecraft
+      id: LAPIS_BLOCK
+      amount: 4
+  deluxe:
+    type: item
+    icon:
+      material: LAPIS_BLOCK
+      name: "&5青金块 x8"
+      amount: 8
+    item:
+      source: minecraft
+      id: LAPIS_BLOCK
+      amount: 8
+
+"8":
+  level: 8
+  free:
+    type: item
+    icon:
+      material: QUARTZ
+      name: "&f石英 x16"
+      amount: 16
+    item:
+      source: minecraft
+      id: QUARTZ
+      amount: 16
+  premium:
+    type: item
+    icon:
+      material: QUARTZ_BLOCK
+      name: "&6石英块 x8"
+      amount: 8
+    item:
+      source: minecraft
+      id: QUARTZ_BLOCK
+      amount: 8
+  deluxe:
+    type: item
+    icon:
+      material: QUARTZ_BLOCK
+      name: "&5石英块 x16"
+      amount: 16
+    item:
+      source: minecraft
+      id: QUARTZ_BLOCK
+      amount: 16
+
+"9":
+  level: 9
+  free:
+    type: item
+    icon:
+      material: NETHER_BRICK
+      name: "&c下界砖 x16"
+      amount: 16
+    item:
+      source: minecraft
+      id: NETHER_BRICK
+      amount: 16
+  premium:
+    type: item
+    icon:
+      material: NETHER_BRICK
+      name: "&6下界砖 x48"
+      amount: 48
+    item:
+      source: minecraft
+      id: NETHER_BRICK
+      amount: 48
+  deluxe:
+    type: item
+    icon:
+      material: NETHER_BRICK
+      name: "&5下界砖 x64"
+      amount: 64
+    item:
+      source: minecraft
+      id: NETHER_BRICK
+      amount: 64
 
 "10":
   level: 10
@@ -146,6 +357,7 @@
     icon:
       material: EMERALD
       name: "&a绿宝石 x2"
+      amount: 2
     commands:
       - "give {player} emerald 2"
   premium:
@@ -153,6 +365,7 @@
     icon:
       material: EMERALD
       name: "&6绿宝石 x8"
+      amount: 8
     commands:
       - "give {player} emerald 8"
   deluxe:
@@ -160,5 +373,6 @@
     icon:
       material: EMERALD
       name: "&5绿宝石 x12"
+      amount: 12
     commands:
       - "give {player} emerald 12"

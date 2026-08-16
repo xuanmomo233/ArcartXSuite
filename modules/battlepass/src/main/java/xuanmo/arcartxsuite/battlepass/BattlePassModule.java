@@ -233,7 +233,8 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
     @Override
     protected @NotNull List<org.bukkit.event.Listener> createListeners() {
-        return List.of(new xuanmo.arcartxsuite.battlepass.listener.BattlePassPlayerListener(plugin, () -> service));
+        return List.of(new xuanmo.arcartxsuite.battlepass.listener.BattlePassPlayerListener(
+            plugin, () -> service, () -> packetHandler));
     }
 
     @Override
@@ -269,6 +270,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             itemStackBridge,
             this::msg
         );
+        service.setUiRefreshListener(packetHandler::onServiceRefresh);
         return packetHandler;
     }
 

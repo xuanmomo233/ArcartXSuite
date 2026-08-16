@@ -2,13 +2,13 @@ package xuanmo.arcartxsuite.battlepass.service;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.UUID;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -39,12 +39,24 @@ public final class BattlePassTaskEngine {
     private EventBusCapability eventBus;
     private BukkitEventSourceListener bukkitListener;
     private volatile boolean active;
+    private static final Logger LOGGER = Logger.getLogger("ArcartXSuite");
+    private final TaskTriggerLimiter triggerLimiter = new TaskTriggerLimiter();
 
     /**
      * EventBus topic → 发布模块 ID 的映射。
      * 用于检测某个 topic 的发布模块是否已加载。
      */
     private static final Map<String, String> TOPIC_TO_MODULE = new HashMap<>();
+    private static final Map<String, String> PAYLOAD_EXPRESSION_KEYS = Map.of(
+        "victim.type.name", "entityType",
+        "victim.name", "entityName",
+        "entity.type.name", "entityType",
+        "entity.name", "entityName",
+        "target.type.name", "targetType",
+        "target.name", "targetName",
+        "item.type.name", "material",
+        "item.amount", "amount"
+    );
 
     static {
         TOPIC_TO_MODULE.put("axs.combateffect.kill_entity", "combateffect");
@@ -86,18 +98,11 @@ public final class BattlePassTaskEngine {
         eventBus = eventBusProvider != null ? eventBusProvider.get() : null;
         active = true;
 
-        java.util.logging.Logger bpLogger = java.util.logging.Logger.getLogger("ArcartXSuite");
-        bpLogger.fine("[battlepass] TaskEngine.start: eventBus=" + (eventBus != null ? "available" : "null")
+        LOGGER.fine("[battlepass] TaskEngine.start: eventBus=" + (eventBus != null ? "available" : "null")
             + " | moduleExistsChecker=" + (moduleExistsChecker != null ? "set" : "null"));
 
-        // 按事件类型分组的降级回调
-        Set<String> neededBukkitEvents = new HashSet<>();
-        // 各事件类型的回调列表
-        List<BiConsumer<Player, Map<String, String>>> killCallbacks = new ArrayList<>();
-        List<BiConsumer<Player, Map<String, String>>> damageCallbacks = new ArrayList<>();
-        List<BiConsumer<Player, Map<String, String>>> joinCallbacks = new ArrayList<>();
-        List<BiConsumer<Player, Map<String, String>>> pickupCallbacks = new ArrayList<>();
-        List<BiConsumer<Player, Map<String, String>>> fishCallbacks = new ArrayList<>();
+        Map<String, List<BiConsumer<Player, Map<String, String>>>> callbacksByEvent =
+            new HashMap<>();
 
         int eventBusCount = 0;
         int bukkitCount = 0;
@@ -118,41 +123,43 @@ public final class BattlePassTaskEngine {
                 if (subId != null) {
                     subscriptionIds.add(subId);
                     eventBusCount++;
-                    bpLogger.fine("[battlepass] TaskEngine 订阅 EventBus: topic=" + topic + " task=" + task.taskId());
+                    LOGGER.fine("[battlepass] TaskEngine 订阅 EventBus: topic=" + topic + " task=" + task.taskId());
                 }
             } else if (task.bukkitEvent() != null) {
                 // 降级到原版 Bukkit 事件
                 String bukkitClass = task.bukkitEvent().eventClass();
-                neededBukkitEvents.add(bukkitClass);
-                BiConsumer<Player, Map<String, String>> callback = (player, payload) ->
-                    handleEvent(player, task, payload);
-                bukkitCount++;
-                bpLogger.info("[battlepass] TaskEngine 降级 Bukkit: event=" + bukkitClass + " task=" + task.taskId() + " (topic=" + topic + " module未加载)");
-                // 按事件类型分组
-                if (bukkitClass.equals("org.bukkit.event.entity.EntityDeathEvent")) {
-                    killCallbacks.add(callback);
-                } else if (bukkitClass.equals("org.bukkit.event.entity.EntityDamageByEntityEvent")) {
-                    damageCallbacks.add(callback);
-                } else if (bukkitClass.equals("org.bukkit.event.player.PlayerJoinEvent")) {
-                    joinCallbacks.add(callback);
-                } else if (bukkitClass.equals("org.bukkit.event.player.PlayerPickupItemEvent")) {
-                    pickupCallbacks.add(callback);
-                } else if (bukkitClass.equals("org.bukkit.event.player.PlayerFishEvent")) {
-                    fishCallbacks.add(callback);
+                if (!BukkitEventSourceListener.isSupportedBukkitEvent(bukkitClass)) {
+                    LOGGER.warning("[battlepass] 不支持的 Bukkit 事件，任务未接入: task="
+                        + task.taskId() + " event=" + bukkitClass);
+                    continue;
                 }
+                String normalizedClass = BukkitEventSourceListener.normalizeBukkitEventClass(bukkitClass);
+                BiConsumer<Player, Map<String, String>> callback = (player, payload) -> {
+                    try {
+                        handleEvent(player, task, mapPayload(payload, task.bukkitEvent().payloadFields()));
+                    } catch (Exception e) {
+                        LOGGER.log(Level.WARNING,
+                            "[battlepass] 任务 " + task.taskId()
+                                + " 处理 Bukkit 事件 " + normalizedClass + " 失败", e);
+                    }
+                };
+                callbacksByEvent.computeIfAbsent(normalizedClass, ignored -> new ArrayList<>())
+                    .add(callback);
+                bukkitCount++;
+                LOGGER.info("[battlepass] TaskEngine 使用 Bukkit 降级: event="
+                    + bukkitClass + " task=" + task.taskId() + " (topic=" + topic + ")");
             } else {
-                bpLogger.warning("[battlepass] TaskEngine 跳过任务（无可用事件源）: task=" + task.taskId() + " topic=" + topic);
+                LOGGER.warning("[battlepass] TaskEngine 跳过任务（无可用事件源）: task=" + task.taskId() + " topic=" + topic);
             }
         }
 
-        bpLogger.info("[battlepass] TaskEngine.start 完成: eventBus订阅=" + eventBusCount
+        LOGGER.info("[battlepass] TaskEngine.start 完成: eventBus订阅=" + eventBusCount
             + " bukkit降级=" + bukkitCount + " 跳过=" + skippedCount
             + " | 总任务数=" + configuration.tasks().all().size());
 
         // 如果有需要降级的 Bukkit 事件，注册监听器
-        if (!neededBukkitEvents.isEmpty()) {
-            registerBukkitListener(neededBukkitEvents, killCallbacks, damageCallbacks,
-                joinCallbacks, pickupCallbacks, fishCallbacks);
+        if (!callbacksByEvent.isEmpty()) {
+            registerBukkitListener(callbacksByEvent);
         }
     }
 
@@ -185,40 +192,35 @@ public final class BattlePassTaskEngine {
     /**
      * 注册原版 Bukkit 事件监听器，将多个回调合并为一个分发器。
      */
-    private void registerBukkitListener(Set<String> eventClasses,
-                                         List<BiConsumer<Player, Map<String, String>>> killCallbacks,
-                                         List<BiConsumer<Player, Map<String, String>>> damageCallbacks,
-                                         List<BiConsumer<Player, Map<String, String>>> joinCallbacks,
-                                         List<BiConsumer<Player, Map<String, String>>> pickupCallbacks,
-                                         List<BiConsumer<Player, Map<String, String>>> fishCallbacks) {
-        BiConsumer<Player, Map<String, String>> killDispatcher = combine(killCallbacks);
-        BiConsumer<Player, Map<String, String>> damageDispatcher = combine(damageCallbacks);
-        BiConsumer<Player, Map<String, String>> joinDispatcher = combine(joinCallbacks);
-        BiConsumer<Player, Map<String, String>> pickupDispatcher = combine(pickupCallbacks);
-        BiConsumer<Player, Map<String, String>> fishDispatcher = combine(fishCallbacks);
-
+    private void registerBukkitListener(
+        Map<String, List<BiConsumer<Player, Map<String, String>>>> callbacksByEvent
+    ) {
+        Map<String, BiConsumer<Player, Map<String, String>>> dispatchers = new HashMap<>();
+        for (Map.Entry<String, List<BiConsumer<Player, Map<String, String>>>> entry
+                : callbacksByEvent.entrySet()) {
+            BiConsumer<Player, Map<String, String>> dispatcher = combine(entry.getValue());
+            if (dispatcher != null) dispatchers.put(entry.getKey(), dispatcher);
+        }
         bukkitListener = BukkitEventSourceListener.register(
             plugin,
-            java.util.logging.Logger.getLogger("ArcartXSuite"),
-            eventClasses,
-            killDispatcher != null ? killDispatcher : null,
-            damageDispatcher != null ? damageDispatcher : null,
-            joinDispatcher != null ? joinDispatcher : null,
-            pickupDispatcher != null ? pickupDispatcher : null,
-            fishDispatcher != null ? fishDispatcher : null
+            LOGGER,
+            dispatchers
         );
     }
 
     /**
      * 将多个回调合并为一个分发器，任一回调异常不影响其他回调。
+     *
+     * @param callbacks 回调列表
+     * @return 合并后的回调，为空时返回 null
      */
-    private BiConsumer<Player, Map<String, String>> combine(List<BiConsumer<Player, Map<String, String>>> callbacks) {
+    private BiConsumer<Player, Map<String, String>> combine(
+        List<BiConsumer<Player, Map<String, String>>> callbacks
+    ) {
         if (callbacks == null || callbacks.isEmpty()) return null;
         return (player, payload) -> {
-            for (BiConsumer<Player, Map<String, String>> cb : callbacks) {
-                try {
-                    cb.accept(player, payload);
-                } catch (Exception ignored) {}
+            for (BiConsumer<Player, Map<String, String>> callback : callbacks) {
+                callback.accept(player, payload);
             }
         };
     }
@@ -241,13 +243,46 @@ public final class BattlePassTaskEngine {
             bukkitListener.unregister();
             bukkitListener = null;
         }
+        triggerLimiter.clear();
+    }
+
+    /**
+     * 清理玩家的任务触发限流状态。
+     *
+     * @param uuid 玩家 UUID
+     */
+    public void clearPlayerLimits(UUID uuid) {
+        triggerLimiter.clear(uuid);
+    }
+
+    private Map<String, String> mapPayload(Map<String, String> payload, Map<String, String> fields) {
+        if (fields == null || fields.isEmpty()) return payload;
+        Map<String, String> mapped = new java.util.LinkedHashMap<>(payload);
+        for (Map.Entry<String, String> entry : fields.entrySet()) {
+            String value = payload.get(entry.getValue());
+            if (value == null) value = resolvePayloadExpression(payload, entry.getValue());
+            if (value != null) mapped.put(entry.getKey(), value);
+        }
+        return mapped;
+    }
+
+    private String resolvePayloadExpression(Map<String, String> payload, String expression) {
+        if (expression == null) return null;
+        String payloadKey = PAYLOAD_EXPRESSION_KEYS.get(expression);
+        String value = payload.get(payloadKey != null ? payloadKey : expression);
+        if (value == null) {
+            LOGGER.fine("[battlepass] 无法解析 payload 表达式: " + expression);
+        }
+        return value;
     }
 
     private void handleEvent(Player player, BattlePassTask task, Map<String, String> payload) {
         if (!active) return;
         if (!task.matchesConditions(player, payload)) return;
         int increment = task.calculateIncrement(player, payload);
-        if (increment > 0) {
+        if (increment > 0
+            && triggerLimiter.tryAcquire(
+                player.getUniqueId(), task.taskId(), task.limits())) {
             service.updateTaskProgress(player, task.taskId(), increment);
         }
     }

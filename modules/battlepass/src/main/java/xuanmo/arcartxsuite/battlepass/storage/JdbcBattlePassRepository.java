@@ -456,9 +456,8 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
         return result;
     }
 
-    @Override
-    public void savePlayerTask(UUID playerUuid, String seasonId, PlayerTaskInstance task) throws SQLException {
-        String sql = switch (dialect()) {
+    private String playerTaskUpsertSql() {
+        return switch (dialect()) {
             case "sqlite" -> """
                 INSERT INTO bp_player_tasks (player_uuid, season_id, instance_id, template_id, category, target_count, current_progress, completed, assigned_date, week_number)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -478,20 +477,61 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                 week_number = VALUES(week_number)
                 """;
         };
+    }
+
+    @Override
+    public void savePlayerTask(UUID playerUuid, String seasonId, PlayerTaskInstance task) throws SQLException {
         try (Connection connection = getConnection();
-             PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, playerUuid.toString());
-            stmt.setString(2, seasonId);
-            stmt.setString(3, task.instanceId());
-            stmt.setString(4, task.templateId());
-            stmt.setString(5, task.category().name());
-            stmt.setInt(6, task.targetCount());
-            stmt.setInt(7, task.currentProgress());
-            stmt.setInt(8, task.completed() ? 1 : 0);
-            stmt.setString(9, task.assignedDate() != null ? task.assignedDate().toString() : LocalDate.now().toString());
-            stmt.setInt(10, task.weekNumber());
+             PreparedStatement stmt = connection.prepareStatement(playerTaskUpsertSql())) {
+            bindPlayerTask(stmt, playerUuid, seasonId, task);
             stmt.executeUpdate();
         }
+    }
+
+    @Override
+    public void savePlayerTasks(UUID playerUuid, String seasonId, List<PlayerTaskInstance> tasks)
+        throws SQLException {
+        if (tasks == null || tasks.isEmpty()) return;
+        try (Connection connection = getConnection();
+             PreparedStatement stmt = connection.prepareStatement(playerTaskUpsertSql())) {
+            boolean autoCommit = connection.getAutoCommit();
+            try {
+                connection.setAutoCommit(false);
+                for (PlayerTaskInstance task : tasks) {
+                    bindPlayerTask(stmt, playerUuid, seasonId, task);
+                    stmt.addBatch();
+                }
+                stmt.executeBatch();
+                connection.commit();
+            } catch (SQLException e) {
+                try {
+                    connection.rollback();
+                } catch (SQLException rollbackError) {
+                    e.addSuppressed(rollbackError);
+                }
+                throw e;
+            } finally {
+                if (connection.getAutoCommit() != autoCommit) {
+                    connection.setAutoCommit(autoCommit);
+                }
+            }
+        }
+    }
+
+    private void bindPlayerTask(
+        PreparedStatement stmt, UUID playerUuid, String seasonId, PlayerTaskInstance task)
+        throws SQLException {
+        stmt.setString(1, playerUuid.toString());
+        stmt.setString(2, seasonId);
+        stmt.setString(3, task.instanceId());
+        stmt.setString(4, task.templateId());
+        stmt.setString(5, task.category().name());
+        stmt.setInt(6, task.targetCount());
+        stmt.setInt(7, task.currentProgress());
+        stmt.setInt(8, task.completed() ? 1 : 0);
+        stmt.setString(9, task.assignedDate() != null
+            ? task.assignedDate().toString() : LocalDate.now().toString());
+        stmt.setInt(10, task.weekNumber());
     }
 
     @Override

@@ -256,13 +256,13 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: "var.deluxeUnlocked ? '120,70,180,220' : var.premiumUnlocked ? '200,160,60,220' : '60,64,76,200'"
+                      normal: "var.deluxeUnlocked == 'true' ? '120,70,180,220' : (var.premiumUnlocked == 'true' ? '200,160,60,220' : '60,64,76,200')"
                       shape: ~round_rect
                       radius: 20
                     effect:
                       stroke:
                         width: 2
-                        color: "var.deluxeUnlocked ? '200,140,255,200' : var.premiumUnlocked ? '255,210,100,200' : '120,130,150,160'"
+                        color: "var.deluxeUnlocked == 'true' ? '200,140,255,200' : (var.premiumUnlocked == 'true' ? '255,210,100,200' : '120,130,150,160')"
                   档位文字:
                     type: Text
                     attribute:
@@ -543,18 +543,18 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.premiumUnlocked ? '0,0,0,255' : '0,0,0,255'"
+                          normal: "var.premiumUnlocked == 'true' ? '0,0,0,255' : '0,0,0,255'"
                           shape: ~round_rect
                           radius: 14
                         effect:
                           gradient:
-                            color1: "var.premiumUnlocked ? '100,80,40,230' : '85,96,122,205'"
-                            color2: "var.premiumUnlocked ? '60,50,28,230' : '45,52,70,205'"
+                            color1: "var.premiumUnlocked == 'true' ? '100,80,40,230' : '85,96,122,205'"
+                            color2: "var.premiumUnlocked == 'true' ? '60,50,28,230' : '45,52,70,205'"
                             type: 0
                             angleDeg: 90
                           stroke:
                             width: 1
-                            color: "var.premiumUnlocked ? '255,210,100,160' : '120,130,150,80'"
+                            color: "var.premiumUnlocked == 'true' ? '255,210,100,160' : '120,130,150,80'"
                       高级档图标:
                         type: Texture
                         attribute:
@@ -562,12 +562,12 @@ controls:
                           x: 12
                           width: 24
                           height: 24
-                          normal: "var.premiumUnlocked ? '255,210,100,240' : '120,130,150,140'"
+                          normal: "var.premiumUnlocked == 'true' ? '255,210,100,240' : '120,130,150,140'"
                           shape: ~circle
                           through: true
                         effect:
                           neon:
-                            color: "var.premiumUnlocked ? '255,210,100,140' : '0,0,0,0'"
+                            color: "var.premiumUnlocked == 'true' ? '255,210,100,140' : '0,0,0,0'"
                             size: 6
                             intensity: 0.5
                             animated: false
@@ -584,7 +584,7 @@ controls:
                         attribute:
                           point: ~middle_right
                           x: -16
-                          texts: "var.premiumUnlocked ? '&a已激活' : '&c未激活'"
+                          texts: "var.premiumUnlocked == 'true' ? '&a已激活' : '&c未激活'"
                           fontSize: 26
                           through: true
                   # 典藏档
@@ -602,18 +602,18 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "var.deluxeUnlocked ? '0,0,0,255' : '0,0,0,255'"
+                          normal: "var.deluxeUnlocked == 'true' ? '0,0,0,255' : '0,0,0,255'"
                           shape: ~round_rect
                           radius: 14
                         effect:
                           gradient:
-                            color1: "var.deluxeUnlocked ? '70,45,90,220' : '62,70,90,190'"
-                            color2: "var.deluxeUnlocked ? '50,30,60,220' : '50,56,74,190'"
+                            color1: "var.deluxeUnlocked == 'true' ? '70,45,90,220' : '62,70,90,190'"
+                            color2: "var.deluxeUnlocked == 'true' ? '50,30,60,220' : '50,56,74,190'"
                             type: 0
                             angleDeg: 90
                           stroke:
                             width: 1
-                            color: "var.deluxeUnlocked ? '200,140,255,160' : '120,130,150,80'"
+                            color: "var.deluxeUnlocked == 'true' ? '200,140,255,160' : '120,130,150,80'"
                       典藏档图标:
                         type: Texture
                         attribute:
@@ -621,12 +621,12 @@ controls:
                           x: 12
                           width: 24
                           height: 24
-                          normal: "var.deluxeUnlocked ? '200,140,255,240' : '120,130,150,140'"
+                          normal: "var.deluxeUnlocked == 'true' ? '200,140,255,240' : '120,130,150,140'"
                           shape: ~circle
                           through: true
                         effect:
                           neon:
-                            color: "var.deluxeUnlocked ? '200,140,255,140' : '0,0,0,0'"
+                            color: "var.deluxeUnlocked == 'true' ? '200,140,255,140' : '0,0,0,0'"
                             size: 6
                             intensity: 0.5
                             animated: false
@@ -643,7 +643,7 @@ controls:
                         attribute:
                           point: ~middle_right
                           x: -16
-                          texts: "var.deluxeUnlocked ? '&a已激活' : '&c未激活'"
+                          texts: "var.deluxeUnlocked == 'true' ? '&a已激活' : '&c未激活'"
                           fontSize: 26
                           through: true
 

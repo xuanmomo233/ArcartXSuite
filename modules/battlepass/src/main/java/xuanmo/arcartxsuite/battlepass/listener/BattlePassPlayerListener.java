@@ -10,6 +10,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import xuanmo.arcartxsuite.battlepass.packet.BattlePassPacketHandler;
 import xuanmo.arcartxsuite.battlepass.service.BattlePassService;
 
 /**
@@ -19,10 +20,13 @@ public final class BattlePassPlayerListener implements Listener {
 
     private final JavaPlugin plugin;
     private final Supplier<BattlePassService> serviceSupplier;
+    private final Supplier<BattlePassPacketHandler> packetHandlerSupplier;
 
-    public BattlePassPlayerListener(JavaPlugin plugin, Supplier<BattlePassService> serviceSupplier) {
+    public BattlePassPlayerListener(JavaPlugin plugin, Supplier<BattlePassService> serviceSupplier,
+                                    Supplier<BattlePassPacketHandler> packetHandlerSupplier) {
         this.plugin = plugin;
         this.serviceSupplier = serviceSupplier;
+        this.packetHandlerSupplier = packetHandlerSupplier;
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -39,9 +43,13 @@ public final class BattlePassPlayerListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
+        java.util.UUID uuid = event.getPlayer().getUniqueId();
+        BattlePassPacketHandler handler = packetHandlerSupplier.get();
+        if (handler != null) {
+            handler.clearPendingRefresh(uuid);
+        }
         BattlePassService service = serviceSupplier.get();
         if (service == null) return;
-        java.util.UUID uuid = event.getPlayer().getUniqueId();
         AxsScheduler.runAsync(plugin, () -> service.handleQuit(uuid));
     }
 }

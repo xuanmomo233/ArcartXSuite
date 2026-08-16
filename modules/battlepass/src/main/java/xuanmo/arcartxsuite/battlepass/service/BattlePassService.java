@@ -6,6 +6,9 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -31,6 +34,22 @@ import xuanmo.arcartxsuite.battlepass.storage.BattlePassRepository;
 
 public final class BattlePassService {
 
+    /**
+     * 任务或进度变化后的 UI 刷新回调。
+     */
+    @FunctionalInterface
+    public interface UiRefreshListener {
+        /**
+         * 通知 UI 刷新。
+         *
+         * @param playerUuid 玩家 UUID
+         * @param structureChanged 任务集合结构是否发生变化
+         */
+        void onRefresh(UUID playerUuid, boolean structureChanged);
+    }
+
+
+
     private final JavaPlugin plugin;
     private final BattlePassModuleConfiguration configuration;
     private final BattlePassRepository repository;
@@ -40,13 +59,20 @@ public final class BattlePassService {
 
     private final Map<UUID, BattlePassPlayerProgress> cachedProgress = new ConcurrentHashMap<>();
     private final Map<UUID, List<PlayerTaskInstance>> cachedInstances = new ConcurrentHashMap<>();
+    private final Map<UUID, Map<String, Integer>> instanceIndexes = new ConcurrentHashMap<>();
+    private final Map<UUID, Map<String, List<String>>> templateIndexes = new ConcurrentHashMap<>();
+    private final Map<String, BattlePassTask> taskIndex;
+    private final Map<Integer, List<BattlePassReward>> rewardsByLevel;
+    private final Map<UUID, Object> playerLocks = new ConcurrentHashMap<>();
     private final Set<UUID> dirtyPlayers = ConcurrentHashMap.newKeySet();
-    private final Set<UUID> dirtyInstances = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, Set<String>> dirtyInstances = new ConcurrentHashMap<>();
     // 加载失败的玩家集合：这些玩家的缓存数据不可信，flushDirtyProgress 必须跳过，避免空进度覆盖 DB 真实数据
     private final Set<UUID> failedLoads = ConcurrentHashMap.newKeySet();
     private BukkitTask saveTask;
     private BukkitTask resetTask;
     private volatile boolean active;
+
+    private volatile UiRefreshListener uiRefreshListener;
 
     private Supplier<EventBusCapability> eventBusProvider;
     private java.util.function.Function<String, Boolean> moduleExistsChecker;
@@ -65,6 +91,21 @@ public final class BattlePassService {
         this.repository = repository;
         this.logger = logger;
         this.rewardDispatcher = new BattlePassRewardDispatcher(plugin, logger, itemSourceRegistry, currencyManager);
+        Map<String, BattlePassTask> taskIndex = new HashMap<>();
+        for (BattlePassTask task : configuration.tasks().all()) {
+            taskIndex.putIfAbsent(task.taskId(), task);
+        }
+        this.taskIndex = Map.copyOf(taskIndex);
+
+        Map<Integer, List<BattlePassReward>> rewardIndex = new HashMap<>();
+        for (BattlePassReward reward : configuration.rewards()) {
+            rewardIndex.computeIfAbsent(reward.level(), ignored -> new ArrayList<>()).add(reward);
+        }
+        Map<Integer, List<BattlePassReward>> immutableRewardIndex = new HashMap<>();
+        for (Map.Entry<Integer, List<BattlePassReward>> entry : rewardIndex.entrySet()) {
+            immutableRewardIndex.put(entry.getKey(), List.copyOf(entry.getValue()));
+        }
+        this.rewardsByLevel = Map.copyOf(immutableRewardIndex);
         this.taskEngine = new BattlePassTaskEngine(plugin, this, configuration, moduleId -> moduleExistsChecker != null && moduleExistsChecker.apply(moduleId));
     }
 
@@ -74,6 +115,28 @@ public final class BattlePassService {
 
     public void setModuleExistsChecker(java.util.function.Function<String, Boolean> checker) {
         this.moduleExistsChecker = checker;
+    }
+
+
+    /**
+     * 设置战令 UI 刷新回调。
+     *
+     * @param listener 刷新回调，为 null 时关闭主动推送
+     */
+    public void setUiRefreshListener(@Nullable UiRefreshListener listener) {
+        this.uiRefreshListener = listener;
+    }
+
+
+
+    private void notifyUiRefresh(UUID playerUuid, boolean structureChanged) {
+        UiRefreshListener listener = uiRefreshListener;
+        if (listener == null) return;
+        try {
+            listener.onRefresh(playerUuid, structureChanged);
+        } catch (Exception e) {
+            logger.warning("[battlepass] UI 刷新回调失败 [" + playerUuid + "]: " + e.getMessage());
+        }
     }
 
     public void start() {
@@ -97,6 +160,9 @@ public final class BattlePassService {
         flushDirtyProgress();
         cachedProgress.clear();
         cachedInstances.clear();
+        instanceIndexes.clear();
+        templateIndexes.clear();
+        playerLocks.clear();
         dirtyPlayers.clear();
         dirtyInstances.clear();
         failedLoads.clear();
@@ -134,54 +200,87 @@ public final class BattlePassService {
     public List<PlayerTaskInstance> getTaskInstances(Player player) {
         UUID uuid = player.getUniqueId();
         List<PlayerTaskInstance> cached = cachedInstances.get(uuid);
-        if (cached != null) return cached;
-        try {
-            String seasonId = configuration.season().seasonId();
-            LocalDate today = LocalDate.now();
-            List<PlayerTaskInstance> result = new ArrayList<>(
-                repository.loadPlayerTasks(uuid, seasonId));
-            if (result.isEmpty()) {
-                // 首次加载：自动分配当日/当周任务
-                BattlePassPlayerProgress progress = getProgress(player);
-                result.addAll(assignmentService.assignDailyTasks(
-                    uuid, configuration.tasks().daily(), configuration.tasks().dailyCount(), today));
-                result.addAll(assignmentService.assignWeeklyTasks(
-                    uuid, configuration.tasks().weekly(), configuration.tasks().weeklyCount(),
-                    progress.currentWeekNumber(), today));
-            }
-            // 赛季任务为固定列表：补齐缺失的模板实例
-            Set<String> seasonTemplates = new java.util.HashSet<>();
-            for (PlayerTaskInstance inst : result) {
-                if (inst.category() == BattlePassTask.TaskCategory.SEASON) {
-                    seasonTemplates.add(inst.templateId());
+        if (cached != null) return List.copyOf(cached);
+        synchronized (playerLock(uuid)) {
+            cached = cachedInstances.get(uuid);
+            if (cached != null) return List.copyOf(cached);
+            try {
+                String seasonId = configuration.season().seasonId();
+                LocalDate today = LocalDate.now();
+                List<PlayerTaskInstance> result = new ArrayList<>(
+                    repository.loadPlayerTasks(uuid, seasonId));
+                boolean hasDaily = result.stream().anyMatch(i -> i.category() == BattlePassTask.TaskCategory.DAILY);
+                boolean hasWeekly = result.stream().anyMatch(i -> i.category() == BattlePassTask.TaskCategory.WEEKLY);
+                BattlePassPlayerProgress progress = null;
+                if (!hasDaily || !hasWeekly) {
+                    progress = getProgress(player);
                 }
-            }
-            List<PlayerTaskInstance> newlyCreated = new ArrayList<>();
-            for (BattlePassTask task : configuration.tasks().season()) {
-                if (!seasonTemplates.contains(task.taskId())) {
-                    PlayerTaskInstance inst = new PlayerTaskInstance(
-                        uuid, uuid + "|SEASON|" + task.taskId(), task.taskId(),
-                        BattlePassTask.TaskCategory.SEASON, task.requiredCount(),
-                        0, false, today, 0);
-                    result.add(inst);
-                    newlyCreated.add(inst);
+                if (!hasDaily) {
+                    result.addAll(assignmentService.assignDailyTasks(
+                        uuid, configuration.tasks().daily(), configuration.tasks().dailyCount(), today));
                 }
-            }
-            for (PlayerTaskInstance inst : result) {
-                if (inst.category() != BattlePassTask.TaskCategory.SEASON || newlyCreated.contains(inst)) {
-                    repository.savePlayerTask(uuid, seasonId, inst);
+                if (!hasWeekly) {
+                    result.addAll(assignmentService.assignWeeklyTasks(
+                        uuid, configuration.tasks().weekly(), configuration.tasks().weeklyCount(),
+                        progress.currentWeekNumber(), today));
                 }
+                Set<String> seasonTemplates = new java.util.HashSet<>();
+                for (PlayerTaskInstance inst : result) {
+                    if (inst.category() == BattlePassTask.TaskCategory.SEASON) {
+                        seasonTemplates.add(inst.templateId());
+                    }
+                }
+                List<PlayerTaskInstance> newlyCreated = new ArrayList<>();
+                for (BattlePassTask task : configuration.tasks().season()) {
+                    if (!seasonTemplates.contains(task.taskId())) {
+                        PlayerTaskInstance inst = new PlayerTaskInstance(
+                            uuid, uuid + "|SEASON|" + task.taskId(), task.taskId(),
+                            BattlePassTask.TaskCategory.SEASON, task.requiredCount(),
+                            0, false, today, 0);
+                        result.add(inst);
+                        newlyCreated.add(inst);
+                    }
+                }
+                result.sort(Comparator.comparingInt(i -> i.category().ordinal()));
+                List<PlayerTaskInstance> toSave = new ArrayList<>();
+                for (PlayerTaskInstance inst : result) {
+                    if (inst.category() != BattlePassTask.TaskCategory.SEASON
+                        || newlyCreated.contains(inst)) {
+                        toSave.add(inst);
+                    }
+                }
+                if (!toSave.isEmpty()) {
+                    repository.savePlayerTasks(uuid, seasonId, toSave);
+                }
+                cacheInstances(uuid, result);
+                failedLoads.remove(uuid);
+                return List.copyOf(result);
+            } catch (SQLException e) {
+                logger.warning("加载玩家任务实例失败: " + e.getMessage());
+                failedLoads.add(uuid);
+                return Collections.emptyList();
             }
-            List<PlayerTaskInstance> immutable = Collections.unmodifiableList(result);
-            cachedInstances.put(uuid, immutable);
-            failedLoads.remove(uuid);
-            return immutable;
-        } catch (SQLException e) {
-            logger.warning("加载玩家任务实例失败: " + e.getMessage());
-            // 不缓存空列表，避免后续操作基于错误数据生成重复任务
-            failedLoads.add(uuid);
-            return Collections.emptyList();
         }
+    }
+
+    private Object playerLock(UUID uuid) {
+        return playerLocks.computeIfAbsent(uuid, ignored -> new Object());
+    }
+
+    private void cacheInstances(UUID uuid, List<PlayerTaskInstance> instances) {
+        List<PlayerTaskInstance> ordered = new ArrayList<>(instances);
+        ordered.sort(Comparator.comparingInt(i -> i.category().ordinal()));
+        cachedInstances.put(uuid, ordered);
+        Map<String, Integer> instanceIndex = new HashMap<>();
+        Map<String, List<String>> templateIndex = new HashMap<>();
+        for (int i = 0; i < ordered.size(); i++) {
+            PlayerTaskInstance instance = ordered.get(i);
+            instanceIndex.put(instance.instanceId(), i);
+            templateIndex.computeIfAbsent(instance.templateId(), ignored -> new ArrayList<>())
+                .add(instance.instanceId());
+        }
+        instanceIndexes.put(uuid, instanceIndex);
+        templateIndexes.put(uuid, templateIndex);
     }
 
     /**
@@ -214,9 +313,14 @@ public final class BattlePassService {
         flushPlayer(uuid);
         cachedProgress.remove(uuid);
         cachedInstances.remove(uuid);
+        instanceIndexes.remove(uuid);
+        templateIndexes.remove(uuid);
+        playerLocks.remove(uuid);
         dirtyPlayers.remove(uuid);
         dirtyInstances.remove(uuid);
-        failedLoads.remove(uuid);
+                taskEngine.clearPlayerLimits(uuid);
+
+failedLoads.remove(uuid);
     }
 
     public List<PlayerTaskInstance> getActiveTaskInstances(Player player) {
@@ -225,47 +329,75 @@ public final class BattlePassService {
             .toList();
     }
 
-    public synchronized void updateInstanceProgress(Player player, PlayerTaskInstance instance, int increment) {
+    public void updateInstanceProgress(Player player, PlayerTaskInstance instance, int increment) {
         if (!active || increment <= 0 || !isSeasonActive()) return;
-        List<PlayerTaskInstance> instances = new ArrayList<>(getTaskInstances(player));
-        int idx = -1;
-        for (int i = 0; i < instances.size(); i++) {
-            if (instances.get(i).instanceId().equals(instance.instanceId())) {
-                idx = i;
-                break;
-            }
-        }
-        if (idx == -1) return;
+        UUID uuid = player.getUniqueId();
+        boolean changed = false;
+        synchronized (playerLock(uuid)) {
+            List<PlayerTaskInstance> instances = cachedInstances.get(uuid);
+            Map<String, Integer> indexes = instanceIndexes.get(uuid);
+            if (instances == null || indexes == null) return;
+            Integer idx = indexes.get(instance.instanceId());
+            if (idx == null || idx < 0 || idx >= instances.size()) return;
 
-        PlayerTaskInstance current = instances.get(idx);
-        PlayerTaskInstance updatedInstance = current.withProgress(
-            Math.min(current.currentProgress() + increment, current.targetCount())
-        );
-        if (updatedInstance.currentProgress() >= updatedInstance.targetCount() && !updatedInstance.completed()) {
-            updatedInstance = updatedInstance.withCompleted(true);
-            BattlePassTask task = findTask(updatedInstance.templateId());
-            if (task != null) {
-                BattlePassPlayerProgress progress = getProgress(player);
-                int xp = Math.round(task.totalXpReward() * progress.xpMultiplier());
-                BattlePassPlayerProgress updatedProgress = addXp(progress, xp);
-                cachedProgress.put(player.getUniqueId(), updatedProgress);
-                dirtyPlayers.add(player.getUniqueId());
-                logger.fine("玩家 " + player.getName() + " 完成任务 " + task.taskId() + " 获得 " + xp + " XP");
+            PlayerTaskInstance current = instances.get(idx);
+            PlayerTaskInstance updatedInstance = current.withProgress(
+                Math.min(current.currentProgress() + increment, current.targetCount()));
+            boolean completedNow = updatedInstance.currentProgress() >= updatedInstance.targetCount()
+                && !updatedInstance.completed();
+            if (completedNow) {
+                updatedInstance = updatedInstance.withCompleted(true);
+                BattlePassTask task = findTask(updatedInstance.templateId());
+                BattlePassPlayerProgress progress = cachedProgress.get(uuid);
+                if (task != null && progress != null) {
+                    int xp = Math.round(task.totalXpReward() * progress.xpMultiplier());
+                    BattlePassPlayerProgress updatedProgress = addXp(progress, xp);
+                    cachedProgress.put(uuid, updatedProgress);
+                    dirtyPlayers.add(uuid);
+                    persistProgressAsync(uuid);
+                    logger.fine("任务完成: " + player.getName() + " task=" + task.taskId() + " xp=" + xp);
+                }
             }
+            instances.set(idx, updatedInstance);
+            markDirtyInstance(uuid, updatedInstance.instanceId());
         }
-        instances.set(idx, updatedInstance);
-        cachedInstances.put(player.getUniqueId(), Collections.unmodifiableList(instances));
-        dirtyInstances.add(player.getUniqueId());
     }
 
     public void updateTaskProgress(Player player, String taskId, int increment) {
         if (!active || increment <= 0) return;
-        // 优先更新 PlayerTaskInstance
-        List<PlayerTaskInstance> activeInstances = getActiveTaskInstances(player);
-        for (PlayerTaskInstance instance : activeInstances) {
-            if (instance.templateId().equals(taskId)) {
-                updateInstanceProgress(player, instance, increment);
+        UUID uuid = player.getUniqueId();
+        boolean changed = false;
+        synchronized (playerLock(uuid)) {
+            List<PlayerTaskInstance> instances = cachedInstances.get(uuid);
+            Map<String, Integer> indexes = instanceIndexes.get(uuid);
+            Map<String, List<String>> templates = templateIndexes.get(uuid);
+            if (instances == null || indexes == null || templates == null) return;
+            List<String> instanceIds = templates.get(taskId);
+            if (instanceIds == null) return;
+            boolean completedNow = false;
+            for (String instanceId : instanceIds) {
+                Integer index = indexes.get(instanceId);
+                if (index == null || index < 0 || index >= instances.size()) continue;
+                PlayerTaskInstance current = instances.get(index);
+                if (current.completed()) continue;
+                PlayerTaskInstance updated = current.withProgress(
+                    Math.min(current.currentProgress() + increment, current.targetCount()));
+                if (updated.currentProgress() >= updated.targetCount()) {
+                    updated = updated.withCompleted(true);
+                    completedNow = true;
+                    BattlePassTask task = findTask(updated.templateId());
+                    BattlePassPlayerProgress progress = cachedProgress.get(uuid);
+                    if (task != null && progress != null) {
+                        int xp = Math.round(task.totalXpReward() * progress.xpMultiplier());
+                        cachedProgress.put(uuid, addXp(progress, xp));
+                        dirtyPlayers.add(uuid);
+                        logger.fine("任务完成: " + player.getName() + " task=" + task.taskId() + " xp=" + xp);
+                    }
+                }
+                instances.set(index, updated);
+                markDirtyInstance(uuid, updated.instanceId());
             }
+            if (completedNow) persistProgressAsync(uuid);
         }
     }
 
@@ -291,56 +423,61 @@ public final class BattlePassService {
     }
 
     /** 一键领取所有已解锁等级中当前可领的全部档位奖励，返回成功领取的数量。 */
-    public synchronized int claimAllRewards(Player player) {
-        BattlePassPlayerProgress progress = getProgress(player);
-        int currentLevel = progress.currentLevel();
-        int claimedCount = 0;
-
-        for (BattlePassReward reward : configuration.rewards()) {
-            if (reward.level() > currentLevel) continue;
-            if (reward.tier() == BattlePassReward.RewardTier.PREMIUM && !progress.unlockedPremium()) continue;
-            if (reward.tier() == BattlePassReward.RewardTier.DELUXE && !progress.unlockedDeluxe()) continue;
-            String rewardId = reward.rewardId();
-            if (progress.claimedRewards().contains(rewardId)) continue;
-
-            rewardDispatcher.dispatch(player, reward);
-            progress = progress.withClaimedReward(rewardId);
-            persistClaimAsync(player.getUniqueId(), rewardId);
-            claimedCount++;
+    public int claimAllRewards(Player player) {
+        UUID uuid = player.getUniqueId();
+        BattlePassPlayerProgress loaded = getProgress(player);
+        synchronized (playerLock(uuid)) {
+            BattlePassPlayerProgress progress = cachedProgress.get(uuid);
+            if (progress == null) progress = loaded;
+            int currentLevel = progress.currentLevel();
+            int claimedCount = 0;
+            for (BattlePassReward reward : configuration.rewards()) {
+                if (reward.level() > currentLevel) continue;
+                if (reward.tier() == BattlePassReward.RewardTier.PREMIUM && !progress.unlockedPremium()) continue;
+                if (reward.tier() == BattlePassReward.RewardTier.DELUXE && !progress.unlockedDeluxe()) continue;
+                String rewardId = reward.rewardId();
+                if (progress.claimedRewards().contains(rewardId)) continue;
+                rewardDispatcher.dispatch(player, reward);
+                progress = progress.withClaimedReward(rewardId);
+                persistClaimAsync(uuid, rewardId);
+                claimedCount++;
+            }
+            if (claimedCount > 0) {
+                cachedProgress.put(uuid, progress);
+                dirtyPlayers.add(uuid);
+            }
+            return claimedCount;
         }
-        if (claimedCount > 0) {
-            cachedProgress.put(player.getUniqueId(), progress);
-            dirtyPlayers.add(player.getUniqueId());
-        }
-        return claimedCount;
     }
 
     /** 领取指定等级下当前可领的全部档位奖励。 */
-    public synchronized ClaimResult claimRewards(Player player, int level) {
-        BattlePassPlayerProgress progress = getProgress(player);
-        if (progress.currentLevel() < level) return ClaimResult.LEVEL_NOT_REACHED;
-
-        boolean found = false;
-        boolean claimed = false;
-        for (BattlePassReward reward : configuration.rewards()) {
-            if (reward.level() != level) continue;
-            if (reward.tier() == BattlePassReward.RewardTier.PREMIUM && !progress.unlockedPremium()) continue;
-            if (reward.tier() == BattlePassReward.RewardTier.DELUXE && !progress.unlockedDeluxe()) continue;
-            found = true;
-            String rewardId = reward.rewardId();
-            if (progress.claimedRewards().contains(rewardId)) continue;
-
-            rewardDispatcher.dispatch(player, reward);
-            progress = progress.withClaimedReward(rewardId);
-            claimed = true;
-            persistClaimAsync(player.getUniqueId(), rewardId);
+    public ClaimResult claimRewards(Player player, int level) {
+        UUID uuid = player.getUniqueId();
+        BattlePassPlayerProgress loaded = getProgress(player);
+        synchronized (playerLock(uuid)) {
+            BattlePassPlayerProgress progress = cachedProgress.get(uuid);
+            if (progress == null) progress = loaded;
+            if (progress.currentLevel() < level) return ClaimResult.LEVEL_NOT_REACHED;
+            boolean found = false;
+            boolean claimed = false;
+            for (BattlePassReward reward : rewardsByLevel.getOrDefault(level, Collections.emptyList())) {
+                if (reward.tier() == BattlePassReward.RewardTier.PREMIUM && !progress.unlockedPremium()) continue;
+                if (reward.tier() == BattlePassReward.RewardTier.DELUXE && !progress.unlockedDeluxe()) continue;
+                found = true;
+                String rewardId = reward.rewardId();
+                if (progress.claimedRewards().contains(rewardId)) continue;
+                rewardDispatcher.dispatch(player, reward);
+                progress = progress.withClaimedReward(rewardId);
+                claimed = true;
+                persistClaimAsync(uuid, rewardId);
+            }
+            if (claimed) {
+                cachedProgress.put(uuid, progress);
+                dirtyPlayers.add(uuid);
+                return ClaimResult.SUCCESS;
+            }
+            return found ? ClaimResult.ALREADY_CLAIMED : ClaimResult.NOT_FOUND;
         }
-        if (claimed) {
-            cachedProgress.put(player.getUniqueId(), progress);
-            dirtyPlayers.add(player.getUniqueId());
-            return ClaimResult.SUCCESS;
-        }
-        return found ? ClaimResult.ALREADY_CLAIMED : ClaimResult.NOT_FOUND;
     }
 
     /** 领取成功后立即异步落盘，缩小崩服重复领取窗口。 */
@@ -362,7 +499,9 @@ public final class BattlePassService {
         AxsScheduler.runAsync(plugin, () -> {
             try {
                 repository.saveProgress(progress);
-                dirtyPlayers.remove(uuid);
+                if (cachedProgress.get(uuid) == progress) {
+                    dirtyPlayers.remove(uuid);
+                }
             } catch (SQLException e) {
                 logger.warning("即时保存战令进度失败 [" + uuid + "]: " + e.getMessage());
             }
@@ -370,13 +509,20 @@ public final class BattlePassService {
     }
 
     public boolean unlockTier(Player player, BattlePassPlayerProgress.PassTier tier) {
-        BattlePassPlayerProgress progress = getProgress(player);
-        if (progress.passTier().ordinal() >= tier.ordinal()) return false;
-        cachedProgress.put(player.getUniqueId(), progress.withPassTier(tier));
-        dirtyPlayers.add(player.getUniqueId());
-        persistProgressAsync(player.getUniqueId());
-        return true;
+        UUID uuid = player.getUniqueId();
+        boolean changed = false;
+        synchronized (playerLock(uuid)) {
+            BattlePassPlayerProgress progress = getProgress(player);
+            if (progress.passTier().ordinal() >= tier.ordinal()) return false;
+            cachedProgress.put(uuid, progress.withPassTier(tier));
+            dirtyPlayers.add(uuid);
+            persistProgressAsync(uuid);
+            changed = true;
+        }
+        if (changed) notifyUiRefresh(uuid, false);
+        return changed;
     }
+
 
     /**
      * 管理员给玩家增加指定经验值，自动升级。
@@ -385,15 +531,26 @@ public final class BattlePassService {
      * @param xp     增加的经验值（正数）
      * @return 实际增加后的总经验（当前等级经验 + 已升级数 * xpPerLevel）
      */
-    public synchronized int addXp(Player player, int xp) {
+    public int addXp(Player player, int xp) {
         if (xp <= 0) return 0;
-        BattlePassPlayerProgress progress = getProgress(player);
-        BattlePassPlayerProgress updated = addXp(progress, xp);
-        cachedProgress.put(player.getUniqueId(), updated);
-        dirtyPlayers.add(player.getUniqueId());
-        persistProgressAsync(player.getUniqueId());
-        return updated.currentXp() + (updated.currentLevel() - progress.currentLevel()) * configuration.season().xpPerLevel();
+        UUID uuid = player.getUniqueId();
+        int result;
+        boolean changed;
+        synchronized (playerLock(uuid)) {
+            BattlePassPlayerProgress progress = getProgress(player);
+            BattlePassPlayerProgress updated = addXp(progress, xp);
+            cachedProgress.put(uuid, updated);
+            dirtyPlayers.add(uuid);
+            persistProgressAsync(uuid);
+            result = updated.currentXp()
+                + (updated.currentLevel() - progress.currentLevel())
+                * configuration.season().xpPerLevel();
+            changed = updated != progress;
+        }
+        if (changed) notifyUiRefresh(uuid, false);
+        return result;
     }
+
 
     /**
      * 管理员设置玩家当前等级内的经验值（不触发升级，超出部分截断）。
@@ -401,14 +558,22 @@ public final class BattlePassService {
      * @param player 目标玩家
      * @param xp     目标经验值
      */
-    public synchronized void setXp(Player player, int xp) {
-        int xpPerLevel = configuration.season().xpPerLevel();
-        int clamped = Math.max(0, Math.min(xp, xpPerLevel - 1));
-        BattlePassPlayerProgress progress = getProgress(player);
-        cachedProgress.put(player.getUniqueId(), progress.withXp(clamped));
-        dirtyPlayers.add(player.getUniqueId());
-        persistProgressAsync(player.getUniqueId());
+    public void setXp(Player player, int xp) {
+        UUID uuid = player.getUniqueId();
+        boolean changed;
+        synchronized (playerLock(uuid)) {
+            int xpPerLevel = configuration.season().xpPerLevel();
+            int clamped = Math.max(0, Math.min(xp, xpPerLevel - 1));
+            BattlePassPlayerProgress progress = getProgress(player);
+            BattlePassPlayerProgress updated = progress.withXp(clamped);
+            cachedProgress.put(uuid, updated);
+            dirtyPlayers.add(uuid);
+            persistProgressAsync(uuid);
+            changed = updated != progress;
+        }
+        if (changed) notifyUiRefresh(uuid, false);
     }
+
 
     /**
      * 管理员扣除玩家经验值，可能降级。
@@ -416,22 +581,30 @@ public final class BattlePassService {
      * @param player 目标玩家
      * @param xp     扣除的经验值（正数）
      */
-    public synchronized void removeXp(Player player, int xp) {
+    public void removeXp(Player player, int xp) {
         if (xp <= 0) return;
-        BattlePassPlayerProgress progress = getProgress(player);
-        int xpPerLevel = configuration.season().xpPerLevel();
-        int totalXp = progress.currentXp() + progress.currentLevel() * xpPerLevel;
-        int newTotal = Math.max(0, totalXp - xp);
-        int newLevel = Math.max(1, newTotal / xpPerLevel);
-        int newXp = newTotal - newLevel * xpPerLevel;
-        if (newLevel < 1) {
-            newLevel = 1;
-            newXp = 0;
+        UUID uuid = player.getUniqueId();
+        boolean changed;
+        synchronized (playerLock(uuid)) {
+            BattlePassPlayerProgress progress = getProgress(player);
+            int xpPerLevel = configuration.season().xpPerLevel();
+            int totalXp = progress.currentXp() + progress.currentLevel() * xpPerLevel;
+            int newTotal = Math.max(0, totalXp - xp);
+            int newLevel = Math.max(1, newTotal / xpPerLevel);
+            int newXp = newTotal - newLevel * xpPerLevel;
+            if (newLevel < 1) {
+                newLevel = 1;
+                newXp = 0;
+            }
+            BattlePassPlayerProgress updated = progress.withLevel(newLevel).withXp(newXp);
+            cachedProgress.put(uuid, updated);
+            dirtyPlayers.add(uuid);
+            persistProgressAsync(uuid);
+            changed = updated != progress;
         }
-        cachedProgress.put(player.getUniqueId(), progress.withLevel(newLevel).withXp(newXp));
-        dirtyPlayers.add(player.getUniqueId());
-        persistProgressAsync(player.getUniqueId());
+        if (changed) notifyUiRefresh(uuid, false);
     }
+
 
     /**
      * 管理员直接设置玩家等级，经验清零。
@@ -439,14 +612,22 @@ public final class BattlePassService {
      * @param player 目标玩家
      * @param level  目标等级
      */
-    public synchronized void setLevel(Player player, int level) {
-        int maxLevel = configuration.season().maxLevel();
-        int clamped = Math.max(1, Math.min(level, maxLevel));
-        BattlePassPlayerProgress progress = getProgress(player);
-        cachedProgress.put(player.getUniqueId(), progress.withLevel(clamped).withXp(0));
-        dirtyPlayers.add(player.getUniqueId());
-        persistProgressAsync(player.getUniqueId());
+    public void setLevel(Player player, int level) {
+        UUID uuid = player.getUniqueId();
+        boolean changed;
+        synchronized (playerLock(uuid)) {
+            int maxLevel = configuration.season().maxLevel();
+            int clamped = Math.max(1, Math.min(level, maxLevel));
+            BattlePassPlayerProgress progress = getProgress(player);
+            BattlePassPlayerProgress updated = progress.withLevel(clamped).withXp(0);
+            cachedProgress.put(uuid, updated);
+            dirtyPlayers.add(uuid);
+            persistProgressAsync(uuid);
+            changed = updated != progress;
+        }
+        if (changed) notifyUiRefresh(uuid, false);
     }
+
 
     public void resetPlayerProgress(UUID playerUuid) {
         try {
@@ -456,16 +637,18 @@ public final class BattlePassService {
         }
         cachedProgress.remove(playerUuid);
         cachedInstances.remove(playerUuid);
+        instanceIndexes.remove(playerUuid);
+        templateIndexes.remove(playerUuid);
+        playerLocks.remove(playerUuid);
         dirtyPlayers.remove(playerUuid);
         dirtyInstances.remove(playerUuid);
-        failedLoads.remove(playerUuid);
+                taskEngine.clearPlayerLimits(playerUuid);
+
+failedLoads.remove(playerUuid);
     }
 
     public @Nullable BattlePassTask findTask(String taskId) {
-        for (BattlePassTask task : configuration.tasks().all()) {
-            if (task.taskId().equals(taskId)) return task;
-        }
-        return null;
+        return taskIndex.get(taskId);
     }
 
     public BattlePassModuleConfiguration configuration() {
@@ -477,9 +660,7 @@ public final class BattlePassService {
     }
 
     private void flushDirtyProgress() {
-        // 逐个摘除脏标记，失败则重新标脏，避免 DB 抖动时静默丢数据
         for (UUID uuid : new ArrayList<>(dirtyPlayers)) {
-            // 跳过加载失败的玩家：缓存中的进度不可信，写回会覆盖 DB 真实数据
             if (failedLoads.contains(uuid)) continue;
             if (!dirtyPlayers.remove(uuid)) continue;
             BattlePassPlayerProgress progress = cachedProgress.get(uuid);
@@ -488,51 +669,76 @@ public final class BattlePassService {
                 repository.saveProgress(progress);
             } catch (SQLException e) {
                 dirtyPlayers.add(uuid);
-                logger.warning("保存战令进度失败 [" + uuid + "]: " + e.getMessage());
+                logger.warning("进度保存失败 [" + uuid + "]: " + e.getMessage());
             }
         }
-        for (UUID uuid : new ArrayList<>(dirtyInstances)) {
-            if (failedLoads.contains(uuid)) continue;
-            if (!dirtyInstances.remove(uuid)) continue;
-            List<PlayerTaskInstance> instances = cachedInstances.get(uuid);
-            if (instances == null) continue;
-            String seasonId = configuration.season().seasonId();
-            for (PlayerTaskInstance instance : instances) {
-                try {
-                    repository.savePlayerTask(uuid, seasonId, instance);
-                } catch (SQLException e) {
-                    dirtyInstances.add(uuid);
-                    logger.warning("保存任务实例失败 [" + uuid + "/" + instance.instanceId() + "]: " + e.getMessage());
+        for (UUID uuid : new ArrayList<>(dirtyInstances.keySet())) {
+            flushDirtyInstances(uuid);
+        }
+    }
+
+    private void markDirtyInstance(UUID uuid, String instanceId) {
+        dirtyInstances.computeIfAbsent(uuid, ignored -> ConcurrentHashMap.newKeySet()).add(instanceId);
+    }
+
+    private void markDirtyInstances(UUID uuid, Set<String> instanceIds) {
+        if (!instanceIds.isEmpty()) {
+            dirtyInstances.compute(uuid, (ignored, current) -> {
+                if (current == null) current = ConcurrentHashMap.newKeySet();
+                current.addAll(instanceIds);
+                return current;
+            });
+        }
+    }
+
+    private void flushDirtyInstances(UUID uuid) {
+        if (failedLoads.contains(uuid)) return;
+        List<PlayerTaskInstance> instances;
+        Set<String> ids;
+        synchronized (playerLock(uuid)) {
+            Set<String> dirty = dirtyInstances.get(uuid);
+            if (dirty == null || dirty.isEmpty()) return;
+            ids = new HashSet<>();
+            dirtyInstances.computeIfPresent(uuid, (ignored, current) -> {
+                ids.addAll(current);
+                return null;
+            });
+            if (ids.isEmpty()) return;
+            List<PlayerTaskInstance> cached = cachedInstances.get(uuid);
+            if (cached == null) {
+                markDirtyInstances(uuid, ids);
+                return;
+            }
+            Map<String, Integer> indexes = instanceIndexes.get(uuid);
+            instances = new ArrayList<>();
+            for (String id : ids) {
+                Integer index = indexes == null ? null : indexes.get(id);
+                if (index != null && index >= 0 && index < cached.size()) {
+                    instances.add(cached.get(index));
                 }
             }
+        }
+        if (instances.isEmpty()) return;
+        try {
+            repository.savePlayerTasks(uuid, configuration.season().seasonId(), instances);
+        } catch (SQLException e) {
+            markDirtyInstances(uuid, ids);
+            logger.warning("任务实例保存失败 [" + uuid + "]: " + e.getMessage());
         }
     }
 
     private void flushPlayer(UUID uuid) {
-        // 跳过加载失败的玩家：缓存中的进度不可信，写回会覆盖 DB 真实数据
-        if (failedLoads.contains(uuid)) {
-            logger.info("跳过加载失败玩家的退服保存 [" + uuid + "]");
-            return;
-        }
+        if (failedLoads.contains(uuid)) return;
         BattlePassPlayerProgress progress = cachedProgress.get(uuid);
         if (progress != null && dirtyPlayers.contains(uuid)) {
             try {
                 repository.saveProgress(progress);
+                dirtyPlayers.remove(uuid);
             } catch (SQLException e) {
-                logger.warning("退服保存战令进度失败 [" + uuid + "]: " + e.getMessage());
+                logger.warning("玩家进度保存失败 [" + uuid + "]: " + e.getMessage());
             }
         }
-        List<PlayerTaskInstance> instances = cachedInstances.get(uuid);
-        if (instances != null && dirtyInstances.contains(uuid)) {
-            String seasonId = configuration.season().seasonId();
-            for (PlayerTaskInstance instance : instances) {
-                try {
-                    repository.savePlayerTask(uuid, seasonId, instance);
-                } catch (SQLException e) {
-                    logger.warning("退服保存任务实例失败 [" + uuid + "/" + instance.instanceId() + "]: " + e.getMessage());
-                }
-            }
-        }
+        flushDirtyInstances(uuid);
     }
 
     private void checkResets() {
@@ -544,61 +750,181 @@ public final class BattlePassService {
             boolean weeklyNeedsReset = progress.lastWeeklyResetDate() == null
                 || ChronoUnit.DAYS.between(progress.lastWeeklyResetDate(), today) >= 7;
             if (dailyNeedsReset || weeklyNeedsReset) {
-                AxsScheduler.runTask(plugin, () -> performReset(uuid, dailyNeedsReset, weeklyNeedsReset));
+                AxsScheduler.runAsync(plugin, () -> performReset(uuid, dailyNeedsReset, weeklyNeedsReset));
             }
         }
     }
 
     private void performReset(UUID playerUuid, boolean daily, boolean weekly) {
-        BattlePassPlayerProgress progress = cachedProgress.get(playerUuid);
-        if (progress == null) return;
-        String seasonId = configuration.season().seasonId();
-        LocalDate today = LocalDate.now();
 
-        if (daily) {
-            try {
-                repository.deletePlayerTasksByCategory(playerUuid, seasonId, BattlePassTask.TaskCategory.DAILY);
-            } catch (SQLException e) {
-                logger.warning("删除旧每日任务失败: " + e.getMessage());
-            }
-            List<PlayerTaskInstance> dailyInstances = assignmentService.assignDailyTasks(
-                playerUuid, configuration.tasks().daily(), configuration.tasks().dailyCount(), today
-            );
-            List<PlayerTaskInstance> allInstances = new ArrayList<>(dailyInstances);
-            List<PlayerTaskInstance> existing = cachedInstances.getOrDefault(playerUuid, Collections.emptyList());
-            for (PlayerTaskInstance inst : existing) {
-                if (inst.category() != BattlePassTask.TaskCategory.DAILY) {
-                    allInstances.add(inst);
+        synchronized (playerLock(playerUuid)) {
+
+            BattlePassPlayerProgress progress = cachedProgress.get(playerUuid);
+
+            if (progress == null) return;
+
+            String seasonId = configuration.season().seasonId();
+
+            LocalDate today = LocalDate.now();
+
+
+
+            if (daily) {
+
+                try {
+
+                    repository.deletePlayerTasksByCategory(
+
+                        playerUuid, seasonId, BattlePassTask.TaskCategory.DAILY);
+
+                } catch (SQLException e) {
+
+                    logger.warning("删除旧每日任务失败: " + e.getMessage());
+
                 }
+
+                List<PlayerTaskInstance> dailyInstances = assignmentService.assignDailyTasks(
+
+                    playerUuid, configuration.tasks().daily(), configuration.tasks().dailyCount(), today
+
+                );
+
+                List<PlayerTaskInstance> allInstances = new ArrayList<>(dailyInstances);
+
+                List<PlayerTaskInstance> existing =
+
+                    cachedInstances.getOrDefault(playerUuid, Collections.emptyList());
+
+                for (PlayerTaskInstance inst : existing) {
+
+                    if (inst.category() != BattlePassTask.TaskCategory.DAILY) {
+
+                        allInstances.add(inst);
+
+                    }
+
+                }
+
+                cacheInstances(playerUuid, allInstances);
+
+                for (PlayerTaskInstance instance : dailyInstances) {
+
+                    markDirtyInstance(playerUuid, instance.instanceId());
+
+                }
+
+                progress = progress.withDailyReset(today);
+
             }
-            cachedInstances.put(playerUuid, Collections.unmodifiableList(allInstances));
-            dirtyInstances.add(playerUuid);
-            progress = progress.withDailyReset(today);
+
+
+
+            if (weekly) {
+
+                try {
+
+                    repository.deletePlayerTasksByCategory(
+
+                        playerUuid, seasonId, BattlePassTask.TaskCategory.WEEKLY);
+
+                } catch (SQLException e) {
+
+                    logger.warning("删除旧每周任务失败: " + e.getMessage());
+
+                }
+
+                int newWeek = progress.currentWeekNumber() + 1;
+
+                List<PlayerTaskInstance> weeklyInstances = assignmentService.assignWeeklyTasks(
+
+                    playerUuid, configuration.tasks().weekly(), configuration.tasks().weeklyCount(),
+
+                    newWeek, today
+
+                );
+
+                List<PlayerTaskInstance> allInstances = new ArrayList<>(weeklyInstances);
+
+                List<PlayerTaskInstance> existing =
+
+                    cachedInstances.getOrDefault(playerUuid, Collections.emptyList());
+
+                for (PlayerTaskInstance inst : existing) {
+
+                    if (inst.category() != BattlePassTask.TaskCategory.WEEKLY) {
+
+                        allInstances.add(inst);
+
+                    }
+
+                }
+
+                cacheInstances(playerUuid, allInstances);
+
+                for (PlayerTaskInstance instance : weeklyInstances) {
+
+                    markDirtyInstance(playerUuid, instance.instanceId());
+
+                }
+
+                progress = progress.withWeeklyReset(today, newWeek);
+
+            }
+
+
+
+            cachedProgress.put(playerUuid, progress);
+
+            dirtyPlayers.add(playerUuid);
+
+            List<PlayerTaskInstance> instances = cachedInstances.get(playerUuid);
+
+            List<PlayerTaskInstance> toSave = new ArrayList<>();
+
+            if (instances != null) {
+
+                for (PlayerTaskInstance instance : instances) {
+
+                    if ((daily && instance.category() == BattlePassTask.TaskCategory.DAILY)
+
+                        || (weekly && instance.category() == BattlePassTask.TaskCategory.WEEKLY)) {
+
+                        toSave.add(instance);
+
+                    }
+
+                }
+
+            }
+
+            if (!toSave.isEmpty()) {
+
+                try {
+
+                    repository.savePlayerTasks(playerUuid, seasonId, toSave);
+
+                    for (PlayerTaskInstance instance : toSave) {
+
+                        dirtyInstances.computeIfPresent(playerUuid, (ignored, dirty) -> {
+
+                            dirty.remove(instance.instanceId());
+
+                            return dirty.isEmpty() ? null : dirty;
+
+                        });
+
+                    }
+
+                } catch (SQLException e) {
+
+                    logger.warning("重置后任务实例保存失败 [" + playerUuid + "]: " + e.getMessage());
+
+                }
+
+            }
+
         }
 
-        if (weekly) {
-            try {
-                repository.deletePlayerTasksByCategory(playerUuid, seasonId, BattlePassTask.TaskCategory.WEEKLY);
-            } catch (SQLException e) {
-                logger.warning("删除旧每周任务失败: " + e.getMessage());
-            }
-            int newWeek = progress.currentWeekNumber() + 1;
-            List<PlayerTaskInstance> weeklyInstances = assignmentService.assignWeeklyTasks(
-                playerUuid, configuration.tasks().weekly(), configuration.tasks().weeklyCount(), newWeek, today
-            );
-            List<PlayerTaskInstance> allInstances = new ArrayList<>(weeklyInstances);
-            List<PlayerTaskInstance> existing = cachedInstances.getOrDefault(playerUuid, Collections.emptyList());
-            for (PlayerTaskInstance inst : existing) {
-                if (inst.category() != BattlePassTask.TaskCategory.WEEKLY) {
-                    allInstances.add(inst);
-                }
-            }
-            cachedInstances.put(playerUuid, Collections.unmodifiableList(allInstances));
-            dirtyInstances.add(playerUuid);
-            progress = progress.withWeeklyReset(today, newWeek);
-        }
-
-        cachedProgress.put(playerUuid, progress);
-        dirtyPlayers.add(playerUuid);
-    }
+        notifyUiRefresh(playerUuid, true);
+}
 }

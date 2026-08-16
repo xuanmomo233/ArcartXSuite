@@ -114,6 +114,16 @@ public interface BattlePassRepository {
     void savePlayerTask(UUID playerUuid, String seasonId, PlayerTaskInstance task) throws SQLException;
 
     /**
+     * 批量保存玩家任务实例。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param seasonId   赛季 ID
+     * @param tasks      要保存的任务实例
+     * @throws SQLException 数据库操作失败
+     */
+    void savePlayerTasks(UUID playerUuid, String seasonId, List<PlayerTaskInstance> tasks) throws SQLException;
+
+    /**
      * 删除玩家在指定赛季中某分类的所有任务实例。
      *
      * @param playerUuid 玩家 UUID

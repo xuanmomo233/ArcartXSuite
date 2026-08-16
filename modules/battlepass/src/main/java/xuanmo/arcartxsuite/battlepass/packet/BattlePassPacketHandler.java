@@ -51,6 +51,11 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     private final Map<UUID, String> actionTokens = new ConcurrentHashMap<>();
     private final Set<UUID> actionTokensInFlight = ConcurrentHashMap.newKeySet();
 
+    private final Set<UUID> pendingTaskRefresh = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> pendingTaskStructureRefresh = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> pendingMainRefresh = ConcurrentHashMap.newKeySet();
+
+
     /**
      * 构造战令包处理器。
      *
@@ -103,6 +108,8 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
             case "claim" -> handleClaim(player, data);
             case "claim_all" -> handleClaimAll(player, data);
             case "refresh" -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushMainData(player); });
+            case "refresh_tasks" -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushTasksData(player); });
+            case "refresh_rewards" -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushRewardsData(player); });
             default -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushMainData(player); });
         }
         return true;
@@ -359,10 +366,14 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     }
 
     private void pushTasksData(Player player) {
-        pushTasksData(player, 0);
+        pushTasksData(player, 0, "init");
     }
 
     private void pushTasksData(Player player, int retryCount) {
+        pushTasksData(player, retryCount, "init");
+    }
+
+    private void pushTasksData(Player player, int retryCount, String packetType) {
         if (packetBridge == null) return;
         if (service.isLoadFailed(player.getUniqueId())) {
             scheduleRetryPush(player, "tasks", retryCount);
@@ -377,7 +388,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         int dIdx = 0, wIdx = 0, sIdx = 0;
         for (PlayerTaskInstance inst : instances) {
             BattlePassTask task = service.findTask(inst.templateId());
-            Map<String, String> entry = new HashMap<>();
+            Map<String, String> entry = new LinkedHashMap<>();
             entry.put("name", task != null ? task.displayName() : inst.templateId());
             entry.put("description", task != null ? task.description() : "");
             entry.put("progress", String.valueOf(inst.currentProgress()));
@@ -387,6 +398,10 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
             entry.put("difficulty", task != null ? task.difficulty().name() : "EASY");
             entry.put("difficultyDisplay", difficultyDisplay(task != null ? task.difficulty() : BattlePassTask.TaskDifficulty.EASY));
             entry.put("progressPercent", String.format("%.0f%%", inst.progressPercent()));
+            double ratio = inst.targetCount() > 0
+                ? (double) inst.currentProgress() / inst.targetCount() : 0.0;
+            ratio = Math.max(0.0, Math.min(1.0, ratio));
+            entry.put("progressRatio", String.format(Locale.ROOT, "%.3f", ratio));
             entry.put("category", inst.category().name());
 
             switch (inst.category()) {
@@ -404,11 +419,60 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         payload.put("dailyTaskCount", String.valueOf(dailyMap.size()));
         payload.put("weeklyTaskCount", String.valueOf(weeklyMap.size()));
         payload.put("seasonTaskCount", String.valueOf(seasonMap.size()));
+        payload.put("totalTaskCount", String.valueOf(dailyMap.size() + weeklyMap.size() + seasonMap.size()));
+        payload.put("dailyCompletedCount", String.valueOf(dailyMap.values().stream().filter(e -> "true".equals(e.get("completed"))).count()));
+        payload.put("weeklyCompletedCount", String.valueOf(weeklyMap.values().stream().filter(e -> "true".equals(e.get("completed"))).count()));
+        payload.put("seasonCompletedCount", String.valueOf(seasonMap.values().stream().filter(e -> "true".equals(e.get("completed"))).count()));
         payload.put("maxDailyCount", String.valueOf(dailyMap.size()));
         payload.put("maxWeeklyCount", String.valueOf(weeklyMap.size()));
         payload.put("maxSeasonCount", String.valueOf(seasonMap.size()));
 
-        packetBridge.sendPacket(player, tasksUiId, "init", payload);
+        packetBridge.sendPacket(player, tasksUiId, packetType, payload);
+    }
+
+
+    /**
+     * 接收服务端进度变化通知，并合并延迟 UI 刷新。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param structureChanged 任务集合结构是否变化
+     */
+    public void onServiceRefresh(UUID playerUuid, boolean structureChanged) {
+        Player player = Bukkit.getPlayer(playerUuid);
+        if (player == null || !player.isOnline() || packetBridge == null) return;
+
+        if (structureChanged) pendingTaskStructureRefresh.add(playerUuid);
+        if (packetBridge.isUiOpen(player, tasksUiId) && pendingTaskRefresh.add(playerUuid)) {
+            AxsScheduler.runAsyncLater(plugin, () -> {
+                pendingTaskRefresh.remove(playerUuid);
+                boolean full = pendingTaskStructureRefresh.remove(playerUuid);
+                Player current = Bukkit.getPlayer(playerUuid);
+                if (current != null && current.isOnline() && packetBridge.isUiOpen(current, tasksUiId)) {
+                    pushTasksData(current, 0, full ? "update" : "progress");
+                }
+            }, 10L);
+        }
+
+        if (packetBridge.isUiOpen(player, mainUiId) && pendingMainRefresh.add(playerUuid)) {
+            AxsScheduler.runAsyncLater(plugin, () -> {
+                pendingMainRefresh.remove(playerUuid);
+                Player current = Bukkit.getPlayer(playerUuid);
+                if (current != null && current.isOnline() && packetBridge.isUiOpen(current, mainUiId)) {
+                    pushMainData(current);
+                }
+            }, 10L);
+        }
+    }
+
+    /**
+     * 清理玩家离线后的 UI 刷新状态。
+     *
+     * @param playerUuid 玩家 UUID
+     */
+    public void clearPendingRefresh(UUID playerUuid) {
+        pendingTaskRefresh.remove(playerUuid);
+        pendingTaskStructureRefresh.remove(playerUuid);
+        pendingMainRefresh.remove(playerUuid);
     }
 
     private static String tierDisplay(BattlePassPlayerProgress.PassTier tier) {

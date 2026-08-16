@@ -35,6 +35,10 @@ ui:
       var.dailyTaskCount = packet['dailyTaskCount']
       var.weeklyTaskCount = packet['weeklyTaskCount']
       var.seasonTaskCount = packet['seasonTaskCount']
+      var.totalTaskCount = packet['totalTaskCount']
+      var.dailyCompletedCount = packet['dailyCompletedCount']
+      var.weeklyCompletedCount = packet['weeklyCompletedCount']
+      var.seasonCompletedCount = packet['seasonCompletedCount']
       var.maxDailyCount = packet['maxDailyCount']
       var.maxWeeklyCount = packet['maxWeeklyCount']
       var.maxSeasonCount = packet['maxSeasonCount']
@@ -73,6 +77,10 @@ ui:
       var.dailyTaskCount = packet['dailyTaskCount']
       var.weeklyTaskCount = packet['weeklyTaskCount']
       var.seasonTaskCount = packet['seasonTaskCount']
+      var.totalTaskCount = packet['totalTaskCount']
+      var.dailyCompletedCount = packet['dailyCompletedCount']
+      var.weeklyCompletedCount = packet['weeklyCompletedCount']
+      var.seasonCompletedCount = packet['seasonCompletedCount']
       var.maxDailyCount = packet['maxDailyCount']
       var.maxWeeklyCount = packet['maxWeeklyCount']
       var.maxSeasonCount = packet['maxSeasonCount']
@@ -100,6 +108,18 @@ ui:
         e = val.赛季任务列表['任务项'].copy('任务项' + key)
         e.entryKey = key
       }
+    progress: |-
+      var.packetId = packet['packetId']
+      var.dailyTasks = packet['dailyTasks']
+      var.weeklyTasks = packet['weeklyTasks']
+      var.seasonTasks = packet['seasonTasks']
+      var.dailyTaskCount = packet['dailyTaskCount']
+      var.weeklyTaskCount = packet['weeklyTaskCount']
+      var.seasonTaskCount = packet['seasonTaskCount']
+      var.totalTaskCount = packet['totalTaskCount']
+      var.dailyCompletedCount = packet['dailyCompletedCount']
+      var.weeklyCompletedCount = packet['weeklyCompletedCount']
+      var.seasonCompletedCount = packet['seasonCompletedCount']
   action:
     load: |-
       var.packetId = 'AXS_BATTLEPASS'
@@ -109,6 +129,10 @@ ui:
       var.dailyTaskCount = 0
       var.weeklyTaskCount = 0
       var.seasonTaskCount = 0
+      var.totalTaskCount = 0
+      var.dailyCompletedCount = 0
+      var.weeklyCompletedCount = 0
+      var.seasonCompletedCount = 0
       var.maxDailyCount = 0
       var.maxWeeklyCount = 0
       var.maxSeasonCount = 0
@@ -130,7 +154,7 @@ controls:
         attribute:
           point: ~middle_center
           width: 1100
-          height: 780
+          height: 860
         children:
           # ── 面板背景层 ─────────────────────────────────────
           背景:
@@ -150,11 +174,6 @@ controls:
               stroke:
                 width: 2
                 color: ~90,170,255,150
-              shadow:
-                xOffset: 0
-                yOffset: 6
-                blur: 20
-                color: ~0,0,0,160
           内描边:
             type: Texture
             attribute:
@@ -406,7 +425,7 @@ controls:
                           point: ~top_right
                           x: -20
                           y: 22
-                          texts: "'&7共 &f' + var.dailyTaskCount + ' &7个任务'"
+                          texts: "'&7已完成 &f' + var.dailyCompletedCount + '&7/&f' + var.dailyTaskCount"
                           fontSize: 26
                       每日任务列表:
                         val: 每日任务列表
@@ -434,13 +453,13 @@ controls:
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: "self.parent.entry != none && self.parent.entry['completed'] ? '40,70,55,220' : '50,55,72,220'"
+                                  normal: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '40,70,55,220' : '50,55,72,220'"
                                   shape: ~round_rect
                                   radius: 14
                                 effect:
                                   stroke:
                                     width: 1
-                                    color: "self.parent.entry != none && self.parent.entry['completed'] ? '100,200,130,140' : '90,170,255,60'"
+                                    color: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '100,200,130,140' : '90,170,255,60'"
                               # 难度标签：Canvas + Texture(背景) + Text(文字)
                               难度标签:
                                 type: Canvas
@@ -456,7 +475,7 @@ controls:
                                     attribute:
                                       point: ~stretch_all
                                       through: true
-                                      normal: "self.parent.entry != none && self.parent.entry['difficulty'] == 'HARD' ? '160,60,60,220' : self.parent.entry != none && self.parent.entry['difficulty'] == 'NORMAL' ? '180,140,50,220' : '60,140,80,220'"
+                                      normal: "self.parent.entry != none && self.parent.entry['difficulty'] == 'HARD' ? '160,60,60,220' : (self.parent.entry != none && self.parent.entry['difficulty'] == 'NORMAL' ? '180,140,50,220' : '60,140,80,220')"
                                       shape: ~round_rect
                                       radius: 14
                                   难度文字:
@@ -520,15 +539,15 @@ controls:
                                   point: ~top_left
                                   x: 88
                                   y: 64
-                                  width: "self.parent.entry != none ? (type.toNumber(self.parent.entry['progressPercent'].replace('%','')) / 100 * 700) : 0"
+                                  width: "self.parent.entry != none && type.toNumber(self.parent.entry['progressRatio']) > 0 ? type.toNumber(self.parent.entry['progressRatio']) * 700 : 0"
                                   height: 10
-                                  normal: "self.parent.entry != none && self.parent.entry['completed'] ? '100,200,130,255' : '90,170,255,255'"
+                                  normal: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '100,200,130,255' : '90,170,255,255'"
                                   shape: ~round_rect
                                   radius: 5
                                 effect:
                                   gradient:
-                                    color1: ~120,200,255,255
-                                    color2: ~70,140,220,255
+                                    color1: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '120,200,130,255' : '120,200,255,255'"
+                                    color2: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '70,160,100,255' : '70,140,220,255'"
                                     type: 0
                                     angleDeg: 0
                               # 进度文字
@@ -547,7 +566,7 @@ controls:
                                   point: ~top_right
                                   x: -130
                                   y: 56
-                                  texts: "self.parent.entry != none && self.parent.entry['completed'] ? '&a✔ 已完成' : '&7进行中'"
+                                  texts: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '&a✔ 已完成' : '&7进行中'"
                                   fontSize: 22
 
                   # ══════════════════════════════════════════════
@@ -602,7 +621,7 @@ controls:
                           point: ~top_right
                           x: -20
                           y: 22
-                          texts: "'&7共 &f' + var.weeklyTaskCount + ' &7个任务'"
+                          texts: "'&7已完成 &f' + var.weeklyCompletedCount + '&7/&f' + var.weeklyTaskCount"
                           fontSize: 26
                       每周任务列表:
                         val: 每周任务列表
@@ -628,13 +647,13 @@ controls:
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: "self.parent.entry != none && self.parent.entry['completed'] ? '40,70,55,220' : '50,55,72,220'"
+                                  normal: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '40,70,55,220' : '50,55,72,220'"
                                   shape: ~round_rect
                                   radius: 14
                                 effect:
                                   stroke:
                                     width: 1
-                                    color: "self.parent.entry != none && self.parent.entry['completed'] ? '100,200,130,140' : '255,180,100,60'"
+                                    color: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '100,200,130,140' : '255,180,100,60'"
                               难度标签:
                                 type: Canvas
                                 attribute:
@@ -649,7 +668,7 @@ controls:
                                     attribute:
                                       point: ~stretch_all
                                       through: true
-                                      normal: "self.parent.entry != none && self.parent.entry['difficulty'] == 'HARD' ? '160,60,60,220' : self.parent.entry != none && self.parent.entry['difficulty'] == 'NORMAL' ? '180,140,50,220' : '60,140,80,220'"
+                                      normal: "self.parent.entry != none && self.parent.entry['difficulty'] == 'HARD' ? '160,60,60,220' : (self.parent.entry != none && self.parent.entry['difficulty'] == 'NORMAL' ? '180,140,50,220' : '60,140,80,220')"
                                       shape: ~round_rect
                                       radius: 14
                                   难度文字:
@@ -708,15 +727,15 @@ controls:
                                   point: ~top_left
                                   x: 88
                                   y: 64
-                                  width: "self.parent.entry != none ? (type.toNumber(self.parent.entry['progressPercent'].replace('%','')) / 100 * 700) : 0"
+                                  width: "self.parent.entry != none && type.toNumber(self.parent.entry['progressRatio']) > 0 ? type.toNumber(self.parent.entry['progressRatio']) * 700 : 0"
                                   height: 10
-                                  normal: "self.parent.entry != none && self.parent.entry['completed'] ? '100,200,130,255' : '255,180,100,255'"
+                                  normal: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '100,200,130,255' : '255,180,100,255'"
                                   shape: ~round_rect
                                   radius: 5
                                 effect:
                                   gradient:
-                                    color1: ~255,210,120,255
-                                    color2: ~200,140,60,255
+                                    color1: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '120,200,130,255' : '255,210,120,255'"
+                                    color2: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '70,160,100,255' : '200,140,60,255'"
                                     type: 0
                                     angleDeg: 0
                               任务进度:
@@ -733,7 +752,7 @@ controls:
                                   point: ~top_right
                                   x: -130
                                   y: 56
-                                  texts: "self.parent.entry != none && self.parent.entry['completed'] ? '&a✔ 已完成' : '&7进行中'"
+                                  texts: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '&a✔ 已完成' : '&7进行中'"
                                   fontSize: 22
 
                   # ══════════════════════════════════════════════
@@ -788,7 +807,7 @@ controls:
                           point: ~top_right
                           x: -20
                           y: 22
-                          texts: "'&7共 &f' + var.seasonTaskCount + ' &7个任务'"
+                          texts: "'&7已完成 &f' + var.seasonCompletedCount + '&7/&f' + var.seasonTaskCount"
                           fontSize: 26
                       赛季任务列表:
                         val: 赛季任务列表
@@ -814,13 +833,13 @@ controls:
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: "self.parent.entry != none && self.parent.entry['completed'] ? '40,70,55,220' : '50,55,72,220'"
+                                  normal: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '40,70,55,220' : '50,55,72,220'"
                                   shape: ~round_rect
                                   radius: 14
                                 effect:
                                   stroke:
                                     width: 1
-                                    color: "self.parent.entry != none && self.parent.entry['completed'] ? '100,200,130,140' : '200,140,255,60'"
+                                    color: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '100,200,130,140' : '200,140,255,60'"
                               难度标签:
                                 type: Canvas
                                 attribute:
@@ -835,7 +854,7 @@ controls:
                                     attribute:
                                       point: ~stretch_all
                                       through: true
-                                      normal: "self.parent.entry != none && self.parent.entry['difficulty'] == 'HARD' ? '160,60,60,220' : self.parent.entry != none && self.parent.entry['difficulty'] == 'NORMAL' ? '180,140,50,220' : '60,140,80,220'"
+                                      normal: "self.parent.entry != none && self.parent.entry['difficulty'] == 'HARD' ? '160,60,60,220' : (self.parent.entry != none && self.parent.entry['difficulty'] == 'NORMAL' ? '180,140,50,220' : '60,140,80,220')"
                                       shape: ~round_rect
                                       radius: 14
                                   难度文字:
@@ -894,15 +913,15 @@ controls:
                                   point: ~top_left
                                   x: 88
                                   y: 64
-                                  width: "self.parent.entry != none ? (type.toNumber(self.parent.entry['progressPercent'].replace('%','')) / 100 * 700) : 0"
+                                  width: "self.parent.entry != none && type.toNumber(self.parent.entry['progressRatio']) > 0 ? type.toNumber(self.parent.entry['progressRatio']) * 700 : 0"
                                   height: 10
-                                  normal: "self.parent.entry != none && self.parent.entry['completed'] ? '100,200,130,255' : '200,140,255,255'"
+                                  normal: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '100,200,130,255' : '200,140,255,255'"
                                   shape: ~round_rect
                                   radius: 5
                                 effect:
                                   gradient:
-                                    color1: ~220,160,255,255
-                                    color2: ~160,100,200,255
+                                    color1: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '120,200,130,255' : '220,160,255,255'"
+                                    color2: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '70,160,100,255' : '160,100,200,255'"
                                     type: 0
                                     angleDeg: 0
                               任务进度:
@@ -919,7 +938,7 @@ controls:
                                   point: ~top_right
                                   x: -130
                                   y: 56
-                                  texts: "self.parent.entry != none && self.parent.entry['completed'] ? '&a✔ 已完成' : '&7进行中'"
+                                  texts: "self.parent.entry != none && self.parent.entry['completed'] == 'true' ? '&a✔ 已完成' : '&7进行中'"
                                   fontSize: 22
 
                   # 空状态提示
@@ -928,7 +947,7 @@ controls:
                     attribute:
                       width: 1052
                       height: 120
-                      visible: "var.dailyTaskCount == 0 && var.weeklyTaskCount == 0 && var.seasonTaskCount == 0"
+                      visible: var.totalTaskCount == 0
                     children:
                       空状态底:
                         type: Texture
@@ -949,3 +968,123 @@ controls:
                           width: 1052
                           texts: "~&7暂无任务，请稍后再来"
                           fontSize: 32
+
+          # ── 底部操作栏 ───────────────────────────────────────
+          底部操作栏:
+            type: Canvas
+            attribute:
+              point: ~bottom_left
+              x: 24
+              y: -24
+              width: 1052
+              height: 56
+            children:
+              操作栏底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~24,26,38,200
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 1
+                    color: ~90,170,255,60
+              # 刷新按钮
+              刷新按钮:
+                type: Canvas
+                attribute:
+                  point: ~middle_center
+                  x: 0
+                  width: 180
+                  height: 40
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'refresh_tasks')
+                children:
+                  背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~50,55,72,220
+                      hover: ~70,80,105,240
+                      shape: ~round_rect
+                      radius: 20
+                  文本:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 180
+                      texts: "~&f&l刷新"
+                      fontSize: 22
+                      through: true
+              # 返回战令按钮（左侧）
+              返回战令按钮:
+                type: Canvas
+                attribute:
+                  point: ~middle_left
+                  x: 16
+                  width: 180
+                  height: 40
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'open_main')
+                children:
+                  返回战令背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~50,55,72,220
+                      hover: ~70,80,105,240
+                      shape: ~round_rect
+                      radius: 20
+                    effect:
+                      ripple:
+                      stroke:
+                        width: 1
+                        color: ~120,140,180,180
+                  返回战令文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 180
+                      texts: "~&f&l◀ 返回战令"
+                      fontSize: 22
+                      through: true
+              # 查看奖励按钮（右侧，强调色）
+              查看奖励按钮:
+                type: Canvas
+                attribute:
+                  point: ~middle_right
+                  x: -16
+                  width: 180
+                  height: 40
+                action:
+                  clickLeft: |-
+                    Packet.send(var.packetId, 'open_rewards')
+                children:
+                  查看奖励背景:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~90,160,100,240
+                      hover: ~110,200,130,255
+                      shape: ~round_rect
+                      radius: 20
+                    effect:
+                      ripple:
+                      stroke:
+                        width: 2
+                        color: ~140,235,170,220
+                  查看奖励文字:
+                    type: Text
+                    attribute:
+                      point: ~middle_center
+                      width: 180
+                      texts: "~&f&l查看奖励 ▶"
+                      fontSize: 22
+                      through: true

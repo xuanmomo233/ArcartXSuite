@@ -31,6 +31,11 @@ public final class FixedIncrementStrategy implements IncrementStrategy {
         return "fixed";
     }
 
+    /**
+     * 返回固定增量值。
+     *
+     * @return 固定增量
+     */
     public int value() {
         return value;
     }

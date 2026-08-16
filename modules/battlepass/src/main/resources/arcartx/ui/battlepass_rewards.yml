@@ -85,6 +85,21 @@ controls:
       width: 1920
       height: 1080
     children:
+      空状态:
+        type: Canvas
+        attribute:
+          point: ~middle_center
+          width: 1052
+          height: 120
+          visible: var.rewardCount == 0
+        children:
+          文本:
+            type: Text
+            attribute:
+              point: ~middle_center
+              width: 1052
+              texts: "~&7当前没有可展示的奖励，稍后再试"
+              fontSize: 32
       主面板:
         type: Canvas
         attribute:
@@ -156,7 +171,7 @@ controls:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "~&6&l奖励领取"
+                  texts: "~&6奖励领取"
                   fontSize: 38
                   through: true
               当前等级:
@@ -164,7 +179,7 @@ controls:
                 attribute:
                   point: ~middle_right
                   x: -90
-                  texts: "'&7当前等级: &e&lLv.' + var.currentLevel"
+                  texts: "'&7当前等级: &eLv.' + var.currentLevel"
                   fontSize: 28
                   through: true
               # 关闭按钮：Canvas + Texture(背景) + Text(文字)
@@ -282,7 +297,7 @@ controls:
                             attribute:
                               point: ~middle_center
                               width: 220
-                              texts: "self.parent.parent.levelData != none ? '&f&lLv.' + self.parent.parent.levelData['level'] : none"
+                              texts: "self.parent.parent.levelData != none ? '&fLv.' + self.parent.parent.levelData['level'] : none"
                               fontSize: 28
                               through: true
                       # 免费档卡片
@@ -375,7 +390,7 @@ controls:
                                 attribute:
                                   point: ~middle_center
                                   width: 86
-                                  texts: "~&f&l领取"
+                                  texts: "~&f领取"
                                   fontSize: 22
                       # 高级档卡片
                       高级档卡片:
@@ -466,7 +481,7 @@ controls:
                                 attribute:
                                   point: ~middle_center
                                   width: 86
-                                  texts: "~&f&l领取"
+                                  texts: "~&f领取"
                                   fontSize: 22
                       # 典藏档卡片
                       典藏档卡片:
@@ -557,7 +572,7 @@ controls:
                                 attribute:
                                   point: ~middle_center
                                   width: 86
-                                  texts: "~&f&l领取"
+                                  texts: "~&f领取"
                                   fontSize: 22
 
           # ── 底部操作栏 ───────────────────────────────────────
@@ -613,7 +628,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       width: 160
-                      texts: "~&f&l◀ 返回战令"
+                      texts: "~&f◀ 返回战令"
                       fontSize: 22
                       through: true
               # 查看任务按钮（中间）
@@ -646,7 +661,7 @@ controls:
                     attribute:
                       point: ~middle_center
                       width: 160
-                      texts: "~&f&l查看任务"
+                      texts: "~&f查看任务"
                       fontSize: 22
                       through: true
               # 一键领取按钮（右侧，强调色）
@@ -680,6 +695,6 @@ controls:
                     attribute:
                       point: ~middle_center
                       width: 200
-                      texts: "~&f&l✦ 一键领取"
+                      texts: "~&f✦ 一键领取"
                       fontSize: 24
                       through: true

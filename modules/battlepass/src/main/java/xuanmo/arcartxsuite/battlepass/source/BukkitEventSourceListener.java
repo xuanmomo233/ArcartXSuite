@@ -1,207 +1,255 @@
 package xuanmo.arcartxsuite.battlepass.source;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.CraftItemEvent;
 import org.bukkit.event.player.PlayerFishEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerPickupItemEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 
 /**
  * 原版 Bukkit 事件降级监听器。
  * <p>
- * 当 ArcartX EventBus 发布模块不存在时，battlepass 通过此监听器直接监听原版 Bukkit 事件，
- * 从事件对象中提取 payload 字段（与 EventBus payload key 保持一致），再回调任务引擎处理。
- * <p>
- * 支持的原版事件类型及 payload 提取规则：
- * <ul>
- *   <li>{@code EntityDeathEvent} → {@code entityType}, {@code entityName}</li>
- *   <li>{@code EntityDamageByEntityEvent} → {@code attacker}, {@code targetType}, {@code targetName}, {@code damage}</li>
- *   <li>{@code PlayerJoinEvent} → （无 payload 字段）</li>
- *   <li>{@code PlayerPickupItemEvent} → {@code material}, {@code amount}</li>
- *   <li>{@code PlayerFishEvent} → {@code fishType}, {@code state}</li>
- * </ul>
- * <p>
- * 击杀事件需要从 {@link EntityDeathEvent} 中获取击杀者（{@code entity.getKiller()}），
- * 伤害事件需要确认 damager 是 Player，拾取事件直接取 player。
+ * 监听器通过规范化后的 Bukkit 事件全类名查找回调。所有事件回调均在 MONITOR
+ * 阶段执行，异常只影响当前回调，不影响其他任务。
  */
 public final class BukkitEventSourceListener implements Listener {
 
+    private static final String ENTITY_DEATH = EntityDeathEvent.class.getName();
+    private static final String ENTITY_DAMAGE = EntityDamageByEntityEvent.class.getName();
+    private static final String PLAYER_JOIN = PlayerJoinEvent.class.getName();
+    private static final String ENTITY_PICKUP = EntityPickupItemEvent.class.getName();
+    private static final String PLAYER_FISH = PlayerFishEvent.class.getName();
+    private static final String BLOCK_BREAK = BlockBreakEvent.class.getName();
+    private static final String BLOCK_PLACE = BlockPlaceEvent.class.getName();
+    private static final String CRAFT_ITEM = CraftItemEvent.class.getName();
+    private static final String ITEM_CONSUME = PlayerItemConsumeEvent.class.getName();
+    private static final String PLAYER_DEATH = PlayerDeathEvent.class.getName();
+    private static final Set<String> SUPPORTED_EVENT_CLASSES = Set.of(
+        EntityDeathEvent.class.getName(),
+        EntityDamageByEntityEvent.class.getName(),
+        PlayerJoinEvent.class.getName(),
+        "org.bukkit.event.player.PlayerPickupItemEvent",
+        EntityPickupItemEvent.class.getName(),
+        PlayerFishEvent.class.getName(),
+        BlockBreakEvent.class.getName(),
+        BlockPlaceEvent.class.getName(),
+        CraftItemEvent.class.getName(),
+        PlayerItemConsumeEvent.class.getName(),
+        PlayerDeathEvent.class.getName()
+    );
+
     private final Plugin plugin;
     private final Logger logger;
-    private final BiConsumer<Player, Map<String, String>> killCallback;
-    private final BiConsumer<Player, Map<String, String>> damageCallback;
-    private final BiConsumer<Player, Map<String, String>> joinCallback;
-    private final BiConsumer<Player, Map<String, String>> pickupCallback;
-    private final BiConsumer<Player, Map<String, String>> fishCallback;
+    private final Map<String, BiConsumer<Player, Map<String, String>>> callbacks;
 
-    private BukkitEventSourceListener(Plugin plugin, Logger logger,
-                                       BiConsumer<Player, Map<String, String>> killCallback,
-                                       BiConsumer<Player, Map<String, String>> damageCallback,
-                                       BiConsumer<Player, Map<String, String>> joinCallback,
-                                       BiConsumer<Player, Map<String, String>> pickupCallback,
-                                       BiConsumer<Player, Map<String, String>> fishCallback) {
+    private BukkitEventSourceListener(
+        Plugin plugin,
+        Logger logger,
+        Map<String, BiConsumer<Player, Map<String, String>>> callbacks
+    ) {
         this.plugin = plugin;
         this.logger = logger;
-        this.killCallback = killCallback;
-        this.damageCallback = damageCallback;
-        this.joinCallback = joinCallback;
-        this.pickupCallback = pickupCallback;
-        this.fishCallback = fishCallback;
+        this.callbacks = callbacks;
     }
 
     /**
-     * 根据需要监听的事件类型集合创建并注册监听器。
+     * 根据事件类名到回调的映射创建并注册监听器。
      *
-     * @param plugin          插件实例
-     * @param logger          日志器
-     * @param eventClasses    需要监听的 Bukkit 事件全类名集合
-     * @param killCallback    击杀事件回调（player, payload）
-     * @param damageCallback  伤害事件回调（player, payload）
-     * @param joinCallback    登录事件回调（player, payload）
-     * @param pickupCallback  拾取事件回调（player, payload）
-     * @param fishCallback    钓鱼事件回调（player, payload）
-     * @return 已注册的监听器实例，调用 {@link #unregister()} 注销
+     * @param plugin 插件实例
+     * @param logger 日志记录器
+     * @param callbacks 规范化 Bukkit 事件类名到分发回调的映射
+     * @return 已注册的监听器实例
      */
-    public static BukkitEventSourceListener register(Plugin plugin, Logger logger,
-                                                      java.util.Set<String> eventClasses,
-                                                      BiConsumer<Player, Map<String, String>> killCallback,
-                                                      BiConsumer<Player, Map<String, String>> damageCallback,
-                                                      BiConsumer<Player, Map<String, String>> joinCallback,
-                                                      BiConsumer<Player, Map<String, String>> pickupCallback,
-                                                      BiConsumer<Player, Map<String, String>> fishCallback) {
-        BukkitEventSourceListener listener = new BukkitEventSourceListener(
-            plugin, logger, killCallback, damageCallback, joinCallback, pickupCallback, fishCallback);
-        // 只在有对应回调时才注册（避免不必要的监听）
-        boolean needKill = eventClasses.contains(EntityDeathEvent.class.getName()) && killCallback != null;
-        boolean needDamage = eventClasses.contains(EntityDamageByEntityEvent.class.getName()) && damageCallback != null;
-        boolean needJoin = eventClasses.contains(PlayerJoinEvent.class.getName()) && joinCallback != null;
-        boolean needPickup = eventClasses.contains(PlayerPickupItemEvent.class.getName()) && pickupCallback != null;
-        boolean needFish = eventClasses.contains(PlayerFishEvent.class.getName()) && fishCallback != null;
-        if (needKill || needDamage || needJoin || needPickup || needFish) {
+    public static BukkitEventSourceListener register(
+        Plugin plugin,
+        Logger logger,
+        Map<String, BiConsumer<Player, Map<String, String>>> callbacks
+    ) {
+        BukkitEventSourceListener listener =
+            new BukkitEventSourceListener(plugin, logger, callbacks);
+        if (callbacks != null && !callbacks.isEmpty()) {
             Bukkit.getPluginManager().registerEvents(listener, plugin);
-            logger.info("[battlepass] 原版事件降级监听已注册: kill=" + needKill + " damage=" + needDamage
-                + " join=" + needJoin + " pickup=" + needPickup + " fish=" + needFish);
+            logger.info("[battlepass] 已注册 Bukkit 事件监听器: " + callbacks.keySet());
         }
         return listener;
     }
 
     /**
-     * 注销此监听器的所有事件监听。
+     * 注销监听器。
      */
     public void unregister() {
         HandlerList.unregisterAll(this);
     }
 
-    // ─── 击杀事件：EntityDeathEvent → axs.combateffect.kill_entity ───
-
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityDeath(EntityDeathEvent event) {
-        if (killCallback == null) return;
         LivingEntity entity = event.getEntity();
-        Player killer = entity.getKiller();
-        if (killer == null || !killer.isOnline()) return;
+        Player player = entity.getKiller();
+        if (player == null || !player.isOnline()) return;
         Map<String, String> payload = new LinkedHashMap<>();
         payload.put("entityType", entity.getType().name());
         payload.put("entityName", entity.getName());
-        try {
-            killCallback.accept(killer, payload);
-        } catch (Exception e) {
-            logger.log(Level.WARNING, "[battlepass] 击杀事件处理异常", e);
-        }
+        payload.put("world", entity.getWorld().getName());
+        dispatch(ENTITY_DEATH, player, payload);
     }
-
-    // ─── 伤害事件：EntityDamageByEntityEvent → axs.combateffect.damage_dealt ───
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
-        if (damageCallback == null) return;
-        if (!(event.getDamager() instanceof Player attacker)) return;
-        if (!attacker.isOnline()) return;
+        if (!(event.getDamager() instanceof Player player) || !player.isOnline()) return;
         Entity target = event.getEntity();
-        if (!(target instanceof LivingEntity livingTarget)) return;
+        if (!(target instanceof LivingEntity)) return;
         Map<String, String> payload = new LinkedHashMap<>();
-        payload.put("attacker", attacker.getName());
+        payload.put("attacker", player.getName());
         payload.put("targetType", target.getType().name());
         payload.put("targetName", target.getName());
         payload.put("damage", String.valueOf(event.getFinalDamage()));
-        try {
-            damageCallback.accept(attacker, payload);
-        } catch (Exception e) {
-            logger.log(Level.WARNING, "[battlepass] 伤害事件处理异常", e);
-        }
+        payload.put("world", player.getWorld().getName());
+        dispatch(ENTITY_DAMAGE, player, payload);
     }
-
-    // ─── 登录事件：PlayerJoinEvent → axs.loginview.login_success ───
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerJoin(PlayerJoinEvent event) {
-        if (joinCallback == null) return;
-        Player player = event.getPlayer();
-        Map<String, String> payload = new LinkedHashMap<>();
-        payload.put("auth_mode", "offline");
-        payload.put("account_type", "offline");
-        try {
-            joinCallback.accept(player, payload);
-        } catch (Exception e) {
-            logger.log(Level.WARNING, "[battlepass] 登录事件处理异常", e);
-        }
-    }
-
-    // ─── 拾取事件：PlayerPickupItemEvent → axs.pickup.item_pickup ───
-
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onPlayerPickupItem(PlayerPickupItemEvent event) {
-        if (pickupCallback == null) return;
         Player player = event.getPlayer();
         if (!player.isOnline()) return;
-        org.bukkit.inventory.ItemStack itemStack = event.getItem().getItemStack();
         Map<String, String> payload = new LinkedHashMap<>();
-        payload.put("material", itemStack.getType().name());
-        payload.put("amount", String.valueOf(itemStack.getAmount()));
-        try {
-            pickupCallback.accept(player, payload);
-        } catch (Exception e) {
-            logger.log(Level.WARNING, "[battlepass] 拾取事件处理异常", e);
-        }
+        payload.put("world", player.getWorld().getName());
+        dispatch(PLAYER_JOIN, player, payload);
     }
 
-    // ─── 钓鱼事件：PlayerFishEvent → axs.fishing.success ───
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityPickupItem(EntityPickupItemEvent event) {
+        if (!(event.getEntity() instanceof Player player) || !player.isOnline()) return;
+        ItemStack item = event.getItem().getItemStack();
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("material", item.getType().name());
+        payload.put("amount", String.valueOf(item.getAmount()));
+        payload.put("world", event.getItem().getWorld().getName());
+        dispatch(ENTITY_PICKUP, player, payload);
+    }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerFish(PlayerFishEvent event) {
-        if (fishCallback == null) return;
         if (event.getState() != PlayerFishEvent.State.CAUGHT_FISH) return;
         Player player = event.getPlayer();
         if (!player.isOnline()) return;
         Map<String, String> payload = new LinkedHashMap<>();
-        if (event.getCaught() != null) {
-            payload.put("fishType", event.getCaught().getType().name());
-        }
+        if (event.getCaught() != null) payload.put("fishType", event.getCaught().getType().name());
         payload.put("state", event.getState().name());
+        payload.put("world", player.getWorld().getName());
+        dispatch(PLAYER_FISH, player, payload);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBlockBreak(BlockBreakEvent event) {
+        Player player = event.getPlayer();
+        if (!player.isOnline()) return;
+        dispatchBlock(BLOCK_BREAK, player, event.getBlock());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBlockPlace(BlockPlaceEvent event) {
+        Player player = event.getPlayer();
+        if (!player.isOnline()) return;
+        dispatchBlock(BLOCK_PLACE, player, event.getBlock());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onCraftItem(CraftItemEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player) || !player.isOnline()) return;
+        if (event.getRecipe() == null) return;
+        ItemStack result = event.getRecipe().getResult();
+        if (result == null || result.getType().isAir()) return;
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("material", result.getType().name());
+        payload.put("amount", String.valueOf(result.getAmount()));
+        payload.put("world", player.getWorld().getName());
+        dispatch(CRAFT_ITEM, player, payload);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerItemConsume(PlayerItemConsumeEvent event) {
+        Player player = event.getPlayer();
+        if (!player.isOnline()) return;
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("material", event.getItem().getType().name());
+        payload.put("world", player.getWorld().getName());
+        dispatch(ITEM_CONSUME, player, payload);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerDeath(PlayerDeathEvent event) {
+        Player player = event.getEntity();
+        if (!player.isOnline()) return;
+        Map<String, String> payload = new LinkedHashMap<>();
+        if (player.getLastDamageCause() != null) {
+            payload.put("deathCause", player.getLastDamageCause().getCause().name());
+        }
+        payload.put("world", player.getWorld().getName());
+        dispatch(PLAYER_DEATH, player, payload);
+    }
+
+    private void dispatchBlock(String eventClass, Player player, Block block) {
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("material", block.getType().name());
+        payload.put("world", block.getWorld().getName());
+        dispatch(eventClass, player, payload);
+    }
+
+    /**
+     * 判断 Bukkit 事件类名是否受支持。
+     *
+     * @param eventClass Bukkit 事件完整类名
+     * @return {@code true} 表示支持该事件
+     */
+    public static boolean isSupportedBukkitEvent(String eventClass) {
+        return SUPPORTED_EVENT_CLASSES.contains(eventClass);
+    }
+
+    /**
+     * 将兼容的旧拾取事件类名规范化为当前监听事件类名。
+     *
+     * @param eventClass Bukkit 事件完整类名
+     * @return 规范化后的事件类名
+     */
+    public static String normalizeBukkitEventClass(String eventClass) {
+        if ("org.bukkit.event.player.PlayerPickupItemEvent".equals(eventClass)) {
+            return ENTITY_PICKUP;
+        }
+        return eventClass;
+    }
+
+    private void dispatch(
+        String eventClass, Player player, Map<String, String> payload
+    ) {
+        BiConsumer<Player, Map<String, String>> callback = callbacks.get(eventClass);
+        if (callback == null) return;
         try {
-            fishCallback.accept(player, payload);
+            callback.accept(player, payload);
         } catch (Exception e) {
-            logger.log(Level.WARNING, "[battlepass] 钓鱼事件处理异常", e);
+            logger.log(Level.WARNING,
+                "[battlepass] Bukkit 事件回调异常: " + eventClass, e);
         }
     }
 }
