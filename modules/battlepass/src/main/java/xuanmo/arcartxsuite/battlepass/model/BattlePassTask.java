@@ -2,6 +2,7 @@ package xuanmo.arcartxsuite.battlepass.model;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import xuanmo.arcartxsuite.battlepass.condition.TaskCondition;
 import xuanmo.arcartxsuite.battlepass.increment.IncrementStrategy;
 
@@ -10,13 +11,18 @@ import xuanmo.arcartxsuite.battlepass.increment.IncrementStrategy;
  * <p>
  * 包含任务的基本信息（名称、描述、分类、难度）、触发条件（事件主题、条件列表）、
  * 奖励计算（基础 XP、难度倍率）及进度增量策略。
+ * <p>
+ * 事件源支持双声明：{@code eventTopic}（ArcartX EventBus 主题）和 {@code bukkitEvent}（原版 Bukkit 事件）。
+ * 引擎启动时优先检测 EventBus 发布模块是否存在，存在则用 EventBus，不存在则降级到原版 Bukkit 监听器，
+ * 确保 battlepass 模块不依赖其他 ArcartX 模块也能正常工作。
  *
  * @param taskId              任务唯一标识
  * @param displayName         任务显示名称
  * @param description         任务描述
  * @param taskCategory        任务分类（DAILY/WEEKLY/SEASON）
  * @param difficulty          任务难度（EASY/NORMAL/HARD）
- * @param eventTopic          触发事件的主题
+ * @param eventTopic          触发事件的主题（ArcartX EventBus，可为空）
+ * @param bukkitEvent         原版 Bukkit 事件降级配置，可为 null
  * @param requiredCount       完成所需次数
  * @param baseXpReward        基础 XP 奖励
  * @param difficultyMultiplier 难度倍率
@@ -31,6 +37,7 @@ public record BattlePassTask(
     TaskCategory taskCategory,
     TaskDifficulty difficulty,
     String eventTopic,
+    BukkitEventSource bukkitEvent,
     int requiredCount,
     int baseXpReward,
     float difficultyMultiplier,
@@ -44,6 +51,21 @@ public record BattlePassTask(
         if (incrementStrategy == null) incrementStrategy = new xuanmo.arcartxsuite.battlepass.increment.FixedIncrementStrategy(1);
         if (difficultyMultiplier <= 0) difficultyMultiplier = 1.0f;
         if (weight <= 0) weight = 1;
+    }
+
+    /**
+     * 原版 Bukkit 事件降级配置，声明事件类名和 payload 提取规则。
+     *
+     * @param eventClass    Bukkit 事件全类名（如 {@code "org.bukkit.event.entity.EntityDeathEvent"}）
+     * @param payloadFields payload 提取规则：key = payload 字段名，value = 表达式
+     */
+    public record BukkitEventSource(
+        String eventClass,
+        Map<String, String> payloadFields
+    ) {
+        public BukkitEventSource {
+            if (payloadFields == null) payloadFields = Collections.emptyMap();
+        }
     }
 
     /**

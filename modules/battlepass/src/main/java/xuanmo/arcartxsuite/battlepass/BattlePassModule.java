@@ -181,6 +181,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             itemSourceRegistry, currencyManager);
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+        service.setModuleExistsChecker(moduleId -> getModule(moduleId).isPresent());
         service.start();
 
         registerCapability(DatabaseMigratable.class, new DatabaseMigratable() {

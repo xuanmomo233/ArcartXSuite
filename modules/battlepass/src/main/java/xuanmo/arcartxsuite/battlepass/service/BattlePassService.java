@@ -49,6 +49,7 @@ public final class BattlePassService {
     private volatile boolean active;
 
     private Supplier<EventBusCapability> eventBusProvider;
+    private java.util.function.Function<String, Boolean> moduleExistsChecker;
     private final TaskAssignmentService assignmentService = new TaskAssignmentService();
 
     public BattlePassService(
@@ -64,11 +65,15 @@ public final class BattlePassService {
         this.repository = repository;
         this.logger = logger;
         this.rewardDispatcher = new BattlePassRewardDispatcher(plugin, logger, itemSourceRegistry, currencyManager);
-        this.taskEngine = new BattlePassTaskEngine(this, configuration);
+        this.taskEngine = new BattlePassTaskEngine(plugin, this, configuration, moduleId -> moduleExistsChecker != null && moduleExistsChecker.apply(moduleId));
     }
 
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
         this.eventBusProvider = eventBusProvider;
+    }
+
+    public void setModuleExistsChecker(java.util.function.Function<String, Boolean> checker) {
+        this.moduleExistsChecker = checker;
     }
 
     public void start() {

@@ -345,11 +345,43 @@ public record BattlePassModuleConfiguration(
             IncrementStrategy incrementStrategy = IncrementStrategyParser.parse(section.getConfigurationSection("increment-strategy"));
             int weight = section.getInt("weight", 1);
 
+            // 解析 bukkit-event 降级配置
+            BattlePassTask.BukkitEventSource bukkitEvent = parseBukkitEvent(section.getConfigurationSection("bukkit-event"));
+
             return new BattlePassTask(
                 taskId, displayName, description, category, difficulty,
-                eventTopic, requiredCount, baseXpReward, difficultyMultiplier,
+                eventTopic, bukkitEvent, requiredCount, baseXpReward, difficultyMultiplier,
                 conditions, incrementStrategy, weight
             );
+        }
+
+        /**
+         * 解析 bukkit-event 降级配置段。
+         * <p>
+         * 配置格式：
+         * <pre>
+         * bukkit-event:
+         *   event-class: "org.bukkit.event.entity.EntityDeathEvent"
+         *   payload-fields:
+         *     entityType: "victim.type.name"
+         *     entityName: "victim.name"
+         * </pre>
+         */
+        private static BattlePassTask.BukkitEventSource parseBukkitEvent(@Nullable ConfigurationSection section) {
+            if (section == null) return null;
+            String eventClass = section.getString("event-class", "");
+            if (eventClass.isEmpty()) return null;
+            ConfigurationSection fieldsSection = section.getConfigurationSection("payload-fields");
+            java.util.Map<String, String> payloadFields = new java.util.LinkedHashMap<>();
+            if (fieldsSection != null) {
+                for (String key : fieldsSection.getKeys(false)) {
+                    String expr = fieldsSection.getString(key, "");
+                    if (!expr.isEmpty()) {
+                        payloadFields.put(key, expr);
+                    }
+                }
+            }
+            return new BattlePassTask.BukkitEventSource(eventClass, payloadFields);
         }
 
         /**

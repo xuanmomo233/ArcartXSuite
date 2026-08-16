@@ -3,44 +3,42 @@
 # 分配给玩家的每周任务从这里按 weight 加权随机抽取 weekly-count 个
 # 每 7 天自动重置并重新分配，周数自动递增
 # =============================================================================
+# 事件源说明详见 daily.yml 头部注释
+# =============================================================================
 
-# -------- 示例：完成悬赏任务 --------
+# -------- 完成悬赏任务 --------
+# questgps 依赖 Chemdah 插件，若无 Chemdah 则此任务不会被触发
 weekly-quest-5:
-  display-name: "完成悬赏任务"  # 任务显示名称
-  description: "本周累计完成5个悬赏任务"  # 任务描述文本
-  difficulty: normal  # 难度等级：easy / normal / hard
-  event-topic: "axs.questgps.quest_completed"  # 触发任务进度的事件主题
-  required-count: 5  # 完成任务所需的目标数量
-  base-xp-reward: 500  # 完成后奖励的基础经验值
-  conditions: []  # 无条件限制
-  increment-strategy:  # 进度增量策略
-    type: fixed  # 固定增量：每次事件固定增加指定值
-    value: 1  # 每次事件增加的进度值
-  weight: 3  # 权重越高，被抽中的概率越大
+  display-name: "完成悬赏任务"
+  description: "本周累计完成5个悬赏任务"
+  difficulty: normal
+  event-topic: "axs.questgps.quest_completed"
+  required-count: 5
+  base-xp-reward: 500
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
 
-# -------- 示例：百斩 --------
+# -------- 百斩 --------
 weekly-kill-100:
   display-name: "百斩"
   description: "本周累计击杀100个敌对生物"
   difficulty: hard
   event-topic: "axs.combateffect.kill_entity"
+  bukkit-event:
+    event-class: "org.bukkit.event.entity.EntityDeathEvent"
   required-count: 100
   base-xp-reward: 600
-  conditions:  # 触发条件列表，需全部满足才计入进度
-    - type: event_payload  # 条件类型：校验事件 Payload 字段
-      key: entity_hostile  # 校验的 Payload 字段名
-      operator: equals  # 比较运算符：等于
-      value: "true"  # 期望的字段值
+  conditions: []
   increment-strategy:
     type: fixed
     value: 1
   weight: 2
 
-# -------- 示例：累计消费货币 --------
-# 通用货币消费追踪任务，支持所有货币提供者（Vault/PlayerPoints/XConomy/Rondo/Command）。
-# CurrencyBridgeManager 在每次 withdraw 成功后自动分发 axs.currency.spent 事件，
-# payload 包含: currency_id（货币ID）、amount（消费金额）、action（"withdraw"）、balance_after（变动后余额）。
-# 可通过 conditions 限制特定货币，或不加条件追踪所有货币消费。
+# -------- 累计消费货币 --------
+# axs.currency.spent 由宿主核心 CurrencyBridgeManager 发布，无需降级
 weekly-spend-1000:
   display-name: "消费达人"
   description: "本周累计消费1000金币"
@@ -59,3 +57,37 @@ weekly-spend-1000:
     max-per-event: 500
     scale: 1.0
   weight: 2
+
+# -------- 累计造成伤害 --------
+weekly-damage-2000:
+  display-name: "战斗狂人"
+  description: "本周累计造成2000点伤害"
+  difficulty: normal
+  event-topic: "axs.combateffect.damage_dealt"
+  bukkit-event:
+    event-class: "org.bukkit.event.entity.EntityDamageByEntityEvent"
+  required-count: 2000
+  base-xp-reward: 450
+  conditions: []
+  increment-strategy:
+    type: payload_value
+    payload-key: damage
+    max-per-event: 500
+    scale: 1.0
+  weight: 2
+
+# -------- 钓鱼 --------
+weekly-fish-20:
+  display-name: "垂钓高手"
+  description: "本周成功钓鱼20次"
+  difficulty: easy
+  event-topic: "axs.fishing.success"
+  bukkit-event:
+    event-class: "org.bukkit.event.player.PlayerFishEvent"
+  required-count: 20
+  base-xp-reward: 300
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3

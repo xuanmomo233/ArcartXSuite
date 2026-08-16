@@ -1,23 +1,27 @@
 # =============================================================================
 # 赛季任务池
 # 赛季任务不会重置，所有玩家共享同一批赛季目标
-# 直接通过旧进度表追踪，不生成 PlayerTaskInstance
+# =============================================================================
+# 事件源说明详见 daily.yml 头部注释
 # =============================================================================
 
-# -------- 示例：千人斩 --------
+# -------- 千人斩 --------
 season-kill-1000:
-  display-name: "千人斩"  # 任务显示名称
-  description: "本赛季累计击杀1000个生物"  # 任务描述文本
-  difficulty: hard  # 难度等级：easy / normal / hard
-  event-topic: "axs.combateffect.kill_entity"  # 触发任务进度的事件主题
-  required-count: 1000  # 完成任务所需的目标数量
-  base-xp-reward: 2000  # 完成后奖励的基础经验值
-  conditions: []  # 无条件限制
-  increment-strategy:  # 进度增量策略
-    type: fixed  # 固定增量：每次事件固定增加指定值
-    value: 1  # 每次事件增加的进度值
+  display-name: "千人斩"
+  description: "本赛季累计击杀1000个生物"
+  difficulty: hard
+  event-topic: "axs.combateffect.kill_entity"
+  bukkit-event:
+    event-class: "org.bukkit.event.entity.EntityDeathEvent"
+  required-count: 1000
+  base-xp-reward: 2000
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
 
-# -------- 示例：交易大师 --------
+# -------- 交易大师 --------
+# market.listing_created 由 market 模块发布，market 模块通常已加载，无需降级
 season-market-50:
   display-name: "交易大师"
   description: "本赛季在市场累计交易50次"
@@ -25,6 +29,38 @@ season-market-50:
   event-topic: "market.listing_created"
   required-count: 50
   base-xp-reward: 1500
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+
+# -------- 万伤 --------
+season-damage-10000:
+  display-name: "万伤战神"
+  description: "本赛季累计造成10000点伤害"
+  difficulty: hard
+  event-topic: "axs.combateffect.damage_dealt"
+  bukkit-event:
+    event-class: "org.bukkit.event.entity.EntityDamageByEntityEvent"
+  required-count: 10000
+  base-xp-reward: 2500
+  conditions: []
+  increment-strategy:
+    type: payload_value
+    payload-key: damage
+    max-per-event: 1000
+    scale: 1.0
+
+# -------- 拾取大师 --------
+season-pickup-500:
+  display-name: "拾取大师"
+  description: "本赛季累计拾取500个物品"
+  difficulty: normal
+  event-topic: "axs.pickup.item_pickup"
+  bukkit-event:
+    event-class: "org.bukkit.event.player.PlayerPickupItemEvent"
+  required-count: 500
+  base-xp-reward: 1200
   conditions: []
   increment-strategy:
     type: fixed
