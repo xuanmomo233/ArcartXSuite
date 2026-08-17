@@ -54,7 +54,7 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("onlinerewards")
             .name("OnlineRewards")
-            .version("1.0.2-beta")
+            .version("1.3.2")
             .mainClass(getClass().getName())
             .externalDepends(List.of("PlaceholderAPI"))
             .build();

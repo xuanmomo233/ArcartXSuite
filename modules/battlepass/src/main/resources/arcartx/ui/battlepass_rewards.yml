@@ -1,11 +1,17 @@
-﻿# AXS BattlePass 奖励界面
+# AXS BattlePass 奖励界面
 # 打开方式: Packet.send(packetId, 'open_rewards') 或 /bp rewards
 # 数据交互: packetHandler rewards
-# 布局: 横向滚动按等级排列，每个等级竖向排列 free/premium/deluxe 三个档位奖励卡片
+# 布局: 全屏毛玻璃工作台 = 顶栏 + 左侧导航（总览/奖励/任务）+ 横向等级轨
+#       每个等级列竖向排列 free/premium/deluxe 三个档位奖励卡片
+# 视觉规范:
+#   全屏玻璃 Frosted:24;30,32,38,110  面板玻璃 Frosted:30;255,255,255,100
+#   卡片 255,255,255,125  卡片浮起 255,255,255,90  描边 255,255,255,165
+#   主色（琥珀金）232,180,90   已领取 124,196,142
+#   档位色: 免费 196,200,208 / 高级 232,180,90 / 典藏 186,140,232
 
 ui:
   isHud: false
-  background: true
+  background: false
   escClose: true
   closeDied: true
   through: false
@@ -42,6 +48,15 @@ ui:
           var.iconJsons[key] = json
         }
       }
+      // 统计可领取数量，用于底部操作栏提示
+      var.claimableCount = 0
+      for(i in range(0, var.rewardCount - 1)){
+        key = i.round()
+        r = var.rewards[key]
+        if(r != none && r['claimable'] == 'true'){
+          var.claimableCount = var.claimableCount + 1
+        }
+      }
       // 动态生成等级列（模板在索引0，复制 1~count-1 共 count-1 项）
       while(val.等级列表.childrenCount() > 1){
         val.等级列表.get(1).remove()
@@ -70,180 +85,463 @@ ui:
       var.levelCount = 0
       var.rewardCount = 0
       var.currentLevel = 0
+      var.claimableCount = 0
       var.actionToken = ''
       var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      // 视口换算：Adaptive 以 1920x1080 设计基准等比缩放，窗口长宽比不是 16:9 时会多出可用空间
+      // viewH / viewW = 换算到设计坐标系后的可用高宽，16:9 时正好 1080 / 1920
+      // offX     = Adaptive 水平居中后，设计坐标 x=0 距窗口左边的偏量（超宽屏 > 0）
+      // contentW = 内容区宽度（左 372 右 48 边距）
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
     open: |-
       Packet.send(var.packetId, 'open_rewards')
+    # 窗口尺寸变化后重算可用高宽，依赖这些变量的控件尺寸会跟着刷新
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
 
 # ─── 控件树 ────────────────────────────────────────────────────────
 controls:
-  自适应全局布局:
-    type: Adaptive
+  # 全屏毛玻璃底（真高斯模糊世界背景）
+  全屏玻璃底:
+    type: Texture
     attribute:
       point: ~stretch_all
       through: true
+      normal: ~Frosted:24;30,32,38,110
+  # 自适配布局：宽高 = 本 UI 的设计分辨率（1920x1080），窗口分辨率变化时按比例缩放子控件
+  # 顶部锚点：使 1080 设计高度的顶边与窗口上边对齐，顶栏可紧贴屏幕顶部；
+  # 非 16:9 窗口多出来的纵向空间全落在下方，由 var.viewH 分配给左导航/内容区贴住底边；
+  # 横向多出的空间（超宽屏）由 var.offX / var.viewW / var.contentW 分配，顶栏与内容区同步铺满
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~top_center
       width: 1920
       height: 1080
     children:
-      空状态:
+      # ── 顶栏 ───────────────────────────────────────────
+      # 顶栏沿窗口整宽铺满（超宽屏时向两侧溢出 Adaptive 的 1920 设计宽度）
+      顶栏:
         type: Canvas
         attribute:
-          point: ~middle_center
-          width: 1052
-          height: 120
-          visible: var.rewardCount == 0
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: 96
         children:
-          文本:
-            type: Text
-            attribute:
-              point: ~middle_center
-              width: 1052
-              texts: "~&7当前没有可展示的奖励，稍后再试"
-              fontSize: 32
-      主面板:
-        type: Canvas
-        attribute:
-          point: ~middle_center
-          width: 1200
-          height: 720
-        children:
-          # ── 面板背景层 ─────────────────────────────────────
-          背景:
+          顶栏底:
             type: Texture
             attribute:
               point: ~stretch_all
-              through: true
-              normal: ~20,22,32,245
-              shape: ~round_rect
-              radius: 24
-            effect:
-              gradient:
-                color1: ~30,32,46,255
-                color2: ~18,20,28,255
-                type: 0
-                angleDeg: 90
-              stroke:
-                width: 2
-                color: ~255,170,90,120
-              shadow:
-                xOffset: 0
-                yOffset: 8
-                blur: 28
-                color: ~0,0,0,180
-          内描边:
+              normal: ~Frosted:30;255,255,255,100
+          顶栏底线:
             type: Texture
             attribute:
-              point: ~middle_center
-              width: 1180
-              height: 700
-              normal: ~0,0,0,0
+              point: ~horizontal_stretch_bottom
+              height: 1
+              normal: ~62,66,74,210
+          标题色块:
+            type: Texture
+            attribute:
+              point: ~middle_left
+              x: 48
+              width: 6
+              height: 36
+              normal: ~232,180,90,255
               shape: ~round_rect
-              radius: 20
-              through: true
-            effect:
-              stroke:
-                width: 1
-                color: ~255,180,100,50
-
-          # ── 顶栏 ───────────────────────────────────────────
-          顶栏:
+              radius: 3
+          标题:
+            type: Text
+            attribute:
+              point: ~middle_left
+              x: 68
+              texts: "~&f战令"
+              fontSize: 48
+          标题竖线:
+            type: Texture
+            attribute:
+              point: ~middle_left
+              x: 168
+              width: 1
+              height: 30
+              normal: ~62,66,74,210
+          页名:
+            type: Text
+            attribute:
+              point: ~middle_left
+              x: 188
+              texts: "~&f奖励"
+              fontSize: 36
+          当前等级:
+            type: Text
+            attribute:
+              point: ~middle_right
+              x: -112
+              texts: "'&f当前等级 &fLv.' + var.currentLevel"
+              fontSize: 34
+          关闭按钮:
             type: Canvas
             attribute:
-              point: ~horizontal_stretch_top
-              height: 80
+              point: ~middle_right
+              x: -40
+              width: 40
+              height: 40
+            action:
+              clickLeft: |-
+                Screen.close()
             children:
-              顶栏底:
+              关闭背景:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~24,26,38,240
+                  normal: ~62,66,74,210
                   shape: ~round_rect
-                  radius: 22
-              顶栏分隔线:
-                type: Texture
-                attribute:
-                  point: ~horizontal_stretch_bottom
-                  height: 1
-                  normal: ~255,180,100,80
-                  through: true
-              标题:
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '245,205,130,255' : '255,255,255,230'"
+              关闭文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  texts: "~&6奖励领取"
-                  fontSize: 38
+                  width: 40
+                  texts: "~&f✕"
+                  fontSize: 32
                   through: true
-              当前等级:
+
+      # ── 左侧导航 ───────────────────────────────────────
+      左侧导航:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 120
+          width: 300
+          height: "var.viewH - 144"
+        children:
+          导航底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~255,255,255,230
+          导航总览:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 18
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_main')
+            children:
+              总览底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '245,205,130,255' : '255,255,255,230'"
+              总览文字:
                 type: Text
                 attribute:
-                  point: ~middle_right
-                  x: -90
-                  texts: "'&7当前等级: &eLv.' + var.currentLevel"
-                  fontSize: 28
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f总览"
+                  fontSize: 36
                   through: true
-              # 关闭按钮：Canvas + Texture(背景) + Text(文字)
-              关闭按钮:
-                type: Canvas
+          # 当前页：奖励
+          导航奖励:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 84
+              width: 272
+              height: 58
+            children:
+              奖励底:
+                type: Texture
                 attribute:
-                  point: ~top_right
-                  x: -20
-                  y: 18
-                  width: 44
-                  height: 44
-                action:
-                  clickLeft: |-
-                    Screen.close()
-                children:
-                  关闭背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~60,40,40,220
-                      hover: ~Frosted:0;200,70,70,240
-                      shape: ~circle
-                    effect:
-                      stroke:
-                        width: 2
-                        color: ~255,100,100,140
-                  关闭文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 44
-                      texts: "~&f✕"
-                      fontSize: 28
+                  point: ~stretch_all
+                  normal: ~232,180,90,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~232,180,90,230
+              奖励高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~232,180,90,255
+                  shape: ~round_rect
+                  radius: 2
+              奖励文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&0奖励"
+                  fontSize: 36
+          导航任务:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 150
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_tasks')
+            children:
+              任务底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '245,205,130,255' : '255,255,255,230'"
+              任务文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f任务"
+                  fontSize: 36
+                  through: true
+          导航分隔线:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 18
+              y: 232
+              width: 264
+              height: 2
+              normal: ~255,255,255,230
+          图例标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 20
+              y: 248
+              texts: "~&f图例"
+              fontSize: 30
+          图例可领取:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 282
+              width: 272
+              height: 40
+            children:
+              可领取色块:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 6
+                  width: 14
+                  height: 14
+                  normal: ~232,180,90,255
+                  shape: ~round_rect
+                  radius: 4
+              可领取文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 30
+                  texts: "~&f金色描边 = 可领取"
+                  fontSize: 30
+          图例已领取:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 322
+              width: 272
+              height: 40
+            children:
+              已领取色块:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 6
+                  width: 14
+                  height: 14
+                  normal: ~124,196,142,255
+                  shape: ~round_rect
+                  radius: 4
+              已领取文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 30
+                  texts: "~&f绿色勾 = 已领取"
+                  fontSize: 30
+          图例未解锁:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 362
+              width: 272
+              height: 40
+            children:
+              未解锁色块:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 6
+                  width: 14
+                  height: 14
+                  normal: ~196,200,208,200
+                  shape: ~round_rect
+                  radius: 4
+              未解锁文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 30
+                  texts: "~&f变暗 = 尚未解锁"
+                  fontSize: 30
+          导航提示:
+            type: Text
+            attribute:
+              point: ~bottom_left
+              x: 20
+              y: -20
+              texts: "~&f滚轮横向浏览等级"
+              fontSize: 28
 
-          # ── 横向滚动区 ────────────────────────────────────────
+      # ── 内容区（奖励）───────────────────────────────────
+      内容区:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "372 - var.offX"
+          y: 120
+          width: "var.contentW"
+          height: "var.viewH - 144"
+        children:
+          内容底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~255,255,255,230
+          页标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 32
+              y: 26
+              texts: "~&f奖励领取"
+              fontSize: 40
+          页标题说明:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 176
+              y: 32
+              texts: "~&f按等级排列，每级含免费 / 高级 / 典藏三档"
+              fontSize: 30
+          空状态:
+            type: Canvas
+            attribute:
+              point: ~middle_center
+              width: "var.contentW - 100"
+              height: 120
+              visible: var.rewardCount == 0
+            children:
+              空状态文本:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: "var.contentW - 100"
+                  texts: "~&f当前没有可展示的奖励，稍后再试"
+                  fontSize: 36
+
+          # ── 横向滚动区 ────────────────────────────────────
+          横向滑轨:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 24
+              y: "var.viewH - 258"
+              width: "var.contentW - 48"
+              height: 12
+              normal: ~40,44,52,225
+              shape: ~round_rect
+              radius: 6
+            effect:
+              stroke:
+                width: 2
+                color: ~255,255,255,230
           横向滑块:
             type: Texture
             val: 横向滑块
             attribute:
-              point: ~bottom_left
-              x: 32
-              y: -24
-              width: 50
-              height: 6
-              normal: ~255,180,100,220
-              maxDragX: 1136
+              point: ~top_left
+              x: 24
+              y: "var.viewH - 258"
+              width: 160
+              height: 12
+              normal: ~245,205,130,255
+              maxDragX: "var.contentW - 208"
               shape: ~round_rect
-              radius: 3
-              through: true
-            effect:
-              neon:
-                color: ~255,180,100,100
-                size: 4
-                intensity: 0.4
-                animated: false
+              radius: 6
           横向滚动区:
             type: Scroll
             attribute:
               point: ~top_left
-              x: 32
-              y: 100
-              width: 1136
-              height: 540
+              x: 24
+              y: 80
+              width: "var.contentW - 48"
+              height: "var.viewH - 346"
               moveX: "self.parent['横向滑块'].getDragXRatio()"
             action:
               wheel: |-
@@ -258,8 +556,9 @@ controls:
                 val: 等级列表
                 type: HStack
                 attribute:
+                  width: "var.contentW - 48"
                   spaceBetween: 20
-                  height: 540
+                  height: "var.viewH - 346"
                 children:
                   # ── 等级列模板（索引0）──────────────────────────
                   # 每个等级列竖向排列 free/premium/deluxe 三个档位奖励卡片
@@ -269,15 +568,15 @@ controls:
                       levelKey: 0.round()
                       levelData: var.levels[self.levelKey]
                       visible: self.levelData != none
-                      width: 220
-                      height: 580
+                      width: 240
+                      height: 718
                     children:
                       # 等级标题
                       等级标题:
                         type: Canvas
                         attribute:
                           point: ~top_left
-                          width: 220
+                          width: 240
                           height: 44
                         children:
                           等级标题底:
@@ -285,29 +584,30 @@ controls:
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: "self.parent.parent.levelData != none && self.parent.parent.levelData['reached'] == 'true' ? '255,170,80,230' : '45,48,62,220'"
+                              normal: ~62,66,74,210
                               shape: ~round_rect
                               radius: 10
                             effect:
                               stroke:
-                                width: 1
-                                color: "self.parent.parent.levelData != none && self.parent.parent.levelData['reached'] == 'true' ? '255,190,120,180' : '80,85,105,80'"
+                                width: 3
+                                color: "self.parent.parent.levelData != none && self.parent.parent.levelData['reached'] == 'true' ? '245,205,130,230' : '255,255,255,230'"
                           等级标题文字:
                             type: Text
                             attribute:
                               point: ~middle_center
-                              width: 220
-                              texts: "self.parent.parent.levelData != none ? '&fLv.' + self.parent.parent.levelData['level'] : none"
-                              fontSize: 28
+                              width: 240
+                              texts: "self.parent.parent.levelData != none ? (self.parent.parent.levelData['reached'] == 'true' ? '&eLv.' + self.parent.parent.levelData['level'] : '&fLv.' + self.parent.parent.levelData['level']) : none"
+                              fontSize: 34
                               through: true
-                      # 免费档卡片
+
+                      # ── 免费档卡片 ────────────────────────────
                       免费档卡片:
                         type: Canvas
                         attribute:
                           point: ~top_left
                           y: 56
-                          width: 220
-                          height: 168
+                          width: 240
+                          height: 210
                           entryKey: "self.parent.levelData != none ? self.parent.levelData['freeEntryKey'] : '0'"
                           entry: var.rewards[self.entryKey]
                           visible: self.entry != none
@@ -317,55 +617,76 @@ controls:
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: "self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '40,65,55,220' : (self.parent.entry != none && self.parent.entry['claimable'] == 'true' ? '35,50,75,230' : (self.parent.entry != none && self.parent.entry['locked'] == 'true' ? '35,38,48,220' : '30,38,55,220'))"
+                              normal: "self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '46,62,52,215' : '48,52,60,215'"
                               shape: ~round_rect
-                              radius: 16
+                              radius: 12
                             effect:
                               stroke:
                                 width: 3
-                                color: "self.parent.entry != none && self.parent.entry['claimable'] == 'true' ? '100,170,255,240' : (self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '100,200,130,200' : '120,150,210,200')"
+                                color: "self.isHovered() ? '245,205,130,255' : (self.parent.entry != none && self.parent.entry['claimable'] == 'true' ? '232,180,90,230' : (self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '124,196,142,230' : '255,255,255,230'))"
+                          档位色条:
+                            type: Texture
+                            attribute:
+                              point: ~top_left
+                              x: 12
+                              y: 14
+                              width: 4
+                              height: 20
+                              normal: ~196,200,208,255
+                              shape: ~round_rect
+                              radius: 2
+                              through: true
                           档位标签:
                             type: Text
                             attribute:
                               point: ~top_left
-                              x: 12
-                              y: 10
-                              texts: "self.parent.entry != none ? self.parent.entry['tierDisplay'] : none"
-                              fontSize: 24
+                              x: 24
+                              y: 12
+                              texts: "~&f免费"
+                              fontSize: 30
+                              through: true
+                          已领取角标:
+                            type: Text
+                            attribute:
+                              point: ~top_right
+                              x: -12
+                              y: 12
+                              texts: "self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '&a✔' : none"
+                              fontSize: 30
                               through: true
                           物品图标:
                             type: Slot
                             attribute:
                               point: ~middle_center
-                              y: -12
-                              width: 72
-                              height: 72
-                              normal: ~0,0,0,0
+                              y: -14
+                              width: 80
+                              height: 80
+                              normal: ~95,95,95,235
                               shape: ~round_rect
                               radius: 10
                               through: true
                               slotType: ~Icon
-                              itemScale: 1.0
+                              itemScale: 0.85
                               seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey] != none ? var.iconJsons[self.parent.entryKey] : var.emptyItemJson)"
                           状态文字:
                             type: Text
                             attribute:
-                              point: ~bottom_left
-                              x: 12
-                              y: -10
-                              width: 196
-                              texts: "self.parent.entry != none ? (self.parent.entry['claimable'] == 'true' ? none : (self.parent.entry['claimed'] == 'true' ? '&a✔ 已领取' : (self.parent.entry['locked'] == 'true' ? '&c未解锁' : '&7等级不足'))) : none"
-                              fontSize: 22
+                              point: ~bottom_center
+                              x: 0
+                              y: -14
+                              width: 228
+                              texts: "self.parent.entry != none ? (self.parent.entry['claimable'] == 'true' ? none : (self.parent.entry['claimed'] == 'true' ? '&a已领取' : (self.parent.entry['locked'] == 'true' ? '&f✖ 未解锁' : '&f等级不足'))) : none"
+                              fontSize: 28
                               through: true
                           # 领取按钮：Canvas + Texture(背景) + Text(文字)
                           领取按钮:
                             type: Canvas
                             attribute:
-                              point: ~bottom_right
-                              x: -10
-                              y: -10
-                              width: 86
-                              height: 36
+                              point: ~bottom_center
+                              x: 0
+                              y: -12
+                              width: 190
+                              height: 40
                               visible: "self.parent.entry != none && self.parent.entry['claimable'] == 'true'"
                             action:
                               clickLeft: |-
@@ -376,30 +697,31 @@ controls:
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: ~80,170,110,245
-                                  hover: ~110,210,140,255
+                                  normal: ~96,78,44,220
                                   shape: ~round_rect
-                                  radius: 18
+                                  radius: 10
                                 effect:
                                   ripple:
                                   stroke:
-                                    width: 1
-                                    color: ~140,235,170,220
+                                    width: 3
+                                    color: "self.isHovered() ? '245,205,130,255' : '232,180,90,230'"
                               领取文字:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  width: 86
-                                  texts: "~&f领取"
-                                  fontSize: 22
-                      # 高级档卡片
+                                  width: 190
+                                  texts: "~&e领取"
+                                  fontSize: 30
+                                  through: true
+
+                      # ── 高级档卡片 ────────────────────────────
                       高级档卡片:
                         type: Canvas
                         attribute:
                           point: ~top_left
-                          y: 232
-                          width: 220
-                          height: 168
+                          y: 282
+                          width: 240
+                          height: 210
                           entryKey: "self.parent.levelData != none ? self.parent.levelData['premiumEntryKey'] : '0'"
                           entry: var.rewards[self.entryKey]
                           visible: self.entry != none
@@ -409,54 +731,75 @@ controls:
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: "self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '60,75,50,225' : (self.parent.entry != none && self.parent.entry['claimable'] == 'true' ? '90,65,30,235' : (self.parent.entry != none && self.parent.entry['locked'] == 'true' ? '50,45,40,225' : '60,52,40,225'))"
+                              normal: "self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '46,62,52,215' : '48,52,60,215'"
                               shape: ~round_rect
-                              radius: 16
+                              radius: 12
                             effect:
                               stroke:
                                 width: 3
-                                color: "self.parent.entry != none && self.parent.entry['claimable'] == 'true' ? '255,190,80,240' : (self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '130,200,100,200' : '200,160,90,200')"
+                                color: "self.isHovered() ? '245,205,130,255' : (self.parent.entry != none && self.parent.entry['claimable'] == 'true' ? '232,180,90,230' : (self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '124,196,142,230' : '255,255,255,230'))"
+                          档位色条:
+                            type: Texture
+                            attribute:
+                              point: ~top_left
+                              x: 12
+                              y: 14
+                              width: 4
+                              height: 20
+                              normal: ~232,180,90,255
+                              shape: ~round_rect
+                              radius: 2
+                              through: true
                           档位标签:
                             type: Text
                             attribute:
                               point: ~top_left
-                              x: 12
-                              y: 10
-                              texts: "self.parent.entry != none ? self.parent.entry['tierDisplay'] : none"
-                              fontSize: 24
+                              x: 24
+                              y: 12
+                              texts: "~&e高级"
+                              fontSize: 30
+                              through: true
+                          已领取角标:
+                            type: Text
+                            attribute:
+                              point: ~top_right
+                              x: -12
+                              y: 12
+                              texts: "self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '&a✔' : none"
+                              fontSize: 30
                               through: true
                           物品图标:
                             type: Slot
                             attribute:
                               point: ~middle_center
-                              y: -12
-                              width: 72
-                              height: 72
-                              normal: ~0,0,0,0
+                              y: -14
+                              width: 80
+                              height: 80
+                              normal: ~95,95,95,235
                               shape: ~round_rect
                               radius: 10
                               through: true
                               slotType: ~Icon
-                              itemScale: 1.0
+                              itemScale: 0.85
                               seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey] != none ? var.iconJsons[self.parent.entryKey] : var.emptyItemJson)"
                           状态文字:
                             type: Text
                             attribute:
-                              point: ~bottom_left
-                              x: 12
-                              y: -10
-                              width: 196
-                              texts: "self.parent.entry != none ? (self.parent.entry['claimable'] == 'true' ? none : (self.parent.entry['claimed'] == 'true' ? '&a✔ 已领取' : (self.parent.entry['locked'] == 'true' ? '&c未解锁' : '&7等级不足'))) : none"
-                              fontSize: 22
+                              point: ~bottom_center
+                              x: 0
+                              y: -14
+                              width: 228
+                              texts: "self.parent.entry != none ? (self.parent.entry['claimable'] == 'true' ? none : (self.parent.entry['claimed'] == 'true' ? '&a已领取' : (self.parent.entry['locked'] == 'true' ? '&f✖ 未解锁' : '&f等级不足'))) : none"
+                              fontSize: 28
                               through: true
                           领取按钮:
                             type: Canvas
                             attribute:
-                              point: ~bottom_right
-                              x: -10
-                              y: -10
-                              width: 86
-                              height: 36
+                              point: ~bottom_center
+                              x: 0
+                              y: -12
+                              width: 190
+                              height: 40
                               visible: "self.parent.entry != none && self.parent.entry['claimable'] == 'true'"
                             action:
                               clickLeft: |-
@@ -467,30 +810,31 @@ controls:
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: ~80,170,110,245
-                                  hover: ~110,210,140,255
+                                  normal: ~96,78,44,220
                                   shape: ~round_rect
-                                  radius: 18
+                                  radius: 10
                                 effect:
                                   ripple:
                                   stroke:
-                                    width: 1
-                                    color: ~140,235,170,220
+                                    width: 3
+                                    color: "self.isHovered() ? '245,205,130,255' : '232,180,90,230'"
                               领取文字:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  width: 86
-                                  texts: "~&f领取"
-                                  fontSize: 22
-                      # 典藏档卡片
+                                  width: 190
+                                  texts: "~&e领取"
+                                  fontSize: 30
+                                  through: true
+
+                      # ── 典藏档卡片 ────────────────────────────
                       典藏档卡片:
                         type: Canvas
                         attribute:
                           point: ~top_left
-                          y: 408
-                          width: 220
-                          height: 168
+                          y: 508
+                          width: 240
+                          height: 210
                           entryKey: "self.parent.levelData != none ? self.parent.levelData['deluxeEntryKey'] : '0'"
                           entry: var.rewards[self.entryKey]
                           visible: self.entry != none
@@ -500,54 +844,75 @@ controls:
                             attribute:
                               point: ~stretch_all
                               through: true
-                              normal: "self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '50,70,55,225' : (self.parent.entry != none && self.parent.entry['claimable'] == 'true' ? '75,40,100,235' : (self.parent.entry != none && self.parent.entry['locked'] == 'true' ? '45,40,55,225' : '55,42,70,225'))"
+                              normal: "self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '46,62,52,215' : '48,52,60,215'"
                               shape: ~round_rect
-                              radius: 16
+                              radius: 12
                             effect:
                               stroke:
                                 width: 3
-                                color: "self.parent.entry != none && self.parent.entry['claimable'] == 'true' ? '190,120,255,240' : (self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '120,200,130,200' : '170,130,220,200')"
+                                color: "self.isHovered() ? '245,205,130,255' : (self.parent.entry != none && self.parent.entry['claimable'] == 'true' ? '232,180,90,230' : (self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '124,196,142,230' : '255,255,255,230'))"
+                          档位色条:
+                            type: Texture
+                            attribute:
+                              point: ~top_left
+                              x: 12
+                              y: 14
+                              width: 4
+                              height: 20
+                              normal: ~186,140,232,255
+                              shape: ~round_rect
+                              radius: 2
+                              through: true
                           档位标签:
                             type: Text
                             attribute:
                               point: ~top_left
-                              x: 12
-                              y: 10
-                              texts: "self.parent.entry != none ? self.parent.entry['tierDisplay'] : none"
-                              fontSize: 24
+                              x: 24
+                              y: 12
+                              texts: "~&d典藏"
+                              fontSize: 30
+                              through: true
+                          已领取角标:
+                            type: Text
+                            attribute:
+                              point: ~top_right
+                              x: -12
+                              y: 12
+                              texts: "self.parent.entry != none && self.parent.entry['claimed'] == 'true' ? '&a✔' : none"
+                              fontSize: 30
                               through: true
                           物品图标:
                             type: Slot
                             attribute:
                               point: ~middle_center
-                              y: -12
-                              width: 72
-                              height: 72
-                              normal: ~0,0,0,0
+                              y: -14
+                              width: 80
+                              height: 80
+                              normal: ~95,95,95,235
                               shape: ~round_rect
                               radius: 10
                               through: true
                               slotType: ~Icon
-                              itemScale: 1.0
+                              itemScale: 0.85
                               seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey] != none ? var.iconJsons[self.parent.entryKey] : var.emptyItemJson)"
                           状态文字:
                             type: Text
                             attribute:
-                              point: ~bottom_left
-                              x: 12
-                              y: -10
-                              width: 196
-                              texts: "self.parent.entry != none ? (self.parent.entry['claimable'] == 'true' ? none : (self.parent.entry['claimed'] == 'true' ? '&a✔ 已领取' : (self.parent.entry['locked'] == 'true' ? '&c未解锁' : '&7等级不足'))) : none"
-                              fontSize: 22
+                              point: ~bottom_center
+                              x: 0
+                              y: -14
+                              width: 228
+                              texts: "self.parent.entry != none ? (self.parent.entry['claimable'] == 'true' ? none : (self.parent.entry['claimed'] == 'true' ? '&a已领取' : (self.parent.entry['locked'] == 'true' ? '&f✖ 未解锁' : '&f等级不足'))) : none"
+                              fontSize: 28
                               through: true
                           领取按钮:
                             type: Canvas
                             attribute:
-                              point: ~bottom_right
-                              x: -10
-                              y: -10
-                              width: 86
-                              height: 36
+                              point: ~bottom_center
+                              x: 0
+                              y: -12
+                              width: 190
+                              height: 40
                               visible: "self.parent.entry != none && self.parent.entry['claimable'] == 'true'"
                             action:
                               clickLeft: |-
@@ -558,120 +923,48 @@ controls:
                                 attribute:
                                   point: ~stretch_all
                                   through: true
-                                  normal: ~80,170,110,245
-                                  hover: ~110,210,140,255
+                                  normal: ~96,78,44,220
                                   shape: ~round_rect
-                                  radius: 18
+                                  radius: 10
                                 effect:
                                   ripple:
                                   stroke:
-                                    width: 1
-                                    color: ~140,235,170,220
+                                    width: 3
+                                    color: "self.isHovered() ? '245,205,130,255' : '232,180,90,230'"
                               领取文字:
                                 type: Text
                                 attribute:
                                   point: ~middle_center
-                                  width: 86
-                                  texts: "~&f领取"
-                                  fontSize: 22
+                                  width: 190
+                                  texts: "~&e领取"
+                                  fontSize: 30
+                                  through: true
 
-          # ── 底部操作栏 ───────────────────────────────────────
+          # ── 底部操作栏 ─────────────────────────────────────
           底部操作栏:
             type: Canvas
             attribute:
               point: ~bottom_left
-              x: 32
-              y: -16
-              width: 1136
-              height: 56
+              x: 24
+              y: -20
+              width: "var.contentW - 48"
+              height: 60
             children:
-              操作栏底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: ~24,26,38,200
-                  shape: ~round_rect
-                  radius: 12
-                effect:
-                  stroke:
-                    width: 1
-                    color: ~255,180,100,60
-              # 返回战令按钮（左侧）
-              返回战令按钮:
-                type: Canvas
+              可领取提示:
+                type: Text
                 attribute:
                   point: ~middle_left
-                  x: 16
-                  width: 160
-                  height: 40
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'open_main')
-                children:
-                  返回战令背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~50,55,72,220
-                      hover: ~70,80,105,240
-                      shape: ~round_rect
-                      radius: 20
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 1
-                        color: ~120,140,180,180
-                  返回战令文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 160
-                      texts: "~&f◀ 返回战令"
-                      fontSize: 22
-                      through: true
-              # 查看任务按钮（中间）
-              查看任务按钮:
-                type: Canvas
-                attribute:
-                  point: ~middle_center
-                  width: 160
-                  height: 40
-                action:
-                  clickLeft: |-
-                    Packet.send(var.packetId, 'open_tasks')
-                children:
-                  查看任务背景:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~50,55,72,220
-                      hover: ~70,80,105,240
-                      shape: ~round_rect
-                      radius: 20
-                    effect:
-                      ripple:
-                      stroke:
-                        width: 1
-                        color: ~120,140,180,180
-                  查看任务文字:
-                    type: Text
-                    attribute:
-                      point: ~middle_center
-                      width: 160
-                      texts: "~&f查看任务"
-                      fontSize: 22
-                      through: true
-              # 一键领取按钮（右侧，强调色）
+                  x: 8
+                  texts: "var.claimableCount > 0 ? '&f当前可领取 &e' + var.claimableCount.round() + ' &f项奖励' : '&f暂无可领取的奖励'"
+                  fontSize: 32
+              # 一键领取（本页唯一主按钮）
               一键领取按钮:
                 type: Canvas
                 attribute:
                   point: ~middle_right
-                  x: -16
-                  width: 200
-                  height: 40
+                  x: -8
+                  width: 240
+                  height: 48
                 action:
                   clickLeft: |-
                     Packet.send(var.packetId, 'claim_all', var.actionToken)
@@ -681,20 +974,19 @@ controls:
                     attribute:
                       point: ~stretch_all
                       through: true
-                      normal: ~90,160,100,240
-                      hover: ~110,200,130,255
+                      normal: "var.claimableCount > 0 ? '232,180,90,235' : '62,66,74,210'"
                       shape: ~round_rect
-                      radius: 20
+                      radius: 10
                     effect:
                       ripple:
                       stroke:
-                        width: 2
-                        color: ~140,235,170,220
+                        width: 3
+                        color: "self.isHovered() ? '245,205,130,255' : (var.claimableCount > 0 ? '245,205,130,230' : '255,255,255,230')"
                   一键领取文字:
                     type: Text
                     attribute:
                       point: ~middle_center
-                      width: 200
-                      texts: "~&f✦ 一键领取"
-                      fontSize: 24
+                      width: 240
+                      texts: "var.claimableCount > 0 ? '&0一键领取' : '&f一键领取'"
+                      fontSize: 32
                       through: true

@@ -44,6 +44,10 @@ settings:
   # 玩家客户端初始化完成后，延迟多少 tick 再推送在线奖励进度变量
   client-sync-delay-ticks: 50
 
+  # 跨天判定时区。留空使用服务器默认时区；海外服务器可设为 Asia/Shanghai 按北京时间跨天。
+  # 合法值示例: Asia/Shanghai, UTC, America/New_York
+  timezone: ""
+
 messages:
   # 今日在线阶段全部完成后的客户端标题文案
   done: "§c所有阶段已领取"

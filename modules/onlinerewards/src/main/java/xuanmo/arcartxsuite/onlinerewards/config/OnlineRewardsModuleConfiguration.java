@@ -19,6 +19,7 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
  *
  * @param debug                 是否开启调试日志
  * @param clientSyncDelayTicks  客户端菜单同步延迟（tick）
+ * @param timezone              跨天判定时区（如 Asia/Shanghai），空串表示使用服务器默认时区
  * @param doneMessage           全部阶段奖励领取完毕时的提示文本
  * @param progressVariableName  进度占位符变量名
  * @param titleVariableName     阶段标题占位符变量名
@@ -36,6 +37,7 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
 public record OnlineRewardsModuleConfiguration(
     boolean debug,
     long clientSyncDelayTicks,
+    String timezone,
     String doneMessage,
     String progressVariableName,
     String titleVariableName,
@@ -92,7 +94,9 @@ public record OnlineRewardsModuleConfiguration(
             readString(configuration, "storage.mysql.database", "arcartxsuite"),
             readString(configuration, "storage.mysql.username", "root"),
             readString(configuration, "storage.mysql.password", ""),
-            Math.max(1, configuration.getInt("storage.mysql.pool-size", 2))
+            // 优先读 storage.pool-size（与配置文件和校验规则一致），向后兼容 storage.mysql.pool-size
+            Math.max(1, configuration.getInt("storage.pool-size",
+                configuration.getInt("storage.mysql.pool-size", 2)))
         );
 
         List<Map<?, ?>> rewardsList = (rewardsFile != null && rewardsFile.isFile())
@@ -122,6 +126,7 @@ public record OnlineRewardsModuleConfiguration(
         return new OnlineRewardsModuleConfiguration(
             configuration.getBoolean("settings.debug", false),
             Math.max(0L, configuration.getLong("settings.client-sync-delay-ticks", 50L)),
+            readString(configuration, "settings.timezone", ""),
             readString(configuration, "messages.done", "§c所有阶段已领取"),
             readString(configuration, "variables.progress", "arcartx_online_time"),
             readString(configuration, "variables.title", "arcartx_online_time_title"),

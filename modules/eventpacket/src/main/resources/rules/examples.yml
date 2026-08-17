@@ -90,6 +90,8 @@ first_join_offer_mainline:
     - type: questgps.offer       # 推送任务到 QuestGPS
       quest-id: "main/example_quest"  # 任务 ID
       open-menu: true            # 是否自动打开任务菜单
+    - type: mail.send            # 发送邮件
+      preset-id: "new_player"  # 邮件预设 ID (支持变量)
 
 # 击杀 10 个僵尸后触发遭遇任务
 kill_zombie_trigger_encounter:

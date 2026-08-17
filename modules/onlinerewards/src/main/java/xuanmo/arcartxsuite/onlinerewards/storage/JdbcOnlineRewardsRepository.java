@@ -366,19 +366,19 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
     }
 
     /**
-     * 统计指定日期前缀的签到记录数。
+     * 统计指定日期的签到记录数。
      *
-     * @param datePrefix 日期前缀
+     * @param date 日期字符串（精确匹配）
      * @return 签到记录数
      * @throws SQLException 查询失败时抛出
      */
     @Override
-    public int countSignInRecords(String datePrefix) throws SQLException {
+    public int countSignInRecords(String date) throws SQLException {
         try (Connection connection = connection();
              PreparedStatement statement = connection.prepareStatement(
-                 "SELECT COUNT(DISTINCT player_uuid) FROM online_rewards_sign_ins WHERE sign_in_date LIKE ?"
+                 "SELECT COUNT(DISTINCT player_uuid) FROM online_rewards_sign_ins WHERE sign_in_date = ?"
              )) {
-            statement.setString(1, datePrefix == null ? "" : datePrefix + "%");
+            statement.setString(1, date == null ? "" : date);
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next() ? resultSet.getInt(1) : 0;
             }
@@ -512,8 +512,8 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
                         makeup_cards INT NOT NULL DEFAULT 0,
                         time_bonus_remainder DOUBLE NOT NULL DEFAULT 0,
                         offline_savings_minutes INT NOT NULL DEFAULT 0,
-                        claimed_weekly_reward_ids TEXT NOT NULL DEFAULT '',
-                        claimed_monthly_reward_ids TEXT NOT NULL DEFAULT ''
+                        claimed_weekly_reward_ids TEXT NOT NULL,
+                        claimed_monthly_reward_ids TEXT NOT NULL
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                     """);
                 statement.execute("""
@@ -538,7 +538,51 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
             }
         }
         ensureColumns(connection);
-        migrateLastSignInRecords(connection);
+        // 仅在未完成迁移时执行，避免每次启动全表扫描
+        if (!isMigrationCompleted(connection, "migrate_last_sign_in_records")) {
+            migrateLastSignInRecords(connection);
+            markMigrationCompleted(connection, "migrate_last_sign_in_records");
+        }
+    }
+
+    private static final String MIGRATION_TABLE = "online_rewards_schema_meta";
+
+    private boolean isMigrationCompleted(Connection connection, String migrationId) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            if (isSqliteDialect()) {
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS %s (
+                        migration_id TEXT PRIMARY KEY,
+                        completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """.formatted(MIGRATION_TABLE));
+            } else {
+                statement.execute("""
+                    CREATE TABLE IF NOT EXISTS %s (
+                        migration_id VARCHAR(64) PRIMARY KEY,
+                        completed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """.formatted(MIGRATION_TABLE));
+            }
+        }
+        try (PreparedStatement statement = connection.prepareStatement(
+            "SELECT 1 FROM %s WHERE migration_id = ?".formatted(MIGRATION_TABLE)
+        )) {
+            statement.setString(1, migrationId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next();
+            }
+        }
+    }
+
+    private void markMigrationCompleted(Connection connection, String migrationId) throws SQLException {
+        String sql = isSqliteDialect()
+            ? "INSERT OR IGNORE INTO %s (migration_id) VALUES (?)".formatted(MIGRATION_TABLE)
+            : "INSERT IGNORE INTO %s (migration_id) VALUES (?)".formatted(MIGRATION_TABLE);
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, migrationId);
+            statement.executeUpdate();
+        }
     }
 
     private void ensureColumns(Connection connection) throws SQLException {
@@ -559,8 +603,8 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
             ensureColumn(statement, columns, "makeup_cards", sqliteType("INTEGER NOT NULL DEFAULT 0", "INT NOT NULL DEFAULT 0"));
             ensureColumn(statement, columns, "time_bonus_remainder", sqliteType("REAL NOT NULL DEFAULT 0", "DOUBLE NOT NULL DEFAULT 0"));
             ensureColumn(statement, columns, "offline_savings_minutes", sqliteType("INTEGER NOT NULL DEFAULT 0", "INT NOT NULL DEFAULT 0"));
-            ensureColumn(statement, columns, "claimed_weekly_reward_ids", sqliteType("TEXT NOT NULL DEFAULT ''", "TEXT NOT NULL DEFAULT ''"));
-            ensureColumn(statement, columns, "claimed_monthly_reward_ids", sqliteType("TEXT NOT NULL DEFAULT ''", "TEXT NOT NULL DEFAULT ''"));
+            ensureColumn(statement, columns, "claimed_weekly_reward_ids", sqliteType("TEXT NOT NULL DEFAULT ''", "TEXT NOT NULL"));
+            ensureColumn(statement, columns, "claimed_monthly_reward_ids", sqliteType("TEXT NOT NULL DEFAULT ''", "TEXT NOT NULL"));
         }
     }
 
@@ -603,13 +647,13 @@ public final class JdbcOnlineRewardsRepository extends AbstractModuleRepository 
      * 判断当前是否为 SQLite 方言。
      * <p>
      * 共享模式下通过 {@link #isMysql()} 判断（基于本体全局描述符）；
-     * 自建模式下通过模块配置的 {@code dialect} 判断。
+     * 自建模式下通过 {@code descriptor} 判断（来自模块配置的 {@code dialect}）。
      *
      * @return {@code true} 表示当前使用 SQLite 方言
      * @since 1.4.0
      */
     private boolean isSqliteDialect() {
-        return isSharedMode() ? !isMysql() : isSqliteDialect();
+        return !isMysql();
     }
 
     private String upsertSql() {

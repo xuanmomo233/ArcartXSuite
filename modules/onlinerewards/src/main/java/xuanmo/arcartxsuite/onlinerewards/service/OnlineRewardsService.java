@@ -101,6 +101,8 @@ public class OnlineRewardsService implements Listener {
     private final Map<UUID, OnlineRewardsPlayerState> dirtyStates = new ConcurrentHashMap<>();
     // 加载失败的玩家集合：这些玩家的缓存数据不可信，flush 必须跳过，避免空状态覆盖 DB 真实数据
     private final Set<UUID> failedLoads = ConcurrentHashMap.newKeySet();
+    // 签到历史缓存：避免每次菜单刷新都全表扫描签到记录，签到/补签时失效
+    private final Map<UUID, Set<String>> signInDatesCache = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> calendarMonthOffsets = new ConcurrentHashMap<>();
     private final Map<UUID, LocalDate> selectedCalendarDates = new ConcurrentHashMap<>();
     private final Map<UUID, String> actionTokens = new ConcurrentHashMap<>();
@@ -109,6 +111,7 @@ public class OnlineRewardsService implements Listener {
         new EnumMap<>(OnlineRewardsLeaderboardScope.class);
 
     private BukkitTask minuteTask;
+    private BukkitTask leaderboardRefreshTask;
     private CrossServerChannel crossServerChannel;
     private java.util.List<String> runtimeMenuUiIds = java.util.List.of();
     private java.util.List<String> registeredMenuUiIds = java.util.List.of();
@@ -135,7 +138,25 @@ public class OnlineRewardsService implements Listener {
         this(plugin, logger, configuration, repository, clientBridge, packetBridge,
             packetGuard, mailProvider, signalProvider, chatCardProvider, titleProvider,
             subtitleProvider, qqBotProvider, eventBusProvider, messages, menuUiFileExporter,
-            Clock.systemDefaultZone(), crossServer);
+            resolveClock(configuration), crossServer);
+    }
+
+    /**
+     * 根据配置的时区创建 Clock，未配置时使用服务器默认时区。
+     *
+     * @param configuration 模块配置
+     * @return 对应时区的 Clock
+     */
+    private static java.time.Clock resolveClock(OnlineRewardsModuleConfiguration configuration) {
+        String timezone = configuration.timezone();
+        if (timezone == null || timezone.isBlank()) {
+            return java.time.Clock.systemDefaultZone();
+        }
+        try {
+            return java.time.Clock.system(java.time.ZoneId.of(timezone));
+        } catch (Exception exception) {
+            return java.time.Clock.systemDefaultZone();
+        }
     }
 
     OnlineRewardsService(
@@ -195,6 +216,8 @@ public class OnlineRewardsService implements Listener {
         refreshLeaderboardSnapshots();
         scheduleSyncForOnlinePlayers();
         minuteTask = AxsScheduler.runTaskTimer(plugin, this::tickOnlinePlayers, 20L, 1200L);
+        // 排行榜定时刷新：每 5 分钟刷新一次，避免每个玩家退出都触发 4 次 DB 查询
+        leaderboardRefreshTask = AxsScheduler.runTaskTimer(plugin, this::refreshLeaderboardSnapshots, 100L, 6000L);
         crossServerChannel = crossServer.openChannel(
             "onlinerewards",
             configuration.crossServer(),
@@ -213,6 +236,10 @@ public class OnlineRewardsService implements Listener {
             minuteTask.cancel();
             minuteTask = null;
         }
+        if (leaderboardRefreshTask != null) {
+            leaderboardRefreshTask.cancel();
+            leaderboardRefreshTask = null;
+        }
         if (crossServerChannel != null) {
             crossServerChannel.close();
             crossServerChannel = null;
@@ -221,6 +248,7 @@ public class OnlineRewardsService implements Listener {
         cachedStates.clear();
         dirtyStates.clear();
         failedLoads.clear();
+        signInDatesCache.clear();
         calendarMonthOffsets.clear();
         selectedCalendarDates.clear();
         leaderboardCache.clear();
@@ -367,38 +395,47 @@ public class OnlineRewardsService implements Listener {
         return true;
     }
 
-    // NOTE: 此方法可能由 PlaceholderAPI 从异步线程调用。
-    // ConcurrentHashMap 保证引用可见性，但 normalizeForPeriod 对 state 字段的修改并非原子操作。
-    // 实际影响极低（仅日/周/月切换瞬间可能读到部分更新状态），如需严格线程安全需加同步。
     /**
      * 加载玩家快照，可能由 PlaceholderAPI 异步调用。
+     * <p>
+     * 线程安全策略：对已缓存玩家，在副本上执行 normalize，不修改主线程持有的原始 state 对象，
+     * 避免与主线程 tick 的并发修改产生数据竞争。脏标记通过 {@link #dirtyStates} 传递给主线程处理。
      *
      * @param playerUuid 玩家唯一 id
      * @param playerName 玩家名称
      * @return 玩家快照
      */
     public OnlineRewardsPlayerSnapshot loadSnapshot(UUID playerUuid, String playerName) {
-        OnlineRewardsPlayerState state = cachedStates.get(playerUuid);
-        boolean cached = state != null;
-        if (state == null) {
-            state = loadState(playerUuid);
+        OnlineRewardsPlayerState cached = cachedStates.get(playerUuid);
+        OnlineRewardsPeriodContext context = currentPeriodContext();
+        if (cached != null) {
+            // 已缓存：在副本上执行 normalize，不修改主线程持有的原始对象
+            OnlineRewardsPlayerState snapshot = cached.copy();
+            boolean changed = stateEngine.normalizeForPeriod(snapshot, context);
+            if (playerName != null && !playerName.isBlank() && !playerName.equals(snapshot.playerName())) {
+                snapshot.setPlayerName(playerName);
+                changed = true;
+            }
+            if (changed) {
+                // 标记脏数据，交由主线程 flush 处理，避免异步线程直接写 DB
+                dirtyStates.put(playerUuid, snapshot.copy());
+            }
+            return new OnlineRewardsPlayerSnapshot(snapshot, stateEngine.snapshot(snapshot),
+                hasSignInRecord(playerUuid, context.rewardDate()) || stateEngine.hasSignedToday(snapshot, context));
         }
 
-        OnlineRewardsPeriodContext context = currentPeriodContext();
+        // 未缓存：从 DB 加载，此时无并发风险
+        OnlineRewardsPlayerState state = loadState(playerUuid);
         boolean changed = stateEngine.normalizeForPeriod(state, context);
         if (playerName != null && !playerName.isBlank() && !playerName.equals(state.playerName())) {
             state.setPlayerName(playerName);
             changed = true;
         }
-
         if (changed) {
-            if (cached) {
-                dirtyStates.put(playerUuid, state.copy());
-            } else {
-                saveImmediately(playerUuid, state);
-            }
+            saveImmediately(playerUuid, state);
         }
-        return new OnlineRewardsPlayerSnapshot(state.copy(), stateEngine.snapshot(state), hasSignInRecord(playerUuid, context.rewardDate()) || stateEngine.hasSignedToday(state, context));
+        return new OnlineRewardsPlayerSnapshot(state.copy(), stateEngine.snapshot(state),
+            hasSignInRecord(playerUuid, context.rewardDate()) || stateEngine.hasSignedToday(state, context));
     }
 
     /**
@@ -712,11 +749,12 @@ public class OnlineRewardsService implements Listener {
         cachedStates.remove(playerUuid);
         dirtyStates.remove(playerUuid);
         failedLoads.remove(playerUuid);
+        signInDatesCache.remove(playerUuid);
         calendarMonthOffsets.remove(playerUuid);
         selectedCalendarDates.remove(playerUuid);
         actionTokens.remove(playerUuid);
         actionTokensInFlight.remove(playerUuid);
-        refreshLeaderboardSnapshots();
+        // 不在退出时刷新排行榜，改为定时刷新避免高峰期 DB 压力
     }
 
     private void storeOfflineSavings(Player player, OnlineRewardsPlayerState state) {
@@ -762,8 +800,10 @@ public class OnlineRewardsService implements Listener {
 
             int gainedMinutes = resolveOnlineMinuteGain(player, state);
             OnlineRewardsTickResult result = stateEngine.advanceMinutes(state, context, gainedMinutes);
-            dirtyStates.put(player.getUniqueId(), state.copy());
-            dirty = true;
+            if (result.stateChanged()) {
+                dirtyStates.put(player.getUniqueId(), state.copy());
+                dirty = true;
+            }
             boolean savedImmediate = false;
             if (!result.triggeredRewards().isEmpty()) {
                 for (OnlineRewardDefinition reward : result.triggeredRewards()) {
@@ -913,9 +953,10 @@ public class OnlineRewardsService implements Listener {
             return;
         }
         OnlineRewardsPlayerSnapshot snapshot = loadSnapshot(player.getUniqueId(), player.getName());
-        Map<String, Object> payload = OnlineRewardsMenuPacketFactory.build(configuration, snapshot, buildCalendarView(player, snapshot.state()));
-        payload.put("serverSignInGoalCurrent", todaySignInCount());
-        payload.put("serverSignInGoalNext", nextServerSignInGoalRequired());
+        int goalCurrent = todaySignInCount();
+        int goalNext = nextServerSignInGoalRequired();
+        Map<String, Object> payload = OnlineRewardsMenuPacketFactory.build(
+            configuration, snapshot, buildCalendarView(player, snapshot.state()), goalCurrent, goalNext);
         payload.put("action_token", actionTokens.getOrDefault(player.getUniqueId(), ""));
         packetBridge.sendPacketToAll(
             player,
@@ -938,29 +979,20 @@ public class OnlineRewardsService implements Listener {
         if (cached != null) {
             return cached;
         }
-        // 首次加载失败时短暂等待后重试一次，应对 DB 连接短暂抖动
-        for (int attempt = 0; attempt < 2; attempt++) {
-            try {
-                OnlineRewardsPlayerState loaded = repository.loadState(playerUuid);
-                cachedStates.put(playerUuid, loaded);
-                failedLoads.remove(playerUuid);
-                return loaded;
-            } catch (SQLException exception) {
-                if (attempt == 0) {
-                    this.logger.log(Level.WARNING, "加载在线奖励数据失败（将重试一次）: " + playerUuid, exception);
-                    try { Thread.sleep(500); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
-                } else {
-                    this.logger.log(Level.WARNING, "加载在线奖励数据失败（重试仍失败）: " + playerUuid, exception);
-                    // 不缓存空状态，避免 flush 把空数据写回 DB 覆盖真实数据
-                    // 标记为加载失败，flush 将跳过该玩家
-                    failedLoads.add(playerUuid);
-                    return new OnlineRewardsPlayerState();
-                }
-            }
+        // 不在主线程阻塞重试：DB 加载失败时直接返回空状态并标记 failedLoads，
+        // 下一 tick 的 attachPlayerState / tickOnlinePlayers 会自然重试。
+        try {
+            OnlineRewardsPlayerState loaded = repository.loadState(playerUuid);
+            cachedStates.put(playerUuid, loaded);
+            failedLoads.remove(playerUuid);
+            return loaded;
+        } catch (SQLException exception) {
+            this.logger.log(Level.WARNING, "加载在线奖励数据失败: " + playerUuid, exception);
+            // 不缓存空状态，避免 flush 把空数据写回 DB 覆盖真实数据
+            // 标记为加载失败，flush 将跳过该玩家，下一 tick 自动重试
+            failedLoads.add(playerUuid);
+            return new OnlineRewardsPlayerState();
         }
-        // 理论上不会走到这里
-        failedLoads.add(playerUuid);
-        return new OnlineRewardsPlayerState();
     }
 
     /**
@@ -1228,6 +1260,8 @@ public class OnlineRewardsService implements Listener {
             state.setWeekMinutes(state.weekMinutes() - safeMinutes);
             state.setMonthMinutes(state.monthMinutes() - safeMinutes);
             state.setTotalMinutes(state.totalMinutes() - safeMinutes);
+            // 回退 rewardStage 使其与减少后的 onlineMinutes 一致
+            rewindRewardStage(state);
         } else if ("set".equals(normalizedOperation)) {
             int previousDaily = state.onlineMinutes();
             int delta = safeMinutes - previousDaily;
@@ -1338,6 +1372,23 @@ public class OnlineRewardsService implements Listener {
         return List.copyOf(triggeredRewards);
     }
 
+    /**
+     * 回退 rewardStage 使其与当前 onlineMinutes 一致。
+     * <p>
+     * 当管理员通过 remove 操作减少在线时长后，已领取的阶段奖励序号需要回退，
+     * 否则 snapshot 会基于错误的 rewardStage 计算进度。
+     *
+     * @param state 玩家状态
+     */
+    private void rewindRewardStage(OnlineRewardsPlayerState state) {
+        List<OnlineRewardDefinition> rewards = configuration.rewards();
+        while (state.rewardStage() > 0
+            && state.rewardStage() <= rewards.size()
+            && state.onlineMinutes() < rewards.get(state.rewardStage() - 1).minutes()) {
+            state.setRewardStage(state.rewardStage() - 1);
+        }
+    }
+
     private int resolveOnlineMinuteGain(Player player, OnlineRewardsPlayerState state) {
         double multiplier = selectedTimeMultiplier(player);
         double rawGain = multiplier + state.timeBonusRemainder();
@@ -1385,10 +1436,13 @@ public class OnlineRewardsService implements Listener {
             this.logger.log(Level.WARNING, "保存签到记录失败: " + player.getUniqueId() + " " + dateText, exception);
             return new OnlineRewardsSignInResult(false, false, state.signInStreak(), state.signInTotal(), dateText, date.getDayOfMonth());
         }
+        // 签到记录已变更，失效缓存后重新加载
+        invalidateSignInDatesCache(player.getUniqueId());
         Set<String> dates = loadAllSignInDates(player.getUniqueId());
         if (!dates.contains(dateText)) {
             dates = new HashSet<>(dates);
             dates.add(dateText);
+            signInDatesCache.put(player.getUniqueId(), Set.copyOf(dates));
         }
         LocalDate latestDate = latestDate(dates);
         int total = dates.size();
@@ -1413,8 +1467,14 @@ public class OnlineRewardsService implements Listener {
     }
 
     private Set<String> loadAllSignInDates(UUID playerUuid) {
+        Set<String> cached = signInDatesCache.get(playerUuid);
+        if (cached != null) {
+            return cached;
+        }
         try {
-            return repository.loadAllSignInDates(playerUuid);
+            Set<String> dates = repository.loadAllSignInDates(playerUuid);
+            signInDatesCache.put(playerUuid, dates);
+            return dates;
         } catch (SQLException exception) {
             this.logger.log(Level.WARNING, "加载签到历史失败: " + playerUuid, exception);
             return Set.of();
@@ -1422,12 +1482,26 @@ public class OnlineRewardsService implements Listener {
     }
 
     private Set<String> loadSignInDates(UUID playerUuid, LocalDate fromDate, LocalDate toDate) {
-        try {
-            return repository.loadSignInDates(playerUuid, fromDate.format(DATE_FORMATTER), toDate.format(DATE_FORMATTER));
-        } catch (SQLException exception) {
-            this.logger.log(Level.WARNING, "加载签到日历失败: " + playerUuid, exception);
-            return Set.of();
+        // 从全量缓存中过滤指定范围，避免重复查 DB
+        Set<String> allDates = loadAllSignInDates(playerUuid);
+        String fromKey = fromDate.format(DATE_FORMATTER);
+        String toKey = toDate.format(DATE_FORMATTER);
+        Set<String> filtered = new HashSet<>();
+        for (String date : allDates) {
+            if (date.compareTo(fromKey) >= 0 && date.compareTo(toKey) <= 0) {
+                filtered.add(date);
+            }
         }
+        return filtered;
+    }
+
+    /**
+     * 使指定玩家的签到历史缓存失效，下次查询时重新从 DB 加载。
+     *
+     * @param playerUuid 玩家唯一 id
+     */
+    private void invalidateSignInDatesCache(UUID playerUuid) {
+        signInDatesCache.remove(playerUuid);
     }
 
     private OnlineRewardsCalendarView buildCalendarView(Player player, OnlineRewardsPlayerState state) {

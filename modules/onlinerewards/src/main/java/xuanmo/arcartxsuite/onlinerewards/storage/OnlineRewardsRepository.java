@@ -41,7 +41,7 @@ public interface OnlineRewardsRepository {
         int limit
     ) throws SQLException;
 
-    int countSignInRecords(String datePrefix) throws SQLException;
+    int countSignInRecords(String date) throws SQLException;
 
     boolean isServerGoalTriggered(String date, String goalId) throws SQLException;
 

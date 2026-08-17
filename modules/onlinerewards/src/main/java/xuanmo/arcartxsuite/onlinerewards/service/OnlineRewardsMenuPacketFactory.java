@@ -27,15 +27,19 @@ public final class OnlineRewardsMenuPacketFactory {
     /**
      * 构建包含日历视图的完整菜单 payload。
      *
-     * @param configuration 模块配置
-     * @param snapshot      玩家快照
-     * @param calendarView  签到日历视图
+     * @param configuration           模块配置
+     * @param snapshot                玩家快照
+     * @param calendarView            签到日历视图
+     * @param serverSignInGoalCurrent 当前全服签到人数
+     * @param serverSignInGoalNext    下一个全服签到目标所需人数
      * @return 菜单 payload 映射
      */
     public static Map<String, Object> build(
         OnlineRewardsModuleConfiguration configuration,
         OnlineRewardsPlayerSnapshot snapshot,
-        OnlineRewardsCalendarView calendarView
+        OnlineRewardsCalendarView calendarView,
+        int serverSignInGoalCurrent,
+        int serverSignInGoalNext
     ) {
         OnlineRewardsPlayerState state = snapshot.state();
         OnlineRewardsProgressSnapshot progress = snapshot.progress();
@@ -81,8 +85,8 @@ public final class OnlineRewardsMenuPacketFactory {
         payload.put("periodicRewardRows", periodicRows);
         payload.put("signInRewardRows", buildSignInRewardRows(configuration));
         payload.put("serverSignInGoalEnabled", configuration.serverSignInGoal().enabled());
-        payload.put("serverSignInGoalCurrent", 0);
-        payload.put("serverSignInGoalNext", 0);
+        payload.put("serverSignInGoalCurrent", serverSignInGoalCurrent);
+        payload.put("serverSignInGoalNext", serverSignInGoalNext);
         payload.put("calendarCount", calendarView.month().lengthOfMonth());
         payload.put("calendarRows", buildCalendarRows(calendarView));
         payload.put("selectedRewardRows", buildSelectedRewardRows(calendarView));
@@ -98,13 +102,15 @@ public final class OnlineRewardsMenuPacketFactory {
      *
      * @param configuration 模块配置
      * @param snapshot      玩家快照
+     * @param clock         时钟（用于确定当前日期，支持时区配置）
      * @return 菜单 payload 映射
      */
     public static Map<String, Object> build(
         OnlineRewardsModuleConfiguration configuration,
-        OnlineRewardsPlayerSnapshot snapshot
+        OnlineRewardsPlayerSnapshot snapshot,
+        java.time.Clock clock
     ) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         OnlineRewardsCalendarView calendarView = new OnlineRewardsCalendarView(
             0,
             java.time.YearMonth.from(today),
@@ -114,7 +120,7 @@ public final class OnlineRewardsMenuPacketFactory {
             List.of(),
             false
         );
-        return build(configuration, snapshot, calendarView);
+        return build(configuration, snapshot, calendarView, 0, 0);
     }
 
     private static Map<String, Object> buildRewardRows(
@@ -320,10 +326,6 @@ public final class OnlineRewardsMenuPacketFactory {
         row.put("trigger", trigger);
         row.put("rewardText", rewardText.isBlank() ? rewardSummary(commandCount, mailPresetCount) : rewardText);
         rows.put(Integer.toString(index), row);
-    }
-
-    private static String rowKey(int index) {
-        return Integer.toString(index + 1);
     }
 
     private static String rewardSummary(int commandCount, int mailPresetCount) {

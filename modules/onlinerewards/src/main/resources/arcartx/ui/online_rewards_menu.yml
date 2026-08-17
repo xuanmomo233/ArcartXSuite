@@ -896,7 +896,7 @@ controls:
             attribute:
               x: 1120
               y: 486
-              visible: "var.periodicRewardRows.size() == 0 || var.periodicRewardRows.size() == none"
+              visible: "var.periodicRewardRows.size() == 0"
               texts: "~&0暂无周期奖励"
               fontSize: 36
           周期滑块:
@@ -983,7 +983,7 @@ controls:
             attribute:
               x: 1120
               y: 726
-              visible: "var.signInRewardRows.size() == 0 || var.signInRewardRows.size() == none"
+              visible: "var.signInRewardRows.size() == 0"
               texts: "~&0暂无签到奖励"
               fontSize: 36
           签到滑块:
