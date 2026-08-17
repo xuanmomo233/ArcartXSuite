@@ -532,168 +532,168 @@ client-packet-guard:
 
 modules:
   entitytracker:
-    enabled: false
+    enabled: true
     # EntityTracker 实体追踪
     # 功能：Boss 血条追踪、攻击目标 HUD、伤害统计、掉落预览、奖励发放。
     # 依赖：需安装 MythicMobs（Boss 追踪来源）。
     # 配置文件：modules/entitytracker/src/main/resources/arcartx/ui/ 下的 UI YAML。
 
   combateffect:
-    enabled: false
+    enabled: true
     # CombatEffect 战斗特效
     # 功能：击杀特效粒子 / 音效、伤害飘字（自定义字体 / 颜色 / 暴击标记）。
     # 关联模块：与 MythicLib / AttributePlus 等属性桥接联动，可读取暴击率等属性。
     # 配置文件：modules/combateffect/ 下的 display 配置。
 
   eventpacket:
-    enabled: false
+    enabled: true
     # EventPacket 事件引擎
     # 功能：将服务器事件（击杀、登录、完成任务等）封装为结构化数据包，通过 ArcartX 通道推送到客户端，
     #      供 title（称号授予）、chat（聊天卡片）、mail（邮件派发）、questgps（任务导航）等模块消费。
     # 关键配置：监听事件列表与字段映射在模块内部 ArcartXEventPacket.yml 中定义。
 
   tab:
-    enabled: false
+    enabled: true
     # Tab 在线列表
     # 功能：自定义玩家列表（TAB）显示内容，支持 PlaceholderAPI 变量、分组排序、页脚信息。
     # 注意：需与 ArcartX 客户端配合使用；纯服务端不会生效。
 
   title:
-    enabled: false
+    enabled: true
     # Title 称号系统
     # 功能：多槽位称号装备、称号属性加成、称号显示与隐藏、称号授予（通过 EventPacket 触发）。
     # 配置文件：ArcartXTitle.yml（称号定义与属性），修改后执行 /axs title reload。
 
   conversation:
-    enabled: false
+    enabled: true
     # Conversation 对话系统
     # 功能：NPC 对话树、分支选项、对话内执行命令 / 给予物品、条件分支（PlaceholderAPI 条件）。
     # 配置文件：ArcartXConversation.yml（对话定义与桥接），修改后执行 /axs conversation reload。
 
   announcer:
-    enabled: false
+    enabled: true
     # Announcer 播报系统
     # 功能：定时全服 HUD 公告（顶部横幅）、打字机式逐字字幕、点击执行指令、条件显示（PAPI 条件）。
 
   pickup:
-    enabled: false
+    enabled: true
     # Pickup 拾取提示
     # 功能：玩家拾取物品时在屏幕中央显示物品图标与名称（类似 RPG 拾取反馈），支持稀有度颜色区分。
 
   prop:
-    enabled: false
+    enabled: true
     # Prop 快捷道具
     # 功能：将物品绑定为快捷技能道具，右键 / 按键触发，支持冷却、消耗、PlaceholderAPI 条件判断。
     # 依赖：需 MythicMobs（技能来源）或 AttributePlus / MythicLib（属性道具）。
 
   rgb:
-    enabled: false
+    enabled: true
     # RGB 渐变文本
     # 功能：动态彩虹 / 自定义渐变色文本，支持聊天、称号、公告等场景。
     # 配置文件：ArcartXRGB.yml（渐变模板与速度），修改后执行 /axs rgb reload。
 
   onlinerewards:
-    enabled: false
+    enabled: true
     # OnlineRewards 在线奖励
     # 功能：累计在线时长奖励、每日签到、连续签到加成、奖励预览与一键领取。
 
   loginview:
-    enabled: false
+    enabled: true
     # LoginView 登录界面
     # 功能：自定义登录 / 注册 / 改密 UI，支持密码强度验证、验证码、皮肤头像显示。
     # 账号类型判定依赖 account-type 配置（微软正版 / LittleSkin / 离线）。
 
   warehouse:
-    enabled: false
+    enabled: true
     # Warehouse 仓库系统
     # 功能：多页个人仓库、共享仓库（公会 / 队伍）、物品搜索、排序、一键整理、跨服同步。
     # 注意：共享仓库权限在模块内部配置中定义。
 
   mail:
-    enabled: false
+    enabled: true
     # Mail 邮箱系统
     # 功能：玩家间邮件、系统邮件、附件物品 / 货币、CDK 兑换码、一键领取全部、批量删除。
 
   chat:
-    enabled: false
+    enabled: true
     # Chat 聊天增强
     # 功能：频道划分（世界 / 附近 / 公会 / 私聊）、聊天卡片（EventPacket 触发）、物品展示、聊天过滤、@提及高亮。
 
   questgps:
-    enabled: false
+    enabled: true
     # QuestGPS 任务导航
     # 功能：接取 / 放弃任务、任务目标追踪、导航箭头 / 距离提示、任务完成自动提交。
     # 通常与 Chemdah 等任务插件配合，通过 GPS 导航至目标 NPC / 坐标。
 
   map:
-    enabled: false
+    enabled: true
     # Map 地图系统
     # 功能：自定义世界地图 UI、传送锚点解锁 / 传送、自定义路径点（Waypoint）增删、地图缩放与图层切换。
 
   essentials:
-    enabled: false
+    enabled: true
     # Essentials 基础工具
     # 功能：玩家管理（/tpa /back /spawn /warp）、安全管控（/invsee /mute）、实用工具（/anvil /enderchest /workbench）。
     # UI 菜单：启用后可通过 /menu 或 ESC 暂停菜单呼出快捷面板。
 
   regions:
-    enabled: false
+    enabled: true
     # Regions 区域保护
     # 功能：40+ 保护标志（破坏 / 放置 / PvP / 火焰蔓延等）、世界规则、成员权限管理、子区域继承、可视化选区工具。
     # 配置文件：模块内部 regions.yml 定义世界与默认规则。
 
   market:
-    enabled: false
+    enabled: true
     # Market 全球市场
     # 功能：系统商店（固定价格买卖）、玩家拍卖行（竞拍 / 一口价）、回收商店（自动估价回收物品）。
     # 特性：多货币支持（见 currencies 配置）、跨服同步（需 cross-server 开启）、历史交易记录。
 
   qqbot:
-    enabled: false
+    enabled: true
     # QQBot QQ 群服互联
     # 功能：OneBot 11 协议对接，QQ 群消息 ↔ 服务器聊天同步、账号绑定、白名单登录控制、群指令查询玩家信息。
     # 前置：需独立 OneBot 实现（如 go-cqhttp / LLOneBot）并填写连接地址与 Token。
 
   menu:
-    enabled: false
+    enabled: true
     # Menu 通用菜单系统
     # 功能：配置驱动的 ArcartX UI 菜单，支持 ESC 暂停界面替换为自定义菜单、多页面、条件显示、点击执行指令 / 打开子菜单。
 
   battlepass:
-    enabled: false
+    enabled: true
     # BattlePass 战令系统
     # 功能：免费 / 高级 / 典藏三档通行证、每日 / 每周 / 赛季任务池、等级奖励、赛季制重置、跨服同步。
 
   fishing:
-    enabled: false
+    enabled: true
     # Fishing 钓鱼系统
     # 功能：星露谷风格钓鱼小游戏（进度条拉扯）、多水域生态（不同水域不同鱼池）、饵料加成、稀有宝藏奖励。
 
   afkreward:
-    enabled: false
+    enabled: true
     # AfkReward 挂机奖励
     # 功能：多区域挂机奖励、手动/自动 AFK 模式、排行榜、HUD 显示、PlaceholderAPI 变量。
 
   lottery:
-    enabled: false
+    enabled: true
     # Lottery 抽奖系统
     # 功能：CS 开箱动画、原神祈愿卡池（单抽 / 十连）、保底机制（大小保底）、磨损度系统（影响物品外观价值）。
 
   extrabackpack:
-    enabled: false
+    enabled: true
     # ExtraBackpack 扩展背包
     # 功能：分类背包（装备 / 材料 / 杂物等），按 NBT 标签自动归类存放，按槽位付费扩展容量，支持 SQLite / MySQL 持久化。
     # 软依赖：warehouse（共享仓库联动）；无依赖也可独立运行。
     # 配置文件：ArcartXExtraBackpack.yml（分类定义、槽位上限与每格定价），修改后执行 /axs extrabackpack reload。
 
   vanilla:
-    enabled: false
+    enabled: true
     # VanillaUI 原版界面替换
     # 功能：将原版工作台 / 熔炉界面替换为 ArcartX 自定义 UI，熔炉状态实时推送到客户端。
     # 配置文件：ArcartXVanilla.yml（crafting / furnace 启用开关与 UI id），UI 文件位于模块内 arcartx/ui/。
 
   tooltip:
-    enabled: false
+    enabled: true
     # Tooltip 物品提示数据采集
     # 功能：接收客户端 Forge mod（ArcartX-Suite-Mod）发送的 AXS_TOOLTIP_DATA 网络包，缓存物品 tooltip 文本行与结构化数据，并通过 TooltipDataCapable 能力供其他模块（如 Chat 聊天物品预览）查询；支持将 tooltip 文本注入物品 NBT Lore。
     # 前置：需客户端安装 ArcartX-Suite-Mod，否则服务端无法获取 tooltip 数据。
