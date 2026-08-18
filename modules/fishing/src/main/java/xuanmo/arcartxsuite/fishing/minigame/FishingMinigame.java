@@ -130,8 +130,10 @@ public final class FishingMinigame {
         tick++;
         session.decrementRemainingTicks();
 
-        // 更新鱼位置
-        double fishSpeed = fishEngine.tick(fishPosition, fishVelocity, tick, session.fish().difficulty());
+        // 更新鱼位置（等级越高鱼越慢，使用加权混合等级修正模型）
+        double lvlMod = levelModifier();
+        double fishSpeedMultiplier = 1.0 - lvlMod; // 满级最多减速 levelModifierScale
+        double fishSpeed = fishEngine.tick(fishPosition, fishVelocity, tick, session.fish().difficulty()) * fishSpeedMultiplier;
         fishVelocity = fishSpeed;
         fishPosition = clamp(fishPosition + fishSpeed, 0.0, 1.0);
         if (fishPosition <= 0.0 || fishPosition >= 1.0) {
@@ -163,8 +165,9 @@ public final class FishingMinigame {
             nextFleeCheckTick = tick + settings.fleeCooldownMin() + ThreadLocalRandom.current().nextInt(settings.fleeCooldownMax() - settings.fleeCooldownMin());
         } else if (tick >= nextFleeCheckTick) {
             // 检查是否触发驱赶：鱼在绿条内时有概率逃离
-            // 难度越高，逃离概率越大、间隔越短
+            // 难度越高，逃离概率越大；玩家等级越高，逃离概率越低（等级修正模型）
             double fleeChance = settings.fleeBaseChance() + (session.fish().difficulty() / 100.0) * settings.fleeChancePerDifficulty();
+            fleeChance *= (1.0 - lvlMod); // 等级修正降低逃离概率
             if (fishInsideForFlee && ThreadLocalRandom.current().nextDouble() < fleeChance) {
                 fleeing = true;
                 // 逃离方向：朝远离绿条中心的方向
@@ -205,8 +208,10 @@ public final class FishingMinigame {
         double barTop = barPosition + halfBar;
         boolean fishInside = fishPosition >= barBottom && fishPosition <= barTop;
 
+        // 进度变化：等级越高进度增长越快（等级修正模型），下降速度不变
+        double progressGainMultiplier = settings.progressRateMultiplier() * (1.0 + lvlMod);
         if (fishInside) {
-            progress += settings.progressGainRate() * settings.progressRateMultiplier();
+            progress += settings.progressGainRate() * progressGainMultiplier;
         } else {
             progress -= settings.progressDrainRate() * settings.progressRateMultiplier();
             wasPerfect = false;
@@ -275,6 +280,49 @@ public final class FishingMinigame {
         ratio *= difficultyShrink;
         // 限制在合理范围 [0.08, 0.9]
         return Math.max(0.08, Math.min(ratio, 0.9));
+    }
+
+    /**
+     * 加权混合多函数等级修正模型。
+     * <p>
+     * 三个基础函数：
+     * - f1 = sqrt(x)        — 前期主导（快速起步）
+     * - f2 = (1-cos(πx))/2  — 中期主导（S型加速）
+     * - f3 = x²             — 后期主导（递减收敛）
+     * <p>
+     * 权重随等级变化（Beta分布权重）：
+     * - w1 = (1-x)²  — 前期权重高
+     * - w2 = 2x(1-x) — 中期权重高
+     * - w3 = x²      — 后期权重高
+     * <p>
+     * 最终修正 = (w1×f1 + w2×f2 + w3×f3) / (w1+w2+w3) × scale
+     * <p>
+     * 返回值范围 [0, scale]，等级越高修正越大，但递减收敛。
+     *
+     * @return 等级修正值 [0, levelModifierScale]
+     */
+    private double levelModifier() {
+        int level = session.playerLevel();
+        int maxLevel = settings.maxLevel();
+        if (maxLevel <= 0 || level <= 0) return 0.0;
+        double x = Math.min(1.0, (double) level / maxLevel);
+
+        // 三个基础函数
+        double f1 = Math.sqrt(x);
+        double f2 = (1.0 - Math.cos(Math.PI * x)) / 2.0;
+        double f3 = x * x;
+
+        // Beta分布权重
+        double w1 = (1.0 - x) * (1.0 - x);
+        double w2 = 2.0 * x * (1.0 - x);
+        double w3 = x * x;
+
+        // 加权混合
+        double weightedSum = w1 * f1 + w2 * f2 + w3 * f3;
+        double weightTotal = w1 + w2 + w3;
+        double modifier = weightTotal > 0 ? weightedSum / weightTotal : 0.0;
+
+        return modifier * settings.levelModifierScale();
     }
 
     public void sendInitPacket(@NotNull Player player) {
