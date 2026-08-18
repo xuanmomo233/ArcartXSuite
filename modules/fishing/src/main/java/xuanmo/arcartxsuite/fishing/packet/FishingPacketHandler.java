@@ -58,6 +58,13 @@ public final class FishingPacketHandler implements ClientPacketHandler {
                     service.pushCollectionData(player, uiId);
                 }
             }
+            case "open_minigame" -> {
+                // UI 打开后主动请求 init 数据，防止服务端主动推送时序问题
+                FishingMinigame minigame = minigameLookup.apply(player);
+                if (minigame != null && !minigame.isFinished()) {
+                    minigame.sendInitPacket(player);
+                }
+            }
             default -> {
                 // unknown action
             }

@@ -195,7 +195,7 @@ public final class FishingMinigame {
         return Math.min(barHeightPx / 400.0, 0.9);
     }
 
-    private void sendInitPacket(@NotNull Player player) {
+    public void sendInitPacket(@NotNull Player player) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("packetId", PACKET_ID);
         payload.put("fishId", session.fish().id());
