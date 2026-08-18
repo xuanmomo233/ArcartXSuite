@@ -228,7 +228,9 @@ public final class FishingMinigame {
         payload.put("caughtSize", session.caughtSize());
         payload.put("rarity", session.fish().rarity().name().toLowerCase());
         // 鱼物品图标 JSON（UI 端 Slot 控件通过 seticon 渲染）
-        payload.put("fishIconJson", itemGenerator.generateItemJson(session.fish().itemRef(), player));
+        String fishIconJson = itemGenerator.generateItemJson(session.fish().itemRef(), player);
+        org.bukkit.Bukkit.getLogger().info("[Fishing] sendInitPacket fishIconJson=" + (fishIconJson.isEmpty() ? "empty" : fishIconJson.substring(0, Math.min(fishIconJson.length(), 80))) + " for " + session.fish().id());
+        payload.put("fishIconJson", fishIconJson);
         packetBridge.sendPacket(player, uiId, "init", payload);
     }
 
