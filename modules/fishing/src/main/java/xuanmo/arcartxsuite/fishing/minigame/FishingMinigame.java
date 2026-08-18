@@ -93,6 +93,18 @@ public final class FishingMinigame {
         }.runTaskTimer(plugin, interval + 2, interval);
     }
 
+    /**
+     * 玩家主动放弃钓鱼，直接以失败结束小游戏。
+     */
+    public void giveUp(@NotNull Player player) {
+        if (finished) return;
+        finished = true;
+        double barHeightRatio = calculateBarHeightRatio();
+        finishWithResult(player, false, false, barHeightRatio);
+        service.onMinigameComplete(session, false, false);
+        cleanup();
+    }
+
     private void tick() {
         try {
             tickInternal();

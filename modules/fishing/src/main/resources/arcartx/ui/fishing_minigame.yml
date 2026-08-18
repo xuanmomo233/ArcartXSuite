@@ -123,6 +123,39 @@ controls:
                   fontSize: 44
                   through: true
 
+          放弃按钮:
+            type: Canvas
+            attribute:
+              point: ~top_right
+              x: -20
+              y: 16
+              width: 120
+              height: 48
+            action:
+              click: |-
+                Packet.send(var.packetId, 'give_up')
+            children:
+              放弃背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~80,30,30,220
+                  hover: ~180,50,50,240
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~200,80,80,180
+              放弃文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  texts: "~&f放弃"
+                  fontSize: 28
+                  through: true
+
           轨道区:
             type: Canvas
             attribute:

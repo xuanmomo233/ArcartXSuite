@@ -65,6 +65,13 @@ public final class FishingPacketHandler implements ClientPacketHandler {
                     minigame.sendInitPacket(player);
                 }
             }
+            case "give_up" -> {
+                // 玩家主动放弃钓鱼
+                FishingMinigame minigame = minigameLookup.apply(player);
+                if (minigame != null && !minigame.isFinished()) {
+                    minigame.giveUp(player);
+                }
+            }
             default -> {
                 // unknown action
             }
