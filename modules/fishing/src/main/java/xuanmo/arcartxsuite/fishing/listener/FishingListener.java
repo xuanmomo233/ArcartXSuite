@@ -49,6 +49,7 @@ public final class FishingListener implements Listener {
 
         // 取消原版钓鱼，启动小游戏
         boolean started = service.startMinigame(player);
+        org.bukkit.Bukkit.getLogger().info("[Fishing] PlayerFishEvent CAUGHT_FISH, startMinigame=" + started);
         if (started) {
             event.setCancelled(true);
         }

@@ -143,9 +143,11 @@ public final class FishingService {
 
     public boolean startMinigame(@NotNull Player player) {
         if (packetBridge == null || !packetBridge.isAvailable()) {
+            org.bukkit.Bukkit.getLogger().warning("[Fishing] startMinigame 失败: packetBridge 不可用");
             return false;
         }
         if (isPlayerInMinigame(player.getUniqueId())) {
+            org.bukkit.Bukkit.getLogger().warning("[Fishing] startMinigame 失败: 玩家已在小游戏中");
             return false;
         }
 
@@ -154,7 +156,8 @@ public final class FishingService {
         if (water == null) water = configuration.defaultWater();
 
         // 权限检查
-        if (water.requirePermission() != null && !player.hasPermission(water.requirePermission())) {
+        if (water.requirePermission() != null && !water.requirePermission().isBlank() && !player.hasPermission(water.requirePermission())) {
+            org.bukkit.Bukkit.getLogger().warning("[Fishing] startMinigame 失败: 权限不足 " + water.requirePermission());
             return false;
         }
 
@@ -169,11 +172,13 @@ public final class FishingService {
         List<FishDefinition> pool = getFishPool(water);
         if (pool.isEmpty()) {
             // 没有符合条件的鱼，走原版
+            org.bukkit.Bukkit.getLogger().warning("[Fishing] startMinigame 失败: 鱼池为空, water=" + water.name() + " pool=" + water.fishPool());
             return false;
         }
 
         FishDefinition fish = selectFishFromPool(player, pool, baitId);
         if (fish == null) {
+            org.bukkit.Bukkit.getLogger().warning("[Fishing] startMinigame 失败: selectFishFromPool 返回 null");
             return false;
         }
 
