@@ -78,10 +78,20 @@ public final class FishingPlayerCommand implements TabExecutor {
             return true;
         }
 
-        if (service != null) {
-            service.pushCollectionData(player, uiId);
-        }
+        // 先打开 UI，再延迟 2 tick 推送数据（参考 battlepass 的 openTasks 模式）
+        // 避免先发包再开 UI 导致的缓存包时序问题
         bridge.openUi(player, uiId);
+        if (service != null) {
+            org.bukkit.Bukkit.getScheduler().runTaskLater(
+                service.getPlugin(),
+                () -> {
+                    if (player.isOnline()) {
+                        service.pushCollectionData(player, uiId);
+                    }
+                },
+                2L
+            );
+        }
         return true;
     }
 

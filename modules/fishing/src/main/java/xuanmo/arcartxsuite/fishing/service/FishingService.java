@@ -86,6 +86,11 @@ public final class FishingService {
         this.messageProvider = messageProvider;
     }
 
+    /** 获取宿主插件实例（供调度器使用）。 */
+    public @NotNull JavaPlugin getPlugin() {
+        return plugin;
+    }
+
     public void setEventBusProvider(@Nullable Supplier<EventBusCapability> provider) {
         this.eventBusProvider = provider;
     }

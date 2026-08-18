@@ -235,10 +235,14 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     @Override
     protected @Nullable ClientPacketHandler createPacketHandler() {
         if (service == null) return null;
-        return new FishingPacketHandler(player -> {
-            if (service == null) return null;
-            return service.getActiveMinigame(player.getUniqueId());
-        });
+        return new FishingPacketHandler(
+            player -> {
+                if (service == null) return null;
+                return service.getActiveMinigame(player.getUniqueId());
+            },
+            () -> service,
+            () -> collectionUiId
+        );
     }
 
     // ─── ModuleCommandHandler ─────────────────────────────────
