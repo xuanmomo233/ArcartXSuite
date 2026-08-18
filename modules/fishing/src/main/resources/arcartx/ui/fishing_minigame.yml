@@ -1,16 +1,16 @@
-# AXS 钓鱼小游戏 HUD
+# AXS 钓鱼小游戏界面（Menu 模式，支持鼠标/键盘交互）
 # 数据交互: packetHandler init/update
 # 海洋主题 + 左侧竖直轨道（鱼/绿条竖直运动）+ 底部横向进度条 + 结果覆盖层
-# 结束时服务端发送 state=success/failed 最终结果包，HUD 展示结果约1.5秒后由服务端关闭
+# 结束时服务端发送 state=success/failed 最终结果包，展示结果约1.5秒后由服务端关闭
 
 ui:
-  isHud: true  # HUD模式，常驻叠加层不拦截游戏交互
-  background: false  # 不渲染背景遮罩（HUD透明叠加）
+  isHud: false  # Menu模式，弹光标界面，捕获鼠标/键盘交互
+  background: false  # 不渲染半透明背景遮罩（保持游戏画面可见）
   escClose: false  # 按ESC不关闭（由服务端控制关闭）
   closeDied: true  # 玩家死亡时自动关闭
-  through: true  # 允许点击穿透到游戏世界
+  through: false  # 不允许点击穿透，确保小游戏捕获交互
   screenScale: true  # 启用屏幕等比缩放
-  show: false  # 由服务端 openUi/closeUi 控制显示，避免常驻
+  show: false  # 由服务端 openUi/closeUi 控制显示
   packetHandler:
     # packetHandler: init
     # 包字段:
@@ -58,11 +58,11 @@ ui:
       var.timeLeft = packet['timeLeft']
       var.fishInside = packet['fishInside']
   action:
-    # load: HUD 加载时的默认初始化变量（等待服务端数据包覆盖）
+    # load: 控件初始化前设置默认变量（等待服务端 init 包覆盖）
     load: |-
       var.packetId = 'AXS_FISHING'
       var.fishId = none
-      var.fishName = none
+      var.fishName = ''
       var.fishY = 0.5
       var.barY = 0.5
       var.barHeight = 0.24
@@ -74,6 +74,9 @@ ui:
       var.fishInside = false
       var.rarityTag = '&f'
       var.rarityLabel = '普通'
+    # open: 控件初始化后，向服务端请求 init 数据
+    open: |-
+      Packet.send(var.packetId, 'open_minigame')
     # keyPress: 按下空格键时向服务端发送 input=true
     keyPress: |-
       if(self.currentKeyPress() == ' ' || self.currentKeyPress() == 'SPACE'){
@@ -92,11 +95,11 @@ ui:
       Packet.send(var.packetId, 'input', false)
 
 controls:
-  # 自适应全局布局：以1920x1080设计分辨率等比缩放整个HUD
+  # 自适应全局布局：以1920x1080设计分辨率等比缩放，居中锚点
   自适应全局布局:
     type: Adaptive
     attribute:
-      point: ~stretch_all
+      point: ~middle_center
       width: 1920
       height: 1080
     children:
@@ -108,7 +111,7 @@ controls:
           y: 200
           width: 140
           height: 560
-          visible: var.state != none
+          visible: "var.state != none"
         children:
           轨道背景:
             type: Texture
@@ -160,7 +163,7 @@ controls:
               normal: ~80,220,160,230
               shape: ~round_rect
               radius: 8
-            visible: "var.state == 'playing'"
+              visible: "var.state == 'playing'"
             effect:
               stroke:
                 width: 1
@@ -170,12 +173,13 @@ controls:
           鱼图标:
             type: Text
             attribute:
-              x: 70
+              x: 35
               y: "(1 - var.fishY) * 540 - 18"
+              width: 70
               texts: "var.rarityTag + '鱼'"
               fontSize: 36
               center: true
-            visible: "var.state == 'playing'"
+              visible: "var.state == 'playing'"
             effect:
               shadow:
                 xOffset: 1
@@ -191,7 +195,7 @@ controls:
           y: 200
           width: 560
           height: 150
-          visible: var.state != none
+          visible: "var.state != none"
         children:
           信息背景:
             type: Texture
@@ -209,6 +213,7 @@ controls:
             attribute:
               x: 20
               y: 12
+              width: 520
               texts: "var.rarityTag + var.fishName"
               fontSize: 40
           稀有度尺寸:
@@ -216,6 +221,7 @@ controls:
             attribute:
               x: 20
               y: 58
+              width: 520
               texts: "var.rarityTag + '◆ ' + var.rarityLabel + ' &7尺寸: &f' + var.caughtSize"
               fontSize: 24
           剩余时间:
@@ -223,16 +229,18 @@ controls:
             attribute:
               x: 20
               y: 90
-              texts: "'&7剩余时间: &f' + math.ceil(var.timeLeft / 20).round() + ' 秒'"
+              width: 520
+              texts: "'&7剩余时间: &f' + (var.timeLeft / 20).round() + ' 秒'"
               fontSize: 24
           操作提示:
             type: Text
             attribute:
               x: 20
               y: 120
+              width: 520
               texts: "~&7按住 空格 / 鼠标 控制绿条追踪鱼"
               fontSize: 20
-            visible: "var.state == 'playing'"
+              visible: "var.state == 'playing'"
 
       # 底部横向进度条区：显示钓鱼进度（满=成功）
       进度条区:
@@ -242,13 +250,14 @@ controls:
           y: 790
           width: 700
           height: 70
-          visible: var.state != none
+          visible: "var.state != none"
         children:
           进度标签:
             type: Text
             attribute:
               x: 0
               y: 0
+              width: 700
               texts: "'&7进度: &f' + (var.progress * 100).round() + '%'"
               fontSize: 22
           进度条背景:
@@ -277,7 +286,7 @@ controls:
               shape: ~round_rect
               radius: 10
 
-      # 结果覆盖层：成功/失败时居中展示，约1.5秒后由服务端关闭HUD
+      # 结果覆盖层：成功/失败时居中展示，约1.5秒后由服务端关闭
       结果覆盖层:
         type: Canvas
         attribute:
@@ -305,8 +314,9 @@ controls:
           结果文字:
             type: Text
             attribute:
-              x: 220
+              x: 0
               y: 40
+              width: 440
               texts: "var.state == 'success' ? '&a&l✓ 捕获成功！' : '&c&l✕ 鱼逃走了...'"
               fontSize: 48
               center: true
@@ -314,8 +324,9 @@ controls:
           结果详情:
             type: Text
             attribute:
-              x: 220
+              x: 0
               y: 120
+              width: 440
               texts: "var.state == 'success' ? (var.rarityTag + var.fishName + ' &7尺寸: &f' + var.caughtSize) : '&7再试一次吧'"
               fontSize: 28
               center: true
@@ -323,9 +334,10 @@ controls:
           结果稀有度:
             type: Text
             attribute:
-              x: 220
+              x: 0
               y: 160
-              texts: "var.state == 'success' ? (var.rarityTag + '◆ ' + var.rarityLabel) : none"
+              width: 440
+              texts: "var.state == 'success' ? (var.rarityTag + '◆ ' + var.rarityLabel) : ''"
               fontSize: 24
               center: true
               through: true
