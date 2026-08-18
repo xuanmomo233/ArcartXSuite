@@ -7,9 +7,9 @@ package xuanmo.arcartxsuite.fishing.model;
  */
 public enum FishRarity {
     COMMON(1.0),
-    UNCOMMON(0.5),
-    RARE(0.15),
-    LEGENDARY(0.02);
+    UNCOMMON(0.6),
+    RARE(0.4),
+    LEGENDARY(0.1);
 
     private final double weightMultiplier;
 

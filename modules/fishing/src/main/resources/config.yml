@@ -24,15 +24,15 @@ fishing:
   # 小游戏刷新间隔（ticks），20 ticks = 1 秒。值越小动画越平滑，CPU 占用越高。
   minigame-tick-interval: 1
   # 进度条重力加速度（像素/tick²），影响绿色目标条下落速度。
-  bar-gravity: 0.6
+  bar-gravity: 0.2
   # 进度条碰撞阻尼（0-1），越接近 1 反弹越持久。
-  bar-bounce-damping: 0.5
+  bar-bounce-damping: 0.4
   # 鼠标点击给进度条施加的瞬时速度（负数表示向上），绝对值越大越容易把条弹起。
-  bar-click-force: -1.2
+  bar-click-force: -0.6
   # 力系数：重力/点击力乘以这个系数后施加到速度上，越大绿条响应越灵敏。
-  bar-force-multiplier: 0.06
+  bar-force-multiplier: 0.03
   # 阻尼系数（0-1）：每 tick 速度乘以这个值，越接近 1 速度衰减越慢（惯性越大），越小越容易停但越迟钝。
-  bar-damping: 0.86
+  bar-damping: 0.85
   # 单次小游戏最长持续时间（ticks），超时视为失败。
   catch-duration-ticks: 600
   # 未按住鼠标时进度下降速率。
@@ -125,8 +125,12 @@ waters:
 # 引用 fishes/ 目录下的鱼种 ID
 fish-pools:
   default:                    # 默认鱼类池（普通水域使用）
-    - "sea_bass"              # 海鲈鱼
-    - "salmon"                # 鲑鱼
+    - "sea_bass"              # 海鲈鱼（普通 difficulty 25）
+    - "salmon"                # 鲑鱼（罕见 difficulty 40）
+    - "pufferfish"            # 河豚（罕见 difficulty 35）
+    - "tuna"                  # 金枪鱼（稀有 difficulty 55）
+    - "catfish"               # 鲶鱼（稀有 difficulty 60）
+    - "legendary_carp"        # 传说鲤鱼（传说 difficulty 90）
   lake:                       # 湖泊鱼类池
     - "sea_bass"              # 海鲈鱼
     - "catfish"               # 鲶鱼
