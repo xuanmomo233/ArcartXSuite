@@ -31,6 +31,7 @@ ui:
       if(var.fishIconJson == none || var.fishIconJson == ''){
         var.fishIconJson = var.emptyItemJson
       }
+      val.鱼图标.seticon()
     update: |-
       var.fishY = packet['fishY']
       var.barY = packet['barY']
@@ -174,9 +175,9 @@ controls:
                 type: Texture
                 attribute:
                   x: 12
-                  y: "(1 - var.barY - var.barHeight / 2) * 504 + 8"
+                  y: "(1 - var.barY - var.barHeight / 2) * 508 + 6"
                   width: 156
-                  height: "var.barHeight * 504"
+                  height: "var.barHeight * 508"
                   normal: ~80,220,160,210
                   shape: ~round_rect
                   radius: 10
@@ -193,17 +194,18 @@ controls:
 
               鱼图标:
                 type: Slot
+                val: 鱼图标
                 attribute:
                   slotType: ~Icon
                   itemScale: 1.5
                   x: 66
-                  y: "(1 - var.fishY) * 504 - 24 + 8"
+                  y: "(1 - var.fishY) * 508 - 24 + 6"
                   width: 48
                   height: 48
                   normal: ~0,0,0,0
                   through: true
                   visible: "var.state == 'playing'"
-                  seticon: "var.fishIconJson != '' && var.fishIconJson != none ? self.setItemIcon(var.fishIconJson) : none"
+                  seticon: "self.setItemIcon(var.fishIconJson != none && var.fishIconJson != '' ? var.fishIconJson : var.emptyItemJson)"
 
           信息面板:
             type: Canvas

@@ -121,28 +121,30 @@ public final class FishingMinigame {
             fishPosition = clamp(fishPosition, 0.0, 1.0);
         }
 
+        // 计算绿条高度（基于玩家等级）—— 先算高度，碰撞用绿条顶底
+        double barHeightRatio = calculateBarHeightRatio();
+        double halfBar = barHeightRatio / 2.0;
+
         // 更新绿条位置（物理：惯性 + 重力 + 点击力）
         boolean pressing = session.isPressing();
         double force = pressing ? settings.barClickForce() : settings.barGravity();
         barVelocity += force * 0.1;
         barVelocity *= 0.88; // 阻尼
-        barPosition = clamp(barPosition + barVelocity, 0.0, 1.0);
+        barPosition = barPosition + barVelocity;
 
-        // 底部反弹
-        if (barPosition <= 0.0) {
-            barPosition = 0.0;
+        // 底部反弹（绿条底部碰轨道底）
+        if (barPosition - halfBar <= 0.0) {
+            barPosition = halfBar;
             barVelocity = Math.abs(barVelocity) * settings.barBounceDamping();
         }
-        if (barPosition >= 1.0) {
-            barPosition = 1.0;
+        // 顶部反弹（绿条顶部碰轨道顶）
+        if (barPosition + halfBar >= 1.0) {
+            barPosition = 1.0 - halfBar;
             barVelocity = -Math.abs(barVelocity) * settings.barBounceDamping();
         }
-
-        // 计算绿条高度（基于玩家等级）
-        double barHeightRatio = calculateBarHeightRatio();
+        barPosition = clamp(barPosition, halfBar, 1.0 - halfBar);
 
         // 检查鱼是否在绿条内
-        double halfBar = barHeightRatio / 2.0;
         double barBottom = barPosition - halfBar;
         double barTop = barPosition + halfBar;
         boolean fishInside = fishPosition >= barBottom && fishPosition <= barTop;
