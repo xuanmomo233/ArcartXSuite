@@ -27,10 +27,21 @@ import xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration;
 import xuanmo.arcartxsuite.fishing.listener.FishingListener;
 import xuanmo.arcartxsuite.fishing.packet.FishingPacketHandler;
 import xuanmo.arcartxsuite.fishing.placeholder.FishingPlaceholderExpansion;
+import xuanmo.arcartxsuite.fishing.reward.RewardDispatcher;
+import xuanmo.arcartxsuite.fishing.reward.RewardLoader;
+import xuanmo.arcartxsuite.fishing.reward.SeasonRewardDefinition;
 import xuanmo.arcartxsuite.fishing.service.FishingItemGenerator;
 import xuanmo.arcartxsuite.fishing.service.FishingService;
+import xuanmo.arcartxsuite.fishing.settlement.SettlementDefinition;
+import xuanmo.arcartxsuite.fishing.settlement.SettlementEngine;
+import xuanmo.arcartxsuite.fishing.settlement.SettlementLoader;
 import xuanmo.arcartxsuite.fishing.storage.FishingRepository;
 import xuanmo.arcartxsuite.fishing.storage.JdbcFishingRepository;
+import xuanmo.arcartxsuite.fishing.talent.TalentEngine;
+import xuanmo.arcartxsuite.fishing.talent.TalentLoader;
+import xuanmo.arcartxsuite.fishing.task.FishingTask;
+import xuanmo.arcartxsuite.fishing.task.TaskEngine;
+import xuanmo.arcartxsuite.fishing.task.TaskLoader;
 
 /**
  * 钓鱼模块的入口类。
@@ -47,12 +58,18 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     private static final String MINIGAME_UI_FILE = "ui/fishing_minigame.yml";
     private static final String COLLECTION_UI_RESOURCE = "arcartx/ui/fishing_collection.yml";
     private static final String COLLECTION_UI_FILE = "ui/fishing_collection.yml";
+    private static final String TALENTS_UI_FILE = "ui/fishing_talents.yml";
+    private static final String REWARDS_UI_FILE = "ui/fishing_rewards.yml";
+    private static final String TASKS_UI_FILE = "ui/fishing_tasks.yml";
 
     private FishingModuleConfiguration configuration;
     private FishingService service;
     private FishingAdminCommand adminCommand;
     private String minigameUiId;
     private String collectionUiId;
+    private String talentsUiId;
+    private String rewardsUiId;
+    private String tasksUiId;
 
     @Override
     public ModuleDescriptor descriptor() {
@@ -104,6 +121,9 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         Map<String, String> mappings = new LinkedHashMap<>();
         mappings.put(MINIGAME_UI_RESOURCE, MINIGAME_UI_FILE);
         mappings.put(COLLECTION_UI_RESOURCE, COLLECTION_UI_FILE);
+        mappings.put("fishing_talents", TALENTS_UI_FILE);
+        mappings.put("fishing_rewards", REWARDS_UI_FILE);
+        mappings.put("fishing_tasks", TASKS_UI_FILE);
         return mappings;
     }
 
@@ -118,7 +138,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             throw new IllegalStateException("ArcartXFishing.yml 配置文件缺失");
         }
         configuration = FishingModuleConfiguration.load(
-            YamlConfiguration.loadConfiguration(configFile), dataFolder, logger);
+            YamlConfiguration.loadConfiguration(configFile), dataFolder, logger, ariaBridge);
     }
 
     @Override
@@ -158,11 +178,91 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             collectionUiId = configuration.ui().collectionId();
         }
 
+        // 注册天赋树/奖励/任务 UI
+        UiBinding binding3 = registerModuleUi(TALENTS_UI_FILE, "fishing_talents", configuration.ui().registerOnEnable());
+        talentsUiId = binding3.registeredUiId() != null ? binding3.registeredUiId() : "fishing_talents";
+        UiBinding binding4 = registerModuleUi(REWARDS_UI_FILE, "fishing_rewards", configuration.ui().registerOnEnable());
+        rewardsUiId = binding4.registeredUiId() != null ? binding4.registeredUiId() : "fishing_rewards";
+        UiBinding binding5 = registerModuleUi(TASKS_UI_FILE, "fishing_tasks", configuration.ui().registerOnEnable());
+        tasksUiId = binding5.registeredUiId() != null ? binding5.registeredUiId() : "fishing_tasks";
+
+        // 加载天赋树配置
+        TalentEngine talentEngine;
+        File talentsFile = new File(dataFolder, "talents.yml");
+        if (!talentsFile.exists()) {
+            // 导出默认 talents.yml
+            try {
+                java.io.InputStream is = getClass().getClassLoader().getResourceAsStream("talents.yml");
+                if (is != null) {
+                    java.nio.file.Files.copy(is, talentsFile.toPath());
+                    is.close();
+                }
+            } catch (Exception e) {
+                logger.warning("导出 talents.yml 失败: " + e.getMessage());
+            }
+        }
+        if (talentsFile.exists()) {
+            talentEngine = TalentLoader.load(
+                YamlConfiguration.loadConfiguration(talentsFile), logger);
+        } else {
+            talentEngine = TalentLoader.load(
+                new YamlConfiguration(), logger);
+        }
+
+        // 加载等级奖励配置
+        List<SeasonRewardDefinition> rewards;
+        File rewardsFile = new File(dataFolder, "rewards.yml");
+        if (!rewardsFile.exists()) {
+            exportResource("rewards.yml", rewardsFile);
+        }
+        if (rewardsFile.exists()) {
+            rewards = RewardLoader.load(YamlConfiguration.loadConfiguration(rewardsFile), logger);
+        } else {
+            rewards = java.util.List.of();
+        }
+
+        // 加载赛季结算配置
+        List<SettlementDefinition> settlements;
+        File settlementFile = new File(dataFolder, "settlement.yml");
+        if (!settlementFile.exists()) {
+            exportResource("settlement.yml", settlementFile);
+        }
+        if (settlementFile.exists()) {
+            settlements = SettlementLoader.load(YamlConfiguration.loadConfiguration(settlementFile), logger);
+        } else {
+            settlements = java.util.List.of();
+        }
+
+        FishingItemGenerator itemGen = new FishingItemGenerator(itemSourceRegistry, itemStackBridge);
+        String dispatchMode = configuration.season().dispatchMode();
+        RewardDispatcher rewardDispatcher = new RewardDispatcher(
+            repo, itemGen, () -> currencyManager,
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class),
+            logger, configuration.season().seasonId(), dispatchMode);
+        SettlementEngine settlementEngine = new SettlementEngine(
+            settlements, ariaBridge, repo, rewardDispatcher, logger, configuration.season().seasonId());
+
+        // 加载任务配置
+        File tasksDir = new File(dataFolder, "tasks");
+        if (!tasksDir.exists()) {
+            tasksDir.mkdirs();
+            exportResource("tasks/daily.yml", new File(tasksDir, "daily.yml"));
+            exportResource("tasks/weekly.yml", new File(tasksDir, "weekly.yml"));
+            exportResource("tasks/season.yml", new File(tasksDir, "season.yml"));
+        }
+        List<FishingTask> dailyTasks = loadTasksFromDir(tasksDir, "daily.yml", FishingTask.TaskCategory.DAILY);
+        List<FishingTask> weeklyTasks = loadTasksFromDir(tasksDir, "weekly.yml", FishingTask.TaskCategory.WEEKLY);
+        List<FishingTask> seasonTasks = loadTasksFromDir(tasksDir, "season.yml", FishingTask.TaskCategory.SEASON);
+
+        TaskEngine taskEngine = new TaskEngine(dailyTasks, weeklyTasks, seasonTasks,
+            3, 3, () -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class),
+            () -> service, logger);
+
         service = new FishingService(
             plugin, configuration, repo,
             packetBridge,
-            new FishingItemGenerator(itemSourceRegistry, itemStackBridge),
-            logger, minigameUiId);
+            itemGen,
+            logger, minigameUiId, talentEngine, rewards, rewardDispatcher, settlementEngine, taskEngine);
         service.setMessageProvider(messages());
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
@@ -174,6 +274,9 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         service.setMailProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.MailDispatchable.class));
         service.start();
+
+        // 启动任务引擎（需要 eventBusProvider 已设置）
+        taskEngine.start();
 
         registerCapability(DatabaseMigratable.class, new DatabaseMigratable() {
             @Override public @NotNull String moduleId() { return "fishing"; }
@@ -222,6 +325,9 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         return Map.of("fishing", new FishingPlayerCommand(
             () -> packetBridge,
             () -> collectionUiId,
+            () -> talentsUiId,
+            () -> rewardsUiId,
+            () -> tasksUiId,
             () -> service,
             this::msg
         ));
@@ -241,7 +347,10 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
                 return service.getActiveMinigame(player.getUniqueId());
             },
             () -> service,
-            () -> collectionUiId
+            () -> collectionUiId,
+            () -> talentsUiId,
+            () -> rewardsUiId,
+            () -> tasksUiId
         );
     }
 
@@ -268,6 +377,25 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         if (mp == null) return key;
         String prefix = mp.get("prefix");
         return prefix + mp.get(key, args);
+    }
+
+    /** 从 jar 资源导出默认配置文件。 */
+    private void exportResource(@NotNull String resourcePath, @NotNull File targetFile) {
+        try (java.io.InputStream is = getClass().getClassLoader().getResourceAsStream(resourcePath)) {
+            if (is != null) {
+                java.nio.file.Files.copy(is, targetFile.toPath());
+            }
+        } catch (Exception e) {
+            logger.warning("导出 " + resourcePath + " 失败: " + e.getMessage());
+        }
+    }
+
+    /** 从 tasks/ 目录加载指定任务文件。 */
+    private java.util.List<FishingTask> loadTasksFromDir(@NotNull File dir, @NotNull String fileName,
+                                                          @NotNull FishingTask.TaskCategory category) {
+        File file = new File(dir, fileName);
+        if (!file.exists()) return java.util.List.of();
+        return TaskLoader.load(YamlConfiguration.loadConfiguration(file), category, logger);
     }
 }
 

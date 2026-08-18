@@ -141,4 +141,41 @@ public interface BattlePassRepository {
      * @throws SQLException 数据库操作失败时抛出
      */
     void deletePlayerTasks(UUID playerUuid, String seasonId) throws SQLException;
+
+    /**
+     * 查询指定赛季是否已完成结算。
+     *
+     * @param seasonId 赛季 ID
+     * @return {@code true} 表示已结算
+     * @throws SQLException 数据库操作失败时抛出
+     */
+    boolean isSeasonSettled(String seasonId) throws SQLException;
+
+    /**
+     * 标记指定赛季已完成结算。
+     *
+     * @param seasonId 赛季 ID
+     * @throws SQLException 数据库操作失败时抛出
+     */
+    void markSeasonSettled(String seasonId) throws SQLException;
+
+    /**
+     * 加载指定赛季所有玩家的进度（用于赛季结算）。
+     * <p>
+     * 仅返回 player_uuid 与 current_level、pass_tier 字段，不加载任务进度和领取记录。
+     *
+     * @param seasonId 赛季 ID
+     * @return 玩家 UUID → 简化进度（level, tier）的映射
+     * @throws SQLException 数据库操作失败时抛出
+     */
+    java.util.List<PlayerSeasonSummary> loadSeasonSummaries(String seasonId) throws SQLException;
+
+    /**
+     * 玩家赛季进度摘要，用于结算。
+     *
+     * @param playerUuid 玩家 UUID
+     * @param level      最终等级
+     * @param tier       战令档位
+     */
+    record PlayerSeasonSummary(UUID playerUuid, int level, String tier) {}
 }

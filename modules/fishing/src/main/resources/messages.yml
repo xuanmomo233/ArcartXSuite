@@ -42,6 +42,9 @@ player:
     open: "&7/fishing&f - 打开鱼类图鉴"
     sell: "&7/fishing sell&f - 出售手中的鱼"
     sell-all: "&7/fishing sell all&f - 出售背包所有鱼"
+    talents: "&7/fishing talents&f - 打开天赋树"
+    rewards: "&7/fishing rewards&f - 打开赛季奖励"
+    tasks: "&7/fishing tasks&f - 打开任务列表"
 
 fishing_inventory_full: "&c你的背包已满，鱼掉落在地上了！"
 

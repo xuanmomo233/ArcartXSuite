@@ -1,0 +1,172 @@
+# AXS 钓鱼赛季等级奖励配置
+# 定义每个等级达到后可领取的奖励
+#
+# 配置结构：
+#   "<奖励唯一标识>":
+#     level: <达到该等级可领取>
+#     type: item / command / currency / mail
+#     icon:
+#       material: <图标材质>
+#       name: "<显示名称>"
+#       amount: <图标显示数量>
+#     # type: item 时
+#     item:
+#       source: minecraft / mythic / neige / overture / mmoitems
+#       id: <物品ID>
+#       amount: <数量>
+#       nbt: ""
+#     # type: currency 时
+#     currency:
+#       currency-id: <货币ID>
+#       amount: <数量>
+#     # type: command 时
+#     commands:
+#       - "<命令1>"
+#       - "<命令2>"
+#
+# 奖励类型说明：
+#   item:     通过 ItemSourceRegistry 生成物品并直接放入玩家背包
+#   command:  以控制台身份执行命令列表，支持 {player} 占位符
+#   currency: 向玩家发放指定货币（需 Vault/PlayerPoints 等经济插件）
+#   mail:     通过 Mail 模块发送邮件（mail-preset-id 或带物品附件）
+
+rewards:
+  fishing_level_5:
+    level: 5
+    type: currency
+    icon:
+      material: GOLD_INGOT
+      name: "&e金币 x100"
+      amount: 1
+    currency:
+      currency-id: "money"
+      amount: 100
+
+  fishing_level_10:
+    level: 10
+    type: item
+    icon:
+      material: FISHING_ROD
+      name: "&b精制钓竿"
+      amount: 1
+    item:
+      source: minecraft
+      id: FISHING_ROD
+      amount: 1
+      nbt: "{display:{Name:'{\"text\":\"§b精制钓竿\"}'}}"
+
+  fishing_level_15:
+    level: 15
+    type: currency
+    icon:
+      material: GOLD_INGOT
+      name: "&e金币 x300"
+      amount: 3
+    currency:
+      currency-id: "money"
+      amount: 300
+
+  fishing_level_20:
+    level: 20
+    type: item
+    icon:
+      material: ENCHANTED_BOOK
+      name: "&d经验修补书"
+      amount: 1
+    item:
+      source: minecraft
+      id: ENCHANTED_BOOK
+      amount: 1
+      nbt: "{StoredEnchantments:[{id:\"minecraft:mending\",lvl:1s}]}"
+
+  fishing_level_25:
+    level: 25
+    type: currency
+    icon:
+      material: GOLD_INGOT
+      name: "&e金币 x500"
+      amount: 5
+    currency:
+      currency-id: "money"
+      amount: 500
+
+  fishing_level_30:
+    level: 30
+    type: item
+    icon:
+      material: DIAMOND
+      name: "&b钻石 x5"
+      amount: 5
+    item:
+      source: minecraft
+      id: DIAMOND
+      amount: 5
+
+  fishing_level_40:
+    level: 40
+    type: currency
+    icon:
+      material: GOLD_INGOT
+      name: "&e金币 x1000"
+      amount: 10
+    currency:
+      currency-id: "money"
+      amount: 1000
+
+  fishing_level_50:
+    level: 50
+    type: item
+    icon:
+      material: NETHERITE_INGOT
+      name: "&6下界合金锭 x3"
+      amount: 3
+    item:
+      source: minecraft
+      id: NETHERITE_INGOT
+      amount: 3
+
+  fishing_level_60:
+    level: 60
+    type: currency
+    icon:
+      material: GOLD_INGOT
+      name: "&e金币 x2000"
+      amount: 20
+    currency:
+      currency-id: "money"
+      amount: 2000
+
+  fishing_level_75:
+    level: 75
+    type: item
+    icon:
+      material: NETHERITE_INGOT
+      name: "&6下界合金锭 x10"
+      amount: 10
+    item:
+      source: minecraft
+      id: NETHERITE_INGOT
+      amount: 10
+
+  fishing_level_90:
+    level: 90
+    type: currency
+    icon:
+      material: GOLD_BLOCK
+      name: "&e金币 x5000"
+      amount: 5
+    currency:
+      currency-id: "money"
+      amount: 5000
+
+  fishing_level_100:
+    level: 100
+    type: item
+    icon:
+      material: DRAGON_EGG
+      name: "&6龙蛋"
+      amount: 1
+    item:
+      source: minecraft
+      id: DRAGON_EGG
+      amount: 1

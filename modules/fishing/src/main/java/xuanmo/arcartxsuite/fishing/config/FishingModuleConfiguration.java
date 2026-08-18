@@ -15,6 +15,9 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.script.AriaBridge;
+import xuanmo.arcartxsuite.api.script.XpCurve;
 import xuanmo.arcartxsuite.api.storage.StorageDescriptor;
 import xuanmo.arcartxsuite.fishing.model.BaitDefinition;
 import xuanmo.arcartxsuite.fishing.model.FishBehaviorType;
@@ -47,6 +50,7 @@ import xuanmo.arcartxsuite.fishing.model.WaterArea.AreaType;
  */
 public record FishingModuleConfiguration(
     @NotNull StorageConfiguration storage,
+    @NotNull SeasonConfiguration season,
     @NotNull FishingSettings fishing,
     @NotNull List<FishDefinition> fishes,
     @NotNull List<TreasureDefinition> treasures,
@@ -61,6 +65,11 @@ public record FishingModuleConfiguration(
 ) {
 
     public static FishingModuleConfiguration load(FileConfiguration yaml, File dataFolder, Logger logger) {
+        return load(yaml, dataFolder, logger, null);
+    }
+
+    public static FishingModuleConfiguration load(FileConfiguration yaml, File dataFolder, Logger logger,
+                                                   @Nullable AriaBridge ariaBridge) {
         List<FishDefinition> fishes = loadFishesFromDir(new File(dataFolder, "fishes"), logger);
         List<TreasureDefinition> treasures = loadTreasuresFromDir(new File(dataFolder, "treasures"), logger);
         List<BaitDefinition> baits = loadBaitsFromDir(new File(dataFolder, "baits"), logger);
@@ -75,6 +84,7 @@ public record FishingModuleConfiguration(
 
         return new FishingModuleConfiguration(
             StorageConfiguration.load(yaml.getConfigurationSection("storage")),
+            SeasonConfiguration.load(yaml.getConfigurationSection("season"), ariaBridge),
             FishingSettings.load(yaml.getConfigurationSection("fishing")),
             Collections.unmodifiableList(fishes),
             Collections.unmodifiableList(treasures),
@@ -559,6 +569,86 @@ public record FishingModuleConfiguration(
                 section.getBoolean("enabled", true),
                 section.getString("base-permission", "axs.fishing.use")
             );
+        }
+    }
+
+    /**
+     * 赛季配置，定义当前赛季的基本参数与经验成长曲线。
+     *
+     * @param seasonId    赛季唯一标识
+     * @param displayName 赛季显示名称
+     * @param maxLevel    赛季最大等级
+     * @param xpCurve     经验成长曲线（ARIA 表达式断点求值）
+     * @param startDate   赛季开始日期（yyyy-MM-dd）
+     * @param endDate     赛季结束日期（yyyy-MM-dd）
+     * @param dispatchMode 结算奖励发放方式：ONLINE_DIRECT / MAIL / HYBRID
+     */
+    public record SeasonConfiguration(
+        @NotNull String seasonId,
+        @NotNull String displayName,
+        int maxLevel,
+        @NotNull XpCurve xpCurve,
+        @NotNull java.time.LocalDate startDate,
+        @NotNull java.time.LocalDate endDate,
+        @NotNull String dispatchMode
+    ) {
+        public static SeasonConfiguration load(ConfigurationSection section, @Nullable AriaBridge ariaBridge) {
+            if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
+            String seasonId = section.getString("season-id", "fishing-s1");
+            String displayName = section.getString("display-name", "第一赛季");
+            int maxLevel = section.getInt("max-level", 100);
+            XpCurve xpCurve = parseXpCurve(section, ariaBridge);
+            java.time.LocalDate startDate = parseDate(section.getString("start-date", "2026-01-01"));
+            java.time.LocalDate endDate = parseDate(section.getString("end-date", "2030-12-31"));
+            String dispatchMode = section.getString("settlement.dispatch-mode", "ONLINE_DIRECT").toUpperCase();
+            return new SeasonConfiguration(seasonId, displayName, maxLevel, xpCurve, startDate, endDate, dispatchMode);
+        }
+
+        private static XpCurve parseXpCurve(ConfigurationSection section, @Nullable AriaBridge ariaBridge) {
+            if (ariaBridge == null) {
+                // Aria 不可用时回退为固定线性曲线
+                return new XpCurve(List.of(new XpCurve.Breakpoint(1, "50 * level")), nullAriaBridge());
+            }
+            List<?> raw = section.getList("xp-curve");
+            if (raw == null || raw.isEmpty()) {
+                return new XpCurve(List.of(new XpCurve.Breakpoint(1, "50 * level")), ariaBridge);
+            }
+            List<XpCurve.Breakpoint> breakpoints = new ArrayList<>();
+            for (Object item : raw) {
+                if (item instanceof Map<?, ?> map) {
+                    int level = ((Number) map.get("level")).intValue();
+                    String formula = String.valueOf(map.get("formula"));
+                    breakpoints.add(new XpCurve.Breakpoint(level, formula));
+                }
+            }
+            if (breakpoints.isEmpty()) {
+                return new XpCurve(List.of(new XpCurve.Breakpoint(1, "50 * level")), ariaBridge);
+            }
+            return new XpCurve(breakpoints, ariaBridge);
+        }
+
+        private static java.time.LocalDate parseDate(String value) {
+            try {
+                return java.time.LocalDate.parse(value.trim());
+            } catch (Exception e) {
+                return java.time.LocalDate.of(2026, 1, 1);
+            }
+        }
+
+        /** 判断当前日期是否在赛季有效时间范围内。 */
+        public boolean isActive() {
+            java.time.LocalDate now = java.time.LocalDate.now();
+            return !now.isBefore(startDate) && !now.isAfter(endDate);
+        }
+
+        private static AriaBridge nullAriaBridge() {
+            return new AriaBridge() {
+                @Override public boolean available() { return false; }
+                @Override public String version() { return null; }
+                @Override public Object eval(@NotNull String code, @NotNull Map<String, Object> bindings) {
+                    return null;
+                }
+            };
         }
     }
 }

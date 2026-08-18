@@ -1,0 +1,203 @@
+# BattlePass 赛季结算奖励配置
+# 定义赛季结束时按等级阈值发放的额外结算奖励
+#
+# 配置结构：
+#   rewards:
+#     "<奖励唯一标识>":
+#       min-level: <达到该等级才发放此结算奖励>
+#       free:                # 免费档结算奖励（结构同 rewards.yml）
+#         type: item / command / currency / mail
+#         icon: ...
+#         item: ...
+#         commands: ...
+#         currency: ...
+#         amount: ...
+#         mail-preset-id: ...     # type: mail 且使用预设时
+#         mail-subject: ...       # type: mail 且直接配置时
+#         mail-body: ...          # type: mail 且直接配置时
+#       premium:           # 高级档结算奖励（结构同 free）
+#         ...
+#       deluxe:            # 典藏档结算奖励（结构同 free）
+#         ...
+#
+# 奖励类型说明：
+#   item:     通过 ItemSourceRegistry 生成物品并直接放入玩家背包（在线时）
+#   command:  以控制台身份执行命令列表（commands 字段），支持 {player} 占位符
+#   currency: 向玩家发放指定货币（需 Vault/PlayerPoints 等经济插件）
+#   mail:     通过 Mail 模块发送邮件（预设 ID 或带物品附件的邮件）
+#             Mail 模块不可用时降级为直接发放物品或执行命令
+#
+# 结算触发时机：
+#   1. 自动：赛季结束日期到期后，定时任务检测并自动结算
+#   2. 手动：管理员执行 /axs battlepass settle 手动结算
+#
+# 结算奖励与等级奖励的关系：
+#   - 等级奖励（rewards.yml）：玩家达到对应等级后主动领取
+#   - 结算奖励（本文件）：赛季结束时按等级阈值自动发放，无需手动领取
+#   - 赛季结算时还会自动发放玩家未领取的等级奖励
+
+rewards:
+  "settlement-participation":
+    min-level: 1
+    free:
+      type: currency
+      icon:
+        material: GOLD_INGOT
+        name: "&e参与奖 &7- &f100 金币"
+        amount: 1
+      currency: "money"
+      amount: 100
+    premium:
+      type: currency
+      icon:
+        material: GOLD_INGOT
+        name: "&e参与奖 &7- &f200 金币"
+        amount: 2
+      currency: "money"
+      amount: 200
+    deluxe:
+      type: currency
+      icon:
+        material: GOLD_INGOT
+        name: "&e参与奖 &7- &f300 金币"
+        amount: 3
+      currency: "money"
+      amount: 300
+
+  "settlement-milestone-25":
+    min-level: 25
+    free:
+      type: item
+      icon:
+        material: DIAMOND
+        name: "&b里程碑奖励 &7- &f钻石 x5"
+        amount: 5
+      item:
+        source: minecraft
+        id: DIAMOND
+        amount: 5
+    premium:
+      type: item
+      icon:
+        material: DIAMOND
+        name: "&b里程碑奖励 &7- &f钻石 x10"
+        amount: 10
+      item:
+        source: minecraft
+        id: DIAMOND
+        amount: 10
+    deluxe:
+      type: item
+      icon:
+        material: DIAMOND
+        name: "&b里程碑奖励 &7- &f钻石 x15"
+        amount: 15
+      item:
+        source: minecraft
+        id: DIAMOND
+        amount: 15
+
+  "settlement-milestone-50":
+    min-level: 50
+    free:
+      type: mail
+      icon:
+        material: ENCHANTED_GOLDEN_APPLE
+        name: "&6半程奖励 &7- &f附金苹果 x1（邮件）"
+        amount: 1
+      mail-subject: "战令半程奖励"
+      mail-body: "恭喜您在赛季中达到 50 级！请查收附金苹果作为奖励。"
+      item:
+        source: minecraft
+        id: ENCHANTED_GOLDEN_APPLE
+        amount: 1
+    premium:
+      type: mail
+      icon:
+        material: ENCHANTED_GOLDEN_APPLE
+        name: "&6半程奖励 &7- &f附金苹果 x3（邮件）"
+        amount: 3
+      mail-subject: "战令半程奖励（高级档）"
+      mail-body: "恭喜您在赛季中达到 50 级！请查收附金苹果 x3 作为奖励。"
+      item:
+        source: minecraft
+        id: ENCHANTED_GOLDEN_APPLE
+        amount: 3
+    deluxe:
+      type: mail
+      icon:
+        material: ENCHANTED_GOLDEN_APPLE
+        name: "&6半程奖励 &7- &f附金苹果 x5（邮件）"
+        amount: 5
+      mail-subject: "战令半程奖励（典藏档）"
+      mail-body: "恭喜您在赛季中达到 50 级！请查收附金苹果 x5 作为奖励。"
+      item:
+        source: minecraft
+        id: ENCHANTED_GOLDEN_APPLE
+        amount: 5
+
+  "settlement-milestone-75":
+    min-level: 75
+    free:
+      type: command
+      icon:
+        material: NETHERITE_INGOT
+        name: "&5高阶奖励 &7- &f下界合金锭 x1"
+        amount: 1
+      commands:
+        - "give {player} netherite_ingot 1"
+    premium:
+      type: command
+      icon:
+        material: NETHERITE_INGOT
+        name: "&5高阶奖励 &7- &f下界合金锭 x2"
+        amount: 2
+      commands:
+        - "give {player} netherite_ingot 2"
+    deluxe:
+      type: command
+      icon:
+        material: NETHERITE_INGOT
+        name: "&5高阶奖励 &7- &f下界合金锭 x3"
+        amount: 3
+      commands:
+        - "give {player} netherite_ingot 3"
+
+  "settlement-max":
+    min-level: 100
+    free:
+      type: mail
+      icon:
+        material: DRAGON_EGG
+        name: "&c满级奖励 &7- &f龙蛋 x1（邮件）"
+        amount: 1
+      mail-subject: "战令满级奖励"
+      mail-body: "恭喜您在赛季中达到满级！请查收龙蛋作为终极奖励。"
+      item:
+        source: minecraft
+        id: DRAGON_EGG
+        amount: 1
+    premium:
+      type: mail
+      icon:
+        material: DRAGON_EGG
+        name: "&c满级奖励 &7- &f龙蛋 x1 + 钻石 x32（邮件）"
+        amount: 1
+      mail-subject: "战令满级奖励（高级档）"
+      mail-body: "恭喜您在赛季中达到满级！请查收龙蛋 x1 + 钻石 x32 作为终极奖励。"
+      item:
+        source: minecraft
+        id: DRAGON_EGG
+        amount: 1
+    deluxe:
+      type: mail
+      icon:
+        material: DRAGON_EGG
+        name: "&c满级奖励 &7- &f龙蛋 x1 + 钻石 x64（邮件）"
+        amount: 1
+      mail-subject: "战令满级奖励（典藏档）"
+      mail-body: "恭喜您在赛季中达到满级！请查收龙蛋 x1 + 钻石 x64 作为终极奖励。"
+      item:
+        source: minecraft
+        id: DRAGON_EGG
+        amount: 1

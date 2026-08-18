@@ -4,14 +4,18 @@ import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
+import xuanmo.arcartxsuite.api.capability.MailDispatchable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
@@ -21,13 +25,14 @@ import xuanmo.arcartxsuite.battlepass.model.BattlePassReward;
 /**
  * 战令奖励发放器，负责根据奖励类型执行实际的奖励发放逻辑。
  * <p>
- * 支持三种奖励类型：
+ * 支持四种奖励类型：
  * <ul>
  *   <li>{@code command} — 以控制台身份执行命令列表，支持 {@code {player}} 占位符</li>
  *   <li>{@code item} — 通过 {@link ItemSourceRegistry} 生成物品并直接放入玩家背包</li>
  *   <li>{@code currency} — 通过 {@link CurrencyBridgeAPI} 向玩家发放货币</li>
+ *   <li>{@code mail} — 通过 {@link MailDispatchable} 发送邮件（预设 ID 或带物品附件的邮件）</li>
  * </ul>
- * 命令执行和物品发放在主线程同步调度。
+ * 命令执行和物品发放在主线程同步调度。mail 类型在 Mail 模块不可用时降级为直接发放物品。
  */
 public final class BattlePassRewardDispatcher {
 
@@ -35,6 +40,8 @@ public final class BattlePassRewardDispatcher {
     private final Logger logger;
     private final @Nullable ItemSourceRegistry itemSourceRegistry;
     private final @Nullable CurrencyBridgeAPI currencyManager;
+    private volatile Supplier<MailDispatchable> mailProvider;
+    private volatile boolean mailDeliveryMode = false;
 
     /**
      * 构造奖励发放器。
@@ -54,7 +61,29 @@ public final class BattlePassRewardDispatcher {
     }
 
     /**
+     * 设置邮件模块能力提供者，用于 mail 类型奖励发放。
+     *
+     * @param mailProvider MailDispatchable 提供者，可为 null
+     */
+    public void setMailProvider(@Nullable Supplier<MailDispatchable> mailProvider) {
+        this.mailProvider = mailProvider;
+    }
+
+    /**
+     * 设置奖励发放模式。
+     *
+     * @param mailDeliveryMode {@code true} 表示统一邮箱发放模式（item 类型走 mail），
+     *                         {@code false} 表示直接发放模式（默认）
+     */
+    public void setMailDeliveryMode(boolean mailDeliveryMode) {
+        this.mailDeliveryMode = mailDeliveryMode;
+    }
+
+    /**
      * 向在线玩家发放指定奖励。
+     * <p>
+     * 直接发放模式：item 放入背包，currency 直接加，command 直接执行，mail 走邮箱。
+     * 邮箱发放模式：item 类型也通过 mail 发送（即使玩家在线），其他类型直接发放。
      *
      * @param player 目标玩家
      * @param reward 要发放的奖励
@@ -64,10 +93,47 @@ public final class BattlePassRewardDispatcher {
         String type = reward.type();
         switch (type.toLowerCase()) {
             case "command" -> dispatchCommands(player, reward.commands());
-            case "item" -> dispatchItem(player, reward);
+            case "item" -> {
+                if (mailDeliveryMode) {
+                    dispatchMail(player, player.getUniqueId(), player.getName(), reward);
+                } else {
+                    dispatchItem(player, reward);
+                }
+            }
             case "currency" -> dispatchCurrency(player, reward);
+            case "mail" -> dispatchMail(player, player.getUniqueId(), player.getName(), reward);
             default -> logger.warning("未知奖励类型 [" + type + "]: " + reward.rewardId());
         }
+    }
+
+    /**
+     * 向离线玩家发放指定奖励。
+     * <p>
+     * 返回是否已成功发放：
+     * <ul>
+     *   <li>mail 类型 / 邮箱模式下的 item 类型 → 通过 mail 发送，返回 true</li>
+     *   <li>currency / command 类型 → 无法离线发放，返回 false（需上线后补发）</li>
+     *   <li>直接模式下的 item 类型 → 无法离线发放，返回 false（需上线后补发）</li>
+     * </ul>
+     *
+     * @param playerUuid 玩家 UUID
+     * @param playerName 玩家名
+     * @param reward     要发放的奖励
+     * @return {@code true} 表示已成功发放，{@code false} 表示需上线后补发
+     */
+    public boolean dispatchOffline(UUID playerUuid, String playerName, BattlePassReward reward) {
+        if (playerUuid == null || reward == null) return false;
+        String type = reward.type();
+        if ("mail".equalsIgnoreCase(type)) {
+            dispatchMail(null, playerUuid, playerName, reward);
+            return true;
+        }
+        if ("item".equalsIgnoreCase(type) && mailDeliveryMode) {
+            dispatchMail(null, playerUuid, playerName, reward);
+            return true;
+        }
+        // currency / command / 直接模式 item → 需上线后补发
+        return false;
     }
 
     private void dispatchCommands(Player player, List<String> commands) {
@@ -176,6 +242,100 @@ public final class BattlePassRewardDispatcher {
             return Bukkit.getUnsafe().modifyItemStack(item.clone(), nbt);
         } catch (Exception ignored) {
             return item;
+        }
+    }
+
+    /**
+     * 通过 mail 模块发放奖励。
+     * <p>
+     * 支持两种模式：
+     * <ul>
+     *   <li>预设模式：配置了 mail-preset-id，调用 {@link MailDispatchable#dispatchPreset}</li>
+     *   <li>直接模式：配置了 mail-subject/mail-body/item，调用 {@link MailDispatchable#sendItemMail}</li>
+     * </ul>
+     * Mail 模块不可用时：
+     * <ul>
+     *   <li>预设模式：降级为执行命令（commands 字段）</li>
+     *   <li>直接模式且有物品：降级为直接发放物品（在线时放入背包，离线时跳过）</li>
+     *   <li>直接模式无物品：降级为执行命令</li>
+     * </ul>
+     *
+     * @param onlinePlayer 在线玩家实例，离线发放时为 null
+     * @param playerUuid   玩家 UUID
+     * @param playerName   玩家名
+     * @param reward       奖励定义
+     */
+    private void dispatchMail(@Nullable Player onlinePlayer, UUID playerUuid, String playerName, BattlePassReward reward) {
+        MailDispatchable mail = mailProvider != null ? mailProvider.get() : null;
+        if (mail == null) {
+            // Mail 模块不可用，降级处理
+            logger.fine("[battlepass] Mail 模块不可用，降级发放奖励: " + reward.rewardId());
+            fallbackFromMail(onlinePlayer, reward);
+            return;
+        }
+        String presetId = reward.mailPresetId();
+        if (presetId != null && !presetId.isBlank()) {
+            // 预设模式
+            AxsScheduler.runAsync(plugin, () -> {
+                try {
+                    boolean success = mail.dispatchPreset(presetId, playerName, "BattlePass");
+                    if (!success) {
+                        logger.warning("[battlepass] 邮件预设发送失败: preset=" + presetId
+                            + " player=" + playerName + "，降级为直接发放");
+                        AxsScheduler.runTask(plugin, () -> fallbackFromMail(onlinePlayer, reward));
+                    }
+                } catch (Exception e) {
+                    logger.warning("[battlepass] 邮件预设发送异常: " + presetId + " | " + e.getMessage());
+                }
+            });
+            return;
+        }
+        // 直接模式：发送带物品附件的邮件
+        String subject = reward.mailSubject() != null ? reward.mailSubject() : "战令奖励";
+        String body = reward.mailBody() != null ? reward.mailBody() : "您收到了战令奖励，请查收附件。";
+        BattlePassItemDefinition itemDef = reward.item();
+        if (itemDef == null) {
+            // 无物品附件，降级为执行命令
+            logger.fine("[battlepass] mail 类型奖励无物品附件，降级为执行命令: " + reward.rewardId());
+            fallbackFromMail(onlinePlayer, reward);
+            return;
+        }
+        ItemStack item = generateItem(itemDef);
+        if (item == null) {
+            logger.warning("[battlepass] mail 类型奖励物品生成失败: " + reward.rewardId()
+                + " source=" + itemDef.source() + " id=" + itemDef.id());
+            return;
+        }
+        AxsScheduler.runAsync(plugin, () -> {
+            try {
+                boolean success = mail.sendItemMail(playerUuid, subject, body, item, "战令");
+                if (!success) {
+                    logger.warning("[battlepass] 带附件邮件发送失败: player=" + playerName
+                        + "，降级为直接发放物品");
+                    AxsScheduler.runTask(plugin, () -> fallbackFromMail(onlinePlayer, reward));
+                }
+            } catch (Exception e) {
+                logger.warning("[battlepass] 带附件邮件发送异常: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Mail 模块不可用时的降级发放逻辑。
+     */
+    private void fallbackFromMail(@Nullable Player player, BattlePassReward reward) {
+        if (player == null || !player.isOnline()) {
+            // 离线玩家无法降级发放，记录日志
+            logger.fine("[battlepass] 离线玩家无法降级发放 mail 奖励: " + reward.rewardId());
+            return;
+        }
+        // 优先尝试发放物品
+        if (reward.item() != null) {
+            dispatchItem(player, reward);
+        }
+        // 再执行命令（如果有）
+        if (reward.commands() != null && !reward.commands().isEmpty()) {
+            dispatchCommands(player, reward.commands());
         }
     }
 }

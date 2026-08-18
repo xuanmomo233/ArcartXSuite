@@ -21,6 +21,8 @@ import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.combat.CombatEventSupport;
 import xuanmo.arcartxsuite.api.combat.EntityCombatMetadata;
+import xuanmo.arcartxsuite.api.event.TaczGunDamageEvent;
+import xuanmo.arcartxsuite.api.event.TaczGunKillEvent;
 import xuanmo.arcartxsuite.combateffect.packet.config.CombatPacketContext;
 import xuanmo.arcartxsuite.combateffect.packet.config.PacketDefinition;
 import xuanmo.arcartxsuite.combateffect.packet.config.PacketRecipient;
@@ -93,6 +95,36 @@ public final class CombatEffectPacketService implements Listener {
         }
         publishDamageEvent(attacker, target, event);
         dispatchPackets(PacketTrigger.ATTACK, CombatPacketContext.fromAttack(attacker, target, event));
+    }
+
+    /**
+     * 监听 TACZ 枪械伤害事件，发布到 EventBus。
+     * <p>
+     * TACZ 伤害不触发 {@link EntityDamageByEntityEvent}，必须单独监听。
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onTaczGunDamage(TaczGunDamageEvent event) {
+        Player attacker = event.getAttacker();
+        LivingEntity target = event.getTarget();
+        if (attacker.equals(target)) return;
+        publishTaczDamageEvent(attacker, target, event.getDamage(), event.isHeadShot());
+    }
+
+    /**
+     * 监听 TACZ 枪械击杀事件，发布到 EventBus。
+     * <p>
+     * TACZ 击杀不保证 {@code LivingEntity.getKiller()} 返回枪手，
+     * 必须通过此事件准确获取击杀者。
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onTaczGunKill(TaczGunKillEvent event) {
+        Player killer = event.getAttacker();
+        LivingEntity victim = event.getKilledEntity();
+        if (killer.equals(victim)) return;
+        boolean isPlayerKill = victim instanceof Player;
+        publishKillEvent(killer, victim, isPlayerKill);
+        String deathMessage = isPlayerKill ? "" : "";
+        dispatchPackets(PacketTrigger.KILL, CombatPacketContext.fromKill(killer, victim, deathMessage));
     }
 
     private void dispatchPackets(PacketTrigger trigger, CombatPacketContext context) {
@@ -190,6 +222,39 @@ public final class CombatEffectPacketService implements Listener {
             eventBus.publish("axs.combateffect.damage_dealt", attacker, payload);
         } catch (Exception e) {
             logger.warning("CombatEffect EventBus 发布失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 发布 TACZ 枪械伤害事件到 EventBus。
+     * <p>
+     * 与 {@link #publishDamageEvent} 发布到同一 topic（{@code axs.combateffect.damage_dealt}），
+     * payload 结构一致，下游消费者无需区分伤害来源。
+     *
+     * @param attacker 攻击者
+     * @param target   目标实体
+     * @param damage   伤害值
+     * @param headShot 是否爆头
+     */
+    private void publishTaczDamageEvent(Player attacker, LivingEntity target, double damage, boolean headShot) {
+        if (eventBusProvider == null) {
+            return;
+        }
+        EventBusCapability eventBus = eventBusProvider.get();
+        if (eventBus == null) {
+            return;
+        }
+        try {
+            Map<String, String> payload = new java.util.LinkedHashMap<>();
+            payload.put("attacker", attacker.getName());
+            payload.put("targetType", target.getType().name());
+            payload.put("targetName", target.getName());
+            payload.put("damage", String.valueOf(damage));
+            payload.put("headshot", String.valueOf(headShot));
+            payload.put("source", "tacz");
+            eventBus.publish("axs.combateffect.damage_dealt", attacker, payload);
+        } catch (Exception e) {
+            logger.warning("CombatEffect EventBus 发布 TACZ 伤害失败: " + e.getMessage());
         }
     }
 

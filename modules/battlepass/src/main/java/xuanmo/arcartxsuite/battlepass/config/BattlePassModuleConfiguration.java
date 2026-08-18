@@ -21,9 +21,12 @@ import xuanmo.arcartxsuite.battlepass.condition.TaskCondition;
 import xuanmo.arcartxsuite.battlepass.condition.TaskConditionParser;
 import xuanmo.arcartxsuite.battlepass.increment.IncrementStrategy;
 import xuanmo.arcartxsuite.battlepass.increment.IncrementStrategyParser;
+import xuanmo.arcartxsuite.api.script.AriaBridge;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassItemDefinition;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassReward;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassTask;
+import xuanmo.arcartxsuite.battlepass.model.SeasonSettlementReward;
+import xuanmo.arcartxsuite.api.script.XpCurve;
 
 /**
  * BattlePass 模块配置根 record，聚合存储、赛季、任务、奖励、UI、跨服等全部子配置。
@@ -31,13 +34,16 @@ import xuanmo.arcartxsuite.battlepass.model.BattlePassTask;
  * 通过 {@link #load} 从 {@link FileConfiguration} 一次性解析所有配置节，
  * 内部嵌套多个子 record 分别对应不同配置区段。
  *
- * @param storage     存储配置（SQLite/MySQL 连接参数）
- * @param season      赛季配置（赛季 ID、等级上限、XP 规则、起止日期）
- * @param tasks       任务配置（每日/每周/赛季任务列表及分配数量）
- * @param rewardsFile 奖励配置文件名（相对模块数据目录）
- * @param rewards     奖励列表（按等级与档位组织的不可变列表）
- * @param ui          UI 配置（注册开关与 UI ID）
- * @param crossServer 跨服配置（启用开关与同步字段列表）
+ * @param storage          存储配置（SQLite/MySQL 连接参数）
+ * @param season           赛季配置（赛季 ID、等级上限、XP 规则、起止日期）
+ * @param tasks            任务配置（每日/每周/赛季任务列表及分配数量）
+ * @param rewardsFile      奖励配置文件名（相对模块数据目录）
+ * @param rewards          奖励列表（按等级与档位组织的不可变列表）
+ * @param seasonRewardsFile 赛季结算奖励配置文件名
+ * @param seasonRewards    赛季结算奖励列表（按等级阈值发放的额外奖励）
+ * @param rewardDeliveryMode 奖励发放方式（direct / mail）
+ * @param ui               UI 配置（注册开关与 UI ID）
+ * @param crossServer      跨服配置（启用开关与同步字段列表）
  */
 public record BattlePassModuleConfiguration(
     BattlePassStorageConfiguration storage,
@@ -45,6 +51,9 @@ public record BattlePassModuleConfiguration(
     BattlePassTasksConfiguration tasks,
     String rewardsFile,
     List<BattlePassReward> rewards,
+    String seasonRewardsFile,
+    List<SeasonSettlementReward> seasonRewards,
+    String rewardDeliveryMode,
     BattlePassUiConfiguration ui,
     BattlePassCrossServerConfiguration crossServer
 ) {
@@ -57,17 +66,31 @@ public record BattlePassModuleConfiguration(
      * @param logger     日志记录器
      * @return 解析后的配置实例
      */
-    public static BattlePassModuleConfiguration load(FileConfiguration yaml, @Nullable File dataFolder, Logger logger) {
+    public static BattlePassModuleConfiguration load(FileConfiguration yaml, @Nullable File dataFolder, Logger logger, AriaBridge ariaBridge) {
         String rewardsFile = yaml.getString("rewards-file", "rewards.yml");
+        String seasonRewardsFile = yaml.getString("season-rewards-file", "season-rewards.yml");
+        String deliveryMode = yaml.getString("reward-delivery-mode", "direct");
         return new BattlePassModuleConfiguration(
             BattlePassStorageConfiguration.load(yaml.getConfigurationSection("storage")),
-            BattlePassSeasonConfiguration.load(yaml.getConfigurationSection("season")),
+            BattlePassSeasonConfiguration.load(yaml.getConfigurationSection("season"), ariaBridge),
             BattlePassTasksConfiguration.load(yaml.getConfigurationSection("tasks"), dataFolder, logger),
             rewardsFile,
             loadRewards(rewardsFile, dataFolder, logger),
+            seasonRewardsFile,
+            loadSeasonRewards(seasonRewardsFile, dataFolder, logger),
+            "mail".equalsIgnoreCase(deliveryMode) ? "mail" : "direct",
             BattlePassUiConfiguration.load(yaml.getConfigurationSection("ui")),
             BattlePassCrossServerConfiguration.load(yaml.getConfigurationSection("cross-server"))
         );
+    }
+
+    /**
+     * 是否使用统一邮箱发放模式。
+     *
+     * @return {@code true} 表示 item 类型奖励通过 mail 模块发送
+     */
+    public boolean isMailDeliveryMode() {
+        return "mail".equalsIgnoreCase(rewardDeliveryMode);
     }
 
     private static List<BattlePassReward> loadRewards(String rewardsFile, @Nullable File dataFolder, Logger logger) {
@@ -112,6 +135,68 @@ public record BattlePassModuleConfiguration(
         return Collections.unmodifiableList(result);
     }
 
+    /**
+     * 从外部文件加载赛季结算奖励配置。
+     *
+     * @param seasonRewardsFile 结算奖励文件名
+     * @param dataFolder        模块数据目录
+     * @param logger            日志记录器
+     * @return 结算奖励列表，文件不存在时返回空列表
+     */
+    private static List<SeasonSettlementReward> loadSeasonRewards(
+            String seasonRewardsFile, @Nullable File dataFolder, Logger logger) {
+        List<SeasonSettlementReward> result = new ArrayList<>();
+        if (dataFolder == null) return result;
+        File file = new File(dataFolder, seasonRewardsFile);
+        if (!file.exists()) {
+            if (logger != null) {
+                logger.fine("未找到赛季结算奖励配置文件: " + file.getPath() + "，结算奖励列表为空");
+            }
+            return result;
+        }
+        try {
+            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(file);
+            ConfigurationSection section = yaml.getConfigurationSection("rewards");
+            if (section == null) section = yaml;
+            for (String key : section.getKeys(false)) {
+                ConfigurationSection rewardSection = section.getConfigurationSection(key);
+                if (rewardSection == null) continue;
+                int minLevel = rewardSection.getInt("min-level", 0);
+                if (minLevel <= 0) {
+                    if (logger != null) {
+                        logger.warning("赛季结算奖励 " + key + " 的 min-level 无效，已跳过");
+                    }
+                    continue;
+                }
+                BattlePassReward free = parseSettlementReward(key + "_free", minLevel, BattlePassReward.RewardTier.FREE,
+                    rewardSection.getConfigurationSection("free"));
+                BattlePassReward premium = parseSettlementReward(key + "_premium", minLevel, BattlePassReward.RewardTier.PREMIUM,
+                    rewardSection.getConfigurationSection("premium"));
+                BattlePassReward deluxe = parseSettlementReward(key + "_deluxe", minLevel, BattlePassReward.RewardTier.DELUXE,
+                    rewardSection.getConfigurationSection("deluxe"));
+                result.add(new SeasonSettlementReward(key, minLevel, free, premium, deluxe));
+            }
+            if (logger != null) {
+                logger.fine("已从外部文件加载赛季结算奖励: " + file.getName() + " (" + result.size() + " 条)");
+            }
+        } catch (Exception e) {
+            if (logger != null) {
+                logger.log(Level.WARNING, "加载赛季结算奖励配置文件失败: " + file.getPath(), e);
+            }
+        }
+        return Collections.unmodifiableList(result);
+    }
+
+    /**
+     * 解析单个结算奖励档位（min-level 作为 level 传入 BattlePassReward）。
+     */
+    private static BattlePassReward parseSettlementReward(
+            String rewardId, int minLevel, BattlePassReward.RewardTier tier,
+            @Nullable ConfigurationSection section) {
+        if (section == null) return null;
+        return parseReward(rewardId, minLevel, tier, section);
+    }
+
     private static BattlePassReward parseReward(String rewardId, int level, BattlePassReward.RewardTier tier, ConfigurationSection section) {
         String type = section.getString("type", "command");
         IconDefinition icon = IconDefinition.load(section, "icon");
@@ -119,8 +204,14 @@ public record BattlePassModuleConfiguration(
         List<String> commands = Collections.unmodifiableList(section.getStringList("commands"));
         String currency = section.getString("currency", "");
         double currencyAmount = section.getDouble("amount", 0);
+        String mailPresetId = section.getString("mail-preset-id", "");
+        String mailSubject = section.getString("mail-subject", "");
+        String mailBody = section.getString("mail-body", "");
         return new BattlePassReward(rewardId, level, tier, type, icon, item,
-            commands, currency, currencyAmount);
+            commands, currency, currencyAmount,
+            mailPresetId.isBlank() ? null : mailPresetId,
+            mailSubject.isBlank() ? null : mailSubject,
+            mailBody.isBlank() ? null : mailBody);
     }
 
     private static @Nullable BattlePassItemDefinition parseItemDefinition(@Nullable ConfigurationSection section) {
@@ -205,7 +296,7 @@ public record BattlePassModuleConfiguration(
      * @param seasonId    赛季唯一标识
      * @param displayName 赛季显示名称
      * @param maxLevel    赛季最大等级
-     * @param xpPerLevel  每级所需经验值
+     * @param xpCurve     经验成长曲线（转折点断点 + ARIA 表达式）
      * @param startDate   赛季开始日期
      * @param endDate     赛季结束日期
      */
@@ -213,26 +304,59 @@ public record BattlePassModuleConfiguration(
         String seasonId,
         String displayName,
         int maxLevel,
-        int xpPerLevel,
+        XpCurve xpCurve,
         LocalDate startDate,
         LocalDate endDate
     ) {
         /**
          * 从配置节加载赛季配置。
          *
-         * @param section 赛季配置节，为 null 时使用默认值
+         * @param section    赛季配置节，为 null 时使用默认值
+         * @param ariaBridge ARIA 脚本桥接，用于经验曲线表达式求值
          * @return 赛季配置实例
          */
-        public static BattlePassSeasonConfiguration load(ConfigurationSection section) {
+        public static BattlePassSeasonConfiguration load(ConfigurationSection section, AriaBridge ariaBridge) {
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
             return new BattlePassSeasonConfiguration(
                 section.getString("season-id", "season-1"),
                 section.getString("display-name", "第一赛季"),
                 section.getInt("max-level", 100),
-                section.getInt("xp-per-level", 1000),
+                parseXpCurve(section, ariaBridge),
                 parseDate(section.getString("start-date", "2026-06-01")),
                 parseDate(section.getString("end-date", "2026-08-01"))
             );
+        }
+
+        /**
+         * 解析 xp-curve 断点列表；缺失时回退为默认线性曲线 {@code 1000}（即每级固定 1000 经验）。
+         */
+        private static XpCurve parseXpCurve(ConfigurationSection section, AriaBridge ariaBridge) {
+            List<?> raw = section.getList("xp-curve");
+            if (raw == null || raw.isEmpty()) {
+                return new XpCurve(List.of(new XpCurve.Breakpoint(1, "1000")), ariaBridge);
+            }
+            List<XpCurve.Breakpoint> breakpoints = new ArrayList<>();
+            for (Object item : raw) {
+                if (item instanceof java.util.Map<?, ?> map) {
+                    Object levelObj = map.get("level");
+                    Object formulaObj = map.get("formula");
+                    if (levelObj == null || formulaObj == null) {
+                        throw new IllegalArgumentException(
+                            "xp-curve 每个断点必须包含 level 与 formula 字段，实际项: " + map);
+                    }
+                    int level;
+                    try {
+                        level = (levelObj instanceof Number n) ? n.intValue() : Integer.parseInt(String.valueOf(levelObj));
+                    } catch (NumberFormatException e) {
+                        throw new IllegalArgumentException("xp-curve 断点 level 非整数: " + levelObj);
+                    }
+                    String formula = String.valueOf(formulaObj);
+                    breakpoints.add(new XpCurve.Breakpoint(level, formula));
+                } else {
+                    throw new IllegalArgumentException("xp-curve 列表项必须为映射，实际类型: " + item.getClass());
+                }
+            }
+            return new XpCurve(breakpoints, ariaBridge);
         }
 
         private static LocalDate parseDate(String value) {
@@ -491,8 +615,15 @@ public record BattlePassModuleConfiguration(
          */
         private static BattlePassTask.BukkitEventSource parseBukkitEvent(@Nullable ConfigurationSection section) {
             if (section == null) return null;
-            String eventClass = section.getString("event-class", "");
-            if (eventClass.isEmpty()) return null;
+            // 优先读取 event-classes 列表，兼容旧的单 event-class 字段
+            List<String> eventClasses = new ArrayList<>(section.getStringList("event-classes"));
+            if (eventClasses.isEmpty()) {
+                String single = section.getString("event-class", "");
+                if (!single.isEmpty()) {
+                    eventClasses.add(single);
+                }
+            }
+            if (eventClasses.isEmpty()) return null;
             ConfigurationSection fieldsSection = section.getConfigurationSection("payload-fields");
             java.util.Map<String, String> payloadFields = new java.util.LinkedHashMap<>();
             if (fieldsSection != null) {
@@ -503,7 +634,7 @@ public record BattlePassModuleConfiguration(
                     }
                 }
             }
-            return new BattlePassTask.BukkitEventSource(eventClass, payloadFields);
+            return new BattlePassTask.BukkitEventSource(Collections.unmodifiableList(eventClasses), payloadFields);
         }
 
         /**

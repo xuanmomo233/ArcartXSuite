@@ -82,15 +82,26 @@ public record BattlePassTask(
     /**
      * 原版 Bukkit 事件降级配置，声明事件类名和 payload 提取规则。
      *
-     * @param eventClass    Bukkit 事件全类名（如 {@code "org.bukkit.event.entity.EntityDeathEvent"}）
+     * @param eventClasses  Bukkit 事件全类名列表（如 {@code ["org.bukkit.event.entity.EntityDeathEvent"]}），
+     *                     支持多个事件类，任一触发即计入任务进度
      * @param payloadFields payload 提取规则：key = payload 字段名，value = 表达式
      */
     public record BukkitEventSource(
-        String eventClass,
+        List<String> eventClasses,
         Map<String, String> payloadFields
     ) {
         public BukkitEventSource {
+            if (eventClasses == null) eventClasses = Collections.emptyList();
             if (payloadFields == null) payloadFields = Collections.emptyMap();
+        }
+
+        /**
+         * 兼容旧 API：返回第一个事件类名。
+         *
+         * @return 第一个事件类名，列表为空时返回空字符串
+         */
+        public String eventClass() {
+            return eventClasses.isEmpty() ? "" : eventClasses.get(0);
         }
     }
 

@@ -72,6 +72,11 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
         return java.util.List.of("bp_player_progress", "bp_task_progress", "bp_claimed_rewards", "bp_player_tasks");
     }
 
+    @Override
+    protected java.util.List<String> allTables() {
+        return java.util.List.of("bp_player_progress", "bp_task_progress", "bp_claimed_rewards", "bp_player_tasks", "bp_season_settlement");
+    }
+
     /** 获取当前方言标识，兼容共享模式和自建模式。 */
     private String dialect() {
         if (isSharedMode()) {
@@ -189,11 +194,27 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
                 """;
         };
 
+        String settlementTable = switch (dialect()) {
+            case "sqlite" -> """
+                CREATE TABLE IF NOT EXISTS bp_season_settlement (
+                    season_id TEXT NOT NULL PRIMARY KEY,
+                    settled_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+                """;
+            default -> """
+                CREATE TABLE IF NOT EXISTS bp_season_settlement (
+                    season_id VARCHAR(64) NOT NULL PRIMARY KEY,
+                    settled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """;
+        };
+
         try (Statement stmt = conn.createStatement()) {
             stmt.execute(progressTable);
             stmt.execute(taskTable);
             stmt.execute(rewardTable);
             stmt.execute(playerTaskTable);
+            stmt.execute(settlementTable);
         }
     }
 
@@ -566,5 +587,58 @@ public final class JdbcBattlePassRepository extends AbstractModuleRepository imp
         } catch (Exception e) {
             return LocalDate.now();
         }
+    }
+
+    // ── 赛季结算 ──────────────────────────────────────────
+
+    @Override
+    public boolean isSeasonSettled(String seasonId) throws SQLException {
+        try (Connection connection = getConnection();
+             PreparedStatement stmt = connection.prepareStatement(
+                 "SELECT 1 FROM bp_season_settlement WHERE season_id = ?"
+             )) {
+            stmt.setString(1, seasonId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
+    @Override
+    public void markSeasonSettled(String seasonId) throws SQLException {
+        String sql = switch (dialect()) {
+            case "sqlite" -> """
+                INSERT INTO bp_season_settlement (season_id) VALUES (?)
+                ON CONFLICT(season_id) DO NOTHING
+                """;
+            default -> """
+                INSERT IGNORE INTO bp_season_settlement (season_id) VALUES (?)
+                """;
+        };
+        try (Connection connection = getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, seasonId);
+            stmt.executeUpdate();
+        }
+    }
+
+    @Override
+    public java.util.List<PlayerSeasonSummary> loadSeasonSummaries(String seasonId) throws SQLException {
+        java.util.List<PlayerSeasonSummary> result = new java.util.ArrayList<>();
+        try (Connection connection = getConnection();
+             PreparedStatement stmt = connection.prepareStatement(
+                 "SELECT player_uuid, current_level, pass_tier FROM bp_player_progress WHERE season_id = ?"
+             )) {
+            stmt.setString(1, seasonId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    UUID uuid = UUID.fromString(rs.getString("player_uuid"));
+                    int level = rs.getInt("current_level");
+                    String tier = rs.getString("pass_tier");
+                    result.add(new PlayerSeasonSummary(uuid, level, tier != null ? tier : "FREE"));
+                }
+            }
+        }
+        return result;
     }
 }

@@ -211,6 +211,43 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
                     return false;
                 }
             }
+
+            @Override
+            public boolean sendCurrencyMail(@NotNull java.util.UUID playerUuid,
+                                            @NotNull String subject,
+                                            @NotNull String body,
+                                            @NotNull String currencyId,
+                                            double amount,
+                                            @Nullable String senderName) {
+                if (amount <= 0) {
+                    logger.warning("[Mail] sendCurrencyMail 金额必须 > 0，实际: " + amount);
+                    return false;
+                }
+                try {
+                    String normalizedCurrencyId = currencyId.trim().toLowerCase(java.util.Locale.ROOT);
+                    xuanmo.arcartxsuite.mail.model.MailAttachmentType type =
+                        "money".equals(normalizedCurrencyId)
+                            ? xuanmo.arcartxsuite.mail.model.MailAttachmentType.VAULT
+                            : xuanmo.arcartxsuite.mail.model.MailAttachmentType.CURRENCY;
+                    xuanmo.arcartxsuite.mail.model.MailAttachment attachment =
+                        new xuanmo.arcartxsuite.mail.model.MailAttachment(
+                            0L, 0, type, "", normalizedCurrencyId, amount, "");
+                    var result = service.sendSystemMail(
+                        playerUuid,
+                        subject,
+                        subject,
+                        body,
+                        java.util.List.of(attachment),
+                        java.util.List.of(),
+                        java.time.Instant.now().plus(java.time.Duration.ofDays(30)),
+                        senderName != null && !senderName.isBlank() ? senderName : "System"
+                    );
+                    return result.success();
+                } catch (Exception e) {
+                    logger.warning("[Mail] sendCurrencyMail 发送失败: " + e.getMessage());
+                    return false;
+                }
+            }
         });
 
         ensureMailNotifyCardDefaults();

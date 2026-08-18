@@ -57,8 +57,14 @@ public final class BattlePassPlaceholderExpansion extends PlaceholderExpansion {
             case "level" -> String.valueOf(progress.currentLevel());
             case "max_level" -> String.valueOf(config.maxLevel());
             case "xp" -> String.valueOf(progress.currentXp());
-            case "xp_per_level" -> String.valueOf(config.xpPerLevel());
-            case "xp_needed" -> String.valueOf(Math.max(0, config.xpPerLevel() - progress.currentXp()));
+            case "xp_per_level" -> {
+                int xpPerLevel = config.xpCurve().xpRequiredForLevelOr(progress.currentLevel() + 1, 0);
+                yield String.valueOf(xpPerLevel);
+            }
+            case "xp_needed" -> {
+                int xpPerLevel = config.xpCurve().xpRequiredForLevelOr(progress.currentLevel() + 1, 0);
+                yield String.valueOf(Math.max(0, xpPerLevel - progress.currentXp()));
+            }
             case "premium" -> progress.unlockedPremium() ? "已激活" : "未激活";
             case "deluxe" -> progress.unlockedDeluxe() ? "已激活" : "未激活";
             case "tier" -> switch (progress.passTier()) {

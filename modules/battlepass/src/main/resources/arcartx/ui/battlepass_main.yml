@@ -27,7 +27,7 @@ ui:
     #   - currentLevel: 玩家当前战令等级
     #   - maxLevel: 赛季最大等级
     #   - currentXp: 当前等级已获得经验值
-    #   - xpPerLevel: 每级所需经验值
+    #   - xpPerLevel: 当前等级升下一级所需经验值（按成长曲线动态计算）
     #   - xpNeeded: 升级还需经验值
     #   - premiumUnlocked: 是否已解锁高级版（premium）
     #   - deluxeUnlocked: 是否已解锁豪华版（deluxe）

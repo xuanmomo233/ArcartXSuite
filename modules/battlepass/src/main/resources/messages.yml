@@ -12,6 +12,7 @@ help:
   setexp: '&7{0} setexp <玩家> <数量>&f - 设置玩家当前等级经验'
   removeexp: '&7{0} removeexp <玩家> <数量>&f - 扣除玩家经验'
   setlevel: '&7{0} setlevel <玩家> <等级>&f - 设置玩家等级'
+  settle: '&7{0} settle&f - 手动结算当前赛季'
   # 以下为旧 key 保留（代码不再引用）
   tasks: '&e/bp tasks &7- 打开任务面板'
   rewards: '&e/bp rewards &7- 打开奖励面板'
@@ -80,6 +81,16 @@ admin:
   removeexp-success: '&a已扣除玩家 &e{0} &a的 &e{1} &a点战令经验。'
   setlevel-success: '&a已将玩家 &e{0} &a的战令等级设为 &e{1}&a。'
   setlevel-exceed-max: '&c等级超过上限，最大等级为 {0}。'
+  settle-start: '&e正在执行赛季结算，请稍候...'
+  settle-success: '&a赛季 &e{0} &a结算完成！所有玩家奖励已发放。'
+  settle-already: '&e赛季 &e{0} &e已结算过，如需重新结算请先清除结算记录。'
+  season:
+    title: '&6===== 赛季信息 ====='
+    id: '&7赛季 ID: &f{0}'
+    name: '&7赛季名称: &f{0}'
+    max-level: '&7最大等级: &f{0}'
+    dates: '&7起止日期: &f{0} ~ {1}'
+    settlement: '&7结算状态: &f{0}'
 
 player:
   only-player: "&c该命令仅限玩家使用。"

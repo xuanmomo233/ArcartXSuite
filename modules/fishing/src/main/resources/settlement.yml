@@ -1,0 +1,123 @@
+# AXS 钓鱼赛季结算配置
+# 赛季结束时根据玩家等级/捕获数等指标发放结算奖励
+#
+# 结算条目结构：
+#   "<结算条目ID>":
+#     condition: "<ARIA 表达式>"   # 满足条件才发放（变量见下方说明）
+#     description: "<描述>"
+#     rewards:                     # 奖励列表（同 rewards.yml 的奖励结构）
+#       - type: currency
+#         currency:
+#           currency-id: "money"
+#           amount: 1000
+#       - type: item
+#         item:
+#           source: minecraft
+#           id: DIAMOND
+#           amount: 5
+#       - type: command
+#         commands:
+#           - "say {player} 赛季结算奖励！"
+#
+# ARIA 表达式可用变量（绑定到求值上下文）：
+#   level           — 玩家赛季最终等级
+#   total_caught    — 玩家累计捕获总数（永久数据）
+#   perfect_catches — 玩家累计完美捕获次数（永久数据）
+#   treasure_caught — 玩家累计宝藏捕获次数（永久数据）
+#   collection_count — 玩家图鉴已收集鱼种数
+#   season_id       — 赛季 ID
+#
+# 示例表达式：
+#   level >= 30                    — 等级达到30
+#   level >= 50 && total_caught >= 100  — 等级50且捕获100
+#   perfect_catches >= 50          — 完美捕获50次
+#   collection_count >= 20         — 图鉴收集20种鱼
+
+# 结算奖励发放方式（覆盖 config.yml 的 settlement.dispatch-mode）：
+#   ONLINE_DIRECT — 在线直接发放，离线玩家上线时补发（默认）
+#   MAIL          — 统一通过 mail 模块发放（需 mail 模块）
+#   HYBRID        — 在线直接发放，离线走 mail（需 mail 模块）
+dispatch-mode: ONLINE_DIRECT
+
+settlements:
+  # 等级达标奖励
+  level_30:
+    condition: "level >= 30"
+    description: "&a赛季等级达到30级"
+    rewards:
+      - type: currency
+        currency:
+          currency-id: "money"
+          amount: 1000
+      - type: item
+        item:
+          source: minecraft
+          id: DIAMOND
+          amount: 5
+
+  level_50:
+    condition: "level >= 50"
+    description: "&a赛季等级达到50级"
+    rewards:
+      - type: currency
+        currency:
+          currency-id: "money"
+          amount: 3000
+      - type: item
+        item:
+          source: minecraft
+          id: NETHERITE_INGOT
+          amount: 3
+
+  level_75:
+    condition: "level >= 75"
+    description: "&a赛季等级达到75级"
+    rewards:
+      - type: currency
+        currency:
+          currency-id: "money"
+          amount: 8000
+      - type: item
+        item:
+          source: minecraft
+          id: NETHERITE_INGOT
+          amount: 10
+
+  level_100:
+    condition: "level >= 100"
+    description: "&a赛季等级达到满级100级"
+    rewards:
+      - type: currency
+        currency:
+          currency-id: "money"
+          amount: 20000
+      - type: item
+        item:
+          source: minecraft
+          id: DRAGON_EGG
+          amount: 1
+
+  # 捕获成就奖励
+  perfect_master:
+    condition: "perfect_catches >= 100"
+    description: "&d累计完美捕获100次"
+    rewards:
+      - type: currency
+        currency:
+          currency-id: "money"
+          amount: 5000
+
+  collection_master:
+    condition: "collection_count >= 30"
+    description: "&b图鉴收集30种鱼"
+    rewards:
+      - type: currency
+        currency:
+          currency-id: "money"
+          amount: 5000
+      - type: item
+        item:
+          source: minecraft
+          id: ENCHANTED_BOOK
+          amount: 1
+          nbt: "{StoredEnchantments:[{id:\"minecraft:luck_of_the_sea\",lvl:3s}]}"

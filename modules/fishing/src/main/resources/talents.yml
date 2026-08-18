@@ -1,0 +1,645 @@
+# AXS 钓鱼天赋树配置
+# 每棵树 5 级（T1→T2二选一→T3→T4二选一→T5），8 个跨树联动天赋。
+# 每 3 级获得 1 点天赋点，100 级 = 33 点。
+# 满天赋加成约 4-5%，给称号和后续玩法留足空间。
+#
+# 节点 ID 命名规则：{tree}-{tier}{branch}，如 steady-t1, steady-t2a
+# 联动节点 ID 命名规则：link-{编号}，如 link-1
+#
+# 效果类型（effect-type）：
+#   bar_height       — 绿条高度加成（像素）
+#   bar_damping      — 绿条阻尼加成（百分比，0-1）
+#   bar_bounce       — 绿条反弹减少（百分比，0-1）
+#   bar_force        — 绿条力系数加成（百分比，0-1）
+#   fish_speed       — 鱼速度降低（百分比，0-1）
+#   fish_dwell       — 鱼停留时间减少（百分比，0-1）
+#   fish_dart        — 鱼突进概率降低（百分比，0-1）
+#   fish_noise       — 鱼噪声降低（百分比，0-1）
+#   fish_edge        — 鱼边缘反弹降低（百分比，0-1）
+#   flee_chance      — 逃离概率降低（百分比，0-1）
+#   flee_speed       — 逃离速度降低（百分比，0-1）
+#   flee_cooldown    — 逃离冷却增加（百分比，0-1）
+#   flee_duration    — 逃离持续时间减少（百分比，0-1）
+#   progress_rate    — 进度增速（百分比，0-1）
+#   progress_drain   — 进度下降减少（百分比，0-1）
+#   perfect_window   — 完美窗口增大（百分比，0-1）
+#   start_progress   — 起始进度增加（百分比，0-1）
+#   xp_multiplier    — 钓鱼经验加成（百分比，0-1）
+#   price_multiplier — 鱼售价加成（百分比，0-1）
+#   legendary_chance — 传说鱼概率加成（百分比，0-1）
+#   treasure_chance  — 宝藏概率加成（百分比，0-1）
+#   rare_chance      — 稀有鱼概率加成（百分比，0-1）
+#   xp_in_bar        — 绿条内经验加成（百分比，0-1）
+#   perfect_xp       — 完美捕获经验加成（百分比，0-1）
+
+trees:
+  # ─── 树1：稳健（绿条） ──────────────────────────────────────
+  steady:
+    display-name: "&a稳健"
+    description: "提升绿色目标条的稳定性与高度"
+    icon: "minecraft:iron_bars"
+    nodes:
+      - id: steady-t1
+        tier: 1
+        branch: root
+        display-name: "&a稳健根基"
+        description: "绿条高度 +1px"
+        effect-type: bar_height
+        effect-value: 1.0
+        prerequisites: []
+      - id: steady-t2a
+        tier: 2
+        branch: a
+        display-name: "&a大绿条"
+        description: "绿条高度 +1px"
+        effect-type: bar_height
+        effect-value: 1.0
+        prerequisites: [steady-t1]
+      - id: steady-t2b
+        tier: 2
+        branch: b
+        display-name: "&a稳绿条"
+        description: "绿条阻尼 +2%"
+        effect-type: bar_damping
+        effect-value: 0.02
+        prerequisites: [steady-t1]
+      - id: steady-t3a
+        tier: 3
+        branch: a
+        display-name: "&a延续大"
+        description: "绿条高度 +1px"
+        effect-type: bar_height
+        effect-value: 1.0
+        prerequisites: [steady-t2a]
+      - id: steady-t3b
+        tier: 3
+        branch: b
+        display-name: "&a延续稳"
+        description: "绿条反弹 -3%"
+        effect-type: bar_bounce
+        effect-value: 0.03
+        prerequisites: [steady-t2b]
+      - id: steady-t4a
+        tier: 4
+        branch: a
+        display-name: "&a精准"
+        description: "绿条力系数 +1.5%"
+        effect-type: bar_force
+        effect-value: 0.015
+        prerequisites: [steady-t3a]
+      - id: steady-t4b
+        tier: 4
+        branch: b
+        display-name: "&a厚实"
+        description: "绿条高度 +1px"
+        effect-type: bar_height
+        effect-value: 1.0
+        prerequisites: [steady-t3a]
+      - id: steady-t4c
+        tier: 4
+        branch: c
+        display-name: "&a柔和"
+        description: "绿条阻尼 +1.5%"
+        effect-type: bar_damping
+        effect-value: 0.015
+        prerequisites: [steady-t3b]
+      - id: steady-t4d
+        tier: 4
+        branch: d
+        display-name: "&a抗冲"
+        description: "绿条反弹 -2%"
+        effect-type: bar_bounce
+        effect-value: 0.02
+        prerequisites: [steady-t3b]
+      - id: steady-t5a
+        tier: 5
+        branch: a
+        display-name: "&a精准大师"
+        description: "绿条力系数 +0.75%"
+        effect-type: bar_force
+        effect-value: 0.0075
+        prerequisites: [steady-t4a]
+      - id: steady-t5b
+        tier: 5
+        branch: b
+        display-name: "&a厚实大师"
+        description: "绿条高度 +0.5px"
+        effect-type: bar_height
+        effect-value: 0.5
+        prerequisites: [steady-t4b]
+      - id: steady-t5c
+        tier: 5
+        branch: c
+        display-name: "&a柔和大师"
+        description: "绿条阻尼 +0.75%"
+        effect-type: bar_damping
+        effect-value: 0.0075
+        prerequisites: [steady-t4c]
+      - id: steady-t5d
+        tier: 5
+        branch: d
+        display-name: "&a抗冲大师"
+        description: "绿条反弹 -1%"
+        effect-type: bar_bounce
+        effect-value: 0.01
+        prerequisites: [steady-t4d]
+
+  # ─── 树2：迅捷（鱼速度） ──────────────────────────────────
+  swift:
+    display-name: "&b迅捷"
+    description: "降低鱼的速度与活跃度"
+    icon: "minecraft:feather"
+    nodes:
+      - id: swift-t1
+        tier: 1
+        branch: root
+        display-name: "&b迅捷根基"
+        description: "鱼速度 -0.5%"
+        effect-type: fish_speed
+        effect-value: 0.005
+        prerequisites: []
+      - id: swift-t2a
+        tier: 2
+        branch: a
+        display-name: "&b减速"
+        description: "鱼速度 -0.5%"
+        effect-type: fish_speed
+        effect-value: 0.005
+        prerequisites: [swift-t1]
+      - id: swift-t2b
+        tier: 2
+        branch: b
+        display-name: "&b停留"
+        description: "鱼停留时间 -5%"
+        effect-type: fish_dwell
+        effect-value: 0.05
+        prerequisites: [swift-t1]
+      - id: swift-t3a
+        tier: 3
+        branch: a
+        display-name: "&b延续减速"
+        description: "鱼速度 -0.5%"
+        effect-type: fish_speed
+        effect-value: 0.005
+        prerequisites: [swift-t2a]
+      - id: swift-t3b
+        tier: 3
+        branch: b
+        display-name: "&b延续停留"
+        description: "鱼停留时间 -5%"
+        effect-type: fish_dwell
+        effect-value: 0.05
+        prerequisites: [swift-t2b]
+      - id: swift-t4a
+        tier: 4
+        branch: a
+        display-name: "&b压制速度"
+        description: "鱼速度 -0.4%"
+        effect-type: fish_speed
+        effect-value: 0.004
+        prerequisites: [swift-t3a]
+      - id: swift-t4b
+        tier: 4
+        branch: b
+        display-name: "&b压制突进"
+        description: "鱼突进概率 -3%"
+        effect-type: fish_dart
+        effect-value: 0.03
+        prerequisites: [swift-t3a]
+      - id: swift-t4c
+        tier: 4
+        branch: c
+        display-name: "&b压制噪声"
+        description: "鱼噪声 -3%"
+        effect-type: fish_noise
+        effect-value: 0.03
+        prerequisites: [swift-t3b]
+      - id: swift-t4d
+        tier: 4
+        branch: d
+        display-name: "&b压制反弹"
+        description: "鱼边缘反弹 -2%"
+        effect-type: fish_edge
+        effect-value: 0.02
+        prerequisites: [swift-t3b]
+      - id: swift-t5a
+        tier: 5
+        branch: a
+        display-name: "&b压制速度大师"
+        description: "鱼速度 -0.2%"
+        effect-type: fish_speed
+        effect-value: 0.002
+        prerequisites: [swift-t4a]
+      - id: swift-t5b
+        tier: 5
+        branch: b
+        display-name: "&b压制突进大师"
+        description: "鱼突进概率 -1.5%"
+        effect-type: fish_dart
+        effect-value: 0.015
+        prerequisites: [swift-t4b]
+      - id: swift-t5c
+        tier: 5
+        branch: c
+        display-name: "&b压制噪声大师"
+        description: "鱼噪声 -1.5%"
+        effect-type: fish_noise
+        effect-value: 0.015
+        prerequisites: [swift-t4c]
+      - id: swift-t5d
+        tier: 5
+        branch: d
+        display-name: "&b压制反弹大师"
+        description: "鱼边缘反弹 -1%"
+        effect-type: fish_edge
+        effect-value: 0.01
+        prerequisites: [swift-t4d]
+
+  # ─── 树3：威压（逃离） ────────────────────────────────────
+  pressure:
+    display-name: "&c威压"
+    description: "压制鱼的逃离行为"
+    icon: "minecraft:iron_sword"
+    nodes:
+      - id: pressure-t1
+        tier: 1
+        branch: root
+        display-name: "&c威压根基"
+        description: "逃离概率 -0.5%"
+        effect-type: flee_chance
+        effect-value: 0.005
+        prerequisites: []
+      - id: pressure-t2a
+        tier: 2
+        branch: a
+        display-name: "&c压制概率"
+        description: "逃离概率 -0.5%"
+        effect-type: flee_chance
+        effect-value: 0.005
+        prerequisites: [pressure-t1]
+      - id: pressure-t2b
+        tier: 2
+        branch: b
+        display-name: "&c压制速度"
+        description: "逃离速度 -1%"
+        effect-type: flee_speed
+        effect-value: 0.01
+        prerequisites: [pressure-t1]
+      - id: pressure-t3a
+        tier: 3
+        branch: a
+        display-name: "&c延续概率"
+        description: "逃离概率 -0.5%"
+        effect-type: flee_chance
+        effect-value: 0.005
+        prerequisites: [pressure-t2a]
+      - id: pressure-t3b
+        tier: 3
+        branch: b
+        display-name: "&c延续速度"
+        description: "逃离速度 -1%"
+        effect-type: flee_speed
+        effect-value: 0.01
+        prerequisites: [pressure-t2b]
+      - id: pressure-t4a
+        tier: 4
+        branch: a
+        display-name: "&c深度压制概率"
+        description: "逃离概率 -0.4%"
+        effect-type: flee_chance
+        effect-value: 0.004
+        prerequisites: [pressure-t3a]
+      - id: pressure-t4b
+        tier: 4
+        branch: b
+        display-name: "&c深度压制速度"
+        description: "逃离速度 -1.5%"
+        effect-type: flee_speed
+        effect-value: 0.015
+        prerequisites: [pressure-t3a]
+      - id: pressure-t4c
+        tier: 4
+        branch: c
+        display-name: "&c延长冷却"
+        description: "逃离冷却 +3%"
+        effect-type: flee_cooldown
+        effect-value: 0.03
+        prerequisites: [pressure-t3b]
+      - id: pressure-t4d
+        tier: 4
+        branch: d
+        display-name: "&c缩短持续"
+        description: "逃离持续 -3%"
+        effect-type: flee_duration
+        effect-value: 0.03
+        prerequisites: [pressure-t3b]
+      - id: pressure-t5a
+        tier: 5
+        branch: a
+        display-name: "&c深度压制概率大师"
+        description: "逃离概率 -0.2%"
+        effect-type: flee_chance
+        effect-value: 0.002
+        prerequisites: [pressure-t4a]
+      - id: pressure-t5b
+        tier: 5
+        branch: b
+        display-name: "&c深度压制速度大师"
+        description: "逃离速度 -0.75%"
+        effect-type: flee_speed
+        effect-value: 0.0075
+        prerequisites: [pressure-t4b]
+      - id: pressure-t5c
+        tier: 5
+        branch: c
+        display-name: "&c延长冷却大师"
+        description: "逃离冷却 +1.5%"
+        effect-type: flee_cooldown
+        effect-value: 0.015
+        prerequisites: [pressure-t4c]
+      - id: pressure-t5d
+        tier: 5
+        branch: d
+        display-name: "&c缩短持续大师"
+        description: "逃离持续 -1.5%"
+        effect-type: flee_duration
+        effect-value: 0.015
+        prerequisites: [pressure-t4d]
+
+  # ─── 树4：专注（进度） ────────────────────────────────────
+  focus:
+    display-name: "&d专注"
+    description: "提升进度获取与维持能力"
+    icon: "minecraft:clock"
+    nodes:
+      - id: focus-t1
+        tier: 1
+        branch: root
+        display-name: "&d专注根基"
+        description: "进度增速 +0.5%"
+        effect-type: progress_rate
+        effect-value: 0.005
+        prerequisites: []
+      - id: focus-t2a
+        tier: 2
+        branch: a
+        display-name: "&d加速进度"
+        description: "进度增速 +0.5%"
+        effect-type: progress_rate
+        effect-value: 0.005
+        prerequisites: [focus-t1]
+      - id: focus-t2b
+        tier: 2
+        branch: b
+        display-name: "&d维持进度"
+        description: "进度下降 -1%"
+        effect-type: progress_drain
+        effect-value: 0.01
+        prerequisites: [focus-t1]
+      - id: focus-t3a
+        tier: 3
+        branch: a
+        display-name: "&d延续加速"
+        description: "进度增速 +0.5%"
+        effect-type: progress_rate
+        effect-value: 0.005
+        prerequisites: [focus-t2a]
+      - id: focus-t3b
+        tier: 3
+        branch: b
+        display-name: "&d延续维持"
+        description: "进度下降 -1%"
+        effect-type: progress_drain
+        effect-value: 0.01
+        prerequisites: [focus-t2b]
+      - id: focus-t4a
+        tier: 4
+        branch: a
+        display-name: "&d深度加速"
+        description: "进度增速 +0.4%"
+        effect-type: progress_rate
+        effect-value: 0.004
+        prerequisites: [focus-t3a]
+      - id: focus-t4b
+        tier: 4
+        branch: b
+        display-name: "&d深度维持"
+        description: "进度下降 -1.5%"
+        effect-type: progress_drain
+        effect-value: 0.015
+        prerequisites: [focus-t3a]
+      - id: focus-t4c
+        tier: 4
+        branch: c
+        display-name: "&d完美窗口"
+        description: "完美窗口 +2%"
+        effect-type: perfect_window
+        effect-value: 0.02
+        prerequisites: [focus-t3b]
+      - id: focus-t4d
+        tier: 4
+        branch: d
+        display-name: "&d起步加速"
+        description: "起始进度 +0.5%"
+        effect-type: start_progress
+        effect-value: 0.005
+        prerequisites: [focus-t3b]
+      - id: focus-t5a
+        tier: 5
+        branch: a
+        display-name: "&d深度加速大师"
+        description: "进度增速 +0.2%"
+        effect-type: progress_rate
+        effect-value: 0.002
+        prerequisites: [focus-t4a]
+      - id: focus-t5b
+        tier: 5
+        branch: b
+        display-name: "&d深度维持大师"
+        description: "进度下降 -0.75%"
+        effect-type: progress_drain
+        effect-value: 0.0075
+        prerequisites: [focus-t4b]
+      - id: focus-t5c
+        tier: 5
+        branch: c
+        display-name: "&d完美窗口大师"
+        description: "完美窗口 +1%"
+        effect-type: perfect_window
+        effect-value: 0.01
+        prerequisites: [focus-t4c]
+      - id: focus-t5d
+        tier: 5
+        branch: d
+        display-name: "&d起步加速大师"
+        description: "起始进度 +0.25%"
+        effect-type: start_progress
+        effect-value: 0.0025
+        prerequisites: [focus-t4d]
+
+  # ─── 树5：幸运（奖励） ────────────────────────────────────
+  lucky:
+    display-name: "&e幸运"
+    description: "提升经验、售价与稀有鱼概率"
+    icon: "minecraft:gold_ingot"
+    nodes:
+      - id: lucky-t1
+        tier: 1
+        branch: root
+        display-name: "&e幸运根基"
+        description: "钓鱼经验 +0.8%"
+        effect-type: xp_multiplier
+        effect-value: 0.008
+        prerequisites: []
+      - id: lucky-t2a
+        tier: 2
+        branch: a
+        display-name: "&e经验加成"
+        description: "钓鱼经验 +0.8%"
+        effect-type: xp_multiplier
+        effect-value: 0.008
+        prerequisites: [lucky-t1]
+      - id: lucky-t2b
+        tier: 2
+        branch: b
+        display-name: "&e售价加成"
+        description: "鱼售价 +0.8%"
+        effect-type: price_multiplier
+        effect-value: 0.008
+        prerequisites: [lucky-t1]
+      - id: lucky-t3a
+        tier: 3
+        branch: a
+        display-name: "&e延续经验"
+        description: "钓鱼经验 +0.8%"
+        effect-type: xp_multiplier
+        effect-value: 0.008
+        prerequisites: [lucky-t2a]
+      - id: lucky-t3b
+        tier: 3
+        branch: b
+        display-name: "&e延续售价"
+        description: "鱼售价 +0.8%"
+        effect-type: price_multiplier
+        effect-value: 0.008
+        prerequisites: [lucky-t2b]
+      - id: lucky-t4a
+        tier: 4
+        branch: a
+        display-name: "&e深度经验"
+        description: "钓鱼经验 +0.6%"
+        effect-type: xp_multiplier
+        effect-value: 0.006
+        prerequisites: [lucky-t3a]
+      - id: lucky-t4b
+        tier: 4
+        branch: b
+        display-name: "&e深度售价"
+        description: "鱼售价 +0.6%"
+        effect-type: price_multiplier
+        effect-value: 0.006
+        prerequisites: [lucky-t3a]
+      - id: lucky-t4c
+        tier: 4
+        branch: c
+        display-name: "&e传说之力"
+        description: "传说鱼概率 +1%"
+        effect-type: legendary_chance
+        effect-value: 0.01
+        prerequisites: [lucky-t3b]
+      - id: lucky-t4d
+        tier: 4
+        branch: d
+        display-name: "&e宝藏之力"
+        description: "宝藏概率 +1.5%"
+        effect-type: treasure_chance
+        effect-value: 0.015
+        prerequisites: [lucky-t3b]
+      - id: lucky-t5a
+        tier: 5
+        branch: a
+        display-name: "&e深度经验大师"
+        description: "钓鱼经验 +0.3%"
+        effect-type: xp_multiplier
+        effect-value: 0.003
+        prerequisites: [lucky-t4a]
+      - id: lucky-t5b
+        tier: 5
+        branch: b
+        display-name: "&e深度售价大师"
+        description: "鱼售价 +0.3%"
+        effect-type: price_multiplier
+        effect-value: 0.003
+        prerequisites: [lucky-t4b]
+      - id: lucky-t5c
+        tier: 5
+        branch: c
+        display-name: "&e传说之力大师"
+        description: "传说鱼概率 +0.5%"
+        effect-type: legendary_chance
+        effect-value: 0.005
+        prerequisites: [lucky-t4c]
+      - id: lucky-t5d
+        tier: 5
+        branch: d
+        display-name: "&e宝藏之力大师"
+        description: "宝藏概率 +0.75%"
+        effect-type: treasure_chance
+        effect-value: 0.0075
+        prerequisites: [lucky-t4d]
+
+# ─── 跨树联动天赋 ──────────────────────────────────────────
+# 每个联动天赋需要 2 个不同树的 T3 节点同时点亮才能解锁
+# 每种路线组合最多点亮 3-4 个联动天赋，强制策略性规划
+links:
+  - id: link-1
+    display-name: "&6稳进"
+    description: "绿条内进度 +1%（需稳健T3a + 专注T3a）"
+    effect-type: progress_rate
+    effect-value: 0.01
+    prerequisites: [steady-t3a, focus-t3a]
+  - id: link-2
+    display-name: "&6镇压"
+    description: "鱼总速度 -1%（需迅捷T3a + 威压T3b）"
+    effect-type: fish_speed
+    effect-value: 0.01
+    prerequisites: [swift-t3a, pressure-t3b]
+  - id: link-3
+    display-name: "&6稳固"
+    description: "绿条阻尼 +1%，反弹 -1%（需稳健T3b + 迅捷T3a）"
+    effects:
+      - effect-type: bar_damping
+        effect-value: 0.01
+      - effect-type: bar_bounce
+        effect-value: 0.01
+    prerequisites: [steady-t3b, swift-t3a]
+  - id: link-4
+    display-name: "&6逆流"
+    description: "逃离时进度下降减半（需威压T3a + 专注T3b）"
+    effect-type: flee_duration
+    effect-value: 0.05
+    prerequisites: [pressure-t3a, focus-t3b]
+  - id: link-5
+    display-name: "&6精髓"
+    description: "完美捕获经验 +3%（需专注T3a + 幸运T3a）"
+    effect-type: perfect_xp
+    effect-value: 0.03
+    prerequisites: [focus-t3a, lucky-t3a]
+  - id: link-6
+    display-name: "&6猎手"
+    description: "稀有鱼概率 +1.5%（需迅捷T3b + 幸运T3b）"
+    effect-type: rare_chance
+    effect-value: 0.015
+    prerequisites: [swift-t3b, lucky-t3b]
+  - id: link-7
+    display-name: "&6渊博"
+    description: "绿条内经验 +2%（需稳健T3a + 幸运T3a）"
+    effect-type: xp_in_bar
+    effect-value: 0.02
+    prerequisites: [steady-t3a, lucky-t3a]
+  - id: link-8
+    display-name: "&6神运"
+    description: "传说鱼概率 +1%（需威压T3b + 幸运T3b）"
+    effect-type: legendary_chance
+    effect-value: 0.01
+    prerequisites: [pressure-t3b, lucky-t3b]

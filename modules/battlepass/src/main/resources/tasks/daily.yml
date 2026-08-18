@@ -11,6 +11,8 @@
 # payload key 参考：
 #   combateffect / EntityDeathEvent: entityType, entityName
 #   combateffect / EntityDamageByEntityEvent: attacker, targetType, targetName, damage
+#   TaczGunKillEvent: entityType, entityName（与 EntityDeathEvent 一致，兼容 TACZ 枪械击杀）
+#   TaczGunDamageEvent: attacker, targetType, targetName, damage（与 EntityDamageByEntityEvent 一致，兼容 TACZ 枪械伤害）
 #   pickup / PlayerPickupItemEvent: material, amount
 #   fishing / PlayerFishEvent: fishType, state
 #   loginview / PlayerJoinEvent: (无 payload 字段)
@@ -39,7 +41,9 @@ daily-kill-any:
   difficulty: easy
   event-topic: "axs.combateffect.kill_entity"
   bukkit-event:
-    event-class: "org.bukkit.event.entity.EntityDeathEvent"
+    event-classes:
+      - "org.bukkit.event.entity.EntityDeathEvent"
+      - "xuanmo.arcartxsuite.api.event.TaczGunKillEvent"
   required-count: 10
   base-xp-reward: 120
   conditions: []
@@ -55,7 +59,9 @@ daily-kill-zombie:
   difficulty: normal
   event-topic: "axs.combateffect.kill_entity"
   bukkit-event:
-    event-class: "org.bukkit.event.entity.EntityDeathEvent"
+    event-classes:
+      - "org.bukkit.event.entity.EntityDeathEvent"
+      - "xuanmo.arcartxsuite.api.event.TaczGunKillEvent"
   required-count: 20
   base-xp-reward: 150
   conditions:
@@ -75,7 +81,9 @@ daily-damage-dealt:
   difficulty: normal
   event-topic: "axs.combateffect.damage_dealt"
   bukkit-event:
-    event-class: "org.bukkit.event.entity.EntityDamageByEntityEvent"
+    event-classes:
+      - "org.bukkit.event.entity.EntityDamageByEntityEvent"
+      - "xuanmo.arcartxsuite.api.event.TaczGunDamageEvent"
   required-count: 500
   base-xp-reward: 180
   conditions: []
@@ -101,3 +109,111 @@ daily-pickup:
     type: fixed
     value: 1
   weight: 4
+
+# -------- 挖掘方块 --------
+daily-block-break:
+  display-name: "矿工日常"
+  description: "挖掘50个方块"
+  difficulty: easy
+  event-topic: "axs.battlepass.block_break"
+  bukkit-event:
+    event-class: "org.bukkit.event.block.BlockBreakEvent"
+  required-count: 50
+  base-xp-reward: 100
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
+
+# -------- 放置方块 --------
+daily-block-place:
+  display-name: "建筑工匠"
+  description: "放置30个方块"
+  difficulty: easy
+  event-topic: "axs.battlepass.block_place"
+  bukkit-event:
+    event-class: "org.bukkit.event.block.BlockPlaceEvent"
+  required-count: 30
+  base-xp-reward: 90
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
+
+# -------- 合成物品 --------
+daily-craft:
+  display-name: "合成大师"
+  description: "合成10个物品"
+  difficulty: easy
+  event-topic: "axs.battlepass.craft_item"
+  bukkit-event:
+    event-class: "org.bukkit.event.inventory.CraftItemEvent"
+  required-count: 10
+  base-xp-reward: 110
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
+
+# -------- 食用食物 --------
+daily-eat:
+  display-name: "美食家"
+  description: "食用5个食物"
+  difficulty: easy
+  event-topic: "axs.battlepass.item_consume"
+  bukkit-event:
+    event-class: "org.bukkit.event.player.PlayerItemConsumeEvent"
+  required-count: 5
+  base-xp-reward: 70
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
+
+# -------- 钓鱼 --------
+daily-fish:
+  display-name: "每日垂钓"
+  description: "成功钓鱼5次"
+  difficulty: easy
+  event-topic: "axs.fishing.success"
+  bukkit-event:
+    event-class: "org.bukkit.event.player.PlayerFishEvent"
+  required-count: 5
+  base-xp-reward: 100
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
+
+# -------- 发送聊天消息 --------
+daily-chat:
+  display-name: "社交达人"
+  description: "发送20条聊天消息"
+  difficulty: easy
+  event-topic: "axs.chat.chat_message_sent"
+  required-count: 20
+  base-xp-reward: 60
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 击杀Boss --------
+daily-boss-kill:
+  display-name: "Boss猎手"
+  description: "击杀1个Boss（需 entitytracker 模块）"
+  difficulty: hard
+  event-topic: "axs.entitytracker.boss_kill"
+  required-count: 1
+  base-xp-reward: 200
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 1

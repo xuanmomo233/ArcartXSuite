@@ -65,10 +65,28 @@ public final class BattlePassTaskEngine {
         TOPIC_TO_MODULE.put("axs.pickup.item_pickup", "pickup");
         TOPIC_TO_MODULE.put("axs.loginview.login_success", "loginview");
         TOPIC_TO_MODULE.put("axs.fishing.success", "fishing");
+        TOPIC_TO_MODULE.put("axs.fishing.perfect", "fishing");
+        TOPIC_TO_MODULE.put("axs.fishing.treasure", "fishing");
+        TOPIC_TO_MODULE.put("axs.fishing.collection_unlock", "fishing");
         TOPIC_TO_MODULE.put("axs.questgps.quest_completed", "questgps");
+        TOPIC_TO_MODULE.put("axs.afkreward.reward_claimed", "afkreward");
+        TOPIC_TO_MODULE.put("axs.chat.chat_message_sent", "chat");
+        TOPIC_TO_MODULE.put("axs.warehouse.item_deposited", "warehouse");
+        TOPIC_TO_MODULE.put("axs.prop.prop_used", "prop");
+        TOPIC_TO_MODULE.put("axs.regions.region_change", "regions");
+        TOPIC_TO_MODULE.put("axs.entitytracker.boss_kill", "entitytracker");
+        TOPIC_TO_MODULE.put("onlinerewards.server_goal_reached", "onlinerewards");
         // 以下 topic 由宿主核心或已加载模块发布，不需要降级
         TOPIC_TO_MODULE.put("axs.currency.spent", "__core__");
         TOPIC_TO_MODULE.put("market.listing_created", "market");
+        // 纯 Bukkit 事件（无 EventBus 发布者），始终走 Bukkit 降级
+        TOPIC_TO_MODULE.put("axs.battlepass.block_break", "__bukkit__");
+        TOPIC_TO_MODULE.put("axs.battlepass.block_place", "__bukkit__");
+        TOPIC_TO_MODULE.put("axs.battlepass.craft_item", "__bukkit__");
+        TOPIC_TO_MODULE.put("axs.battlepass.item_consume", "__bukkit__");
+        // TACZ 枪械事件（由宿主 TaczCombatBridge 广播为 Bukkit 事件，始终走 Bukkit 降级）
+        TOPIC_TO_MODULE.put("axs.battlepass.tacz_damage", "__bukkit__");
+        TOPIC_TO_MODULE.put("axs.battlepass.tacz_kill", "__bukkit__");
     }
 
     /**
@@ -126,28 +144,29 @@ public final class BattlePassTaskEngine {
                     LOGGER.fine("[battlepass] TaskEngine 订阅 EventBus: topic=" + topic + " task=" + task.taskId());
                 }
             } else if (task.bukkitEvent() != null) {
-                // 降级到原版 Bukkit 事件
-                String bukkitClass = task.bukkitEvent().eventClass();
-                if (!BukkitEventSourceListener.isSupportedBukkitEvent(bukkitClass)) {
-                    LOGGER.warning("[battlepass] 不支持的 Bukkit 事件，任务未接入: task="
-                        + task.taskId() + " event=" + bukkitClass);
-                    continue;
-                }
-                String normalizedClass = BukkitEventSourceListener.normalizeBukkitEventClass(bukkitClass);
-                BiConsumer<Player, Map<String, String>> callback = (player, payload) -> {
-                    try {
-                        handleEvent(player, task, mapPayload(payload, task.bukkitEvent().payloadFields()));
-                    } catch (Exception e) {
-                        LOGGER.log(Level.WARNING,
-                            "[battlepass] 任务 " + task.taskId()
-                                + " 处理 Bukkit 事件 " + normalizedClass + " 失败", e);
+                // 降级到原版 Bukkit 事件（支持多个事件类）
+                for (String bukkitClass : task.bukkitEvent().eventClasses()) {
+                    if (!BukkitEventSourceListener.isSupportedBukkitEvent(bukkitClass)) {
+                        LOGGER.warning("[battlepass] 不支持的 Bukkit 事件，跳过: task="
+                            + task.taskId() + " event=" + bukkitClass);
+                        continue;
                     }
-                };
-                callbacksByEvent.computeIfAbsent(normalizedClass, ignored -> new ArrayList<>())
-                    .add(callback);
-                bukkitCount++;
-                LOGGER.info("[battlepass] TaskEngine 使用 Bukkit 降级: event="
-                    + bukkitClass + " task=" + task.taskId() + " (topic=" + topic + ")");
+                    String normalizedClass = BukkitEventSourceListener.normalizeBukkitEventClass(bukkitClass);
+                    BiConsumer<Player, Map<String, String>> callback = (player, payload) -> {
+                        try {
+                            handleEvent(player, task, mapPayload(payload, task.bukkitEvent().payloadFields()));
+                        } catch (Exception e) {
+                            LOGGER.log(Level.WARNING,
+                                "[battlepass] 任务 " + task.taskId()
+                                    + " 处理 Bukkit 事件 " + normalizedClass + " 失败", e);
+                        }
+                    };
+                    callbacksByEvent.computeIfAbsent(normalizedClass, ignored -> new ArrayList<>())
+                        .add(callback);
+                    bukkitCount++;
+                    LOGGER.info("[battlepass] TaskEngine 使用 Bukkit 降级: event="
+                        + bukkitClass + " task=" + task.taskId() + " (topic=" + topic + ")");
+                }
             } else {
                 LOGGER.warning("[battlepass] TaskEngine 跳过任务（无可用事件源）: task=" + task.taskId() + " topic=" + topic);
             }
@@ -179,6 +198,10 @@ public final class BattlePassTaskEngine {
         if ("__core__".equals(moduleId)) {
             // 宿主核心发布的事件，始终可用
             return true;
+        }
+        if ("__bukkit__".equals(moduleId)) {
+            // 纯 Bukkit 事件（无 EventBus 发布者），始终走 Bukkit 降级
+            return false;
         }
         // 检测模块是否已加载
         if (moduleExistsChecker == null) return true;

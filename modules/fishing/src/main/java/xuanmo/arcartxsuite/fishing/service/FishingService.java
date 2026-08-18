@@ -31,6 +31,7 @@ import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
+import xuanmo.arcartxsuite.api.script.XpCurve;
 import xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration;
 import xuanmo.arcartxsuite.fishing.minigame.FishingMinigame;
 import xuanmo.arcartxsuite.fishing.minigame.FishingSession;
@@ -38,11 +39,18 @@ import xuanmo.arcartxsuite.fishing.model.BaitDefinition;
 import xuanmo.arcartxsuite.fishing.model.FishCollectionEntry;
 import xuanmo.arcartxsuite.fishing.model.FishDefinition;
 import xuanmo.arcartxsuite.fishing.model.FishRarity;
-import xuanmo.arcartxsuite.fishing.model.FishingPlayerData;
+import xuanmo.arcartxsuite.fishing.model.FishingPermanentData;
+import xuanmo.arcartxsuite.fishing.model.FishingSeasonData;
 import xuanmo.arcartxsuite.fishing.model.RodDefinition;
 import xuanmo.arcartxsuite.fishing.model.TreasureDefinition;
 import xuanmo.arcartxsuite.fishing.model.WaterArea;
 import xuanmo.arcartxsuite.fishing.storage.FishingRepository;
+import xuanmo.arcartxsuite.fishing.talent.TalentBonuses;
+import xuanmo.arcartxsuite.fishing.talent.TalentEngine;
+import xuanmo.arcartxsuite.fishing.reward.RewardDispatcher;
+import xuanmo.arcartxsuite.fishing.reward.SeasonRewardDefinition;
+import xuanmo.arcartxsuite.fishing.settlement.SettlementEngine;
+import xuanmo.arcartxsuite.fishing.task.TaskEngine;
 
 public final class FishingService {
 
@@ -55,6 +63,11 @@ public final class FishingService {
     private final String minigameUiId;
     private final Map<UUID, FishingMinigame> activeMinigames = new HashMap<>();
     private final Map<UUID, Long> fishingCooldowns = new HashMap<>(); // 玩家UUID → 冷却到期时间戳(System.currentTimeMillis)
+    private final TalentEngine talentEngine;
+    private final List<SeasonRewardDefinition> seasonRewards;
+    private final RewardDispatcher rewardDispatcher;
+    private final SettlementEngine settlementEngine;
+    private final TaskEngine taskEngine;
     private MessageProvider messageProvider;
 
     // 跨模块能力提供者（懒加载，避免循环依赖）
@@ -73,7 +86,12 @@ public final class FishingService {
     public FishingService(@NotNull JavaPlugin plugin, @NotNull FishingModuleConfiguration configuration,
                           @NotNull FishingRepository repository, @Nullable PacketBridgeAPI packetBridge,
                           @NotNull FishingItemGenerator itemGenerator,
-                          @NotNull Logger logger, @NotNull String minigameUiId) {
+                          @NotNull Logger logger, @NotNull String minigameUiId,
+                          @NotNull TalentEngine talentEngine,
+                          @NotNull List<SeasonRewardDefinition> seasonRewards,
+                          @NotNull RewardDispatcher rewardDispatcher,
+                          @NotNull SettlementEngine settlementEngine,
+                          @NotNull TaskEngine taskEngine) {
         this.plugin = plugin;
         this.configuration = configuration;
         this.repository = repository;
@@ -81,6 +99,11 @@ public final class FishingService {
         this.itemGenerator = itemGenerator;
         this.logger = logger;
         this.minigameUiId = minigameUiId;
+        this.talentEngine = talentEngine;
+        this.seasonRewards = seasonRewards;
+        this.rewardDispatcher = rewardDispatcher;
+        this.settlementEngine = settlementEngine;
+        this.taskEngine = taskEngine;
     }
 
     public void setMessageProvider(@Nullable MessageProvider messageProvider) {
@@ -194,16 +217,19 @@ public final class FishingService {
         adjustedDifficulty = Math.max(1, Math.min(100, adjustedDifficulty));
 
         int caughtSize = fish.randomSize();
-        FishingPlayerData playerData = repository.loadPlayerData(player.getUniqueId());
+        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
 
         FishingSession session = new FishingSession(
-            player, fish, caughtSize, playerData.level(),
+            player, fish, caughtSize, seasonData.level(),
             configuration.fishing().catchDurationTicks() + rod.catchDurationBonus(), water, adjustedDifficulty,
             baitId, rod.greenBarHeightBonus(), rod.expMultiplier()
         );
 
+        // 计算天赋加成（开局一次性计算）
+        TalentBonuses bonuses = new TalentBonuses(talentEngine.computeBonuses(seasonData));
+
         FishingMinigame minigame = new FishingMinigame(
-            plugin, packetBridge, configuration.fishing(), this, itemGenerator, session, minigameUiId
+            plugin, packetBridge, configuration.fishing(), this, itemGenerator, session, minigameUiId, bonuses
         );
         activeMinigames.put(player.getUniqueId(), minigame);
         minigame.start();
@@ -239,10 +265,15 @@ public final class FishingService {
     private void handleSuccess(@NotNull Player player, @NotNull FishingSession session, boolean perfect) {
         FishDefinition fish = session.fish();
         int size = session.caughtSize();
-        FishingPlayerData playerData = repository.loadPlayerData(player.getUniqueId());
+        String seasonId = configuration.season().seasonId();
+        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), seasonId);
+        FishingPermanentData permData = repository.loadPermanentData(player.getUniqueId());
 
-        // 计算经验（应用钓竿经验倍率）
-        int xp = (int) (fish.calculateXp(size, perfect) * session.expMultiplier());
+        // 计算经验（应用钓竿经验倍率 + 天赋经验加成）
+        TalentBonuses bonuses = new TalentBonuses(talentEngine.computeBonuses(seasonData));
+        double xpMultiplier = session.expMultiplier() * (1.0 + bonuses.xpMultiplierBonus());
+        if (perfect) xpMultiplier *= (1.0 + bonuses.perfectXpBonus());
+        int xp = (int) (fish.calculateXp(size, perfect) * xpMultiplier);
         xp = Math.max(1, xp);
         // 更新图鉴
         FishCollectionEntry existing = repository.loadCollectionEntry(player.getUniqueId(), fish.id());
@@ -280,12 +311,12 @@ public final class FishingService {
             }
         }
 
-        FishingPlayerData updatedData = playerData.withXpAdded(xp).withCaught(perfect, gotTreasure);
-        while (updatedData.canLevelUp(configuration.fishing().baseXpPerLevel())) {
-            updatedData = updatedData.withLevelUp();
-        }
+        FishingSeasonData updatedSeason = seasonData.withXpAdded(xp,
+            configuration.season().xpCurve(), configuration.season().maxLevel());
+        FishingPermanentData updatedPerm = permData.withCaught(perfect, gotTreasure);
 
-        repository.savePlayerData(updatedData);
+        repository.saveSeasonData(updatedSeason);
+        repository.savePermanentData(updatedPerm);
 
         // ─── 货币奖励 ────────────────────────────────────────────
         if (fish.currencyReward() != null) {
@@ -301,10 +332,10 @@ public final class FishingService {
         }
 
         // ─── 跨模块事件发射 ──────────────────────────────────────
-        emitFishingEvent(player, fish, size, water, session.baitId(), perfect, isFirstCatch, gotTreasure, updatedData);
+        emitFishingEvent(player, fish, size, water, session.baitId(), perfect, isFirstCatch, gotTreasure, updatedSeason, updatedPerm);
 
         // ─── 里程碑检测 ──────────────────────────────────────────
-        checkMilestones(player, updatedData, fish, isFirstCatch);
+        checkMilestones(player, updatedPerm, fish, isFirstCatch);
 
         // 发送消息
         String quality = perfect ? "完美" : "普通";
@@ -327,8 +358,8 @@ public final class FishingService {
             }
         }
 
-        if (updatedData.level() > playerData.level()) {
-            String levelMsg = getMessage("fishing_level_up", String.valueOf(updatedData.level()));
+        if (updatedSeason.level() > seasonData.level()) {
+            String levelMsg = getMessage("fishing_level_up", String.valueOf(updatedSeason.level()));
             if (levelMsg != null) {
                 player.sendMessage(levelMsg);
             }
@@ -693,8 +724,22 @@ public final class FishingService {
 
     // ─── 统计查询 ────────────────────────────────────────────
 
-    public @NotNull FishingPlayerData getPlayerData(@NotNull UUID uuid) {
-        return repository.loadPlayerData(uuid);
+    public @NotNull FishingSeasonData getSeasonData(@NotNull UUID uuid) {
+        return repository.loadSeasonData(uuid, configuration.season().seasonId());
+    }
+
+    public @NotNull FishingPermanentData getPermanentData(@NotNull UUID uuid) {
+        return repository.loadPermanentData(uuid);
+    }
+
+    /** @deprecated 使用 {@link #getSeasonData(UUID)} 代替 */
+    @Deprecated
+    public @NotNull FishingSeasonData getPlayerData(@NotNull UUID uuid) {
+        return getSeasonData(uuid);
+    }
+
+    public @NotNull XpCurve getXpCurve() {
+        return configuration.season().xpCurve();
     }
 
     public @NotNull List<FishCollectionEntry> getCollection(@NotNull UUID uuid) {
@@ -706,8 +751,9 @@ public final class FishingService {
     }
 
     public void resetPlayerData(@NotNull UUID uuid) {
-        FishingPlayerData empty = FishingPlayerData.empty(uuid);
-        repository.savePlayerData(empty);
+        FishingSeasonData empty = FishingSeasonData.empty(uuid, configuration.season().seasonId());
+        repository.saveSeasonData(empty);
+        repository.savePermanentData(FishingPermanentData.empty(uuid));
         try {
             for (FishCollectionEntry entry : repository.loadCollection(uuid)) {
                 FishCollectionEntry reset = new FishCollectionEntry(uuid, entry.fishId(), 0, 0, entry.firstCatchAt());
@@ -717,12 +763,128 @@ public final class FishingService {
     }
 
     public void giveXp(@NotNull UUID uuid, int amount) {
-        FishingPlayerData data = repository.loadPlayerData(uuid);
-        FishingPlayerData updated = data.withXpAdded(amount);
-        while (updated.canLevelUp(configuration.fishing().baseXpPerLevel())) {
-            updated = updated.withLevelUp();
+        FishingSeasonData data = repository.loadSeasonData(uuid, configuration.season().seasonId());
+        FishingSeasonData updated = data.withXpAdded(amount,
+            configuration.season().xpCurve(), configuration.season().maxLevel());
+        repository.saveSeasonData(updated);
+    }
+
+    // ─── 天赋树操作 ────────────────────────────────────────────
+
+    public @NotNull TalentEngine getTalentEngine() {
+        return talentEngine;
+    }
+
+    /**
+     * 点亮一个天赋节点。
+     *
+     * @param uuid   玩家 UUID
+     * @param nodeId 节点 ID
+     * @return {@code true} 表示点亮成功
+     */
+    public boolean unlockTalent(@NotNull UUID uuid, @NotNull String nodeId) {
+        FishingSeasonData data = repository.loadSeasonData(uuid, configuration.season().seasonId());
+        if (!talentEngine.canUnlock(data, nodeId)) return false;
+        FishingSeasonData updated = talentEngine.unlock(data, nodeId);
+        repository.saveSeasonData(updated);
+        return true;
+    }
+
+    /**
+     * 重置玩家天赋树（退还所有天赋点）。
+     *
+     * @param uuid 玩家 UUID
+     */
+    public void resetTalents(@NotNull UUID uuid) {
+        FishingSeasonData data = repository.loadSeasonData(uuid, configuration.season().seasonId());
+        FishingSeasonData updated = talentEngine.reset(data);
+        repository.saveSeasonData(updated);
+    }
+
+    // ─── 等级奖励领取 ──────────────────────────────────────────
+
+    public @NotNull List<SeasonRewardDefinition> getSeasonRewards() {
+        return seasonRewards;
+    }
+
+    /**
+     * 领取等级奖励。
+     *
+     * @param player   玩家
+     * @param rewardId 奖励 ID
+     * @return {@code true} 表示领取成功
+     */
+    public boolean claimReward(@NotNull Player player, @NotNull String rewardId) {
+        SeasonRewardDefinition reward = seasonRewards.stream()
+            .filter(r -> r.id().equals(rewardId))
+            .findFirst().orElse(null);
+        if (reward == null) return false;
+
+        FishingSeasonData data = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
+        if (data.level() < reward.level()) return false;
+        if (data.claimedRewards().contains(rewardId)) return false;
+
+        FishingSeasonData updated = data.withRewardClaimed(rewardId);
+        repository.saveSeasonData(updated);
+
+        rewardDispatcher.dispatch(player, player.getUniqueId(), reward, "等级奖励 Lv." + reward.level());
+        return true;
+    }
+
+    /**
+     * 获取玩家可领取但尚未领取的奖励列表。
+     *
+     * @param uuid 玩家 UUID
+     * @return 可领取奖励列表
+     */
+    public @NotNull List<SeasonRewardDefinition> getClaimableRewards(@NotNull UUID uuid) {
+        FishingSeasonData data = repository.loadSeasonData(uuid, configuration.season().seasonId());
+        return seasonRewards.stream()
+            .filter(r -> data.level() >= r.level() && !data.claimedRewards().contains(r.id()))
+            .toList();
+    }
+
+    // ─── 赛季结算 ──────────────────────────────────────────────
+
+    /**
+     * 触发赛季结算（对所有在线玩家）。
+     */
+    public void triggerSettlement() {
+        settlementEngine.settleAllOnline();
+        logger.info("钓鱼赛季结算已触发: " + configuration.season().seasonId());
+    }
+
+    /**
+     * 对单个玩家执行赛季结算。
+     *
+     * @param uuid 玩家 UUID
+     */
+    public void settlePlayer(@NotNull UUID uuid) {
+        settlementEngine.settlePlayer(uuid);
+    }
+
+    /**
+     * 玩家上线时补发待发放奖励。
+     *
+     * @param player 上线玩家
+     */
+    public void onPlayerJoin(@NotNull Player player) {
+        try {
+            rewardDispatcher.dispatchPending(player);
+        } catch (Exception e) {
+            logger.warning("补发待发放奖励失败 [" + player.getName() + "]: " + e.getMessage());
         }
-        repository.savePlayerData(updated);
+        try {
+            taskEngine.onPlayerJoin(player);
+        } catch (Exception e) {
+            logger.warning("分配任务失败 [" + player.getName() + "]: " + e.getMessage());
+        }
+    }
+
+    // ─── 任务查询 ──────────────────────────────────────────────
+
+    public @NotNull TaskEngine getTaskEngine() {
+        return taskEngine;
     }
 
     public int getCollectionCount(@NotNull UUID uuid) {
@@ -753,14 +915,15 @@ public final class FishingService {
     public void pushCollectionData(@NotNull Player player, @NotNull String uiId) {
         if (packetBridge == null || !packetBridge.isAvailable()) return;
 
-        FishingPlayerData data = repository.loadPlayerData(player.getUniqueId());
+        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
+        FishingPermanentData permData = repository.loadPermanentData(player.getUniqueId());
         List<FishCollectionEntry> collection = repository.loadCollection(player.getUniqueId());
 
         java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("packetId", "AXS_FISHING");
-        payload.put("playerLevel", data.level());
-        payload.put("totalXp", data.totalXp());
-        payload.put("totalCaught", data.totalCaught());
+        payload.put("playerLevel", seasonData.level());
+        payload.put("currentXp", seasonData.currentXp());
+        payload.put("totalCaught", permData.totalCaught());
         payload.put("collectionCount", collection.size());
         payload.put("totalFishTypes", configuration.fishes().size());
         int percent = configuration.fishes().isEmpty() ? 0 : (collection.size() * 100) / configuration.fishes().size();
@@ -797,7 +960,8 @@ public final class FishingService {
 
     private void emitFishingEvent(@NotNull Player player, @NotNull FishDefinition fish, int size,
                                    @Nullable WaterArea water, @Nullable String baitId, boolean perfect,
-                                   boolean isFirstCatch, boolean gotTreasure, @NotNull FishingPlayerData data) {
+                                   boolean isFirstCatch, boolean gotTreasure,
+                                   @NotNull FishingSeasonData seasonData, @NotNull FishingPermanentData permData) {
         // EventBus 发布（供 BattlePass / QuestGPS / OnlineRewards 等订阅）
         EventBusCapability eventBus = eventBusProvider != null ? eventBusProvider.get() : null;
         if (eventBus != null) {
@@ -808,7 +972,7 @@ public final class FishingService {
             payload.put("water_area", water != null ? water.name() : "default");
             payload.put("bait_id", baitId != null ? baitId : "");
             payload.put("is_perfect", String.valueOf(perfect));
-            payload.put("player_level", String.valueOf(data.level()));
+            payload.put("player_level", String.valueOf(seasonData.level()));
             eventBus.publish("axs.fishing.success", player, payload);
 
             if (perfect) {
@@ -852,7 +1016,7 @@ public final class FishingService {
 
     // ─── 里程碑检测 ─────────────────────────────────────────────────
 
-    private void checkMilestones(@NotNull Player player, @NotNull FishingPlayerData data,
+    private void checkMilestones(@NotNull Player player, @NotNull FishingPermanentData data,
                                    @NotNull FishDefinition fish, boolean isFirstCatch) {
         // 首次捕获传说鱼
         if (isFirstCatch && fish.rarity() == FishRarity.LEGENDARY) {
@@ -1010,5 +1174,181 @@ public final class FishingService {
             return val != null ? val : 0;
         }
         return 0;
+    }
+
+    // ─── 天赋/奖励/任务 UI 数据推送 ──────────────────────────
+
+    /**
+     * 推送天赋树数据到 UI。
+     */
+    public void pushTalentsData(@NotNull Player player, @NotNull String uiId) {
+        if (packetBridge == null || !packetBridge.isAvailable()) return;
+        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
+
+        java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("packetId", "AXS_FISHING_TALENTS");
+        payload.put("seasonId", seasonData.seasonId());
+        payload.put("level", seasonData.level());
+        payload.put("talentPoints", seasonData.talentPoints());
+        payload.put("unspentTalentPoints", seasonData.unspentTalentPoints());
+        payload.put("unlockedTalents", new java.util.ArrayList<>(seasonData.talents()));
+
+        // 天赋树定义（按树分组）
+        java.util.Map<String, Object> treesMap = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, xuanmo.arcartxsuite.fishing.talent.TalentTreeDefinition> treeEntry : talentEngine.getTrees().entrySet()) {
+            String treeId = treeEntry.getKey();
+            xuanmo.arcartxsuite.fishing.talent.TalentTreeDefinition tree = treeEntry.getValue();
+            java.util.Map<String, Object> treeMap = new java.util.LinkedHashMap<>();
+            treeMap.put("id", treeId);
+            treeMap.put("displayName", tree.displayName());
+            treeMap.put("description", tree.description());
+            java.util.Map<String, Object> nodesMap = new java.util.LinkedHashMap<>();
+            int nodeIdx = 0;
+            for (xuanmo.arcartxsuite.fishing.talent.TalentNode node : tree.nodes()) {
+                java.util.Map<String, Object> nodeMap = new java.util.LinkedHashMap<>();
+                nodeMap.put("id", node.id());
+                nodeMap.put("name", node.displayName());
+                nodeMap.put("description", node.description());
+                nodeMap.put("tier", node.tier());
+                nodeMap.put("unlocked", seasonData.talents().contains(node.id()));
+                nodeMap.put("canUnlock", talentEngine.canUnlock(seasonData, node.id()));
+                // 效果描述
+                java.util.List<String> effects = new java.util.ArrayList<>();
+                for (xuanmo.arcartxsuite.fishing.talent.TalentEffect effect : node.effects()) {
+                    effects.add(effect.effectType() + ": " + effect.effectValue());
+                }
+                nodeMap.put("effects", effects);
+                nodesMap.put(Integer.toString(nodeIdx), nodeMap);
+                nodeIdx++;
+            }
+            treeMap.put("nodes", nodesMap);
+            treeMap.put("nodeCount", tree.nodes().size());
+            treesMap.put(treeId, treeMap);
+        }
+        payload.put("trees", treesMap);
+
+        packetBridge.sendPacket(player, uiId, "init", payload);
+    }
+
+    /**
+     * 推送赛季奖励数据到 UI。
+     */
+    public void pushRewardsData(@NotNull Player player, @NotNull String uiId) {
+        if (packetBridge == null || !packetBridge.isAvailable()) return;
+        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
+
+        java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("packetId", "AXS_FISHING_REWARDS");
+        payload.put("level", seasonData.level());
+        payload.put("claimedRewards", new java.util.ArrayList<>(seasonData.claimedRewards()));
+
+        // 奖励列表
+        java.util.Map<String, Object> rewardsMap = new java.util.LinkedHashMap<>();
+        int idx = 0;
+        for (SeasonRewardDefinition reward : seasonRewards) {
+            java.util.Map<String, Object> entry = new java.util.LinkedHashMap<>();
+            entry.put("id", reward.id());
+            entry.put("level", reward.level());
+            entry.put("type", reward.type());
+            entry.put("iconName", reward.iconName());
+            entry.put("iconMaterial", reward.iconMaterial());
+            entry.put("iconAmount", reward.iconAmount());
+            entry.put("claimable", seasonData.level() >= reward.level() && !seasonData.claimedRewards().contains(reward.id()));
+            entry.put("claimed", seasonData.claimedRewards().contains(reward.id()));
+            rewardsMap.put(Integer.toString(idx), entry);
+            idx++;
+        }
+        payload.put("rewards", rewardsMap);
+        payload.put("rewardCount", seasonRewards.size());
+
+        packetBridge.sendPacket(player, uiId, "init", payload);
+    }
+
+    /**
+     * 推送任务数据到 UI。
+     */
+    public void pushTasksData(@NotNull Player player, @NotNull String uiId) {
+        if (packetBridge == null || !packetBridge.isAvailable()) return;
+        java.util.List<xuanmo.arcartxsuite.fishing.task.PlayerTaskInstance> allTasks = taskEngine.getAllTasks(player.getUniqueId());
+
+        java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("packetId", "AXS_FISHING_TASKS");
+
+        // 按分类组织任务
+        java.util.Map<String, Object> dailyMap = new java.util.LinkedHashMap<>();
+        java.util.Map<String, Object> weeklyMap = new java.util.LinkedHashMap<>();
+        java.util.Map<String, Object> seasonMap = new java.util.LinkedHashMap<>();
+        int dailyIdx = 0, weeklyIdx = 0, seasonIdx = 0;
+        for (xuanmo.arcartxsuite.fishing.task.PlayerTaskInstance instance : allTasks) {
+            xuanmo.arcartxsuite.fishing.task.FishingTask template = taskEngine.findTemplate(
+                instance.templateId(), instance.category());
+            if (template == null) continue;
+            java.util.Map<String, Object> entry = new java.util.LinkedHashMap<>();
+            entry.put("id", instance.templateId());
+            entry.put("name", template.displayName());
+            entry.put("description", template.description());
+            entry.put("category", instance.category().name());
+            entry.put("progress", instance.currentProgress());
+            entry.put("target", instance.targetCount());
+            entry.put("completed", instance.completed());
+            entry.put("percent", (int) instance.progressPercent());
+            entry.put("xpReward", template.totalXpReward());
+
+            switch (instance.category()) {
+                case DAILY -> dailyMap.put(Integer.toString(dailyIdx++), entry);
+                case WEEKLY -> weeklyMap.put(Integer.toString(weeklyIdx++), entry);
+                case SEASON -> seasonMap.put(Integer.toString(seasonIdx++), entry);
+            }
+        }
+        payload.put("daily", dailyMap);
+        payload.put("weekly", weeklyMap);
+        payload.put("season", seasonMap);
+
+        packetBridge.sendPacket(player, uiId, "init", payload);
+    }
+
+    /**
+     * 处理客户端 UI 操作请求（点亮天赋/领取奖励等）。
+     *
+     * @param player 玩家
+     * @param action 操作类型
+     * @param data   操作数据
+     */
+    public void handleUiAction(@NotNull Player player, @NotNull String action, @NotNull java.util.List<String> data) {
+        switch (action.toLowerCase()) {
+            case "unlock_talent" -> {
+                if (data.size() > 1) {
+                    String nodeId = data.get(1);
+                    if (unlockTalent(player.getUniqueId(), nodeId)) {
+                        player.sendMessage("§a天赋点亮成功: " + nodeId);
+                    } else {
+                        player.sendMessage("§c无法点亮天赋: " + nodeId);
+                    }
+                }
+            }
+            case "reset_talents" -> {
+                resetTalents(player.getUniqueId());
+                player.sendMessage("§a天赋树已重置，所有天赋点已退还。");
+            }
+            case "claim_reward" -> {
+                if (data.size() > 1) {
+                    String rewardId = data.get(1);
+                    if (claimReward(player, rewardId)) {
+                        player.sendMessage("§a奖励领取成功！");
+                    } else {
+                        player.sendMessage("§c无法领取奖励: " + rewardId);
+                    }
+                }
+            }
+            case "refresh_talents", "open_talents" -> {
+                // UI 请求刷新数据
+            }
+            case "refresh_rewards", "open_rewards" -> {
+                // UI 请求刷新数据
+            }
+            case "refresh_tasks", "open_tasks" -> {
+                // UI 请求刷新数据
+            }
+        }
     }
 }

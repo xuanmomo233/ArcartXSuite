@@ -47,7 +47,7 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
 
     @Override
     public List<String> actions() {
-        return List.of("help", "status", "reset", "season", "unlock", "addexp", "setexp", "removeexp", "setlevel");
+        return List.of("help", "status", "reset", "season", "unlock", "addexp", "setexp", "removeexp", "setlevel", "settle");
     }
 
     /**
@@ -68,7 +68,8 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
             case "setexp" -> handleSetExp(sender, args);
             case "removeexp" -> handleRemoveExp(sender, args);
             case "setlevel" -> handleSetLevel(sender, args);
-            case "season" -> sender.sendMessage(msg("admin.season-unimplemented"));
+            case "settle" -> handleSettle(sender, args);
+            case "season" -> handleSeason(sender);
             default -> sender.sendMessage(msg("common.unknown", cmd));
         }
         return true;
@@ -109,6 +110,7 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(msg("help.setexp", cmd));
         sender.sendMessage(msg("help.removeexp", cmd));
         sender.sendMessage(msg("help.setlevel", cmd));
+        sender.sendMessage(msg("help.settle", cmd));
     }
 
     private void sendStatus(CommandSender sender) {
@@ -305,6 +307,44 @@ public final class BattlePassAdminCommand implements ModuleCommandHandler {
         }
         service.setLevel(target, level);
         sender.sendMessage(msg("admin.setlevel-success", target.getName(), String.valueOf(level)));
+    }
+
+    private void handleSettle(CommandSender sender, String[] args) {
+        BattlePassService service = serviceProvider.get();
+        if (service == null) {
+            sender.sendMessage(msg("common.service-unavailable"));
+            return;
+        }
+        sender.sendMessage(msg("admin.settle-start"));
+        // 异步执行结算，避免阻塞主线程
+        org.bukkit.Bukkit.getScheduler().runTaskAsynchronously(
+            org.bukkit.Bukkit.getPluginManager().getPlugin("ArcartXSuite"),
+            () -> {
+                String seasonId = service.configuration().season().seasonId();
+                boolean success = service.settlementService().settle(seasonId, true);
+                if (success) {
+                    sender.sendMessage(msg("admin.settle-success", seasonId));
+                } else {
+                    sender.sendMessage(msg("admin.settle-already", seasonId));
+                }
+            }
+        );
+    }
+
+    private void handleSeason(CommandSender sender) {
+        BattlePassService service = serviceProvider.get();
+        if (service == null) {
+            sender.sendMessage(msg("common.service-unavailable"));
+            return;
+        }
+        var season = service.configuration().season();
+        sender.sendMessage(msg("admin.season.title"));
+        sender.sendMessage(msg("admin.season.id", season.seasonId()));
+        sender.sendMessage(msg("admin.season.name", season.displayName()));
+        sender.sendMessage(msg("admin.season.max-level", String.valueOf(season.maxLevel())));
+        sender.sendMessage(msg("admin.season.dates", season.startDate().toString(), season.endDate().toString()));
+        sender.sendMessage(msg("admin.season.settlement",
+            service.settlementService().getSettlementStatus(season.seasonId())));
     }
 
     private String msg(String key, Object... args) {

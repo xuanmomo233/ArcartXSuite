@@ -40,6 +40,13 @@
 #   item:     通过 ItemSourceRegistry 生成物品并直接放入玩家背包
 #   command:  以控制台身份执行命令列表（commands 字段），支持 {player} 占位符
 #   currency: 向玩家发放指定货币（需 Vault/PlayerPoints 等经济插件）
+#   mail:     通过 Mail 模块发送邮件（预设 ID 或带物品附件的邮件）
+#             Mail 模块不可用时降级为直接发放物品或执行命令
+#             配置字段：
+#               mail-preset-id:  邮件预设 ID（使用 Mail 模块预设时配置）
+#               mail-subject:    邮件主题（直接配置带附件邮件时使用）
+#               mail-body:       邮件正文（直接配置带附件邮件时使用）
+#               item:            邮件附件物品（直接配置带附件邮件时使用）
 #
 # icon 配置（完整字段见 menu/market 模块）：
 #   material:          原版材质名（如 DIAMOND）

@@ -1,0 +1,76 @@
+# AXS 钓鱼每周任务池
+# 每周一 0 点自动重置并重新分配
+
+# -------- 周常钓鱼 --------
+weekly-fish-any:
+  display-name: "周常钓鱼"
+  description: "钓到50条任意鱼"
+  difficulty: easy
+  event-topic: "axs.fishing.success"
+  required-count: 50
+  base-xp-reward: 500
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 5
+
+# -------- 完美大师 --------
+weekly-perfect:
+  display-name: "完美大师"
+  description: "完美捕获20条鱼"
+  difficulty: normal
+  event-topic: "axs.fishing.perfect"
+  required-count: 20
+  base-xp-reward: 600
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
+
+# -------- 传说猎手 --------
+weekly-legendary:
+  display-name: "传说猎手"
+  description: "钓到2条传说品质的鱼"
+  difficulty: hard
+  event-topic: "axs.fishing.success"
+  required-count: 2
+  base-xp-reward: 1000
+  conditions:
+    - type: event_payload
+      key: fish_rarity
+      operator: equals
+      value: "LEGENDARY"
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 1
+
+# -------- 宝藏猎人 --------
+weekly-treasure:
+  display-name: "宝藏猎人"
+  description: "钓到10个宝藏"
+  difficulty: normal
+  event-topic: "axs.fishing.treasure"
+  required-count: 10
+  base-xp-reward: 800
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 图鉴扩展 --------
+weekly-collection:
+  display-name: "图鉴扩展"
+  description: "解锁5种新鱼的图鉴"
+  difficulty: normal
+  event-topic: "axs.fishing.collection_unlock"
+  required-count: 5
+  base-xp-reward: 700
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2

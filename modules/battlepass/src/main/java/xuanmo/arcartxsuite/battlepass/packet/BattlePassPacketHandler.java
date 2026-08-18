@@ -345,8 +345,10 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         }
         BattlePassPlayerProgress progress = service.getProgress(player);
         var season = service.configuration().season();
-        int xpNeeded = Math.max(0, season.xpPerLevel() - progress.currentXp());
-        float ratio = season.xpPerLevel() > 0 ? (float) progress.currentXp() / season.xpPerLevel() : 0f;
+        // 按玩家当前等级动态计算该级所需经验（成长曲线）
+        int xpPerLevel = season.xpCurve().xpRequiredForLevelOr(progress.currentLevel() + 1, 0);
+        int xpNeeded = Math.max(0, xpPerLevel - progress.currentXp());
+        float ratio = xpPerLevel > 0 ? (float) progress.currentXp() / xpPerLevel : 0f;
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("packetId", PACKET_ID);
@@ -354,7 +356,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         payload.put("currentLevel", String.valueOf(progress.currentLevel()));
         payload.put("maxLevel", String.valueOf(season.maxLevel()));
         payload.put("currentXp", String.valueOf(progress.currentXp()));
-        payload.put("xpPerLevel", String.valueOf(season.xpPerLevel()));
+        payload.put("xpPerLevel", String.valueOf(xpPerLevel));
         payload.put("xpNeeded", String.valueOf(xpNeeded));
         payload.put("progressRatio", String.valueOf(ratio));
         payload.put("premiumUnlocked", String.valueOf(progress.unlockedPremium()));

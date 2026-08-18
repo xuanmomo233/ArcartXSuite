@@ -100,9 +100,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
                 .withRange(1, 100),
             ValidationRule.required("season.season-id", ValueType.STRING),
             ValidationRule.required("season.max-level", ValueType.INT)
-                .withRange(1, 10000),
-            ValidationRule.required("season.xp-per-level", ValueType.INT)
-                .withRange(1, 1000000)
+                .withRange(1, 10000)
         );
     }
 
@@ -131,7 +129,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         // 首次安装时导出默认奖励文件
         ensureRewardDefaults(dataFolder);
         configuration = BattlePassModuleConfiguration.load(
-            YamlConfiguration.loadConfiguration(configFile), dataFolder, logger);
+            YamlConfiguration.loadConfiguration(configFile), dataFolder, logger, ariaBridge);
     }
 
     private void ensureTaskDefaults(File dataFolder) {
@@ -152,6 +150,11 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         File target = new File(dataFolder, "rewards.yml");
         if (!target.exists()) {
             exportResource("rewards.yml", target, false);
+        }
+        // 导出默认赛季结算奖励文件
+        File seasonRewardsTarget = new File(dataFolder, "season-rewards.yml");
+        if (!seasonRewardsTarget.exists()) {
+            exportResource("season-rewards.yml", seasonRewardsTarget, false);
         }
     }
 
@@ -182,6 +185,8 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.setModuleExistsChecker(moduleId -> getModule(moduleId).isPresent());
+        service.setMailProvider(() -> getCapability(
+            xuanmo.arcartxsuite.api.capability.MailDispatchable.class));
         service.start();
 
         registerCapability(DatabaseMigratable.class, new DatabaseMigratable() {

@@ -77,6 +77,7 @@ public final class BattlePassService {
     private Supplier<EventBusCapability> eventBusProvider;
     private java.util.function.Function<String, Boolean> moduleExistsChecker;
     private final TaskAssignmentService assignmentService = new TaskAssignmentService();
+    private SeasonSettlementService settlementService;
 
     public BattlePassService(
         JavaPlugin plugin,
@@ -107,6 +108,7 @@ public final class BattlePassService {
         }
         this.rewardsByLevel = Map.copyOf(immutableRewardIndex);
         this.taskEngine = new BattlePassTaskEngine(plugin, this, configuration, moduleId -> moduleExistsChecker != null && moduleExistsChecker.apply(moduleId));
+        this.settlementService = new SeasonSettlementService(plugin, configuration, repository, this, rewardDispatcher, logger);
     }
 
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
@@ -115,6 +117,25 @@ public final class BattlePassService {
 
     public void setModuleExistsChecker(java.util.function.Function<String, Boolean> checker) {
         this.moduleExistsChecker = checker;
+    }
+
+    /**
+     * 设置邮件模块能力提供者，用于 mail 类型奖励发放。
+     *
+     * @param mailProvider MailDispatchable 提供者，可为 null
+     */
+    public void setMailProvider(@Nullable java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailProvider) {
+        this.rewardDispatcher.setMailProvider(mailProvider);
+        this.rewardDispatcher.setMailDeliveryMode(configuration.isMailDeliveryMode());
+    }
+
+    /**
+     * 获取赛季结算服务实例。
+     *
+     * @return 结算服务，不为 null
+     */
+    public SeasonSettlementService settlementService() {
+        return settlementService;
     }
 
 
@@ -306,6 +327,10 @@ public final class BattlePassService {
         if (!active) return;
         getProgress(player);
         getTaskInstances(player);
+        // 检查是否需要补发赛季结算奖励
+        if (settlementService != null) {
+            AxsScheduler.runTask(plugin, () -> settlementService.checkPendingSettlement(player));
+        }
     }
 
     /** 退服时落盘并驱逐缓存。 */
@@ -405,15 +430,20 @@ failedLoads.remove(uuid);
         if (xp <= 0) return progress;
         int newXp = progress.currentXp() + xp;
         int newLevel = progress.currentLevel();
-        int xpPerLevel = configuration.season().xpPerLevel();
+        var xpCurve = configuration.season().xpCurve();
         int maxLevel = configuration.season().maxLevel();
 
-        while (newXp >= xpPerLevel && newLevel < maxLevel) {
-            newXp -= xpPerLevel;
+        // 升到 newLevel+1 级所需经验随等级变化，逐级扣减
+        while (newLevel < maxLevel) {
+            int required = xpCurve.xpRequiredForLevel(newLevel + 1);
+            if (newXp < required) break;
+            newXp -= required;
             newLevel++;
         }
         if (newLevel >= maxLevel) {
-            newXp = Math.min(newXp, xpPerLevel - 1);
+            // 满级后截断到当前级上限 - 1
+            int cap = xpCurve.xpRequiredForLevelOr(maxLevel, Integer.MAX_VALUE);
+            newXp = Math.min(newXp, Math.max(0, cap - 1));
         }
         return progress.withLevel(newLevel).withXp(newXp);
     }
@@ -529,7 +559,7 @@ failedLoads.remove(uuid);
      *
      * @param player 目标玩家
      * @param xp     增加的经验值（正数）
-     * @return 实际增加后的总经验（当前等级经验 + 已升级数 * xpPerLevel）
+     * @return 实际增加后的总经验（当前等级内经验 + 升级经过的每级所需经验之和）
      */
     public int addXp(Player player, int xp) {
         if (xp <= 0) return 0;
@@ -542,9 +572,13 @@ failedLoads.remove(uuid);
             cachedProgress.put(uuid, updated);
             dirtyPlayers.add(uuid);
             persistProgressAsync(uuid);
-            result = updated.currentXp()
-                + (updated.currentLevel() - progress.currentLevel())
-                * configuration.season().xpPerLevel();
+            // 累加升级经过的每级实际所需经验 + 当前级内经验
+            var xpCurve = configuration.season().xpCurve();
+            int sum = updated.currentXp();
+            for (int lv = progress.currentLevel() + 1; lv <= updated.currentLevel(); lv++) {
+                sum += xpCurve.xpRequiredForLevelOr(lv, 0);
+            }
+            result = sum;
             changed = updated != progress;
         }
         if (changed) notifyUiRefresh(uuid, false);
@@ -562,9 +596,11 @@ failedLoads.remove(uuid);
         UUID uuid = player.getUniqueId();
         boolean changed;
         synchronized (playerLock(uuid)) {
-            int xpPerLevel = configuration.season().xpPerLevel();
-            int clamped = Math.max(0, Math.min(xp, xpPerLevel - 1));
+            var xpCurve = configuration.season().xpCurve();
             BattlePassPlayerProgress progress = getProgress(player);
+            // 当前级所需经验作为上限，超出截断到 required - 1
+            int required = xpCurve.xpRequiredForLevelOr(progress.currentLevel() + 1, Integer.MAX_VALUE);
+            int clamped = Math.max(0, Math.min(xp, Math.max(0, required - 1)));
             BattlePassPlayerProgress updated = progress.withXp(clamped);
             cachedProgress.put(uuid, updated);
             dirtyPlayers.add(uuid);
@@ -587,11 +623,23 @@ failedLoads.remove(uuid);
         boolean changed;
         synchronized (playerLock(uuid)) {
             BattlePassPlayerProgress progress = getProgress(player);
-            int xpPerLevel = configuration.season().xpPerLevel();
-            int totalXp = progress.currentXp() + progress.currentLevel() * xpPerLevel;
+            var xpCurve = configuration.season().xpCurve();
+            int maxLevel = configuration.season().maxLevel();
+            // 计算玩家从 1 级开始累积的总经验
+            int totalXp = progress.currentXp();
+            for (int lv = 2; lv <= progress.currentLevel(); lv++) {
+                totalXp += xpCurve.xpRequiredForLevelOr(lv, 0);
+            }
             int newTotal = Math.max(0, totalXp - xp);
-            int newLevel = Math.max(1, newTotal / xpPerLevel);
-            int newXp = newTotal - newLevel * xpPerLevel;
+            // 从 1 级逐级累加确定新等级与新级内经验
+            int newLevel = 1;
+            int newXp = newTotal;
+            while (newLevel < maxLevel) {
+                int required = xpCurve.xpRequiredForLevelOr(newLevel + 1, Integer.MAX_VALUE);
+                if (newXp < required) break;
+                newXp -= required;
+                newLevel++;
+            }
             if (newLevel < 1) {
                 newLevel = 1;
                 newXp = 0;
@@ -743,6 +791,14 @@ failedLoads.remove(playerUuid);
 
     private void checkResets() {
         LocalDate today = LocalDate.now();
+        // 赛季结束自动结算检测
+        if (settlementService != null) {
+            try {
+                settlementService.checkAndAutoSettle();
+            } catch (Exception e) {
+                logger.warning("[battlepass] 赛季自动结算检查失败: " + e.getMessage());
+            }
+        }
         for (Map.Entry<UUID, BattlePassPlayerProgress> entry : cachedProgress.entrySet()) {
             BattlePassPlayerProgress progress = entry.getValue();
             UUID uuid = entry.getKey();

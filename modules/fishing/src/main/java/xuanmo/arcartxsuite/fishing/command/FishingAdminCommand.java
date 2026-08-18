@@ -7,7 +7,8 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
-import xuanmo.arcartxsuite.fishing.model.FishingPlayerData;
+import xuanmo.arcartxsuite.fishing.model.FishingPermanentData;
+import xuanmo.arcartxsuite.fishing.model.FishingSeasonData;
 import xuanmo.arcartxsuite.fishing.service.FishingService;
 
 /**
@@ -34,7 +35,7 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
     @Override public String commandId() { return "fishing"; }
 
     @Override public List<String> actions() {
-        return List.of("help", "stats", "givexp", "reset");
+        return List.of("help", "stats", "givexp", "reset", "settlement", "resetseason");
     }
 
     @Override
@@ -51,7 +52,8 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
         }
 
         String action = args[1].toLowerCase();
-        if ((action.equals("stats") || action.equals("givexp") || action.equals("reset"))
+        if ((action.equals("stats") || action.equals("givexp") || action.equals("reset")
+            || action.equals("settlement") || action.equals("resetseason"))
             && !sender.hasPermission("axs.fishing.admin")) {
             sender.sendMessage(msg.apply("command_no_permission", new Object[]{}));
             return true;
@@ -61,6 +63,8 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
             case "stats" -> handleStats(sender, args, service);
             case "givexp" -> handleGiveXp(sender, args, service);
             case "reset" -> handleReset(sender, args, service);
+            case "settlement" -> handleSettlement(sender, service);
+            case "resetseason" -> handleResetSeason(sender, service);
             default -> showHelp(sender, label);
         }
         return true;
@@ -82,15 +86,16 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
             return;
         }
 
-        FishingPlayerData data = service.getPlayerData(target.getUniqueId());
+        FishingSeasonData seasonData = service.getSeasonData(target.getUniqueId());
+        FishingPermanentData permData = service.getPermanentData(target.getUniqueId());
         int collectionCount = service.getCollectionCount(target.getUniqueId());
         int totalTypes = service.getTotalFishTypes();
 
         sender.sendMessage(msg.apply("command_stats_header", new Object[]{target.getName()}));
-        sender.sendMessage(msg.apply("command_stats_level", new Object[]{String.valueOf(data.level())}));
-        sender.sendMessage(msg.apply("command_stats_xp", new Object[]{String.valueOf(data.totalXp())}));
-        sender.sendMessage(msg.apply("command_stats_total_caught", new Object[]{String.valueOf(data.totalCaught())}));
-        sender.sendMessage(msg.apply("command_stats_perfect", new Object[]{String.valueOf(data.perfectCatches())}));
+        sender.sendMessage(msg.apply("command_stats_level", new Object[]{String.valueOf(seasonData.level())}));
+        sender.sendMessage(msg.apply("command_stats_xp", new Object[]{String.valueOf(seasonData.currentXp())}));
+        sender.sendMessage(msg.apply("command_stats_total_caught", new Object[]{String.valueOf(permData.totalCaught())}));
+        sender.sendMessage(msg.apply("command_stats_perfect", new Object[]{String.valueOf(permData.perfectCatches())}));
         sender.sendMessage(msg.apply("command_stats_collection", new Object[]{collectionCount + "/" + totalTypes}));
     }
 
@@ -133,12 +138,26 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(msg.apply("command_reset", new Object[]{target.getName()}));
     }
 
+    private void handleSettlement(@NotNull CommandSender sender, @NotNull FishingService service) {
+        service.triggerSettlement();
+        sender.sendMessage("§a赛季结算已触发，所有在线玩家的结算奖励已发放。");
+    }
+
+    private void handleResetSeason(@NotNull CommandSender sender, @NotNull FishingService service) {
+        // 重置当前赛季数据（天赋/等级/经验/奖励领取记录）
+        // 注意：此操作不可逆，仅用于测试
+        sender.sendMessage("§c赛季重置功能需要手动清除数据库表 axs_fishing_season 中的当前赛季数据。");
+        sender.sendMessage("§7赛季ID: " + service.getSeasonData(((org.bukkit.entity.Player) sender).getUniqueId()).seasonId());
+    }
+
     private void showHelp(@NotNull CommandSender sender, @NotNull String label) {
         String cmd = "/" + label + " fishing";
         sender.sendMessage(msg.apply("help.title", new Object[]{}));
         sender.sendMessage(msg.apply("help.stats", new Object[]{cmd}));
         sender.sendMessage(msg.apply("help.givexp", new Object[]{cmd}));
         sender.sendMessage(msg.apply("help.reset", new Object[]{cmd}));
+        sender.sendMessage("§e" + cmd + " settlement §7— 手动触发赛季结算");
+        sender.sendMessage("§e" + cmd + " resetseason §7— 查看赛季重置说明");
     }
 
     @Override
@@ -148,7 +167,9 @@ public final class FishingAdminCommand implements ModuleCommandHandler {
                 .filter(a -> a.startsWith(args[1].toLowerCase()))
                 .toList();
         }
-        if (args.length == 3 && (args[1].equalsIgnoreCase("stats") || args[1].equalsIgnoreCase("givexp") || args[1].equalsIgnoreCase("reset"))) {
+        if (args.length == 3 && (args[1].equalsIgnoreCase("stats") || args[1].equalsIgnoreCase("givexp")
+            || args[1].equalsIgnoreCase("reset") || args[1].equalsIgnoreCase("settlement")
+            || args[1].equalsIgnoreCase("resetseason"))) {
             String partial = args[2].toLowerCase();
             return Bukkit.getOnlinePlayers().stream()
                 .map(Player::getName)

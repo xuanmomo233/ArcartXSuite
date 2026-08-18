@@ -1,0 +1,82 @@
+# AXS 钓鱼每日任务池
+# 每天 0 点自动重置并重新分配
+# 事件源：axs.fishing.success / axs.fishing.perfect / axs.fishing.treasure / axs.fishing.collection_unlock
+# payload key: fish_id, fish_rarity, fish_size, water_area, bait_id, is_perfect, player_level
+
+# -------- 每日钓鱼 --------
+daily-fish-any:
+  display-name: "日常钓鱼"
+  description: "钓到10条任意鱼"
+  difficulty: easy
+  event-topic: "axs.fishing.success"
+  required-count: 10
+  base-xp-reward: 80
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 5
+
+# -------- 完美捕获 --------
+daily-perfect:
+  display-name: "精准垂钓"
+  description: "完美捕获5条鱼"
+  difficulty: normal
+  event-topic: "axs.fishing.perfect"
+  required-count: 5
+  base-xp-reward: 120
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
+
+# -------- 钓到稀有鱼 --------
+daily-rare-fish:
+  display-name: "稀有猎手"
+  description: "钓到3条稀有或以上品质的鱼"
+  difficulty: normal
+  event-topic: "axs.fishing.success"
+  required-count: 3
+  base-xp-reward: 150
+  conditions:
+    - type: event_payload
+      key: fish_rarity
+      operator: in
+      value: "RARE,EPIC,LEGENDARY"
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 寻宝 --------
+daily-treasure:
+  display-name: "每日寻宝"
+  description: "钓到2个宝藏"
+  difficulty: normal
+  event-topic: "axs.fishing.treasure"
+  required-count: 2
+  base-xp-reward: 100
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 大鱼 --------
+daily-big-fish:
+  display-name: "大鱼传说"
+  description: "钓到5条体型≥80的鱼"
+  difficulty: hard
+  event-topic: "axs.fishing.success"
+  required-count: 5
+  base-xp-reward: 200
+  conditions:
+    - type: event_payload
+      key: fish_size
+      operator: gte
+      value: "80"
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 1

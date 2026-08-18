@@ -1,0 +1,516 @@
+# AXS 钓鱼天赋树界面
+# 打开方式: /fishing talents
+# 数据交互: packetHandler init (AXS_FISHING_TALENTS)
+# 全屏布局 + 左侧5棵树标签 + 右侧天赋节点列表
+
+ui:
+  isHud: false
+  background: true
+  escClose: true
+  closeDied: true
+  through: false
+  screenScale: true
+  show: true
+  level: 8
+  packetHandler:
+    # packetHandler: init
+    # 包字段:
+    #   - packetId: "AXS_FISHING_TALENTS"
+    #   - seasonId: 赛季ID
+    #   - level: 玩家赛季等级
+    #   - talentPoints: 总获得天赋点
+    #   - unspentTalentPoints: 未分配天赋点
+    #   - unlockedTalents: 已点亮天赋节点ID列表
+    init: |-
+      var.packetId = packet['packetId']
+      var.seasonId = packet['seasonId']
+      var.playerLevel = packet['level']
+      var.talentPoints = packet['talentPoints']
+      var.unspentTalentPoints = packet['unspentTalentPoints']
+      var.unlockedTalents = packet['unlockedTalents']
+      if(var.unlockedTalents == none){ var.unlockedTalents = [] }
+      var.currentTree = 'steady'
+      var.needRebuild = true
+    update: |-
+      var.packetId = packet['packetId']
+      var.seasonId = packet['seasonId']
+      var.playerLevel = packet['level']
+      var.talentPoints = packet['talentPoints']
+      var.unspentTalentPoints = packet['unspentTalentPoints']
+      var.unlockedTalents = packet['unlockedTalents']
+      if(var.unlockedTalents == none){ var.unlockedTalents = [] }
+      var.needRebuild = true
+  action:
+    load: |-
+      var.packetId = 'AXS_FISHING_TALENTS'
+      var.seasonId = ''
+      var.playerLevel = 1
+      var.talentPoints = 0
+      var.unspentTalentPoints = 0
+      var.unlockedTalents = []
+      var.currentTree = 'steady'
+      var.needRebuild = false
+      // 视口换算
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 96
+    open: |-
+      Packet.send(var.packetId, 'open_talents')
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 96
+
+controls:
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~top_center
+      width: 1920
+      height: 1080
+    children:
+      # 全屏毛玻璃背景
+      全屏背景:
+        type: Texture
+        attribute:
+          point: ~top_left
+          x: "-var.offX"
+          y: 0
+          width: "var.viewW"
+          height: "var.viewH"
+          normal: ~Frosted:28;12,22,38,200
+          shape: ~round_rect
+          radius: 0
+
+      # 顶栏
+      顶栏:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "-var.offX"
+          y: 0
+          width: "var.viewW"
+          height: 100
+        children:
+          顶栏底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~20,35,55,235
+              shape: ~round_rect
+              radius: 0
+            effect:
+              stroke:
+                width: 2
+                color: ~50,160,190,120
+          标题:
+            type: Text
+            attribute:
+              x: 48
+              y: 22
+              width: 400
+              height: 56
+              texts: "~&b🎣 钓鱼天赋树"
+              fontSize: 42
+          等级显示:
+            type: Text
+            attribute:
+              x: 500
+              y: 30
+              width: 300
+              height: 40
+              texts: "~&e等级: &f" + var.playerLevel
+              fontSize: 32
+          天赋点显示:
+            type: Text
+            attribute:
+              x: 800
+              y: 30
+              width: 400
+              height: 40
+              texts: "~&a可用天赋点: &f" + var.unspentTalentPoints + " / " + var.talentPoints
+              fontSize: 32
+          关闭按钮:
+            type: Canvas
+            attribute:
+              point: ~top_right
+              x: -20
+              y: 18
+              width: 64
+              height: 64
+            action:
+              click: "Screen.close()"
+            children:
+              关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~60,40,40,220
+                  hover: ~200,70,70,240
+                  shape: ~circle
+              关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 64
+                  texts: "~&f✕"
+                  fontSize: 36
+                  through: true
+
+      # 左侧导航 — 5棵天赋树标签
+      左侧导航:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: 48
+          y: 120
+          width: 280
+          height: "var.viewH - 144"
+        children:
+          导航底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~25,40,60,200
+              shape: ~round_rect
+              radius: 16
+          稳健标签:
+            type: Canvas
+            attribute:
+              x: 16
+              y: 16
+              width: 248
+              height: 80
+            action:
+              click: |-
+                var.currentTree = 'steady'
+                var.needRebuild = true
+            children:
+              标签底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.currentTree == 'steady' ? '50,120,80,220' : '35,50,70,180'"
+                  hover: "var.currentTree == 'steady' ? '60,140,90,240' : '45,60,80,200'"
+                  shape: ~round_rect
+                  radius: 12
+              标签名:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 10
+                  width: 208
+                  height: 30
+                  texts: "~&a稳健"
+                  fontSize: 32
+                  through: true
+              标签描述:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 44
+                  width: 208
+                  height: 26
+                  texts: "~&7绿条稳定性与高度"
+                  fontSize: 20
+                  through: true
+          迅捷标签:
+            type: Canvas
+            attribute:
+              x: 16
+              y: 104
+              width: 248
+              height: 80
+            action:
+              click: |-
+                var.currentTree = 'swift'
+                var.needRebuild = true
+            children:
+              标签底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.currentTree == 'swift' ? '50,100,140,220' : '35,50,70,180'"
+                  hover: "var.currentTree == 'swift' ? '60,120,160,240' : '45,60,80,200'"
+                  shape: ~round_rect
+                  radius: 12
+              标签名:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 10
+                  width: 208
+                  height: 30
+                  texts: "~&b迅捷"
+                  fontSize: 32
+                  through: true
+              标签描述:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 44
+                  width: 208
+                  height: 26
+                  texts: "~&7降低鱼速与活跃度"
+                  fontSize: 20
+                  through: true
+          威压标签:
+            type: Canvas
+            attribute:
+              x: 16
+              y: 192
+              width: 248
+              height: 80
+            action:
+              click: |-
+                var.currentTree = 'pressure'
+                var.needRebuild = true
+            children:
+              标签底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.currentTree == 'pressure' ? '140,50,50,220' : '35,50,70,180'"
+                  hover: "var.currentTree == 'pressure' ? '160,60,60,240' : '45,60,80,200'"
+                  shape: ~round_rect
+                  radius: 12
+              标签名:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 10
+                  width: 208
+                  height: 30
+                  texts: "~&c威压"
+                  fontSize: 32
+                  through: true
+              标签描述:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 44
+                  width: 208
+                  height: 26
+                  texts: "~&7压制鱼逃离行为"
+                  fontSize: 20
+                  through: true
+          专注标签:
+            type: Canvas
+            attribute:
+              x: 16
+              y: 280
+              width: 248
+              height: 80
+            action:
+              click: |-
+                var.currentTree = 'focus'
+                var.needRebuild = true
+            children:
+              标签底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.currentTree == 'focus' ? '130,60,140,220' : '35,50,70,180'"
+                  hover: "var.currentTree == 'focus' ? '150,70,160,240' : '45,60,80,200'"
+                  shape: ~round_rect
+                  radius: 12
+              标签名:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 10
+                  width: 208
+                  height: 30
+                  texts: "~&d专注"
+                  fontSize: 32
+                  through: true
+              标签描述:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 44
+                  width: 208
+                  height: 26
+                  texts: "~&7进度获取与维持"
+                  fontSize: 20
+                  through: true
+          幸运标签:
+            type: Canvas
+            attribute:
+              x: 16
+              y: 368
+              width: 248
+              height: 80
+            action:
+              click: |-
+                var.currentTree = 'lucky'
+                var.needRebuild = true
+            children:
+              标签底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: "var.currentTree == 'lucky' ? '160,130,40,220' : '35,50,70,180'"
+                  hover: "var.currentTree == 'lucky' ? '180,150,50,240' : '45,60,80,200'"
+                  shape: ~round_rect
+                  radius: 12
+              标签名:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 10
+                  width: 208
+                  height: 30
+                  texts: "~&e幸运"
+                  fontSize: 32
+                  through: true
+              标签描述:
+                type: Text
+                attribute:
+                  x: 20
+                  y: 44
+                  width: 208
+                  height: 26
+                  texts: "~&7经验售价与稀有鱼"
+                  fontSize: 20
+                  through: true
+
+          # 重置天赋按钮
+          重置按钮:
+            type: Canvas
+            attribute:
+              x: 16
+              y: "var.viewH - 280"
+              width: 248
+              height: 60
+            action:
+              click: |-
+                Packet.send(var.packetId, 'reset_talents')
+            children:
+              重置底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~120,60,60,200
+                  hover: ~160,80,80,230
+                  shape: ~round_rect
+                  radius: 12
+              重置文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 248
+                  texts: "~&f↻ 重置天赋树"
+                  fontSize: 28
+                  through: true
+
+      # 右侧内容区 — 天赋节点列表
+      内容区:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: 348
+          y: 120
+          width: "var.contentW - 300"
+          height: "var.viewH - 144"
+        children:
+          内容底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              through: true
+              normal: ~25,40,60,200
+              shape: ~round_rect
+              radius: 16
+          页标题:
+            type: Text
+            attribute:
+              x: 24
+              y: 16
+              width: 600
+              height: 40
+              texts: "var.currentTree == 'steady' ? '~&a稳健天赋树' : (var.currentTree == 'swift' ? '~&b迅捷天赋树' : (var.currentTree == 'pressure' ? '~&c威压天赋树' : (var.currentTree == 'focus' ? '~&d专注天赋树' : '~&e幸运天赋树')))"
+              fontSize: 36
+          提示文字:
+            type: Text
+            attribute:
+              x: 24
+              y: 60
+              width: "var.contentW - 360"
+              height: 30
+              texts: "~&7点击天赋节点进行点亮，每3级获得1点天赋点"
+              fontSize: 22
+
+          # 天赋节点容器（由 tick 动态生成）
+          节点容器:
+            type: Canvas
+            attribute:
+              x: 24
+              y: 100
+              width: "var.contentW - 348"
+              height: "var.viewH - 260"
+            children:
+              # 节点模板（索引0）
+              节点模板:
+                type: Canvas
+                attribute:
+                  x: 0
+                  y: 0
+                  width: 400
+                  height: 100
+                  visible: false
+                children:
+                  节点底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~40,55,75,200
+                      shape: ~round_rect
+                      radius: 12
+                  节点名:
+                    type: Text
+                    attribute:
+                      x: 16
+                      y: 10
+                      width: 368
+                      height: 30
+                      texts: "~&f天赋节点"
+                      fontSize: 26
+                      through: true
+                  节点描述:
+                    type: Text
+                    attribute:
+                      x: 16
+                      y: 42
+                      width: 368
+                      height: 26
+                      texts: "~&7描述"
+                      fontSize: 20
+                      through: true
+                  节点状态:
+                    type: Text
+                    attribute:
+                      x: 16
+                      y: 70
+                      width: 368
+                      height: 24
+                      texts: "~&e点击点亮"
+                      fontSize: 20
+                      through: true

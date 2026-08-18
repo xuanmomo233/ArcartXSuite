@@ -12,7 +12,9 @@ season-kill-1000:
   difficulty: hard
   event-topic: "axs.combateffect.kill_entity"
   bukkit-event:
-    event-class: "org.bukkit.event.entity.EntityDeathEvent"
+    event-classes:
+      - "org.bukkit.event.entity.EntityDeathEvent"
+      - "xuanmo.arcartxsuite.api.event.TaczGunKillEvent"
   required-count: 1000
   base-xp-reward: 2000
   conditions: []
@@ -41,7 +43,9 @@ season-damage-10000:
   difficulty: hard
   event-topic: "axs.combateffect.damage_dealt"
   bukkit-event:
-    event-class: "org.bukkit.event.entity.EntityDamageByEntityEvent"
+    event-classes:
+      - "org.bukkit.event.entity.EntityDamageByEntityEvent"
+      - "xuanmo.arcartxsuite.api.event.TaczGunDamageEvent"
   required-count: 10000
   base-xp-reward: 2500
   conditions: []
@@ -61,6 +65,90 @@ season-pickup-500:
     event-class: "org.bukkit.event.player.PlayerPickupItemEvent"
   required-count: 500
   base-xp-reward: 1200
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+
+# -------- 击杀Boss --------
+season-boss-kill-50:
+  display-name: "Boss终结者"
+  description: "本赛季累计击杀50个Boss（需 entitytracker 模块）"
+  difficulty: hard
+  event-topic: "axs.entitytracker.boss_kill"
+  required-count: 50
+  base-xp-reward: 3000
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+
+# -------- 钓鱼 --------
+season-fish-500:
+  display-name: "钓鱼宗师"
+  description: "本赛季累计钓鱼500次"
+  difficulty: normal
+  event-topic: "axs.fishing.success"
+  bukkit-event:
+    event-class: "org.bukkit.event.player.PlayerFishEvent"
+  required-count: 500
+  base-xp-reward: 2000
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+
+# -------- 合成物品 --------
+season-craft-500:
+  display-name: "合成宗师"
+  description: "本赛季累计合成500个物品"
+  difficulty: normal
+  event-topic: "axs.battlepass.craft_item"
+  bukkit-event:
+    event-class: "org.bukkit.event.inventory.CraftItemEvent"
+  required-count: 500
+  base-xp-reward: 2500
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+
+# -------- 挖掘方块 --------
+season-block-break-5000:
+  display-name: "挖矿狂魔"
+  description: "本赛季累计挖掘5000个方块"
+  difficulty: normal
+  event-topic: "axs.battlepass.block_break"
+  bukkit-event:
+    event-class: "org.bukkit.event.block.BlockBreakEvent"
+  required-count: 5000
+  base-xp-reward: 2000
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+
+# -------- 领取挂机奖励 --------
+season-afk-30:
+  display-name: "挂机专家"
+  description: "本赛季累计领取30次挂机奖励（需 afkreward 模块）"
+  difficulty: easy
+  event-topic: "axs.afkreward.reward_claimed"
+  required-count: 30
+  base-xp-reward: 1500
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+
+# -------- 钓到宝藏 --------
+season-treasure-50:
+  display-name: "宝藏猎人"
+  description: "本赛季累计钓到50个宝藏（需 fishing 模块）"
+  difficulty: hard
+  event-topic: "axs.fishing.treasure"
+  required-count: 50
+  base-xp-reward: 2500
   conditions: []
   increment-strategy:
     type: fixed

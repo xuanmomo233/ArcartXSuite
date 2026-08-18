@@ -28,7 +28,9 @@ weekly-kill-100:
   difficulty: hard
   event-topic: "axs.combateffect.kill_entity"
   bukkit-event:
-    event-class: "org.bukkit.event.entity.EntityDeathEvent"
+    event-classes:
+      - "org.bukkit.event.entity.EntityDeathEvent"
+      - "xuanmo.arcartxsuite.api.event.TaczGunKillEvent"
   required-count: 100
   base-xp-reward: 600
   conditions: []
@@ -65,7 +67,9 @@ weekly-damage-2000:
   difficulty: normal
   event-topic: "axs.combateffect.damage_dealt"
   bukkit-event:
-    event-class: "org.bukkit.event.entity.EntityDamageByEntityEvent"
+    event-classes:
+      - "org.bukkit.event.entity.EntityDamageByEntityEvent"
+      - "xuanmo.arcartxsuite.api.event.TaczGunDamageEvent"
   required-count: 2000
   base-xp-reward: 450
   conditions: []
@@ -91,3 +95,97 @@ weekly-fish-20:
     type: fixed
     value: 1
   weight: 3
+
+# -------- 完美钓鱼 --------
+weekly-fish-perfect-10:
+  display-name: "完美钓手"
+  description: "本周完美钓鱼10次（需 fishing 模块）"
+  difficulty: normal
+  event-topic: "axs.fishing.perfect"
+  required-count: 10
+  base-xp-reward: 500
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 仓库存入材料 --------
+weekly-warehouse-deposit:
+  display-name: "仓储管理"
+  description: "本周向仓库存入100个材料（需 warehouse 模块）"
+  difficulty: normal
+  event-topic: "axs.warehouse.item_deposited"
+  required-count: 100
+  base-xp-reward: 400
+  conditions: []
+  increment-strategy:
+    type: payload_value
+    payload-key: amount
+    max-per-event: 64
+    scale: 1.0
+  weight: 2
+
+# -------- 使用快捷道具 --------
+weekly-prop-use:
+  display-name: "道具专家"
+  description: "本周使用快捷道具20次（需 prop 模块）"
+  difficulty: normal
+  event-topic: "axs.prop.prop_used"
+  required-count: 20
+  base-xp-reward: 350
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 区域探索 --------
+weekly-region-explore:
+  display-name: "探险家"
+  description: "本周进入10个不同区域（需 regions 模块）"
+  difficulty: normal
+  event-topic: "axs.regions.region_change"
+  required-count: 10
+  base-xp-reward: 450
+  conditions:
+    - type: event_payload
+      key: type
+      operator: equals
+      value: enter
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 合成物品 --------
+weekly-craft-50:
+  display-name: "批量合成"
+  description: "本周合成50个物品"
+  difficulty: normal
+  event-topic: "axs.battlepass.craft_item"
+  bukkit-event:
+    event-class: "org.bukkit.event.inventory.CraftItemEvent"
+  required-count: 50
+  base-xp-reward: 550
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 挖掘方块 --------
+weekly-block-break-200:
+  display-name: "采矿周计划"
+  description: "本周挖掘200个方块"
+  difficulty: normal
+  event-topic: "axs.battlepass.block_break"
+  bukkit-event:
+    event-class: "org.bukkit.event.block.BlockBreakEvent"
+  required-count: 200
+  base-xp-reward: 500
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2

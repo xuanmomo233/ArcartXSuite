@@ -33,6 +33,7 @@ public final class FishingMinigame {
     private final FishingSession session;
     private final FishBehaviorEngine fishEngine;
     private final String uiId;
+    private final xuanmo.arcartxsuite.fishing.talent.TalentBonuses talentBonuses;
 
     // 物理状态
     private double fishPosition = 0.5;      // [0, 1]
@@ -57,7 +58,8 @@ public final class FishingMinigame {
     public FishingMinigame(@NotNull JavaPlugin plugin, @NotNull PacketBridgeAPI packetBridge,
                            @NotNull FishingSettings settings, @NotNull FishingService service,
                            @NotNull FishingItemGenerator itemGenerator,
-                           @NotNull FishingSession session, @NotNull String uiId) {
+                           @NotNull FishingSession session, @NotNull String uiId,
+                           @NotNull xuanmo.arcartxsuite.fishing.talent.TalentBonuses talentBonuses) {
         this.plugin = plugin;
         this.packetBridge = packetBridge;
         this.settings = settings;
@@ -65,6 +67,7 @@ public final class FishingMinigame {
         this.itemGenerator = itemGenerator;
         this.session = session;
         this.uiId = uiId;
+        this.talentBonuses = talentBonuses;
         this.fishEngine = new FishBehaviorEngine(session.fish().randomBehavior(), session.adjustedDifficulty());
     }
 
@@ -132,12 +135,12 @@ public final class FishingMinigame {
 
         // 更新鱼位置（等级越高鱼越慢，使用加权混合等级修正模型）
         double lvlMod = levelModifier();
-        double fishSpeedMultiplier = 1.0 - lvlMod; // 满级最多减速 levelModifierScale
+        double fishSpeedMultiplier = (1.0 - lvlMod) * (1.0 - talentBonuses.fishSpeedReduction());
         double fishSpeed = fishEngine.tick(fishPosition, fishVelocity, tick, session.fish().difficulty()) * fishSpeedMultiplier;
         fishVelocity = fishSpeed;
         fishPosition = clamp(fishPosition + fishSpeed, 0.0, 1.0);
         if (fishPosition <= 0.0 || fishPosition >= 1.0) {
-            fishVelocity = -fishVelocity * settings.fishEdgeBounce();
+            fishVelocity = -fishVelocity * settings.fishEdgeBounce() * (1.0 - talentBonuses.fishEdgeReduction());
             fishPosition = clamp(fishPosition, 0.0, 1.0);
         }
 
@@ -150,9 +153,10 @@ public final class FishingMinigame {
         boolean fishInsideForFlee = fishPosition >= barBottomForFlee && fishPosition <= barTopForFlee;
 
         if (fleeing) {
-            // 正在逃离：施加逃离速度
+            // 正在逃离：施加逃离速度（天赋降低逃离速度）
             if (tick < fleeUntilTick) {
-                double fleeSpeed = settings.fleeBaseSpeed() + (session.fish().difficulty() / 100.0) * settings.fleeSpeedPerDifficulty();
+                double fleeSpeed = (settings.fleeBaseSpeed() + (session.fish().difficulty() / 100.0) * settings.fleeSpeedPerDifficulty())
+                    * (1.0 - talentBonuses.fleeSpeedReduction());
                 fishVelocity = fleeDirection * fleeSpeed;
                 fishPosition = clamp(fishPosition + fishVelocity, 0.0, 1.0);
                 if (fishPosition <= 0.02 || fishPosition >= 0.98) {
@@ -161,13 +165,17 @@ public final class FishingMinigame {
             } else {
                 fleeing = false;
             }
-            // 逃离期间重置下次检查时间
-            nextFleeCheckTick = tick + settings.fleeCooldownMin() + ThreadLocalRandom.current().nextInt(settings.fleeCooldownMax() - settings.fleeCooldownMin());
+            // 逃离期间重置下次检查时间（天赋延长冷却）
+            int cooldownMin = (int) (settings.fleeCooldownMin() * (1.0 + talentBonuses.fleeCooldownBonus()));
+            int cooldownMax = (int) (settings.fleeCooldownMax() * (1.0 + talentBonuses.fleeCooldownBonus()));
+            if (cooldownMax <= cooldownMin) cooldownMax = cooldownMin + 1;
+            nextFleeCheckTick = tick + cooldownMin + ThreadLocalRandom.current().nextInt(cooldownMax - cooldownMin);
         } else if (tick >= nextFleeCheckTick) {
             // 检查是否触发驱赶：鱼在绿条内时有概率逃离
             // 难度越高，逃离概率越大；玩家等级越高，逃离概率越低（等级修正模型）
-            double fleeChance = settings.fleeBaseChance() + (session.fish().difficulty() / 100.0) * settings.fleeChancePerDifficulty();
-            fleeChance *= (1.0 - lvlMod); // 等级修正降低逃离概率
+            // 天赋降低逃离概率
+            double fleeChance = (settings.fleeBaseChance() + (session.fish().difficulty() / 100.0) * settings.fleeChancePerDifficulty())
+                * (1.0 - lvlMod) * (1.0 - talentBonuses.fleeChanceReduction());
             if (fishInsideForFlee && ThreadLocalRandom.current().nextDouble() < fleeChance) {
                 fleeing = true;
                 // 逃离方向：朝远离绿条中心的方向
@@ -175,7 +183,11 @@ public final class FishingMinigame {
                 // 如果鱼在轨道边缘，反向逃离
                 if (fleeDirection < 0 && fishPosition < 0.15) fleeDirection = 1.0;
                 if (fleeDirection > 0 && fishPosition > 0.85) fleeDirection = -1.0;
-                fleeUntilTick = tick + settings.fleeMinDuration() + ThreadLocalRandom.current().nextInt(settings.fleeMaxDuration() - settings.fleeMinDuration());
+                // 天赋缩短逃离持续时间
+                int fleeMinDur = (int) (settings.fleeMinDuration() * (1.0 - talentBonuses.fleeDurationReduction()));
+                int fleeMaxDur = (int) (settings.fleeMaxDuration() * (1.0 - talentBonuses.fleeDurationReduction()));
+                if (fleeMaxDur <= fleeMinDur) fleeMaxDur = fleeMinDur + 1;
+                fleeUntilTick = tick + fleeMinDur + ThreadLocalRandom.current().nextInt(fleeMaxDur - fleeMinDur);
             }
             nextFleeCheckTick = tick + settings.fleeCheckMinInterval() + ThreadLocalRandom.current().nextInt(settings.fleeCheckMaxInterval() - settings.fleeCheckMinInterval());
         }
@@ -184,22 +196,23 @@ public final class FishingMinigame {
         double barHeightRatio = calculateBarHeightRatio();
         double halfBar = barHeightRatio / 2.0;
 
-        // 更新绿条位置（物理：惯性 + 重力 + 点击力）
+        // 更新绿条位置（物理：惯性 + 重力 + 点击力，天赋加成阻尼/力系数/反弹）
         boolean pressing = session.isPressing();
         double force = pressing ? settings.barClickForce() : settings.barGravity();
-        barVelocity += force * settings.barForceMultiplier();
-        barVelocity *= settings.barDamping();
+        barVelocity += force * settings.barForceMultiplier() * (1.0 + talentBonuses.barForceBonus());
+        barVelocity *= settings.barDamping() + talentBonuses.barDampingBonus();
         barPosition = barPosition + barVelocity;
 
-        // 底部反弹（绿条底部碰轨道底）
+        // 底部反弹（绿条底部碰轨道底，天赋减少反弹）
+        double bounceDamping = settings.barBounceDamping() * (1.0 - talentBonuses.barBounceReduction());
         if (barPosition - halfBar <= 0.0) {
             barPosition = halfBar;
-            barVelocity = Math.abs(barVelocity) * settings.barBounceDamping();
+            barVelocity = Math.abs(barVelocity) * bounceDamping;
         }
         // 顶部反弹（绿条顶部碰轨道顶）
         if (barPosition + halfBar >= 1.0) {
             barPosition = 1.0 - halfBar;
-            barVelocity = -Math.abs(barVelocity) * settings.barBounceDamping();
+            barVelocity = -Math.abs(barVelocity) * bounceDamping;
         }
         barPosition = clamp(barPosition, halfBar, 1.0 - halfBar);
 
@@ -208,12 +221,12 @@ public final class FishingMinigame {
         double barTop = barPosition + halfBar;
         boolean fishInside = fishPosition >= barBottom && fishPosition <= barTop;
 
-        // 进度变化：等级越高进度增长越快（等级修正模型），下降速度不变
-        double progressGainMultiplier = settings.progressRateMultiplier() * (1.0 + lvlMod);
+        // 进度变化：等级越高进度增长越快（等级修正模型），天赋加成增速/减少下降
+        double progressGainMultiplier = settings.progressRateMultiplier() * (1.0 + lvlMod) * (1.0 + talentBonuses.progressRateBonus());
         if (fishInside) {
             progress += settings.progressGainRate() * progressGainMultiplier;
         } else {
-            progress -= settings.progressDrainRate() * settings.progressRateMultiplier();
+            progress -= settings.progressDrainRate() * settings.progressRateMultiplier() * (1.0 - talentBonuses.progressDrainReduction());
             wasPerfect = false;
         }
         progress = clamp(progress, 0.0, 1.0);
@@ -269,10 +282,11 @@ public final class FishingMinigame {
     }
 
     private double calculateBarHeightRatio() {
-        // 绿条像素高度 = 基础高度 + 玩家等级加成 + 鱼竿加成
+        // 绿条像素高度 = 基础高度 + 玩家等级加成 + 鱼竿加成 + 天赋加成
         int barHeightPx = settings.baseGreenBarHeight()
             + session.playerLevel() * settings.heightPerLevel()
-            + session.greenBarHeightBonus();
+            + session.greenBarHeightBonus()
+            + (int) talentBonuses.barHeightBonus();
         // 转换为 [0,1] 比例，轨道实际高度 644 像素
         double ratio = barHeightPx / 644.0;
         // 难度越高绿条越窄：难度 0 时不缩减，难度 100 时缩减 difficultyBarShrink

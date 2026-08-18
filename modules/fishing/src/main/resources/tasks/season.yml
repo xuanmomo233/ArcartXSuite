@@ -1,0 +1,76 @@
+# AXS 钓鱼赛季任务池
+# 赛季期间持续累计，赛季结束时重置
+
+# -------- 赛季钓鱼达人 --------
+season-fish-master:
+  display-name: "钓鱼达人"
+  description: "赛季期间累计钓到500条鱼"
+  difficulty: hard
+  event-topic: "axs.fishing.success"
+  required-count: 500
+  base-xp-reward: 5000
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 5
+
+# -------- 完美传奇 --------
+season-perfect-legend:
+  display-name: "完美传奇"
+  description: "赛季期间完美捕获100条鱼"
+  difficulty: hard
+  event-topic: "axs.fishing.perfect"
+  required-count: 100
+  base-xp-reward: 8000
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
+
+# -------- 传说收藏家 --------
+season-legendary-collector:
+  display-name: "传说收藏家"
+  description: "赛季期间钓到10条传说品质的鱼"
+  difficulty: hard
+  event-topic: "axs.fishing.success"
+  required-count: 10
+  base-xp-reward: 10000
+  conditions:
+    - type: event_payload
+      key: fish_rarity
+      operator: equals
+      value: "LEGENDARY"
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 1
+
+# -------- 宝藏大师 --------
+season-treasure-master:
+  display-name: "宝藏大师"
+  description: "赛季期间钓到50个宝藏"
+  difficulty: hard
+  event-topic: "axs.fishing.treasure"
+  required-count: 50
+  base-xp-reward: 6000
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 图鉴完成 --------
+season-collection-complete:
+  display-name: "图鉴大师"
+  description: "赛季期间解锁20种新鱼的图鉴"
+  difficulty: hard
+  event-topic: "axs.fishing.collection_unlock"
+  required-count: 20
+  base-xp-reward: 7000
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
