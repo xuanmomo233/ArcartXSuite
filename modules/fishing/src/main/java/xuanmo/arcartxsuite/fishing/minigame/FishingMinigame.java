@@ -253,12 +253,17 @@ public final class FishingMinigame {
     }
 
     private double calculateBarHeightRatio() {
-        // 将像素高度转换为 [0,1] 比例
-        // 假设轨道总高度为 400 像素
+        // 绿条像素高度 = 基础高度 + 玩家等级加成 + 鱼竿加成
         int barHeightPx = settings.baseGreenBarHeight()
             + session.playerLevel() * settings.heightPerLevel()
             + session.greenBarHeightBonus();
-        return Math.min(barHeightPx / 400.0, 0.9);
+        // 转换为 [0,1] 比例，轨道实际高度 644 像素
+        double ratio = barHeightPx / 644.0;
+        // 难度越高绿条越窄：难度 0 时不缩减，难度 100 时缩减 40%
+        double difficultyShrink = 1.0 - (session.adjustedDifficulty() / 100.0) * 0.4;
+        ratio *= difficultyShrink;
+        // 限制在合理范围 [0.08, 0.9]
+        return Math.max(0.08, Math.min(ratio, 0.9));
     }
 
     public void sendInitPacket(@NotNull Player player) {

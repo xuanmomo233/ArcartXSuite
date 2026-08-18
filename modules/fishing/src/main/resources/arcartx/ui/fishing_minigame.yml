@@ -184,12 +184,12 @@ controls:
                 val: 鱼图标
                 attribute:
                   slotType: ~Icon
-                  itemScale: 1.8
+                  itemScale: 1.0
                   point: ~top_left
-                  x: 88
-                  y: "(1 - var.fishY) * 580 + 8"
-                  width: 64
-                  height: 64
+                  x: 80
+                  y: "(1 - var.fishY) * 564 + 8"
+                  width: 80
+                  height: 80
                   normal: ~0,0,0,0
                   through: true
                   visible: "var.state == 'playing'"
