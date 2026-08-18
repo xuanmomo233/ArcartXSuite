@@ -84,6 +84,21 @@ public final class FishingMinigame {
     }
 
     private void tick() {
+        try {
+            tickInternal();
+        } catch (Throwable t) {
+            org.bukkit.Bukkit.getLogger().severe("[Fishing] tick 异常，强制清理小游戏: " + t.getClass().getSimpleName() + " - " + t.getMessage());
+            t.printStackTrace();
+            if (!finished) {
+                finished = true;
+                try { finishWithResult(Bukkit.getPlayer(session.playerUuid()), false, false, calculateBarHeightRatio()); } catch (Throwable ignored) {}
+                try { service.onMinigameComplete(session, false, false); } catch (Throwable ignored) {}
+            }
+            try { cleanup(); } catch (Throwable ignored) {}
+        }
+    }
+
+    private void tickInternal() {
         Player player = Bukkit.getPlayer(session.playerUuid());
         if (player == null || !session.isActive() || finished) {
             cleanup();

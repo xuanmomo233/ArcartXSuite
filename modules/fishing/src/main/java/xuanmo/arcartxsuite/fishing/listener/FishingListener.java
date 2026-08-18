@@ -30,6 +30,7 @@ public final class FishingListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlayerFish(@NotNull PlayerFishEvent event) {
+        org.bukkit.Bukkit.getLogger().info("[Fishing] onPlayerFish called, state=" + event.getState() + " replaceVanilla=" + service.isReplaceVanilla());
         if (!service.isReplaceVanilla()) {
             return;
         }
@@ -38,6 +39,7 @@ public final class FishingListener implements Listener {
 
         // 小游戏进行中：取消所有钓鱼事件（防止右键收杆打断小游戏）
         if (service.isPlayerInMinigame(player.getUniqueId())) {
+            org.bukkit.Bukkit.getLogger().warning("[Fishing] 玩家已在小游戏中，取消钓鱼事件: " + player.getName());
             event.setCancelled(true);
             return;
         }
