@@ -34,13 +34,16 @@ public final class FishingListener implements Listener {
             return;
         }
 
-        if (event.getState() != PlayerFishEvent.State.CAUGHT_FISH) {
+        Player player = event.getPlayer();
+
+        // 小游戏进行中：取消所有钓鱼事件（防止右键收杆打断小游戏）
+        if (service.isPlayerInMinigame(player.getUniqueId())) {
+            event.setCancelled(true);
             return;
         }
 
-        Player player = event.getPlayer();
-        if (service.isPlayerInMinigame(player.getUniqueId())) {
-            event.setCancelled(true);
+        // 仅在鱼上钩（CAUGHT_FISH）时启动小游戏
+        if (event.getState() != PlayerFishEvent.State.CAUGHT_FISH) {
             return;
         }
 

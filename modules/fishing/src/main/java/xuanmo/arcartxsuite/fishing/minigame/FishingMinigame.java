@@ -65,18 +65,22 @@ public final class FishingMinigame {
             return;
         }
 
-        // 打开 UI
+        // 先打开 UI，再延迟 2 tick 发送 init 包（参考 battlepass 的 openTasks 模式）
         packetBridge.openUi(player, uiId);
-        sendInitPacket(player);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (player.isOnline() && session.isActive()) {
+                sendInitPacket(player);
+            }
+        }, 2L);
 
-        // 启动 tick 任务
+        // 启动 tick 任务（延迟 2 tick 开始，确保 init 包先到达）
         long interval = Math.max(1, settings.minigameTickInterval());
         tickTask = new BukkitRunnable() {
             @Override
             public void run() {
                 tick();
             }
-        }.runTaskTimer(plugin, interval, interval);
+        }.runTaskTimer(plugin, interval + 2, interval);
     }
 
     private void tick() {
