@@ -105,7 +105,7 @@ public final class FishBehaviorEngine implements FishBehavior {
                 return 0.0;
             }
             default -> {
-                // 游荡：双频率正弦叠加 + 随机噪声
+                // 游荡：双频率正弦叠加 + 随机噪声 + 回中力
                 double amp = wanderAmp + jitter * 0.008;
                 double wave = Math.sin(tick * wanderFreq1) * amp + Math.sin(tick * wanderFreq2) * amp * 0.4;
                 double noise = (ThreadLocalRandom.current().nextDouble() - 0.5) * 0.003 * jitter;
@@ -113,7 +113,9 @@ public final class FishBehaviorEngine implements FishBehavior {
                 if (ThreadLocalRandom.current().nextDouble() < 0.05) {
                     wave += (ThreadLocalRandom.current().nextDouble() - 0.5) * 0.015 * jitter;
                 }
-                return wave + noise;
+                // 回中力：鱼偏离中心越远，向中心的拉力越大，防止卡在边缘
+                double centerPull = (0.5 - position) * 0.015;
+                return wave + noise + centerPull;
             }
         }
     }
@@ -140,8 +142,9 @@ public final class FishBehaviorEngine implements FishBehavior {
         }
         double diff = dartTarget - position;
         if (Math.abs(diff) < 0.02) {
-            // 到达目标后小幅抖动等待
-            return (ThreadLocalRandom.current().nextDouble() - 0.5) * 0.004 * jitter;
+            // 到达目标后小幅抖动等待 + 回中力
+            double centerPull = (0.5 - position) * 0.01;
+            return (ThreadLocalRandom.current().nextDouble() - 0.5) * 0.004 * jitter + centerPull;
         }
         return Math.signum(diff) * dartSpeed + (ThreadLocalRandom.current().nextDouble() - 0.5) * 0.006 * jitter;
     }

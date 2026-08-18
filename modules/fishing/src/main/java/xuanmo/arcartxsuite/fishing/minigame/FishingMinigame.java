@@ -44,6 +44,12 @@ public final class FishingMinigame {
     private boolean wasPerfect = true;      // 是否全程在绿条内
     private BukkitTask tickTask;
 
+    // 驱赶机制：鱼偶尔迅速逃离绿条范围
+    private long nextFleeCheckTick = 0;     // 下次驱赶检查的 tick
+    private boolean fleeing = false;        // 是否正在逃离
+    private long fleeUntilTick = 0;         // 逃离持续到哪个 tick
+    private double fleeDirection = 0.0;     // 逃离方向（+1 向上，-1 向下）
+
     // 结果
     private volatile boolean success = false;
     private volatile boolean finished = false;
@@ -119,6 +125,44 @@ public final class FishingMinigame {
         if (fishPosition <= 0.0 || fishPosition >= 1.0) {
             fishVelocity = -fishVelocity * 0.5;
             fishPosition = clamp(fishPosition, 0.0, 1.0);
+        }
+
+        // ── 驱赶机制：鱼偶尔迅速逃离绿条范围 ──
+        // 先算绿条高度和半高，供驱赶判定
+        double barHeightRatioForFlee = calculateBarHeightRatio();
+        double halfBarForFlee = barHeightRatioForFlee / 2.0;
+        double barBottomForFlee = barPosition - halfBarForFlee;
+        double barTopForFlee = barPosition + halfBarForFlee;
+        boolean fishInsideForFlee = fishPosition >= barBottomForFlee && fishPosition <= barTopForFlee;
+
+        if (fleeing) {
+            // 正在逃离：施加逃离速度
+            if (tick < fleeUntilTick) {
+                double fleeSpeed = 0.04 + (session.fish().difficulty() / 100.0) * 0.03;
+                fishVelocity = fleeDirection * fleeSpeed;
+                fishPosition = clamp(fishPosition + fishVelocity, 0.0, 1.0);
+                if (fishPosition <= 0.02 || fishPosition >= 0.98) {
+                    fleeing = false; // 撞到边缘停止逃离
+                }
+            } else {
+                fleeing = false;
+            }
+            // 逃离期间重置下次检查时间
+            nextFleeCheckTick = tick + 60 + ThreadLocalRandom.current().nextInt(80);
+        } else if (tick >= nextFleeCheckTick) {
+            // 检查是否触发驱赶：鱼在绿条内时有概率逃离
+            // 难度越高，逃离概率越大、间隔越短
+            double fleeChance = 0.12 + (session.fish().difficulty() / 100.0) * 0.18;
+            if (fishInsideForFlee && ThreadLocalRandom.current().nextDouble() < fleeChance) {
+                fleeing = true;
+                // 逃离方向：朝远离绿条中心的方向
+                fleeDirection = fishPosition < barPosition ? -1.0 : 1.0;
+                // 如果鱼在轨道边缘，反向逃离
+                if (fleeDirection < 0 && fishPosition < 0.15) fleeDirection = 1.0;
+                if (fleeDirection > 0 && fishPosition > 0.85) fleeDirection = -1.0;
+                fleeUntilTick = tick + 15 + ThreadLocalRandom.current().nextInt(20);
+            }
+            nextFleeCheckTick = tick + 40 + ThreadLocalRandom.current().nextInt(60);
         }
 
         // 计算绿条高度（基于玩家等级）—— 先算高度，碰撞用绿条顶底

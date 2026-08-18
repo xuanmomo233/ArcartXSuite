@@ -187,7 +187,7 @@ controls:
                   itemScale: 1.8
                   point: ~top_left
                   x: 88
-                  y: "(1 - var.fishY) * 644 - 32 + 8"
+                  y: "(1 - var.fishY) * 580 + 8"
                   width: 64
                   height: 64
                   normal: ~0,0,0,0
