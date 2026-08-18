@@ -194,8 +194,20 @@ public final class LootScannerService implements Listener {
             disabledPlayers.add(playerId);
             playerStates.remove(playerId);
             menuOpenPlayers.remove(playerId);
+            // 立即关闭 loot_panel HUD 与 loot_interact Menu
+            Player player = Bukkit.getPlayer(playerId);
+            if (player != null && player.isOnline() && packetBridge.isAvailable()) {
+                packetBridge.closeUi(player, interactUiId);
+                packetBridge.closeUi(player, uiId);
+            }
+            hudOpenPlayers.remove(playerId);
         } else {
             disabledPlayers.remove(playerId);
+            // 立即重新打开 loot_panel HUD（若当前未打开）
+            Player player = Bukkit.getPlayer(playerId);
+            if (player != null && player.isOnline()) {
+                openHudForPlayer(player);
+            }
         }
         return !shouldDisable;
     }

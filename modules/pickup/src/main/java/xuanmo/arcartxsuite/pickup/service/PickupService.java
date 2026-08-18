@@ -32,7 +32,8 @@ public final class PickupService implements Listener {
 
     private static final long PREOPEN_DELAY_TICKS = 5L;
     private static final long OPENED_PACKET_DELAY_TICKS = 1L;
-    private static final long FALLBACK_OPEN_PACKET_DELAY_TICKS = 40L;
+    /** openUi 成功后延迟多少 tick 将玩家标记为已打开并 flush 待发队列 */
+    private static final long OPEN_CONFIRM_DELAY_TICKS = 40L;
     /** 玩家进服后延迟多少 tick 尝试打开 HUD（等待客户端 HUD 体系就绪） */
     private static final long JOIN_OPEN_DELAY_TICKS = 40L;
 
@@ -43,7 +44,6 @@ public final class PickupService implements Listener {
     private final ItemBridgeAPI itemStackBridge;
     private final String uiId;
     private final Set<UUID> openedPlayers = ConcurrentHashMap.newKeySet();
-    private final Set<UUID> openingPlayers = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Deque<Map<String, Object>>> pendingPickups = new ConcurrentHashMap<>();
     /** 手动关闭拾取通知的玩家集合 */
     private final Set<UUID> disabledPlayers = ConcurrentHashMap.newKeySet();
@@ -70,8 +70,8 @@ public final class PickupService implements Listener {
         active = true;
         Bukkit.getPluginManager().registerEvents(this, plugin);
         AxsScheduler.runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS);
-        // reload 后 ArcartX 客户端重建 HUD 可能需要更长时间，安排二次确认重试
-        AxsScheduler.runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS + FALLBACK_OPEN_PACKET_DELAY_TICKS);
+        // 二次兜底：首次打开时客户端可能尚未就绪，延迟重试
+        AxsScheduler.runTaskLater(plugin, this::openForOnlinePlayers, PREOPEN_DELAY_TICKS + OPEN_CONFIRM_DELAY_TICKS);
     }
 
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
@@ -88,7 +88,6 @@ public final class PickupService implements Listener {
             }
         }
         openedPlayers.clear();
-        openingPlayers.clear();
         pendingPickups.clear();
         disabledPlayers.clear();
     }
@@ -110,8 +109,20 @@ public final class PickupService implements Listener {
         }
         if (shouldDisable) {
             disabledPlayers.add(playerId);
+            // 立即关闭 HUD 并清理该玩家的打开状态与待发队列
+            Player player = Bukkit.getPlayer(playerId);
+            if (player != null && player.isOnline() && bridge.isAvailable()) {
+                bridge.closeUi(player, uiId);
+            }
+            openedPlayers.remove(playerId);
+            pendingPickups.remove(playerId);
         } else {
             disabledPlayers.remove(playerId);
+            // 立即重新打开 HUD（若当前未打开）
+            Player player = Bukkit.getPlayer(playerId);
+            if (player != null && player.isOnline()) {
+                ensureUiOpen(player);
+            }
         }
         return !shouldDisable;
     }
@@ -216,7 +227,7 @@ public final class PickupService implements Listener {
      * 玩家进服时打开常驻通知 HUD。
      * <p>
      * 延迟到客户端 HUD 体系就绪后再发包；onClientInitialized 作为更可靠的
-     * 补充入口存在，二者通过 openedPlayers/openingPlayers 去重。
+     * 补充入口存在，二者通过 openedPlayers 去重。
      */
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
@@ -232,7 +243,6 @@ public final class PickupService implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         UUID playerId = event.getPlayer().getUniqueId();
         openedPlayers.remove(playerId);
-        openingPlayers.remove(playerId);
         pendingPickups.remove(playerId);
     }
 
@@ -244,24 +254,16 @@ public final class PickupService implements Listener {
         if (openedPlayers.contains(playerId)) {
             return true;
         }
-        if (openingPlayers.contains(playerId)) {
+
+        // 不依赖客户端回调确认，openUi 返回 true 即视为服务端已下发打开指令。
+        // 延迟 OPEN_CONFIRM_DELAY_TICKS 后将玩家标记为已打开并 flush 待发队列，
+        // 给客户端足够时间完成 HUD 渲染。后续 onClientInitialized 会兜底重试。
+        boolean opened = bridge.openUi(player, uiId);
+        if (opened) {
+            logOpenMode(player, "open");
+            AxsScheduler.runTaskLater(plugin, () -> handleUiOpened(player), OPEN_CONFIRM_DELAY_TICKS);
             return true;
         }
-
-        openingPlayers.add(playerId);
-        boolean callbackOpen = bridge.openUiWithCallback(player, uiId, () -> handleUiOpened(player));
-        if (callbackOpen) {
-            logOpenMode(player, "callback");
-            return true;
-        }
-
-        if (bridge.openUi(player, uiId)) {
-            logOpenMode(player, "fallback-delay");
-            AxsScheduler.runTaskLater(plugin, () -> handleUiOpened(player), FALLBACK_OPEN_PACKET_DELAY_TICKS);
-            return true;
-        }
-
-        openingPlayers.remove(playerId);
         return false;
     }
 
@@ -279,7 +281,6 @@ public final class PickupService implements Listener {
             return;
         }
         UUID playerId = player.getUniqueId();
-        openingPlayers.remove(playerId);
         openedPlayers.add(playerId);
         flushPendingPickups(player);
     }

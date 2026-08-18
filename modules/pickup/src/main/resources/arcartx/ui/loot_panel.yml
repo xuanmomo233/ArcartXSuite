@@ -145,7 +145,7 @@ controls:
       height: 1080
     action:
       click: |-
-        if(client.pickup && !var.menuOpen){
+        if(var.count > 0 && !var.menuOpen){
           Packet.send('pickup', 'pick')
         }
     children:

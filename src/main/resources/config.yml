@@ -188,6 +188,7 @@ keybinds:
   #   - Pickup 扫描模式（优先级 10）：按下打开拾取交互菜单
   #   - Conversation 对话（优先级 50）：按下确认/推进对话
   # 拾取优先于对话，故扫描模式开启时此键归拾取。
+  # Pickup 模块会在 pickup-pick 留空时默认订阅此键。
   interact:
     name: AXS_INTERACT
     default-key: G
@@ -205,7 +206,8 @@ keybinds:
     default-key: DOWN
     category: ArcartXSuite
   # Pickup 扫描模式专用拾取键（按键打开 loot_interact 交互菜单）。
-  # 由宿主统一注册到客户端，pickup 模块通过 scanner.keybind.name 订阅此按键回调。
+  # 仅当配置 pickup-pick 时才订阅此键；
+  # 若 pickup-pick 留空则 pickup 默认订阅上面的 AXS_INTERACT，此键不启用。
   pickup-pick:
     name: AXS_PICKUP_PICK
     default-key: F

@@ -145,7 +145,7 @@ public record PickupModuleConfiguration(
             Math.max(0, config.getInt("scanner.pickup-delay-ticks", 40)),
             config.getBoolean("scanner.merge-same-items", true),
             readString(config, "scanner.interact-ui-id", "AXS:loot_interact"),
-            readString(config, "scanner.keybind.name", "AXS_PICKUP_PICK")
+            readString(config, "scanner.keybind.name", "AXS_INTERACT")
         );
 
         FilterConfig filter = loadFilter(config);

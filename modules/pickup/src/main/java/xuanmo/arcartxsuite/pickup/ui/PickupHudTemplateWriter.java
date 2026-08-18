@@ -78,44 +78,44 @@ public final class PickupHudTemplateWriter {
         }
         line(builder, 0, "");
         line(builder, 0, "controls:");
-        line(builder, 1, "adaptive:");
+        line(builder, 1, "自适应全局布局:");
         line(builder, 2, "type: Adaptive");
         line(builder, 2, "attribute:");
         line(builder, 3, "point: ~stretch_all");
         line(builder, 3, "width: 1920");
         line(builder, 3, "height: 1080");
         line(builder, 2, "children:");
-        line(builder, 3, "pickup_stack:");
+        line(builder, 3, "拾取纵向布局:");
         line(builder, 4, "type: VStack");
         line(builder, 4, "attribute:");
         line(builder, 5, "point: ~bottom_right");
-        line(builder, 5, "x: -210");
+        line(builder, 5, "x: -300");
         line(builder, 5, "y: -120");
         line(builder, 5, "spaceBetween: 8");
         line(builder, 4, "children:");
 
         for (int index = 1; index <= maxVisible; index++) {
-            line(builder, 5, "pickup_entry_" + index + ":");
+            line(builder, 5, "拾取条目" + index + ":");
             line(builder, 6, "type: Canvas");
             line(builder, 6, "attribute:");
-            line(builder, 7, "width: 240");
+            line(builder, 7, "width: self['文字'].width + 80");
             line(builder, 7, "height: 60");
             line(builder, 7, "visible: var.entry" + index + "Visible");
             line(builder, 6, "children:");
 
-            line(builder, 7, "background" + index + ":");
+            line(builder, 7, "背景:");
             line(builder, 8, "type: Texture");
             line(builder, 8, "attribute:");
             line(builder, 9, "point: ~stretch_all");
-            line(builder, 9, "normal: ~255,255,255,120");
+            line(builder, 9, "normal: ~Frosted:30;95,95,95,220");
             line(builder, 9, "shape: ~round_rect");
             line(builder, 9, "radius: 16");
             line(builder, 8, "effect:");
             line(builder, 9, "stroke:");
             line(builder, 10, "width: 2");
-            line(builder, 10, "color: ~0,0,0,120");
+            line(builder, 10, "color: ~0,0,0,255");
 
-            line(builder, 7, "slot" + index + ":");
+            line(builder, 7, "图标:");
             line(builder, 8, "val: pickup_slot_" + index);
             line(builder, 8, "type: Slot");
             line(builder, 8, "attribute:");
@@ -130,7 +130,7 @@ public final class PickupHudTemplateWriter {
             line(builder, 9, "itemScale: 0.85");
             line(builder, 9, "visible: var.entry" + index + "ItemJson != none");
 
-            line(builder, 7, "text" + index + ":");
+            line(builder, 7, "文字:");
             line(builder, 8, "type: Text");
             line(builder, 8, "attribute:");
             line(builder, 9, "point: ~middle_left");

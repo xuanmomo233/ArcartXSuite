@@ -54,10 +54,9 @@ scanner:
   # 交互 Menu 的 UI ID（按自定义交互键打开的透明菜单，用于捕获滚轮/按键输入）
   interact-ui-id: "AXS:loot_interact"
   # 拾取按键绑定：声明扫描模式订阅的客户端按键 ID。
-  # 该按键由宿主 config.yml 的 keybinds.pickup-pick 统一注册到 ArcartX 客户端，
-  # 玩家可在按键设置中修改。服务端通过此 name 订阅按键回调，按键触发后
-  # 由服务端发包通知客户端打开交互菜单（客户端无需感知按键 name）。
-  # 如需更换按键名，须同步修改宿主 config.yml 的 keybinds 节，否则按键无法注册。
+  # 留空或不配置时默认使用 AXS_INTERACT（宿主全局交互键，与对话模块共享，拾取优先级更高）。
+  # 若想用独立按键，填 AXS_PICKUP_PICK（宿主 config.yml keybinds.pickup-pick 注册的专用键）。
+  # 无论填哪个，对应的按键都必须在宿主 config.yml 的 keybinds 节中注册，否则按键无法触发。
   keybind:
     name: AXS_PICKUP_PICK
 

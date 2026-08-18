@@ -191,13 +191,8 @@ public final class PickupModule extends AbstractAXSModule {
             playerId -> scannerService != null && scannerService.isEnabled(playerId));
 
         // 注册宿主全局按键回调（优先级 10，拾取优先于对话）
-        // 使用配置的 keybindName，默认 AXS_INTERACT（宿主全局交互键）
-        String keybindName = configuration.scanner().keybindName();
-        if (keybindName == null || keybindName.isBlank()) {
-            keybindName = "AXS_INTERACT";
-        }
-        final String resolvedKeybindName = keybindName;
-        registerKeybindHandler(resolvedKeybindName, 10, (player, keyName) ->
+        // keybindName 由 PickupModuleConfiguration 保证非空，默认 AXS_INTERACT（宿主全局交互键）
+        registerKeybindHandler(configuration.scanner().keybindName(), 10, (player, keyName) ->
             scannerService != null && scannerService.handleInteractKeyFromHost(player)
         );
 
