@@ -121,7 +121,7 @@ public final class FishingMinigame {
         boolean pressing = session.isPressing();
         double force = pressing ? settings.barClickForce() : settings.barGravity();
         barVelocity += force * 0.1;
-        barVelocity *= 0.92; // 阻尼
+        barVelocity *= 0.85; // 阻尼
         barPosition = clamp(barPosition + barVelocity, 0.0, 1.0);
 
         // 底部反弹
