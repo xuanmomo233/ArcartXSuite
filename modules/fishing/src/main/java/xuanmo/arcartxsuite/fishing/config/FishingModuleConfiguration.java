@@ -470,6 +470,7 @@ public record FishingModuleConfiguration(
         double barForceMultiplier,
         double barDamping,
         int catchDurationTicks,
+        int fishingCooldownTicks,
         double progressDrainRate,
         double progressGainRate,
         double progressRateMultiplier,
@@ -502,6 +503,7 @@ public record FishingModuleConfiguration(
                 section.getDouble("bar-force-multiplier", 0.03),
                 section.getDouble("bar-damping", 0.85),
                 section.getInt("catch-duration-ticks", 600),
+                section.getInt("fishing-cooldown-ticks", 100),
                 section.getDouble("progress-drain-rate", 0.5),
                 section.getDouble("progress-gain-rate", 1.0),
                 section.getDouble("progress-rate-multiplier", 0.008),
@@ -512,16 +514,16 @@ public record FishingModuleConfiguration(
                 section.getDouble("treasure-chance", 0.15),
                 section.getDouble("perfect-bonus-multiplier", 1.5),
                 section.getInt("base-xp-per-level", 100),
-                section.getDouble("flee-base-chance", 0.12),
-                section.getDouble("flee-chance-per-difficulty", 0.18),
+                section.getDouble("flee-base-chance", 0.25),
+                section.getDouble("flee-chance-per-difficulty", 0.25),
                 section.getDouble("flee-base-speed", 0.04),
                 section.getDouble("flee-speed-per-difficulty", 0.03),
                 section.getInt("flee-min-duration", 15),
                 section.getInt("flee-max-duration", 35),
-                section.getInt("flee-check-min-interval", 40),
-                section.getInt("flee-check-max-interval", 100),
-                section.getInt("flee-cooldown-min", 60),
-                section.getInt("flee-cooldown-max", 140)
+                section.getInt("flee-check-min-interval", 20),
+                section.getInt("flee-check-max-interval", 50),
+                section.getInt("flee-cooldown-min", 30),
+                section.getInt("flee-cooldown-max", 70)
             );
         }
     }

@@ -35,6 +35,9 @@ fishing:
   bar-damping: 0.85
   # 单次小游戏最长持续时间（ticks），超时视为失败。
   catch-duration-ticks: 600
+  # 钓鱼冷却时间（ticks）：小游戏结束后多少 ticks 内无法再次触发钓鱼。
+  # 20 ticks = 1 秒，默认 100 ticks = 5 秒。
+  fishing-cooldown-ticks: 100
   # 未按住鼠标时进度下降速率。
   progress-drain-rate: 0.5
   # 按住鼠标时进度上升速率。
@@ -60,8 +63,8 @@ fishing:
   # 鱼在绿条内时，每隔一段检查时间有概率触发逃离冲刺。
   # 难度越高，逃离概率越大、速度越快。
   # 基础逃离概率（难度0时），每点难度增加 flee-chance-per-difficulty。
-  flee-base-chance: 0.12
-  flee-chance-per-difficulty: 0.18
+  flee-base-chance: 0.25
+  flee-chance-per-difficulty: 0.25
   # 基础逃离速度，每点难度增加 flee-speed-per-difficulty。
   flee-base-speed: 0.04
   flee-speed-per-difficulty: 0.03
@@ -69,11 +72,11 @@ fishing:
   flee-min-duration: 15
   flee-max-duration: 35
   # 逃离检查间隔 ticks 范围 [min, max)，每隔这段时间检查一次是否触发。
-  flee-check-min-interval: 40
-  flee-check-max-interval: 100
+  flee-check-min-interval: 20
+  flee-check-max-interval: 50
   # 逃离结束后冷却 ticks 范围 [min, max)，冷却期间不会再次逃离。
-  flee-cooldown-min: 60
-  flee-cooldown-max: 140
+  flee-cooldown-min: 30
+  flee-cooldown-max: 70
 
 # ─── 水域定义 ────────────────────────────────────────
 # 指定地点: 玩家在指定坐标/区域内钓鱼

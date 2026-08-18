@@ -54,6 +54,7 @@ public final class FishingService {
     private final Logger logger;
     private final String minigameUiId;
     private final Map<UUID, FishingMinigame> activeMinigames = new HashMap<>();
+    private final Map<UUID, Long> fishingCooldowns = new HashMap<>(); // 玩家UUID → 冷却到期时间戳(System.currentTimeMillis)
     private MessageProvider messageProvider;
 
     // 跨模块能力提供者（懒加载，避免循环依赖）
@@ -122,6 +123,7 @@ public final class FishingService {
             } catch (Exception ignored) {}
         }
         activeMinigames.clear();
+        fishingCooldowns.clear();
         repository.shutdown();
     }
 
@@ -148,6 +150,11 @@ public final class FishingService {
         }
         if (isPlayerInMinigame(player.getUniqueId())) {
             org.bukkit.Bukkit.getLogger().warning("[Fishing] startMinigame 失败: 玩家已在小游戏中");
+            return false;
+        }
+        // 钓鱼冷却检查
+        Long cooldownUntil = fishingCooldowns.get(player.getUniqueId());
+        if (cooldownUntil != null && cooldownUntil > System.currentTimeMillis()) {
             return false;
         }
 
@@ -210,6 +217,12 @@ public final class FishingService {
 
     public void onMinigameComplete(@NotNull FishingSession session, boolean success, boolean perfect) {
         activeMinigames.remove(session.playerUuid());
+        // 设置钓鱼冷却
+        int cooldownTicks = configuration.fishing().fishingCooldownTicks();
+        if (cooldownTicks > 0) {
+            long cooldownMs = cooldownTicks * 50L; // 1 tick = 50ms
+            fishingCooldowns.put(session.playerUuid(), System.currentTimeMillis() + cooldownMs);
+        }
         Player player = Bukkit.getPlayer(session.playerUuid());
         if (player == null) return;
 
