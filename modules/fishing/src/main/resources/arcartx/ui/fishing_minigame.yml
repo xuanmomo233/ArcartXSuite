@@ -84,11 +84,10 @@ controls:
     children:
       主卡片:
         type: Canvas
-        val: "主卡片"
         attribute:
           point: ~middle_center
-          width: 760
-          height: 640
+          width: 960
+          height: 800
         children:
           卡片背景:
             type: Texture
@@ -96,24 +95,18 @@ controls:
               point: ~stretch_all
               normal: ~14,30,48,235
               shape: ~round_rect
-              radius: 20
+              radius: 24
             effect:
               stroke:
                 width: 2
                 color: ~60,170,200,100
-              shadow:
-                xOffset: 0
-                yOffset: 6
-                blur: 20
-                color: ~0,0,0,180
 
           标题栏:
             type: Canvas
             attribute:
-              x: 0
-              y: 0
-              width: 760
-              height: 60
+              point: ~top_center
+              width: 960
+              height: 80
             children:
               标题背景:
                 type: Texture
@@ -121,26 +114,23 @@ controls:
                   point: ~stretch_all
                   normal: ~20,42,62,220
                   shape: ~round_rect
-                  radius: 20
+                  radius: 24
               标题文字:
                 type: Text
                 attribute:
-                  x: 0
-                  y: 14
-                  width: 760
-                  texts: "~&b&l钓鱼中"
-                  fontSize: 32
-                  center: true
+                  point: ~middle_center
+                  texts: "~&b钓鱼中"
+                  fontSize: 44
                   through: true
 
           轨道区:
             type: Canvas
-            val: "轨道区"
             attribute:
-              x: 40
-              y: 80
-              width: 180
-              height: 520
+              point: ~top_left
+              x: 50
+              y: 110
+              width: 240
+              height: 660
             children:
               轨道背景:
                 type: Texture
@@ -148,7 +138,7 @@ controls:
                   point: ~stretch_all
                   normal: ~8,20,35,220
                   shape: ~round_rect
-                  radius: 14
+                  radius: 16
                 effect:
                   stroke:
                     width: 2
@@ -157,13 +147,14 @@ controls:
               水深渐变:
                 type: Texture
                 attribute:
-                  x: 6
-                  y: 6
-                  width: 168
-                  height: 508
+                  point: ~top_left
+                  x: 8
+                  y: 8
+                  width: 224
+                  height: 644
                   normal: ~12,28,42,255
                   shape: ~round_rect
-                  radius: 12
+                  radius: 14
                 effect:
                   gradient:
                     color1: ~18,45,70,200
@@ -174,46 +165,44 @@ controls:
               绿条:
                 type: Texture
                 attribute:
-                  x: 12
-                  y: "(1 - var.barY - var.barHeight / 2) * 508 + 6"
-                  width: 156
-                  height: "var.barHeight * 508"
+                  point: ~top_left
+                  x: 16
+                  y: "(1 - var.barY - var.barHeight / 2) * 644 + 8"
+                  width: 208
+                  height: "var.barHeight * 644"
                   normal: ~80,220,160,210
                   shape: ~round_rect
-                  radius: 10
+                  radius: 12
                   visible: "var.state == 'playing'"
                 effect:
                   stroke:
                     width: 2
                     color: ~140,255,200,180
-                  shadow:
-                    xOffset: 0
-                    yOffset: 0
-                    blur: 8
-                    color: ~100,255,180,100
 
               鱼图标:
                 type: Slot
                 val: 鱼图标
                 attribute:
                   slotType: ~Icon
-                  itemScale: 1.5
-                  x: 66
-                  y: "(1 - var.fishY) * 508 - 24 + 6"
-                  width: 48
-                  height: 48
+                  itemScale: 1.8
+                  point: ~top_left
+                  x: 88
+                  y: "(1 - var.fishY) * 644 - 32 + 8"
+                  width: 64
+                  height: 64
                   normal: ~0,0,0,0
                   through: true
                   visible: "var.state == 'playing'"
-                  seticon: "self.setItemIcon(var.fishIconJson != none && var.fishIconJson != '' ? var.fishIconJson : var.emptyItemJson)"
+                  seticon: "self.setItemIcon(var.fishIconJson)"
 
           信息面板:
             type: Canvas
             attribute:
-              x: 250
-              y: 80
-              width: 470
-              height: 520
+              point: ~top_left
+              x: 320
+              y: 110
+              width: 590
+              height: 660
             children:
               信息背景:
                 type: Texture
@@ -221,7 +210,7 @@ controls:
                   point: ~stretch_all
                   normal: ~12,28,42,200
                   shape: ~round_rect
-                  radius: 14
+                  radius: 16
                 effect:
                   stroke:
                     width: 1
@@ -230,10 +219,11 @@ controls:
               鱼名称区:
                 type: Canvas
                 attribute:
-                  x: 20
-                  y: 20
-                  width: 430
-                  height: 90
+                  point: ~top_left
+                  x: 24
+                  y: 24
+                  width: 542
+                  height: 110
                 children:
                   鱼名称背景:
                     type: Texture
@@ -241,7 +231,7 @@ controls:
                       point: ~stretch_all
                       normal: "var.rarityColor + ',40'"
                       shape: ~round_rect
-                      radius: 12
+                      radius: 14
                     effect:
                       stroke:
                         width: 1
@@ -249,20 +239,20 @@ controls:
                   鱼名称:
                     type: Text
                     attribute:
-                      x: 20
-                      y: 22
-                      width: 390
+                      point: ~middle_left
+                      x: 24
                       texts: "var.rarityTag + var.fishName"
-                      fontSize: 40
+                      fontSize: 44
                       through: true
 
               稀有度区:
                 type: Canvas
                 attribute:
-                  x: 20
-                  y: 130
-                  width: 430
-                  height: 56
+                  point: ~top_left
+                  x: 24
+                  y: 160
+                  width: 542
+                  height: 72
                 children:
                   稀有度背景:
                     type: Texture
@@ -270,7 +260,7 @@ controls:
                       point: ~stretch_all
                       normal: "var.rarityColor + ',30'"
                       shape: ~round_rect
-                      radius: 10
+                      radius: 12
                     effect:
                       stroke:
                         width: 1
@@ -278,20 +268,20 @@ controls:
                   稀有度文字:
                     type: Text
                     attribute:
-                      x: 20
-                      y: 14
-                      width: 390
+                      point: ~middle_left
+                      x: 24
                       texts: "var.rarityTag + '◆ ' + var.rarityLabel + '  &7尺寸: &f' + var.caughtSize + ' cm'"
-                      fontSize: 26
+                      fontSize: 30
                       through: true
 
               时间区:
                 type: Canvas
                 attribute:
-                  x: 20
-                  y: 206
-                  width: 430
-                  height: 56
+                  point: ~top_left
+                  x: 24
+                  y: 256
+                  width: 542
+                  height: 72
                 children:
                   时间背景:
                     type: Texture
@@ -299,7 +289,7 @@ controls:
                       point: ~stretch_all
                       normal: ~20,38,55,180
                       shape: ~round_rect
-                      radius: 10
+                      radius: 12
                     effect:
                       stroke:
                         width: 1
@@ -307,40 +297,41 @@ controls:
                   时间文字:
                     type: Text
                     attribute:
-                      x: 20
-                      y: 14
-                      width: 390
+                      point: ~middle_left
+                      x: 24
                       texts: "'&7剩余时间: &f' + (var.timeLeft / 20).round() + ' 秒'"
-                      fontSize: 26
+                      fontSize: 30
                       through: true
 
               进度区:
                 type: Canvas
                 attribute:
-                  x: 20
-                  y: 282
-                  width: 430
-                  height: 90
+                  point: ~top_left
+                  x: 24
+                  y: 352
+                  width: 542
+                  height: 120
                 children:
                   进度标签:
                     type: Text
                     attribute:
+                      point: ~top_left
                       x: 0
                       y: 0
-                      width: 430
                       texts: "'&7进度: &f' + (var.progress * 100).round() + '%'"
-                      fontSize: 24
+                      fontSize: 28
                       through: true
                   进度条背景:
                     type: Texture
                     attribute:
+                      point: ~top_left
                       x: 0
-                      y: 36
-                      width: 430
-                      height: 40
+                      y: 44
+                      width: 542
+                      height: 52
                       normal: ~15,25,38,230
                       shape: ~round_rect
-                      radius: 12
+                      radius: 14
                     effect:
                       stroke:
                         width: 1
@@ -348,21 +339,23 @@ controls:
                   进度条填充:
                     type: Texture
                     attribute:
-                      x: 3
-                      y: 39
-                      width: "var.progress * 424"
-                      height: 34
+                      point: ~top_left
+                      x: 4
+                      y: 48
+                      width: "var.progress * 534"
+                      height: 44
                       normal: "var.progress >= 1.0 ? '100,220,140,255' : (var.fishInside ? '60,190,220,245' : '220,100,90,245')"
                       shape: ~round_rect
-                      radius: 10
+                      radius: 12
 
               操作提示区:
                 type: Canvas
                 attribute:
-                  x: 20
-                  y: 392
-                  width: 430
-                  height: 108
+                  point: ~top_left
+                  x: 24
+                  y: 496
+                  width: 542
+                  height: 140
                 children:
                   提示背景:
                     type: Texture
@@ -370,7 +363,7 @@ controls:
                       point: ~stretch_all
                       normal: ~18,32,48,180
                       shape: ~round_rect
-                      radius: 12
+                      radius: 14
                     effect:
                       stroke:
                         width: 1
@@ -378,37 +371,37 @@ controls:
                   提示标题:
                     type: Text
                     attribute:
-                      x: 20
-                      y: 14
-                      width: 390
+                      point: ~top_left
+                      x: 24
+                      y: 18
                       texts: "~&e操作说明"
-                      fontSize: 24
+                      fontSize: 28
                       through: true
                   提示内容:
                     type: Text
                     attribute:
-                      x: 20
-                      y: 48
-                      width: 390
+                      point: ~top_left
+                      x: 24
+                      y: 60
                       texts: "~&7按住 &f空格 &7或 &f鼠标 &7控制绿条"
-                      fontSize: 22
+                      fontSize: 26
                       through: true
                   提示内容2:
                     type: Text
                     attribute:
-                      x: 20
-                      y: 76
-                      width: 390
+                      point: ~top_left
+                      x: 24
+                      y: 96
                       texts: "~&7让绿条追踪鱼的位置以填满进度"
-                      fontSize: 22
+                      fontSize: 26
                       through: true
 
           结果覆盖层:
             type: Canvas
             attribute:
               point: ~middle_center
-              width: 520
-              height: 300
+              width: 640
+              height: 380
               visible: "var.state == 'success' || var.state == 'failed'"
             children:
               结果背景:
@@ -417,43 +410,32 @@ controls:
                   point: ~stretch_all
                   normal: "var.state == 'success' ? '18,50,35,240' : '55,20,20,240'"
                   shape: ~round_rect
-                  radius: 20
+                  radius: 24
                 effect:
                   stroke:
                     width: 3
                     color: "var.state == 'success' ? '100,230,150,200' : '230,100,90,200'"
-                  shadow:
-                    xOffset: 0
-                    yOffset: 6
-                    blur: 20
-                    color: ~0,0,0,180
               结果文字:
                 type: Text
                 attribute:
-                  x: 0
-                  y: 60
-                  width: 520
-                  texts: "var.state == 'success' ? '&a&l✓ 捕获成功！' : '&c&l✕ 鱼逃走了...'"
-                  fontSize: 52
-                  center: true
+                  point: ~top_center
+                  y: 70
+                  texts: "var.state == 'success' ? '&a✓ 捕获成功！' : '&c✕ 鱼逃走了...'"
+                  fontSize: 56
                   through: true
               结果详情:
                 type: Text
                 attribute:
-                  x: 0
-                  y: 140
-                  width: 520
+                  point: ~top_center
+                  y: 170
                   texts: "var.state == 'success' ? (var.rarityTag + var.fishName + ' &7尺寸: &f' + var.caughtSize + ' cm') : '&7再试一次吧'"
-                  fontSize: 30
-                  center: true
+                  fontSize: 34
                   through: true
               结果稀有度:
                 type: Text
                 attribute:
-                  x: 0
-                  y: 190
-                  width: 520
+                  point: ~top_center
+                  y: 230
                   texts: "var.state == 'success' ? (var.rarityTag + '◆ ' + var.rarityLabel) : ''"
-                  fontSize: 26
-                  center: true
+                  fontSize: 30
                   through: true

@@ -126,10 +126,11 @@ public final class FishingMinigame {
         double halfBar = barHeightRatio / 2.0;
 
         // 更新绿条位置（物理：惯性 + 重力 + 点击力）
+        // 力系数较小 + 阻尼较高，让绿条操控细腻、不暴冲
         boolean pressing = session.isPressing();
         double force = pressing ? settings.barClickForce() : settings.barGravity();
-        barVelocity += force * 0.1;
-        barVelocity *= 0.88; // 阻尼
+        barVelocity += force * 0.04;
+        barVelocity *= 0.82; // 阻尼较高，速度衰减快，便于精准操控
         barPosition = barPosition + barVelocity;
 
         // 底部反弹（绿条底部碰轨道底）
