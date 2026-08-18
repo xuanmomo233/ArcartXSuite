@@ -123,7 +123,7 @@ public final class FishingMinigame {
         fishVelocity = fishSpeed;
         fishPosition = clamp(fishPosition + fishSpeed, 0.0, 1.0);
         if (fishPosition <= 0.0 || fishPosition >= 1.0) {
-            fishVelocity = -fishVelocity * 0.5;
+            fishVelocity = -fishVelocity * settings.fishEdgeBounce();
             fishPosition = clamp(fishPosition, 0.0, 1.0);
         }
 
@@ -138,7 +138,7 @@ public final class FishingMinigame {
         if (fleeing) {
             // 正在逃离：施加逃离速度
             if (tick < fleeUntilTick) {
-                double fleeSpeed = 0.04 + (session.fish().difficulty() / 100.0) * 0.03;
+                double fleeSpeed = settings.fleeBaseSpeed() + (session.fish().difficulty() / 100.0) * settings.fleeSpeedPerDifficulty();
                 fishVelocity = fleeDirection * fleeSpeed;
                 fishPosition = clamp(fishPosition + fishVelocity, 0.0, 1.0);
                 if (fishPosition <= 0.02 || fishPosition >= 0.98) {
@@ -148,11 +148,11 @@ public final class FishingMinigame {
                 fleeing = false;
             }
             // 逃离期间重置下次检查时间
-            nextFleeCheckTick = tick + 60 + ThreadLocalRandom.current().nextInt(80);
+            nextFleeCheckTick = tick + settings.fleeCooldownMin() + ThreadLocalRandom.current().nextInt(settings.fleeCooldownMax() - settings.fleeCooldownMin());
         } else if (tick >= nextFleeCheckTick) {
             // 检查是否触发驱赶：鱼在绿条内时有概率逃离
             // 难度越高，逃离概率越大、间隔越短
-            double fleeChance = 0.12 + (session.fish().difficulty() / 100.0) * 0.18;
+            double fleeChance = settings.fleeBaseChance() + (session.fish().difficulty() / 100.0) * settings.fleeChancePerDifficulty();
             if (fishInsideForFlee && ThreadLocalRandom.current().nextDouble() < fleeChance) {
                 fleeing = true;
                 // 逃离方向：朝远离绿条中心的方向
@@ -160,9 +160,9 @@ public final class FishingMinigame {
                 // 如果鱼在轨道边缘，反向逃离
                 if (fleeDirection < 0 && fishPosition < 0.15) fleeDirection = 1.0;
                 if (fleeDirection > 0 && fishPosition > 0.85) fleeDirection = -1.0;
-                fleeUntilTick = tick + 15 + ThreadLocalRandom.current().nextInt(20);
+                fleeUntilTick = tick + settings.fleeMinDuration() + ThreadLocalRandom.current().nextInt(settings.fleeMaxDuration() - settings.fleeMinDuration());
             }
-            nextFleeCheckTick = tick + 40 + ThreadLocalRandom.current().nextInt(60);
+            nextFleeCheckTick = tick + settings.fleeCheckMinInterval() + ThreadLocalRandom.current().nextInt(settings.fleeCheckMaxInterval() - settings.fleeCheckMinInterval());
         }
 
         // 计算绿条高度（基于玩家等级）—— 先算高度，碰撞用绿条顶底
@@ -170,11 +170,10 @@ public final class FishingMinigame {
         double halfBar = barHeightRatio / 2.0;
 
         // 更新绿条位置（物理：惯性 + 重力 + 点击力）
-        // 力系数较小 + 阻尼较高，让绿条操控细腻、不暴冲
         boolean pressing = session.isPressing();
         double force = pressing ? settings.barClickForce() : settings.barGravity();
-        barVelocity += force * 0.04;
-        barVelocity *= 0.82; // 阻尼较高，速度衰减快，便于精准操控
+        barVelocity += force * settings.barForceMultiplier();
+        barVelocity *= settings.barDamping();
         barPosition = barPosition + barVelocity;
 
         // 底部反弹（绿条底部碰轨道底）
@@ -195,9 +194,9 @@ public final class FishingMinigame {
         boolean fishInside = fishPosition >= barBottom && fishPosition <= barTop;
 
         if (fishInside) {
-            progress += settings.progressGainRate() * 0.005;
+            progress += settings.progressGainRate() * settings.progressRateMultiplier();
         } else {
-            progress -= settings.progressDrainRate() * 0.005;
+            progress -= settings.progressDrainRate() * settings.progressRateMultiplier();
             wasPerfect = false;
         }
         progress = clamp(progress, 0.0, 1.0);
@@ -259,8 +258,8 @@ public final class FishingMinigame {
             + session.greenBarHeightBonus();
         // 转换为 [0,1] 比例，轨道实际高度 644 像素
         double ratio = barHeightPx / 644.0;
-        // 难度越高绿条越窄：难度 0 时不缩减，难度 100 时缩减 40%
-        double difficultyShrink = 1.0 - (session.adjustedDifficulty() / 100.0) * 0.4;
+        // 难度越高绿条越窄：难度 0 时不缩减，难度 100 时缩减 difficultyBarShrink
+        double difficultyShrink = 1.0 - (session.adjustedDifficulty() / 100.0) * settings.difficultyBarShrink();
         ratio *= difficultyShrink;
         // 限制在合理范围 [0.08, 0.9]
         return Math.max(0.08, Math.min(ratio, 0.9));
