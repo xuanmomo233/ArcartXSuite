@@ -44,16 +44,15 @@ public final class FishingListener implements Listener {
             return;
         }
 
-        // 仅在鱼上钩（CAUGHT_FISH）时启动小游戏
-        if (event.getState() != PlayerFishEvent.State.CAUGHT_FISH) {
-            return;
-        }
-
-        // 取消原版钓鱼，启动小游戏
-        boolean started = service.startMinigame(player);
-        org.bukkit.Bukkit.getLogger().info("[Fishing] PlayerFishEvent CAUGHT_FISH, startMinigame=" + started);
-        if (started) {
-            event.setCancelled(true);
+        // 在 BITE 状态（鱼咬钩）时启动小游戏，而不是等 CAUGHT_FISH
+        // CAUGHT_FISH 需要玩家右键收杆才触发，而我们要在收杆前就启动小游戏
+        if (event.getState() == PlayerFishEvent.State.BITE) {
+            // 取消原版钓鱼（阻止后续 CAUGHT_FISH/FAILED_ATTEMPT），启动小游戏
+            boolean started = service.startMinigame(player);
+            org.bukkit.Bukkit.getLogger().info("[Fishing] PlayerFishEvent BITE, startMinigame=" + started);
+            if (started) {
+                event.setCancelled(true);
+            }
         }
     }
 
