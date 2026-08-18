@@ -196,7 +196,7 @@ public final class FishingService {
         );
 
         FishingMinigame minigame = new FishingMinigame(
-            plugin, packetBridge, configuration.fishing(), this, session, minigameUiId
+            plugin, packetBridge, configuration.fishing(), this, itemGenerator, session, minigameUiId
         );
         activeMinigames.put(player.getUniqueId(), minigame);
         minigame.start();

@@ -13,6 +13,7 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration.FishingSettings;
 import xuanmo.arcartxsuite.fishing.model.FishDefinition;
+import xuanmo.arcartxsuite.fishing.service.FishingItemGenerator;
 import xuanmo.arcartxsuite.fishing.service.FishingService;
 
 /**
@@ -28,6 +29,7 @@ public final class FishingMinigame {
     private final PacketBridgeAPI packetBridge;
     private final FishingSettings settings;
     private final FishingService service;
+    private final FishingItemGenerator itemGenerator;
     private final FishingSession session;
     private final FishBehaviorEngine fishEngine;
     private final String uiId;
@@ -48,11 +50,13 @@ public final class FishingMinigame {
 
     public FishingMinigame(@NotNull JavaPlugin plugin, @NotNull PacketBridgeAPI packetBridge,
                            @NotNull FishingSettings settings, @NotNull FishingService service,
+                           @NotNull FishingItemGenerator itemGenerator,
                            @NotNull FishingSession session, @NotNull String uiId) {
         this.plugin = plugin;
         this.packetBridge = packetBridge;
         this.settings = settings;
         this.service = service;
+        this.itemGenerator = itemGenerator;
         this.session = session;
         this.uiId = uiId;
         this.fishEngine = new FishBehaviorEngine(session.fish().randomBehavior(), session.adjustedDifficulty());
@@ -121,7 +125,7 @@ public final class FishingMinigame {
         boolean pressing = session.isPressing();
         double force = pressing ? settings.barClickForce() : settings.barGravity();
         barVelocity += force * 0.1;
-        barVelocity *= 0.85; // 阻尼
+        barVelocity *= 0.88; // 阻尼
         barPosition = clamp(barPosition + barVelocity, 0.0, 1.0);
 
         // 底部反弹
@@ -223,6 +227,8 @@ public final class FishingMinigame {
         payload.put("timeLeft", session.remainingTicks());
         payload.put("caughtSize", session.caughtSize());
         payload.put("rarity", session.fish().rarity().name().toLowerCase());
+        // 鱼物品图标 JSON（UI 端 Slot 控件通过 seticon 渲染）
+        payload.put("fishIconJson", itemGenerator.generateItemJson(session.fish().itemRef(), player));
         packetBridge.sendPacket(player, uiId, "init", payload);
     }
 
