@@ -234,6 +234,8 @@ public final class FishingMinigame {
         if (player != null) {
             packetBridge.closeUi(player, uiId);
         }
+        // 确保从 activeMinigames 中移除，防止状态残留导致后续钓鱼无法触发
+        service.removeMinigame(session.playerUuid());
     }
 
     public boolean isFinished() {

@@ -133,6 +133,10 @@ public final class FishingService {
         return activeMinigames.containsKey(uuid);
     }
 
+    public void removeMinigame(@NotNull UUID uuid) {
+        activeMinigames.remove(uuid);
+    }
+
     public xuanmo.arcartxsuite.fishing.minigame.FishingMinigame getActiveMinigame(@NotNull UUID uuid) {
         return activeMinigames.get(uuid);
     }
