@@ -127,7 +127,7 @@ controls:
               y: 30
               width: 300
               height: 40
-              texts: "~&e等级: &f" + var.playerLevel
+              texts: "'&e等级: &f' + var.playerLevel"
               fontSize: 32
           天赋点显示:
             type: Text
@@ -136,7 +136,7 @@ controls:
               y: 30
               width: 400
               height: 40
-              texts: "~&a可用天赋点: &f" + var.unspentTalentPoints + " / " + var.talentPoints
+              texts: "'&a可用天赋点: &f' + var.unspentTalentPoints + ' / ' + var.talentPoints"
               fontSize: 32
           关闭按钮:
             type: Canvas
