@@ -546,6 +546,7 @@ controls:
           # 卡片滚动列表容器
           卡片列表:
             type: Canvas
+            val: 卡片列表
             attribute:
               point: ~top_left
               x: 32
