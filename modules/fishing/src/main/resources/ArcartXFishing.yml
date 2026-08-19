@@ -27,11 +27,11 @@ fishing:
   replace-vanilla: true
   # 小游戏刷新间隔（ticks），20 ticks = 1 秒。值越小动画越平滑，CPU 占用越高。
   minigame-tick-interval: 1
-  # 进度条重力加速度（像素/tick²），影响绿色目标条下落速度。
+  # 未按住鼠标时绿条受到的力（正数=向下落，负数=向上浮），绝对值越大下落/上浮越快。
   bar-gravity: 0.3
-  # 进度条碰撞阻尼（0-1），越接近 1 反弹越持久。
+  # 绿条碰到轨道顶部/底部时的反弹阻尼（0-1），越接近 1 反弹越持久，越接近 0 反弹越弱。
   bar-bounce-damping: 0.7
-  # 鼠标点击给进度条施加的瞬时速度（负数表示向上），绝对值越大越容易把条弹起。
+  # 按住鼠标时绿条受到的力（负数=向上），绝对值越大越容易把绿条推上去。
   bar-click-force: -0.6
   # 力系数：重力/点击力乘以这个系数后施加到速度上，越大绿条响应越灵敏。
   bar-force-multiplier: 0.03
@@ -42,15 +42,15 @@ fishing:
   # 钓鱼冷却时间（ticks）：小游戏结束后多少 ticks 内无法再次触发钓鱼。
   # 20 ticks = 1 秒，默认 100 ticks = 5 秒。
   fishing-cooldown-ticks: 100
-  # 未按住鼠标时进度下降速率。
+  # 钓鱼进度下降速率：鱼在绿条外时进度每 tick 下降量。
   progress-drain-rate: 0.5
-  # 按住鼠标时进度上升速率。
+  # 钓鱼进度上升速率：鱼在绿条内时进度每 tick 上升量。
   progress-gain-rate: 1.0
   # 进度涨跌系数：进度变化 = progress-gain/drain-rate × 此系数，越大进度变化越快。
   progress-rate-multiplier: 0.008
-  # 绿色目标条基础高度（像素），随鱼难度变化。
+  # 绿色目标条基础高度（像素），玩家等级和鱼竿会增加绿条高度。
   base-green-bar-height: 96
-  # 鱼每提升 1 级难度，绿色条增加的高度（像素）。
+  # 玩家每提升 1 级钓鱼等级，绿色条增加的高度（像素），等级越高绿条越大越容易钓。
   height-per-level: 4
   # 难度对绿条高度的缩减比例（0-1）：难度100时绿条高度缩减此比例。0=不缩减，1=完全消失。
   difficulty-bar-shrink: 0.3
@@ -58,7 +58,7 @@ fishing:
   fish-edge-bounce: 0.5
   # 钓起宝藏（treasures/ 目录定义）的基础概率，范围 0.0 ~ 1.0，最终概率受水域、饵料加成影响。
   treasure-chance: 0.15
-  # 完美收竿（进度条始终覆盖目标区域）时的经验倍率。
+  # 完美捕获（全程鱼都在绿条内，未离开过）时的经验和货币奖励倍率。
   perfect-bonus-multiplier: 1.5
   # 每提升 1 级钓鱼等级所需基础经验。
   # 注意：此值仅用于钓鱼小游戏的等级修正曲线计算，不影响赛季 XP 成长曲线。
@@ -67,12 +67,12 @@ fishing:
   # 钓鱼等级上限，影响等级修正曲线计算。
   max-level: 100
   # 等级修正系数：等级对鱼速度/逃离概率/进度增速的最大修正比例。
-  # 例如 0.5 表示满级时鱼速度最多降低50%、逃离概率最多降低50%、进度最多加快50%。
+  # 例如 0.5 表示满级时鱼速度最多减慢50%、逃离概率最多降低50%、进度增长最多加快50%。
   level-modifier-scale: 0.5
 
   # ─── 驱赶机制（鱼偶尔迅速逃离绿条范围） ──────────────
-  # 鱼在绿条内时，每隔一段检查时间有概率触发逃离冲刺。
-  # 难度越高，逃离概率越大、速度越快。
+  # 鱼在绿条内时，每隔一段随机检查间隔有概率触发逃离冲刺。
+  # 难度越高，逃离概率越大、速度越快；玩家等级越高，逃离概率越低。
   # 基础逃离概率（难度0时），每点难度增加 flee-chance-per-difficulty。
   flee-base-chance: 0.25
   flee-chance-per-difficulty: 0.25
@@ -82,7 +82,7 @@ fishing:
   # 逃离持续 ticks 范围 [min, max)，随机取值。
   flee-min-duration: 15
   flee-max-duration: 35
-  # 逃离检查间隔 ticks 范围 [min, max)，每隔这段时间检查一次是否触发。
+  # 逃离检查间隔 ticks 范围 [min, max)，每隔这段随机时间检查一次是否触发。
   flee-check-min-interval: 20
   flee-check-max-interval: 50
   # 逃离结束后冷却 ticks 范围 [min, max)，冷却期间不会再次逃离。
@@ -200,7 +200,7 @@ treasure-pools:
 
 # ─── 饵料定义 ────────────────────────────────────────
 # 饵料不通过本文件配置，请在 baits/ 目录下为每个饵料创建独立 YAML 文件。
-# 每个饵料文件支持的字段见 fishes/worm.yml 示例：
+# 每个饵料文件支持的字段见 baits/worm.yml 示例：
 #   id、display-name、item、default、fish-attract-modifiers、
 #   treasure-chance-boost、max-durability-bonus。
 
