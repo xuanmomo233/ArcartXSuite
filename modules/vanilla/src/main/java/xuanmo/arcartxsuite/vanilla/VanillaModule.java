@@ -43,7 +43,7 @@ public final class VanillaModule extends AbstractAXSModule {
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("vanilla")
             .name("VanillaUI")
-            .version("1.1.3")
+            .version("1.2.0")
             .mainClass(getClass().getName())
             .build();
     }
@@ -59,12 +59,18 @@ public final class VanillaModule extends AbstractAXSModule {
     }
 
     @Override
+    protected int currentConfigVersion() {
+        return 2;
+    }
+
+    @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
+            ValidationRule.of("ui.crafting-ui-id", ValueType.STRING),
+            ValidationRule.of("ui.furnace-ui-id", ValueType.STRING),
+            ValidationRule.of("ui.overwrite-ui-files", ValueType.BOOLEAN),
             ValidationRule.of("crafting.enabled", ValueType.BOOLEAN),
-            ValidationRule.of("crafting.ui-id", ValueType.STRING),
             ValidationRule.of("furnace.enabled", ValueType.BOOLEAN),
-            ValidationRule.of("furnace.ui-id", ValueType.STRING),
             ValidationRule.of("furnace.push-interval-ticks", ValueType.INT)
                 .withRange(1, 100)
         );
@@ -85,8 +91,7 @@ public final class VanillaModule extends AbstractAXSModule {
     @Override
     protected boolean overwriteUiFiles() {
         if (configuration == null) return false;
-        return configuration.crafting().overwriteUiFile()
-            || configuration.furnace().overwriteUiFile();
+        return configuration.ui().overwriteUiFiles();
     }
 
     @Override
@@ -106,7 +111,7 @@ public final class VanillaModule extends AbstractAXSModule {
         if (configuration.crafting().enabled()) {
             UiBinding craftingBinding = registerModuleUi(
                 CRAFTING_FILE_PATH,
-                configuration.crafting().uiId(),
+                configuration.ui().craftingUiId(),
                 true
             );
             logger.fine("Vanilla 工作台 UI 已注册: " + craftingBinding.runtimeUiId());
@@ -116,12 +121,12 @@ public final class VanillaModule extends AbstractAXSModule {
         if (configuration.furnace().enabled()) {
             UiBinding furnaceBinding = registerModuleUi(
                 FURNACE_FILE_PATH,
-                configuration.furnace().uiId(),
+                configuration.ui().furnaceUiId(),
                 true
             );
             logger.fine("Vanilla 熔炉 UI 已注册: " + furnaceBinding.runtimeUiId());
 
-            furnaceTask = new FurnaceStateTask(plugin, packetBridge, configuration.furnace().uiId());
+            furnaceTask = new FurnaceStateTask(plugin, packetBridge, configuration.ui().furnaceUiId());
             furnaceTask.start(configuration.furnace().pushIntervalTicks());
             inventoryListener = new InventoryOpenListener(furnaceTask);
         }

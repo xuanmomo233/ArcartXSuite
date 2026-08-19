@@ -52,7 +52,7 @@ public final class PickupModule extends AbstractAXSModule {
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("pickup")
             .name("Pickup")
-            .version("1.1.0-beta")
+            .version("1.2.0-beta")
             .mainClass(getClass().getName())
             .build();
     }
@@ -64,7 +64,7 @@ public final class PickupModule extends AbstractAXSModule {
 
     @Override
     protected int currentConfigVersion() {
-        return 2;
+        return 3;
     }
 
     @Override
@@ -98,7 +98,7 @@ public final class PickupModule extends AbstractAXSModule {
 
     @Override
     protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.scanner().overwriteUiFile();
+        return configuration != null && configuration.ui().overwriteUiFiles();
     }
 
     @Override
@@ -166,8 +166,8 @@ public final class PickupModule extends AbstractAXSModule {
         // HUD（被动显示）
         UiBinding uiBinding = registerModuleUi(
             LOOT_PANEL_FILE_PATH,
-            configuration.scanner().uiId(),
-            configuration.scanner().registerUiOnEnable()
+            configuration.ui().scannerUiId(),
+            configuration.ui().registerUiOnEnable()
         );
         if (uiBinding.registeredUiId() == null) {
             throw new IOException("Pickup 扫描模式 HUD UI 注册失败");
@@ -176,8 +176,8 @@ public final class PickupModule extends AbstractAXSModule {
         // Menu（交互捕获）
         UiBinding interactBinding = registerModuleUi(
             LOOT_INTERACT_FILE_PATH,
-            configuration.scanner().interactUiId(),
-            configuration.scanner().registerUiOnEnable()
+            configuration.ui().interactUiId(),
+            configuration.ui().registerUiOnEnable()
         );
         if (interactBinding.registeredUiId() == null) {
             throw new IOException("Pickup 扫描模式 Interact Menu UI 注册失败");
@@ -270,7 +270,7 @@ public final class PickupModule extends AbstractAXSModule {
         if (parent != null && !parent.exists()) {
             parent.mkdirs();
         }
-        if (!target.exists() || config.notification().overwriteUiFile()) {
+        if (!target.exists() || config.ui().overwriteUiFiles()) {
             PickupHudTemplateWriter.write(target, config.maxVisible(), config.entryTtlMs());
         }
         return target;

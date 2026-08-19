@@ -131,18 +131,20 @@ public record PickupModuleConfiguration(
         String modeStr = readString(config, "settings.mode", "notification");
         PickupMode mode = "scanner".equalsIgnoreCase(modeStr) ? PickupMode.SCANNER : PickupMode.NOTIFICATION;
 
+        UiConfig ui = new UiConfig(
+            readString(config, "ui.notification-ui-id", "AXS:pickup_hud"),
+            readString(config, "ui.scanner-ui-id", "AXS:loot_panel"),
+            readString(config, "ui.interact-ui-id", "AXS:loot_interact"),
+            config.getBoolean("ui.register-ui-on-enable", true),
+            config.getBoolean("ui.overwrite-ui-files", false)
+        );
+
         NotificationConfig notification = new NotificationConfig(
-            readString(config, "notification.ui-id", "AXS:pickup_hud"),
-            config.getBoolean("notification.register-ui-on-enable", true),
-            config.getBoolean("notification.overwrite-ui-file", false),
             Math.max(1, config.getInt("notification.max-visible", 4)),
             Math.max(500L, config.getLong("notification.entry-ttl-ms", 3000L))
         );
 
         ScannerConfig scanner = new ScannerConfig(
-            readString(config, "scanner.ui-id", "AXS:loot_panel"),
-            config.getBoolean("scanner.register-ui-on-enable", true),
-            config.getBoolean("scanner.overwrite-ui-file", false),
             Math.max(1.0, config.getDouble("scanner.scan-radius", 5.0)),
             Math.max(1, config.getInt("scanner.scan-interval-ticks", 5)),
             Math.max(1, config.getInt("scanner.max-display", 8)),
@@ -150,13 +152,12 @@ public record PickupModuleConfiguration(
             config.getBoolean("scanner.warehouse-auto-deposit", false),
             Math.max(0, config.getInt("scanner.pickup-delay-ticks", 40)),
             config.getBoolean("scanner.merge-same-items", true),
-            readString(config, "scanner.interact-ui-id", "AXS:loot_interact"),
             readString(config, "scanner.keybind.name", "AXS_INTERACT")
         );
 
         FilterConfig filter = loadFilter(config);
 
-        return new PickupModuleConfiguration(debug, mode, notification, scanner, filter);
+        return new PickupModuleConfiguration(debug, mode, ui, notification, scanner, filter);
     }
 
     /** 加载过滤系统配置。 */
@@ -219,10 +220,10 @@ public record PickupModuleConfiguration(
         return materials;
     }
 
-    // 向后兼容：通知模式时的快捷访问
-    public String uiId() { return notification.uiId(); }
-    public boolean registerUiOnEnable() { return notification.registerUiOnEnable(); }
-    public boolean overwriteUiFile() { return notification.overwriteUiFile(); }
+    // 向后兼容：通知模式时的快捷访问（UI 配置已统一到 ui 节）
+    public String uiId() { return ui.notificationUiId(); }
+    public boolean registerUiOnEnable() { return ui.registerUiOnEnable(); }
+    public boolean overwriteUiFile() { return ui.overwriteUiFiles(); }
     public int maxVisible() { return notification.maxVisible(); }
     public long entryTtlMs() { return notification.entryTtlMs(); }
 

@@ -1,0 +1,20 @@
+from-version: 1
+to-version: 2
+description: "UI 配置抽离到统一 ui 节：settings.ui-id→ui.ui-id, subtitle.settings.ui-id→ui.subtitle-ui-id, 合并注册/覆盖开关"
+operations:
+  - type: move
+    from: settings.ui-id
+    to: ui.ui-id
+  - type: move
+    from: settings.register-ui-on-enable
+    to: ui.register-ui-on-enable
+  - type: move
+    from: settings.overwrite-ui-file
+    to: ui.overwrite-ui-files
+  - type: move
+    from: subtitle.settings.ui-id
+    to: ui.subtitle-ui-id
+  - type: remove
+    path: subtitle.settings.register-ui-on-enable
+  - type: remove
+    path: subtitle.settings.overwrite-ui-file

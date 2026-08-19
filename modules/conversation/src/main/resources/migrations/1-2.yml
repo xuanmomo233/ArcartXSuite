@@ -1,0 +1,31 @@
+# Conversation 配置迁移文件（版本 1 → 2）
+# 将分散在 client / cinematic 嵌套节中的 UI 配置抽离到统一顶层 ui 节。
+# - client.packet-id → ui.packet-id
+# - client.dialog-ui-id → ui.dialog-ui-id
+# - client.selector-ui-id → ui.selector-ui-id
+# - client.register-ui-on-enable → ui.register-ui-on-enable
+# - client.overwrite-ui-files → ui.overwrite-ui-files（保持复数不变）
+# - cinematic.letterbox-ui-id → ui.letterbox-ui-id
+# 注意：client 节移除全部 UI 字段后为空，迁移后整个 client 节将被同步策略清理。
+from-version: 1
+to-version: 2
+description: "UI 配置从 client / cinematic 嵌套节抽离到统一 ui 节：client.packet-id→ui.packet-id, client.dialog-ui-id→ui.dialog-ui-id, client.selector-ui-id→ui.selector-ui-id, client.register-ui-on-enable→ui.register-ui-on-enable, client.overwrite-ui-files→ui.overwrite-ui-files, cinematic.letterbox-ui-id→ui.letterbox-ui-id。"
+operations:
+  - type: move
+    from: client.packet-id
+    to: ui.packet-id
+  - type: move
+    from: client.dialog-ui-id
+    to: ui.dialog-ui-id
+  - type: move
+    from: client.selector-ui-id
+    to: ui.selector-ui-id
+  - type: move
+    from: client.register-ui-on-enable
+    to: ui.register-ui-on-enable
+  - type: move
+    from: client.overwrite-ui-files
+    to: ui.overwrite-ui-files
+  - type: move
+    from: cinematic.letterbox-ui-id
+    to: ui.letterbox-ui-id

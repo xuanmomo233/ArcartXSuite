@@ -3,24 +3,25 @@
 # 重载: /axs vanilla reload
 
 # 配置版本号（请勿手动修改）
-config-version: 1
+config-version: 2
+
+# UI 配置（统一管理所有界面的 id 与覆盖策略）
+ui:
+  # 工作台 UI id（与 vanilla_crafting.yml 文件名对应）
+  crafting-ui-id: "vanilla_crafting"
+  # 熔炉 UI id（与 vanilla_furnace.yml 文件名对应）
+  furnace-ui-id: "vanilla_furnace"
+  # 是否覆盖用户已修改的 UI 文件
+  overwrite-ui-files: false
 
 # 工作台界面替换
 crafting:
   # 是否启用工作台 UI 替换
   enabled: true
-  # UI id（与 vanilla_crafting.yml 文件名对应）
-  ui-id: vanilla_crafting
-  # 是否覆盖用户已修改的 UI 文件
-  overwrite-ui-file: false
 
 # 熔炉界面替换
 furnace:
   # 是否启用熔炉 UI 替换
   enabled: true
-  # UI id（与 vanilla_furnace.yml 文件名对应）
-  ui-id: vanilla_furnace
-  # 是否覆盖用户已修改的 UI 文件
-  overwrite-ui-file: false
   # 熔炉状态推送间隔（tick），每秒 20 tick，默认 2 tick（每秒 10 次）
   push-interval-ticks: 2

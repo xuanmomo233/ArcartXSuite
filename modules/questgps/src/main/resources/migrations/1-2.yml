@@ -1,0 +1,21 @@
+from-version: 1
+to-version: 2
+description: "UI 配置从 client 节抽离到统一 ui 节：client.menu-ui-id→ui.menu-ui-id, client.guide-ui-id→ui.guide-ui-id, client.packet-id→ui.packet-id, client.register-ui-on-enable→ui.register-ui-on-enable, client.overwrite-ui-files→ui.overwrite-ui-files"
+operations:
+  - type: move
+    from: client.menu-ui-id
+    to: ui.menu-ui-id
+  - type: move
+    from: client.guide-ui-id
+    to: ui.guide-ui-id
+  - type: move
+    from: client.packet-id
+    to: ui.packet-id
+  - type: move
+    from: client.register-ui-on-enable
+    to: ui.register-ui-on-enable
+  - type: move
+    from: client.overwrite-ui-files
+    to: ui.overwrite-ui-files
+  - type: remove
+    path: client

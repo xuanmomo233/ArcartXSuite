@@ -51,7 +51,7 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("conversation")
             .name("Conversation")
-            .version("1.0.2-beta")
+            .version("1.1.0-beta")
             .mainClass(getClass().getName())
             .build();
     }
@@ -69,15 +69,25 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            ValidationRule.required("client.packet-id", ValueType.STRING),
-            ValidationRule.of("client.register-ui-on-enable", ValueType.BOOLEAN),
+            ValidationRule.required("ui.packet-id", ValueType.STRING),
+            ValidationRule.of("ui.register-ui-on-enable", ValueType.BOOLEAN),
             ValidationRule.of("interaction.enabled", ValueType.BOOLEAN),
             ValidationRule.of("interaction.scan-range", ValueType.DOUBLE).withRange(1.0, 128.0),
             ValidationRule.of("interaction.scan-period-ticks", ValueType.INT).withRange(1, 200),
             ValidationRule.of("interaction.open-cooldown-ms", ValueType.LONG).withRange(0L, 60000L),
             ValidationRule.of("cinematic.enabled", ValueType.BOOLEAN),
-            ValidationRule.of("cinematic.letterbox-ui-id", ValueType.STRING)
+            ValidationRule.of("ui.letterbox-ui-id", ValueType.STRING)
         );
+    }
+
+    @Override
+    protected int currentConfigVersion() {
+        return 2;
+    }
+
+    @Override
+    protected boolean overwriteUiFiles() {
+        return configuration != null && configuration.ui().overwriteUiFiles();
     }
 
     @Override
@@ -102,7 +112,7 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
     protected void startService() throws Exception {
 
         java.util.List<String> dialogRuntimeUiIds = new java.util.ArrayList<>();
-        for (String candidateUiId : configuration.clientConfig().dialogUiIds()) {
+        for (String candidateUiId : configuration.ui().dialogUiIds()) {
             UiBinding dialogBinding = registerModuleUi(
                 "arcartx/ui/conversation_dialog.yml",
                 DIALOG_UI_FILE_PATH,
@@ -114,7 +124,7 @@ public final class ConversationModule extends AbstractAXSModule implements Modul
             }
         }
         java.util.List<String> selectorRuntimeUiIds = new java.util.ArrayList<>();
-        for (String candidateUiId : configuration.clientConfig().selectorUiIds()) {
+        for (String candidateUiId : configuration.ui().selectorUiIds()) {
             UiBinding selectorBinding = registerModuleUi(
                 "arcartx/ui/conversation_selector.yml",
                 SELECTOR_UI_FILE_PATH,

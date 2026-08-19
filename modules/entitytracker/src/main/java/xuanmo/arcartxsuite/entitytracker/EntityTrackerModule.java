@@ -81,7 +81,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("entitytracker")
             .name("EntityTracker")
-            .version("1.0.2-beta")
+            .version("1.1.0-beta")
             .mainClass(getClass().getName())
             .build();
     }
@@ -89,6 +89,11 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     @Override
     protected String configFileName() {
         return "ArcartXEntityTracker.yml";
+    }
+
+    @Override
+    protected int currentConfigVersion() {
+        return 2;
     }
 
     @Override
@@ -130,8 +135,8 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
 
     @Override
     protected boolean overwriteUiFiles() {
-        return (configuration != null && configuration.overwriteUiFile())
-            || (targetConfiguration != null && targetConfiguration.overwriteUiFile());
+        // UI 覆盖开关已统一到 ui.overwrite-ui-files，boss 与 target 共用同一字段
+        return configuration != null && configuration.overwriteUiFile();
     }
 
     @Override
@@ -141,14 +146,15 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         }
         FileConfiguration yaml = YamlConfiguration.loadConfiguration(configFile);
         moduleYaml = yaml;
+        ConfigurationSection uiSection = yaml.getConfigurationSection("ui");
         ConfigurationSection bossSection = yaml.getConfigurationSection("boss");
         String bossesDirRelative = bossSection != null
             ? bossSection.getString("bosses-directory", "bosses") : "bosses";
         File bossesDirectory = new File(dataFolder, bossesDirRelative);
         ensureBossDefaults(bossesDirRelative);
         this.bossesDirectory = bossesDirectory;
-        configuration = PluginConfiguration.from(bossSection, bossesDirectory);
-        targetConfiguration = EntityTargetHudConfiguration.load(yaml.getConfigurationSection("attack-target"));
+        configuration = PluginConfiguration.from(bossSection, uiSection, bossesDirectory);
+        targetConfiguration = EntityTargetHudConfiguration.load(yaml.getConfigurationSection("attack-target"), uiSection);
         crossServerChannelConfig = CrossServerChannelConfigs.fromSection(yaml.getConfigurationSection("cross-server"));
         newFeaturesSettings = EntityTrackerNewFeaturesSettings.load(yaml.getConfigurationSection("new-features"));
     }

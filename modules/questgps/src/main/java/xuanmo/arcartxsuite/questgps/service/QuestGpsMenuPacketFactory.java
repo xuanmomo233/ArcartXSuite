@@ -40,7 +40,7 @@ public final class QuestGpsMenuPacketFactory {
         QuestGpsSnapshotBuilder.DetailSnapshot detail = snapshot.detail();
 
         Map<String, Object> packet = new LinkedHashMap<>();
-        packet.put("packetId", configuration.client().packetId());
+        packet.put("packetId", configuration.ui().packetId());
         packet.put("categories", categories);
         packet.put("pages", pages);
         packet.put("quests", quests);

@@ -463,7 +463,7 @@ public final class MenuService {
             return;
         }
         Map<String, Object> payload = MenuPacketFactory.buildPayload(
-            configuration.client().packetId(),
+            configuration.ui().packetId(),
             player,
             definition,
             session,

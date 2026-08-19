@@ -1,0 +1,21 @@
+from-version: 1
+to-version: 2
+description: "client 节的 UI 配置字段整体迁移到统一 ui 节（menu-ui-id / hud-ui-id / packet-id / register-ui-on-enable / overwrite-ui-files）"
+operations:
+  - type: move
+    from: client.menu-ui-id
+    to: ui.menu-ui-id
+  - type: move
+    from: client.hud-ui-id
+    to: ui.hud-ui-id
+  - type: move
+    from: client.packet-id
+    to: ui.packet-id
+  - type: move
+    from: client.register-ui-on-enable
+    to: ui.register-ui-on-enable
+  - type: move
+    from: client.overwrite-ui-files
+    to: ui.overwrite-ui-files
+  - type: remove
+    path: client

@@ -80,7 +80,7 @@ public record OnlineRewardsModuleConfiguration(
         OnlineRewardsUiConfiguration ui = new OnlineRewardsUiConfiguration(
             readString(configuration, "ui.packet-id", "AXS_ONLINE_REWARDS"),
             xuanmo.arcartxsuite.api.config.UiIdParser.readUiIds(
-                configuration.getConfigurationSection("ui"), "menu-ui-id", "AXS:online_rewards_menu"
+                configuration.getConfigurationSection("ui"), "ui-id", "AXS:online_rewards_menu"
             ),
             configuration.getBoolean("ui.register-ui-on-enable", true),
             configuration.getBoolean("ui.overwrite-ui-files", false)

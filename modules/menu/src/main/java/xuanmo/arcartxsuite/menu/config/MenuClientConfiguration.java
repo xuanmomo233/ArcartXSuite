@@ -3,23 +3,14 @@ package xuanmo.arcartxsuite.menu.config;
 import org.bukkit.configuration.ConfigurationSection;
 
 /**
- * Menu 模块客户端配置，定义 Packet ID、面板 UI 和 ESC UI 的标识及注册策略。
+ * Menu 模块客户端配置，仅保留与 UI 无关的客户端字段。
  * <p>
- * 由主配置的 {@code client} 节解析，控制与 ArcartX 客户端 UI 的对接参数。
+ * 由主配置的 {@code client} 节解析。UI 相关字段（packet-id、panel-ui-id、esc-ui-id、
+ * register-ui-on-enable、overwrite-ui-files）已抽离到 {@link MenuUiConfiguration} 的 {@code ui} 节。
  *
- * @param packetId          客户端数据包标识，用于 UI 与服务端通信
- * @param panelUiId         面板菜单 UI 的注册 ID
- * @param escUiId           ESC 菜单 UI 的注册 ID
- * @param registerUiOnEnable 启用时是否自动注册 UI
- * @param overwriteUiFiles  是否覆盖用户已修改的 UI 文件
- * @param escMenuId         默认 ESC 菜单的菜单 ID
+ * @param escMenuId 默认 ESC 菜单的菜单 ID（菜单定义 ID，非 UI ID）
  */
 public record MenuClientConfiguration(
-    String packetId,
-    String panelUiId,
-    String escUiId,
-    boolean registerUiOnEnable,
-    boolean overwriteUiFiles,
     String escMenuId
 ) {
 
@@ -31,14 +22,9 @@ public record MenuClientConfiguration(
      */
     public static MenuClientConfiguration load(ConfigurationSection section) {
         if (section == null) {
-            return new MenuClientConfiguration("AXS_MENU", "AXS:menu_panel", "AXS:menu_esc", true, false, "esc_main");
+            return new MenuClientConfiguration("esc_main");
         }
         return new MenuClientConfiguration(
-            section.getString("packet-id", "AXS_MENU"),
-            section.getString("panel-ui-id", "AXS:menu_panel"),
-            section.getString("esc-ui-id", "AXS:menu_esc"),
-            section.getBoolean("register-ui-on-enable", true),
-            section.getBoolean("overwrite-ui-files", false),
             section.getString("esc-menu-id", "esc_main")
         );
     }

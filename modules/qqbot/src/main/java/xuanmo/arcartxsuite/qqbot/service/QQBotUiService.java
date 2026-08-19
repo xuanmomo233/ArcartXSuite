@@ -148,8 +148,10 @@ public final class QQBotUiService {
 
     /**
      * 广播通知到所有在线玩家（@全体 / 重要消息）。
+     * 受 {@code ui.notify-enabled} 配置控制：禁用时直接跳过。
      */
     public void broadcastNotification(String nick, String message) {
+        if (!config.ui().notifyEnabled()) return;
         for (Player player : Bukkit.getOnlinePlayers()) {
             sendNotification(player, nick, message);
         }

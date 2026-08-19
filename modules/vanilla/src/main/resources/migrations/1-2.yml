@@ -1,0 +1,22 @@
+# Vanilla 配置迁移文件（版本 1 → 2）
+# 将分散在 crafting / furnace 嵌套节中的 UI 配置抽离到统一顶层 ui 节。
+# - crafting.ui-id → ui.crafting-ui-id（move + 重命名）
+# - furnace.ui-id → ui.furnace-ui-id（move + 重命名）
+# - crafting.overwrite-ui-file / furnace.overwrite-ui-file → 合并到 ui.overwrite-ui-files（单数改复数）
+# 注意：overwrite-ui-files 为合并字段，两节均有值时 furnace 节的值覆盖 crafting 节（默认值一致，无影响）。
+from-version: 1
+to-version: 2
+description: "UI 配置从 crafting / furnace 嵌套节抽离到统一 ui 节：crafting.ui-id→ui.crafting-ui-id, furnace.ui-id→ui.furnace-ui-id, overwrite-ui-file 合并到 ui.overwrite-ui-files（单数改复数）。"
+operations:
+  - type: move
+    from: crafting.ui-id
+    to: ui.crafting-ui-id
+  - type: move
+    from: crafting.overwrite-ui-file
+    to: ui.overwrite-ui-files
+  - type: move
+    from: furnace.ui-id
+    to: ui.furnace-ui-id
+  - type: move
+    from: furnace.overwrite-ui-file
+    to: ui.overwrite-ui-files

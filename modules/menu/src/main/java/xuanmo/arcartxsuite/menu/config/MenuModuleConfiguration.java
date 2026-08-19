@@ -5,17 +5,19 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Menu 模块顶层配置，聚合调试开关、客户端配置、设置配置和消息配置。
+ * Menu 模块顶层配置，聚合调试开关、UI 配置、客户端配置、设置配置和消息配置。
  * <p>
  * 由 {@link xuanmo.arcartxsuite.menu.MenuModule} 在启动时从主配置文件加载。
  *
  * @param debug    是否启用调试日志
- * @param client   客户端 UI 配置
+ * @param ui       UI 配置（Packet ID、UI ID 及注册策略）
+ * @param client   客户端配置（与 UI 无关的字段，如 ESC 菜单定义 ID）
  * @param settings 菜单设置配置
  * @param messages 消息配置
  */
 public record MenuModuleConfiguration(
     boolean debug,
+    MenuUiConfiguration ui,
     MenuClientConfiguration client,
     MenuSettingsConfiguration settings,
     MenuMessagesConfiguration messages
@@ -30,6 +32,7 @@ public record MenuModuleConfiguration(
     public static MenuModuleConfiguration load(@NotNull YamlConfiguration yaml) {
         return new MenuModuleConfiguration(
             yaml.getBoolean("debug.enabled", false),
+            MenuUiConfiguration.load(yaml.getConfigurationSection("ui")),
             MenuClientConfiguration.load(yaml.getConfigurationSection("client")),
             MenuSettingsConfiguration.load(yaml.getConfigurationSection("settings")),
             MenuMessagesConfiguration.load(yaml.getConfigurationSection("messages"))
@@ -48,6 +51,7 @@ public record MenuModuleConfiguration(
             @NotNull YamlConfiguration messagesYaml) {
         return new MenuModuleConfiguration(
             yaml.getBoolean("debug.enabled", false),
+            MenuUiConfiguration.load(yaml.getConfigurationSection("ui")),
             MenuClientConfiguration.load(yaml.getConfigurationSection("client")),
             MenuSettingsConfiguration.load(yaml.getConfigurationSection("settings")),
             MenuMessagesConfiguration.load(messagesYaml)

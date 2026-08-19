@@ -41,7 +41,7 @@ public final class QuestGpsGuidePacketFactory {
         QuestGpsNavigationService navigationService
     ) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("packetId", configuration.client().packetId());
+        payload.put("packetId", configuration.ui().packetId());
         payload.put("active", trackState.active());
         payload.put("questName", trackState.label());
 

@@ -8,7 +8,7 @@ import xuanmo.arcartxsuite.api.config.UiIdParser;
 public record ConversationModuleConfiguration(
     DebugConfiguration debugConfig,
     ThemeConfiguration themeConfig,
-    ClientConfiguration clientConfig,
+    UiConfiguration uiConfig,
     InteractionConfiguration interactionConfig,
     CinematicBasicConfiguration cinematicConfig,
     List<NpcAppearanceEntry> npcAppearances
@@ -44,14 +44,14 @@ public record ConversationModuleConfiguration(
 
         ConfigurationSection cinematicSection = configuration.getConfigurationSection("cinematic");
 
-        ConfigurationSection clientSection = configuration.getConfigurationSection("client");
-        ClientConfiguration client = new ClientConfiguration(
-            clientSection == null ? DEFAULT_PACKET_ID : string(clientSection.getString("packet-id"), DEFAULT_PACKET_ID),
-            UiIdParser.readUiIds(clientSection, "dialog-ui-id", DEFAULT_DIALOG_UI_ID),
-            UiIdParser.readUiIds(clientSection, "selector-ui-id", DEFAULT_SELECTOR_UI_ID),
-            UiIdParser.readUiIds(cinematicSection, "letterbox-ui-id", DEFAULT_LETTERBOX_UI_ID),
-            clientSection == null || clientSection.getBoolean("register-ui-on-enable", DEFAULT_REGISTER_UI_ON_ENABLE),
-            clientSection != null && clientSection.getBoolean("overwrite-ui-files", DEFAULT_OVERWRITE_UI_FILES)
+        ConfigurationSection uiSection = configuration.getConfigurationSection("ui");
+        UiConfiguration ui = new UiConfiguration(
+            uiSection == null ? DEFAULT_PACKET_ID : string(uiSection.getString("packet-id"), DEFAULT_PACKET_ID),
+            UiIdParser.readUiIds(uiSection, "dialog-ui-id", DEFAULT_DIALOG_UI_ID),
+            UiIdParser.readUiIds(uiSection, "selector-ui-id", DEFAULT_SELECTOR_UI_ID),
+            UiIdParser.readUiIds(uiSection, "letterbox-ui-id", DEFAULT_LETTERBOX_UI_ID),
+            uiSection == null || uiSection.getBoolean("register-ui-on-enable", DEFAULT_REGISTER_UI_ON_ENABLE),
+            uiSection != null && uiSection.getBoolean("overwrite-ui-files", DEFAULT_OVERWRITE_UI_FILES)
         );
 
         ConfigurationSection interactionSection = configuration.getConfigurationSection("interaction");
@@ -67,12 +67,12 @@ public record ConversationModuleConfiguration(
 
         CinematicBasicConfiguration cinematic = new CinematicBasicConfiguration(
             cinematicSection == null || cinematicSection.getBoolean("enabled", DEFAULT_CINEMATIC_ENABLED),
-            UiIdParser.readUiIds(cinematicSection, "letterbox-ui-id", DEFAULT_LETTERBOX_UI_ID)
+            ui.letterboxUiIds()
         );
 
         List<NpcAppearanceEntry> npcAppearances = NpcAppearanceEntry.loadList(configuration);
 
-        return new ConversationModuleConfiguration(debug, theme, client, interaction, cinematic, npcAppearances);
+        return new ConversationModuleConfiguration(debug, theme, ui, interaction, cinematic, npcAppearances);
     }
 
     public boolean debug() {
@@ -84,11 +84,11 @@ public record ConversationModuleConfiguration(
     }
 
     public String clientPacketId() {
-        return clientConfig.packetId();
+        return uiConfig.packetId();
     }
 
     public String dialogUiId() {
-        return clientConfig.dialogUiId();
+        return uiConfig.dialogUiId();
     }
 
     public String uiId() {
@@ -96,23 +96,27 @@ public record ConversationModuleConfiguration(
     }
 
     public String selectorUiId() {
-        return clientConfig.selectorUiId();
+        return uiConfig.selectorUiId();
     }
 
     public boolean registerUiOnEnable() {
-        return clientConfig.registerUiOnEnable();
+        return uiConfig.registerUiOnEnable();
     }
 
     public boolean selectorRegisterUiOnEnable() {
-        return clientConfig.registerUiOnEnable();
+        return uiConfig.registerUiOnEnable();
     }
 
     public boolean overwriteUiFile() {
-        return clientConfig.overwriteUiFiles();
+        return uiConfig.overwriteUiFiles();
     }
 
     public boolean selectorOverwriteUiFile() {
-        return clientConfig.overwriteUiFiles();
+        return uiConfig.overwriteUiFiles();
+    }
+
+    public UiConfiguration ui() {
+        return uiConfig;
     }
 
     public boolean interactionEnabled() {
@@ -202,7 +206,7 @@ public record ConversationModuleConfiguration(
     public record ThemeConfiguration(String name) {
     }
 
-    public record ClientConfiguration(
+    public record UiConfiguration(
         String packetId,
         List<String> dialogUiIds,
         List<String> selectorUiIds,

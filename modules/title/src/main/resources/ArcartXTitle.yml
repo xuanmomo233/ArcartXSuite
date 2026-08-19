@@ -73,6 +73,10 @@ ui:
   # 如果你想完全自己管理 UI 文件注册，可设为 false。
   register-ui-on-enable: true
 
+  # 启用时是否覆盖用户已修改的 UI 文件。
+  # false = 保留用户自定义的 UI 文件不覆盖；true = 每次启动都用 jar 内默认 UI 覆盖。
+  overwrite-ui-files: false
+
   # 属性列表每行的统一颜色前缀。
   # 后端会把这个前缀加到 selected_display_attributes_text / display_attributes_text 等
   # List<String> 字段的每一项之前，UI 直接通过 texts: "var.xxx 渲染即可。"

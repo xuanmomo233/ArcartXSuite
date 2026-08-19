@@ -95,11 +95,13 @@ public record AnnouncerModuleConfiguration(
      */
     public static AnnouncerModuleConfiguration load(FileConfiguration configuration, Logger logger, File entriesDirectory) {
         boolean debug = configuration.getBoolean("settings.debug", false);
+        // UI 配置统一从顶层 ui 节读取
+        ConfigurationSection uiSection = configuration.getConfigurationSection("ui");
         List<String> uiIds = UiIdParser.readUiIds(
-            configuration.getConfigurationSection("settings"), "ui-id", "AXS:announcer_hud"
+            uiSection, "ui-id", "AXS:announcer_hud"
         );
-        boolean registerUiOnEnable = configuration.getBoolean("settings.register-ui-on-enable", true);
-        boolean overwriteUiFile = configuration.getBoolean("settings.overwrite-ui-file", false);
+        boolean registerUiOnEnable = configuration.getBoolean("ui.register-ui-on-enable", true);
+        boolean overwriteUiFile = configuration.getBoolean("ui.overwrite-ui-files", false);
         boolean autoPlay = configuration.getBoolean("settings.auto-play", true);
         long checkIntervalTicks = Math.max(1L, configuration.getLong("settings.check-interval-ticks", 20L));
         long cooldownMs = Math.max(0L, configuration.getLong("settings.cooldown-ms", 30000L));
@@ -170,14 +172,22 @@ public record AnnouncerModuleConfiguration(
 
     private static SubtitleSettings loadSubtitle(FileConfiguration configuration) {
         ConfigurationSection section = configuration.getConfigurationSection("subtitle.settings");
+        // 字幕 UI ID 统一从顶层 ui 节读取
+        ConfigurationSection uiSection = configuration.getConfigurationSection("ui");
+        List<String> subtitleUiIds = UiIdParser.readUiIds(
+            uiSection, "subtitle-ui-id", "AXS:subtitle_hud"
+        );
         if (section == null) {
-            return SubtitleSettings.DEFAULTS;
+            return new SubtitleSettings(
+                false,
+                subtitleUiIds,
+                "subtitle/groups",
+                true
+            );
         }
         return new SubtitleSettings(
             section.getBoolean("debug", false),
-            UiIdParser.readUiIds(section, "ui-id", "AXS:subtitle_hud"),
-            section.getBoolean("register-ui-on-enable", true),
-            section.getBoolean("overwrite-ui-file", false),
+            subtitleUiIds,
             readString(section, "groups-directory", "subtitle/groups"),
             section.getBoolean("show-background", true)
         );

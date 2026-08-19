@@ -39,7 +39,7 @@ import xuanmo.arcartxsuite.battlepass.storage.JdbcBattlePassRepository;
  */
 public final class BattlePassModule extends AbstractAXSModule implements ModuleCommandHandler {
 
-    private static final String MODULE_VERSION = "1.3.2";
+    private static final String MODULE_VERSION = "1.4.0";
 
     private static final String MAIN_UI_RESOURCE_PATH = "arcartx/ui/battlepass_main.yml";
     private static final String MAIN_UI_FILE_PATH = "ui/battlepass_main.yml";

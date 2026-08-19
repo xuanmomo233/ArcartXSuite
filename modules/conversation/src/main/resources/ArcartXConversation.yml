@@ -1,5 +1,5 @@
 # 配置版本号（不要手动修改，由模块自动管理）
-config-version: 1
+config-version: 2
 # AXS Conversation
 # 作用: 桥接 Chemdah/Adyeshach 对话，把 NPC 正文、玩家回复和附近可对话 NPC 列表推送到 ArcartX UI。
 # 依赖: ArcartX、Chemdah、Adyeshach。
@@ -17,10 +17,10 @@ theme:
   # 注册到 ConversationService 的主题名。
   name: ArcartXConversation
 
-client:
+ui:
   # 客户端 packet-id；HUD 菜单与交互都会通过这个标识通信。
   # 注意: 两个 HUD 的点击/滚轮回包会直接读取这里下发的 packetId。
-  packet-id: AXS_CONVERSATION
+  packet-id: "AXS_CONVERSATION"
 
   # 主对话 Menu 与 NPC 选择 HUD 的 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
   # dialog-ui-id: "AXS:conversation_menu"
@@ -28,12 +28,14 @@ client:
   # dialog-ui-id:
   #   - "AXS:conversation_menu"
   #   - "AXS:conversation_menu_alt"
-  dialog-ui-id: AXS:conversation_menu
+  dialog-ui-id: "AXS:conversation_menu"
   # selector-ui-id 同样支持列表格式：
   # selector-ui-id:
   #   - "AXS:conversation_selector_hud"
   #   - "AXS:conversation_selector_alt"
-  selector-ui-id: AXS:conversation_selector_hud
+  selector-ui-id: "AXS:conversation_selector_hud"
+  # 电影序列播放时显示的 letterbox 黑边 UI ID
+  letterbox-ui-id: "AXS:conversation_letterbox"
 
   # 是否在模块启用 / 重载时自动向 ArcartX 注册 UI 文件。
   register-ui-on-enable: true
@@ -124,8 +126,6 @@ npc-appearances:
 cinematic:
   # 是否启用电影序列功能
   enabled: true
-  # 电影序列播放时显示的 letterbox 黑边 UI ID
-  letterbox-ui-id: AXS:conversation_letterbox
 
   # 序列定义（每个根键为序列 ID，可在命令中引用）
   cinematics:

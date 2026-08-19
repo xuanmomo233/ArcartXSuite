@@ -45,7 +45,7 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("title")
             .name("Title")
-            .version("1.0.2-beta")
+            .version("1.0.3-beta")
             .mainClass(getClass().getName())
             .build();
     }
@@ -90,6 +90,11 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
     @Override
     protected @NotNull Map<String, String> uiResourceMappings() {
         return Map.of(TITLE_MENU_RESOURCE_PATH, TITLE_MENU_FILE_PATH);
+    }
+
+    @Override
+    protected boolean overwriteUiFiles() {
+        return configuration != null && configuration.ui().overwriteUiFiles();
     }
 
     @Override

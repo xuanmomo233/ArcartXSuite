@@ -99,6 +99,7 @@ public record TitleModuleConfiguration(
         TitleUiConfiguration ui = new TitleUiConfiguration(
             uiSection == null ? "AXS:title_menu" : nullToEmpty(uiSection.getString("ui-id", "AXS:title_menu")).trim(),
             uiSection == null || uiSection.getBoolean("register-ui-on-enable", true),
+            uiSection != null && uiSection.getBoolean("overwrite-ui-files", false),
             uiSection == null ? "&0" : nullToEmpty(uiSection.getString("attribute-line-color", "&0")),
             uiSection == null ? "-" : nullToEmpty(uiSection.getString("empty-attribute-placeholder", "-"))
         );

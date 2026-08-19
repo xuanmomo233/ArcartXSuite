@@ -1,0 +1,30 @@
+# QQBot 配置迁移文件（版本 1 → 2）
+# UI 配置从 bind / notify / admin 嵌套节抽离到统一扁平 ui 节。
+# - ui.bind.ui-id → ui.bind-ui-id
+# - ui.notify.ui-id → ui.notify-ui-id
+# - ui.admin.ui-id → ui.admin-ui-id
+# - ui.notify.enabled → ui.notify-enabled
+# - 删除 ui.bind.ui-file / ui.notify.ui-file / ui.admin.ui-file（文件名为代码常量，不再可配置）
+# 新增 ui.register-ui-on-enable / ui.overwrite-ui-files（之前代码硬编码，现在可配置，迁移时使用默认值）。
+from-version: 1
+to-version: 2
+description: "UI 配置从嵌套改为扁平统一格式，删除 ui-file（文件名保持代码常量），新增 register-ui-on-enable/overwrite-ui-files"
+operations:
+  - type: move
+    from: ui.bind.ui-id
+    to: ui.bind-ui-id
+  - type: move
+    from: ui.notify.ui-id
+    to: ui.notify-ui-id
+  - type: move
+    from: ui.admin.ui-id
+    to: ui.admin-ui-id
+  - type: move
+    from: ui.notify.enabled
+    to: ui.notify-enabled
+  - type: remove
+    path: ui.bind.ui-file
+  - type: remove
+    path: ui.notify.ui-file
+  - type: remove
+    path: ui.admin.ui-file

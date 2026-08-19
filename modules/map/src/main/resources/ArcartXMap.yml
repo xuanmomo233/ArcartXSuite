@@ -1,5 +1,5 @@
 # 配置版本号（不要手动修改，由模块自动管理）
-config-version: 1
+config-version: 2
 # AXS Map
 # 作用: 提供全屏地图 GUI、小地图 HUD、世界配置、锚点、路径点、自定义图标和 AXMap 临时导航目标。
 # 依赖: ArcartX；Vault、PlayerPoints、MythicMobs、NeigeItems 按功能选用。
@@ -10,12 +10,12 @@ config-version: 1
 
 debug: false
 
-client:
-  # packet-id 为客户端 Packet.send / 服务端 packetHandler 的通信标识。
-  packet-id: "AXS_MAP"
+ui:
   # menu-ui-id 全屏地图 UI；hud-ui-id 小地图 HUD。
   menu-ui-id: "AXS:map_menu"
   hud-ui-id: "AXS:map_hud"
+  # packet-id 为客户端 Packet.send / 服务端 packetHandler 的通信标识。
+  packet-id: "AXS_MAP"
   # 是否在启用/重载时自动注册 UI；overwrite-ui-files 为 true 时覆盖已导出的 UI 文件。
   register-ui-on-enable: true
   overwrite-ui-files: false

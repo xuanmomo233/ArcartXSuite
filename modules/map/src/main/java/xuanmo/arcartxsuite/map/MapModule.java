@@ -48,7 +48,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("map")
             .name("Map")
-            .version("1.0.2-beta")
+            .version("1.1.0-beta")
             .mainClass(getClass().getName())
             .build();
     }
@@ -61,6 +61,12 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
     @Override
     protected String messagesFileName() {
         return "messages.yml";
+    }
+
+    @Override
+    protected int currentConfigVersion() {
+        // client 节的 UI 配置字段整体迁移到 ui 节（move 操作，见 migrations/1-2.yml）
+        return 2;
     }
 
     @Override
@@ -82,7 +88,7 @@ public final class MapModule extends AbstractAXSModule implements ModuleCommandH
             // pool-size 范围 1-100
             ValidationRule.required("storage.pool-size", ValueType.INT)
                 .withRange(1, 100),
-            ValidationRule.required("client.packet-id", ValueType.STRING),
+            ValidationRule.required("ui.packet-id", ValueType.STRING),
             ValidationRule.of("navigation.enabled", ValueType.BOOLEAN)
         );
     }

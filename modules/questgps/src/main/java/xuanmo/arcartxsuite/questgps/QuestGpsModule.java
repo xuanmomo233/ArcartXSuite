@@ -54,7 +54,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("questgps")
             .name("QuestGPS")
-            .version("1.0.2-beta")
+            .version("1.1.0-beta")
             .mainClass(getClass().getName())
             .build();
     }
@@ -63,6 +63,12 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     @Override
     protected String configFileName() {
         return "ArcartXQuestGPS.yml";
+    }
+
+    /** @return 当前配置文件版本号（用于迁移脚本识别版本） */
+    @Override
+    protected int currentConfigVersion() {
+        return 2;
     }
 
     /** @return 消息文件名 */
@@ -84,7 +90,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            ValidationRule.required("client.packet-id", ValueType.STRING),
+            ValidationRule.required("ui.packet-id", ValueType.STRING),
             ValidationRule.of("navigation.enabled", ValueType.BOOLEAN),
             ValidationRule.of("navigation.mode", ValueType.STRING),
             ValidationRule.of("database.enabled", ValueType.BOOLEAN),
@@ -106,7 +112,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     /** @return 是否在启用时覆盖已存在的 UI 文件 */
     @Override
     protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.client().overwriteUiFiles();
+        return configuration != null && configuration.ui().overwriteUiFiles();
     }
 
     /**
@@ -165,24 +171,24 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
     protected void startService() throws Exception {
 
         java.util.List<String> menuRuntimeUiIds = new java.util.ArrayList<>();
-        for (String candidateUiId : configuration.client().menuUiIds()) {
+        for (String candidateUiId : configuration.ui().menuUiIds()) {
             UiBinding menuBinding = registerModuleUi(
                 QuestGpsService.MENU_UI_RESOURCE_PATH,
                 QuestGpsService.MENU_UI_FILE_PATH,
                 candidateUiId,
-                configuration.client().registerUiOnEnable()
+                configuration.ui().registerUiOnEnable()
             );
             if (menuBinding.registeredUiId() != null) {
                 menuRuntimeUiIds.add(menuBinding.runtimeUiId());
             }
         }
         java.util.List<String> guideRuntimeUiIds = new java.util.ArrayList<>();
-        for (String candidateUiId : configuration.client().guideUiIds()) {
+        for (String candidateUiId : configuration.ui().guideUiIds()) {
             UiBinding guideBinding = registerModuleUi(
                 QuestGpsService.GUIDE_UI_RESOURCE_PATH,
                 QuestGpsService.GUIDE_UI_FILE_PATH,
                 candidateUiId,
-                configuration.client().registerUiOnEnable()
+                configuration.ui().registerUiOnEnable()
             );
             if (guideBinding.registeredUiId() != null) {
                 guideRuntimeUiIds.add(guideBinding.runtimeUiId());
@@ -257,7 +263,7 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
         adminCommand = new QuestGpsAdminCommand(() -> service, messages());
 
         logger.fine(
-            "QuestGPS: 模块已载入，packet-id=" + configuration.client().packetId()
+            "QuestGPS: 模块已载入，packet-id=" + configuration.ui().packetId()
                 + " | menu-ui=" + menuRuntimeUiIds
                 + " | guide-ui=" + guideRuntimeUiIds
                 + " | quests=" + configuration.configuredQuestCount()

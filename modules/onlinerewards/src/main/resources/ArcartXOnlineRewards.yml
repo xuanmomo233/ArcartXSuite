@@ -1,5 +1,5 @@
 # 配置版本号（不要手动修改，由模块自动管理）
-config-version: 2
+config-version: 3
 # AXS OnlineRewards
 # 作用: 统计今日/本周/本月/总在线时长，发放在线阶段奖励；提供签到、连续/累计/每月/节日奖励、补签卡、排行榜和日历 UI；
 #       新增周/月累计在线时长奖励、离线时长储蓄、全服签到目标/集体奖励、签到历史回顾。
@@ -62,12 +62,12 @@ variables:
 ui:
   # OnlineRewards 菜单 UI ID；/onlinerewards open 或 /onlinerewards 会打开该界面。
   # 支持字符串（单 UI）或列表（多 UI 同时发包）：
-  # menu-ui-id: "AXS:online_rewards_menu"
+  # ui-id: "AXS:online_rewards_menu"
   # 多 UI 示例（同一个 payload 同时发给多个 UI）：
-  # menu-ui-id:
+  # ui-id:
   #   - "AXS:online_rewards_menu"
   #   - "AXS:online_rewards_menu_alt"
-  menu-ui-id: AXS:online_rewards_menu
+  ui-id: AXS:online_rewards_menu
 
   # 客户端按钮回包 ID；需与 online_rewards_menu.yml 中 Packet.send 的第一个参数一致。
   packet-id: AXS_ONLINE_REWARDS

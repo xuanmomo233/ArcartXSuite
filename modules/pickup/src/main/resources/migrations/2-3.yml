@@ -1,0 +1,33 @@
+# Pickup 配置迁移文件（版本 2 → 3）
+# 将分散在 notification / scanner 嵌套节中的 UI 配置抽离到统一顶层 ui 节。
+# - notification.ui-id → ui.notification-ui-id
+# - scanner.ui-id → ui.scanner-ui-id
+# - scanner.interact-ui-id → ui.interact-ui-id
+# - notification.register-ui-on-enable / scanner.register-ui-on-enable → 合并到 ui.register-ui-on-enable
+# - notification.overwrite-ui-file / scanner.overwrite-ui-file → 合并到 ui.overwrite-ui-files（单数改复数）
+# 注意：register-ui-on-enable 与 overwrite-ui-files 为合并字段，两节均有值时 scanner 节的值覆盖 notification 节（默认值一致，无影响）。
+from-version: 2
+to-version: 3
+description: "UI 配置从 notification / scanner 嵌套节抽离到统一 ui 节：notification.ui-id→ui.notification-ui-id, scanner.ui-id→ui.scanner-ui-id, scanner.interact-ui-id→ui.interact-ui-id, register-ui-on-enable 合并到 ui.register-ui-on-enable, overwrite-ui-file 合并到 ui.overwrite-ui-files（单数改复数）。"
+operations:
+  - type: move
+    from: notification.ui-id
+    to: ui.notification-ui-id
+  - type: move
+    from: notification.register-ui-on-enable
+    to: ui.register-ui-on-enable
+  - type: move
+    from: notification.overwrite-ui-file
+    to: ui.overwrite-ui-files
+  - type: move
+    from: scanner.ui-id
+    to: ui.scanner-ui-id
+  - type: move
+    from: scanner.interact-ui-id
+    to: ui.interact-ui-id
+  - type: move
+    from: scanner.register-ui-on-enable
+    to: ui.register-ui-on-enable
+  - type: move
+    from: scanner.overwrite-ui-file
+    to: ui.overwrite-ui-files

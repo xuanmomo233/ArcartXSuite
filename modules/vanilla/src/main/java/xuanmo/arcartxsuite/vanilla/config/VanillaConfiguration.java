@@ -7,12 +7,18 @@ import org.bukkit.configuration.file.YamlConfiguration;
  */
 public final class VanillaConfiguration {
 
+    private final Ui ui;
     private final Crafting crafting;
     private final Furnace furnace;
 
-    private VanillaConfiguration(Crafting crafting, Furnace furnace) {
+    private VanillaConfiguration(Ui ui, Crafting crafting, Furnace furnace) {
+        this.ui = ui;
         this.crafting = crafting;
         this.furnace = furnace;
+    }
+
+    public Ui ui() {
+        return ui;
     }
 
     public Crafting crafting() {
@@ -24,23 +30,27 @@ public final class VanillaConfiguration {
     }
 
     public static VanillaConfiguration load(YamlConfiguration yaml) {
+        Ui ui = new Ui(
+            yaml.getString("ui.crafting-ui-id", "vanilla_crafting"),
+            yaml.getString("ui.furnace-ui-id", "vanilla_furnace"),
+            yaml.getBoolean("ui.overwrite-ui-files", false)
+        );
         Crafting crafting = new Crafting(
-            yaml.getBoolean("crafting.enabled", true),
-            yaml.getString("crafting.ui-id", "vanilla_crafting"),
-            yaml.getBoolean("crafting.overwrite-ui-file", false)
+            yaml.getBoolean("crafting.enabled", true)
         );
         Furnace furnace = new Furnace(
             yaml.getBoolean("furnace.enabled", true),
-            yaml.getString("furnace.ui-id", "vanilla_furnace"),
-            yaml.getBoolean("furnace.overwrite-ui-file", false),
             yaml.getInt("furnace.push-interval-ticks", 2)
         );
-        return new VanillaConfiguration(crafting, furnace);
+        return new VanillaConfiguration(ui, crafting, furnace);
     }
 
-    public record Crafting(boolean enabled, String uiId, boolean overwriteUiFile) {
+    public record Ui(String craftingUiId, String furnaceUiId, boolean overwriteUiFiles) {
     }
 
-    public record Furnace(boolean enabled, String uiId, boolean overwriteUiFile, int pushIntervalTicks) {
+    public record Crafting(boolean enabled) {
+    }
+
+    public record Furnace(boolean enabled, int pushIntervalTicks) {
     }
 }

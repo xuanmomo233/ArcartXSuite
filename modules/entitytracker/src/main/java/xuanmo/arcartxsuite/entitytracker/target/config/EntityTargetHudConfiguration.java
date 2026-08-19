@@ -37,6 +37,15 @@ public record EntityTargetHudConfiguration(
     private static final String DEFAULT_SUBTITLE_FORMAT = "&7{entity_type_name} &8| &c{health}/{max_health} &8| &f{distance_text}";
 
     public static EntityTargetHudConfiguration load(ConfigurationSection configuration) {
+        return load(configuration, null);
+    }
+
+    /**
+     * @param configuration attack-target 节
+     * @param uiSection     顶层 ui 节（包含 target-ui-id、register-ui-on-enable、overwrite-ui-files）；
+     *                      为 null 时回退到 attack-target.settings 下的旧字段（向后兼容）
+     */
+    public static EntityTargetHudConfiguration load(ConfigurationSection configuration, ConfigurationSection uiSection) {
         if (configuration == null) {
             configuration = new YamlConfiguration();
         }
@@ -44,11 +53,18 @@ public record EntityTargetHudConfiguration(
         long refreshIntervalTicks = Math.max(1L, configuration.getLong("settings.refresh-interval-ticks", DEFAULT_REFRESH_INTERVAL_TICKS));
         long targetTimeoutMs = Math.max(250L, configuration.getLong("settings.target-timeout-ms", DEFAULT_TARGET_TIMEOUT_MS));
         double maxViewDistance = Math.max(1.0D, configuration.getDouble("settings.max-view-distance", DEFAULT_MAX_VIEW_DISTANCE));
-        List<String> uiIds = UiIdParser.readUiIds(
-            configuration.getConfigurationSection("settings"), "ui-id", DEFAULT_UI_ID
-        );
-        boolean registerUiOnEnable = configuration.getBoolean("settings.register-ui-on-enable", true);
-        boolean overwriteUiFile = configuration.getBoolean("settings.overwrite-ui-file", false);
+        // UI 字段优先从顶层 ui 节读取；ui 节缺失时回退到 attack-target.settings 旧字段（兼容未迁移配置）
+        List<String> uiIds = uiSection != null
+            ? UiIdParser.readUiIds(uiSection, "target-ui-id", DEFAULT_UI_ID)
+            : UiIdParser.readUiIds(
+                configuration.getConfigurationSection("settings"), "ui-id", DEFAULT_UI_ID
+            );
+        boolean registerUiOnEnable = uiSection != null
+            ? uiSection.getBoolean("register-ui-on-enable", configuration.getBoolean("settings.register-ui-on-enable", true))
+            : configuration.getBoolean("settings.register-ui-on-enable", true);
+        boolean overwriteUiFile = uiSection != null
+            ? uiSection.getBoolean("overwrite-ui-files", configuration.getBoolean("settings.overwrite-ui-file", false))
+            : configuration.getBoolean("settings.overwrite-ui-file", false);
         String titleFormat = readString(configuration, "settings.title-format", DEFAULT_TITLE_FORMAT);
         String subtitleFormat = readString(configuration, "settings.subtitle-format", DEFAULT_SUBTITLE_FORMAT);
         Set<String> blacklistedMythicMobIds = readNormalizedSet(

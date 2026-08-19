@@ -28,10 +28,20 @@ public record PluginConfiguration(
     private static final Set<String> RESERVED_ROOT_KEYS = Set.of("settings", "bosses");
 
     public static PluginConfiguration from(ConfigurationSection config) {
-        return from(config, null);
+        return from(config, null, null);
     }
 
     public static PluginConfiguration from(ConfigurationSection config, File bossesDirectory) {
+        return from(config, null, bossesDirectory);
+    }
+
+    /**
+     * @param config          boss 节（包含 settings、bosses-directory 等）
+     * @param uiSection       顶层 ui 节（包含 boss-ui-id、register-ui-on-enable、overwrite-ui-files）；
+     *                        为 null 时回退到 boss.settings 下的旧字段（向后兼容）
+     * @param bossesDirectory Boss 定义目录
+     */
+    public static PluginConfiguration from(ConfigurationSection config, ConfigurationSection uiSection, File bossesDirectory) {
         if (config == null) {
             config = new YamlConfiguration();
         }
@@ -40,12 +50,20 @@ public record PluginConfiguration(
         double defaultViewerRange = settings != null ? Math.max(1.0D, settings.getDouble("default-viewer-range", 48.0D)) : 48.0D;
         int maxVisibleBars = settings != null ? Math.max(1, settings.getInt("max-visible-bars", 5)) : 5;
         BossSortMode sortMode = BossSortMode.from(settings != null ? settings.getString("sort-mode", "spawn-order") : "spawn-order");
-        List<String> uiIds = settings != null
-            ? UiIdParser.readUiIds(settings, "ui-id", DEFAULT_UI_ID).stream()
+        // UI 字段优先从顶层 ui 节读取；ui 节缺失时回退到 boss.settings 旧字段（兼容未迁移配置）
+        List<String> uiIds = uiSection != null
+            ? UiIdParser.readUiIds(uiSection, "boss-ui-id", DEFAULT_UI_ID).stream()
                 .map(PluginConfiguration::normalizeUiId).toList()
-            : List.of(DEFAULT_UI_ID);
-        boolean registerUiOnEnable = settings == null || settings.getBoolean("register-ui-on-enable", true);
-        boolean overwriteUiFile = settings != null && settings.getBoolean("overwrite-ui-file", false);
+            : (settings != null
+                ? UiIdParser.readUiIds(settings, "ui-id", DEFAULT_UI_ID).stream()
+                    .map(PluginConfiguration::normalizeUiId).toList()
+                : List.of(DEFAULT_UI_ID));
+        boolean registerUiOnEnable = uiSection != null
+            ? uiSection.getBoolean("register-ui-on-enable", settings == null || settings.getBoolean("register-ui-on-enable", true))
+            : (settings == null || settings.getBoolean("register-ui-on-enable", true));
+        boolean overwriteUiFile = uiSection != null
+            ? uiSection.getBoolean("overwrite-ui-files", settings != null && settings.getBoolean("overwrite-ui-file", false))
+            : (settings != null && settings.getBoolean("overwrite-ui-file", false));
 
         Map<String, BossDefinition> bosses = new LinkedHashMap<>();
         if (bossesDirectory != null && bossesDirectory.isDirectory()) {

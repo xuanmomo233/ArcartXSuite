@@ -1,5 +1,5 @@
 # 配置版本号（不要手动修改，由模块自动管理）
-config-version: 1
+config-version: 2
 # AXS QQBot QQ群服互联
 # 作用: 通过 OneBot 11 协议连接 QQ 机器人，实现 QQ 群与服务器消息双向同步、
 #       群指令查询玩家数据、QQ-游戏账号绑定、白名单管理。
@@ -385,21 +385,20 @@ storage:
   pool-size: 4
 
 # ─── UI 界面配置 ───────────────────────────────────────
+# UI 文件名（qqbot_bind.yml 等）为代码常量，不再在此配置。
 ui:
-  # 绑定中心 UI
-  bind:
-    ui-id: "AXS:QQBot_Bind"
-    ui-file: "qqbot_bind.yml"
-  # 消息通知 HUD
-  notify:
-    ui-id: "AXS:QQBot_Notify"
-    ui-file: "qqbot_notify.yml"
-    # 是否启用消息通知 HUD（屏幕右上角弹出新消息）
-    enabled: true
-  # 管理后台 UI
-  admin:
-    ui-id: "AXS:QQBot_Admin"
-    ui-file: "qqbot_admin.yml"
+  # 绑定中心 UI ID
+  bind-ui-id: "AXS:QQBot_Bind"
+  # 消息通知 HUD UI ID
+  notify-ui-id: "AXS:QQBot_Notify"
+  # 管理后台 UI ID
+  admin-ui-id: "AXS:QQBot_Admin"
+  # 是否启用消息通知 HUD（屏幕右上角弹出新消息）
+  notify-enabled: true
+  # 模块启动时是否自动注册 UI
+  register-ui-on-enable: true
+  # 是否强制覆盖已存在的 UI 文件
+  overwrite-ui-files: false
 
 # ─── 消息文本 ─────────────────────────────────────────
 # 以下为各场景的消息模板，{xxx} 为占位符变量。

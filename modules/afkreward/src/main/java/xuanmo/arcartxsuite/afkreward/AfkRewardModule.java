@@ -53,7 +53,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("afkreward")
             .name("AfkReward")
-            .version("1.0.0-beta")
+            .version("1.1.0-beta")
             .mainClass(getClass().getName())
             .externalDepends(List.of("PlaceholderAPI"))
             .build();

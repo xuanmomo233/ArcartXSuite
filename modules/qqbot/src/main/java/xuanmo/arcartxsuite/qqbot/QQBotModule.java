@@ -59,7 +59,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("qqbot")
             .name("QQBot")
-            .version("1.0.0-beta")
+            .version("1.1.0-beta")
             .mainClass(getClass().getName())
             .softDepends(List.of("chat"))
             .build();
@@ -68,6 +68,16 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     @Override
     protected String configFileName() {
         return "ArcartXQQBot.yml";
+    }
+
+    @Override
+    protected int currentConfigVersion() {
+        return 2;
+    }
+
+    @Override
+    protected boolean overwriteUiFiles() {
+        return configuration != null && configuration.ui().overwriteUiFiles();
     }
 
     @Override
@@ -322,25 +332,28 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
 
         // 注入群消息监听器到 UI 服务
         QQBotUiService uiSvc = uiService;
+        final boolean notifyEnabled = configuration.ui().notifyEnabled();
         service.setGroupMessageListener((nick, message, groupId) -> {
             uiSvc.cacheGroupMessage(nick, message, groupId);
-            // 广播通知到所有在线玩家
-            AxsScheduler.runTask(plugin, () ->
-                uiSvc.broadcastNotification(nick, message));
+            // 广播通知到所有在线玩家（受 ui.notify-enabled 控制）
+            if (notifyEnabled) {
+                AxsScheduler.runTask(plugin, () ->
+                    uiSvc.broadcastNotification(nick, message));
+            }
         });
 
-        // 注册 UI 绑定
-        UiBinding bindUi = registerModuleUi(QQBotUiService.BIND_UI_FILE, "AXS:QQBot_Bind", true);
+        // 注册 UI 绑定（UI ID 与注册行为从配置 ui 节读取）
+        UiBinding bindUi = registerModuleUi(QQBotUiService.BIND_UI_FILE, configuration.ui().bindUiId(), configuration.ui().registerUiOnEnable());
         if (bindUi.registeredUiId() != null) {
             uiService.setBindUiId(bindUi.runtimeUiId());
         }
 
-        UiBinding notifyUi = registerModuleUi(QQBotUiService.NOTIFY_UI_FILE, "AXS:QQBot_Notify", true);
+        UiBinding notifyUi = registerModuleUi(QQBotUiService.NOTIFY_UI_FILE, configuration.ui().notifyUiId(), configuration.ui().registerUiOnEnable());
         if (notifyUi.registeredUiId() != null) {
             uiService.setNotifyUiId(notifyUi.runtimeUiId());
         }
 
-        UiBinding adminUi = registerModuleUi(QQBotUiService.ADMIN_UI_FILE, "AXS:QQBot_Admin", true);
+        UiBinding adminUi = registerModuleUi(QQBotUiService.ADMIN_UI_FILE, configuration.ui().adminUiId(), configuration.ui().registerUiOnEnable());
         if (adminUi.registeredUiId() != null) {
             uiService.setAdminUiId(adminUi.runtimeUiId());
         }

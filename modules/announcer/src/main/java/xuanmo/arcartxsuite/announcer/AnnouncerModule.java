@@ -47,7 +47,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("announcer")
             .name("Announcer")
-            .version("1.1.0-beta")
+            .version("1.2.0-beta")
             .mainClass(getClass().getName())
             .build();
     }
@@ -70,6 +70,16 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
     @Override
     protected String messagesFileName() {
         return "messages.yml";
+    }
+
+    /**
+     * 主配置版本号：UI 配置抽离到统一 ui 节后 +1。
+     *
+     * @return 当前配置版本号 {@code 2}
+     */
+    @Override
+    protected int currentConfigVersion() {
+        return 2;
     }
 
     private String msg(String key, Object... args) {
@@ -123,14 +133,15 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
 
     /**
      * 判断是否需要在启用时覆盖已存在的 UI 文件。
+     * <p>
+     * 公告与字幕共用统一开关（{@code ui.overwrite-ui-files}）。
      *
-     * @return 当公告或字幕配置要求覆盖时返回 {@code true}
+     * @return 当配置要求覆盖时返回 {@code true}
      */
     @Override
     protected boolean overwriteUiFiles() {
         if (configuration == null) return false;
-        return configuration.overwriteUiFile()
-            || configuration.subtitle().overwriteUiFile();
+        return configuration.overwriteUiFile();
     }
 
     /**
@@ -196,7 +207,7 @@ public final class AnnouncerModule extends AbstractAXSModule implements ModuleCo
                 "arcartx/ui/subtitle_hud.yml",
                 "ui/subtitle_hud.yml",
                 candidateUiId,
-                subtitleCfg.registerUiOnEnable()
+                configuration.registerUiOnEnable()
             );
             if (subtitleUiBinding.registeredUiId() != null) {
                 subtitleRuntimeUiIds.add(subtitleUiBinding.runtimeUiId());

@@ -1,4 +1,4 @@
-config-version: 1
+config-version: 2
 # AXS Menu — 通用 ArcartX 菜单系统（类 TrMenu 配置驱动）
 # 作用: 通过 menus/ 目录下的 YAML 定义多页菜单、按钮动作、打开条件与命令绑定。
 # 依赖: ArcartX；PlaceholderAPI 可选（条件表达式）。
@@ -9,12 +9,14 @@ config-version: 1
 debug:
   enabled: false  # 是否输出调试日志
 
-client:
-  packet-id: "AXS_MENU"  # 客户端通信包标识符
+ui:
   panel-ui-id: "AXS:menu_panel"  # 面板布局 UI 的 ID
   esc-ui-id: "AXS:menu_esc"  # ESC 布局 UI 的 ID
+  packet-id: "AXS_MENU"  # 客户端通信包标识符
   register-ui-on-enable: true  # 启动时是否自动注册 UI
   overwrite-ui-files: false  # 是否强制覆盖用户已修改的 UI 文件
+
+client:
   # ESC 暂停界面绑定的默认菜单 ID（layout: esc 的菜单定义）
   esc-menu-id: "esc_main"
 

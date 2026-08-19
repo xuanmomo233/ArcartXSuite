@@ -147,7 +147,7 @@ public final class QuestGpsService implements Listener {
             navigationService
         );
         this.overlayValidator = new QuestGpsOverlayValidator(this.logger, configuration, categoryResolver);
-        this.uiPacketHandler = new QuestGpsUiPacketHandler(this, configuration.client().packetId());
+        this.uiPacketHandler = new QuestGpsUiPacketHandler(this, configuration.ui().packetId());
     }
 
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {

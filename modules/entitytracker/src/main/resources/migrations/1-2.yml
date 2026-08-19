@@ -1,0 +1,24 @@
+from-version: 1
+to-version: 2
+description: "UI 配置从 boss.settings / attack-target.settings 嵌套节抽离到统一 ui 节：boss.settings.ui-id→ui.boss-ui-id, attack-target.settings.ui-id→ui.target-ui-id, *.settings.register-ui-on-enable→ui.register-ui-on-enable, *.settings.overwrite-ui-file→ui.overwrite-ui-files"
+operations:
+  # attack-target.settings UI 字段先移动到统一 ui 节（合并字段先写入 attack-target 侧值）
+  - type: move
+    from: attack-target.settings.ui-id
+    to: ui.target-ui-id
+  - type: move
+    from: attack-target.settings.register-ui-on-enable
+    to: ui.register-ui-on-enable
+  - type: move
+    from: attack-target.settings.overwrite-ui-file
+    to: ui.overwrite-ui-files
+  # boss.settings UI 字段后移动（合并字段 boss 侧值覆盖 attack-target 侧值）
+  - type: move
+    from: boss.settings.ui-id
+    to: ui.boss-ui-id
+  - type: move
+    from: boss.settings.register-ui-on-enable
+    to: ui.register-ui-on-enable
+  - type: move
+    from: boss.settings.overwrite-ui-file
+    to: ui.overwrite-ui-files

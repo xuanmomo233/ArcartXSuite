@@ -50,7 +50,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("menu")
             .name("Menu")
-            .version("1.0.0-beta")
+            .version("1.1.0-beta")
             .mainClass(getClass().getName())
             .externalSoftDepends(List.of("PlaceholderAPI"))
             .build();
@@ -63,7 +63,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected int currentConfigVersion() {
-        return 1;
+        return 2;
     }
 
     @Override
@@ -74,7 +74,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            ValidationRule.required("client.packet-id", ValueType.STRING),
+            ValidationRule.required("ui.packet-id", ValueType.STRING),
             ValidationRule.required("settings.menus-directory", ValueType.STRING)
         );
     }
@@ -89,7 +89,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.client().overwriteUiFiles();
+        return configuration != null && configuration.ui().overwriteUiFiles();
     }
 
     @Override
@@ -136,13 +136,13 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
 
         UiBinding panelBinding = registerModuleUi(
             MenuService.PANEL_UI_FILE_PATH,
-            configuration.client().panelUiId(),
-            configuration.client().registerUiOnEnable()
+            configuration.ui().panelUiId(),
+            configuration.ui().registerUiOnEnable()
         );
         UiBinding escBinding = registerModuleUi(
             MenuService.ESC_UI_FILE_PATH,
-            configuration.client().escUiId(),
-            configuration.client().registerUiOnEnable()
+            configuration.ui().escUiId(),
+            configuration.ui().registerUiOnEnable()
         );
         if (panelBinding.registeredUiId() == null || escBinding.registeredUiId() == null) {
             throw new IllegalStateException("Menu UI 注册失败");
@@ -161,7 +161,7 @@ public final class MenuModule extends AbstractAXSModule implements ModuleCommand
         service.setRuntimeUiIds(panelBinding.runtimeUiId(), escBinding.runtimeUiId());
         service.reload(dataFolder);
         registerCustomMenuUis(panelBinding.runtimeUiId(), escBinding.runtimeUiId());
-        packetHandler = new MenuUiPacketHandler(service, configuration.client().packetId());
+        packetHandler = new MenuUiPacketHandler(service, configuration.ui().packetId());
         adminCommand = new MenuAdminCommand(service, messages());
 
         registerCapability(MenuOpenable.class, new MenuOpenable() {

@@ -1,0 +1,29 @@
+# Menu 配置迁移: 1 -> 2
+# UI 配置字段从 client 节抽离到统一 ui 节：
+# client.packet-id -> ui.packet-id
+# client.panel-ui-id -> ui.panel-ui-id
+# client.esc-ui-id -> ui.esc-ui-id
+# client.register-ui-on-enable -> ui.register-ui-on-enable
+# client.overwrite-ui-files -> ui.overwrite-ui-files
+# 保留 client.esc-menu-id（这是菜单定义 ID，不是 UI ID）
+
+from-version: 1
+to-version: 2
+description: "UI 配置从 client 节抽离到统一 ui 节：client.packet-id→ui.packet-id, client.panel-ui-id→ui.panel-ui-id, client.esc-ui-id→ui.esc-ui-id, client.register-ui-on-enable→ui.register-ui-on-enable, client.overwrite-ui-files→ui.overwrite-ui-files（保留 client.esc-menu-id）"
+
+operations:
+  - type: move
+    from: client.packet-id
+    to: ui.packet-id
+  - type: move
+    from: client.panel-ui-id
+    to: ui.panel-ui-id
+  - type: move
+    from: client.esc-ui-id
+    to: ui.esc-ui-id
+  - type: move
+    from: client.register-ui-on-enable
+    to: ui.register-ui-on-enable
+  - type: move
+    from: client.overwrite-ui-files
+    to: ui.overwrite-ui-files

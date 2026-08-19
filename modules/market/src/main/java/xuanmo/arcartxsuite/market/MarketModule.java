@@ -61,7 +61,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
     public ModuleDescriptor descriptor() {
         return ModuleDescriptor.builder("market")
             .name("Market")
-            .version("1.0.0")
+            .version("1.1.0")
             .mainClass(getClass().getName())
             .build();
     }

@@ -1,5 +1,5 @@
 # 配置文件版本号（用于迁移脚本识别版本，勿手动修改）
-config-version: 1
+config-version: 2
 # AXS QuestGPS
 # 作用: 将 Chemdah 任务展示为 ArcartX 菜单，支持任务分类、接取/放弃、目标追踪、奖励预览、粒子导航和 AXMap 临时目标联动。
 # 依赖: ArcartX、Chemdah；AXMap 可选联动。
@@ -12,9 +12,8 @@ config-version: 1
 debug:
   enabled: false
 
-#客户端发包
-client:
-  packet-id: "AXS_QUESTGPS"
+#UI 界面配置（UI ID、发包标识、注册与覆盖开关）
+ui:
   # 任务菜单 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
   # menu-ui-id: "AXS:questgps_menu"
   # 多 UI 示例（同一个 payload 同时发给多个 UI）：
@@ -27,6 +26,7 @@ client:
   #   - "AXS:questgps_guide"
   #   - "AXS:questgps_guide_alt"
   guide-ui-id: "AXS:questgps_guide"
+  packet-id: "AXS_QUESTGPS"
   register-ui-on-enable: true
   overwrite-ui-files: false
 

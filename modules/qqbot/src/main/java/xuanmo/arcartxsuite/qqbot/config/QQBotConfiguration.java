@@ -42,7 +42,8 @@ public record QQBotConfiguration(
     QQBotAnnounceConfig announce,
     QQBotModerationConfig moderation,
     QQBotBlacklistConfig blacklist,
-    boolean atToGameEnabled
+    boolean atToGameEnabled,
+    QQBotUiConfig ui
 ) {
 
     /**
@@ -392,13 +393,23 @@ public record QQBotConfiguration(
             yaml.getString("blacklist.list-prefix", "#黑名单列表")
         );
 
+        QQBotUiConfig ui = new QQBotUiConfig(
+            yaml.getString("ui.bind-ui-id", "AXS:QQBot_Bind"),
+            yaml.getString("ui.notify-ui-id", "AXS:QQBot_Notify"),
+            yaml.getString("ui.admin-ui-id", "AXS:QQBot_Admin"),
+            yaml.getBoolean("ui.notify-enabled", true),
+            yaml.getBoolean("ui.register-ui-on-enable", true),
+            yaml.getBoolean("ui.overwrite-ui-files", false)
+        );
+
         return new QQBotConfiguration(
             debug, serverId, onebot, groups, binding, whitelist,
             adminEnabled, adminQQs, adminCommandPrefix,
             commandPrefix, helpPrefix, customCommands, storage, messages,
             signin, prizes, monitor, scheduledMessages, broadcast, marketBroadcast,
             welcome, autoReply, announce, moderation, blacklist,
-            yaml.getBoolean("at-to-game.enabled", true)
+            yaml.getBoolean("at-to-game.enabled", true),
+            ui
         );
     }
 

@@ -40,8 +40,8 @@ public final class VanillaService {
         this.configuration = configuration;
         this.logger = logger;
         this.recipeCollector = new RecipeCollector(nameBridge);
-        this.craftingUiId = configuration.crafting().uiId();
-        this.furnaceUiId = configuration.furnace().uiId();
+        this.craftingUiId = configuration.ui().craftingUiId();
+        this.furnaceUiId = configuration.ui().furnaceUiId();
     }
 
     /**

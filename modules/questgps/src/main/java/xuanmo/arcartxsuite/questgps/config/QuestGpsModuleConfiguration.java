@@ -22,7 +22,7 @@ import xuanmo.arcartxsuite.questgps.chemdah.database.QuestGpsDatabaseSettings;
 
 public record QuestGpsModuleConfiguration(
     boolean debug,
-    ClientConfiguration client,
+    UiConfiguration ui,
     NavigationDefaults navigation,
     PresentationDefaults presentation,
     CategoryDefaults categoryDefaults,
@@ -52,7 +52,7 @@ public record QuestGpsModuleConfiguration(
         Objects.requireNonNull(logger, "logger");
 
         boolean debug = configuration.getBoolean("debug.enabled", false);
-        ClientConfiguration client = loadClient(configuration.getConfigurationSection("client"));
+        UiConfiguration ui = loadUi(configuration.getConfigurationSection("ui"));
         NavigationDefaults navigation = loadNavigationDefaults(configuration.getConfigurationSection("navigation"));
         PresentationDefaults presentation = loadPresentationDefaults(configuration.getConfigurationSection("presentation"), logger);
         CategoryDefaults categoryDefaults = loadCategoryDefaults(configuration.getConfigurationSection("category"), logger);
@@ -71,7 +71,7 @@ public record QuestGpsModuleConfiguration(
         }
         return new QuestGpsModuleConfiguration(
             debug,
-            client,
+            ui,
             navigation,
             presentation,
             categoryDefaults,
@@ -129,8 +129,8 @@ public record QuestGpsModuleConfiguration(
         );
     }
 
-    private static ClientConfiguration loadClient(ConfigurationSection section) {
-        return new ClientConfiguration(
+    private static UiConfiguration loadUi(ConfigurationSection section) {
+        return new UiConfiguration(
             string(section == null ? null : section.getString("packet-id"), DEFAULT_PACKET_ID),
             UiIdParser.readUiIds(section, "menu-ui-id", DEFAULT_MENU_UI_ID),
             UiIdParser.readUiIds(section, "guide-ui-id", DEFAULT_GUIDE_UI_ID),
@@ -566,7 +566,7 @@ public record QuestGpsModuleConfiguration(
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 
-    public record ClientConfiguration(
+    public record UiConfiguration(
         String packetId,
         List<String> menuUiIds,
         List<String> guideUiIds,

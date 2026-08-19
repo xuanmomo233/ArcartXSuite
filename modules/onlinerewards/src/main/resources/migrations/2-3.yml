@@ -1,0 +1,13 @@
+# OnlineRewards 配置迁移: 2 -> 3
+# UI 配置字段名统一为标准格式，单 UI 场景使用 ui-id 而非 menu-ui-id
+# menu-ui-id -> ui-id
+
+from-version: 2  # 迁移起始版本号
+to-version: 3  # 迁移目标版本号
+description: "UI 配置字段名统一：menu-ui-id→ui-id"  # 迁移描述
+
+operations:  # 迁移操作列表，按顺序执行
+  # 重命名菜单 UI 标识字段（单 UI 场景统一为 ui-id）
+  - type: rename  # 操作类型：重命名指定路径的配置键
+    from: ui.menu-ui-id  # 旧字段路径
+    to: ui.ui-id  # 新字段路径

@@ -73,13 +73,13 @@ public record MapModuleConfiguration(
     public static MapModuleConfiguration load(FileConfiguration configuration, Logger logger, File anchorsDirectory) {
         boolean debug = configuration.getBoolean("debug", false);
 
-        ConfigurationSection clientSection = configuration.getConfigurationSection("client");
+        ConfigurationSection uiSection = configuration.getConfigurationSection("ui");
         ClientConfiguration client = new ClientConfiguration(
-            string(clientSection == null ? null : clientSection.getString("packet-id"), DEFAULT_PACKET_ID),
-            string(clientSection == null ? null : clientSection.getString("menu-ui-id"), DEFAULT_MENU_UI_ID),
-            string(clientSection == null ? null : clientSection.getString("hud-ui-id"), DEFAULT_HUD_UI_ID),
-            clientSection == null || clientSection.getBoolean("register-ui-on-enable", true),
-            clientSection != null && clientSection.getBoolean("overwrite-ui-files", false)
+            string(uiSection == null ? null : uiSection.getString("packet-id"), DEFAULT_PACKET_ID),
+            string(uiSection == null ? null : uiSection.getString("menu-ui-id"), DEFAULT_MENU_UI_ID),
+            string(uiSection == null ? null : uiSection.getString("hud-ui-id"), DEFAULT_HUD_UI_ID),
+            uiSection == null || uiSection.getBoolean("register-ui-on-enable", true),
+            uiSection != null && uiSection.getBoolean("overwrite-ui-files", false)
         );
 
         ConfigurationSection keybindSection = configuration.getConfigurationSection("keybinds");
