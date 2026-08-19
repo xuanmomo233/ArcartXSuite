@@ -395,11 +395,18 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
                     tierEntry.put("type", reward.type());
                     tierEntry.put("tierDisplay", rewardTierDisplay(reward.tier()));
                     tierEntry.put("present", "true");
+                    // 推送奖励名称（取 icon.name，供 UI 显示奖励描述）
+                    String displayName = "";
+                    if (reward.icon() != null && reward.icon().name() != null) {
+                        displayName = reward.icon().name();
+                    }
+                    tierEntry.put("name", displayName);
                     // 推送图标
                     String iconJson = iconResolver.resolveItemJson(player, reward.icon());
                     payload.put("iconJson" + idx + "_" + iconIdx, iconJson);
                 } else {
                     tierEntry.put("present", "false");
+                    tierEntry.put("name", "");
                 }
                 entry.put(tier, tierEntry);
                 iconIdx++;

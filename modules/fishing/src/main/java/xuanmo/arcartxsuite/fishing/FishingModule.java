@@ -58,8 +58,11 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     private static final String MINIGAME_UI_FILE = "ui/fishing_minigame.yml";
     private static final String COLLECTION_UI_RESOURCE = "arcartx/ui/fishing_collection.yml";
     private static final String COLLECTION_UI_FILE = "ui/fishing_collection.yml";
+    private static final String TALENTS_UI_RESOURCE = "arcartx/ui/fishing_talents.yml";
     private static final String TALENTS_UI_FILE = "ui/fishing_talents.yml";
+    private static final String REWARDS_UI_RESOURCE = "arcartx/ui/fishing_rewards.yml";
     private static final String REWARDS_UI_FILE = "ui/fishing_rewards.yml";
+    private static final String TASKS_UI_RESOURCE = "arcartx/ui/fishing_tasks.yml";
     private static final String TASKS_UI_FILE = "ui/fishing_tasks.yml";
 
     private FishingModuleConfiguration configuration;
@@ -121,9 +124,9 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         Map<String, String> mappings = new LinkedHashMap<>();
         mappings.put(MINIGAME_UI_RESOURCE, MINIGAME_UI_FILE);
         mappings.put(COLLECTION_UI_RESOURCE, COLLECTION_UI_FILE);
-        mappings.put("fishing_talents", TALENTS_UI_FILE);
-        mappings.put("fishing_rewards", REWARDS_UI_FILE);
-        mappings.put("fishing_tasks", TASKS_UI_FILE);
+        mappings.put(TALENTS_UI_RESOURCE, TALENTS_UI_FILE);
+        mappings.put(REWARDS_UI_RESOURCE, REWARDS_UI_FILE);
+        mappings.put(TASKS_UI_RESOURCE, TASKS_UI_FILE);
         return mappings;
     }
 

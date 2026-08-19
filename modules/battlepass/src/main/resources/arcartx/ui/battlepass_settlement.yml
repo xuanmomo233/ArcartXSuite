@@ -47,16 +47,21 @@ ui:
         }
       }
       // 动态生成结算卡片（模板在索引0，复制 1~count-1 共 count-1 项）
+      // range(a,b) 左闭右闭含两端，故用 settlementCount-1 作为上界
       while(val.卡片列表.childrenCount() > 1){
         val.卡片列表.get(1).remove()
       }
-      for(i in range(1, var.settlementCount)){
+      for(i in range(1, var.settlementCount - 1)){
         key = i.round()
         e = val.卡片列表['结算卡片'].copy('结算卡片' + key)
         e.entryKey = key
       }
       // 数据就绪后触发每个图标的 seticon()
-      for(i in range(1, var.settlementCount)){
+      // 模板卡片（索引0）也需要触发，否则第一张卡片图标不显示
+      val.卡片列表['结算卡片']['免费档区']['物品图标'].seticon()
+      val.卡片列表['结算卡片']['高级档区']['物品图标'].seticon()
+      val.卡片列表['结算卡片']['典藏档区']['物品图标'].seticon()
+      for(i in range(1, var.settlementCount - 1)){
         key = i.round()
         e = val.卡片列表['结算卡片' + key]
         if(e != none){
@@ -81,9 +86,11 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
-      var.cardW = (var.contentW - 96) / 2
+      // 单档区宽度：卡片宽(contentW-80) 减去左右内边距 48 与两个档间距 24 后三等分
+      var.slotW = (var.contentW - 152) / 3
+    # open 不发包：数据由服务端 openSettlement() 延迟 2 tick 推送 init 包
     open: |-
-      Packet.send(var.packetId, 'refresh_settlement')
+      {}
     resize: |-
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -92,7 +99,7 @@ ui:
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
       var.contentW = var.viewW - 420
-      var.cardW = (var.contentW - 96) / 2
+      var.slotW = (var.contentW - 152) / 3
 
 # ─── 控件树 ────────────────────────────────────────────────────────
 controls:
@@ -543,187 +550,262 @@ controls:
               texts: "~&f赛季结束时按等级阈值自动发放以下奖励"
               fontSize: 30
 
-          # 卡片滚动列表容器
-          卡片列表:
-            type: Canvas
-            val: 卡片列表
+          # ── 滚动区 ─────────────────────────────────────
+          结算滑轨:
+            type: Texture
+            attribute:
+              point: ~top_right
+              x: -16
+              y: 84
+              width: 12
+              height: "var.viewH - 348"
+              normal: ~40,44,52,225
+              shape: ~round_rect
+              radius: 6
+            effect:
+              stroke:
+                width: 2
+                color: ~255,255,255,230
+          结算滑块:
+            type: Texture
+            val: 结算滑块
+            attribute:
+              point: ~top_right
+              x: -16
+              y: 84
+              width: 12
+              height: 120
+              normal: ~245,205,130,255
+              maxDragY: "var.viewH - 468"
+              shape: ~round_rect
+              radius: 6
+          滚动区:
+            type: Scroll
             attribute:
               point: ~top_left
-              x: 32
+              x: 28
               y: 84
-              width: "var.contentW - 64"
-              height: "var.viewH - 300"
+              width: "var.contentW - 80"
+              height: "var.viewH - 348"
+              moveY: "self.parent['结算滑块'].getDragYRatio()"
+            action:
+              wheel: |-
+                if(self.moveY >= 0 && self.wheelValue > 0){
+                  self.parent['结算滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
+                if(self.moveY <= 1 && self.wheelValue < 0){
+                  self.parent['结算滑块'].setDragYRatio((self.moveY - self.wheelValue * 0.1).round(1))
+                }
             children:
-              # 模板卡片（索引 0，不会被显示，作为 copy 的模板）
-              结算卡片:
-                type: Canvas
+              卡片列表:
+                val: 卡片列表
+                type: VStack
                 attribute:
-                  point: ~top_left
-                  x: 0
-                  y: "self.entryKey * 176"
-                  width: "var.contentW - 64"
-                  height: 160
-                  entryKey: 0.round()
+                  width: "var.contentW - 80"
+                  spaceBetween: 16
                 children:
-                  卡片底:
-                    type: Texture
-                    attribute:
-                      point: ~stretch_all
-                      through: true
-                      normal: ~62,66,74,210
-                      shape: ~round_rect
-                      radius: 12
-                    effect:
-                      stroke:
-                        width: 3
-                        color: "var.settlements[self.entryKey] != none && var.settlements[self.entryKey]['reached'] == 'true' ? '124,196,142,230' : '255,255,255,230'"
-                  等级标签:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 28
-                      y: 20
-                      texts: "var.settlements[self.entryKey] != none ? '&fLv.' + var.settlements[self.entryKey]['minLevel'] : ''"
-                      fontSize: 36
-                      through: true
-                  达到状态:
-                    type: Text
-                    attribute:
-                      point: ~top_left
-                      x: 140
-                      y: 24
-                      texts: "var.settlements[self.entryKey] != none && var.settlements[self.entryKey]['reached'] == 'true' ? '&a✓ 已达到' : '&7✗ 未达到'"
-                      fontSize: 30
-                      through: true
-                  # 免费档区
-                  免费档区:
+                  # 模板卡片（索引 0，copy 1~count-1）
+                  结算卡片:
                     type: Canvas
                     attribute:
-                      point: ~top_left
-                      x: 24
-                      y: 68
-                      width: "(var.contentW - 128) / 3"
-                      height: 76
-                      iconKey: "self.parent.entryKey + '_0'"
+                      entryKey: 0.round()
+                      entry: var.settlements[self.entryKey]
+                      visible: self.entry != none
+                      width: "var.contentW - 80"
+                      height: 160
                     children:
-                      免费区底:
+                      卡片底:
                         type: Texture
                         attribute:
                           point: ~stretch_all
                           through: true
                           normal: ~62,66,74,210
                           shape: ~round_rect
-                          radius: 10
+                          radius: 12
                         effect:
                           stroke:
                             width: 3
-                            color: ~196,200,208,230
-                      免费档标签:
+                            color: "self.parent.entry != none && self.parent.entry['reached'] == 'true' ? '124,196,142,230' : '255,255,255,230'"
+                      等级标签:
                         type: Text
                         attribute:
                           point: ~top_left
-                          x: 12
-                          y: 8
-                          texts: "~&7免费"
-                          fontSize: 28
+                          x: 28
+                          y: 20
+                          texts: "self.parent.entry != none ? '&fLv.' + self.parent.entry['minLevel'] : ''"
+                          fontSize: 36
                           through: true
-                      物品图标:
-                        type: Slot
-                        attribute:
-                          point: ~middle_left
-                          x: 12
-                          width: 48
-                          height: 48
-                          through: true
-                          slotType: ~Icon
-                          itemScale: 0.85
-                          seticon: "self.setItemIcon(var.iconJsons[self.parent.iconKey] != none ? var.iconJsons[self.parent.iconKey] : var.emptyItemJson)"
-                  # 高级档区
-                  高级档区:
-                    type: Canvas
-                    attribute:
-                      point: ~top_left
-                      x: "36 + (var.contentW - 128) / 3"
-                      y: 68
-                      width: "(var.contentW - 128) / 3"
-                      height: 76
-                      iconKey: "self.parent.entryKey + '_1'"
-                    children:
-                      高级区底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~62,66,74,210
-                          shape: ~round_rect
-                          radius: 10
-                        effect:
-                          stroke:
-                            width: 3
-                            color: ~232,180,90,230
-                      高级档标签:
+                      达到状态:
                         type: Text
                         attribute:
                           point: ~top_left
-                          x: 12
-                          y: 8
-                          texts: "~&6高级"
-                          fontSize: 28
+                          x: 140
+                          y: 24
+                          texts: "self.parent.entry != none && self.parent.entry['reached'] == 'true' ? '&a✓ 已达到' : '&7✗ 未达到'"
+                          fontSize: 30
                           through: true
-                      物品图标:
-                        type: Slot
-                        attribute:
-                          point: ~middle_left
-                          x: 12
-                          width: 48
-                          height: 48
-                          through: true
-                          slotType: ~Icon
-                          itemScale: 0.85
-                          seticon: "self.setItemIcon(var.iconJsons[self.parent.iconKey] != none ? var.iconJsons[self.parent.iconKey] : var.emptyItemJson)"
-                  # 典藏档区
-                  典藏档区:
-                    type: Canvas
-                    attribute:
-                      point: ~top_left
-                      x: "48 + 2 * (var.contentW - 128) / 3"
-                      y: 68
-                      width: "(var.contentW - 128) / 3"
-                      height: 76
-                      iconKey: "self.parent.entryKey + '_2'"
-                    children:
-                      典藏区底:
-                        type: Texture
-                        attribute:
-                          point: ~stretch_all
-                          through: true
-                          normal: ~62,66,74,210
-                          shape: ~round_rect
-                          radius: 10
-                        effect:
-                          stroke:
-                            width: 3
-                            color: ~186,140,232,230
-                      典藏档标签:
-                        type: Text
+                      # 免费档区
+                      免费档区:
+                        type: Canvas
                         attribute:
                           point: ~top_left
-                          x: 12
-                          y: 8
-                          texts: "~&5典藏"
-                          fontSize: 28
-                          through: true
-                      物品图标:
-                        type: Slot
+                          x: 24
+                          y: 68
+                          width: "var.slotW"
+                          height: 76
+                          iconKey: "self.parent.entryKey + '_0'"
+                          entry: self.parent.entry
+                        children:
+                          免费区底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~62,66,74,210
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 3
+                                color: ~196,200,208,230
+                          免费档标签:
+                            type: Text
+                            attribute:
+                              point: ~top_left
+                              x: 12
+                              y: 8
+                              texts: "~&7免费"
+                              fontSize: 28
+                              through: true
+                          物品图标:
+                            type: Slot
+                            attribute:
+                              point: ~middle_left
+                              x: 12
+                              width: 48
+                              height: 48
+                              through: true
+                              slotType: ~Icon
+                              itemScale: 0.85
+                              seticon: "self.setItemIcon(var.iconJsons[self.parent.iconKey] != none ? var.iconJsons[self.parent.iconKey] : var.emptyItemJson)"
+                          奖励名称:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 68
+                              width: "var.slotW - 80"
+                              texts: "self.parent.entry != none && self.parent.entry['free'] != none && self.parent.entry['free']['present'] == 'true' ? self.parent.entry['free']['name'] : ''"
+                              fontSize: 26
+                              limit: 16
+                              through: true
+                      # 高级档区
+                      高级档区:
+                        type: Canvas
                         attribute:
-                          point: ~middle_left
-                          x: 12
-                          width: 48
-                          height: 48
-                          through: true
-                          slotType: ~Icon
-                          itemScale: 0.85
-                          seticon: "self.setItemIcon(var.iconJsons[self.parent.iconKey] != none ? var.iconJsons[self.parent.iconKey] : var.emptyItemJson)"
+                          point: ~top_left
+                          x: "36 + var.slotW"
+                          y: 68
+                          width: "var.slotW"
+                          height: 76
+                          iconKey: "self.parent.entryKey + '_1'"
+                          entry: self.parent.entry
+                        children:
+                          高级区底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~62,66,74,210
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 3
+                                color: ~232,180,90,230
+                          高级档标签:
+                            type: Text
+                            attribute:
+                              point: ~top_left
+                              x: 12
+                              y: 8
+                              texts: "~&6高级"
+                              fontSize: 28
+                              through: true
+                          物品图标:
+                            type: Slot
+                            attribute:
+                              point: ~middle_left
+                              x: 12
+                              width: 48
+                              height: 48
+                              through: true
+                              slotType: ~Icon
+                              itemScale: 0.85
+                              seticon: "self.setItemIcon(var.iconJsons[self.parent.iconKey] != none ? var.iconJsons[self.parent.iconKey] : var.emptyItemJson)"
+                          奖励名称:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 68
+                              width: "var.slotW - 80"
+                              texts: "self.parent.entry != none && self.parent.entry['premium'] != none && self.parent.entry['premium']['present'] == 'true' ? self.parent.entry['premium']['name'] : ''"
+                              fontSize: 26
+                              limit: 16
+                              through: true
+                      # 典藏档区
+                      典藏档区:
+                        type: Canvas
+                        attribute:
+                          point: ~top_left
+                          x: "48 + 2 * var.slotW"
+                          y: 68
+                          width: "var.slotW"
+                          height: 76
+                          iconKey: "self.parent.entryKey + '_2'"
+                          entry: self.parent.entry
+                        children:
+                          典藏区底:
+                            type: Texture
+                            attribute:
+                              point: ~stretch_all
+                              through: true
+                              normal: ~62,66,74,210
+                              shape: ~round_rect
+                              radius: 10
+                            effect:
+                              stroke:
+                                width: 3
+                                color: ~186,140,232,230
+                          典藏档标签:
+                            type: Text
+                            attribute:
+                              point: ~top_left
+                              x: 12
+                              y: 8
+                              texts: "~&5典藏"
+                              fontSize: 28
+                              through: true
+                          物品图标:
+                            type: Slot
+                            attribute:
+                              point: ~middle_left
+                              x: 12
+                              width: 48
+                              height: 48
+                              through: true
+                              slotType: ~Icon
+                              itemScale: 0.85
+                              seticon: "self.setItemIcon(var.iconJsons[self.parent.iconKey] != none ? var.iconJsons[self.parent.iconKey] : var.emptyItemJson)"
+                          奖励名称:
+                            type: Text
+                            attribute:
+                              point: ~middle_left
+                              x: 68
+                              width: "var.slotW - 80"
+                              texts: "self.parent.entry != none && self.parent.entry['deluxe'] != none && self.parent.entry['deluxe']['present'] == 'true' ? self.parent.entry['deluxe']['name'] : ''"
+                              fontSize: 26
+                              limit: 16
+                              through: true
 
           # 底部说明
           底部说明:

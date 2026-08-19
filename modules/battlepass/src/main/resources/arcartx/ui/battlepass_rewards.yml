@@ -697,7 +697,6 @@ controls:
                               normal: ~95,95,95,235
                               shape: ~round_rect
                               radius: 10
-                              through: true
                               slotType: ~Icon
                               itemScale: 0.85
                               seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey] != none ? var.iconJsons[self.parent.entryKey] : var.emptyItemJson)"
@@ -811,7 +810,6 @@ controls:
                               normal: ~95,95,95,235
                               shape: ~round_rect
                               radius: 10
-                              through: true
                               slotType: ~Icon
                               itemScale: 0.85
                               seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey] != none ? var.iconJsons[self.parent.entryKey] : var.emptyItemJson)"
@@ -924,7 +922,6 @@ controls:
                               normal: ~95,95,95,235
                               shape: ~round_rect
                               radius: 10
-                              through: true
                               slotType: ~Icon
                               itemScale: 0.85
                               seticon: "self.setItemIcon(var.iconJsons[self.parent.entryKey] != none ? var.iconJsons[self.parent.entryKey] : var.emptyItemJson)"
