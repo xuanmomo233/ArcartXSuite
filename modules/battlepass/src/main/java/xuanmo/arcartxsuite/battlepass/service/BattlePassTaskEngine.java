@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -22,9 +21,9 @@ import xuanmo.arcartxsuite.battlepass.source.BukkitEventSourceListener;
  * 战令任务引擎，负责监听事件并驱动任务进度更新。
  * <p>
  * 支持双事件源：ArcartX EventBus（优先）和原版 Bukkit 事件（降级）。
- * 启动时为每个任务模板检测发布模块是否存在：
+ * 启动时为每个任务模板检测发布者是否已注册：
  * <ul>
- *   <li>若 EventBus topic 对应的发布模块已加载 → 订阅 EventBus</li>
+ *   <li>若 EventBus 已有该 topic 的发布者 → 订阅 EventBus</li>
  *   <li>否则，若任务配置了 bukkit-event → 注册原版 Bukkit 监听器</li>
  * </ul>
  * 确保不依赖其他 ArcartX 模块也能正常工作，且不会重复计数。
@@ -34,7 +33,6 @@ public final class BattlePassTaskEngine {
     private final Plugin plugin;
     private final BattlePassService service;
     private final BattlePassModuleConfiguration configuration;
-    private final Function<String, Boolean> moduleExistsChecker;
     private final List<String> subscriptionIds = new ArrayList<>();
     private EventBusCapability eventBus;
     private BukkitEventSourceListener bukkitListener;
@@ -42,11 +40,6 @@ public final class BattlePassTaskEngine {
     private static final Logger LOGGER = Logger.getLogger("ArcartXSuite");
     private final TaskTriggerLimiter triggerLimiter = new TaskTriggerLimiter();
 
-    /**
-     * EventBus topic → 发布模块 ID 的映射。
-     * 用于检测某个 topic 的发布模块是否已加载。
-     */
-    private static final Map<String, String> TOPIC_TO_MODULE = new HashMap<>();
     private static final Map<String, String> PAYLOAD_EXPRESSION_KEYS = Map.of(
         "victim.type.name", "entityType",
         "victim.name", "entityName",
@@ -58,52 +51,18 @@ public final class BattlePassTaskEngine {
         "item.amount", "amount"
     );
 
-    static {
-        TOPIC_TO_MODULE.put("axs.combateffect.kill_entity", "combateffect");
-        TOPIC_TO_MODULE.put("axs.combateffect.damage_dealt", "combateffect");
-        TOPIC_TO_MODULE.put("axs.combateffect.player_death", "combateffect");
-        TOPIC_TO_MODULE.put("axs.pickup.item_pickup", "pickup");
-        TOPIC_TO_MODULE.put("axs.loginview.login_success", "loginview");
-        TOPIC_TO_MODULE.put("axs.fishing.success", "fishing");
-        TOPIC_TO_MODULE.put("axs.fishing.perfect", "fishing");
-        TOPIC_TO_MODULE.put("axs.fishing.treasure", "fishing");
-        TOPIC_TO_MODULE.put("axs.fishing.collection_unlock", "fishing");
-        TOPIC_TO_MODULE.put("axs.questgps.quest_completed", "questgps");
-        TOPIC_TO_MODULE.put("axs.afkreward.reward_claimed", "afkreward");
-        TOPIC_TO_MODULE.put("axs.chat.chat_message_sent", "chat");
-        TOPIC_TO_MODULE.put("axs.warehouse.item_deposited", "warehouse");
-        TOPIC_TO_MODULE.put("axs.prop.prop_used", "prop");
-        TOPIC_TO_MODULE.put("axs.regions.region_change", "regions");
-        TOPIC_TO_MODULE.put("axs.entitytracker.boss_kill", "entitytracker");
-        TOPIC_TO_MODULE.put("onlinerewards.server_goal_reached", "onlinerewards");
-        // 以下 topic 由宿主核心或已加载模块发布，不需要降级
-        TOPIC_TO_MODULE.put("axs.currency.spent", "__core__");
-        TOPIC_TO_MODULE.put("market.listing_created", "market");
-        // 纯 Bukkit 事件（无 EventBus 发布者），始终走 Bukkit 降级
-        TOPIC_TO_MODULE.put("axs.battlepass.block_break", "__bukkit__");
-        TOPIC_TO_MODULE.put("axs.battlepass.block_place", "__bukkit__");
-        TOPIC_TO_MODULE.put("axs.battlepass.craft_item", "__bukkit__");
-        TOPIC_TO_MODULE.put("axs.battlepass.item_consume", "__bukkit__");
-        // TACZ 枪械事件（由宿主 TaczCombatBridge 广播为 Bukkit 事件，始终走 Bukkit 降级）
-        TOPIC_TO_MODULE.put("axs.battlepass.tacz_damage", "__bukkit__");
-        TOPIC_TO_MODULE.put("axs.battlepass.tacz_kill", "__bukkit__");
-    }
-
     /**
      * 构造任务引擎。
      *
-     * @param plugin               插件实例
-     * @param service              BattlePassService 实例
-     * @param configuration        模块配置
-     * @param moduleExistsChecker  模块存在性检测函数（输入模块 ID，返回是否已加载），可为 null
+     * @param plugin        插件实例
+     * @param service       BattlePassService 实例
+     * @param configuration 模块配置
      */
     public BattlePassTaskEngine(Plugin plugin, BattlePassService service,
-                                 BattlePassModuleConfiguration configuration,
-                                 Function<String, Boolean> moduleExistsChecker) {
+                                 BattlePassModuleConfiguration configuration) {
         this.plugin = plugin;
         this.service = service;
         this.configuration = configuration;
-        this.moduleExistsChecker = moduleExistsChecker;
     }
 
     /**
@@ -116,8 +75,7 @@ public final class BattlePassTaskEngine {
         eventBus = eventBusProvider != null ? eventBusProvider.get() : null;
         active = true;
 
-        LOGGER.fine("[battlepass] TaskEngine.start: eventBus=" + (eventBus != null ? "available" : "null")
-            + " | moduleExistsChecker=" + (moduleExistsChecker != null ? "set" : "null"));
+        LOGGER.fine("[battlepass] TaskEngine.start: eventBus=" + (eventBus != null ? "available" : "null"));
 
         Map<String, List<BiConsumer<Player, Map<String, String>>>> callbacksByEvent =
             new HashMap<>();
@@ -183,32 +141,21 @@ public final class BattlePassTaskEngine {
     }
 
     /**
-     * 判断某个 EventBus topic 的发布模块是否已加载。
+     * 判断某个 EventBus topic 是否已有发布者注册。
+     * <p>
+     * 通过 {@link EventBusCapability#hasPublisher(String)} API 查询，
+     * 无需维护硬编码的 topic → moduleId 映射。
      *
      * @param topic EventBus 主题
-     * @return true 表示发布模块已加载，应使用 EventBus；false 表示需要降级
+     * @return true 表示已有发布者注册，应使用 EventBus；false 表示需要降级
      */
     private boolean shouldUseEventBus(String topic) {
         if (eventBus == null) return false;
-        String moduleId = TOPIC_TO_MODULE.get(topic);
-        if (moduleId == null) {
-            // 未知 topic，默认尝试 EventBus
-            return true;
-        }
-        if ("__core__".equals(moduleId)) {
-            // 宿主核心发布的事件，始终可用
-            return true;
-        }
-        if ("__bukkit__".equals(moduleId)) {
-            // 纯 Bukkit 事件（无 EventBus 发布者），始终走 Bukkit 降级
-            return false;
-        }
-        // 检测模块是否已加载
-        if (moduleExistsChecker == null) return true;
         try {
-            return moduleExistsChecker.apply(moduleId);
+            return eventBus.hasPublisher(topic);
         } catch (Exception e) {
-            return true;
+            LOGGER.warning("[battlepass] EventBus.hasPublisher 查询异常 topic=" + topic + ": " + e.getMessage());
+            return false;
         }
     }
 

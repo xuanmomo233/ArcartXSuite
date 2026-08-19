@@ -196,8 +196,9 @@ class DebugRpcDispatcher(
     //  模块管理
     // ════════════════════════════════════════════════════════════
 
-    /** 列出所有已加载模块（通过 data/<moduleId>/ 目录 + getModule 探测状态） */
+    /** 列出所有已加载模块（通过 data/<moduleId>/ 目录 + ModuleAdminCapability 探测状态） */
     private fun moduleList(): Any {
+        val admin = module.moduleAdmin()
         val dataDir = File(module.pluginDataFolder(), "data")
         val ids = dataDir.listFiles { f -> f.isDirectory }?.map { it.name }?.toMutableSet() ?: mutableSetOf()
         // 确保当前 debug 模块也在列表中
@@ -207,7 +208,7 @@ class DebugRpcDispatcher(
             val obj = JsonObject()
             obj.addProperty("id", id)
             val ready = try {
-                module.findModule(id).map { it.isReady }.orElse(false)
+                admin?.findModule(id)?.map { it.isReady }?.orElse(false) ?: false
             } catch (_: Exception) {
                 false
             }
@@ -220,10 +221,10 @@ class DebugRpcDispatcher(
     /** 重载指定模块 (params: moduleId) → module.onReload() */
     private fun moduleReload(params: JsonObject): Any {
         val moduleId = requireParam(params, "moduleId")
-        val target = module.findModule(moduleId)
-            .orElseThrow { IllegalArgumentException("模块未加载: $moduleId") }
+        val admin = module.moduleAdmin()
+            ?: throw IllegalStateException("ModuleAdminCapability 不可用")
         return syncOnMain {
-            target.onReload()
+            admin.reloadModule(moduleId)
             ok("success" to true, "message" to "Module $moduleId reloaded")
         }
     }
@@ -241,7 +242,9 @@ class DebugRpcDispatcher(
      */
     private fun configDiagnose(params: JsonObject): Any {
         val moduleId = requireParam(params, "moduleId")
-        val target = module.findModule(moduleId)
+        val admin = module.moduleAdmin()
+            ?: throw IllegalStateException("ModuleAdminCapability 不可用")
+        val target = admin.findModule(moduleId)
             .orElseThrow { IllegalArgumentException("模块未加载: $moduleId") }
         val specs = target.configSpecs()
         val arr = JsonArray()

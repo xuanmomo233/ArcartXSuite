@@ -165,6 +165,11 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
      * </ol>
      */
     @Override
+    protected List<String> publishedTopics() {
+        return List.of("axs.warehouse.item_deposited");
+    }
+
+    @Override
     protected void startService() throws Exception {
 
         WarehouseService.UiResourceExporter uiExporter = (resourcePath, relativeUiPath, overwrite) -> {

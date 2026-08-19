@@ -169,6 +169,11 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
     }
 
     @Override
+    protected List<String> publishedTopics() {
+        return List.of("axs.entitytracker.boss_kill");
+    }
+
+    @Override
     protected void startService() throws Exception {
 
         initializeRepositoryIfNeeded();

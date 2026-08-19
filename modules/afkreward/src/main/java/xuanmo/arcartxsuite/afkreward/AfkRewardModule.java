@@ -127,6 +127,11 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
     }
 
     @Override
+    protected List<String> publishedTopics() {
+        return List.of("axs.afkreward.reward_claimed");
+    }
+
+    @Override
     protected void startService() throws Exception {
         // 加载区域独立配置文件
         String effectiveAreasDir = configuration.areasDirectory();

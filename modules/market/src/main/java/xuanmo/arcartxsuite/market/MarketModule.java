@@ -142,6 +142,11 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
     }
 
     @Override
+    protected List<String> publishedTopics() {
+        return List.of("market.listing_created", "market.auction_purchased");
+    }
+
+    @Override
     protected void startService() throws Exception {
 
         // 构造物品序列化器（智能检测 Overture 物品并使用原生序列化）

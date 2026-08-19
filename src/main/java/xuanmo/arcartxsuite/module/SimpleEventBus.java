@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.module;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -18,6 +19,7 @@ public final class SimpleEventBus implements EventBusCapability {
     private final Logger logger;
     private final ConcurrentHashMap<String, CopyOnWriteArrayList<Subscription>> subscriptions = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Subscription> subscriptionById = new ConcurrentHashMap<>();
+    private final Set<String> publisherTopics = ConcurrentHashMap.newKeySet();
 
     public SimpleEventBus(Logger logger) {
         this.logger = logger;
@@ -25,6 +27,8 @@ public final class SimpleEventBus implements EventBusCapability {
 
     @Override
     public void publish(@NotNull String topic, @Nullable Player player, @NotNull Map<String, String> payload) {
+        // 自动追踪已发布的主题（运行时检测补充）
+        publisherTopics.add(topic);
         BusEvent event = new BusEvent(topic, player, payload, System.currentTimeMillis());
         // 精确匹配
         CopyOnWriteArrayList<Subscription> exact = subscriptions.get(topic);
@@ -45,6 +49,16 @@ public final class SimpleEventBus implements EventBusCapability {
                 }
             }
         }
+    }
+
+    @Override
+    public void registerPublisher(@NotNull String topic) {
+        publisherTopics.add(topic);
+    }
+
+    @Override
+    public boolean hasPublisher(@NotNull String topic) {
+        return publisherTopics.contains(topic);
     }
 
     @Override
@@ -77,6 +91,7 @@ public final class SimpleEventBus implements EventBusCapability {
     public void clear() {
         subscriptions.clear();
         subscriptionById.clear();
+        publisherTopics.clear();
     }
 
     private void dispatch(Subscription sub, BusEvent event) {

@@ -3,7 +3,6 @@ package xuanmo.arcartxsuite.api;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Optional;
 import java.util.logging.Logger;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.event.Listener;
@@ -128,21 +127,8 @@ public interface ModuleContext {
 
     // ─── 模块间通信 ───────────────────────────────────────────
 
-    /**
-     * 按类型查找已加载的模块实例。
-     *
-     * @param moduleClass 目标模块的类
-     * @return 模块实例，未加载则返回 empty
-     */
-    <T extends AXSModule> Optional<T> getModule(Class<T> moduleClass);
-
-    /**
-     * 按 id 查找已加载的模块实例。
-     *
-     * @param moduleId 目标模块 id
-     * @return 模块实例，未加载则返回 empty
-     */
-    Optional<AXSModule> getModule(String moduleId);
+    // 模块间通信统一通过 Capability 机制（registerCapability / getCapability），
+    // 不再支持按模块 ID 或类直接查找模块实例。
 
     // ─── 安全 ─────────────────────────────────────────────────
 

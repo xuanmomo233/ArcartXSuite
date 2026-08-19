@@ -138,6 +138,11 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
     }
 
     @Override
+    protected List<String> publishedTopics() {
+        return List.of("onlinerewards.server_goal_reached");
+    }
+
+    @Override
     protected void startService() throws Exception {
 
         if (clientBridge == null || !clientBridge.isAvailable()) {

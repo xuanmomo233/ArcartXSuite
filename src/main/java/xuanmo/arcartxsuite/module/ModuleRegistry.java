@@ -23,6 +23,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.jetbrains.annotations.NotNull;
 import xuanmo.arcartxsuite.api.AXSModule;
 import xuanmo.arcartxsuite.api.ClientInitializedHandler;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
@@ -608,24 +609,6 @@ public final class ModuleRegistry {
 
     // ─── 查询 ────────────────────────────────────────────────
 
-    @SuppressWarnings("unchecked")
-    public <T extends AXSModule> Optional<T> getModule(Class<T> moduleClass) {
-        for (LoadedModule loaded : modules.values()) {
-            if (loaded.isEnabled() && moduleClass.isInstance(loaded.instance())) {
-                return Optional.of((T) loaded.instance());
-            }
-        }
-        return Optional.empty();
-    }
-
-    public Optional<AXSModule> getModule(String moduleId) {
-        LoadedModule loaded = modules.get(moduleId);
-        if (loaded != null && loaded.isEnabled()) {
-            return Optional.of(loaded.instance());
-        }
-        return Optional.empty();
-    }
-
     public List<ModuleDescriptor> listModules() {
         List<ModuleDescriptor> descriptors = new ArrayList<>();
         for (LoadedModule loaded : modules.values()) {
@@ -1011,16 +994,45 @@ public final class ModuleRegistry {
         ScriptConditionServices.install(scriptConditionEvaluator);
 
         // 全局事件总线
+        xuanmo.arcartxsuite.api.capability.EventBusCapability eventBus;
         if (!capabilities.containsKey(xuanmo.arcartxsuite.api.capability.EventBusCapability.class)) {
-            capabilities.put(xuanmo.arcartxsuite.api.capability.EventBusCapability.class,
-                new SimpleEventBus(xuanmo.arcartxsuite.module.AxsLog.logger()));
+            eventBus = new SimpleEventBus(xuanmo.arcartxsuite.module.AxsLog.logger());
+            capabilities.put(xuanmo.arcartxsuite.api.capability.EventBusCapability.class, eventBus);
+        } else {
+            eventBus = (xuanmo.arcartxsuite.api.capability.EventBusCapability)
+                capabilities.get(xuanmo.arcartxsuite.api.capability.EventBusCapability.class);
         }
 
+        // 宿主核心注册自身发布的事件主题（模块加载前完成，确保模块启动时即可查询）
+        eventBus.registerPublisher("axs.currency.spent");
+        eventBus.registerPublisher("axs.currency.earned");
+
         // 将事件总线注入货币管理器，使 withdraw/deposit 成功后分发 axs.currency.spent / axs.currency.earned 事件
-        currencyBridgeManager.setEventBusProvider(
-            () -> (xuanmo.arcartxsuite.api.capability.EventBusCapability)
-                capabilities.get(xuanmo.arcartxsuite.api.capability.EventBusCapability.class)
-        );
+        final xuanmo.arcartxsuite.api.capability.EventBusCapability finalEventBus = eventBus;
+        currencyBridgeManager.setEventBusProvider(() -> finalEventBus);
+
+        // 注册模块管理能力（供 debug 等管理工具使用）
+        capabilities.put(xuanmo.arcartxsuite.api.capability.ModuleAdminCapability.class,
+            new xuanmo.arcartxsuite.api.capability.ModuleAdminCapability() {
+                @Override
+                public java.util.Optional<xuanmo.arcartxsuite.api.AXSModule> findModule(@NotNull String moduleId) {
+                    LoadedModule loaded = modules.get(moduleId);
+                    if (loaded != null && loaded.isEnabled()) {
+                        return java.util.Optional.of(loaded.instance());
+                    }
+                    return java.util.Optional.empty();
+                }
+
+                @Override
+                public @NotNull java.util.List<xuanmo.arcartxsuite.api.ModuleDescriptor> listModules() {
+                    return ModuleRegistry.this.listModules();
+                }
+
+                @Override
+                public void reloadModule(@NotNull String moduleId) throws Exception {
+                    ModuleRegistry.this.reloadModule(moduleId);
+                }
+            });
 
         // 统一账号识别服务（微软正版 / LittleSkin / 离线）
         ensureAccountTypeService();

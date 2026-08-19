@@ -13,7 +13,7 @@ import java.net.URLClassLoader;
  *   <li>Spigot API</li>
  *   <li>宿主插件中的 bridge 类</li>
  * </ul>
- * 模块之间默认隔离，通过 ModuleContext.getModule() 进行安全的跨模块通信。
+ * 模块之间默认隔离，通过 ModuleContext.getCapability() 进行安全的跨模块通信。
  * <p>
  * 在混合端（Mohist/Arclight）上，parent 委托链可能将 Bukkit API 类错误地
  * 解析为 Forge 类。覆写 loadClass 确保服务端 API 类优先从服务端 ClassLoader 加载。

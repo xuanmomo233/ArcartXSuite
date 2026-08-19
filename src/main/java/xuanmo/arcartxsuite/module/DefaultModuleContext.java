@@ -7,7 +7,6 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.jetbrains.annotations.NotNull;
@@ -16,7 +15,6 @@ import org.bukkit.command.TabExecutor;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
-import xuanmo.arcartxsuite.api.AXSModule;
 import xuanmo.arcartxsuite.api.ClientInitializedHandler;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleContext;
@@ -210,17 +208,6 @@ final class DefaultModuleContext implements ModuleContext {
     @Override
     public ScriptConditionEvaluator scriptConditionEvaluator() {
         return registry.scriptConditionEvaluator();
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public <T extends AXSModule> Optional<T> getModule(Class<T> moduleClass) {
-        return registry.getModule(moduleClass);
-    }
-
-    @Override
-    public Optional<AXSModule> getModule(String moduleId) {
-        return registry.getModule(moduleId);
     }
 
     @Override

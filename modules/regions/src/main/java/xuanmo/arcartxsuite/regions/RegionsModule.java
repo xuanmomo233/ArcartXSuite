@@ -161,6 +161,11 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
      * @throws Exception 启动过程中发生错误时抛出
      */
     @Override
+    protected List<String> publishedTopics() {
+        return List.of("axs.regions.region_change");
+    }
+
+    @Override
     protected void startService() throws Exception {
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（dialect=mysql 等），则走自建模式（向后兼容）

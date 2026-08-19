@@ -110,9 +110,7 @@ class DebugModule : AbstractAXSModule() {
     /** 宿主数据目录（plugins/ArcartXSuite/） */
     internal fun pluginDataFolder() = pluginDataFolder
 
-    /** 按 id 查找已加载模块 */
-    internal fun findModule(id: String) = getModule(id)
-
-    /** 按类型查找已加载模块 */
-    internal fun <T : xuanmo.arcartxsuite.api.AXSModule> findModule(clazz: Class<T>) = getModule(clazz)
+    /** 模块管理能力（由宿主核心注册，供 debug 工具查询/重载模块） */
+    internal fun moduleAdmin(): xuanmo.arcartxsuite.api.capability.ModuleAdminCapability? =
+        getCapability(xuanmo.arcartxsuite.api.capability.ModuleAdminCapability::class.java)
 }

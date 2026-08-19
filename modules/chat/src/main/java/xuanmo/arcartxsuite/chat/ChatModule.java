@@ -112,6 +112,11 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
     }
 
     @Override
+    protected List<String> publishedTopics() {
+        return List.of("axs.chat.chat_message_sent");
+    }
+
+    @Override
     protected void startService() throws Exception {
 
         // 绑定 @补全 overlay UI

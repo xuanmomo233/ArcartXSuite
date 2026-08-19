@@ -63,6 +63,11 @@ public final class PropModule extends AbstractAXSModule implements ModuleCommand
     }
 
     @Override
+    protected List<String> publishedTopics() {
+        return List.of("axs.prop.prop_used");
+    }
+
+    @Override
     protected void startService() throws Exception {
         if (propBridge == null || !propBridge.isAvailable()) {
             throw new IllegalStateException("Prop 模块需要 ArcartX API 桥接，当前不可用");

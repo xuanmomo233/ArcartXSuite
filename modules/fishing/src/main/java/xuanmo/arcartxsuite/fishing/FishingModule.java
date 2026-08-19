@@ -142,6 +142,11 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     }
 
     @Override
+    protected List<String> publishedTopics() {
+        return List.of("axs.fishing.success", "axs.fishing.perfect", "axs.fishing.collection_unlock", "axs.fishing.treasure");
+    }
+
+    @Override
     protected void startService() throws Exception {
         // 共享模式：使用本体统一数据源，模块只需提供表前缀
         // 若模块配置了独立 storage 节（mode=mysql 等），则走自建模式（向后兼容）

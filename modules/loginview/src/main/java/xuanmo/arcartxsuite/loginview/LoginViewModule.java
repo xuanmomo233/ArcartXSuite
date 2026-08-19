@@ -184,6 +184,11 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
     }
 
     @Override
+    protected List<String> publishedTopics() {
+        return List.of("axs.loginview.login_success");
+    }
+
+    @Override
     protected void startService() throws Exception {
         String selectedUiPath = configuration.ui().relativeUiPath();
         UiBinding uiBinding = registerModuleUi(

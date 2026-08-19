@@ -75,7 +75,6 @@ public final class BattlePassService {
     private volatile UiRefreshListener uiRefreshListener;
 
     private Supplier<EventBusCapability> eventBusProvider;
-    private java.util.function.Function<String, Boolean> moduleExistsChecker;
     private final TaskAssignmentService assignmentService = new TaskAssignmentService();
     private SeasonSettlementService settlementService;
 
@@ -107,16 +106,12 @@ public final class BattlePassService {
             immutableRewardIndex.put(entry.getKey(), List.copyOf(entry.getValue()));
         }
         this.rewardsByLevel = Map.copyOf(immutableRewardIndex);
-        this.taskEngine = new BattlePassTaskEngine(plugin, this, configuration, moduleId -> moduleExistsChecker != null && moduleExistsChecker.apply(moduleId));
+        this.taskEngine = new BattlePassTaskEngine(plugin, this, configuration);
         this.settlementService = new SeasonSettlementService(plugin, configuration, repository, this, rewardDispatcher, logger);
     }
 
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
         this.eventBusProvider = eventBusProvider;
-    }
-
-    public void setModuleExistsChecker(java.util.function.Function<String, Boolean> checker) {
-        this.moduleExistsChecker = checker;
     }
 
     /**
@@ -162,7 +157,13 @@ public final class BattlePassService {
 
     public void start() {
         active = true;
-        taskEngine.start(eventBusProvider);
+        // 延迟 1 tick 启动 TaskEngine，确保所有模块的 publishedTopics() 已注册到 EventBus
+        // （模块加载顺序不确定，延迟到下一个 tick 时 loadAll 已完成）
+        org.bukkit.scheduler.BukkitTask delayedStart = AxsScheduler.runTask(plugin, () -> {
+            if (active) {
+                taskEngine.start(eventBusProvider);
+            }
+        });
         saveTask = AxsScheduler.runAsyncTimer(plugin, this::flushDirtyProgress, 300L, 300L);
         resetTask = AxsScheduler.runAsyncTimer(plugin, this::checkResets, 6000L, 6000L);
     }

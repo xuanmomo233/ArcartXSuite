@@ -157,6 +157,11 @@ public final class QuestGpsModule extends AbstractAXSModule implements ModuleCom
      * @throws Exception UI 注册失败或服务启动异常时抛出
      */
     @Override
+    protected List<String> publishedTopics() {
+        return List.of("axs.questgps.quest_completed");
+    }
+
+    @Override
     protected void startService() throws Exception {
 
         java.util.List<String> menuRuntimeUiIds = new java.util.ArrayList<>();

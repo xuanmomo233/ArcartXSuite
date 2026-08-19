@@ -111,6 +111,11 @@ public final class PickupModule extends AbstractAXSModule {
     }
 
     @Override
+    protected List<String> publishedTopics() {
+        return List.of("axs.pickup.item_pickup");
+    }
+
+    @Override
     protected void startService() throws Exception {
 
         if (configuration.mode() == PickupMode.SCANNER) {

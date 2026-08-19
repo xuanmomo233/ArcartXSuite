@@ -134,6 +134,11 @@ public final class CombatEffectModule extends AbstractAXSModule implements Modul
     }
 
     @Override
+    protected List<String> publishedTopics() {
+        return List.of("axs.combateffect.kill_entity", "axs.combateffect.damage_dealt", "axs.combateffect.player_death");
+    }
+
+    @Override
     protected void startService() throws Exception {
 
         // 注册 UI（由基类根据 uiResourceMappings() 自动导出并注册）
