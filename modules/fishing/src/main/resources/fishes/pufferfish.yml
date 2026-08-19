@@ -25,3 +25,53 @@ behaviors:                     # 小游戏中鱼的行为模式及权重
     weight: 0.8                # 权重0.8（主要行为）
   - type: floater              # 上浮型：鱼向轨道顶部移动
     weight: 0.2                # 权重0.2（次要行为）
+
+# ─── 小游戏机制（可选，覆盖全局配置） ──────────────────
+# 河豚突进型行为，逃离较频繁但速度不快
+flee-params:
+  base-chance: 0.30            # 逃离概率较高（全局默认0.25）
+  base-speed: 0.03             # 逃离速度中等（全局默认0.04）
+  min-duration: 12             # 逃离持续较短（全局默认15）
+
+# 多阶段行为：河豚越钓越暴躁
+behavior-stages:
+  stage1:
+    threshold: 0.0             # 进度 0% 起：正常突进
+    behaviors:
+      - type: dart
+        weight: 0.8
+      - type: floater
+        weight: 0.2
+  stage2:
+    threshold: 0.6             # 进度 60% 后：加入之字型
+    behaviors:
+      - type: dart
+        weight: 0.5
+      - type: zigzag           # 之字型：规律性左右摆动
+        weight: 0.3
+      - type: floater
+        weight: 0.2
+
+# ─── 奖励（可选） ──────────────────────────────────────
+# 货币奖励
+currency-reward:
+  currency-id: "coin"
+  amount: 30
+
+# 完美捕获额外掉落
+drops:
+  perfect_bonus:
+    item:
+      source: "minecraft"
+      item-id: "prismarine_shard"
+      amount: 2
+    weight: 1.0
+    condition: "perfect"       # 完美捕获时掉落海晶碎片
+
+# ─── 出现条件（可选） ──────────────────────────────────
+biomes: [ocean, beach, lukewarm_ocean]  # 仅在海洋类生物群系出现
+
+# ─── 数据/展示（可选） ─────────────────────────────────
+description: "夏季午后出现在海洋中的不常见鱼类，受惊时会快速突进，需把握节奏。"
+icon-texture: "minecraft:pufferfish"
+record-weight: 0.8

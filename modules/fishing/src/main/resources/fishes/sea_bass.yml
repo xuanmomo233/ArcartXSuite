@@ -25,3 +25,27 @@ behaviors:                     # 小游戏中鱼的行为模式及权重
     weight: 0.6                # 权重0.6（主要行为）
   - type: dart                 # 突进型：鱼快速跳跃移动
     weight: 0.4                # 权重0.4（次要行为）
+
+# ─── 小游戏机制（可选，覆盖全局配置） ──────────────────
+# 海鲈鱼是最简单的鱼，进度衰减最慢，几乎不会逃离
+progress-drain-rate: 0.2       # 鱼在绿条外时进度下降很慢（全局默认0.5）
+progress-gain-rate: 1.2        # 鱼在绿条内时进度上升较快（全局默认1.0）
+flee-params:
+  base-chance: 0.10            # 逃离概率很低（全局默认0.25）
+  base-speed: 0.02             # 逃离速度很慢（全局默认0.04）
+
+# ─── 奖励（可选） ──────────────────────────────────────
+# 首次捕获额外奖励，鼓励新手探索
+drops:
+  first_catch_bonus:
+    item:
+      source: "minecraft"
+      item-id: "bread"
+      amount: 3
+    weight: 1.0
+    condition: "first_catch"   # 首次捕获时额外给面包
+
+# ─── 数据/展示（可选） ─────────────────────────────────
+description: "全年可捕获的常见鱼类，在海洋和河流中均有分布，难度最低，新手友好。"
+icon-texture: "minecraft:cod"
+record-weight: 0.3             # 图鉴排序最靠后（最常见）

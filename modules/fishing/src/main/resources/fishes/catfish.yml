@@ -25,3 +25,110 @@ behaviors:                     # 小游戏中鱼的行为模式及权重
     weight: 0.7                # 权重0.7（主要行为）
   - type: smooth               # 平滑型：鱼缓慢平稳移动
     weight: 0.3                # 权重0.3（次要行为）
+
+# ─── 小游戏机制（可选，覆盖全局配置） ──────────────────
+# 鲶鱼是稀有鱼，难度较高，进度衰减快，逃离频繁
+progress-drain-rate: 0.7       # 鱼在绿条外时进度下降快（全局默认0.5）
+progress-gain-rate: 0.9        # 鱼在绿条内时进度上升稍慢（全局默认1.0）
+flee-params:
+  base-chance: 0.35            # 逃离概率高（全局默认0.25）
+  chance-per-difficulty: 0.30  # 每点难度逃离概率增长更多（全局默认0.25）
+  base-speed: 0.05             # 逃离速度快（全局默认0.04）
+  min-duration: 18             # 逃离持续较久（全局默认15）
+  max-duration: 40             # 逃离持续更久（全局默认35）
+
+# 多阶段行为：鲶鱼潜伏型，后期突然暴走
+behavior-stages:
+  stage1:
+    threshold: 0.0             # 进度 0% 起：潜伏下沉
+    behaviors:
+      - type: sinker
+        weight: 0.7
+      - type: smooth
+        weight: 0.3
+  stage2:
+    threshold: 0.4             # 进度 40% 后：加入停滞型
+    behaviors:
+      - type: idle             # 停滞型：长时间不动后突然突进
+        weight: 0.4
+      - type: sinker
+        weight: 0.4
+      - type: smooth
+        weight: 0.2
+  stage3:
+    threshold: 0.75            # 进度 75% 后：疯狂暴走
+    behaviors:
+      - type: mixed            # 混合型：随机切换所有行为
+        weight: 0.6
+      - type: dart
+        weight: 0.4
+
+# ─── 奖励（可选） ──────────────────────────────────────
+# 货币奖励
+currency-reward:
+  currency-id: "coin"
+  amount: 100
+
+# 多货币奖励
+currency-rewards:
+  gem_reward:
+    currency-id: "gem"
+    amount: 3
+  reputation_reward:
+    currency-id: "reputation"
+    amount: 10
+
+# 多物品掉落（条件掉落）
+drops:
+  perfect_bonus:
+    item:
+      source: "minecraft"
+      item-id: "emerald"
+      amount: 2
+    weight: 1.0
+    condition: "perfect"       # 完美捕获时掉落绿宝石
+  big_catfish_bonus:
+    item:
+      source: "minecraft"
+      item-id: "diamond"
+      amount: 1
+    weight: 1.0
+    condition: "size:120"      # 尺寸≥120cm 时掉落钻石
+  first_catch_reward:
+    item:
+      source: "minecraft"
+      item-id: "experience_bottle"
+      amount: 5
+    weight: 1.0
+    condition: "first_catch"   # 首次捕获时给附魔瓶
+
+# 命令奖励
+command-rewards:
+  announce:
+    command: "say {player} 在雨夜钓到了一条 {size}cm 的稀有鲶鱼！"
+    condition: ""              # 无条件执行
+  give_title:
+    command: "title {player} title \"&b夜钓达人！\""
+    condition: "perfect"       # 完美捕获时给称号
+
+# ─── 出现条件（可选） ──────────────────────────────────
+min-player-level: 10           # 至少10级钓鱼等级
+biomes: [river, swamp, mangrove_swamp]  # 河流和沼泽类生物群系
+depth-range:
+  min-depth: 2                 # 至少2格深
+  max-depth: 30                # 最深30格（鲶鱼不喜深水）
+
+# 饵料偏好
+bait-preferences:
+  worm_pref:
+    bait-id: "worm"
+    multiplier: 1.5            # 蚯蚓提高出现概率
+  special_bait:
+    bait-id: "night_bait"
+    multiplier: 2.5            # 夜钓饵料大幅提高出现概率
+
+# ─── 数据/展示（可选） ─────────────────────────────────
+description: "稀有的淡水鱼，仅在春夏雨夜的河流和湖泊中出没，潜伏深水，难以捕捉。"
+icon-texture: "minecraft:cooked_cod"
+icon-texture-url: "https://example.com/textures/catfish.png"
+record-weight: 1.5             # 图鉴排序靠前（稀有鱼）
