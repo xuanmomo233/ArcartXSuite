@@ -80,6 +80,10 @@ public record FishingSeasonData(
 
     /**
      * 累加经验并自动连续升级。
+     * <p>
+     * <b>注意</b>：此方法仅做等级/经验/天赋点计算，不触发升级事件或奖励发放。
+     * 调用方应在服务层（{@code FishingService}）处理升级副作用。
+     * 满级后经验截断到 {@code cap - 1}，与 battlepass 行为一致。
      *
      * @param xp      增加的经验值
      * @param xpCurve 经验曲线
@@ -87,12 +91,30 @@ public record FishingSeasonData(
      * @return 更新后的新实例
      */
     public @NotNull FishingSeasonData withXpAdded(int xp, @NotNull XpCurve xpCurve, int maxLevel) {
-        FishingSeasonData result = new FishingSeasonData(uuid, seasonId, level, currentXp + xp,
-            talentPoints, unspentTalentPoints, talents, claimedRewards);
-        while (result.canLevelUp(xpCurve, maxLevel)) {
-            result = result.withLevelUp(xpCurve);
+        int newXp = currentXp + xp;
+        int newLevel = level;
+        int newTalentPoints = talentPoints;
+        int newUnspent = unspentTalentPoints;
+
+        // 逐级扣减升级
+        while (newLevel < maxLevel) {
+            int required = xpCurve.xpRequiredForLevelOr(newLevel + 1, Integer.MAX_VALUE);
+            if (newXp < required) break;
+            newXp -= required;
+            newLevel++;
+            // 每3级获得1点天赋点
+            if (newLevel % 3 == 0) {
+                newTalentPoints++;
+                newUnspent++;
+            }
         }
-        return result;
+        // 满级后截断到当前级上限 - 1，防止经验无限累加
+        if (newLevel >= maxLevel) {
+            int cap = xpCurve.xpRequiredForLevelOr(maxLevel, Integer.MAX_VALUE);
+            newXp = Math.min(newXp, Math.max(0, cap - 1));
+        }
+        return new FishingSeasonData(uuid, seasonId, newLevel, newXp,
+            newTalentPoints, newUnspent, talents, claimedRewards);
     }
 
     /**

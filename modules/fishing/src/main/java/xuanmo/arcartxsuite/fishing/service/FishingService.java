@@ -359,10 +359,38 @@ public final class FishingService {
         }
 
         if (updatedSeason.level() > seasonData.level()) {
-            String levelMsg = getMessage("fishing_level_up", String.valueOf(updatedSeason.level()));
-            if (levelMsg != null) {
-                player.sendMessage(levelMsg);
+            onLevelUp(player, seasonData.level(), updatedSeason.level());
+        }
+    }
+
+    /**
+     * 玩家升级回调（服务层副作用）。
+     * <p>
+     * 发送升级消息、发射 EventBus 事件、发放升级瞬间奖励等。
+     *
+     * @param player    玩家
+     * @param oldLevel  升级前等级
+     * @param newLevel  升级后等级
+     */
+    private void onLevelUp(@NotNull Player player, int oldLevel, int newLevel) {
+        // 发送升级消息
+        String levelMsg = getMessage("fishing_level_up", String.valueOf(newLevel));
+        if (levelMsg != null) {
+            player.sendMessage(levelMsg);
+        }
+        // 发射 EventBus 升级事件
+        try {
+            xuanmo.arcartxsuite.api.capability.EventBusCapability eventBus =
+                eventBusProvider != null ? eventBusProvider.get() : null;
+            if (eventBus != null) {
+                java.util.Map<String, String> payload = new java.util.HashMap<>();
+                payload.put("old_level", String.valueOf(oldLevel));
+                payload.put("new_level", String.valueOf(newLevel));
+                payload.put("season_id", configuration.season().seasonId());
+                eventBus.publish("axs.fishing.level_up", player, payload);
             }
+        } catch (Exception e) {
+            logger.warning("发射升级事件失败: " + e.getMessage());
         }
     }
 
@@ -764,9 +792,17 @@ public final class FishingService {
 
     public void giveXp(@NotNull UUID uuid, int amount) {
         FishingSeasonData data = repository.loadSeasonData(uuid, configuration.season().seasonId());
+        int oldLevel = data.level();
         FishingSeasonData updated = data.withXpAdded(amount,
             configuration.season().xpCurve(), configuration.season().maxLevel());
         repository.saveSeasonData(updated);
+        // 升级回调
+        if (updated.level() > oldLevel) {
+            Player player = plugin.getServer().getPlayer(uuid);
+            if (player != null && player.isOnline()) {
+                onLevelUp(player, oldLevel, updated.level());
+            }
+        }
     }
 
     // ─── 天赋树操作 ────────────────────────────────────────────

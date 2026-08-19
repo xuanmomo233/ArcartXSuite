@@ -44,7 +44,40 @@ fishing:
   # 完美收竿（进度条始终覆盖目标区域）时的经验倍率。
   perfect-bonus-multiplier: 1.5
   # 每提升 1 级钓鱼等级所需基础经验。
+  # 注意：此值仅用于钓鱼小游戏的等级修正曲线计算，不影响赛季 XP 成长曲线。
+  # 赛季 XP 曲线由 season.xp-curve 配置决定。
   base-xp-per-level: 100
+
+# ─── 赛季配置 ────────────────────────────────────────
+# 定义当前钓鱼赛季的基本参数与经验成长曲线。
+# 赛季结束时重置等级/经验/天赋点/奖励领取记录，永久数据（图鉴）保留。
+season:
+  season-id: "fishing-s1"
+  display-name: "第一赛季"
+  max-level: 100
+  # 经验成长曲线：转折点断点列表，每项指定一个起始等级（level）与一个 ARIA 表达式（formula）。
+  # 表达式以变量 level 为入参，计算结果即为"升到该等级所需经验值"（必须 ≥ 1）。
+  # 系统按 level 升序选取最大的且不超过目标等级的断点公式求值。
+  # 首个断点的 level 必须为 1；断点 level 必须严格递增。
+  #
+  # 当前曲线：线性 × S曲线增长因子模型
+  #   xpForNextLevel = baseXp × level × (1 + a × smoothstep(0, maxLevel, level)^k)
+  #   smoothstep(0, 100, level) = (level/100)^2 × (3 - 2 × (level/100))
+  #   参数: baseXp=50, a=2, k=1.5
+  #
+  # 特征：前期近似线性（快速升级给正反馈），中后期 S曲线因子平滑加速（挑战感递增），
+  #       全程无拐点突变。满级(100)累计约 187,500 xp。
+  # 节奏（每次钓鱼约 5-15 xp，平均 10 xp/次，每小时约 60 次 = 600 xp/h）：
+  #   Lv25 约 5 小时、Lv50 约 25 小时、Lv75 约 80 小时、Lv100 约 180 小时。
+  # 天赋点（每3级1点）：满级共 33 点，可点亮 25 个树节点 + 8 个联动节点中的部分。
+  xp-curve:
+    - level: 1
+      formula: "50 * level * (1 + 2.0 * math.pow(math.pow(level / 100, 2) * (3 - 2 * level / 100), 1.5))"
+  start-date: "2026-01-01"
+  end-date: "2030-12-31"
+  # 赛季结算奖励发放方式：ONLINE_DIRECT / MAIL / HYBRID
+  settlement:
+    dispatch-mode: "ONLINE_DIRECT"
 
 # ─── 水域定义 ────────────────────────────────────────
 # 指定地点: 玩家在指定坐标/区域内钓鱼

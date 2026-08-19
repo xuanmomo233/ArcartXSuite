@@ -57,6 +57,8 @@ fishing:
   # 完美收竿（进度条始终覆盖目标区域）时的经验倍率。
   perfect-bonus-multiplier: 1.5
   # 每提升 1 级钓鱼等级所需基础经验。
+  # 注意：此值仅用于钓鱼小游戏的等级修正曲线计算，不影响赛季 XP 成长曲线。
+  # 赛季 XP 曲线由 season.xp-curve 配置决定。
   base-xp-per-level: 100
   # 钓鱼等级上限，影响等级修正曲线计算。
   max-level: 100
