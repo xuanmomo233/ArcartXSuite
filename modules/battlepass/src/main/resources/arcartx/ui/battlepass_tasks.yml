@@ -402,12 +402,45 @@ controls:
                   x: 28
                   texts: "~&0任务"
                   fontSize: 36
+          导航结算:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 216
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_settlement')
+            children:
+              结算底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '245,205,130,255' : '255,255,255,230'"
+              结算文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f结算"
+                  fontSize: 36
+                  through: true
           导航分隔线:
             type: Texture
             attribute:
               point: ~top_left
               x: 18
-              y: 232
+              y: 298
               width: 264
               height: 2
               normal: ~255,255,255,230
@@ -416,7 +449,7 @@ controls:
             attribute:
               point: ~top_left
               x: 20
-              y: 248
+              y: 314
               texts: "~&f完成度"
               fontSize: 30
           # 每日完成度
@@ -425,7 +458,7 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 282
+              y: 348
               width: 272
               height: 62
             children:
@@ -484,7 +517,7 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 356
+              y: 422
               width: 272
               height: 62
             children:
@@ -543,7 +576,7 @@ controls:
             attribute:
               point: ~top_left
               x: 14
-              y: 430
+              y: 496
               width: 272
               height: 62
             children:
