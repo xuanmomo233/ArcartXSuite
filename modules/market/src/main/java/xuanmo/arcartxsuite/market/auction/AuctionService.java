@@ -26,6 +26,9 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.mail.MailAttachmentSpec;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendRequest;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.AuctionConfiguration;
@@ -655,7 +658,13 @@ public class AuctionService {
         String subject = "拍卖行物品返还";
         String body = "物品: " + itemDisplayName + " (来源: " + reason + ")";
         try {
-            return mail.sendItemMail(target, subject, body, item, "拍卖行");
+            MailSendResult result = mail.sendMail(MailSendRequest.builder(target, subject, body)
+                .attachment(MailAttachmentSpec.item(item))
+                .senderName("拍卖行")
+                .sourceModule("market")
+                .sourceDetail(reason)
+                .build());
+            return result.success();
         } catch (Exception e) {
             logger.warning("[Market-Auction] 邮件返还物品失败，降级入待发放队列: " + e.getMessage());
             return false;

@@ -181,16 +181,26 @@ public final class AreaConfiguration {
     ) {
         String name = typeName == null || typeName.isBlank() ? id : typeName;
         String describe = rewardSec != null ? rewardSec.getString("describe", "") : "";
-        List<String> mailPresets = rewardSec != null
-            ? new ArrayList<>(rewardSec.getStringList("mail-presets")) : List.of();
-        String fullInventoryMail = rewardSec != null
-            ? rewardSec.getString("full-inventory-mail", "") : "";
+        List<String> mailPresets = List.of();
+        if (rewardSec != null) {
+            ConfigurationSection mailSec = rewardSec.getConfigurationSection("mail");
+            if (mailSec != null) {
+                mailPresets = new ArrayList<>(mailSec.getStringList("presets"));
+            }
+        }
+        List<String> fullInventoryMailPresets = List.of();
+        if (rewardSec != null) {
+            ConfigurationSection fullMailSec = rewardSec.getConfigurationSection("full-inventory-mail");
+            if (fullMailSec != null) {
+                fullInventoryMailPresets = new ArrayList<>(fullMailSec.getStringList("presets"));
+            }
+        }
         Map<String, List<String>> tiers = new LinkedHashMap<>();
         if (rewardSec != null) {
             for (String tierKey : rewardSec.getKeys(false)) {
                 if ("round".equals(tierKey) || "max".equals(tierKey)
                     || "player".equals(tierKey) || "overflow-to-mail".equals(tierKey)
-                    || "describe".equals(tierKey) || "mail-presets".equals(tierKey)
+                    || "describe".equals(tierKey) || "mail".equals(tierKey)
                     || "full-inventory-mail".equals(tierKey)) {
                     continue;
                 }
@@ -205,7 +215,7 @@ public final class AreaConfiguration {
             describe,
             Collections.unmodifiableMap(tiers),
             Collections.unmodifiableList(mailPresets),
-            fullInventoryMail
+            Collections.unmodifiableList(fullInventoryMailPresets)
         );
     }
 

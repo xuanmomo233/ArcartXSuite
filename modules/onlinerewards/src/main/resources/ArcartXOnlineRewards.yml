@@ -119,21 +119,23 @@ rewards-file: "rewards.yml"
 
 # 每周累计在线时长奖励。每周期自动重置，repeat: true 表示每周期都可重复领取一次。
 # 字段: id=奖励ID, minutes=所需在线分钟, name=名称, rewardText=描述,
-#       commands=达成后执行的命令, mail-presets=邮件预设ID列表, repeat=是否可重复领取
+#       commands=达成后执行的命令, mail.presets=邮件预设ID列表, repeat=是否可重复领取
 weekly-rewards:
   - id: "weekly_2h"
     minutes: 120
     name: "本周活跃 2 小时"
     rewardText: ""
     commands: []
-    mail-presets: []
+    mail:
+      presets: []
     repeat: false
   - id: "weekly_5h"
     minutes: 300
     name: "本周活跃 5 小时"
     rewardText: ""
     commands: []
-    mail-presets: []
+    mail:
+      presets: []
     repeat: false
 
 # 每月累计在线时长奖励。
@@ -144,14 +146,16 @@ monthly-rewards:
     name: "本月活跃 10 小时"
     rewardText: ""
     commands: []
-    mail-presets: []
+    mail:
+      presets: []
     repeat: false
   - id: "monthly_30h"
     minutes: 1800
     name: "本月活跃 30 小时"
     rewardText: ""
     commands: []
-    mail-presets: []
+    mail:
+      presets: []
     repeat: false
 
 # 离线时长储蓄：下线时按 storage-rate 比例存储当日已在线时长，次日登录时作为初始在线时长加成。
@@ -174,7 +178,7 @@ server-sign-in-goal:
   broadcast: true
   # 目标列表
   # 字段: id=目标ID, required=所需签到人数, name=目标名称,
-  #       rewardText=描述, commands=达成后执行的命令, mail-presets=邮件预设,
+  #       rewardText=描述, commands=达成后执行的命令, mail.presets=邮件预设,
   #       chat-cards=聊天卡片, subtitle-groups=字幕组, title-ids=标题ID,
   #       broadcast=达成时的广播文本
   targets:
@@ -183,7 +187,8 @@ server-sign-in-goal:
       name: "今日 10 人签到"
       rewardText: ""
       commands: []
-      mail-presets: []
+      mail:
+        presets: []
       chat-cards: []
       subtitle-groups: []
       title-ids: []
@@ -193,7 +198,8 @@ server-sign-in-goal:
       name: "今日 50 人签到"
       rewardText: ""
       commands: []
-      mail-presets: []
+      mail:
+        presets: []
       chat-cards: []
       subtitle-groups: []
       title-ids: []

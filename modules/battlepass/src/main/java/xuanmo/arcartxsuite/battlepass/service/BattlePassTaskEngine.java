@@ -36,6 +36,7 @@ public final class BattlePassTaskEngine {
     private final List<String> subscriptionIds = new ArrayList<>();
     private EventBusCapability eventBus;
     private BukkitEventSourceListener bukkitListener;
+    private xuanmo.arcartxsuite.battlepass.source.MythicMobEventListener mythicListener;
     private volatile boolean active;
     private static final Logger LOGGER = Logger.getLogger("ArcartXSuite");
     private final TaskTriggerLimiter triggerLimiter = new TaskTriggerLimiter();
@@ -83,12 +84,19 @@ public final class BattlePassTaskEngine {
         int eventBusCount = 0;
         int bukkitCount = 0;
         int skippedCount = 0;
+        // MythicMobs 事件回调（独立收集，因 MythicMobs 为可选依赖，需通过独立监听器注册）
+        List<BiConsumer<Player, Map<String, String>>> mythicCallbacks = new ArrayList<>();
 
         for (BattlePassTask task : configuration.tasks().all()) {
             String topic = task.eventTopic();
-            if (topic == null || topic.isEmpty()) { skippedCount++; continue; }
+            boolean hasTopic = topic != null && !topic.isEmpty();
 
-            boolean useEventBus = shouldUseEventBus(topic);
+            // 判断事件源优先级：
+            // 1. 有 event-topic 且 EventBus 已有发布者 → 使用 EventBus
+            // 2. 有 bukkit-event → 使用 Bukkit 事件（无论 event-topic 是否存在）
+            // 3. 有 event-topic 但无发布者且无 bukkit-event → 跳过
+            // 4. 两者都没有 → 跳过
+            boolean useEventBus = hasTopic && shouldUseEventBus(topic);
 
             if (useEventBus) {
                 // 使用 EventBus
@@ -102,7 +110,7 @@ public final class BattlePassTaskEngine {
                     LOGGER.fine("[battlepass] TaskEngine 订阅 EventBus: topic=" + topic + " task=" + task.taskId());
                 }
             } else if (task.bukkitEvent() != null) {
-                // 降级到原版 Bukkit 事件（支持多个事件类）
+                // 使用 Bukkit 事件（支持多个事件类）
                 for (String bukkitClass : task.bukkitEvent().eventClasses()) {
                     if (!BukkitEventSourceListener.isSupportedBukkitEvent(bukkitClass)) {
                         LOGGER.warning("[battlepass] 不支持的 Bukkit 事件，跳过: task="
@@ -119,24 +127,39 @@ public final class BattlePassTaskEngine {
                                     + " 处理 Bukkit 事件 " + normalizedClass + " 失败", e);
                         }
                     };
-                    callbacksByEvent.computeIfAbsent(normalizedClass, ignored -> new ArrayList<>())
-                        .add(callback);
+                    // MythicMobs 事件单独收集，由独立监听器处理
+                    if (normalizedClass.equals(xuanmo.arcartxsuite.battlepass.source.MythicMobEventListener.MYTHIC_MOB_DEATH)) {
+                        mythicCallbacks.add(callback);
+                    } else {
+                        callbacksByEvent.computeIfAbsent(normalizedClass, ignored -> new ArrayList<>())
+                            .add(callback);
+                    }
                     bukkitCount++;
-                    LOGGER.info("[battlepass] TaskEngine 使用 Bukkit 降级: event="
-                        + bukkitClass + " task=" + task.taskId() + " (topic=" + topic + ")");
+                    LOGGER.info("[battlepass] TaskEngine 使用 Bukkit 事件: event="
+                        + bukkitClass + " task=" + task.taskId()
+                        + (hasTopic ? " (topic=" + topic + " 无发布者，降级)" : ""));
                 }
+            } else if (hasTopic) {
+                LOGGER.warning("[battlepass] TaskEngine 跳过任务（EventBus 无发布者且无 bukkit-event 降级）: task="
+                    + task.taskId() + " topic=" + topic);
+                skippedCount++;
             } else {
-                LOGGER.warning("[battlepass] TaskEngine 跳过任务（无可用事件源）: task=" + task.taskId() + " topic=" + topic);
+                LOGGER.warning("[battlepass] TaskEngine 跳过任务（无可用事件源）: task=" + task.taskId());
+                skippedCount++;
             }
         }
 
         LOGGER.info("[battlepass] TaskEngine.start 完成: eventBus订阅=" + eventBusCount
-            + " bukkit降级=" + bukkitCount + " 跳过=" + skippedCount
+            + " bukkit事件=" + bukkitCount + " 跳过=" + skippedCount
             + " | 总任务数=" + configuration.tasks().all().size());
 
-        // 如果有需要降级的 Bukkit 事件，注册监听器
+        // 注册原版 Bukkit 事件监听器
         if (!callbacksByEvent.isEmpty()) {
             registerBukkitListener(callbacksByEvent);
+        }
+        // 注册 MythicMobs 事件监听器（仅在 MythicMobs 可用时）
+        if (!mythicCallbacks.isEmpty()) {
+            registerMythicListener(mythicCallbacks);
         }
     }
 
@@ -179,6 +202,24 @@ public final class BattlePassTaskEngine {
     }
 
     /**
+     * 注册 MythicMobs 事件监听器（仅在 MythicMobs 可用时）。
+     * <p>
+     * MythicMobs 为可选依赖，运行时可能不存在。{@link xuanmo.arcartxsuite.battlepass.source.MythicMobEventListener#registerIfAvailable}
+     * 会在 MythicMobs 不可用时返回 null，此时 MythicMobs 相关任务不会被触发。
+     */
+    private void registerMythicListener(List<BiConsumer<Player, Map<String, String>>> callbacks) {
+        BiConsumer<Player, Map<String, String>> dispatcher = combine(callbacks);
+        if (dispatcher == null) return;
+        mythicListener = xuanmo.arcartxsuite.battlepass.source.MythicMobEventListener
+            .registerIfAvailable(plugin, dispatcher);
+        if (mythicListener != null) {
+            LOGGER.info("[battlepass] MythicMobs 事件监听器已注册");
+        } else {
+            LOGGER.warning("[battlepass] 有任务配置了 MythicMobs 事件，但 MythicMobs 插件未安装，相关任务不会触发");
+        }
+    }
+
+    /**
      * 将多个回调合并为一个分发器，任一回调异常不影响其他回调。
      *
      * @param callbacks 回调列表
@@ -212,6 +253,10 @@ public final class BattlePassTaskEngine {
         if (bukkitListener != null) {
             bukkitListener.unregister();
             bukkitListener = null;
+        }
+        if (mythicListener != null) {
+            mythicListener.unregister();
+            mythicListener = null;
         }
         triggerLimiter.clear();
     }

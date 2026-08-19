@@ -18,6 +18,8 @@ import org.bukkit.entity.Player;
 import xuanmo.arcartxsuite.api.security.PacketGuardAPI;
 import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.capability.QQBotBroadcastable;
 import xuanmo.arcartxsuite.api.capability.QuestGpsNavigable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
@@ -522,7 +524,10 @@ public final class EventPacketDispatchService {
         if (presetId.isBlank()) {
             return false;
         }
-        return mail.dispatchPreset(presetId, subject.getName(), "EventPacket");
+        MailSendResult result = mail.dispatchPreset(MailPresetRequest.builder(presetId, subject.getName())
+            .sourceModule("eventpacket")
+            .build());
+        return result.success();
     }
 
     private boolean executeQQBroadcast(EventPacketAction action, Player subject, EventPacketContext context) {

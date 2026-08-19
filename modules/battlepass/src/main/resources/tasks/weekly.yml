@@ -26,7 +26,6 @@ weekly-kill-100:
   display-name: "百斩"
   description: "本周累计击杀100个敌对生物"
   difficulty: hard
-  event-topic: "axs.combateffect.kill_entity"
   bukkit-event:
     event-classes:
       - "org.bukkit.event.entity.EntityDeathEvent"
@@ -65,7 +64,6 @@ weekly-damage-2000:
   display-name: "战斗狂人"
   description: "本周累计造成2000点伤害"
   difficulty: normal
-  event-topic: "axs.combateffect.damage_dealt"
   bukkit-event:
     event-classes:
       - "org.bukkit.event.entity.EntityDamageByEntityEvent"
@@ -163,7 +161,6 @@ weekly-craft-50:
   display-name: "批量合成"
   description: "本周合成50个物品"
   difficulty: normal
-  event-topic: "axs.battlepass.craft_item"
   bukkit-event:
     event-class: "org.bukkit.event.inventory.CraftItemEvent"
   required-count: 50
@@ -179,7 +176,6 @@ weekly-block-break-200:
   display-name: "采矿周计划"
   description: "本周挖掘200个方块"
   difficulty: normal
-  event-topic: "axs.battlepass.block_break"
   bukkit-event:
     event-class: "org.bukkit.event.block.BlockBreakEvent"
   required-count: 200
@@ -189,3 +185,76 @@ weekly-block-break-200:
     type: fixed
     value: 1
   weight: 2
+
+# -------- 射箭周训 --------
+# 监听 ProjectileHitEvent，射箭命中实体才算
+weekly-archery-150:
+  display-name: "神射手"
+  description: "本周射箭命中目标150次"
+  difficulty: normal
+  bukkit-event:
+    event-class: "org.bukkit.event.entity.ProjectileHitEvent"
+  required-count: 150
+  base-xp-reward: 400
+  conditions:
+    - type: event_payload
+      key: projectileType
+      operator: equals
+      value: ARROW
+    - type: event_payload
+      key: hitEntity
+      operator: exists
+      value: ""
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 附魔周计划 --------
+weekly-enchant-20:
+  display-name: "附魔大师"
+  description: "本周附魔20件物品"
+  difficulty: normal
+  bukkit-event:
+    event-class: "org.bukkit.event.enchantment.EnchantItemEvent"
+  required-count: 20
+  base-xp-reward: 500
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 剪羊毛周任务 --------
+weekly-shear-50:
+  display-name: "牧羊人"
+  description: "本周剪50只羊"
+  difficulty: easy
+  bukkit-event:
+    event-class: "org.bukkit.event.player.PlayerShearEntityEvent"
+  required-count: 50
+  base-xp-reward: 300
+  conditions:
+    - type: event_payload
+      key: entityType
+      operator: equals
+      value: SHEEP
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
+
+# -------- 驯兽周任务 --------
+weekly-tame-10:
+  display-name: "驯兽大师"
+  description: "本周驯服10只动物"
+  difficulty: hard
+  bukkit-event:
+    event-class: "org.bukkit.event.entity.EntityTameEvent"
+  required-count: 10
+  base-xp-reward: 600
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 1

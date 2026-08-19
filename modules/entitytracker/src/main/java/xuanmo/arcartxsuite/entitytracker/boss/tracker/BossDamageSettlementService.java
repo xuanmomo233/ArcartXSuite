@@ -604,7 +604,12 @@ final class BossDamageSettlementService {
         if (mailService == null) {
             return new BossDamageSettlementActionResult("mail", false, "Mail 模块未启用");
         }
-        boolean ok = mailService.dispatchPreset(action.presetId(), targetName, "BossSettlement:" + record.settlementId());
+        xuanmo.arcartxsuite.api.capability.mail.MailSendResult mailResult = mailService.dispatchPreset(
+            xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest.builder(action.presetId(), targetName)
+                .sourceModule("entitytracker")
+                .sourceDetail("BossSettlement:" + record.settlementId())
+                .build());
+        boolean ok = mailResult.success();
         return new BossDamageSettlementActionResult("mail", ok, ok ? "邮件已派发" : "邮件派发失败");
     }
 

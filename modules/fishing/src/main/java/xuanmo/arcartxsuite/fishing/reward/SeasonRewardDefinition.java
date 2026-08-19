@@ -20,7 +20,7 @@ import org.jetbrains.annotations.Nullable;
  * @param currencyId  货币 ID（type=currency 时有效）
  * @param currencyAmount 货币数量（type=currency 时有效）
  * @param commands    命令列表（type=command 时有效）
- * @param mailPresetId 邮件预设 ID（type=mail 时有效）
+ * @param mailPresets 邮件预设 ID 列表（type=mail 时有效）
  */
 public record SeasonRewardDefinition(
     @NotNull String id,
@@ -36,7 +36,7 @@ public record SeasonRewardDefinition(
     @Nullable String currencyId,
     double currencyAmount,
     @Nullable List<String> commands,
-    @Nullable String mailPresetId
+    @Nullable List<String> mailPresets
 ) {
 
     public enum Type {

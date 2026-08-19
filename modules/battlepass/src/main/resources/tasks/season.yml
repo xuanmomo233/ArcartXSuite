@@ -10,7 +10,6 @@ season-kill-1000:
   display-name: "千人斩"
   description: "本赛季累计击杀1000个生物"
   difficulty: hard
-  event-topic: "axs.combateffect.kill_entity"
   bukkit-event:
     event-classes:
       - "org.bukkit.event.entity.EntityDeathEvent"
@@ -41,7 +40,6 @@ season-damage-10000:
   display-name: "万伤战神"
   description: "本赛季累计造成10000点伤害"
   difficulty: hard
-  event-topic: "axs.combateffect.damage_dealt"
   bukkit-event:
     event-classes:
       - "org.bukkit.event.entity.EntityDamageByEntityEvent"
@@ -60,7 +58,6 @@ season-pickup-500:
   display-name: "拾取大师"
   description: "本赛季累计拾取500个物品"
   difficulty: normal
-  event-topic: "axs.pickup.item_pickup"
   bukkit-event:
     event-class: "org.bukkit.event.player.PlayerPickupItemEvent"
   required-count: 500
@@ -103,7 +100,6 @@ season-craft-500:
   display-name: "合成宗师"
   description: "本赛季累计合成500个物品"
   difficulty: normal
-  event-topic: "axs.battlepass.craft_item"
   bukkit-event:
     event-class: "org.bukkit.event.inventory.CraftItemEvent"
   required-count: 500
@@ -118,7 +114,6 @@ season-block-break-5000:
   display-name: "挖矿狂魔"
   description: "本赛季累计挖掘5000个方块"
   difficulty: normal
-  event-topic: "axs.battlepass.block_break"
   bukkit-event:
     event-class: "org.bukkit.event.block.BlockBreakEvent"
   required-count: 5000
@@ -149,6 +144,106 @@ season-treasure-50:
   event-topic: "axs.fishing.treasure"
   required-count: 50
   base-xp-reward: 2500
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+
+# -------- 累计登录 --------
+# 赛季累计登录 30 天
+# limits.max-per-day: 1 确保每天只计 1 次，无论玩家当天进服多少次
+# loginview 模块存在时走 EventBus（登录成功），不存在时走 PlayerJoinEvent
+season-login-30:
+  display-name: "坚持不懈"
+  description: "本赛季累计登录30天"
+  difficulty: normal
+  event-topic: "axs.loginview.login_success"
+  bukkit-event:
+    event-class: "org.bukkit.event.player.PlayerJoinEvent"
+  required-count: 30
+  base-xp-reward: 3000
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  limits:
+    max-per-day: 1
+
+# -------- 赛季附魔宗师 --------
+season-enchant-200:
+  display-name: "附魔宗师"
+  description: "本赛季累计附魔200件物品"
+  difficulty: hard
+  bukkit-event:
+    event-class: "org.bukkit.event.enchantment.EnchantItemEvent"
+  required-count: 200
+  base-xp-reward: 2000
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+
+# -------- 赛季任务大师 --------
+# 需 questgps + chemdah 模块
+season-quest-200:
+  display-name: "任务大师"
+  description: "本赛季累计完成200个任务"
+  difficulty: hard
+  event-topic: "axs.questgps.quest_completed"
+  required-count: 200
+  base-xp-reward: 3000
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+
+# -------- 赛季神射手 --------
+# 监听 ProjectileHitEvent，射箭命中实体才算
+season-archery-1500:
+  display-name: "百步穿杨"
+  description: "本赛季累计射箭命中目标1500次"
+  difficulty: hard
+  bukkit-event:
+    event-class: "org.bukkit.event.entity.ProjectileHitEvent"
+  required-count: 1500
+  base-xp-reward: 1800
+  conditions:
+    - type: event_payload
+      key: projectileType
+      operator: equals
+      value: ARROW
+    - type: event_payload
+      key: hitEntity
+      operator: exists
+      value: ""
+  increment-strategy:
+    type: fixed
+    value: 1
+
+# -------- 赛季驯兽王 --------
+season-tame-50:
+  display-name: "驯兽之王"
+  description: "本赛季累计驯服50只动物"
+  difficulty: hard
+  bukkit-event:
+    event-class: "org.bukkit.event.entity.EntityTameEvent"
+  required-count: 50
+  base-xp-reward: 2500
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+
+# -------- 赛季成就大师 --------
+# 每个成就只能完成一次，赛季累计完成50个不同成就
+season-advancement-50:
+  display-name: "成就大师"
+  description: "本赛季累计完成50个成就"
+  difficulty: hard
+  bukkit-event:
+    event-class: "org.bukkit.event.player.PlayerAdvancementDoneEvent"
+  required-count: 50
+  base-xp-reward: 3000
   conditions: []
   increment-strategy:
     type: fixed

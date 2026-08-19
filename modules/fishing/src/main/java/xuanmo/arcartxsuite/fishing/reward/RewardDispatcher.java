@@ -12,6 +12,10 @@ import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.mail.MailAttachmentSpec;
+import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendRequest;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.fishing.model.FishingPendingReward;
 import xuanmo.arcartxsuite.fishing.service.FishingItemGenerator;
@@ -175,8 +179,16 @@ public final class RewardDispatcher {
             case CURRENCY -> {
                 if (reward.currencyId() != null) {
                     try {
-                        mail.sendCurrencyMail(player.getUniqueId(), description, description,
-                            reward.currencyId(), reward.currencyAmount(), "Fishing");
+                        MailSendResult result = mail.sendMail(MailSendRequest.builder(
+                                player.getUniqueId(), description, description)
+                            .attachment(MailAttachmentSpec.currency(reward.currencyId(), reward.currencyAmount()))
+                            .senderName("钓鱼")
+                            .sourceModule("fishing")
+                            .build());
+                        if (!result.success()) {
+                            logger.warning("mail 货币发放失败，降级直接发放: " + result.message());
+                            dispatchCurrency(player, reward);
+                        }
                     } catch (Exception e) {
                         logger.warning("mail 货币发放失败，降级直接发放: " + e.getMessage());
                         dispatchCurrency(player, reward);
@@ -184,9 +196,14 @@ public final class RewardDispatcher {
                 }
             }
             case ITEM -> {
-                if (reward.mailPresetId() != null && !reward.mailPresetId().isBlank()) {
+                if (reward.mailPresets() != null && !reward.mailPresets().isEmpty()) {
                     try {
-                        mail.dispatchPreset(reward.mailPresetId(), player.getName(), "Fishing");
+                        for (String presetId : reward.mailPresets()) {
+                            if (presetId.isBlank()) continue;
+                            mail.dispatchPreset(MailPresetRequest.builder(presetId, player.getName())
+                                .sourceModule("fishing")
+                                .build());
+                        }
                     } catch (Exception e) {
                         logger.warning("mail 预设发放失败，降级直接发放: " + e.getMessage());
                         dispatchItem(player, reward);
@@ -198,11 +215,16 @@ public final class RewardDispatcher {
             }
             case COMMAND -> dispatchCommand(player, reward);
             case MAIL -> {
-                if (reward.mailPresetId() != null && !reward.mailPresetId().isBlank()) {
-                    try {
-                        mail.dispatchPreset(reward.mailPresetId(), player.getName(), "Fishing");
-                    } catch (Exception e) {
-                        logger.warning("mail 预设发放失败: " + e.getMessage());
+                if (reward.mailPresets() != null) {
+                    for (String presetId : reward.mailPresets()) {
+                        if (presetId.isBlank()) continue;
+                        try {
+                            mail.dispatchPreset(MailPresetRequest.builder(presetId, player.getName())
+                                .sourceModule("fishing")
+                                .build());
+                        } catch (Exception e) {
+                            logger.warning("mail 预设发放失败: " + e.getMessage());
+                        }
                     }
                 }
             }
@@ -228,8 +250,16 @@ public final class RewardDispatcher {
             case CURRENCY -> {
                 if (reward.currencyId() != null) {
                     try {
-                        mail.sendCurrencyMail(uuid, description, description,
-                            reward.currencyId(), reward.currencyAmount(), "Fishing");
+                        MailSendResult result = mail.sendMail(MailSendRequest.builder(
+                                uuid, description, description)
+                            .attachment(MailAttachmentSpec.currency(reward.currencyId(), reward.currencyAmount()))
+                            .senderName("钓鱼")
+                            .sourceModule("fishing")
+                            .build());
+                        if (!result.success()) {
+                            logger.warning("离线 mail 货币发放失败，降级 pending: " + result.message());
+                            savePending(uuid, reward, description);
+                        }
                     } catch (Exception e) {
                         logger.warning("离线 mail 货币发放失败，降级 pending: " + e.getMessage());
                         savePending(uuid, reward, description);
@@ -237,9 +267,14 @@ public final class RewardDispatcher {
                 }
             }
             case ITEM -> {
-                if (reward.mailPresetId() != null && !reward.mailPresetId().isBlank()) {
+                if (reward.mailPresets() != null && !reward.mailPresets().isEmpty()) {
                     try {
-                        mail.dispatchPreset(reward.mailPresetId(), playerName, "Fishing");
+                        for (String presetId : reward.mailPresets()) {
+                            if (presetId.isBlank()) continue;
+                            mail.dispatchPreset(MailPresetRequest.builder(presetId, playerName)
+                                .sourceModule("fishing")
+                                .build());
+                        }
                     } catch (Exception e) {
                         logger.warning("离线 mail 预设发放失败，降级 pending: " + e.getMessage());
                         savePending(uuid, reward, description);

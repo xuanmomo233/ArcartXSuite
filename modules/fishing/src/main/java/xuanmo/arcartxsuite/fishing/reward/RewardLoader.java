@@ -71,12 +71,18 @@ public final class RewardLoader {
             commands = section.getStringList("commands");
         }
 
-        String mailPresetId = null;
+        List<String> mailPresets = null;
         if ("mail".equals(type)) {
-            mailPresetId = section.getString("mail-preset-id", "");
+            ConfigurationSection mailSection = section.getConfigurationSection("mail");
+            if (mailSection != null) {
+                mailPresets = mailSection.getStringList("presets");
+            }
+            if (mailPresets == null || mailPresets.isEmpty()) {
+                mailPresets = java.util.List.of();
+            }
         }
 
         return new SeasonRewardDefinition(id, level, type, iconMaterial, iconName, iconAmount,
-            itemSource, itemId, itemAmount, itemNbt, currencyId, currencyAmount, commands, mailPresetId);
+            itemSource, itemId, itemAmount, itemNbt, currencyId, currencyAmount, commands, mailPresets);
     }
 }

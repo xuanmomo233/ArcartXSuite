@@ -16,6 +16,10 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.mail.MailAttachmentSpec;
+import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendRequest;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
@@ -50,22 +54,16 @@ public final class BattlePassRewardDispatcher {
      * @param logger             日志记录器
      * @param itemSourceRegistry 物品来源注册表，可为 null（item 类型奖励将无法发放）
      * @param currencyManager    货币管理器，可为 null（currency 类型奖励将无法发放）
+     * @param mailProvider       MailDispatchable 提供者，可为 null（mail 类型奖励将降级发放）
      */
     public BattlePassRewardDispatcher(JavaPlugin plugin, Logger logger,
                                        @Nullable ItemSourceRegistry itemSourceRegistry,
-                                       @Nullable CurrencyBridgeAPI currencyManager) {
+                                       @Nullable CurrencyBridgeAPI currencyManager,
+                                       @Nullable Supplier<MailDispatchable> mailProvider) {
         this.plugin = plugin;
         this.logger = logger;
         this.itemSourceRegistry = itemSourceRegistry;
         this.currencyManager = currencyManager;
-    }
-
-    /**
-     * 设置邮件模块能力提供者，用于 mail 类型奖励发放。
-     *
-     * @param mailProvider MailDispatchable 提供者，可为 null
-     */
-    public void setMailProvider(@Nullable Supplier<MailDispatchable> mailProvider) {
         this.mailProvider = mailProvider;
     }
 
@@ -273,19 +271,24 @@ public final class BattlePassRewardDispatcher {
             fallbackFromMail(onlinePlayer, reward);
             return;
         }
-        String presetId = reward.mailPresetId();
-        if (presetId != null && !presetId.isBlank()) {
+        List<String> presetIds = reward.mailPresets();
+        if (presetIds != null && !presetIds.isEmpty()) {
             // 预设模式
             AxsScheduler.runAsync(plugin, () -> {
-                try {
-                    boolean success = mail.dispatchPreset(presetId, playerName, "BattlePass");
-                    if (!success) {
-                        logger.warning("[battlepass] 邮件预设发送失败: preset=" + presetId
-                            + " player=" + playerName + "，降级为直接发放");
-                        AxsScheduler.runTask(plugin, () -> fallbackFromMail(onlinePlayer, reward));
+                for (String presetId : presetIds) {
+                    if (presetId == null || presetId.isBlank()) continue;
+                    try {
+                        MailSendResult result = mail.dispatchPreset(MailPresetRequest.builder(presetId, playerName)
+                            .sourceModule("battlepass")
+                            .build());
+                        if (!result.success()) {
+                            logger.warning("[battlepass] 邮件预设发送失败: preset=" + presetId
+                                + " player=" + playerName + "，降级为直接发放");
+                            AxsScheduler.runTask(plugin, () -> fallbackFromMail(onlinePlayer, reward));
+                        }
+                    } catch (Exception e) {
+                        logger.warning("[battlepass] 邮件预设发送异常: " + presetId + " | " + e.getMessage());
                     }
-                } catch (Exception e) {
-                    logger.warning("[battlepass] 邮件预设发送异常: " + presetId + " | " + e.getMessage());
                 }
             });
             return;
@@ -308,10 +311,14 @@ public final class BattlePassRewardDispatcher {
         }
         AxsScheduler.runAsync(plugin, () -> {
             try {
-                boolean success = mail.sendItemMail(playerUuid, subject, body, item, "战令");
-                if (!success) {
+                MailSendResult result = mail.sendMail(MailSendRequest.builder(playerUuid, subject, body)
+                    .attachment(MailAttachmentSpec.item(item))
+                    .senderName("战令")
+                    .sourceModule("battlepass")
+                    .build());
+                if (!result.success()) {
                     logger.warning("[battlepass] 带附件邮件发送失败: player=" + playerName
-                        + "，降级为直接发放物品");
+                        + "，降级为直接发放物品 — " + result.message());
                     AxsScheduler.runTask(plugin, () -> fallbackFromMail(onlinePlayer, reward));
                 }
             } catch (Exception e) {

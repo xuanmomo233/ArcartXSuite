@@ -22,6 +22,10 @@ import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.mail.MailAttachmentSpec;
+import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendRequest;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.capability.SecondaryPasswordAccess;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.mail.command.MailAdminCommand;
@@ -173,80 +177,80 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
         // 注册 MailDispatchable capability，供其他模块调用
         registerCapability(MailDispatchable.class, new MailDispatchable() {
             @Override
-            public boolean dispatchPreset(@NotNull String presetId, @NotNull String playerName, @NotNull String source) {
-                Player player = Bukkit.getPlayerExact(playerName);
-                if (player != null && player.isOnline()) {
-                    return service.dispatchPresetToPlayer(presetId, player, source).success();
-                }
-                return service.dispatchPreset(presetId, playerName, source).success();
-            }
-
-            @Override
-            public boolean sendItemMail(@NotNull java.util.UUID playerUuid,
-                                        @NotNull String subject,
-                                        @NotNull String body,
-                                        @NotNull org.bukkit.inventory.ItemStack item,
-                                        @Nullable String senderName) {
+            public MailSendResult sendMail(@NotNull MailSendRequest request) {
                 try {
-                    String itemData = xuanmo.arcartxsuite.mail.util.MailItemSerializer.serialize(item);
-                    xuanmo.arcartxsuite.mail.model.MailAttachment attachment = new xuanmo.arcartxsuite.mail.model.MailAttachment(
-                        0L, 0, xuanmo.arcartxsuite.mail.model.MailAttachmentType.ITEM,
-                        itemData, "", 0.0D, "");
+                    java.util.List<xuanmo.arcartxsuite.mail.model.MailAttachment> attachments = new java.util.ArrayList<>();
+                    int sortOrder = 0;
+                    for (MailAttachmentSpec spec : request.attachments()) {
+                        if (spec.type() == MailAttachmentSpec.Type.ITEM) {
+                            org.bukkit.inventory.ItemStack item = spec.itemStack();
+                            if (item == null) continue;
+                            String itemData = xuanmo.arcartxsuite.mail.util.MailItemSerializer.serialize(item);
+                            attachments.add(new xuanmo.arcartxsuite.mail.model.MailAttachment(
+                                0L, sortOrder++, xuanmo.arcartxsuite.mail.model.MailAttachmentType.ITEM,
+                                itemData, "", 0.0D, ""));
+                        } else if (spec.type() == MailAttachmentSpec.Type.CURRENCY) {
+                            String currencyId = spec.currencyId();
+                            if (currencyId == null || currencyId.isBlank()) continue;
+                            double amount = spec.amount();
+                            if (amount <= 0) continue;
+                            xuanmo.arcartxsuite.mail.model.MailAttachmentType type =
+                                "money".equals(currencyId)
+                                    ? xuanmo.arcartxsuite.mail.model.MailAttachmentType.VAULT
+                                    : xuanmo.arcartxsuite.mail.model.MailAttachmentType.CURRENCY;
+                            attachments.add(new xuanmo.arcartxsuite.mail.model.MailAttachment(
+                                0L, sortOrder++, type, "", currencyId, amount, ""));
+                        }
+                    }
+                    String logContent = buildLogContent(request.sourceModule(), request.sourceDetail());
+                    java.time.Instant expiresAt = request.expiresAt() != null
+                        ? request.expiresAt()
+                        : java.time.Instant.now().plus(java.time.Duration.ofDays(30));
+                    String senderName = request.senderName() != null && !request.senderName().isBlank()
+                        ? request.senderName() : "系统";
                     var result = service.sendSystemMail(
-                        playerUuid,
-                        subject,
-                        subject,
-                        body,
-                        java.util.List.of(attachment),
+                        request.playerUuid(),
+                        logContent,
+                        request.subject(),
+                        request.body(),
+                        attachments,
                         java.util.List.of(),
-                        java.time.Instant.now().plus(java.time.Duration.ofDays(15)),
-                        senderName != null && !senderName.isBlank() ? senderName : "System"
+                        expiresAt,
+                        senderName
                     );
-                    return result.success();
+                    return result.success()
+                        ? MailSendResult.ok()
+                        : MailSendResult.failure(result.message());
                 } catch (IOException e) {
-                    logger.warning("[Mail] sendItemMail 物品序列化失败: " + e.getMessage());
-                    return false;
+                    logger.warning("[Mail] sendMail 物品序列化失败: " + e.getMessage());
+                    return MailSendResult.failure("物品序列化失败: " + e.getMessage());
                 } catch (Exception e) {
-                    logger.warning("[Mail] sendItemMail 发送失败: " + e.getMessage());
-                    return false;
+                    logger.warning("[Mail] sendMail 发送失败: " + e.getMessage());
+                    return MailSendResult.failure("发送失败: " + e.getMessage());
                 }
             }
 
             @Override
-            public boolean sendCurrencyMail(@NotNull java.util.UUID playerUuid,
-                                            @NotNull String subject,
-                                            @NotNull String body,
-                                            @NotNull String currencyId,
-                                            double amount,
-                                            @Nullable String senderName) {
-                if (amount <= 0) {
-                    logger.warning("[Mail] sendCurrencyMail 金额必须 > 0，实际: " + amount);
-                    return false;
-                }
+            public MailSendResult dispatchPreset(@NotNull MailPresetRequest request) {
                 try {
-                    String normalizedCurrencyId = currencyId.trim().toLowerCase(java.util.Locale.ROOT);
-                    xuanmo.arcartxsuite.mail.model.MailAttachmentType type =
-                        "money".equals(normalizedCurrencyId)
-                            ? xuanmo.arcartxsuite.mail.model.MailAttachmentType.VAULT
-                            : xuanmo.arcartxsuite.mail.model.MailAttachmentType.CURRENCY;
-                    xuanmo.arcartxsuite.mail.model.MailAttachment attachment =
-                        new xuanmo.arcartxsuite.mail.model.MailAttachment(
-                            0L, 0, type, "", normalizedCurrencyId, amount, "");
-                    var result = service.sendSystemMail(
-                        playerUuid,
-                        subject,
-                        subject,
-                        body,
-                        java.util.List.of(attachment),
-                        java.util.List.of(),
-                        java.time.Instant.now().plus(java.time.Duration.ofDays(30)),
-                        senderName != null && !senderName.isBlank() ? senderName : "System"
-                    );
-                    return result.success();
+                    String actorName = buildLogContent(request.sourceModule(), request.sourceDetail());
+                    Player player = Bukkit.getPlayerExact(request.playerName());
+                    var result = (player != null && player.isOnline())
+                        ? service.dispatchPresetToPlayer(request.presetId(), player, actorName)
+                        : service.dispatchPreset(request.presetId(), request.playerName(), actorName);
+                    return result.success()
+                        ? MailSendResult.ok()
+                        : MailSendResult.failure(result.message());
                 } catch (Exception e) {
-                    logger.warning("[Mail] sendCurrencyMail 发送失败: " + e.getMessage());
-                    return false;
+                    logger.warning("[Mail] dispatchPreset 发送失败: " + e.getMessage());
+                    return MailSendResult.failure("发送失败: " + e.getMessage());
                 }
+            }
+
+            private String buildLogContent(@NotNull String sourceModule, @Nullable String sourceDetail) {
+                return sourceDetail != null && !sourceDetail.isBlank()
+                    ? sourceModule + ":" + sourceDetail
+                    : sourceModule;
             }
         });
 
@@ -323,14 +327,6 @@ public final class MailModule extends AbstractAXSModule implements ModuleCommand
     @Override
     protected @Nullable String packetGuardModuleKey() {
         return "mail";
-    }
-
-    public MailService getService() {
-        return service;
-    }
-
-    public MailModuleConfiguration getConfiguration() {
-        return configuration;
     }
 
     private void ensureMailNotifyCardDefaults() {

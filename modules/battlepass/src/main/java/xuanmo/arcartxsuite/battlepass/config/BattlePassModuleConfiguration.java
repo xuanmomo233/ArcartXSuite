@@ -204,12 +204,17 @@ public record BattlePassModuleConfiguration(
         List<String> commands = Collections.unmodifiableList(section.getStringList("commands"));
         String currency = section.getString("currency", "");
         double currencyAmount = section.getDouble("amount", 0);
-        String mailPresetId = section.getString("mail-preset-id", "");
+        List<String> mailPresets = null;
+        ConfigurationSection mailSection = section.getConfigurationSection("mail");
+        if (mailSection != null) {
+            mailPresets = mailSection.getStringList("presets");
+            if (mailPresets.isEmpty()) mailPresets = null;
+        }
         String mailSubject = section.getString("mail-subject", "");
         String mailBody = section.getString("mail-body", "");
         return new BattlePassReward(rewardId, level, tier, type, icon, item,
             commands, currency, currencyAmount,
-            mailPresetId.isBlank() ? null : mailPresetId,
+            mailPresets,
             mailSubject.isBlank() ? null : mailSubject,
             mailBody.isBlank() ? null : mailBody);
     }
@@ -659,13 +664,15 @@ public record BattlePassModuleConfiguration(
      * @param mainId           主界面 UI ID
      * @param tasksId          任务界面 UI ID
      * @param rewardsId        奖励界面 UI ID
+     * @param settlementId     赛季结算奖励界面 UI ID
      */
     public record BattlePassUiConfiguration(
         boolean registerOnEnable,
         boolean overwriteUiFiles,
         String mainId,
         String tasksId,
-        String rewardsId
+        String rewardsId,
+        String settlementId
     ) {
         public static BattlePassUiConfiguration load(ConfigurationSection section) {
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
@@ -674,7 +681,8 @@ public record BattlePassModuleConfiguration(
                 section.getBoolean("overwrite-ui-files", false),
                 section.getString("main-id", "battlepass_main"),
                 section.getString("tasks-id", "battlepass_tasks"),
-                section.getString("rewards-id", "battlepass_rewards")
+                section.getString("rewards-id", "battlepass_rewards"),
+                section.getString("settlement-id", "battlepass_settlement")
             );
         }
     }

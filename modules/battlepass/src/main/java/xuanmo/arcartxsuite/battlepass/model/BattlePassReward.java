@@ -25,7 +25,7 @@ import xuanmo.arcartxsuite.api.icon.IconDefinition;
  * @param commands  命令列表（type: command 时使用），可为空列表
  * @param currency  货币 ID（type: currency 时使用），可为 null
  * @param currencyAmount 货币数量（type: currency 时使用）
- * @param mailPresetId  邮件预设 ID（type: mail 且使用预设时），可为 null
+ * @param mailPresets   邮件预设 ID 列表（type: mail 且使用预设时），可为 null
  * @param mailSubject   邮件主题（type: mail 且直接配置时），可为 null
  * @param mailBody      邮件正文（type: mail 且直接配置时），可为 null
  */
@@ -39,7 +39,7 @@ public record BattlePassReward(
     List<String> commands,
     @Nullable String currency,
     double currencyAmount,
-    @Nullable String mailPresetId,
+    @Nullable List<String> mailPresets,
     @Nullable String mailSubject,
     @Nullable String mailBody
 ) {

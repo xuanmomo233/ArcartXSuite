@@ -11,21 +11,34 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.enchantment.EnchantItemEvent;
+import org.bukkit.event.entity.EntityBreedEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.entity.EntityTameEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.inventory.CraftItemEvent;
+import org.bukkit.event.player.PlayerAdvancementDoneEvent;
+import org.bukkit.event.player.PlayerBedEnterEvent;
+import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerFishEvent;
+import org.bukkit.event.player.PlayerHarvestBlockEvent;
+import org.bukkit.event.player.PlayerItemBreakEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerLevelChangeEvent;
+import org.bukkit.event.player.PlayerShearEntityEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.plugin.Plugin;
 import xuanmo.arcartxsuite.api.event.TaczGunDamageEvent;
 import xuanmo.arcartxsuite.api.event.TaczGunKillEvent;
@@ -53,6 +66,19 @@ public final class BukkitEventSourceListener implements Listener {
     private static final String PLAYER_DEATH = PlayerDeathEvent.class.getName();
     private static final String TACZ_DAMAGE = TaczGunDamageEvent.class.getName();
     private static final String TACZ_KILL = TaczGunKillEvent.class.getName();
+    // MythicMobs 事件类名（不直接引用，避免 MythicMobs 不存在时类加载失败）
+    private static final String MYTHIC_MOB_DEATH = "io.lumine.mythic.bukkit.events.MythicMobDeathEvent";
+    private static final String SHEAR_ENTITY = PlayerShearEntityEvent.class.getName();
+    private static final String ENTITY_TAME = EntityTameEvent.class.getName();
+    private static final String ENTITY_BREED = EntityBreedEvent.class.getName();
+    private static final String BUCKET_FILL = PlayerBucketFillEvent.class.getName();
+    private static final String ENCHANT_ITEM = EnchantItemEvent.class.getName();
+    private static final String BED_ENTER = PlayerBedEnterEvent.class.getName();
+    private static final String PROJECTILE_HIT = ProjectileHitEvent.class.getName();
+    private static final String LEVEL_CHANGE = PlayerLevelChangeEvent.class.getName();
+    private static final String ADVANCEMENT_DONE = PlayerAdvancementDoneEvent.class.getName();
+    private static final String ITEM_BREAK = PlayerItemBreakEvent.class.getName();
+    private static final String HARVEST_BLOCK = PlayerHarvestBlockEvent.class.getName();
     private static final Set<String> SUPPORTED_EVENT_CLASSES = Set.of(
         EntityDeathEvent.class.getName(),
         EntityDamageByEntityEvent.class.getName(),
@@ -66,7 +92,19 @@ public final class BukkitEventSourceListener implements Listener {
         PlayerItemConsumeEvent.class.getName(),
         PlayerDeathEvent.class.getName(),
         TaczGunDamageEvent.class.getName(),
-        TaczGunKillEvent.class.getName()
+        TaczGunKillEvent.class.getName(),
+        MYTHIC_MOB_DEATH,
+        SHEAR_ENTITY,
+        ENTITY_TAME,
+        ENTITY_BREED,
+        BUCKET_FILL,
+        ENCHANT_ITEM,
+        BED_ENTER,
+        PROJECTILE_HIT,
+        LEVEL_CHANGE,
+        ADVANCEMENT_DONE,
+        ITEM_BREAK,
+        HARVEST_BLOCK
     );
 
     private final Plugin plugin;
@@ -255,6 +293,178 @@ public final class BukkitEventSourceListener implements Listener {
         payload.put("entityName", victim.getName());
         payload.put("world", victim.getWorld().getName());
         dispatch(TACZ_KILL, player, payload);
+    }
+
+    // ─── 扩展 Bukkit 事件 ───────────────────────────────────
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerShearEntity(PlayerShearEntityEvent event) {
+        Player player = event.getPlayer();
+        if (!player.isOnline()) return;
+        Entity entity = event.getEntity();
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("entityType", entity.getType().name());
+        payload.put("entityName", entity.getName());
+        payload.put("world", entity.getWorld().getName());
+        dispatch(SHEAR_ENTITY, player, payload);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityTame(EntityTameEvent event) {
+        if (!(event.getOwner() instanceof Player player) || !player.isOnline()) return;
+        Entity entity = event.getEntity();
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("entityType", entity.getType().name());
+        payload.put("entityName", entity.getName());
+        payload.put("world", entity.getWorld().getName());
+        dispatch(ENTITY_TAME, player, payload);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityBreed(EntityBreedEvent event) {
+        if (!(event.getBreeder() instanceof Player player) || !player.isOnline()) return;
+        LivingEntity child = event.getEntity();
+        Map<String, String> payload = new LinkedHashMap<>();
+        if (child != null) {
+            payload.put("entityType", child.getType().name());
+        }
+        LivingEntity mother = event.getMother();
+        LivingEntity father = event.getFather();
+        if (mother != null) payload.put("motherType", mother.getType().name());
+        if (father != null) payload.put("fatherType", father.getType().name());
+        payload.put("world", player.getWorld().getName());
+        dispatch(ENTITY_BREED, player, payload);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerBucketFill(PlayerBucketFillEvent event) {
+        Player player = event.getPlayer();
+        if (!player.isOnline()) return;
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("bucket", event.getBucket().name());
+        payload.put("material", event.getItemStack().getType().name());
+        payload.put("world", player.getWorld().getName());
+        dispatch(BUCKET_FILL, player, payload);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEnchantItem(EnchantItemEvent event) {
+        Player player = event.getEnchanter();
+        if (player == null || !player.isOnline()) return;
+        ItemStack item = event.getItem();
+        Map<String, String> payload = new LinkedHashMap<>();
+        if (item != null) {
+            payload.put("material", item.getType().name());
+        }
+        payload.put("cost", String.valueOf(event.getExpLevelCost()));
+        payload.put("world", player.getWorld().getName());
+        dispatch(ENCHANT_ITEM, player, payload);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerBedEnter(PlayerBedEnterEvent event) {
+        Player player = event.getPlayer();
+        if (!player.isOnline()) return;
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("world", player.getWorld().getName());
+        dispatch(BED_ENTER, player, payload);
+    }
+
+    /**
+     * 监听弹射物命中事件。
+     * <p>
+     * {@link ProjectileHitEvent} 在弹射物命中实体或方块时触发。
+     * payload 字段：
+     * <ul>
+     *   <li>{@code projectileType} — 弹射物类型（如 ARROW、SNOWBALL、TRIDENT）</li>
+     *   <li>{@code hitEntity} — 命中实体类型（如 ZOMBIE），未命中实体时为空</li>
+     *   <li>{@code hitBlock} — 是否命中方块（true/false）</li>
+     * </ul>
+     * 通过 condition 匹配 {@code projectileType=ARROW} 且 {@code hitEntity} 非空，
+     * 可实现"射中目标"的任务。
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onProjectileHit(ProjectileHitEvent event) {
+        Projectile projectile = event.getEntity();
+        ProjectileSource source = projectile.getShooter();
+        if (!(source instanceof Player player) || !player.isOnline()) return;
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("projectileType", projectile.getType().name());
+        Entity hitEntity = event.getHitEntity();
+        if (hitEntity != null) {
+            payload.put("hitEntity", hitEntity.getType().name());
+        }
+        payload.put("hitBlock", String.valueOf(event.getHitBlock() != null));
+        payload.put("world", player.getWorld().getName());
+        dispatch(PROJECTILE_HIT, player, payload);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerLevelChange(PlayerLevelChangeEvent event) {
+        Player player = event.getPlayer();
+        if (!player.isOnline()) return;
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("oldLevel", String.valueOf(event.getOldLevel()));
+        payload.put("newLevel", String.valueOf(event.getNewLevel()));
+        payload.put("world", player.getWorld().getName());
+        dispatch(LEVEL_CHANGE, player, payload);
+    }
+
+    /**
+     * 监听玩家完成成就/进度事件。
+     * <p>
+     * 每个成就只能完成一次，无法刷，适合作为高难度任务目标。
+     * payload 字段：
+     * <ul>
+     *   <li>{@code advancement} — 成就 key（如 {@code minecraft:story/mine_diamond}）</li>
+     * </ul>
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerAdvancementDone(PlayerAdvancementDoneEvent event) {
+        Player player = event.getPlayer();
+        if (!player.isOnline()) return;
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("advancement", event.getAdvancement().getKey().toString());
+        payload.put("world", player.getWorld().getName());
+        dispatch(ADVANCEMENT_DONE, player, payload);
+    }
+
+    /**
+     * 监听玩家工具/防具损坏事件。
+     * <p>
+     * 物品耐久耗尽时触发，需消耗真实耐久，难刷。
+     * payload 字段：
+     * <ul>
+     *   <li>{@code material} — 损坏物品类型（如 DIAMOND_PICKAXE）</li>
+     * </ul>
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerItemBreak(PlayerItemBreakEvent event) {
+        Player player = event.getPlayer();
+        if (!player.isOnline()) return;
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("material", event.getBrokenItem().getType().name());
+        payload.put("world", player.getWorld().getName());
+        dispatch(ITEM_BREAK, player, payload);
+    }
+
+    /**
+     * 监听玩家右键采收作物事件。
+     * <p>
+     * 如采收甜浆果、发光浆果等，需实际种植作物，较难刷。
+     * payload 字段：
+     * <ul>
+     *   <li>{@code material} — 被采收方块类型（如 SWEET_BERRY_BUSH、CAVE_VINES）</li>
+     * </ul>
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerHarvestBlock(PlayerHarvestBlockEvent event) {
+        Player player = event.getPlayer();
+        if (!player.isOnline()) return;
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("material", event.getHarvestedBlock().getType().name());
+        payload.put("world", player.getWorld().getName());
+        dispatch(HARVEST_BLOCK, player, payload);
     }
 
     private void dispatchBlock(String eventClass, Player player, Block block) {

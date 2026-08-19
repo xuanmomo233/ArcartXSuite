@@ -1,72 +1,44 @@
 package xuanmo.arcartxsuite.api.capability;
 
-import java.util.UUID;
-import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.ApiStability;
+import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendRequest;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 
 /**
  * 邮件发送能力接口。
  * <p>
- * 由 Mail 模块实现，供 EventPacket 等模块跨模块调用。
+ * 由 Mail 模块实现，供其他模块跨模块调用。
+ * <p>
+ * 线程安全：两个方法均可在任意线程调用（同步执行，内部落库阻塞至完成后返回）。
+ * 调用方如需异步发送，请自行包异步任务。
+ *
+ * @since 1.5.0
  */
 public interface MailDispatchable {
 
     /**
-     * 按预设模板发送邮件。
-     *
-     * @param presetId   预设 id
-     * @param playerName 收件人名
-     * @param source     来源标识（如 "EventPacket"）
-     * @return {@code true} 表示发送成功
-     */
-    boolean dispatchPreset(@NotNull String presetId, @NotNull String playerName, @NotNull String source);
-
-    /**
-     * 发送一封附带物品的系统邮件。
+     * 发送一封带混合附件（物品+货币）的系统邮件。
      * <p>
      * 收件人无需在线，邮件存入收件箱，玩家上线后查看领取附件。
-     * Mail 模块未启用或不支持动态物品附件时返回 {@code false}，调用方应自行降级处理。
+     * Mail 模块未启用时返回 {@code failure}，调用方应自行降级处理。
      *
-     * @param playerUuid 收件人 UUID
-     * @param subject    邮件主题
-     * @param body       邮件正文
-     * @param item       附件物品（不可为空）
-     * @param senderName 发件人显示名（如 "拍卖行"），null 时默认 "System"
-     * @return {@code true} 表示发送成功
-     */
-    default boolean sendItemMail(@NotNull UUID playerUuid,
-                                 @NotNull String subject,
-                                 @NotNull String body,
-                                 @NotNull ItemStack item,
-                                 @Nullable String senderName) {
-        return false;
-    }
-
-    /**
-     * 发送一封附带货币的系统邮件。
-     * <p>
-     * 收件人无需在线，邮件存入收件箱，玩家上线后查看领取货币附件。
-     * {@code currencyId} 为 "money" 时走 Vault 通道，其余走 CurrencyBridge。
-     * Mail 模块未启用或不支持货币附件时返回 {@code false}，调用方应自行降级处理。
-     *
-     * @param playerUuid 收件人 UUID
-     * @param subject    邮件主题
-     * @param body       邮件正文
-     * @param currencyId 货币 ID（如 "money"、"coin"），不可为空
-     * @param amount     货币数量，必须 &gt; 0
-     * @param senderName 发件人显示名（如 "赛季结算"），null 时默认 "System"
-     * @return {@code true} 表示发送成功
-     * @since 1.4.0
+     * @param request 邮件发送请求（收件人/主题/正文/附件列表/发件人名/来源/过期时间）
+     * @return 发送结果（success/message）
      */
     @ApiStability.Stable
-    default boolean sendCurrencyMail(@NotNull UUID playerUuid,
-                                     @NotNull String subject,
-                                     @NotNull String body,
-                                     @NotNull String currencyId,
-                                     double amount,
-                                     @Nullable String senderName) {
-        return false;
-    }
+    MailSendResult sendMail(@NotNull MailSendRequest request);
+
+    /**
+     * 按预设模板发送邮件。
+     * <p>
+     * 收件人用玩家名（预设支持按名解析离线玩家）。
+     * Mail 模块未启用或预设不存在时返回 {@code failure}。
+     *
+     * @param request 预设派发请求（presetId/收件人玩家名/来源模块/来源详情）
+     * @return 发送结果
+     */
+    @ApiStability.Stable
+    MailSendResult dispatchPreset(@NotNull MailPresetRequest request);
 }

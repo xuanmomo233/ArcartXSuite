@@ -269,32 +269,25 @@ public record OnlineRewardsModuleConfiguration(
     }
 
     private static List<String> readMailPresetIds(Map<?, ?> entry) {
-        List<String> values = toStringList(entry.get("mail-presets"));
-        if (!values.isEmpty()) {
-            return values;
+        // 新格式: mail.presets（mail 子节下的 presets 列表）
+        Object mailObj = entry.get("mail");
+        if (mailObj instanceof Map<?, ?> mailMap) {
+            List<String> values = toStringList(mailMap.get("presets"));
+            if (!values.isEmpty()) {
+                return values;
+            }
         }
-
-        String singlePresetId = nullToDefault(entry.get("mail-preset"), "");
-        return singlePresetId.isBlank() ? List.of() : List.of(singlePresetId);
+        return List.of();
     }
 
     private static List<String> readMailPresetIds(FileConfiguration configuration, String pathPrefix) {
-        List<String> values = toStringList(configuration.get(pathPrefix + "-mail-presets"));
-        if (!values.isEmpty()) {
-            return values;
-        }
-
-        String singlePresetId = readString(configuration, pathPrefix + "-mail-preset", "");
-        return singlePresetId.isBlank() ? List.of() : List.of(singlePresetId);
+        List<String> values = toStringList(configuration.get(pathPrefix + ".mail.presets"));
+        return values.isEmpty() ? List.of() : values;
     }
 
     private static List<String> readMailPresetIdsFromSection(FileConfiguration section, String prefix) {
-        List<String> values = toStringList(section.get(prefix + "-mail-presets"));
-        if (!values.isEmpty()) {
-            return values;
-        }
-        String single = section.getString(prefix + "-mail-preset", "");
-        return (single == null || single.isBlank()) ? List.of() : List.of(single.trim());
+        List<String> values = toStringList(section.get(prefix + ".mail.presets"));
+        return values.isEmpty() ? List.of() : values;
     }
 
     private static OnlineRewardsMakeupConfiguration loadMakeupFromSection(FileConfiguration section) {

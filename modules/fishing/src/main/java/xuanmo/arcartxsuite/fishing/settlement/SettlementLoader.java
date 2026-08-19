@@ -68,7 +68,7 @@ public final class SettlementLoader {
         String currencyId = null;
         double currencyAmount = 0;
         List<String> commands = null;
-        String mailPresetId = null;
+        List<String> mailPresets = null;
 
         if ("item".equals(type)) {
             Object itemObj = map.get("item");
@@ -91,11 +91,19 @@ public final class SettlementLoader {
                 for (Object c : cmdList) commands.add(String.valueOf(c));
             }
         } else if ("mail".equals(type)) {
-            mailPresetId = strOr(map.get("mail-preset-id"), "");
+            Object mailObj = map.get("mail");
+            if (mailObj instanceof Map<?, ?> mailMap) {
+                Object presetsObj = mailMap.get("presets");
+                if (presetsObj instanceof List<?> presetList) {
+                    mailPresets = new ArrayList<>();
+                    for (Object p : presetList) mailPresets.add(String.valueOf(p));
+                }
+            }
+            if (mailPresets == null) mailPresets = java.util.List.of();
         }
 
         return new SeasonRewardDefinition(id, 0, type, iconMaterial, iconName, iconAmount,
-            itemSource, itemId, itemAmount, itemNbt, currencyId, currencyAmount, commands, mailPresetId);
+            itemSource, itemId, itemAmount, itemNbt, currencyId, currencyAmount, commands, mailPresets);
     }
 
     private static String strOr(Object value, String defaultValue) {

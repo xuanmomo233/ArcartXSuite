@@ -34,6 +34,8 @@ import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.capability.QQBotBroadcastable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
@@ -1124,7 +1126,11 @@ public class OnlineRewardsService implements Listener {
             if (presetId == null || presetId.isBlank()) {
                 continue;
             }
-            boolean success = mailService.dispatchPreset(presetId, player.getName(), actorName);
+            MailSendResult result = mailService.dispatchPreset(MailPresetRequest.builder(presetId, player.getName())
+                .sourceModule("onlinerewards")
+                .sourceDetail(actorName.substring("OnlineRewards:".length()))
+                .build());
+            boolean success = result.success();
             if (configuration.debug()) {
                 this.logger.info(
                     "OnlineRewards 邮件奖励 -> player="

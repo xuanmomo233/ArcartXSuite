@@ -149,7 +149,8 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             repository,
             logger,
             placeholderResolver,
-            messages()
+            messages(),
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class)
         );
 
         // 4. 初始化 OneBot WebSocket 客户端
@@ -168,8 +169,6 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
         service.setClient(oneBotClient);
         service.setEssentialsProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EssentialsQueryable.class));
-        service.setMailProvider(() -> getCapability(
-            xuanmo.arcartxsuite.api.capability.MailDispatchable.class));
 
         // 6. 签到积分服务
         signInService = new xuanmo.arcartxsuite.qqbot.service.QQBotSignInService(

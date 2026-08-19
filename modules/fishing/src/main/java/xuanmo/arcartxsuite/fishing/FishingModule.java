@@ -267,7 +267,8 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
             plugin, configuration, repo,
             packetBridge,
             itemGen,
-            logger, minigameUiId, talentEngine, rewards, rewardDispatcher, settlementEngine, taskEngine);
+            logger, minigameUiId, talentEngine, rewards, rewardDispatcher, settlementEngine, taskEngine,
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class));
         service.setMessageProvider(messages());
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
@@ -276,8 +277,6 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         service.setCurrencyProvider(() -> currencyManager);
         service.setTitleProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.TitleGrantable.class));
-        service.setMailProvider(() -> getCapability(
-            xuanmo.arcartxsuite.api.capability.MailDispatchable.class));
         service.start();
 
         // 启动任务引擎（需要 eventBusProvider 已设置）

@@ -7,12 +7,12 @@
 #       min-level: <达到该等级才发放此结算奖励>
 #       free:                # 免费档结算奖励（结构同 rewards.yml）
 #         type: item / command / currency / mail
-#         icon: ...
-#         item: ...
-#         commands: ...
-#         currency: ...
-#         amount: ...
-#         mail-preset-id: ...     # type: mail 且使用预设时
+#         icon: ...          # UI 显示图标
+#         item: ...          # type: item 时发放的物品
+#         commands: ...      # type: command 时执行的命令列表
+#         currency: ...      # type: currency 时发放的货币 ID
+#         amount: ...        # type: currency 时发放的货币数量
+#         mail.presets: ...       # type: mail 且使用预设时（预设 ID 列表）
 #         mail-subject: ...       # type: mail 且直接配置时
 #         mail-body: ...          # type: mail 且直接配置时
 #       premium:           # 高级档结算奖励（结构同 free）
@@ -22,10 +22,30 @@
 #
 # 奖励类型说明：
 #   item:     通过 ItemSourceRegistry 生成物品并直接放入玩家背包（在线时）
+#             离线玩家上线后补发；reward-delivery-mode: mail 时改为通过邮件发放
 #   command:  以控制台身份执行命令列表（commands 字段），支持 {player} 占位符
 #   currency: 向玩家发放指定货币（需 Vault/PlayerPoints 等经济插件）
 #   mail:     通过 Mail 模块发送邮件（预设 ID 或带物品附件的邮件）
 #             Mail 模块不可用时降级为直接发放物品或执行命令
+#
+# item.source 支持的物品来源：
+#   minecraft  — 原版物品（id 为材质名，如 DIAMOND）
+#   mythic     — MythicMobs 物品（id 为 MythicMobs 内部物品名）
+#   neige      — NeigeItems 物品（id 为 NeigeItems 物品 ID）
+#   overture   — Overture 物品（id 为 Overture 物品 ID）
+#   mmoitems   — MMOItems 物品（id 为 MMOItems 物品 ID）
+#
+# icon 配置（完整字段见 menu/market 模块）：
+#   material:          原版材质名（如 DIAMOND）
+#   source + id:       外部物品库图标（mythic/neige/overture/mmoitems）
+#   name:              图标悬浮名称（支持 & 颜色码）
+#   amount:            图标显示数量（默认1，大于1时图标右下角显示数字）
+#   lore:              图标描述（列表）
+#   custom-model-data: 自定义模型数据
+#   glow:              是否附魔发光
+#   texture:           ArcartX 自定义贴图（写入 icon NBT）
+#   texture-url:       贴图 URL（写入 url NBT）
+#   nbt:               自定义 NBT（键值对或 SNBT 字符串）
 #
 # 结算触发时机：
 #   1. 自动：赛季结束日期到期后，定时任务检测并自动结算
@@ -37,6 +57,7 @@
 #   - 赛季结算时还会自动发放玩家未领取的等级奖励
 
 rewards:
+  # ─── 参与奖（min-level: 1）— currency 类型，所有玩家都能拿到 ───
   "settlement-participation":
     min-level: 1
     free:
@@ -58,12 +79,14 @@ rewards:
     deluxe:
       type: currency
       icon:
-        material: GOLD_INGOT
-        name: "&e参与奖 &7- &f300 金币"
-        amount: 3
+        material: GOLD_BLOCK
+        name: "&e参与奖 &7- &f500 金币 + 50 点券"
+        amount: 1
       currency: "money"
-      amount: 300
+      amount: 500
+    # 注：deluxe 档额外发放点券的示例见 settlement-milestone-25
 
+  # ─── 里程碑 25 级 — item 类型（原版物品直接发放）+ currency（点券）───
   "settlement-milestone-25":
     min-level: 25
     free:
@@ -87,35 +110,35 @@ rewards:
         id: DIAMOND
         amount: 10
     deluxe:
-      type: item
+      # currency 类型：发放点券（PlayerPoints 经济插件）
+      type: currency
       icon:
-        material: DIAMOND
-        name: "&b里程碑奖励 &7- &f钻石 x15"
-        amount: 15
-      item:
-        source: minecraft
-        id: DIAMOND
-        amount: 15
+        material: EMERALD
+        name: "&b里程碑奖励 &7- &f50 点券"
+        amount: 50
+      currency: "points"
+      amount: 50
 
+  # ─── 半程 50 级 — mail 类型（使用 mail.presets 预设邮件）───
   "settlement-milestone-50":
     min-level: 50
     free:
+      # mail 类型：通过 Mail 模块的预设邮件 ID 发送
+      # 需要在 Mail 模块中预先配置好 preset ID "battlepass_settlement_50_free"
       type: mail
       icon:
         material: ENCHANTED_GOLDEN_APPLE
-        name: "&6半程奖励 &7- &f附金苹果 x1（邮件）"
+        name: "&6半程奖励 &7- &f附金苹果 x1（邮件预设）"
         amount: 1
-      mail-subject: "战令半程奖励"
-      mail-body: "恭喜您在赛季中达到 50 级！请查收附金苹果作为奖励。"
-      item:
-        source: minecraft
-        id: ENCHANTED_GOLDEN_APPLE
-        amount: 1
+      mail:
+        presets:
+          - "battlepass_settlement_50_free"
     premium:
+      # mail 类型：直接配置邮件主题/正文/附件（不使用预设）
       type: mail
       icon:
         material: ENCHANTED_GOLDEN_APPLE
-        name: "&6半程奖励 &7- &f附金苹果 x3（邮件）"
+        name: "&6半程奖励 &7- &f附金苹果 x3（邮件附件）"
         amount: 3
       mail-subject: "战令半程奖励（高级档）"
       mail-body: "恭喜您在赛季中达到 50 级！请查收附金苹果 x3 作为奖励。"
@@ -124,48 +147,61 @@ rewards:
         id: ENCHANTED_GOLDEN_APPLE
         amount: 3
     deluxe:
+      # mail 类型：使用外部物品库（MMOItems）作为邮件附件
       type: mail
       icon:
-        material: ENCHANTED_GOLDEN_APPLE
-        name: "&6半程奖励 &7- &f附金苹果 x5（邮件）"
-        amount: 5
+        material: NETHER_STAR
+        name: "&6半程奖励 &7- &fMMOItems 稀有道具（邮件）"
+        amount: 1
       mail-subject: "战令半程奖励（典藏档）"
-      mail-body: "恭喜您在赛季中达到 50 级！请查收附金苹果 x5 作为奖励。"
+      mail-body: "恭喜您在赛季中达到 50 级！请查收 MMOItems 稀有道具作为典藏档奖励。"
       item:
-        source: minecraft
-        id: ENCHANTED_GOLDEN_APPLE
-        amount: 5
+        source: mmoitems
+        id: "LEGENDARY_SWORD"
+        amount: 1
 
+  # ─── 高阶 75 级 — item 类型（外部物品库示例）+ command 类型 ───
   "settlement-milestone-75":
     min-level: 75
     free:
-      type: command
+      # item 类型：MythicMobs 物品直接发放
+      type: item
       icon:
         material: NETHERITE_INGOT
         name: "&5高阶奖励 &7- &f下界合金锭 x1"
         amount: 1
-      commands:
-        - "give {player} netherite_ingot 1"
+      item:
+        source: minecraft
+        id: NETHERITE_INGOT
+        amount: 1
     premium:
+      # item 类型：MythicMobs 物品
+      type: item
+      icon:
+        source: mythic
+        id: "MythicLegendSword"
+        name: "&5高阶奖励 &7- &fMythicMobs 传说之剑 x1"
+        amount: 1
+      item:
+        source: mythic
+        id: "MythicLegendSword"
+        amount: 1
+    deluxe:
+      # command 类型：执行多条命令（支持 {player} 占位符）
       type: command
       icon:
-        material: NETHERITE_INGOT
-        name: "&5高阶奖励 &7- &f下界合金锭 x2"
+        material: NETHERITE_BLOCK
+        name: "&5高阶奖励 &7- &f下界合金块 x2 + 经验 x1000"
         amount: 2
       commands:
-        - "give {player} netherite_ingot 2"
-    deluxe:
-      type: command
-      icon:
-        material: NETHERITE_INGOT
-        name: "&5高阶奖励 &7- &f下界合金锭 x3"
-        amount: 3
-      commands:
-        - "give {player} netherite_ingot 3"
+        - "give {player} netherite_block 2"
+        - "xp give {player} 1000"
 
+  # ─── 满级 100 级 — 混合类型，各档位不同发放方式 ───
   "settlement-max":
     min-level: 100
     free:
+      # mail 类型：直接配置邮件 + 原版物品附件
       type: mail
       icon:
         material: DRAGON_EGG
@@ -178,26 +214,73 @@ rewards:
         id: DRAGON_EGG
         amount: 1
     premium:
-      type: mail
+      # item 类型：NeigeItems 物品直接发放（不走邮件）
+      type: item
       icon:
-        material: DRAGON_EGG
-        name: "&c满级奖励 &7- &f龙蛋 x1 + 钻石 x32（邮件）"
+        source: neige
+        id: "NeigeLegendArmor"
+        name: "&c满级奖励 &7- &fNeigeItems 传说护甲 x1"
         amount: 1
-      mail-subject: "战令满级奖励（高级档）"
-      mail-body: "恭喜您在赛季中达到满级！请查收龙蛋 x1 + 钻石 x32 作为终极奖励。"
+        glow: true
+        lore:
+          - "&7赛季满级专属奖励"
+          - "&7高级档典藏装备"
       item:
-        source: minecraft
-        id: DRAGON_EGG
+        source: neige
+        id: "NeigeLegendArmor"
         amount: 1
     deluxe:
-      type: mail
+      # command 类型：多条命令组合发放（原版物品 + 货币 + 权限）
+      type: command
       icon:
-        material: DRAGON_EGG
-        name: "&c满级奖励 &7- &f龙蛋 x1 + 钻石 x64（邮件）"
+        material: DRAGON_HEAD
+        name: "&c满级奖励 &7- &f龙首 + 钻石 x64 + 专属称号"
         amount: 1
-      mail-subject: "战令满级奖励（典藏档）"
-      mail-body: "恭喜您在赛季中达到满级！请查收龙蛋 x1 + 钻石 x64 作为终极奖励。"
-      item:
-        source: minecraft
-        id: DRAGON_EGG
-        amount: 1
+        glow: true
+        lore:
+          - "&7典藏档满级终极奖励"
+          - "&7包含稀有物品 + 专属称号"
+      commands:
+        - "give {player} dragon_head 1"
+        - "give {player} diamond 64"
+        - "lp user {player} permission set axs.title.legendary"
+
+  # ─── 额外示例：Overture 物品库 + 自定义 NBT ───
+  # 取消注释以启用
+  # "settlement-bonus-60":
+  #   min-level: 60
+  #   free:
+  #     type: item
+  #     icon:
+  #       material: GOLDEN_APPLE
+  #       name: "&e额外奖励 &7- &f金苹果 x8"
+  #       amount: 8
+  #     item:
+  #       source: minecraft
+  #       id: GOLDEN_APPLE
+  #       amount: 8
+  #   premium:
+  #     # Overture 物品库
+  #     type: item
+  #     icon:
+  #       source: overture
+  #       id: "OvertureRareGem"
+  #       name: "&e额外奖励 &7- &fOverture 稀有宝石 x1"
+  #       amount: 1
+  #     item:
+  #       source: overture
+  #       id: "OvertureRareGem"
+  #       amount: 1
+  #   deluxe:
+  #     # 带自定义 NBT 的原版物品
+  #     type: item
+  #     icon:
+  #       material: ENCHANTED_BOOK
+  #       name: "&e额外奖励 &7- &f自定义附魔书"
+  #       amount: 1
+  #       glow: true
+  #     item:
+  #       source: minecraft
+  #       id: ENCHANTED_BOOK
+  #       amount: 1
+  #       nbt: "{StoredEnchantments:[{id:'minecraft:sharpness',lvl:5s},{id:'minecraft:unbreaking',lvl:3s}]}"

@@ -307,7 +307,7 @@ public record AfkRewardConfiguration(
             manualSec != null ? manualSec.getString("signal-on-end", "") : "",
             manualSec != null ? manualSec.getString("subtitle-on-reward", "") : "",
             manualSec != null ? manualSec.getString("subtitle-on-end", "") : "",
-            manualSec != null ? manualSec.getStringList("end-mail-presets") : List.of(),
+            manualSec != null ? readMailPresets(manualSec, "end-mail") : List.of(),
             protections,
             manualSec != null ? Math.max(1, manualSec.getInt("permission-recheck-seconds", 5)) : 5
         );
@@ -365,5 +365,13 @@ public record AfkRewardConfiguration(
 
         return new AfkRewardConfiguration(debug, areasDirectory,
             Collections.unmodifiableMap(areas), storage, ui, manual, antiAbuse, audit, performance);
+    }
+
+    private static java.util.List<String> readMailPresets(org.bukkit.configuration.ConfigurationSection section, String prefix) {
+        org.bukkit.configuration.ConfigurationSection mailSec = section.getConfigurationSection(prefix + ".mail");
+        if (mailSec != null) {
+            return mailSec.getStringList("presets");
+        }
+        return java.util.List.of();
     }
 }

@@ -14,6 +14,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.capability.EssentialsQueryable;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.qqbot.config.QQBotConfiguration;
 import xuanmo.arcartxsuite.qqbot.config.QQBotCustomCommand;
@@ -42,7 +44,8 @@ public final class QQBotCommandRouter {
         QQBotBindService bindService,
         QQBotRepository repository,
         Logger logger,
-        PlaceholderResolverAPI placeholderResolver
+        PlaceholderResolverAPI placeholderResolver,
+        @Nullable Supplier<MailDispatchable> mailProvider
     ) {
         this.plugin = plugin;
         this.config = config;
@@ -51,14 +54,11 @@ public final class QQBotCommandRouter {
         this.repository = repository;
         this.logger = logger;
         this.placeholderResolver = placeholderResolver;
+        this.mailProvider = mailProvider;
     }
 
     public void setEssentialsProvider(Supplier<EssentialsQueryable> provider) {
         this.essentialsProvider = provider;
-    }
-
-    public void setMailProvider(Supplier<MailDispatchable> provider) {
-        this.mailProvider = provider;
     }
 
     public void setSignInService(QQBotSignInService signInService) {
@@ -813,8 +813,10 @@ public final class QQBotCommandRouter {
             reply(event, "邮件模块不可用");
             return;
         }
-        boolean success = mail.dispatchPreset(presetId, playerName, "QQBot");
-        if (success) {
+        MailSendResult result = mail.dispatchPreset(MailPresetRequest.builder(presetId, playerName)
+            .sourceModule("qqbot")
+            .build());
+        if (result.success()) {
             reply(event, "已向 " + playerName + " 发送邮件预设: " + presetId);
         } else {
             reply(event, "邮件发送失败，请检查预设ID或玩家名是否正确");

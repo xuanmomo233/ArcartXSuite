@@ -47,6 +47,8 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
     private static final String TASKS_UI_FILE_PATH = "ui/battlepass_tasks.yml";
     private static final String REWARDS_UI_RESOURCE_PATH = "arcartx/ui/battlepass_rewards.yml";
     private static final String REWARDS_UI_FILE_PATH = "ui/battlepass_rewards.yml";
+    private static final String SETTLEMENT_UI_RESOURCE_PATH = "arcartx/ui/battlepass_settlement.yml";
+    private static final String SETTLEMENT_UI_FILE_PATH = "ui/battlepass_settlement.yml";
 
     private BattlePassModuleConfiguration configuration;
     private BattlePassService service;
@@ -110,6 +112,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         mappings.put(MAIN_UI_RESOURCE_PATH, MAIN_UI_FILE_PATH);
         mappings.put(TASKS_UI_RESOURCE_PATH, TASKS_UI_FILE_PATH);
         mappings.put(REWARDS_UI_RESOURCE_PATH, REWARDS_UI_FILE_PATH);
+        mappings.put(SETTLEMENT_UI_RESOURCE_PATH, SETTLEMENT_UI_FILE_PATH);
         return mappings;
     }
 
@@ -175,17 +178,17 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         UiBinding mainBinding = registerModuleUi(MAIN_UI_FILE_PATH, configuration.ui().mainId(), true);
         UiBinding tasksBinding = registerModuleUi(TASKS_UI_FILE_PATH, configuration.ui().tasksId(), true);
         UiBinding rewardsBinding = registerModuleUi(REWARDS_UI_FILE_PATH, configuration.ui().rewardsId(), true);
+        UiBinding settlementBinding = registerModuleUi(SETTLEMENT_UI_FILE_PATH, configuration.ui().settlementId(), true);
         if (mainBinding.registeredUiId() == null || tasksBinding.registeredUiId() == null
-            || rewardsBinding.registeredUiId() == null) {
+            || rewardsBinding.registeredUiId() == null || settlementBinding.registeredUiId() == null) {
             throw new IllegalStateException("BattlePass UI 注册失败");
         }
 
         service = new BattlePassService(plugin, configuration, repo, logger,
-            itemSourceRegistry, currencyManager);
+            itemSourceRegistry, currencyManager,
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class));
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
-        service.setMailProvider(() -> getCapability(
-            xuanmo.arcartxsuite.api.capability.MailDispatchable.class));
         service.start();
 
         registerCapability(DatabaseMigratable.class, new DatabaseMigratable() {
@@ -262,6 +265,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
         String mainUiId = getModuleUiId(MAIN_UI_FILE_PATH);
         String tasksUiId = getModuleUiId(TASKS_UI_FILE_PATH);
         String rewardsUiId = getModuleUiId(REWARDS_UI_FILE_PATH);
+        String settlementUiId = getModuleUiId(SETTLEMENT_UI_FILE_PATH);
         packetHandler = new BattlePassPacketHandler(
             plugin,
             packetBridge,
@@ -270,6 +274,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
             mainUiId != null ? mainUiId : configuration.ui().mainId(),
             tasksUiId != null ? tasksUiId : configuration.ui().tasksId(),
             rewardsUiId != null ? rewardsUiId : configuration.ui().rewardsId(),
+            settlementUiId != null ? settlementUiId : configuration.ui().settlementId(),
             itemSourceRegistry,
             itemStackBridge,
             this::msg

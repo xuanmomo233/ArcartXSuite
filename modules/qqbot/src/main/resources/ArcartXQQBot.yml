@@ -190,12 +190,14 @@ signin:
 
 # ─── 积分兑换奖品 ──────────────────────────────────────
 # 兑换后通过邮件系统（Mail 模块）将奖品发放给绑定玩家。
-# mail-preset-id 须对应 Mail 模块中配置的邮件预设。
+# mail.presets 须对应 Mail 模块中配置的邮件预设。
 prizes:
   - id: "diamond"
     name: "钻石礼包"
     cost: 100
-    mail-preset-id: "qqbot_diamond"
+    mail:
+      presets:
+        - "qqbot_diamond"
     description: "10 颗钻石"
     # 每日兑换上限（0=不限）
     limit-per-day: 1
@@ -208,7 +210,9 @@ prizes:
   - id: "vip1"
     name: "VIP体验卡"
     cost: 500
-    mail-preset-id: "qqbot_vip"
+    mail:
+      presets:
+        - "qqbot_vip"
     description: "3 天 VIP 体验"
     limit-per-day: 0
     require-bind: true

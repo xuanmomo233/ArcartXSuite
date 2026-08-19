@@ -5,12 +5,12 @@
 #   "<奖励唯一标识>":
 #     level: <达到该等级可领取>
 #     free:           # 免费档奖励
-#       type: item    # 奖励类型：item / command / currency
+#       type: item    # 奖励类型：item / command / currency / mail
 #       icon:         # UI 显示图标（与 menu/market 的 icon 用法一致）
 #         material: DIAMOND
 #         name: "&b钻石 x1"
 #         amount: 1   # 图标显示数量（与 item.amount 一致）
-#       item:         # type: item 时的物品定义
+#       item:         # 发放物品奖励
 #         source: minecraft      # 物品来源：minecraft / mythic / neige / overture / mmoitems
 #         id: DIAMOND             # 物品 ID（原版材质名或外部物品库 ID）
 #         amount: 1               # 物品数量
@@ -38,15 +38,23 @@
 #
 # 奖励类型说明：
 #   item:     通过 ItemSourceRegistry 生成物品并直接放入玩家背包
+#             离线玩家上线后补发；reward-delivery-mode: mail 时改为通过邮件发放
 #   command:  以控制台身份执行命令列表（commands 字段），支持 {player} 占位符
 #   currency: 向玩家发放指定货币（需 Vault/PlayerPoints 等经济插件）
 #   mail:     通过 Mail 模块发送邮件（预设 ID 或带物品附件的邮件）
 #             Mail 模块不可用时降级为直接发放物品或执行命令
 #             配置字段：
-#               mail-preset-id:  邮件预设 ID（使用 Mail 模块预设时配置）
+#               mail.presets:     邮件预设 ID 列表（使用 Mail 模块预设时配置）
 #               mail-subject:    邮件主题（直接配置带附件邮件时使用）
 #               mail-body:       邮件正文（直接配置带附件邮件时使用）
 #               item:            邮件附件物品（直接配置带附件邮件时使用）
+#
+# item.source 支持的物品来源：
+#   minecraft  — 原版物品（id 为材质名，如 DIAMOND）
+#   mythic     — MythicMobs 物品（id 为 MythicMobs 内部物品名）
+#   neige      — NeigeItems 物品（id 为 NeigeItems 物品 ID）
+#   overture   — Overture 物品（id 为 Overture 物品 ID）
+#   mmoitems   — MMOItems 物品（id 为 MMOItems 物品 ID）
 #
 # icon 配置（完整字段见 menu/market 模块）：
 #   material:          原版材质名（如 DIAMOND）
@@ -60,6 +68,7 @@
 #   texture-url:       贴图 URL（写入 url NBT）
 #   nbt:               自定义 NBT（键值对或 SNBT 字符串）
 
+# ─── 1~5 级：原版物品（item 类型，minecraft 来源）───
 "1":
   level: 1
   free:
@@ -192,8 +201,39 @@
       id: COAL_BLOCK
       amount: 16
 
+# ─── 5 级：currency 类型（货币发放）───
 "5":
   level: 5
+  free:
+    # currency 类型：发放金币（Vault 经济插件）
+    type: currency
+    icon:
+      material: GOLD_INGOT
+      name: "&e金币 x100"
+      amount: 1
+    currency: "money"
+    amount: 100
+  premium:
+    type: currency
+    icon:
+      material: GOLD_BLOCK
+      name: "&6金币 x500"
+      amount: 1
+    currency: "money"
+    amount: 500
+  deluxe:
+    # currency 类型：发放点券（PlayerPoints 经济插件）
+    type: currency
+    icon:
+      material: EMERALD
+      name: "&5点券 x20"
+      amount: 20
+    currency: "points"
+    amount: 20
+
+# ─── 6 级：item 类型（外部物品库 MythicMobs）───
+"6":
+  level: 6
   free:
     type: item
     icon:
@@ -205,59 +245,31 @@
       id: EXPERIENCE_BOTTLE
       amount: 4
   premium:
+    # MythicMobs 物品
     type: item
     icon:
-      material: EXPERIENCE_BOTTLE
-      name: "&6经验瓶 x16"
-      amount: 16
+      source: mythic
+      id: "MythicRareGem"
+      name: "&6MythicMobs 稀有宝石 x1"
+      amount: 1
     item:
-      source: minecraft
-      id: EXPERIENCE_BOTTLE
-      amount: 16
+      source: mythic
+      id: "MythicRareGem"
+      amount: 1
   deluxe:
     type: item
     icon:
-      material: EXPERIENCE_BOTTLE
-      name: "&5经验瓶 x24"
-      amount: 24
+      source: mythic
+      id: "MythicEpicSword"
+      name: "&5MythicMobs 史诗之剑 x1"
+      amount: 1
+      glow: true
     item:
-      source: minecraft
-      id: EXPERIENCE_BOTTLE
-      amount: 24
+      source: mythic
+      id: "MythicEpicSword"
+      amount: 1
 
-"6":
-  level: 6
-  free:
-    type: item
-    icon:
-      material: REDSTONE
-      name: "&c红石 x16"
-      amount: 16
-    item:
-      source: minecraft
-      id: REDSTONE
-      amount: 16
-  premium:
-    type: item
-    icon:
-      material: REDSTONE_BLOCK
-      name: "&6红石块 x4"
-      amount: 4
-    item:
-      source: minecraft
-      id: REDSTONE_BLOCK
-      amount: 4
-  deluxe:
-    type: item
-    icon:
-      material: REDSTONE_BLOCK
-      name: "&5红石块 x8"
-      amount: 8
-    item:
-      source: minecraft
-      id: REDSTONE_BLOCK
-      amount: 8
-
+# ─── 7 级：item 类型（NeigeItems + 自定义图标属性）───
 "7":
   level: 7
   free:
@@ -271,28 +283,71 @@
       id: LAPIS_LAZULI
       amount: 16
   premium:
+    # NeigeItems 物品，带 lore 和 glow
     type: item
     icon:
-      material: LAPIS_BLOCK
-      name: "&6青金块 x4"
-      amount: 4
+      source: neige
+      id: "NeigeEnchantedBook"
+      name: "&6NeigeItems 附魔书 x1"
+      amount: 1
+      glow: true
+      lore:
+        - "&7高级档等级奖励"
+        - "&7蕴含强大魔力的附魔书"
     item:
-      source: minecraft
-      id: LAPIS_BLOCK
-      amount: 4
+      source: neige
+      id: "NeigeEnchantedBook"
+      amount: 1
   deluxe:
     type: item
     icon:
-      material: LAPIS_BLOCK
-      name: "&5青金块 x8"
-      amount: 8
+      source: neige
+      id: "NeigeLegendArmor"
+      name: "&5NeigeItems 传说护甲 x1"
+      amount: 1
+      glow: true
+      lore:
+        - "&7典藏档等级奖励"
+        - "&7NeigeItems 传说级装备"
     item:
-      source: minecraft
-      id: LAPIS_BLOCK
-      amount: 8
+      source: neige
+      id: "NeigeLegendArmor"
+      amount: 1
 
+# ─── 8 级：command 类型（多条命令 + {player} 占位符）───
 "8":
   level: 8
+  free:
+    type: command
+    icon:
+      material: REDSTONE
+      name: "&c红石 x16"
+      amount: 16
+    commands:
+      - "give {player} redstone 16"
+  premium:
+    # command 类型：多条命令组合发放
+    type: command
+    icon:
+      material: REDSTONE_BLOCK
+      name: "&6红石块 x4 + 经验 x500"
+      amount: 4
+    commands:
+      - "give {player} redstone_block 4"
+      - "xp give {player} 500"
+  deluxe:
+    type: command
+    icon:
+      material: REDSTONE_BLOCK
+      name: "&5红石块 x8 + 经验 x1000"
+      amount: 8
+    commands:
+      - "give {player} redstone_block 8"
+      - "xp give {player} 1000"
+
+# ─── 9 级：item 类型（MMOItems + Overture 物品库）───
+"9":
+  level: 9
   free:
     type: item
     icon:
@@ -304,82 +359,150 @@
       id: QUARTZ
       amount: 16
   premium:
+    # MMOItems 物品
     type: item
     icon:
-      material: QUARTZ_BLOCK
-      name: "&6石英块 x8"
-      amount: 8
+      source: mmoitems
+      id: "RARE_GEMSTONE"
+      name: "&6MMOItems 稀有宝石 x1"
+      amount: 1
     item:
-      source: minecraft
-      id: QUARTZ_BLOCK
-      amount: 8
+      source: mmoitems
+      id: "RARE_GEMSTONE"
+      amount: 1
   deluxe:
+    # Overture 物品
     type: item
     icon:
-      material: QUARTZ_BLOCK
-      name: "&5石英块 x16"
-      amount: 16
+      source: overture
+      id: "OvertureEpicWeapon"
+      name: "&5Overture 史诗武器 x1"
+      amount: 1
+      glow: true
     item:
-      source: minecraft
-      id: QUARTZ_BLOCK
-      amount: 16
+      source: overture
+      id: "OvertureEpicWeapon"
+      amount: 1
 
-"9":
-  level: 9
-  free:
-    type: item
-    icon:
-      material: NETHER_BRICK
-      name: "&c下界砖 x16"
-      amount: 16
-    item:
-      source: minecraft
-      id: NETHER_BRICK
-      amount: 16
-  premium:
-    type: item
-    icon:
-      material: NETHER_BRICK
-      name: "&6下界砖 x48"
-      amount: 48
-    item:
-      source: minecraft
-      id: NETHER_BRICK
-      amount: 48
-  deluxe:
-    type: item
-    icon:
-      material: NETHER_BRICK
-      name: "&5下界砖 x64"
-      amount: 64
-    item:
-      source: minecraft
-      id: NETHER_BRICK
-      amount: 64
-
+# ─── 10 级：mail 类型（邮件发放）+ command 类型 ───
 "10":
   level: 10
   free:
-    type: command
+    # mail 类型：使用 Mail 模块预设邮件 ID
+    # 需要在 Mail 模块中预先配置好 preset ID "battlepass_level_10_free"
+    type: mail
     icon:
       material: EMERALD
-      name: "&a绿宝石 x2"
+      name: "&a绿宝石 x2（邮件预设）"
       amount: 2
-    commands:
-      - "give {player} emerald 2"
+    mail:
+      presets:
+        - "battlepass_level_10_free"
   premium:
-    type: command
+    # mail 类型：直接配置邮件主题/正文/附件
+    type: mail
     icon:
-      material: EMERALD
-      name: "&6绿宝石 x8"
-      amount: 8
-    commands:
-      - "give {player} emerald 8"
+      material: ENCHANTED_GOLDEN_APPLE
+      name: "&6附金苹果 x1（邮件附件）"
+      amount: 1
+    mail-subject: "战令 10 级奖励（高级档）"
+    mail-body: "恭喜达到战令 10 级！请查收附金苹果作为高级档奖励。"
+    item:
+      source: minecraft
+      id: ENCHANTED_GOLDEN_APPLE
+      amount: 1
   deluxe:
+    # command 类型：发放物品 + 设置权限
     type: command
     icon:
-      material: EMERALD
-      name: "&5绿宝石 x12"
-      amount: 12
+      material: NETHERITE_INGOT
+      name: "&5下界合金锭 x2 + 专属称号"
+      amount: 2
+      glow: true
+      lore:
+        - "&7典藏档 10 级奖励"
+        - "&7含稀有物品 + 专属称号权限"
     commands:
-      - "give {player} emerald 12"
+      - "give {player} netherite_ingot 2"
+      - "lp user {player} permission set axs.title.battlepass10"
+
+# ─── 额外示例（取消注释以启用）───
+
+# ─── 自定义 NBT 物品示例 ───
+# "11":
+#   level: 11
+#   free:
+#     type: item
+#     icon:
+#       material: GOLDEN_APPLE
+#       name: "&e金苹果 x4"
+#       amount: 4
+#     item:
+#       source: minecraft
+#       id: GOLDEN_APPLE
+#       amount: 4
+#   premium:
+#     # 带自定义 NBT 的原版物品（附魔书）
+#     type: item
+#     icon:
+#       material: ENCHANTED_BOOK
+#       name: "&6自定义附魔书（锋利V + 耐久III）"
+#       amount: 1
+#       glow: true
+#     item:
+#       source: minecraft
+#       id: ENCHANTED_BOOK
+#       amount: 1
+#       nbt: "{StoredEnchantments:[{id:'minecraft:sharpness',lvl:5s},{id:'minecraft:unbreaking',lvl:3s}]}"
+#   deluxe:
+#     # 带自定义模型数据的物品
+#     type: item
+#     icon:
+#       material: DIAMOND_SWORD
+#       name: "&5自定义模型钻石剑"
+#       amount: 1
+#       custom-model-data: 10001
+#       glow: true
+#       lore:
+#         - "&7典藏档专属武器皮肤"
+#     item:
+#       source: minecraft
+#       id: DIAMOND_SWORD
+#       amount: 1
+#       nbt: "{CustomModelData:10001,Enchantments:[{id:'minecraft:sharpness',lvl:5s}]}"
+
+# ─── ArcartX 自定义贴图图标示例 ───
+# "12":
+#   level: 12
+#   free:
+#     type: currency
+#     icon:
+#       material: PAPER
+#       name: "&e金币 x200"
+#       texture-url: "https://example.com/textures/coin.png"
+#       amount: 1
+#     currency: "money"
+#     amount: 200
+#   premium:
+#     type: item
+#     icon:
+#       material: PAPER
+#       name: "&6自定义贴图道具"
+#       texture: "arcartx:items/custom_reward"
+#       amount: 1
+#     item:
+#       source: minecraft
+#       id: PAPER
+#       amount: 1
+#       nbt: "{arcartx_texture:'arcartx:items/custom_reward'}"
+#   deluxe:
+#     type: command
+#     icon:
+#       material: PAPER
+#       name: "&5自定义贴图 + 多命令"
+#       texture-url: "https://example.com/textures/legendary.png"
+#       amount: 1
+#       glow: true
+#     commands:
+#       - "give {player} diamond 32"
+#       - "lp user {player} permission set axs.title.legendary"

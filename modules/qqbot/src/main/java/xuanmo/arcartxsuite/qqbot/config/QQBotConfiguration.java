@@ -274,7 +274,7 @@ public record QQBotConfiguration(
                     id,
                     toStr(map.get("name"), id),
                     (int) toLong(map.get("cost")),
-                    toStr(map.get("mail-preset-id"), ""),
+                    parseMailPresets(map.get("mail")),
                     toStr(map.get("description"), ""),
                     (int) toLong(map.get("limit-per-day")),
                     toBoolean(map.get("require-bind")),
@@ -443,5 +443,20 @@ public record QQBotConfiguration(
     private static String toStr(Object obj, String defaultValue) {
         if (obj == null) return defaultValue;
         return String.valueOf(obj);
+    }
+
+    private static java.util.List<String> parseMailPresets(Object mailObj) {
+        if (mailObj instanceof Map<?, ?> mailMap) {
+            Object presetsObj = mailMap.get("presets");
+            if (presetsObj instanceof List<?> presetList) {
+                java.util.List<String> result = new java.util.ArrayList<>();
+                for (Object p : presetList) {
+                    String s = String.valueOf(p);
+                    if (!s.isBlank()) result.add(s);
+                }
+                return result;
+            }
+        }
+        return java.util.List.of();
     }
 }

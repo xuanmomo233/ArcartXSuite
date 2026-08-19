@@ -6,7 +6,7 @@
 #   messages           - 各场景消息模板（支持 {streak} {total} {date} {day} 等变量）
 #   base-commands      - 每次签到执行的命令
 #   base-rewardText    - 基础签到奖励描述
-#   base-mail-presets  - 基础签到邮件预设列表
+#   base.mail.presets  - 基础签到邮件预设列表
 #   makeup             - 补签卡配置
 #   streak-rewards     - 连续签到奖励（恰好等于 days 时触发）
 #   total-rewards      - 累计签到奖励（恰好等于 days 时触发）
@@ -34,7 +34,9 @@ base-commands:
 # 基础签到奖励描述文本
 base-rewardText: "命令 1"
 # 基础签到邮件预设列表
-base-mail-presets: []
+base:
+  mail:
+    presets: []
 
 # 补签卡配置
 makeup:
@@ -52,16 +54,18 @@ makeup:
   already-signed: "§e该日期已经签到过了。"
 
 # 连续签到奖励，仅在连续天数"恰好等于" days 时触发
-# 字段: days=连续天数, rewardText=描述, mail-presets=邮件预设, commands=执行的命令
+# 字段: days=连续天数, rewardText=描述, mail.presets=邮件预设, commands=执行的命令
 streak-rewards:
   - days: 3
     rewardText: "这里是连续签到 3 天的奖励描述"
-    mail-presets: []
+    mail:
+      presets: []
     commands:
       - "say [签到] {player} 达成连续签到 {streak} 天"
   - days: 7
     rewardText: "这里是连续签到 7 天的奖励描述"
-    mail-presets: []
+    mail:
+      presets: []
     commands:
       - "say [签到] {player} 达成连续签到 {streak} 天"
 
@@ -70,46 +74,52 @@ streak-rewards:
 total-rewards:
   - days: 10
     rewardText: "这里是累计签到 10 天的奖励描述"
-    mail-presets: []
+    mail:
+      presets: []
     commands:
       - "say [签到] {player} 达成累计签到 {total} 天"
   - days: 30
     rewardText: "这里是累计签到 30 天的奖励描述"
-    mail-presets: []
+    mail:
+      presets: []
     commands:
       - "say [签到] {player} 达成累计签到 {total} 天"
 
 # 每月指定日期签到奖励，仅在当月的指定 day 当天签到时触发
-# 字段: day=每月几号, rewardText=描述, mail-presets=邮件预设, commands=执行的命令
+# 字段: day=每月几号, rewardText=描述, mail.presets=邮件预设, commands=执行的命令
 day-of-month-rewards:
   - day: 1
     rewardText: "这里是每月 1 号的奖励描述"
-    mail-presets: []
+    mail:
+      presets: []
     commands:
       - "say [签到] {player} 完成每月 1 号签到"
   - day: 15
     rewardText: "这里是每月 15 号的奖励描述"
-    mail-presets: []
+    mail:
+      presets: []
     commands:
       - "say [签到] {player} 完成每月 15 号签到"
 
 # 节日签到奖励，在指定月日签到或补签该日期时触发
-# 字段: month=月份, day=日期, name=节日名称, rewardText=描述, mail-presets=邮件预设, commands=执行的命令
+# 字段: month=月份, day=日期, name=节日名称, rewardText=描述, mail.presets=邮件预设, commands=执行的命令
 holiday-rewards:
   - month: 1
     day: 1
     name: "元旦签到"
     rewardText: "这里是元旦签到的奖励描述"
-    mail-presets: []
+    mail:
+      presets: []
     commands:
       - "say [签到] {player} 完成元旦签到"
 
 # 拥有对应权限时，成功签到或补签会额外发放一组奖励；匹配多个权限时取 priority 最高的一组。
-# 字段: permission=权限节点, priority=优先级, rewardText=描述, mail-presets=邮件预设, commands=执行的命令
+# 字段: permission=权限节点, priority=优先级, rewardText=描述, mail.presets=邮件预设, commands=执行的命令
 permission-bonus-groups:
   - permission: "ArcartXSuite.onlinerewards.signin.bonus"
     priority: 10
     rewardText: "权限额外奖励"
-    mail-presets: []
+    mail:
+      presets: []
     commands:
       - "say [签到] {player} 领取了权限额外签到奖励"

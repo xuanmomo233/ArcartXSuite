@@ -210,7 +210,12 @@ public final class RewardActionExecutor {
             return RewardActionResult.fail("mail", "Mail 模块未启用");
         }
         String source = "RankingReward:" + variables.getOrDefault("boss_id", "unknown");
-        boolean ok = mailService.dispatchPreset(action.presetId(), targetName, source);
+        xuanmo.arcartxsuite.api.capability.mail.MailSendResult mailResult = mailService.dispatchPreset(
+            xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest.builder(action.presetId(), targetName)
+                .sourceModule("entitytracker")
+                .sourceDetail(source)
+                .build());
+        boolean ok = mailResult.success();
         return new RewardActionResult("mail", ok, ok ? "邮件已派发" : "邮件派发失败");
     }
 

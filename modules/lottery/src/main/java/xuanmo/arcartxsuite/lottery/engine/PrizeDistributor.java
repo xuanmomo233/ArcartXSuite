@@ -11,6 +11,8 @@ import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.util.ItemSerializer;
 import xuanmo.arcartxsuite.lottery.model.PoolItem;
@@ -73,9 +75,18 @@ public class PrizeDistributor {
         java.util.Map<Integer, ItemStack> leftover = player.getInventory().addItem(stack);
         if (!leftover.isEmpty()) {
             MailDispatchable mail = mailSupplier != null ? mailSupplier.get() : null;
-            if (mail != null && item.mailPreset() != null && !item.mailPreset().isBlank()
-                    && mail.dispatchPreset(item.mailPreset(), player.getName(), "Lottery")) {
-                return DistributionResult.mailSent(stack);
+            if (mail != null && item.mailPresets() != null && !item.mailPresets().isEmpty()) {
+                boolean anySuccess = false;
+                for (String presetId : item.mailPresets()) {
+                    if (presetId == null || presetId.isBlank()) continue;
+                    MailSendResult result = mail.dispatchPreset(MailPresetRequest.builder(presetId, player.getName())
+                        .sourceModule("lottery")
+                        .build());
+                    if (result.success()) anySuccess = true;
+                }
+                if (anySuccess) {
+                    return DistributionResult.mailSent(stack);
+                }
             }
             return DistributionResult.failure(stack, "背包空间不足且邮件发送失败");
         }
@@ -109,15 +120,23 @@ public class PrizeDistributor {
             logger.warning("[Lottery] MailDispatchable 不可用，无法发送邮件奖励");
             return DistributionResult.failure(generateItem(item), "邮件能力不可用");
         }
-        if (item.mailPreset() != null && !item.mailPreset().isBlank()) {
+        if (item.mailPresets() != null && !item.mailPresets().isEmpty()) {
             ItemStack stack = generateItem(item);
-            if (mail.dispatchPreset(item.mailPreset(), player.getName(), "Lottery")) {
+            boolean anySuccess = false;
+            for (String presetId : item.mailPresets()) {
+                if (presetId == null || presetId.isBlank()) continue;
+                MailSendResult result = mail.dispatchPreset(MailPresetRequest.builder(presetId, player.getName())
+                    .sourceModule("lottery")
+                    .build());
+                if (result.success()) anySuccess = true;
+            }
+            if (anySuccess) {
                 return DistributionResult.mailSent(stack);
             }
             return DistributionResult.failure(stack, "邮件发送失败");
         }
-        logger.warning("[Lottery] 奖品 " + item.id() + " 配置了 MAIL 但未设置 mail-preset");
-        return DistributionResult.failure(generateItem(item), "缺少 mail-preset");
+        logger.warning("[Lottery] 奖品 " + item.id() + " 配置了 MAIL 但未设置 mail.presets");
+        return DistributionResult.failure(generateItem(item), "缺少 mail.presets");
     }
 
     /**

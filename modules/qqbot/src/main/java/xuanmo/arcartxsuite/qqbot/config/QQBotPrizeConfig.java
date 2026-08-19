@@ -1,5 +1,7 @@
 package xuanmo.arcartxsuite.qqbot.config;
 
+import java.util.List;
+
 /**
  * 积分兑换商店中的单个奖品配置。
  * 兑换后通过邮件系统将奖品发放给绑定玩家。
@@ -8,7 +10,7 @@ public record QQBotPrizeConfig(
     String id,
     String name,
     int cost,
-    String mailPresetId,
+    List<String> mailPresets,
     String description,
     int limitPerDay,
     boolean requireBind,

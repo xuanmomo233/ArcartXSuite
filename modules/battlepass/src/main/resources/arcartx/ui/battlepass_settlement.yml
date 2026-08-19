@@ -1,0 +1,756 @@
+# AXS BattlePass 赛季结算奖励界面
+# 打开方式: Packet.send(packetId, 'open_settlement')
+# 数据交互: packetHandler init
+# 布局: 全屏毛玻璃工作台 = 顶栏 + 左侧导航（总览/奖励/任务/结算）+ 内容区
+#       内容区展示各等级阈值的结算奖励卡片（免费/高级/典藏三档图标）
+# 视觉规范:
+#   全屏玻璃 Frosted:24;30,32,38,110  面板玻璃 Frosted:30;255,255,255,100
+#   卡片 255,255,255,125  卡片浮起 255,255,255,90  描边 255,255,255,165
+#   主色（琥珀金）232,180,90   已达到 124,196,142
+#   档位色: 免费 196,200,208 / 高级 232,180,90 / 典藏 186,140,232
+
+ui:
+  isHud: false
+  background: false
+  escClose: true
+  closeDied: true
+  through: false
+  screenScale: true
+  show: true
+  level: 8
+  itemSize: 16
+  packetHandler:
+    # packetHandler: init
+    # 接收赛季结算奖励数据包
+    # 包字段:
+    #   - packetId: 包标识符
+    #   - seasonName: 当前赛季名称
+    #   - currentLevel: 玩家当前战令等级
+    #   - settlementCount: 结算奖励条目数
+    #   - settlements: 结算奖励映射（key 为序号，含 id/minLevel/reached/free/premium/deluxe）
+    #   - iconJsonX_Y: 各档位奖励的图标 itemJson（X=结算序号, Y=0免费/1高级/2典藏）
+    init: |-
+      var.packetId = packet['packetId']
+      var.seasonName = packet['seasonName']
+      var.currentLevel = packet['currentLevel']
+      var.settlements = packet['settlements']
+      var.settlementCount = packet['settlementCount']
+      // 构建 iconJsons 映射（iconJsonX_Y → key "X_Y"）
+      var.iconJsons = {}
+      for(i in range(0, var.settlementCount - 1)){
+        for(j in range(0, 2)){
+          key = i.round() + '_' + j.round()
+          json = packet['iconJson' + key]
+          if(json != none && json != ''){
+            var.iconJsons[key] = json
+          }
+        }
+      }
+      // 动态生成结算卡片（模板在索引0，复制 1~count-1 共 count-1 项）
+      while(val.卡片列表.childrenCount() > 1){
+        val.卡片列表.get(1).remove()
+      }
+      for(i in range(1, var.settlementCount)){
+        key = i.round()
+        e = val.卡片列表['结算卡片'].copy('结算卡片' + key)
+        e.entryKey = key
+      }
+      // 数据就绪后触发每个图标的 seticon()
+      for(i in range(1, var.settlementCount)){
+        key = i.round()
+        e = val.卡片列表['结算卡片' + key]
+        if(e != none){
+          e['免费档区']['物品图标'].seticon()
+          e['高级档区']['物品图标'].seticon()
+          e['典藏档区']['物品图标'].seticon()
+        }
+      }
+  action:
+    load: |-
+      var.packetId = 'AXS_BATTLEPASS'
+      var.seasonName = '等待同步'
+      var.currentLevel = 0
+      var.settlements = {}
+      var.settlementCount = 0
+      var.iconJsons = {}
+      var.emptyItemJson = '{"id":"minecraft:air","Count":1b}'
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
+      var.cardW = (var.contentW - 96) / 2
+    open: |-
+      Packet.send(var.packetId, 'refresh_settlement')
+    resize: |-
+      sx = Screen.getWidth() / 1920
+      sy = Screen.getHeight() / 1080
+      s = sx < sy ? sx : sy
+      var.viewH = Screen.getHeight() / s
+      var.viewW = Screen.getWidth() / s
+      var.offX = (var.viewW - 1920) / 2
+      var.contentW = var.viewW - 420
+      var.cardW = (var.contentW - 96) / 2
+
+# ─── 控件树 ────────────────────────────────────────────────────────
+controls:
+  全屏玻璃底:
+    type: Texture
+    attribute:
+      point: ~stretch_all
+      through: true
+      normal: ~Frosted:24;30,32,38,110
+  自适应全局布局:
+    type: Adaptive
+    attribute:
+      point: ~top_center
+      width: 1920
+      height: 1080
+    children:
+      # ── 顶栏 ───────────────────────────────────────────
+      顶栏:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "-var.offX"
+          width: "var.viewW"
+          height: 96
+        children:
+          顶栏底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+          顶栏底线:
+            type: Texture
+            attribute:
+              point: ~horizontal_stretch_bottom
+              height: 1
+              normal: ~62,66,74,210
+          标题色块:
+            type: Texture
+            attribute:
+              point: ~middle_left
+              x: 48
+              width: 6
+              height: 36
+              normal: ~232,180,90,255
+              shape: ~round_rect
+              radius: 3
+          标题:
+            type: Text
+            attribute:
+              point: ~middle_left
+              x: 68
+              texts: "~&f战令"
+              fontSize: 48
+          标题竖线:
+            type: Texture
+            attribute:
+              point: ~middle_left
+              x: 168
+              width: 1
+              height: 30
+              normal: ~62,66,74,210
+          赛季名:
+            type: Text
+            attribute:
+              point: ~middle_left
+              x: 188
+              texts: "'&f' + var.seasonName"
+              fontSize: 36
+          关闭按钮:
+            type: Canvas
+            attribute:
+              point: ~middle_right
+              x: -40
+              width: 40
+              height: 40
+            action:
+              clickLeft: |-
+                Screen.close()
+            children:
+              关闭背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '245,205,130,255' : '255,255,255,230'"
+              关闭文字:
+                type: Text
+                attribute:
+                  point: ~middle_center
+                  width: 40
+                  texts: "~&f✕"
+                  fontSize: 32
+                  through: true
+
+      # ── 左侧导航 ───────────────────────────────────────
+      左侧导航:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "48 - var.offX"
+          y: 120
+          width: 300
+          height: "var.viewH - 144"
+        children:
+          导航底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~255,255,255,230
+          导航总览:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 18
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_main')
+            children:
+              总览底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '245,205,130,255' : '255,255,255,230'"
+              总览文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f总览"
+                  fontSize: 36
+                  through: true
+          导航奖励:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 84
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_rewards')
+            children:
+              奖励底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '245,205,130,255' : '255,255,255,230'"
+              奖励文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f奖励"
+                  fontSize: 36
+                  through: true
+          导航任务:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 150
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_tasks')
+            children:
+              任务底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  through: true
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '245,205,130,255' : '255,255,255,230'"
+              任务文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f任务"
+                  fontSize: 36
+                  through: true
+          导航结算:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 216
+              width: 272
+              height: 58
+            children:
+              结算底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~232,180,90,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~232,180,90,230
+              结算高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~232,180,90,255
+                  shape: ~round_rect
+                  radius: 2
+              结算文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&0结算"
+                  fontSize: 36
+          导航提示:
+            type: Text
+            attribute:
+              point: ~bottom_left
+              x: 20
+              y: -20
+              texts: "~&fESC 关闭界面"
+              fontSize: 28
+          导航分隔线:
+            type: Texture
+            attribute:
+              point: ~top_left
+              x: 18
+              y: 298
+              width: 264
+              height: 2
+              normal: ~255,255,255,230
+          档位区标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 20
+              y: 314
+              texts: "~&f档位"
+              fontSize: 30
+          免费档行:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 348
+              width: 272
+              height: 48
+            children:
+              免费底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~255,255,255,230
+              免费圆点:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 14
+                  width: 10
+                  height: 10
+                  normal: ~196,200,208,255
+                  shape: ~circle
+              免费文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 32
+                  texts: "~&f免费"
+                  fontSize: 32
+              免费状态:
+                type: Text
+                attribute:
+                  point: ~middle_right
+                  x: -16
+                  texts: "~&a已激活"
+                  fontSize: 30
+          高级档行:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 404
+              width: 272
+              height: 48
+            children:
+              高级底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~255,255,255,230
+              高级圆点:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 14
+                  width: 10
+                  height: 10
+                  normal: ~196,200,208,200
+                  shape: ~circle
+              高级文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 32
+                  texts: "~&f高级"
+                  fontSize: 32
+              高级状态:
+                type: Text
+                attribute:
+                  point: ~middle_right
+                  x: -16
+                  texts: "~&f未解锁"
+                  fontSize: 30
+          典藏档行:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 460
+              width: 272
+              height: 48
+            children:
+              典藏底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~255,255,255,230
+              典藏圆点:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 14
+                  width: 10
+                  height: 10
+                  normal: ~196,200,208,200
+                  shape: ~circle
+              典藏文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 32
+                  texts: "~&f典藏"
+                  fontSize: 32
+              典藏状态:
+                type: Text
+                attribute:
+                  point: ~middle_right
+                  x: -16
+                  texts: "~&f未解锁"
+                  fontSize: 30
+
+      # ── 内容区（结算奖励）───────────────────────────────
+      内容区:
+        type: Canvas
+        attribute:
+          point: ~top_left
+          x: "372 - var.offX"
+          y: 120
+          width: "var.contentW"
+          height: "var.viewH - 144"
+        children:
+          内容底:
+            type: Texture
+            attribute:
+              point: ~stretch_all
+              normal: ~Frosted:30;255,255,255,100
+              shape: ~round_rect
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~255,255,255,230
+          页标题:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 32
+              y: 26
+              texts: "~&f赛季结算奖励"
+              fontSize: 40
+          页标题说明:
+            type: Text
+            attribute:
+              point: ~top_left
+              x: 268
+              y: 32
+              texts: "~&f赛季结束时按等级阈值自动发放以下奖励"
+              fontSize: 30
+
+          # 卡片滚动列表容器
+          卡片列表:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 32
+              y: 84
+              width: "var.contentW - 64"
+              height: "var.viewH - 300"
+            children:
+              # 模板卡片（索引 0，不会被显示，作为 copy 的模板）
+              结算卡片:
+                type: Canvas
+                attribute:
+                  point: ~top_left
+                  x: 0
+                  y: "self.entryKey * 176"
+                  width: "var.contentW - 64"
+                  height: 160
+                  entryKey: 0.round()
+                children:
+                  卡片底:
+                    type: Texture
+                    attribute:
+                      point: ~stretch_all
+                      through: true
+                      normal: ~62,66,74,210
+                      shape: ~round_rect
+                      radius: 12
+                    effect:
+                      stroke:
+                        width: 3
+                        color: "var.settlements[self.entryKey] != none && var.settlements[self.entryKey]['reached'] == 'true' ? '124,196,142,230' : '255,255,255,230'"
+                  等级标签:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 28
+                      y: 20
+                      texts: "var.settlements[self.entryKey] != none ? '&fLv.' + var.settlements[self.entryKey]['minLevel'] : ''"
+                      fontSize: 36
+                      through: true
+                  达到状态:
+                    type: Text
+                    attribute:
+                      point: ~top_left
+                      x: 140
+                      y: 24
+                      texts: "var.settlements[self.entryKey] != none && var.settlements[self.entryKey]['reached'] == 'true' ? '&a✓ 已达到' : '&7✗ 未达到'"
+                      fontSize: 30
+                      through: true
+                  # 免费档区
+                  免费档区:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: 24
+                      y: 68
+                      width: "(var.contentW - 128) / 3"
+                      height: 76
+                      iconKey: "self.parent.entryKey + '_0'"
+                    children:
+                      免费区底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~62,66,74,210
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~196,200,208,230
+                      免费档标签:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 12
+                          y: 8
+                          texts: "~&7免费"
+                          fontSize: 28
+                          through: true
+                      物品图标:
+                        type: Slot
+                        attribute:
+                          point: ~middle_left
+                          x: 12
+                          width: 48
+                          height: 48
+                          through: true
+                          slotType: ~Icon
+                          itemScale: 0.85
+                          seticon: "self.setItemIcon(var.iconJsons[self.parent.iconKey] != none ? var.iconJsons[self.parent.iconKey] : var.emptyItemJson)"
+                  # 高级档区
+                  高级档区:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: "36 + (var.contentW - 128) / 3"
+                      y: 68
+                      width: "(var.contentW - 128) / 3"
+                      height: 76
+                      iconKey: "self.parent.entryKey + '_1'"
+                    children:
+                      高级区底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~62,66,74,210
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~232,180,90,230
+                      高级档标签:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 12
+                          y: 8
+                          texts: "~&6高级"
+                          fontSize: 28
+                          through: true
+                      物品图标:
+                        type: Slot
+                        attribute:
+                          point: ~middle_left
+                          x: 12
+                          width: 48
+                          height: 48
+                          through: true
+                          slotType: ~Icon
+                          itemScale: 0.85
+                          seticon: "self.setItemIcon(var.iconJsons[self.parent.iconKey] != none ? var.iconJsons[self.parent.iconKey] : var.emptyItemJson)"
+                  # 典藏档区
+                  典藏档区:
+                    type: Canvas
+                    attribute:
+                      point: ~top_left
+                      x: "48 + 2 * (var.contentW - 128) / 3"
+                      y: 68
+                      width: "(var.contentW - 128) / 3"
+                      height: 76
+                      iconKey: "self.parent.entryKey + '_2'"
+                    children:
+                      典藏区底:
+                        type: Texture
+                        attribute:
+                          point: ~stretch_all
+                          through: true
+                          normal: ~62,66,74,210
+                          shape: ~round_rect
+                          radius: 10
+                        effect:
+                          stroke:
+                            width: 3
+                            color: ~186,140,232,230
+                      典藏档标签:
+                        type: Text
+                        attribute:
+                          point: ~top_left
+                          x: 12
+                          y: 8
+                          texts: "~&5典藏"
+                          fontSize: 28
+                          through: true
+                      物品图标:
+                        type: Slot
+                        attribute:
+                          point: ~middle_left
+                          x: 12
+                          width: 48
+                          height: 48
+                          through: true
+                          slotType: ~Icon
+                          itemScale: 0.85
+                          seticon: "self.setItemIcon(var.iconJsons[self.parent.iconKey] != none ? var.iconJsons[self.parent.iconKey] : var.emptyItemJson)"
+
+          # 底部说明
+          底部说明:
+            type: Canvas
+            attribute:
+              point: ~bottom_left
+              x: 32
+              y: -24
+              width: "var.contentW - 64"
+              height: 80
+            children:
+              说明底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~62,66,74,210
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~255,255,255,230
+              说明文字:
+                type: Text
+                attribute:
+                  point: ~top_left
+                  x: 24
+                  y: 16
+                  width: "var.contentW - 120"
+                  texts: "~&f赛季结束后，根据你的最终等级自动发放对应档位的结算奖励。未领取的等级奖励也会一并发放。"
+                  fontSize: 28

@@ -90,6 +90,7 @@ ui:
   main-id: "battlepass_main"  # 主界面 UI 标识
   tasks-id: "battlepass_tasks"  # 任务列表界面 UI 标识
   rewards-id: "battlepass_rewards"  # 奖励界面 UI 标识
+  settlement-id: "battlepass_settlement"  # 赛季结算奖励界面 UI 标识
 
 # 跨服同步配置
 cross-server:

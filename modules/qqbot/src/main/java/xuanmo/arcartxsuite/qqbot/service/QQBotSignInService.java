@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.qqbot.config.QQBotConfiguration;
 import xuanmo.arcartxsuite.qqbot.config.QQBotPrizeConfig;
 import xuanmo.arcartxsuite.qqbot.config.QQBotSignInConfig;
@@ -173,9 +175,20 @@ public final class QQBotSignInService {
         // 发放邮件
         MailDispatchable mail = mailProvider != null ? mailProvider.get() : null;
         boolean dispatched = false;
-        if (mail != null && prize.mailPresetId() != null && !prize.mailPresetId().isBlank()) {
+        if (mail != null && prize.mailPresets() != null && !prize.mailPresets().isEmpty()) {
             try {
-                dispatched = mail.dispatchPreset(prize.mailPresetId(), playerName, "QQBot-Redeem");
+                for (String presetId : prize.mailPresets()) {
+                    if (presetId == null || presetId.isBlank()) continue;
+                    MailSendResult result = mail.dispatchPreset(MailPresetRequest.builder(presetId, playerName)
+                        .sourceModule("qqbot")
+                        .sourceDetail("redeem:" + prizeId)
+                        .build());
+                    if (result.success()) {
+                        dispatched = true;
+                    } else {
+                        logger.warning("[QQBot] 兑换邮件发放失败: " + presetId + " — " + result.message());
+                    }
+                }
             } catch (Exception e) {
                 logger.warning("[QQBot] 兑换邮件发放异常: " + e.getMessage());
             }

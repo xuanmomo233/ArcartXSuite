@@ -22,6 +22,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
+import xuanmo.arcartxsuite.api.capability.MailDispatchable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.battlepass.config.BattlePassModuleConfiguration;
@@ -84,13 +85,15 @@ public final class BattlePassService {
         BattlePassRepository repository,
         Logger logger,
         @Nullable ItemSourceRegistry itemSourceRegistry,
-        @Nullable CurrencyBridgeAPI currencyManager
+        @Nullable CurrencyBridgeAPI currencyManager,
+        @Nullable java.util.function.Supplier<MailDispatchable> mailProvider
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
         this.repository = repository;
         this.logger = logger;
-        this.rewardDispatcher = new BattlePassRewardDispatcher(plugin, logger, itemSourceRegistry, currencyManager);
+        this.rewardDispatcher = new BattlePassRewardDispatcher(plugin, logger, itemSourceRegistry, currencyManager, mailProvider);
+        this.rewardDispatcher.setMailDeliveryMode(configuration.isMailDeliveryMode());
         Map<String, BattlePassTask> taskIndex = new HashMap<>();
         for (BattlePassTask task : configuration.tasks().all()) {
             taskIndex.putIfAbsent(task.taskId(), task);
@@ -112,16 +115,6 @@ public final class BattlePassService {
 
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
         this.eventBusProvider = eventBusProvider;
-    }
-
-    /**
-     * 设置邮件模块能力提供者，用于 mail 类型奖励发放。
-     *
-     * @param mailProvider MailDispatchable 提供者，可为 null
-     */
-    public void setMailProvider(@Nullable java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailProvider) {
-        this.rewardDispatcher.setMailProvider(mailProvider);
-        this.rewardDispatcher.setMailDeliveryMode(configuration.isMailDeliveryMode());
     }
 
     /**

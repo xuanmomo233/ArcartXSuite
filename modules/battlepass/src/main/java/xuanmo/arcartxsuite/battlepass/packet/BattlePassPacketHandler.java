@@ -25,6 +25,7 @@ import xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassReward;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassTask;
 import xuanmo.arcartxsuite.battlepass.model.PlayerTaskInstance;
+import xuanmo.arcartxsuite.battlepass.model.SeasonSettlementReward;
 import xuanmo.arcartxsuite.battlepass.service.BattlePassService;
 
 /**
@@ -46,6 +47,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     private final String mainUiId;
     private final String tasksUiId;
     private final String rewardsUiId;
+    private final String settlementUiId;
     private final IconResolver iconResolver;
     private final java.util.function.BiFunction<String, Object[], String> messageResolver;
     private final Map<UUID, String> actionTokens = new ConcurrentHashMap<>();
@@ -66,6 +68,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
      * @param mainUiId        主界面 UI ID
      * @param tasksUiId       任务界面 UI ID
      * @param rewardsUiId     奖励界面 UI ID
+     * @param settlementUiId  赛季结算奖励界面 UI ID
      * @param itemSourceRegistry 物品来源注册表，可为 null
      * @param itemStackBridge    ItemStack 桥接 API，可为 null
      * @param messageResolver 消息解析函数
@@ -73,6 +76,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
     public BattlePassPacketHandler(JavaPlugin plugin, PacketBridgeAPI packetBridge,
                                     PacketGuardAPI packetGuard, BattlePassService service,
                                     String mainUiId, String tasksUiId, String rewardsUiId,
+                                    String settlementUiId,
                                     @Nullable ItemSourceRegistry itemSourceRegistry,
                                     @Nullable ItemBridgeAPI itemStackBridge,
                                     java.util.function.BiFunction<String, Object[], String> messageResolver) {
@@ -83,6 +87,7 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         this.mainUiId = mainUiId;
         this.tasksUiId = tasksUiId;
         this.rewardsUiId = rewardsUiId;
+        this.settlementUiId = settlementUiId;
         this.iconResolver = new IconResolver(itemStackBridge, itemSourceRegistry);
         this.messageResolver = messageResolver;
     }
@@ -105,11 +110,13 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
             case "open_main" -> openMain(player);
             case "open_tasks" -> openTasks(player);
             case "open_rewards" -> openRewards(player);
+            case "open_settlement" -> openSettlement(player);
             case "claim" -> handleClaim(player, data);
             case "claim_all" -> handleClaimAll(player, data);
             case "refresh" -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushMainData(player); });
             case "refresh_tasks" -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushTasksData(player); });
             case "refresh_rewards" -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushRewardsData(player); });
+            case "refresh_settlement" -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushSettlementData(player); });
             default -> AxsScheduler.runAsync(plugin, () -> { if (player.isOnline()) pushMainData(player); });
         }
         return true;
@@ -241,6 +248,21 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         }, 2L);
     }
 
+    /**
+     * 为玩家打开赛季结算奖励界面并推送结算奖励数据。
+     *
+     * @param player 目标玩家
+     */
+    public void openSettlement(Player player) {
+        if (packetBridge == null) return;
+        packetBridge.openUi(player, settlementUiId);
+        AxsScheduler.runAsyncLater(plugin, () -> {
+            if (player.isOnline()) {
+                pushSettlementData(player);
+            }
+        }, 2L);
+    }
+
     private void pushRewardsData(Player player) {
         pushRewardsData(player, 0);
     }
@@ -323,6 +345,77 @@ public final class BattlePassPacketHandler implements ClientPacketHandler {
         payload.put("action_token", actionTokens.getOrDefault(player.getUniqueId(), ""));
 
         packetBridge.sendPacket(player, rewardsUiId, "rewards", payload);
+    }
+
+    /**
+     * 向玩家推送赛季结算奖励数据。
+     * <p>
+     * 数据包格式：
+     * <pre>
+     * packetId: AXS_BATTLEPASS
+     * seasonName: 赛季名称
+     * currentLevel: 玩家当前等级
+     * settlementCount: 结算奖励条目数
+     * settlements: { "0": { id, minLevel, reached, free: { type, name, claimed }, premium: {...}, deluxe: {...} }, ... }
+     * iconJson0..iconJsonN: 各奖励的图标 JSON
+     * </pre>
+     */
+    private void pushSettlementData(Player player) {
+        if (packetBridge == null) return;
+        BattlePassPlayerProgress progress = service.getProgress(player);
+        var season = service.configuration().season();
+
+        List<SeasonSettlementReward> rewards = service.configuration().seasonRewards();
+        // 按 minLevel 升序排列
+        List<SeasonSettlementReward> sorted = new ArrayList<>(rewards);
+        sorted.sort(java.util.Comparator.comparingInt(SeasonSettlementReward::minLevel));
+
+        Map<String, Map<String, Object>> settlementsMap = new LinkedHashMap<>();
+        Map<String, Object> payload = new LinkedHashMap<>();
+
+        int idx = 0;
+        for (SeasonSettlementReward settlement : sorted) {
+            boolean reached = progress.currentLevel() >= settlement.minLevel();
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("id", settlement.settlementId());
+            entry.put("minLevel", String.valueOf(settlement.minLevel()));
+            entry.put("reached", String.valueOf(reached));
+
+            // 各档位奖励信息
+            int iconIdx = 0;
+            for (String tier : new String[]{"free", "premium", "deluxe"}) {
+                BattlePassReward reward = switch (tier) {
+                    case "free" -> settlement.free();
+                    case "premium" -> settlement.premium();
+                    case "deluxe" -> settlement.deluxe();
+                    default -> null;
+                };
+                Map<String, String> tierEntry = new LinkedHashMap<>();
+                if (reward != null) {
+                    tierEntry.put("type", reward.type());
+                    tierEntry.put("tierDisplay", rewardTierDisplay(reward.tier()));
+                    tierEntry.put("present", "true");
+                    // 推送图标
+                    String iconJson = iconResolver.resolveItemJson(player, reward.icon());
+                    payload.put("iconJson" + idx + "_" + iconIdx, iconJson);
+                } else {
+                    tierEntry.put("present", "false");
+                }
+                entry.put(tier, tierEntry);
+                iconIdx++;
+            }
+
+            settlementsMap.put(String.valueOf(idx), entry);
+            idx++;
+        }
+
+        payload.put("packetId", PACKET_ID);
+        payload.put("seasonName", season.displayName());
+        payload.put("currentLevel", String.valueOf(progress.currentLevel()));
+        payload.put("settlements", settlementsMap);
+        payload.put("settlementCount", String.valueOf(idx));
+
+        packetBridge.sendPacket(player, settlementUiId, "init", payload);
     }
 
     private static String rewardTierDisplay(BattlePassReward.RewardTier tier) {

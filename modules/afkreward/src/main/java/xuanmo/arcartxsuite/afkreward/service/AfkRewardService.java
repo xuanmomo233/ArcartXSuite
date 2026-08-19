@@ -32,6 +32,8 @@ import org.bukkit.scheduler.BukkitTask;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
 import xuanmo.arcartxsuite.api.capability.EssentialsQueryable;
@@ -611,14 +613,27 @@ public final class AfkRewardService {
 
     private boolean tryOverflowMail(Player player, AfkArea area, AfkRewardType rewardType) {
         if (!area.reward().overflowToMail().enable()
-            || rewardType.fullInventoryMail() == null
-            || rewardType.fullInventoryMail().isBlank()
+            || rewardType.fullInventoryMailPresets() == null
+            || rewardType.fullInventoryMailPresets().isEmpty()
             || player.getInventory().firstEmpty() != -1) {
             return false;
         }
         MailDispatchable mail = mailProvider != null ? mailProvider.get() : null;
-        if (mail == null || !mail.dispatchPreset(rewardType.fullInventoryMail(),
-            player.getName(), "AfkReward")) {
+        if (mail == null) {
+            return false;
+        }
+        boolean anySuccess = false;
+        for (String presetId : rewardType.fullInventoryMailPresets()) {
+            if (presetId == null || presetId.isBlank()) continue;
+            MailSendResult result = mail.dispatchPreset(MailPresetRequest.builder(presetId, player.getName())
+                .sourceModule("afkreward")
+                .sourceDetail("overflow:" + area.id())
+                .build());
+            if (result.success()) {
+                anySuccess = true;
+            }
+        }
+        if (!anySuccess) {
             return false;
         }
         if (overflowNotified.add(player.getUniqueId())) {
@@ -1303,9 +1318,11 @@ public final class AfkRewardService {
         for (String presetId : presetIds) {
             if (presetId == null || presetId.isBlank()) continue;
             try {
-                boolean ok = md.dispatchPreset(presetId, player.getName(), "AfkReward");
+                MailSendResult result = md.dispatchPreset(MailPresetRequest.builder(presetId, player.getName())
+                    .sourceModule("afkreward")
+                    .build());
                 if (config.debug()) {
-                    logger.info("[AfkReward] 邮件派发 -> preset=" + presetId + " player=" + player.getName() + " success=" + ok);
+                    logger.info("[AfkReward] 邮件派发 -> preset=" + presetId + " player=" + player.getName() + " success=" + result.success());
                 }
             } catch (Exception e) {
                 logger.warning("[AfkReward] 邮件派发失败 " + presetId + ": " + e.getMessage());

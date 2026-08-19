@@ -27,6 +27,7 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.capability.TitleGrantable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
@@ -98,7 +99,8 @@ public final class FishingService {
                           @NotNull List<SeasonRewardDefinition> seasonRewards,
                           @NotNull RewardDispatcher rewardDispatcher,
                           @NotNull SettlementEngine settlementEngine,
-                          @NotNull TaskEngine taskEngine) {
+                          @NotNull TaskEngine taskEngine,
+                          @Nullable Supplier<MailDispatchable> mailProvider) {
         this.plugin = plugin;
         this.configuration = configuration;
         this.repository = repository;
@@ -111,6 +113,7 @@ public final class FishingService {
         this.rewardDispatcher = rewardDispatcher;
         this.settlementEngine = settlementEngine;
         this.taskEngine = taskEngine;
+        this.mailProvider = mailProvider;
     }
 
     public void setMessageProvider(@Nullable MessageProvider messageProvider) {
@@ -136,10 +139,6 @@ public final class FishingService {
 
     public void setTitleProvider(@Nullable Supplier<TitleGrantable> provider) {
         this.titleProvider = provider;
-    }
-
-    public void setMailProvider(@Nullable Supplier<MailDispatchable> provider) {
-        this.mailProvider = provider;
     }
 
     public void start() throws Exception {
@@ -1107,7 +1106,9 @@ public final class FishingService {
         MailDispatchable mail = mailProvider != null ? mailProvider.get() : null;
         if (mail != null) {
             try {
-                mail.dispatchPreset(presetId, player.getName(), "Fishing");
+                mail.dispatchPreset(MailPresetRequest.builder(presetId, player.getName())
+                    .sourceModule("fishing")
+                    .build());
             } catch (Exception e) {
                 logger.warning("发送邮件失败: " + presetId + " — " + e.getMessage());
             }

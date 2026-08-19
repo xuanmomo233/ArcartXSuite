@@ -42,7 +42,7 @@ items:
     #   amount         — 发放数量（正整数，默认1）
     #   icon           — 奖品图标（未配置时用 item 生成的物品作为图标）
     #   commands       — COMMAND 投递时执行的命令列表（支持 {player}/{uuid}/{amount}/{item} 占位符）
-    #   mail-preset    — MAIL 投递时使用的邮件预设名称
+    #   mail.presets   — MAIL 投递时使用的邮件预设 ID 列表
     #   extra-commands — 投递成功后执行的附加命令列表
     #   weight         — 权重（兑换商店无意义，默认1）
     #   rarity         — 稀有度名称（CASE 奖池用，兑换商店无意义）

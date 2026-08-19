@@ -4,21 +4,46 @@
 # 每天 0 点自动重置并重新分配
 # =============================================================================
 # 事件源说明：
-#   event-topic: ArcartX EventBus 主题（优先使用，需对应模块已加载）
-#   bukkit-event: 原版 Bukkit 事件降级配置（当发布模块不存在时自动启用）
+#   event-topic: ArcartX EventBus 主题（仅用于业务语义事件，需对应模块已加载）
+#   bukkit-event: 原版 Bukkit 事件（用于有直接对应 Bukkit 事件的场景）
 #   两个源不会同时生效，引擎启动时检测模块存在性自动选择。
 #
+#   选择原则：
+#   - 如果事件有直接对应的 Bukkit 事件（如击杀→EntityDeathEvent、拾取→EntityPickupItemEvent），
+#     只配置 bukkit-event 即可，无需 event-topic 中转。
+#   - 如果事件是业务语义（如登录成功、钓鱼成功、Boss 击杀、拍卖成交等），没有单个 Bukkit 事件
+#     能直接表达，则配置 event-topic，由对应模块发布。
+#   - 如果需要扩展没有的事件，请自行寻找你所使用服务器的事件填入 event-class，
+#     如果没有开发能力可以交给 AI。
+#
 # payload key 参考：
-#   combateffect / EntityDeathEvent: entityType, entityName
-#   combateffect / EntityDamageByEntityEvent: attacker, targetType, targetName, damage
-#   TaczGunKillEvent: entityType, entityName（与 EntityDeathEvent 一致，兼容 TACZ 枪械击杀）
-#   TaczGunDamageEvent: attacker, targetType, targetName, damage（与 EntityDamageByEntityEvent 一致，兼容 TACZ 枪械伤害）
-#   pickup / PlayerPickupItemEvent: material, amount
-#   fishing / PlayerFishEvent: fishType, state
-#   loginview / PlayerJoinEvent: (无 payload 字段)
+#   EntityDeathEvent / TaczGunKillEvent: entityType, entityName
+#   EntityDamageByEntityEvent / TaczGunDamageEvent: attacker, targetType, targetName, damage
+#   EntityPickupItemEvent: material, amount
+#   PlayerFishEvent: fishType, state
+#   PlayerJoinEvent: world
+#   BlockBreakEvent / BlockPlaceEvent: material, world（BlockBreakEvent 也可用于收获农作物，用 condition 匹配 material）
+#   CraftItemEvent: material, amount
+#   PlayerItemConsumeEvent: material
+#   PlayerDeathEvent: deathCause
+#   PlayerShearEntityEvent: entityType, entityName
+#   EntityTameEvent: entityType, entityName
+#   EntityBreedEvent: entityType, motherType, fatherType
+#   PlayerBucketFillEvent: bucket, material
+#   EnchantItemEvent: material, cost
+#   PlayerBedEnterEvent: world
+#   ProjectileHitEvent: projectileType, hitEntity, hitBlock
+#   PlayerLevelChangeEvent: oldLevel, newLevel
+#   PlayerAdvancementDoneEvent: advancement, world
+#   PlayerItemBreakEvent: material, world
+#   PlayerHarvestBlockEvent: material, world
+#   MythicMobDeathEvent: entityType, entityName, mythicMobId, world
+#   questgps.quest_completed: quest_id, quest_name
 # =============================================================================
 
 # -------- 每日登录 --------
+# event-topic 优先（loginview 模块发布"登录成功"事件，仅密码验证通过后触发）
+# bukkit-event 降级（PlayerJoinEvent 每次进服都触发，需配合 limits.max-per-day 防止重复计数）
 daily-login:
   display-name: "每日登录"
   description: "每天登录游戏即可获得奖励"
@@ -32,6 +57,11 @@ daily-login:
   increment-strategy:
     type: fixed
     value: 1
+  # 限制每天最多计入 1 次，防止玩家反复进服刷进度
+  # loginview 模块存在时走 EventBus（登录成功才触发），此限制是双重保险
+  # loginview 不存在时走 PlayerJoinEvent，此限制确保每天只算一次
+  limits:
+    max-per-day: 1
   weight: 5
 
 # -------- 击杀任意生物 --------
@@ -39,7 +69,6 @@ daily-kill-any:
   display-name: "日常狩猎"
   description: "击杀10个任意生物"
   difficulty: easy
-  event-topic: "axs.combateffect.kill_entity"
   bukkit-event:
     event-classes:
       - "org.bukkit.event.entity.EntityDeathEvent"
@@ -57,7 +86,6 @@ daily-kill-zombie:
   display-name: "击杀僵尸"
   description: "在主世界击杀20个僵尸"
   difficulty: normal
-  event-topic: "axs.combateffect.kill_entity"
   bukkit-event:
     event-classes:
       - "org.bukkit.event.entity.EntityDeathEvent"
@@ -79,7 +107,6 @@ daily-damage-dealt:
   display-name: "战斗训练"
   description: "对生物累计造成500点伤害"
   difficulty: normal
-  event-topic: "axs.combateffect.damage_dealt"
   bukkit-event:
     event-classes:
       - "org.bukkit.event.entity.EntityDamageByEntityEvent"
@@ -99,7 +126,6 @@ daily-pickup:
   display-name: "收集资源"
   description: "拾取15个物品"
   difficulty: easy
-  event-topic: "axs.pickup.item_pickup"
   bukkit-event:
     event-class: "org.bukkit.event.player.PlayerPickupItemEvent"
   required-count: 15
@@ -115,7 +141,6 @@ daily-block-break:
   display-name: "矿工日常"
   description: "挖掘50个方块"
   difficulty: easy
-  event-topic: "axs.battlepass.block_break"
   bukkit-event:
     event-class: "org.bukkit.event.block.BlockBreakEvent"
   required-count: 50
@@ -131,7 +156,6 @@ daily-block-place:
   display-name: "建筑工匠"
   description: "放置30个方块"
   difficulty: easy
-  event-topic: "axs.battlepass.block_place"
   bukkit-event:
     event-class: "org.bukkit.event.block.BlockPlaceEvent"
   required-count: 30
@@ -147,7 +171,6 @@ daily-craft:
   display-name: "合成大师"
   description: "合成10个物品"
   difficulty: easy
-  event-topic: "axs.battlepass.craft_item"
   bukkit-event:
     event-class: "org.bukkit.event.inventory.CraftItemEvent"
   required-count: 10
@@ -163,7 +186,6 @@ daily-eat:
   display-name: "美食家"
   description: "食用5个食物"
   difficulty: easy
-  event-topic: "axs.battlepass.item_consume"
   bukkit-event:
     event-class: "org.bukkit.event.player.PlayerItemConsumeEvent"
   required-count: 5
@@ -217,3 +239,365 @@ daily-boss-kill:
     type: fixed
     value: 1
   weight: 1
+
+# -------- 击杀 MythicMobs 怪物 --------
+# 需安装 MythicMobs/MythicBukkit 插件
+# payload 包含 mythicMobId 字段，可通过 condition 精确匹配特定 MythicMobs 怪物
+daily-mythic-kill:
+  display-name: "魔物猎手"
+  description: "击杀5个 MythicMobs 怪物"
+  difficulty: normal
+  bukkit-event:
+    event-class: "io.lumine.mythic.bukkit.events.MythicMobDeathEvent"
+  required-count: 5
+  base-xp-reward: 150
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 击杀特定 MythicMobs 怪物（condition 匹配 mythicMobId）--------
+# 取消注释以启用，将 MythicMobId 替换为你服务器中实际配置的 MythicMobs 怪物内部名
+# daily-mythic-kill-specific:
+#   display-name: "骸骨骑士猎手"
+#   description: "击杀3个骸骨骑士（MythicMobs: SkeletalKnight）"
+#   difficulty: hard
+#   bukkit-event:
+#     event-class: "io.lumine.mythic.bukkit.events.MythicMobDeathEvent"
+#   required-count: 3
+#   base-xp-reward: 250
+#   conditions:
+#     - type: event_payload
+#       key: mythicMobId
+#       operator: equals
+#       value: "SkeletalKnight"
+#   increment-strategy:
+#     type: fixed
+#     value: 1
+#   weight: 1
+
+# -------- 剪羊毛 --------
+daily-shear:
+  display-name: "羊毛采集"
+  description: "剪5只羊"
+  difficulty: easy
+  bukkit-event:
+    event-class: "org.bukkit.event.player.PlayerShearEntityEvent"
+  required-count: 5
+  base-xp-reward: 80
+  conditions:
+    - type: event_payload
+      key: entityType
+      operator: equals
+      value: SHEEP
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
+
+# -------- 驯服动物 --------
+daily-tame:
+  display-name: "驯兽师"
+  description: "驯服2只动物"
+  difficulty: normal
+  bukkit-event:
+    event-class: "org.bukkit.event.entity.EntityTameEvent"
+  required-count: 2
+  base-xp-reward: 150
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 繁殖动物 --------
+daily-breed:
+  display-name: "牧场主"
+  description: "繁殖3只动物"
+  difficulty: easy
+  bukkit-event:
+    event-class: "org.bukkit.event.entity.EntityBreedEvent"
+  required-count: 3
+  base-xp-reward: 100
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 附魔物品 --------
+daily-enchant:
+  display-name: "附魔学徒"
+  description: "附魔3件物品"
+  difficulty: normal
+  bukkit-event:
+    event-class: "org.bukkit.event.enchantment.EnchantItemEvent"
+  required-count: 3
+  base-xp-reward: 120
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 射箭训练 --------
+# 监听 ProjectileHitEvent，射箭命中实体才算（不含命中方块）
+# condition 匹配 projectileType=ARROW，hitEntity exists 表示命中实体
+daily-archery:
+  display-name: "射箭训练"
+  description: "射箭命中目标20次"
+  difficulty: normal
+  bukkit-event:
+    event-class: "org.bukkit.event.entity.ProjectileHitEvent"
+  required-count: 20
+  base-xp-reward: 120
+  conditions:
+    # 只计入箭矢命中（排除雪球/末影珍珠/三叉戟等其他弹射物）
+    - type: event_payload
+      key: projectileType
+      operator: equals
+      value: ARROW
+    # hitEntity 字段存在 = 命中了实体（而非命中方块或未命中）
+    # exists 操作符判断 payload 中是否存在该 key，value 留空
+    - type: event_payload
+      key: hitEntity
+      operator: exists
+      value: ""
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
+
+# -------- 收集水桶 --------
+daily-bucket-fill:
+  display-name: "挑水工"
+  description: "用桶装10次水或岩浆"
+  difficulty: easy
+  bukkit-event:
+    event-class: "org.bukkit.event.player.PlayerBucketFillEvent"
+  required-count: 10
+  base-xp-reward: 70
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 睡觉 --------
+# 需配合 limits.max-per-day: 1，防止反复睡觉刷进度
+daily-sleep:
+  display-name: "好好休息"
+  description: "在床上睡1次觉"
+  difficulty: easy
+  bukkit-event:
+    event-class: "org.bukkit.event.player.PlayerBedEnterEvent"
+  required-count: 1
+  base-xp-reward: 60
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  limits:
+    max-per-day: 1
+  weight: 2
+
+# -------- 玩家死亡 --------
+# 趣味任务：死亡也能拿经验（适合整活服）
+# 取消注释以启用
+# daily-death:
+#   display-name: "死不足惜"
+#   description: "死亡3次"
+#   difficulty: easy
+#   bukkit-event:
+#     event-class: "org.bukkit.event.entity.PlayerDeathEvent"
+#   required-count: 3
+#   base-xp-reward: 50
+#   conditions: []
+#   increment-strategy:
+#     type: fixed
+#     value: 1
+#   weight: 1
+
+# -------- 等级提升（Minecraft 原版等级）--------
+# 监听 PlayerLevelChangeEvent，每次 Minecraft 等级变化都计入（包括升/降级）
+# 如需只计入等级提升，需添加 condition 检查 newLevel > oldLevel（但当前 condition 只支持字符串比较，不支持数值比较）
+# 建议使用 limits.max-per-day 配合 increment-strategy 来限制每日计入次数
+# 取消注释以启用
+# daily-level-up:
+#   display-name: "经验丰富"
+#   description: "Minecraft 等级提升5次"
+#   difficulty: normal
+#   bukkit-event:
+#     event-class: "org.bukkit.event.player.PlayerLevelChangeEvent"
+#   required-count: 5
+#   base-xp-reward: 130
+#   conditions: []
+#   increment-strategy:
+#     type: fixed
+#     value: 1
+#   limits:
+#     max-per-day: 10
+#   weight: 2
+
+# -------- 完成日常任务（Chemdah）--------
+# 需 questgps + chemdah 模块
+# payload: quest_id, quest_name
+daily-quest-complete:
+  display-name: "任务达人"
+  description: "完成3个日常任务"
+  difficulty: normal
+  event-topic: "axs.questgps.quest_completed"
+  required-count: 3
+  base-xp-reward: 150
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
+
+# -------- 完成特定 Chemdah 任务 --------
+# 取消注释以启用，将 quest_id 替换为你服务器中实际的 Chemdah 模板 ID
+# 通过 condition 匹配 quest_id 字段，只计入特定任务的完成
+daily-quest-specific:
+  display-name: "主线先锋"
+  description: "完成指定主线任务"
+  difficulty: hard
+  event-topic: "axs.questgps.quest_completed"
+  required-count: 1
+  base-xp-reward: 300
+  conditions:
+    - type: event_payload
+      key: quest_id
+      operator: equals
+      value: "example_mainline_quest"  #填chemdah的任务id
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 1
+
+# -------- 完成成就 --------
+# 每个成就只能完成一次，无法刷
+# advancement 字段格式如 "minecraft:story/mine_diamond"
+# 可用 condition 匹配特定成就，如只计入主世界成就
+daily-advancement:
+  display-name: "成就猎人"
+  description: "完成2个成就"
+  difficulty: hard
+  bukkit-event:
+    event-class: "org.bukkit.event.player.PlayerAdvancementDoneEvent"
+  required-count: 2
+  base-xp-reward: 200
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 1
+
+# -------- 工具损坏 --------
+# 趣味任务：工具/防具耐久耗尽损坏
+# 可用 condition 匹配 material 限定特定类型（如只算钻石镎损坏）
+daily-item-break:
+  display-name: "物尽其用"
+  description: "用坏3件工具或防具"
+  difficulty: easy
+  bukkit-event:
+    event-class: "org.bukkit.event.player.PlayerItemBreakEvent"
+  required-count: 3
+  base-xp-reward: 80
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 2
+
+# -------- 采收作物（右键采收）--------
+# 仅覆盖右键采收的作物：甜浆果丛(SWEET_BERRY_BUSH)、发光浆果(CAVE_VINES)
+# 小麦/胡萝卜等左键破坏收获的作物见下方 daily-farm-break 任务
+daily-harvest:
+  display-name: "浆果采摘"
+  description: "采收10次甜浆果或发光浆果"
+  difficulty: easy
+  bukkit-event:
+    event-class: "org.bukkit.event.player.PlayerHarvestBlockEvent"
+  required-count: 10
+  base-xp-reward: 90
+  conditions: []
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
+
+# -------- 采收特定浆果（condition 匹配 material）--------
+# 取消注释以启用，限定只采收甜浆果丛
+# daily-harvest-berry:
+#   display-name: "甜浆果采摘工"
+#   description: "采收20次甜浆果"
+#   difficulty: easy
+#   bukkit-event:
+#     event-class: "org.bukkit.event.player.PlayerHarvestBlockEvent"
+#   required-count: 20
+#   base-xp-reward: 100
+#   conditions:
+#     - type: event_payload
+#       key: material
+#       operator: equals
+#       value: SWEET_BERRY_BUSH
+#   increment-strategy:
+#     type: fixed
+#     value: 1
+#   weight: 2
+
+# -------- 种植收获（左键破坏农作物）--------
+# 覆盖左键破坏收获的农作物：小麦、胡萝卜、马铃薯、甜菜根等
+# 用 condition 的 in 操作符匹配多种农作物 material
+daily-farm-break:
+  display-name: "农夫"
+  description: "收获20个农作物"
+  difficulty: easy
+  bukkit-event:
+    event-class: "org.bukkit.event.block.BlockBreakEvent"
+  required-count: 20
+  base-xp-reward: 100
+  conditions:
+    # in 操作符：payload 的 material 值在 values 列表中才计入
+    - type: event_payload
+      key: material
+      operator: in
+      values:
+        - WHEAT          # 小麦
+        - CARROTS        # 胡萝卜
+        - POTATOES       # 马铃薯
+        - BEETROOTS      # 甜菜根
+        - MELON          # 西瓜
+        - PUMPKIN        # 南瓜
+        - SUGAR_CANE     # 甘蔗
+        - CACTUS         # 仙人掌
+        - COCOA          # 可可豆
+        - NETHER_WART    # 下界疣
+        - BAMBOO         # 竹子
+        - KELP           # 海带
+  increment-strategy:
+    type: fixed
+    value: 1
+  weight: 3
+
+# -------- 收获特定农作物（condition 匹配单个 material）--------
+# 取消注释以启用，限定只收获小麦
+# daily-farm-wheat:
+#   display-name: "麦田守望者"
+#   description: "收获50个小麦"
+#   difficulty: easy
+#   bukkit-event:
+#     event-class: "org.bukkit.event.block.BlockBreakEvent"
+#   required-count: 50
+#   base-xp-reward: 120
+#   conditions:
+#     - type: event_payload
+#       key: material
+#       operator: equals
+#       value: WHEAT
+#   increment-strategy:
+#     type: fixed
+#     value: 1
+#   weight: 2

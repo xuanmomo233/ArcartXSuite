@@ -46,6 +46,7 @@ public final class QQBotService implements Listener {
     private volatile QQBotCommandRouter commandRouter;
     private volatile QQBotSignInService signInService;
     private final Logger logger;
+    private final java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailProvider;
     private final Set<String> processedMessageIds = ConcurrentHashMap.newKeySet();
 
     private BukkitTask cleanupTask;
@@ -68,7 +69,8 @@ public final class QQBotService implements Listener {
         QQBotRepository repository,
         Logger logger,
         PlaceholderResolverAPI placeholderResolver,
-        MessageProvider messages
+        MessageProvider messages,
+        java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailProvider
     ) {
         this.plugin = plugin;
         this.config = config;
@@ -77,6 +79,7 @@ public final class QQBotService implements Listener {
         this.repository = repository;
         this.logger = logger;
         this.placeholderResolver = placeholderResolver;
+        this.mailProvider = mailProvider;
     }
 
     /**
@@ -85,7 +88,7 @@ public final class QQBotService implements Listener {
      */
     public void setClient(OneBotClient client) {
         this.client = client;
-        this.commandRouter = new QQBotCommandRouter(plugin, config, client, bindService, repository, logger, placeholderResolver);
+        this.commandRouter = new QQBotCommandRouter(plugin, config, client, bindService, repository, logger, placeholderResolver, mailProvider);
     }
 
     public void start() {
@@ -157,10 +160,6 @@ public final class QQBotService implements Listener {
 
     public void setEssentialsProvider(java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.EssentialsQueryable> provider) {
         if (commandRouter != null) commandRouter.setEssentialsProvider(provider);
-    }
-
-    public void setMailProvider(java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> provider) {
-        if (commandRouter != null) commandRouter.setMailProvider(provider);
     }
 
     public void setSignInService(QQBotSignInService signInService) {

@@ -19,7 +19,7 @@ import xuanmo.arcartxsuite.api.icon.IconDefinition;
  * @param name        奖品显示名称
  * @param delivery    奖品投递方式
  * @param commands    COMMAND 投递方式执行的命令列表
- * @param mailPreset  MAIL 投递方式使用的邮件预设
+ * @param mailPresets MAIL 投递方式使用的邮件预设列表
  * @param itemSource  item.source 对应的物品来源类型
  * @param itemId      item.id 对应的物品标识；MMOItems 使用 TYPE;ID 格式
  * @param itemJson    PLAIN 物品使用的 Base64 序列化 ItemStack 数据
@@ -34,7 +34,7 @@ public record PoolItem(
     @NotNull String name,
     @NotNull DeliveryType delivery,
     @NotNull List<String> commands,
-    @Nullable String mailPreset,
+    @Nullable List<String> mailPresets,
     @NotNull PluginItemType itemSource,
     @NotNull String itemId,
     @Nullable String itemJson,
@@ -94,8 +94,12 @@ public record PoolItem(
         String deliveryStr = section.getString("delivery", "DIRECT");
         DeliveryType delivery = DeliveryType.valueOf(deliveryStr.toUpperCase(Locale.ROOT));
         List<String> commands = section.getStringList("commands");
-        String mailPreset = section.getString("mail-preset", "");
-        if (mailPreset.isBlank()) mailPreset = null;
+        List<String> mailPresets = null;
+        ConfigurationSection mailSection = section.getConfigurationSection("mail");
+        if (mailSection != null) {
+            mailPresets = mailSection.getStringList("presets");
+            if (mailPresets.isEmpty()) mailPresets = null;
+        }
 
         boolean commandOnly = delivery == DeliveryType.COMMAND;
         String itemJson = section.getString("item-json");
@@ -137,7 +141,7 @@ public record PoolItem(
             return null;
         }
 
-        return new PoolItem(id, name, delivery, commands, mailPreset, itemSource, itemId,
+        return new PoolItem(id, name, delivery, commands, mailPresets, itemSource, itemId,
             itemJson, icon, extraCommands, amount, weight, rarity);
     }
 }
