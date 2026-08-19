@@ -184,12 +184,12 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         }
 
         // 注册天赋树/奖励/任务 UI
-        UiBinding binding3 = registerModuleUi(TALENTS_UI_FILE, "fishing_talents", configuration.ui().registerOnEnable());
-        talentsUiId = binding3.registeredUiId() != null ? binding3.registeredUiId() : "fishing_talents";
-        UiBinding binding4 = registerModuleUi(REWARDS_UI_FILE, "fishing_rewards", configuration.ui().registerOnEnable());
-        rewardsUiId = binding4.registeredUiId() != null ? binding4.registeredUiId() : "fishing_rewards";
-        UiBinding binding5 = registerModuleUi(TASKS_UI_FILE, "fishing_tasks", configuration.ui().registerOnEnable());
-        tasksUiId = binding5.registeredUiId() != null ? binding5.registeredUiId() : "fishing_tasks";
+        UiBinding binding3 = registerModuleUi(TALENTS_UI_FILE, configuration.ui().talentsId(), configuration.ui().registerOnEnable());
+        talentsUiId = binding3.registeredUiId() != null ? binding3.registeredUiId() : configuration.ui().talentsId();
+        UiBinding binding4 = registerModuleUi(REWARDS_UI_FILE, configuration.ui().rewardsId(), configuration.ui().registerOnEnable());
+        rewardsUiId = binding4.registeredUiId() != null ? binding4.registeredUiId() : configuration.ui().rewardsId();
+        UiBinding binding5 = registerModuleUi(TASKS_UI_FILE, configuration.ui().tasksId(), configuration.ui().registerOnEnable());
+        tasksUiId = binding5.registeredUiId() != null ? binding5.registeredUiId() : configuration.ui().tasksId();
 
         // 加载天赋树配置
         TalentEngine talentEngine;

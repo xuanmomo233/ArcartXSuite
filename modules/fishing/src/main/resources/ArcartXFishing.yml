@@ -178,6 +178,12 @@ ui:
   minigame-id: "fishing_minigame"
   # 鱼类图鉴 UI 的 ID。
   collection-id: "fishing_collection"
+  # 天赋树 UI 的 ID。
+  talents-id: "fishing_talents"
+  # 赛季等级奖励 UI 的 ID。
+  rewards-id: "fishing_rewards"
+  # 任务列表 UI 的 ID。
+  tasks-id: "fishing_tasks"
 
 # ─── 命令配置 ────────────────────────────────────────
 commands:
