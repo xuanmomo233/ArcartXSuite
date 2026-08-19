@@ -47,6 +47,7 @@ import xuanmo.arcartxsuite.fishing.model.WaterArea.AreaType;
  * @param treasurePools   宝藏池映射（池名 → 宝藏 id 列表）
  * @param ui              UI 配置（小游戏/图鉴界面 id 等）
  * @param commands        命令配置
+ * @param debug           是否输出调试日志（钓鱼事件、小游戏状态、发包详情等）
  */
 public record FishingModuleConfiguration(
     @NotNull StorageConfiguration storage,
@@ -61,7 +62,8 @@ public record FishingModuleConfiguration(
     @NotNull Map<String, List<String>> fishPools,
     @NotNull Map<String, List<String>> treasurePools,
     @NotNull UiConfiguration ui,
-    @NotNull CommandsConfiguration commands
+    @NotNull CommandsConfiguration commands,
+    boolean debug
 ) {
 
     public static FishingModuleConfiguration load(FileConfiguration yaml, File dataFolder, Logger logger) {
@@ -95,7 +97,8 @@ public record FishingModuleConfiguration(
             Collections.unmodifiableMap(fishPools),
             Collections.unmodifiableMap(treasurePools),
             UiConfiguration.load(yaml.getConfigurationSection("ui")),
-            CommandsConfiguration.load(yaml.getConfigurationSection("commands"))
+            CommandsConfiguration.load(yaml.getConfigurationSection("commands")),
+            yaml.getBoolean("debug", false)
         );
     }
 

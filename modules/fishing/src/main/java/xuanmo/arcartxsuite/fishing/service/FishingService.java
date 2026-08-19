@@ -64,6 +64,13 @@ public final class FishingService {
     private final Map<UUID, FishingMinigame> activeMinigames = new HashMap<>();
     private final Map<UUID, Long> fishingCooldowns = new HashMap<>(); // 玩家UUID → 冷却到期时间戳(System.currentTimeMillis)
     private final TalentEngine talentEngine;
+
+    /** 调试日志：仅当 configuration.debug() 为 true 时输出。 */
+    public void debug(@NotNull String message) {
+        if (configuration.debug()) {
+            logger.info("[Fishing] " + message);
+        }
+    }
     private final List<SeasonRewardDefinition> seasonRewards;
     private final RewardDispatcher rewardDispatcher;
     private final SettlementEngine settlementEngine;
@@ -172,12 +179,13 @@ public final class FishingService {
             return false;
         }
         if (isPlayerInMinigame(player.getUniqueId())) {
-            logger.fine("startMinigame 失败: 玩家已在小游戏中");
+            debug("startMinigame 跳过: 玩家已在小游戏中 " + player.getName());
             return false;
         }
         // 钓鱼冷却检查
         Long cooldownUntil = fishingCooldowns.get(player.getUniqueId());
         if (cooldownUntil != null && cooldownUntil > System.currentTimeMillis()) {
+            debug("startMinigame 跳过: 玩家冷却中 " + player.getName());
             return false;
         }
 
@@ -187,7 +195,7 @@ public final class FishingService {
 
         // 权限检查
         if (water.requirePermission() != null && !water.requirePermission().isBlank() && !player.hasPermission(water.requirePermission())) {
-            logger.fine("startMinigame 失败: 权限不足 " + water.requirePermission());
+            debug("startMinigame 跳过: 权限不足 " + water.requirePermission());
             return false;
         }
 
@@ -211,6 +219,10 @@ public final class FishingService {
             logger.warning("startMinigame 失败: selectFishFromPool 返回 null");
             return false;
         }
+
+        debug("startMinigame: player=" + player.getName() + " water=" + water.name()
+            + " fish=" + fish.id() + " difficulty=" + fish.difficulty()
+            + " bait=" + (baitId != null ? baitId : "none"));
 
         // 应用水域难度修改器
         int adjustedDifficulty = (int) (fish.difficulty() * water.difficultyModifier());
@@ -251,6 +263,9 @@ public final class FishingService {
         }
         Player player = Bukkit.getPlayer(session.playerUuid());
         if (player == null) return;
+
+        debug("onMinigameComplete: player=" + player.getName() + " success=" + success + " perfect=" + perfect
+            + " fish=" + session.fish().id());
 
         if (success) {
             handleSuccess(player, session, perfect);

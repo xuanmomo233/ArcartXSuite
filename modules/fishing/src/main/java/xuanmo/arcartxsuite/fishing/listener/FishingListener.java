@@ -41,7 +41,6 @@ public final class FishingListener implements Listener {
 
         // 小游戏进行中：取消所有钓鱼事件（防止右键收杆打断小游戏）
         if (service.isPlayerInMinigame(player.getUniqueId())) {
-            logger.fine("玩家已在小游戏中，取消钓鱼事件: " + player.getName());
             event.setCancelled(true);
             return;
         }
