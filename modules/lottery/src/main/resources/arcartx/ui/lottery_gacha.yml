@@ -251,14 +251,14 @@ ui:
     # load 事件: 初始化星级配色、稀有度配色与界面状态变量
     load: |-
       var.starColors = {}
-      var.starColors[3] = '118,140,168,255'  # 3 星 - 蓝灰
-      var.starColors[4] = '168,120,220,255'  # 4 星 - 紫
-      var.starColors[5] = '232,180,90,255'   # 5 星 - 金
+      var.starColors[3] = '118,140,168,255'  // 3 星 - 蓝灰
+      var.starColors[4] = '168,120,220,255'  // 4 星 - 紫
+      var.starColors[5] = '232,180,90,255'   // 5 星 - 金
       var.starColors[none] = '128,128,128,255'
       var.air = '{"id":"minecraft:air","Count":1b}'
-      var.revealMs = 1600       # 等待层到结果层的过场时长（毫秒）
-      var.pulling = false       # 是否正在祈愿（防连点）
-      var.resultPending = false # 本次祈愿是否已收到结果包
+      var.revealMs = 1600       // 等待层到结果层的过场时长（毫秒）
+      var.pulling = false       // 是否正在祈愿（防连点）
+      var.resultPending = false // 本次祈愿是否已收到结果包
       var.pointBalanceRows = {}
       var.exchangeRows = {}
       var.exchangeCount = 0
@@ -2304,14 +2304,14 @@ controls:
                 attribute:
                   point: ~stretch_all
                   normal: ~26,30,44,244
+                  shape: ~round_rect
+                  radius: 12
+                effect:
                   gradient:
                     color1: ~38,46,72,255
                     color2: ~30,40,64,255
                     type: 0
                     angleDeg: 90
-                  shape: ~round_rect
-                  radius: 12
-                effect:
                   stroke:
                     width: 3
                     color: "{var.starColors != none && var.resultItemStars != none && var.resultItemStars[1] != none && var.starColors[var.resultItemStars[1]] != none ? var.starColors[var.resultItemStars[1]] : '128,128,128,255'}"
@@ -2543,14 +2543,14 @@ controls:
                       entryKey: 0.round()
                       point: ~stretch_all
                       normal: ~26,30,44,244
+                      shape: ~round_rect
+                      radius: 8
+                    effect:
                       gradient:
                         color1: ~38,46,72,255
                         color2: ~30,40,64,255
                         type: 0
                         angleDeg: 90
-                      shape: ~round_rect
-                      radius: 8
-                    effect:
                       stroke:
                         width: 2
                         color: "{var.starColors != none && var.resultItemStars != none && var.resultItemStars[self.entryKey] != none && var.starColors[var.resultItemStars[self.entryKey]] != none ? var.starColors[var.resultItemStars[self.entryKey]] : '128,128,128,255'}"
@@ -2738,14 +2738,14 @@ controls:
             attribute:
               point: ~stretch_all
               normal: ~26,30,44,244
+              shape: ~round_rect
+              radius: 12
+            effect:
               gradient:
                 color1: ~38,46,72,255
                 color2: ~30,40,64,255
                 type: 0
                 angleDeg: 90
-              shape: ~round_rect
-              radius: 12
-            effect:
               stroke:
                 width: 2
                 color: ~110,148,204,150
@@ -2933,14 +2933,14 @@ controls:
             attribute:
               point: ~stretch_all
               normal: ~26,30,44,244
+              shape: ~round_rect
+              radius: 12
+            effect:
               gradient:
                 color1: ~38,46,72,255
                 color2: ~30,40,64,255
                 type: 0
                 angleDeg: 90
-              shape: ~round_rect
-              radius: 12
-            effect:
               stroke:
                 width: 2
                 color: ~110,148,204,150
@@ -3145,14 +3145,14 @@ controls:
             attribute:
               point: ~stretch_all
               normal: ~26,30,44,244
+              shape: ~round_rect
+              radius: 12
+            effect:
               gradient:
                 color1: ~38,46,72,255
                 color2: ~30,40,64,255
                 type: 0
                 angleDeg: 90
-              shape: ~round_rect
-              radius: 12
-            effect:
               stroke:
                 width: 2
                 color: ~110,148,204,150

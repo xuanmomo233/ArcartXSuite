@@ -711,7 +711,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   width: 104
-                  texts: '&0解锁'
+                  texts: ~&0解锁
                   fontSize: 16
                   shadow: false
                   through: true
@@ -742,7 +742,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   width: 104
-                  texts: '&0传送'
+                  texts: ~&0传送
                   fontSize: 16
                   shadow: false
                   through: true
@@ -779,7 +779,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   width: 104
-                  texts: '&0导航'
+                  texts: ~&0导航
                   fontSize: 16
                   shadow: false
                   through: true
@@ -810,7 +810,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   width: 72
-                  texts: '&0删除'
+                  texts: ~&0删除
                   fontSize: 16
                   shadow: false
                   through: true
@@ -841,7 +841,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   width: 72
-                  texts: '&0新建'
+                  texts: ~&0新建
                   fontSize: 16
                   shadow: false
                   through: true
@@ -872,7 +872,7 @@ controls:
                 attribute:
                   point: ~middle_center
                   width: 72
-                  texts: '&0清除'
+                  texts: ~&0清除
                   fontSize: 16
                   shadow: false
                   through: true

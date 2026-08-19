@@ -229,6 +229,11 @@ ui:
       var.maxSigninRewardCount = 0
       var.maxSelectedRewardCount = 0
       var.calendarCount = 31
+      var.signInStreak = 0
+      var.signInTotal = 0
+      var.makeupCardCount = 0
+      var.serverSignInGoalCurrent = 0
+      var.serverSignInGoalNext = 0
     open: |-
       var.packetId = 'AXS_ONLINE_REWARDS'
       var.dailyTimeText = '0分钟'
