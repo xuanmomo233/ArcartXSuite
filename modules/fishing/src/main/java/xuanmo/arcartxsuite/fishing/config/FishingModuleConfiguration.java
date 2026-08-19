@@ -162,6 +162,166 @@ public record FishingModuleConfiguration(
         FishingItemRef itemRef = parseItemRef(section, "item", "minecraft:cod");
         int difficulty = section.getInt("difficulty", 30);
 
+        List<FishDefinition.BehaviorEntry> behaviors = parseBehaviors(section);
+        if (behaviors.isEmpty()) {
+            behaviors.add(new FishDefinition.BehaviorEntry(FishBehaviorType.SMOOTH, 1.0));
+        }
+
+        FishDefinition.CurrencyReward currencyReward = null;
+        ConfigurationSection crSection = section.getConfigurationSection("currency-reward");
+        if (crSection != null) {
+            String currencyId = crSection.getString("currency-id", "");
+            double amount = crSection.getDouble("amount", 0);
+            if (!currencyId.isEmpty() && amount > 0) {
+                currencyReward = new FishDefinition.CurrencyReward(currencyId, amount);
+            }
+        }
+
+        // ─── 小游戏机制（可选） ──────────────────────────
+        Double progressDrainRate = section.contains("progress-drain-rate") ? section.getDouble("progress-drain-rate") : null;
+        Double progressGainRate = section.contains("progress-gain-rate") ? section.getDouble("progress-gain-rate") : null;
+
+        FishDefinition.FleeParams fleeParams = null;
+        ConfigurationSection fleeSection = section.getConfigurationSection("flee-params");
+        if (fleeSection != null) {
+            fleeParams = new FishDefinition.FleeParams(
+                fleeSection.contains("base-chance") ? fleeSection.getDouble("base-chance") : null,
+                fleeSection.contains("chance-per-difficulty") ? fleeSection.getDouble("chance-per-difficulty") : null,
+                fleeSection.contains("base-speed") ? fleeSection.getDouble("base-speed") : null,
+                fleeSection.contains("speed-per-difficulty") ? fleeSection.getDouble("speed-per-difficulty") : null,
+                fleeSection.contains("min-duration") ? fleeSection.getInt("min-duration") : null,
+                fleeSection.contains("max-duration") ? fleeSection.getInt("max-duration") : null,
+                fleeSection.contains("check-min-interval") ? fleeSection.getInt("check-min-interval") : null,
+                fleeSection.contains("check-max-interval") ? fleeSection.getInt("check-max-interval") : null,
+                fleeSection.contains("cooldown-min") ? fleeSection.getInt("cooldown-min") : null,
+                fleeSection.contains("cooldown-max") ? fleeSection.getInt("cooldown-max") : null
+            );
+        }
+
+        // 多阶段行为
+        List<FishDefinition.BehaviorStage> behaviorStages = new ArrayList<>();
+        ConfigurationSection stagesSection = section.getConfigurationSection("behavior-stages");
+        if (stagesSection != null) {
+            for (String stageKey : stagesSection.getKeys(false)) {
+                ConfigurationSection stage = stagesSection.getConfigurationSection(stageKey);
+                if (stage != null) {
+                    double threshold = stage.getDouble("threshold", 0.0);
+                    List<FishDefinition.BehaviorEntry> stageBehaviors = parseBehaviors(stage);
+                    if (!stageBehaviors.isEmpty()) {
+                        behaviorStages.add(new FishDefinition.BehaviorStage(threshold, stageBehaviors));
+                    }
+                }
+            }
+        }
+        // 按 threshold 排序
+        behaviorStages.sort(java.util.Comparator.comparingDouble(FishDefinition.BehaviorStage::threshold));
+
+        // ─── 奖励（可选） ──────────────────────────────────
+        // 多物品掉落
+        List<FishDefinition.DropEntry> drops = new ArrayList<>();
+        ConfigurationSection dropsSection = section.getConfigurationSection("drops");
+        if (dropsSection != null) {
+            for (String dropKey : dropsSection.getKeys(false)) {
+                ConfigurationSection drop = dropsSection.getConfigurationSection(dropKey);
+                if (drop != null) {
+                    FishingItemRef dropItem = parseItemRef(drop, "item", "minecraft:air");
+                    if (!dropItem.isEmpty()) {
+                        double weight = drop.getDouble("weight", 1.0);
+                        String condition = drop.getString("condition", "");
+                        drops.add(new FishDefinition.DropEntry(dropItem, weight, condition));
+                    }
+                }
+            }
+        }
+
+        // 命令奖励
+        List<FishDefinition.CommandReward> commandRewards = new ArrayList<>();
+        ConfigurationSection cmdSection = section.getConfigurationSection("command-rewards");
+        if (cmdSection != null) {
+            for (String cmdKey : cmdSection.getKeys(false)) {
+                ConfigurationSection cmd = cmdSection.getConfigurationSection(cmdKey);
+                if (cmd != null) {
+                    String command = cmd.getString("command", "");
+                    String condition = cmd.getString("condition", "");
+                    if (!command.isEmpty()) {
+                        commandRewards.add(new FishDefinition.CommandReward(command, condition));
+                    }
+                }
+            }
+        }
+
+        // 多货币奖励
+        List<FishDefinition.CurrencyReward> currencyRewards = new ArrayList<>();
+        ConfigurationSection crsSection = section.getConfigurationSection("currency-rewards");
+        if (crsSection != null) {
+            for (String crKey : crsSection.getKeys(false)) {
+                ConfigurationSection cr2 = crsSection.getConfigurationSection(crKey);
+                if (cr2 != null) {
+                    String currencyId = cr2.getString("currency-id", "");
+                    double amount = cr2.getDouble("amount", 0);
+                    if (!currencyId.isEmpty() && amount > 0) {
+                        currencyRewards.add(new FishDefinition.CurrencyReward(currencyId, amount));
+                    }
+                }
+            }
+        }
+
+        // ─── 出现条件（可选） ──────────────────────────────
+        int minPlayerLevel = section.getInt("min-player-level", 0);
+        String requirePermission = section.contains("require-permission") ? section.getString("require-permission", "") : null;
+        if (requirePermission != null && requirePermission.isEmpty()) requirePermission = null;
+
+        // 饵料偏好
+        List<FishDefinition.BaitPreference> baitPreferences = new ArrayList<>();
+        ConfigurationSection baitPrefSection = section.getConfigurationSection("bait-preferences");
+        if (baitPrefSection != null) {
+            for (String bpKey : baitPrefSection.getKeys(false)) {
+                ConfigurationSection bp = baitPrefSection.getConfigurationSection(bpKey);
+                if (bp != null) {
+                    String baitId = bp.getString("bait-id", "");
+                    double multiplier = bp.getDouble("multiplier", 1.0);
+                    if (!baitId.isEmpty()) {
+                        baitPreferences.add(new FishDefinition.BaitPreference(baitId, multiplier));
+                    }
+                }
+            }
+        }
+
+        // biome 限制
+        List<String> biomes = section.getStringList("biomes");
+
+        // 深度限制
+        FishDefinition.DepthRange depthRange = null;
+        ConfigurationSection depthSection = section.getConfigurationSection("depth-range");
+        if (depthSection != null) {
+            int minDepth = depthSection.getInt("min-depth", 0);
+            int maxDepth = depthSection.getInt("max-depth", 256);
+            depthRange = new FishDefinition.DepthRange(minDepth, maxDepth);
+        }
+
+        // ─── 数据/展示（可选） ─────────────────────────────
+        String description = section.contains("description") ? section.getString("description") : null;
+        String iconTexture = section.contains("icon-texture") ? section.getString("icon-texture") : null;
+        String iconTextureUrl = section.contains("icon-texture-url") ? section.getString("icon-texture-url") : null;
+        double recordWeight = section.getDouble("record-weight", 1.0);
+
+        return FishDefinition.builder()
+            .id(id).displayName(displayName).rarity(rarity)
+            .minSize(minSize).maxSize(maxSize).basePrice(basePrice).baseXp(baseXp)
+            .seasons(seasons).weathers(weathers).waterTypes(waterTypes)
+            .timeRanges(timeRanges).itemRef(itemRef).difficulty(difficulty).behaviors(behaviors)
+            .currencyReward(currencyReward)
+            .progressDrainRate(progressDrainRate).progressGainRate(progressGainRate)
+            .fleeParams(fleeParams).behaviorStages(behaviorStages)
+            .drops(drops).commandRewards(commandRewards).currencyRewards(currencyRewards)
+            .minPlayerLevel(minPlayerLevel).requirePermission(requirePermission)
+            .baitPreferences(baitPreferences).biomes(biomes).depthRange(depthRange)
+            .description(description).iconTexture(iconTexture).iconTextureUrl(iconTextureUrl)
+            .recordWeight(recordWeight)
+            .build();
+    }
+
+    private static List<FishDefinition.BehaviorEntry> parseBehaviors(ConfigurationSection section) {
         List<FishDefinition.BehaviorEntry> behaviors = new ArrayList<>();
         ConfigurationSection bhSection = section.getConfigurationSection("behaviors");
         if (bhSection != null) {
@@ -178,27 +338,7 @@ public record FishingModuleConfiguration(
                 }
             }
         }
-        if (behaviors.isEmpty()) {
-            behaviors.add(new FishDefinition.BehaviorEntry(FishBehaviorType.SMOOTH, 1.0));
-        }
-
-        FishDefinition.CurrencyReward currencyReward = null;
-        ConfigurationSection crSection = section.getConfigurationSection("currency-reward");
-        if (crSection != null) {
-            String currencyId = crSection.getString("currency-id", "");
-            double amount = crSection.getDouble("amount", 0);
-            if (!currencyId.isEmpty() && amount > 0) {
-                currencyReward = new FishDefinition.CurrencyReward(currencyId, amount);
-            }
-        }
-
-        return FishDefinition.builder()
-            .id(id).displayName(displayName).rarity(rarity)
-            .minSize(minSize).maxSize(maxSize).basePrice(basePrice).baseXp(baseXp)
-            .seasons(seasons).weathers(weathers).waterTypes(waterTypes)
-            .timeRanges(timeRanges).itemRef(itemRef).difficulty(difficulty).behaviors(behaviors)
-            .currencyReward(currencyReward)
-            .build();
+        return behaviors;
     }
 
     // ─── 从 treasures/ 目录加载 ────────────────────────────────

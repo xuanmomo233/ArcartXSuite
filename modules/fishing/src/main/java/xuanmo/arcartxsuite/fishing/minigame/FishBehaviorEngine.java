@@ -15,6 +15,7 @@ public final class FishBehaviorEngine implements FishBehavior {
 
     private final FishBehaviorType type;
     private final int difficulty;
+    private FishBehaviorType activeType; // 当前生效的行为类型（支持多阶段切换）
     private long lastDartTick = 0;
     private double dartTarget = 0.5;
     private double dartSpeed = 0.02;
@@ -30,6 +31,7 @@ public final class FishBehaviorEngine implements FishBehavior {
 
     public FishBehaviorEngine(FishBehaviorType type, int difficulty) {
         this.type = type;
+        this.activeType = type;
         this.difficulty = difficulty;
         // 随机初始化游荡频率，让每条鱼的节奏不同
         wanderFreq1 = 0.02 + ThreadLocalRandom.current().nextDouble() * 0.04;
@@ -37,9 +39,24 @@ public final class FishBehaviorEngine implements FishBehavior {
         wanderAmp = 0.004 + ThreadLocalRandom.current().nextDouble() * 0.006;
     }
 
+    /**
+     * 切换行为类型（多阶段行为用），重置内部状态。
+     */
+    public void switchBehavior(FishBehaviorType newType) {
+        this.activeType = newType;
+        // 重置状态
+        lastDartTick = 0;
+        sinkerPhase = 0;
+        floaterPhase = 0;
+        nextModeSwitchTick = 0;
+        currentMode = 0;
+        stayUntilTick = 0;
+    }
+
     @Override
     public double tick(double currentPosition, double currentVelocity, long tick, int difficulty) {
         double jitter = this.difficulty / 100.0;
+        FishBehaviorType type = this.activeType;
         switch (type) {
             case SMOOTH -> {
                 return smoothBehavior(currentPosition, tick, jitter);
@@ -52,6 +69,15 @@ public final class FishBehaviorEngine implements FishBehavior {
             }
             case FLOATER -> {
                 return floaterBehavior(currentPosition, tick, jitter);
+            }
+            case MIXED -> {
+                return mixedBehavior(currentPosition, tick, jitter);
+            }
+            case ZIGZAG -> {
+                return zigzagBehavior(currentPosition, tick, jitter);
+            }
+            case IDLE -> {
+                return idleBehavior(currentPosition, tick, jitter);
             }
         }
         return 0.0;
@@ -208,5 +234,78 @@ public final class FishBehaviorEngine implements FishBehavior {
             return -(base + periodic + noise);
         }
         return base + periodic + noise;
+    }
+
+    /**
+     * 混合型：在 smooth/dart/sinker/floater 之间随机切换，无法预测的运动模式。
+     */
+    private double mixedBehavior(double position, long tick, double jitter) {
+        if (tick >= nextModeSwitchTick) {
+            // 随机切换到一种子行为
+            int mode = ThreadLocalRandom.current().nextInt(4);
+            currentMode = mode;
+            nextModeSwitchTick = tick + 40 + ThreadLocalRandom.current().nextInt(60);
+            // 重置子行为状态
+            lastDartTick = tick;
+            sinkerPhase = 0;
+            floaterPhase = 0;
+        }
+        return switch (currentMode) {
+            case 1 -> dartBehavior(position, tick, jitter);
+            case 2 -> sinkerBehavior(position, tick, jitter);
+            case 3 -> floaterBehavior(position, tick, jitter);
+            default -> smoothBehavior(position, tick, jitter);
+        };
+    }
+
+    /**
+     * 之字型：规律性左右摆动，幅度和频率随难度增加。
+     */
+    private double zigzagBehavior(double position, long tick, double jitter) {
+        // 主频率之字摆动
+        double freq = 0.04 + jitter * 0.03;
+        double amp = 0.008 + jitter * 0.006;
+        double wave = Math.sin(tick * freq) * amp;
+        // 叠加高频小波增加不规则性
+        double ripple = Math.sin(tick * 0.12) * 0.002 * jitter;
+        double noise = (ThreadLocalRandom.current().nextDouble() - 0.5) * 0.002 * jitter;
+        // 回中力防止飘到边缘
+        double centerPull = (0.5 - position) * 0.008;
+        return wave + ripple + noise + centerPull;
+    }
+
+    /**
+     * 停滞型：长时间几乎不动，偶尔突然突进。模拟潜伏型鱼类。
+     */
+    private double idleBehavior(double position, long tick, double jitter) {
+        if (tick >= nextModeSwitchTick) {
+            // 进入突进模式
+            if (currentMode == 0) {
+                currentMode = 1;
+                dartTarget = ThreadLocalRandom.current().nextDouble(0.1, 0.9);
+                if (Math.abs(dartTarget - position) < 0.3) {
+                    dartTarget = position < 0.5
+                        ? ThreadLocalRandom.current().nextDouble(0.5, 0.9)
+                        : ThreadLocalRandom.current().nextDouble(0.1, 0.5);
+                }
+                dartSpeed = 0.03 + jitter * 0.04;
+                nextModeSwitchTick = tick + 10 + ThreadLocalRandom.current().nextInt(15);
+            } else {
+                // 回到停滞
+                currentMode = 0;
+                nextModeSwitchTick = tick + 60 + ThreadLocalRandom.current().nextInt(80);
+            }
+        }
+        if (currentMode == 1) {
+            double diff = dartTarget - position;
+            if (Math.abs(diff) < 0.03) {
+                currentMode = 0;
+                nextModeSwitchTick = tick + 60 + ThreadLocalRandom.current().nextInt(80);
+                return (ThreadLocalRandom.current().nextDouble() - 0.5) * 0.002;
+            }
+            return Math.signum(diff) * dartSpeed;
+        }
+        // 停滞：微小抖动
+        return (ThreadLocalRandom.current().nextDouble() - 0.5) * 0.001 * (1 + jitter);
     }
 }

@@ -9,5 +9,8 @@ public enum FishBehaviorType {
     SMOOTH,
     DART,
     SINKER,
-    FLOATER
+    FLOATER,
+    MIXED,
+    ZIGZAG,
+    IDLE
 }

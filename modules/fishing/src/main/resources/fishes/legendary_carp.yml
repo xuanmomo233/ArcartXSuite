@@ -1,6 +1,7 @@
 # 鱼类定义：传说鲤鱼
 # 传说鲤鱼是游戏中最稀有的鱼类，仅在春季雨天的湖泊中、黎明时分出现，难度极高
 # 鱼类文件位于 fishes/ 目录，每个文件定义一种鱼
+# 以下展示全部可选扩展字段（未配置时使用全局默认值或无效果）
 
 id: "legendary_carp"           # 鱼类唯一标识符
 display-name: "传说鲤鱼"         # 显示名称
@@ -27,3 +28,117 @@ behaviors:                     # 小游戏中鱼的行为模式及权重
     weight: 0.3                # 权重0.3
   - type: floater              # 上浮型：鱼向轨道顶部移动
     weight: 0.2                # 权重0.2
+
+# ─── 小游戏机制（可选，覆盖全局配置） ──────────────────
+# 每条鱼独立的进度速率（未配置时用全局 fishing.progress-gain/drain-rate）
+progress-gain-rate: 0.8        # 鱼在绿条内时进度上升较慢（全局默认1.0）
+progress-drain-rate: 0.8       # 鱼在绿条外时进度下降较快（全局默认0.5）
+
+# 每条鱼独立的逃离参数（未配置的字段用全局默认值）
+flee-params:
+  base-chance: 0.35            # 基础逃离概率更高（全局默认0.25）
+  speed-per-difficulty: 0.04   # 每点难度逃离速度增长更多（全局默认0.03）
+  min-duration: 20             # 逃离持续更久（全局默认15）
+
+# 多阶段行为：进度达到阈值后切换行为模式（模拟"鱼越挣扎越激烈"）
+# threshold = 进度百分比（0.0~1.0），达到后切换到对应阶段的行为
+behavior-stages:
+  stage1:
+    threshold: 0.0             # 进度 0% 起：初始行为
+    behaviors:
+      - type: smooth
+        weight: 0.7
+      - type: dart
+        weight: 0.3
+  stage2:
+    threshold: 0.5             # 进度 50% 后：更激进
+    behaviors:
+      - type: dart
+        weight: 0.6
+      - type: zigzag           # 之字型：规律性左右摆动
+        weight: 0.4
+  stage3:
+    threshold: 0.8             # 进度 80% 后：疯狂挣扎
+    behaviors:
+      - type: mixed            # 混合型：随机切换所有行为
+        weight: 0.5
+      - type: idle             # 停滞型：长时间不动后突然突进
+        weight: 0.5
+
+# ─── 奖励（可选） ──────────────────────────────────────
+# 货币奖励（单个，向后兼容）
+currency-reward:
+  currency-id: "coin"
+  amount: 500
+
+# 多货币奖励列表（与 currency-reward 叠加生效）
+currency-rewards:
+  reward1:
+    currency-id: "gem"
+    amount: 10
+  reward2:
+    currency-id: "reputation"
+    amount: 50
+
+# 多物品掉落（与 item 叠加，支持条件掉落）
+# condition 支持的值："" (无条件)、"perfect" (完美捕获)、"size:N" (尺寸≥N)、"first_catch" (首次捕获)
+# 多条件用逗号分隔（全部满足才掉落）
+drops:
+  rare_drop:
+    item:
+      source: "minecraft"
+      item-id: "nether_star"
+      amount: 1
+    weight: 1.0
+    condition: "perfect"       # 仅完美捕获时掉落
+  big_fish_bonus:
+    item:
+      source: "minecraft"
+      item-id: "diamond"
+      amount: 3
+    weight: 1.0
+    condition: "size:200"      # 尺寸≥200cm 时掉落
+  first_catch_reward:
+    item:
+      source: "minecraft"
+      item-id: "golden_apple"
+      amount: 5
+    weight: 1.0
+    condition: "first_catch"   # 首次捕获此鱼时掉落
+
+# 命令奖励（捕获后以控制台身份执行）
+# 支持占位符：{player}、{fish}、{size}
+command-rewards:
+  announce:
+    command: "say {player} 钓到了一条 {size}cm 的传说鲤鱼！"
+    condition: ""              # 无条件执行
+  give_title:
+    command: "title {player} title \"&6传说渔夫！\""
+    condition: "perfect"       # 完美捕获时执行
+
+# ─── 出现条件（可选） ──────────────────────────────────
+min-player-level: 30           # 最低钓鱼等级30级才能钓到
+require-permission: "axs.fishing.legendary"  # 需要此权限才能钓到
+
+# 饵料偏好：指定饵料对该鱼的出现概率倍率
+bait-preferences:
+  worm_pref:
+    bait-id: "worm"
+    multiplier: 0.5            # 蚯蚓降低出现概率
+  special_bait:
+    bait-id: "golden_bait"
+    multiplier: 3.0            # 金饵料大幅提高出现概率
+
+# biome 限制（留空=不限 biome）
+biomes: [river, ocean]         # 仅在河流和海洋生物群系出现
+
+# 深度限制（从水面往下的方块深度）
+depth-range:
+  min-depth: 5                 # 至少5格深
+  max-depth: 50                # 最深50格
+
+# ─── 数据/展示（可选） ─────────────────────────────────
+description: "传说中的金色鲤鱼，据说只有最虔诚的渔夫才能在黎明的雨中湖畔遇见它。"
+icon-texture: "minecraft:enchanted_golden_apple"  # 图鉴中的鱼图标
+icon-texture-url: "https://example.com/textures/legendary_carp.png"  # 自定义贴图URL
+record-weight: 2.0             # 图鉴排序权重（越大越靠前）

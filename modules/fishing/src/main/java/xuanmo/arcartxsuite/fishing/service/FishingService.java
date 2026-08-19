@@ -352,15 +352,51 @@ public final class FishingService {
         repository.saveSeasonData(updatedSeason);
         repository.savePermanentData(updatedPerm);
 
-        // ─── 货币奖励 ────────────────────────────────────────────
-        if (fish.currencyReward() != null) {
-            CurrencyBridgeAPI currencyApi = currencyProvider != null ? currencyProvider.get() : null;
-            if (currencyApi != null) {
-                var reward = fish.currencyReward();
-                double amount = perfect ? reward.amount() * configuration.fishing().perfectBonusMultiplier() : reward.amount();
-                var bridge = currencyApi.bridge(reward.currencyId());
+        // ─── 货币奖励（单个 + 多货币列表） ───────────────────────
+        CurrencyBridgeAPI currencyApi = currencyProvider != null ? currencyProvider.get() : null;
+        if (fish.currencyReward() != null && currencyApi != null) {
+            var reward = fish.currencyReward();
+            double amount = perfect ? reward.amount() * configuration.fishing().perfectBonusMultiplier() : reward.amount();
+            var bridge = currencyApi.bridge(reward.currencyId());
+            if (bridge != null && bridge.available()) {
+                bridge.deposit(player, BigDecimal.valueOf(amount));
+            }
+        }
+        if (!fish.currencyRewards().isEmpty() && currencyApi != null) {
+            for (FishDefinition.CurrencyReward cr : fish.currencyRewards()) {
+                double amount = perfect ? cr.amount() * configuration.fishing().perfectBonusMultiplier() : cr.amount();
+                var bridge = currencyApi.bridge(cr.currencyId());
                 if (bridge != null && bridge.available()) {
                     bridge.deposit(player, BigDecimal.valueOf(amount));
+                }
+            }
+        }
+
+        // ─── 多物品掉落（条件掉落） ─────────────────────────────
+        for (FishDefinition.DropEntry drop : fish.drops()) {
+            if (checkDropCondition(drop.condition(), perfect, size, isFirstCatch)) {
+                try {
+                    ItemStack dropStack = itemGenerator.generate(drop.itemRef(), player);
+                    if (dropStack != null) {
+                        dropOrGive(player, dropStack);
+                    }
+                } catch (Exception e) {
+                    logger.warning("给予额外掉落物品失败: " + e.getMessage());
+                }
+            }
+        }
+
+        // ─── 命令奖励 ──────────────────────────────────────────
+        for (FishDefinition.CommandReward cmd : fish.commandRewards()) {
+            if (checkDropCondition(cmd.condition(), perfect, size, isFirstCatch)) {
+                String executed = cmd.command()
+                    .replace("{player}", player.getName())
+                    .replace("{fish}", fish.id())
+                    .replace("{size}", String.valueOf(size));
+                try {
+                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), executed);
+                } catch (Exception e) {
+                    logger.warning("执行鱼命令奖励失败: " + executed + " — " + e.getMessage());
                 }
             }
         }
@@ -462,6 +498,9 @@ public final class FishingService {
             .filter(f -> f.weathers().contains(currentWeather))
             .filter(f -> f.waterTypes().contains(waterType))
             .filter(f -> isInTimeRange(currentTime, f.timeRanges()))
+            .filter(f -> f.minPlayerLevel() <= getPlayerSeasonLevel(player))
+            .filter(f -> f.requirePermission() == null || player.hasPermission(f.requirePermission()))
+            .filter(f -> f.biomes().isEmpty() || f.biomes().contains(getPlayerBiome(player).toLowerCase()))
             .toList();
 
         if (candidates.isEmpty()) {
@@ -484,6 +523,13 @@ public final class FishingService {
             double weight = fish.rarity().weightMultiplier();
             if (bait != null) {
                 weight *= bait.attractModifier(fish.id());
+                // 鱼的饵料偏好覆盖
+                for (FishDefinition.BaitPreference pref : fish.baitPreferences()) {
+                    if (pref.baitId().equals(bait.id())) {
+                        weight *= pref.multiplier();
+                        break;
+                    }
+                }
             }
             weights.put(fish, weight);
             totalWeight += weight;
@@ -719,6 +765,35 @@ public final class FishingService {
             case 9, 10, 11 -> "fall";
             default -> "winter";
         };
+    }
+
+    private int getPlayerSeasonLevel(@NotNull Player player) {
+        FishingSeasonData data = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
+        return data != null ? data.level() : 0;
+    }
+
+    private String getPlayerBiome(@NotNull Player player) {
+        try {
+            return player.getLocation().getBlock().getBiome().name();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /**
+     * 检查掉落/命令条件是否满足。
+     * 支持条件："" (无条件)、"perfect" (完美捕获)、"size:N" (尺寸≥N)、"first_catch" (首次捕获)。
+     * 多条件用逗号分隔（全部满足才通过）。
+     */
+    private boolean checkDropCondition(@NotNull String condition, boolean perfect, int size, boolean firstCatch) {
+        if (condition.isEmpty()) return true;
+        for (String cond : condition.split(",")) {
+            cond = cond.trim().toLowerCase();
+            if (cond.equals("perfect") && !perfect) return false;
+            if (cond.equals("first_catch") && !firstCatch) return false;
+            if (cond.startsWith("size:") && size < Integer.parseInt(cond.substring(5))) return false;
+        }
+        return true;
     }
 
     private String getCurrentWeather(@NotNull World world) {

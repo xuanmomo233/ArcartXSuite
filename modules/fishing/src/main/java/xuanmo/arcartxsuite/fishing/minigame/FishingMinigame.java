@@ -1,6 +1,7 @@
 package xuanmo.arcartxsuite.fishing.minigame;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import org.bukkit.Bukkit;
@@ -12,6 +13,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.PacketBridgeAPI;
 import xuanmo.arcartxsuite.fishing.config.FishingModuleConfiguration.FishingSettings;
+import xuanmo.arcartxsuite.fishing.model.FishBehaviorType;
 import xuanmo.arcartxsuite.fishing.model.FishDefinition;
 import xuanmo.arcartxsuite.fishing.service.FishingItemGenerator;
 import xuanmo.arcartxsuite.fishing.service.FishingService;
@@ -42,6 +44,7 @@ public final class FishingMinigame {
     private double barVelocity = 0.0;
     private double progress = 0.5;          // [0, 1]
     private long tick = 0;
+    private int currentStageIndex = -1;     // 当前行为阶段索引，-1 = 使用默认 behaviors
     private boolean wasPerfect = true;      // 是否全程在绿条内
     private BukkitTask tickTask;
 
@@ -133,6 +136,21 @@ public final class FishingMinigame {
         tick++;
         session.decrementRemainingTicks();
 
+        // 多阶段行为：根据进度切换鱼的行为模式
+        List<FishDefinition.BehaviorStage> stages = session.fish().behaviorStages();
+        if (!stages.isEmpty()) {
+            FishDefinition.BehaviorStage stage = session.fish().selectBehaviorStage(progress);
+            int newStageIndex = stage != null ? stages.indexOf(stage) : -1;
+            if (newStageIndex != currentStageIndex) {
+                currentStageIndex = newStageIndex;
+                // 重新选择行为并重建引擎
+                FishBehaviorType newType = stage != null && !stage.behaviors().isEmpty()
+                    ? selectWeightedBehavior(stage.behaviors())
+                    : session.fish().randomBehavior();
+                fishEngine.switchBehavior(newType);
+            }
+        }
+
         // 更新鱼位置（等级越高鱼越慢，使用加权混合等级修正模型）
         double lvlMod = levelModifier();
         double fishSpeedMultiplier = (1.0 - lvlMod * settings.fishSpeedLevelScale()) * (1.0 - talentBonuses.fishSpeedReduction());
@@ -152,10 +170,23 @@ public final class FishingMinigame {
         double barTopForFlee = barPosition + halfBarForFlee;
         boolean fishInsideForFlee = fishPosition >= barBottomForFlee && fishPosition <= barTopForFlee;
 
+        // 鱼独立逃离参数（可选覆盖全局配置）
+        FishDefinition.FleeParams fp = session.fish().fleeParams();
+        double fleeBaseSpeed = fp != null && fp.baseSpeed() != null ? fp.baseSpeed() : settings.fleeBaseSpeed();
+        double fleeSpeedPerDiff = fp != null && fp.speedPerDifficulty() != null ? fp.speedPerDifficulty() : settings.fleeSpeedPerDifficulty();
+        double fleeBaseChance = fp != null && fp.baseChance() != null ? fp.baseChance() : settings.fleeBaseChance();
+        double fleeChancePerDiff = fp != null && fp.chancePerDifficulty() != null ? fp.chancePerDifficulty() : settings.fleeChancePerDifficulty();
+        int fleeMinDur = fp != null && fp.minDuration() != null ? fp.minDuration() : settings.fleeMinDuration();
+        int fleeMaxDur = fp != null && fp.maxDuration() != null ? fp.maxDuration() : settings.fleeMaxDuration();
+        int fleeCheckMin = fp != null && fp.checkMinInterval() != null ? fp.checkMinInterval() : settings.fleeCheckMinInterval();
+        int fleeCheckMax = fp != null && fp.checkMaxInterval() != null ? fp.checkMaxInterval() : settings.fleeCheckMaxInterval();
+        int fleeCooldownMin = fp != null && fp.cooldownMin() != null ? fp.cooldownMin() : settings.fleeCooldownMin();
+        int fleeCooldownMax = fp != null && fp.cooldownMax() != null ? fp.cooldownMax() : settings.fleeCooldownMax();
+
         if (fleeing) {
             // 正在逃离：施加逃离速度（天赋降低逃离速度）
             if (tick < fleeUntilTick) {
-                double fleeSpeed = (settings.fleeBaseSpeed() + (session.fish().difficulty() / 100.0) * settings.fleeSpeedPerDifficulty())
+                double fleeSpeed = (fleeBaseSpeed + (session.fish().difficulty() / 100.0) * fleeSpeedPerDiff)
                     * (1.0 - lvlMod * settings.fleeSpeedLevelScale()) * (1.0 - talentBonuses.fleeSpeedReduction());
                 fishVelocity = fleeDirection * fleeSpeed;
                 fishPosition = clamp(fishPosition + fishVelocity, 0.0, 1.0);
@@ -166,15 +197,15 @@ public final class FishingMinigame {
                 fleeing = false;
             }
             // 逃离期间重置下次检查时间（天赋延长冷却）
-            int cooldownMin = (int) (settings.fleeCooldownMin() * (1.0 + talentBonuses.fleeCooldownBonus()));
-            int cooldownMax = (int) (settings.fleeCooldownMax() * (1.0 + talentBonuses.fleeCooldownBonus()));
+            int cooldownMin = (int) (fleeCooldownMin * (1.0 + talentBonuses.fleeCooldownBonus()));
+            int cooldownMax = (int) (fleeCooldownMax * (1.0 + talentBonuses.fleeCooldownBonus()));
             if (cooldownMax <= cooldownMin) cooldownMax = cooldownMin + 1;
             nextFleeCheckTick = tick + cooldownMin + ThreadLocalRandom.current().nextInt(cooldownMax - cooldownMin);
         } else if (tick >= nextFleeCheckTick) {
             // 检查是否触发驱赶：鱼在绿条内时有概率逃离
             // 难度越高，逃离概率越大；玩家等级越高，逃离概率越低（等级修正模型）
             // 天赋降低逃离概率
-            double fleeChance = (settings.fleeBaseChance() + (session.fish().difficulty() / 100.0) * settings.fleeChancePerDifficulty())
+            double fleeChance = (fleeBaseChance + (session.fish().difficulty() / 100.0) * fleeChancePerDiff)
                 * (1.0 - lvlMod * settings.fleeChanceLevelScale()) * (1.0 - talentBonuses.fleeChanceReduction());
             if (fishInsideForFlee && ThreadLocalRandom.current().nextDouble() < fleeChance) {
                 fleeing = true;
@@ -184,12 +215,13 @@ public final class FishingMinigame {
                 if (fleeDirection < 0 && fishPosition < 0.15) fleeDirection = 1.0;
                 if (fleeDirection > 0 && fishPosition > 0.85) fleeDirection = -1.0;
                 // 天赋缩短逃离持续时间
-                int fleeMinDur = (int) (settings.fleeMinDuration() * (1.0 - talentBonuses.fleeDurationReduction()));
-                int fleeMaxDur = (int) (settings.fleeMaxDuration() * (1.0 - talentBonuses.fleeDurationReduction()));
-                if (fleeMaxDur <= fleeMinDur) fleeMaxDur = fleeMinDur + 1;
-                fleeUntilTick = tick + fleeMinDur + ThreadLocalRandom.current().nextInt(fleeMaxDur - fleeMinDur);
+                int adjMinDur = (int) (fleeMinDur * (1.0 - talentBonuses.fleeDurationReduction()));
+                int adjMaxDur = (int) (fleeMaxDur * (1.0 - talentBonuses.fleeDurationReduction()));
+                if (adjMaxDur <= adjMinDur) adjMaxDur = adjMinDur + 1;
+                fleeUntilTick = tick + adjMinDur + ThreadLocalRandom.current().nextInt(adjMaxDur - adjMinDur);
             }
-            nextFleeCheckTick = tick + settings.fleeCheckMinInterval() + ThreadLocalRandom.current().nextInt(settings.fleeCheckMaxInterval() - settings.fleeCheckMinInterval());
+            if (fleeCheckMax <= fleeCheckMin) fleeCheckMax = fleeCheckMin + 1;
+            nextFleeCheckTick = tick + fleeCheckMin + ThreadLocalRandom.current().nextInt(fleeCheckMax - fleeCheckMin);
         }
 
         // 计算绿条高度（基于玩家等级）—— 先算高度，碰撞用绿条顶底
@@ -231,11 +263,15 @@ public final class FishingMinigame {
         boolean fishInside = fishPosition >= barBottom && fishPosition <= barTop;
 
         // 进度变化：等级越高进度增长越快（等级修正模型），天赋加成增速/减少下降
+        // 鱼独立进度速率（可选覆盖全局配置）
+        double fishProgressGainRate = session.fish().progressGainRate() != null ? session.fish().progressGainRate() : settings.progressGainRate();
+        double fishProgressDrainRate = session.fish().progressDrainRate() != null ? session.fish().progressDrainRate() : settings.progressDrainRate();
+
         double progressGainMultiplier = settings.progressRateMultiplier() * (1.0 + lvlMod * settings.progressRateLevelScale()) * (1.0 + talentBonuses.progressRateBonus());
         if (fishInside) {
-            progress += settings.progressGainRate() * progressGainMultiplier;
+            progress += fishProgressGainRate * progressGainMultiplier;
         } else {
-            progress -= settings.progressDrainRate() * settings.progressRateMultiplier() * (1.0 - talentBonuses.progressDrainReduction());
+            progress -= fishProgressDrainRate * settings.progressRateMultiplier() * (1.0 - talentBonuses.progressDrainReduction());
             wasPerfect = false;
         }
         progress = clamp(progress, 0.0, 1.0);
@@ -288,6 +324,18 @@ public final class FishingMinigame {
                 }
             }
         }.runTaskLater(plugin, 30L);
+    }
+
+    private FishBehaviorType selectWeightedBehavior(List<FishDefinition.BehaviorEntry> entries) {
+        double totalWeight = entries.stream().mapToDouble(FishDefinition.BehaviorEntry::weight).sum();
+        if (totalWeight <= 0) return FishBehaviorType.SMOOTH;
+        double roll = ThreadLocalRandom.current().nextDouble() * totalWeight;
+        double cumulative = 0;
+        for (FishDefinition.BehaviorEntry entry : entries) {
+            cumulative += entry.weight();
+            if (roll <= cumulative) return entry.type();
+        }
+        return entries.get(entries.size() - 1).type();
     }
 
     private double calculateBarHeightRatio() {
