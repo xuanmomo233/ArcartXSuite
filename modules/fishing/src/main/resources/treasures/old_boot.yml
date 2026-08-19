@@ -1,6 +1,23 @@
-# 宝藏定义：旧靴子
+# 宝藏定义：旧靴子（原版物品示例）
 # 旧靴子是一种常见宝藏（杂物类），钓到后掉落皮革靴子，出现概率较高
 # 宝藏文件位于 treasures/ 目录，每个文件定义一种宝藏
+#
+# item 配置支持以下字段：
+#   source:      物品来源，可选值：
+#                minecraft  → 原版物品（默认）
+#                mythic     → MythicMobs 内部物品
+#                neige      → NeigeItems 物品
+#                overture   → Overture（葱白物品库）
+#                mmo        → MMOItems 物品
+#   item-id:     物品 ID（source=minecraft 时为原版 Material 名；其他来源为对应插件物品 ID）
+#   mmo-type:    MMOItems 物品类型（仅 source=mmo 时使用）
+#   mmo-id:      MMOItems 物品 ID（仅 source=mmo 时使用）
+#   json:        原版 JSON 物品定义（优先级最高，覆盖 source/item-id）
+#   texture:     ArcartX 自定义贴图 NBT key
+#   texture-url: ArcartX 自定义贴图 URL（ArcartX 客户端从 URL 加载贴图）
+#   amount:      物品数量
+#
+# 更多示例见同目录下其他宝藏文件（mythic_gem / neige_rune / mmo_aquamarine / overture_legendary_rod / custom_treasure_map）
 
 id: "old_boot"                 # 宝藏唯一标识符
 display-name: "旧靴子"          # 显示名称

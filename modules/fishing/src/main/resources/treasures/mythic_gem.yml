@@ -1,0 +1,20 @@
+# 宝藏定义示例：MythicMobs 物品对接
+# 演示如何通过 MythicMobs 物品库生成宝藏物品。
+# 前提：服务器已安装 MythicMobs，且存在对应内部物品 ID。
+# 物品来源说明：
+#   source: mythic       → 调用 MythicMobs API 生成物品
+#   item-id: "Sapphire"  → MythicMobs 内部物品 ID（在 MythicMobs 配置中定义的 drop 或 item）
+#   amount: 1            → 数量
+# 其他可选字段（本文件未使用）：
+#   mmo-type / mmo-id    → MMOItems 的 type:id（source 为 mmo 时使用）
+#   json                 → 原版 JSON 物品定义（优先级最高，覆盖 source/item-id）
+#   texture              → ArcartX 自定义贴图 NBT key
+#   texture-url          → ArcartX 自定义贴图 URL
+
+id: "mythic_gem"
+display-name: "&b幻彩宝石"
+item:
+  source: "mythic"
+  item-id: "Sapphire"
+  amount: 1
+chance: 0.05
