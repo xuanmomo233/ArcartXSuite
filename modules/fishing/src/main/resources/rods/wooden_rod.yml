@@ -2,13 +2,15 @@
 # 基础钓竿 — 示例配置，新手默认钓竿
 # 鱼竿物品通过 PDC 标签 axs_fishing_rod_id 识别
 # 鱼竿文件位于 rods/ 目录，每个文件定义一种鱼竿
+#
+# ⚠ 鱼竿识别仅依赖 PDC 标签，本文件不定义鱼竿物品材质。
+#    要让某个物品库的物品成为鱼竿，需在该物品库配置里写入 NBT:
+#    PublicBukkitValues."arcartx-suite:axs_fishing_rod_id" = "wooden_rod"
+#    namespace "arcartx-suite" 来自主插件名 ArcartX-Suite 的小写。
+#    物品库配置示例见各物品库目录下的 fishing_rod.yml。
 
 id: "wooden_rod"               # 鱼竿唯一标识符
 display-name: "木制钓竿"        # 显示名称
-item:                          # 鱼竿对应的物品定义
-  source: "minecraft"          # 物品来源（minecraft=原版物品）
-  item-id: "fishing_rod"       # 原版物品ID（钓鱼竿）
-  amount: 1                    # 物品数量
 # 宝藏概率加成（加到基础概率上）
 treasure-chance-bonus: 0.05    # 宝藏概率额外+5%
 # 绿条高度加成（像素）

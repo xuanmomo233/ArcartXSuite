@@ -276,13 +276,12 @@ public record FishingModuleConfiguration(
                     String id = section.getString("id", p.getFileName().toString().replace(".yml", ""));
                     result.add(new RodDefinition(
                         id,
-                        section.getString("display-name", id),
-                        parseItemRef(section, "item", "minecraft:fishing_rod"),
                         section.getDouble("treasure-chance-bonus", 0.0),
                         section.getInt("green-bar-height-bonus", 0),
                         section.getInt("catch-duration-bonus", 0),
                         section.getDouble("exp-multiplier", 1.0),
-                        section.getInt("min-player-level", 0)
+                        section.getInt("min-player-level", 0),
+                        section.getInt("max-player-level", 0)
                     ));
                 } catch (Exception e) {
                     logger.warning("加载钓竿文件失败: " + p + " — " + e.getMessage());
