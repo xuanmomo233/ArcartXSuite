@@ -112,7 +112,7 @@ public final class FishingMinigame {
         try {
             tickInternal();
         } catch (Throwable t) {
-            org.bukkit.Bukkit.getLogger().severe("[Fishing] tick 异常，强制清理小游戏: " + t.getClass().getSimpleName() + " - " + t.getMessage());
+            service.getPlugin().getLogger().severe("[Fishing] tick 异常，强制清理小游戏: " + t.getClass().getSimpleName() + " - " + t.getMessage());
             t.printStackTrace();
             if (!finished) {
                 finished = true;
@@ -354,7 +354,6 @@ public final class FishingMinigame {
         payload.put("rarity", session.fish().rarity().name().toLowerCase());
         // 鱼物品图标 JSON（UI 端 Slot 控件通过 seticon 渲染）
         String fishIconJson = itemGenerator.generateItemJson(session.fish().itemRef(), player);
-        org.bukkit.Bukkit.getLogger().info("[Fishing] sendInitPacket fishIconJson=" + (fishIconJson.isEmpty() ? "empty" : fishIconJson.substring(0, Math.min(fishIconJson.length(), 80))) + " for " + session.fish().id());
         payload.put("fishIconJson", fishIconJson);
         packetBridge.sendPacket(player, uiId, "init", payload);
     }

@@ -24,14 +24,15 @@ import xuanmo.arcartxsuite.fishing.service.FishingService;
 public final class FishingListener implements Listener {
 
     private final FishingService service;
+    private final java.util.logging.Logger logger;
 
     public FishingListener(@NotNull FishingService service) {
         this.service = service;
+        this.logger = java.util.logging.Logger.getLogger("Fishing");
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlayerFish(@NotNull PlayerFishEvent event) {
-        org.bukkit.Bukkit.getLogger().info("[Fishing] onPlayerFish called, state=" + event.getState() + " replaceVanilla=" + service.isReplaceVanilla());
         if (!service.isReplaceVanilla()) {
             return;
         }
@@ -40,7 +41,7 @@ public final class FishingListener implements Listener {
 
         // 小游戏进行中：取消所有钓鱼事件（防止右键收杆打断小游戏）
         if (service.isPlayerInMinigame(player.getUniqueId())) {
-            org.bukkit.Bukkit.getLogger().warning("[Fishing] 玩家已在小游戏中，取消钓鱼事件: " + player.getName());
+            logger.fine("玩家已在小游戏中，取消钓鱼事件: " + player.getName());
             event.setCancelled(true);
             return;
         }
@@ -50,7 +51,6 @@ public final class FishingListener implements Listener {
         if (event.getState() == PlayerFishEvent.State.BITE) {
             // 取消原版钓鱼（阻止后续 CAUGHT_FISH/FAILED_ATTEMPT），启动小游戏
             boolean started = service.startMinigame(player);
-            org.bukkit.Bukkit.getLogger().info("[Fishing] PlayerFishEvent BITE, startMinigame=" + started);
             if (started) {
                 event.setCancelled(true);
             }
