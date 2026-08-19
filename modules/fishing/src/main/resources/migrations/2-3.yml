@@ -1,0 +1,22 @@
+from-version: 2
+to-version: 3
+description: "UI 配置字段名统一：minigame-id→minigame-ui-id, collection-id→collection-ui-id, talents-id→talents-ui-id, rewards-id→rewards-ui-id, tasks-id→tasks-ui-id, register-on-enable→register-ui-on-enable"
+operations:
+  - type: rename
+    from: ui.minigame-id
+    to: ui.minigame-ui-id
+  - type: rename
+    from: ui.collection-id
+    to: ui.collection-ui-id
+  - type: rename
+    from: ui.talents-id
+    to: ui.talents-ui-id
+  - type: rename
+    from: ui.rewards-id
+    to: ui.rewards-ui-id
+  - type: rename
+    from: ui.tasks-id
+    to: ui.tasks-ui-id
+  - type: rename
+    from: ui.register-on-enable
+    to: ui.register-ui-on-enable

@@ -1,0 +1,13 @@
+from-version: 1
+to-version: 2
+description: "UI 配置字段名统一为 xxx-ui-id 格式：id→ui-id, manage-id→manage-ui-id, bank-id→bank-ui-id"
+operations:
+  - type: rename
+    from: ui.id
+    to: ui.ui-id
+  - type: rename
+    from: ui.manage-id
+    to: ui.manage-ui-id
+  - type: rename
+    from: ui.bank-id
+    to: ui.bank-ui-id

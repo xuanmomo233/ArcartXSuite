@@ -205,6 +205,26 @@ public final class FishingService {
         // 检测钓竿
         RodDefinition rod = detectRod(player);
 
+        // 鱼竿等级限制校验（maxPlayerLevel = 0 表示无上限）
+        if (!rod.id().equals(RodDefinition.DEFAULT.id())) {
+            int playerLevel = repository.loadSeasonData(player.getUniqueId(),
+                configuration.season().seasonId()).level();
+            if (playerLevel < rod.minPlayerLevel()) {
+                String msg = getMessage("fishing_rod_level_low", String.valueOf(rod.minPlayerLevel()));
+                if (msg != null && !msg.isEmpty()) player.sendMessage(msg);
+                debug("startMinigame 跳过: 鱼竿等级不足 " + player.getName()
+                    + " level=" + playerLevel + " required=" + rod.minPlayerLevel() + " rod=" + rod.id());
+                return false;
+            }
+            if (rod.maxPlayerLevel() > 0 && playerLevel > rod.maxPlayerLevel()) {
+                String msg = getMessage("fishing_rod_level_high", String.valueOf(rod.maxPlayerLevel()));
+                if (msg != null && !msg.isEmpty()) player.sendMessage(msg);
+                debug("startMinigame 跳过: 鱼竿等级超出 " + player.getName()
+                    + " level=" + playerLevel + " max=" + rod.maxPlayerLevel() + " rod=" + rod.id());
+                return false;
+            }
+        }
+
         // 获取该水域的鱼池
         List<FishDefinition> pool = getFishPool(water);
         if (pool.isEmpty()) {

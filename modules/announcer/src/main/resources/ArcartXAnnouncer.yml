@@ -1,4 +1,4 @@
-config-version: 1
+config-version: 2
 # AXS Announcer & Subtitle
 # 作用: 轮播公告到 ArcartX HUD + 服务端打字机字幕播放。
 # 依赖: ArcartX；PlaceholderAPI 可选，仅用于解析公告文本 / 字幕文本。
@@ -8,12 +8,9 @@ config-version: 1
 # 内置变量: click-command 中的 <player> 会替换为点击玩家名。
 # 关联资源: ui/announcer_hud.yml、ui/subtitle_hud.yml、subtitle/groups/*.yml
 
-settings:
-  # 是否输出调试日志。
-  # true 时会打印 settings / entries 发包内容和点击回包信息。
-  debug: false
-
-  # 目标 HUD 的 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
+# 统一 UI 配置节：公告 HUD 与字幕 HUD 的 UI 注册/覆盖开关集中在此。
+ui:
+  # 公告 HUD 的 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
   # ui-id: "AXS:announcer_hud"
   # 多 UI 示例（同一个 payload 同时发给多个 UI）：
   # ui-id:
@@ -21,11 +18,24 @@ settings:
   #   - "AXS:announcer_hud_alt"
   ui-id: "AXS:announcer_hud"
 
-  # 插件启动/重载时是否自动注册 HUD
+  # 字幕 HUD 的 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
+  # subtitle-ui-id: "AXS:subtitle_hud"
+  # 多 UI 示例：
+  # subtitle-ui-id:
+  #   - "AXS:subtitle_hud"
+  #   - "AXS:subtitle_hud_alt"
+  subtitle-ui-id: "AXS:subtitle_hud"
+
+  # 插件启动/重载时是否自动注册 HUD（公告与字幕共用此开关）
   register-ui-on-enable: true
 
-  # 是否强制覆盖 plugins/ArcartXSuite/ui/announcer_hud.yml
-  overwrite-ui-file: false
+  # 是否强制覆盖 plugins/ArcartXSuite/ui/ 下的 announcer_hud.yml 与 subtitle_hud.yml（共用此开关）
+  overwrite-ui-files: false
+
+settings:
+  # 是否输出调试日志。
+  # true 时会打印 settings / entries 发包内容和点击回包信息。
+  debug: false
 
   # 是否自动播放公告
   # false 时 HUD 仍会同步配置，但不主动滚动显示
@@ -76,20 +86,6 @@ subtitle:
     # 是否输出调试日志。
     # true 时会打印每帧字幕 play 包和关闭 close 包内容。
     debug: false
-
-    # 目标 HUD 的 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
-    # ui-id: "AXS:subtitle_hud"
-    # 多 UI 示例：
-    # ui-id:
-    #   - "AXS:subtitle_hud"
-    #   - "AXS:subtitle_hud_alt"
-    ui-id: "AXS:subtitle_hud"
-
-    # 插件启动/重载时是否自动向 ArcartX 注册 HUD
-    register-ui-on-enable: true
-
-    # 是否强制覆盖 plugins/ArcartXSuite/ui/subtitle_hud.yml
-    overwrite-ui-file: false
 
     # 字幕组目录，路径相对插件数据目录
     groups-directory: "subtitle/groups"

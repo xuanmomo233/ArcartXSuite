@@ -22,8 +22,8 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
  *
  * @param debug                是否开启调试日志
  * @param uiIds                公告 HUD 的 UI id 列表
- * @param registerUiOnEnable   启用时是否自动注册公告 UI
- * @param overwriteUiFile      启用时是否覆盖已存在的公告 UI 文件
+ * @param registerUiOnEnable   启用时是否自动注册 UI（公告与字幕共用此开关）
+ * @param overwriteUiFile      启用时是否覆盖已存在的 UI 文件（公告与字幕共用此开关）
  * @param autoPlay             是否自动开始轮播
  * @param checkIntervalTicks   轮播检查间隔（tick）
  * @param cooldownMs           同一玩家两次公告之间的冷却（毫秒）
@@ -53,25 +53,24 @@ public record AnnouncerModuleConfiguration(
     /**
      * 字幕子配置记录，隶属于 announcer 模块。
      * <p>
-     * 描述字幕 HUD 的 UI 注册、字幕组目录与背景显示等参数。
+     * 描述字幕 HUD 的字幕组目录与背景显示等参数。
+     * UI 注册/覆盖开关已统一到顶层 {@code ui} 节，由
+     * {@link AnnouncerModuleConfiguration#registerUiOnEnable()} 与
+     * {@link AnnouncerModuleConfiguration#overwriteUiFile()} 统一控制。
      *
      * @param debug              是否开启字幕调试日志
      * @param uiIds              字幕 HUD 的 UI id 列表
-     * @param registerUiOnEnable 启用时是否自动注册字幕 UI
-     * @param overwriteUiFile    启用时是否覆盖已存在的字幕 UI 文件
      * @param groupsDirectory    字幕组文件所在目录（相对模块数据目录）
      * @param showBackground     是否显示字幕背景
      */
     public record SubtitleSettings(
         boolean debug,
         List<String> uiIds,
-        boolean registerUiOnEnable,
-        boolean overwriteUiFile,
         String groupsDirectory,
         boolean showBackground
     ) {
         public static final SubtitleSettings DEFAULTS = new SubtitleSettings(
-            false, List.of("AXS:subtitle_hud"), true, false, "subtitle/groups", true
+            false, List.of("AXS:subtitle_hud"), "subtitle/groups", true
         );
     }
 

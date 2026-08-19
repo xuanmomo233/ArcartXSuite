@@ -135,7 +135,7 @@ public final class FishingMinigame {
 
         // 更新鱼位置（等级越高鱼越慢，使用加权混合等级修正模型）
         double lvlMod = levelModifier();
-        double fishSpeedMultiplier = (1.0 - lvlMod) * (1.0 - talentBonuses.fishSpeedReduction());
+        double fishSpeedMultiplier = (1.0 - lvlMod * settings.fishSpeedLevelScale()) * (1.0 - talentBonuses.fishSpeedReduction());
         double fishSpeed = fishEngine.tick(fishPosition, fishVelocity, tick, session.fish().difficulty()) * fishSpeedMultiplier;
         fishVelocity = fishSpeed;
         fishPosition = clamp(fishPosition + fishSpeed, 0.0, 1.0);
@@ -156,7 +156,7 @@ public final class FishingMinigame {
             // 正在逃离：施加逃离速度（天赋降低逃离速度）
             if (tick < fleeUntilTick) {
                 double fleeSpeed = (settings.fleeBaseSpeed() + (session.fish().difficulty() / 100.0) * settings.fleeSpeedPerDifficulty())
-                    * (1.0 - talentBonuses.fleeSpeedReduction());
+                    * (1.0 - lvlMod * settings.fleeSpeedLevelScale()) * (1.0 - talentBonuses.fleeSpeedReduction());
                 fishVelocity = fleeDirection * fleeSpeed;
                 fishPosition = clamp(fishPosition + fishVelocity, 0.0, 1.0);
                 if (fishPosition <= 0.02 || fishPosition >= 0.98) {
@@ -175,7 +175,7 @@ public final class FishingMinigame {
             // 难度越高，逃离概率越大；玩家等级越高，逃离概率越低（等级修正模型）
             // 天赋降低逃离概率
             double fleeChance = (settings.fleeBaseChance() + (session.fish().difficulty() / 100.0) * settings.fleeChancePerDifficulty())
-                * (1.0 - lvlMod) * (1.0 - talentBonuses.fleeChanceReduction());
+                * (1.0 - lvlMod * settings.fleeChanceLevelScale()) * (1.0 - talentBonuses.fleeChanceReduction());
             if (fishInsideForFlee && ThreadLocalRandom.current().nextDouble() < fleeChance) {
                 fleeing = true;
                 // 逃离方向：朝远离绿条中心的方向
@@ -231,7 +231,7 @@ public final class FishingMinigame {
         boolean fishInside = fishPosition >= barBottom && fishPosition <= barTop;
 
         // 进度变化：等级越高进度增长越快（等级修正模型），天赋加成增速/减少下降
-        double progressGainMultiplier = settings.progressRateMultiplier() * (1.0 + lvlMod) * (1.0 + talentBonuses.progressRateBonus());
+        double progressGainMultiplier = settings.progressRateMultiplier() * (1.0 + lvlMod * settings.progressRateLevelScale()) * (1.0 + talentBonuses.progressRateBonus());
         if (fishInside) {
             progress += settings.progressGainRate() * progressGainMultiplier;
         } else {

@@ -23,7 +23,7 @@
 #   %axsmarket_redis_status%       Redis 连接状态
 # =============================================================================
 
-config-version: 1
+config-version: 3
 
 # ------------------------------------------------------------------------------
 # 全局设置
@@ -45,17 +45,17 @@ settings:
 # ------------------------------------------------------------------------------
 ui:
   # 系统商店 UI ID（与 ArcartX 客户端通信用的标识）
-  shop-id: "AXS:market_shop"
+  shop-ui-id: "AXS:market_shop"
   # 系统商店 UI 文件在 JAR 中的路径
   shop-file: "arcartx/ui/market_shop.yml"
   # 拍卖行 UI ID
-  auction-id: "AXS:market_auction"
+  auction-ui-id: "AXS:market_auction"
   auction-file: "arcartx/ui/market_auction.yml"
   # 回收商店 UI ID
-  recycle-id: "AXS:market_recycle"
+  recycle-ui-id: "AXS:market_recycle"
   recycle-file: "arcartx/ui/market_recycle.yml"
   # 交易历史 UI ID
-  history-id: "AXS:market_history"
+  history-ui-id: "AXS:market_history"
   history-file: "arcartx/ui/market_history.yml"
   # 客户端数据包 ID，所有 Market UI 通信均通过此 ID
   packet-id: "AXS_MARKET"
@@ -231,16 +231,6 @@ auction:
 shop:
   # 是否启用系统商店功能
   enabled: true
-  # 允许用于拍卖交易的货币，id 必须已由 CurrencyBridgeAPI 注册
-  currencies:
-    - id: "money"
-      name: "金币"
-  default-currency: "money"
-  # 一口价/起拍价全局范围
-  min-price: 1
-  max-price: 1000000000
-  # 留言最大字符数
-  message-max-length: 50
   # 商店定义文件所在目录（相对模块数据目录）
   # 模块启动时会递归扫描此目录下的所有 .yml 文件并加载为商店
   shops-directory: "shops"
@@ -261,16 +251,6 @@ shop:
 recycle:
   # 是否启用回收商店功能
   enabled: true
-  # 允许用于拍卖交易的货币，id 必须已由 CurrencyBridgeAPI 注册
-  currencies:
-    - id: "money"
-      name: "金币"
-  default-currency: "money"
-  # 一口价/起拍价全局范围
-  min-price: 1
-  max-price: 1000000000
-  # 留言最大字符数
-  message-max-length: 50
   # 回收表定义文件所在目录（相对模块数据目录）
   recycle-directory: "recycle"
   # 默认回收货币类型（当回收条目未指定 currency 时 fallback）

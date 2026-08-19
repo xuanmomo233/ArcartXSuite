@@ -1,0 +1,30 @@
+# BattlePass 配置迁移: 3 -> 4
+# UI 配置字段名统一为标准格式，避免与其他模块的 id 字段命名歧义
+# main-id -> main-ui-id, tasks-id -> tasks-ui-id, rewards-id -> rewards-ui-id,
+# settlement-id -> settlement-ui-id, register-on-enable -> register-ui-on-enable
+
+from-version: 3  # 迁移起始版本号
+to-version: 4  # 迁移目标版本号
+description: "UI 配置字段名统一：main-id→main-ui-id, tasks-id→tasks-ui-id, rewards-id→rewards-ui-id, settlement-id→settlement-ui-id, register-on-enable→register-ui-on-enable"  # 迁移描述
+
+operations:  # 迁移操作列表，按顺序执行
+  # 重命名 UI 注册开关字段
+  - type: rename  # 操作类型：重命名指定路径的配置键
+    from: ui.register-on-enable  # 旧字段路径
+    to: ui.register-ui-on-enable  # 新字段路径
+  # 重命名主界面 UI 标识字段
+  - type: rename
+    from: ui.main-id
+    to: ui.main-ui-id
+  # 重命名任务列表界面 UI 标识字段
+  - type: rename
+    from: ui.tasks-id
+    to: ui.tasks-ui-id
+  # 重命名奖励界面 UI 标识字段
+  - type: rename
+    from: ui.rewards-id
+    to: ui.rewards-ui-id
+  # 重命名赛季结算奖励界面 UI 标识字段
+  - type: rename
+    from: ui.settlement-id
+    to: ui.settlement-ui-id

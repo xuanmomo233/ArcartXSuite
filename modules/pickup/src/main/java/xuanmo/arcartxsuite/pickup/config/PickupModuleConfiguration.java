@@ -16,6 +16,7 @@ import org.bukkit.configuration.file.FileConfiguration;
  *
  * @param debug        是否输出调试日志
  * @param mode         工作模式
+ * @param ui           统一 UI 配置（所有 UI ID 与注册行为集中管理）
  * @param notification 通知模式配置
  * @param scanner      扫描模式配置
  * @param filter       过滤系统配置（仅扫描模式生效）
@@ -23,6 +24,7 @@ import org.bukkit.configuration.file.FileConfiguration;
 public record PickupModuleConfiguration(
     boolean debug,
     PickupMode mode,
+    UiConfig ui,
     NotificationConfig notification,
     ScannerConfig scanner,
     FilterConfig filter
@@ -37,18 +39,30 @@ public record PickupModuleConfiguration(
     }
 
     /**
+     * 统一 UI 配置（从原 notification / scanner 嵌套节抽离）。
+     *
+     * @param notificationUiId 通知模式目标 HUD 的 UI ID
+     * @param scannerUiId      扫描模式目标 HUD 的 UI ID
+     * @param interactUiId     扫描模式交互 Menu 的 UI ID（按键打开的透明菜单）
+     * @param registerUiOnEnable 启动时是否自动注册 UI
+     * @param overwriteUiFiles 是否强制覆盖 UI 文件
+     */
+    public record UiConfig(
+        String notificationUiId,
+        String scannerUiId,
+        String interactUiId,
+        boolean registerUiOnEnable,
+        boolean overwriteUiFiles
+    ) {
+    }
+
+    /**
      * 通知模式配置。
      *
-     * @param uiId              目标 HUD 的 UI ID
-     * @param registerUiOnEnable 启动时是否自动注册 HUD
-     * @param overwriteUiFile   是否强制覆盖 UI 文件
      * @param maxVisible        同时最多显示的提示条数
      * @param entryTtlMs        每条提示存活时间（毫秒）
      */
     public record NotificationConfig(
-        String uiId,
-        boolean registerUiOnEnable,
-        boolean overwriteUiFile,
         int maxVisible,
         long entryTtlMs
     ) {
@@ -57,9 +71,6 @@ public record PickupModuleConfiguration(
     /**
      * 扫描模式配置。
      *
-     * @param uiId                目标 HUD 的 UI ID
-     * @param registerUiOnEnable  启动时是否自动注册 HUD
-     * @param overwriteUiFile     是否强制覆盖 UI 文件
      * @param scanRadius          扫描附近掉落物的半径（格）
      * @param scanIntervalTicks   扫描间隔（ticks）
      * @param maxDisplay          面板最多显示的物品数
@@ -67,13 +78,9 @@ public record PickupModuleConfiguration(
      * @param warehouseAutoDeposit 拾取后是否自动存入仓库
      * @param pickupDelayTicks    掉落物落地后多久开始显示（ticks）
      * @param mergeSameItems       同类物品是否合并显示
-     * @param interactUiId         交互 Menu 的 UI ID（按键打开的透明菜单）
      * @param keybindName          拾取按键注册名（ArcartX 客户端按键 ID，须与宿主 config.yml keybinds 节中的 name 一致）
      */
     public record ScannerConfig(
-        String uiId,
-        boolean registerUiOnEnable,
-        boolean overwriteUiFile,
         double scanRadius,
         int scanIntervalTicks,
         int maxDisplay,
@@ -81,7 +88,6 @@ public record PickupModuleConfiguration(
         boolean warehouseAutoDeposit,
         int pickupDelayTicks,
         boolean mergeSameItems,
-        String interactUiId,
         String keybindName
     ) {
     }

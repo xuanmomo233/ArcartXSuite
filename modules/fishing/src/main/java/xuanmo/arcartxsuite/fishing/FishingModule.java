@@ -85,7 +85,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
 
     @Override
     protected int currentConfigVersion() {
-        return 2;
+        return 3;
     }
 
     @Override

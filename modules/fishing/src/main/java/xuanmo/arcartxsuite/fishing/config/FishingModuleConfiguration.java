@@ -495,6 +495,10 @@ public record FishingModuleConfiguration(
         int baseXpPerLevel,
         int maxLevel,
         double levelModifierScale,
+        double fishSpeedLevelScale,
+        double fleeChanceLevelScale,
+        double fleeSpeedLevelScale,
+        double progressRateLevelScale,
         double fleeBaseChance,
         double fleeChancePerDifficulty,
         double fleeBaseSpeed,
@@ -530,6 +534,10 @@ public record FishingModuleConfiguration(
                 section.getInt("base-xp-per-level", 100),
                 section.getInt("max-level", 100),
                 section.getDouble("level-modifier-scale", 0.5),
+                section.getDouble("fish-speed-level-scale", 1.0),
+                section.getDouble("flee-chance-level-scale", 1.0),
+                section.getDouble("flee-speed-level-scale", 1.0),
+                section.getDouble("progress-rate-level-scale", 1.0),
                 section.getDouble("flee-base-chance", 0.25),
                 section.getDouble("flee-chance-per-difficulty", 0.25),
                 section.getDouble("flee-base-speed", 0.04),
@@ -556,13 +564,13 @@ public record FishingModuleConfiguration(
         public static UiConfiguration load(ConfigurationSection section) {
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
             return new UiConfiguration(
-                section.getBoolean("register-on-enable", true),
+                section.getBoolean("register-ui-on-enable", true),
                 section.getBoolean("overwrite-ui-files", false),
-                section.getString("minigame-id", "fishing_minigame"),
-                section.getString("collection-id", "fishing_collection"),
-                section.getString("talents-id", "fishing_talents"),
-                section.getString("rewards-id", "fishing_rewards"),
-                section.getString("tasks-id", "fishing_tasks")
+                section.getString("minigame-ui-id", "fishing_minigame"),
+                section.getString("collection-ui-id", "fishing_collection"),
+                section.getString("talents-ui-id", "fishing_talents"),
+                section.getString("rewards-ui-id", "fishing_rewards"),
+                section.getString("tasks-ui-id", "fishing_tasks")
             );
         }
     }

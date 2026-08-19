@@ -66,7 +66,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
 
     @Override
     protected int currentConfigVersion() {
-        return 5;
+        return 6;
     }
 
     @Override
@@ -106,7 +106,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
 
     @Override
     protected boolean overwriteUiFiles() {
-        return configuration != null && configuration.ui().overwriteUiFile();
+        return configuration != null && configuration.ui().overwriteUiFiles();
     }
 
     @Override
@@ -165,8 +165,8 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
         );
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         UiBinding hudBinding = null;
-        if (configuration.ui().registerOnEnable()) {
-            hudBinding = registerModuleUi(HUD_UI_FILE_PATH, configuration.ui().hudId(), true);
+        if (configuration.ui().registerUiOnEnable()) {
+            hudBinding = registerModuleUi(HUD_UI_FILE_PATH, configuration.ui().uiId(), true);
         }
         if (hudBinding != null) {
             service.setHudBridge(packetBridge, hudBinding.runtimeUiId());

@@ -1,4 +1,4 @@
-config-version: 1
+config-version: 2
 # AXS Warehouse AXUI
 # 作用: AXUI 驱动个人仓库、共享仓库、NBT 分类、银行、多利率定期存款和二级密码。
 # 重载: /axs warehouse reload
@@ -16,9 +16,9 @@ cross-server:
   enabled: false  # 是否启用跨服编辑锁
 
 ui:
-  id: "AXS:warehouse_storage"  # 仓库存储界面 UI ID
-  manage-id: "AXS:warehouse_manage"  # 仓库管理界面 UI ID
-  bank-id: "AXS:warehouse_bank"  # 银行界面 UI ID
+  ui-id: "AXS:warehouse_storage"  # 仓库存储界面 UI ID
+  manage-ui-id: "AXS:warehouse_manage"  # 仓库管理界面 UI ID
+  bank-ui-id: "AXS:warehouse_bank"  # 银行界面 UI ID
   packet-id: "AXS_WAREHOUSE"  # 客户端通信包标识符
   register-ui-on-enable: true  # 启动时是否自动注册 UI
   overwrite-ui-files: false  # 是否强制覆盖用户已修改的 UI 文件

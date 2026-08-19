@@ -181,14 +181,14 @@ public record AfkRewardConfiguration(
     /**
      * UI（HUD）子配置。
      *
-     * @param hudId           HUD 标识
-     * @param registerOnEnable 启用时是否注册 HUD
-     * @param overwriteUiFile  启用时是否覆盖已存在的 UI 文件
+     * @param uiId              UI 界面标识
+     * @param registerUiOnEnable 启用时是否注册 UI
+     * @param overwriteUiFiles   启用时是否覆盖已存在的 UI 文件
      */
     public record UiConfig(
-        String hudId,
-        boolean registerOnEnable,
-        boolean overwriteUiFile
+        String uiId,
+        boolean registerUiOnEnable,
+        boolean overwriteUiFiles
     ) {}
 
     /**
@@ -271,9 +271,9 @@ public record AfkRewardConfiguration(
         // ui
         ConfigurationSection uiSec = yaml.getConfigurationSection("ui");
         UiConfig ui = new UiConfig(
-            uiSec != null ? uiSec.getString("hud-id", "AXS:afk_reward_hud") : "AXS:afk_reward_hud",
-            uiSec != null && uiSec.getBoolean("register-on-enable", true),
-            uiSec != null && uiSec.getBoolean("overwrite-ui-file", false)
+            uiSec != null ? uiSec.getString("ui-id", "AXS:afk_reward_hud") : "AXS:afk_reward_hud",
+            uiSec != null && uiSec.getBoolean("register-ui-on-enable", true),
+            uiSec != null && uiSec.getBoolean("overwrite-ui-files", false)
         );
 
         // manual

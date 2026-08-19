@@ -59,9 +59,9 @@ public record WarehouseModuleConfiguration(
         long transferConfirmExpireHours = configuration.getLong("settings.transfer-confirm-expire-hours", 24L);
 
         UiConfiguration ui = new UiConfiguration(
-            readString(configuration, "ui.id", "AXS:warehouse_storage"),
-            readString(configuration, "ui.manage-id", "AXS:warehouse_manage"),
-            readString(configuration, "ui.bank-id", "AXS:warehouse_bank"),
+            readString(configuration, "ui.ui-id", "AXS:warehouse_storage"),
+            readString(configuration, "ui.manage-ui-id", "AXS:warehouse_manage"),
+            readString(configuration, "ui.bank-ui-id", "AXS:warehouse_bank"),
             readString(configuration, "ui.packet-id", "AXS_WAREHOUSE"),
             configuration.getBoolean("ui.register-ui-on-enable", true),
             configuration.getBoolean("ui.overwrite-ui-files", false),

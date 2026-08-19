@@ -3,7 +3,7 @@
 # 重载: /axs afkreward reload
 # 奖励周期、上限、倍率与奖励定义已下放到各个 areas/area-*.yml 文件，
 # 每个区域文件现在可以独立配置完整的奖励规则。
-config-version: 5  # 配置版本号（用于触发 migration 迁移流程）
+config-version: 6  # 配置版本号（用于触发 migration 迁移流程）
 
 debug: false  # 是否开启调试模式（输出详细日志）
 
@@ -120,6 +120,6 @@ storage:
 
 # HUD 配置
 ui:
-  hud-id: "AXS:afk_reward_hud"  # HUD 界面 ID（对应 ui/afk_reward_hud.yml）
-  register-on-enable: true       # 模块启用时是否自动注册 HUD
-  overwrite-ui-file: false       # 是否在每次启用时覆盖用户已修改的 UI 文件
+  ui-id: "AXS:afk_reward_hud"  # HUD 界面 ID（对应 ui/afk_reward_hud.yml）
+  register-ui-on-enable: true       # 模块启用时是否自动注册 HUD
+  overwrite-ui-files: false       # 是否在每次启用时覆盖用户已修改的 UI 文件

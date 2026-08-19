@@ -1,7 +1,7 @@
 # 文件用途: EntityTracker 模块主配置文件，控制 Boss 追踪、攻击目标 HUD、掉落记录/分配、跨服排行等全部功能开关与参数。
 # 重载命令: /axs entitytracker reload
 
-config-version: 1  # 配置文件版本号，用于迁移脚本判断升级路径
+config-version: 2  # 配置文件版本号，用于迁移脚本判断升级路径
 # AXS EntityTracker
 # 作用: 跟踪指定 MythicMob，向 HUD/聊天卡片同步血量、距离、目标、存活时间、实时伤害排行和死亡结算结果；同时显示玩家最近攻击目标 HUD。
 # 新增: Boss掉落记录、掉落分配系统、跨服Boss排行功能
@@ -11,6 +11,24 @@ config-version: 1  # 配置文件版本号，用于迁移脚本判断升级路�
 # 关联资源: ui/boss_tracker.yml、ui/attack_target_hud.yml
 # 福利模块: 消费额度满¥150获得授权
 
+ui:                            # UI 统一配置（boss 追踪与攻击目标 HUD 共用）
+  # Boss 追踪 HUD 的 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
+  # boss-ui-id: "AXS:boss_tracker"
+  # 多 UI 示例（同一个 payload 同时发给多个 UI）：
+  # boss-ui-id:
+  #   - "AXS:boss_tracker"
+  #   - "AXS:boss_tracker_alt"
+  boss-ui-id: "AXS:boss_tracker"   # Boss 追踪 HUD 的 UI ID
+  # 攻击目标 HUD 的 UI ID。支持字符串或列表：
+  # target-ui-id: "AXS:attack_target_hud"
+  # 多 UI 示例：
+  # target-ui-id:
+  #   - "AXS:attack_target_hud"
+  #   - "AXS:attack_target_hud_alt"
+  target-ui-id: "AXS:attack_target_hud"  # 攻击目标 HUD 的 UI ID
+  register-ui-on-enable: true     # 模块启用时是否自动注册 UI（boss 与 target 共用）
+  overwrite-ui-files: false       # 是否覆盖已有的 UI 文件（false=保留用户修改，boss 与 target 共用）
+
 boss:                           # Boss 追踪相关配置
   settings:                     # Boss 追踪全局设置
     refresh-interval-ticks: 5   # 数据刷新间隔（tick，20tick=1秒）
@@ -19,15 +37,6 @@ boss:                           # Boss 追踪相关配置
     # sort-mode 排序模式:
     # spawn-order 生成顺序；distance 距离优先；health-percent 血量百分比优先；priority 配置优先级；hybrid 混合排序。
     sort-mode: "spawn-order"
-    # 目标 HUD 的 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
-    # ui-id: "AXS:boss_tracker"
-    # 多 UI 示例（同一个 payload 同时发给多个 UI）：
-    # ui-id:
-    #   - "AXS:boss_tracker"
-    #   - "AXS:boss_tracker_alt"
-    ui-id: "AXS:boss_tracker"   # Boss 追踪 HUD 的 UI ID
-    register-ui-on-enable: true # 模块启用时是否自动注册 UI
-    overwrite-ui-file: false    # 是否覆盖已有的 UI 文件（false=保留用户修改）
 
   # Boss 定义目录，路径相对模块数据目录。
   # 目录下每个 *.yml 文件为一个 Boss 追踪配置，文件名（去掉 .yml）即为 MythicMob ID。
@@ -39,15 +48,6 @@ attack-target:                  # 攻击目标 HUD 相关配置
     refresh-interval-ticks: 5   # 数据刷新间隔（tick）
     target-timeout-ms: 3000     # 目标超时时间（毫秒），超过此时间未攻击则关闭 HUD
     max-view-distance: 48.0     # 最大查看距离（格），超出不显示目标 HUD
-    # 目标 HUD 的 UI ID。支持字符串（单 UI）或列表（多 UI 同时发包）：
-    # ui-id: "AXS:attack_target_hud"
-    # 多 UI 示例：
-    # ui-id:
-    #   - "AXS:attack_target_hud"
-    #   - "AXS:attack_target_hud_alt"
-    ui-id: "AXS:attack_target_hud"  # 攻击目标 HUD 的 UI ID
-    register-ui-on-enable: true     # 模块启用时是否自动注册 UI
-    overwrite-ui-file: false        # 是否覆盖已有的 UI 文件
     blacklist:                      # 黑名单配置：命中的实体不显示 target HUD
       # MythicMob ID 黑名单，大小写不敏感。命中后不显示 EntityTracker target HUD。
       mythic-mob-ids: []
@@ -182,4 +182,3 @@ database:
     password: ""
     # 连接池配置
     pool-size: 5
-    connection-timeout: 30000

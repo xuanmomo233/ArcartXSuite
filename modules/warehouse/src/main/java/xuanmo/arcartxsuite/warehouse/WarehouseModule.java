@@ -81,6 +81,14 @@ public final class WarehouseModule extends AbstractAXSModule implements ModuleCo
     }
 
     /**
+     * 配置版本号：UI 配置字段名统一为 xxx-ui-id 格式（id→ui-id, manage-id→manage-ui-id, bank-id→bank-ui-id）。
+     */
+    @Override
+    protected int currentConfigVersion() {
+        return 2;
+    }
+
+    /**
      * 消息文件名称，位于模块配置目录下。
      * 通过 {@link #messages()} 获取的 {@link MessageProvider} 支持 {@code &} 颜色码和 {@code {0}} 占位符。
      */

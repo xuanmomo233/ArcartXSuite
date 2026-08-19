@@ -62,6 +62,30 @@ navigation:
   anchor-id-prefix: "AXS-map-anchor-"
   # 路径点导航在客户端的 ID 前缀
   waypoint-id-prefix: "AXS-map-track-"
+  # 导航标记模型配置，控制路径标记实体的外观与行为
+  marker:
+    # 是否启用标记模型
+    enabled: false
+    # 模型 ID（资源包中的模型标识）
+    model-id: "nav_beacon"
+    # 缩放比例
+    scale: 1.0
+    # 默认状态
+    default-state: "idle"
+    # 动画类型
+    animation: "rotate"
+    # Y 轴偏移（方块）
+    y-offset: 2.0
+    # 路径标记间距（方块）
+    path-interval: 3.0
+    # 路径最大标记数
+    path-max-markers: 20
+    # 路径更新间隔（tick）
+    path-update-ticks: 10
+    # 路径最大距离（方块）
+    path-max-distance: 64.0
+    # 路径计算最大迭代次数
+    path-max-iterations: 2000
 
 # ─── 世界配置 ──────────────────────────────────────────
 # 每个根键为世界 ID（对应 Bukkit world name），定义该世界的地图纹理与显示参数。

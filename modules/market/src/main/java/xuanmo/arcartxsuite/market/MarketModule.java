@@ -77,6 +77,11 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
     }
 
     @Override
+    protected int currentConfigVersion() {
+        return 3;
+    }
+
+    @Override
     protected @NotNull SyncPolicy defaultSyncPolicy() {
         return SyncPolicy.builder()
             .dynamicSection("auction.categories")
@@ -211,9 +216,6 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
             itemStackBridge, vanillaItemNameBridge, mailSupplier, logger, crossServer, messages());
         service.setSignalProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.SignalDispatchable.class));
-        service.setQQBotProvider(
-            () -> getCapability(xuanmo.arcartxsuite.api.capability.QQBotBroadcastable.class),
-            configuration.auction().qqBroadcastThreshold());
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start(dataFolder, marketRepo);

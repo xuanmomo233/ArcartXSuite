@@ -358,11 +358,18 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class);
         if (eventBus != null) {
             eventBus.subscribe("market.*", event -> {
-                if ("market.auction_purchased".equals(event.topic())) {
-                    String price = event.payload().getOrDefault("formatted_price", "?");
-                    String playerName = event.player() != null ? event.player().getName() : "未知";
-                    svc.sendToAllGroups("[交易] " + playerName + " 以 " + price + " 购买了拍卖行物品");
+                if (!"market.auction_purchased".equals(event.topic())) return;
+                if (!configuration.marketBroadcast().enabled()) return;
+                double price = 0;
+                try {
+                    price = Double.parseDouble(event.payload().getOrDefault("price", "0"));
+                } catch (NumberFormatException ignored) {
+                    return;
                 }
+                if (price < configuration.marketBroadcast().threshold()) return;
+                String formattedPrice = event.payload().getOrDefault("formatted_price", String.valueOf(price));
+                String playerName = event.player() != null ? event.player().getName() : "未知";
+                svc.sendToAllGroups("[交易] " + playerName + " 以 " + formattedPrice + " 购买了拍卖行物品");
             });
             eventBus.subscribe("mail.*", event -> {
                 // 预留：邮件相关事件群通知

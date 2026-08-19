@@ -58,13 +58,13 @@ public record MarketModuleConfiguration(
 
     private static UiConfiguration loadUi(FileConfiguration config) {
         return new UiConfiguration(
-            readStr(config, "ui.shop-id", "AXS:market_shop"),
+            readStr(config, "ui.shop-ui-id", "AXS:market_shop"),
             readStr(config, "ui.shop-file", "arcartx/ui/market_shop.yml"),
-            readStr(config, "ui.auction-id", "AXS:market_auction"),
+            readStr(config, "ui.auction-ui-id", "AXS:market_auction"),
             readStr(config, "ui.auction-file", "arcartx/ui/market_auction.yml"),
-            readStr(config, "ui.recycle-id", "AXS:market_recycle"),
+            readStr(config, "ui.recycle-ui-id", "AXS:market_recycle"),
             readStr(config, "ui.recycle-file", "arcartx/ui/market_recycle.yml"),
-            readStr(config, "ui.history-id", "AXS:market_history"),
+            readStr(config, "ui.history-ui-id", "AXS:market_history"),
             readStr(config, "ui.history-file", "arcartx/ui/market_history.yml"),
             readStr(config, "ui.packet-id", "AXS_MARKET"),
             config.getBoolean("ui.register-ui-on-enable", true),
@@ -174,8 +174,7 @@ public record MarketModuleConfiguration(
             readStr(sec, "expired-return-method", "mail"),
             readStr(sec, "outbid-notify", "chat"),
             blacklist,
-            categories,
-            sec.getDouble("qq-broadcast-threshold", 1000.0)
+            categories
         );
     }
 
@@ -306,8 +305,7 @@ public record MarketModuleConfiguration(
         Map<String, Double> taxDiscount,
         String expiredReturnMethod, String outbidNotify,
         AuctionBlacklist blacklist,
-        Map<String, CategoryDefinition> categories,
-        double qqBroadcastThreshold
+        Map<String, CategoryDefinition> categories
     ) {
         public static AuctionConfiguration defaults() {
             return new AuctionConfiguration(
@@ -316,7 +314,7 @@ public record MarketModuleConfiguration(
                 3600L, 604800L, 86400L, 10, 0.05, 10.0,
                 0.0, "money", 0.05, "money",
                 Map.of(), "mail", "chat",
-                AuctionBlacklist.empty(), Map.of(), 1000.0
+                AuctionBlacklist.empty(), Map.of()
             );
         }
     }

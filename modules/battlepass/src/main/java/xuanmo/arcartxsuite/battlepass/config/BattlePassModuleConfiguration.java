@@ -677,12 +677,12 @@ public record BattlePassModuleConfiguration(
         public static BattlePassUiConfiguration load(ConfigurationSection section) {
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
             return new BattlePassUiConfiguration(
-                section.getBoolean("register-on-enable", true),
+                section.getBoolean("register-ui-on-enable", true),
                 section.getBoolean("overwrite-ui-files", false),
-                section.getString("main-id", "battlepass_main"),
-                section.getString("tasks-id", "battlepass_tasks"),
-                section.getString("rewards-id", "battlepass_rewards"),
-                section.getString("settlement-id", "battlepass_settlement")
+                section.getString("main-ui-id", "battlepass_main"),
+                section.getString("tasks-ui-id", "battlepass_tasks"),
+                section.getString("rewards-ui-id", "battlepass_rewards"),
+                section.getString("settlement-ui-id", "battlepass_settlement")
             );
         }
     }

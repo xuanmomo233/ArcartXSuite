@@ -36,6 +36,7 @@ public record QQBotConfiguration(
     QQBotMonitorConfig monitor,
     List<QQBotScheduledMessageConfig> scheduledMessages,
     QQBotBroadcastConfig broadcast,
+    QQBotMarketBroadcastConfig marketBroadcast,
     QQBotWelcomeConfig welcome,
     QQBotAutoReplyConfig autoReply,
     QQBotAnnounceConfig announce,
@@ -321,6 +322,11 @@ public record QQBotConfiguration(
             yaml.getString("broadcast.death.format", "☠ {player} 死亡了")
         );
 
+        QQBotMarketBroadcastConfig marketBroadcast = new QQBotMarketBroadcastConfig(
+            yaml.getBoolean("market-broadcast.enabled", true),
+            yaml.getDouble("market-broadcast.threshold", 1000.0)
+        );
+
         QQBotWelcomeConfig welcome = new QQBotWelcomeConfig(
             yaml.getBoolean("welcome.enabled", false),
             yaml.getString("welcome.message", "欢迎新成员加入！\n发送 #绑定 <游戏名> 关联你的游戏账号\n发送 #帮助 查看可用指令")
@@ -390,7 +396,7 @@ public record QQBotConfiguration(
             debug, serverId, onebot, groups, binding, whitelist,
             adminEnabled, adminQQs, adminCommandPrefix,
             commandPrefix, helpPrefix, customCommands, storage, messages,
-            signin, prizes, monitor, scheduledMessages, broadcast,
+            signin, prizes, monitor, scheduledMessages, broadcast, marketBroadcast,
             welcome, autoReply, announce, moderation, blacklist,
             yaml.getBoolean("at-to-game.enabled", true)
         );

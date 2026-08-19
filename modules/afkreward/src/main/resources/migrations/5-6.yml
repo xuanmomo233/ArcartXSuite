@@ -1,0 +1,20 @@
+# 文件用途: AfkReward 配置迁移 5 -> 6
+# 迁移目的: UI 配置字段名统一为标准格式
+# hud-id → ui-id, register-on-enable → register-ui-on-enable, overwrite-ui-file → overwrite-ui-files
+from-version: 5  # 迁移起始版本号
+to-version: 6    # 迁移目标版本号
+description: "UI 配置字段名统一：hud-id→ui-id, register-on-enable→register-ui-on-enable, overwrite-ui-file→overwrite-ui-files"  # 迁移说明
+
+operations:
+  # ui.hud-id → ui.ui-id
+  - type: rename          # 重命名操作：同层级键名变更
+    from: ui.hud-id       # 旧字段路径
+    to: ui.ui-id          # 新字段路径
+  # ui.register-on-enable → ui.register-ui-on-enable
+  - type: rename          # 重命名操作：同层级键名变更
+    from: ui.register-on-enable  # 旧字段路径
+    to: ui.register-ui-on-enable # 新字段路径
+  # ui.overwrite-ui-file → ui.overwrite-ui-files（单数 file → 复数 files）
+  - type: rename          # 重命名操作：同层级键名变更
+    from: ui.overwrite-ui-file   # 旧字段路径
+    to: ui.overwrite-ui-files    # 新字段路径

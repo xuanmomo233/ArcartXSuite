@@ -1,0 +1,16 @@
+from-version: 2
+to-version: 3
+description: "UI 配置字段名统一为 xxx-ui-id 格式：shop-id→shop-ui-id, auction-id→auction-ui-id, recycle-id→recycle-ui-id, history-id→history-ui-id"
+operations:
+  - type: rename
+    from: ui.shop-id
+    to: ui.shop-ui-id
+  - type: rename
+    from: ui.auction-id
+    to: ui.auction-ui-id
+  - type: rename
+    from: ui.recycle-id
+    to: ui.recycle-ui-id
+  - type: rename
+    from: ui.history-id
+    to: ui.history-ui-id

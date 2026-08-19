@@ -1,0 +1,20 @@
+from-version: 1
+to-version: 2
+description: "删除 shop 和 recycle 子系统中从未被代码读取的死字段（currencies/min-price/max-price/message-max-length），这些字段是从 auction 复制过来的遗留字段，对系统商店/回收商店无业务意义"
+operations:
+  - type: remove
+    path: shop.currencies
+  - type: remove
+    path: shop.min-price
+  - type: remove
+    path: shop.max-price
+  - type: remove
+    path: shop.message-max-length
+  - type: remove
+    path: recycle.currencies
+  - type: remove
+    path: recycle.min-price
+  - type: remove
+    path: recycle.max-price
+  - type: remove
+    path: recycle.message-max-length

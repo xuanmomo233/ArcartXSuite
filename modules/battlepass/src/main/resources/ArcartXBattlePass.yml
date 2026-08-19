@@ -1,7 +1,7 @@
 # ArcartXBattlePass 主配置文件
 # 定义战令系统的存储、赛季、任务、奖励、UI 及跨服同步等核心参数
 
-config-version: 3  # 配置版本号，变更时触发迁移
+config-version: 4  # 配置版本号，变更时触发迁移
 
 # 存储配置：支持 sqlite 与 mysql 两种模式
 storage:
@@ -85,12 +85,12 @@ reward-delivery-mode: "direct"
 
 # UI 配置：控制界面注册与绑定
 ui:
-  register-on-enable: true  # 模块启动时是否自动注册 UI
+  register-ui-on-enable: true  # 模块启动时是否自动注册 UI
   overwrite-ui-files: false  # 是否强制覆盖用户已修改的 UI 文件
-  main-id: "battlepass_main"  # 主界面 UI 标识
-  tasks-id: "battlepass_tasks"  # 任务列表界面 UI 标识
-  rewards-id: "battlepass_rewards"  # 奖励界面 UI 标识
-  settlement-id: "battlepass_settlement"  # 赛季结算奖励界面 UI 标识
+  main-ui-id: "battlepass_main"  # 主界面 UI 标识
+  tasks-ui-id: "battlepass_tasks"  # 任务列表界面 UI 标识
+  rewards-ui-id: "battlepass_rewards"  # 奖励界面 UI 标识
+  settlement-ui-id: "battlepass_settlement"  # 赛季结算奖励界面 UI 标识
 
 # 跨服同步配置
 cross-server:

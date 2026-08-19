@@ -1,6 +1,6 @@
 # AXS 钓鱼模块主配置文件
 # 配置钓鱼小游戏核心参数、水域定义、鱼类池、宝藏池、UI注册和命令
-config-version: 2              # 配置文件版本号
+config-version: 3              # 配置文件版本号
 
 # ─── 调试 ────────────────────────────────────────────
 # 开启后输出钓鱼事件、小游戏状态、发包详情等详细日志，生产环境建议关闭。
@@ -80,18 +80,27 @@ fishing:
   # ─── 等级修正（玩家钓鱼等级越高，小游戏越轻松） ────────────────
   # 钓鱼等级上限，用于将玩家等级归一化到 [0,1] 参与等级修正计算。与 season.max-level 独立。
   max-level: 100
-  # 等级修正系数：满级时鱼速度最多减慢此比例、逃离概率最多降低此比例、进度增长最多加快此比例。
-  # 例如 0.5 = 满级时鱼速度 ×0.5、逃离概率 ×0.5、进度增速 ×1.5。
+  # 等级修正基础系数：满级时等级修正的最大值。例如 0.5 = 满级时 lvlMod = 0.5。
+  # 以下 4 个独立 scale 分别控制 lvlMod 对各参数的影响程度，默认 1.0 = 完全应用 lvlMod。
+  # 设为 0.5 = 该参数只受一半 lvlMod 影响；设为 0 = 该参数不受等级影响。
   level-modifier-scale: 0.5
+  # 鱼移动速度的等级修正系数：鱼速度 ×（1 - lvlMod × 此值）。满级时鱼速度最多减慢 level-modifier-scale × 此值。
+  fish-speed-level-scale: 1.0
+  # 逃离概率的等级修正系数：逃离概率 ×（1 - lvlMod × 此值）。满级时逃离概率最多降低 level-modifier-scale × 此值。
+  flee-chance-level-scale: 1.0
+  # 逃离速度的等级修正系数：逃离速度 ×（1 - lvlMod × 此值）。满级时逃离速度最多减慢 level-modifier-scale × 此值。
+  flee-speed-level-scale: 1.0
+  # 进度增速的等级修正系数：进度增速 ×（1 + lvlMod × 此值）。满级时进度增速最多加快 level-modifier-scale × 此值。
+  progress-rate-level-scale: 1.0
 
   # ─── 驱赶机制（鱼在绿条内时偶尔迅速逃离，增加操作难度） ────────
   # 逃离触发条件：鱼在绿条内 + 到达检查时间 + 随机骰 < 逃离概率。
-  # 逃离概率 = flee-base-chance +（鱼难度/100）× flee-chance-per-difficulty，再 ×（1 - 等级修正）×（1 - 天赋减免）。
+  # 逃离概率 = [flee-base-chance +（鱼难度/100）× flee-chance-per-difficulty] ×（1 - 等级修正×flee-chance-level-scale）×（1 - 天赋减免）。
   # 难度越高逃离越频繁；玩家等级越高逃离概率越低。
   flee-base-chance: 0.25
   flee-chance-per-difficulty: 0.25
-  # 逃离速度 = flee-base-speed +（鱼难度/100）× flee-speed-per-difficulty，再 ×（1 - 天赋减免）。
-  # 难度越高逃离越快。
+  # 逃离速度 = [flee-base-speed +（鱼难度/100）× flee-speed-per-difficulty] ×（1 - 等级修正×flee-speed-level-scale）×（1 - 天赋减免）。
+  # 难度越高逃离越快；玩家等级越高逃离速度越慢。
   flee-base-speed: 0.04
   flee-speed-per-difficulty: 0.03
   # 逃离持续 ticks 范围 [min, max)，触发后随机取一个持续时间。
@@ -223,19 +232,19 @@ treasure-pools:
 # 这些 UI 文件位于 arcartx/ui/ 目录，由模块在启动时注册到 ArcartX。
 ui:
   # 是否在插件启用时自动注册本模块的 UI。
-  register-on-enable: true
+  register-ui-on-enable: true
   # 是否强制覆盖用户已修改的 UI 文件。
   overwrite-ui-files: false
   # 钓鱼小游戏 UI 的 ID。
-  minigame-id: "fishing_minigame"
+  minigame-ui-id: "fishing_minigame"
   # 鱼类图鉴 UI 的 ID。
-  collection-id: "fishing_collection"
+  collection-ui-id: "fishing_collection"
   # 天赋树 UI 的 ID。
-  talents-id: "fishing_talents"
+  talents-ui-id: "fishing_talents"
   # 赛季等级奖励 UI 的 ID。
-  rewards-id: "fishing_rewards"
+  rewards-ui-id: "fishing_rewards"
   # 任务列表 UI 的 ID。
-  tasks-id: "fishing_tasks"
+  tasks-ui-id: "fishing_tasks"
 
 # ─── 命令配置 ────────────────────────────────────────
 commands:

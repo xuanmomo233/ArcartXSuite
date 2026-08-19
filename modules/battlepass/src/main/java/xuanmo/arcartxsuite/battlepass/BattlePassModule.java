@@ -72,7 +72,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
     @Override
     protected int currentConfigVersion() {
-        return 3;
+        return 4;
     }
 
     @Override
@@ -87,10 +87,10 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
     @Override
     protected @NotNull SyncPolicy defaultSyncPolicy() {
-        return SyncPolicy.builder()
-            .dynamicSection("tasks")
-            .dynamicSection("messages")
-            .build();
+        // tasks 节自配置版本 2 起已外部化为 tasks/ 目录下独立文件，
+        // 主配置中 tasks 仅剩 daily-count/weekly-count/tasks-directory 固定字段，不再作为动态节。
+        // messages 由独立 messages.yml 管理，不受主配置 SyncPolicy 管辖，无需声明。
+        return SyncPolicy.strict();
     }
 
     @Override

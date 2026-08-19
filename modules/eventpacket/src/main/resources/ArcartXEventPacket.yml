@@ -36,7 +36,6 @@ packet-command:
   # 可用占位符: <player>, <uuid>, <world>, <arg1>, <arg2> ...
   enabled: true
   packet-id: "ArcartXEventPacket"
-  presets-directory: "eventpacket/packet-command-presets"
 
 # 规则定义目录，路径相对模块数据目录。
 # 目录下每个 *.yml 文件可包含多个规则定义，根键即为规则 ID。

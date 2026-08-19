@@ -18,7 +18,6 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
-import xuanmo.arcartxsuite.api.capability.QQBotBroadcastable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
@@ -78,9 +77,7 @@ public class MarketService {
     }
 
     private volatile java.util.function.Supplier<SignalDispatchable> signalProvider;
-    private volatile java.util.function.Supplier<QQBotBroadcastable> qqBotProvider;
     private volatile java.util.function.Supplier<EventBusCapability> eventBusProvider;
-    private double qqBroadcastThreshold = 1000.0;
 
     private MarketRepository repository;
     private RedisMarketCache redisCache;
@@ -115,11 +112,6 @@ public class MarketService {
 
     public void setSignalProvider(java.util.function.Supplier<SignalDispatchable> provider) {
         this.signalProvider = provider;
-    }
-
-    public void setQQBotProvider(java.util.function.Supplier<QQBotBroadcastable> provider, double threshold) {
-        this.qqBotProvider = provider;
-        this.qqBroadcastThreshold = threshold;
     }
 
     public void setEventBusProvider(java.util.function.Supplier<EventBusCapability> provider) {
@@ -464,10 +456,6 @@ public class MarketService {
                 "price", String.valueOf(result.price()),
                 "formatted_price", currencyManager.format(result.currency(), BigDecimal.valueOf(result.price()))
             ));
-            // 大额交易群播报（后备直接调用，后续可移除）
-            if (result.price() >= qqBroadcastThreshold) {
-                broadcastToQQ(player.getName() + " 以 " + currencyManager.format(result.currency(), BigDecimal.valueOf(result.price())) + " 购买了拍卖行物品");
-            }
         } else {
             player.sendMessage(ChatColor.RED + result.error());
         }
@@ -1101,14 +1089,6 @@ public class MarketService {
         SignalDispatchable sd = signalProvider.get();
         if (sd != null && player != null) {
             sd.dispatchSignal(signal, player, variables);
-        }
-    }
-
-    private void broadcastToQQ(String message) {
-        if (qqBotProvider == null) return;
-        QQBotBroadcastable qqBot = qqBotProvider.get();
-        if (qqBot != null) {
-            qqBot.sendToAllGroups("[交易] " + message);
         }
     }
 

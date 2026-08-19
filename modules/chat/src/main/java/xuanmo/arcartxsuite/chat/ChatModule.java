@@ -73,10 +73,10 @@ public final class ChatModule extends AbstractAXSModule implements ModuleCommand
 
     @Override
     protected @NotNull SyncPolicy defaultSyncPolicy() {
-        // cards、function 包含用户自定义聊天卡片与功能配置
+        // cards 为固定 schema（卡片 ID + 排版参数），不作为动态节
+        // function 下仅 custom-components 为用户自定义组件匹配表，其余为固定字段
         return SyncPolicy.builder()
-            .dynamicSection("cards")
-            .dynamicSection("function")
+            .dynamicSection("function.custom-components")
             .build();
     }
 
