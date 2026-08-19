@@ -38,6 +38,14 @@ public final class DefaultAriaBridge implements AriaBridge {
         "priv.seventeen.artist.aria.object.IAriaObject";
     private static final String NEW_JAVA_OBJECT_MIRROR_CLASS =
         "priv.seventeen.artist.aria.interop.JavaObjectMirror";
+    private static final String NEW_NUMBER_VALUE_CLASS =
+        "priv.seventeen.artist.aria.value.NumberValue";
+    private static final String NEW_STRING_VALUE_CLASS =
+        "priv.seventeen.artist.aria.value.StringValue";
+    private static final String NEW_BOOLEAN_VALUE_CLASS =
+        "priv.seventeen.artist.aria.value.BooleanValue";
+    private static final String NEW_NONE_VALUE_CLASS =
+        "priv.seventeen.artist.aria.value.NoneValue";
     private static final String[] DISCOVERY_PLUGINS = {
         "BlinkAriaHost",
         "ArcartX",
@@ -54,6 +62,11 @@ public final class DefaultAriaBridge implements AriaBridge {
     private Method newSetValue;
     private Constructor<?> newJavaObjectMirrorCtor;
     private Constructor<?> newObjectValueCtor;
+    // 原生 IValue 构造/工厂，用于按 Java 类型正确包装绑定值（避免 JavaObjectMirror.canMath()=false 导致数值运算失效）
+    private Constructor<?> newNumberValueCtor;
+    private Constructor<?> newStringValueCtor;
+    private Method newBooleanValueOf;
+    private Object newNoneValueNone;
 
     // unwrap 方法缓存：按值类型类名缓存 Method，避免每次 eval 都做 getMethod 查找
     private final ConcurrentMap<String, Method> unwrapMethodCache = new ConcurrentHashMap<>();
@@ -120,6 +133,29 @@ public final class DefaultAriaBridge implements AriaBridge {
                 javaObjectMirrorClass.getConstructor(Object.class);
             newObjectValueCtor =
                 objectValueClass.getConstructor(iAriaObjectClass);
+
+            // 原生 IValue 类型映射：Number→NumberValue, String→StringValue, Boolean→BooleanValue, null→NoneValue
+            Class<?> numberValueClass = Class.forName(
+                NEW_NUMBER_VALUE_CLASS, true, classLoader
+            );
+            Class<?> stringValueClass = Class.forName(
+                NEW_STRING_VALUE_CLASS, true, classLoader
+            );
+            Class<?> booleanValueClass = Class.forName(
+                NEW_BOOLEAN_VALUE_CLASS, true, classLoader
+            );
+            Class<?> noneValueClass = Class.forName(
+                NEW_NONE_VALUE_CLASS, true, classLoader
+            );
+            newNumberValueCtor =
+                numberValueClass.getConstructor(double.class);
+            newStringValueCtor =
+                stringValueClass.getConstructor(String.class);
+            newBooleanValueOf =
+                booleanValueClass.getMethod("of", boolean.class);
+            Field noneField = noneValueClass.getDeclaredField("NONE");
+            noneField.setAccessible(true);
+            newNoneValueNone = noneField.get(null);
 
             version = resolveNewApiVersion(ariaClass);
             available = true;
@@ -229,15 +265,53 @@ public final class DefaultAriaBridge implements AriaBridge {
         Object storage = newGetGlobalStorage.invoke(context);
         for (Map.Entry<String, Object> entry : bindings.entrySet()) {
             Object value = entry.getValue();
-            if (value == null) {
+            Object ariaValue = wrapToAriaValue(value);
+            if (ariaValue == null) {
                 continue;
             }
             Object key = newVariableKeyOf.invoke(null, entry.getKey());
-            Object mirror = newJavaObjectMirrorCtor.newInstance(value);
-            Object objectValue = newObjectValueCtor.newInstance(mirror);
             Object reference = newGetGlobalVariable.invoke(storage, key);
-            newSetValue.invoke(reference, objectValue);
+            newSetValue.invoke(reference, ariaValue);
         }
+    }
+
+    /**
+     * 按 Java 类型映射到 ARIA 原生 IValue，确保数值/字符串/布尔能正确参与 ARIA 运算。
+     * <p>
+     * 旧实现统一用 {@code ObjectValue(JavaObjectMirror)} 包装，而 {@code JavaObjectMirror}
+     * 未重写 {@code IAriaObject.canMath()}（默认 false），导致 Number 绑定值在 ARIA 数值
+     * 表达式中被当作不可运算对象，乘法/加法等结果归零（如 xp-curve 公式 level=2 结果=0）。
+     * <p>
+     * 映射规则（对齐 {@code NativeCallable.wrapObject}）：
+     * <ul>
+     *   <li>null → NoneValue.NONE</li>
+     *   <li>Number → NumberValue(double)</li>
+     *   <li>String → StringValue</li>
+     *   <li>Boolean → BooleanValue</li>
+     *   <li>其他 → ObjectValue(JavaObjectMirror)（保留对象语义，供脚本访问成员）</li>
+     * </ul>
+     * 注意：绑定值注入到 {@code global.} 命名空间，脚本中需用 {@code global.<name>} 访问。
+     *
+     * @param value Java 端绑定值
+     * @return 对应的 ARIA IValue 实例，null 表示跳过该绑定
+     */
+    private @Nullable Object wrapToAriaValue(Object value)
+        throws ReflectiveOperationException {
+        if (value == null) {
+            return newNoneValueNone;
+        }
+        if (value instanceof Number number) {
+            return newNumberValueCtor.newInstance(number.doubleValue());
+        }
+        if (value instanceof String text) {
+            return newStringValueCtor.newInstance(text);
+        }
+        if (value instanceof Boolean bool) {
+            return newBooleanValueOf.invoke(null, bool);
+        }
+        // 非基础类型保留对象镜像语义（脚本可通过 dot/[] 访问成员）
+        Object mirror = newJavaObjectMirrorCtor.newInstance(value);
+        return newObjectValueCtor.newInstance(mirror);
     }
 
     private @Nullable Object unwrap(@Nullable Object result)
@@ -343,5 +417,9 @@ public final class DefaultAriaBridge implements AriaBridge {
         newSetValue = null;
         newJavaObjectMirrorCtor = null;
         newObjectValueCtor = null;
+        newNumberValueCtor = null;
+        newStringValueCtor = null;
+        newBooleanValueOf = null;
+        newNoneValueNone = null;
     }
 }

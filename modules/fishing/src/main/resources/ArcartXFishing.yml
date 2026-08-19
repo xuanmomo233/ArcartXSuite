@@ -121,7 +121,8 @@ season:
   display-name: "第一赛季"
   max-level: 100
   # 经验成长曲线：转折点断点列表，每项指定一个起始等级（level）与一个 ARIA 表达式（formula）。
-  # 表达式以变量 level 为入参，计算结果即为"升到该等级所需经验值"（必须 ≥ 1）。
+  # 表达式以变量 global.level 为入参（绑定值注入到 ARIA global. 命名空间，需用 global. 前缀访问），
+  # 计算结果即为"升到该等级所需经验值"（必须 ≥ 1）。
   # 系统按 level 升序选取最大的且不超过目标等级的断点公式求值。
   # 首个断点的 level 必须为 1；断点 level 必须严格递增。
   #
@@ -137,7 +138,7 @@ season:
   # 天赋点（每3级1点）：满级共 33 点，可点亮 25 个树节点 + 8 个联动节点中的部分。
   xp-curve:
     - level: 1
-      formula: "50 * level * (1 + 2.0 * math.pow(math.pow(level / 100, 2) * (3 - 2 * level / 100), 1.5))"
+      formula: "50 * global.level * (1 + 2.0 * math.pow(math.pow(global.level / 100, 2) * (3 - 2 * global.level / 100), 1.5))"
   start-date: "2026-01-01"
   end-date: "2030-12-31"
   # 赛季结算奖励发放方式：ONLINE_DIRECT / MAIL / HYBRID

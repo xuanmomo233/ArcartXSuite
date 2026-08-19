@@ -763,11 +763,11 @@ public record FishingModuleConfiguration(
         private static XpCurve parseXpCurve(ConfigurationSection section, @Nullable AriaBridge ariaBridge) {
             if (ariaBridge == null) {
                 // Aria 不可用时回退为固定线性曲线
-                return new XpCurve(List.of(new XpCurve.Breakpoint(1, "50 * level")), nullAriaBridge());
+                return new XpCurve(List.of(new XpCurve.Breakpoint(1, "50 * global.level")), nullAriaBridge());
             }
             List<?> raw = section.getList("xp-curve");
             if (raw == null || raw.isEmpty()) {
-                return new XpCurve(List.of(new XpCurve.Breakpoint(1, "50 * level")), ariaBridge);
+                return new XpCurve(List.of(new XpCurve.Breakpoint(1, "50 * global.level")), ariaBridge);
             }
             List<XpCurve.Breakpoint> breakpoints = new ArrayList<>();
             for (Object item : raw) {
@@ -778,7 +778,7 @@ public record FishingModuleConfiguration(
                 }
             }
             if (breakpoints.isEmpty()) {
-                return new XpCurve(List.of(new XpCurve.Breakpoint(1, "50 * level")), ariaBridge);
+                return new XpCurve(List.of(new XpCurve.Breakpoint(1, "50 * global.level")), ariaBridge);
             }
             return new XpCurve(breakpoints, ariaBridge);
         }
