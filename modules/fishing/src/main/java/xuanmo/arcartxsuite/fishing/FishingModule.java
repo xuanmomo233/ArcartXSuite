@@ -140,8 +140,63 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         if (configFile == null) {
             throw new IllegalStateException("ArcartXFishing.yml 配置文件缺失");
         }
+        // 在加载配置前，确保 fishes/baits/rods/treasures 四个定义目录存在默认文件。
+        // 仅当目录为空或不存在时从 jar 导出，不覆盖用户已修改/自定义的文件。
+        ensureDefinitionDefaults();
         configuration = FishingModuleConfiguration.load(
             YamlConfiguration.loadConfiguration(configFile), dataFolder, logger, ariaBridge);
+    }
+
+    /**
+     * 确保 fishes/baits/rods/treasures 四个定义目录存在默认文件。
+     * <p>
+     * 仅当对应目录不存在或为空时，从模块 jar 中导出内置默认文件；
+     * 用户已存在或自定义的文件不会被覆盖。
+     */
+    private void ensureDefinitionDefaults() {
+        ensureDefinitionDir("fishes", new String[]{
+            "fishes/catfish.yml", "fishes/legendary_carp.yml", "fishes/pufferfish.yml",
+            "fishes/salmon.yml", "fishes/sea_bass.yml", "fishes/tuna.yml"
+        });
+        ensureDefinitionDir("baits", new String[]{
+            "baits/bread.yml", "baits/corn.yml", "baits/worm.yml"
+        });
+        ensureDefinitionDir("rods", new String[]{
+            "rods/wooden_rod.yml"
+        });
+        ensureDefinitionDir("treasures", new String[]{
+            "treasures/ancient_coin.yml", "treasures/custom_treasure_map.yml", "treasures/lost_ring.yml",
+            "treasures/mmo_aquamarine.yml", "treasures/mythic_gem.yml", "treasures/neige_rune.yml",
+            "treasures/old_boot.yml", "treasures/overture_legendary_rod.yml"
+        });
+    }
+
+    /**
+     * 确保指定定义目录存在默认文件。
+     * <p>
+     * 当目录不存在或不含任何 .yml 文件时，从 jar 导出 defaults 列表中的所有文件；
+     * 已存在的文件不会被覆盖（exportResource 走 Files.copy，目标存在时会抛异常被捕获并跳过）。
+     *
+     * @param dirName  dataFolder 下的子目录名（如 "fishes"）
+     * @param defaults jar 内资源路径数组（如 {"fishes/catfish.yml", ...}）
+     */
+    private void ensureDefinitionDir(@NotNull String dirName, @NotNull String[] defaults) {
+        File dir = new File(dataFolder, dirName);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        File[] existing = dir.listFiles((d, name) -> name.endsWith(".yml") || name.endsWith(".yaml"));
+        if (existing != null && existing.length > 0) {
+            // 用户已有定义文件，不导出默认值
+            return;
+        }
+        for (String res : defaults) {
+            String fileName = res.substring(res.lastIndexOf('/') + 1);
+            File target = new File(dir, fileName);
+            if (!target.exists()) {
+                exportResource(res, target);
+            }
+        }
     }
 
     @Override
