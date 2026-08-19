@@ -54,6 +54,8 @@ import xuanmo.arcartxsuite.fishing.task.TaskLoader;
  */
 public final class FishingModule extends AbstractAXSModule implements ModuleCommandHandler {
 
+    private static final String MAIN_UI_RESOURCE = "arcartx/ui/fishing_main.yml";
+    private static final String MAIN_UI_FILE = "ui/fishing_main.yml";
     private static final String MINIGAME_UI_RESOURCE = "arcartx/ui/fishing_minigame.yml";
     private static final String MINIGAME_UI_FILE = "ui/fishing_minigame.yml";
     private static final String COLLECTION_UI_RESOURCE = "arcartx/ui/fishing_collection.yml";
@@ -68,6 +70,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     private FishingModuleConfiguration configuration;
     private FishingService service;
     private FishingAdminCommand adminCommand;
+    private String mainUiId;
     private String minigameUiId;
     private String collectionUiId;
     private String talentsUiId;
@@ -122,6 +125,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     @Override
     protected @NotNull Map<String, String> uiResourceMappings() {
         Map<String, String> mappings = new LinkedHashMap<>();
+        mappings.put(MAIN_UI_RESOURCE, MAIN_UI_FILE);
         mappings.put(MINIGAME_UI_RESOURCE, MINIGAME_UI_FILE);
         mappings.put(COLLECTION_UI_RESOURCE, COLLECTION_UI_FILE);
         mappings.put(TALENTS_UI_RESOURCE, TALENTS_UI_FILE);
@@ -219,6 +223,17 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         }
 
         // 注册 UI 并获取 UI ID
+        UiBinding binding0 = registerModuleUi(
+            MAIN_UI_FILE,
+            configuration.ui().mainId(),
+            configuration.ui().registerOnEnable()
+        );
+        if (binding0.registeredUiId() != null) {
+            mainUiId = binding0.registeredUiId();
+        } else {
+            mainUiId = configuration.ui().mainId();
+        }
+
         UiBinding binding1 = registerModuleUi(
             MINIGAME_UI_FILE,
             configuration.ui().minigameId(),
@@ -386,6 +401,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     protected @NotNull Map<String, TabExecutor> commandBindings() {
         return Map.of("fishing", new FishingPlayerCommand(
             () -> packetBridge,
+            () -> mainUiId,
             () -> collectionUiId,
             () -> talentsUiId,
             () -> rewardsUiId,
@@ -409,6 +425,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
                 return service.getActiveMinigame(player.getUniqueId());
             },
             () -> service,
+            () -> mainUiId,
             () -> collectionUiId,
             () -> talentsUiId,
             () -> rewardsUiId,

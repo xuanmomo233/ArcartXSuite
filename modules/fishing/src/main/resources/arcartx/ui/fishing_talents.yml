@@ -1,7 +1,12 @@
 # AXS 钓鱼天赋树界面
-# 打开方式: /fishing talents
+# 打开方式: /fishing talents 或主界面导航跳转
 # 数据交互: packetHandler init/update (AXS_FISHING_TALENTS)
-# 全屏布局 + 左侧5棵树标签 + 右侧天赋节点滚动列表
+# 布局: 全屏毛玻璃工作台 = 顶栏 + 左侧导航（总览/图鉴/奖励/天赋/任务）+ 内容区
+#       内容区 = 天赋树标签栏（稳健/迅捷/威压/专注/幸运）+ 天赋节点滚动列表
+# 视觉规范:
+#   全屏玻璃 Frosted:24;12,22,38,110  面板玻璃 Frosted:30;255,255,255,100
+#   卡片底 26,34,46,210  卡片描边 50,160,190,180
+#   主色（青蓝）50,170,200  已点亮 124,196,142  悬停高亮 80,200,220
 #
 # Java 端 pushTalentsData 发送字段:
 #   packetId, seasonId, level, talentPoints, unspentTalentPoints,
@@ -15,7 +20,7 @@
 
 ui:
   isHud: false
-  background: true
+  background: false
   escClose: true
   closeDied: true
   through: false
@@ -47,6 +52,7 @@ ui:
       if(var.trees == none){ var.trees = {} }
       var.needRebuild = true
   action:
+    # load: 初始化变量 + 视口换算（Adaptive 以 1920x1080 等比缩放）
     load: |-
       var.packetId = 'AXS_FISHING_TALENTS'
       var.seasonId = ''
@@ -57,15 +63,18 @@ ui:
       var.trees = {}
       var.currentTree = 'steady'
       var.needRebuild = false
+      // 视口换算
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
       s = sx < sy ? sx : sy
       var.viewH = Screen.getHeight() / s
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
-      var.contentW = var.viewW - 96
+      var.contentW = var.viewW - 420
+    # open: 界面打开后主动请求服务端推送数据
     open: |-
-      Packet.send(var.packetId, 'open_talents')
+      Packet.send(var.packetId, 'refresh_talents')
+    # resize: 窗口尺寸变化后重算可用高宽
     resize: |-
       sx = Screen.getWidth() / 1920
       sy = Screen.getHeight() / 1080
@@ -73,7 +82,8 @@ ui:
       var.viewH = Screen.getHeight() / s
       var.viewW = Screen.getWidth() / s
       var.offX = (var.viewW - 1920) / 2
-      var.contentW = var.viewW - 96
+      var.contentW = var.viewW - 420
+    # tick: 每帧检查是否需要重建节点列表（树切换或数据更新时触发）
     tick: |-
       if(var.needRebuild){
         var.needRebuild = false
@@ -93,16 +103,16 @@ ui:
         }
       }
 
+# ─── 控件树 ────────────────────────────────────────────────────────
 controls:
-  # 全屏毛玻璃背景（顶层，铺满窗口）
-  全屏背景:
+  # 全屏毛玻璃底（真高斯模糊世界背景）
+  全屏玻璃底:
     type: Texture
     attribute:
       point: ~stretch_all
       through: true
-      normal: ~Frosted:28;12,22,38,200
-
-  # 自适应全局布局（设计分辨率 1920x1080）
+      normal: ~Frosted:24;12,22,38,110
+  # 自适配布局：宽高 = 设计分辨率 1920x1080
   自适应全局布局:
     type: Adaptive
     attribute:
@@ -116,318 +126,303 @@ controls:
         attribute:
           point: ~top_left
           x: "-var.offX"
-          y: 0
           width: "var.viewW"
-          height: 100
+          height: 96
         children:
           顶栏底:
             type: Texture
             attribute:
               point: ~stretch_all
-              normal: ~20,35,55,235
-            effect:
-              stroke:
-                width: 2
-                color: ~50,160,190,120
+              normal: ~Frosted:30;255,255,255,100
+          顶栏底线:
+            type: Texture
+            attribute:
+              point: ~horizontal_stretch_bottom
+              height: 1
+              normal: ~50,160,190,120
+          标题色块:
+            type: Texture
+            attribute:
+              point: ~middle_left
+              x: 48
+              width: 6
+              height: 36
+              normal: ~50,170,200,255
+              shape: ~round_rect
+              radius: 3
           标题:
             type: Text
             attribute:
               point: ~middle_left
-              x: 48
-              texts: "~&b🎣 钓鱼天赋树"
-              fontSize: 42
-          等级显示:
+              x: 68
+              texts: "~&f钓鱼"
+              fontSize: 48
+          标题竖线:
+            type: Texture
+            attribute:
+              point: ~middle_left
+              x: 168
+              width: 1
+              height: 30
+              normal: ~50,160,190,120
+          页名:
             type: Text
             attribute:
               point: ~middle_left
-              x: 500
-              texts: "'&e等级: &f' + var.playerLevel"
-              fontSize: 32
-          天赋点显示:
-            type: Text
-            attribute:
-              point: ~middle_left
-              x: 800
-              texts: "'&a可用天赋点: &f' + var.unspentTalentPoints + ' / ' + var.talentPoints"
-              fontSize: 32
+              x: 188
+              texts: "~&f天赋"
+              fontSize: 36
           关闭按钮:
             type: Canvas
             attribute:
-              point: ~top_right
-              x: -20
-              y: 18
-              width: 64
-              height: 64
+              point: ~middle_right
+              x: -40
+              width: 40
+              height: 40
             action:
-              click: "Screen.close()"
+              clickLeft: |-
+                Screen.close()
             children:
               关闭背景:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~60,40,40,220
-                  hover: ~200,70,70,240
-                  shape: ~circle
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
               关闭文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 64
+                  width: 40
                   texts: "~&f✕"
-                  fontSize: 36
+                  fontSize: 32
                   through: true
 
-      # ── 左侧导航 — 5棵天赋树标签 ────────────────────────
+      # ── 左侧导航 ───────────────────────────────────────
       左侧导航:
         type: Canvas
         attribute:
           point: ~top_left
           x: "48 - var.offX"
           y: 120
-          width: 280
+          width: 300
           height: "var.viewH - 144"
         children:
           导航底:
             type: Texture
             attribute:
               point: ~stretch_all
-              through: true
-              normal: ~25,40,60,200
+              normal: ~Frosted:30;255,255,255,100
               shape: ~round_rect
-              radius: 16
-          稳健标签:
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~50,160,190,180
+          导航总览:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 16
-              y: 16
-              width: 248
-              height: 80
+              x: 14
+              y: 18
+              width: 272
+              height: 58
             action:
-              click: |-
-                var.currentTree = 'steady'
-                var.needRebuild = true
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_main')
             children:
-              标签底:
+              总览底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.currentTree == 'steady' ? '50,120,80,220' : '35,50,70,180'"
-                  hover: "var.currentTree == 'steady' ? '60,140,90,240' : '45,60,80,200'"
+                  normal: ~26,34,46,210
                   shape: ~round_rect
-                  radius: 12
-              标签名:
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+              总览文字:
                 type: Text
                 attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 10
-                  width: 208
-                  height: 30
-                  texts: "~&a稳健"
-                  fontSize: 32
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f总览"
+                  fontSize: 36
                   through: true
-              标签描述:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 44
-                  width: 208
-                  height: 26
-                  texts: "~&7绿条稳定性与高度"
-                  fontSize: 20
-                  through: true
-          迅捷标签:
+          导航图鉴:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 16
-              y: 104
-              width: 248
-              height: 80
+              x: 14
+              y: 84
+              width: 272
+              height: 58
             action:
-              click: |-
-                var.currentTree = 'swift'
-                var.needRebuild = true
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_collection')
             children:
-              标签底:
+              图鉴底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.currentTree == 'swift' ? '50,100,140,220' : '35,50,70,180'"
-                  hover: "var.currentTree == 'swift' ? '60,120,160,240' : '45,60,80,200'"
+                  normal: ~26,34,46,210
                   shape: ~round_rect
-                  radius: 12
-              标签名:
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+              图鉴文字:
                 type: Text
                 attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 10
-                  width: 208
-                  height: 30
-                  texts: "~&b迅捷"
-                  fontSize: 32
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f图鉴"
+                  fontSize: 36
                   through: true
-              标签描述:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 44
-                  width: 208
-                  height: 26
-                  texts: "~&7降低鱼速与活跃度"
-                  fontSize: 20
-                  through: true
-          威压标签:
+          导航奖励:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 16
-              y: 192
-              width: 248
-              height: 80
+              x: 14
+              y: 150
+              width: 272
+              height: 58
             action:
-              click: |-
-                var.currentTree = 'pressure'
-                var.needRebuild = true
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_rewards')
             children:
-              标签底:
+              奖励底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.currentTree == 'pressure' ? '140,50,50,220' : '35,50,70,180'"
-                  hover: "var.currentTree == 'pressure' ? '160,60,60,240' : '45,60,80,200'"
+                  normal: ~26,34,46,210
                   shape: ~round_rect
-                  radius: 12
-              标签名:
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+              奖励文字:
                 type: Text
                 attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 10
-                  width: 208
-                  height: 30
-                  texts: "~&c威压"
-                  fontSize: 32
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f奖励"
+                  fontSize: 36
                   through: true
-              标签描述:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 44
-                  width: 208
-                  height: 26
-                  texts: "~&7压制鱼逃离行为"
-                  fontSize: 20
-                  through: true
-          专注标签:
+          # 当前页：天赋
+          导航天赋:
             type: Canvas
             attribute:
               point: ~top_left
-              x: 16
-              y: 280
-              width: 248
-              height: 80
-            action:
-              click: |-
-                var.currentTree = 'focus'
-                var.needRebuild = true
+              x: 14
+              y: 216
+              width: 272
+              height: 58
             children:
-              标签底:
+              天赋底:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~50,170,200,210
+                  shape: ~round_rect
+                  radius: 10
+                effect:
+                  stroke:
+                    width: 3
+                    color: ~50,170,200,230
+              天赋高亮条:
+                type: Texture
+                attribute:
+                  point: ~middle_left
+                  x: 8
+                  width: 4
+                  height: 28
+                  normal: ~50,170,200,255
+                  shape: ~round_rect
+                  radius: 2
+              天赋文字:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&0天赋"
+                  fontSize: 36
+          导航任务:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 14
+              y: 282
+              width: 272
+              height: 58
+            action:
+              clickLeft: |-
+                Packet.send(var.packetId, 'open_tasks')
+            children:
+              任务底:
                 type: Texture
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: "var.currentTree == 'focus' ? '130,60,140,220' : '35,50,70,180'"
-                  hover: "var.currentTree == 'focus' ? '150,70,160,240' : '45,60,80,200'"
+                  normal: ~26,34,46,210
                   shape: ~round_rect
-                  radius: 12
-              标签名:
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
+              任务文字:
                 type: Text
                 attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 10
-                  width: 208
-                  height: 30
-                  texts: "~&d专注"
-                  fontSize: 32
+                  point: ~middle_left
+                  x: 28
+                  texts: "~&f任务"
+                  fontSize: 36
                   through: true
-              标签描述:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 44
-                  width: 208
-                  height: 26
-                  texts: "~&7进度获取与维持"
-                  fontSize: 20
-                  through: true
-          幸运标签:
-            type: Canvas
+          导航分隔线:
+            type: Texture
             attribute:
               point: ~top_left
-              x: 16
-              y: 368
-              width: 248
-              height: 80
-            action:
-              click: |-
-                var.currentTree = 'lucky'
-                var.needRebuild = true
-            children:
-              标签底:
-                type: Texture
-                attribute:
-                  point: ~stretch_all
-                  through: true
-                  normal: "var.currentTree == 'lucky' ? '160,130,40,220' : '35,50,70,180'"
-                  hover: "var.currentTree == 'lucky' ? '180,150,50,240' : '45,60,80,200'"
-                  shape: ~round_rect
-                  radius: 12
-              标签名:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 10
-                  width: 208
-                  height: 30
-                  texts: "~&e幸运"
-                  fontSize: 32
-                  through: true
-              标签描述:
-                type: Text
-                attribute:
-                  point: ~top_left
-                  x: 20
-                  y: 44
-                  width: 208
-                  height: 26
-                  texts: "~&7经验售价与稀有鱼"
-                  fontSize: 20
-                  through: true
-
-          # 重置天赋按钮
-          重置按钮:
+              x: 18
+              y: 364
+              width: 264
+              height: 2
+              normal: ~50,160,190,80
+          导航提示:
+            type: Text
+            attribute:
+              point: ~bottom_left
+              x: 20
+              y: -84
+              texts: "~&fESC 关闭界面"
+              fontSize: 28
+          # 重置天赋按钮（导航底部）
+          重置天赋按钮:
             type: Canvas
             attribute:
               point: ~bottom_left
-              x: 16
+              x: 14
               y: -18
-              width: 248
-              height: 60
+              width: 272
+              height: 52
             action:
-              click: |-
+              clickLeft: |-
                 Packet.send(var.packetId, 'reset_talents')
             children:
               重置底:
@@ -435,73 +430,183 @@ controls:
                 attribute:
                   point: ~stretch_all
                   through: true
-                  normal: ~120,60,60,200
-                  hover: ~160,80,80,230
+                  normal: ~26,34,46,210
                   shape: ~round_rect
-                  radius: 12
+                  radius: 10
+                effect:
+                  ripple:
+                  stroke:
+                    width: 3
+                    color: "self.isHovered() ? '80,200,220,255' : '50,160,190,180'"
               重置文字:
                 type: Text
                 attribute:
                   point: ~middle_center
-                  width: 248
+                  width: 272
                   texts: "~&f↻ 重置天赋树"
-                  fontSize: 28
+                  fontSize: 30
                   through: true
 
-      # ── 右侧内容区 — 天赋节点列表 ──────────────────────
+      # ── 内容区（天赋）──────────────────────────────────
       内容区:
         type: Canvas
         attribute:
           point: ~top_left
           x: "372 - var.offX"
           y: 120
-          width: "var.contentW - 324"
+          width: "var.contentW"
           height: "var.viewH - 144"
         children:
           内容底:
             type: Texture
             attribute:
               point: ~stretch_all
-              through: true
-              normal: ~25,40,60,200
+              normal: ~Frosted:30;255,255,255,100
               shape: ~round_rect
-              radius: 16
-          页标题:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 24
-              y: 16
-              width: 600
-              height: 40
-              texts: "var.currentTree == 'steady' ? '&a稳健天赋树' : var.currentTree == 'swift' ? '&b迅捷天赋树' : var.currentTree == 'pressure' ? '&c威压天赋树' : var.currentTree == 'focus' ? '&d专注天赋树' : '&e幸运天赋树'"
-              fontSize: 36
-          提示文字:
-            type: Text
-            attribute:
-              point: ~top_left
-              x: 24
-              y: 60
-              width: "var.contentW - 372"
-              height: 30
-              texts: "~&7点击天赋节点进行点亮，每3级获得1点天赋点"
-              fontSize: 22
+              radius: 14
+            effect:
+              stroke:
+                width: 3
+                color: ~50,160,190,180
 
-          # 滚动区
+          # 天赋树标签栏：稳健/迅捷/威压/专注/幸运
+          标签栏:
+            type: HStack
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 20
+              spaceBetween: 12
+            children:
+              标签_稳健:
+                type: Texture
+                attribute:
+                  width: 200
+                  height: 50
+                  normal: "var.currentTree == 'steady' ? '50,170,200,230' : '26,34,46,200'"
+                  shape: ~round_rect
+                  radius: 10
+                  texts: "var.currentTree == 'steady' ? '&f稳健' : '&7稳健'"
+                  fontSize: 30
+                  center: true
+                action:
+                  clickLeft: |-
+                    var.currentTree = 'steady'
+                    var.needRebuild = true
+              标签_迅捷:
+                type: Texture
+                attribute:
+                  width: 200
+                  height: 50
+                  normal: "var.currentTree == 'swift' ? '50,170,200,230' : '26,34,46,200'"
+                  shape: ~round_rect
+                  radius: 10
+                  texts: "var.currentTree == 'swift' ? '&f迅捷' : '&7迅捷'"
+                  fontSize: 30
+                  center: true
+                action:
+                  clickLeft: |-
+                    var.currentTree = 'swift'
+                    var.needRebuild = true
+              标签_威压:
+                type: Texture
+                attribute:
+                  width: 200
+                  height: 50
+                  normal: "var.currentTree == 'pressure' ? '50,170,200,230' : '26,34,46,200'"
+                  shape: ~round_rect
+                  radius: 10
+                  texts: "var.currentTree == 'pressure' ? '&f威压' : '&7威压'"
+                  fontSize: 30
+                  center: true
+                action:
+                  clickLeft: |-
+                    var.currentTree = 'pressure'
+                    var.needRebuild = true
+              标签_专注:
+                type: Texture
+                attribute:
+                  width: 200
+                  height: 50
+                  normal: "var.currentTree == 'focus' ? '50,170,200,230' : '26,34,46,200'"
+                  shape: ~round_rect
+                  radius: 10
+                  texts: "var.currentTree == 'focus' ? '&f专注' : '&7专注'"
+                  fontSize: 30
+                  center: true
+                action:
+                  clickLeft: |-
+                    var.currentTree = 'focus'
+                    var.needRebuild = true
+              标签_幸运:
+                type: Texture
+                attribute:
+                  width: 200
+                  height: 50
+                  normal: "var.currentTree == 'lucky' ? '50,170,200,230' : '26,34,46,200'"
+                  shape: ~round_rect
+                  radius: 10
+                  texts: "var.currentTree == 'lucky' ? '&f幸运' : '&7幸运'"
+                  fontSize: 30
+                  center: true
+                action:
+                  clickLeft: |-
+                    var.currentTree = 'lucky'
+                    var.needRebuild = true
+
+          # 信息栏：当前天赋树名称 + 可用天赋点
+          信息栏:
+            type: Canvas
+            attribute:
+              point: ~top_left
+              x: 24
+              y: 86
+              width: "var.contentW - 48"
+              height: 60
+            children:
+              信息背景:
+                type: Texture
+                attribute:
+                  point: ~stretch_all
+                  normal: ~26,34,46,210
+                  shape: ~round_rect
+                  radius: 12
+                effect:
+                  stroke:
+                    width: 2
+                    color: ~50,160,190,120
+              树名称:
+                type: Text
+                attribute:
+                  point: ~middle_left
+                  x: 24
+                  width: 600
+                  texts: "var.currentTree == 'steady' ? '&b稳健天赋树 &7绿条稳定性与高度' : var.currentTree == 'swift' ? '&b迅捷天赋树 &7降低鱼速与活跃度' : var.currentTree == 'pressure' ? '&b威压天赋树 &7压制鱼逃离行为' : var.currentTree == 'focus' ? '&b专注天赋树 &7进度获取与维持' : '&b幸运天赋树 &7经验售价与稀有鱼'"
+                  fontSize: 30
+              天赋点显示:
+                type: Text
+                attribute:
+                  point: ~middle_right
+                  x: -24
+                  width: 400
+                  texts: "'&a可用天赋点: &f' + var.unspentTalentPoints + ' / ' + var.talentPoints"
+                  fontSize: 28
+
+          # 滚动区：天赋节点列表
           滚动区:
             type: Scroll
             attribute:
               point: ~top_left
               x: 24
-              y: 100
-              width: "var.contentW - 372"
-              height: "var.viewH - 260"
+              y: 158
+              width: "var.contentW - 48"
+              height: "var.viewH - 326"
             children:
               天赋节点列表:
                 val: 天赋节点列表
                 type: VStack
                 attribute:
-                  width: "var.contentW - 372"
+                  width: "var.contentW - 48"
                   spaceBetween: 12
                 children:
                   # 天赋节点项模板（索引0，visible: false）
@@ -512,10 +617,10 @@ controls:
                       entryKey: 0.round()
                       entry: "var.trees[var.currentTree] != none ? var.trees[var.currentTree]['nodes'][self.entryKey] : none"
                       visible: false
-                      width: "var.contentW - 372"
+                      width: "var.contentW - 48"
                       height: 110
                     action:
-                      click: |-
+                      clickLeft: |-
                         if(self.entry != none){
                           if(self.entry['canUnlock'] == 'true' && self.entry['unlocked'] != 'true'){
                             Packet.send(var.packetId, 'unlock_talent', self.entry['id'])
@@ -527,14 +632,13 @@ controls:
                         attribute:
                           point: ~stretch_all
                           through: true
-                          normal: "self.parent.entry != none ? (self.parent.entry['unlocked'] == 'true' ? '46,90,60,220' : self.parent.entry['canUnlock'] == 'true' ? '50,65,90,220' : '45,45,50,180') : '40,55,75,200'"
-                          hover: "self.parent.entry != none ? (self.parent.entry['unlocked'] == 'true' ? '56,110,75,240' : self.parent.entry['canUnlock'] == 'true' ? '60,80,110,240' : '55,55,60,200') : '50,65,85,220'"
+                          normal: "self.parent.entry != none ? (self.parent.entry['unlocked'] == 'true' ? '124,196,142,210' : self.parent.entry['canUnlock'] == 'true' ? '50,170,200,210' : '26,34,46,210') : '26,34,46,210'"
                           shape: ~round_rect
                           radius: 12
                         effect:
                           stroke:
                             width: 3
-                            color: "self.parent.entry != none ? (self.parent.entry['unlocked'] == 'true' ? '124,196,142,230' : self.parent.entry['canUnlock'] == 'true' ? '100,160,220,230' : '80,80,80,180') : '255,255,255,230'"
+                            color: "self.parent.entry != none ? (self.parent.entry['unlocked'] == 'true' ? '124,196,142,230' : self.parent.entry['canUnlock'] == 'true' ? '50,170,200,230' : '50,160,190,120') : '50,160,190,120'"
                       层级标记:
                         type: Texture
                         attribute:
@@ -542,7 +646,7 @@ controls:
                           x: 16
                           width: 6
                           height: 80
-                          normal: "self.parent.entry != none ? (self.parent.entry['unlocked'] == 'true' ? '124,196,142,255' : self.parent.entry['canUnlock'] == 'true' ? '100,160,220,255' : '80,80,80,200') : '120,120,120,200'"
+                          normal: "self.parent.entry != none ? (self.parent.entry['unlocked'] == 'true' ? '124,196,142,255' : self.parent.entry['canUnlock'] == 'true' ? '50,170,200,255' : '50,160,190,160') : '50,160,190,160'"
                           shape: ~round_rect
                           radius: 3
                           through: true
@@ -552,7 +656,7 @@ controls:
                           point: ~top_left
                           x: 36
                           y: 12
-                          width: "var.contentW - 420"
+                          width: "var.contentW - 96"
                           height: 30
                           texts: "self.parent.entry != none ? '&f' + self.parent.entry['name'] : none"
                           fontSize: 28
@@ -564,7 +668,7 @@ controls:
                           point: ~top_left
                           x: 36
                           y: 44
-                          width: "var.contentW - 420"
+                          width: "var.contentW - 96"
                           height: 26
                           texts: "self.parent.entry != none ? '&7' + self.parent.entry['description'] : none"
                           fontSize: 22
@@ -576,7 +680,7 @@ controls:
                           point: ~top_left
                           x: 36
                           y: 76
-                          width: "var.contentW - 420"
+                          width: "var.contentW - 96"
                           height: 24
                           texts: "self.parent.entry != none ? (self.parent.entry['unlocked'] == 'true' ? '&a✔ 已点亮' : self.parent.entry['canUnlock'] == 'true' ? '&e点击点亮' : '&c不可点亮') : none"
                           fontSize: 20
@@ -589,7 +693,7 @@ controls:
                           y: 12
                           width: 60
                           height: 28
-                          normal: "self.parent.entry != none ? (self.parent.entry['unlocked'] == 'true' ? '124,196,142,200' : self.parent.entry['canUnlock'] == 'true' ? '100,160,220,200' : '80,80,80,160') : '120,120,120,160'"
+                          normal: "self.parent.entry != none ? (self.parent.entry['unlocked'] == 'true' ? '124,196,142,200' : self.parent.entry['canUnlock'] == 'true' ? '50,170,200,200' : '50,160,190,140') : '50,160,190,140'"
                           shape: ~round_rect
                           radius: 8
                           through: true
@@ -599,6 +703,6 @@ controls:
                             attribute:
                               point: ~middle_center
                               width: 60
-                              texts: "self.parent.entry != none ? '&fT' + self.parent.entry['tier'] : none"
+                              texts: "self.parent.parent.entry != none ? '&fT' + self.parent.parent.entry['tier'] : none"
                               fontSize: 20
                               through: true

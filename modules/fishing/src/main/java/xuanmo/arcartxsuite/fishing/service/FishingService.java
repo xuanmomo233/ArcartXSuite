@@ -1,7 +1,9 @@
 package xuanmo.arcartxsuite.fishing.service;
 
 import java.math.BigDecimal;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -55,6 +57,18 @@ import xuanmo.arcartxsuite.fishing.task.TaskEngine;
 
 public final class FishingService {
 
+    /** 最近捕获记录条目（内存缓存，重启后清空，仅用于主界面展示）。 */
+    public record RecentCatch(
+        @NotNull String fishId,
+        @NotNull String fishName,
+        @NotNull String rarity,
+        int size,
+        boolean perfect,
+        long timestamp
+    ) {}
+
+    private static final int MAX_RECENT_CATCHES = 10;
+
     private final JavaPlugin plugin;
     private final FishingModuleConfiguration configuration;
     private final FishingRepository repository;
@@ -64,6 +78,7 @@ public final class FishingService {
     private final String minigameUiId;
     private final Map<UUID, FishingMinigame> activeMinigames = new HashMap<>();
     private final Map<UUID, Long> fishingCooldowns = new HashMap<>(); // 玩家UUID → 冷却到期时间戳(System.currentTimeMillis)
+    private final Map<UUID, Deque<RecentCatch>> recentCatches = new HashMap<>();
     private final TalentEngine talentEngine;
 
     /** 调试日志：仅当 configuration.debug() 为 true 时输出。 */
@@ -400,6 +415,11 @@ public final class FishingService {
                 }
             }
         }
+
+        // ─── 记录最近捕获（内存缓存，用于主界面展示） ──────────
+        recordRecentCatch(player.getUniqueId(), new RecentCatch(
+            fish.id(), fish.displayName(), fish.rarity().name().toLowerCase(), size, perfect, System.currentTimeMillis()
+        ));
 
         // ─── 跨模块事件发射 ──────────────────────────────────────
         emitFishingEvent(player, fish, size, water, session.baitId(), perfect, isFirstCatch, gotTreasure, updatedSeason, updatedPerm);
@@ -1055,6 +1075,105 @@ public final class FishingService {
             }
         }
         return favoriteFish != null ? favoriteFish.displayName() : "";
+    }
+
+    /** 记录最近捕获到内存缓存（保留最近 MAX_RECENT_CATCHES 条）。 */
+    private void recordRecentCatch(@NotNull UUID uuid, @NotNull RecentCatch catchEntry) {
+        Deque<RecentCatch> deque = recentCatches.computeIfAbsent(uuid, k -> new ArrayDeque<>());
+        deque.addFirst(catchEntry);
+        while (deque.size() > MAX_RECENT_CATCHES) {
+            deque.removeLast();
+        }
+    }
+
+    /** 获取玩家最近捕获记录列表（最新在前）。 */
+    @NotNull
+    public List<RecentCatch> getRecentCatches(@NotNull UUID uuid) {
+        Deque<RecentCatch> deque = recentCatches.get(uuid);
+        return deque != null ? new ArrayList<>(deque) : List.of();
+    }
+
+    /** 打开指定 UI（供 PacketHandler 导航跳转使用）。 */
+    public void openUi(@NotNull Player player, @NotNull String uiId) {
+        if (packetBridge == null || !packetBridge.isAvailable()) return;
+        packetBridge.openUi(player, uiId);
+    }
+
+    /**
+     * 推送主界面总览数据到 UI。
+     * <p>
+     * 包含：等级/经验、图鉴完成度、捕获统计、天赋点、可领取奖励数、最近捕获记录流。
+     */
+    public void pushMainData(@NotNull Player player, @NotNull String uiId) {
+        if (packetBridge == null || !packetBridge.isAvailable()) return;
+
+        FishingSeasonData seasonData = repository.loadSeasonData(player.getUniqueId(), configuration.season().seasonId());
+        FishingPermanentData permData = repository.loadPermanentData(player.getUniqueId());
+        List<FishCollectionEntry> collection = repository.loadCollection(player.getUniqueId());
+        List<RecentCatch> recent = getRecentCatches(player.getUniqueId());
+
+        // 统计可领取奖励数
+        int claimableRewardCount = 0;
+        for (SeasonRewardDefinition reward : seasonRewards) {
+            if (seasonData.level() >= reward.level() && !seasonData.claimedRewards().contains(reward.id())) {
+                claimableRewardCount++;
+            }
+        }
+
+        // 当前级升级所需经验与进度比
+        XpCurve xpCurve = configuration.season().xpCurve();
+        int xpForNext = seasonData.xpForNextLevel(xpCurve);
+        int maxLevel = configuration.season().maxLevel();
+        double progressRatio = xpForNext > 0 ? (double) seasonData.currentXp() / xpForNext : 0;
+        if (seasonData.level() >= maxLevel) progressRatio = 1.0;
+
+        java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("packetId", "AXS_FISHING");
+        payload.put("seasonName", configuration.season().displayName());
+        payload.put("playerLevel", seasonData.level());
+        payload.put("maxLevel", maxLevel);
+        payload.put("currentXp", seasonData.currentXp());
+        payload.put("xpForNext", xpForNext);
+        payload.put("progressRatio", progressRatio);
+        payload.put("totalCaught", permData.totalCaught());
+        payload.put("perfectCatches", permData.perfectCatches());
+        payload.put("treasureCaught", permData.treasureCaught());
+        payload.put("collectionCount", collection.size());
+        payload.put("totalFishTypes", configuration.fishes().size());
+        int collectionPercent = configuration.fishes().isEmpty() ? 0 : (collection.size() * 100) / configuration.fishes().size();
+        payload.put("collectionPercent", collectionPercent);
+        payload.put("unspentTalentPoints", seasonData.unspentTalentPoints());
+        payload.put("totalTalentPoints", seasonData.talentPoints());
+        payload.put("unlockedTalentCount", seasonData.talents().size());
+        payload.put("claimableRewardCount", claimableRewardCount);
+        payload.put("claimedRewardCount", seasonData.claimedRewards().size());
+        payload.put("totalRewardCount", seasonRewards.size());
+
+        // 最近捕获记录流
+        java.util.Map<String, Object> recentMap = new java.util.LinkedHashMap<>();
+        int idx = 0;
+        for (RecentCatch catchEntry : recent) {
+            java.util.Map<String, Object> entry = new java.util.LinkedHashMap<>();
+            entry.put("fishId", catchEntry.fishId());
+            entry.put("fishName", catchEntry.fishName());
+            entry.put("rarity", catchEntry.rarity());
+            entry.put("size", catchEntry.size());
+            entry.put("perfect", catchEntry.perfect());
+            entry.put("timestamp", catchEntry.timestamp());
+            recentMap.put(Integer.toString(idx), entry);
+            // 鱼物品图标 JSON（分离模式）
+            FishDefinition fishDef = configuration.fishes().stream()
+                .filter(f -> f.id().equals(catchEntry.fishId()))
+                .findFirst().orElse(null);
+            if (fishDef != null) {
+                payload.put("recentIconJson" + idx, itemGenerator.generateItemJson(fishDef.itemRef(), player));
+            }
+            idx++;
+        }
+        payload.put("recentCatches", recentMap);
+        payload.put("recentCount", recent.size());
+
+        packetBridge.sendPacket(player, uiId, "init", payload);
     }
 
     public void pushCollectionData(@NotNull Player player, @NotNull String uiId) {

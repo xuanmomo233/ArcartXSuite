@@ -20,6 +20,7 @@ import xuanmo.arcartxsuite.fishing.service.FishingService;
 public final class FishingPlayerCommand implements TabExecutor {
 
     private final java.util.function.Supplier<PacketBridgeAPI> packetBridgeSupplier;
+    private final java.util.function.Supplier<String> mainUiIdSupplier;
     private final java.util.function.Supplier<String> collectionUiIdSupplier;
     private final java.util.function.Supplier<String> talentsUiIdSupplier;
     private final java.util.function.Supplier<String> rewardsUiIdSupplier;
@@ -31,7 +32,7 @@ public final class FishingPlayerCommand implements TabExecutor {
                                 @NotNull java.util.function.Supplier<String> collectionUiIdSupplier,
                                 @NotNull java.util.function.Supplier<FishingService> serviceSupplier,
                                 @NotNull java.util.function.BiFunction<String, Object[], String> msg) {
-        this(packetBridgeSupplier, collectionUiIdSupplier, null, null, null, serviceSupplier, msg);
+        this(packetBridgeSupplier, null, collectionUiIdSupplier, null, null, null, serviceSupplier, msg);
     }
 
     public FishingPlayerCommand(@NotNull java.util.function.Supplier<PacketBridgeAPI> packetBridgeSupplier,
@@ -41,7 +42,19 @@ public final class FishingPlayerCommand implements TabExecutor {
                                 @Nullable java.util.function.Supplier<String> tasksUiIdSupplier,
                                 @NotNull java.util.function.Supplier<FishingService> serviceSupplier,
                                 @NotNull java.util.function.BiFunction<String, Object[], String> msg) {
+        this(packetBridgeSupplier, null, collectionUiIdSupplier, talentsUiIdSupplier, rewardsUiIdSupplier, tasksUiIdSupplier, serviceSupplier, msg);
+    }
+
+    public FishingPlayerCommand(@NotNull java.util.function.Supplier<PacketBridgeAPI> packetBridgeSupplier,
+                                @Nullable java.util.function.Supplier<String> mainUiIdSupplier,
+                                @NotNull java.util.function.Supplier<String> collectionUiIdSupplier,
+                                @Nullable java.util.function.Supplier<String> talentsUiIdSupplier,
+                                @Nullable java.util.function.Supplier<String> rewardsUiIdSupplier,
+                                @Nullable java.util.function.Supplier<String> tasksUiIdSupplier,
+                                @NotNull java.util.function.Supplier<FishingService> serviceSupplier,
+                                @NotNull java.util.function.BiFunction<String, Object[], String> msg) {
         this.packetBridgeSupplier = packetBridgeSupplier;
+        this.mainUiIdSupplier = mainUiIdSupplier;
         this.collectionUiIdSupplier = collectionUiIdSupplier;
         this.talentsUiIdSupplier = talentsUiIdSupplier;
         this.rewardsUiIdSupplier = rewardsUiIdSupplier;
@@ -97,7 +110,23 @@ public final class FishingPlayerCommand implements TabExecutor {
             return openUi(sender, player, service, tasksUiIdSupplier, "tasks");
         }
 
-        // 默认：打开图鉴 UI
+        // collection 子命令 — 打开图鉴 UI
+        if (args.length > 0 && "collection".equalsIgnoreCase(args[0])) {
+            return openUi(sender, player, service, collectionUiIdSupplier, "collection");
+        }
+
+        // main 子命令 — 打开主界面 UI
+        if (args.length > 0 && "main".equalsIgnoreCase(args[0])) {
+            return openUi(sender, player, service, mainUiIdSupplier, "main");
+        }
+
+        // 默认：打开主界面 UI（若未配置则回退到图鉴）
+        if (mainUiIdSupplier != null) {
+            String mainId = mainUiIdSupplier.get();
+            if (mainId != null && !mainId.isBlank()) {
+                return openUi(sender, player, service, mainUiIdSupplier, "main");
+            }
+        }
         return openUi(sender, player, service, collectionUiIdSupplier, "collection");
     }
 
@@ -124,7 +153,7 @@ public final class FishingPlayerCommand implements TabExecutor {
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                                    @NotNull String label, @NotNull String[] args) {
         if (args.length == 1) {
-            return java.util.stream.Stream.of("help", "sell", "talents", "rewards", "tasks")
+            return java.util.stream.Stream.of("help", "sell", "main", "collection", "talents", "rewards", "tasks")
                 .filter(a -> a.startsWith(args[0].toLowerCase()))
                 .toList();
         }
@@ -141,6 +170,7 @@ public final class FishingPlayerCommand implements TabExecutor {
         sender.sendMessage(msg.apply("player.help.open", new Object[]{}));
         sender.sendMessage(msg.apply("player.help.sell", new Object[]{}));
         sender.sendMessage(msg.apply("player.help.sell-all", new Object[]{}));
+        sender.sendMessage(msg.apply("player.help.collection", new Object[]{}));
         sender.sendMessage(msg.apply("player.help.talents", new Object[]{}));
         sender.sendMessage(msg.apply("player.help.rewards", new Object[]{}));
         sender.sendMessage(msg.apply("player.help.tasks", new Object[]{}));

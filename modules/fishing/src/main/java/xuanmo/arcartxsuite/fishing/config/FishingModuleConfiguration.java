@@ -695,6 +695,7 @@ public record FishingModuleConfiguration(
     public record UiConfiguration(
         boolean registerOnEnable,
         boolean overwriteUiFiles,
+        String mainId,
         String minigameId,
         String collectionId,
         String talentsId,
@@ -706,6 +707,7 @@ public record FishingModuleConfiguration(
             return new UiConfiguration(
                 section.getBoolean("register-ui-on-enable", true),
                 section.getBoolean("overwrite-ui-files", false),
+                section.getString("main-ui-id", "fishing_main"),
                 section.getString("minigame-ui-id", "fishing_minigame"),
                 section.getString("collection-ui-id", "fishing_collection"),
                 section.getString("talents-ui-id", "fishing_talents"),
