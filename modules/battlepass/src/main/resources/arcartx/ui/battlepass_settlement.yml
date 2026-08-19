@@ -655,6 +655,11 @@ controls:
                           height: 76
                           iconKey: "self.parent.entryKey + '_0'"
                           entry: self.parent.entry
+                        action:
+                          enter: |-
+                            self['奖励名称滚动'].scrollAnim = Lerp(0, 1, 2000)
+                          leave: |-
+                            self['奖励名称滚动'].scrollAnim = none
                         children:
                           免费区底:
                             type: Texture
@@ -688,16 +693,29 @@ controls:
                               slotType: ~Icon
                               itemScale: 0.85
                               seticon: "self.setItemIcon(var.iconJsons[self.parent.iconKey] != none ? var.iconJsons[self.parent.iconKey] : var.emptyItemJson)"
-                          奖励名称:
-                            type: Text
+                          奖励名称滚动:
+                            type: Scroll
                             attribute:
                               point: ~middle_left
                               x: 68
                               width: "var.slotW - 80"
-                              texts: "self.parent.entry != none && self.parent.entry['free'] != none && self.parent.entry['free']['present'] == 'true' ? self.parent.entry['free']['name'] : ''"
-                              fontSize: 26
-                              limit: 16
+                              height: 36
                               through: true
+                              scrollAnim: none
+                              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                            children:
+                              横向排列:
+                                type: HStack
+                                attribute:
+                                  through: true
+                                  height: 36
+                                children:
+                                  奖励名称:
+                                    type: Text
+                                    attribute:
+                                      through: true
+                                      texts: "self.parent.parent.parent.entry != none && self.parent.parent.parent.entry['free'] != none && self.parent.parent.parent.entry['free']['present'] == 'true' ? self.parent.parent.parent.entry['free']['name'] : ''"
+                                      fontSize: 56
                       # 高级档区
                       高级档区:
                         type: Canvas
@@ -709,6 +727,11 @@ controls:
                           height: 76
                           iconKey: "self.parent.entryKey + '_1'"
                           entry: self.parent.entry
+                        action:
+                          enter: |-
+                            self['奖励名称滚动'].scrollAnim = Lerp(0, 1, 2000)
+                          leave: |-
+                            self['奖励名称滚动'].scrollAnim = none
                         children:
                           高级区底:
                             type: Texture
@@ -742,16 +765,29 @@ controls:
                               slotType: ~Icon
                               itemScale: 0.85
                               seticon: "self.setItemIcon(var.iconJsons[self.parent.iconKey] != none ? var.iconJsons[self.parent.iconKey] : var.emptyItemJson)"
-                          奖励名称:
-                            type: Text
+                          奖励名称滚动:
+                            type: Scroll
                             attribute:
                               point: ~middle_left
                               x: 68
                               width: "var.slotW - 80"
-                              texts: "self.parent.entry != none && self.parent.entry['premium'] != none && self.parent.entry['premium']['present'] == 'true' ? self.parent.entry['premium']['name'] : ''"
-                              fontSize: 26
-                              limit: 16
+                              height: 36
                               through: true
+                              scrollAnim: none
+                              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                            children:
+                              横向排列:
+                                type: HStack
+                                attribute:
+                                  through: true
+                                  height: 36
+                                children:
+                                  奖励名称:
+                                    type: Text
+                                    attribute:
+                                      through: true
+                                      texts: "self.parent.parent.parent.entry != none && self.parent.parent.parent.entry['premium'] != none && self.parent.parent.parent.entry['premium']['present'] == 'true' ? self.parent.parent.parent.entry['premium']['name'] : ''"
+                                      fontSize: 56
                       # 典藏档区
                       典藏档区:
                         type: Canvas
@@ -763,6 +799,11 @@ controls:
                           height: 76
                           iconKey: "self.parent.entryKey + '_2'"
                           entry: self.parent.entry
+                        action:
+                          enter: |-
+                            self['奖励名称滚动'].scrollAnim = Lerp(0, 1, 2000)
+                          leave: |-
+                            self['奖励名称滚动'].scrollAnim = none
                         children:
                           典藏区底:
                             type: Texture
@@ -796,16 +837,29 @@ controls:
                               slotType: ~Icon
                               itemScale: 0.85
                               seticon: "self.setItemIcon(var.iconJsons[self.parent.iconKey] != none ? var.iconJsons[self.parent.iconKey] : var.emptyItemJson)"
-                          奖励名称:
-                            type: Text
+                          奖励名称滚动:
+                            type: Scroll
                             attribute:
                               point: ~middle_left
                               x: 68
                               width: "var.slotW - 80"
-                              texts: "self.parent.entry != none && self.parent.entry['deluxe'] != none && self.parent.entry['deluxe']['present'] == 'true' ? self.parent.entry['deluxe']['name'] : ''"
-                              fontSize: 26
-                              limit: 16
+                              height: 36
                               through: true
+                              scrollAnim: none
+                              moveX: "self.scrollAnim != none ? self.scrollAnim.get() : 0"
+                            children:
+                              横向排列:
+                                type: HStack
+                                attribute:
+                                  through: true
+                                  height: 36
+                                children:
+                                  奖励名称:
+                                    type: Text
+                                    attribute:
+                                      through: true
+                                      texts: "self.parent.parent.parent.entry != none && self.parent.parent.parent.entry['deluxe'] != none && self.parent.parent.parent.entry['deluxe']['present'] == 'true' ? self.parent.parent.parent.entry['deluxe']['name'] : ''"
+                                      fontSize: 56
 
           # 底部说明
           底部说明:
