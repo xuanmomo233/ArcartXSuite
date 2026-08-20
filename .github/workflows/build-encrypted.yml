@@ -504,6 +504,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload ProGuard mapping (core)
+        if: always()
         uses: actions/upload-artifact@v5
         with:
           name: axs-core-proguard-mapping
@@ -926,6 +927,7 @@ jobs:
           done
 
       - name: Upload ProGuard mappings (modules)
+        if: always()
         uses: actions/upload-artifact@v5
         with:
           name: axs-modules-proguard-mapping
