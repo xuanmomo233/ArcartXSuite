@@ -29,12 +29,12 @@ jobs:
           # 再构建 title 模块的混淆（生成 mapping）
           gradle :axs-core:obfuscateCore :modules:title:obfuscateModule --no-build-cache -PskipNativeCheck=true
           echo "=== title mapping ==="
-          find build/ArcartX-Suite/modules-obf -name "*title*proguard-mapping*" -exec wc -l {} \;
+          find build/ArcartX-Suite/modules-obf -name "*Title*proguard-mapping*" -exec wc -l {} \;
 
       - name: Upload title ProGuard mapping
         uses: actions/upload-artifact@v5
         with:
           name: title-proguard-mapping
-          path: build/ArcartX-Suite/modules-obf/*title*proguard-mapping*.txt
+          path: build/ArcartX-Suite/modules-obf/*Title*proguard-mapping*.txt
           if-no-files-found: error
           retention-days: 1
