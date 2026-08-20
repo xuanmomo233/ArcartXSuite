@@ -15,6 +15,7 @@ import java.util.List;
  * @param baseCommands         每次签到基础执行的命令列表
  * @param baseMailPresetIds    每次签到基础发送的邮件预设 id 列表
  * @param baseRewardText       基础签到奖励描述文本
+ * @param baseItemRewards      每次签到基础通过 ItemSourceRegistry 发放的物品奖励列表
  * @param makeup               补签功能配置
  * @param streakRewards        连续签到里程碑奖励列表
  * @param totalRewards         累计签到里程碑奖励列表
@@ -30,6 +31,7 @@ public record OnlineRewardsSignInConfiguration(
     List<String> baseCommands,
     List<String> baseMailPresetIds,
     String baseRewardText,
+    List<OnlineRewardsItemReward> baseItemRewards,
     OnlineRewardsMakeupConfiguration makeup,
     List<OnlineRewardsMilestoneReward> streakRewards,
     List<OnlineRewardsMilestoneReward> totalRewards,

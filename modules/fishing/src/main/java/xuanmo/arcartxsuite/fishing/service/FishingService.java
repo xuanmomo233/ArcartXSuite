@@ -782,15 +782,7 @@ public final class FishingService {
     }
 
     private void dropOrGive(@NotNull Player player, @NotNull ItemStack item) {
-        if (player.getInventory().firstEmpty() != -1) {
-            player.getInventory().addItem(item);
-        } else {
-            player.getWorld().dropItemNaturally(player.getLocation(), item);
-            String msg = getMessage("fishing_inventory_full");
-            if (msg != null) {
-                player.sendMessage(msg);
-            }
-        }
+        rewardDispatcher.dispatchItem(player, item, "fishing-drop");
     }
 
     // ─── 饵料装载 ────────────────────────────────────────────────
@@ -1065,7 +1057,7 @@ public final class FishingService {
      */
     public boolean claimReward(@NotNull Player player, @NotNull String rewardId) {
         SeasonRewardDefinition reward = seasonRewards.stream()
-            .filter(r -> r.id().equals(rewardId))
+            .filter(r -> r.rewardId().equals(rewardId))
             .findFirst().orElse(null);
         if (reward == null) return false;
 
@@ -1089,7 +1081,7 @@ public final class FishingService {
     public @NotNull List<SeasonRewardDefinition> getClaimableRewards(@NotNull UUID uuid) {
         FishingSeasonData data = repository.loadSeasonData(uuid, configuration.season().seasonId());
         return seasonRewards.stream()
-            .filter(r -> data.level() >= r.level() && !data.claimedRewards().contains(r.id()))
+            .filter(r -> data.level() >= r.level() && !data.claimedRewards().contains(r.rewardId()))
             .toList();
     }
 
@@ -1113,16 +1105,14 @@ public final class FishingService {
     }
 
     /**
-     * 玩家上线时补发待发放奖励。
+     * 玩家上线时处理。
+     * <p>
+     * 待发放奖励补发已由本体统一 PendingRewardService 在 PlayerJoinEvent 中自动处理，
+     * 此方法仅处理任务分配。
      *
      * @param player 上线玩家
      */
     public void onPlayerJoin(@NotNull Player player) {
-        try {
-            rewardDispatcher.dispatchPending(player);
-        } catch (Exception e) {
-            logger.warning("补发待发放奖励失败 [" + player.getName() + "]: " + e.getMessage());
-        }
         try {
             taskEngine.onPlayerJoin(player);
         } catch (Exception e) {
@@ -1219,7 +1209,7 @@ public final class FishingService {
         // 统计可领取奖励数
         int claimableRewardCount = 0;
         for (SeasonRewardDefinition reward : seasonRewards) {
-            if (seasonData.level() >= reward.level() && !seasonData.claimedRewards().contains(reward.id())) {
+            if (seasonData.level() >= reward.level() && !seasonData.claimedRewards().contains(reward.rewardId())) {
                 claimableRewardCount++;
             }
         }
@@ -1656,14 +1646,14 @@ public final class FishingService {
         int idx = 0;
         for (SeasonRewardDefinition reward : seasonRewards) {
             java.util.Map<String, Object> entry = new java.util.LinkedHashMap<>();
-            entry.put("id", reward.id());
+            entry.put("id", reward.rewardId());
             entry.put("level", reward.level());
             entry.put("type", reward.type());
             entry.put("iconName", reward.iconName());
             entry.put("iconMaterial", reward.iconMaterial());
             entry.put("iconAmount", reward.iconAmount());
-            entry.put("claimable", seasonData.level() >= reward.level() && !seasonData.claimedRewards().contains(reward.id()));
-            entry.put("claimed", seasonData.claimedRewards().contains(reward.id()));
+            entry.put("claimable", seasonData.level() >= reward.level() && !seasonData.claimedRewards().contains(reward.rewardId()));
+            entry.put("claimed", seasonData.claimedRewards().contains(reward.rewardId()));
             rewardsMap.put(Integer.toString(idx), entry);
             // 图标 itemJson：Java 端构建 ItemStack 后序列化，避免 UI 端拼 SNBT 出错
             // （材质名大小写、Count 浮点等客户端拼接问题）

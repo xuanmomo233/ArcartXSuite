@@ -4,7 +4,6 @@ import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -90,10 +89,7 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            ValidationRule.required("storage.mode", ValueType.STRING)
-                .withEnum(Set.of("sqlite", "mysql")),
-            ValidationRule.required("storage.pool-size", ValueType.INT)
-                .withRange(1, 100),
+            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
             ValidationRule.required("pools-directory", ValueType.STRING)
         );
     }
@@ -162,7 +158,7 @@ public final class LotteryModule extends AbstractAXSModule implements ModuleComm
 
         service = new LotteryService(
             plugin, configuration, repo,
-            currencyManager, itemSourceRegistry, itemMatcher, mailSupplier, logger);
+            currencyManager, itemSourceRegistry, itemMatcher, mailSupplier, itemRewardDispatcher, logger);
         service.setMessageProvider(messages());
         service.start();
 

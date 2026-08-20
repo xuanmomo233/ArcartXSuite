@@ -136,8 +136,7 @@ public final class LoginViewModule extends AbstractAXSModule implements ModuleCo
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            ValidationRule.required("storage.mode", ValueType.STRING)
-                .withEnum(Set.of("sqlite", "mysql")),
+            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
             ValidationRule.required("auth.mode", ValueType.STRING)
                 .withEnum(Set.of("standalone", "authme")),
             ValidationRule.of("ui.open-delay-ticks", ValueType.INT)

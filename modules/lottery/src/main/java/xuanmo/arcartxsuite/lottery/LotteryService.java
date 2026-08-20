@@ -19,6 +19,7 @@ import xuanmo.arcartxsuite.api.capability.MailDispatchable;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.item.ItemMatcher;
 import xuanmo.arcartxsuite.api.item.ItemMatcherAPI;
+import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.util.ItemSerializer;
@@ -55,6 +56,7 @@ public class LotteryService {
     private final ItemSourceRegistry itemSourceRegistry;
     private final ItemMatcherAPI itemMatcherSupport;
     private final Supplier<MailDispatchable> mailSupplier;
+    private final ItemRewardDispatcher itemRewardDispatcher;
     private final Logger logger;
     private final GachaEngine gachaEngine;
     private final CaseOpeningEngine caseEngine;
@@ -72,6 +74,7 @@ public class LotteryService {
      * @param currencyManager   货币桥接 API
      * @param itemSourceRegistry 物品来源注册表
      * @param mailSupplier      邮件能力延迟供应器
+     * @param itemRewardDispatcher 统一物品奖励发放器
      * @param logger            日志记录器
      */
     public LotteryService(JavaPlugin plugin,
@@ -81,6 +84,7 @@ public class LotteryService {
                           ItemSourceRegistry itemSourceRegistry,
                            ItemMatcherAPI itemMatcherSupport,
                            Supplier<MailDispatchable> mailSupplier,
+                          ItemRewardDispatcher itemRewardDispatcher,
                           Logger logger) {
         this.plugin = plugin;
         this.configuration = configuration;
@@ -89,10 +93,11 @@ public class LotteryService {
         this.itemSourceRegistry = itemSourceRegistry;
         this.itemMatcherSupport = itemMatcherSupport;
         this.mailSupplier = mailSupplier;
+        this.itemRewardDispatcher = itemRewardDispatcher;
         this.logger = logger;
         this.gachaEngine = new GachaEngine();
         this.caseEngine = new CaseOpeningEngine();
-        this.distributor = new PrizeDistributor(plugin, itemSourceRegistry, mailSupplier, logger);
+        this.distributor = new PrizeDistributor(plugin, itemSourceRegistry, mailSupplier, itemRewardDispatcher, logger);
     }
 
     /**
@@ -152,12 +157,13 @@ public class LotteryService {
     /**
      * 根据奖品定义生成对应的 {@link ItemStack}，用于 UI 展示。
      *
-     * @param item 奖品定义
+     * @param item   奖品定义
+     * @param player 玩家上下文（Overture 等需要），可为 {@code null}
      * @return 生成的物品堆，生成失败时返回 {@code null}
      */
     @Nullable
-    public ItemStack generateItem(@NotNull PoolItem item) {
-        return distributor.generateItem(item);
+    public ItemStack generateItem(@NotNull PoolItem item, @Nullable Player player) {
+        return distributor.generateItem(item, player);
     }
 
     /**
@@ -321,7 +327,7 @@ public class LotteryService {
         // 日志
         if (result != null && result.item() != null) {
             plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () ->
-                repository.logCaseOpen(player.getUniqueId(), poolId, result.item().id(), result.rarity()));
+                repository.logCaseOpen(player.getUniqueId(), poolId, result.item().key(), result.rarity()));
         }
 
         // 发放奖品
@@ -362,7 +368,7 @@ public class LotteryService {
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             for (CaseResult result : results) {
                 if (result != null && result.item() != null) {
-                    repository.logCaseOpen(player.getUniqueId(), poolId, result.item().id(), result.rarity());
+                    repository.logCaseOpen(player.getUniqueId(), poolId, result.item().key(), result.rarity());
                 }
             }
         });
@@ -378,12 +384,14 @@ public class LotteryService {
         if (outcome.success()) {
             if (outcome.mailSent()) {
                 sendMessage(player, "common.mail-sent", item.name());
+            } else if (outcome.pendingSaved()) {
+                sendMessage(player, "common.pending-saved", item.name());
             }
             return;
         }
 
         String itemData = distributor.toItemJson(outcome.item());
-        String metadata = item.id() + "|" + item.name() + "|" + item.delivery().name();
+        String metadata = item.key() + "|" + item.name() + "|" + item.delivery().name();
         if (!itemData.isBlank()) {
             long claimId = repository.enqueuePendingClaim(player.getUniqueId(), poolId, metadata, itemData);
             if (claimId > 0) {
@@ -396,12 +404,12 @@ public class LotteryService {
             }
             sendMessage(player, "common.distribution-failed", item.name());
             logger.severe("奖励投递失败且无法序列化，需管理员处理: player="
-                + player.getName() + ", pool=" + poolId + ", item=" + item.id()
+                + player.getName() + ", pool=" + poolId + ", item=" + item.key()
                 + ", reason=" + outcome.failureReason());
         } else {
             sendMessage(player, "common.distribution-failed", item.name());
             logger.severe("非物品奖励投递失败，需管理员处理: player="
-                + player.getName() + ", pool=" + poolId + ", item=" + item.id()
+                + player.getName() + ", pool=" + poolId + ", item=" + item.key()
                 + ", reason=" + outcome.failureReason());
         }
     }
@@ -422,7 +430,14 @@ public class LotteryService {
                 org.bukkit.inventory.ItemStack stack = ItemSerializer.deserialize(
                     java.util.Base64.getDecoder().decode(claim.itemData()));
                 if (stack == null) continue;
-                if (!player.getInventory().addItem(stack).isEmpty()) {
+                ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder("lottery")
+                    .sourceDetail("pending-claim")
+                    .overflowMailSubject("抽奖待领取奖励溢出物品")
+                    .overflowMailBody("您的背包已满，待领取奖励物品通过邮件补发。")
+                    .overflowMailSenderName("抽奖")
+                    .build();
+                ItemRewardDispatcher.DispatchResult result = itemRewardDispatcher.dispatchItem(player, stack, options);
+                if (!result.success()) {
                     break;
                 }
                 repository.markPendingClaimClaimed(claim.id());
@@ -734,7 +749,7 @@ public class LotteryService {
     }
 
     private boolean contains(List<PoolItem> items, PoolItem target) {
-        return items != null && items.stream().anyMatch(item -> item.id().equals(target.id()));
+        return items != null && items.stream().anyMatch(item -> item.key().equals(target.key()));
     }
 
     public record GachaItemInfo(int star, boolean up) {}
@@ -863,7 +878,7 @@ public class LotteryService {
         for (int i = 0; i < items.size(); i++) {
             if (i > 0) sb.append(",");
             PoolItem item = items.get(i);
-            sb.append(item != null ? item.id() : "null");
+            sb.append(item != null ? item.key() : "null");
         }
         sb.append("]");
         return sb.toString();

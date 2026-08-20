@@ -25,10 +25,6 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
-import xuanmo.arcartxsuite.api.capability.MailDispatchable;
-import xuanmo.arcartxsuite.api.capability.mail.MailAttachmentSpec;
-import xuanmo.arcartxsuite.api.capability.mail.MailSendRequest;
-import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
 import xuanmo.arcartxsuite.market.config.MarketModuleConfiguration.AuctionConfiguration;
@@ -57,19 +53,19 @@ public class AuctionService {
     private final RedisMarketCache redisCache;
     private final @Nullable Consumer<String> crossServerPublisher;
     private final CurrencyBridgeAPI currencyManager;
-    private final @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier;
     private final AuctionItemSerializer itemSerializer;
     private final Logger logger;
     private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
+    private final xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher;
     private BukkitTask schedulerTask;
 
     public AuctionService(JavaPlugin plugin, AuctionConfiguration config, MessagesConfiguration messages,
                           MarketRepository repository, RedisMarketCache redisCache,
                           @Nullable Consumer<String> crossServerPublisher,
                           CurrencyBridgeAPI currencyManager,
-                          @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier,
                           AuctionItemSerializer itemSerializer, Logger logger,
-                          xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge) {
+                          xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge,
+                          xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher) {
         this.plugin = plugin;
         this.config = config;
         this.messages = messages;
@@ -77,10 +73,10 @@ public class AuctionService {
         this.redisCache = redisCache;
         this.crossServerPublisher = crossServerPublisher;
         this.currencyManager = currencyManager;
-        this.mailSupplier = mailSupplier;
         this.itemSerializer = itemSerializer;
         this.logger = logger;
         this.vanillaItemNameBridge = vanillaItemNameBridge;
+        this.itemRewardDispatcher = itemRewardDispatcher;
     }
 
     public void start(long intervalTicks) {
@@ -224,10 +220,14 @@ public class AuctionService {
     }
 
     private void giveBack(Player player, ItemStack item) {
-        var overflow = player.getInventory().addItem(item.clone());
-        for (ItemStack left : overflow.values()) {
-            player.getWorld().dropItemNaturally(player.getLocation(), left);
-        }
+        xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions options =
+            xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions.builder("market")
+                .sourceDetail("auction-giveback")
+                .overflowMailSubject("拍卖物品归还")
+                .overflowMailBody("您的背包已满，流拍物品通过邮件归还。")
+                .overflowMailSenderName("全球市场")
+                .build();
+        itemRewardDispatcher.dispatchItem(player, item, options);
     }
 
     /**
@@ -633,41 +633,23 @@ public class AuctionService {
         Player online = Bukkit.getPlayer(target);
         if (online != null && online.isOnline()) {
             runOnMain(() -> {
-                java.util.Map<Integer, ItemStack> overflow = online.getInventory().addItem(item);
-                for (ItemStack left : overflow.values()) {
-                    if (!sendItemMail(target, left, reason, listing.getItemDisplayName())) {
-                        repository.addPendingItem(target, itemSerializer.serialize(left), reason);
-                    }
+                xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions options =
+                    xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions.builder("market")
+                        .sourceDetail("auction-settlement:" + listing.getId())
+                        .overflowMailSubject("拍卖结算物品")
+                        .overflowMailBody("您拍得/流拍的物品已通过邮件发放，请查收。")
+                        .overflowMailSenderName("全球市场")
+                        .build();
+                xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchResult result =
+                    itemRewardDispatcher.dispatchItem(online, item, options);
+                if (!result.success()) {
+                    // ItemRewardDispatcher 发放失败（含邮件+掉落均失败）：转入 pending
+                    repository.addPendingItem(target, listing.getItemData(), reason);
                 }
             });
         } else {
-            if (!sendItemMail(target, item, reason, listing.getItemDisplayName())) {
-                repository.addPendingItem(target, listing.getItemData(), reason);
-            }
-        }
-    }
-
-    /**
-     * 通过 Mail 模块发送附带物品的系统邮件。
-     *
-     * @return {@code true} 表示邮件发送成功，{@code false} 表示 Mail 模块不可用
-     */
-    private boolean sendItemMail(UUID target, ItemStack item, String reason, String itemDisplayName) {
-        MailDispatchable mail = mailSupplier != null ? mailSupplier.get() : null;
-        if (mail == null) return false;
-        String subject = "拍卖行物品返还";
-        String body = "物品: " + itemDisplayName + " (来源: " + reason + ")";
-        try {
-            MailSendResult result = mail.sendMail(MailSendRequest.builder(target, subject, body)
-                .attachment(MailAttachmentSpec.item(item))
-                .senderName("拍卖行")
-                .sourceModule("market")
-                .sourceDetail(reason)
-                .build());
-            return result.success();
-        } catch (Exception e) {
-            logger.warning("[Auction] 邮件返还物品失败，降级入待发放队列: " + e.getMessage());
-            return false;
+            // 离线玩家：直接入 pending 队列，上线后由 PendingDeliveryService 通过 ItemRewardDispatcher 统一发放
+            repository.addPendingItem(target, listing.getItemData(), reason);
         }
     }
 

@@ -77,8 +77,7 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            ValidationRule.required("storage.mode", ValueType.STRING)
-                .withEnum(java.util.Set.of("sqlite", "mysql")),
+            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
             ValidationRule.of("manual.leaderboard-size", ValueType.INT)
                 .withRange(1, 100),
             ValidationRule.of("anti-abuse.time-limit.on-exceed", ValueType.STRING)
@@ -164,6 +163,8 @@ public final class AfkRewardModule extends AbstractAXSModule implements ModuleCo
             () -> getCapability(EssentialsQueryable.class)
         );
         service.setEventBusProvider(() -> getCapability(xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
+        service.setItemSourceRegistry(itemSourceRegistry);
+        service.setItemRewardDispatcher(itemRewardDispatcher);
         UiBinding hudBinding = null;
         if (configuration.ui().registerUiOnEnable()) {
             hudBinding = registerModuleUi(HUD_UI_FILE_PATH, configuration.ui().uiId(), true);

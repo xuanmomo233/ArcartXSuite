@@ -13,6 +13,7 @@ import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import xuanmo.arcartxsuite.afkreward.model.AfkArea;
+import xuanmo.arcartxsuite.afkreward.model.AfkItemReward;
 import xuanmo.arcartxsuite.afkreward.model.AfkRewardType;
 
 /**
@@ -146,9 +147,6 @@ public final class AreaConfiguration {
                 rewardSec == null || rewardSec.getBoolean("player.enable", true),
                 rewardSec != null ? Math.max(1, rewardSec.getInt("player.limit", 30)) : 30
             ),
-            new AfkArea.RewardConfig.OverflowConfig(
-                rewardSec != null && rewardSec.getBoolean("overflow-to-mail.enable", false)
-            ),
             rewardType
         );
 
@@ -188,20 +186,17 @@ public final class AreaConfiguration {
                 mailPresets = new ArrayList<>(mailSec.getStringList("presets"));
             }
         }
-        List<String> fullInventoryMailPresets = List.of();
-        if (rewardSec != null) {
-            ConfigurationSection fullMailSec = rewardSec.getConfigurationSection("full-inventory-mail");
-            if (fullMailSec != null) {
-                fullInventoryMailPresets = new ArrayList<>(fullMailSec.getStringList("presets"));
-            }
-        }
+        // item-rewards 子节：按档位配置物品奖励
+        ConfigurationSection itemRewardsSec = rewardSec != null
+            ? rewardSec.getConfigurationSection("item-rewards") : null;
         Map<String, List<String>> tiers = new LinkedHashMap<>();
+        Map<String, List<AfkItemReward>> tierItemRewards = new LinkedHashMap<>();
         if (rewardSec != null) {
             for (String tierKey : rewardSec.getKeys(false)) {
                 if ("round".equals(tierKey) || "max".equals(tierKey)
-                    || "player".equals(tierKey) || "overflow-to-mail".equals(tierKey)
+                    || "player".equals(tierKey)
                     || "describe".equals(tierKey) || "mail".equals(tierKey)
-                    || "full-inventory-mail".equals(tierKey)) {
+                    || "item-rewards".equals(tierKey)) {
                     continue;
                 }
                 List<String> commands = rewardSec.getStringList(tierKey);
@@ -209,13 +204,38 @@ public final class AreaConfiguration {
                     tiers.put(tierKey, new ArrayList<>(commands));
                 }
             }
+            // 解析 item-rewards 下各档位的物品列表
+            if (itemRewardsSec != null) {
+                for (String tierKey : itemRewardsSec.getKeys(false)) {
+                    List<?> rawList = itemRewardsSec.getList(tierKey);
+                    if (rawList == null || rawList.isEmpty()) continue;
+                    List<AfkItemReward> rewards = new ArrayList<>();
+                    for (Object entry : rawList) {
+                        if (entry instanceof Map<?, ?> rawMap) {
+                            Map<String, Object> map = new java.util.LinkedHashMap<>();
+                            rawMap.forEach((k, v) -> map.put(String.valueOf(k), v));
+                            String source = String.valueOf(map.getOrDefault("source", "minecraft"));
+                            String itemId = String.valueOf(map.getOrDefault("id", ""));
+                            int amount = map.get("amount") instanceof Number n ? n.intValue() : 1;
+                            Object nbtRaw = map.get("nbt");
+                            String nbt = nbtRaw == null ? null : String.valueOf(nbtRaw);
+                            if (!itemId.isBlank()) {
+                                rewards.add(new AfkItemReward(source, itemId, amount, nbt));
+                            }
+                        }
+                    }
+                    if (!rewards.isEmpty()) {
+                        tierItemRewards.put(tierKey, Collections.unmodifiableList(rewards));
+                    }
+                }
+            }
         }
         return new AfkRewardType(
             name,
             describe,
             Collections.unmodifiableMap(tiers),
-            Collections.unmodifiableList(mailPresets),
-            Collections.unmodifiableList(fullInventoryMailPresets)
+            Collections.unmodifiableMap(tierItemRewards),
+            Collections.unmodifiableList(mailPresets)
         );
     }
 

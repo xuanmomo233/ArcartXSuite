@@ -11,7 +11,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
-import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
@@ -20,10 +19,10 @@ import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRankRewardDefinition;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRankingRewardsSettings;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardAction;
-import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardActionType;
-import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardInventoryFullStrategy;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardMessageTarget;
+import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
+import xuanmo.arcartxsuite.api.item.PendingRewardService;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import java.util.logging.Logger;
@@ -45,6 +44,8 @@ final class BossDamageSettlementService {
     private final java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider;
     private final java.util.function.BiConsumer<String, org.bukkit.entity.Player> signalDispatcher;
     private final ItemSourceRegistry itemSourceRegistry;
+    private final ItemRewardDispatcher itemRewardDispatcher;
+    private final PendingRewardService pendingRewardService;
     private final MessageProvider messages;
     private final Map<String, BossDamageSettlementRecord> settlementsById = new LinkedHashMap<>();
     private final Map<UUID, BossDamagePlayerSettlementView> lastSettlementByPlayer = new LinkedHashMap<>();
@@ -54,7 +55,7 @@ final class BossDamageSettlementService {
 
     public BossDamageSettlementService(JavaPlugin plugin,
         Logger logger, ItemSourceRegistry itemSourceRegistry, PlaceholderResolverAPI placeholderResolver) {
-        this(plugin, logger, () -> null, null, itemSourceRegistry, placeholderResolver, null);
+        this(plugin, logger, () -> null, null, itemSourceRegistry, null, placeholderResolver, null, null);
     }
 
     public BossDamageSettlementService(
@@ -63,16 +64,20 @@ final class BossDamageSettlementService {
         java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider,
         java.util.function.BiConsumer<String, org.bukkit.entity.Player> signalDispatcher,
         ItemSourceRegistry itemSourceRegistry,
+        ItemRewardDispatcher itemRewardDispatcher,
         PlaceholderResolverAPI placeholderResolver,
-        MessageProvider messages
+        MessageProvider messages,
+        PendingRewardService pendingRewardService
     ) {
         this.plugin = plugin;
         this.logger = logger;
         this.mailDispatchableProvider = mailDispatchableProvider == null ? () -> null : mailDispatchableProvider;
         this.signalDispatcher = signalDispatcher;
         this.itemSourceRegistry = itemSourceRegistry;
+        this.itemRewardDispatcher = itemRewardDispatcher;
         this.placeholderResolver = placeholderResolver;
         this.messages = messages;
+        this.pendingRewardService = pendingRewardService;
     }
 
     /**
@@ -275,8 +280,7 @@ final class BossDamageSettlementService {
                 action,
                 target,
                 record,
-                entry,
-                rewardsSettings.inventoryFullStrategy()
+                entry
             );
             actionResults.add(result);
             if (!result.success()) {
@@ -310,37 +314,15 @@ final class BossDamageSettlementService {
         BossDamageRewardAction action,
         OfflinePlayer target,
         BossDamageSettlementRecord record,
-        BossDamageSettlementEntry entry,
-        BossDamageRewardInventoryFullStrategy inventoryFullStrategy
+        BossDamageSettlementEntry entry
     ) {
         if (action == null || action.type() == null) {
             return new BossDamageSettlementActionResult("unknown", false, "奖励动作类型无效");
         }
 
         return switch (action.type()) {
-            case NEIGE_ITEMS -> executeItemAction(
-                action,
-                target,
-                record,
-                entry,
-                inventoryFullStrategy,
-                BossDamageRewardActionType.NEIGE_ITEMS
-            );
-            case MYTHIC_ITEMS -> executeItemAction(
-                action,
-                target,
-                record,
-                entry,
-                inventoryFullStrategy,
-                BossDamageRewardActionType.MYTHIC_ITEMS
-            );
-            case OVERTURE_ITEMS -> executeItemAction(
-                action,
-                target,
-                record,
-                entry,
-                inventoryFullStrategy,
-                BossDamageRewardActionType.OVERTURE_ITEMS
+            case ITEM -> executeItemAction(
+                action, target, record, entry
             );
             case COMMAND -> executeCommandAction(action, target, record, entry);
             case MESSAGE -> executeMessageAction(action, target, record, entry);
@@ -353,56 +335,44 @@ final class BossDamageSettlementService {
         BossDamageRewardAction action,
         OfflinePlayer target,
         BossDamageSettlementRecord record,
-        BossDamageSettlementEntry entry,
-        BossDamageRewardInventoryFullStrategy inventoryFullStrategy,
-        BossDamageRewardActionType actionType
+        BossDamageSettlementEntry entry
     ) {
-        if (action.itemId().isBlank()) {
-            return new BossDamageSettlementActionResult(actionType.configKey(), false, "缺少 item-id");
+        if (action.id().isBlank()) {
+            return new BossDamageSettlementActionResult(action.type().configKey(), false, "缺少 id");
         }
         if (!(target instanceof Player player) || !player.isOnline()) {
-            return new BossDamageSettlementActionResult(actionType.configKey(), false, "目标玩家不在线");
-        }
-
-        ItemStack itemStack = switch (actionType) {
-            case NEIGE_ITEMS -> itemSourceRegistry.generateNeigeItem(action.itemId(), action.amount());
-            case MYTHIC_ITEMS -> itemSourceRegistry.generateMythicItem(action.itemId(), action.amount());
-            case OVERTURE_ITEMS -> itemSourceRegistry.generateOvertureItem(action.itemId(), player, action.amount());
-            default -> null;
-        };
-        if (itemStack == null || itemStack.getType().isAir()) {
-            return new BossDamageSettlementActionResult(actionType.configKey(), false, "物品不存在: " + action.itemId());
-        }
-
-        if (inventoryFullStrategy == BossDamageRewardInventoryFullStrategy.FAIL && !canFullyFit(player, itemStack)) {
-            return new BossDamageSettlementActionResult(actionType.configKey(), false, "背包空间不足");
-        }
-
-        Map<Integer, ItemStack> leftovers = player.getInventory().addItem(itemStack.clone());
-        if (leftovers.isEmpty()) {
-            return new BossDamageSettlementActionResult(actionType.configKey(), true, itemStack.getAmount() + "x " + action.itemId());
-        }
-
-        if (inventoryFullStrategy == BossDamageRewardInventoryFullStrategy.FAIL) {
-            return new BossDamageSettlementActionResult(actionType.configKey(), false, "背包空间不足");
-        }
-
-        Location location = player.getLocation();
-        for (ItemStack leftover : leftovers.values()) {
-            if (leftover == null || leftover.getType().isAir()) {
-                continue;
+            // 离线玩家：暂存到统一 pending 服务，上线后自动补发
+            if (target != null && pendingRewardService != null) {
+                pendingRewardService.savePending(PendingRewardService.PendingReward.item(
+                    target.getUniqueId(), "entitytracker",
+                    action.source(), action.id(), action.amount(), action.nbt(),
+                    "Boss 伤害结算奖励: " + record.settlementId() + " rank=" + entry.rank()
+                ));
+                return new BossDamageSettlementActionResult(action.type().configKey(), true, "离线玩家奖励已暂存，上线后自动补发");
             }
-            player.getWorld().dropItemNaturally(location, leftover);
+            return new BossDamageSettlementActionResult(action.type().configKey(), false, "目标玩家不在线");
         }
-        if (inventoryFullStrategy == BossDamageRewardInventoryFullStrategy.DROP) {
-            player.sendMessage(
-                ChatColor.translateAlternateColorCodes(
-                    '&',
-                    "&e你的背包空间不足，" + action.itemId() + " 已掉落到脚下。"
-                )
-            );
+
+        ItemStack itemStack = itemSourceRegistry.generateItem(action.source(), action.id(), action.amount(), action.nbt(), player);
+        if (itemStack == null || itemStack.getType().isAir()) {
+            return new BossDamageSettlementActionResult(action.type().configKey(), false, "物品不存在: " + action.id());
         }
-        return new BossDamageSettlementActionResult(actionType.configKey(), true, "部分掉落到脚下");
+
+        ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder("entitytracker")
+            .sourceDetail("settlement:" + record.settlementId() + ":rank" + entry.rank())
+            .overflowMailSubject("Boss 结算奖励溢出物品")
+            .overflowMailBody("您的背包已满，Boss 伤害结算奖励物品通过邮件补发。")
+            .overflowMailSenderName("Boss 追踪")
+            .build();
+        ItemRewardDispatcher.DispatchResult result = itemRewardDispatcher.dispatchItem(player, itemStack, options);
+        if (result.success()) {
+            String suffix = "";
+            if (result.mailedCount() > 0) suffix = "（部分通过邮件补发）";
+            else if (result.pendingCount() > 0) suffix = "（部分已暂存待发放）";
+            String desc = itemStack.getAmount() + "x " + action.id() + suffix;
+            return new BossDamageSettlementActionResult(action.type().configKey(), true, desc);
+        }
+        return new BossDamageSettlementActionResult(action.type().configKey(), false, result.message());
     }
 
     private BossDamageSettlementActionResult executeCommandAction(
@@ -480,25 +450,6 @@ final class BossDamageSettlementService {
         }
         matcher.appendTail(rendered);
         return applyPlaceholderApi(target, rendered.toString());
-    }
-
-    private boolean canFullyFit(Player player, ItemStack itemStack) {
-        if (player == null || itemStack == null || itemStack.getType().isAir()) {
-            return false;
-        }
-
-        int remaining = Math.max(1, itemStack.getAmount());
-        for (ItemStack slotItem : player.getInventory().getStorageContents()) {
-            if (slotItem == null || slotItem.getType().isAir()) {
-                remaining -= itemStack.getMaxStackSize();
-            } else if (slotItem.isSimilar(itemStack)) {
-                remaining -= Math.max(0, slotItem.getMaxStackSize() - slotItem.getAmount());
-            }
-            if (remaining <= 0) {
-                return true;
-            }
-        }
-        return remaining <= 0;
     }
 
     private void cacheSettlement(BossDamageSettlementRecord record) {

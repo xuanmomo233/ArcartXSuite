@@ -22,6 +22,7 @@ common:
   pending-claim-available: "&e你有 {0} 个待领取奖励，请使用 /lottery claim。"
   pending-claim-claimed: "&a已领取 {0} 个待领取奖励。"
   mail-sent: "&a奖励已通过邮件发放: &f{0}"
+  pending-saved: "&e背包已满，奖励已暂存，将在你下次上线时补发: &f{0}"
   error: "&c操作失败: {0}"
   ten-unavailable: "&c该奖池未配置十连消耗，暂不可进行十连。"
   pending-claim-manual: "&e奖励需要管理员处理: &f{0}"
@@ -40,6 +41,7 @@ packet:
   pending-claim-available: "&e你有 {0} 个待领取奖励，请使用 /lottery claim。"
   pending-claim-claimed: "&a已领取 {0} 个待领取奖励。"
   mail-sent: "&a奖励已通过邮件发放: &f{0}"
+  pending-saved: "&e背包已满，奖励已暂存，将在你下次上线时补发: &f{0}"
 rarity:
   common: "消费级"
   uncommon: "工业级"

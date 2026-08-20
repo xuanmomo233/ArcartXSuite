@@ -10,22 +10,22 @@ import org.bukkit.configuration.ConfigurationSection;
 /**
  * Boss 伤害排名奖励总设置，属于 entitytracker 模块的 boss 伤害排名子系统。
  * <p>
- * 负责从配置节解析排名奖励开关、背包满处理策略以及各名次奖励定义，
+ * 负责从配置节解析排名奖励开关以及各名次奖励定义，
  * 供结算服务在 Boss 死亡后按名次发放奖励。
+ * <p>
+ * 物品发放的背包满处理统一由 {@link xuanmo.arcartxsuite.api.item.ItemRewardDispatcher} 负责
+ * （放入背包→背包满转邮件→无邮件则掉落），不再需要配置策略。
  *
  * @param enabled               是否启用排名奖励
- * @param inventoryFullStrategy 玩家背包满时的奖励处理策略
  * @param rankRewards           名次到奖励定义的映射，键为名次（从 1 开始）
  */
 public record BossDamageRankingRewardsSettings(
     boolean enabled,
-    BossDamageRewardInventoryFullStrategy inventoryFullStrategy,
     Map<Integer, BossDamageRankRewardDefinition> rankRewards
 ) {
 
     private static final BossDamageRankingRewardsSettings DEFAULT = new BossDamageRankingRewardsSettings(
         false,
-        BossDamageRewardInventoryFullStrategy.DROP,
         Map.of()
     );
 
@@ -41,9 +41,6 @@ public record BossDamageRankingRewardsSettings(
         }
 
         boolean enabled = section.getBoolean("enabled", DEFAULT.enabled());
-        BossDamageRewardInventoryFullStrategy inventoryFullStrategy = BossDamageRewardInventoryFullStrategy.parse(
-            section.getString("inventory-full", DEFAULT.inventoryFullStrategy().configKey())
-        );
 
         Map<Integer, BossDamageRankRewardDefinition> rankRewards = new LinkedHashMap<>();
         ConfigurationSection ranksSection = section.getConfigurationSection("ranks");
@@ -75,7 +72,6 @@ public record BossDamageRankingRewardsSettings(
 
         return new BossDamageRankingRewardsSettings(
             enabled,
-            inventoryFullStrategy,
             Collections.unmodifiableMap(rankRewards)
         );
     }
@@ -100,4 +96,3 @@ public record BossDamageRankingRewardsSettings(
         return definition == null ? BossDamageRankRewardDefinition.empty(rank) : definition;
     }
 }
-

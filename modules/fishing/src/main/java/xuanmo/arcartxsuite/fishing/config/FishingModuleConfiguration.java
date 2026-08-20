@@ -572,7 +572,25 @@ public record FishingModuleConfiguration(
         return result;
     }
 
+    /**
+     * 存储配置 record，描述 SQLite/MySQL 连接参数。
+     * <p>
+     * 当 {@code shared=true} 时，模块使用本体共享数据源（由本体 config.yml 的 storage 节统一管控）；
+     * 当 {@code shared=false} 时，模块自建独立连接池（不推荐）。
+     *
+     * @param shared         是否使用共享存储模式（true=共享本体数据源，false=自建连接池）
+     * @param mode           存储模式（sqlite / mysql），仅在 shared=false 时生效
+     * @param sqliteFileName SQLite 文件名，仅在 shared=false 时生效
+     * @param host           MySQL 主机地址，仅在 shared=false 时生效
+     * @param port           MySQL 端口，仅在 shared=false 时生效
+     * @param database       MySQL 数据库名，仅在 shared=false 时生效
+     * @param username       MySQL 用户名，仅在 shared=false 时生效
+     * @param password       MySQL 密码，仅在 shared=false 时生效
+     * @param tablePrefix    MySQL 表名前缀，仅在 shared=false 时生效
+     * @param poolSize       连接池大小，仅在 shared=false 时生效
+     */
     public record StorageConfiguration(
+        boolean shared,
         String mode,
         String sqliteFileName,
         String host,
@@ -583,12 +601,26 @@ public record FishingModuleConfiguration(
         String tablePrefix,
         int poolSize
     ) {
+        /**
+         * 从配置节加载存储配置。
+         * <p>
+         * shared=true 时使用默认值（不读取其余字段）；shared=false 时读取 mode/sqlite/mysql 配置。
+         *
+         * @param section 配置节，为 {@code null} 时使用默认值（shared=true）
+         * @return 解析后的 {@link StorageConfiguration} 实例
+         */
         public static StorageConfiguration load(ConfigurationSection section) {
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
-            return new StorageConfiguration(
+            boolean shared = section.getBoolean("shared", true);
+            if (shared) {
+                return new StorageConfiguration(true, "sqlite", "fishing.db",
+                    "127.0.0.1", 3306, "arcartxsuite", "root", "",
+                    "axs_fishing_", 1);
+            }
+            return new StorageConfiguration(false,
                 section.getString("mode", "sqlite"),
                 section.getString("sqlite.file", "fishing.db"),
-                section.getString("mysql.host", "localhost"),
+                section.getString("mysql.host", "127.0.0.1"),
                 section.getInt("mysql.port", 3306),
                 section.getString("mysql.database", "arcartxsuite"),
                 section.getString("mysql.username", "root"),
@@ -598,10 +630,20 @@ public record FishingModuleConfiguration(
             );
         }
 
+        /**
+         * 判断当前存储模式是否为 SQLite（非 mysql 均视为 SQLite）。
+         *
+         * @return {@code true} 表示使用 SQLite
+         */
         public boolean isSqlite() {
             return !"mysql".equalsIgnoreCase(mode);
         }
 
+        /**
+         * 将存储配置转换为存储描述符。
+         *
+         * @return 对应的 {@link StorageDescriptor}
+         */
         public StorageDescriptor toDescriptor() {
             if (!isSqlite()) {
                 return StorageDescriptor.mysql(host, port, database, username, password, poolSize, tablePrefix);
@@ -611,15 +653,12 @@ public record FishingModuleConfiguration(
 
         /**
          * 判断是否为覆盖模式（模块自建连接池）。
-         * <p>
-         * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
-         * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
          *
-         * @return {@code true} 表示模块应自建连接池（旧路径）
+         * @return {@code true} 表示模块应自建连接池（shared=false）
          * @since 1.4.0
          */
         public boolean hasOverride() {
-            return "mysql".equalsIgnoreCase(mode);
+            return !shared;
         }
     }
 
@@ -749,7 +788,6 @@ public record FishingModuleConfiguration(
      * @param xpCurve     经验成长曲线（ARIA 表达式断点求值）
      * @param startDate   赛季开始日期（yyyy-MM-dd）
      * @param endDate     赛季结束日期（yyyy-MM-dd）
-     * @param dispatchMode 结算奖励发放方式：ONLINE_DIRECT / MAIL / HYBRID
      */
     public record SeasonConfiguration(
         @NotNull String seasonId,
@@ -757,8 +795,7 @@ public record FishingModuleConfiguration(
         int maxLevel,
         @NotNull XpCurve xpCurve,
         @NotNull java.time.LocalDate startDate,
-        @NotNull java.time.LocalDate endDate,
-        @NotNull String dispatchMode
+        @NotNull java.time.LocalDate endDate
     ) {
         public static SeasonConfiguration load(ConfigurationSection section, @Nullable AriaBridge ariaBridge) {
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
@@ -768,8 +805,7 @@ public record FishingModuleConfiguration(
             XpCurve xpCurve = parseXpCurve(section, ariaBridge);
             java.time.LocalDate startDate = parseDate(section.getString("start-date", "2026-01-01"));
             java.time.LocalDate endDate = parseDate(section.getString("end-date", "2030-12-31"));
-            String dispatchMode = section.getString("settlement.dispatch-mode", "ONLINE_DIRECT").toUpperCase();
-            return new SeasonConfiguration(seasonId, displayName, maxLevel, xpCurve, startDate, endDate, dispatchMode);
+            return new SeasonConfiguration(seasonId, displayName, maxLevel, xpCurve, startDate, endDate);
         }
 
         private static XpCurve parseXpCurve(ConfigurationSection section, @Nullable AriaBridge ariaBridge) {

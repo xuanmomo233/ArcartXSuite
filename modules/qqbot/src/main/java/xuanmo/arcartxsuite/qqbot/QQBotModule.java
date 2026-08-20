@@ -4,7 +4,6 @@ import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
@@ -100,10 +99,7 @@ public final class QQBotModule extends AbstractAXSModule implements ModuleComman
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
             ValidationRule.required("onebot.ws-url", ValueType.STRING),
-            ValidationRule.required("storage.mode", ValueType.STRING)
-                .withEnum(Set.of("sqlite", "mysql")),
-            ValidationRule.required("storage.pool-size", ValueType.INT)
-                .withRange(1, 50),
+            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
             // 签到积分
             ValidationRule.of("signin.base-points", ValueType.INT).withRange(0, 100000),
             ValidationRule.of("signin.streak-bonus", ValueType.INT).withRange(0, 100000),

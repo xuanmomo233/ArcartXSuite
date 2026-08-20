@@ -41,7 +41,6 @@ import xuanmo.arcartxsuite.api.script.XpCurve;
  * @param rewards          奖励列表（按等级与档位组织的不可变列表）
  * @param seasonRewardsFile 赛季结算奖励配置文件名
  * @param seasonRewards    赛季结算奖励列表（按等级阈值发放的额外奖励）
- * @param rewardDeliveryMode 奖励发放方式（direct / mail）
  * @param ui               UI 配置（注册开关与 UI ID）
  * @param crossServer      跨服配置（启用开关与同步字段列表）
  */
@@ -53,7 +52,6 @@ public record BattlePassModuleConfiguration(
     List<BattlePassReward> rewards,
     String seasonRewardsFile,
     List<SeasonSettlementReward> seasonRewards,
-    String rewardDeliveryMode,
     BattlePassUiConfiguration ui,
     BattlePassCrossServerConfiguration crossServer
 ) {
@@ -69,7 +67,6 @@ public record BattlePassModuleConfiguration(
     public static BattlePassModuleConfiguration load(FileConfiguration yaml, @Nullable File dataFolder, Logger logger, AriaBridge ariaBridge) {
         String rewardsFile = yaml.getString("rewards-file", "rewards.yml");
         String seasonRewardsFile = yaml.getString("season-rewards-file", "season-rewards.yml");
-        String deliveryMode = yaml.getString("reward-delivery-mode", "direct");
         return new BattlePassModuleConfiguration(
             BattlePassStorageConfiguration.load(yaml.getConfigurationSection("storage")),
             BattlePassSeasonConfiguration.load(yaml.getConfigurationSection("season"), ariaBridge),
@@ -78,19 +75,9 @@ public record BattlePassModuleConfiguration(
             loadRewards(rewardsFile, dataFolder, logger),
             seasonRewardsFile,
             loadSeasonRewards(seasonRewardsFile, dataFolder, logger),
-            "mail".equalsIgnoreCase(deliveryMode) ? "mail" : "direct",
             BattlePassUiConfiguration.load(yaml.getConfigurationSection("ui")),
             BattlePassCrossServerConfiguration.load(yaml.getConfigurationSection("cross-server"))
         );
-    }
-
-    /**
-     * 是否使用统一邮箱发放模式。
-     *
-     * @return {@code true} 表示 item 类型奖励通过 mail 模块发送
-     */
-    public boolean isMailDeliveryMode() {
-        return "mail".equalsIgnoreCase(rewardDeliveryMode);
     }
 
     private static List<BattlePassReward> loadRewards(String rewardsFile, @Nullable File dataFolder, Logger logger) {
@@ -231,18 +218,23 @@ public record BattlePassModuleConfiguration(
 
     /**
      * 存储配置 record，描述 SQLite/MySQL 连接参数。
+     * <p>
+     * 当 {@code shared=true} 时，模块使用本体共享数据源（由本体 config.yml 的 storage 节统一管控）；
+     * 当 {@code shared=false} 时，模块自建独立连接池（不推荐）。
      *
-     * @param mode           存储模式（sqlite / mysql）
-     * @param sqliteFileName SQLite 文件名
-     * @param host           MySQL 主机地址
-     * @param port           MySQL 端口
-     * @param database       MySQL 数据库名
-     * @param username       MySQL 用户名
-     * @param password       MySQL 密码
-     * @param tablePrefix    MySQL 表名前缀
-     * @param poolSize       连接池大小
+     * @param shared         是否使用共享存储模式（true=共享本体数据源，false=自建连接池）
+     * @param mode           存储模式（sqlite / mysql），仅在 shared=false 时生效
+     * @param sqliteFileName SQLite 文件名，仅在 shared=false 时生效
+     * @param host           MySQL 主机地址，仅在 shared=false 时生效
+     * @param port           MySQL 端口，仅在 shared=false 时生效
+     * @param database       MySQL 数据库名，仅在 shared=false 时生效
+     * @param username       MySQL 用户名，仅在 shared=false 时生效
+     * @param password       MySQL 密码，仅在 shared=false 时生效
+     * @param tablePrefix    MySQL 表名前缀，仅在 shared=false 时生效
+     * @param poolSize       连接池大小，仅在 shared=false 时生效
      */
     public record BattlePassStorageConfiguration(
+        boolean shared,
         String mode,
         String sqliteFileName,
         String host,
@@ -255,16 +247,24 @@ public record BattlePassModuleConfiguration(
     ) {
         /**
          * 从配置节加载存储配置。
+         * <p>
+         * shared=true 时使用默认值（不读取其余字段）；shared=false 时读取 mode/sqlite/mysql 配置。
          *
-         * @param section 存储配置节，为 null 时使用默认值
+         * @param section 存储配置节，为 null 时使用默认值（shared=true）
          * @return 存储配置实例
          */
         public static BattlePassStorageConfiguration load(ConfigurationSection section) {
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
-            return new BattlePassStorageConfiguration(
+            boolean shared = section.getBoolean("shared", true);
+            if (shared) {
+                return new BattlePassStorageConfiguration(true, "sqlite", "battlepass.db",
+                    "127.0.0.1", 3306, "arcartxsuite", "root", "",
+                    "axs_battlepass_", 1);
+            }
+            return new BattlePassStorageConfiguration(false,
                 section.getString("mode", "sqlite"),
                 section.getString("sqlite.file", "battlepass.db"),
-                section.getString("mysql.host", "localhost"),
+                section.getString("mysql.host", "127.0.0.1"),
                 section.getInt("mysql.port", 3306),
                 section.getString("mysql.database", "arcartxsuite"),
                 section.getString("mysql.username", "root"),
@@ -298,11 +298,11 @@ public record BattlePassModuleConfiguration(
         /**
          * 判断是否为覆盖模式（模块自建连接池）。
          *
-         * @return {@code true} 表示模块应自建连接池（mode=mysql）
+         * @return {@code true} 表示模块应自建连接池（shared=false）
          * @since 1.4.0
          */
         public boolean hasOverride() {
-            return "mysql".equalsIgnoreCase(mode);
+            return !shared;
         }
     }
 

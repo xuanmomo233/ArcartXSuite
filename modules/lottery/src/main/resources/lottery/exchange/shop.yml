@@ -37,8 +37,8 @@ items:
     # 完整字段（未用到的可省略）：
     #   name           — 奖品显示名称（缺省时用 id）
     #   delivery       — 投递方式：DIRECT（直接发放）/ COMMAND（执行命令）/ MAIL（邮件发放），默认 DIRECT
-    #   item           — 奖品物品来源（source + id），与 delivery=COMMAND 互斥（COMMAND 不发放物品）
-    #   item-json      — PLAIN 物品的 Base64 序列化 ItemStack 数据（与 item 二选一）
+    #   item           — 奖品物品来源（source + id + nbt），与 delivery=COMMAND 互斥（COMMAND 不发放物品）
+    #   item.nbt       — 自定义 NBT（SNBT 字符串，仅 minecraft 源有效，可选）
     #   amount         — 发放数量（正整数，默认1）
     #   icon           — 奖品图标（未配置时用 item 生成的物品作为图标）
     #   commands       — COMMAND 投递时执行的命令列表（支持 {player}/{uuid}/{amount}/{item} 占位符）

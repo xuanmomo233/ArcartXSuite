@@ -11,6 +11,13 @@
 #   rewardText   - 奖励描述文本（显示在 UI 中）
 #   mail.presets - 邮件预设 ID 列表（对应 Mail 模块的 preset.id）
 #   commands     - 达成阶段后执行的命令列表（支持 {player} 变量）
+#   item-rewards - 物品奖励列表（通过 ItemSourceRegistry 生成，统一发放）
+#
+# item-rewards 字段说明:
+#   source: 物品来源（minecraft/mythic/neige/overture/mmoitems）
+#   id:     物品 ID（mmoitems 格式为 "类型ID;物品ID"）
+#   amount: 数量
+#   nbt:    可选，自定义 NBT（SNBT 字符串，仅 minecraft 源有效）
 
 rewards:
   - minutes: 1
@@ -20,6 +27,10 @@ rewards:
       presets: []
     commands:
       - "say 你好 {player} 这是第一阶段"
+    # item-rewards:
+    #   - source: "minecraft"
+    #     id: "DIAMOND"
+    #     amount: 1
 
   - minutes: 5
     name: "第二阶段"

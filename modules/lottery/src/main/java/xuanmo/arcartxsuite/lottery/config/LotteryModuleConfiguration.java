@@ -142,18 +142,23 @@ public record LotteryModuleConfiguration(
      * <p>
      * 支持 SQLite 与 MySQL 两种模式，通过 {@link #toDescriptor} 转换为
      * {@link xuanmo.arcartxsuite.api.storage.StorageDescriptor} 供存储层使用。
+     * <p>
+     * 当 {@code shared=true} 时，模块使用本体共享数据源（由本体 config.yml 的 storage 节统一管控）；
+     * 当 {@code shared=false} 时，模块自建独立连接池（不推荐）。
      *
-     * @param mode           存储模式（sqlite 或 mysql）
-     * @param sqliteFileName SQLite 文件名
-     * @param host           MySQL 主机地址
-     * @param port           MySQL 端口
-     * @param database       MySQL 数据库名
-     * @param username       MySQL 用户名
-     * @param password       MySQL 密码
-     * @param tablePrefix    表名前缀
-     * @param poolSize       连接池大小
+     * @param shared         是否使用共享存储模式（true=共享本体数据源，false=自建连接池）
+     * @param mode           存储模式（sqlite 或 mysql），仅在 shared=false 时生效
+     * @param sqliteFileName SQLite 文件名，仅在 shared=false 时生效
+     * @param host           MySQL 主机地址，仅在 shared=false 时生效
+     * @param port           MySQL 端口，仅在 shared=false 时生效
+     * @param database       MySQL 数据库名，仅在 shared=false 时生效
+     * @param username       MySQL 用户名，仅在 shared=false 时生效
+     * @param password       MySQL 密码，仅在 shared=false 时生效
+     * @param tablePrefix    表名前缀，仅在 shared=false 时生效
+     * @param poolSize       连接池大小，仅在 shared=false 时生效
      */
     public record StorageConfiguration(
+        boolean shared,
         String mode,
         String sqliteFileName,
         String host,
@@ -166,16 +171,24 @@ public record LotteryModuleConfiguration(
     ) {
         /**
          * 从配置节加载存储配置。
+         * <p>
+         * shared=true 时使用默认值（不读取其余字段）；shared=false 时读取 mode/sqlite/mysql 配置。
          *
-         * @param section 配置节，为 {@code null} 时使用默认值
+         * @param section 配置节，为 {@code null} 时使用默认值（shared=true）
          * @return 解析后的 {@link StorageConfiguration} 实例
          */
         public static StorageConfiguration load(@Nullable ConfigurationSection section) {
             if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
-            return new StorageConfiguration(
+            boolean shared = section.getBoolean("shared", true);
+            if (shared) {
+                return new StorageConfiguration(true, "sqlite", "lottery.db",
+                    "127.0.0.1", 3306, "arcartxsuite", "root", "",
+                    "axs_lottery_", 1);
+            }
+            return new StorageConfiguration(false,
                 section.getString("mode", "sqlite"),
                 section.getString("sqlite.file", "lottery.db"),
-                section.getString("mysql.host", "localhost"),
+                section.getString("mysql.host", "127.0.0.1"),
                 section.getInt("mysql.port", 3306),
                 section.getString("mysql.database", "arcartxsuite"),
                 section.getString("mysql.username", "root"),
@@ -209,15 +222,12 @@ public record LotteryModuleConfiguration(
 
         /**
          * 判断是否为覆盖模式（模块自建连接池）。
-         * <p>
-         * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
-         * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
          *
-         * @return {@code true} 表示模块应自建连接池（旧路径）
+         * @return {@code true} 表示模块应自建连接池（shared=false）
          * @since 1.4.0
          */
         public boolean hasOverride() {
-            return "mysql".equalsIgnoreCase(mode);
+            return !shared;
         }
     }
 }

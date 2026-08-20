@@ -11,13 +11,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.logging.Logger;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.condition.ScriptCondition;
 import xuanmo.arcartxsuite.api.condition.ScriptConditionsLoader;
+import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.mail.model.MailAttachment;
 import xuanmo.arcartxsuite.mail.model.MailAttachmentType;
 import xuanmo.arcartxsuite.mail.model.MailPresetDefinition;
@@ -30,12 +33,13 @@ public final class MailPresetLoader {
     }
 
     public static Map<String, MailPresetDefinition> loadPresets(File directory, Logger logger, int maxAttachments) throws IOException {
-        return loadPresets(directory, logger, maxAttachments, null);
+        return loadPresets(directory, logger, maxAttachments, null, null);
     }
 
-    /** 加载预设；传入桥接时物品附件的默认描述使用中文名。 */
+    /** 加载预设；传入桥接时物品附件的默认描述使用中文名，传入物品来源注册表时支持外部物品库。 */
     public static Map<String, MailPresetDefinition> loadPresets(File directory, Logger logger, int maxAttachments,
-            xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge) throws IOException {
+            @Nullable ItemSourceRegistry itemSourceRegistry,
+            @Nullable xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge) throws IOException {
         Map<String, MailPresetDefinition> result = new LinkedHashMap<>();
         File[] files = directory.listFiles((dir, name) -> name.toLowerCase(Locale.ROOT).endsWith(".yml"));
         if (files == null) {
@@ -54,7 +58,7 @@ public final class MailPresetLoader {
             String subject = string(presetSection.getString("subject", displayName));
             String body = string(presetSection.getString("body", ""));
             Duration expiresAfter = Duration.ofDays(Math.max(1, presetSection.getLong("expires-after-days", 15L)));
-            List<MailAttachment> attachments = loadAttachments(presetSection, logger, maxAttachments, id, vanillaItemNameBridge);
+            List<MailAttachment> attachments = loadAttachments(presetSection, logger, maxAttachments, id, itemSourceRegistry, vanillaItemNameBridge);
             List<String> claimCommands = presetSection.getStringList("claim-commands");
             List<ScriptCondition> claimConditions = new ArrayList<>(
                 ScriptConditionsLoader.loadClaimConditions(presetSection)
@@ -96,12 +100,9 @@ public final class MailPresetLoader {
     }
 
     private static List<MailAttachment> loadAttachments(ConfigurationSection presetSection, Logger logger, int maxAttachments, String presetId,
-            xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge) {
+            @Nullable ItemSourceRegistry itemSourceRegistry,
+            @Nullable xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge) {
         java.util.ArrayList<MailAttachment> attachments = new java.util.ArrayList<>();
-        double vaultAttachment = Math.max(0.0D, presetSection.getDouble("vault-attachment", 0.0D));
-        if (vaultAttachment > 0.0D) {
-            attachments.add(new MailAttachment(0L, attachments.size(), MailAttachmentType.CURRENCY, "", "money", vaultAttachment, "金币 " + trimDecimal(vaultAttachment)));
-        }
 
         for (Map<?, ?> rawCurrency : presetSection.getMapList("currency-attachments")) {
             if (attachments.size() >= maxAttachments) {
@@ -121,24 +122,16 @@ public final class MailPresetLoader {
             if (attachments.size() >= maxAttachments) {
                 break;
             }
-            Material material = Material.matchMaterial(mapString(rawItem, "material", "STONE"));
-            if (material == null || material.isAir()) {
-                logger.warning("邮件预设 '" + presetId + "' 包含非法 material，已跳过。");
+            String source = mapString(rawItem, "source", "minecraft").trim().toLowerCase(Locale.ROOT);
+            String itemId = mapString(rawItem, "id", "");
+            if (itemId.isBlank()) {
+                logger.warning("邮件预设 '" + presetId + "' 的物品附件缺少 id 字段，已跳过。");
                 continue;
             }
-            int amount = Math.max(1, Integer.parseInt(mapString(rawItem, "amount", "1")));
-            ItemStack itemStack = new ItemStack(material, amount);
-            ItemMeta itemMeta = itemStack.getItemMeta();
-            if (itemMeta != null) {
-                Object rawName = rawItem.get("name");
-                if (rawName != null) {
-                    itemMeta.setDisplayName(String.valueOf(rawName));
-                }
-                Object rawLore = rawItem.get("lore");
-                if (rawLore instanceof List<?> loreList && !loreList.isEmpty()) {
-                    itemMeta.setLore(loreList.stream().map(String::valueOf).toList());
-                }
-                itemStack.setItemMeta(itemMeta);
+            int amount = Math.max(1, parseInt(mapString(rawItem, "amount", "1"), 1));
+            ItemStack itemStack = generateItemStack(source, itemId, amount, rawItem, itemSourceRegistry, logger, presetId);
+            if (itemStack == null) {
+                continue;
             }
             try {
                 attachments.add(
@@ -157,6 +150,67 @@ public final class MailPresetLoader {
             }
         }
         return List.copyOf(attachments);
+    }
+
+    /**
+     * 根据 source + id 生成物品堆；支持 minecraft / mythic / neige / overture / mmoitems 来源。
+     * 物品库桥接不可用时返回 null 并打印警告。
+     */
+    @Nullable
+    private static ItemStack generateItemStack(String source, String itemId, int amount, Map<?, ?> rawItem,
+            @Nullable ItemSourceRegistry itemSourceRegistry, Logger logger, String presetId) {
+        try {
+            ItemStack item = switch (source) {
+                case "minecraft" -> {
+                    Material material = Material.matchMaterial(itemId, true);
+                    if (material == null || material.isAir()) {
+                        logger.warning("邮件预设 '" + presetId + "' 包含非法 minecraft 物品 id: " + itemId + "，已跳过。");
+                        yield null;
+                    }
+                    ItemStack base = new ItemStack(material, amount);
+                    ItemMeta itemMeta = base.getItemMeta();
+                    if (itemMeta != null) {
+                        Object rawName = rawItem.get("name");
+                        if (rawName != null) {
+                            itemMeta.setDisplayName(String.valueOf(rawName));
+                        }
+                        Object rawLore = rawItem.get("lore");
+                        if (rawLore instanceof List<?> loreList && !loreList.isEmpty()) {
+                            itemMeta.setLore(loreList.stream().map(String::valueOf).toList());
+                        }
+                        base.setItemMeta(itemMeta);
+                    }
+                    yield applyItemNbt(base, mapString(rawItem, "nbt", ""));
+                }
+                // 外部物品源统一通过 ItemSourceRegistry.generateItem 生成（player 传 null，预设加载时无玩家上下文）
+                case "mythic", "mythicmobs", "neige", "neigeitems", "overture", "mmoitems", "mmo" -> {
+                    if (itemSourceRegistry == null) {
+                        logger.warning("邮件预设 '" + presetId + "' 的物品附件 source=" + source + " 但 ItemSourceRegistry 不可用，已跳过: " + itemId);
+                        yield null;
+                    }
+                    yield itemSourceRegistry.generateItem(source, itemId, amount, null, null);
+                }
+                default -> {
+                    logger.warning("邮件预设 '" + presetId + "' 的物品附件包含未知 source: " + source + "，已跳过。");
+                    yield null;
+                }
+            };
+            return item;
+        } catch (Exception exception) {
+            logger.warning("邮件预设 '" + presetId + "' 的物品附件生成异常: " + source + ":" + itemId + " | " + exception.getMessage());
+            return null;
+        }
+    }
+
+    /** 应用原版物品的自定义 NBT（SNBT 字符串）。 */
+    @Nullable
+    private static ItemStack applyItemNbt(@Nullable ItemStack item, String nbt) {
+        if (item == null || nbt == null || nbt.isBlank()) return item;
+        try {
+            return Bukkit.getUnsafe().modifyItemStack(item.clone(), nbt);
+        } catch (Exception ignored) {
+            return item;
+        }
     }
 
     /**
@@ -193,14 +247,15 @@ public final class MailPresetLoader {
             section.set("currency-attachments", currencyList);
         }
 
-        // item attachments
+        // item attachments（保存为 source+id 新格式；管理员 UI 创建的物品统一保存为 minecraft 源）
         List<Map<String, Object>> itemList = new ArrayList<>();
         for (MailAttachment att : preset.attachments()) {
             if (att.isItem() && att.itemData() != null && !att.itemData().isBlank()) {
                 try {
                     ItemStack item = MailItemSerializer.deserialize(att.itemData());
                     Map<String, Object> map = new LinkedHashMap<>();
-                    map.put("material", item.getType().name());
+                    map.put("source", "minecraft");
+                    map.put("id", item.getType().name());
                     map.put("amount", item.getAmount());
                     ItemMeta meta = item.getItemMeta();
                     if (meta != null && meta.hasDisplayName()) {

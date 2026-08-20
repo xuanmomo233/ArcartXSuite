@@ -134,6 +134,7 @@ public final class MailService implements Listener {
     private final MessageProvider messages;
     private final Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier;
     private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
+    private final xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry;
     private final Map<String, MailPresetDefinition> presets = new ConcurrentHashMap<>();
     private final Map<UUID, Long> selectedMailIds = new ConcurrentHashMap<>();
     private final Map<UUID, MailInboxQuery> inboxQueries = new ConcurrentHashMap<>();
@@ -142,6 +143,8 @@ public final class MailService implements Listener {
     private final Set<UUID> composePasswordPanels = ConcurrentHashMap.newKeySet();
     private final Map<UUID, AdminEditSession> adminEditSessions = new ConcurrentHashMap<>();
     private final Map<UUID, CdkPreviewState> cdkPreviewStates = new ConcurrentHashMap<>();
+    // CDK 兑换限流状态：玩家 UUID -> 限流条目
+    private final Map<UUID, CdkRateLimitEntry> cdkRateLimitMap = new ConcurrentHashMap<>();
     private final Set<UUID> inboxViewers = ConcurrentHashMap.newKeySet();
     private final Set<UUID> logViewers = ConcurrentHashMap.newKeySet();
 
@@ -172,7 +175,7 @@ public final class MailService implements Listener {
         xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this(plugin, logger, plugin.getDataFolder(), configuration, repository, bridge, packetGuard,
-            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, vanillaItemNameBridge);
+            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, null, vanillaItemNameBridge);
     }
 
     public MailService(
@@ -191,7 +194,7 @@ public final class MailService implements Listener {
         xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this(plugin, logger, baseDataDir, configuration, repository, bridge, packetGuard,
-            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, vanillaItemNameBridge);
+            uiResourceExporter, bundledResourceWriter, signalDispatcher, currencyBridgeManager, crossServer, null, null, null, vanillaItemNameBridge);
     }
 
     public MailService(
@@ -208,6 +211,7 @@ public final class MailService implements Listener {
         CurrencyBridgeAPI currencyBridgeManager,
         CrossServerAPI crossServer,
         MessageProvider messages,
+        xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry,
         xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this(
@@ -225,6 +229,7 @@ public final class MailService implements Listener {
             crossServer,
             messages,
             null,
+            itemSourceRegistry,
             vanillaItemNameBridge
         );
     }
@@ -244,6 +249,7 @@ public final class MailService implements Listener {
         CrossServerAPI crossServer,
         MessageProvider messages,
         Supplier<SecondaryPasswordAccess> secondaryPasswordSupplier,
+        xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry,
         xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge
     ) {
         this.plugin = plugin;
@@ -261,6 +267,7 @@ public final class MailService implements Listener {
         this.messages = messages;
         this.secondaryPasswordSupplier = secondaryPasswordSupplier;
         this.vanillaItemNameBridge = vanillaItemNameBridge;
+        this.itemSourceRegistry = itemSourceRegistry;
     }
 
     private String message(String key, Object... args) {
@@ -358,6 +365,11 @@ public final class MailService implements Listener {
 
     public int presetCount() {
         return presets.size();
+    }
+
+    /** CDK 兑换是否要求 arcartxsuite.mail.cdk 权限。 */
+    public boolean isCdkPermissionRequired() {
+        return configuration.cdk().requirePermission();
     }
 
     public List<String> presetIds() {
@@ -650,27 +662,48 @@ public final class MailService implements Listener {
             return MailOperationResult.failure(message("player.cdk-required"));
         }
 
+        // ── CDK 兑换限流检查 ──
+        UUID playerId = player.getUniqueId();
+        Instant now = Instant.now();
+        CdkRateLimitEntry rateLimit = cdkRateLimitMap.computeIfAbsent(playerId, k -> new CdkRateLimitEntry());
+        synchronized (rateLimit) {
+            // 锁定检查
+            if (rateLimit.lockoutUntil != null && rateLimit.lockoutUntil.isAfter(now)) {
+                return MailOperationResult.failure(message("player.cdk-locked", TIME_FORMATTER.format(rateLimit.lockoutUntil)));
+            }
+            // 冷却检查
+            if (rateLimit.lastFailAt != null && configuration.cdk().cooldownSeconds() > 0) {
+                Instant cooldownEnd = rateLimit.lastFailAt.plusSeconds(configuration.cdk().cooldownSeconds());
+                if (cooldownEnd.isAfter(now)) {
+                    return MailOperationResult.failure(message("player.cdk-cooldown", TIME_FORMATTER.format(cooldownEnd)));
+                }
+            }
+        }
+
         try {
             Optional<MailCdkDefinition> preview = repository.loadCdk(code);
             if (preview.isEmpty()) {
-                cdkPreviewStates.put(player.getUniqueId(), new CdkPreviewState(code, "missing", message("player.cdk-preview-missing"), false));
+                cdkPreviewStates.put(playerId, new CdkPreviewState(code, "missing", message("player.cdk-preview-missing"), false));
+                onCdkRedeemFailure(playerId, now);
                 return MailOperationResult.failure(message("player.cdk-not-found"));
             }
 
             MailCdkDefinition previewDefinition = preview.get();
             MailPresetDefinition preset = preset(previewDefinition.presetId());
             if (preset == null || !preset.enabled()) {
+                onCdkRedeemFailure(playerId, now);
                 return MailOperationResult.failure(message("player.cdk-preset-unavailable"));
             }
 
-            MailRepository.CdkClaimResult claimResult = repository.claimCdk(code, player.getUniqueId(), Instant.now());
+            MailRepository.CdkClaimResult claimResult = repository.claimCdk(code, playerId, now);
             if (!claimResult.success()) {
-                cdkPreviewStates.put(player.getUniqueId(), new CdkPreviewState(code, "rejected", claimResult.message(), false));
+                cdkPreviewStates.put(playerId, new CdkPreviewState(code, "rejected", claimResult.message(), false));
+                onCdkRedeemFailure(playerId, now);
                 return MailOperationResult.failure(claimResult.message());
             }
 
             MailOperationResult sendResult = sendPresetMail(
-                new RecipientResolution(player.getUniqueId(), player.getName()),
+                new RecipientResolution(playerId, player.getName()),
                 preset,
                 MailSourceType.CDK,
                 "",
@@ -679,18 +712,42 @@ public final class MailService implements Listener {
                 true
             );
             if (!sendResult.success()) {
-                cdkPreviewStates.put(player.getUniqueId(), new CdkPreviewState(code, "failed", sendResult.message(), false));
+                cdkPreviewStates.put(playerId, new CdkPreviewState(code, "failed", sendResult.message(), false));
+                onCdkRedeemFailure(playerId, now);
                 return sendResult;
             }
 
-            appendLog(player.getUniqueId(), "cdk", "兑换 CDK " + code + "，奖励已投递到邮箱。");
-            cdkPreviewStates.put(player.getUniqueId(), new CdkPreviewState(code, "success", preset.displayName(), true));
+            // 兑换成功：重置失败计数
+            synchronized (rateLimit) {
+                rateLimit.failCount = 0;
+                rateLimit.lastFailAt = null;
+                rateLimit.lockoutUntil = null;
+            }
+            appendLog(playerId, "cdk", "兑换 CDK " + code + "，奖励已投递到邮箱。");
+            cdkPreviewStates.put(playerId, new CdkPreviewState(code, "success", preset.displayName(), true));
             refreshPlayerViews(player, false);
             dispatchCdkRedeemedSignal(player, code, preset);
             return MailOperationResult.success(message("player.cdk-claim-success"));
         } catch (Exception exception) {
             this.logger.warning("兑换 CDK 失败: " + exception.getMessage());
             return MailOperationResult.failure(message("player.cdk-claim-failed"));
+        }
+    }
+
+    /**
+     * CDK 兑换失败时更新限流状态：增加失败计数，记录失败时间，达到阈值时锁定。
+     */
+    private void onCdkRedeemFailure(UUID playerId, Instant now) {
+        CdkRateLimitEntry entry = cdkRateLimitMap.get(playerId);
+        if (entry == null) return;
+        synchronized (entry) {
+            entry.failCount++;
+            entry.lastFailAt = now;
+            int maxFail = configuration.cdk().maxFailAttempts();
+            if (maxFail > 0 && entry.failCount >= maxFail) {
+                entry.lockoutUntil = now.plusSeconds(configuration.cdk().lockoutMinutes() * 60L);
+                entry.failCount = 0;
+            }
         }
     }
 
@@ -1354,7 +1411,7 @@ public final class MailService implements Listener {
             throw new IOException("无法创建邮件预设目录: " + directory.getAbsolutePath());
         }
         exportBundledPresetIfMissing(directory);
-        presets.putAll(MailPresetLoader.loadPresets(directory, this.logger, configuration.playerSend().maxAttachments(), vanillaItemNameBridge));
+        presets.putAll(MailPresetLoader.loadPresets(directory, this.logger, configuration.playerSend().maxAttachments(), itemSourceRegistry, vanillaItemNameBridge));
     }
 
     private void syncPresetCdks() throws Exception {
@@ -2011,6 +2068,11 @@ public final class MailService implements Listener {
                 return currencyValidation;
             }
 
+            // 检查背包空间是否足够容纳所有物品附件
+            if (!hasEnoughInventorySpace(player, itemRewards)) {
+                return MailOperationResult.failure(message("player.mail-claim-inventory-full"));
+            }
+
             Instant now = Instant.now();
             MailStatus previousStatus = mail.status();
             if (!repository.tryClaimMail(player.getUniqueId(), mailId, now)) {
@@ -2019,7 +2081,11 @@ public final class MailService implements Listener {
 
             deliverItemRewards(player, itemRewards);
             for (String command : mail.claimCommands()) {
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), replacePlayerTokens(command, player));
+                try {
+                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), replacePlayerTokens(command, player));
+                } catch (Exception e) {
+                    logger.warning("[Mail] 执行领取命令失败: " + command + " | " + e.getMessage());
+                }
             }
             MailOperationResult currencyResult = depositClaimCurrencies(player, mail.attachments());
             if (!currencyResult.success()) {
@@ -2522,10 +2588,36 @@ public final class MailService implements Listener {
         PlayerInventory inventory = player.getInventory();
         for (ItemStack itemReward : itemRewards) {
             HashMap<Integer, ItemStack> leftovers = inventory.addItem(itemReward.clone());
+            // 理论上不应有剩余（领取前已检查空间），但作为兜底仍掉落地面避免丢物品
             for (ItemStack leftover : leftovers.values()) {
                 player.getWorld().dropItemNaturally(player.getLocation(), leftover);
             }
         }
+    }
+
+    /**
+     * 检查玩家背包是否有足够空间容纳所有物品附件。
+     * <p>
+     * 模拟发放：克隆背包内容，逐个 addItem，检查是否有剩余。
+     * 不修改实际背包内容。
+     *
+     * @param player     玩家
+     * @param itemRewards 物品附件列表
+     * @return true 表示空间足够
+     */
+    private boolean hasEnoughInventorySpace(Player player, List<ItemStack> itemRewards) {
+        if (itemRewards == null || itemRewards.isEmpty()) return true;
+        // 克隆背包内容进行模拟
+        ItemStack[] contents = player.getInventory().getStorageContents().clone();
+        org.bukkit.inventory.Inventory simulated = Bukkit.createInventory(null, 36);
+        simulated.setContents(contents);
+        for (ItemStack itemReward : itemRewards) {
+            Map<Integer, ItemStack> leftovers = simulated.addItem(itemReward.clone());
+            if (!leftovers.isEmpty()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private MailOperationResult validateClaimCurrencies(List<MailAttachment> attachments) {
@@ -2927,6 +3019,19 @@ public final class MailService implements Listener {
     private static record CdkPreviewState(String code, String status, String description, boolean redeemable) {
         private static CdkPreviewState empty() {
             return new CdkPreviewState("", "", "", false);
+        }
+    }
+
+    /** CDK 兑换限流条目：记录连续失败次数、上次失败时间和锁定到期时间。 */
+    private static final class CdkRateLimitEntry {
+        private int failCount;
+        private Instant lastFailAt;
+        private Instant lockoutUntil;
+
+        CdkRateLimitEntry() {
+            this.failCount = 0;
+            this.lastFailAt = null;
+            this.lockoutUntil = null;
         }
     }
 

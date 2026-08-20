@@ -173,10 +173,11 @@ public record EssentialsConfiguration(
     }
 
     /**
-     * 存储子配置，支持 SQLite 与 MySQL 两种方言。
+     * 存储子配置，支持共享存储与自建存储两种模式。
      *
-     * @param mode           存储模式（sqlite / mysql）
-     * @param sqliteFileName SQLite 数据库文件名（仅 SQLite 模式时使用）
+     * @param shared         是否使用共享存储模式（true=共享本体数据源，false=自建连接池）
+     * @param mode           存储模式（sqlite / mysql，仅 shared=false 时生效）
+     * @param sqliteFileName SQLite 数据库文件名（仅 shared=false 时使用）
      * @param host           MySQL 主机地址
      * @param port           MySQL 端口
      * @param database       MySQL 数据库名
@@ -186,6 +187,7 @@ public record EssentialsConfiguration(
      * @param poolSize       连接池大小
      */
     public record StorageConfiguration(
+        boolean shared,
         String mode,
         String sqliteFileName,
         String host,
@@ -221,19 +223,24 @@ public record EssentialsConfiguration(
         /**
          * 判断是否为覆盖模式（模块自建连接池）。
          * <p>
-         * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
-         * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
+         * 当 shared=false 时返回 true（模块自建独立连接池）；
+         * shared=true 时返回 false（使用本体共享数据源）。
          *
-         * @return {@code true} 表示模块应自建连接池（旧路径）
-         * @since 1.4.0
+         * @return {@code true} 表示模块应自建连接池
          */
         public boolean hasOverride() {
-            return "mysql".equalsIgnoreCase(mode);
+            return !shared;
         }
 
         static StorageConfiguration load(ConfigurationSection s, Logger logger) {
+            boolean shared = s.getBoolean("shared", true);
+            if (shared) {
+                return new StorageConfiguration(true, "sqlite", "essentials.db",
+                    "127.0.0.1", 3306, "arcartxsuite", "root", "",
+                    "axs_ess_", 4);
+            }
             ConfigurationSection mysql = s.getConfigurationSection("mysql");
-            return new StorageConfiguration(
+            return new StorageConfiguration(false,
                 s.getString("mode", "sqlite"),
                 s.getString("sqlite.file", "essentials.db"),
                 mysql != null ? mysql.getString("host", "localhost") : "localhost",

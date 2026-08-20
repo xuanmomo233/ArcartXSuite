@@ -3,7 +3,6 @@ package xuanmo.arcartxsuite.fishing.reward;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
-import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
@@ -17,48 +16,60 @@ import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
 import xuanmo.arcartxsuite.api.capability.mail.MailSendRequest;
 import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
-import xuanmo.arcartxsuite.fishing.model.FishingPendingReward;
-import xuanmo.arcartxsuite.fishing.service.FishingItemGenerator;
-import xuanmo.arcartxsuite.fishing.storage.FishingRepository;
+import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
+import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
+import xuanmo.arcartxsuite.api.item.PendingRewardService;
 
 /**
  * 奖励发放器，处理等级奖励与结算奖励的实际发放。
  * <p>
- * 支持四种发放策略：
- * <ul>
- *   <li>{@code ONLINE_DIRECT} — 在线直接发放，离线暂存到 pending 表，上线补发</li>
- *   <li>{@code MAIL} — 统一通过 mail 模块发放（mail 不可用时降级为 ONLINE_DIRECT）</li>
- *   <li>{@code HYBRID} — 在线直接发放，离线走 mail（mail 不可用时降级为在线补发）</li>
- * </ul>
+ * 物品奖励统一通过 {@link ItemRewardDispatcher} 发放（放入背包→背包满转邮件→无邮件则掉落）。
+ * MAIL 类型奖励通过 Mail 模块发送预设邮件。
+ * 离线玩家奖励暂存到统一 {@link PendingRewardService}，由本体在玩家上线时自动补发。
  */
 public final class RewardDispatcher {
 
-    public static final String MODE_ONLINE_DIRECT = "ONLINE_DIRECT";
-    public static final String MODE_MAIL = "MAIL";
-    public static final String MODE_HYBRID = "HYBRID";
-
-    private final FishingRepository repository;
-    private final FishingItemGenerator itemGenerator;
+    private final PendingRewardService pendingRewardService;
+    private final ItemSourceRegistry itemSourceRegistry;
     private final Supplier<CurrencyBridgeAPI> currencyProvider;
     private final Supplier<MailDispatchable> mailProvider;
+    private final ItemRewardDispatcher itemRewardDispatcher;
     private final Logger logger;
     private final String seasonId;
-    private final String dispatchMode;
 
-    public RewardDispatcher(@NotNull FishingRepository repository,
-                            @NotNull FishingItemGenerator itemGenerator,
+    public RewardDispatcher(@NotNull PendingRewardService pendingRewardService,
+                            @NotNull ItemSourceRegistry itemSourceRegistry,
                             @Nullable Supplier<CurrencyBridgeAPI> currencyProvider,
                             @Nullable Supplier<MailDispatchable> mailProvider,
+                            @NotNull ItemRewardDispatcher itemRewardDispatcher,
                             @NotNull Logger logger,
-                            @NotNull String seasonId,
-                            @NotNull String dispatchMode) {
-        this.repository = repository;
-        this.itemGenerator = itemGenerator;
+                            @NotNull String seasonId) {
+        this.pendingRewardService = pendingRewardService;
+        this.itemSourceRegistry = itemSourceRegistry;
         this.currencyProvider = currencyProvider;
         this.mailProvider = mailProvider;
+        this.itemRewardDispatcher = itemRewardDispatcher;
         this.logger = logger;
         this.seasonId = seasonId;
-        this.dispatchMode = dispatchMode;
+    }
+
+    /**
+     * 直接向在线玩家发放物品（通过 ItemRewardDispatcher 统一发放：背包满转邮件/掉落）。
+     * <p>
+     * 供 FishingService 等需要直接发放物品的场景调用，避免手写"背包满→掉落"逻辑。
+     *
+     * @param player 在线玩家
+     * @param item   要发放的物品
+     * @param sourceDetail 来源详情（用于审计/邮件 sourceDetail）
+     */
+    public void dispatchItem(@NotNull Player player, @NotNull ItemStack item, @NotNull String sourceDetail) {
+        ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder("fishing")
+            .sourceDetail(sourceDetail)
+            .overflowMailSubject("钓鱼物品溢出")
+            .overflowMailBody("您的背包已满，钓鱼物品通过邮件补发。")
+            .overflowMailSenderName("钓鱼")
+            .build();
+        itemRewardDispatcher.dispatchItem(player, item, options);
     }
 
     /**
@@ -72,35 +83,14 @@ public final class RewardDispatcher {
     public void dispatch(@Nullable Player player, @NotNull UUID uuid,
                          @NotNull SeasonRewardDefinition reward, @NotNull String description) {
         if (player != null && player.isOnline()) {
-            // 在线：根据模式决定直接发还是走 mail
-            if (MODE_MAIL.equals(dispatchMode) && isMailAvailable()) {
-                dispatchViaMail(player, reward, description);
-            } else {
-                dispatchDirect(player, reward);
-            }
+            dispatchDirect(player, reward);
         } else {
-            // 离线：根据模式决定 mail 还是 pending
-            if ((MODE_MAIL.equals(dispatchMode) || MODE_HYBRID.equals(dispatchMode)) && isMailAvailable()) {
+            // 离线：MAIL 类型走邮件，其他暂存 pending
+            if (SeasonRewardDefinition.Type.fromKey(reward.type()) == SeasonRewardDefinition.Type.MAIL
+                && isMailAvailable()) {
                 dispatchViaMailOffline(uuid, reward, description);
             } else {
                 savePending(uuid, reward, description);
-            }
-        }
-    }
-
-    /**
-     * 发放玩家所有待发放奖励（上线时调用）。
-     *
-     * @param player 上线玩家
-     */
-    public void dispatchPending(@NotNull Player player) {
-        List<FishingPendingReward> pending = repository.loadPendingRewards(player.getUniqueId());
-        for (FishingPendingReward pr : pending) {
-            try {
-                dispatchPendingItem(player, pr);
-                repository.deletePendingReward(pr.id());
-            } catch (Exception e) {
-                logger.warning("补发奖励失败 [" + pr.description() + "]: " + e.getMessage());
             }
         }
     }
@@ -130,27 +120,18 @@ public final class RewardDispatcher {
     }
 
     private void dispatchItem(@NotNull Player player, @NotNull SeasonRewardDefinition reward) {
-        if (reward.itemId() == null) return;
-        String nbt = reward.itemNbt() != null ? reward.itemNbt() : "";
-        xuanmo.arcartxsuite.fishing.model.FishingItemRef ref;
-        if (!nbt.isBlank()) {
-            // 带 NBT 的物品：通过 json 字段传递 SNBT
-            ref = new xuanmo.arcartxsuite.fishing.model.FishingItemRef(
-                reward.itemSource() != null ? reward.itemSource() : "minecraft",
-                reward.itemId(), "", "", nbt, "", "", reward.itemAmount());
-        } else {
-            ref = xuanmo.arcartxsuite.fishing.model.FishingItemRef.fromMaterial(
-                reward.itemId(), reward.itemAmount());
-            if (reward.itemSource() != null && !reward.itemSource().equals("minecraft")) {
-                ref = new xuanmo.arcartxsuite.fishing.model.FishingItemRef(
-                    reward.itemSource(), reward.itemId(), "", "", "", "", "", reward.itemAmount());
-            }
-        }
-        ItemStack item = itemGenerator.generate(ref, player);
-        if (item != null) {
-            player.getInventory().addItem(item).forEach((idx, leftover) ->
-                player.getWorld().dropItemNaturally(player.getLocation(), leftover));
-        }
+        if (reward.id() == null) return;
+        String source = reward.source() != null ? reward.source() : "minecraft";
+        ItemStack item = itemSourceRegistry.generateItem(
+            source, reward.id(), reward.amount(), reward.nbt(), player);
+        if (item == null) return;
+        ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder("fishing")
+            .sourceDetail("season:" + seasonId)
+            .overflowMailSubject("钓鱼奖励溢出物品")
+            .overflowMailBody("您的背包已满，钓鱼奖励物品通过邮件补发。")
+            .overflowMailSenderName("钓鱼")
+            .build();
+        itemRewardDispatcher.dispatchItem(player, item, options);
     }
 
     private void dispatchCommand(@NotNull Player player, @NotNull SeasonRewardDefinition reward) {
@@ -172,6 +153,7 @@ public final class RewardDispatcher {
                                  @NotNull String description) {
         MailDispatchable mail = mailProvider != null ? mailProvider.get() : null;
         if (mail == null) {
+            // Mail 不可用：MAIL 类型降级为直接发放（物品走 ItemRewardDispatcher）
             dispatchDirect(player, reward);
             return;
         }
@@ -195,38 +177,11 @@ public final class RewardDispatcher {
                     }
                 }
             }
-            case ITEM -> {
-                if (reward.mailPresets() != null && !reward.mailPresets().isEmpty()) {
-                    try {
-                        for (String presetId : reward.mailPresets()) {
-                            if (presetId.isBlank()) continue;
-                            mail.dispatchPreset(MailPresetRequest.builder(presetId, player.getName())
-                                .sourceModule("fishing")
-                                .build());
-                        }
-                    } catch (Exception e) {
-                        logger.warning("mail 预设发放失败，降级直接发放: " + e.getMessage());
-                        dispatchItem(player, reward);
-                    }
-                } else {
-                    // 无预设 ID，降级直接发放
-                    dispatchItem(player, reward);
-                }
-            }
+            case ITEM -> dispatchItem(player, reward);
             case COMMAND -> dispatchCommand(player, reward);
             case MAIL -> {
-                if (reward.mailPresets() != null) {
-                    for (String presetId : reward.mailPresets()) {
-                        if (presetId.isBlank()) continue;
-                        try {
-                            mail.dispatchPreset(MailPresetRequest.builder(presetId, player.getName())
-                                .sourceModule("fishing")
-                                .build());
-                        } catch (Exception e) {
-                            logger.warning("mail 预设发放失败: " + e.getMessage());
-                        }
-                    }
-                }
+                xuanmo.arcartxsuite.api.capability.mail.MailPresetHelper.dispatchPresets(
+                    mailProvider, player.getName(), reward.mailPresets(), "fishing", logger);
             }
         }
     }
@@ -266,72 +221,49 @@ public final class RewardDispatcher {
                     }
                 }
             }
-            case ITEM -> {
+            case ITEM, COMMAND -> savePending(uuid, reward, description);
+            case MAIL -> {
                 if (reward.mailPresets() != null && !reward.mailPresets().isEmpty()) {
-                    try {
-                        for (String presetId : reward.mailPresets()) {
-                            if (presetId.isBlank()) continue;
-                            mail.dispatchPreset(MailPresetRequest.builder(presetId, playerName)
-                                .sourceModule("fishing")
-                                .build());
-                        }
-                    } catch (Exception e) {
-                        logger.warning("离线 mail 预设发放失败，降级 pending: " + e.getMessage());
+                    boolean allSuccess = xuanmo.arcartxsuite.api.capability.mail.MailPresetHelper.dispatchPresets(
+                        mailProvider, playerName, reward.mailPresets(), "fishing", logger);
+                    if (!allSuccess) {
                         savePending(uuid, reward, description);
                     }
                 } else {
                     savePending(uuid, reward, description);
                 }
             }
-            case COMMAND, MAIL -> savePending(uuid, reward, description);
         }
     }
 
-    // ─── Pending 补发 ─────────────────────────────────────────
+    // ─── Pending 暂存（统一服务） ──────────────────────────────
 
     private void savePending(@NotNull UUID uuid, @NotNull SeasonRewardDefinition reward,
                              @NotNull String description) {
-        String rewardType = reward.type().toUpperCase();
-        FishingPendingReward pending = new FishingPendingReward(
-            0, uuid, seasonId, rewardType,
-            reward.currencyId(), reward.currencyAmount(),
-            reward.itemId() != null ? reward.itemId() : null,
-            reward.commands() != null ? String.join(";", reward.commands()) : null,
-            description, System.currentTimeMillis()
-        );
-        repository.savePendingReward(pending);
-    }
-
-    private void dispatchPendingItem(@NotNull Player player, @NotNull FishingPendingReward pr) {
-        switch (pr.rewardType().toUpperCase()) {
-            case "CURRENCY" -> {
-                if (pr.currencyId() != null && !pr.currencyId().isBlank()) {
-                    CurrencyBridgeAPI api = currencyProvider != null ? currencyProvider.get() : null;
-                    if (api != null) {
-                        var bridge = api.bridge(pr.currencyId());
-                        if (bridge != null && bridge.available()) {
-                            bridge.deposit(player, BigDecimal.valueOf(pr.amount()));
-                        }
-                    }
+        SeasonRewardDefinition.Type type = SeasonRewardDefinition.Type.fromKey(reward.type());
+        switch (type) {
+            case ITEM -> {
+                String source = reward.source() != null ? reward.source() : "minecraft";
+                String itemId = reward.id() != null ? reward.id() : "";
+                pendingRewardService.savePending(PendingRewardService.PendingReward.item(
+                    uuid, "fishing", source, itemId, reward.amount(), reward.nbt(), description));
+            }
+            case CURRENCY -> {
+                if (reward.currencyId() != null) {
+                    pendingRewardService.savePending(PendingRewardService.PendingReward.currency(
+                        uuid, "fishing", reward.currencyId(), reward.currencyAmount(), description));
                 }
             }
-            case "ITEM" -> {
-                if (pr.itemData() != null && !pr.itemData().isBlank()) {
-                    ItemStack item = itemGenerator.generate(
-                        xuanmo.arcartxsuite.fishing.model.FishingItemRef.fromMaterial(pr.itemData(), 1),
-                        player);
-                    if (item != null) {
-                        player.getInventory().addItem(item).forEach((idx, leftover) ->
-                            player.getWorld().dropItemNaturally(player.getLocation(), leftover));
-                    }
+            case COMMAND -> {
+                if (reward.commands() != null) {
+                    pendingRewardService.savePending(PendingRewardService.PendingReward.command(
+                        uuid, "fishing", reward.commands(), description));
                 }
             }
-            case "COMMAND" -> {
-                if (pr.command() != null && !pr.command().isBlank()) {
-                    for (String cmd : pr.command().split(";")) {
-                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(),
-                            cmd.replace("{player}", player.getName()));
-                    }
+            case MAIL -> {
+                if (reward.mailPresets() != null) {
+                    pendingRewardService.savePending(PendingRewardService.PendingReward.mailPreset(
+                        uuid, "fishing", reward.mailPresets(), description));
                 }
             }
         }

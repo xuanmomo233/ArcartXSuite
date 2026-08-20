@@ -15,12 +15,14 @@ public final class DefaultItemSourceRegistry implements ItemSourceRegistry {
     private final NeigeItemsBridge neigeItemsBridge;
     private final OvertureItemBridge overtureItemBridge;
     private final MmoItemsBridge mmoItemsBridge;
+    private final java.util.logging.Logger logger;
 
     public DefaultItemSourceRegistry(JavaPlugin plugin) {
         this.mythicItemBridge = safeCreate(() -> new MythicItemBridge(plugin), "MythicMobs");
         this.neigeItemsBridge = safeCreate(() -> new NeigeItemsBridge(plugin), "NeigeItems");
         this.overtureItemBridge = safeCreate(() -> new OvertureItemBridge(plugin), "Overture");
         this.mmoItemsBridge = safeCreate(() -> new MmoItemsBridge(plugin), "MMOItems");
+        this.logger = plugin.getLogger();
     }
 
     private <T> T safeCreate(java.util.function.Supplier<T> supplier, String name) {
@@ -71,6 +73,68 @@ public final class DefaultItemSourceRegistry implements ItemSourceRegistry {
     }
 
     // ─── 物品生成 ─────────────────────────────────────────────────
+
+    @Override
+    public ItemStack generateItem(@org.jetbrains.annotations.NotNull String source,
+                                  @org.jetbrains.annotations.NotNull String id, int amount,
+                                  @org.jetbrains.annotations.Nullable String nbt,
+                                  @org.jetbrains.annotations.Nullable Player player) {
+        if (source == null || id == null || id.isBlank() || amount < 1) return null;
+        ItemStack item;
+        switch (source.toLowerCase(java.util.Locale.ROOT)) {
+            case "minecraft", "plain", "vanilla" -> {
+                org.bukkit.Material material = org.bukkit.Material.matchMaterial(id);
+                if (material == null) return null;
+                // 不截断 amount：Bukkit 的 inventory.addItem 会自动拆分超 maxStackSize 的物品到多个槽位
+                item = new ItemStack(material, amount);
+            }
+            case "mythic", "mythicmobs" -> {
+                item = mythicItemBridge != null ? mythicItemBridge.getItemStack(id, amount) : null;
+            }
+            case "neige", "neigeitems" -> {
+                item = neigeItemsBridge != null ? neigeItemsBridge.getItemStack(id, amount) : null;
+            }
+            case "overture" -> {
+                item = overtureItemBridge != null ? overtureItemBridge.generateItem(id, player, amount) : null;
+            }
+            case "mmoitems", "mmo" -> {
+                // id 格式: "类型ID;物品ID"
+                int sep = id.indexOf(';');
+                if (sep <= 0 || sep >= id.length() - 1) return null;
+                String typeId = id.substring(0, sep);
+                String itemId = id.substring(sep + 1);
+                item = mmoItemsBridge != null ? mmoItemsBridge.getItemStack(typeId, itemId, amount) : null;
+            }
+            default -> {
+                return null;
+            }
+        }
+        // 统一 NBT 应用（所有物品来源均支持）
+        return applyNbt(item, nbt);
+    }
+
+    /**
+     * 应用 SNBT 格式的 NBT 标签到物品上。
+     * <p>
+     * 使用 {@link org.bukkit.UnsafeValues#modifyItemStack} 解析 SNBT 字符串，
+     * 失败时保留原物品并记录警告。
+     *
+     * @param item 原始物品，为 null 时直接返回 null
+     * @param nbt  SNBT 字符串（如 "{display:{Name:'{\"text\":\"测试\"}'}}""），为 null/空时跳过
+     * @return 应用了 NBT 的物品克隆，或原物品
+     */
+    private ItemStack applyNbt(@org.jetbrains.annotations.Nullable ItemStack item,
+                               @org.jetbrains.annotations.Nullable String nbt) {
+        if (item == null) return null;
+        if (nbt == null || nbt.isBlank()) return item;
+        try {
+            ItemStack modified = org.bukkit.Bukkit.getUnsafe().modifyItemStack(item.clone(), nbt);
+            return modified != null ? modified : item;
+        } catch (Exception e) {
+            logger.warning("应用 NBT 失败: " + nbt + " | " + e.getMessage());
+            return item;
+        }
+    }
 
     @Override
     public ItemStack generateMythicItem(String itemId, int amount) {

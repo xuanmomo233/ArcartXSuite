@@ -205,14 +205,14 @@ public class RankingRewardService {
     ) {
         if (Bukkit.isPrimaryThread()) {
             return actionExecutor.executeActions(
-                rewardDef.actions(), target, variables, rewardSettings.inventoryFullStrategy()
+                rewardDef.actions(), target, variables
             );
         }
 
         try {
             return AxsScheduler.callSyncMethod(plugin, () ->
                 actionExecutor.executeActions(
-                    rewardDef.actions(), target, variables, rewardSettings.inventoryFullStrategy()
+                    rewardDef.actions(), target, variables
                 )
             ).get();
         } catch (Exception e) {
@@ -649,8 +649,8 @@ public class RankingRewardService {
                         parts.add("指令");
                     }
                 }
-                case NEIGE_ITEMS, MYTHIC_ITEMS, OVERTURE_ITEMS -> {
-                    if (!action.itemId().isBlank()) {
+                case ITEM -> {
+                    if (!action.id().isBlank()) {
                         parts.add("物品×" + action.amount());
                     }
                 }

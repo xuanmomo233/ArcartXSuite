@@ -176,6 +176,16 @@ final class DefaultModuleContext implements ModuleContext {
     }
 
     @Override
+    public xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher() {
+        return registry.itemRewardDispatcher();
+    }
+
+    @Override
+    public xuanmo.arcartxsuite.api.item.PendingRewardService pendingRewardService() {
+        return registry.pendingRewardService();
+    }
+
+    @Override
     public xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge() {
         return registry.vanillaItemNameBridge();
     }

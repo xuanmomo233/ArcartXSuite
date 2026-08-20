@@ -68,17 +68,8 @@ public record WarehouseModuleConfiguration(
             Math.max(1, configuration.getInt("ui.page-size", configuration.getInt("search.page-size", 18)))
         );
 
-        ConfigurationSection storageSection = configuration.getConfigurationSection("storage");
-        StorageConfiguration storage = new StorageConfiguration(
-            storageSection == null ? "sqlite" : readString(storageSection, "mode", "sqlite"),
-            storageSection == null ? "warehouse.db" : readString(storageSection, "sqlite.file", "warehouse.db"),
-            storageSection == null ? "127.0.0.1" : readString(storageSection, "mysql.host", "127.0.0.1"),
-            storageSection == null ? 3306 : Math.max(1, storageSection.getInt("mysql.port", 3306)),
-            storageSection == null ? "arcartxsuite" : readString(storageSection, "mysql.database", "arcartxsuite"),
-            storageSection == null ? "root" : readString(storageSection, "mysql.username", "root"),
-            storageSection == null ? "" : readString(storageSection, "mysql.password", ""),
-            storageSection == null ? "axs_warehouse_" : readString(storageSection, "mysql.table-prefix", "axs_warehouse_"),
-            storageSection == null ? 4 : Math.max(1, storageSection.getInt("pool-size", 4))
+        StorageConfiguration storage = StorageConfiguration.load(
+            configuration.getConfigurationSection("storage")
         );
 
         ConfigurationSection securitySection = configuration.getConfigurationSection("security");
@@ -508,8 +499,9 @@ public record WarehouseModuleConfiguration(
     ) {
     }
 
-    /** 存储后端配置：SQLite 文件或 MySQL 连接参数。 */
+    /** 存储后端配置：共享模式或自建 SQLite/MySQL 连接参数。 */
     public record StorageConfiguration(
+        boolean shared,
         String mode,
         String sqliteFileName,
         String host,
@@ -520,6 +512,36 @@ public record WarehouseModuleConfiguration(
         String tablePrefix,
         int poolSize
     ) {
+        /**
+         * 从配置节加载存储配置。
+         * <p>
+         * shared=true（默认）时使用全部默认值，不读取其余字段；
+         * shared=false 时读取 mode/sqlite/mysql 等自建存储字段。
+         *
+         * @param section storage 配置节，可为 {@code null}
+         * @return 解析后的存储配置
+         */
+        public static StorageConfiguration load(ConfigurationSection section) {
+            if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
+            boolean shared = section.getBoolean("shared", true);
+            if (shared) {
+                return new StorageConfiguration(true, "sqlite", "warehouse.db",
+                    "127.0.0.1", 3306, "arcartxsuite", "root", "",
+                    "axs_warehouse_", 4);
+            }
+            return new StorageConfiguration(false,
+                readString(section, "mode", "sqlite"),
+                readString(section, "sqlite.file", "warehouse.db"),
+                readString(section, "mysql.host", "127.0.0.1"),
+                Math.max(1, section.getInt("mysql.port", 3306)),
+                readString(section, "mysql.database", "arcartxsuite"),
+                readString(section, "mysql.username", "root"),
+                readString(section, "mysql.password", ""),
+                readString(section, "mysql.table-prefix", "axs_warehouse_"),
+                Math.max(1, section.getInt("pool-size", 4))
+            );
+        }
+
         public boolean isSqlite() {
             return !"mysql".equalsIgnoreCase(mode);
         }
@@ -535,14 +557,13 @@ public record WarehouseModuleConfiguration(
         /**
          * 判断是否为覆盖模式（模块自建连接池）。
          * <p>
-         * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
-         * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
+         * 当 shared=false 时返回 true（模块独立连接，自建存储）；
+         * shared=true 时返回 false（使用本体共享数据源）。
          *
-         * @return {@code true} 表示模块应自建连接池（旧路径）
-         * @since 1.4.0
+         * @return {@code true} 表示模块应自建连接池
          */
         public boolean hasOverride() {
-            return "mysql".equalsIgnoreCase(mode);
+            return !shared;
         }
     }
 

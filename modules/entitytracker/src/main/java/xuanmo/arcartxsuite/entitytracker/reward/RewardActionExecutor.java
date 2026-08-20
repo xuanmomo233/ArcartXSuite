@@ -7,17 +7,16 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
-import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardAction;
-import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardActionType;
-import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardInventoryFullStrategy;
 import xuanmo.arcartxsuite.entitytracker.boss.config.BossDamageRewardMessageTarget;
+import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
+import xuanmo.arcartxsuite.api.item.PendingRewardService;
 import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
 
 /**
@@ -25,6 +24,8 @@ import xuanmo.arcartxsuite.api.placeholder.PlaceholderResolverAPI;
  * <p>
  * 调用方通过 {@code variables} Map 注入占位符上下文（如 {player}, {rank}, {boss_display_name} 等），
  * 执行器负责模板渲染、物品发放、命令执行、消息发送、邮件派发和信号分发。
+ * <p>
+ * 物品发放统一通过 {@link ItemRewardDispatcher}（放入背包→背包满转邮件→无邮件则掉落）。
  */
 public final class RewardActionExecutor {
 
@@ -34,6 +35,7 @@ public final class RewardActionExecutor {
     private final java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider;
     private final java.util.function.BiConsumer<String, Player> signalDispatcher;
     private final ItemSourceRegistry itemSourceRegistry;
+    private final ItemRewardDispatcher itemRewardDispatcher;
     private final PlaceholderResolverAPI placeholderResolver;
 
     public RewardActionExecutor(
@@ -41,12 +43,14 @@ public final class RewardActionExecutor {
         java.util.function.Supplier<xuanmo.arcartxsuite.api.capability.MailDispatchable> mailDispatchableProvider,
         java.util.function.BiConsumer<String, Player> signalDispatcher,
         ItemSourceRegistry itemSourceRegistry,
+        ItemRewardDispatcher itemRewardDispatcher,
         PlaceholderResolverAPI placeholderResolver
     ) {
         this.plugin = plugin;
         this.mailDispatchableProvider = mailDispatchableProvider == null ? () -> null : mailDispatchableProvider;
         this.signalDispatcher = signalDispatcher;
         this.itemSourceRegistry = itemSourceRegistry;
+        this.itemRewardDispatcher = itemRewardDispatcher;
         this.placeholderResolver = placeholderResolver;
     }
 
@@ -56,12 +60,11 @@ public final class RewardActionExecutor {
     public List<RewardActionResult> executeActions(
         List<BossDamageRewardAction> actions,
         OfflinePlayer target,
-        Map<String, String> variables,
-        BossDamageRewardInventoryFullStrategy inventoryFullStrategy
+        Map<String, String> variables
     ) {
         List<RewardActionResult> results = new ArrayList<>();
         for (BossDamageRewardAction action : actions) {
-            results.add(executeAction(action, target, variables, inventoryFullStrategy));
+            results.add(executeAction(action, target, variables));
         }
         return results;
     }
@@ -72,8 +75,7 @@ public final class RewardActionExecutor {
     public RewardActionResult executeAction(
         BossDamageRewardAction action,
         OfflinePlayer target,
-        Map<String, String> variables,
-        BossDamageRewardInventoryFullStrategy inventoryFullStrategy
+        Map<String, String> variables
     ) {
         if (action == null || action.type() == null) {
             return RewardActionResult.fail("unknown", "奖励动作类型无效");
@@ -81,9 +83,7 @@ public final class RewardActionExecutor {
 
         try {
             return switch (action.type()) {
-                case NEIGE_ITEMS -> executeItemAction(action, target, variables, inventoryFullStrategy, BossDamageRewardActionType.NEIGE_ITEMS);
-                case MYTHIC_ITEMS -> executeItemAction(action, target, variables, inventoryFullStrategy, BossDamageRewardActionType.MYTHIC_ITEMS);
-                case OVERTURE_ITEMS -> executeItemAction(action, target, variables, inventoryFullStrategy, BossDamageRewardActionType.OVERTURE_ITEMS);
+                case ITEM -> executeItemAction(action, target, variables);
                 case COMMAND -> executeCommandAction(action, target, variables);
                 case MESSAGE -> executeMessageAction(action, target, variables);
                 case MAIL -> executeMailAction(action, target, variables);
@@ -99,50 +99,36 @@ public final class RewardActionExecutor {
     private RewardActionResult executeItemAction(
         BossDamageRewardAction action,
         OfflinePlayer target,
-        Map<String, String> variables,
-        BossDamageRewardInventoryFullStrategy inventoryFullStrategy,
-        BossDamageRewardActionType actionType
+        Map<String, String> variables
     ) {
-        if (action.itemId().isBlank()) {
-            return RewardActionResult.fail(actionType.configKey(), "缺少 item-id");
+        if (action.id().isBlank()) {
+            return RewardActionResult.fail(action.type().configKey(), "缺少 id");
         }
         if (!(target instanceof Player player) || !player.isOnline()) {
-            return RewardActionResult.fail(actionType.configKey(), "目标玩家不在线");
+            return RewardActionResult.fail(action.type().configKey(), "目标玩家不在线");
         }
 
-        ItemStack itemStack = switch (actionType) {
-            case NEIGE_ITEMS -> itemSourceRegistry.generateNeigeItem(action.itemId(), action.amount());
-            case MYTHIC_ITEMS -> itemSourceRegistry.generateMythicItem(action.itemId(), action.amount());
-            case OVERTURE_ITEMS -> itemSourceRegistry.generateOvertureItem(action.itemId(), player, action.amount());
-            default -> null;
-        };
+        ItemStack itemStack = itemSourceRegistry.generateItem(action.source(), action.id(), action.amount(), action.nbt(), player);
         if (itemStack == null || itemStack.getType().isAir()) {
-            return RewardActionResult.fail(actionType.configKey(), "物品不存在: " + action.itemId());
+            return RewardActionResult.fail(action.type().configKey(), "物品不存在: " + action.id());
         }
 
-        if (inventoryFullStrategy == BossDamageRewardInventoryFullStrategy.FAIL && !canFullyFit(player, itemStack)) {
-            return RewardActionResult.fail(actionType.configKey(), "背包空间不足");
+        String sourceDetail = "ranking:" + variables.getOrDefault("boss_id", "unknown");
+        ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder("entitytracker")
+            .sourceDetail(sourceDetail)
+            .overflowMailSubject("Boss 奖励溢出物品")
+            .overflowMailBody("您的背包已满，Boss 排行榜奖励物品通过邮件补发。")
+            .overflowMailSenderName("Boss 追踪")
+            .build();
+        ItemRewardDispatcher.DispatchResult result = itemRewardDispatcher.dispatchItem(player, itemStack, options);
+        if (result.success()) {
+            String suffix = "";
+            if (result.mailedCount() > 0) suffix = "（部分通过邮件补发）";
+            else if (result.pendingCount() > 0) suffix = "（部分已暂存待发放）";
+            String desc = itemStack.getAmount() + "x " + action.id() + suffix;
+            return RewardActionResult.ok(action.type().configKey(), desc);
         }
-
-        Map<Integer, ItemStack> leftovers = player.getInventory().addItem(itemStack.clone());
-        if (leftovers.isEmpty()) {
-            return RewardActionResult.ok(actionType.configKey(), itemStack.getAmount() + "x " + action.itemId());
-        }
-
-        if (inventoryFullStrategy == BossDamageRewardInventoryFullStrategy.FAIL) {
-            return RewardActionResult.fail(actionType.configKey(), "背包空间不足");
-        }
-
-        Location location = player.getLocation();
-        for (ItemStack leftover : leftovers.values()) {
-            if (leftover == null || leftover.getType().isAir()) continue;
-            player.getWorld().dropItemNaturally(location, leftover);
-        }
-        if (inventoryFullStrategy == BossDamageRewardInventoryFullStrategy.DROP) {
-            player.sendMessage(ChatColor.translateAlternateColorCodes('&',
-                "&e你的背包空间不足，" + action.itemId() + " 已掉落到脚下。"));
-        }
-        return RewardActionResult.ok(actionType.configKey(), "部分掉落到脚下");
+        return RewardActionResult.fail(action.type().configKey(), result.message());
     }
 
     // ─── 命令 ───────────────────────────────────────────
@@ -279,20 +265,6 @@ public final class RewardActionExecutor {
             }
         }
         return resolvePlayerName(target, variables);
-    }
-
-    private static boolean canFullyFit(Player player, ItemStack itemStack) {
-        if (player == null || itemStack == null || itemStack.getType().isAir()) return false;
-        int remaining = Math.max(1, itemStack.getAmount());
-        for (ItemStack slotItem : player.getInventory().getStorageContents()) {
-            if (slotItem == null || slotItem.getType().isAir()) {
-                remaining -= itemStack.getMaxStackSize();
-            } else if (slotItem.isSimilar(itemStack)) {
-                remaining -= Math.max(0, slotItem.getMaxStackSize() - slotItem.getAmount());
-            }
-            if (remaining <= 0) return true;
-        }
-        return remaining <= 0;
     }
 
     private static String stripLeadingSlash(String command) {

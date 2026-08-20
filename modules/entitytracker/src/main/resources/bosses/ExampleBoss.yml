@@ -29,16 +29,17 @@ damage-ranking:
   rewards:
     # 只在 Boss 死亡结算时发奖；重载 / 消失 / 停机不会触发。
     enabled: false
-    # inventory-full 背包满时处理: drop 掉落剩余物品；fail 发奖前直接失败；silent-drop 静默掉落剩余物品。
-    inventory-full: "drop"
+    # 物品奖励背包满时统一处理：放入背包→背包满转邮件→无邮件则掉落（由 ItemRewardDispatcher 统一处理）
     ranks:
       1:
         actions:
-          - type: neigeitems
-            item-id: "legendary_sword"
+          - type: item
+            source: neige
+            id: "legendary_sword"
             amount: 1
-          - type: mythicitems
-            item-id: "BossGem"
+          - type: item
+            source: mythic
+            id: "BossGem"
             amount: 1
           - type: command
             command: "points give {player} 100"
@@ -64,8 +65,7 @@ damage-ranking:
   ranking-rewards:
     weekly:
       enabled: false
-      # inventory-full 背包满时处理: drop 掉落剩余物品；fail 发奖前直接失败；silent-drop 静默掉落剩余物品。
-      inventory-full: "drop"
+      # 物品奖励背包满时统一处理：放入背包→背包满转邮件→无邮件则掉落（由 ItemRewardDispatcher 统一处理）
       ranks:
         1:
           actions:
@@ -93,7 +93,6 @@ damage-ranking:
               text: "&b你在本周 {boss_display_name} 伤害排行榜获得第 {rank} 名。"
     monthly:
       enabled: false
-      inventory-full: "drop"
       ranks:
         1:
           actions:

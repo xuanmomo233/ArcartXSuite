@@ -5,13 +5,11 @@ import java.util.Locale;
 /**
  * 奖励动作类型枚举，属于 entitytracker 模块的 boss 伤害排名奖励子系统。
  * <p>
- * 定义可用的奖励发放方式：物品发放（NeigeItems/MythicItems/Overture）、
+ * 定义可用的奖励发放方式：物品发放（统一由 {@code source} 字段区分来源）、
  * 命令执行、消息发送、邮件发送、信号派发。
  */
 public enum BossDamageRewardActionType {
-    NEIGE_ITEMS("neigeitems"),
-    MYTHIC_ITEMS("mythicitems"),
-    OVERTURE_ITEMS("overture"),
+    ITEM("item"),
     COMMAND("command"),
     MESSAGE("message"),
     MAIL("mail"),
@@ -41,9 +39,9 @@ public enum BossDamageRewardActionType {
     public static BossDamageRewardActionType parse(String rawValue) {
         String normalized = rawValue == null ? "" : rawValue.trim().toLowerCase(Locale.ROOT);
         return switch (normalized) {
-            case "neigeitems", "neigeitem" -> NEIGE_ITEMS;
-            case "mythicitems", "mythicitem" -> MYTHIC_ITEMS;
-            case "overture", "overtureitems", "overtureitem" -> OVERTURE_ITEMS;
+            case "item", "items" -> ITEM;
+            // 兼容旧配置：将物品来源类型统一映射为 ITEM
+            case "neigeitems", "neigeitem", "mythicitems", "mythicitem", "overture", "overtureitems", "overtureitem" -> ITEM;
             case "command", "cmd" -> COMMAND;
             case "message", "msg" -> MESSAGE;
             case "mail" -> MAIL;
@@ -52,4 +50,3 @@ public enum BossDamageRewardActionType {
         };
     }
 }
-

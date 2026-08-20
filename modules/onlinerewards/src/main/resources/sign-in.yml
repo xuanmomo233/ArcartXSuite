@@ -34,9 +34,18 @@ base-commands:
 # 基础签到奖励描述文本
 base-rewardText: "命令 1"
 # 基础签到邮件预设列表
+# base.item-rewards: 基础签到物品奖励列表（通过 ItemSourceRegistry 生成，统一发放）
+#   source: 物品来源（minecraft/mythic/neige/overture/mmoitems）
+#   id:     物品 ID（mmoitems 格式为 "类型ID;物品ID"）
+#   amount: 数量
+#   nbt:    可选，自定义 NBT（SNBT 字符串，仅 minecraft 源有效）
 base:
   mail:
     presets: []
+  # item-rewards:
+  #   - source: "minecraft"
+  #     id: "DIAMOND"
+  #     amount: 1
 
 # 补签卡配置
 makeup:

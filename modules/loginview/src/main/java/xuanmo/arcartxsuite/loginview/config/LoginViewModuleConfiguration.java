@@ -299,19 +299,21 @@ public record LoginViewModuleConfiguration(
     }
 
     /**
-     * 存储后端配置，支持 SQLite 与 MySQL 两种模式。
+     * 存储后端配置，支持共享模式与自建 SQLite/MySQL 两种模式。
      *
-     * @param mode          存储模式（sqlite / mysql）
-     * @param sqliteFileName SQLite 文件名
-     * @param host          MySQL 主机地址
-     * @param port          MySQL 端口
-     * @param database      MySQL 数据库名
-     * @param username      MySQL 用户名
-     * @param password      MySQL 密码
-     * @param tablePrefix   表名前缀
-     * @param poolSize      连接池大小
+     * @param shared          是否使用共享存储模式（true=共享本体连接，false=自建连接）
+     * @param mode            存储模式（sqlite / mysql），仅在 shared=false 时生效
+     * @param sqliteFileName  SQLite 文件名
+     * @param host            MySQL 主机地址
+     * @param port            MySQL 端口
+     * @param database        MySQL 数据库名
+     * @param username        MySQL 用户名
+     * @param password        MySQL 密码
+     * @param tablePrefix     表名前缀
+     * @param poolSize        连接池大小
      */
     public record StorageConfiguration(
+        boolean shared,
         String mode,
         String sqliteFileName,
         String host,
@@ -323,7 +325,14 @@ public record LoginViewModuleConfiguration(
         int poolSize
     ) {
         private static StorageConfiguration load(ConfigurationSection section) {
-            return new StorageConfiguration(
+            if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
+            boolean shared = section.getBoolean("shared", true);
+            if (shared) {
+                return new StorageConfiguration(true, "sqlite", "loginview.db",
+                    "127.0.0.1", 3306, "minecraft", "root", "",
+                    "AXS_loginview_", 4);
+            }
+            return new StorageConfiguration(false,
                 string(section, "mode", "sqlite"),
                 string(section, "sqlite.file", "loginview.db"),
                 string(section, "mysql.host", "127.0.0.1"),
@@ -356,14 +365,13 @@ public record LoginViewModuleConfiguration(
         /**
          * 判断是否为覆盖模式（模块自建连接池）。
          * <p>
-         * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
-         * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
+         * 当 shared=false 时返回 true（模块独立连接，自建存储）；
+         * shared=true 时返回 false（使用本体共享数据源）。
          *
-         * @return {@code true} 表示模块应自建连接池（旧路径）
-         * @since 1.4.0
+         * @return {@code true} 表示模块应自建连接池
          */
         public boolean hasOverride() {
-            return "mysql".equalsIgnoreCase(mode);
+            return !shared;
         }
     }
 

@@ -25,12 +25,10 @@ public record AfkArea(
         int roundMinutes,
         MaxConfig max,
         PlayerLimitConfig player,
-        OverflowConfig overflowToMail,
         AfkRewardType type
     ) {
         public record MaxConfig(boolean enabled, int limit) {}
         public record PlayerLimitConfig(boolean enabled, int limit) {}
-        public record OverflowConfig(boolean enable) {}
     }
 
     public record MultiplierConfig(

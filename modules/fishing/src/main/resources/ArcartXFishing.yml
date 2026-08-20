@@ -7,20 +7,25 @@ config-version: 4              # 配置文件版本号
 debug: false
 
 # ─── 数据存储 ────────────────────────────────────────
-# mode: sqlite 或 mysql。
 storage:
-  mode: "sqlite"
-  # SQLite 数据库文件名（相对模块数据目录）。
-  sqlite:
-    file: "fishing.db"
-  # 连接池大小，SQLite 建议保持 1。
-  pool-size: 1
-  # ── MySQL 自建模式（不推荐） ──
+  # shared: true 共享存储模式（推荐，性能较好），数据库连接由本体统一管控。
+  # 各模块共用本体 config.yml（plugins/ArcartX-Suite/config.yml）的 storage 节配置。
+  shared: true
+  #
+  # —— shared: false 时，必须配置下方字段启动自建存储模式（不推荐） ——
+  # 存储模式：sqlite 或 mysql。
+  # mode: "sqlite"
+  #
+  # —— SQLite 存储 ——
+  # SQLite 文件名（相对模块数据目录）。
+  # sqlite:
+  #   file: "fishing.db"
+  # JDBC 连接池大小，SQLite 建议保持 1。
+  # pool-size: 1
+  #
+  # —— MySQL 存储 ——
   # 在此处填写 MySQL 连接信息 = 本模块「自建」独立 HikariCP 连接池，不复用本体连接。
-  # 推荐使用「共享模式」：保持 mode 为 sqlite，到本体 config.yml
-  # （plugins/ArcartX-Suite/config.yml）的 storage 节统一配置 MySQL，
-  # 所有模块将共享同一个连接池，用 table-prefix 隔离表，资源占用更低。
-  # 以下配置仅在 storage.mode 设为 mysql 时生效：
+  # 以下配置仅在 mode 设为 mysql 时生效：
   # mysql:
   #   host: "127.0.0.1"
   #   port: 3306
@@ -156,9 +161,6 @@ season:
       formula: "50 * global.level * (1 + 2.0 * math.pow(math.pow(global.level / 100, 2) * (3 - 2 * global.level / 100), 1.5))"
   start-date: "2026-01-01"
   end-date: "2030-12-31"
-  # 赛季结算奖励发放方式：ONLINE_DIRECT / MAIL / HYBRID
-  settlement:
-    dispatch-mode: "ONLINE_DIRECT"
 
 # ─── 水域定义 ────────────────────────────────────────
 # 指定地点: 玩家在指定坐标/区域内钓鱼

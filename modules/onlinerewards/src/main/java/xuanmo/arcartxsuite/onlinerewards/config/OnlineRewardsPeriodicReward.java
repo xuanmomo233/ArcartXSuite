@@ -12,6 +12,7 @@ public record OnlineRewardsPeriodicReward(
     String rewardText,
     List<String> commands,
     List<String> mailPresetIds,
-    boolean repeat
+    boolean repeat,
+    List<OnlineRewardsItemReward> itemRewards
 ) {
 }

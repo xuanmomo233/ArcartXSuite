@@ -117,9 +117,10 @@ public record AfkRewardConfiguration(
     public record PerformanceConfig(boolean pauseOnLowTps, double minTps) {}
 
     /**
-     * 存储子配置，支持 SQLite 与 MySQL。
+     * 存储子配置，支持共享存储与自建存储两种模式。
      *
-     * @param mode           存储模式（sqlite / mysql）
+     * @param shared         是否使用共享存储模式（true=共享本体数据源，false=自建连接池）
+     * @param mode           存储模式（sqlite / mysql，仅 shared=false 时生效）
      * @param sqliteFileName SQLite 数据库文件名
      * @param host           MySQL 主机地址
      * @param port           MySQL 端口
@@ -130,6 +131,7 @@ public record AfkRewardConfiguration(
      * @param poolSize       连接池大小
      */
     public record StorageConfig(
+        boolean shared,
         String mode, String sqliteFileName,
         String host, int port, String database,
         String username, String password,
@@ -160,14 +162,13 @@ public record AfkRewardConfiguration(
         /**
          * 判断是否为覆盖模式（模块自建连接池）。
          * <p>
-         * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
-         * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
+         * 当 shared=false 时返回 true（模块自建独立连接池）；
+         * shared=true 时返回 false（使用本体共享数据源）。
          *
-         * @return {@code true} 表示模块应自建连接池（旧路径）
-         * @since 1.4.0
+         * @return {@code true} 表示模块应自建连接池
          */
         public boolean hasOverride() {
-            return "mysql".equalsIgnoreCase(mode);
+            return !shared;
         }
     }
 
@@ -249,18 +250,26 @@ public record AfkRewardConfiguration(
 
         // storage
         ConfigurationSection storSec = yaml.getConfigurationSection("storage");
-        ConfigurationSection mysql = storSec != null ? storSec.getConfigurationSection("mysql") : null;
-        StorageConfig storage = new StorageConfig(
-            storSec != null ? storSec.getString("mode", "sqlite") : "sqlite",
-            storSec != null ? storSec.getString("sqlite.file", "afkreward.db") : "afkreward.db",
-            mysql != null ? mysql.getString("host", "127.0.0.1") : "127.0.0.1",
-            mysql != null ? mysql.getInt("port", 3306) : 3306,
-            mysql != null ? mysql.getString("database", "arcartxsuite") : "arcartxsuite",
-            mysql != null ? mysql.getString("username", "root") : "root",
-            mysql != null ? mysql.getString("password", "") : "",
-            mysql != null ? mysql.getString("table-prefix", "axs_afk_") : "axs_afk_",
-            storSec != null ? storSec.getInt("pool-size", 3) : 3
-        );
+        boolean shared = storSec != null && storSec.getBoolean("shared", true);
+        StorageConfig storage;
+        if (shared) {
+            storage = new StorageConfig(true, "sqlite", "afkreward.db",
+                "127.0.0.1", 3306, "arcartxsuite", "root", "",
+                "axs_afk_", 3);
+        } else {
+            ConfigurationSection mysql = storSec != null ? storSec.getConfigurationSection("mysql") : null;
+            storage = new StorageConfig(false,
+                storSec != null ? storSec.getString("mode", "sqlite") : "sqlite",
+                storSec != null ? storSec.getString("sqlite.file", "afkreward.db") : "afkreward.db",
+                mysql != null ? mysql.getString("host", "127.0.0.1") : "127.0.0.1",
+                mysql != null ? mysql.getInt("port", 3306) : 3306,
+                mysql != null ? mysql.getString("database", "arcartxsuite") : "arcartxsuite",
+                mysql != null ? mysql.getString("username", "root") : "root",
+                mysql != null ? mysql.getString("password", "") : "",
+                mysql != null ? mysql.getString("table-prefix", "axs_afk_") : "axs_afk_",
+                storSec != null ? storSec.getInt("pool-size", 3) : 3
+            );
+        }
 
         // ui
         ConfigurationSection uiSec = yaml.getConfigurationSection("ui");

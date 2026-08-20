@@ -33,11 +33,10 @@
 #   perfect_catches >= 50          — 完美捕获50次
 #   collection_count >= 20         — 图鉴收集20种鱼
 
-# 结算奖励发放方式（覆盖 config.yml 的 settlement.dispatch-mode）：
-#   ONLINE_DIRECT — 在线直接发放，离线玩家上线时补发（默认）
-#   MAIL          — 统一通过 mail 模块发放（需 mail 模块）
-#   HYBRID        — 在线直接发放，离线走 mail（需 mail 模块）
-dispatch-mode: ONLINE_DIRECT
+# 奖励发放说明：
+#   item 类型 — 统一通过 ItemRewardDispatcher 发放（放入背包→背包满转邮件→无邮件则掉落）
+#   mail 类型 — 通过 Mail 模块发送预设邮件
+#   离线玩家 — item/currency/command 暂存 pending 表，上线补发；mail 类型离线直接发邮件
 
 settlements:
   # 等级达标奖励

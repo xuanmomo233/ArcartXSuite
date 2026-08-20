@@ -3,18 +3,17 @@ import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.bridge.ItemBridgeAPI;
+import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
 import xuanmo.arcartxsuite.api.capability.mail.MailAttachmentSpec;
 import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
@@ -45,7 +44,7 @@ public final class BattlePassRewardDispatcher {
     private final @Nullable ItemSourceRegistry itemSourceRegistry;
     private final @Nullable CurrencyBridgeAPI currencyManager;
     private volatile Supplier<MailDispatchable> mailProvider;
-    private volatile boolean mailDeliveryMode = false;
+    private ItemRewardDispatcher itemRewardDispatcher;
 
     /**
      * 构造奖励发放器。
@@ -68,20 +67,21 @@ public final class BattlePassRewardDispatcher {
     }
 
     /**
-     * 设置奖励发放模式。
+     * 注入统一物品奖励发放器。
+     * <p>
+     * 注入后 item 类型奖励的物品发放（含背包满转邮件兜底）统一由 ItemRewardDispatcher 处理。
      *
-     * @param mailDeliveryMode {@code true} 表示统一邮箱发放模式（item 类型走 mail），
-     *                         {@code false} 表示直接发放模式（默认）
+     * @param itemRewardDispatcher 统一物品奖励发放器
      */
-    public void setMailDeliveryMode(boolean mailDeliveryMode) {
-        this.mailDeliveryMode = mailDeliveryMode;
+    public void setItemRewardDispatcher(ItemRewardDispatcher itemRewardDispatcher) {
+        this.itemRewardDispatcher = itemRewardDispatcher;
     }
 
     /**
      * 向在线玩家发放指定奖励。
      * <p>
-     * 直接发放模式：item 放入背包，currency 直接加，command 直接执行，mail 走邮箱。
-     * 邮箱发放模式：item 类型也通过 mail 发送（即使玩家在线），其他类型直接发放。
+     * item 类型通过 ItemRewardDispatcher 统一发放（放入背包→背包满转邮件→无邮件则掉落），
+     * currency 直接加，command 直接执行，mail 走邮箱。
      *
      * @param player 目标玩家
      * @param reward 要发放的奖励
@@ -91,13 +91,7 @@ public final class BattlePassRewardDispatcher {
         String type = reward.type();
         switch (type.toLowerCase()) {
             case "command" -> dispatchCommands(player, reward.commands());
-            case "item" -> {
-                if (mailDeliveryMode) {
-                    dispatchMail(player, player.getUniqueId(), player.getName(), reward);
-                } else {
-                    dispatchItem(player, reward);
-                }
-            }
+            case "item" -> dispatchItem(player, reward);
             case "currency" -> dispatchCurrency(player, reward);
             case "mail" -> dispatchMail(player, player.getUniqueId(), player.getName(), reward);
             default -> logger.warning("未知奖励类型 [" + type + "]: " + reward.rewardId());
@@ -109,9 +103,8 @@ public final class BattlePassRewardDispatcher {
      * <p>
      * 返回是否已成功发放：
      * <ul>
-     *   <li>mail 类型 / 邮箱模式下的 item 类型 → 通过 mail 发送，返回 true</li>
-     *   <li>currency / command 类型 → 无法离线发放，返回 false（需上线后补发）</li>
-     *   <li>直接模式下的 item 类型 → 无法离线发放，返回 false（需上线后补发）</li>
+     *   <li>mail 类型 → 通过 mail 发送，返回 true</li>
+     *   <li>currency / command / item 类型 → 无法离线发放，返回 false（需上线后补发）</li>
      * </ul>
      *
      * @param playerUuid 玩家 UUID
@@ -126,11 +119,7 @@ public final class BattlePassRewardDispatcher {
             dispatchMail(null, playerUuid, playerName, reward);
             return true;
         }
-        if ("item".equalsIgnoreCase(type) && mailDeliveryMode) {
-            dispatchMail(null, playerUuid, playerName, reward);
-            return true;
-        }
-        // currency / command / 直接模式 item → 需上线后补发
+        // currency / command / item → 需上线后补发
         return false;
     }
 
@@ -157,18 +146,24 @@ public final class BattlePassRewardDispatcher {
             logger.warning("物品奖励缺少 item 定义: " + reward.rewardId());
             return;
         }
-        ItemStack item = generateItem(itemDef);
+        if (itemSourceRegistry == null) {
+            logger.warning("物品来源注册表不可用，无法发放物品奖励: " + reward.rewardId());
+            return;
+        }
+        ItemStack item = itemSourceRegistry.generateItem(
+            itemDef.source(), itemDef.id(), itemDef.amount(), itemDef.nbt(), player);
         if (item == null) {
             logger.warning("物品奖励生成失败: " + reward.rewardId()
                 + " source=" + itemDef.source() + " id=" + itemDef.id());
             return;
         }
-        AxsScheduler.runTask(plugin, () -> {
-            Map<Integer, ItemStack> overflow = player.getInventory().addItem(item);
-            for (ItemStack left : overflow.values()) {
-                player.getWorld().dropItemNaturally(player.getLocation(), left);
-            }
-        });
+        ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder("battlepass")
+            .sourceDetail("reward:" + reward.rewardId())
+            .overflowMailSubject("战令奖励溢出物品")
+            .overflowMailBody("您的背包已满，战令奖励物品通过邮件补发。")
+            .overflowMailSenderName("战令")
+            .build();
+        itemRewardDispatcher.dispatchItem(player, item, options);
     }
 
     private void dispatchCurrency(Player player, BattlePassReward reward) {
@@ -197,50 +192,6 @@ public final class BattlePassRewardDispatcher {
                     + " reason=" + result.message());
             }
         });
-    }
-
-    @Nullable
-    private ItemStack generateItem(BattlePassItemDefinition def) {
-        if (itemSourceRegistry == null && !"minecraft".equalsIgnoreCase(def.source())) {
-            logger.warning("物品来源注册表不可用，无法生成外部物品: " + def.source() + ":" + def.id());
-            return null;
-        }
-        try {
-            String source = def.source().toLowerCase(java.util.Locale.ROOT);
-            ItemStack item = switch (source) {
-                case "mythic", "mythicmobs" -> itemSourceRegistry == null ? null
-                    : itemSourceRegistry.generateMythicItem(def.id(), def.amount());
-                case "neige", "neigeitems" -> itemSourceRegistry == null ? null
-                    : itemSourceRegistry.generateNeigeItem(def.id(), def.amount());
-                case "overture" -> itemSourceRegistry == null ? null
-                    : itemSourceRegistry.generateOvertureItem(def.id(), null, def.amount());
-                case "mmoitems", "mmo" -> {
-                    if (itemSourceRegistry == null) yield null;
-                    String[] parts = def.id().split(";", 2);
-                    yield parts.length == 2
-                        ? itemSourceRegistry.generateMmoItem(parts[0], parts[1], def.amount()) : null;
-                }
-                default -> {
-                    Material material = Material.matchMaterial(def.id(), true);
-                    ItemStack base = material == null ? null : new ItemStack(material, def.amount());
-                    yield applyItemNbt(base, def.nbt());
-                }
-            };
-            return item;
-        } catch (Exception e) {
-            logger.warning("物品生成异常: " + def.source() + ":" + def.id() + " | " + e.getMessage());
-            return null;
-        }
-    }
-
-    @Nullable
-    private static ItemStack applyItemNbt(@Nullable ItemStack item, @Nullable String nbt) {
-        if (item == null || nbt == null || nbt.isBlank()) return item;
-        try {
-            return Bukkit.getUnsafe().modifyItemStack(item.clone(), nbt);
-        } catch (Exception ignored) {
-            return item;
-        }
     }
 
     /**
@@ -273,22 +224,14 @@ public final class BattlePassRewardDispatcher {
         }
         List<String> presetIds = reward.mailPresets();
         if (presetIds != null && !presetIds.isEmpty()) {
-            // 预设模式
+            // 预设模式（异步发送，失败时降级为直接发放）
             AxsScheduler.runAsync(plugin, () -> {
-                for (String presetId : presetIds) {
-                    if (presetId == null || presetId.isBlank()) continue;
-                    try {
-                        MailSendResult result = mail.dispatchPreset(MailPresetRequest.builder(presetId, playerName)
-                            .sourceModule("battlepass")
-                            .build());
-                        if (!result.success()) {
-                            logger.warning("邮件预设发送失败: preset=" + presetId
-                                + " player=" + playerName + "，降级为直接发放");
-                            AxsScheduler.runTask(plugin, () -> fallbackFromMail(onlinePlayer, reward));
-                        }
-                    } catch (Exception e) {
-                        logger.warning("邮件预设发送异常: " + presetId + " | " + e.getMessage());
-                    }
+                boolean allSuccess = xuanmo.arcartxsuite.api.capability.mail.MailPresetHelper.dispatchPresets(
+                    mailProvider, playerName, presetIds, "battlepass", logger);
+                if (!allSuccess) {
+                    logger.warning("邮件预设发送存在失败，降级为直接发放: player=" + playerName
+                        + " reward=" + reward.rewardId());
+                    AxsScheduler.runTask(plugin, () -> fallbackFromMail(onlinePlayer, reward));
                 }
             });
             return;
@@ -303,7 +246,12 @@ public final class BattlePassRewardDispatcher {
             fallbackFromMail(onlinePlayer, reward);
             return;
         }
-        ItemStack item = generateItem(itemDef);
+        if (itemSourceRegistry == null) {
+            logger.warning("物品来源注册表不可用，无法生成 mail 类型奖励物品: " + reward.rewardId());
+            return;
+        }
+        ItemStack item = itemSourceRegistry.generateItem(
+            itemDef.source(), itemDef.id(), itemDef.amount(), itemDef.nbt(), onlinePlayer);
         if (item == null) {
             logger.warning("mail 类型奖励物品生成失败: " + reward.rewardId()
                 + " source=" + itemDef.source() + " id=" + itemDef.id());

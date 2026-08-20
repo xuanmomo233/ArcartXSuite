@@ -5,6 +5,14 @@
 # 关联文件: ArcartXMail.yml
 # 重载命令: /axs mail reload
 # 最小使用路径: preset.id + /axs mail preset send <presetId> <player|all-online|all-registered>
+#
+# item-attachments 物品来源（source）支持：
+#   minecraft  — 原版物品（id 为材质名，如 APPLE/DIAMOND）
+#   mythic     — MythicMobs 物品（id 为 MythicMobs 内部物品名）
+#   neige      — NeigeItems 物品（id 为 NeigeItems 物品 ID）
+#   overture   — Overture 物品（id 为 Overture 物品 ID）
+#   mmoitems   — MMOItems 物品（id 为 "类型ID;物品ID"，如 "SWORD;LEGENDARY_SWORD"）
+# 物品库未安装时该附件会被跳过并在日志打印警告，其余附件正常发放。
 
 preset:
   # 预设唯一 ID；建议与文件名一致。
@@ -19,22 +27,44 @@ preset:
   # 邮件默认过期天数。
   expires-after-days: 15
 
-  # 旧版兼容字段；等价于附带一份 money 货币附件。
-  vault-attachment: 0.0
-
-  # 也可以用 currency-attachments 显式定义多种货币附件。
+  # 货币附件；可定义多种货币附件。
   # currency-attachments:
   #   - currency: money
   #     amount: 88
   #     description: 新手金币礼包
 
   item-attachments:
-    - material: APPLE
+    - source: minecraft
+      id: APPLE
       amount: 8
       name: "§a欢迎苹果"
       lore:
         - "§7来自 AXS Mail 示例预设"
 
+  # 物品库附件示例（取消注释以启用；需服务器安装对应物品库插件）：
+  # item-attachments:
+  #   - source: minecraft
+  #     id: APPLE
+  #     amount: 8
+  #     name: "§a欢迎苹果"
+  #     lore:
+  #       - "§7来自 AXS Mail 示例预设"
+  #
+  #   - source: mythic
+  #     id: "MythicStarterSword"
+  #     amount: 1
+  #
+  #   - source: neige
+  #     id: "NeigeStarterArmor"
+  #     amount: 1
+  #
+  #   - source: overture
+  #     id: "OvertureStarterGem"
+  #     amount: 1
+  #
+  #   - source: mmoitems
+  #     id: "SWORD;LEGENDARY_SWORD"
+  #     amount: 1
 
   # 玩家领取邮件时额外执行的命令。
   claim-commands:
@@ -50,5 +80,5 @@ preset:
   cdks:
     - code: STARTER2026
       enabled: true
-      max-claims: 100
-      expires-after: 30d
+      max-claims: 100     #CDK 全局共享的最大领取次数（所有玩家共用，领完即止；每玩家仅可领一次）
+      expires-after: 30d  #CDK 本身的过期时长（从 CDK 首次创建时间算起，过期后任何人都无法领取）

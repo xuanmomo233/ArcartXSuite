@@ -88,11 +88,10 @@ public final class EventPacketModule extends AbstractAXSModule implements Module
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            // storage.mode 必须是 sqlite 或 mysql
-            ValidationRule.required("storage.mode", ValueType.STRING)
-                .withEnum(Set.of("sqlite", "mysql")),
-            // pool-size 范围 1-100
-            ValidationRule.required("storage.pool-size", ValueType.INT)
+            // storage.shared 必须是布尔值
+            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+            // pool-size 范围 1-100（仅在 shared=false 时需要）
+            ValidationRule.of("storage.pool-size", ValueType.INT)
                 .withRange(1, 100)
         );
     }

@@ -3,7 +3,6 @@ package xuanmo.arcartxsuite.title;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -73,11 +72,10 @@ public final class TitleModule extends AbstractAXSModule implements ModuleComman
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            // storage.mode 必须是 sqlite 或 mysql
-            ValidationRule.required("storage.mode", ValueType.STRING)
-                .withEnum(Set.of("sqlite", "mysql")),
-            // pool-size 范围 1-100
-            ValidationRule.required("storage.pool-size", ValueType.INT)
+            // storage.shared 必须是布尔值
+            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+            // pool-size 范围 1-100（仅在 shared: false 时生效）
+            ValidationRule.of("storage.pool-size", ValueType.INT)
                 .withRange(1, 100),
             // 过期清理周期必须为正
             ValidationRule.of("settings.expiration-cleanup-interval-ticks", ValueType.INT)

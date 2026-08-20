@@ -26,6 +26,7 @@ import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
@@ -37,9 +38,12 @@ import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
 import xuanmo.arcartxsuite.api.capability.SubtitlePlayable;
 import xuanmo.arcartxsuite.api.capability.EssentialsQueryable;
+import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
+import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.afkreward.config.AfkRewardConfiguration;
 import xuanmo.arcartxsuite.afkreward.model.AfkArea;
+import xuanmo.arcartxsuite.afkreward.model.AfkItemReward;
 import xuanmo.arcartxsuite.afkreward.model.AfkRewardType;
 import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository;
 import xuanmo.arcartxsuite.afkreward.storage.AfkRewardRepository.AreaStats;
@@ -78,6 +82,8 @@ public final class AfkRewardService {
     private final Supplier<SubtitlePlayable> subtitleProvider;
     private final Supplier<EssentialsQueryable> essentialsProvider;
     private Supplier<EventBusCapability> eventBusProvider;
+    private volatile ItemSourceRegistry itemSourceRegistry;
+    private ItemRewardDispatcher itemRewardDispatcher;
 
     // 在线玩家状态
     private final Map<UUID, PlayerAfkState> afkStates = new ConcurrentHashMap<>();
@@ -93,7 +99,6 @@ public final class AfkRewardService {
     private final Map<UUID, Integer> dailySeconds = new ConcurrentHashMap<>();
     private final Map<UUID, Deque<Long>> viewChanges = new ConcurrentHashMap<>();
     private final Set<UUID> antiAbuseNotified = ConcurrentHashMap.newKeySet();
-    private final Set<UUID> overflowNotified = ConcurrentHashMap.newKeySet();
     // 加载失败的玩家集合：这些玩家的缓存数据不可信，trySave/saveAreaStats 必须跳过，避免空数据覆盖 DB 真实数据
     private final Set<UUID> failedLoads = ConcurrentHashMap.newKeySet();
     private final Map<UUID, EndReason> pendingManualEndReasons = new ConcurrentHashMap<>();
@@ -138,6 +143,14 @@ public final class AfkRewardService {
     public void setHudBridge(PacketBridgeAPI packetBridge, String hudUiId) {
         this.packetBridge = packetBridge;
         this.hudUiId = hudUiId;
+    }
+
+    public void setItemSourceRegistry(ItemSourceRegistry itemSourceRegistry) {
+        this.itemSourceRegistry = itemSourceRegistry;
+    }
+
+    public void setItemRewardDispatcher(ItemRewardDispatcher itemRewardDispatcher) {
+        this.itemRewardDispatcher = itemRewardDispatcher;
     }
 
     public void start() {
@@ -185,7 +198,6 @@ public final class AfkRewardService {
         dailySeconds.clear();
         viewChanges.clear();
         antiAbuseNotified.clear();
-        overflowNotified.clear();
         failedLoads.clear();
         pendingManualEndReasons.clear();
     }
@@ -293,7 +305,6 @@ public final class AfkRewardService {
                 state.startTimeMillis = System.currentTimeMillis();
                 enterNotified.remove(uuid);
                 antiAbuseNotified.remove(uuid);
-                overflowNotified.remove(uuid);
         }
 
         // 权限检查
@@ -389,15 +400,15 @@ public final class AfkRewardService {
         }
 
         List<String> commands = rewardType.tierCommands().get(matchedTier);
-        if (commands == null || commands.isEmpty()) return;
+        List<AfkItemReward> itemRewards = rewardType.tierItemRewards().get(matchedTier);
+        if ((commands == null || commands.isEmpty()) && (itemRewards == null || itemRewards.isEmpty())) return;
 
-        boolean mailed = tryOverflowMail(player, area, rewardType);
-        if (!mailed) {
-            for (String cmd : commands) {
-                String parsed = replaceRewardPlaceholders(cmd, player, afkStates.get(uuid), area);
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), parsed);
-            }
+        for (String cmd : commands != null ? commands : List.<String>of()) {
+            String parsed = replaceRewardPlaceholders(cmd, player, afkStates.get(uuid), area);
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), parsed);
         }
+        // 发放物品奖励（统一通过 ItemRewardDispatcher：背包满转邮件，无邮件则掉落）
+        dispatchItemRewards(player, itemRewards);
 
         // 更新统计
         stats = new PlayerStats(
@@ -414,7 +425,7 @@ public final class AfkRewardService {
         // 更新区域统计
         updateAreaTime(uuid, area.name(), 0);
         auditLogger.log(player, uuid, area.name(), "REGION",
-            mailed ? matchedTier + "(mail)" : matchedTier, 1,
+            matchedTier, 1,
             computeMultiplier(player, afkStates.get(uuid), area));
 
         // 触发联动
@@ -611,36 +622,41 @@ public final class AfkRewardService {
             .replace("%axsafkreward_multiplier%", value);
     }
 
-    private boolean tryOverflowMail(Player player, AfkArea area, AfkRewardType rewardType) {
-        if (!area.reward().overflowToMail().enable()
-            || rewardType.fullInventoryMailPresets() == null
-            || rewardType.fullInventoryMailPresets().isEmpty()
-            || player.getInventory().firstEmpty() != -1) {
-            return false;
+    /**
+     * 发放物品奖励：通过 ItemSourceRegistry 生成物品后统一调用 ItemRewardDispatcher 发放。
+     * <p>
+     * 统一行为：放入背包 → 背包满时溢出物品通过 Mail 模块发邮件补发 →
+     * Mail 模块不可用时溢出物品掉落地面。由宿主 ItemRewardDispatcher 保证全模块一致。
+     *
+     * @param player  在线玩家
+     * @param rewards 物品奖励列表
+     */
+    private void dispatchItemRewards(Player player, List<AfkItemReward> rewards) {
+        if (rewards == null || rewards.isEmpty()) return;
+        if (itemSourceRegistry == null) {
+            logger.warning("挂机奖励物品发放跳过：ItemSourceRegistry 未注入");
+            return;
         }
-        MailDispatchable mail = mailProvider != null ? mailProvider.get() : null;
-        if (mail == null) {
-            return false;
+        if (itemRewardDispatcher == null) {
+            logger.warning("挂机奖励物品发放跳过：ItemRewardDispatcher 未注入");
+            return;
         }
-        boolean anySuccess = false;
-        for (String presetId : rewardType.fullInventoryMailPresets()) {
-            if (presetId == null || presetId.isBlank()) continue;
-            MailSendResult result = mail.dispatchPreset(MailPresetRequest.builder(presetId, player.getName())
-                .sourceModule("afkreward")
-                .sourceDetail("overflow:" + area.id())
-                .build());
-            if (result.success()) {
-                anySuccess = true;
+        for (AfkItemReward reward : rewards) {
+            ItemStack item = itemSourceRegistry.generateItem(
+                reward.source(), reward.id(), reward.amount(), reward.nbt(), player);
+            if (item == null) {
+                logger.warning("挂机奖励物品生成失败: source=" + reward.source()
+                    + " id=" + reward.id() + " amount=" + reward.amount());
+                continue;
             }
+            ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder("afkreward")
+                .sourceDetail("item-reward")
+                .overflowMailSubject("挂机奖励溢出物品")
+                .overflowMailBody("你的背包已满，挂机奖励物品通过邮件补发。")
+                .overflowMailSenderName("挂机奖励")
+                .build();
+            itemRewardDispatcher.dispatchItem(player, item, options);
         }
-        if (!anySuccess) {
-            return false;
-        }
-        if (overflowNotified.add(player.getUniqueId())) {
-            String msg = messages != null ? messages.get("hints.overflow-mail") : null;
-            if (msg != null) player.sendMessage(msg);
-        }
-        return true;
     }
 
     private int countPlayersInArea(String areaName) {
@@ -894,7 +910,6 @@ public final class AfkRewardService {
 
         afkStates.remove(uuid);
         enterNotified.remove(uuid);
-        overflowNotified.remove(uuid);
         pendingManualEndReasons.remove(uuid);
 
         if (!silent) {
@@ -935,7 +950,8 @@ public final class AfkRewardService {
             matchedTier = tierKeys.get(tierKeys.size() - 1);
         }
         List<String> commands = rewardType.tierCommands().get(matchedTier);
-        if (commands == null || commands.isEmpty()) return;
+        List<AfkItemReward> itemRewards = rewardType.tierItemRewards().get(matchedTier);
+        if ((commands == null || commands.isEmpty()) && (itemRewards == null || itemRewards.isEmpty())) return;
 
         UUID uuid = player.getUniqueId();
         String today = LocalDate.now().format(DATE_FMT);
@@ -945,21 +961,18 @@ public final class AfkRewardService {
         }
 
         int actualTimes = 0;
-        boolean mailedAny = false;
         for (int i = 0; i < times; i++) {
             if (!passesAntiAbuse(player, state, area, true)) break;
             // 每日上限检查
             if (area.reward().max().enabled() && stats.todayCount() >= area.reward().max().limit()) {
                 if (!player.hasPermission("axs.afkreward.not.reward.limit")) break;
             }
-            boolean mailed = tryOverflowMail(player, area, rewardType);
-            mailedAny |= mailed;
-            if (!mailed) {
-                for (String cmd : commands) {
-                    String parsed = replaceRewardPlaceholders(cmd, player, state, area);
-                    Bukkit.dispatchCommand(Bukkit.getConsoleSender(), parsed);
-                }
+            for (String cmd : commands != null ? commands : List.<String>of()) {
+                String parsed = replaceRewardPlaceholders(cmd, player, state, area);
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), parsed);
             }
+            // 发放物品奖励（统一通过 ItemRewardDispatcher：背包满转邮件，无邮件则掉落）
+            dispatchItemRewards(player, itemRewards);
             actualTimes++;
             if (state != null) state.sessionRewards++;
             stats = new PlayerStats(stats.playerName(), stats.todayDate(),
@@ -969,7 +982,7 @@ public final class AfkRewardService {
             statsCache.put(uuid, stats);
             trySave(uuid, stats);
             auditLogger.log(player, uuid, area.name(), "MANUAL",
-                mailedAny ? matchedTier + "(mail)" : matchedTier, actualTimes,
+                matchedTier, actualTimes,
                 computeMultiplier(player, state, area));
         }
         String msg = messages != null ? messages.get("hints.reward", area.name(), String.valueOf(area.reward().roundMinutes())) : null;
@@ -1202,7 +1215,6 @@ public final class AfkRewardService {
         afkStates.remove(playerUuid);
         enterNotified.remove(playerUuid);
         lastCombat.remove(playerUuid);
-        overflowNotified.remove(playerUuid);
         pendingManualEndReasons.remove(playerUuid);
         viewChanges.remove(playerUuid);
         statsCache.remove(playerUuid);
@@ -1309,25 +1321,8 @@ public final class AfkRewardService {
     }
 
     private void dispatchMail(Player player, List<String> presetIds) {
-        if (presetIds == null || presetIds.isEmpty()) return;
-        MailDispatchable md = mailProvider != null ? mailProvider.get() : null;
-        if (md == null) {
-            logger.fine("Mail 模块不可用，跳过邮件派发");
-            return;
-        }
-        for (String presetId : presetIds) {
-            if (presetId == null || presetId.isBlank()) continue;
-            try {
-                MailSendResult result = md.dispatchPreset(MailPresetRequest.builder(presetId, player.getName())
-                    .sourceModule("afkreward")
-                    .build());
-                if (config.debug()) {
-                    logger.info("邮件派发 -> preset=" + presetId + " player=" + player.getName() + " success=" + result.success());
-                }
-            } catch (Exception e) {
-                logger.warning("邮件派发失败 " + presetId + ": " + e.getMessage());
-            }
-        }
+        xuanmo.arcartxsuite.api.capability.mail.MailPresetHelper.dispatchPresets(
+            mailProvider, player.getName(), presetIds, "afkreward", logger);
     }
 
     public static String formatTime(int totalSeconds) {

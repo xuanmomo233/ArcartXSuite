@@ -25,6 +25,7 @@ import xuanmo.arcartxsuite.api.crossserver.CrossServerChannelConfigs;
  * @param playerSend      玩家发送配置
  * @param moderation      审核配置
  * @param retention       保留策略配置
+ * @param cdk             CDK 兑换安全配置
  * @param presetsDirectory 预设邮件模板目录名
  */
 public record MailModuleConfiguration(
@@ -35,6 +36,7 @@ public record MailModuleConfiguration(
     MailPlayerSendConfiguration playerSend,
     MailModerationConfiguration moderation,
     MailRetentionConfiguration retention,
+    MailCdkConfiguration cdk,
     String presetsDirectory
 ) {
 
@@ -48,18 +50,7 @@ public record MailModuleConfiguration(
     public static MailModuleConfiguration load(FileConfiguration configuration, Logger logger) {
         boolean debug = configuration.getBoolean("settings.debug", false);
 
-        ConfigurationSection storageSection = configuration.getConfigurationSection("storage");
-        MailStorageConfiguration storage = new MailStorageConfiguration(
-            storageSection == null ? "sqlite" : storageSection.getString("mode", "sqlite"),
-            storageSection == null ? "mail.db" : string(storageSection.getString("sqlite.file", "mail.db")),
-            storageSection == null ? "127.0.0.1" : string(storageSection.getString("mysql.host", "127.0.0.1")),
-            storageSection == null ? 3306 : Math.max(1, storageSection.getInt("mysql.port", 3306)),
-            storageSection == null ? "arcartxsuite" : string(storageSection.getString("mysql.database", "arcartxsuite")),
-            storageSection == null ? "root" : string(storageSection.getString("mysql.username", "root")),
-            storageSection == null ? "" : string(storageSection.getString("mysql.password", "")),
-            storageSection == null ? "axs_mail_" : string(storageSection.getString("mysql.table-prefix", "axs_mail_")),
-            storageSection == null ? 4 : Math.max(1, storageSection.getInt("pool-size", 4))
-        );
+        MailStorageConfiguration storage = MailStorageConfiguration.load(configuration.getConfigurationSection("storage"));
 
         CrossServerChannelConfig crossServer = CrossServerChannelConfigs.fromSection(
             configuration.getConfigurationSection("cross-server")
@@ -128,7 +119,15 @@ public record MailModuleConfiguration(
         ConfigurationSection presetsSection = configuration.getConfigurationSection("presets");
         String presetsDirectory = presetsSection == null ? "presets" : string(presetsSection.getString("directory", "presets"));
 
-        return new MailModuleConfiguration(debug, storage, crossServer, ui, playerSend, moderation, retention, presetsDirectory);
+        ConfigurationSection cdkSection = configuration.getConfigurationSection("cdk");
+        MailCdkConfiguration cdk = new MailCdkConfiguration(
+            cdkSection != null && cdkSection.getBoolean("require-permission", false),
+            cdkSection == null ? 0 : Math.max(0, cdkSection.getInt("cooldown-seconds", 0)),
+            cdkSection == null ? 0 : Math.max(0, cdkSection.getInt("max-fail-attempts", 0)),
+            cdkSection == null ? 5 : Math.max(1, cdkSection.getInt("lockout-minutes", 5))
+        );
+
+        return new MailModuleConfiguration(debug, storage, crossServer, ui, playerSend, moderation, retention, cdk, presetsDirectory);
     }
 
     private static String string(String value) {

@@ -13,7 +13,6 @@ import xuanmo.arcartxsuite.api.AbstractAXSModule;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
-import java.util.Set;
 import xuanmo.arcartxsuite.api.ClientInitializedHandler;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
@@ -87,11 +86,10 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            // storage.mode 必须是 sqlite 或 mysql
-            ValidationRule.required("storage.mode", ValueType.STRING)
-                .withEnum(Set.of("sqlite", "mysql")),
-            // pool-size 范围 1-100
-            ValidationRule.required("storage.pool-size", ValueType.INT)
+            // storage.shared 必须是布尔值
+            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+            // pool-size 范围 1-100（仅在 shared: false 时生效）
+            ValidationRule.of("storage.pool-size", ValueType.INT)
                 .withRange(1, 100),
             // 离线储蓄上限
             ValidationRule.of("offline-savings.max-minutes", ValueType.INT)
@@ -187,6 +185,8 @@ public final class OnlineRewardsModule extends AbstractAXSModule implements Modu
             },
             crossServer
         );
+        service.setItemSourceRegistry(itemSourceRegistry);
+        service.setItemRewardDispatcher(itemRewardDispatcher);
         service.start();
 
         registerCapability(OnlineRewardsQueryable.class, new OnlineRewardsQueryable() {

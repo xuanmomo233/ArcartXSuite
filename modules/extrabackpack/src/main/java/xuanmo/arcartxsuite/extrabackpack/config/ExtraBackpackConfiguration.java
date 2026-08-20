@@ -44,18 +44,7 @@ public record ExtraBackpackConfiguration(
             uiSection == null || uiSection.getBoolean("register-ui-on-enable", true),
             uiSection != null && uiSection.getBoolean("overwrite-ui-files", false)
         );
-        ConfigurationSection storageSection = configuration.getConfigurationSection("storage");
-        StorageConfiguration storage = new StorageConfiguration(
-            storageSection == null ? "sqlite" : readString(storageSection, "mode", "sqlite"),
-            storageSection == null ? "extrabackpack.db" : readString(storageSection, "sqlite.file", "extrabackpack.db"),
-            storageSection == null ? "127.0.0.1" : readString(storageSection, "mysql.host", "127.0.0.1"),
-            storageSection == null ? 3306 : Math.max(1, storageSection.getInt("mysql.port", 3306)),
-            storageSection == null ? "arcartxsuite" : readString(storageSection, "mysql.database", "arcartxsuite"),
-            storageSection == null ? "root" : readString(storageSection, "mysql.username", "root"),
-            storageSection == null ? "" : readString(storageSection, "mysql.password", ""),
-            storageSection == null ? "axs_extrabackpack_" : readString(storageSection, "mysql.table-prefix", "axs_extrabackpack_"),
-            storageSection == null ? 4 : Math.max(1, storageSection.getInt("pool-size", 4))
-        );
+        StorageConfiguration storage = StorageConfiguration.load(configuration.getConfigurationSection("storage"));
         ExtraBackpackConfig extraBackpack =
             loadExtraBackpack(configuration.getConfigurationSection("extra-backpack"), logger);
         return new ExtraBackpackConfiguration(debug, ui, storage, extraBackpack);
@@ -166,7 +155,8 @@ public record ExtraBackpackConfiguration(
      * 通过 {@link #toDescriptor()} 转换为 {@link xuanmo.arcartxsuite.api.storage.StorageDescriptor}，
      * 供 {@link xuanmo.arcartxsuite.extrabackpack.storage.JdbcExtraBackpackRepository} 构造连接池使用。
      *
-     * @param mode           存储模式（sqlite / mysql）
+     * @param shared          是否共享存储模式（true=共享本体数据源，false=模块自建连接池）
+     * @param mode           存储模式（sqlite / mysql），仅在 shared=false 时有意义
      * @param sqliteFileName SQLite 模式下的数据库文件名
      * @param host           MySQL 主机地址
      * @param port           MySQL 端口
@@ -177,6 +167,7 @@ public record ExtraBackpackConfiguration(
      * @param poolSize       连接池大小
      */
     public record StorageConfiguration(
+        boolean shared,
         String mode,
         String sqliteFileName,
         String host,
@@ -208,14 +199,44 @@ public record ExtraBackpackConfiguration(
         /**
          * 判断是否为覆盖模式（模块自建连接池）。
          * <p>
-         * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
-         * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
+         * 当 shared=false 时返回 true（模块独立连接，自建存储模式）；
+         * shared=true 时返回 false（使用本体共享数据源）。
          *
-         * @return {@code true} 表示模块应自建连接池（旧路径）
+         * @return {@code true} 表示模块应自建连接池
          * @since 1.4.0
          */
         public boolean hasOverride() {
-            return "mysql".equalsIgnoreCase(mode);
+            return !shared;
+        }
+
+        /**
+         * 从配置节加载存储配置。
+         * <p>
+         * shared=true（默认）时使用默认值，不读 mode/sqlite/mysql；
+         * shared=false 时读取自建存储模式的全部字段。
+         *
+         * @param section storage 配置节，为 {@code null} 时按共享模式处理
+         * @return 解析后的存储配置实例
+         */
+        public static StorageConfiguration load(org.bukkit.configuration.ConfigurationSection section) {
+            if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
+            boolean shared = section.getBoolean("shared", true);
+            if (shared) {
+                return new StorageConfiguration(true, "sqlite", "extrabackpack.db",
+                    "127.0.0.1", 3306, "arcartxsuite", "root", "",
+                    "axs_extrabackpack_", 4);
+            }
+            return new StorageConfiguration(false,
+                readString(section, "mode", "sqlite"),
+                readString(section, "sqlite.file", "extrabackpack.db"),
+                readString(section, "mysql.host", "127.0.0.1"),
+                Math.max(1, section.getInt("mysql.port", 3306)),
+                readString(section, "mysql.database", "arcartxsuite"),
+                readString(section, "mysql.username", "root"),
+                readString(section, "mysql.password", ""),
+                readString(section, "mysql.table-prefix", "axs_extrabackpack_"),
+                Math.max(1, section.getInt("pool-size", 4))
+            );
         }
     }
 

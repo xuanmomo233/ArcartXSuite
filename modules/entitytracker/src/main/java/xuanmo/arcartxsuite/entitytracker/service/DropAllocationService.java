@@ -34,16 +34,19 @@ public final class DropAllocationService {
     private final PlayerDkpDao dkpDao;
     private final MessageProvider messages;
     private final Random random = new Random();
+    private final xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher;
 
     public DropAllocationService(JavaPlugin plugin,
         Logger logger, DropAllocationSettings settings, DataSource dataSource,
-        MessageProvider messages) {
+        MessageProvider messages,
+        xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher) {
         this.plugin = plugin;
         this.logger = logger;
         this.settings = settings;
         this.allocationDao = new DropAllocationRecordDao(dataSource, plugin);
         this.dkpDao = new PlayerDkpDao(dataSource, this.logger);
         this.messages = messages;
+        this.itemRewardDispatcher = itemRewardDispatcher;
     }
 
     public void allocateAfterKill(
@@ -215,9 +218,14 @@ public final class DropAllocationService {
         if (stack.getType().isAir()) {
             return;
         }
-        Map<Integer, ItemStack> overflow = player.getInventory().addItem(stack);
-        overflow.values().forEach(leftover ->
-            player.getWorld().dropItemNaturally(player.getLocation(), leftover));
+        xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions options =
+            xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions.builder("entitytracker")
+                .sourceDetail("drop-allocation:" + drop.itemId())
+                .overflowMailSubject("Boss 掉落物品溢出")
+                .overflowMailBody("您的背包已满，Boss 掉落物品通过邮件补发。")
+                .overflowMailSenderName("Boss 追踪")
+                .build();
+        itemRewardDispatcher.dispatchItem(player, stack, options);
     }
 
     private void broadcastAllocation(String mode, String winnerName, String itemName, int score) {

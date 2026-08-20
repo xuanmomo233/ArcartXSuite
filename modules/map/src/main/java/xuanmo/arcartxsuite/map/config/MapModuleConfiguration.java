@@ -95,18 +95,7 @@ public record MapModuleConfiguration(
             joinSection == null ? 20L : Math.max(0L, joinSection.getLong("show-hud-delay-ticks", 20L))
         );
 
-        ConfigurationSection storageSection = configuration.getConfigurationSection("storage");
-        StorageConfiguration storage = new StorageConfiguration(
-            storageSection == null ? "sqlite" : string(storageSection.getString("mode", "sqlite"), "sqlite"),
-            storageSection == null ? "map.db" : string(storageSection.getString("sqlite.file", "map.db"), "map.db"),
-            storageSection == null ? "127.0.0.1" : string(storageSection.getString("mysql.host", "127.0.0.1"), "127.0.0.1"),
-            storageSection == null ? 3306 : Math.max(1, storageSection.getInt("mysql.port", 3306)),
-            storageSection == null ? "arcartxsuite" : string(storageSection.getString("mysql.database", "arcartxsuite"), "arcartxsuite"),
-            storageSection == null ? "root" : string(storageSection.getString("mysql.username", "root"), "root"),
-            storageSection == null ? "" : string(storageSection.getString("mysql.password", ""), ""),
-            storageSection == null ? "axs_map_" : string(storageSection.getString("mysql.table-prefix", "axs_map_"), "axs_map_"),
-            storageSection == null ? 4 : Math.max(1, storageSection.getInt("pool-size", 4))
-        );
+        StorageConfiguration storage = StorageConfiguration.load(configuration.getConfigurationSection("storage"));
 
         ConfigurationSection navigationSection = configuration.getConfigurationSection("navigation");
         ConfigurationSection markerSection = navigationSection == null ? null : navigationSection.getConfigurationSection("marker");
@@ -519,7 +508,8 @@ public record MapModuleConfiguration(
     /**
      * 存储后端配置。
      *
-     * @param mode          存储模式（sqlite / mysql）
+     * @param shared          是否共享存储模式（true=共享本体数据源，false=模块自建连接池）
+     * @param mode          存储模式（sqlite / mysql），仅在 shared=false 时有意义
      * @param sqliteFileName SQLite 文件名
      * @param host          MySQL 主机地址
      * @param port          MySQL 端口
@@ -530,6 +520,7 @@ public record MapModuleConfiguration(
      * @param poolSize      连接池大小
      */
     public record StorageConfiguration(
+        boolean shared,
         String mode,
         String sqliteFileName,
         String host,
@@ -555,14 +546,44 @@ public record MapModuleConfiguration(
         /**
          * 判断是否为覆盖模式（模块自建连接池）。
          * <p>
-         * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
-         * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
+         * 当 shared=false 时返回 true（模块独立连接，自建存储模式）；
+         * shared=true 时返回 false（使用本体共享数据源）。
          *
-         * @return {@code true} 表示模块应自建连接池（旧路径）
+         * @return {@code true} 表示模块应自建连接池
          * @since 1.4.0
          */
         public boolean hasOverride() {
-            return "mysql".equalsIgnoreCase(mode);
+            return !shared;
+        }
+
+        /**
+         * 从配置节加载存储配置。
+         * <p>
+         * shared=true（默认）时使用默认值，不读 mode/sqlite/mysql；
+         * shared=false 时读取自建存储模式的全部字段。
+         *
+         * @param section storage 配置节，为 {@code null} 时按共享模式处理
+         * @return 解析后的存储配置实例
+         */
+        public static StorageConfiguration load(org.bukkit.configuration.ConfigurationSection section) {
+            if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
+            boolean shared = section.getBoolean("shared", true);
+            if (shared) {
+                return new StorageConfiguration(true, "sqlite", "map.db",
+                    "127.0.0.1", 3306, "arcartxsuite", "root", "",
+                    "axs_map_", 4);
+            }
+            return new StorageConfiguration(false,
+                string(section.getString("mode"), "sqlite"),
+                string(section.getString("sqlite.file"), "map.db"),
+                string(section.getString("mysql.host"), "127.0.0.1"),
+                Math.max(1, section.getInt("mysql.port", 3306)),
+                string(section.getString("mysql.database"), "arcartxsuite"),
+                string(section.getString("mysql.username"), "root"),
+                string(section.getString("mysql.password"), ""),
+                string(section.getString("mysql.table-prefix"), "axs_map_"),
+                Math.max(1, section.getInt("pool-size", 4))
+            );
         }
     }
 

@@ -5,7 +5,6 @@ import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
@@ -159,9 +158,7 @@ public final class EssentialsModule extends AbstractAXSModule implements ModuleC
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            ValidationRule.required("storage.mode", ValueType.STRING)
-                .withEnum(Set.of("sqlite", "mysql")),
-            ValidationRule.required("storage.sqlite.file", ValueType.STRING)
+            ValidationRule.required("storage.shared", ValueType.BOOLEAN)
         );
     }
 

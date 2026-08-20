@@ -46,9 +46,6 @@ reward:
   player:
     enable: true    # 是否启用人数上限
     limit: 30       # 最大同时挂机人数
-  # 背包满时是否改发 full-inventory-mail
-  overflow-to-mail:
-    enable: false   # 是否启用背包满时转邮件
 
   # 奖励说明
   describe: "泡澡的人越多，获取的铜币和经验越多"
@@ -56,9 +53,6 @@ reward:
   mail:
     presets:
       - "afk_reward_mail"
-  # 背包满时使用的邮件预设，留空则继续执行命令
-  full-inventory-mail:
-    presets: []
 
   # 奖励档位从高到低排列
   # 各档位对应权限 axs.afkreward.start.<id>.<档位名>，玩家拥有对应权限则执行该档位命令
@@ -76,6 +70,24 @@ reward:
   common:  # 普通档位（无权限要求，默认奖励）
     - "addbalance %player_name% 铜币 %axsafkreward_players%*20+%player_level%/10+100"
     - "cmi exp %player_name% add %axsafkreward_players%*%player_level%/10+%player_level%/4"
+
+  # ── 物品奖励（可选，通过 ItemSourceRegistry 直接发放物品） ──
+  # 与上方命令档位对应，背包满时优先转邮件（需 Mail 模块），否则掉落地面。
+  # source 可选：minecraft / mythic / neige / overture / mmoitems
+  # mmoitems 的 id 格式为 "类型ID;物品ID"（如 "SWORD;EPEX_SWORD"）
+  # nbt 仅对 minecraft 源有效，为 SNBT 字符串，可省略。
+  # item-rewards:
+  #   vip3:
+  #     - source: "minecraft"
+  #       id: "DIAMOND"
+  #       amount: 3
+  #     - source: "mythic"
+  #       id: "legendary_gem"
+  #       amount: 1
+  #   common:
+  #     - source: "minecraft"
+  #       id: "IRON_INGOT"
+  #       amount: 5
 
 # 本区域倍率配置
 multiplier:

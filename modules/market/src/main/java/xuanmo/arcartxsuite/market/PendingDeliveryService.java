@@ -3,7 +3,6 @@ import xuanmo.arcartxsuite.api.util.AxsScheduler;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
@@ -17,6 +16,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import xuanmo.arcartxsuite.api.currency.CurrencyBridgeAPI;
 import xuanmo.arcartxsuite.api.currency.CurrencyTransactionResult;
+import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.market.auction.AuctionItemSerializer;
 import xuanmo.arcartxsuite.market.storage.MarketRepository;
 import xuanmo.arcartxsuite.market.storage.PendingDelivery;
@@ -24,7 +24,9 @@ import xuanmo.arcartxsuite.market.storage.PendingDelivery;
 /**
  * 待发放队列消费者：玩家上线时补发其离线期间（或背包曾满时）累积的物品 / 货币。
  * <p>
- * 与拍卖结算的"安全发放"配合，保证 Market 交易在任何在线/离线/背包状态下都不丢钱、不丢物品。
+ * 物品补发统一通过 {@link ItemRewardDispatcher}（放入背包→背包满转邮件→无邮件则掉落），
+ * 背包仍满时保留记录待下次补发。与拍卖结算的"安全发放"配合，
+ * 保证 Market 交易在任何在线/离线/背包状态下都不丢钱、不丢物品。
  */
 public class PendingDeliveryService implements Listener {
 
@@ -32,15 +34,19 @@ public class PendingDeliveryService implements Listener {
     private final MarketRepository repository;
     private final CurrencyBridgeAPI currencyManager;
     private final AuctionItemSerializer itemSerializer;
+    private final ItemRewardDispatcher itemRewardDispatcher;
     private final Logger logger;
 
     public PendingDeliveryService(JavaPlugin plugin, MarketRepository repository,
                                   CurrencyBridgeAPI currencyManager,
-                                  AuctionItemSerializer itemSerializer, Logger logger) {
+                                  AuctionItemSerializer itemSerializer,
+                                  ItemRewardDispatcher itemRewardDispatcher,
+                                  Logger logger) {
         this.plugin = plugin;
         this.repository = repository;
         this.currencyManager = currencyManager;
         this.itemSerializer = itemSerializer;
+        this.itemRewardDispatcher = itemRewardDispatcher;
         this.logger = logger;
     }
 
@@ -73,9 +79,17 @@ public class PendingDeliveryService implements Listener {
                         logger.warning("待发放物品反序列化失败，已丢弃 id=" + delivery.id());
                         continue;
                     }
-                    Map<Integer, ItemStack> overflow = player.getInventory().addItem(item);
-                    if (!overflow.isEmpty()) {
-                        // 背包仍装不下：保留记录，待下次上线 / 腾空后再补发
+                    xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions options =
+                        xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions.builder("market")
+                            .sourceDetail("pending-delivery:" + delivery.id())
+                            .overflowMailSubject("市场待发放物品")
+                            .overflowMailBody("您的背包已满，市场待发放物品通过邮件补发。")
+                            .overflowMailSenderName("全球市场")
+                            .build();
+                    xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchResult result =
+                        itemRewardDispatcher.dispatchItem(player, item, options);
+                    if (!result.success()) {
+                        // 发放失败（含邮件失败且掉落失败）：保留记录待下次补发
                         continue;
                     }
                     deliveredItems++;

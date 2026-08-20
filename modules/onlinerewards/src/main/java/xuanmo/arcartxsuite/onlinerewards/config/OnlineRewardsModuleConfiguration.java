@@ -86,18 +86,8 @@ public record OnlineRewardsModuleConfiguration(
             configuration.getBoolean("ui.overwrite-ui-files", false)
         );
 
-        OnlineRewardsStorageConfiguration storage = new OnlineRewardsStorageConfiguration(
-            configuration.getString("storage.mode", "sqlite"),
-            readString(configuration, "storage.sqlite.file", "online-rewards.db"),
-            readString(configuration, "storage.mysql.host", "127.0.0.1"),
-            Math.max(1, configuration.getInt("storage.mysql.port", 3306)),
-            readString(configuration, "storage.mysql.database", "arcartxsuite"),
-            readString(configuration, "storage.mysql.username", "root"),
-            readString(configuration, "storage.mysql.password", ""),
-            readString(configuration, "storage.mysql.table-prefix", "axs_onlinerewards_"),
-            // 优先读 storage.pool-size（与配置文件和校验规则一致），向后兼容 storage.mysql.pool-size
-            Math.max(1, configuration.getInt("storage.pool-size",
-                configuration.getInt("storage.mysql.pool-size", 2)))
+        OnlineRewardsStorageConfiguration storage = OnlineRewardsStorageConfiguration.load(
+            configuration.getConfigurationSection("storage")
         );
 
         List<Map<?, ?>> rewardsList = (rewardsFile != null && rewardsFile.isFile())
@@ -110,7 +100,8 @@ public record OnlineRewardsModuleConfiguration(
             String rewardText = nullToDefault(entry.get("rewardText"), "");
             List<String> commands = toStringList(entry.get("commands"));
             List<String> mailPresetIds = readMailPresetIds(entry);
-            rewards.add(new OnlineRewardDefinition(Math.max(0, minutes), name, rewardText, commands, mailPresetIds));
+            List<OnlineRewardsItemReward> itemRewards = readItemRewards(entry);
+            rewards.add(new OnlineRewardDefinition(Math.max(0, minutes), name, rewardText, commands, mailPresetIds, itemRewards));
         }
 
         FileConfiguration signInCfg = (signInFile != null && signInFile.isFile())
@@ -153,6 +144,7 @@ public record OnlineRewardsModuleConfiguration(
             toStringList(external.get("base-commands")),
             readMailPresetIdsFromSection(external, "base"),
             nullToDefault(external.getString("base-rewardText"), ""),
+            readItemRewardsFromSection(external, "base"),
             loadMakeupFromSection(external),
             loadMilestoneRewards(external.getMapList("streak-rewards"), "days"),
             loadMilestoneRewards(external.getMapList("total-rewards"), "days"),
@@ -187,7 +179,8 @@ public record OnlineRewardsModuleConfiguration(
             String rewardText = nullToDefault(value.get("rewardText"), "");
             List<String> commands = toStringList(value.get("commands"));
             List<String> mailPresetIds = readMailPresetIds(value);
-            rewards.add(new OnlineRewardsPermissionBonusReward(permission, priority, rewardText, commands, mailPresetIds));
+            List<OnlineRewardsItemReward> itemRewards = readItemRewards(value);
+            rewards.add(new OnlineRewardsPermissionBonusReward(permission, priority, rewardText, commands, mailPresetIds, itemRewards));
         }
         return List.copyOf(rewards);
     }
@@ -201,7 +194,8 @@ public record OnlineRewardsModuleConfiguration(
             String rewardText = nullToDefault(value.get("rewardText"), "");
             List<String> commands = toStringList(value.get("commands"));
             List<String> mailPresetIds = readMailPresetIds(value);
-            rewards.add(new OnlineRewardsHolidayReward(month, day, name, rewardText, commands, mailPresetIds));
+            List<OnlineRewardsItemReward> itemRewards = readItemRewards(value);
+            rewards.add(new OnlineRewardsHolidayReward(month, day, name, rewardText, commands, mailPresetIds, itemRewards));
         }
         return List.copyOf(rewards);
     }
@@ -213,7 +207,8 @@ public record OnlineRewardsModuleConfiguration(
             String rewardText = nullToDefault(value.get("rewardText"), "");
             List<String> commands = toStringList(value.get("commands"));
             List<String> mailPresetIds = readMailPresetIds(value);
-            rewards.add(new OnlineRewardsMilestoneReward(threshold, rewardText, commands, mailPresetIds));
+            List<OnlineRewardsItemReward> itemRewards = readItemRewards(value);
+            rewards.add(new OnlineRewardsMilestoneReward(threshold, rewardText, commands, mailPresetIds, itemRewards));
         }
         return List.copyOf(rewards);
     }
@@ -225,7 +220,8 @@ public record OnlineRewardsModuleConfiguration(
             String rewardText = nullToDefault(value.get("rewardText"), "");
             List<String> commands = toStringList(value.get("commands"));
             List<String> mailPresetIds = readMailPresetIds(value);
-            rewards.add(new OnlineRewardsDayOfMonthReward(day, rewardText, commands, mailPresetIds));
+            List<OnlineRewardsItemReward> itemRewards = readItemRewards(value);
+            rewards.add(new OnlineRewardsDayOfMonthReward(day, rewardText, commands, mailPresetIds, itemRewards));
         }
         return List.copyOf(rewards);
     }
@@ -281,6 +277,61 @@ public record OnlineRewardsModuleConfiguration(
         return List.of();
     }
 
+    /**
+     * 从配置 Map 中解析 item-rewards 列表。
+     * <p>
+     * 配置格式：
+     * <pre>
+     * item-rewards:
+     *   - source: "minecraft"
+     *     id: "DIAMOND"
+     *     amount: 1
+     *   - source: "mythic"
+     *     id: "legendary_gem"
+     *     amount: 2
+     * </pre>
+     */
+    private static List<OnlineRewardsItemReward> readItemRewards(Map<?, ?> entry) {
+        Object raw = entry.get("item-rewards");
+        if (!(raw instanceof List<?> list) || list.isEmpty()) {
+            return List.of();
+        }
+        List<OnlineRewardsItemReward> rewards = new ArrayList<>();
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?> map)) continue;
+            String source = nullToDefault(map.get("source"), "minecraft");
+            String id = nullToDefault(map.get("id"), "");
+            if (id.isBlank()) continue;
+            int amount = Math.max(1, parseInt(map.get("amount"), 1));
+            Object nbtRaw = map.get("nbt");
+            String nbt = nbtRaw == null ? null : String.valueOf(nbtRaw);
+            rewards.add(new OnlineRewardsItemReward(source, id, amount, nbt));
+        }
+        return List.copyOf(rewards);
+    }
+
+    /**
+     * 从 ConfigurationSection 中解析 item-rewards 列表（用于签到基础奖励等直接从 section 读取的场景）。
+     */
+    private static List<OnlineRewardsItemReward> readItemRewardsFromSection(
+        org.bukkit.configuration.file.FileConfiguration section, String prefix
+    ) {
+        List<?> raw = section.getList(prefix + ".item-rewards");
+        if (raw == null || raw.isEmpty()) return List.of();
+        List<OnlineRewardsItemReward> rewards = new ArrayList<>();
+        for (Object item : raw) {
+            if (!(item instanceof Map<?, ?> map)) continue;
+            String source = nullToDefault(map.get("source"), "minecraft");
+            String id = nullToDefault(map.get("id"), "");
+            if (id.isBlank()) continue;
+            int amount = Math.max(1, parseInt(map.get("amount"), 1));
+            Object nbtRaw = map.get("nbt");
+            String nbt = nbtRaw == null ? null : String.valueOf(nbtRaw);
+            rewards.add(new OnlineRewardsItemReward(source, id, amount, nbt));
+        }
+        return List.copyOf(rewards);
+    }
+
     private static List<String> readMailPresetIds(FileConfiguration configuration, String pathPrefix) {
         List<String> values = toStringList(configuration.get(pathPrefix + ".mail.presets"));
         return values.isEmpty() ? List.of() : values;
@@ -313,7 +364,8 @@ public record OnlineRewardsModuleConfiguration(
             List<String> commands = toStringList(value.get("commands"));
             List<String> mailPresetIds = readMailPresetIds(value);
             boolean repeat = parseBoolean(value.get("repeat"), false);
-            rewards.add(new OnlineRewardsPeriodicReward(id, minutes, name, rewardText, commands, mailPresetIds, repeat));
+            List<OnlineRewardsItemReward> itemRewards = readItemRewards(value);
+            rewards.add(new OnlineRewardsPeriodicReward(id, minutes, name, rewardText, commands, mailPresetIds, repeat, itemRewards));
             index++;
         }
         return List.copyOf(rewards);
@@ -349,7 +401,8 @@ public record OnlineRewardsModuleConfiguration(
             List<String> subtitleGroupIds = toStringList(value.get("subtitle-groups"));
             List<String> titleIds = toStringList(value.get("title-ids"));
             String broadcastMessage = nullToDefault(value.get("broadcast"), "");
-            targets.add(new OnlineRewardsServerSignInGoalTarget(id, required, name, rewardText, commands, mailPresetIds, chatCardIds, subtitleGroupIds, titleIds, broadcastMessage));
+            List<OnlineRewardsItemReward> itemRewards = readItemRewards(value);
+            targets.add(new OnlineRewardsServerSignInGoalTarget(id, required, name, rewardText, commands, mailPresetIds, chatCardIds, subtitleGroupIds, titleIds, broadcastMessage, itemRewards));
             index++;
         }
         return new OnlineRewardsServerSignInGoalConfiguration(

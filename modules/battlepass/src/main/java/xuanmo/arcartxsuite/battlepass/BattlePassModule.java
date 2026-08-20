@@ -4,7 +4,6 @@ import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
@@ -96,10 +95,7 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            ValidationRule.required("storage.mode", ValueType.STRING)
-                .withEnum(Set.of("sqlite", "mysql")),
-            ValidationRule.required("storage.pool-size", ValueType.INT)
-                .withRange(1, 100),
+            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
             ValidationRule.required("season.season-id", ValueType.STRING),
             ValidationRule.required("season.max-level", ValueType.INT)
                 .withRange(1, 10000)
@@ -186,7 +182,8 @@ public final class BattlePassModule extends AbstractAXSModule implements ModuleC
 
         service = new BattlePassService(plugin, configuration, repo, logger,
             itemSourceRegistry, currencyManager,
-            () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class));
+            () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class),
+            itemRewardDispatcher, pendingRewardService);
         service.setEventBusProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.EventBusCapability.class));
         service.start();

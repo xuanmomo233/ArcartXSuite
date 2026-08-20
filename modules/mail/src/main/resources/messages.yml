@@ -23,7 +23,8 @@ help:
   # ── 预设邮件子命令帮助 ──
   preset:
     list: "&7{0} preset list&f - 列出所有预设"
-    send: "&7{0} preset send <预设ID> <目标>&f - 派发预设邮件"
+    send: "&7{0} preset send <预设ID> <目标> [force-bypass]&f - 派发预设邮件（多人需确认）"
+    send-confirm: "&7{0} preset send confirm&f - 确认上一次多人派发请求"
     info: "&7{0} preset info <预设ID>&f - 查看预设详情"
     delete: "&7{0} preset delete <预设ID>&f - 删除预设"
     reload: "&7{0} preset reload&f - 重新加载预设"
@@ -52,7 +53,12 @@ admin:
   # ── preset 子命令用法与反馈 ──
   preset:
     usage: "&e用法: /axs mail preset <list|send|info|delete|reload> ..."
-    send-usage: "&e用法: /axs mail preset send <预设ID> <目标>"
+    send-usage: "&e用法: /axs mail preset send <预设ID> <目标> [force-bypass] &7| &e/axs mail preset send confirm"
+    send-confirm-prompt: "&e即将向 &6{0} &e派发预设 &6{1} &e的邮件，请在 30 秒内执行 &f/axs mail preset send confirm &e完成确认。"
+    send-confirm-none: "&c当前没有待确认的多人邮件派发请求。"
+    send-confirm-expired: "&c待确认的派发请求已过期，请重新发起。"
+    send-confirm-accepted: "&a已确认，开始派发预设 &f{0} &a到 &f{1}&a。"
+    send-force-bypass-invalid: "&cforce-bypass 仅用于 all-online / all-registered 多人派发。"
     info-usage: "&e用法: /axs mail preset info <预设ID>"
     delete-usage: "&e用法: /axs mail preset delete <预设ID>"
     sub-list: "&eyml preset 子命令: list|send|info|delete|reload"
@@ -175,6 +181,7 @@ player:
   mail-already-claimed: "&c该邮件已被领取或当前不可领取。"
   mail-claimed: "&a邮件已领取。"
   mail-claim-failed: "&c领取邮件失败。"
+  mail-claim-inventory-full: "&c背包空间不足，无法领取邮件附件，请清理背包后重试。"
   mail-delete-restricted: "&c该邮件仍有未领取内容，当前配置不允许直接删除。"
   mail-deleted: "&a邮件已删除。"
   mail-delete-failed: "&c删除邮件失败。"
@@ -187,6 +194,9 @@ player:
   claim-currency-failed: "&c领取货币附件失败: {0}"
   compose-cooldown: "&c寄信冷却中，请在 {0} 后再试。"
   cdk-preview-missing: "CDK 不存在。"
+  cdk-cooldown: "&cCDK 兑换冷却中，请在 {0} 后再试。"
+  cdk-locked: "&cCDK 兑换尝试次数过多已被临时锁定，请在 {0} 后再试。"
+  cdk-no-permission: "&c你没有 CDK 兑换权限。"
 
 # ── ui ─────────────────────────────────────────────────
 # 以下为 UI 界面中使用的显示文本（来源标签、状态标签、日志类型等）。

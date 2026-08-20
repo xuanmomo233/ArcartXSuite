@@ -7,32 +7,32 @@ import org.jetbrains.annotations.Nullable;
 /**
  * 赛季等级奖励定义。
  *
- * @param id          奖励唯一标识
+ * @param rewardId    奖励唯一标识
  * @param level       达到该等级可领取
  * @param type        奖励类型：item / command / currency / mail
  * @param iconMaterial 图标材质
  * @param iconName    图标显示名称
  * @param iconAmount  图标显示数量
- * @param itemSource  物品来源（type=item 时有效）
- * @param itemId      物品 ID（type=item 时有效）
- * @param itemAmount  物品数量（type=item 时有效）
- * @param itemNbt     物品 NBT（type=item 时有效）
+ * @param source      物品来源（type=item 时有效）
+ * @param id          物品 ID（type=item 时有效）
+ * @param amount      物品数量（type=item 时有效）
+ * @param nbt         物品 NBT（type=item 时有效）
  * @param currencyId  货币 ID（type=currency 时有效）
  * @param currencyAmount 货币数量（type=currency 时有效）
  * @param commands    命令列表（type=command 时有效）
  * @param mailPresets 邮件预设 ID 列表（type=mail 时有效）
  */
 public record SeasonRewardDefinition(
-    @NotNull String id,
+    @NotNull String rewardId,
     int level,
     @NotNull String type,
     @NotNull String iconMaterial,
     @NotNull String iconName,
     int iconAmount,
-    @Nullable String itemSource,
-    @Nullable String itemId,
-    int itemAmount,
-    @Nullable String itemNbt,
+    @Nullable String source,
+    @Nullable String id,
+    int amount,
+    @Nullable String nbt,
     @Nullable String currencyId,
     double currencyAmount,
     @Nullable List<String> commands,

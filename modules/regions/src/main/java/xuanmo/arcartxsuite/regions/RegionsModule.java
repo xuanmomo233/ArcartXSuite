@@ -17,7 +17,6 @@ import xuanmo.arcartxsuite.api.capability.PlayerDataPurgeable;
 import xuanmo.arcartxsuite.api.config.SyncPolicy;
 import xuanmo.arcartxsuite.api.config.ValidationRule;
 import xuanmo.arcartxsuite.api.config.ValueType;
-import java.util.Set;
 import xuanmo.arcartxsuite.api.ClientPacketHandler;
 import xuanmo.arcartxsuite.api.ModuleCommandHandler;
 import xuanmo.arcartxsuite.api.ModuleDescriptor;
@@ -98,8 +97,7 @@ public final class RegionsModule extends AbstractAXSModule implements ModuleComm
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            ValidationRule.required("storage.mode", ValueType.STRING)
-                .withEnum(Set.of("sqlite", "mysql")),
+            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
             ValidationRule.of("selection.max-volume", ValueType.INT).withRange(1, 100000000)
         );
     }

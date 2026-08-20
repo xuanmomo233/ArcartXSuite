@@ -95,9 +95,8 @@ public final class ExtraBackpackModule extends AbstractAXSModule {
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            ValidationRule.required("storage.mode", ValueType.STRING)
-                .withEnum(java.util.Set.of("sqlite", "mysql")),
-            ValidationRule.required("storage.pool-size", ValueType.INT)
+            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+            ValidationRule.of("storage.pool-size", ValueType.INT)
                 .withRange(1, 100),
             ValidationRule.of("settings.debug", ValueType.BOOLEAN),
             ValidationRule.of("ui.register-ui-on-enable", ValueType.BOOLEAN),

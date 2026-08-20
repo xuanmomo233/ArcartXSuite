@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -95,9 +94,8 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            ValidationRule.required("storage.mode", ValueType.STRING)
-                .withEnum(Set.of("sqlite", "mysql")),
-            ValidationRule.required("storage.pool-size", ValueType.INT)
+            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
+            ValidationRule.of("storage.pool-size", ValueType.INT)
                 .withRange(1, 100),
             ValidationRule.of("auction.max-listings-per-player", ValueType.INT)
                 .withRange(1, 1000),
@@ -213,7 +211,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
         service = new MarketService(plugin, configuration, packetBridge,
             currencyManager, itemSourceRegistry, itemSerializer,
-            itemStackBridge, vanillaItemNameBridge, mailSupplier, logger, crossServer, messages());
+            itemStackBridge, vanillaItemNameBridge, mailSupplier, itemRewardDispatcher, logger, crossServer, messages());
         service.setSignalProvider(() -> getCapability(
             xuanmo.arcartxsuite.api.capability.SignalDispatchable.class));
         service.setEventBusProvider(() -> getCapability(
@@ -222,7 +220,7 @@ public final class MarketModule extends AbstractAXSModule implements ModuleComma
 
         // 注册待发放队列消费者（玩家上线补发离线期间累积的物品/货币）
         registerListener(new PendingDeliveryService(
-            plugin, service.getRepository(), currencyManager, itemSerializer, logger));
+            plugin, service.getRepository(), currencyManager, itemSerializer, itemRewardDispatcher, logger));
 
         // 注册 UI 到 ArcartX 桥接层
         bindMarketUi(configuration.ui().shopId(), SHOP_UI_FILE_PATH);

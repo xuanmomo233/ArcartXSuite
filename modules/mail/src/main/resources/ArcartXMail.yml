@@ -17,34 +17,31 @@ settings:
   debug: false
 
 storage:
-  # 存储模式: sqlite 本地文件；mysql 远程 MySQL。
-  mode: sqlite
-
-  sqlite:
-    # SQLite 文件会创建在插件数据目录下。
-    file: mail.db
-
-  # ── MySQL 自建模式（不推荐） ──
+  # shared: true 共享存储模式（推荐，性能较好），数据库连接由本体统一管控。
+  # 各模块共用本体 config.yml（plugins/ArcartX-Suite/config.yml）的 storage 节配置。
+  shared: true
+  #
+  # —— shared: false 时，必须配置下方字段启动自建存储模式（不推荐） ——
+  # 存储模式：sqlite 或 mysql。
+  # mode: "sqlite"
+  #
+  # —— SQLite 存储 ——
+  # SQLite 文件名（相对模块数据目录）。
+  # sqlite:
+  #   file: "<moduleId>.db"
+  # JDBC 连接池大小，SQLite 建议保持 1。
+  # pool-size: <N>
+  #
+  # —— MySQL 存储 ——
   # 在此处填写 MySQL 连接信息 = 本模块「自建」独立 HikariCP 连接池，不复用本体连接。
-  # 推荐使用「共享模式」：保持 mode 为 sqlite，到本体 config.yml
-  # （plugins/ArcartX-Suite/config.yml）的 storage 节统一配置 MySQL，
-  # 所有模块将共享同一个连接池，用 table-prefix 隔离表，资源占用更低。
-  # 以下配置仅在 storage.mode 设为 mysql 时生效：
+  # 以下配置仅在 mode 设为 mysql 时生效：
   # mysql:
-  #   # MySQL 服务器地址。
-  #   host: 127.0.0.1
-  #   # MySQL 服务器端口。
+  #   host: "127.0.0.1"
   #   port: 3306
-  #   # 数据库名称。
-  #   database: arcartxsuite
-  #   # 数据库用户名。
-  #   username: root
-  #   # 数据库密码。
+  #   database: "arcartxsuite"
+  #   username: "root"
   #   password: ""
-  #   table-prefix: "axs_mail_"
-
-  # 数据库连接池大小。
-  pool-size: 4
+  #   table-prefix: "axs_<moduleId>_"
 
 cross-server:
   # 多服邮件刷新通知；连接参数见宿主 config.yml cross-server 节
@@ -153,6 +150,22 @@ retention:
 
   # 是否允许在仍有未领取附件时删除邮件。
   allow-delete-with-unclaimed-attachments: false
+
+cdk:
+  # 是否要求 arcartxsuite.mail.cdk 权限才能兑换 CDK。
+  # 默认 false（所有有 arcartxsuite.mail.use 权限的玩家都能兑换）；设为 true 后管理员可按需收回兑换权限。
+  require-permission: false
+
+  # CDK 兑换失败后对该玩家的冷却时间（秒）；0 表示不冷却。
+  # 每次兑换失败（CDK 不存在/已领过/已过期/已领完等）都会触发冷却。
+  cooldown-seconds: 10
+
+  # 连续失败达到此次数后临时锁定该玩家的 CDK 兑换功能；0 表示不锁定。
+  # 兑换成功会重置失败计数。
+  max-fail-attempts: 5
+
+  # 触发锁定后的锁定时长（分钟）。
+  lockout-minutes: 5
 
 presets:
   # 预设目录，相对于插件数据目录。

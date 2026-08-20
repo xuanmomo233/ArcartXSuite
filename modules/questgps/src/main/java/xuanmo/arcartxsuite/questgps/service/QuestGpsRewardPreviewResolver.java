@@ -73,28 +73,28 @@ public final class QuestGpsRewardPreviewResolver {
             case "neigeitems" -> resolveItem(
                 rewardId,
                 type,
-                itemSourceRegistry.generateNeigeItem(definition.neigeItemId(), definition.amount()),
+                itemSourceRegistry.generateItem("neige", definition.neigeItemId(), definition.amount(), null, null),
                 definition,
                 definition.neigeItemId()
             );
             case "mythicmobs", "mythicitems" -> resolveItem(
                 rewardId,
                 type,
-                itemSourceRegistry.generateMythicItem(definition.mythicItemId(), definition.amount()),
+                itemSourceRegistry.generateItem("mythic", definition.mythicItemId(), definition.amount(), null, null),
                 definition,
                 definition.mythicItemId()
             );
             case "overture" -> resolveItem(
                 rewardId,
                 type,
-                itemSourceRegistry.generateOvertureItem(definition.overtureItemId(), null, definition.amount()),
+                itemSourceRegistry.generateItem("overture", definition.overtureItemId(), definition.amount(), null, null),
                 definition,
                 definition.overtureItemId()
             );
             case "mmoitems" -> resolveItem(
                 rewardId,
                 type,
-                itemSourceRegistry.generateMmoItem(definition.mmoItemType(), definition.mmoItemId(), definition.amount()),
+                itemSourceRegistry.generateItem("mmoitems", definition.mmoItemType() + ";" + definition.mmoItemId(), definition.amount(), null, null),
                 definition,
                 definition.mmoItemType() + ":" + definition.mmoItemId()
             );

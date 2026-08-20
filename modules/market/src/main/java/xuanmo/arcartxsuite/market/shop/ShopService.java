@@ -226,7 +226,7 @@ public class ShopService {
             return BuyResult.success(totalPrice.doubleValue(), shopItem.currency());
         }
 
-        ItemStack item = createItem(shopItem, amount);
+        ItemStack item = createItem(shopItem, amount, player);
         if (item == null) {
             depositSafe(player, shopItem.currency(), totalPrice, "shop_item_generation_refund");
             restoreStock(player, shopId, itemId, shopItem, amount);
@@ -330,8 +330,8 @@ public class ShopService {
         repository.addPendingCurrency(player.getUniqueId(), currency, amount.doubleValue(), reason);
     }
 
-    private @Nullable ItemStack createItem(ShopItem shopItem, int amount) {
-        return ShopItemFactory.create(itemSourceRegistry, shopItem.item(), amount, logger);
+    private @Nullable ItemStack createItem(ShopItem shopItem, int amount, Player player) {
+        return ShopItemFactory.create(itemSourceRegistry, shopItem.item(), amount, player, logger);
     }
 
     private long calculateResetTime(String resetType) {

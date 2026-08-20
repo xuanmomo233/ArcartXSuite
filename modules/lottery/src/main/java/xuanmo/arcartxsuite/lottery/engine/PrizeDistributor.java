@@ -5,7 +5,6 @@ import java.util.function.Supplier;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
 import xuanmo.arcartxsuite.api.util.AxsScheduler;
-import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
@@ -13,6 +12,7 @@ import org.jetbrains.annotations.Nullable;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
 import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
 import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
+import xuanmo.arcartxsuite.api.item.ItemRewardDispatcher;
 import xuanmo.arcartxsuite.api.item.ItemSourceRegistry;
 import xuanmo.arcartxsuite.api.util.ItemSerializer;
 import xuanmo.arcartxsuite.lottery.model.PoolItem;
@@ -21,12 +21,14 @@ import xuanmo.arcartxsuite.lottery.model.PoolItem;
  * 奖品发放器。
  * <p>
  * 根据 {@link PoolItem.DeliveryType} 将奖品以直接发放、命令执行或邮件发送的方式
- * 投递给玩家。背包满时自动转投邮件，投递失败时返回失败结果供上层入队待领取。
+ * 投递给玩家。DIRECT 类型物品发放统一通过 {@link ItemRewardDispatcher}
+ * （放入背包→背包满转邮件→无邮件则掉落），投递失败时返回失败结果供上层入队待领取。
  */
 public class PrizeDistributor {
 
     private final ItemSourceRegistry itemSourceRegistry;
     private final Supplier<MailDispatchable> mailSupplier;
+    private final ItemRewardDispatcher itemRewardDispatcher;
     private final Logger logger;
     private final org.bukkit.plugin.java.JavaPlugin plugin;
 
@@ -35,15 +37,18 @@ public class PrizeDistributor {
      *
      * @param itemSourceRegistry 物品来源注册表
      * @param mailSupplier       邮件能力延迟供应器
+     * @param itemRewardDispatcher 统一物品奖励发放器
      * @param logger             日志记录器
      */
     public PrizeDistributor(org.bukkit.plugin.java.JavaPlugin plugin,
                             ItemSourceRegistry itemSourceRegistry,
                             Supplier<MailDispatchable> mailSupplier,
+                            ItemRewardDispatcher itemRewardDispatcher,
                             Logger logger) {
         this.plugin = plugin;
         this.itemSourceRegistry = itemSourceRegistry;
         this.mailSupplier = mailSupplier;
+        this.itemRewardDispatcher = itemRewardDispatcher;
         this.logger = logger;
     }
 
@@ -66,31 +71,25 @@ public class PrizeDistributor {
     }
 
     private DistributionResult giveDirectItem(Player player, PoolItem item) {
-        ItemStack stack = generateItem(item);
+        ItemStack stack = generateItem(item, player);
         if (stack == null) {
-            logger.warning("无法生成物品: " + item.itemId() + " (type=" + item.itemSource() + ")");
+            logger.warning("无法生成物品: " + item.id() + " (source=" + item.source() + ")");
             return DistributionResult.failure(null, "物品生成失败");
         }
 
-        java.util.Map<Integer, ItemStack> leftover = player.getInventory().addItem(stack);
-        if (!leftover.isEmpty()) {
-            MailDispatchable mail = mailSupplier != null ? mailSupplier.get() : null;
-            if (mail != null && item.mailPresets() != null && !item.mailPresets().isEmpty()) {
-                boolean anySuccess = false;
-                for (String presetId : item.mailPresets()) {
-                    if (presetId == null || presetId.isBlank()) continue;
-                    MailSendResult result = mail.dispatchPreset(MailPresetRequest.builder(presetId, player.getName())
-                        .sourceModule("lottery")
-                        .build());
-                    if (result.success()) anySuccess = true;
-                }
-                if (anySuccess) {
-                    return DistributionResult.mailSent(stack);
-                }
-            }
-            return DistributionResult.failure(stack, "背包空间不足且邮件发送失败");
+        ItemRewardDispatcher.DispatchOptions options = ItemRewardDispatcher.DispatchOptions.builder("lottery")
+            .sourceDetail("prize:" + item.key())
+            .overflowMailSubject("抽奖奖励溢出物品")
+            .overflowMailBody("您的背包已满，抽奖奖励物品通过邮件补发。")
+            .overflowMailSenderName("抽奖")
+            .build();
+        ItemRewardDispatcher.DispatchResult result = itemRewardDispatcher.dispatchItem(player, stack, options);
+        if (result.success()) {
+            if (result.mailedCount() > 0) return DistributionResult.mailSent(stack);
+            if (result.pendingCount() > 0) return DistributionResult.pendingSaved(stack);
+            return DistributionResult.success(stack);
         }
-        return DistributionResult.success(stack);
+        return DistributionResult.failure(stack, result.message());
     }
 
     private DistributionResult executeCommands(Player player, PoolItem item) {
@@ -115,64 +114,38 @@ public class PrizeDistributor {
     }
 
     private DistributionResult sendMail(Player player, PoolItem item) {
+        if (item.mailPresets() == null || item.mailPresets().isEmpty()) {
+            logger.warning("奖品 " + item.key() + " 配置了 MAIL 但未设置 mail.presets");
+            return DistributionResult.failure(generateItem(item, player), "缺少 mail.presets");
+        }
+        ItemStack stack = generateItem(item, player);
+        boolean allSuccess = xuanmo.arcartxsuite.api.capability.mail.MailPresetHelper.dispatchPresets(
+            mailSupplier, player.getName(), item.mailPresets(), "lottery", logger);
+        if (allSuccess) {
+            return DistributionResult.mailSent(stack);
+        }
+        // MailPresetHelper 返回 false 可能是 mail 不可用或部分失败，检查 mail 是否可用来判断
         MailDispatchable mail = mailSupplier != null ? mailSupplier.get() : null;
         if (mail == null) {
-            logger.warning("MailDispatchable 不可用，无法发送邮件奖励");
-            return DistributionResult.failure(generateItem(item), "邮件能力不可用");
+            return DistributionResult.failure(stack, "邮件能力不可用");
         }
-        if (item.mailPresets() != null && !item.mailPresets().isEmpty()) {
-            ItemStack stack = generateItem(item);
-            boolean anySuccess = false;
-            for (String presetId : item.mailPresets()) {
-                if (presetId == null || presetId.isBlank()) continue;
-                MailSendResult result = mail.dispatchPreset(MailPresetRequest.builder(presetId, player.getName())
-                    .sourceModule("lottery")
-                    .build());
-                if (result.success()) anySuccess = true;
-            }
-            if (anySuccess) {
-                return DistributionResult.mailSent(stack);
-            }
-            return DistributionResult.failure(stack, "邮件发送失败");
-        }
-        logger.warning("奖品 " + item.id() + " 配置了 MAIL 但未设置 mail.presets");
-        return DistributionResult.failure(generateItem(item), "缺少 mail.presets");
+        return DistributionResult.failure(stack, "邮件发送失败");
     }
 
     /**
      * 根据奖品定义生成对应的 {@link ItemStack}。
+     * <p>
+     * 委托给 {@link ItemSourceRegistry#generateItem} 统一生成，
+     * 根据 source 字符串分发到对应桥接。
      *
-     * @param item 奖品定义
+     * @param item   奖品定义
+     * @param player 玩家上下文（Overture 等需要），可为 {@code null}
      * @return 生成的物品堆，生成失败时返回 {@code null}
      */
     @Nullable
-    public ItemStack generateItem(PoolItem item) {
-        if (item.itemSource() == PoolItem.PluginItemType.PLAIN && item.itemJson() != null
-                && !item.itemJson().isBlank()) {
-            try {
-                return ItemSerializer.deserialize(java.util.Base64.getDecoder().decode(item.itemJson()));
-            } catch (Exception e) {
-                logger.warning("预序列化物品解析失败: " + e.getMessage());
-            }
-        }
-        if (item.itemId() == null || item.itemId().isBlank()) return null;
-        return switch (item.itemSource()) {
-            case MYTHIC -> itemSourceRegistry.generateMythicItem(item.itemId(), item.amount());
-            case NEIGE -> itemSourceRegistry.generateNeigeItem(item.itemId(), item.amount());
-            case OVERTURE -> itemSourceRegistry.generateOvertureItem(item.itemId(), null, item.amount());
-            case MMO -> {
-                String[] parts = item.itemId().split(";", 2);
-                String typeId = parts[0];
-                String itemId = parts.length == 2 ? parts[1] : parts[0];
-                yield itemSourceRegistry.generateMmoItem(typeId, itemId, item.amount());
-            }
-            case PLAIN -> {
-                String materialName = item.itemId().startsWith("minecraft:")
-                    ? item.itemId().substring("minecraft:".length()) : item.itemId();
-                Material material = Material.matchMaterial(materialName, true);
-                yield material == null ? null : new ItemStack(material, item.amount());
-            }
-        };
+    public ItemStack generateItem(PoolItem item, @Nullable Player player) {
+        if (item.id() == null || item.id().isBlank()) return null;
+        return itemSourceRegistry.generateItem(item.source(), item.id(), item.amount(), item.nbt(), player);
     }
 
     /**
@@ -202,7 +175,8 @@ public class PrizeDistributor {
      * @param failureReason 失败原因，成功时为空字符串
      */
     public record DistributionResult(boolean success, @Nullable ItemStack item,
-                                     boolean mailSent, @NotNull String failureReason) {
+                                     boolean mailSent, boolean pendingSaved,
+                                     @NotNull String failureReason) {
         /**
          * 构造直接发放成功的结果。
          *
@@ -210,7 +184,7 @@ public class PrizeDistributor {
          * @return 成功结果实例
          */
         public static DistributionResult success(@Nullable ItemStack item) {
-            return new DistributionResult(true, item, false, "");
+            return new DistributionResult(true, item, false, false, "");
         }
 
         /**
@@ -220,7 +194,17 @@ public class PrizeDistributor {
          * @return 邮件发送结果实例
          */
         public static DistributionResult mailSent(@Nullable ItemStack item) {
-            return new DistributionResult(true, item, true, "");
+            return new DistributionResult(true, item, true, false, "");
+        }
+
+        /**
+         * 构造物品已暂存待发放的结果。
+         *
+         * @param item 涉及的物品堆
+         * @return 暂存结果实例
+         */
+        public static DistributionResult pendingSaved(@Nullable ItemStack item) {
+            return new DistributionResult(true, item, false, true, "");
         }
 
         /**
@@ -231,7 +215,7 @@ public class PrizeDistributor {
          * @return 失败结果实例
          */
         public static DistributionResult failure(@Nullable ItemStack item, @NotNull String reason) {
-            return new DistributionResult(false, item, false, reason);
+            return new DistributionResult(false, item, false, false, reason);
         }
     }
 }

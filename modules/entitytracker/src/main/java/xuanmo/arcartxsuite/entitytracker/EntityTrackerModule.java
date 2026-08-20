@@ -213,7 +213,8 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
                 plugin, logger, configuration, packetBridge, bossRuntimeUiIds,
                 platform, null, () -> getCapability(MailDispatchable.class),
                 itemSourceRegistry, attributeBridge,
-                crossServerService, killRecordingService, placeholderResolver, messages()
+                crossServerService, killRecordingService, placeholderResolver, messages(),
+                itemRewardDispatcher, pendingRewardService
             );
             bossService.start();
             adminCommand = new EntityTrackerAdminCommand(() -> bossService, messages());
@@ -300,7 +301,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
         }
         if (newFeaturesSettings.dropAllocation().enabled()) {
             dropAllocationService = new DropAllocationService(
-                plugin, logger, newFeaturesSettings.dropAllocation(), ds, messages()
+                plugin, logger, newFeaturesSettings.dropAllocation(), ds, messages(), itemRewardDispatcher
             );
         }
         boolean crossServerRanking = newFeaturesSettings.crossServerRanking().enabled()
@@ -458,7 +459,7 @@ public final class EntityTrackerModule extends AbstractAXSModule implements Modu
             java.util.function.BiConsumer<String, org.bukkit.entity.Player> signalDispatcher =
                 (signal, player) -> {}; // 待接入实际信号派发器
             RewardActionExecutor actionExecutor = new RewardActionExecutor(
-                plugin, mailSupplier, signalDispatcher, itemSourceRegistry, placeholderResolver
+                plugin, mailSupplier, signalDispatcher, itemSourceRegistry, itemRewardDispatcher, placeholderResolver
             );
 
             // 创建服务实例

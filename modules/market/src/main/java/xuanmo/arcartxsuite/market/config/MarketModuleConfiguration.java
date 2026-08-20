@@ -73,19 +73,7 @@ public record MarketModuleConfiguration(
     }
 
     private static StorageConfiguration loadStorage(FileConfiguration config) {
-        ConfigurationSection sec = config.getConfigurationSection("storage");
-        if (sec == null) return StorageConfiguration.defaults();
-        return new StorageConfiguration(
-            readStr(sec, "mode", "sqlite"),
-            readStr(sec, "sqlite.file", "market.db"),
-            readStr(sec, "mysql.host", "127.0.0.1"),
-            Math.max(1, sec.getInt("mysql.port", 3306)),
-            readStr(sec, "mysql.database", "arcartxsuite"),
-            readStr(sec, "mysql.username", "root"),
-            readStr(sec, "mysql.password", ""),
-            readStr(sec, "mysql.table-prefix", "axs_market_"),
-            Math.max(1, sec.getInt("pool-size", 8))
-        );
+        return StorageConfiguration.load(config.getConfigurationSection("storage"));
     }
 
     private static RedisConfiguration loadRedis(FileConfiguration config) {
@@ -250,6 +238,7 @@ public record MarketModuleConfiguration(
     ) {}
 
     public record StorageConfiguration(
+        boolean shared,
         String mode, String sqliteFileName,
         String host, int port, String database,
         String username, String password, String tablePrefix, int poolSize
@@ -258,8 +247,38 @@ public record MarketModuleConfiguration(
             return !"mysql".equalsIgnoreCase(mode);
         }
 
+        /**
+         * 从配置节加载存储配置。
+         * <p>
+         * shared=true（默认）时使用全部默认值，不读取其余字段；
+         * shared=false 时读取 mode/sqlite/mysql 等自建存储字段。
+         *
+         * @param section storage 配置节，可为 {@code null}
+         * @return 解析后的存储配置
+         */
+        public static StorageConfiguration load(ConfigurationSection section) {
+            if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
+            boolean shared = section.getBoolean("shared", true);
+            if (shared) {
+                return new StorageConfiguration(true, "sqlite", "market.db",
+                    "127.0.0.1", 3306, "arcartxsuite", "root", "",
+                    "axs_market_", 8);
+            }
+            return new StorageConfiguration(false,
+                readStr(section, "mode", "sqlite"),
+                readStr(section, "sqlite.file", "market.db"),
+                readStr(section, "mysql.host", "127.0.0.1"),
+                Math.max(1, section.getInt("mysql.port", 3306)),
+                readStr(section, "mysql.database", "arcartxsuite"),
+                readStr(section, "mysql.username", "root"),
+                readStr(section, "mysql.password", ""),
+                readStr(section, "mysql.table-prefix", "axs_market_"),
+                Math.max(1, section.getInt("pool-size", 8))
+            );
+        }
+
         public static StorageConfiguration defaults() {
-            return new StorageConfiguration("sqlite", "market.db", "127.0.0.1", 3306, "arcartxsuite", "root", "", "axs_market_", 8);
+            return new StorageConfiguration(true, "sqlite", "market.db", "127.0.0.1", 3306, "arcartxsuite", "root", "", "axs_market_", 8);
         }
 
         public xuanmo.arcartxsuite.api.storage.StorageDescriptor toDescriptor() {
@@ -273,14 +292,13 @@ public record MarketModuleConfiguration(
         /**
          * 判断是否为覆盖模式（模块自建连接池）。
          * <p>
-         * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
-         * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
+         * 当 shared=false 时返回 true（模块独立连接，自建存储）；
+         * shared=true 时返回 false（使用本体共享数据源）。
          *
-         * @return {@code true} 表示模块应自建连接池（旧路径）
-         * @since 1.4.0
+         * @return {@code true} 表示模块应自建连接池
          */
         public boolean hasOverride() {
-            return "mysql".equalsIgnoreCase(mode);
+            return !shared;
         }
     }
 

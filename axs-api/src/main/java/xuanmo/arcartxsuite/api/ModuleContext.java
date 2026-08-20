@@ -71,6 +71,29 @@ public interface ModuleContext {
     ItemSourceRegistry itemSourceRegistry();
 
     /**
+     * 获取统一物品奖励发放器（永不为 null）。
+     * <p>
+     * 提供"放入背包 → 背包满转邮件 → 无邮件模块则掉落地面"的统一物品发放行为，
+     * 供所有奖励发放模块调用，避免各模块自行实现导致行为不一致。
+     *
+     * @since 1.5.0
+     */
+    @ApiStability.Stable
+    @NotNull xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher();
+
+    /**
+     * 获取统一待发放奖励服务（永不为 null）。
+     * <p>
+     * 提供"暂存离线/失败奖励 → 玩家上线自动补发"的统一 pending 机制，
+     * 供所有需要离线奖励补发的模块调用，避免各模块自行实现 pending 存储和补发逻辑。
+     * 后续修改补发流程（如接入第三方邮箱插件）只需改本体实现。
+     *
+     * @since 1.5.0
+     */
+    @ApiStability.Stable
+    @NotNull xuanmo.arcartxsuite.api.item.PendingRewardService pendingRewardService();
+
+    /**
      * 获取原版物品中文名称解析桥接（永不为 null）。
      * <p>
      * 用于显示原版物品名、入库搜索文本、聊天物品预览等场景，

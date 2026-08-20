@@ -4,7 +4,6 @@ import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabExecutor;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -112,10 +111,7 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
     @Override
     protected @NotNull List<ValidationRule> mainConfigValidations() {
         return List.of(
-            ValidationRule.required("storage.mode", ValueType.STRING)
-                .withEnum(Set.of("sqlite", "mysql")),
-            ValidationRule.required("storage.pool-size", ValueType.INT)
-                .withRange(1, 100),
+            ValidationRule.required("storage.shared", ValueType.BOOLEAN),
             ValidationRule.required("fishing.replace-vanilla", ValueType.BOOLEAN),
             ValidationRule.required("fishing.minigame-tick-interval", ValueType.INT)
                 .withRange(1, 20)
@@ -312,11 +308,11 @@ public final class FishingModule extends AbstractAXSModule implements ModuleComm
         }
 
         FishingItemGenerator itemGen = new FishingItemGenerator(itemSourceRegistry, itemStackBridge);
-        String dispatchMode = configuration.season().dispatchMode();
         RewardDispatcher rewardDispatcher = new RewardDispatcher(
-            repo, itemGen, () -> currencyManager,
+            pendingRewardService, itemSourceRegistry, () -> currencyManager,
             () -> getCapability(xuanmo.arcartxsuite.api.capability.MailDispatchable.class),
-            logger, configuration.season().seasonId(), dispatchMode);
+            itemRewardDispatcher,
+            logger, configuration.season().seasonId());
         SettlementEngine settlementEngine = new SettlementEngine(
             settlements, ariaBridge, repo, rewardDispatcher, logger, configuration.season().seasonId());
 

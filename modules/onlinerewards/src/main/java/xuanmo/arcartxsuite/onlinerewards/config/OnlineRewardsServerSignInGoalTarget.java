@@ -15,6 +15,7 @@ public record OnlineRewardsServerSignInGoalTarget(
     List<String> chatCardIds,
     List<String> subtitleGroupIds,
     List<String> titleIds,
-    String broadcastMessage
+    String broadcastMessage,
+    List<OnlineRewardsItemReward> itemRewards
 ) {
 }

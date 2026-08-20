@@ -83,6 +83,8 @@ public final class ModuleRegistry {
 
     // ─── 全局桥接单例 ──────────────────────────────────────────
     private DefaultItemSourceRegistry itemSourceRegistry;
+    private xuanmo.arcartxsuite.bridge.DefaultItemRewardDispatcher itemRewardDispatcher;
+    private xuanmo.arcartxsuite.bridge.DefaultPendingRewardService pendingRewardService;
     private ItemMatcherSupport itemMatcherSupport;
     private CurrencyBridgeManager currencyBridgeManager;
     private DefaultAttributeBridgeRegistry attributeBridgeRegistry;
@@ -948,6 +950,22 @@ public final class ModuleRegistry {
         }
         itemSourceRegistry.initialize();
 
+        // 统一物品奖励发放器（依赖 registry 自身查找 MailDispatchable capability）
+        if (itemRewardDispatcher == null) {
+            itemRewardDispatcher = new xuanmo.arcartxsuite.bridge.DefaultItemRewardDispatcher(
+                plugin, LOGGER, this);
+        }
+
+        // 统一待发放奖励服务（单张 DB 表 + 上线自动补发）
+        if (pendingRewardService == null) {
+            pendingRewardService = new xuanmo.arcartxsuite.bridge.DefaultPendingRewardService(
+                plugin, LOGGER, storageManager, this);
+        }
+        pendingRewardService.initialize();
+        Bukkit.getPluginManager().registerEvents(pendingRewardService, plugin);
+        // 注册为 core capability，供 DefaultItemRewardDispatcher 第三级兜底查找
+        registerCoreCapability(xuanmo.arcartxsuite.api.item.PendingRewardService.class, pendingRewardService);
+
         // 原版物品中文名称桥接（纯静态表，无外部依赖）
         if (vanillaItemNameBridge == null) {
             vanillaItemNameBridge = new DefaultVanillaItemNameBridge();
@@ -1073,6 +1091,16 @@ public final class ModuleRegistry {
     /** 获取全局物品来源注册表 */
     public ItemSourceRegistry itemSourceRegistry() {
         return itemSourceRegistry;
+    }
+
+    /** 获取统一物品奖励发放器 */
+    public xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher() {
+        return itemRewardDispatcher;
+    }
+
+    /** 获取统一待发放奖励服务 */
+    public xuanmo.arcartxsuite.api.item.PendingRewardService pendingRewardService() {
+        return pendingRewardService;
     }
 
     /** 获取原版物品中文名称桥接 */

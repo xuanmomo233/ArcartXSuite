@@ -21,7 +21,9 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
@@ -34,7 +36,9 @@ import xuanmo.arcartxsuite.api.capability.ChatCardSendable;
 import xuanmo.arcartxsuite.api.capability.EventBusCapability;
 import xuanmo.arcartxsuite.api.message.MessageProvider;
 import xuanmo.arcartxsuite.api.capability.MailDispatchable;
+import xuanmo.arcartxsuite.api.capability.mail.MailAttachmentSpec;
 import xuanmo.arcartxsuite.api.capability.mail.MailPresetRequest;
+import xuanmo.arcartxsuite.api.capability.mail.MailSendRequest;
 import xuanmo.arcartxsuite.api.capability.mail.MailSendResult;
 import xuanmo.arcartxsuite.api.capability.QQBotBroadcastable;
 import xuanmo.arcartxsuite.api.capability.SignalDispatchable;
@@ -117,6 +121,8 @@ public class OnlineRewardsService implements Listener {
     private CrossServerChannel crossServerChannel;
     private java.util.List<String> runtimeMenuUiIds = java.util.List.of();
     private java.util.List<String> registeredMenuUiIds = java.util.List.of();
+    private xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry;
+    private xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher;
 
     public OnlineRewardsService(
         JavaPlugin plugin,
@@ -203,6 +209,16 @@ public class OnlineRewardsService implements Listener {
         for (OnlineRewardsLeaderboardScope scope : OnlineRewardsLeaderboardScope.values()) {
             leaderboardCache.put(scope, List.of());
         }
+    }
+
+    /** 注入 ItemSourceRegistry，用于发放物品奖励。 */
+    public void setItemSourceRegistry(xuanmo.arcartxsuite.api.item.ItemSourceRegistry itemSourceRegistry) {
+        this.itemSourceRegistry = itemSourceRegistry;
+    }
+
+    /** 注入统一物品奖励发放器，用于物品奖励的统一发放（背包满转邮件兜底）。 */
+    public void setItemRewardDispatcher(xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher) {
+        this.itemRewardDispatcher = itemRewardDispatcher;
     }
 
     /**
@@ -691,6 +707,7 @@ public class OnlineRewardsService implements Listener {
         OnlineRewardsSignInResult result = applySignInRecord(player, state, context.date(), false);
         executeCommands(player, resolveSignInCommands(configuration.signIn(), result, selectedPermissionBonus(player)), result);
         dispatchSignInMailPresets(player, resolveSignInMailPresetIds(configuration.signIn(), result, selectedPermissionBonus(player)));
+        dispatchItemRewards(player, resolveSignInItemRewards(configuration.signIn(), result, selectedPermissionBonus(player)), "签到");
         refreshLeaderboardSnapshots();
         refreshMenu(player);
         publishRefresh(player.getUniqueId());
@@ -732,6 +749,7 @@ public class OnlineRewardsService implements Listener {
         OnlineRewardsPermissionBonusReward permissionBonus = selectedPermissionBonus(player);
         executeCommands(player, resolveSignInCommands(configuration.signIn(), result, permissionBonus), result);
         dispatchSignInMailPresets(player, resolveSignInMailPresetIds(configuration.signIn(), result, permissionBonus));
+        dispatchItemRewards(player, resolveSignInItemRewards(configuration.signIn(), result, permissionBonus), "补签");
         selectedCalendarDates.put(player.getUniqueId(), date);
         refreshLeaderboardSnapshots();
         refreshMenu(player);
@@ -1078,6 +1096,7 @@ public class OnlineRewardsService implements Listener {
             }
         }
         dispatchMailPresets(player, reward.mailPresetIds(), "奖励 '" + reward.name() + "'", "OnlineRewards:" + reward.name());
+        dispatchItemRewards(player, reward.itemRewards(), "奖励 '" + reward.name() + "'");
     }
 
     private void executePeriodicRewardCommands(Player player, OnlineRewardsPeriodicReward reward, OnlineRewardsPeriodContext context, String periodLabel) {
@@ -1103,56 +1122,66 @@ public class OnlineRewardsService implements Listener {
             }
         }
         dispatchMailPresets(player, reward.mailPresetIds(), periodLabel + "奖励 '" + reward.name() + "'", "OnlineRewards:" + periodLabel + ":" + reward.name());
+        dispatchItemRewards(player, reward.itemRewards(), periodLabel + "奖励 '" + reward.name() + "'");
     }
 
     private void dispatchSignInMailPresets(Player player, List<String> mailPresetIds) {
         dispatchMailPresets(player, mailPresetIds, "签到", "OnlineRewards:SignIn");
     }
 
+    /**
+     * 统一发放物品奖励：通过 ItemSourceRegistry 生成物品后调用 ItemRewardDispatcher 发放。
+     * <p>
+     * 统一行为：放入背包→背包满转邮件→无邮件则掉落。
+     *
+     * @param player     在线玩家
+     * @param itemRewards 物品奖励列表
+     * @param sourceLabel 奖励来源标签（用于日志和邮件描述）
+     */
+    private void dispatchItemRewards(Player player, List<xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsItemReward> itemRewards, String sourceLabel) {
+        if (itemRewards == null || itemRewards.isEmpty()) return;
+        xuanmo.arcartxsuite.api.item.ItemSourceRegistry registry = itemSourceRegistry;
+        xuanmo.arcartxsuite.api.item.ItemRewardDispatcher dispatcher = itemRewardDispatcher;
+        if (registry == null) {
+            logger.warning("OnlineRewards 物品奖励发放跳过：ItemSourceRegistry 未注入");
+            return;
+        }
+        if (dispatcher == null) {
+            logger.warning("OnlineRewards 物品奖励发放跳过：ItemRewardDispatcher 未注入");
+            return;
+        }
+        for (xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsItemReward reward : itemRewards) {
+            try {
+                ItemStack item = registry.generateItem(reward.source(), reward.id(), reward.amount(), reward.nbt(), player);
+                if (item == null) {
+                    logger.warning("OnlineRewards 物品奖励生成失败: source=" + reward.source()
+                        + " id=" + reward.id() + " amount=" + reward.amount());
+                    continue;
+                }
+                xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions options =
+                    xuanmo.arcartxsuite.api.item.ItemRewardDispatcher.DispatchOptions.builder("onlinerewards")
+                        .sourceDetail("reward:" + sourceLabel)
+                        .overflowMailSubject("在线奖励溢出物品")
+                        .overflowMailBody("您的背包已满，在线奖励物品通过邮件补发。")
+                        .overflowMailSenderName("在线奖励")
+                        .build();
+                dispatcher.dispatchItem(player, item, options);
+                if (configuration.debug()) {
+                    logger.info("OnlineRewards 发放物品奖励 -> player=" + player.getName()
+                        + " | source=" + reward.source() + " | id=" + reward.id()
+                        + " | amount=" + reward.amount());
+                }
+            } catch (Exception e) {
+                logger.warning("OnlineRewards 物品奖励发放异常: " + e.getMessage());
+            }
+        }
+    }
+
     private void dispatchMailPresets(Player player, List<String> mailPresetIds, String sourceLabel, String actorName) {
-        if (mailPresetIds == null || mailPresetIds.isEmpty()) {
-            return;
-        }
-
-        MailDispatchable mailService = mailProvider == null ? null : mailProvider.get();
-        if (mailService == null) {
-            this.logger.warning(
-                "OnlineRewards " + sourceLabel + " 配置了邮件预设，但 Mail 模块当前不可用。"
-            );
-            return;
-        }
-
-        for (String presetId : mailPresetIds) {
-            if (presetId == null || presetId.isBlank()) {
-                continue;
-            }
-            MailSendResult result = mailService.dispatchPreset(MailPresetRequest.builder(presetId, player.getName())
-                .sourceModule("onlinerewards")
-                .sourceDetail(actorName.substring("OnlineRewards:".length()))
-                .build());
-            boolean success = result.success();
-            if (configuration.debug()) {
-                this.logger.info(
-                    "OnlineRewards 邮件奖励 -> player="
-                        + player.getName()
-                        + " | source="
-                        + sourceLabel
-                        + " | preset="
-                        + presetId
-                        + " | success="
-                        + success
-                );
-            } else if (!success) {
-                this.logger.warning(
-                    "OnlineRewards 邮件奖励派发失败 -> player="
-                        + player.getName()
-                        + " | source="
-                        + sourceLabel
-                        + " | preset="
-                        + presetId
-                );
-            }
-        }
+        String sourceDetail = actorName.startsWith("OnlineRewards:")
+            ? actorName.substring("OnlineRewards:".length()) : actorName;
+        xuanmo.arcartxsuite.api.capability.mail.MailPresetHelper.dispatchPresets(
+            mailProvider, player.getName(), mailPresetIds, "onlinerewards", sourceDetail, logger);
     }
 
     private void executeCommands(Player player, List<String> commands, OnlineRewardsSignInResult result) {
@@ -1674,6 +1703,40 @@ public class OnlineRewardsService implements Listener {
         return List.copyOf(mailPresetIds);
     }
 
+    static List<xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsItemReward> resolveSignInItemRewards(
+        OnlineRewardsSignInConfiguration configuration,
+        OnlineRewardsSignInResult result,
+        OnlineRewardsPermissionBonusReward permissionBonus
+    ) {
+        List<xuanmo.arcartxsuite.onlinerewards.config.OnlineRewardsItemReward> itemRewards =
+            new ArrayList<>(configuration.baseItemRewards());
+        for (OnlineRewardsDayOfMonthReward reward : configuration.dayOfMonthRewards()) {
+            if (reward.day() == result.dayOfMonth()) {
+                itemRewards.addAll(reward.itemRewards());
+            }
+        }
+        for (OnlineRewardsHolidayReward reward : configuration.holidayRewards()) {
+            LocalDate date = parseIsoDate(result.signInDate());
+            if (date != null && reward.month() == date.getMonthValue() && reward.day() == date.getDayOfMonth()) {
+                itemRewards.addAll(reward.itemRewards());
+            }
+        }
+        for (OnlineRewardsMilestoneReward reward : configuration.streakRewards()) {
+            if (reward.days() == result.streak()) {
+                itemRewards.addAll(reward.itemRewards());
+            }
+        }
+        for (OnlineRewardsMilestoneReward reward : configuration.totalRewards()) {
+            if (reward.days() == result.total()) {
+                itemRewards.addAll(reward.itemRewards());
+            }
+        }
+        if (permissionBonus != null) {
+            itemRewards.addAll(permissionBonus.itemRewards());
+        }
+        return List.copyOf(itemRewards);
+    }
+
     static List<OnlineRewardsRewardPreviewRow> resolveSignInPreviewRows(
         OnlineRewardsSignInConfiguration configuration,
         OnlineRewardsSignInResult result,
@@ -1836,9 +1899,14 @@ public class OnlineRewardsService implements Listener {
 
     private void executeServerGoalCommands(Player player, OnlineRewardsServerSignInGoalTarget target) {
         for (String rawCommand : target.commands()) {
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), rawCommand.replace("{player}", player.getName()));
+            try {
+                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), rawCommand.replace("{player}", player.getName()));
+            } catch (Exception e) {
+                logger.warning("[OnlineRewards] 执行全服签到目标命令失败: " + rawCommand + " | " + e.getMessage());
+            }
         }
         dispatchMailPresets(player, target.mailPresetIds(), "全服签到目标 '" + target.name() + "'", "OnlineRewards:ServerGoal:" + target.id());
+        dispatchItemRewards(player, target.itemRewards(), "全服签到目标 '" + target.name() + "'");
         ChatCardSendable chatCard = chatCardProvider != null ? chatCardProvider.get() : null;
         for (String cardId : target.chatCardIds()) {
             if (chatCard != null) {

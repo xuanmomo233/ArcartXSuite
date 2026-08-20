@@ -368,7 +368,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
 
     private String poolItemJson(Player player, PoolItem item) {
         if (item.icon() != null) return iconResolver.resolveItemJson(player, item.icon());
-        return iconResolver.itemToJson(service.generateItem(item));
+        return iconResolver.itemToJson(service.generateItem(item, player));
     }
 
     private String upItemIconJson(Player player, PoolDefinition pool) {
@@ -623,7 +623,7 @@ public final class LotteryPacketHandler implements ClientPacketHandler {
     private String itemName(PoolDefinition pool, String itemId) {
         if (pool.caseConfig() != null) {
             for (PoolItem item : pool.caseConfig().items()) {
-                if (item.id().equals(itemId)) return item.name();
+                if (item.key().equals(itemId)) return item.name();
             }
         }
         return itemId;

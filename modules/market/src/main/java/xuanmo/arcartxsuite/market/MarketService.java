@@ -53,6 +53,7 @@ public class MarketService {
     private final @Nullable ItemBridgeAPI itemStackBridge;
     private final xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge;
     private final @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier;
+    private final xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher;
     private final Logger logger;
     private final CrossServerAPI crossServer;
     private final MessageProvider messages;
@@ -92,6 +93,7 @@ public class MarketService {
                          @Nullable ItemBridgeAPI itemStackBridge,
                          xuanmo.arcartxsuite.api.bridge.VanillaItemNameBridge vanillaItemNameBridge,
                          @Nullable java.util.function.Supplier<MailDispatchable> mailSupplier,
+                         xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher,
                          Logger logger,
                          CrossServerAPI crossServer,
                          MessageProvider messages) {
@@ -105,6 +107,7 @@ public class MarketService {
         this.itemStackBridge = itemStackBridge;
         this.vanillaItemNameBridge = vanillaItemNameBridge;
         this.mailSupplier = mailSupplier;
+        this.itemRewardDispatcher = itemRewardDispatcher;
         this.logger = logger;
         this.crossServer = crossServer;
         this.messages = messages;
@@ -147,7 +150,7 @@ public class MarketService {
         // 启动子服务
         if (config.auction().enabled()) {
             auctionService = new AuctionService(plugin, config.auction(), config.messages(),
-                repository, redisCache, crossServerPublisher, currencyManager, mailSupplier, itemSerializer, logger, vanillaItemNameBridge);
+                repository, redisCache, crossServerPublisher, currencyManager, itemSerializer, logger, vanillaItemNameBridge, itemRewardDispatcher);
             auctionService.start(config.schedulerIntervalTicks());
         }
 
@@ -941,7 +944,7 @@ public class MarketService {
         if (shopItem.icon() != null) return iconResolver.resolveItemJson(player, shopItem.icon());
         try {
             ItemStack item = xuanmo.arcartxsuite.market.shop.ShopItemFactory.create(
-                itemSourceRegistry, shopItem.item(), 1, logger);
+                itemSourceRegistry, shopItem.item(), 1, player, logger);
             return item != null ? itemToJson(item) : "";
         } catch (Exception exception) {
             return "";

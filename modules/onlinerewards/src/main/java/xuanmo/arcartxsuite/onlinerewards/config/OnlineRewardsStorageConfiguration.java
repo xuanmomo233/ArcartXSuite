@@ -1,12 +1,16 @@
 package xuanmo.arcartxsuite.onlinerewards.config;
 
+import org.bukkit.configuration.ConfigurationSection;
+import org.jetbrains.annotations.Nullable;
+
 /**
  * 存储层配置。
  * <p>
  * 属于 {@code onlinerewards} 模块，描述存储模式（SQLite/MySQL）及连接参数，
  * 通过 {@link #toDescriptor()} 转换为宿主统一的 {@code StorageDescriptor}。
  *
- * @param mode            存储模式（sqlite / mysql）
+ * @param shared          是否使用共享存储模式（true=共享本体连接，false=自建连接）
+ * @param mode            存储模式（sqlite / mysql），仅在 shared=false 时生效
  * @param sqliteFileName  SQLite 数据库文件名
  * @param host            MySQL 主机地址
  * @param port            MySQL 端口
@@ -17,6 +21,7 @@ package xuanmo.arcartxsuite.onlinerewards.config;
  * @param poolSize        连接池大小
  */
 public record OnlineRewardsStorageConfiguration(
+    boolean shared,
     String mode,
     String sqliteFileName,
     String host,
@@ -29,6 +34,36 @@ public record OnlineRewardsStorageConfiguration(
 ) {
     public boolean isSqlite() {
         return !"mysql".equalsIgnoreCase(mode);
+    }
+
+    /**
+     * 从配置节加载存储配置。
+     * <p>
+     * shared=true（默认）时使用全部默认值，不读取其余字段；
+     * shared=false 时读取 mode/sqlite/mysql 等自建存储字段。
+     *
+     * @param section storage 配置节，可为 {@code null}
+     * @return 解析后的存储配置
+     */
+    public static OnlineRewardsStorageConfiguration load(@Nullable ConfigurationSection section) {
+        if (section == null) section = new org.bukkit.configuration.MemoryConfiguration();
+        boolean shared = section.getBoolean("shared", true);
+        if (shared) {
+            return new OnlineRewardsStorageConfiguration(true, "sqlite", "online-rewards.db",
+                "127.0.0.1", 3306, "arcartxsuite", "root", "",
+                "axs_onlinerewards_", 2);
+        }
+        return new OnlineRewardsStorageConfiguration(false,
+            section.getString("mode", "sqlite"),
+            section.getString("sqlite.file", "online-rewards.db"),
+            section.getString("mysql.host", "127.0.0.1"),
+            Math.max(1, section.getInt("mysql.port", 3306)),
+            section.getString("mysql.database", "arcartxsuite"),
+            section.getString("mysql.username", "root"),
+            section.getString("mysql.password", ""),
+            section.getString("mysql.table-prefix", "axs_onlinerewards_"),
+            Math.max(1, section.getInt("pool-size", 2))
+        );
     }
 
     /**
@@ -47,13 +82,12 @@ public record OnlineRewardsStorageConfiguration(
     /**
      * 判断是否为覆盖模式（模块自建连接池）。
      * <p>
-     * 当 mode=mysql 时返回 true（模块独立连接 MySQL，向后兼容旧配置）；
-     * mode=sqlite 时返回 false（使用本体共享数据源，各模块仍用各自的 .db 文件）。
+     * 当 shared=false 时返回 true（模块独立连接，自建存储）；
+     * shared=true 时返回 false（使用本体共享数据源）。
      *
-     * @return {@code true} 表示模块应自建连接池（旧路径）
-     * @since 1.4.0
+     * @return {@code true} 表示模块应自建连接池
      */
     public boolean hasOverride() {
-        return "mysql".equalsIgnoreCase(mode);
+        return !shared;
     }
 }

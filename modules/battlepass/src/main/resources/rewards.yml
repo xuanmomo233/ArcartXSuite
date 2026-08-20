@@ -37,8 +37,8 @@
 #         amount: 8
 #
 # 奖励类型说明：
-#   item:     通过 ItemSourceRegistry 生成物品并直接放入玩家背包
-#             离线玩家上线后补发；reward-delivery-mode: mail 时改为通过邮件发放
+#   item:     通过 ItemSourceRegistry 生成物品并统一发放（放入背包→背包满转邮件→无邮件则掉落）
+#             离线玩家上线后补发
 #   command:  以控制台身份执行命令列表（commands 字段），支持 {player} 占位符
 #   currency: 向玩家发放指定货币（需 Vault/PlayerPoints 等经济插件）
 #   mail:     通过 Mail 模块发送邮件（预设 ID 或带物品附件的邮件）

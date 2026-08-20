@@ -14,6 +14,7 @@ import java.util.List;
  * @param rewardText   奖励描述文本，为空时由系统自动生成摘要
  * @param commands     触发时执行的命令列表
  * @param mailPresetIds 触发时发送的邮件预设 id 列表
+ * @param itemRewards   触发时通过 ItemSourceRegistry 发放的物品奖励列表
  */
 public record OnlineRewardsHolidayReward(
     int month,
@@ -21,6 +22,7 @@ public record OnlineRewardsHolidayReward(
     String name,
     String rewardText,
     List<String> commands,
-    List<String> mailPresetIds
+    List<String> mailPresetIds,
+    List<OnlineRewardsItemReward> itemRewards
 ) {
 }

@@ -5,23 +5,31 @@ config-version: 5  # 配置版本号，变更时触发迁移
 
 # 存储配置：支持 sqlite 与 mysql 两种模式
 storage:
-  mode: "sqlite"  # 存储模式：sqlite 或 mysql
-  sqlite:
-    file: "battlepass.db"  # SQLite 数据库文件名
-  pool-size: 1  # 数据库连接池大小
-  # ── MySQL 自建模式（不推荐） ──
+  # shared: true 共享存储模式（推荐，性能较好），数据库连接由本体统一管控。
+  # 各模块共用本体 config.yml（plugins/ArcartX-Suite/config.yml）的 storage 节配置。
+  shared: true
+  #
+  # —— shared: false 时，必须配置下方字段启动自建存储模式（不推荐） ——
+  # 存储模式：sqlite 或 mysql。
+  # mode: "sqlite"
+  #
+  # —— SQLite 存储 ——
+  # SQLite 文件名（相对模块数据目录）。
+  # sqlite:
+  #   file: "battlepass.db"
+  # JDBC 连接池大小，SQLite 建议保持 1。
+  # pool-size: 1
+  #
+  # —— MySQL 存储 ——
   # 在此处填写 MySQL 连接信息 = 本模块「自建」独立 HikariCP 连接池，不复用本体连接。
-  # 推荐使用「共享模式」：保持 mode 为 sqlite，到本体 config.yml
-  # （plugins/ArcartX-Suite/config.yml）的 storage 节统一配置 MySQL，
-  # 所有模块将共享同一个连接池，用 table-prefix 隔离表，资源占用更低。
-  # 以下配置仅在 storage.mode 设为 mysql 时生效：
+  # 以下配置仅在 mode 设为 mysql 时生效：
   # mysql:
-  #   host: "127.0.0.1"  # MySQL 主机地址
-  #   port: 3306  # MySQL 端口
-  #   database: "arcartxsuite"  # MySQL 数据库名
-  #   username: "root"  # MySQL 用户名
-  #   password: ""  # MySQL 密码
-  #   table-prefix: "axs_battlepass_"  # MySQL 表名前缀
+  #   host: "127.0.0.1"
+  #   port: 3306
+  #   database: "arcartxsuite"
+  #   username: "root"
+  #   password: ""
+  #   table-prefix: "axs_battlepass_"
 
 # 赛季配置：定义当前赛季的基本参数
 season:
@@ -81,17 +89,6 @@ rewards-file: "rewards.yml"
 # 详细配置格式见 season-rewards.yml 文件内注释。
 # ---------------------------------------------------------------------------
 season-rewards-file: "season-rewards.yml"
-
-# ---------------------------------------------------------------------------
-# 奖励发放方式
-# ---------------------------------------------------------------------------
-# direct（默认）：在线玩家直接发放（物品放入背包、货币直接增加、命令直接执行），
-#                 离线玩家上线后补发。
-# mail：统一邮箱发放。item 类型奖励通过 Mail 模块发送邮件（不管在线离线），
-#       currency / command 类型仍直接发放（在线即发，离线补发）。
-#       需要 Mail 模块，未安装时自动降级为 direct 模式。
-# ---------------------------------------------------------------------------
-reward-delivery-mode: "direct"
 
 # UI 配置：控制界面注册与绑定
 ui:

@@ -86,14 +86,16 @@ public final class BattlePassService {
         Logger logger,
         @Nullable ItemSourceRegistry itemSourceRegistry,
         @Nullable CurrencyBridgeAPI currencyManager,
-        @Nullable java.util.function.Supplier<MailDispatchable> mailProvider
+        @Nullable java.util.function.Supplier<MailDispatchable> mailProvider,
+        @Nullable xuanmo.arcartxsuite.api.item.ItemRewardDispatcher itemRewardDispatcher,
+        xuanmo.arcartxsuite.api.item.PendingRewardService pendingRewardService
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
         this.repository = repository;
         this.logger = logger;
         this.rewardDispatcher = new BattlePassRewardDispatcher(plugin, logger, itemSourceRegistry, currencyManager, mailProvider);
-        this.rewardDispatcher.setMailDeliveryMode(configuration.isMailDeliveryMode());
+        this.rewardDispatcher.setItemRewardDispatcher(itemRewardDispatcher);
         Map<String, BattlePassTask> taskIndex = new HashMap<>();
         for (BattlePassTask task : configuration.tasks().all()) {
             taskIndex.putIfAbsent(task.taskId(), task);
@@ -110,7 +112,7 @@ public final class BattlePassService {
         }
         this.rewardsByLevel = Map.copyOf(immutableRewardIndex);
         this.taskEngine = new BattlePassTaskEngine(plugin, this, configuration, logger);
-        this.settlementService = new SeasonSettlementService(plugin, configuration, repository, this, rewardDispatcher, logger);
+        this.settlementService = new SeasonSettlementService(plugin, configuration, repository, this, rewardDispatcher, logger, pendingRewardService);
     }
 
     public void setEventBusProvider(Supplier<EventBusCapability> eventBusProvider) {
@@ -321,10 +323,7 @@ public final class BattlePassService {
         if (!active) return;
         getProgress(player);
         getTaskInstances(player);
-        // 检查是否需要补发赛季结算奖励
-        if (settlementService != null) {
-            AxsScheduler.runTask(plugin, () -> settlementService.checkPendingSettlement(player));
-        }
+        // 赛季结算奖励补发已由本体统一 PendingRewardService 在 PlayerJoinEvent 中自动处理
     }
 
     /** 退服时落盘并驱逐缓存。 */

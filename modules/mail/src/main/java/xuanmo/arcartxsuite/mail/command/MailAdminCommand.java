@@ -3,8 +3,10 @@ package xuanmo.arcartxsuite.mail.command;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -31,9 +33,33 @@ public final class MailAdminCommand implements ModuleCommandHandler {
 
     private static final List<String> ACTIONS = List.of("help", "status", "open", "preset", "cdk", "admin");
     private static final Pattern DURATION_PATTERN = Pattern.compile("^(\\d+)([smhd])$", Pattern.CASE_INSENSITIVE);
+    private static final List<String> MULTI_TARGETS = List.of("all-online", "all-registered");
+    private static final Duration CONFIRM_TTL = Duration.ofSeconds(30);
+
+    /** 待确认的多人邮件派发请求，按发送者名称隔离。 */
+    private final Map<String, PendingDispatch> pendingConfirmations = new LinkedHashMap<>();
 
     private final Supplier<MailService> serviceProvider;
     private final MessageProvider messages;
+
+    /** 待确认派发会话。 */
+    private static final class PendingDispatch {
+        final String presetId;
+        final String target;
+        final String actorName;
+        private final Instant expireAt;
+
+        PendingDispatch(String presetId, String target, String actorName, Instant expireAt) {
+            this.presetId = presetId;
+            this.target = target;
+            this.actorName = actorName;
+            this.expireAt = expireAt;
+        }
+
+        boolean isExpired(Instant now) {
+            return !now.isBefore(expireAt);
+        }
+    }
 
     /**
      * 构造管理命令处理器。
@@ -108,12 +134,30 @@ public final class MailAdminCommand implements ModuleCommandHandler {
         }
         if (args.length == 4 && "preset".equalsIgnoreCase(args[1]) && svc != null) {
             String sub = args[2].toLowerCase(Locale.ROOT);
-            if ("send".equals(sub) || "info".equals(sub) || "delete".equals(sub)) {
+            if ("send".equals(sub)) {
+                // preset send 后可接 confirm（确认上一次多人派发）或 presetId
+                List<String> candidates = new ArrayList<>(svc.presetIds());
+                candidates.add("confirm");
+                return filter(candidates, args[3]);
+            }
+            if ("info".equals(sub) || "delete".equals(sub)) {
                 return filter(svc.presetIds(), args[3]);
             }
         }
         if (args.length == 5 && "preset".equalsIgnoreCase(args[1]) && "send".equalsIgnoreCase(args[2])) {
-            return null; // 目标玩家
+            // 目标位置：补全 all-online / all-registered + 在线玩家名
+            if ("confirm".equalsIgnoreCase(args[3])) {
+                return List.of();
+            }
+            List<String> candidates = new ArrayList<>(MULTI_TARGETS);
+            for (Player online : Bukkit.getOnlinePlayers()) {
+                candidates.add(online.getName());
+            }
+            return filter(candidates, args[4]);
+        }
+        if (args.length == 6 && "preset".equalsIgnoreCase(args[1]) && "send".equalsIgnoreCase(args[2])) {
+            // force-bypass 不提供 tab 补全
+            return List.of();
         }
         return List.of();
     }
@@ -125,6 +169,7 @@ public final class MailAdminCommand implements ModuleCommandHandler {
         sender.sendMessage(fullMsg("help.open", cmd));
         sender.sendMessage(fullMsg("help.preset.list", cmd));
         sender.sendMessage(fullMsg("help.preset.send", cmd));
+        sender.sendMessage(fullMsg("help.preset.send-confirm", cmd));
         sender.sendMessage(fullMsg("help.preset.info", cmd));
         sender.sendMessage(fullMsg("help.preset.delete", cmd));
         sender.sendMessage(fullMsg("help.preset.reload", cmd));
@@ -164,14 +209,7 @@ public final class MailAdminCommand implements ModuleCommandHandler {
         }
         switch (args[2].toLowerCase(Locale.ROOT)) {
             case "list" -> handlePresetList(sender, svc);
-            case "send" -> {
-                if (args.length < 5) {
-                    sender.sendMessage(fullMsg("admin.preset.send-usage"));
-                    return;
-                }
-                MailOperationResult result = svc.dispatchPreset(args[3], args[4], sender.getName());
-                sender.sendMessage((messages != null ? messages.get("prefix") : "") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
-            }
+            case "send" -> handlePresetSend(sender, svc, args);
             case "info" -> {
                 if (args.length < 4) {
                     sender.sendMessage(fullMsg("admin.preset.info-usage"));
@@ -208,6 +246,72 @@ public final class MailAdminCommand implements ModuleCommandHandler {
             int cmdCount = def.claimCommands() != null ? def.claimCommands().size() : 0;
             sender.sendMessage(fullMsg("admin.preset.item-format", check, def.id(), ChatColor.translateAlternateColorCodes('&', def.displayName()), attCount, cmdCount));
         }
+    }
+
+    /**
+     * 处理 preset send 子命令，支持多人派发二次确认与 force-bypass 绕过。
+     * <ul>
+     *   <li>{@code preset send confirm} —— 确认并执行上一次发起的多人派发请求。</li>
+     *   <li>{@code preset send <presetId> <target> [force-bypass]} —— 派发邮件；
+     *       当 target 为 all-online/all-registered 时需二次确认，附加 force-bypass 可直接派发。</li>
+     * </ul>
+     */
+    private void handlePresetSend(CommandSender sender, MailService svc, String[] args) {
+        // /axs mail preset send confirm
+        if (args.length >= 4 && "confirm".equalsIgnoreCase(args[3])) {
+            handlePresetSendConfirm(sender, svc);
+            return;
+        }
+        if (args.length < 5) {
+            sender.sendMessage(fullMsg("admin.preset.send-usage"));
+            return;
+        }
+        String presetId = args[3];
+        String target = args[4];
+        boolean forceBypass = args.length >= 6 && "force-bypass".equalsIgnoreCase(args[5]);
+        boolean isMultiTarget = isMultiTarget(target);
+
+        // force-bypass 仅对多人派发生效
+        if (forceBypass && !isMultiTarget) {
+            sender.sendMessage(fullMsg("admin.preset.send-force-bypass-invalid"));
+            return;
+        }
+
+        // 单人 target 或带 force-bypass 的多人 target 直接派发
+        if (!isMultiTarget || forceBypass) {
+            MailOperationResult result = svc.dispatchPreset(presetId, target, sender.getName());
+            sender.sendMessage((messages != null ? messages.get("prefix") : "") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+            return;
+        }
+
+        // 多人 target 且未绕过：进入待确认会话
+        String senderKey = sender.getName();
+        PendingDispatch pending = new PendingDispatch(presetId, target, sender.getName(), Instant.now().plus(CONFIRM_TTL));
+        pendingConfirmations.put(senderKey, pending);
+        sender.sendMessage(fullMsg("admin.preset.send-confirm-prompt", target, presetId));
+    }
+
+    /** 处理 {@code preset send confirm}：执行上一次待确认的多人派发。 */
+    private void handlePresetSendConfirm(CommandSender sender, MailService svc) {
+        String senderKey = sender.getName();
+        PendingDispatch pending = pendingConfirmations.remove(senderKey);
+        if (pending == null) {
+            sender.sendMessage(fullMsg("admin.preset.send-confirm-none"));
+            return;
+        }
+        if (pending.isExpired(Instant.now())) {
+            sender.sendMessage(fullMsg("admin.preset.send-confirm-expired"));
+            return;
+        }
+        sender.sendMessage(fullMsg("admin.preset.send-confirm-accepted", pending.presetId, pending.target));
+        MailOperationResult result = svc.dispatchPreset(pending.presetId, pending.target, pending.actorName);
+        sender.sendMessage((messages != null ? messages.get("prefix") : "") + (result.success() ? ChatColor.GREEN : ChatColor.RED) + result.message());
+    }
+
+    private static boolean isMultiTarget(String target) {
+        if (target == null) return false;
+        String lower = target.toLowerCase(Locale.ROOT);
+        return MULTI_TARGETS.contains(lower);
     }
 
     private void handlePresetInfo(CommandSender sender, MailService svc, String presetId) {

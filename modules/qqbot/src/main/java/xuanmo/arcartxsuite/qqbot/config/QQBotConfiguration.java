@@ -194,17 +194,7 @@ public record QQBotConfiguration(
             }
         }
 
-        QQBotStorageConfig storage = new QQBotStorageConfig(
-            yaml.getString("storage.mode", "sqlite"),
-            yaml.getString("storage.sqlite.file", "qqbot.db"),
-            yaml.getString("storage.mysql.host", "127.0.0.1"),
-            yaml.getInt("storage.mysql.port", 3306),
-            yaml.getString("storage.mysql.database", "arcartxsuite"),
-            yaml.getString("storage.mysql.username", "root"),
-            yaml.getString("storage.mysql.password", ""),
-            yaml.getString("storage.mysql.table-prefix", "axs_qqbot_"),
-            yaml.getInt("storage.pool-size", 4)
-        );
+        QQBotStorageConfig storage = QQBotStorageConfig.load(yaml.getConfigurationSection("storage"));
 
         QQBotMessagesConfig messages = new QQBotMessagesConfig(
             yaml.getString("messages.prefix", "&8[&bQQBot&8] &7"),

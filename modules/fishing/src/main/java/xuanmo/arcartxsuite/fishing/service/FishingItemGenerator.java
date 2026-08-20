@@ -95,21 +95,14 @@ public final class FishingItemGenerator {
     private ItemStack generateFromSource(@NotNull FishingItemRef ref, @Nullable Player player) {
         if (itemSourceRegistry == null) return null;
         String source = ref.source().trim().toLowerCase();
-        return switch (source) {
-            case "mythic", "mythicmobs" -> itemSourceRegistry.generateMythicItem(ref.itemId(), ref.amount());
-            case "neige", "neigeitems" -> itemSourceRegistry.generateNeigeItem(ref.itemId(), ref.amount());
-            case "overture" -> itemSourceRegistry.generateOvertureItem(ref.itemId(), player, ref.amount());
-            case "mmo", "mmoitems" -> {
-                if (!ref.mmoType().isBlank() && !ref.mmoId().isBlank()) {
-                    yield itemSourceRegistry.generateMmoItem(ref.mmoType(), ref.mmoId(), ref.amount());
-                }
-                String[] parts = ref.itemId().split("[:;]", 2);
-                yield parts.length == 2
-                    ? itemSourceRegistry.generateMmoItem(parts[0], parts[1], ref.amount())
-                    : null;
-            }
-            default -> null;
-        };
+        // mmoitems 支持mmoType/mmoId分离配置，需拼装为 "类型ID;物品ID" 格式
+        if ("mmo".equals(source) || "mmoitems".equals(source)) {
+            String id = (!ref.mmoType().isBlank() && !ref.mmoId().isBlank())
+                ? ref.mmoType() + ";" + ref.mmoId()
+                : ref.itemId().contains(":") ? ref.itemId().replace(":", ";") : ref.itemId();
+            return itemSourceRegistry.generateItem("mmoitems", id, ref.amount(), null, player);
+        }
+        return itemSourceRegistry.generateItem(source, ref.itemId(), ref.amount(), null, player);
     }
 
     private ItemStack applyCustomNbt(@Nullable ItemStack stack, @NotNull FishingItemRef ref) {

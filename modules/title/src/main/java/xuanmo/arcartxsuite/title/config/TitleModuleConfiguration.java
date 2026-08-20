@@ -83,17 +83,8 @@ public record TitleModuleConfiguration(
         boolean debug = configuration.getBoolean("settings.debug", false);
         long expirationCleanupIntervalTicks = Math.max(20L, configuration.getLong("settings.expiration-cleanup-interval-ticks", 1200L));
 
-        ConfigurationSection storageSection = configuration.getConfigurationSection("storage");
-        TitleStorageConfiguration storage = new TitleStorageConfiguration(
-            storageSection == null ? "sqlite" : storageSection.getString("mode", "sqlite"),
-            storageSection == null ? "titles.db" : nullToEmpty(storageSection.getString("sqlite.file", "titles.db")).trim(),
-            storageSection == null ? "127.0.0.1" : nullToEmpty(storageSection.getString("mysql.host", "127.0.0.1")).trim(),
-            storageSection == null ? 3306 : Math.max(1, storageSection.getInt("mysql.port", 3306)),
-            storageSection == null ? "arcartxsuite" : nullToEmpty(storageSection.getString("mysql.database", "arcartxsuite")).trim(),
-            storageSection == null ? "root" : nullToEmpty(storageSection.getString("mysql.username", "root")).trim(),
-            storageSection == null ? "" : nullToEmpty(storageSection.getString("mysql.password", "")).trim(),
-            storageSection == null ? "axs_title_" : nullToEmpty(storageSection.getString("mysql.table-prefix", "axs_title_")).trim(),
-            storageSection == null ? 4 : Math.max(1, storageSection.getInt("pool-size", 4))
+        TitleStorageConfiguration storage = TitleStorageConfiguration.load(
+            configuration.getConfigurationSection("storage")
         );
 
         ConfigurationSection uiSection = configuration.getConfigurationSection("ui");

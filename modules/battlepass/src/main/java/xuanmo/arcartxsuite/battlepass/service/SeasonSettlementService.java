@@ -7,7 +7,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -16,8 +15,10 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Nullable;
+import xuanmo.arcartxsuite.api.item.PendingRewardService;
 import xuanmo.arcartxsuite.api.util.AxsScheduler;
 import xuanmo.arcartxsuite.battlepass.config.BattlePassModuleConfiguration;
+import xuanmo.arcartxsuite.battlepass.model.BattlePassItemDefinition;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassPlayerProgress;
 import xuanmo.arcartxsuite.battlepass.model.BattlePassReward;
 import xuanmo.arcartxsuite.battlepass.model.SeasonSettlementReward;
@@ -35,7 +36,7 @@ import xuanmo.arcartxsuite.battlepass.storage.BattlePassRepository;
  * 发放方式：
  * <ul>
  *   <li>在线玩家：直接发放（通过 BattlePassRewardDispatcher）</li>
- *   <li>离线玩家：通过 mail 模块发放（mail 类型奖励），非 mail 类型跳过</li>
+ *   <li>离线玩家：暂存到统一 PendingRewardService，由宿主在玩家上线时自动补发</li>
  * </ul>
  * <p>
  * 防重复：通过 bp_season_settlement 表记录已结算赛季，重启后不会重复结算。
@@ -48,9 +49,7 @@ public final class SeasonSettlementService {
     private final BattlePassService service;
     private final BattlePassRewardDispatcher dispatcher;
     private final Logger logger;
-
-    // 已补发结算的离线玩家集合（防止上线时重复补发）
-    private final Set<UUID> settledOfflinePlayers = ConcurrentHashMap.newKeySet();
+    private final PendingRewardService pendingRewardService;
 
     public SeasonSettlementService(
         JavaPlugin plugin,
@@ -58,7 +57,8 @@ public final class SeasonSettlementService {
         BattlePassRepository repository,
         BattlePassService service,
         BattlePassRewardDispatcher dispatcher,
-        Logger logger
+        Logger logger,
+        PendingRewardService pendingRewardService
     ) {
         this.plugin = plugin;
         this.configuration = configuration;
@@ -66,6 +66,7 @@ public final class SeasonSettlementService {
         this.service = service;
         this.dispatcher = dispatcher;
         this.logger = logger;
+        this.pendingRewardService = pendingRewardService;
     }
 
     /**
@@ -143,23 +144,24 @@ public final class SeasonSettlementService {
         boolean online = onlinePlayer != null && onlinePlayer.isOnline();
 
         // 1. 发放未领取的等级奖励
-        boolean needsPending = settleUnclaimedLevelRewards(uuid, level, tier, seasonId, onlinePlayer);
+        settleUnclaimedLevelRewards(uuid, level, tier, seasonId, onlinePlayer);
 
         // 2. 发放赛季结算奖励（按等级阈值）
-        needsPending |= settleSeasonRewards(level, tier, onlinePlayer, uuid);
+        settleSeasonRewards(level, tier, onlinePlayer, uuid);
 
-        if (!online && needsPending) {
-            settledOfflinePlayers.add(uuid);
-        }
         return online;
     }
 
     /**
      * 发放玩家未领取的等级奖励。
      *
-     * @return {@code true} 表示有奖励需要上线后补发（离线玩家且有非 mail 类型奖励）
+     * @param uuid         玩家 UUID
+     * @param level        玩家等级
+     * @param tier         玩家档位
+     * @param seasonId     赛季 ID
+     * @param onlinePlayer 在线玩家实例，为 null 表示离线
      */
-    private boolean settleUnclaimedLevelRewards(UUID uuid, int level, BattlePassPlayerProgress.PassTier tier,
+    private void settleUnclaimedLevelRewards(UUID uuid, int level, BattlePassPlayerProgress.PassTier tier,
                                               String seasonId, @Nullable Player onlinePlayer) {
         Set<String> claimedRewards;
         try {
@@ -169,7 +171,6 @@ public final class SeasonSettlementService {
             claimedRewards = new HashSet<>();
         }
 
-        boolean needsPending = false;
         for (BattlePassReward reward : configuration.rewards()) {
             if (reward.level() > level) continue;
             if (reward.tier() == BattlePassReward.RewardTier.PREMIUM
@@ -181,8 +182,8 @@ public final class SeasonSettlementService {
             if (onlinePlayer != null) {
                 dispatcher.dispatch(onlinePlayer, reward);
             } else {
-                boolean sent = dispatcher.dispatchOffline(uuid, getPlayerName(uuid), reward);
-                if (!sent) needsPending = true;
+                // 离线玩家：暂存到统一 PendingRewardService，由宿主上线时补发
+                savePendingToUnifiedService(uuid, reward, "战令等级奖励: " + reward.rewardId());
             }
             try {
                 repository.saveClaimedReward(uuid, seasonId, reward.rewardId());
@@ -190,17 +191,14 @@ public final class SeasonSettlementService {
                 logger.warning("标记结算奖励领取记录失败 [" + uuid + "/" + reward.rewardId() + "]: " + e.getMessage());
             }
         }
-        return needsPending;
     }
 
     /**
      * 发放赛季结算奖励（按等级阈值）。
      * <p>
      * 使用 "settlement_<settlementId>_<tier>" 作为 claimedRewards 的 key 防止补发时重复。
-     *
-     * @return {@code true} 表示有奖励需要上线后补发
      */
-    private boolean settleSeasonRewards(int level, BattlePassPlayerProgress.PassTier tier,
+    private void settleSeasonRewards(int level, BattlePassPlayerProgress.PassTier tier,
                                       @Nullable Player onlinePlayer, UUID uuid) {
         String seasonId = configuration.season().seasonId();
         Set<String> claimedRewards;
@@ -211,7 +209,6 @@ public final class SeasonSettlementService {
             claimedRewards = new HashSet<>();
         }
 
-        boolean needsPending = false;
         String tierName = tier.name().toLowerCase();
         for (SeasonSettlementReward settlement : configuration.seasonRewards()) {
             if (level < settlement.minLevel()) continue;
@@ -229,8 +226,11 @@ public final class SeasonSettlementService {
             if (onlinePlayer != null) {
                 dispatcher.dispatch(onlinePlayer, reward);
             } else {
+                // 离线玩家：mail 类型尝试通过邮件发送，其他类型暂存到统一 PendingRewardService
                 boolean sent = dispatcher.dispatchOffline(uuid, getPlayerName(uuid), reward);
-                if (!sent) needsPending = true;
+                if (!sent) {
+                    savePendingToUnifiedService(uuid, reward, "战令结算奖励: " + settlementKey);
+                }
             }
             // 标记已发放（防止补发时重复）
             try {
@@ -239,42 +239,44 @@ public final class SeasonSettlementService {
                 logger.warning("标记结算奖励发放记录失败 [" + uuid + "/" + settlementKey + "]: " + e.getMessage());
             }
         }
-        return needsPending;
     }
 
     /**
-     * 玩家上线时检查是否需要补发结算奖励。
-     * <p>
-     * 如果赛季已结算但该玩家在结算时离线，且尚未补发过，则执行补发。
-     *
-     * @param player 上线玩家
+     * 将离线玩家的奖励暂存到统一 PendingRewardService。
      */
-    public void checkPendingSettlement(Player player) {
-        UUID uuid = player.getUniqueId();
-        if (settledOfflinePlayers.contains(uuid)) {
-            // 该玩家在结算时离线，需要补发
-            String seasonId = configuration.season().seasonId();
-            try {
-                if (!repository.isSeasonSettled(seasonId)) return;
-                List<BattlePassRepository.PlayerSeasonSummary> summaries = repository.loadSeasonSummaries(seasonId);
-                for (BattlePassRepository.PlayerSeasonSummary summary : summaries) {
-                    if (summary.playerUuid().equals(uuid)) {
-                        logger.fine("补发离线玩家 " + player.getName() + " 的赛季结算奖励");
-                        settlePlayer(summary, seasonId);
-                        break;
-                    }
+    private void savePendingToUnifiedService(UUID uuid, BattlePassReward reward, String description) {
+        String type = reward.type() != null ? reward.type().toLowerCase() : "";
+        switch (type) {
+            case "item" -> {
+                if (reward.item() != null) {
+                    pendingRewardService.savePending(PendingRewardService.PendingReward.item(
+                        uuid, "battlepass",
+                        reward.item().source(), reward.item().id(),
+                        reward.item().amount(), reward.item().nbt(),
+                        description));
                 }
-            } catch (SQLException e) {
-                logger.warning("补发结算奖励失败 [" + uuid + "]: " + e.getMessage());
-            } finally {
-                settledOfflinePlayers.remove(uuid);
+            }
+            case "currency" -> {
+                if (reward.currency() != null) {
+                    pendingRewardService.savePending(PendingRewardService.PendingReward.currency(
+                        uuid, "battlepass", reward.currency(), reward.currencyAmount(), description));
+                }
+            }
+            case "command" -> {
+                if (reward.commands() != null && !reward.commands().isEmpty()) {
+                    pendingRewardService.savePending(PendingRewardService.PendingReward.command(
+                        uuid, "battlepass", reward.commands(), description));
+                }
+            }
+            case "mail" -> {
+                if (reward.mailPresets() != null && !reward.mailPresets().isEmpty()) {
+                    pendingRewardService.savePending(PendingRewardService.PendingReward.mailPreset(
+                        uuid, "battlepass", reward.mailPresets(), description));
+                }
             }
         }
     }
 
-    /**
-     * 获取玩家名称（在线优先，离线时从 Bukkit OfflinePlayer 获取）。
-     */
     private String getPlayerName(UUID uuid) {
         Player online = Bukkit.getPlayer(uuid);
         if (online != null) return online.getName();

@@ -12,13 +12,13 @@ import java.util.Map;
  * @param name             奖励类型名称（与区域配置中 {@code reward.type} 对应）
  * @param describe         奖励类型描述文本，用于展示
  * @param tierCommands     档位到命令列表的映射，key 为档位标识、value 为该档位触发时执行的命令
+ * @param tierItemRewards  档位到物品奖励列表的映射，通过 ItemSourceRegistry 生成物品直接发放
  * @param mailPresets      预设邮件标识列表，用于背包满时通过邮件补发奖励
- * @param fullInventoryMailPresets 背包满时使用的兜底邮件预设列表
  */
 public record AfkRewardType(
     String name,
     String describe,
     Map<String, List<String>> tierCommands,
-    List<String> mailPresets,
-    List<String> fullInventoryMailPresets
+    Map<String, List<AfkItemReward>> tierItemRewards,
+    List<String> mailPresets
 ) {}

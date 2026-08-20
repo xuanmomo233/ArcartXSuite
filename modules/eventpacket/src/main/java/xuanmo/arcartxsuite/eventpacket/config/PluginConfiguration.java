@@ -112,18 +112,7 @@ public record PluginConfiguration(
             rules.addAll(presetRules);
         }
 
-        ConfigurationSection storageSection = configuration.getConfigurationSection("storage");
-        EventPacketStorageConfiguration storage = new EventPacketStorageConfiguration(
-            storageSection == null ? "sqlite" : storageSection.getString("mode", "sqlite"),
-            storageSection == null ? "eventpacket.db" : nullToEmpty(storageSection.getString("sqlite.file", "eventpacket.db")).trim(),
-            storageSection == null ? "127.0.0.1" : nullToEmpty(storageSection.getString("mysql.host", "127.0.0.1")).trim(),
-            storageSection == null ? 3306 : Math.max(1, storageSection.getInt("mysql.port", 3306)),
-            storageSection == null ? "arcartxsuite" : nullToEmpty(storageSection.getString("mysql.database", "arcartxsuite")).trim(),
-            storageSection == null ? "root" : nullToEmpty(storageSection.getString("mysql.username", "root")).trim(),
-            storageSection == null ? "" : nullToEmpty(storageSection.getString("mysql.password", "")).trim(),
-            storageSection == null ? "axs_eventpacket_" : nullToEmpty(storageSection.getString("mysql.table-prefix", "axs_eventpacket_")).trim(),
-            storageSection == null ? 2 : Math.max(1, storageSection.getInt("pool-size", 2))
-        );
+        EventPacketStorageConfiguration storage = EventPacketStorageConfiguration.load(configuration.getConfigurationSection("storage"));
 
         if (rules.isEmpty()) {
             logger.warning("ArcartXEventPacket 未找到任何规则定义（rules 段和目录均为空）。");

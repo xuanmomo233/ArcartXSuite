@@ -77,6 +77,11 @@ public final class MailPlayerCommand implements org.bukkit.command.TabExecutor {
                     sender.sendMessage(fullMsg("player.cdk-usage", label));
                     return true;
                 }
+                // 配置了 require-permission 时需要 arcartxsuite.mail.cdk 权限
+                if (mailService.isCdkPermissionRequired() && !player.hasPermission("arcartxsuite.mail.cdk")) {
+                    sender.sendMessage(fullMsg("player.cdk-no-permission"));
+                    return true;
+                }
                 sender.sendMessage(colorize(mailService.redeemCdk(player, args[1])));
             }
             default -> sender.sendMessage(fullMsg("player.usage", label));
