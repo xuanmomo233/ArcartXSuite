@@ -665,7 +665,7 @@ controls:
                           x: 232
                           y: 60
                           width: "var.contentW - 500"
-                          texts: "self.parent.entry != none ? '&7类型: &b' + self.parent.entry['type'] : none"
+                          texts: "self.parent.entry != none ? '&7类型: &b' + (self.parent.entry['type'] == 'currency' ? '货币' : (self.parent.entry['type'] == 'item' ? '物品' : self.parent.entry['type'])) : none"
                           fontSize: 24
                           through: true
 
