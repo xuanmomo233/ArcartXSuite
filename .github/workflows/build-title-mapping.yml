@@ -1,0 +1,40 @@
+name: Build Title Mapping
+
+# 临时工作流：只构建 title 模块的 ProGuard mapping 文件（不加密、不上传云端）
+# 用于调试 I1I1.O0 StackOverflowError 问题
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-title-mapping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.10.2'
+          cache-read-only: true
+
+      - name: Build core obfuscation + title obfuscation
+        run: |
+          set -euo pipefail
+          # 先构建混淆后的 core（作为 library jar 供模块混淆使用）
+          # 再构建 title 模块的混淆（生成 mapping）
+          gradle :axs-core:obfuscateCore :modules:title:obfuscateModule --no-build-cache -PskipNativeCheck=true
+          echo "=== title mapping ==="
+          find build/ArcartX-Suite/modules-obf -name "*title*proguard-mapping*" -exec wc -l {} \;
+
+      - name: Upload title ProGuard mapping
+        uses: actions/upload-artifact@v5
+        with:
+          name: title-proguard-mapping
+          path: build/ArcartX-Suite/modules-obf/*title*proguard-mapping*.txt
+          if-no-files-found: error
+          retention-days: 1
